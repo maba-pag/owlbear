@@ -76,14 +76,16 @@ def save(
             planned, problems = decision_archive.plan(store.shared.root, store.name, c, stem, outcome)
             writes = [] if problems else decision_archive.batch_files(planned)
 
-            def publish() -> decision_transaction.Step:
+            def publish(head: str) -> decision_transaction.Step:
                 files, left = decision_archive.write_plan(planned, problems, c.slug)
                 if writes and left:  # a decision refused: the record commits with none of the batch
                     return decision_transaction.Step(
                         f"the record of {c.slug} was not saved; " + "; ".join(left), refused=True
                     )
                 atomic_write(path, text)
-                sent = decision_sync.publish(store.shared, [path, *files], message, time.monotonic() + SAVE_SECONDS)
+                sent = decision_sync.publish(
+                    store.shared, [path, *files], message, time.monotonic() + SAVE_SECONDS, head
+                )
                 notice = "; ".join(filter(None, [sent.notice, *left]))
                 return decision_transaction.Step(notice, unknown=sent.stale or sent.ambiguous, refused=sent.uncommitted)
 

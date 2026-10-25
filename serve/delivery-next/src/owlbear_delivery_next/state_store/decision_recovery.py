@@ -97,8 +97,14 @@ def finish(shared: DataRepo, generation: str) -> Recovery:
             batch = _current(root, generation)
             if _committed(root, batch):
                 _written(root, batch)
+                if not decision_sync.proved(root, batch.head, time.monotonic() + SAVE_SECONDS):
+                    notice = (
+                        f"committed in Git, but {batch.head[:12]} is not on the remote, so batch {generation} stays "
+                        "interrupted; the owner resolves it"
+                    )
+                    return Recovery(generation=generation, done=False, notice=notice)
                 decision_batch.complete(root, generation)
-                notice = "already committed in Git: its marker is completed; no push is retried here"
+                notice = "already committed in Git and on the remote: its marker is completed; no rebase is run here"
                 return Recovery(generation=generation, done=True, notice=notice)
             _at_head(root, batch)
             _preflight(root, batch)
@@ -107,7 +113,7 @@ def finish(shared: DataRepo, generation: str) -> Recovery:
                 decision_batch.replace_file(root.root / rel, after)
             _validate(root, batch)
             paths = [root.root / rel for rel, _, _ in batch.files]
-            sent = decision_sync.publish(root, paths, batch.message, time.monotonic() + SAVE_SECONDS)
+            sent = decision_sync.publish(root, paths, batch.message, time.monotonic() + SAVE_SECONDS, batch.head)
             landed = decision_transaction.landed(root, batch.head, batch.files)
             if sent.uncommitted or sent.stale or sent.ambiguous or not landed:
                 why = sent.notice[:300] or "Git does not hold the batch as written"

@@ -11,6 +11,7 @@ it. A project decision the approval published is left as it is: the Change's end
 
 from __future__ import annotations
 
+import time
 from typing import TYPE_CHECKING, Any
 
 from pydantic import ValidationError
@@ -22,8 +23,8 @@ from owlbear_decisions.storage import serialize
 from owlbear_decisions.validate import Entry, Layer, check
 from owlbear_delivery_next.change_contracts import decision_wording
 from owlbear_delivery_next.change_contracts.decision_wording import WHOLE, whole  # noqa: F401 - existing consumer API
-from owlbear_delivery_next.local_system.data_repo import DataRepo
-from owlbear_delivery_next.state_store import decision_store, decision_transaction
+from owlbear_delivery_next.local_system.data_repo import SAVE_SECONDS, DataRepo
+from owlbear_delivery_next.state_store import decision_store, decision_sync, decision_transaction
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -82,13 +83,15 @@ def archive(root: Path, project: str, c: Change, stem: str, outcome: str) -> tup
             return write_plan(planned, problems, c.slug)
         done: dict[str, tuple[list[Path], list[str]]] = {}
 
-        def step() -> decision_transaction.Step:
+        def step(head: str) -> decision_transaction.Step:
             written, left = write_plan(planned, problems, c.slug)
             done["result"] = (written, left)
             if not written:
                 return decision_transaction.Step("", refused=True)
-            said = shared.publish(written, f"archive {c.slug}")
-            return decision_transaction.Step(said, unknown=bool(said))
+            sent = decision_sync.publish(shared, written, f"archive {c.slug}", time.monotonic() + SAVE_SECONDS, head)
+            return decision_transaction.Step(
+                sent.notice, unknown=sent.stale or sent.ambiguous, refused=sent.uncommitted
+            )
 
         notice = decision_transaction.transaction(shared, project, f"archive {c.slug}", files, step)
     written, left = done["result"]

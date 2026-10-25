@@ -276,8 +276,8 @@ def test_a_lost_publish_after_the_record_keeps_its_batch_interrupted(shared, rep
     )  # fmt: skip
     real_publish = decision_sync.publish
 
-    def lost_after_commit(shared_, paths, message, until):
-        real_publish(shared_, paths, message, until)
+    def lost_after_commit(shared_, paths, message, until, head):
+        real_publish(shared_, paths, message, until, head)
         return decision_sync.Sent(ambiguous=True, notice="the publication of the record is unknown")
 
     monkeypatch.setattr(decision_sync, "publish", lost_after_commit)
@@ -380,7 +380,9 @@ def test_a_publish_whose_rebase_leaves_git_mid_rebase_is_ambiguous(shared) -> No
     (root / "f.txt").write_text("again\n")
     repo = data_repo.DataRepo(root)
 
-    sent = decision_sync.publish(repo, [root / "f.txt"], "decisions: publish", time.monotonic() + 60)
+    sent = decision_sync.publish(
+        repo, [root / "f.txt"], "decisions: publish", time.monotonic() + 60, git(root, "rev-parse", "HEAD~1")
+    )
 
     assert sent.ambiguous
     assert not sent.uncommitted
@@ -403,7 +405,9 @@ def test_an_owner_resolution_staged_during_a_publish_rebase_stays_ambiguous(shar
     monkeypatch.setattr(data_repo, "_git", owner_stages_after_failure)
     repo = data_repo.DataRepo(root)
 
-    sent = decision_sync.publish(repo, [root / "f.txt"], "decisions: publish", time.monotonic() + 60)
+    sent = decision_sync.publish(
+        repo, [root / "f.txt"], "decisions: publish", time.monotonic() + 60, git(root, "rev-parse", "HEAD~1")
+    )
 
     assert sent.ambiguous
     assert (git_admin(root) / "rebase-merge").is_dir()

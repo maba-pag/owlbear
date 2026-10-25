@@ -463,12 +463,12 @@ def test_an_archive_is_published_while_its_batch_is_still_pending(store, monkeyp
     root = store.shared.root
     pending_at_publish: list[bool] = []
 
-    def lost_publish(self, _paths, _message):
-        pending_at_publish.append(decision_batch.pending(self) is not None)
+    def lost_publish(_repo, _paths, _message, _until, _head):
+        pending_at_publish.append(decision_batch.pending(store.shared) is not None)
         msg = "publish lost after the files were written"
         raise RuntimeError(msg)
 
-    monkeypatch.setattr(DataRepo, "publish", lost_publish)
+    monkeypatch.setattr(decision_sync, "publish", lost_publish)
     with pytest.raises(RuntimeError, match="publish lost"):
         decision_archive.archive(root, "shop-site", finished(), STEM, "merged")
 

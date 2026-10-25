@@ -33,21 +33,22 @@ def transaction(
     project: str,
     message: str,
     files: Sequence[tuple[Path, bytes]],
-    step: Callable[[], Step],
+    step: Callable[[str], Step],
 ) -> str:
     """Run *step*, which writes and publishes *files*, as one journaled batch; the caller holds the lock.
 
-    The journal completes once the files landed in HEAD, or when the producer's known refusal left HEAD unmoved and put
-    them back as they were. An unknown publication, a partial commit, a bare notice without that refusal, or an
-    exception stays interrupted for the owner: it is never completed on a guess. Nothing nests: a batch within it would
-    be a second one.
+    The batch journals HEAD, and *step* receives that head to pass to every publication, which proves it on the remote
+    before it commits. The journal completes once the files landed in HEAD, or when the producer's known refusal
+    left HEAD unmoved and put them back as they were. An unknown publication, a partial commit, a bare notice without
+    that refusal, or an exception stays interrupted for the owner: it is never completed on a guess. Nothing nests: a
+    batch within it would be a second one.
     """
     store._interrupted(shared)  # noqa: SLF001 - same package; store helpers stay private to it
     rows = [(p.relative_to(shared.root).as_posix(), store._content(p), data) for p, data in files]  # noqa: SLF001
-    head = store._head(shared)  # noqa: SLF001
+    head = store._head(shared)  # noqa: SLF001 - the journal names HEAD; each publication proves it on the remote
     generation = decision_batch.begin(shared, project, head, message, [p.stem for p, _ in files], rows)
     try:
-        outcome = step()
+        outcome = step(head)
     except BaseException:
         if landed(shared, head, rows):
             decision_batch.complete(shared, generation)

@@ -412,8 +412,8 @@ def test_an_owner_edit_after_a_publish_that_then_raises_stays_interrupted(pickin
     rel = path.relative_to(shared.root).as_posix()
     published, owner = b"the published image\n", b"the owner's edit after the publish\n"
 
-    def step() -> tuple[str, bool]:
-        path.parent.mkdir(parents=True, exist_ok=True)
+    def step(_head: str) -> tuple[str, bool]:
+
         path.write_bytes(published)
         shared.publish(path, "decisions: owner edit")
         path.write_bytes(owner)

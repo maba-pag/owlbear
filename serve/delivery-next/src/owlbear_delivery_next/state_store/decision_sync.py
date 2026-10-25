@@ -66,6 +66,28 @@ def _merge_base(shared: DataRepo, until: float) -> str:
     return "" if said.returncode else said.stdout.strip()
 
 
+def _on_remote(shared: DataRepo, head: str, until: float) -> bool:
+    """Whether the fetched remote branch descends from *head*; unknown counts as not."""
+    return not shared.git("merge-base", "--is-ancestor", head, UPSTREAM, until=until).returncode
+
+
+def proved(shared: DataRepo, head: str, until: float) -> bool:
+    """Whether *head* is on the remote, pushing HEAD first when *head* is its ancestor and the remote lacks it.
+
+    The push is never forced: a remote that moved on refuses it and nothing is proved.
+    """
+    if shared.git("fetch", "-q", until=until).returncode:
+        return False
+    if _on_remote(shared, head, until):
+        return True
+    current = _rev(shared, "HEAD", until)
+    if current is None or shared.git("merge-base", "--is-ancestor", head, current, until=until).returncode:
+        return False
+    if shared.git("push", "-q", until=until).returncode or shared.git("fetch", "-q", until=until).returncode:
+        return False
+    return _on_remote(shared, head, until)
+
+
 def rebase(shared: DataRepo, until: float) -> str:
     """Rebase on the fetched remote unless both sides changed one decision file; why it did not, else nothing."""
     if (sides := _diverged(shared, until)) is None:
@@ -91,15 +113,19 @@ def catch_up(shared: DataRepo, until: float) -> str:
     return rebase(shared, until)
 
 
-def publish(shared: DataRepo, paths: list[Path], message: str, until: float) -> Sent:
+def publish(shared: DataRepo, paths: list[Path], message: str, until: float, head: str) -> Sent:
     """Commit *paths* alone and push; a rejected push never rebases over a remote change of a decision file here.
 
-    A failed commit is known only when HEAD did not move; when it moved, the commit is accepted only if it is provably
-    this call's own and holds the files as they are, so a lost commit is never guessed from a moved head.
+    *head* is the journalled head of the batch. Before the commit it is put on the remote if it can be, and a rebase
+    refuses to run unless it is on the remote, so a rebase never rewrites a commit the batch's proof depends on. An
+    unproved head still commits; only the rebase is refused. A failed commit is known only when HEAD did not move; when
+    it moved, the commit is accepted only if it is provably this call's own and holds the files as they are, so a lost
+    commit is never guessed from a moved head.
     """
     before = _rev(shared, "HEAD", until)
-    if before is None:  # nothing is committed when HEAD cannot be read: never guess its position
-        return Sent(notice=f"HEAD of {shared.root} could not be read, so nothing was committed", ambiguous=True)
+    if before is None:  # nothing is committed unless HEAD is read
+        return Sent(notice="HEAD is not known, so nothing was committed", ambiguous=True)
+    proved(shared, head, until)
     rels = {p.relative_to(shared.root).as_posix() for p in paths}
     failed = shared.commit(paths, message, until)
     now = _rev(shared, "HEAD", until)
@@ -111,7 +137,9 @@ def publish(shared: DataRepo, paths: list[Path], message: str, until: float) -> 
     pushed = shared.git("push", "-q", until=until)
     if pushed.returncode == 0:
         return Sent()
-    return _rejected(shared, rels, pushed.stderr, until, own=bool(made))
+    if refused := _rejected(shared, rels, pushed.stderr, until, own=bool(made)):
+        return refused
+    return _rebase_push(shared, head, until)
 
 
 def _in_head(shared: DataRepo, paths: list[Path], until: float) -> bool:
@@ -146,7 +174,8 @@ def _rebase_failed(shared: DataRepo, where: str, failed: str, until: float) -> S
     return Sent(notice=f"{where}, but it could not be rebased on the remote: {failed}; push it by hand", ambiguous=left)
 
 
-def _rejected(shared: DataRepo, rels: set[str], why: str, until: float, *, own: bool) -> Sent:
+def _rejected(shared: DataRepo, rels: set[str], why: str, until: float, *, own: bool) -> Sent | None:
+    """The outcome of a refused push that cannot be rebased over; None when the remote can be rebased on."""
     where = f"saved and committed in {shared.root}"
     if shared.git("fetch", "-q", until=until).returncode or (sides := _diverged(shared, until)) is None:
         return Sent(notice=f"{where}, but the push failed: {why.strip()[:200]}")
@@ -163,6 +192,17 @@ def _rejected(shared: DataRepo, rels: set[str], why: str, until: float, *, own: 
     if both := ours & theirs:
         listed = ", ".join(sorted(both))
         return Sent(notice=f"{where}, but not published: {listed} changed here and on the remote; the owner decides")
+    return None
+
+
+def _rebase_push(shared: DataRepo, head: str, until: float) -> Sent:
+    """Rebase on the remote and push again; a rebase that would rewrite *head*, the batch's proof, is refused."""
+    where = f"saved and committed in {shared.root}"
+    if not _on_remote(shared, head, until):  # a rebase would rewrite the batch's head: refused, the batch stays
+        return Sent(
+            notice=f"{where}, but {head[:12]} is not on the remote, so it is not rebased; the owner resolves it",
+            ambiguous=True,
+        )
     if failed := shared.rebase(until):
         return _rebase_failed(shared, where, failed, until)
     sent = shared.git("push", "-q", until=until)

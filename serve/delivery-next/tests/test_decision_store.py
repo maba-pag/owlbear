@@ -400,7 +400,7 @@ def test_conflict_flags_reach_a_competitor_that_arrives_while_they_publish(
     assert save(shared, one, expected_revision=None, message="decisions: one").active
     real, arrived = decision_sync.publish, []
 
-    def racing(repo, paths, message, until):
+    def racing(repo, paths, message, until, head):
         if message.startswith("decisions: conflict") and not arrived:
             arrived.append(three)
             git(third.root, "pull", "-q", "--rebase")
@@ -408,7 +408,7 @@ def test_conflict_flags_reach_a_competitor_that_arrives_while_they_publish(
             git(third.root, "add", "-A")
             git(third.root, "commit", "-qm", "decisions: three")
             git(third.root, "push", "-q")
-        return real(repo, paths, message, until)
+        return real(repo, paths, message, until, head)
 
     monkeypatch.setattr(decision_sync, "publish", racing)
     said = save(shared, two, expected_revision=None, message="decisions: two")
@@ -438,10 +438,10 @@ def test_an_ambiguous_conflict_flag_publish_stays_interrupted(shared, monkeypatc
         save(shared, decision, expected_revision=None, message="m")
     real_publish = decision_sync.publish
 
-    def unknown_flags(repo, paths, message, until):
+    def unknown_flags(repo, paths, message, until, head):
         if message.startswith("decisions: conflict on"):
             return decision_sync.Sent(ambiguous=True, notice="not provably its own commit")
-        return real_publish(repo, paths, message, until)
+        return real_publish(repo, paths, message, until, head)
 
     monkeypatch.setattr(decision_sync, "publish", unknown_flags)
     said = save(shared, replacing(old), expected_revision=None, message="m")

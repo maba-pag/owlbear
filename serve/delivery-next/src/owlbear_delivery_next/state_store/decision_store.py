@@ -269,7 +269,8 @@ def _save_all(shared: DataRepo, items: list[Placed], message: str) -> list[Recei
     images = {path: (before[path], serialize(d).encode("utf-8")) for d, path in zip(decisions, paths, strict=True)}
     if refused := _refusals(items):
         return _refused(shared, decisions, refused, behind)
-    generation, head, rows = _begin(shared, items, before, message)
+    head = _head(shared)
+    generation, rows = _begin(shared, items, before, message, head)
     try:
         refused = write_batch(items)
     except OSError:
@@ -279,7 +280,7 @@ def _save_all(shared: DataRepo, items: list[Placed], message: str) -> list[Recei
     if refused:
         decision_batch.complete(shared, generation)
         return _refused(shared, decisions, refused, behind)
-    sent = decision_sync.publish(shared, paths, message, until)
+    sent = decision_sync.publish(shared, paths, message, until, head)
     if sent.uncommitted or sent.ambiguous or sent.stale:
         if sent.uncommitted and _refusal_settles(shared, images, until):  # the files are put back: nothing is in flight
             decision_batch.complete(shared, generation)
@@ -303,20 +304,16 @@ def _save_all(shared: DataRepo, items: list[Placed], message: str) -> list[Recei
 
 
 def _begin(
-    shared: DataRepo, items: list[Placed], before: dict[Path, bytes | None], message: str
-) -> tuple[str, str, list[tuple[str, bytes | None, bytes]]]:
-    """Journal the batch, with each file's bytes before and after, before its first file is written.
-
-    Returns the generation, the head it was journalled on and the rows, which the publication must land.
-    """
+    shared: DataRepo, items: list[Placed], before: dict[Path, bytes | None], message: str, head: str
+) -> tuple[str, list[tuple[str, bytes | None, bytes]]]:
+    """Journal the batch on *head*, with each file's bytes before and after, before its first file is written."""
     rows = []
     for decision, folder, _ in items:
         path = decision_path(decision, folder)
         rows.append((path.relative_to(shared.root).as_posix(), before[path], serialize(decision).encode("utf-8")))
     project = next((d.project for d, _, _ in items if d.project), "")
-    head = _head(shared)
     generation = decision_batch.begin(shared, project, head, message, [d.id for d, _, _ in items], rows)
-    return generation, head, rows
+    return generation, rows
 
 
 def _refusals(items: list[Placed]) -> dict[str, str]:
@@ -416,12 +413,12 @@ def _reconcile(shared: DataRepo, decisions: list[Decision], said: list[str], unt
         files = [(e.path, serialize(e.decision.model_copy(update={"conflict": True})).encode("utf-8")) for e in entries]
         halt: list[bool] = []
 
-        def flag(entries: list[Entry] = entries, halt: list[bool] = halt) -> decision_transaction.Step:
+        def flag(head: str, entries: list[Entry] = entries, halt: list[bool] = halt) -> decision_transaction.Step:
             flagged = [path for e in entries if (path := _flag(e))]
             if not flagged:
                 return decision_transaction.Step("", refused=True)
             ids = ", ".join(sorted(p.stem for p in flagged))
-            sent = decision_sync.publish(shared, flagged, f"decisions: conflict on {ids}", until)
+            sent = decision_sync.publish(shared, flagged, f"decisions: conflict on {ids}", until, head)
             unknown = sent.ambiguous or sent.stale
             halt.append(sent.uncommitted or unknown)
             return decision_transaction.Step(sent.notice, unknown=unknown, refused=sent.uncommitted)
