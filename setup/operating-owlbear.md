@@ -81,6 +81,8 @@ project's Changes while that project's VS Code window is closed.
 
 `owlbear --help` lists every command, including the project commands that take `--repo PATH`.
 
+Moving a project's store to its folder is manual and needs a reboot: run `owlbear prepare --repo PATH`, reboot, then run `owlbear finish --repo PATH` from the new boot. Finish refuses an unknown or dirty OwlBear build, a changed or split install, and an unchanged boot, and it never runs on its own. The clone's old store is kept as a non-authoritative source; back it up before deleting it by hand. The fixed gate contracts that prove older builds are safe are maintained in the `state_store/legacy_family` tables; change them only when a gate function changes, and record why.
+
 **Pause Delivery** in the bar stops new automatic agent steps on every project until you press
 **Resume**; your own actions, such as settings, memory and **New Change**, still run. While paused,
 **Pause and stop when idle** stops OwlBear once the running steps end. Automatic memory curation
