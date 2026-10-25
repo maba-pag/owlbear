@@ -21,6 +21,7 @@ from owlbear_decisions import DecisionError, LinkType, Scope, check_write, decis
 from owlbear_decisions.snapshot import CONFLICT
 from owlbear_decisions.storage import kind, serialize
 from owlbear_decisions.validate import collect, layers, project_folders
+from owlbear_delivery_next.local_system import storage_io
 from owlbear_delivery_next.local_system.data_repo import SAVE_SECONDS, DataRepoError
 from owlbear_delivery_next.state_store import decision_batch, decision_sync, decision_transaction
 from owlbear_delivery_next.state_store.database import StoreError
@@ -334,6 +335,7 @@ def write_batch(items: Sequence[Placed]) -> dict[str, str]:
     before = {decision_path(d, folder): _content(decision_path(d, folder)) for d, folder, _ in items}
     for decision, folder, expected in items:
         try:
+            storage_io.make_dirs(decision_path(decision, folder).parent)  # ancestors are durable before the write
             write(decision, folder, expected)
         except (DecisionError, OSError) as exc:
             for path, text in before.items():  # the failing file too: a rename may land before its fsync fails
@@ -356,10 +358,8 @@ def _as_before(before: dict[Path, bytes | None]) -> bool:
 
 
 def _put_back(path: Path, text: bytes | None) -> None:
-    if text is None:
-        path.unlink(missing_ok=True)
-    elif _content(path) != text:
-        path.write_bytes(text)
+    if _content(path) != text:
+        decision_batch.replace_file(path, text)
 
 
 def _refusal_settles(shared: DataRepo, before: dict[Path, bytes | None], until: float) -> bool:
