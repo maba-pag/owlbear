@@ -76,7 +76,7 @@ IMPORTS = (
     ("state_store/project_home.py", "c79464a6139fe571efd600903aa848dc67c9673f016d12c093d7d6b94b74a681"),
     ("state_store/store.py", "a3da565feeee931b40d4907f17c46372c000e573e1add938ae3679d175e75de4"),
 )
-CURRENT_FAMILY_AGGREGATE = "fc9858af4aaa3236539b082c9c481f1dba89cbdff80ca3ca1aac910355079615"
+CURRENT_FAMILY_AGGREGATE = "f3688d066bd1827ccabb93bd8358bf0d85481f1ddba325897b30e7cd72403f6f"
 CURRENT_FUNCTIONS = (
     ("commands/chat_client.py:Chat.call", "0fc1fdb166ea555741a2aa7796a99a4eb7b71c572ad37fba1ae0a9e37171b584"),
     ("commands/chat_client.py:workspace", "d3a3e15a15d6554c1a3d9167d3b259d8890a0321c85af2df2115deaed14f13e9"),
@@ -91,7 +91,7 @@ CURRENT_FUNCTIONS = (
     ("machine_host/command.py:forward", "5b6327596aa3036314e5e279f4b7a444152e7555a29059797bf2b6f0e82cca69"),
     ("machine_host/command.py:main", "b07806f0e0d2da7c59fb4e4d23f13bf545ff03b09ee49f7110da2027d5d31c36"),
     ("machine_host/install.py:doctor", "905d2d2f6a5de0db3f4a373d2c5740867bbe3f097a292719c631c26c3383a6d1"),
-    ("machine_host/machine.py:Machine._load", "3b3dc14beceee8bc16d4f08ca1f16ee6bc922c5560e310d82d46bfadbf9f9ebb"),
+    ("machine_host/machine.py:Machine._load", "38228c2f01fb8c7a83e4ca36971f4d85743952addbd2c29a988eec4c5c60c5be"),
     ("machine_host/machine.py:Machine.load_all", "70b96c5b7e2866db55db01ff96af21ca735ebaaab3f701aac367fda92aaa1370"),
     ("machine_host/machine.py:Machine.retry", "89035a3934b6da831ef697ec64561953d7e56d9bb9577ea6ce69c0155097a051"),
     ("machine_host/project.py:Project.load", "90cb161f238ce91af9469fc383d03ecb7f5225e239796463fd25cb96f5a92654"),
