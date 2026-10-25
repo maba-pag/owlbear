@@ -352,6 +352,12 @@ Behavior:
 - does not reject blank or wildcard callers; unrecognized callers receive universal-only guidance
 - accepts named and universal recall guidance according to the memory service's recognition rules
 
+Delivery's step sessions get their pre-flight lessons without this call: each newly created conversation's first
+message starts with "Lessons from earlier runs", chosen with the same eligibility by the memory package's shared
+policy (`owlbear_memory.selection`: at most five whole entries in 2,000 characters) and quoted with their IDs and
+revisions for `assess_memories`. That is the agent's startup recall; it calls `recall_memory` when the section is
+missing, says the lessons could not be read or did not fit, or when it needs more.
+
 ## assess_memories
 
 Records how useful recalled memory entries were for a substantive task attempt. When a
