@@ -95,13 +95,18 @@ def load_run(data: HeldRun) -> Run:
         msg = f"held payload {p.get('model')!r} is not a result model"
         raise ValueError(msg)
     args, old = _current(p)
+    run = _unloaded(data)
+    return replace(run, payload=model.model_validate(args) if p and model else None, changed=run.changed or old)
+
+
+def _unloaded(data: HeldRun) -> Run:
+    """The held run without its result: what counting it reads, whether or not its result still loads."""
     return Run(
         data.session_id,
         ending=data.ending,  # type: ignore[arg-type] - checked by the ending dispatch, which refuses unknown ones
-        payload=model.model_validate(args) if p and model else None,
         detail=data.detail,
         head=data.head,
-        changed=list(data.changed) or old,
+        changed=list(data.changed),
         denials=list(data.denials),
         denied=dict(data.denied),
         runtime=data.runtime,
@@ -314,11 +319,20 @@ def uncounted(store: Store, change: Change) -> Held | None:
 
 
 def accounted(data: HeldRun) -> Run:
-    """The held run with the usage and tool calls its gate kept, so counting it happens exactly once.
+    """The held run's usage and tool calls as its gate kept them, so counting it happens exactly once.
 
-    A hold an older build kept has no usage record: its usage is unknown and counts as unread, never as zero.
+    Its result is not loaded: one that no longer loads still counts once, and is retired when it would be taken. A
+    hold an older build kept has no usage record: its usage is unknown and counts as unread, never as zero.
     """
-    run = load_run(data)
+    return _with_usage(_unloaded(data), data)
+
+
+def restored(data: HeldRun) -> Run:
+    """The kept run with its result validated and its own usage: a pending child's run as it returned."""
+    return _with_usage(load_run(data), data)
+
+
+def _with_usage(run: Run, data: HeldRun) -> Run:
     if not data.counted:
         return replace(run, usage={"error": "held-unrecorded"}, usage_unread=UNRECORDED)
     return replace(
@@ -399,13 +413,22 @@ def counted_hold(store: Store, lock: Lock, pending: Held) -> None:
     """A held session counts once, with the gate question it was asked on, and only then does the step wait (RUN-04).
 
     The count goes on the Change the store has now, so the owner's latest transitions survive. An older hold keeps no
-    Change of its own, so the stored one is the base it counts on.
+    Change of its own, so the stored one is the base it counts on. A hold whose step the owner has left can never be
+    accepted: once its count is durable it is retired.
     """
     change = _gated(store.read(lock.slug), pending)
     change.counted_holds = [*change.counted_holds, gen(pending)]
     sessions.logged(
         store, lock, change, accounted(pending.run), {"kind": pending.kind, "exit": Exit.ASK} | pending.label
     )
+    if not _fits(change, pending):
+        _retire(store, lock, change, gen(pending))
+
+
+def _fits(change: Change, pending: Held) -> bool:
+    """The Change is still on the step, task, mode and brief version its hold depends on."""
+    s = change.step
+    return (s.kind, s.task, s.mode, change.brief.version) == (pending.kind, pending.task, pending.mode, pending.brief)
 
 
 def _gated(change: Change, pending: Held) -> Change:
@@ -416,9 +439,8 @@ def _gated(change: Change, pending: Held) -> Change:
     own fallback record. An owner's pause stays; an abandon, a new brief or another step only count the hold.
     """
     snap, s = pending.change, change.step
-    fits = (s.kind, s.task, s.mode, change.brief.version) == (pending.kind, pending.task, pending.mode, pending.brief)
     waiting = change.outcome is not None and change.outcome.exit in {Exit.ASK, Exit.STOP}
-    if snap is None or not fits or waiting or any(q.id == pending.question for q in change.questions):
+    if snap is None or not _fits(change, pending) or waiting or any(q.id == pending.question for q in change.questions):
         return change
     gate = session_result.usage_gate(accounted(pending.run), s.kind, accept=True)
     gated = loop.apply(change, gate, datetime.now(UTC))

@@ -827,3 +827,108 @@ def test_an_accepted_hold_is_checkpointed_with_its_receipt_before_a_paid_session
     assert not held._path(store, "c1").exists()  # noqa: SLF001
     assert store.read("c1").accepted_holds
     assert sum(1 for e in store.events("c1") if e.get("event") == "step") == steps + 1
+
+
+def unloadable(tmp_path, clone, monkeypatch) -> tuple[Store, held.Held]:
+    """A held build whose count write failed, its result then naming no result model: its usage still reads."""
+    store = Store(tmp_path / "store")
+    names = Names(branch="owlbear/c1", target="main", worktree=str(clone))
+    plan = Plan(tasks=[Task(id="t1", title="one", scope=["b.txt"])])
+    change = Change(slug="c1", brief=Brief(version=1), plan=plan, step=Step(kind=K.BUILD, task="t1"), names=names)
+    store.write(Lock("c1"), change)
+
+    async def unread(cfg):
+        return built(cfg, commit(clone, "b.txt"), unread=True)
+
+    real_write = Store.write
+
+    def count_fails(self, lock, c):
+        if c.counted_holds:
+            msg = "disk full"
+            raise OSError(msg)
+        return real_write(self, lock, c)
+
+    monkeypatch.setattr(Store, "write", count_fails)
+    monkeypatch.setattr(runner.sdk_adapter, "run", unread)
+    with pytest.raises(OSError, match="disk full"):
+        runner._step(store, Lock("c1"), change, change.step, clone)  # noqa: SLF001
+    monkeypatch.setattr(Store, "write", real_write)
+    path = held._path(store, "c1")  # noqa: SLF001
+    data = json.loads(path.read_text())
+    data["run"]["payload"]["model"] = "NoSuchResult"  # a valid record whose result no longer loads
+    path.write_text(json.dumps(data))
+    hold = held.read(store, "c1")
+    assert hold is not None
+    with pytest.raises(ValueError, match="NoSuchResult"):
+        held.load_run(hold.run)
+    return store, hold
+
+
+def restarted(tmp_path, clone) -> Change:
+    fresh = Store(tmp_path / "store")
+    with fresh.lock("c1") as lock:
+        change, step = fresh.fold(lock, "c1", NOW)
+        runner._step(fresh, lock, change, step, clone)  # noqa: SLF001
+    return fresh.read("c1")
+
+
+@pytest.mark.parametrize("then", ["pause", "abandon", "retry"])
+def test_a_hold_whose_result_no_longer_loads_still_counts_once_and_the_owner_moves_on(
+    tmp_path, clone, monkeypatch, then
+):
+    store, hold = unloadable(tmp_path, clone, monkeypatch)
+    starts = []
+
+    async def boundary(cfg):
+        starts.append(cfg.session_id)
+        raise BoundaryReachedError
+
+    monkeypatch.setattr(runner.sdk_adapter, "run", boundary)
+    if then != "retry":
+        store.put_inbox("c1", IntentItem(at=NOW, intent=then, text="owner says stop"))
+    c = restarted(tmp_path, clone)
+    assert (c.counted_holds, c.spend.unread) == ([held.gen(hold)], [hold.run.session_id])  # counted, never zero
+    if then == "pause":  # the step is still the hold's: its gate is back, the hold kept for the owner
+        assert c.intent.paused_at is not None
+        assert loop.open_question(c).id == hold.question
+        assert held._path(store, "c1").exists()  # noqa: SLF001
+    elif then == "abandon":  # the owner left its step: once counted it is retired, and cleanup goes on
+        assert c.intent.abandoned_at is not None
+        assert c.step.kind == K.CLEANUP
+        assert not held._path(store, "c1").exists()  # noqa: SLF001
+    else:
+        q = loop.open_question(c)
+        assert q.id == hold.question
+        store.put_inbox("c1", AnswerItem(at=NOW, channel="status-view", question=q.id, option="retry"))
+        with pytest.raises(BoundaryReachedError):  # its result never loads: retired, and the step runs again
+            restarted(tmp_path, clone)
+        assert len(starts) == 1
+        assert not held._path(store, "c1").exists()  # noqa: SLF001
+        c = store.read("c1")
+    for _ in range(2 if then != "retry" else 0):  # later restarts neither fail on it nor count it again
+        c = restarted(tmp_path, clone)
+    assert (c.counted_holds, c.spend.unread) == ([held.gen(hold)], [hold.run.session_id])
+    assert len(starts) == (1 if then == "retry" else 0)
+
+
+def test_a_fallback_hold_whose_result_no_longer_loads_is_retired_once_on_retry(tmp_path, clone, monkeypatch):
+    store, c = held_without_file(tmp_path, clone, monkeypatch)
+    with store.db.read() as db:
+        data = json.loads(db.execute("SELECT record FROM changes WHERE slug = 'c1'").fetchone()[0])
+    data["held_fallback"]["run"]["payload"]["model"] = "NoSuchResult"
+    with store.db.write() as db:
+        db.execute("UPDATE changes SET record = ? WHERE slug = 'c1'", (json.dumps(data),))
+    q = loop.open_question(store.read("c1"))
+    store.put_inbox("c1", AnswerItem(at=NOW, channel="status-view", question=q.id, option="retry"))
+    starts = []
+
+    async def boundary(cfg):
+        starts.append(cfg.session_id)
+        raise BoundaryReachedError
+
+    monkeypatch.setattr(runner.sdk_adapter, "run", boundary)
+    with pytest.raises(BoundaryReachedError):
+        restarted(tmp_path, clone)
+    after = Store(tmp_path / "store").read("c1")
+    assert (len(starts), after.held_fallback, after.counted_holds) == (1, None, c.counted_holds)
+    assert after.spend.unread == c.spend.unread  # counted once, at its gate

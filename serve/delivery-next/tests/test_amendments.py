@@ -108,7 +108,7 @@ def proposing(store: Store, clone: Path, monkeypatch, args: dict, during=lambda:
 
     def review_run(*args, submit, settings, **kwargs):
         _store, _lock, _change, source, made, label = args
-        assert kwargs["defer"] is True  # the challenge settles only once its write is durable
+        assert kwargs["keep"] is not None  # the challenge keeps its run before cleanup and settles it once
         judged.append((label, submit, made(source).message, settings))
         verdict = tools.VisualReviewResult(
             verdict="fix", findings=[{"place": "AC-1", "problem": "tabs could now pass", "fix": "keep trimming tabs"}]

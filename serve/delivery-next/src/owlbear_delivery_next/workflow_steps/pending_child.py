@@ -11,6 +11,7 @@ settles it, with a receipt of its session.
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -30,11 +31,13 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from owlbear_delivery_next.change_contracts.amendment_records import Amendment
+    from owlbear_delivery_next.change_contracts.held_records import HeldRun
     from owlbear_delivery_next.change_contracts.models import Change, Step
     from owlbear_delivery_next.runtimes.session_result import Run
     from owlbear_delivery_next.state_store.store import Lock, Store
 
 type Judged = tuple[loop.StepResult, Run]
+type Start = Callable[[sessions.Keep], Judged]
 CAPTURE = "child-"  # a returned child's run, kept in its own file when its Change write failed
 
 
@@ -53,24 +56,45 @@ def route_of(pending: PendingChild) -> loop.StepResult:
     return loop.StepResult.model_validate(pending.route)
 
 
-def child(store: Store, lock: Lock, change: Change, parent: tuple[str, str], start: Callable[[], Judged]) -> Judged:
+def child(store: Store, lock: Lock, change: Change, parent: tuple[str, str], start: Start) -> Judged:
     """The child's verdict and run: its kept run when it returned before, else a session kept as soon as it returns.
 
-    *parent* is the child's label and what it judges. A run that is not confirmed gone, or whose usage is unread,
-    is not kept: the session's own gates decide it, as without a pending record.
+    *parent* is the child's label and what it judges. *start* runs the session and passes its runs to the keeper it is
+    given once their read-only checks pass, before its own cleanup can fail; a run no keeper saw is kept on return. A
+    run that is not confirmed gone, or whose usage is unread, is not kept: the session's own gates decide it, as
+    without a pending record.
     """
     pending = change.pending_child
     if pending is not None and pending.run is not None:
-        run = held.accounted(pending.run)
+        run = _reloaded(pending.run)
         return session_result.to_result(run, StepKind.REVIEW, datetime.now(UTC), change.step.kind), run
-    verdict, run = start()
-    if sessions.deferrable(run):
-        label, judged = parent
-        pending = change.pending_child or PendingChild(label=label, parent=judged)
-        pending.run = held.dump_run(run)
-        change.pending_child = pending
-        _kept(store, lock, change, pending)
+    label, judged = parent
+    seen: list[Run] = []
+
+    def keep(runs: list[Run]) -> None:
+        for run in runs:
+            seen.append(run)
+            if sessions.deferrable(run):
+                kept = change.pending_child or PendingChild(label=label, parent=judged)
+                kept.run = held.dump_run(run)
+                change.pending_child = kept
+                _kept(store, lock, change, kept)
+
+    verdict, run = start(keep)
+    if all(r is not run for r in seen):
+        keep([run])
     return verdict, run
+
+
+def _reloaded(data: HeldRun) -> Run:
+    """The kept child's run with its result validated; one whose result no longer loads is a failed attempt.
+
+    Its usage and tool calls still count once; it judges nothing, so its retry runs a new challenger.
+    """
+    try:
+        return held.restored(data)
+    except (ValueError, ValidationError, TypeError) as exc:
+        return replace(held.accounted(data), ending="error", detail=f"its kept result no longer loads: {exc}"[:300])
 
 
 def _kept(store: Store, lock: Lock, change: Change, pending: PendingChild) -> None:
@@ -180,14 +204,23 @@ def retired(store: Store, lock: Lock, change: Change) -> Change:
         return change
     step = None
     if pending.run is not None:
-        run = held.accounted(pending.run)
-        verdict = session_result.to_result(run, StepKind.REVIEW, datetime.now(UTC), change.step.kind)
+        run = held.accounted(pending.run)  # counted whether or not its result still loads
         made = candidate(change, pending) if pending.label == amendments.LABEL else None
-        if made is not None and not made.verdict and judgeable(verdict):
-            amendments.judged(made, run)
+        if made is not None and not made.verdict:
+            _left_verdict(change, pending.run, made)
         step = booked(change, run, {"exit": "retired"})
     change.pending_child = None
     store.write(lock, change)
     if step is not None:
         sessions.announce(store, lock, change.slug, step)
     return change
+
+
+def _left_verdict(change: Change, data: HeldRun, made: Amendment) -> None:
+    """The candidate keeps the verdict of a left step's challenger, when its result still loads and judges."""
+    try:
+        run = held.restored(data)
+    except ValueError, ValidationError, TypeError:
+        return  # a result that no longer loads judges nothing; its usage still counts
+    if judgeable(session_result.to_result(run, StepKind.REVIEW, datetime.now(UTC), change.step.kind)):
+        amendments.judged(made, run)

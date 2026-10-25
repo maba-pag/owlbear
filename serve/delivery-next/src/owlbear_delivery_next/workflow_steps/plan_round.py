@@ -111,8 +111,8 @@ def challenge(  # noqa: PLR0913, PLR0917 - the plan's session context
             memory=sessions.memory(store),
         )
 
-    def start() -> pending_child.Judged:
-        return sessions.review_run(store, lock, change, path, made, LABEL, defer=True)
+    def start(keep: sessions.Keep) -> pending_child.Judged:
+        return sessions.review_run(store, lock, change, path, made, LABEL, keep=keep)
 
     verdict, run = pending_child.child(store, lock, change, (LABEL, str(plan.version) if plan else ""), start)
     if (step := pending_child.booked(change, run, {"exit": verdict.exit})) is not None:

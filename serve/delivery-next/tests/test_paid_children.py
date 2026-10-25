@@ -33,7 +33,7 @@ from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.runtimes import amendments
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.state_store.store import Lock, Store, StoreError
-from owlbear_delivery_next.workflow_steps import held, pending_child, plan_round
+from owlbear_delivery_next.workflow_steps import disposable, held, pending_child, plan_round
 
 K = StepKind
 DONE = Termination(confirmed=True)
@@ -127,12 +127,16 @@ def restart(tmp_path: Path, repo: Path, now: datetime | None = None) -> Store:
     return store
 
 
+def passing(parent: str) -> tools.Args:
+    """A challenger's passing verdict in the form its parent's challenge submits."""
+    return tools.ReviewResult(verdict="pass") if parent == "plan" else tools.VisualReviewResult(verdict="pass")
+
+
 def held_and_accepted(tmp_path: Path, repo: Path, paid: Paid, parent: str) -> Store:
     """The parent's session returned with its usage unread: held, counted at its gate, then accepted in the inbox."""
     store = Store(tmp_path / "store")
     store.write(Lock("c1"), made(parent, repo))
-    verdict = tools.ReviewResult(verdict="pass") if parent == "plan" else tools.VisualReviewResult(verdict="pass")
-    paid.verdicts = [verdict]
+    paid.verdicts = [passing(parent)]
     restart(tmp_path, repo)
     gated = store.read("c1")
     q = loop.open_question(gated)
@@ -534,6 +538,114 @@ def test_a_child_run_no_storage_keeps_is_printed_and_reported_never_claimed(tmp_
     c = store.read("c1")
     assert len(paid.children) == 2  # nothing kept the first run, so its challenge ran again, as reported
     assert (c.counted_children, c.spend.credits) == (paid.children[1:], pytest.approx(2.5 + 3.5))
+
+
+CLEANUPS = ["cleanup", "cleanup+capture-write", "cleanup+both-media"]
+
+
+@pytest.mark.parametrize("parent", ["plan", "amend"])
+def test_a_kept_child_whose_result_no_longer_loads_counts_once_judges_nothing_and_its_challenge_reruns(
+    tmp_path, change_repo, monkeypatch, parent
+):
+    paid = settlement_fails(tmp_path, change_repo, monkeypatch, parent)
+    paid.verdicts.append(passing(parent))
+    store = Store(tmp_path / "store")
+    data = json.loads(stored(store))
+    data["pending_child"]["run"]["payload"]["model"] = "NoSuchResult"
+    with store.db.write() as db:
+        db.execute("UPDATE changes SET record = ? WHERE slug = 'c1'", (json.dumps(data),))
+    c = restart(tmp_path, change_repo).read("c1")
+    assert (c.counted_children, c.spend.credits) == (paid.children, pytest.approx(2.5 + 3.5))
+    assert (c.outcome.exit, c.outcome.cause is not None) == (Exit.RETRY, True)  # a failed attempt, judging nothing
+    if parent == "plan":
+        assert (c.loops[PLAN].round, c.step.mode) == (0, "challenge")
+    else:
+        assert [a.verdict for a in c.amendments] == [""]
+
+    c = restart(tmp_path, change_repo).read("c1")  # its retry: a new challenger, never the parent again
+    assert (len(paid.parents), len(paid.children)) == (1, 2)
+    assert (c.counted_children, c.spend.credits) == (paid.children, pytest.approx(2.5 + 2 * 3.5))
+    if parent == "plan":
+        assert (c.loops[PLAN].round, c.step.kind) == (1, K.BUILD)
+    else:
+        (a,) = c.amendments
+        assert (a.verdict, a.session, a.challenger) == ("equivalent", paid.parents[0], paid.children[1])
+
+
+@pytest.mark.parametrize("fault", CLEANUPS)
+@pytest.mark.parametrize("parent", ["plan", "amend"])
+def test_a_confirmed_child_whose_read_only_cleanup_fails_is_kept_before_it_and_never_paid_again(  # noqa: C901, PLR0913, PLR0915, PLR0917
+    tmp_path, change_repo, monkeypatch, capsys, parent, fault
+):
+    paid = Paid(monkeypatch, change_repo, parent, "known")
+    held_and_accepted(tmp_path, change_repo, paid, parent)
+    paid.verdicts.append(paid.verdicts[0])
+    real_unlink, real_write = Path.unlink, Store.write
+    armed = set(fault.split("+"))
+
+    def unlink(self, *args, **kwargs):
+        if "cleanup" in armed and self.name == disposable.LIVE:  # after the child returned, its processes gone
+            armed.discard("cleanup")
+            assert paid.children, "the cleanup fails only after the confirmed child returned"
+            msg = "cleanup refused"
+            raise OSError(msg)
+        return real_unlink(self, *args, **kwargs)
+
+    def write(self, lock, change):
+        returned = change.pending_child and change.pending_child.run
+        if returned and armed & {"capture-write", "both-media"}:
+            armed.difference_update({"capture-write", "both-media"})
+            msg = "change refused"
+            raise OSError(msg)
+        return real_write(self, lock, change)
+
+    def no_capture(path, _text):
+        msg = f"{path.name} refused"
+        raise OSError(msg)
+
+    monkeypatch.setattr(Path, "unlink", unlink)
+    monkeypatch.setattr(Store, "write", write)
+    if fault == "cleanup+both-media":
+        monkeypatch.setattr(pending_child, "atomic_write", no_capture)
+    with pytest.raises(OSError, match="cleanup refused") as failed:  # the cleanup's own failure, as it is
+        restart(tmp_path, change_repo)
+    assert not armed
+    monkeypatch.setattr(Path, "unlink", real_unlink)
+    monkeypatch.setattr(Store, "write", real_write)
+    after = Store(tmp_path / "store")
+    kept = after.read("c1").pending_child
+    if fault == "cleanup":  # kept with its Change before the cleanup ran
+        assert kept is not None
+        assert kept.run is not None
+        assert (kept.run.session_id, kept.run.usage) == (paid.children[0], CHILD)
+    elif fault == "cleanup+capture-write":  # its Change write failed too: its capture keeps the same run
+        (path,) = captures(after)
+        assert json.loads(path.read_text())["run"]["session_id"] == paid.children[0]
+        assert isinstance(failed.value.__context__, OSError)
+    else:  # nothing kept it: it is printed and the error says so, never claimed
+        assert "change refused" in str(failed.value.__context__)
+        assert any("could not be kept" in n for n in failed.value.__context__.__notes__)
+        printed = [json.loads(x) for x in capsys.readouterr().out.splitlines() if "child-unkept" in x]
+        assert [p["child"]["run"]["session_id"] for p in printed] == paid.children
+        assert captures(after) == []
+
+    if fault == "cleanup+both-media":
+        (live := after.root / "changes" / "c1" / disposable.LIVE).unlink()  # the owner confirmed it gone
+        assert not live.exists()
+    restart(tmp_path, change_repo)
+    c = Store(tmp_path / "store").read("c1")
+    honest = fault == "cleanup+both-media"  # its challenge ran again, as reported; only that run counted
+    assert (len(paid.parents), len(paid.children)) == (1, 2 if honest else 1)
+    assert (c.counted_children, c.pending_child) == (paid.children[-1:], None)
+    assert c.spend.credits == pytest.approx(2.5 + 3.5)
+    assert (c.tool_use.tools["bash"].calls, c.tool_use.tools["grep"].calls) == (3, 2)
+    assert captures(Store(tmp_path / "store")) == []
+    if parent == "plan":
+        assert (c.plan.version, c.loops[PLAN].round, c.step.kind) == (1, 1, K.BUILD)
+    else:
+        (a,) = c.amendments
+        assert (a.verdict, a.session, a.challenger) == ("equivalent", paid.parents[0], paid.children[-1])
+        assert (c.step.kind, c.outcome.exit) == (K.PLAN, Exit.BACK)
 
 
 def stored(store: Store) -> str:

@@ -99,9 +99,9 @@ def _settled(store: Store, lock: Lock, change: Change, path: Path, settings: Set
             memory=sessions.memory(store),
         )
 
-    def start() -> pending_child.Judged:
+    def start(keep: sessions.Keep) -> pending_child.Judged:
         return sessions.review_run(
-            store, lock, change, path, config, amendments.LABEL, submit=amendments.SUBMIT, settings=settings, defer=True
+            store, lock, change, path, config, amendments.LABEL, submit=amendments.SUBMIT, settings=settings, keep=keep
         )
 
     verdict, done = pending_child.child(store, lock, change, (amendments.LABEL, made.id), start)
