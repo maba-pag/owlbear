@@ -123,7 +123,10 @@ recent actions with their evidence, the open work; each with an event cutoff). I
 sampling probability, verdict (silent, note, interrupt), the note, the evidence references and a short rationale.
 Records are kept on this machine in a daily store (`~/.owlbear/spotter/records-<date>.jsonl`), each with its session,
 its Change and step or its chat and turn, and its look, so Retro can join them after a restart.
-Active Spotter cases are its prompt examples.
+Active Spotter cases are its prompt examples. A look takes no session slot of its own: the agent it looks at holds
+one, so waiting for another could deadlock a machine limited to one. Instead it is admitted without blocking, within
+the Spotter's own budget and a short timeout; a look that cannot run in time is recorded as skipped, and the agent
+carries on as without a Spotter.
 - **Hand-off:** Delivery's `submit_result`; in a chat, a turn that ends with a reply to the requester.
 - **Plan:** the agent's first reply after a requester message.
 - **State change:** W1a's outside writes, publishing, deleting, settings.
@@ -167,8 +170,9 @@ hindsight verdicts. Raw cards stay on this machine; only reviewed, minimised and
 - **Retro chatlogs:** a durable Change-to-session manifest written when a step session is chosen and when it ends, on
   every ending path; at a step's end its `events.jsonl` is gzipped to `~/.owlbear/retro/chatlogs/`, with the files
   the runtime saved large outputs to if still present (missing ones are recorded). A chat counts as finished after a
-  day without events; its log is copied when Retro takes it. Logs no finding, case or pending proposal refers to go
-  after 30 days. Encrypted reasoning stays unreadable; only its summaries are kept.
+  day without events; its log is copied when Retro takes it. The logs of an unfinished Change, and of any unit Retro
+  has not judged yet, are kept; once Retro has judged a unit, its logs that no finding, case or pending proposal refers
+  to go 30 days later. Encrypted reasoning stays unreadable; only its summaries are kept.
 - **Units:** a finished Change (every step from the manifest, its reviews and its end) or a finished chat, read in
   segments, each with the chat's later course. Missing evidence makes a finding "unknown", never a proposal.
 - **Judges** with hindsight what went wrong, what it really cost and whether the agent recovered (a requester's
