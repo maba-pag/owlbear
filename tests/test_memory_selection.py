@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import os
 from typing import TYPE_CHECKING
 
+import pytest
 from owlbear_memory import MemoryEntry, MemoryState, selection, storage
 
 if TYPE_CHECKING:
@@ -68,16 +70,49 @@ def test_whole_entries_up_to_the_cap_skip_what_does_not_fit_and_fill_no_quota() 
     found = [(entry(n, score=1.0 - n / 100), "project") for n in sizes]
     picked = selection.select(found, "builder", cost=lambda c: sizes[int(c.entry.id[-5:])], room=200)
     assert ids(picked.chosen) == [1, 3, 4, 5, 6]  # 2 is skipped whole; the cap of 5 ends the selection
-    assert ids(picked.omitted) == [2]
+    assert [(ids([s.candidate])[0], s.reason) for s in picked.omitted] == [(2, "budget"), (7, "cap")]
+    every = selection.ranked(found, "builder")
+    assert sorted(ids([*picked.chosen, *(s.candidate for s in picked.omitted)])) == sorted(ids(every))
     assert selection.CAP == 5
     assert selection.BUDGET == 2000
     assert selection.select([], "builder", cost=len, room=200) == selection.Selection((), ())
 
 
 def test_a_memory_folder_is_read_as_recall_reads_it_and_a_missing_one_holds_nothing(tmp_path: Path) -> None:
-    assert selection.stored(tmp_path / "absent") == []
+    absent = selection.stored(tmp_path / "absent")
+    assert (absent.entries, absent.complete) == ([], True)
     assert not (tmp_path / "absent").exists()  # reading never creates the folder
     e = entry(1)
     storage.write_entry(tmp_path / f"{e.id}.md", e, memory_dir=tmp_path)
+    read = selection.stored(tmp_path)
+    assert ([x.id for x in read.entries], read.complete) == ([e.id], True)
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root reads files whatever their mode")
+def test_entry_files_the_reader_skips_make_the_read_incomplete(tmp_path: Path) -> None:
+    e = entry(1)
+    storage.write_entry(tmp_path / f"{e.id}.md", e, memory_dir=tmp_path)
     (tmp_path / "broken.md").write_text("not a memory")
-    assert [x.id for x in selection.stored(tmp_path)] == [e.id]
+    hidden = entry(2)
+    storage.write_entry(tmp_path / f"{hidden.id}.md", hidden, memory_dir=tmp_path)
+    (tmp_path / f"{hidden.id}.md").chmod(0)
+    try:
+        read = selection.stored(tmp_path)
+    finally:
+        (tmp_path / f"{hidden.id}.md").chmod(0o600)
+    assert ([x.id for x in read.entries], read.unreadable, read.complete) == ([e.id], 2, False)
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root lists folders whatever their mode")
+def test_a_folder_that_exists_but_cannot_be_listed_or_is_a_file_is_an_error_never_empty(tmp_path: Path) -> None:
+    locked = tmp_path / "locked"
+    locked.mkdir()
+    locked.chmod(0)
+    try:
+        with pytest.raises(PermissionError):
+            selection.stored(locked)
+    finally:
+        locked.chmod(0o700)
+    (tmp_path / "file").write_text("")
+    with pytest.raises(NotADirectoryError):
+        selection.stored(tmp_path / "file")

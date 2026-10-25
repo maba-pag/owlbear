@@ -1,8 +1,10 @@
 """Pre-flight lessons (TD-70): what a newly created step conversation is told from memory, and what it is not."""
 
 import asyncio
+import contextlib
 import dataclasses
 import json
+import os
 import subprocess
 from pathlib import Path
 from types import SimpleNamespace
@@ -67,7 +69,20 @@ def shown(text: str) -> list[dict]:
 
 def told(role: str, folder: Path | None) -> tuple[str, list[dict]]:
     log: list[dict] = []
-    return lessons.opening(role, folder, "## Task\nDo it.", lambda **e: log.append(e)), log
+    text, exposure = lessons.opening(role, folder, "## Task\nDo it.", lambda **e: log.append(e))
+    assert (exposure is None) == (log == [])
+    return text, log
+
+
+def selected(role: str = "builder", **made: object) -> dict:
+    """A ``lessons-selected`` event: what was chosen before anything was sent."""
+    return {
+        "event": "lessons-selected",
+        "selection": selection.VERSION,
+        "role": role,
+        "lessons": [],
+        "omitted": [],
+    } | made
 
 
 def test_the_role_gets_its_own_and_every_agents_lessons_from_project_and_global_memory(memory: Path) -> None:
@@ -97,14 +112,7 @@ def test_the_role_gets_its_own_and_every_agents_lessons_from_project_and_global_
     }
     assert text.startswith(f"{lessons.HEADING}\n{lessons.FRAME}\n")
     assert text.endswith(f"{lessons.CLOSE}\n\n## Task\nDo it.")
-    assert log == [
-        {
-            "event": "lessons",
-            "selection": selection.VERSION,
-            "lessons": [{"id": q["id"], "revision": q["revision"]} for q in quoted],
-            "omitted": [],
-        }
-    ]
+    assert log == [selected(status="shown", lessons=[{"id": q["id"], "revision": q["revision"]} for q in quoted])]
 
 
 def test_the_frame_says_lessons_are_advisory_data_that_override_nothing() -> None:
@@ -152,7 +160,9 @@ def test_whole_lessons_fit_the_hard_budget_wrappers_included_and_skipped_ones_ar
     assert kept >= 1
     assert [q["id"] for q in quoted] == [e.id for e in (big[0], *small[:kept])]  # big[1] is skipped, never cut
     assert quoted[0]["body"] == "x" * 1000
-    assert log[0]["omitted"] == [{"id": e.id, "revision": e.revision} for e in (big[1], *small[kept:])]
+    skipped = (big[1], *small[kept:])
+    assert log[0]["omitted"] == [{"id": e.id, "revision": e.revision, "reason": "budget"} for e in skipped]
+    assert len(quoted) + len(log[0]["omitted"]) == len(big) + len(small)  # every eligible lesson is accounted for
     for skipped in (big[1], small[kept]):
         assert len(block) + len(lessons.line(selection.Candidate(skipped, "project", specific=True))) + 1 > 2000
 
@@ -161,7 +171,7 @@ def test_at_most_five_lessons_are_shown_and_none_fills_a_quota(memory: Path) -> 
     keep(memory, *(entry(n, score=0.9 - n / 100) for n in range(1, 9)))
     text, log = told("builder", memory)
     assert [q["title"] for q in shown(text)] == [f"Lesson {n}" for n in range(1, 6)]
-    assert log[0]["omitted"] == []
+    assert [(o["id"][-5:], o["reason"]) for o in log[0]["omitted"]] == [(f"{n:05d}", "cap") for n in range(6, 9)]
     keep(memory.parent / "other", entry(1))
     assert len(shown(told("builder", memory.parent / "other")[0])) == 1
 
@@ -170,7 +180,7 @@ def test_no_eligible_lessons_are_said_as_such(memory: Path) -> None:
     keep(memory, entry(1, state=MemoryState.PENDING), entry(2, scope_agents=["reviewer"]))
     text, log = told("builder", memory)
     assert text == f"{lessons.HEADING}\n{lessons.NONE}\n\n## Task\nDo it."
-    assert log == [{"event": "lessons", "selection": selection.VERSION, "lessons": [], "omitted": []}]
+    assert log == [selected(status="none")]
     assert told("builder", memory.parent / "absent")[0].startswith(f"{lessons.HEADING}\n{lessons.NONE}")
 
 
@@ -178,8 +188,12 @@ def test_lessons_that_exist_but_fit_nothing_send_the_agent_to_its_own_recall(mem
     keep(memory, entry(1, title="t" * 2000))
     text, log = told("builder", memory)
     assert text.startswith(f"{lessons.HEADING}\n{lessons.UNFIT.format(role='builder')}")
-    assert log[0]["lessons"] == []
-    assert len(log[0]["omitted"]) == 1
+    assert log == [
+        selected(
+            status="unfit",
+            omitted=[{"id": entry(1).id, "revision": log[0]["omitted"][0]["revision"], "reason": "budget"}],
+        )
+    ]
 
 
 def test_an_unread_memory_falls_back_to_the_agents_own_recall(memory: Path, monkeypatch) -> None:
@@ -190,7 +204,40 @@ def test_an_unread_memory_falls_back_to_the_agents_own_recall(memory: Path, monk
     text, log = told("reviewer", memory)
     assert text.startswith(f"{lessons.HEADING}\n{lessons.UNREAD.format(why='PermissionError', role='reviewer')}")
     assert "call `recall_memory` with agent `reviewer` before you start" in text
-    assert log == [{"event": "lessons", "selection": selection.VERSION, "failed": "PermissionError"}]
+    assert log == [selected("reviewer", status="unread", failed="PermissionError")]
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root reads files whatever their mode")
+def test_entries_the_real_reader_skips_make_an_incomplete_read_that_falls_back_to_recall(memory: Path) -> None:
+    keep(memory, entry(1))
+    common = keep(memory.parent.parent / "memory", entry(2))
+    (common / f"{entry(2).id}.md").chmod(0)
+    (memory / "broken.md").write_text("not a memory")
+    try:
+        text, log = told("builder", memory)
+    finally:
+        (common / f"{entry(2).id}.md").chmod(0o600)
+    assert (
+        text
+        == f"{lessons.HEADING}\n{lessons.UNREAD.format(why='2 unreadable entries', role='builder')}\n\n## Task\nDo it."
+    )
+    assert log == [selected(status="incomplete", failed="2 unreadable entries")]
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root lists folders whatever their mode")
+def test_a_memory_folder_the_real_reader_cannot_list_is_unread_and_an_absent_one_is_empty(memory: Path) -> None:
+    keep(memory, entry(1))
+    memory.chmod(0)
+    try:
+        text, log = told("builder", memory)
+    finally:
+        memory.chmod(0o700)
+    assert text.startswith(f"{lessons.HEADING}\n{lessons.UNREAD.format(why='PermissionError', role='builder')}")
+    assert log == [selected(status="unread", failed="PermissionError")]
+    (memory.parent / "file").write_text("")
+    assert told("builder", memory.parent / "file")[1] == [selected(status="unread", failed="NotADirectoryError")]
+    text, log = told("builder", memory.parent / "absent")  # no folders yet: memory holds nothing, completely
+    assert (text.split("\n\n")[0], log) == (f"{lessons.HEADING}\n{lessons.NONE}", [selected(status="none")])
 
 
 def test_roles_without_recall_and_steps_without_memory_get_nothing(memory: Path) -> None:
@@ -235,8 +282,8 @@ def sdk_step(memory: Path, **cfg: object) -> sdk_adapter._Step:
 class Client:
     """A runtime that holds *found* sessions; each session records what was sent to it."""
 
-    def __init__(self, *found: str, transcript: tuple[str, ...] = ()) -> None:
-        self.found, self.sends, self.created = set(found), [], []
+    def __init__(self, *found: str, transcript: tuple[str, ...] = (), fails: bool = False) -> None:
+        self.found, self.sends, self.created, self.fails = set(found), [], [], fails
         user = [
             SimpleNamespace(type=SimpleNamespace(value="user.message"), data=SimpleNamespace(content=t))
             for t in transcript
@@ -244,6 +291,8 @@ class Client:
         self.session = SimpleNamespace(send=self.send, get_events=lambda: asyncio.sleep(0, user))
 
     async def send(self, message: str, **_kw: object) -> None:
+        if self.fails:
+            raise ConnectionError
         self.sends.append(message)
 
     async def get_session_metadata(self, sid: str) -> dict | None:
@@ -258,28 +307,45 @@ class Client:
 
 
 def opened(client: Client, st: sdk_adapter._Step) -> list[dict]:
-    asyncio.run(sdk_adapter._open(client, st))  # noqa: SLF001
-    return [e for e in st.events if e.get("event") == "lessons"]
+    with contextlib.suppress(ConnectionError):
+        asyncio.run(sdk_adapter._open(client, st))  # noqa: SLF001
+    return [{k: v for k, v in e.items() if k != "at"} for e in st.events if e.get("event", "").startswith("lessons")]
+
+
+def exposed(session: str, *ids: str, role: str = "builder") -> dict:
+    """A ``lessons-shown`` event: what the conversation *session* was shown once its first message reached it."""
+    refs = [{"id": i, "revision": entry(int(i[-5:])).revision} for i in ids]
+    made = {"session": session, "role": role, "selection": selection.VERSION, "status": "shown", "lessons": refs}
+    return {"event": "lessons-shown"} | made
 
 
 def test_a_fresh_sdk_session_starts_with_its_lessons_once(memory: Path) -> None:
     keep(memory, entry(1))
     client, st = Client(), sdk_step(memory)
-    exposed = opened(client, st)
+    events = opened(client, st)
     assert client.created == ["s1"]
     assert client.sends[0].startswith(f"{lessons.HEADING}\n{lessons.FRAME}")
     assert client.sends[0].endswith("\n\nm")
-    assert [x["id"] for x in exposed[0]["lessons"]] == [entry(1).id]
+    ref = [{"id": entry(1).id, "revision": entry(1).revision}]
+    assert events == [selected(status="shown", lessons=ref), exposed("s1", entry(1).id)]
+
+
+def test_a_failed_first_send_logs_the_selection_and_no_exposure(memory: Path) -> None:
+    keep(memory, entry(1))
+    client, st = Client(fails=True), sdk_step(memory)
+    events = opened(client, st)
+    assert client.created == ["s1"]
+    assert [e["event"] for e in events] == ["lessons-selected"]
 
 
 def test_a_replacement_sdk_session_gets_the_lessons_with_its_fresh_message(memory: Path) -> None:
     keep(memory, entry(1))
     client, st = Client(), sdk_step(memory, resume=True, replaced=lambda: "s2")
-    exposed = opened(client, st)
+    events = opened(client, st)
     assert client.created == ["s2"]
     assert client.sends[0].startswith(lessons.HEADING)
     assert client.sends[0].endswith("\n\ntold again")
-    assert len(exposed) == 1
+    assert events[1:] == [exposed("s2", entry(1).id)]  # bound to the replacement, not the missing session
 
 
 def test_a_resumed_sdk_session_gets_no_lessons_again(memory: Path, monkeypatch) -> None:
@@ -320,27 +386,38 @@ def clone(tmp_path: Path, monkeypatch) -> Path:
 
 
 @pytest.fixture
-def window(tmp_path: Path, clone: Path, memory: Path, monkeypatch) -> list[str]:
-    """Runs every step session in a VS Code window whose host only records each new chat's first prompt."""
-    prompts: list[str] = []
+def window(tmp_path: Path, clone: Path, memory: Path, monkeypatch) -> SimpleNamespace:
+    """Runs every step session in a VS Code window whose host records each new chat's first prompt.
+
+    ``starts`` False: the host never starts the prompt's turn; ``reachable`` False: no editor answers.
+    """
+    seen = SimpleNamespace(prompts=[], sessions=[], starts=True, reachable=True)
 
     class Chat:
         def __init__(self, _conn: object, spec: object, _approve: object, **_hooks: object) -> None:
-            prompts.append(spec.prompt)
+            seen.prompts.append(spec.prompt)
             self.announced: dict[str, str] = {}
 
         def run(self, control: object, *, limit: float) -> Outcome:  # noqa: ARG002
+            if not seen.starts:
+                return Outcome("error", "the host refused the turn")
             control.started.set()
             return Outcome("complete")
 
+    def connect(_folder: Path) -> SimpleNamespace:
+        if not seen.reachable:
+            raise ConnectionRefusedError
+        return SimpleNamespace()
+
     env = vscode_adapter.Env(
-        connect=lambda _f: SimpleNamespace(),
+        connect=connect,
         settle=lambda *_a: Termination(confirmed=True),
         reminder="Call submit_result.",
         record=lambda *_a: host_record.Record(found=False, why="no host record"),
     )
 
     def run(_store: Store, cfg: sdk_adapter.Session, **_kw: object) -> Run:
+        seen.sessions.append(cfg.session_id)
         vscode_adapter.run(dataclasses.replace(cfg, model="gpt-6-luna"), tmp_path / "steps" / "1.json", env)
         done = Run(
             cfg.session_id,
@@ -357,7 +434,7 @@ def window(tmp_path: Path, clone: Path, memory: Path, monkeypatch) -> list[str]:
     monkeypatch.setattr(runner.sessions, "memory", lambda _store: memory)
     keep(memory, entry(1))
     (tmp_path / "steps").mkdir()
-    return prompts
+    return seen
 
 
 def stepped(tmp_path: Path, clone: Path, *tasks: Task, at: str) -> Store:
@@ -372,19 +449,31 @@ def stepped(tmp_path: Path, clone: Path, *tasks: Task, at: str) -> Store:
 
 
 def exposures(store: Store) -> list[dict]:
-    return [e for e in store.events("c1") if e.get("event") == "lessons"]
+    return [e for e in store.events("c1") if e.get("event", "").startswith("lessons")]
 
 
-def test_a_window_step_starts_its_chat_with_the_lessons(tmp_path: Path, clone: Path, window: list[str]) -> None:
+def test_a_window_step_starts_its_chat_with_the_lessons(tmp_path: Path, clone: Path, window: SimpleNamespace) -> None:
     store = stepped(tmp_path, clone, Task(id="t1", title="one"), at="t1")
-    assert len(window) == 1
-    assert window[0].startswith(f"{lessons.HEADING}\n{lessons.FRAME}")
-    assert "## Task t1: one" in window[0]
-    assert [x["id"] for x in exposures(store)[0]["lessons"]] == [entry(1).id]
+    assert len(window.prompts) == 1
+    assert window.prompts[0].startswith(f"{lessons.HEADING}\n{lessons.FRAME}")
+    assert "## Task t1: one" in window.prompts[0]
+    ref = [{"id": entry(1).id, "revision": entry(1).revision}]
+    logged = [{k: v for k, v in e.items() if k != "at"} for e in exposures(store)]
+    assert logged == [selected(status="shown", lessons=ref), exposed(window.sessions[0], entry(1).id)]
+
+
+@pytest.mark.parametrize("failure", ["starts", "reachable"])
+def test_a_window_whose_turn_never_starts_logs_no_exposure(
+    tmp_path: Path, clone: Path, window: SimpleNamespace, failure: str
+) -> None:
+    setattr(window, failure, False)
+    store = stepped(tmp_path, clone, Task(id="t1", title="one"), at="t1")
+    expected = ["lessons-selected"] if failure == "starts" else []  # no editor: no prompt was even made
+    assert [e["event"] for e in exposures(store)] == expected
 
 
 def test_a_window_repair_falls_back_to_a_fresh_chat_that_gets_the_lessons(
-    tmp_path: Path, clone: Path, window: list[str]
+    tmp_path: Path, clone: Path, window: SimpleNamespace
 ) -> None:
     store = stepped(
         tmp_path,
@@ -393,8 +482,10 @@ def test_a_window_repair_falls_back_to_a_fresh_chat_that_gets_the_lessons(
         Task(id="f1", title="fix", origin="review", fixes="t1", resume="s-build", earlier="Added b."),
         at="f1",
     )
-    assert [e["session"] for e in store.events("c1") if e.get("event") == "repair-fallback"] == ["s-build"]
-    assert len(window) == 1
-    assert window[0].startswith(lessons.HEADING)
-    assert window[0].endswith(repairs.EARLIER.format("Added b."))
-    assert len(exposures(store)) == 1
+    fell = [e for e in store.events("c1") if e.get("event") == "repair-fallback"]
+    assert [e["session"] for e in fell] == ["s-build"]
+    assert len(window.prompts) == 1
+    assert window.prompts[0].startswith(lessons.HEADING)
+    assert window.prompts[0].endswith(repairs.EARLIER.format("Added b."))
+    assert [e["event"] for e in exposures(store)] == ["lessons-selected", "lessons-shown"]
+    assert exposures(store)[1]["session"] == fell[0]["fresh"]

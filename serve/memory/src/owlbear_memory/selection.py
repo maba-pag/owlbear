@@ -11,7 +11,9 @@ of a project's memory folder and of Global memory, deduplicated by ID with the p
 4. the entry ID, so equal entries always come in the same order.
 
 It keeps at most ``CAP`` whole entries. One that does not fit the space left is skipped, never cut, and a later,
-smaller one may still fit; nothing fills a quota.
+smaller one may still fit; nothing fills a quota. Every eligible entry left out is named with its reason, the cap
+or the budget. A read that skipped unreadable entry files is incomplete, and says so; only a folder that does not
+exist reads as complete and empty.
 
 Limits: the ranking knows nothing of the task, so a high-scoring lesson that does not apply can take a place a
 relevant one needed; a long entry is skipped whole; a new lesson ranks by its saver's confidence alone, since
@@ -20,9 +22,11 @@ nobody has assessed it yet; recency follows the entry's last update, whatever ch
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from datetime import datetime
-from typing import TYPE_CHECKING
+from stat import S_ISDIR
+from typing import TYPE_CHECKING, Literal
 
 from owlbear_memory.engine import MemoryEngine
 from owlbear_memory.models import MemoryEntry, MemoryState, Where
@@ -45,9 +49,36 @@ def eligible(entry: MemoryEntry, agent: str | None) -> bool:
     return EVERY in entry.scope_agents or (bool(agent) and agent != EVERY and agent in entry.scope_agents)
 
 
-def stored(folder: Path) -> list[MemoryEntry]:
-    """A memory folder's entries, read as recall reads them; none while the folder does not exist."""
-    return MemoryEngine(folder).load() if folder.is_dir() else []
+@dataclass(frozen=True)
+class Read:
+    """A memory folder's readable entries and how many of its entry files could not be read."""
+
+    entries: list[MemoryEntry]
+    unreadable: int = 0
+
+    @property
+    def complete(self) -> bool:
+        """Every entry file was read: an empty complete read means the folder holds none."""
+        return not self.unreadable
+
+
+def stored(folder: Path) -> Read:
+    """A memory folder's entries, read as recall reads them; none, completely, while the folder does not exist.
+
+    Raises:
+        OSError: The folder exists but is no folder or cannot be listed, so its entries are unknown.
+    """
+    try:
+        found = folder.stat()
+    except FileNotFoundError:
+        return Read([])
+    if not S_ISDIR(found.st_mode):
+        raise NotADirectoryError(str(folder))
+    with os.scandir(folder):  # a folder the reader cannot list would otherwise read as empty
+        pass
+    engine = MemoryEngine(folder)
+    entries = engine.load()
+    return Read(entries, engine.parse_errors)
 
 
 def readable(project: Iterable[MemoryEntry], shared: Iterable[MemoryEntry]) -> list[tuple[MemoryEntry, Where]]:
@@ -67,11 +98,19 @@ class Candidate:
 
 
 @dataclass(frozen=True)
+class Skipped:
+    """An eligible entry left out, and why: the cap was reached, or it did not fit the space left."""
+
+    candidate: Candidate
+    reason: Literal["cap", "budget"]
+
+
+@dataclass(frozen=True)
 class Selection:
-    """The entries kept, in order, and those skipped because they did not fit the space left."""
+    """The entries kept, in order, and every other eligible one with the reason it was left out."""
 
     chosen: tuple[Candidate, ...]
-    omitted: tuple[Candidate, ...]
+    omitted: tuple[Skipped, ...]
 
 
 def _updated(entry: MemoryEntry) -> float:
@@ -99,15 +138,16 @@ def select(
     room: int,
     cap: int = CAP,
 ) -> Selection:
-    """Up to *cap* ranked entries whose *cost*, the size of each as rendered, fits *room* in total."""
+    """Up to *cap* ranked entries whose *cost*, the size of each as rendered, fits *room* in total; the rest skipped."""
     chosen: list[Candidate] = []
-    omitted: list[Candidate] = []
+    omitted: list[Skipped] = []
     for candidate in ranked(entries, agent):
         if len(chosen) >= cap:
-            break
+            omitted.append(Skipped(candidate, "cap"))
+            continue
         size = cost(candidate)
         if size > room:
-            omitted.append(candidate)
+            omitted.append(Skipped(candidate, "budget"))
             continue
         chosen.append(candidate)
         room -= size
