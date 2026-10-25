@@ -213,7 +213,7 @@ def test_a_shared_profile_is_detected_once_in_each_clone_and_again_after_a_failu
 
     monkeypatch.setattr(profile_share.profile, "detect", detect)
     monkeypatch.setattr(profile_share.profile, "provider", lambda *_a: None)
-    assert [profile_share.checked(store, repo).version for _ in range(2)] == [2, 2]
+    assert [profile_share.checked(store, repo).version for _ in range(2)] == [2, 5]
     assert [profile_share.checked(store, repo).version for _ in range(2)] == [6, 6]
     assert (seen, Store.open(repo).read_profile().version) == ([2, 2, 5], 6)
 

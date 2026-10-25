@@ -19,7 +19,7 @@ from owlbear_delivery_next.change_contracts.models import (
     Waiting,
 )
 from owlbear_delivery_next.change_contracts.profile_record import Profile
-from owlbear_delivery_next.change_flow import loop, worktree
+from owlbear_delivery_next.change_flow import delivery_target, loop, worktree
 from owlbear_delivery_next.change_flow.loop import StepResult
 from owlbear_delivery_next.git.remote_git import RemoteGitError, RemoteGitFailed, RemoteGitTimeout, run_remote_git
 from owlbear_delivery_next.github.provider import FailureCode, ProviderError
@@ -32,7 +32,7 @@ if TYPE_CHECKING:
 
     from owlbear_delivery_next.change_contracts.models import Actor, Change
     from owlbear_delivery_next.change_flow.loop import PrState, Seen
-    from owlbear_delivery_next.github.provider import Provider, Rules
+    from owlbear_delivery_next.github.provider import Provider, PullRequest, Rules
     from owlbear_delivery_next.state_store.store import Lock, Store
 
 type Step = Callable[[Ctx, Change], tuple[Change, StepResult]]
@@ -200,12 +200,25 @@ def unsupported(c: Change, now: datetime) -> StepResult:
     return StepResult(exit=Exit.STOP, reason=reason, stop=stop)
 
 
+def landed(ctx: Ctx, c: Change, pr: PullRequest) -> StepResult | None:
+    """Validate a terminal merge before releasing its queue claim; otherwise ask or keep waiting."""
+    if not pr.merged:
+        return pending(Waiting.GITHUB, f"PR #{pr.number} is not confirmed merged", ctx.poll())
+    if why := delivery_target.mismatch(c, pr, ctx.repository):
+        c.stop = delivery_target.stop(c, why, ctx.now)
+        return StepResult(exit=Exit.ASK, question=delivery_target.question(c, why))
+    c.queue = None
+    return None
+
+
 def pr_state(gh: Provider, repository: str, c: Change, offered: str | None = None) -> Seen:
     """The PR's terminal state for the scheduler, None when unreadable; reads the conversation only for consent."""
     if c.names.pr is None or not repository or c.finished_at:
         return None, False
     try:
         pr = gh.read_pull_request(repository, c.names.pr)
+        if pr.merged and delivery_target.mismatch(c, pr, repository):
+            return "misdelivered", False
         state: PrState = "merged" if pr.merged else pr.state
         if state != "open" or not loop.waiting_consent(c):
             return state, False
