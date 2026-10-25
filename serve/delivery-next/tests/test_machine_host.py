@@ -645,9 +645,7 @@ def test_a_stop_when_idle_landing_right_after_a_curation_grant_stops_it_before_i
     assert (ran, machine.idle_stop()) == ([], True)
 
 
-def test_a_curation_admitted_before_a_stop_when_idle_stays_pinned_and_finishes(
-    machine, shared_repo, monkeypatch
-):
+def test_a_curation_admitted_before_a_stop_when_idle_stays_pinned_and_finishes(machine, shared_repo, monkeypatch):
     gate = threading.Event()
     ran = _curation_runs(machine, shared_repo, monkeypatch, gate)
     machine.curation.start("shop")
