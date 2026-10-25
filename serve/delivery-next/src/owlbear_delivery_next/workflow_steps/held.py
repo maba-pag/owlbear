@@ -199,7 +199,8 @@ def _visual_holds(store: Store, change: Change, kept: VisualRound, where: Path) 
 def take(store: Store, lock: Lock, change: Change) -> Run | None:
     """The held result when the owner accepted it and it still matches the step, brief version and HEAD.
 
-    The hold is used at most once: it is removed whether it is taken, stale or declined.
+    An accepted hold stays on disk until `consume` records it once its result is durably applied; a stale or
+    declined one is removed here.
     """
     lock.check(change.slug)
     file = _path(store, change.slug)
@@ -210,10 +211,20 @@ def take(store: Store, lock: Lock, change: Change) -> Run | None:
         run = _load(held.run) if held else None
     except ValueError, ValidationError, TypeError:
         run = None
-    file.unlink(missing_ok=True)
     if held is None or run is None or not _accepted(change, held.question):
+        file.unlink(missing_ok=True)
         return None
-    event = "held-accepted" if _matches(held, change) else "held-stale"
+    if not _matches(held, change):
+        file.unlink(missing_ok=True)
+        at = datetime.now(UTC).isoformat(timespec="seconds")
+        store.log(lock, change.slug, {"event": "held-stale", "at": at, "session": run.session_id})
+        return None
+    return run
+
+
+def consume(store: Store, lock: Lock, slug: str, run: Run) -> None:
+    """Record an accepted hold once its result is durably applied, then remove it."""
+    lock.check(slug)
     at = datetime.now(UTC).isoformat(timespec="seconds")
-    store.log(lock, change.slug, {"event": event, "at": at, "session": run.session_id})
-    return run if event == "held-accepted" else None
+    store.log(lock, slug, {"event": "held-accepted", "at": at, "session": run.session_id})
+    _path(store, slug).unlink(missing_ok=True)

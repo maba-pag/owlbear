@@ -197,6 +197,8 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:  # noq
     if isinstance(p := run.payload, tools.CheckRecipe) and result.exit == Exit.PENDING:
         change.env = Environment(check=s.task or "", command=p.command, directory=p.directory, ready_url=p.ready_url)
     store.write(lock, loop.apply(change, result, end))
+    if accepted:
+        held.consume(store, lock, slug, accepted)  # once durable: a failed write leaves the hold for a restart
 
 
 def _helpers(

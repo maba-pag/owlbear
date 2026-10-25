@@ -260,3 +260,33 @@ def test_an_unread_judge_is_logged_with_its_label_so_its_subagents_count_for_its
     (step,) = [e for e in store.events("c1") if e.get("event") == "step"]
     assert (step["kind"], step["label"], step["subagents"]) == ("shape", "brief-challenge", ran)
     assert [(u["role"], u["runs"]) for u in pack_routes.subagent_use(store)] == [("challenger", 1)]
+
+
+def test_an_accepted_hold_survives_a_failed_final_write_and_is_applied_once_after_restart(gated, clone, monkeypatch):
+    store, c = gated
+    session = c.step.session
+    c = answer(store, c, "accept")
+    held_file = store.root / "changes" / "c1" / "held.json"
+    real_apply, failures = runner.loop.apply, []
+
+    def failing_once(change, result, now):
+        if not failures:
+            failures.append(result)
+            msg = "disk full"
+            raise OSError(msg)
+        return real_apply(change, result, now)
+
+    monkeypatch.setattr(runner.loop, "apply", failing_once)
+    with pytest.raises(OSError, match="disk full"):
+        runner._step(store, Lock("c1"), c, c.step, clone)  # noqa: SLF001
+    assert held_file.exists()
+    assert [e for e in store.events("c1") if e.get("event") == "held-accepted"] == []
+
+    monkeypatch.setattr(runner.sdk_adapter, "run", lambda _cfg: pytest.fail("a restored hold starts no session"))
+    runner._step(store, Lock("c1"), store.read("c1"), store.read("c1").step, clone)  # noqa: SLF001
+
+    done = store.read("c1")
+    accepted = [e for e in store.events("c1") if e.get("event") == "held-accepted"]
+    assert (done.step.kind, done.outcome.exit) == (K.REVIEW, Exit.DONE)
+    assert [e["session"] for e in accepted] == [session]
+    assert not held_file.exists()
