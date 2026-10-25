@@ -354,11 +354,14 @@ def _packages(profile: Profile) -> list[str]:
 def _alone(profile: Profile) -> str:
     """How a task names its checks: the profile's commands as listed, never with a `cd` in front."""
     inside = ((p, c) for p, c in wt.checks(profile) if p.strip("/") not in {"", "."})
-    package, command = next(inside, ("packages/app", "npm test"))
-    return (
+    rule = (
         "A task's `checks` are these check commands exactly as listed. The Builder runs each from its package's "
-        f"directory, so a check never starts with `cd`: write `{command}`, not `cd {package} && {command}`."
+        "directory, so a check never starts with `cd`"
     )
+    if (found := next(inside, None)) is None:  # no package check to show: an example would name one not listed
+        return f"{rule}."
+    package, command = found
+    return f"{rule}: write `{command}`, not `cd {package} && {command}`."
 
 
 def _others(others: Mapping[str, Sequence[str]]) -> list[str]:

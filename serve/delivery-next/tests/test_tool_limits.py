@@ -113,3 +113,16 @@ def test_other_errors_give_the_nested_field_s_own_example():
     ]
     _, errors = tool_schema.parse(tools.PlanResult, {"tasks": ["t1"]})
     assert errors[0].startswith('tasks[0]: Input should be a valid dictionary or instance of PlanTask - e.g. {"title"')
+
+
+def test_a_visual_reviews_covered_paths_over_the_limit_keep_every_screenshot():
+    from owlbear_delivery_next.change_contracts import tool_schema, tools  # noqa: PLC0415
+
+    paths = [f"shots/{n}.png" for n in range(500)]
+    _, errors = tool_schema.parse(tools.VisualReviewResult, {"verdict": "pass", "covered_paths": paths})
+    told = next(e for e in errors if e.startswith("covered_paths"))
+    assert told.endswith("list each required screenshot once, by its exact file name")
+    _, errors = tool_schema.parse(tools.ReviewResult, {"verdict": "pass", "covered_paths": paths})
+    assert next(e for e in errors if e.startswith("covered_paths")).endswith(
+        "name the directories you read instead of each file"
+    )

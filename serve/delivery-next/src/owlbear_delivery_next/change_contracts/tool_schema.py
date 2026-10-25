@@ -30,6 +30,7 @@ SHORTEN = {
     ("BuildResult", "checks"): "report each task check once, as it last ran",
     ("ReviewResult", "findings"): "merge findings with the same fix; leave out none that must be fixed",
     ("ReviewResult", "covered_paths"): "name the directories you read instead of each file",
+    ("VisualReviewResult", "covered_paths"): "list each required screenshot once, by its exact file name",
 }
 
 
@@ -74,7 +75,9 @@ def _field(model: type[BaseModel], loc: Sequence[int | str]) -> tuple[tuple[str,
 
 
 def _declaring(model: type[BaseModel], name: str) -> str:
-    """The class that declares *name*, so a subclass's field shares its parent's advice."""
+    """The class whose advice *name* takes: the model's own, else the declaring class's, which subclasses share."""
+    if (model.__name__, name) in SHORTEN:
+        return model.__name__
     return next(c.__name__ for c in reversed(model.__mro__) if name in getattr(c, "__annotations__", {}))
 
 

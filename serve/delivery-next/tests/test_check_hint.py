@@ -63,7 +63,8 @@ def test_the_plan_step_says_how_a_task_names_its_checks_and_carries_the_packages
         "directory, so a check never starts with `cd`: write `npm test`, not `cd packages/app && npm test`."
     ) in parts.message
     bare = step_input.plan(c, Profile(), Path("/w"), {})
-    assert "write `npm test`, not `cd packages/app && npm test`" in bare  # no profile yet: the example stands
+    assert "so a check never starts with `cd`." in bare  # no package check listed: no example naming one
+    assert "write `" not in bare
 
 
 def test_the_plan_step_s_gate_gives_the_hint():
