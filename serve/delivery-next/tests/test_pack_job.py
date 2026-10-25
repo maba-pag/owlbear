@@ -1,6 +1,7 @@
 """The Settings page's design pack update job (TD-101) and the Maintenance overview (TD-113), with fakes for the live
 parts: upstream, downloads, golden pages, replay and the challenger. Git runs only on local repositories in tmp."""
 
+import fcntl
 import hashlib
 import json
 import os
@@ -1403,6 +1404,55 @@ def test_every_project_sees_an_update_running_on_the_machine_and_for_whom(tmp_pa
     finally:
         os.close(job.held)
     assert pack_job.running_for() is None
+
+
+def test_a_successor_claim_is_never_erased_by_a_release_paused_after_its_close(tmp_path, monkeypatch):
+    """A release closes and clears the claim under the lock a claim takes, so a successor is not erased."""
+    job = pack_job.Job(Store(tmp_path / "store"))
+    job._claim()  # noqa: SLF001 - the first run's claim
+    real_close, closed, resume = os.close, threading.Event(), threading.Event()
+    armed = [True]
+
+    def paused_close(fd: int) -> None:
+        real_close(fd)
+        if armed[0]:
+            armed[0] = False
+            closed.set()
+            resume.wait(10)
+
+    monkeypatch.setattr(pack_job.os, "close", paused_close)
+    releaser = threading.Thread(target=job._release)  # noqa: SLF001 - the first run's release
+    releaser.start()
+    assert closed.wait(10)
+    entered = threading.Event()
+
+    def successor() -> None:
+        with job.exclusive():
+            entered.set()
+
+    claimant = threading.Thread(target=successor)
+    claimant.start()
+    assert not entered.wait(0.3), "a successor entered while the first release was still clearing its claim"
+    resume.set()
+    releaser.join(10)
+    claimant.join(10)
+    assert entered.is_set()
+    assert job.held is None
+    monkeypatch.setattr(pack_job.os, "close", real_close)
+
+    job._release()  # noqa: SLF001 - idle: nothing held, nothing to close
+    with job.exclusive():
+        assert job.held is not None
+    assert job.held is None
+    failure = RuntimeError("the replay failed")
+    with pytest.raises(RuntimeError), job.exclusive():
+        raise failure
+    assert job.held is None
+    probe = os.open(pack_job.local_home.root() / pack_job.MACHINE_LOCK, os.O_RDWR)
+    try:
+        fcntl.flock(probe, fcntl.LOCK_EX | fcntl.LOCK_NB)  # no claim leaked a descriptor or the flock
+    finally:
+        os.close(probe)
 
 
 def test_one_run_at_a_time_and_the_api_refuses_a_second(tmp_path, checkout, clone):

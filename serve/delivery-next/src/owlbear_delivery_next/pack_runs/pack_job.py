@@ -380,9 +380,10 @@ class Job:
             self._release()
 
     def _release(self) -> None:
-        if self.held is not None:
-            os.close(self.held)
-            self.held = None
+        with self.lock:  # the close and the clear are one step, so a successor's claim is never erased
+            if self.held is not None:
+                os.close(self.held)
+                self.held = None
 
     @contextlib.contextmanager
     def exclusive(self) -> Iterator[None]:

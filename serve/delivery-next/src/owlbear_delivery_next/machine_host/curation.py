@@ -73,6 +73,7 @@ class Runs(Record):
 
     folders: dict[str, FolderRun] = Field(default_factory=dict)
     left: dict[int, float | None] = Field(default_factory=dict)  # a run's processes not yet confirmed gone
+    left_key: str = ""  # the run whose lease records those processes; empty when none does
 
 
 def message(folder: str) -> str:
@@ -128,8 +129,13 @@ class Curation:
             interrupted=any(r.state == "running" for r in runs.folders.values()),
         )
         if runs.left and not self.maintenance.pending("curation"):
-            # An import already recorded (even an empty one) must not let these PIDs be cleared as history.
-            self.maintenance.adopt_uncertain(f"{self.path()}#left", SLOT, "curation", workspace="")
+            # An import already recorded (even an empty one) must not let these PIDs be cleared as history. A settled
+            # run's own lease covers them again after a recovery, so an unchanged snapshot never gets a fresh hold.
+            lease = self.maintenance.adopt_uncertain(
+                f"{self.path()}#left", SLOT, "curation", workspace="", covers=_left_covers(runs), pids=runs.left,
+            )  # fmt: skip
+            if _observed(lease, runs.left):
+                runs.left_key = lease.slot
         for name, r in runs.folders.items():
             # The run's ledger lease, or its one-time import; its key keeps a recovered run from being imported again.
             # A running row is taken before it is rewritten below, so the rewrite never erases what an older host held.
@@ -148,7 +154,7 @@ class Curation:
         for name, r in runs.folders.items():
             if r.state in {"waiting", "running"}:
                 runs.folders[name] = r.model_copy(update={"state": "failed", "reason": INTERRUPTED})
-        self.left = dict(runs.left)
+        self.left, self.left_key = dict(runs.left), runs.left_key
         self._write(runs)
 
     def path(self) -> Path:
@@ -192,7 +198,7 @@ class Curation:
         with self.lock:
             self.left |= {int(p): c for p, c in event.get("pids", {}).items()}
             runs = self.load()
-            runs.left = dict(self.left)
+            runs.left, runs.left_key = dict(self.left), self.left_key
             self._write(runs)
 
     def lingering(self) -> bool:
@@ -201,9 +207,9 @@ class Curation:
             if self.maintenance.pending("curation"):
                 return True
             if self.left:
-                self.left = {}
+                self.left, self.left_key = {}, ""
                 runs = self.load()
-                runs.left = {}
+                runs.left, runs.left_key = {}, ""
                 self._write(runs)
             return False
 
@@ -375,13 +381,15 @@ class Curation:
                 subagents=roles.subagents(settings, LABEL),
                 role=tools.CURATOR, job=LABEL, journal=sdk_adapter.Journal(event=self._pids), memory=store,
             )  # fmt: skip
+            with self.lock:
+                self.left_key = key  # persisted with the first PIDs this run records, so a restart knows whose they are
             done = maintained.run_owned(self.maintenance, cfg, self.run, project=SLOT, slot=key, kind="curation")
         t = done.termination
         with self.lock:
             watched = dict.fromkeys((*t.survivors, *t.unknown)) | done.pids if t is not None and not t.confirmed else {}
-            self.left = watched
+            self.left, self.left_key = watched, key if watched else ""
             runs = self.load()
-            runs.left = dict(self.left)
+            runs.left, runs.left_key = dict(self.left), self.left_key
             self._write(runs)
         unknown = not (t and t.confirmed)
         ended = datetime.now(UTC)
@@ -419,6 +427,31 @@ def _pending(store: Path) -> list[Any]:
 def legacy_uncertain(run: FolderRun) -> bool:
     """A failed run whose termination an older host left unknown, and which the ledger has never recorded."""
     return run.state == "failed" and UNKNOWN in run.reason and not run.key
+
+
+def _observed(lease: maintenance.Lease, left: dict[int, float | None]) -> bool:
+    """Whether a lease recorded every one of these PIDs; a birth unknown on either side matches any birth."""
+    return bool(left) and all(
+        pid in lease.pids and (lease.pids[pid] is None or born is None or lease.pids[pid] == born)
+        for pid, born in left.items()
+    )
+
+
+def _left_covers(runs: Runs) -> Callable[[maintenance.Lease], bool]:
+    """Whether a lease already accounts for the PIDs on file: an active uncertain hold, or the run that recorded them.
+
+    The run's own lease keeps its PIDs after a recovery, so an unchanged snapshot is covered by it and is not held
+    again. A lease of any other run, or a run whose PIDs differ, does not cover them.
+    """
+
+    def covers(lease: maintenance.Lease) -> bool:
+        if lease.project != SLOT or lease.kind != "curation":
+            return False
+        if lease.state in maintenance.HELD and lease.workspace == "" and lease.generation == "":
+            return True
+        return bool(runs.left_key) and lease.slot == runs.left_key and _observed(lease, runs.left)
+
+    return covers
 
 
 def _same_run(folder: str, run: FolderRun) -> Callable[[maintenance.Lease], bool]:

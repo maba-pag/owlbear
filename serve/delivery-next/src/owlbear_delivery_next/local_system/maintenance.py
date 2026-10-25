@@ -238,12 +238,13 @@ class Maintenance:
         generation: str = "",
         started: datetime | None = None,
         covers: Callable[[Lease], bool] | None = None,
+        pids: processes.Pids | None = None,
     ) -> Lease:
         """Import an older host's uncertain work once per proven generation.
 
         A proven generation is covered by its lease in any state, so a recovered one is never resurrected. An unproven
         one (empty *generation*) is covered only by a held lease, so a later unknown run gets its own hold. *covers*
-        replaces that rule for a caller that keys its own history.
+        replaces that rule for a caller that keys its own history. *pids* are the processes a new lease records.
         """
 
         def same(s: Lease) -> bool:
@@ -271,6 +272,7 @@ class Maintenance:
                 owner_created=processes.started(os.getpid()),
                 state="held",
                 reason="legacy maintenance stopped without complete termination proof",
+                pids=dict(pids or {}),
             )
             ledger.sessions.append(lease)
             if source not in ledger.imported:

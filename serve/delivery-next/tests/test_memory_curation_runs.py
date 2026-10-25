@@ -517,6 +517,55 @@ def test_an_unrelated_earlier_curation_generation_never_covers_a_later_unkeyed_2
     assert calls == []
 
 
+def survived_run(root, monkeypatch, pid: int = 4242) -> curation.Curation:
+    """A run whose process survives it: its PIDs are kept on the run's own lease and on the ledger's ``left``."""
+    monkeypatch.setattr(processes, "alive", lambda _pid, _created: True)
+
+    def run(cfg) -> Run:
+        return Run(cfg.session_id, ending="result", payload=MemoryCurationResult(summary="ok", entries=[]),
+                   runtime_pid=pid, pids={pid: 1.0},
+                   termination=Termination(confirmed=False, survivors=(pid,)))  # fmt: skip
+
+    job = curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root), run=run)
+    job.start("shop")
+    drained(job)
+    return job
+
+
+def recovered_by_reboot(job: curation.Curation) -> None:
+    [session] = job.maintenance.read()["sessions"]
+    booted = job.maintenance.boot
+    job.maintenance.boot = lambda: booted() + 1  # the computer rebooted since the run was left
+    job.maintenance.recover(session["id"], rebooted=True)
+
+
+def test_a_settled_runs_pids_are_not_held_again_when_rebuilt_after_its_recovery(root, monkeypatch) -> None:
+    """Reconstruction runs without an intervening working() or lingering(), so the same PIDs stay released."""
+    job = survived_run(root, monkeypatch)
+    recovered_by_reboot(job)
+    again = curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root))
+    sessions = again.maintenance.read()["sessions"]
+    assert (again.maintenance.pending("curation"), len(sessions), sessions[0]["state"], again.left) == (
+        False, 1, "recovered", {4242: 1.0},
+    )  # fmt: skip
+
+
+def test_repeated_rebuilds_while_the_survivor_is_held_add_no_duplicate_hold(root, monkeypatch) -> None:
+    survived_run(root, monkeypatch)
+    for _ in range(2):
+        again = curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root))
+        assert (again.maintenance.pending("curation"), len(again.maintenance.read()["sessions"])) == (True, 1)
+
+
+def test_pids_a_later_snapshot_records_are_held_and_never_borrow_the_recovered_run(root, monkeypatch) -> None:
+    job = survived_run(root, monkeypatch)
+    recovered_by_reboot(job)
+    again = curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root))
+    again._pids({"event": "pids", "pids": {"5555": 2.0}})  # noqa: SLF001 - a process the earlier run never recorded
+    later = curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root))
+    assert (later.maintenance.pending("curation"), len(later.maintenance.read()["sessions"])) == (True, 2)
+
+
 def test_a_new_unknown_curation_run_is_not_imported_again_at_restart(root) -> None:
     def run(cfg) -> Run:
         return Run(cfg.session_id, ending="error", detail="runtime PID unknown",
