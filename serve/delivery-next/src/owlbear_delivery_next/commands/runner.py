@@ -203,7 +203,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:  # noq
     _write_result(store, lock, change, accepted, loop.apply(change, result, end), post)
 
 
-def _write_result(  # noqa: PLR0913, PLR0917 - the receipt needs the store, lock, change, its hold, and the deferred writes
+def _write_result(  # noqa: PLR0913, PLR0917 - the receipt needs the store, lock, change, hold and deferred writes
     store: Store,
     lock: Lock,
     change: Change,

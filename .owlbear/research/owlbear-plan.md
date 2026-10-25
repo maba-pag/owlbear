@@ -244,7 +244,10 @@ accounting and step label; it is counted once through a receipt written with the
 uncounted hold counts it before any step runs. When the hold file cannot be written, the Change keeps the same held
 record (format 8), so the owner's accept and the count survive without a paid rerun; if the Change write fails too,
 the error is reported and nothing is counted. A hold written before this receipt existed is marked unread once,
-never zero-filled or recharged. Other packages remain open until their own merged-code
+never zero-filled or recharged. An accepted fallback is cleared from the Change once its result is durable, so it
+cannot suppress a later step; a failed clear is retried by the next run without a session or a second count. The
+branch carries main's #653 lesson delivery and exposure logging, which runs after the replacement check's send and
+before its delivery is recorded. Other packages remain open until their own merged-code
 acceptance evidence is verified.
 
 Remote-branch retirement (#612) uses an atomic expected-head ref update, never
