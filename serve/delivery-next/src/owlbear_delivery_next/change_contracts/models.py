@@ -460,6 +460,7 @@ class Change(Record):
     step: Step = Field(default_factory=lambda: Step(kind=StepKind.SHAPE))
     outcome: Outcome | None = None
     accepted_holds: list[str] = Field(default_factory=list)  # held results recorded with this Change's result (RUN-04)
+    counted_holds: list[str] = Field(default_factory=list)  # held results whose usage and tool calls the Change counts
     budgets: Budgets = Field(default_factory=Budgets)
     consent: MergeConsent | None = None
     queue: QueueClaim | None = None  # TD-226: Delivery's open enqueue attempt

@@ -179,32 +179,42 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:  # noq
     # The session's callbacks replace ``change``; objects taken from it before the session are stale.
     task = next((t for t in change.plan.tasks if t.id == s.task), None) if change.plan else None
     curation_build.recorded(change, run, path)
+    post = held.Deferred(store, slug) if accepted else store  # an accepted hold's writes wait for its receipt (RUN-04)
     result = review.recorded(change, task, run, path, session_result.to_result(run, s.kind, end))
     result = disputes.processed(change, task, run.session_id, run.payload, result, run.changed)
-    result = amend.challenge(store, lock, change, path, run, result=result, settings=settings)  # TD-179: judged only
+    result = amend.challenge(post, lock, change, path, run, result=result, settings=settings)  # TD-179: judged only
     result = conversation.disputed(task, run.payload, result)
     conversation.respond(task, run.payload, run.head, result.exit)
     sessions.logged(
-        store, lock, change, run, {"kind": s.kind, "exit": result.exit} | ({"held": True} if accepted else {})
+        post, lock, change, run, {"kind": s.kind, "exit": result.exit} | ({"held": True} if accepted else {})
     )
     if s.kind == StepKind.PLAN and result.plan:  # recorded, then challenged in its loop (TD-190)
-        result = plan_round.planned(store, lock, change, path, run.payload, result, profile, others)
+        result = plan_round.planned(post, lock, change, path, run.payload, result, profile, others)
         overlap.record(change, result, others, path)
         end = datetime.now(UTC)
-    result = overlap.integrated(store, change, path, (start, run.ending), result)
+    result = overlap.integrated(post, change, path, (start, run.ending), result)
     if isinstance(p := run.payload, tools.WrongPremise) and (p.stage, s.kind, result.exit) == TARGET:
         result = engine.needs_target(change, path, f"{p.reason} ({'; '.join(p.evidence)})", end)
     change = budgets.effect_observed(change, answer.id, end) if answer and session_result.effect_seen(run) else change
     if ctx is not None:
-        result = prepare.chosen(store, change, path, run.payload, ctx, result)
+        result = prepare.chosen(post, change, path, run.payload, ctx, result)
     if isinstance(p := run.payload, tools.CheckRecipe) and result.exit == Exit.PENDING:
         change.env = Environment(check=s.task or "", command=p.command, directory=p.directory, ready_url=p.ready_url)
-    _write_result(store, lock, change, accepted, loop.apply(change, result, end))
+    _write_result(store, lock, change, accepted, loop.apply(change, result, end), post)
 
 
-def _write_result(store: Store, lock: Lock, change: Change, accepted: session_result.Run | None, final: Change) -> None:
+def _write_result(  # noqa: PLR0913, PLR0917 - the receipt needs the store, lock, change, its hold, and the deferred writes
+    store: Store,
+    lock: Lock,
+    change: Change,
+    accepted: session_result.Run | None,
+    final: Change,
+    post: Store | held.Deferred,
+) -> None:
     """Write a step's result with an accepted hold's receipt, then remove the hold once that write is durable."""
     store.write(lock, held.receipted(store, final, accepted))
+    if isinstance(post, held.Deferred):  # the logs its writes deferred follow the receipted result
+        post.flush()
     if accepted:  # a failed write, or a failed cleanup, leaves the hold: the receipt stops it running again
         held.consume(store, lock, change.slug)
 
@@ -428,6 +438,9 @@ def main(argv: list[str] | None = None) -> int:
 
 def _step(store: Store, lock: Lock, change: Change, step: Step | None, repo: Path) -> None:
     """Run the folded Change's next step; a session whose usage stayed unread stops it for the owner (TD-54)."""
+    if (pending := held.uncounted(store, change)) is not None:  # a held session counts before anything else runs
+        _counted_hold(store, lock, change, pending)
+        return
     if step is not None:
         try:
             store.settings()
@@ -497,9 +510,15 @@ def _gate_unread(store: Store, lock: Lock, exc: UsageUnreadError) -> None:
     gated = loop.apply(kept, session_result.usage_gate(exc.run, kept.step.kind, accept=bool(head)), datetime.now(UTC))
     store.write(lock, gated)
     if head:  # after its question exists: a hold no question offers is never taken
-        held.keep(store, lock, gated, exc.run, head)
+        gated.counted_holds = [*gated.counted_holds, held.keep(store, lock, gated, exc.run, head)]
     label = {"label": exc.label} if exc.label else {}  # whose session it was, when not the step's own (TD-376)
     sessions.logged(store, lock, gated, exc.run, {"kind": kept.step.kind, "exit": Exit.ASK} | label)
+
+
+def _counted_hold(store: Store, lock: Lock, change: Change, pending: held.Held) -> None:
+    """A held session whose accounting write failed counts now, once, and only then does the step wait (RUN-04)."""
+    change.counted_holds = [*change.counted_holds, held.gen(pending)]
+    sessions.logged(store, lock, change, held.accounted(pending.run), {"kind": pending.kind, "exit": Exit.ASK})
 
 
 def _unshelved(exc: worktree.ShelveError) -> Result:

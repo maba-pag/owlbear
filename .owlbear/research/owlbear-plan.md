@@ -238,7 +238,9 @@ them from a verified archive; supported links and file modes are preserved witho
 following symlink parents. The owner-continuation candidate (#618, R12) sends a
 replacement check session the owner's pending answer before its delivery is recorded,
 and keeps an accepted held result until its final write is durable, so a restart
-applies it once without a paid rerun. Other packages remain open until their own merged-code
+applies it once without a paid rerun. An accepted review's round and findings are
+buffered until that final write, and a held result keeps its full usage and tool
+accounting, counted once through a receipt written with the spend. Other packages remain open until their own merged-code
 acceptance evidence is verified.
 
 Remote-branch retirement (#612) uses an atomic expected-head ref update, never

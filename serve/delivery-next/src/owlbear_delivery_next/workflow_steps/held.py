@@ -9,9 +9,10 @@ inputs Delivery does not hold, so its unread usage still only reruns the step.
 from __future__ import annotations
 
 import subprocess
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, ValidationError
 
@@ -37,7 +38,7 @@ OBSOLETE = {"BuildResult": ("changed_paths",)}
 
 
 class HeldRun(BaseModel):
-    """The parts of a session's run its processing reads; usage is not kept, since the gate already counted it."""
+    """The parts of a session's run its processing reads, with the accounting its gate would have counted (RUN-04)."""
 
     session_id: str
     ending: str
@@ -50,6 +51,11 @@ class HeldRun(BaseModel):
     runtime: str = "sdk"
     quota: bool = False
     quota_reset: datetime | None = None
+    usage: dict[str, Any] = {}
+    usage_unread: str = ""
+    model_check: Literal["verified", "mismatch", "unknown"] = "unknown"
+    subagents: list[dict[str, Any]] = []
+    tool_calls: dict[str, dict[str, int]] = {}
 
 
 class Held(BaseModel):
@@ -83,6 +89,11 @@ def _dump(run: Run) -> HeldRun:
         runtime=run.runtime,
         quota=run.quota,
         quota_reset=run.quota_reset,
+        usage=run.usage,
+        usage_unread=run.usage_unread,
+        model_check=run.model_check,
+        subagents=run.subagents,
+        tool_calls=run.tool_calls,
     )
 
 
@@ -126,10 +137,11 @@ def _current(payload: dict[str, Any] | None) -> tuple[object, list[str]]:
     return kept, [str(x) for x in paths] if isinstance(paths, list) else []
 
 
-def keep(store: Store, lock: Lock, change: Change, run: Run, head: str) -> None:
+def keep(store: Store, lock: Lock, change: Change, run: Run, head: str) -> str:
     """Hold an agent step's unread result for the gate question just asked, with what it depends on.
 
     A held build's session ends at *head*: its span closes there, as a recorded session's does (TD-210).
+    Returns the hold's identity, which the Change counts once its usage is logged.
     """
     lock.check(change.slug)
     s, asked = change.step, change.outcome.question if change.outcome else None
@@ -148,6 +160,7 @@ def keep(store: Store, lock: Lock, change: Change, run: Run, head: str) -> None:
         run=_dump(run),
     )
     atomic_write(_path(store, change.slug), held.model_dump_json())
+    return gen(held)
 
 
 def _accepted(change: Change, question: str) -> bool:
@@ -240,9 +253,70 @@ def take(store: Store, lock: Lock, change: Change) -> Run | None:
     return run
 
 
-def _gen(held: Held) -> str:
+def gen(held: Held) -> str:
     """The identity of a held result: its session and when it was kept, so each hold is distinct (RUN-04)."""
     return f"{held.run.session_id}@{held.at.isoformat()}"
+
+
+def uncounted(store: Store, change: Change) -> Held | None:
+    """The hold on disk whose usage and tool calls the Change does not count yet, if any (RUN-04)."""
+    held = _read(store, change.slug)
+    return held if held is not None and gen(held) not in change.counted_holds else None
+
+
+def accounted(data: HeldRun) -> Run:
+    """The held run with the usage and tool calls its gate had not yet counted, so counting it happens exactly once."""
+    return replace(
+        _load(data),
+        usage=dict(data.usage),
+        usage_unread=data.usage_unread,
+        model_check=data.model_check,
+        subagents=list(data.subagents),
+        tool_calls={k: dict(v) for k, v in data.tool_calls.items()},
+    )
+
+
+class Deferred:
+    """An accepted hold's post-session writes, kept in memory until its receipted result is written (RUN-04).
+
+    A failed final write then leaves the stored Change as it was before those writes, so a restart runs them once.
+    Other slugs and reads pass through to the store.
+    """
+
+    def __init__(self, store: Store, slug: str) -> None:
+        self._store = store
+        self._slug = slug
+        self._change: Change | None = None
+        self._events: list[tuple[Lock, str, dict[str, Any]]] = []
+
+    def __getattr__(self, name: str) -> Any:  # noqa: ANN401 - the store's other methods pass through
+        return getattr(self._store, name)
+
+    def read(self, slug: str) -> Change:
+        """The slug's Change as last written here, else as the store has it."""
+        if slug == self._slug and self._change is not None:
+            return self._change.model_copy(deep=True)
+        return self._store.read(slug)
+
+    def write(self, lock: Lock, change: Change) -> None:
+        """Hold this slug's Change in memory; other slugs are written through."""
+        if change.slug != self._slug:
+            return self._store.write(lock, change)
+        self._change = change.model_copy(deep=True)
+        return None
+
+    def log(self, lock: Lock, slug: str, event: dict[str, Any]) -> None:
+        """Hold this slug's events in memory; other slugs are logged through."""
+        if slug != self._slug:
+            return self._store.log(lock, slug, event)
+        self._events.append((lock, slug, event))
+        return None
+
+    def flush(self) -> None:
+        """The buffered events, once the receipted result is durable."""
+        for lock, slug, event in self._events:
+            self._store.log(lock, slug, event)
+        self._events.clear()
 
 
 def receipted(store: Store, change: Change, accepted: Run | None) -> Change:
@@ -253,7 +327,7 @@ def receipted(store: Store, change: Change, accepted: Run | None) -> Change:
     if held is None:
         msg = "the accepted held result is unreadable; the step stays for a restart"
         raise OSError(msg)
-    change.accepted_holds = [*change.accepted_holds, _gen(held)]
+    change.accepted_holds = [*change.accepted_holds, gen(held)]
     return change
 
 
@@ -262,17 +336,17 @@ def consume(store: Store, lock: Lock, slug: str) -> None:
     lock.check(slug)
     held = _read(store, slug)
     if held is not None:
-        gen = _gen(held)
-        if gen not in {e.get("gen") for e in store.events(slug) if e.get("event") == "held-accepted"}:
+        gen_ = gen(held)
+        if gen_ not in {e.get("gen") for e in store.events(slug) if e.get("event") == "held-accepted"}:
             at = datetime.now(UTC).isoformat(timespec="seconds")
-            store.log(lock, slug, {"event": "held-accepted", "at": at, "session": held.run.session_id, "gen": gen})
+            store.log(lock, slug, {"event": "held-accepted", "at": at, "session": held.run.session_id, "gen": gen_})
     _path(store, slug).unlink(missing_ok=True)
 
 
 def settled(store: Store, lock: Lock, change: Change) -> bool:
     """Whether the hold on disk is already recorded with the Change: then it is only cleaned up, never applied again."""
     held = _read(store, change.slug)
-    if held is None or _gen(held) not in change.accepted_holds:
+    if held is None or gen(held) not in change.accepted_holds:
         return False
     consume(store, lock, change.slug)
     return True
