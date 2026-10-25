@@ -10,6 +10,7 @@ counts it again before granting anything. A design pack update takes one slot fo
 from __future__ import annotations
 
 import dataclasses
+import subprocess
 import threading
 import uuid
 from typing import TYPE_CHECKING
@@ -18,7 +19,8 @@ from owlbear_delivery_next.change_contracts.failures import cause_key
 from owlbear_delivery_next.change_contracts.models import ErrorKind, StepKind
 from owlbear_delivery_next.design_packs import design_pack
 from owlbear_delivery_next.local_system.slots import PACK
-from owlbear_delivery_next.pack_runs import pack_replay, pack_run
+from owlbear_delivery_next.pack_runs import pack_job, pack_replay, pack_run
+from owlbear_delivery_next.state_store import project_home
 from owlbear_delivery_next.state_store.store import StoreError
 from owlbear_delivery_next.workflow_steps import check, pick
 
@@ -28,6 +30,7 @@ if TYPE_CHECKING:
 
     from owlbear_delivery_next.change_contracts.models import Change, Step
     from owlbear_delivery_next.design_packs.calibration import Replay
+    from owlbear_delivery_next.local_system.maintenance import Maintenance
     from owlbear_delivery_next.pack_runs.pack_candidate import Candidate
     from owlbear_delivery_next.pack_runs.pack_job import Job, Live
     from owlbear_delivery_next.project_host.host import Host
@@ -155,10 +158,39 @@ def interrupted(job: Job, key: str) -> None:
         return
     if job.interrupted is not None:
         run = job.interrupted
-        source = f"run:{job.path}:{run['run']}:{run['started_at']}"
+        source = f"{key}:run:{run['run']}:{run['started_at']}"  # the same run adopted once, wherever its folder lies
         maintenance.adopt(source, key, "pack", {}, interrupted=True, workspace=run["workspace"] or str(legacy))
     elif "workspace" not in job.state and legacy.is_dir():
-        maintenance.adopt(f"legacy:{legacy}", key, "pack", {}, interrupted=True, workspace=str(legacy))
+        maintenance.adopt(f"{key}:legacy", key, "pack", {}, interrupted=True, workspace=str(legacy))
+
+
+def unloaded(maintenance: Maintenance, key: str, repo: Path) -> None:
+    """Hold the uncertain pack work of a project whose store did not open, read from its folder without opening it.
+
+    A record that cannot be read is held too: unreadable ownership is never taken for none (TD-242).
+    """
+    try:
+        root = project_home.current(repo)
+    except (OSError, subprocess.CalledProcessError, StoreError):
+        maintenance.adopt(f"{key}:unlocated", key, "pack", {}, interrupted=True)  # its folder cannot be told
+        return
+    if root is None:
+        return
+    legacy = root / pack_run.UPDATER
+    try:
+        kept = pack_job.read_only(root)
+    except (OSError, ValueError):
+        maintenance.adopt(f"{key}:unreadable", key, "pack", {}, interrupted=True, workspace=str(legacy))
+        return
+    if kept is None:
+        if legacy.is_dir():
+            maintenance.adopt(f"{key}:legacy", key, "pack", {}, interrupted=True, workspace=str(legacy))
+    elif kept.get("state") == "running":
+        run, started = str(kept.get("run") or ""), str(kept.get("started_at") or "")
+        workspace = str(kept.get("workspace") or legacy)
+        maintenance.adopt(f"{key}:run:{run}:{started}", key, "pack", {}, interrupted=True, workspace=workspace)
+    elif "workspace" not in kept and legacy.is_dir():
+        maintenance.adopt(f"{key}:legacy", key, "pack", {}, interrupted=True, workspace=str(legacy))
 
 
 def pack_live(host: Host | None, live: Live, note: Callable[[str], None]) -> Live:

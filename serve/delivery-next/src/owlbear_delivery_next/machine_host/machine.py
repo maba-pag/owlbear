@@ -147,6 +147,8 @@ class Machine:
                 job = pack_job.Job(p.store)
                 job.maintenance = self.maintenance
                 session_slots.interrupted(job, entry.id)
+            else:  # its store did not open, but its pack record may still say a run is uncertain (TD-242)
+                session_slots.unloaded(self.maintenance, entry.id, Path(entry.path))
         self.say(f"{p.name}: {p.state}" + (f": {p.reason}" if p.reason else ""))
         return p
 

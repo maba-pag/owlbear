@@ -504,6 +504,23 @@ def _pack(src: pack_git.Source, c: pack_candidate.Candidate) -> str:
     return f"{c.pins['pack']}: upstream {c.tag} at {up['commit'][:12]}, engine {up['engine']}; from {src.base[:12]}"
 
 
+def read_only(root: Path) -> dict[str, Any] | None:
+    """The last run as *root* holds it, read without following a link or writing; None when it has no record.
+
+    Raises OSError or ValueError when the record exists but cannot be read as a run: that is not an empty record.
+    """
+    try:
+        fd = os.open(root / FILE, os.O_RDONLY | os.O_NOFOLLOW)
+    except FileNotFoundError:
+        return None
+    with os.fdopen(fd, encoding="utf-8") as f:
+        kept = json.load(f)
+    if not isinstance(kept, dict):
+        msg = f"{FILE} is not a run"
+        raise ValueError(msg)
+    return kept
+
+
 def last(store: Store) -> dict[str, Any] | None:
     """The last run's state, ending and times, for the Maintenance page; None when it never ran."""
     try:

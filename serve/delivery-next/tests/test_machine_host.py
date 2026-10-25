@@ -25,6 +25,7 @@ from owlbear_delivery_next.local_system import codebase
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.machine_host import app, project, registry, serve
 from owlbear_delivery_next.machine_host.machine import Machine
+from owlbear_delivery_next.pack_runs import pack_job, pack_run
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import ENDING, Host, HostRecord, RunnerRecord, running
 from owlbear_delivery_next.state_store import decision_store, project_home
@@ -244,6 +245,64 @@ def test_a_project_that_did_not_load_counts_its_runners_until_a_host_confirms_th
     runner.unlink()  # as a host's check of its processes does
     assert http.delete(f"/api/next/projects/{bad.id}").json() == {"removed": bad.id}
     assert machine.slots.counts(bad.id)[2] == 0
+
+
+def legacy_pack_folder(tmp_path, name: str, *, format_too_new: bool = True) -> tuple[dict, Path]:
+    """A registered clone whose store will not open (format 99), with its store folder for a pre-ledger pack record."""
+    entry = registry.register(clone(tmp_path / name))
+    folder = Path(entry.path) / ".git" / "owlbear-delivery"
+    if format_too_new:
+        (folder / "format").write_text("99\n")
+    return entry, folder
+
+
+def legacy_pack_record(folder: Path, state: str, *, updater: bool = True) -> Path:
+    """The last pack run as a pre-ledger host left it, with its SDK stage uncertain and no PID map."""
+    stage = {"name": "update", "label": "Update", "result": "running", "detail": ""}
+    record = pack_job._blank() | {  # noqa: SLF001 - the record's own shape
+        "state": state, "stage": "update", "stages": [stage], "started_at": "2026-10-24T00:00:00+00:00", "run": "r1",
+    }  # fmt: skip
+    (folder / pack_job.FILE).write_text(json.dumps(record), encoding="utf-8")
+    if updater:
+        (folder / pack_run.UPDATER).mkdir(exist_ok=True)
+    return folder / pack_run.UPDATER
+
+
+def test_a_project_whose_store_did_not_open_holds_its_legacy_running_pack_before_another_project_can_take_the_slot(
+    tmp_path, machine
+):
+    """HIGH review: an unloaded project's readable legacy running record keeps the machine's one session."""
+    bad, folder = legacy_pack_folder(tmp_path, "bad")
+    good = registry.register(clone(tmp_path / "good"))
+    updater = legacy_pack_record(folder, "running")
+    machine.slots.total = lambda: 1
+    machine.load_all()
+    assert machine.projects[bad.id].state == "failed"
+    assert machine.slots.counts(bad.id)[2] == 1
+    assert machine.slots.take(good.id, "probe", 1, 1) == 0  # the other project waits behind the uncertain update
+    assert (updater.is_dir(), (folder / pack_job.FILE).is_file()) == (True, True)  # workspace and record are kept
+
+
+def test_an_unloaded_project_whose_pack_record_is_finished_holds_nothing_and_another_project_takes_the_slot(
+    tmp_path, machine
+):
+    bad, folder = legacy_pack_folder(tmp_path, "bad")
+    good = registry.register(clone(tmp_path / "good"))
+    legacy_pack_record(folder, "up-to-date", updater=False)
+    machine.slots.total = lambda: 1
+    machine.load_all()
+    assert (machine.projects[bad.id].state, machine.slots.counts(bad.id)[2]) == ("failed", 0)
+    assert machine.slots.take(good.id, "probe", 1, 1) == 1
+
+
+def test_an_unreadable_pack_record_of_an_unloaded_project_is_held_not_taken_for_empty(tmp_path, machine):
+    bad, folder = legacy_pack_folder(tmp_path, "bad")
+    good = registry.register(clone(tmp_path / "good"))
+    (folder / pack_job.FILE).write_text("{not json", encoding="utf-8")
+    machine.slots.total = lambda: 1
+    machine.load_all()
+    assert machine.slots.counts(bad.id)[2] == 1
+    assert machine.slots.take(good.id, "probe", 1, 1) == 0
 
 
 def test_removal_is_refused_while_a_step_runs_and_then_stops_the_project_before_forgetting_it(tmp_path, http, machine):
