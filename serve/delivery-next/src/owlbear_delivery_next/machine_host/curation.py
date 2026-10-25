@@ -263,8 +263,9 @@ class Curation:
                     return
                 folder = self.queue[0]
             started = datetime.now(UTC)
+            refused = False
             try:
-                self._one(folder, started)
+                refused = self._one(folder, started)
             except Exception as exc:  # noqa: BLE001 - one folder's failure never strands the others
                 why = f"{type(exc).__name__}: {exc}"[:300]
                 self._save(
@@ -272,24 +273,27 @@ class Curation:
                 )
             with self.lock:  # a follow-up joins before the run leaves, so the queue never looks empty between
                 trigger = self.again.pop(folder, None)
+                # a Curate now that landed after this automatic request was refused is not lost: it runs once
+                manual = refused and self.asked.get(folder) == "manual"
                 again = trigger is not None and self.due(folder)
                 self.running = ""
                 self.queue.remove(folder)
                 self.asked.pop(folder, None)
-                if again:
+                if manual or again:
                     self._save(
                         folder, self.load().folders.get(folder, FolderRun()).model_copy(update={"state": "waiting"})
                     )
                     self.queue.append(folder)
-                    self.asked[folder] = trigger
+                    self.asked[folder] = "manual" if manual else trigger
 
-    def _one(self, folder: str, started: datetime) -> None:
+    def _one(self, folder: str, started: datetime) -> bool:
+        """Run one folder's curation; True when an automatic request was refused its admission."""
         shared = self.shared()
         why = NO_SHARED if shared is None else LEFT if self.lingering() else self.fenced()
         why = why or _unset(lookup.machine(shared))  # checked again on the snapshot it starts with
         if shared is None or why:
             self._save(folder, FolderRun(state="failed", started_at=started, ended_at=started, reason=why))
-            return
+            return False
         turn, key = threading.Event(), f"curate:{folder}"
         while True:
             turn.clear()  # cleared before the take, so a wake during it is never lost
@@ -298,12 +302,12 @@ class Curation:
             if why := self.fenced():  # an update or a stop came while it waited: it never starts
                 self.slots.cancel(SLOT, key)
                 self._save(folder, FolderRun(state="failed", started_at=started, ended_at=started, reason=why))
-                return
+                return False
             turn.wait(5)
         if why := self.fenced():
             self.slots.give(SLOT, key)
             self._save(folder, FolderRun(state="failed", started_at=started, ended_at=started, reason=why))
-            return
+            return False
         with self.lock:  # the automatic switches are read at the grant, not when the request was made
             asked = self.asked.get(folder, "manual")
             admitted = asked == "manual" or self.allowed(asked)
@@ -314,13 +318,14 @@ class Curation:
             why = self._refusal(asked)
             update = {"state": "failed", "started_at": started, "ended_at": started, "reason": why}
             self._save(folder, prior.model_copy(update=update))
-            return
+            return True
         try:
             self._save(folder, FolderRun(state="running", started_at=started))
             self._save(folder, self._session(shared, folder, started, key))
         finally:
             if self.held != key:
                 self.slots.give(SLOT, key)
+        return False
 
     def _session(self, shared: data_repo.DataRepo, folder: str, started: datetime, key: str) -> FolderRun:
         settings = lookup.machine(shared)

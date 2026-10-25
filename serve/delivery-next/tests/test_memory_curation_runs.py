@@ -329,6 +329,26 @@ def test_curate_now_takes_over_a_waiting_automatic_request_and_runs_only_once(ro
     assert (len(ran), folder_run(job, "shop")["state"]) == (1, "done")
 
 
+def test_curate_now_landing_after_an_automatic_refusal_but_before_the_worker_retires_it_still_runs(root) -> None:
+    slots, paused, ran = Slots(lambda: 1), [False], []
+    assert slots.take(HELD, "a-change", 1, 1) == 1
+    job = curation.Curation(slots, shared=lambda: DataRepo(root), run=recording(ran), paused=lambda: paused[0])
+    pending(root / "shop" / "memory", "Lesson")
+    assert job.nudge(None, "idle") == ["shop"]
+    paused[0] = True
+    saved, raced = job._save, []  # noqa: SLF001 - the interleaving is gated on the refusal's own save
+
+    def save_then_race(folder: str, run: curation.FolderRun) -> None:
+        saved(folder, run)
+        if run.state == "failed" and run.reason == curation.PAUSED and not raced:
+            raced.append(job.start(folder))  # Curate now lands in the gap before the worker retires the folder
+
+    job._save = save_then_race  # noqa: SLF001
+    slots.give(HELD, "a-change")
+    finished(job)
+    assert (raced, len(ran), folder_run(job, "shop")["state"]) == ([[]], 1, "done")
+
+
 def test_curate_now_bypasses_the_automatic_switch_and_pause_but_never_a_fence(root) -> None:
     configure_machine(curate_when_idle="off", curate_after_merge="off")
     ran = []
