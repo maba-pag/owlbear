@@ -115,7 +115,10 @@ def publish_config_unlocked(store: Store) -> str:
     if not store.shared:
         return ""
     try:
-        notice = store.shared.publish(store.config_path, f"settings: {store.name}: project layer")
+        notice = store.shared.publish(
+            store.config_path,
+            f"settings: {store.name}: {'project layer' if store.config_path.exists() else 'project layer removed'}",
+        )
     except DataRepoError as exc:
         notice = str(exc)
     return settle_config(store, notice)
@@ -146,8 +149,30 @@ def settle_config(store: Store, notice: str) -> str:
         atomic_write(target, want)
     else:
         target.unlink(missing_ok=True)
-    extra = store.shared.publish(target, f"settings: {store.name}: project config {'pending' if want else 'published'}")
-    return notice or extra
+    try:
+        extra = store.shared.publish(
+            target, f"settings: {store.name}: project config {'pending' if want else 'published'}"
+        )
+    except DataRepoError as exc:
+        extra = str(exc)
+    return "; ".join(dict.fromkeys(part for part in (notice, extra) if part))
+
+
+def publish_layer(store: Store, path: Path, message: str, until: float) -> str:
+    """Publish a changed settings layer under the held lock.
+
+    A raised project config refusal is recorded as pending before it propagates, as a returned refusal is, so another
+    clone cannot publish a completed import over it. The raised error is re-raised with that record in its message.
+    """
+    from owlbear_delivery_next.state_store.store import SharedError  # noqa: PLC0415 - the store imports this module
+
+    try:
+        notice = store.shared.publish(path, message, until)
+    except DataRepoError as exc:
+        if path != store.config_path:
+            raise
+        raise SharedError(settle_config(store, str(exc))) from exc
+    return settle_config(store, notice) if path == store.config_path else notice
 
 
 def mark(store: Store, expect: str, to: str, basis: str = "") -> tuple[str, str, bool]:

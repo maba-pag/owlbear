@@ -166,8 +166,14 @@ def ready(store: Store, repo: Path, *, carry: bool = False) -> list[Check]:
     """The readiness check at a host start, after a shared profile's facts were detected in this clone (TD-147).
 
     With *carry* (a host start) the legacy preference import runs after that detection and its failure is a check.
+    A detection that cannot publish is a failed check too, and the legacy import waits for a detection that succeeded.
     """
-    prof = profile_share.checked(store, repo)
+    try:
+        prof = profile_share.checked(store, repo)
+    except StoreError as exc:
+        fix = "Restore the shared profile repository's write access, then restart Delivery"
+        failed = Check("profile detection", ok=False, detail=str(exc)[:200], fix=fix)
+        return [failed, *check(repo, None)]
     carried = _carried(store) if carry else []
     return [*carried, *check(repo, prof)]
 

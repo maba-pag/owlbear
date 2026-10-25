@@ -11,7 +11,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from owlbear_delivery_next.local_system.data_repo import DataRepoError
 from owlbear_delivery_next.settings.prefs_import import plan
 from owlbear_delivery_next.state_store import profile_share
 
@@ -50,12 +49,8 @@ def _publish_config(store: Store) -> str:
         return store.update_config(lambda cur: cur, "legacy preferences carried")
     if not store.shared:
         return ""
-    try:
-        with store.shared.locked():
-            notice = store.shared.publish(store.config_path, f"settings: {store.name}: project layer removed")
-            return profile_share.settle_config(store, notice)
-    except DataRepoError as exc:
-        return str(exc)
+    with store.shared.locked():
+        return profile_share.publish_config_unlocked(store)
 
 
 def republish(store: Store) -> None:

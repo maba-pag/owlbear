@@ -6,11 +6,12 @@ from pathlib import Path
 import pytest
 
 from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
-from owlbear_delivery_next.local_system.data_repo import DataRepo
+from owlbear_delivery_next.local_system.data_repo import DataRepo, DataRepoError
 from owlbear_delivery_next.runtimes import readiness
 from owlbear_delivery_next.settings import config, profile
-from owlbear_delivery_next.state_store import profile_share
-from owlbear_delivery_next.state_store.store import Store
+from owlbear_delivery_next.state_store import prefs_import, profile_share
+from owlbear_delivery_next.state_store.database import StoreError
+from owlbear_delivery_next.state_store.store import SharedError, Store
 
 
 def confirmed(value: str) -> ProfileEntry:
@@ -70,3 +71,97 @@ def test_a_refused_completion_is_reported_at_start_and_published_by_the_next_sta
     assert not [c for c in second if not c.ok]
     _, got = clone_profile(remote, tmp_path)
     assert got.prefs_import == "done"
+
+
+def remote_subjects(remote: Path) -> list[str]:
+    return subprocess.run(
+        ["git", "log", "--reverse", "--format=%s", "main"],  # noqa: S607
+        cwd=remote,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.splitlines()
+
+
+@pytest.mark.usefixtures("no_network")
+@pytest.mark.parametrize("action", ["edit", "remove"])
+def test_a_raised_config_refusal_keeps_the_shared_evidence_so_a_fresh_start_cannot_publish_done(
+    shared_repo, tmp_path, monkeypatch, action
+):
+    root, remote = shared_repo
+    store = Store(tmp_path / "store", DataRepo(root), "shop-site")
+    store.write_profile(Profile(entries={profile.POLL: confirmed("45")}))
+    real, refused = DataRepo.publish, []
+
+    def refuse_done(self, path, message, until=None):
+        if path == profile_share.path(store) and message.endswith("import done") and not refused:
+            refused.append(message)
+            return "remote refused"
+        return real(self, path, message, until)
+
+    monkeypatch.setattr(DataRepo, "publish", refuse_done)
+    readiness.ready(store, root, carry=True)  # the config is published; the done marker is refused in A
+    assert refused
+
+    def raise_config(self, path, message, until=None):
+        if path == store.config_path and not raised:
+            raised.append(message)
+            msg = "remote unavailable"
+            raise DataRepoError(msg)
+        return refuse_done(self, path, message, until)
+
+    raised: list[str] = []
+    monkeypatch.setattr(DataRepo, "publish", raise_config)
+    if action == "edit":
+        with pytest.raises(SharedError):
+            store.update_config(lambda cur: cur.model_copy(update={"widths": [1600]}))
+    else:
+        store.config_path.unlink()
+        with pytest.raises(StoreError):
+            prefs_import.republish(store)
+    assert raised
+
+    monkeypatch.setattr(DataRepo, "publish", real)
+    fresh_b, _ = clone_profile(remote, tmp_path)
+    checks = readiness.ready(fresh_b, tmp_path / "fresh", carry=True)  # a clone without A's local flag
+    assert [c for c in checks if not c.ok]
+    assert not any(s.endswith("import done") for s in remote_subjects(remote))
+
+    readiness.ready(store, root, carry=True)  # A's retry publishes the config first, then the done marker
+    third = tmp_path / "third"
+    subprocess.run(["git", "clone", "-q", str(remote), str(third)], check=True, capture_output=True)  # noqa: S603, S607
+    got = Store(tmp_path / "third-store", DataRepo(third), "shop-site")
+    assert got.read_profile().prefs_import == "done"
+    if action == "edit":
+        assert got.read_config().widths == [1600]
+    else:
+        assert not got.config_path.exists()
+
+
+@pytest.mark.usefixtures("no_network")
+@pytest.mark.parametrize("raises", [False, True])
+def test_a_refused_detection_publication_is_a_failed_readiness_check(shared_repo, tmp_path, monkeypatch, raises):
+    root, _remote = shared_repo
+    store = Store(tmp_path / "store", DataRepo(root), "shop-site")
+    store.write_profile(Profile(entries={profile.POLL: confirmed("45")}))
+    monkeypatch.setattr(profile, "detect", lambda *_a: Profile(entries={profile.POLL: confirmed("60")}))
+    real, refused = DataRepo.publish, []
+
+    def refuse_detection(self, path, message, until=None):
+        if path == profile_share.path(store) and message.endswith("detected in a clone") and not refused:
+            refused.append(message)
+            if raises:
+                msg = "remote unavailable"
+                raise DataRepoError(msg)
+            return "remote refused"
+        return real(self, path, message, until)
+
+    monkeypatch.setattr(DataRepo, "publish", refuse_detection)
+    first = readiness.ready(store, root, carry=True)
+    assert refused
+    failed = [c for c in first if c.name == "profile detection"]
+    assert [c.ok for c in failed] == [False], [(c.name, c.ok, c.detail) for c in first]
+
+    monkeypatch.setattr(DataRepo, "publish", real)
+    again = readiness.ready(store, root, carry=True)
+    assert not [c for c in again if not c.ok]
