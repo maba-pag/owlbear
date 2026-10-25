@@ -480,5 +480,6 @@ def test_each_build_session_records_its_own_span(tmp_path, clone):
     review.started(c, task, clone, settings)
     store = Store(tmp_path / "store")
     store.write(Lock("c1"), c)
-    held.keep(store, Lock("c1"), c, run, asked)  # a session whose usage stayed unread ends at its held head
-    assert store.read("c1").plan.tasks[0].spans[-1] == f"{asked}..{asked}"
+    # a session whose usage stayed unread ends at its held head
+    pending = held.hold(store, Lock("c1"), c, run, asked, {})
+    assert pending.change.plan.tasks[0].spans[-1] == f"{asked}..{asked}"
