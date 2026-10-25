@@ -37,7 +37,8 @@ STAGES = (
 LOG = 200  # lines kept of the last run's log
 MACHINE_LOCK = "design-pack.lock"  # one running update per machine, whichever project started it (TD-242)
 OPEN = frozenset({"pending", "running", "waiting"})
-REQUIRED = frozenset({"state", "stages", "log"})  # every record Job writes has these; a record without them is damaged
+# every state Job writes; a record in any other state is damaged, not idle
+STATES = frozenset({"idle", "running", "waiting", "failed", "discarded", "up-to-date", "passed"})
 
 
 def now() -> str:
@@ -70,8 +71,9 @@ def read_fd(fd: int) -> tuple[dict[str, Any], str]:
     if not isinstance(kept, dict):
         msg = f"{FILE} is not a run"
         raise ValueError(msg)  # noqa: TRY004 - callers treat a damaged record as a ValueError
-    if not kept.keys() >= REQUIRED:
-        msg = f"{FILE} lacks the run's stages or log"  # a partial record is not evidence of an idle run
+    state, stages, log = kept.get("state"), kept.get("stages"), kept.get("log")
+    if not (isinstance(state, str) and state in STATES and isinstance(stages, list) and isinstance(log, list)):
+        msg = f"{FILE} is missing or misshapen in its state, stages or log"  # not evidence of an idle run
         raise ValueError(msg)
     return kept, version_of(st)
 

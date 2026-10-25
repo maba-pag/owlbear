@@ -431,6 +431,65 @@ def test_an_absent_valid_idle_or_definitively_failed_record_holds_nothing(
     loaded_machine.stop_all()
 
 
+MALFORMED = [
+    pytest.param({"state": None}, id="state-null"),
+    pytest.param({"state": "unknown"}, id="state-unknown"),
+    pytest.param({"state": 7}, id="state-number"),
+    pytest.param({"state": ["running"]}, id="state-list"),
+    pytest.param({"stages": None}, id="stages-null"),
+    pytest.param({"stages": "running"}, id="stages-text"),
+    pytest.param({"log": None}, id="log-null"),
+    pytest.param({"log": "a line"}, id="log-text"),
+]
+
+
+@pytest.mark.parametrize("damage", MALFORMED)
+def test_the_reader_names_a_misshapen_required_field_unreadable(tmp_path, damage):
+    path = tmp_path / pack_job.FILE
+    path.write_text(json.dumps(pack_job._blank() | damage), encoding="utf-8")  # noqa: SLF001
+    assert pack_state.read_version(path)[1] == "", f"{damage} was read as a readable run"
+
+
+@pytest.mark.parametrize("state", sorted(pack_state.STATES))
+def test_every_state_job_writes_with_its_stages_and_log_is_readable(tmp_path, state):
+    path = tmp_path / pack_job.FILE
+    path.write_text(json.dumps(pack_job._blank() | {"state": state}), encoding="utf-8")  # noqa: SLF001
+    assert pack_state.read_version(path)[1] != "", f"a {state} record was read as unreadable"
+
+
+@pytest.mark.parametrize("loaded", [False, True])
+@pytest.mark.parametrize("damage", MALFORMED)
+def test_a_misshapen_legacy_record_with_no_workspace_is_held_once_and_not_duplicated_on_restart(
+    tmp_path, machines, shared_repo, loaded, damage
+):
+    shared, _remote = shared_repo
+    entry, folder = project_with_legacy_run(tmp_path, shared, loaded=loaded)
+    write_bare(folder, pack_job._blank() | damage)  # noqa: SLF001
+    first = machines()
+    first.load_all()
+    assert len(held(first, entry.id)) == 1, sessions_of(first, entry.id)
+    first.stop_all()
+
+    restarted = machines()
+    restarted.load_all()
+    assert len(held(restarted, entry.id)) == 1, "reconstruction duplicated a misshapen-record hold"
+    restarted.stop_all()
+
+
+@pytest.mark.parametrize("loaded", [False, True])
+@pytest.mark.parametrize("state", ["passed", "up-to-date", "discarded"])
+def test_a_valid_definitive_outcome_without_a_workspace_holds_nothing_on_load(
+    tmp_path, machines, shared_repo, loaded, state
+):
+    shared, _remote = shared_repo
+    entry, folder = project_with_legacy_run(tmp_path, shared, loaded=loaded)
+    write_bare(folder, pack_job._blank() | {"state": state, "reason": "the pack was already current"})  # noqa: SLF001
+    loaded_machine = machines()
+    loaded_machine.load_all()
+    assert held(loaded_machine, entry.id) == [], sessions_of(loaded_machine, entry.id)
+    loaded_machine.stop_all()
+
+
 @pytest.mark.parametrize("loaded", [False, True])
 def test_an_incomplete_running_record_replaced_after_recovery_gets_a_new_hold_and_is_not_resurrected_untouched(
     tmp_path, machines, shared_repo, loaded
