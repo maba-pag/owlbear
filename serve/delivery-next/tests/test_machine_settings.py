@@ -91,9 +91,9 @@ def test_with_its_settings_unset_nothing_that_needs_them_runs(monkeypatch):
     monkeypatch.setenv(data_repo.VIEW, "")  # no shared repository: no Global either
     with pytest.raises(versions.VersionError, match="unset"):
         versions.target()
-    job = curation.Curation(Slots(lambda: 1), shared=lambda: None)
-    assert not job.allowed("merge", paused=False)
-    assert not job.allowed("idle", paused=False)
+    job = curation.Curation(Slots(lambda: 1), shared=lambda: None, paused=lambda: False)
+    assert not job.allowed("merge")
+    assert not job.allowed("idle")
     assert Machine._sessions(SimpleNamespace(total=4)) == 0  # noqa: SLF001 - no session starts
     assert not Auto.permitted(SimpleNamespace(machine=SimpleNamespace(paused=False)))  # never updates by itself
 
