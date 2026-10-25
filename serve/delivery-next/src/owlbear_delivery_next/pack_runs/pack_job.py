@@ -19,7 +19,6 @@ import threading
 import time
 import uuid
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
 from importlib.resources import files
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol
@@ -31,6 +30,27 @@ from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.local_system.storage_io import atomic_write
 from owlbear_delivery_next.pack_runs import pack_candidate, pack_gates, pack_publish, pack_replay, pack_rounds, pack_run
 from owlbear_delivery_next.pack_runs.pack_run import CANDIDATE, UPDATER, Stopped
+from owlbear_delivery_next.pack_runs.pack_state import (
+    FILE,
+    LOG,
+    MACHINE_LOCK,
+    OPEN,
+    RUNS,
+    STAGES,
+    last,
+    legacy_uncertain,  # noqa: F401 - retain the existing pack_job ownership-reader API
+    read_only,  # noqa: F401 - retain the existing pack_job ownership-reader API
+    running_for,
+)
+from owlbear_delivery_next.pack_runs.pack_state import (
+    blank as _blank,
+)
+from owlbear_delivery_next.pack_runs.pack_state import (
+    describe as _pack,
+)
+from owlbear_delivery_next.pack_runs.pack_state import (
+    now as _now,
+)
 from owlbear_delivery_next.workflow_steps import sessions
 
 if TYPE_CHECKING:
@@ -44,24 +64,6 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.state_store.store import Store
 
 __all__ = ["CANDIDATE", "FILE", "STAGES", "Busy", "Job", "Live", "Refused", "Stale", "Stopped", "last", "running_for"]
-FILE = "design-pack-update.json"  # the last run, under the store
-RUNS = "design-pack-runs"  # each run's own updater repository, under the store; never reused after a run
-STAGES = (
-    ("notice", "Notice: newer upstream release"),
-    ("candidate", "Candidate: detector pins and skills"),
-    ("diff", "Diff: rules and skill files"),
-    ("golden", "Golden pages"),
-    ("update", "Updater: skills against upstream and the findings"),
-    ("replay", "Calibration replay"),
-    ("challenger", "Challenger on the whole pack"),
-    ("commit", "Commit: one commit on a pack branch"),
-    ("push", "Push the branch"),
-    ("pull-request", "Pull request to main"),
-    ("merge", "CI and merge"),
-)
-LOG = 200  # lines kept of the last run's log
-MACHINE_LOCK = "design-pack.lock"  # one running update per machine, whichever project started it (TD-242)
-OPEN = frozenset({"pending", "running", "waiting"})
 
 
 class Busy(Exception):  # noqa: N818 - the route's answer, not a fault
@@ -111,16 +113,6 @@ class Live:
     sleep: Callable[[float], None] = time.sleep
     poll: float = 30.0  # seconds between looks at the pull request's checks
     ci_wait: float = 3600.0  # seconds CI may take at one head before the owner is asked
-
-
-def _now() -> str:
-    return datetime.now(UTC).isoformat(timespec="seconds")
-
-
-def _blank() -> dict[str, Any]:
-    stages = [{"name": n, "label": label, "result": "pending", "detail": ""} for n, label in STAGES]
-    return {"state": "idle", "stage": "", "stages": stages, "started_at": None, "ended_at": None, "reason": "",
-            "log": [], "published": None, "run": "", "loop": None, "questions": [], "context": None}  # fmt: skip
 
 
 class Job:
@@ -497,61 +489,3 @@ def _decided(  # noqa: PLR0913 - the open questions, the answered one, the answe
     else:
         lp.ended, ctx.accepted, ctx.next = lp.ended, q["identity"], "activate"
     return []
-
-
-def _pack(src: pack_git.Source, c: pack_candidate.Candidate) -> str:
-    up = c.pins["upstream"]
-    return f"{c.pins['pack']}: upstream {c.tag} at {up['commit'][:12]}, engine {up['engine']}; from {src.base[:12]}"
-
-
-def read_only(root: Path) -> dict[str, Any] | None:
-    """The last run as *root* holds it, read without following a link or writing; None when it has no record.
-
-    Raises OSError or ValueError when the record exists but cannot be read as a run: that is not an empty record.
-    """
-    try:
-        fd = os.open(root / FILE, os.O_RDONLY | os.O_NOFOLLOW)
-    except FileNotFoundError:
-        return None
-    with os.fdopen(fd, encoding="utf-8") as f:
-        kept = json.load(f)
-    if not isinstance(kept, dict):
-        msg = f"{FILE} is not a run"
-        raise ValueError(msg)  # noqa: TRY004 - callers treat a damaged record as a ValueError
-    return kept
-
-
-def legacy_uncertain(kept: dict[str, Any]) -> bool:
-    """A failed record an older host wrote while its updater or replay judge may still run; it has no workspace."""
-    return (
-        kept.get("state") == "failed"
-        and "workspace" not in kept
-        and "may still be running" in str(kept.get("reason", ""))
-    )
-
-
-def last(store: Store) -> dict[str, Any] | None:
-    """The last run's state, ending and times, for the Maintenance page; None when it never ran."""
-    try:
-        kept = json.loads((store.root / FILE).read_text(encoding="utf-8"))
-    except OSError, ValueError:
-        return None
-    if not isinstance(kept, dict) or not kept.get("started_at"):
-        return None
-    return {k: kept.get(k) for k in ("state", "started_at", "ended_at", "reason")}
-
-
-def running_for() -> str | None:
-    """The project whose design pack update runs on this machine now, by its name; None while none runs (TD-290)."""
-    path = local_home.root() / MACHINE_LOCK
-    try:
-        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
-    except OSError:
-        return None
-    try:
-        fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)  # a running update holds it exclusively
-    except BlockingIOError:
-        return path.read_text(encoding="utf-8").strip() or "another project"
-    finally:
-        os.close(fd)  # closing releases a shared lock taken here
-    return None

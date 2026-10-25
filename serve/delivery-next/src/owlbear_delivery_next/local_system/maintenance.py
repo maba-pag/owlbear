@@ -59,14 +59,18 @@ class Lease(Record):
     def identities(cls, value: object) -> object:
         """A damaged or fabricated PID never becomes evidence that a session is gone."""
         if not isinstance(value, dict):
-            raise ValueError("maintenance process identities must be a mapping")  # noqa: TRY003, TRY004, EM101 - pydantic validation
+            raise ValueError(  # noqa: TRY003, TRY004
+                "maintenance process identities must be a mapping"  # noqa: EM101
+            )
         for pid, born in value.items():
             if isinstance(pid, bool) or not str(pid).isdigit() or int(str(pid)) <= 0:
                 raise ValueError("maintenance PIDs must be positive integers")  # noqa: TRY003, EM101
             if born is not None and (
                 isinstance(born, bool) or not isinstance(born, (float, int)) or not math.isfinite(born) or born <= 0
             ):
-                raise ValueError("maintenance process birth times must be positive finite numbers")  # noqa: TRY003, EM101
+                raise ValueError(  # noqa: TRY003
+                    "maintenance process birth times must be positive finite numbers"  # noqa: EM101
+                )
         return value
 
 

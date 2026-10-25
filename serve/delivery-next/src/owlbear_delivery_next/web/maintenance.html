@@ -38,8 +38,10 @@ import { html, nothing, render } from "/assets/lit-html/3.3.3/lit-html.js";
 import { call, defined, here } from "/assets/ui.mjs";
 
 const RESULTS = { passed: "success", "up-to-date": "success", failed: "error", running: "info" };
-const state = { actions: [], use: [], error: "", tests: null, skipped: new Set(), starting: false, curation: null,
-  curating: "", unread: { tests: "", curation: "", sessions: "" }, refused: { tests: "", curation: new Map() }, reading: 0,
+const state = {
+  actions: [], use: [], error: "", tests: null, skipped: new Set(), starting: false, curation: null,
+  curating: "", unread: { tests: "", curation: "", sessions: "" },
+  refused: { tests: "", curation: new Map() }, reading: 0,
   sessions: null, confirmed: new Set(), recovering: "", refusedRecover: new Map() };
 
 // The last run in words, so its state never rests on the tag's colour alone.
@@ -258,9 +260,11 @@ function sessionRow(x) {
       <p-checkbox label="The computer has rebooted since this session failed" .checked=${state.confirmed.has(id)}
         ?disabled=${state.recovering} @change=${(e) => confirmReboot(id, e.target.checked)}></p-checkbox>
       <div><p-button type="button" compact="true" variant="secondary" ?disabled=${!state.confirmed.has(id)
-        || state.recovering} .loading=${state.recovering === id} @click=${() => recover(id)}>Release this session</p-button></div>`
+        || state.recovering} .loading=${state.recovering === id}
+        @click=${() => recover(id)}>Release this session</p-button></div>`
       : html`<p-text size="xs">A reboot since it failed is needed before it can be released.</p-text>`}
-    ${refused ? html`<p-inline-notification state="error" dismiss-button="false">${sentence(refused)}</p-inline-notification>`
+    ${refused ? html`<p-inline-notification state="error"
+      dismiss-button="false">${sentence(refused)}</p-inline-notification>`
       : nothing}
   </li>`;
 }
