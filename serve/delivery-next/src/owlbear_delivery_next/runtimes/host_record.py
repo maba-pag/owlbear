@@ -30,6 +30,7 @@ class Record:
     why: str = ""
     tools: list[str] | None = None  # the tools the step's agent was given, None when the record does not say
     subagents: list[tuple[str, SimpleNamespace]] = field(default_factory=list)  # (event type, data) in record order
+    session: str = ""  # the host's own session id: the record's folder name, not the protocol's id
 
 
 def _events(path: Path) -> list[Event]:
@@ -91,13 +92,13 @@ def read(folder: Path, since: datetime, agent: str, state: Path = STATE) -> Reco
         except OSError:
             continue
         if _started(events, folder, since) and (tools := _selected(events, agent)) is not None:
-            matches.append((events, tools))
+            matches.append((events, tools, path.parent.name))
     if len(matches) != 1:
         return Record(found=False, why=f"{len(matches)} host records match the step" if matches else "no host record")
-    events, tools = matches[0]
+    events, tools, session = matches[0]
     kinds = {"subagent.started", "subagent.completed", "subagent.failed"}
     subagents = [(e["type"], _subagent(e.get("data") or {})) for e in events if e.get("type") in kinds]
-    return Record(found=True, tools=tools, subagents=subagents)
+    return Record(found=True, tools=tools, subagents=subagents, session=session)
 
 
 def unexpected(given: list[str], allowed: list[str]) -> list[str]:
