@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from importlib.resources import files
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol
 
 from owlbear_delivery_next.change_contracts.round_records import RoundLoop
 from owlbear_delivery_next.design_packs import design_pack, pack_git, pack_update
@@ -37,11 +37,14 @@ if TYPE_CHECKING:
 
     from owlbear_delivery_next.design_packs.calibration import Replay
     from owlbear_delivery_next.github.provider import Provider
+    from owlbear_delivery_next.local_system.maintenance import Maintenance
+    from owlbear_delivery_next.runtimes.sdk_adapter import Session
     from owlbear_delivery_next.runtimes.session_result import Run
     from owlbear_delivery_next.state_store.store import Store
 
 __all__ = ["CANDIDATE", "FILE", "STAGES", "Busy", "Job", "Live", "Refused", "Stale", "Stopped", "last", "running_for"]
 FILE = "design-pack-update.json"  # the last run, under the store
+RUNS = "design-pack-runs"  # each run's own updater repository, under the store; never reused after a run
 STAGES = (
     ("notice", "Notice: newer upstream release"),
     ("candidate", "Candidate: detector pins and skills"),
@@ -76,6 +79,19 @@ def _upstream() -> Path:
     return design_pack.folder().parent / "upstream"  # beside the packs, outside every project
 
 
+class Replays(Protocol):
+    """The calibration replay: its candidate's session runs under *run*, and *keep* holds its scratch directory."""
+
+    def __call__(
+        self,
+        store: Store,
+        candidate: pack_candidate.Candidate | None,
+        run: Callable[[Session], Run] | None = None,
+        *,
+        keep: Callable[[Path], bool] | None = None,
+    ) -> Replay: ...
+
+
 @dataclass
 class Live:
     """What reaches outside: upstream, downloads, the browser, model sessions and git. Tests replace each."""
@@ -86,9 +102,9 @@ class Live:
     sync: Callable[[Path, str], None] = pack_candidate.sync
     download: Callable[[str], bytes] = design_pack.fetch
     golden: Callable[..., dict[str, dict[str, list[str]]]] = pack_update.golden  # (installed, folder=None)
-    replay: Callable[[Store, pack_candidate.Candidate | None], Replay] = pack_replay.replay
-    challenge: Callable[[Store, Any], Run] = sessions.run
-    update: Callable[[Store, Any], Run] = sessions.run  # the writing updater (TD-125)
+    replay: Replays = pack_replay.replay
+    challenge: Callable[[Store, Session], Run] = sessions.run
+    update: Callable[[Store, Session], Run] = sessions.run  # the writing updater (TD-125)
     git: pack_git.Git = pack_git.git
     github: Callable[[Path], Provider] = GhProvider
     sleep: Callable[[float], None] = time.sleep
@@ -114,6 +130,7 @@ class Job:
         self.store, self.live, self.lock = store, live or Live(), threading.Lock()
         self.thread: threading.Thread | None = None
         self.held: int | None = None
+        self.maintenance: Maintenance | None = None  # bound by session_slots.packed; without it nothing is removed
         self.state = self._read()
         if self.state["state"] == "running" and (self.state.get("context") or {}).get("publication"):
             reason = "the host stopped while the update was being published"
@@ -125,6 +142,16 @@ class Job:
     def path(self) -> Path:
         """Where the last run is kept."""
         return self.store.root / FILE
+
+    @property
+    def workspace(self) -> Path:
+        """The current run's updater repository; a run from before per-run workspaces keeps the shared root."""
+        kept = self.state.get("workspace")
+        return Path(kept) if kept else self.store.root / UPDATER
+
+    def keeps(self, path: Path) -> bool:
+        """Whether the ledger holds *path*'s session, so its scratch directory must outlive the call."""
+        return self.maintenance is not None and self.maintenance.retained(str(path))
 
     def _read(self) -> dict[str, Any]:
         try:
@@ -163,7 +190,11 @@ class Job:
                 msg = "a design pack update waits for your answers; answer or discard it first"
                 raise Busy(msg)
             self._claim()
-            self.state = _blank() | {"state": "running", "started_at": _now(), "run": uuid.uuid4().hex}
+            run = uuid.uuid4().hex
+            self.state = _blank() | {
+                "state": "running", "started_at": _now(), "run": run,
+                "workspace": str(self.store.root / RUNS / run),
+            }  # fmt: skip
             self._save()
             self.thread = threading.Thread(
                 target=self._run, args=(self._stages,), name="design-pack-update", daemon=True
@@ -301,15 +332,25 @@ class Job:
                 s["result"] = "failed" if s["result"] == "running" and state == "failed" else "skipped"
         self.state |= {"state": state, "stage": "", "ended_at": _now(), "reason": reason, "questions": []}
         self.state["context"] = None
-        shutil.rmtree(self.store.root / UPDATER, ignore_errors=True)
+        if self._removable(self.workspace):
+            shutil.rmtree(self.workspace, ignore_errors=True)
         self._save()
+
+    def _removable(self, workspace: Path) -> bool:
+        """A workspace goes unless the ledger keeps it; without a ledger only the legacy shared root is kept."""
+        if self.maintenance is None:
+            return workspace != self.store.root / UPDATER
+        return not self.maintenance.retained(str(workspace))
 
     def _claim(self) -> None:
         """Take the machine's one pack lock for the run's thread; the pack is shared by every project.
 
         Raises:
-            Busy: Another project's update runs now.
+            Busy: Another project's update runs now, or an earlier pack session is still unproven.
         """
+        if self.maintenance is not None and self.maintenance.pending(kind="pack"):
+            msg = "an earlier design pack session is unproven; recover it on the Maintenance page first"
+            raise Busy(msg)
         path = local_home.root() / MACHINE_LOCK
         path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         fd = os.open(path, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)

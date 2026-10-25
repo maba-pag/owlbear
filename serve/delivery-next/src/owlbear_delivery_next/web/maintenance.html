@@ -39,7 +39,8 @@ import { call, defined, here } from "/assets/ui.mjs";
 
 const RESULTS = { passed: "success", "up-to-date": "success", failed: "error", running: "info" };
 const state = { actions: [], use: [], error: "", tests: null, skipped: new Set(), starting: false, curation: null,
-  curating: "", unread: { tests: "", curation: "" }, refused: { tests: "", curation: new Map() }, reading: 0 };
+  curating: "", unread: { tests: "", curation: "", sessions: "" }, refused: { tests: "", curation: new Map() }, reading: 0,
+  sessions: null, confirmed: new Set(), recovering: "", refusedRecover: new Map() };
 
 // The last run in words, so its state never rests on the tag's colour alone.
 function lastRun(a) {
@@ -229,6 +230,71 @@ async function curate(folder) {
   }
 }
 
+// Held sessions keep their slot, workspace and history until the owner confirms a reboot since they failed.
+function sessionsSection() {
+  const s = state.sessions;
+  if (!s && !state.unread.sessions) return nothing;
+  const held = (s?.sessions ?? []).filter((x) => x.state === "held");
+  return html`<section aria-labelledby="sessions-title">
+    <p-heading size="lg"><h2 id="sessions-title">Held maintenance sessions</h2></p-heading>
+    <p-text size="sm">A session whose outcome is unknown keeps its slot until you confirm that the computer rebooted
+      since it failed. Its workspace and history stay for inspection.</p-text>
+    ${state.unread.sessions ? html`<p-inline-notification id="sessions-error" state="error" dismiss-button="false">
+      Could not read the held sessions: ${state.unread.sessions}.</p-inline-notification>` : nothing}
+    ${held.length ? html`<ul id="sessions" class="actions">${held.map(sessionRow)}</ul>`
+      : s ? html`<p-text id="sessions-none" size="sm">No maintenance session is held.</p-text>` : nothing}
+  </section>`;
+}
+
+function sessionRow(x) {
+  const id = x.id;  // the captured identity: a recovery names this session, not whatever the list shows next
+  const refused = state.refusedRecover.get(id);
+  return html`<li class="action">
+    <div class="title"><p-text size="sm" weight="semibold">${x.project}: ${x.kind}</p-text></div>
+    <p-text size="xs" color="contrast-medium">Started ${new Date(x.started_at).toLocaleString()}; its workspace
+      ${x.workspace} is kept.</p-text>
+    ${x.reason ? html`<p-text size="sm">${sentence(x.reason)}.</p-text>` : nothing}
+    ${x.recoverable ? html`
+      <p-checkbox label="The computer has rebooted since this session failed" .checked=${state.confirmed.has(id)}
+        ?disabled=${state.recovering} @change=${(e) => confirmReboot(id, e.target.checked)}></p-checkbox>
+      <div><p-button type="button" compact="true" variant="secondary" ?disabled=${!state.confirmed.has(id)
+        || state.recovering} .loading=${state.recovering === id} @click=${() => recover(id)}>Release this session</p-button></div>`
+      : html`<p-text size="xs">A reboot since it failed is needed before it can be released.</p-text>`}
+    ${refused ? html`<p-inline-notification state="error" dismiss-button="false">${sentence(refused)}</p-inline-notification>`
+      : nothing}
+  </li>`;
+}
+
+function confirmReboot(id, on) {
+  if (on) state.confirmed.add(id);
+  else state.confirmed.delete(id);
+  show();
+}
+
+async function recover(id) {
+  const sure = await window.ask({
+    title: "Release this maintenance session?", yes: "Release", no: "Cancel",
+    now: "The computer rebooted since this session failed, and its outcome is unknown.",
+    then: "Its slot is released; its workspace and history are kept for inspection.",
+    after: "Work that waited for this slot may now start.",
+    instead: "Nothing changes.",
+  });
+  if (!sure) return;
+  state.recovering = id;
+  state.refusedRecover.delete(id);
+  show();
+  try {
+    await call(`/maintenance/sessions/${encodeURIComponent(id)}/recover`, { body: { rebooted: true }, timeout: 15000 });
+    state.confirmed.delete(id);
+  } catch (e) {
+    state.refusedRecover.set(id, e.message);
+  } finally {
+    state.recovering = "";
+    show();
+    await refresh();
+  }
+}
+
 function sentence(text) {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
@@ -270,6 +336,7 @@ function view() {
       <ul id="actions" class="actions">${state.actions.map(action)}</ul>
     </section>
     ${curationSection()}
+    ${sessionsSection()}
     ${useSection()}`;
 }
 
@@ -310,6 +377,17 @@ async function refresh() {
   } else {
     // Only a missing route before any successful read is expected clone-host capability absence.
     state.unread.curation = curation.reason.status === 404 && !state.curation ? "" : curation.reason.message;
+  }
+  const [sessions] = await Promise.allSettled([
+    call("/maintenance/sessions", { timeout: 15000 }),
+  ]);
+  if (generation !== state.reading) return;
+  if (sessions.status === "fulfilled") {
+    state.sessions = sessions.value;
+    state.unread.sessions = "";
+  } else {
+    // A clone host has no maintenance sessions route; that is an absence, not a read failure.
+    state.unread.sessions = sessions.reason.status === 404 && !state.sessions ? "" : sessions.reason.message;
   }
   show();
   clearTimeout(state.again);  // a run in progress: look again until its report is in

@@ -15,9 +15,20 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
 from owlbear_delivery_next.design_packs import design_pack, pack_update
-from owlbear_delivery_next.pack_runs import pack_job
-from owlbear_delivery_next.project_host import curation_routes
+from owlbear_delivery_next.design_packs.detector import DetectorError
+from owlbear_delivery_next.local_system import data_repo
+from owlbear_delivery_next.pack_runs import pack_candidate, pack_job, pack_replay
+from owlbear_delivery_next.project_host import curation_routes, maintenance_routes
 from owlbear_delivery_next.settings import roles
+
+REPLAY_FAILURES = (
+    design_pack.PackError,
+    DetectorError,
+    data_repo.DataRepoError,
+    subprocess.CalledProcessError,
+    OSError,
+    ValueError,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -160,6 +171,7 @@ def router(
             raise HTTPException(409, str(exc)) from exc
 
     _answers(routes, job, admitted)
+    _replay(routes, store, job, admitted)
 
     @routes.get("/maintenance")
     def maintenance() -> list[dict[str, Any]]:
@@ -169,9 +181,31 @@ def router(
     def subagents() -> list[dict[str, Any]]:
         return subagent_use(store)
 
+    routes.include_router(maintenance_routes.router(host))
     if host is not None:
         routes.include_router(curation_routes.router(store, host))
     return routes
+
+
+def _replay(
+    routes: APIRouter, store: Store, job: pack_job.Job, admitted: Callable[[], AbstractContextManager[None]]
+) -> None:
+    """The installed pack's calibration replay, run by this host's managed job; never a second one at once (TD-177)."""
+
+    @routes.post("/design-pack/replay")
+    def replay() -> dict[str, Any]:
+        if not job.lock.acquire(blocking=False):
+            raise HTTPException(409, "a design pack update is running: wait for it to finish")
+        try:
+            with admitted():
+                r = job.live.replay(store, None, keep=job.keeps)
+        except pack_replay.ReplayError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        except REPLAY_FAILURES as exc:
+            raise HTTPException(422, str(exc)) from exc
+        finally:
+            job.lock.release()
+        return {"ok": r.ok, "report": f"calibration replay: {pack_candidate.said_replay(r)}"}
 
 
 def _answers(routes: APIRouter, job: pack_job.Job, admitted: Callable[[], AbstractContextManager[None]]) -> None:

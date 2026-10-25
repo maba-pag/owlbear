@@ -39,6 +39,14 @@ def finished(job: curation.Curation) -> None:
     pytest.fail("the curation did not finish")
 
 
+def drained(job: curation.Curation) -> None:
+    for _ in range(200):
+        if job.worker is None:
+            return
+        time.sleep(0.02)
+    pytest.fail("the curation queue did not drain")
+
+
 def test_the_folders_are_the_shared_repositorys_project_memory_folders_owlbears_included(root) -> None:
     job = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root))
     got = job.read()
@@ -161,9 +169,13 @@ def test_one_folder_that_fails_never_strands_the_next_and_a_restart_ends_interru
 
     job = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root), run=run)
     job.start("all")
-    finished(job)
+    drained(job)
     states = {f["folder"]: (f["state"], f["reason"]) for f in job.read()["folders"]}
-    assert states == {"owlbear": ("failed", "RuntimeError: the runtime broke"), "shop": ("done", "")}
+    assert states == {
+        "owlbear": ("failed", "RuntimeError: the runtime broke"),
+        "shop": ("failed", curation.LEFT),
+    }
+    assert job.slots.counts(curation.SLOT)[2] == 1
 
     job._save("shop", curation.FolderRun(state="running"))  # noqa: SLF001 - OwlBear stops while it runs
     again = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root))
@@ -179,6 +191,7 @@ def test_processes_that_may_still_run_keep_their_slot_and_the_machine_busy_until
 
     def run(cfg) -> Run:
         return Run(cfg.session_id, ending="result", payload=MemoryCurationResult(summary="ok", entries=[]),
+                   runtime_pid=4242, pids={4242: 1.0},
                    termination=Termination(confirmed=False, survivors=(4242,)))  # fmt: skip
 
     job = curation.Curation(slots, shared=lambda: DataRepo(root), run=run)
@@ -188,7 +201,7 @@ def test_processes_that_may_still_run_keep_their_slot_and_the_machine_busy_until
             break
         time.sleep(0.02)
     assert (job.working(), slots.counts(curation.SLOT)[2]) == ([curation.LINGERING], 1)
-    assert curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root)).left == {4242: None}  # kept on file
+    assert curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root)).left == {4242: 1.0}
     alive[0] = False
     assert (job.working(), slots.counts(curation.SLOT)[2]) == ([], 0)
 
@@ -222,14 +235,15 @@ def test_a_run_keeps_its_processes_on_file_while_it_runs_and_a_restart_holds_the
     runs = job.load()
     runs.left = {4242: None}
     job._write(runs)  # noqa: SLF001
+    job.maintenance.path.unlink()  # synthetic pre-ledger installation, after every new-format lease ended
     slots = Slots(lambda: 1, closed=True)
     restarted = curation.Curation(slots, shared=lambda: DataRepo(root))
     assert (slots.counts(curation.SLOT)[2], restarted.working()) == (1, [curation.LINGERING])
     alive[0] = False
-    assert (restarted.working(), slots.counts(curation.SLOT)[2]) == ([], 0)
+    assert (restarted.working(), slots.counts(curation.SLOT)[2]) == ([curation.LINGERING], 1)
 
 
-def test_a_run_unconfirmed_without_processes_to_watch_gives_its_slot_back_and_says_so(root) -> None:
+def test_a_run_unconfirmed_without_processes_to_watch_retains_its_slot_and_says_so(root) -> None:
     slots = Slots(lambda: 1)
 
     def run(cfg) -> Run:
@@ -238,9 +252,10 @@ def test_a_run_unconfirmed_without_processes_to_watch_gives_its_slot_back_and_sa
 
     job = curation.Curation(slots, shared=lambda: DataRepo(root), run=run)
     job.start("shop")
-    finished(job)
+    drained(job)
     shop = {f["folder"]: f for f in job.read()["folders"]}["shop"]
-    assert (shop["state"], curation.UNKNOWN in shop["reason"], slots.counts(curation.SLOT)[2]) == ("failed", True, 0)
+    assert (shop["state"], curation.UNKNOWN in shop["reason"], slots.counts(curation.SLOT)[2]) == ("failed", True, 1)
+    assert slots.take("another-project", "c1", 1, 1) == 0
 
 
 def test_a_run_waiting_for_a_slot_never_starts_once_an_update_or_a_stop_fences_it(root) -> None:

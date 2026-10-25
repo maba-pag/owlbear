@@ -9,25 +9,31 @@ counts it again before granting anything. A design pack update takes one slot fo
 
 from __future__ import annotations
 
-import contextlib
 import dataclasses
 import threading
 import uuid
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.change_contracts.failures import cause_key
 from owlbear_delivery_next.change_contracts.models import ErrorKind, StepKind
 from owlbear_delivery_next.design_packs import design_pack
 from owlbear_delivery_next.local_system.slots import PACK
+from owlbear_delivery_next.pack_runs import pack_replay, pack_run
 from owlbear_delivery_next.state_store.store import StoreError
 from owlbear_delivery_next.workflow_steps import check, pick
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator
+    from collections.abc import Callable
+    from pathlib import Path
 
     from owlbear_delivery_next.change_contracts.models import Change, Step
+    from owlbear_delivery_next.design_packs.calibration import Replay
+    from owlbear_delivery_next.pack_runs.pack_candidate import Candidate
     from owlbear_delivery_next.pack_runs.pack_job import Job, Live
     from owlbear_delivery_next.project_host.host import Host
+    from owlbear_delivery_next.runtimes.sdk_adapter import Session
+    from owlbear_delivery_next.runtimes.session_result import Run
+    from owlbear_delivery_next.state_store.store import Store
 
 NO_AGENT = frozenset({StepKind.PUBLISH, StepKind.FOLLOW, StepKind.MERGE, StepKind.CLEANUP})
 ALL = 1_000  # as many as the project's limit and the machine's free slots allow
@@ -102,19 +108,18 @@ def waiting(host: Host, slug: str) -> str:
     return f"this machine {used} of {total}, this project {mine} of {limit(host)}{said}"
 
 
-@contextlib.contextmanager
-def one(host: Host, note: Callable[[str], None]) -> Iterator[None]:
-    """Hold one slot of the project for a pack update's session, waiting for it in the job's thread."""
+def admit(host: Host, note: Callable[[str], None]) -> str:
+    """Wait for one of the project's slots for a pack update's session and return its key.
+
+    The slot is given back only by the maintenance ownership, which keeps it while the session's processes are unproven.
+    """
     key = f"{PACK}{uuid.uuid4().hex[:8]}"
     try:
         _queued(host, key, note)
     except BaseException:
         host.slots.cancel(project(host), key)
         raise
-    try:
-        yield
-    finally:
-        host.slots.give(project(host), key)
+    return key
 
 
 def _queued(host: Host, key: str, note: Callable[[str], None]) -> None:
@@ -130,21 +135,45 @@ def _queued(host: Host, key: str, note: Callable[[str], None]) -> None:
         turn.clear()
 
 
-def packed(host: Host, job: Job) -> Job:
-    """*job* whose updater, challenger and replay sessions each hold one of the project's slots; its wait is logged."""
+def packed(host: Host | None, job: Job) -> Job:
+    """*job* whose updater, challenger and replay sessions each hold one of the project's slots; its wait is logged.
+
+    A legacy updater repository that no ledger lease covers is adopted as unknown work, so it is never removed.
+    Without a running host there is no maintenance to own a session, so the sessions refuse to start.
+    """
     job.live = pack_live(host, job.live, job.log)
+    job.maintenance = host.maintenance if host is not None else None
+    legacy = job.store.root / pack_run.UPDATER
+    if job.maintenance is not None and "workspace" not in job.state and legacy.is_dir():
+        job.maintenance.adopt(f"legacy:{legacy}", project(host), "pack", {}, interrupted=True, workspace=str(legacy))
     return job
 
 
-def pack_live(host: Host, live: Live, note: Callable[[str], None]) -> Live:
-    """*live* whose updater, challenger and replay sessions each hold one of the project's slots."""
+def pack_live(host: Host | None, live: Live, note: Callable[[str], None]) -> Live:
+    """*live* whose updater, challenger and replay sessions enter the SDK only as maintenance owning a project slot."""
 
-    def gated[**P](work: Callable[P, Any]) -> Callable[P, Any]:
-        def run(*args: P.args, **kwargs: P.kwargs) -> Any:  # noqa: ANN401 - whatever the session returns
-            with one(host, note):
-                return work(*args, **kwargs)
+    def owned(work: Callable[[Session], Run]) -> Callable[[Session], Run]:
+        def run(cfg: Session) -> Run:
+            if host is None or host.maintenance is None:
+                msg = "the machine's maintenance ownership is not bound; the design pack's sessions cannot start"
+                raise design_pack.PackError(msg)
+            return host.maintenance.run(cfg, work, project=project(host), slot=admit(host, note), kind="pack")
 
         return run
 
-    held = {"update": gated(live.update), "challenge": gated(live.challenge), "replay": gated(live.replay)}
-    return dataclasses.replace(live, **held)
+    def update(store: Store, cfg: Session) -> Run:
+        return owned(lambda bound: live.update(store, bound))(cfg)
+
+    def challenge(store: Store, cfg: Session) -> Run:
+        return owned(lambda bound: live.challenge(store, bound))(cfg)
+
+    def replay(
+        store: Store,
+        candidate: Candidate | None,
+        run: Callable[[Session], Run] | None = None,
+        *,
+        keep: Callable[[Path], bool] | None = None,
+    ) -> Replay:
+        return live.replay(store, candidate, owned(run or pack_replay.sdk_run), keep=keep)
+
+    return dataclasses.replace(live, update=update, challenge=challenge, replay=replay)

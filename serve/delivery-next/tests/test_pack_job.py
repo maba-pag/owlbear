@@ -35,6 +35,7 @@ from owlbear_delivery_next.github.provider import (
     Rules,
 )
 from owlbear_delivery_next.local_system.codebase import CURRENT
+from owlbear_delivery_next.local_system.maintenance import Maintenance
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.local_system.slots import Slots
 from owlbear_delivery_next.pack_runs import pack_gates, pack_job, pack_publish, pack_rounds, pack_updater
@@ -266,7 +267,7 @@ class Fakes:
         self.at_golden()
         return self.wrong if folder is None else self.wrong_after
 
-    def replay(self, _store: Store, candidate) -> calibration.Replay:
+    def replay(self, _store: Store, candidate, _run=None, *, keep=None) -> calibration.Replay:  # the managed runner is unused here
         self.calls.append("replay")
         self.replayed = candidate
         skill = (candidate.skills / "owlbear-design-review" / "SKILL.md").read_text()
@@ -402,7 +403,7 @@ def test_a_passing_update_runs_every_stage_then_merges_one_commit_through_a_pull
     assert results(state) == dict.fromkeys(NAMES, "passed")
     here = design_pack.platform_name()
     assert fakes.calls == ["releases", "sync", f"engine {here}", "golden", "update", "golden", "replay", "challenger"]
-    assert fakes.folders == [None, store.root / pack_job.UPDATER / "golden"]  # the package's, then the candidate's
+    assert fakes.folders == [None, store.root / pack_job.RUNS / state["run"] / "golden"]  # the package's, then the candidate's
     replayed = fakes.replayed  # the replay judges with the candidate pack, not the active one
     assert (replayed.pins["pack"], replayed.installed.bundle) == ("impeccable-4.6.0.1", "bundle skill-v4.6.0")
     assert replayed.manifest == shown(checkout, "design_pack.json")  # the pack then activated
@@ -667,7 +668,7 @@ def test_rounds_ending_without_a_pass_wait_and_a_discard_changes_nothing(tmp_pat
     assert (state["state"], fakes.calls.count("challenger")) == ("waiting", 1)  # 1 finding: the last round (TD-208)
     assert results(state)["challenger"] == "waiting"
     assert [o["id"] for o in state["questions"][0]["options"]] == ["activate", "discard"]
-    assert (store.root / "design-pack-updater").is_dir()
+    assert job.workspace.is_dir()
     with pytest.raises(pack_job.Busy, match="waits for your answers"):
         job.start()
 
@@ -1366,6 +1367,8 @@ class Host:
 
     def __init__(self) -> None:  # the session slots its pack sessions take (TD-336)
         self.slots, self.stopped = Slots(lambda: 4), threading.Event()
+        self.maintenance = Maintenance(self.slots)  # bound by the machine host before any project starts
+        self.record = SimpleNamespace(project="")  # the project's key among the machine's slots (its store root here)
         self.store = SimpleNamespace(root=Path("/project"), settings=lambda: SimpleNamespace(sessions=2))
 
 

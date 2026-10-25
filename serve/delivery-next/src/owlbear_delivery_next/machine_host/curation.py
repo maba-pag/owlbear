@@ -11,7 +11,6 @@ paused" on (the owner, 2026-10-22). An entry a run left pending starts no other 
 from __future__ import annotations
 
 import asyncio
-import tempfile
 import threading
 import uuid
 from datetime import UTC, datetime
@@ -25,7 +24,7 @@ from owlbear_delivery_next.change_contracts import memory_curation_tools, tools
 from owlbear_delivery_next.change_contracts.memory_curation_tools import Judged  # noqa: TC001 - a field's type
 from owlbear_delivery_next.change_contracts.models import Record, StepKind
 from owlbear_delivery_next.change_contracts.permissions import Policy
-from owlbear_delivery_next.local_system import data_repo, local_home, processes
+from owlbear_delivery_next.local_system import data_repo, local_home, maintenance, processes
 from owlbear_delivery_next.local_system.storage_io import atomic_write
 from owlbear_delivery_next.machine_host import machine_settings, registry
 from owlbear_delivery_next.runtimes import sdk_adapter
@@ -99,6 +98,7 @@ class Curation:
         shared: Callable[[], data_repo.DataRepo | None] = data_repo.locate,
         run: Callable[[sdk_adapter.Session], Run] = _run,
         fenced: Callable[[], str] = str,
+        ownership: maintenance.Maintenance | None = None,
     ) -> None:
         """Runs a restart interrupted end as failed; their processes, if any, still count until they are gone."""
         self.slots, self.shared, self.run, self.fenced = slots, shared, run, fenced
@@ -106,13 +106,18 @@ class Curation:
         self.queue, self.again, self.worker = list[str](), set[str](), None
         self.held = ""  # the slot a run whose processes may still run keeps
         runs = self.load()
+        self.maintenance = ownership or maintenance.Maintenance(slots)
+        self.maintenance.adopt(
+            str(self.path()),
+            SLOT,
+            "curation",
+            runs.left,
+            interrupted=any(r.state == "running" for r in runs.folders.values()),
+        )
         for name, r in runs.folders.items():
             if r.state in {"waiting", "running"}:
                 runs.folders[name] = r.model_copy(update={"state": "failed", "reason": INTERRUPTED})
         self.left = dict(runs.left)
-        if self.left:  # processes a stopped host left: their slot stays taken until they are seen gone
-            self.held = "curate:restored"
-            self.slots.restore(SLOT, {self.held: 1})
         self._write(runs)
 
     def path(self) -> Path:
@@ -123,8 +128,11 @@ class Curation:
         """Every folder's last run; none when the file is missing or unreadable."""
         try:
             return Runs.model_validate_json(self.path().read_text())
-        except OSError, ValueError:
+        except FileNotFoundError:
             return Runs()
+        except (OSError, ValueError) as exc:
+            msg = f"the memory curation ownership record cannot be read: {exc}"
+            raise maintenance.MaintenanceError(msg) from exc
 
     def _write(self, runs: Runs) -> None:
         self.path().parent.mkdir(parents=True, exist_ok=True)
@@ -159,6 +167,8 @@ class Curation:
     def lingering(self) -> bool:
         """Whether a run's processes may still run; once they are seen gone, their slot is given back."""
         with self.lock:
+            if self.maintenance.pending("curation"):
+                return True
             if not self.left:
                 return False
             if not processes.verdict(self.left, processes.alive).confirmed:
@@ -278,7 +288,7 @@ class Curation:
             self._save(folder, FolderRun(state="running", started_at=started))
             self._save(folder, self._session(shared, folder, started, key))
         finally:
-            if self.held != key:
+            if not self.maintenance.held(SLOT, key):
                 self.slots.give(SLOT, key)
 
     def _session(self, shared: data_repo.DataRepo, folder: str, started: datetime, key: str) -> FolderRun:
@@ -288,8 +298,7 @@ class Curation:
         role = roles.chosen(settings, LABEL)
         store = shared.root / folder / "memory"
         before = {e.id: e.revision for e in _pending(store)}  # what the curator can see when it starts
-        with tempfile.TemporaryDirectory(prefix="owlbear-curation-") as empty:
-            at = Path(empty)
+        with self.maintenance.workspace("owlbear-curation-") as at:
             said = message(folder)
             cfg = sdk_adapter.Session(
                 kind=StepKind.REVIEW, worktree=at, session_id=f"{LABEL}-{folder}-{uuid.uuid4().hex[:8]}",
@@ -298,15 +307,15 @@ class Curation:
                 model=role.model, effort=role.effort, context=role.context, limit=roles.limit(settings, LABEL),
                 role=tools.CURATOR, job=LABEL, journal=sdk_adapter.Journal(event=self._pids), memory=store,
             )  # fmt: skip
-            done = self.run(cfg)
+            done = self.maintenance.run(cfg, self.run, project=SLOT, slot=key, kind="curation")
         t = done.termination
         with self.lock:
             watched = dict.fromkeys((*t.survivors, *t.unknown)) | done.pids if t is not None and not t.confirmed else {}
-            self.left, self.held = watched, key if watched else ""  # kept until they are seen gone
+            self.left, self.held = watched, key if self.maintenance.held(SLOT, key) else ""
             runs = self.load()
             runs.left = dict(self.left)
             self._write(runs)
-        unknown = t is not None and not t.confirmed and not watched
+        unknown = not (t and t.confirmed)
         ended = datetime.now(UTC)
         report = done.payload if isinstance(done.payload, memory_curation_tools.MemoryCurationResult) else None
         if done.ending != "result" or report is None or unknown:

@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.change_flow.status import RESUME, status
-from owlbear_delivery_next.local_system import data_repo
+from owlbear_delivery_next.local_system import data_repo, maintenance
 from owlbear_delivery_next.local_system.slots import Slots
 from owlbear_delivery_next.machine_host import machine_settings, registry
 from owlbear_delivery_next.machine_host.curation import Curation
@@ -76,13 +76,16 @@ class Machine:
         self.on_stop: Callable[[], None] = lambda: None
         self.total = 0  # until the machine's total is read; unset, no session starts (2026-10-23)
         self.slots = Slots(self._sessions, closed=True)  # opened once every project's live steps are counted
+        self.maintenance = maintenance.Maintenance(self.slots)
         from owlbear_delivery_next.machine_host.auto_update import Auto  # noqa: PLC0415 - it names this class
         from owlbear_delivery_next.machine_host.update import Updater  # noqa: PLC0415 - it names this class
 
         self.updater = Updater(self)
         self.auto = Auto(self)
         self.curation = Curation(
-            self.slots, fenced=lambda: self.updating or ("stopping" if self.stopping.is_set() else "")
+            self.slots,
+            fenced=lambda: self.updating or ("stopping" if self.stopping.is_set() else ""),
+            ownership=self.maintenance,
         )
 
     def _sessions(self) -> int:
@@ -129,6 +132,7 @@ class Machine:
             h.closed = lambda: self.stopping.is_set() or not p.gate.open
             h.updating = lambda: self.updating
             h.slots = self.slots
+            h.maintenance = self.maintenance
             h.merged = lambda: self.curation.nudge([h.store.name], "merge", paused=self.paused)
 
         try:
