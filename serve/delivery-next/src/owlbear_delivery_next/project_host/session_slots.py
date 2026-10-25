@@ -138,15 +138,27 @@ def _queued(host: Host, key: str, note: Callable[[str], None]) -> None:
 def packed(host: Host | None, job: Job) -> Job:
     """*job* whose updater, challenger and replay sessions each hold one of the project's slots; its wait is logged.
 
-    A legacy updater repository that no ledger lease covers is adopted as unknown work, so it is never removed.
-    Without a running host there is no maintenance to own a session, so the sessions refuse to start.
+    A run the last host left open, or a legacy updater repository no ledger lease covers, is adopted as unknown work
+    so it is never removed. Without a running host there is no maintenance to own a session, so the sessions refuse.
     """
     job.live = pack_live(host, job.live, job.log)
     job.maintenance = host.maintenance if host is not None else None
-    legacy = job.store.root / pack_run.UPDATER
-    if job.maintenance is not None and "workspace" not in job.state and legacy.is_dir():
-        job.maintenance.adopt(f"legacy:{legacy}", project(host), "pack", {}, interrupted=True, workspace=str(legacy))
+    if host is not None:
+        interrupted(job, project(host))
     return job
+
+
+def interrupted(job: Job, key: str) -> None:
+    """Hold the uncertain pack work a last host left running, whether or not it has PIDs or a directory."""
+    maintenance, legacy = job.maintenance, job.store.root / pack_run.UPDATER
+    if maintenance is None:
+        return
+    if job.interrupted is not None:
+        run = job.interrupted
+        source = f"run:{job.path}:{run['run']}:{run['started_at']}"
+        maintenance.adopt(source, key, "pack", {}, interrupted=True, workspace=run["workspace"] or str(legacy))
+    elif "workspace" not in job.state and legacy.is_dir():
+        maintenance.adopt(f"legacy:{legacy}", key, "pack", {}, interrupted=True, workspace=str(legacy))
 
 
 def pack_live(host: Host | None, live: Live, note: Callable[[str], None]) -> Live:

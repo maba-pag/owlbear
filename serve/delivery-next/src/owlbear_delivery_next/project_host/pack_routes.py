@@ -194,17 +194,15 @@ def _replay(
 
     @routes.post("/design-pack/replay")
     def replay() -> dict[str, Any]:
-        if not job.lock.acquire(blocking=False):
-            raise HTTPException(409, "a design pack update is running: wait for it to finish")
         try:
-            with admitted():
+            with job.exclusive(), admitted():
                 r = job.live.replay(store, None, keep=job.keeps)
+        except pack_job.Busy as exc:
+            raise HTTPException(409, str(exc)) from exc
         except pack_replay.ReplayError as exc:
             raise HTTPException(409, str(exc)) from exc
         except REPLAY_FAILURES as exc:
             raise HTTPException(422, str(exc)) from exc
-        finally:
-            job.lock.release()
         return {"ok": r.ok, "report": f"calibration replay: {pack_candidate.said_replay(r)}"}
 
 

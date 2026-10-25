@@ -10,6 +10,7 @@ reads as failed, except during publication: it waits for the owner, and trying a
 
 from __future__ import annotations
 
+import contextlib
 import fcntl
 import json
 import os
@@ -33,7 +34,7 @@ from owlbear_delivery_next.pack_runs.pack_run import CANDIDATE, UPDATER, Stopped
 from owlbear_delivery_next.workflow_steps import sessions
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Iterator
 
     from owlbear_delivery_next.design_packs.calibration import Replay
     from owlbear_delivery_next.github.provider import Provider
@@ -131,12 +132,19 @@ class Job:
         self.thread: threading.Thread | None = None
         self.held: int | None = None
         self.maintenance: Maintenance | None = None  # bound by session_slots.packed; without it nothing is removed
+        self.interrupted: dict[str, str] | None = None  # a run the last host left running; its SDK stage may still work
         self.state = self._read()
         if self.state["state"] == "running" and (self.state.get("context") or {}).get("publication"):
             reason = "the host stopped while the update was being published"
             self._hold(pack_run.Context.model_validate(self.state["context"]), reason)
         elif self.state["state"] == "running":
-            self._end("failed", "the host stopped during this run; check the package checkout before running again")
+            self.interrupted = {
+                "run": self.state.get("run") or "", "started_at": self.state.get("started_at") or "",
+                "workspace": self.state.get("workspace") or "",
+            }  # fmt: skip
+            # keeps the workspace: nothing is bound to say whether an uncertain session still uses it
+            reason = "the host stopped during this run; check the package checkout before running again"
+            self._finish("failed", reason, keep=True)
 
     @property
     def path(self) -> Path:
@@ -326,13 +334,13 @@ class Job:
         with self.lock:
             self._finish(state, reason)
 
-    def _finish(self, state: str, reason: str) -> None:
+    def _finish(self, state: str, reason: str, *, keep: bool = False) -> None:
         for s in self.state["stages"]:
             if s["result"] in OPEN:
                 s["result"] = "failed" if s["result"] == "running" and state == "failed" else "skipped"
         self.state |= {"state": state, "stage": "", "ended_at": _now(), "reason": reason, "questions": []}
         self.state["context"] = None
-        if self._removable(self.workspace):
+        if not keep and self._removable(self.workspace):
             shutil.rmtree(self.workspace, ignore_errors=True)
         self._save()
 
@@ -369,9 +377,29 @@ class Job:
         try:
             self._steps(work)
         finally:
-            if self.held is not None:
-                os.close(self.held)
-                self.held = None
+            self._release()
+
+    def _release(self) -> None:
+        if self.held is not None:
+            os.close(self.held)
+            self.held = None
+
+    @contextlib.contextmanager
+    def exclusive(self) -> Iterator[None]:
+        """Hold the machine's pack claim while a manual replay runs, as an update does; uncertain pack work refuses it.
+
+        Raises:
+            Busy: An update runs or waits, another project holds the machine's claim, or a pack session is unproven.
+        """
+        with self.lock:
+            if self.busy() or self.state["state"] in ("running", "waiting"):
+                msg = "a design pack update is running or waits for answers: finish it before a replay"
+                raise Busy(msg)
+            self._claim()
+        try:
+            yield
+        finally:
+            self._release()
 
     def _steps(self, work: Callable[[], str | None]) -> None:
         try:
