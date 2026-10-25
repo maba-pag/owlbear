@@ -144,6 +144,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:  # noq
             policy=permissions.Policy(at, write=parts.write),
             observe=lambda: worktree.observe(at, change.names.target, since),
             checks=parts.checks,
+            packages=parts.packages,
             submit=parts.submit,
             scope=tuple(change.brief.scope),
             model=role.model,
@@ -177,7 +178,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:  # noq
     task = next((t for t in change.plan.tasks if t.id == s.task), None) if change.plan else None
     curation_build.recorded(change, run, path)
     result = review.recorded(change, task, run, path, session_result.to_result(run, s.kind, end))
-    result = disputes.processed(change, task, run.session_id, run.payload, result)
+    result = disputes.processed(change, task, run.session_id, run.payload, result, run.changed)
     result = amend.challenge(store, lock, change, path, run, result=result, settings=settings)  # TD-179: judged only
     result = conversation.disputed(task, run.payload, result)
     conversation.respond(task, run.payload, run.head, result.exit)

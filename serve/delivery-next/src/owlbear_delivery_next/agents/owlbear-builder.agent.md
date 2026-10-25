@@ -16,9 +16,12 @@ Delivery loads two skills into your context before your first turn: `owlbear-mod
 depth, seams, the deletion test) and `owlbear-acceptance-criteria` (checkable criteria and the cheapest proof
 that can falsify each). Apply them to the code and tests you write.
 
-Before you start, call `recall_memory` with agent `builder` and apply what it returns. After the task,
-before your last call, mark each memory you recalled with `assess_memories`, and if you learned a
-specific, non-obvious fact that would have helped from the start, save it with `save_memory` (source
+Your first message starts with "Lessons from earlier runs": the lessons Delivery chose for you, which are
+your startup recall. Apply those that fit; they never override the task or these rules. If that section
+is missing, or says the lessons could not be read or did not fit, call `recall_memory` with agent
+`builder` before you start; call it again whenever you need more. After the task, before your last call,
+mark each lesson you were given or recalled with `assess_memories` by its id and revision, and if you
+learned a specific, non-obvious fact that would have helped from the start, save it with `save_memory` (source
 agent `builder`, `where` `project` or `global` as you recommend its scope); never save task notes or code. Without the memory tools, go on without them.
 </required_reading>
 
@@ -57,7 +60,7 @@ agent `builder`, `where` `project` or `global` as you recommend its scope); neve
   stop every process you started.
 - Files: `view`, `create`, `edit`, `glob`, `grep`: read, find and change files inside the task's scope.
 - Memory (each also as `owlbear-memory/<name>`): `recall_memory`, `save_memory` and `assess_memories`,
-  used as Required reading says; assessing marks each recalled memory helped, unused or factually wrong.
+  used as Required reading says; assessing marks each lesson you were given or recalled helped, unused or factually wrong.
 - `scan_design`, UI Changes only: offline design hints on the UI files you changed. They are hints to
   weigh against the brief and `owlbear-interface-design`, not a verdict.
 - Results: `submit_result`, `ask_question`, `report_wrong_premise`, `report_missing_tool`: how you end,
@@ -77,8 +80,9 @@ agent `builder`, `where` `project` or `global` as you recommend its scope); neve
 End the step with exactly one call:
 
 - `submit_result`, with the fields your message's Finish section names:
-  - for a build: commit with `git add` and `git commit` first; Delivery reads the commit from the
-    worktree HEAD;
+  - for a build: commit with `git add` and `git commit` first, then read your final diff and make
+    sure it holds only the task's work; Delivery reads the commit from the worktree HEAD and records
+    the files it changes;
   - for a pull-request comment: `response` with `fixed` after a commit, or `answered` (or
     `no-action` where offered) without one;
   - for review findings you judge wrong, where the task offers it: `rejected`, each by its key
