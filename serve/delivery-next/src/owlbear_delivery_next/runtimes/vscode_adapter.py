@@ -27,7 +27,7 @@ from typing import TYPE_CHECKING, Any
 from owlbear_delivery_next.change_contracts import permissions
 from owlbear_delivery_next.local_system.mask import redact
 from owlbear_delivery_next.local_system.processes import Termination
-from owlbear_delivery_next.runtimes import ahp, host_record, leftovers, readiness, step_input, subagents
+from owlbear_delivery_next.runtimes import ahp, host_record, leftovers, lessons, readiness, step_input, subagents
 from owlbear_delivery_next.runtimes import window_files as wf
 from owlbear_delivery_next.runtimes.results import Gate
 from owlbear_delivery_next.runtimes.sdk_adapter import DEADLINES, role_of
@@ -131,6 +131,7 @@ class _Driver:
         self.gate = Gate(cfg, run, self.log, _grace(self.control))
         self.stepper: Step | None = None
         self.inbox = Path()
+        self.exposure: lessons.Exposure | None = None  # what its first prompt says from memory
 
     def log(self, **event: Any) -> None:  # noqa: ANN401 - JSON values
         self.cfg.journal.event({"at": datetime.now(UTC).isoformat(timespec="seconds"), **event})
@@ -184,6 +185,8 @@ class _Driver:
 
     def drive(self, conn: ahp.Transport) -> Outcome:
         cfg, reminder = self.cfg, self.env.reminder
+        first = cfg.fresh if cfg.resume and cfg.fresh else cfg.message
+        prompt, self.exposure = lessons.opening(self.role, cfg.memory, first, self.log)  # every window chat is new
         hooks = Hooks(
             launch=self.env.launch,
             clock=self.env.clock,
@@ -195,7 +198,7 @@ class _Driver:
             agent=cfg.worktree / wf.agent_path(self.role),
             model=cfg.model or "",
             effort=cfg.effort or "",
-            prompt=cfg.fresh if cfg.resume and cfg.fresh else cfg.message,
+            prompt=prompt,
             config=CONFIG if cfg.policy.write else READ_ONLY,
             context=cfg.context,
             reminder=step_input.reminder(self.role, judging=cfg.judging) if reminder is None else reminder,
@@ -335,6 +338,7 @@ def run(cfg: Session, inbox: Path, env: Env | None = None) -> Run:
     out = driver.step(inbox)
     started = driver.control.started.is_set()
     if started:
+        lessons.shown(driver.exposure, cfg.session_id, driver.log, confirmed=False)  # dispatched, not acknowledged
         cfg.journal.delivered()
         _recorded(driver, out, inbox, env.record(cfg.worktree, since, wf.agent_name(driver.role)))
     result.usage = _usage(out, cfg.model)
