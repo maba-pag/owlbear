@@ -38,7 +38,8 @@ export function inherited() {
 export function edit(key, raw, literal = false) {
   const field = key.split(".")[1] ?? key;
   const value = !literal && !NUMBERS.includes(field) && raw === INHERIT ? "" : raw;
-  if (canonical(key, value) === saved(state.layer, key)) delete drafts[state.layer][key];
+  // a list keeps its text as typed (a comma, a space), counted as an edit only when its items differ (dirty)
+  if (!LISTS.includes(key) && canonical(key, value) === saved(state.layer, key)) delete drafts[state.layer][key];
   else drafts[state.layer][key] = value;
   show();
 }

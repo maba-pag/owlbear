@@ -150,6 +150,11 @@ def test_each_layer_keeps_its_own_drafts_and_a_save_sends_only_the_shown_layer(s
         expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
         looks.fill("hand-off,sample")  # the saved list written differently: no edit
         expect(page.locator("#pending")).to_contain_text("No unsaved edits.")  # the global edit stays apart
+        looks.press_sequentially(",")  # extending a saved list by keyboard: the comma stays while typing
+        expect(looks).to_have_value("hand-off,sample,")
+        looks.press_sequentially(" plan")
+        expect(page.locator("#pending")).to_contain_text("spot looks: hand-off, sample → hand-off,sample, plan")
+        looks.fill("hand-off, sample")
         pds.pick(page, "Layer", "global")
         expect(page.get_by_label("Minutes per session, builder")).to_have_value("60")
         expect(page.locator("#pr")).to_contain_text("inherit (on)")  # layered since code ships no defaults
