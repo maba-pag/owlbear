@@ -173,9 +173,22 @@ def ready(store: Store, repo: Path, *, carry: bool = False) -> list[Check]:
     except StoreError as exc:
         fix = "Restore the shared profile repository's write access, then restart Delivery"
         failed = Check("profile detection", ok=False, detail=str(exc)[:200], fix=fix)
-        return [failed, *check(repo, None)]
+        return [failed, *_host_checks(store, repo)]
     carried = _carried(store) if carry else []
     return [*carried, *check(repo, prof)]
+
+
+def _host_checks(store: Store, repo: Path) -> list[Check]:
+    """The host checks after a failed detection: the known profile's host, else none while the profile is unreadable.
+
+    A missing profile is a fresh clone, whose checks use the default host; an unreadable one has no host to check, so
+    its host-specific checks wait for the next start rather than run against a public host by default.
+    """
+    try:
+        prof = store.read_profile()
+    except StoreError:
+        return []
+    return check(repo, prof)
 
 
 def _carried(store: Store) -> list[Check]:

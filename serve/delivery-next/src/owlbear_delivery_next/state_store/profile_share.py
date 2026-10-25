@@ -124,11 +124,12 @@ def publish_config_unlocked(store: Store) -> str:
     return settle_config(store, notice)
 
 
-def settle_config(store: Store, notice: str) -> str:
+def settle_config(store: Store, notice: str, *, owner: bool = False) -> str:
     """Record in the shared repository whether this clone's project config change reached it.
 
     The caller holds the shared lock and has just attempted the config's publication; *notice* is its refusal, if any.
-    A refused change is recorded by its digest, and only the publication of the same bytes clears it. The record is a
+    A refused change is recorded by its digest, and only the publication of the same bytes clears it, unless an *owner*
+    save (its revision validated under the lock) published: that supersedes any earlier pending digest. The record is a
     file of its own, so recording a refused change never publishes the profile's unpublished completion.
     """
     if not store.shared:
@@ -137,7 +138,7 @@ def settle_config(store: Store, notice: str) -> str:
     pending = _shared_pending(store)
     if notice:
         want = digest
-    elif pending == digest:
+    elif pending == digest or owner:
         want = ""
     else:
         return notice
@@ -158,7 +159,7 @@ def settle_config(store: Store, notice: str) -> str:
     return "; ".join(dict.fromkeys(part for part in (notice, extra) if part))
 
 
-def publish_layer(store: Store, path: Path, message: str, until: float) -> str:
+def publish_layer(store: Store, path: Path, message: str, until: float, *, owner: bool = False) -> str:
     """Publish a changed settings layer under the held lock.
 
     A raised project config refusal is recorded as pending before it propagates, as a returned refusal is, so another
@@ -172,7 +173,7 @@ def publish_layer(store: Store, path: Path, message: str, until: float) -> str:
         if path != store.config_path:
             raise
         raise SharedError(settle_config(store, str(exc))) from exc
-    return settle_config(store, notice) if path == store.config_path else notice
+    return settle_config(store, notice, owner=owner) if path == store.config_path else notice
 
 
 def mark(store: Store, expect: str, to: str, basis: str = "") -> tuple[str, str, bool]:

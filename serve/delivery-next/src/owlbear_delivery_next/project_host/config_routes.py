@@ -249,7 +249,7 @@ def _save[T: Layer](  # noqa: PLR0913, PLR0917 - the host names this machine's p
         if isinstance(new, MachineLayer):
             update_layer(path, model, change)
             return ""
-        return store.save(path, model, change, what)
+        return store.save(path, model, change, what, owner=True)
     except StoreError as exc:
         raise HTTPException(409, str(exc)) from exc
     except OSError as exc:

@@ -225,7 +225,9 @@ class Store:
             self.shared.publish(self.config_path, f"settings: {self.name} moved from its clone")
             local.replace(local.with_name(f"{CONFIG}.moved"))  # kept as the recovery copy
 
-    def save[T: Layer](self, path: Path, model: type[T], change: Callable[[T], T], what: str) -> str:
+    def save[T: Layer](
+        self, path: Path, model: type[T], change: Callable[[T], T], what: str, *, owner: bool = False
+    ) -> str:
         """Change one settings layer and publish it; what the owner should know about the publication, else nothing."""
         if not self.shared:
             update_layer(path, model, change)
@@ -234,7 +236,7 @@ class Store:
             until = time.monotonic() + data_repo.SAVE_SECONDS  # the lock wait and every git command share it
             with self.shared.locked():
                 update_layer(path, model, change)
-                return profile_share.publish_layer(self, path, f"settings: {what}", until)
+                return profile_share.publish_layer(self, path, f"settings: {what}", until, owner=owner)
         except data_repo.DataRepoError as exc:
             raise SharedError(str(exc)) from exc
 
