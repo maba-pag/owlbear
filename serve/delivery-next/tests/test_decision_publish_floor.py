@@ -25,6 +25,7 @@ from owlbear_delivery_next.state_store import (
     decision_batch,
     decision_recovery,
     decision_sync,
+    decision_transaction,
 )
 from owlbear_delivery_next.state_store.decision_store import DecisionsUnavailable, save
 
@@ -215,6 +216,32 @@ def test_a_committed_generation_completes_offline_without_fetch_push_or_rebase(
     assert "committed locally" in done.notice
     assert not {"fetch", "push", "pull", "rebase"} & set(commands)
     assert decision_batch.pending(shared) is None
+    assert (root / OWNER).read_text() == "owner words\n"
+
+
+def test_a_rebase_started_after_ancestry_keeps_the_committed_batch_pending(shared_repo, lost_ack, monkeypatch) -> None:
+    root, _remote = shared_repo
+    owner_commit(root, "owner words\n")
+    shared = DataRepo(root)
+    save(shared, make(), expected_revision=None, message="decisions: notes")
+    pending = decision_batch.pending(shared)
+    assert pending is not None
+    head = git(root, "rev-parse", "HEAD")
+    lost_ack[0] = False
+
+    real_in_head = decision_transaction.in_head
+
+    def rebase_starts_after_ancestry(*args, **kwargs):
+        found = real_in_head(*args, **kwargs)
+        (root / ".git" / "rebase-merge").mkdir()  # a real paused rebase, started during the blob proof
+        return found
+
+    monkeypatch.setattr(decision_transaction, "in_head", rebase_starts_after_ancestry)
+    with pytest.raises(DecisionsUnavailable, match="not proved now"):
+        decision_recovery.finish(shared, pending.generation)
+
+    assert git(root, "rev-parse", "HEAD") == head
+    assert decision_batch.pending(shared) is not None
     assert (root / OWNER).read_text() == "owner words\n"
 
 
@@ -438,10 +465,13 @@ def test_an_owned_file_that_is_a_symlink_is_never_followed_while_a_plain_file_st
     assert link.is_symlink()
 
 
-def test_a_rebase_in_progress_blocks_a_new_save_before_any_commit(shared_repo, monkeypatch) -> None:
+def test_a_real_rebase_paused_by_exec_blocks_a_new_save_and_is_never_aborted(shared_repo, monkeypatch) -> None:
     root, _ = shared_repo
     owner_commit(root, "owner words\n")
-    (root / ".git" / "rebase-merge").mkdir()
+    paused = subprocess.run(["git", "rebase", "--exec", "false", "HEAD~1"], cwd=root, check=False, capture_output=True)  # noqa: S607
+    assert paused.returncode != 0
+    assert (root / ".git" / "rebase-merge").is_dir()
+    assert DataRepo(root).rebasing() is True
     shared = DataRepo(root)
     head, before = git(root, "rev-parse", "HEAD"), tree_bytes(root)
     commands = recorded_git(monkeypatch)
@@ -450,7 +480,64 @@ def test_a_rebase_in_progress_blocks_a_new_save_before_any_commit(shared_repo, m
 
     assert not receipt.saved
     assert "rebase is in progress" in receipt.notice
-    assert not {"fetch", "push", "pull", "rebase", "commit"} & set(commands)
+    assert not {"fetch", "push", "pull", "rebase", "commit", "rebase --abort"} & set(commands)
     assert git(root, "rev-parse", "HEAD") == head
     assert tree_bytes(root) == before
+    assert (root / ".git" / "rebase-merge").is_dir()
+
+
+def test_a_detached_head_with_no_rebase_is_not_mistaken_for_one(shared_repo) -> None:
+    root, _ = shared_repo
+    owner_commit(root, "owner words\n")
+    git(root, "checkout", "-q", "--detach")
+    assert not (root / ".git" / "rebase-merge").exists()
+    assert DataRepo(root).rebasing() is False
+
+
+def test_a_rebase_in_progress_refuses_a_new_save_before_writing_anything(shared_repo, monkeypatch) -> None:
+    root, _ = shared_repo
+    owner_commit(root, "owner words\n")
+    (root / ".git" / "rebase-merge").mkdir()
+    shared = DataRepo(root)
+    head = git(root, "rev-parse", "HEAD")
+    commands = recorded_git(monkeypatch)
+
+    receipt = save(shared, make(), expected_revision=None, message="decisions: notes")
+
+    assert not receipt.saved
+    assert "rebase is in progress" in receipt.notice
+    assert "nothing was written" in receipt.notice
+    assert not {"fetch", "push", "pull", "rebase", "commit"} & set(commands)
+    assert git(root, "rev-parse", "HEAD") == head
     assert decision_batch.pending(shared) is None
+    assert (root / OWNER).read_text() == "owner words\n"
+
+
+def test_an_owner_commit_during_a_paused_rebase_is_never_rolled_back_by_the_publisher(shared_repo, monkeypatch) -> None:
+    root, _ = shared_repo
+    owner_commit(root, "owner words\n")
+    shared = DataRepo(root)
+    commands = recorded_git(monkeypatch)
+    real_publish = decision_sync.publish
+    owner: dict[str, object] = {}
+
+    def owner_commits_and_pauses_then_publish(*args, **kwargs):
+        git(root, "add", "-A")  # the owner commits the batch while the checkout enters a paused edit
+        git(root, "commit", "-q", "-m", "owner: committed during the rebase")
+        (root / ".git" / "rebase-merge").mkdir()
+        owner["head"] = git(root, "rev-parse", "HEAD")
+        owner["index"] = git(root, "ls-files", "-s")
+        owner["tree"] = tree_bytes(root)
+        owner["mark"] = len(commands)
+        return real_publish(*args, **kwargs)
+
+    monkeypatch.setattr(decision_sync, "publish", owner_commits_and_pauses_then_publish)
+    receipt = save(shared, make(), expected_revision=None, message="decisions: notes")
+
+    assert not receipt.saved
+    assert "rebase is in progress" in receipt.notice
+    assert git(root, "rev-parse", "HEAD") == owner["head"]
+    assert git(root, "ls-files", "-s") == owner["index"]
+    assert tree_bytes(root) == owner["tree"]
+    assert decision_batch.pending(shared) is not None
+    assert not {"fetch", "push", "pull", "rebase", "commit"} & set(commands[owner["mark"] :])

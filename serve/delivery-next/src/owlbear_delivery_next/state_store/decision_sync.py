@@ -153,13 +153,14 @@ def prepare(shared: DataRepo, until: float) -> tuple[str, str]:
 def _ready(shared: DataRepo, until: float) -> tuple[str, Sent | None]:
     """HEAD to commit on; else why nothing is committed: HEAD is unknown, or a rebase is active or unknown.
 
-    An unknown rebase is not "no rebase", so it leaves the batch interrupted rather than uncommitted.
+    An active rebase is ambiguous too: the owner may have committed the batch while the rebase was paused, so "no
+    commit by us" proves nothing about HEAD or the index. The batch stays interrupted for the owner to settle.
     """
     if (head := _rev(shared, "HEAD", until)) is None:
         return "", Sent(notice="HEAD is not known, so nothing was committed", ambiguous=True)
     try:
         if shared.rebasing(until):
-            return "", Sent(notice="a rebase is in progress, so nothing was committed", uncommitted=True)
+            return "", Sent(notice="a rebase is in progress, so nothing was rolled back", ambiguous=True)
     except DataRepoError as exc:
         return "", Sent(notice=f"{exc}, so nothing was committed", ambiguous=True)
     return head, None

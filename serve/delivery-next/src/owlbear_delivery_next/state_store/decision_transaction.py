@@ -82,17 +82,22 @@ def landed(shared: DataRepo, head: str, rows: Sequence[tuple[str, bytes | None, 
     One HEAD commit is read for all of it and checked again at the end, so a commit moving mid-proof cannot pass. An
     active or unknown rebase is never published. Finish and every completion path use this same check.
     """
-    try:
-        if shared.rebasing():
-            return False
-    except DataRepoError:
+    if not operation_idle(shared):
         return False
     commit = head_commit(shared)
     if commit is None or shared.git("merge-base", "--is-ancestor", head, commit).returncode:
         return False
     if not all(in_head(shared, rel, after, commit) and worktree_holds(shared, rel, after) for rel, _, after in rows):
         return False
-    return head_commit(shared) == commit
+    return head_commit(shared) == commit and operation_idle(shared)
+
+
+def operation_idle(shared: DataRepo) -> bool:
+    """No rebase is active or unknown; read again after the blob and worktree proof, since a rebase can start in it."""
+    try:
+        return not shared.rebasing()
+    except DataRepoError:
+        return False
 
 
 def head_commit(shared: DataRepo) -> str | None:

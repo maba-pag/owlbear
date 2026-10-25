@@ -115,6 +115,30 @@ def test_a_null_before_image_for_a_new_file_is_accepted_and_finishes(picking, mo
     assert (shared.root / PROJECT / "decisions" / f"{new.id}.md").exists()
 
 
+@pytest.mark.parametrize(
+    "edit",
+    [
+        lambda record: record["files"][0].__setitem__("path", 7),
+        lambda record: record.__setitem__("files", {"path": "decisions/x.md"}),
+        lambda record: record.__setitem__("files", ["decisions/x.md"]),
+    ],
+    ids=["path-not-string", "files-not-list", "file-entry-not-object"],
+)
+def test_a_journal_with_a_wrongly_typed_file_list_raises_journal_error_and_keeps_its_bytes(picking, monkeypatch, edit):
+    _seed(picking)
+    shared = picking.shared
+    _interrupt(picking, monkeypatch, [make(title="Notes use UTC", statement="All note timestamps use UTC.")])
+    assert decision_batch.pending(shared) is not None
+    _rewrite_journal(shared, edit)
+    journal = decision_batch.journal_path(shared).read_bytes()
+
+    with pytest.raises(decision_batch.JournalError):
+        decision_batch.pending(shared)
+    with pytest.raises(decision_store.DecisionsUnavailable):
+        decision_recovery.finish(shared, "any")
+    assert decision_batch.journal_path(shared).read_bytes() == journal
+
+
 def test_an_ambiguous_head_after_a_landed_commit_keeps_the_journal_and_the_written_file(picking, monkeypatch):
     _seed(picking)
     shared = picking.shared

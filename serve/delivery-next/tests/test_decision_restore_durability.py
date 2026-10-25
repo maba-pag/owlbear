@@ -183,6 +183,13 @@ class _Store:
         self.shared, self.name = DataRepo(root), PROJECT
 
 
+def _where(folder: Path, root: Path) -> str:
+    """A synced folder's place under the data root; a folder outside it, such as the root's parent, is named outside."""
+    if not Path(folder).is_relative_to(root):
+        return "outside"
+    return Path(folder).relative_to(root).as_posix() or "."
+
+
 def test_a_new_project_folder_and_its_parent_are_fsynced_before_the_record_is_published(shared_repo, monkeypatch):
     root, _ = shared_repo
     store = _Store(root)
@@ -190,7 +197,7 @@ def test_a_new_project_folder_and_its_parent_are_fsynced_before_the_record_is_pu
     real_fsync, real_publish = storage_io.fsync_dir, decision_sync.publish
 
     def traced_fsync(folder: Path) -> None:
-        events.append(f"fsync {Path(folder).relative_to(root).as_posix() or '.'}")
+        events.append(f"fsync {_where(folder, root)}")
         real_fsync(folder)
 
     def traced_publish(*args, **kwargs):
@@ -215,7 +222,7 @@ def test_an_existing_project_folder_publishes_without_refsyncing_the_root(shared
     real_fsync, real_publish = storage_io.fsync_dir, decision_sync.publish
 
     def traced_fsync(folder: Path) -> None:
-        events.append(f"fsync {Path(folder).relative_to(root).as_posix() or '.'}")
+        events.append(f"fsync {_where(folder, root)}")
         real_fsync(folder)
 
     def traced_publish(*args, **kwargs):
@@ -229,3 +236,59 @@ def test_an_existing_project_folder_publishes_without_refsyncing_the_root(shared
 
     assert "fsync ." not in events
     assert "publish" in events
+
+
+def test_a_symlink_leaf_with_matching_bytes_rejects_the_whole_batch_before_any_restore(picking, monkeypatch, tmp_path):
+    old, before = _committed(picking)
+    path = _file(picking, old)
+    successor = _successor(old)
+    successor_path = _file(picking, successor)
+    outside = tmp_path / "outside.md"
+    outside.write_bytes(before)
+    head = _head(picking)
+
+    def refused_after_swap(*args, **kwargs):
+        path.unlink()
+        path.symlink_to(outside)
+        return _refused(*args, **kwargs)
+
+    monkeypatch.setattr(decision_sync, "publish", refused_after_swap)
+
+    _save_supersede(picking, old, successor)
+
+    assert path.is_symlink()
+    assert outside.read_bytes() == before
+    assert successor_path.exists()
+    assert _head(picking) == head
+    assert decision_batch.pending(picking.shared) is not None
+
+
+def test_a_symlink_parent_with_matching_bytes_rejects_the_whole_batch_before_any_restore(
+    picking, monkeypatch, tmp_path
+):
+    old, before = _committed(picking)
+    path = _file(picking, old)
+    folder = path.parent
+    successor = _successor(old)
+    successor_path = _file(picking, successor)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / path.name).write_bytes(before)
+    head = _head(picking)
+
+    def refused_after_swap(*args, **kwargs):
+        moved = tmp_path / "moved"
+        folder.rename(moved)
+        folder.symlink_to(outside, target_is_directory=True)
+        return _refused(*args, **kwargs)
+
+    monkeypatch.setattr(decision_sync, "publish", refused_after_swap)
+
+    _save_supersede(picking, old, successor)
+
+    assert folder.is_symlink()
+    assert (outside / path.name).read_bytes() == before
+    assert not (outside / successor_path.name).exists()
+    assert (tmp_path / "moved" / successor_path.name).exists()
+    assert _head(picking) == head
+    assert decision_batch.pending(picking.shared) is not None
