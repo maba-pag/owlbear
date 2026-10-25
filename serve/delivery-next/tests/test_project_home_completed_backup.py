@@ -137,6 +137,25 @@ def test_a_replaced_target_refuses_and_keeps_the_source_and_receipt(clone, monke
     assert (target / "impostor").read_text() == "foreign\n"
 
 
+def test_a_replaced_target_with_the_same_identity_refuses_and_keeps_the_impostor(clone, monkeypatch):
+    """A freed folder can come back with the same device and inode (Linux reuses them); identity alone is not proof."""
+    repo, folder = clone
+    monkeypatch.setattr(project_move, "_ident", lambda _st: [0, 0])
+    move(repo, monkeypatch)
+    target = project_home.located(repo)
+    before = receipt_bytes(folder)
+    shutil.rmtree(target)
+    target.mkdir()
+    (target / "impostor").write_text("foreign\n")
+
+    with pytest.raises(StoreError):
+        project_home.located(repo)
+
+    assert receipt_bytes(folder) == before
+    assert (folder / "changes" / "c1" / "runner.log").read_text() == "ran\n"
+    assert (target / "impostor").read_text() == "foreign\n"
+
+
 def test_a_malformed_receipt_refuses_and_is_not_rewritten(clone, monkeypatch):
     repo, folder = clone
     move(repo, monkeypatch)

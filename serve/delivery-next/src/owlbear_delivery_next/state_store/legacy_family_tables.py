@@ -33,6 +33,6 @@ CURRENT_MODULES = (
     ("state_store/fd_tree.py", "02a7562796f8b5abf7e915807fbbb90a1392b9c98baed2d07836ab4f315f9313"),
     ("state_store/offline_protocol.py", "15f8b6301e0df818eb6ec769b1afefeca35f88b70b62b8b6b198246235412daf"),
     ("state_store/project_home.py", "465e753fadbaf283ce139ba4f2d07ecb2587bdaec93d0cd8f4e1553c216a0445"),
-    ("state_store/project_move.py", "9b52fb4bbc46d68d72f83836e76cdcc8963a56c5dd614376518a5614ba099a6d"),
+    ("state_store/project_move.py", "83b6477525b7f9aa19e3f7f24b5112421cb11ae1cd646e6d37a1a375d8b00e3f"),
     ("state_store/store.py", "e0439c41372c84ab4bd032bb94a3daece67da8142dc72e4174398524da5a4e63"),
 )

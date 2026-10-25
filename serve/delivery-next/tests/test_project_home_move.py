@@ -13,7 +13,7 @@ import subprocess
 
 import pytest
 
-from owlbear_delivery_next.state_store import fd_tree, offline_protocol, project_home, project_move
+from owlbear_delivery_next.state_store import fd_tree, legacy_family, offline_protocol, project_home, project_move
 from owlbear_delivery_next.state_store.database import StoreError
 
 SOURCE_ID = "abc123"
@@ -418,8 +418,11 @@ def test_a_lock_nobody_holds_is_retained_by_the_move_and_never_unlinked(clone, m
     assert (folder / "host.lock").is_file()
 
 
-def test_without_a_verified_offline_proof_production_refuses_and_moves_nothing(clone):
+def test_without_a_verified_offline_proof_production_refuses_and_moves_nothing(clone, current_binding, monkeypatch):
     repo, folder = clone
+    monkeypatch.setattr(offline_protocol, "boot_session", lambda: BEFORE)
+    unproven = legacy_family.Binding(None, current_binding.interpreter, current_binding.package)
+    monkeypatch.setattr(legacy_family, "live_binding", lambda: unproven)
     with pytest.raises(StoreError, match=r"legacy producers are not proven fenced"):
         offline_protocol.prepare_clone(repo)  # the production list is non-empty
     assert not (folder / offline_protocol.PREPARED).exists()

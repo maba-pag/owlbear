@@ -76,7 +76,7 @@ def test_prepare_records_the_prior_format_and_boot_then_fences_the_source(run, r
     assert source_marker(repo) == "999"
 
 
-@pytest.mark.usefixtures("current_binding")
+@pytest.mark.usefixtures("current_binding", "boot")
 def test_a_repeated_prepare_keeps_the_valid_prior_format(run, repo) -> None:
     assert run(repo, "prepare") == 0
     assert run(repo, "prepare") == 0

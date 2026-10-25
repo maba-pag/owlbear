@@ -13,6 +13,7 @@ from __future__ import annotations
 import contextlib
 import json
 import os
+import secrets
 import stat
 from dataclasses import dataclass
 from pathlib import Path
@@ -39,10 +40,11 @@ from owlbear_delivery_next.state_store.fd_tree import (
 CLONE_ID = "clone-id"
 MOVE_LOCK = "move.lock"
 MOVE_RECORD = "move.json"
+MOVE_PROOF = ".move-proof"  # random bytes this move wrote into its copy: identity the inode numbers cannot reuse
 PREPARED = "prepare.json"  # the offline preparation: stays in the clone, never moves
 FENCE = "999"  # reserved source fence: above every admitted producer format, so no admitted runtime can write it
 COPYING, SWITCHED = "copying", "switched"
-RECORD_KEYS = frozenset({"target", "stage", "stage_id", "manifest", "copied", "pending", "phase"})
+RECORD_KEYS = frozenset({"target", "stage", "stage_id", "proof", "manifest", "copied", "pending", "phase"})
 KEPT = frozenset({CLONE_ID, MARKER, MOVE_LOCK, MOVE_RECORD, PREPARED})
 STAGE_ID_FIELDS = 2  # a folder's identity: its device and inode
 
@@ -128,11 +130,23 @@ def _is_record(found: object) -> bool:
         SWITCHED,
     )
     pending_ok = found["pending"] is None or isinstance(found["pending"], str)
+    proof_ok = found["proof"] is None or isinstance(found["proof"], str)
     maps_ok = all(
         isinstance(m, dict) and all(isinstance(k, str) and isinstance(v, str) for k, v in m.items())
         for m in (found["manifest"], found["copied"])
     )
-    return id_ok and strings_ok and pending_ok and maps_ok
+    return id_ok and strings_ok and pending_ok and proof_ok and maps_ok
+
+
+def _write_proof(sfd: int) -> str:
+    """Write this move's random proof into the new staging folder; the record keeps its digest."""
+    fd_tree.create_at(sfd, MOVE_PROOF, f"{secrets.token_hex(16)}\n")
+    return _digest_at(sfd, MOVE_PROOF)
+
+
+def _proof_ok(dfd: int, rec: dict) -> bool:
+    """Whether the folder at *dfd* still holds the proof this move wrote into it."""
+    return rec["proof"] is not None and fd_tree.entry_ok(dfd, MOVE_PROOF, rec["proof"])
 
 
 def _save(folder: Path, folder_fd: int, rec: dict) -> None:
@@ -232,10 +246,20 @@ def _published(pfd: int, target: Path, tfd: int, rec: dict) -> None:
         or not _same_folder(target, tfd)  # the path must still reach the pinned folder through its ancestors
     ):
         raise _not_published(target)
-    if not all(_entry_ok(tfd, n, d) for n, d in rec["manifest"].items()):
+    if not all(_entry_ok(tfd, n, d) for n, d in rec["manifest"].items()) or not _proof_ok(tfd, rec):
         raise _not_published(target)
-    if set(os.listdir(tfd)) - {MARKER} != set(rec["manifest"]):
+    if set(os.listdir(tfd)) - {MARKER} != set(rec["manifest"]) | {MOVE_PROOF}:
         raise _not_published(target)
+
+
+def _staged_ok(sfd: int, names: set[str], rec: dict, *, complete: bool) -> bool:
+    """Whether the staged entries are the ones the record proves: the proof, and the copies it lists."""
+    if MOVE_PROOF in names and not _proof_ok(sfd, rec):
+        return False
+    body = names - {MOVE_PROOF}
+    if complete:
+        return rec["pending"] is None and MOVE_PROOF in names and body == set(rec["copied"]) == set(rec["manifest"])
+    return body <= set(rec["copied"]) | ({rec["pending"]} - {None})
 
 
 def _owned(pfd: int, stage_name: str, rec: dict, *, complete: bool) -> None:
@@ -253,12 +277,7 @@ def _owned(pfd: int, stage_name: str, rec: dict, *, complete: bool) -> None:
             if names:
                 raise _unrecorded(stage)
             return
-        if _ident(os.fstat(sfd)) != rec["stage_id"]:
-            raise _unrecorded(stage)
-        if complete:
-            if rec["pending"] is not None or names != set(rec["manifest"]) or set(rec["copied"]) != names:
-                raise _unrecorded(stage)
-        elif not names <= set(rec["copied"]) | ({rec["pending"]} - {None}):
+        if _ident(os.fstat(sfd)) != rec["stage_id"] or not _staged_ok(sfd, names, rec, complete=complete):
             raise _unrecorded(stage)
         if not all(_entry_ok(sfd, n, d) for n, d in rec["copied"].items()):
             raise _unrecorded(stage)
@@ -322,6 +341,7 @@ def _move(folder: Path, folder_fd: int, target: Path, pfd: int) -> None:
         "target": str(target),
         "stage": str(target.parent / stage_name),
         "stage_id": None,
+        "proof": None,
         "manifest": {n: _digest_at(folder_fd, n) for n in left_at(folder_fd)},
         "copied": {},
         "pending": None,
@@ -332,6 +352,8 @@ def _move(folder: Path, folder_fd: int, target: Path, pfd: int) -> None:
     sfd = _open_at(pfd, stage_name)
     try:
         rec["stage_id"] = _ident(os.fstat(sfd))
+        _save(folder, folder_fd, rec)
+        rec["proof"] = _write_proof(sfd)
         _save(folder, folder_fd, rec)
         _copy_each(folder, folder_fd, sfd, rec)
     finally:
@@ -435,8 +457,8 @@ def check_switched(target: Path, pfd: int, rec: dict) -> None:
     named_switched(target, rec)
     tfd = _open_at(pfd, target.name)
     try:
-        if _ident(os.fstat(tfd)) != rec["stage_id"] or not _same_folder(target, tfd):
-            raise _not_published(target)
+        if _ident(os.fstat(tfd)) != rec["stage_id"] or not _same_folder(target, tfd) or not _proof_ok(tfd, rec):
+            raise _not_published(target)  # a freed folder can return with the same identity: the proof decides
         fd_tree.refuse_quarantined(tfd, target)
     finally:
         os.close(tfd)

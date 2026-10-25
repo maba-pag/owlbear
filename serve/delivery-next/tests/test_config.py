@@ -7,11 +7,15 @@ from pydantic import ValidationError
 
 from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.change_contracts.profile_record import RoleModel
+from owlbear_delivery_next.commands import cli
 from owlbear_delivery_next.settings import carried, roles
 from owlbear_delivery_next.settings.config import Agent, GlobalLayer, Layer, resolve
-from owlbear_delivery_next.state_store import profile_share
+from owlbear_delivery_next.state_store import offline_protocol, profile_share
 from owlbear_delivery_next.state_store import store as store_mod
 from owlbear_delivery_next.state_store.store import Store, StoreError, read_layer, update_layer
+
+BEFORE = "AAAAAAAA-0000-4000-8000-000000000001"
+AFTER = "BBBBBBBB-0000-4000-8000-000000000002"
 
 
 @pytest.fixture
@@ -202,11 +206,27 @@ def _old_profile(root, roles_: object, fmt: object = 1) -> None:
     (root / "profile.json").write_text(json.dumps(raw))
 
 
+@pytest.fixture
+def boot(monkeypatch) -> dict:
+    state = {"id": BEFORE}
+    monkeypatch.setattr(offline_protocol, "boot_session", lambda: state["id"])
+    return state
+
+
+def _prepare_reboot_finish(repo, boot) -> None:
+    """The manual move a clone's old store needs before any Store.open: prepare, reboot, finish."""
+    assert cli.main(["--repo", str(repo), "prepare"]) == 0
+    boot["id"] = AFTER
+    assert cli.main(["--repo", str(repo), "finish"]) == 0
+
+
+@pytest.mark.usefixtures("current_binding")
 @pytest.mark.parametrize("fmt", [1, "1"])
-def test_a_format_1_profile_moves_its_roles_into_the_project_config_once(repo, fmt):
+def test_a_format_1_profile_moves_its_roles_into_the_project_config_once(repo, boot, fmt):
     root = repo / ".git" / "owlbear-delivery"
     old = {"builder": {"model": "m-1", "effort": "low"}, "reviewer": {"model": "r-1", "effort": "max"}}
     _old_profile(root, old, fmt)
+    _prepare_reboot_finish(repo, boot)
     store = Store.open(repo)
     root = store.root  # moved into ~/.owlbear (TD-334)
 
@@ -225,11 +245,13 @@ def test_a_format_1_profile_moves_its_roles_into_the_project_config_once(repo, f
     assert roles.chosen(Store.open(repo).settings(), StepKind.BUILD) == carried.MODELS["builder"]
 
 
-def test_old_roles_fill_only_the_fields_an_existing_project_config_leaves_empty(repo):
+@pytest.mark.usefixtures("current_binding")
+def test_old_roles_fill_only_the_fields_an_existing_project_config_leaves_empty(repo, boot):
     root = repo / ".git" / "owlbear-delivery"
     _old_profile(root, {"builder": {"model": "m-1", "effort": "low"}, "reviewer": {"model": "r-1", "effort": "max"}})
     own = Layer(agents={"builder": Agent(model="own")}, widths=[1600])
     (root / "config.json").write_text(own.model_dump_json())
+    _prepare_reboot_finish(repo, boot)
     store = Store.open(repo)
 
     assert roles.chosen(store.settings(), StepKind.BUILD) == RoleModel(model="own", effort="low")
@@ -303,9 +325,11 @@ def test_a_merge_that_fails_after_replacing_the_config_fails_the_open(repo, monk
         "",
     ],
 )
-def test_invalid_old_roles_are_refused_and_never_copied(repo, bad):
+@pytest.mark.usefixtures("current_binding")
+def test_invalid_old_roles_are_refused_and_never_copied(repo, boot, bad):
     root = repo / ".git" / "owlbear-delivery"
     _old_profile(root, bad)
+    _prepare_reboot_finish(repo, boot)
     store = Store.open(repo)
 
     assert not (root / "config.json").exists()

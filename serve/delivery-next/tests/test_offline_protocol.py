@@ -93,9 +93,9 @@ def test_finish_in_the_same_boot_session_refuses_before_any_change(folder):
     assert snapshot(folder) == before
 
 
+@pytest.mark.usefixtures("boot")
 def test_finish_refuses_a_missing_or_unreadable_boot_session(folder, monkeypatch):
     op.prepare(folder, gaps=lambda: NO_GAPS)
-    before = snapshot(folder)
     before = snapshot(folder)
 
     def unreadable():

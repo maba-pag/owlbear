@@ -36,7 +36,11 @@ def test_owlbear_forwards_prepare_and_finish_to_the_project_cli() -> None:
 
 
 @pytest.mark.usefixtures("boot")
-def test_prepare_refuses_while_the_real_legacy_producers_are_unfenced(repo, capsys) -> None:
+def test_prepare_refuses_while_the_real_legacy_producers_are_unfenced(
+    repo, current_binding, monkeypatch, capsys
+) -> None:
+    unproven = legacy_family.Binding(None, current_binding.interpreter, current_binding.package)
+    monkeypatch.setattr(legacy_family, "live_binding", lambda: unproven)
     assert run(repo, "prepare") == 1
     folder = project_home.clone_dir(repo)
     assert "legacy producers are not proven fenced" in capsys.readouterr().err
