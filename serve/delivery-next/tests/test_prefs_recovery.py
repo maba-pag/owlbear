@@ -13,10 +13,12 @@ from owlbear_delivery_next.change_contracts.models import Change, Exit, Question
 from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
 from owlbear_delivery_next.change_flow import loop
 from owlbear_delivery_next.change_flow.loop import StepResult
+from owlbear_delivery_next.commands import setup
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import HostRecord
+from owlbear_delivery_next.runtimes import readiness
 from owlbear_delivery_next.settings import config, profile
 from owlbear_delivery_next.settings.config import Prefs
 from owlbear_delivery_next.state_store import prefs_import, profile_share
@@ -349,3 +351,50 @@ def test_a_refused_config_during_an_ordinary_save_keeps_new_facts_for_the_retry(
     assert got.entries[profile.WINDOW].value == "30"
     assert not fresh.config_path.exists()
     assert not profile_share.unpublished(retried)
+
+
+# Setup repair of an unreadable saved profile keeps only its valid legacy guard
+
+
+UNREADABLE = '{"format": 4, "prefs_import": "%s", "prefs_basis": "", "models": {}}'
+
+
+def test_repair_keeps_a_done_import_guard_and_does_not_reimport(local: Store) -> None:
+    local.root.mkdir(parents=True, exist_ok=True)
+    (local.root / "profile.json").write_text(UNREADABLE % "done")
+    local.write_profile(Profile(version=2), replace_unreadable=True)
+    assert local.read_profile().prefs_import == "done"
+
+
+def test_ordinary_save_refuses_an_unreadable_saved_profile(local: Store) -> None:
+    local.root.mkdir(parents=True, exist_ok=True)
+    (local.root / "profile.json").write_text(UNREADABLE % "done")
+    before = (local.root / "profile.json").read_text()
+    with pytest.raises(StoreError):
+        local.write_profile(Profile(version=2))
+    assert (local.root / "profile.json").read_text() == before
+
+
+def test_repair_refuses_a_malformed_guard_and_keeps_the_file(local: Store) -> None:
+    local.root.mkdir(parents=True, exist_ok=True)
+    (local.root / "profile.json").write_text(UNREADABLE % "bogus")
+    before = (local.root / "profile.json").read_text()
+    with pytest.raises(StoreError):
+        local.write_profile(Profile(version=2), replace_unreadable=True)
+    assert (local.root / "profile.json").read_text() == before
+
+
+def test_setup_repair_with_a_pending_guard_keeps_the_pending_marker(
+    repo: Path, tmp_path_factory, monkeypatch, capsys
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path_factory.mktemp("home")))
+    monkeypatch.setattr(readiness, "check", lambda *_a: [])
+    monkeypatch.setattr(setup.profile, "detect", lambda *_a: Profile(version=1))
+    store = Store.open(repo)
+    store.root.mkdir(parents=True, exist_ok=True)
+    (store.root / "profile.json").write_text(UNREADABLE % "pending")
+    with pytest.raises(StoreError, match="review the Merge and cleanup preferences"):
+        setup.run(repo, [], yes=True, local_files="no")
+    assert "cannot be read" in capsys.readouterr().out
+    assert store.read_profile().prefs_import == "pending"
+    assert not store.config_path.exists()

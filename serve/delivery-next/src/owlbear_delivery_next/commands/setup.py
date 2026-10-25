@@ -220,11 +220,12 @@ def run(
         str(local_home.stable(Path(sys.executable))),
         lambda t: sys.stdout.write(t + "\n"),
     )
+    unreadable = False
     try:
         prev = store.read_profile()
     except StoreError as exc:  # setup replaces a profile it cannot read; confirming saves the new one
         say(f"The saved profile cannot be read ({exc}); detecting a new one.")
-        prev = None
+        prev, unreadable = None, True
     checks = readiness.check(repo, prev)
     say("Readiness")
     say("\n".join(f"  {'ok ' if c.ok else 'FIX'} {c.name}: {c.detail}" for c in checks))
@@ -246,7 +247,7 @@ def run(
     if prof.confirmed_at is None:
         say("Profile not confirmed; nothing was saved. Run setup again to confirm it.")
         return 1
-    store.write_profile(prof)
+    store.write_profile(prof, replace_unreadable=unreadable)
     prefs_import.run(store)
     say(f"Profile v{prof.version} confirmed and saved in {store.root}")
     given, local_ask = local_files == "yes", ask if local_files == "ask" else lambda _q: ""

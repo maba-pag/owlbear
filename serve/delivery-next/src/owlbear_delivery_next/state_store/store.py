@@ -323,10 +323,10 @@ class Store:
         """Read the confirmed project profile under its own format gate; None before confirmation."""
         return profile_share.read(self)
 
-    def write_profile(self, profile: Profile) -> str:
+    def write_profile(self, profile: Profile, *, replace_unreadable: bool = False) -> str:
         """Write the project profile atomically, published when shared (TD-147); the publication notice."""
         try:
-            return profile_share.write(self, profile)
+            return profile_share.write(self, profile, replace_unreadable=replace_unreadable)
         except data_repo.DataRepoError as exc:
             raise SharedError(str(exc)) from exc
 

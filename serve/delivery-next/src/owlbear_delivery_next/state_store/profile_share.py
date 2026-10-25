@@ -13,6 +13,8 @@ import json
 import os
 from typing import TYPE_CHECKING
 
+from pydantic import ValidationError
+
 from owlbear_delivery_next.change_contracts.profile_record import PROFILE_FORMAT, Profile
 from owlbear_delivery_next.design_packs.detector import DetectorError
 from owlbear_delivery_next.github.provider import ProviderError
@@ -40,10 +42,14 @@ def path(store: Store) -> Path:
     return store.shared.root / store.name / PROFILE if store.shared else store.root / PROFILE
 
 
-def write(store: Store, prof: Profile) -> str:
-    """Write the profile; in the shared folder also commit and push it: what the owner should know, else nothing."""
+def write(store: Store, prof: Profile, *, replace_unreadable: bool = False) -> str:
+    """Write the profile; in the shared folder also commit and push it: what the owner should know, else nothing.
+
+    An ordinary save refuses a saved profile it cannot read. Only the explicit setup repair (*replace_unreadable*)
+    replaces one, and it keeps the saved profile's legacy import guard when that guard is valid.
+    """
     with _writer(store):
-        current = _read_unlocked(store)
+        current = _current_for_write(store, replace_unreadable=replace_unreadable)
         if current is not None:  # only mark() moves the legacy import marker; a snapshot never rewinds it
             prof = prof.model_copy(update={"prefs_import": current.prefs_import, "prefs_basis": current.prefs_basis})
         _keep_local(store, prof)
@@ -162,6 +168,39 @@ def _read_unlocked(store: Store) -> Profile | None:
     """The coherent reader for a caller already holding the profile's writer lock."""
     source = path(store)
     return merged(store, _read(source)) if _present(source) else None
+
+
+def _current_for_write(store: Store, *, replace_unreadable: bool) -> Profile | None:
+    """The saved profile whose legacy guard an ordinary save keeps, or, for the explicit repair, only that guard."""
+    from owlbear_delivery_next.state_store.store import StoreError  # noqa: PLC0415 - the store imports this module
+
+    if not replace_unreadable:
+        return _read_unlocked(store)
+    try:
+        return _read_unlocked(store)
+    except StoreError:
+        return _unreadable_guard(path(store))
+
+
+def _unreadable_guard(source: Path) -> Profile | None:
+    """The legacy import guard of a saved profile that cannot be read: kept when valid, malformed evidence raises."""
+    from owlbear_delivery_next.state_store.store import StoreError  # noqa: PLC0415 - the store imports this module
+
+    if not _present(source):
+        return None
+    try:
+        data = json.loads(source.read_text())
+    except (OSError, ValueError) as exc:
+        msg = f"the saved profile's legacy import guard cannot be read: {source}"
+        raise StoreError(msg) from exc
+    if not isinstance(data, dict):
+        msg = f"the saved profile's legacy import guard is malformed: {source}"
+        raise StoreError(msg)
+    try:
+        return Profile(prefs_import=data.get("prefs_import", ""), prefs_basis=data.get("prefs_basis", ""))
+    except ValidationError as exc:
+        msg = f"the saved profile's legacy import guard is malformed: {source}"
+        raise StoreError(msg) from exc
 
 
 def _present(source: Path) -> bool:
