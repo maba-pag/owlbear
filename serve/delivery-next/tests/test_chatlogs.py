@@ -127,6 +127,36 @@ def test_a_capture_stopped_while_copying_outputs_publishes_nothing(tmp_path, mon
     finally:
         own.unlink()
     assert not (chatlogs.root() / "chatlogs" / "s8.json").exists()  # no final snapshot to keep: taken again later
+    assert not [p for p in (chatlogs.root() / "chatlogs").iterdir() if p.name.startswith(".stage")]
+
+
+def test_a_stopped_refresh_keeps_the_previous_snapshot_whole(tmp_path, monkeypatch):
+    own = Path(tempfile.gettempdir()) / f"{os.getpid()}-copilot-tool-output-refresh.txt"
+    own.write_text("first")
+    records = _records(tmp_path, "s9", [_saved(str(own))])
+    try:
+        first = chatlogs.capture("s9", provisional=True, records=records)
+        with (records / "s9" / "events.jsonl").open("a") as log:
+            log.write(json.dumps({"type": "session.resume"}) + "\n")
+        own.write_text("second")
+        stop, real = threading.Event(), chatlogs._copy  # noqa: SLF001
+
+        def stopping(src, target, limit, *rest):
+            if limit is not None:
+                stop.set()
+            return real(src, target, limit, *rest)
+
+        monkeypatch.setattr(chatlogs, "_copy", stopping)
+        with pytest.raises(chatlogs.Stopped):
+            chatlogs.capture("s9", provisional=False, records=records, stop=stop)
+    finally:
+        own.unlink()
+    folder = chatlogs.root() / "chatlogs"
+    assert json.loads((folder / "s9.json").read_text()) == first
+    with gzip.open(folder / "s9.jsonl.gz", "rt") as log:
+        assert "session.resume" not in log.read()  # the log, too, as the sidecar says
+    with gzip.open(folder / "s9.outputs" / f"{own.name}.gz", "rt") as out:
+        assert out.read() == "first"
 
 
 def test_a_session_without_a_record_is_said_missing(tmp_path):
@@ -179,6 +209,19 @@ def test_an_interrupted_session_gets_its_line_and_its_error_goes_on(monkeypatch,
     with pytest.raises(type(raised)):
         asyncio.run(chatlogs.around(cfg, step()))
     assert [(e["event"], e.get("ending")) for e in _manifest()] == [("started", None), ("ended", "interrupted")]
+
+
+def test_an_interrupted_replacement_gets_its_owner_line_and_the_interruption(monkeypatch):
+    monkeypatch.setattr(chatlogs, "capture", lambda *_a, **_k: pytest.fail("no capture while interrupted"))
+
+    async def step():
+        raise asyncio.CancelledError
+
+    cfg = SimpleNamespace(session_id="s4", kind=SimpleNamespace(value="build"), role="builder", job="", worktree="/w")
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(chatlogs.around(cfg, step(), lambda: "s4-new"))
+    assert [(e["event"], e["session"], e.get("replaces")) for e in _manifest()] == [
+        ("started", "s4", None), ("started", "s4-new", "s4"), ("ended", "s4-new", None)]  # fmt: skip
 
 
 def test_a_failing_capture_never_fails_the_step(monkeypatch, capsys):

@@ -442,7 +442,7 @@ async def run(cfg: Session) -> Run:
     """Open or resume the session, send the message, await its result, tear down within bounds, then the watcher."""
     st = _Step(cfg, asyncio.get_running_loop())
     st.feed = watch_feed.opened(cfg.watch, cfg.worktree, lambda: st.run.session_id, st.watch)
-    return await chatlogged(cfg, watch_feed.around(st.feed, _run(st)))  # between its Retro chatlog lines (design §5)
+    return await chatlogged(cfg, watch_feed.around(st.feed, _run(st)), lambda: st.run.session_id)  # design §5
 
 
 async def _run(st: _Step) -> Run:

@@ -33,7 +33,7 @@ from typing import TYPE_CHECKING, Any, BinaryIO
 from owlbear_delivery_next.local_system import local_home
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Iterable, Iterator
+    from collections.abc import Awaitable, Callable, Iterable, Iterator
 
     from owlbear_delivery_next.runtimes.session_result import Run
 
@@ -143,14 +143,18 @@ def _go_on(stop: threading.Event, until: float, *, over: bool) -> None:
         raise Stopped
 
 
-def _named(log: Path) -> list[str]:
-    """The saved-output paths the log's tool results name, in first-seen order."""
+def _named(log: Path, stop: threading.Event, until: float) -> list[str]:
+    """The first ``OUTPUTS`` saved-output paths the log's tool results name; stops with the capture."""
     seen: dict[str, None] = {}
     with log.open(errors="replace") as lines:
-        for line in lines:
+        for n, line in enumerate(lines):
+            if n % 1000 == 0:
+                _go_on(stop, until, over=False)
             if "Saved to:" in line:
                 seen |= dict.fromkeys(SAVED.findall(line.replace("\\n", "\n")))
-    return list(seen)
+            if len(seen) >= OUTPUTS:
+                break
+    return list(seen)[:OUTPUTS]
 
 
 def _output(path: str, target: Path, room: int, stop: threading.Event, until: float) -> tuple[str, int]:
@@ -214,19 +218,35 @@ def capture(
             )
             if final and not provisional:
                 return before
-        with log.open("rb") as src:
-            size = _copy(src, folder / f"{session}.jsonl.gz", None, stop, until)
-        used, outputs = 0, []
-        for path in _named(log)[:OUTPUTS]:
-            _private(folder / f"{session}.outputs")
-            verdict, n = _output(path, folder / f"{session}.outputs" / f"{Path(path).name}.gz", OUTPUT_BYTES - used,
-                                 stop, until)  # fmt: skip
-            used += n
-            outputs.append({"path": path, "state": verdict})
-        said = {"session": session, "copied_at": _now(), "size": size, "mtime": st.st_mtime,
-                "provisional": provisional or size != st.st_size, "outputs": outputs}  # fmt: skip
-        _write(side, said)
-        return said
+        stage = Path(tempfile.mkdtemp(dir=folder, prefix=f".stage-{session}-"))
+        try:  # the whole snapshot is staged, then published; a stop keeps the previous one as it was
+            with log.open("rb") as src:
+                size = _copy(src, stage / "log.jsonl.gz", None, stop, until)
+            used, outputs = 0, []
+            for path in _named(log, stop, until):
+                _private(stage / "outputs")
+                verdict, n = _output(path, stage / "outputs" / f"{Path(path).name}.gz", OUTPUT_BYTES - used, stop,
+                                     until)  # fmt: skip
+                used += n
+                outputs.append({"path": path, "state": verdict})
+            _go_on(stop, until, over=False)
+            said = {"session": session, "copied_at": _now(), "size": size, "mtime": st.st_mtime,
+                    "provisional": provisional or size != st.st_size, "outputs": outputs}  # fmt: skip
+            _publish(stage, folder, session, said)
+            return said
+        finally:
+            shutil.rmtree(stage, ignore_errors=True)
+
+
+def _publish(stage: Path, folder: Path, session: str, said: dict[str, Any]) -> None:
+    """Move a staged snapshot into place, its sidecar last; the caller holds the session's lock."""
+    (stage / "log.jsonl.gz").replace(folder / f"{session}.jsonl.gz")
+    outputs, old = folder / f"{session}.outputs", stage / "old-outputs"
+    if outputs.exists():
+        outputs.rename(old)
+    if (stage / "outputs").exists():
+        (stage / "outputs").rename(outputs)
+    _write(folder / f"{session}.json", said)
 
 
 def _write(path: Path, data: dict[str, Any]) -> None:
@@ -246,7 +266,7 @@ def kept(session: str, ending: str, *, provisional: bool, stop: threading.Event 
         sys.stderr.write(f"retro chatlogs: {session} not captured ({type(exc).__name__}: {exc})\n")
 
 
-async def around(cfg: Any, step: Awaitable[Run]) -> Run:  # noqa: ANN401 - an SDK step's Session
+async def around(cfg: Any, step: Awaitable[Run], current: Callable[[], str] | None = None) -> Run:  # noqa: ANN401
     """Run *cfg*'s *step* between its manifest lines, then capture it; an interruption of the step: its line only.
 
     The capture runs in an owned daemon thread that stops at its deadline or when this is cancelled.
@@ -256,7 +276,10 @@ async def around(cfg: Any, step: Awaitable[Run]) -> Run:  # noqa: ANN401 - an SD
     try:
         done = await step
     except BaseException:
-        note({"event": "ended", "session": session, "ending": "interrupted", "provisional": True})
+        active = (current() if current else "") or session
+        if active != session:  # a replacement was under way: its owner line too
+            note({"event": "started", "session": active, "replaces": session, **who})
+        note({"event": "ended", "session": active, "ending": "interrupted", "provisional": True})
         raise
     actual = done.session_id or session
     if actual != session:  # a replacement session: its own owner line, naming the one it replaces
@@ -326,12 +349,13 @@ def finished_chats(folders: list[str], now: datetime, records: Path | None = Non
 
 def prune(now: datetime, judged: dict[str, datetime], pinned: set[str]) -> list[str]:
     """Remove each judged session's copies a month after its judgement, unless a finding, case or proposal pins it."""
-    folder, gone = root() / "chatlogs", []
+    folder, gone = _private(root() / "chatlogs"), []
     for session, at in judged.items():
         if session in pinned or now - at < KEPT:
             continue
-        for path in (folder / f"{session}.jsonl.gz", folder / f"{session}.json"):
-            path.unlink(missing_ok=True)
-        shutil.rmtree(folder / f"{session}.outputs", ignore_errors=True)
+        with _locked(folder / f".{session}.lock"):  # never under a capture of the same session
+            for path in (folder / f"{session}.json", folder / f"{session}.jsonl.gz"):
+                path.unlink(missing_ok=True)
+            shutil.rmtree(folder / f"{session}.outputs", ignore_errors=True)
         gone.append(session)
     return gone
