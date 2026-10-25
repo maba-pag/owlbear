@@ -22,7 +22,6 @@ NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
 HEAD, BASE = "a" * 40, "b" * 40
 GOOD = {
     "summary": "Added greet().",
-    "changed_paths": ["packages/app/src/greet.ts"],
     "checks": [{"command": "npm test", "exit_code": 0}],
 }
 
@@ -78,20 +77,24 @@ def test_the_derived_head_must_move_past_the_base_with_a_clean_worktree() -> Non
     ]
 
 
-def test_a_committed_result_must_name_paths_and_every_passing_check() -> None:
+def test_a_committed_result_must_name_every_passing_check_and_never_its_paths() -> None:
     tree = Worktree(head=HEAD, base=BASE, changed=("packages/app/src/greet.ts", "packages/app/test/greet.test.ts"))
     assert tools.check_build(build(), Worktree(HEAD, BASE, changed=("packages/app/src/greet.ts",)), ["npm test"]) == []
     errors = tools.check_build(
         build(checks=[{"command": "npm test", "exit_code": 1}]), tree, ["npm test", "npm run lint"]
     )
-    assert errors[0] == "changed_paths: missing packages/app/test/greet.test.ts - list every path your commit changes"
-    assert errors[1].startswith("checks[0].exit_code: 1")
-    assert errors[2].startswith('checks: "npm run lint" missing')
+    assert errors[0].startswith("checks[0].exit_code: 1")
+    assert errors[1].startswith('checks: "npm run lint" missing')
+    assert len(errors) == 2
+    assert "changed_paths" not in tool_schema.schema(tools.SUBMIT)["properties"]
+    assert tool_schema.parse(BuildResult, {**GOOD, "changed_paths": ["a.ts"]})[1] == [
+        "changed_paths: Extra inputs are not permitted"  # a new call stays strict; Delivery reads the paths itself
+    ]
 
 
 def test_only_a_bot_comment_or_review_may_be_left_without_a_reply() -> None:
     tree = Worktree(head=BASE, base=BASE)
-    no_action = build(changed_paths=[], checks=[], response={"how": "no-action", "text": "bot notice"})
+    no_action = build(checks=[], response={"how": "no-action", "text": "bot notice"})
     refused = "response.how: no-action is only for a bot's comment or review - fix it or answer it"
 
     def ref(kind, *, bot):
@@ -158,6 +161,7 @@ def test_a_late_call_never_changes_the_accepted_result_or_its_head() -> None:
     late = st._handle(tools.SUBMIT, SimpleNamespace(arguments={**GOOD, "summary": "Other."}))  # noqa: SLF001
     assert (accepted.result_type, late.result_type) == ("success", "rejected")
     assert (st.run.ending, st.run.head, st.run.payload.summary) == ("result", HEAD, "Added greet().")
+    assert st.run.changed == ["packages/app/src/greet.ts"]  # Delivery's read at the accepted head, kept with it
     assert [e["accepted"] for e in st.events if e.get("event") == "tool"] == [True, False]
 
 
@@ -180,6 +184,7 @@ def test_a_turn_on_another_model_voids_an_accepted_result() -> None:
     assert (st.run.ending, st.run.head) == ("result", HEAD)
     st.on_event(_event("assistant.message", content="", model="mai-code-1.1-flash", parent_tool_call_id=None))
     assert (st.run.ending, st.run.payload, st.run.head, st.run.model_check) == ("error", None, None, "mismatch")
+    assert st.run.changed == []
     assert st.run.detail == "wrong model: a turn ran on mai-code-1.1-flash, the step needs claude-opus-5.5"
     st = _accepted()
     st.on_event(_event("session.auto_mode_resolved"))

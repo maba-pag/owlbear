@@ -25,6 +25,7 @@ from owlbear_delivery_next.change_flow import loop, plan_rounds, repairs
 from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.runtimes import session_result
+from owlbear_delivery_next.runtimes.results import Gate
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.state_store.store import Lock, Store
 from owlbear_delivery_next.workflow_steps import plan_round, session_choice
@@ -152,10 +153,25 @@ def test_a_challenged_plan_comes_back_with_the_flag_and_a_display_reason():
 
 
 def built_run(cfg, head: str) -> Run:
-    payload = tools.BuildResult(summary="Fixed b.", changed_paths=["b.txt"], checks=[])
+    payload = tools.BuildResult(summary="Fixed b.", checks=[])
     run = Run(cfg.session_id, "result", payload, head=head, termination=Termination(confirmed=True))
     run.usage = {"models": {}}
     return run
+
+
+def gated_run(cfg) -> Run:
+    """The builder's result through Delivery's own gate, which reads the worktree the runner points it at."""
+    run = Run(cfg.session_id, termination=Termination(confirmed=True))
+    text, ok = Gate(cfg, run, lambda **_e: None, lambda: None).call(tools.SUBMIT, {"summary": "Fixed b.", "checks": []})
+    assert ok, text
+    run.usage = {"models": {}}
+    return run
+
+
+def save(work: Path, name: str, text: str) -> None:
+    (work / name).write_text(text)
+    git(work, "add", "-A")
+    git(work, "commit", "-qm", name)
 
 
 def repairing(tmp_path) -> tuple[Store, Change]:
@@ -173,9 +189,12 @@ def test_the_repair_build_resumes_the_producer_and_binds_the_accepted_result(tmp
     store, c = repairing(tmp_path)
     seen = []
 
+    git(clone, "branch", "main")
+
     async def build(cfg):
         seen.append((cfg.session_id, cfg.resume, cfg.fresh))
-        return built_run(cfg, git(clone, "rev-parse", "HEAD"))
+        save(clone, "b.txt", "b\n")
+        return gated_run(cfg)
 
     monkeypatch.setattr(runner.sdk_adapter, "run", build)
     runner._step(store, Lock("c1"), c, c.step, clone)  # noqa: SLF001
@@ -183,6 +202,27 @@ def test_the_repair_build_resumes_the_producer_and_binds_the_accepted_result(tmp
     assert seen[0][2].endswith(repairs.EARLIER.format("Added b."))  # what a fresh fallback would be told
     after = task(store.read("c1"), "f1")
     assert (after.built_by, after.earlier) == ("s-build", "Fixed b. Changed: b.txt")
+
+
+def test_a_repair_is_told_the_paths_delivery_read_at_the_accepted_head(tmp_path, clone, monkeypatch):
+    store, c = repairing(tmp_path)
+    git(clone, "branch", "main")
+
+    async def build(cfg):
+        git(clone, "mv", "a.txt", "moved.txt")
+        git(clone, "commit", "-qm", "move")
+        git(clone, "checkout", "-q", "main")
+        save(clone, "target.txt", "the target's own\n")
+        git(clone, "checkout", "-q", "owlbear/c1")
+        git(clone, "merge", "-q", "--no-edit", "main")  # a target merge: its paths are not the task's work
+        save(clone, "new.txt", "n\n")
+        return gated_run(cfg)
+
+    monkeypatch.setattr(runner.sdk_adapter, "run", build)
+    runner._step(store, Lock("c1"), c, c.step, clone)  # noqa: SLF001
+    after = task(store.read("c1"), "f1")
+    assert after.earlier == "Fixed b. Changed: a.txt, moved.txt, new.txt"  # both ends of the rename
+    assert after.earlier in repairs.fallback(after)
 
 
 def test_a_missing_producer_falls_back_to_a_fresh_session_without_charging_a_budget(tmp_path, clone, monkeypatch):

@@ -72,6 +72,11 @@ def writer(store: Store, notes: list[str], size: int = watch_reports.SIZE) -> Wr
     return Writer(store.db, Lock("c1"), note=notes.append, size=size)
 
 
+def lost(note: str) -> int:
+    """How many reports a writer's log line says were failed or not written by the deadline."""
+    return sum(int(n) for n in re.findall(r"(\d+) (?:not written by the deadline|failed)", note))
+
+
 def summary(said: str) -> Report:
     return watch_reports.summary_row("s1", "build", said)
 
@@ -184,8 +189,7 @@ def test_a_migration_fence_held_through_the_deadline_stops_the_writer_and_the_lo
         assert not w.thread.is_alive()
         assert not threads()
     assert len(notes) == 1  # the one in progress at the deadline is failed or not written, whichever saw it first
-    told = {int(n): what for n, what in re.findall(r"(\d+) (not written by the deadline|failed)", notes[0])}
-    assert (notes[0].startswith("watcher c1: "), sum(told)) == (True, 3)
+    assert (notes[0].startswith("watcher c1: "), lost(notes[0])) == (True, 3)
     assert watch_reports.reports(store.db, "c1") == []  # nothing written after the deadline, the summary neither
 
 
@@ -206,7 +210,8 @@ def test_a_sqlite_write_lock_held_through_the_deadline_stops_the_writer_and_the_
     finally:
         other.execute("ROLLBACK")
         other.close()
-    assert notes == ["watcher c1: 1 failed (the Delivery database failed: database is locked)"]
+    assert len(notes) == 1  # the one in progress at the deadline is failed or not written, whichever saw it first
+    assert (notes[0].startswith("watcher c1: "), lost(notes[0])) == (True, 1)
     assert watch_reports.reports(store.db, "c1") == []
 
 

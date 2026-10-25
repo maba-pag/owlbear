@@ -84,7 +84,7 @@ names, not positions: the table lists the items in their order.
 | 8 | Window-step gate: windows keep repository hooks and user MCP servers out, subagents detected and counted, judge effects contained | TD-223, TD-145, TD-342 | [gate build](window-step-gate-build.md), [probes](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/window-step-gate-probes.md) | Building: TD-267 is built (`ahp.py` on the `websockets` library, #590). The probes of 2026-10-23 settled each part `autonomous` (the owner declined to decide the gate); Built: hooks and VS Code MCP servers off per step, the host record's allowlist check, subagents in windows under the SDK rule, read-only steps asking and the SDK policy answering; the live proof of 2026-10-23 held. Window steps stay paused until item 9 needs them (`autonomous`) |
 | 18 | Settings without code defaults: every setting comes from Global, the machine or the project; unset is an error on the Settings page and the steps needing it ask; today's values carried into Global once; machine settings get a Global layer | D-01M5MYY55ZX0FPN7VZB021H8MC, D-01M5MZKEPWNASF6X3CNF4FEWZH, D-01M5MZKEPW6WCSM8SZ6DH783EN, D-01M5MZKEPPVMFC9HK795MMG91B | none | Done (#604, #605): layered settings, then machine settings with a Global layer, moved there once on this laptop |
 | 19 | Pinned OwlBear: live chats keep their tools across updates; the chat server a state-free client of the host under a chat contract (first), then the memory, knowledge and browser servers run from the install, pinned and leased; this laptop updates only deliberately | D-01M5Q5GKHX7BJTXPEW2MHGS9E0, D-01M5Q5GKBFGSJRGCPXET234QAH | none | Built: the chat contract (#632, v1.49), the launcher (#636, v1.50) and the memory, knowledge and browser entries of `.mcp.json` and the seed switched to it (this pull request); item 9 next |
-| 9 | Watcher: an improvement watcher. Tool and contract fixes plus pre-flight lessons first, then a live coach, then a curator, measured in phases | TD-224, TD-316, TD-47, the owner's choice of 2026-10-25 | [improvement watcher](watcher-coach-design.md) | Redesigned 2026-10-25. Built: W1a (#640), the SDK feed, agent identity and the Watcher list, which the coach reuses. Closed: #647 (a shell-effect parser). Next: phase 1, tool and contract fixes and pre-flight lessons |
+| 9 | Watcher: an improvement watcher. Tool and contract fixes plus pre-flight lessons first, then a live coach, then a curator, measured in phases | TD-224, TD-316, TD-47, the owner's choice of 2026-10-25 | [improvement watcher](watcher-coach-design.md) | Redesigned 2026-10-25. Built: W1a (#640), the SDK feed, agent identity and the Watcher list, which the coach reuses. Closed: #647 (a shell-effect parser). Phase 1a built: changed_paths derived, limit errors, check-form hint. Phase 1b built: pre-flight lessons in every new step conversation. Next: phase 2, the coach in shadow on a labelled replay set |
 | 16 | Amendment design session with the owner (TD-185), end to end, before any amendment code | TD-185, TD-422 | none yet | Not started |
 | 10 | First real project: the per-project GitHub account setting first; memory publication and curation (F17) fixed; two Changes merged in consumer projects; OwlBear builds itself through Delivery | TD-338, TD-402, TD-90, TD-319 | none yet | Waits for item 9 |
 | 17 | Browser and knowledge rebuilt from scratch, from the [ideas of the closed issues](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/closed-issue-ideas-2026-10.md); until then the packages stay untouched | TD-434 | none yet | After item 10 |
@@ -269,6 +269,23 @@ Shared-settings publication (#622) distinguishes a missing path from failed Git
 tracking or staged-diff probes and stops before acknowledging a failed commit.
 Pending-status failures are reported instead of reading as fully published;
 unchanged saves still retry prior commits without consuming unrelated staging.
+
+Profile provenance (#615) binds confirmed intent to the complete observation,
+including its state and value, rather than an evidence label. Push permission,
+hooks and install facts remain in each clone's local overlay; repeated reads
+cannot borrow another clone's capabilities. Legacy facts are observed once,
+publication failures keep local progress without file/index undo, and new Changes
+use the current target while existing Changes retain their stored target.
+Confirmation retains the raw workflow digest without nesting its evidence label,
+so owner-selected CI checks still govern the same workflows. A returned publication
+failure notice leaves detection incomplete and retryable, just like a raised failure.
+Profile pairs use their writer lock; detection preserves newer local edits and
+clears per key, retains unchanged fresh capabilities, and retries before acknowledging
+a raced snapshot. Explicit install commands for undetected packages bind to the same
+absence observation on confirmation and refresh.
+Readers take the same pair lock, with an internal unlocked reader for the guarded
+save, so neither shared nor unshared reads combine halves across saves. A missing
+private profile remains a read-only absence; lock failures are reported.
 
 Brief approval (#617) rejects blank required decision wording and refuses the
 whole approval if any current ID-bearing project rule cannot be built or saved.

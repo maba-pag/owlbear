@@ -9,6 +9,8 @@ from owlbear_delivery_next.change_contracts.models import Exit, StepKind
 from owlbear_delivery_next.change_contracts.round_records import FINAL
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from owlbear_delivery_next.change_contracts.models import Change, Task
     from owlbear_delivery_next.change_flow.loop import StepResult
 
@@ -54,13 +56,19 @@ def session(change: Change, task: Task | None) -> str:
     return s.repair
 
 
-def bind(change: Change, task: Task | None, session: str, payload: object, result: StepResult) -> None:
-    """Bind an accepted build to the session that made it and what it made; an accepted plan uses up its chance."""
+def bind(  # noqa: PLR0913, PLR0917 - the Change, its task, the session, its result and Delivery's paths
+    change: Change, task: Task | None, session: str, payload: object, result: StepResult, changed: Sequence[str] = ()
+) -> None:
+    """Bind an accepted build to the session that made it and what it made; an accepted plan uses up its chance.
+
+    What it made is its summary and *changed*: the paths its commits change at the accepted head, as Delivery read
+    them (target merges left out, both ends of a rename in).
+    """
     s = change.step
     if s.kind == StepKind.PLAN and s.repair and result.exit == Exit.DONE:
         s.resumed, s.repair = s.repair, ""
     if s.kind == StepKind.BUILD and task and result.exit == Exit.DONE and isinstance(p := payload, tools.BuildResult):
-        task.built_by, task.earlier = session, f"{p.summary} Changed: {', '.join(p.changed_paths)}"[:2000]
+        task.built_by, task.earlier = session, f"{p.summary} Changed: {', '.join(changed)}"[:2000]
 
 
 def fallback(task: Task | None) -> str:

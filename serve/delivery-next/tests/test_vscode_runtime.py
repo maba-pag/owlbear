@@ -30,7 +30,7 @@ from owlbear_delivery_next.state_store.store import Store
 from owlbear_delivery_next.workflow_steps import sessions
 
 HEAD, BASE = "a" * 40, "b" * 40
-GOOD = {"summary": "Added greet().", "changed_paths": ["src/greet.ts"], "checks": []}
+GOOD = {"summary": "Added greet().", "checks": []}
 
 
 def git(cwd: Path, *args: str) -> str:

@@ -17,7 +17,7 @@ from pydantic import TypeAdapter, ValidationError
 
 from owlbear_delivery_next.change_contracts.inbox import InboxItem
 from owlbear_delivery_next.change_contracts.models import FORMAT, Change, Record
-from owlbear_delivery_next.change_contracts.profile_record import PROFILE_FORMAT, Profile
+from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_flow import answer_kinds, loop
 from owlbear_delivery_next.local_system import data_repo, local_home
 from owlbear_delivery_next.local_system.storage_io import atomic_write, open_lock
@@ -320,13 +320,12 @@ class Store:
 
     def read_profile(self) -> Profile | None:
         """Read the confirmed project profile under its own format gate; None before confirmation."""
-        path = profile_share.path(self)
-        return _load(path, Profile, PROFILE_FORMAT, migrations.PROFILE) if path.exists() else None
+        return profile_share.read(self)
 
     def write_profile(self, profile: Profile) -> str:
         """Write the project profile atomically, published when shared (TD-147); the publication notice."""
         try:
-            return profile_share.write(self, profile.model_dump_json(indent=1))
+            return profile_share.write(self, profile)
         except data_repo.DataRepoError as exc:
             raise SharedError(str(exc)) from exc
 
