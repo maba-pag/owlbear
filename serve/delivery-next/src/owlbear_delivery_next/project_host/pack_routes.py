@@ -195,8 +195,13 @@ def _replay(
     @routes.post("/design-pack/replay")
     def replay() -> dict[str, Any]:
         try:
-            with job.exclusive(), admitted():
-                r = job.live.replay(store, None, keep=job.keeps)
+            with job.exclusive():
+                with admitted():  # a barrier only: the launch lock is not held while the replay waits for a slot
+                    job.count_replay(1)
+                try:
+                    r = job.live.replay(store, None, keep=job.keeps)
+                finally:
+                    job.count_replay(-1)
         except pack_job.Busy as exc:
             raise HTTPException(409, str(exc)) from exc
         except pack_replay.ReplayError as exc:

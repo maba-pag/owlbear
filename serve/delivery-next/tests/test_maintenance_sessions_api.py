@@ -90,3 +90,16 @@ def test_the_recovery_body_accepts_only_the_rebooted_confirmation(tmp_path):
     response = http.post(f"/maintenance/sessions/{ident}/recover", json={"rebooted": True, "id": "other"})
     assert response.status_code == 422
     assert rebooted.slots.counts("p") == (1, 1, 1)
+
+
+def test_a_chat_tool_cannot_recover_a_held_session_even_with_a_valid_confirmation(tmp_path):
+    ident = failed_session(tmp_path)
+    rebooted = maintenance.Maintenance(Slots(lambda: 1, closed=True), boot=lambda: 20.0)
+    rebooted.slots.open()
+    http = client(rebooted)
+    chat = http.post(
+        f"/maintenance/sessions/{ident}/recover", json={"rebooted": True}, headers={"x-owlbear-use": "chat"}
+    )
+    assert chat.status_code == 403
+    assert rebooted.slots.counts("p") == (1, 1, 1)
+    assert http.get("/maintenance/sessions").json()["sessions"][0]["state"] == "held"

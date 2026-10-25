@@ -13,6 +13,7 @@ import dataclasses
 import subprocess
 import threading
 import uuid
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.change_contracts.failures import cause_key
@@ -159,10 +160,27 @@ def interrupted(job: Job, key: str) -> None:
         return
     if job.interrupted is not None:
         run = job.interrupted
+        if run["workspace"] and maintenance.owns(run["workspace"]):
+            return  # the ledger already holds this run's own lease; importing it again would hold it twice
         source = f"{key}:run:{run['run']}:{run['started_at']}"  # the same run adopted once, wherever its folder lies
         maintenance.adopt(source, key, "pack", {}, interrupted=True, workspace=run["workspace"] or str(legacy))
     elif "workspace" not in job.state and (legacy.is_dir() or pack_job.legacy_uncertain(job.state)):
-        maintenance.adopt_uncertain(f"{key}:legacy", key, "pack", workspace=str(legacy))
+        generation, started = _generation(job.state)
+        maintenance.adopt_uncertain(
+            f"{key}:legacy", key, "pack", workspace=str(legacy), generation=generation, started=started
+        )
+
+
+def _generation(record: dict[str, object]) -> tuple[str, datetime | None]:
+    """A legacy run's proven identity and start time; empty when either is missing or unreadable."""
+    run, started = str(record.get("run") or ""), str(record.get("started_at") or "")
+    if not run or not started:
+        return "", None
+    try:
+        when = datetime.fromisoformat(started)
+    except ValueError:
+        return "", None
+    return f"{run}:{started}", when
 
 
 def unloaded(maintenance: Maintenance, key: str, repo: Path) -> None:
@@ -189,9 +207,14 @@ def unloaded(maintenance: Maintenance, key: str, repo: Path) -> None:
     elif kept.get("state") == "running":
         run, started = str(kept.get("run") or ""), str(kept.get("started_at") or "")
         workspace = str(kept.get("workspace") or legacy)
+        if kept.get("workspace") and maintenance.owns(workspace):
+            return  # a modern run the ledger already owns; the same record is not a second hold
         maintenance.adopt(f"{key}:run:{run}:{started}", key, "pack", {}, interrupted=True, workspace=workspace)
     elif "workspace" not in kept and (legacy.is_dir() or pack_job.legacy_uncertain(kept)):
-        maintenance.adopt_uncertain(f"{key}:legacy", key, "pack", workspace=str(legacy))
+        generation, started_at = _generation(kept)
+        maintenance.adopt_uncertain(
+            f"{key}:legacy", key, "pack", workspace=str(legacy), generation=generation, started=started_at
+        )
 
 
 def pack_live(host: Host | None, live: Live, note: Callable[[str], None]) -> Live:

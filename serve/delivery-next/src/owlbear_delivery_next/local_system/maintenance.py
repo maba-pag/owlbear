@@ -54,6 +54,7 @@ class Lease(Record):
     slot: str
     kind: Kind
     workspace: str
+    generation: str = ""  # the imported run's proven identity; empty when none was proven
     started_at: datetime
     boot: float = Field(gt=0, allow_inf_nan=False)
     owner_pid: int = Field(gt=0)
@@ -207,21 +208,31 @@ class Maintenance:
             ledger.imported.append(source)
             self._save(ledger)
 
-    def adopt_uncertain(
+    def adopt_uncertain(  # noqa: PLR0913 - one import's identity, all needed to decide its generation
         self,
         source: str,
         project: str,
         kind: Kind,
         *,
         workspace: str,
+        generation: str = "",
+        started: datetime | None = None,
         covers: Callable[[Lease], bool] | None = None,
     ) -> Lease:
-        """Import an older host's uncertain work, unless a lease already covers it in any state.
+        """Import an older host's uncertain work once per proven generation.
 
-        An empty import receipt never suppresses this; only genuine ledger history does, so a recovered
-        generation is not resurrected and a current lease is not duplicated.
+        A proven generation is covered by its lease in any state, so a recovered one is never resurrected. An unproven
+        one (empty *generation*) is covered only by a held lease, so a later unknown run gets its own hold. *covers*
+        replaces that rule for a caller that keys its own history.
         """
-        same = covers or (lambda s: s.project == project and s.kind == kind and s.workspace == workspace)
+
+        def same(s: Lease) -> bool:
+            if covers is not None:
+                return covers(s)
+            if s.project != project or s.kind != kind or s.workspace != workspace or s.generation != generation:
+                return False
+            return bool(generation) or s.state in HELD
+
         with self._locked() as ledger:
             known = [s for s in ledger.sessions if same(s)]
             if known:
@@ -233,7 +244,8 @@ class Maintenance:
                 slot=f"pack:legacy-{ident}",
                 kind=kind,
                 workspace=workspace,
-                started_at=datetime.now(UTC),
+                generation=generation,
+                started_at=started or datetime.now(UTC),
                 boot=self.boot(),
                 owner_pid=os.getpid(),
                 owner_created=processes.started(os.getpid()),
@@ -246,6 +258,11 @@ class Maintenance:
             self._save(ledger)
         self.slots.restore_one(lease.project, lease.slot, 1)
         return lease
+
+    def owns(self, workspace: str) -> bool:
+        """Whether a lease in any state already accounts for *workspace*, so its record must not be imported again."""
+        with self._locked() as ledger:
+            return any(s.workspace == workspace for s in ledger.sessions)
 
     def held(self, project: str, slot: str) -> bool:
         """Whether a particular admitted reservation still belongs to uncertain work."""

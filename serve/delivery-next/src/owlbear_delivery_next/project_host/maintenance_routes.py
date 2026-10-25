@@ -2,14 +2,21 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict
+
+from owlbear_delivery_next.project_host import decision_routes
 
 if TYPE_CHECKING:
     from owlbear_delivery_next.local_system import maintenance
-    from owlbear_delivery_next.project_host.host import Host
+
+
+class Holder(Protocol):
+    """A project host or the machine: whichever owns the maintenance ledger it reads and recovers from."""
+
+    maintenance: maintenance.Maintenance | None
 
 
 class RecoverBody(BaseModel):
@@ -20,15 +27,18 @@ class RecoverBody(BaseModel):
     rebooted: bool
 
 
-def router(host: Host | None) -> APIRouter:
-    """Held sessions and their recovery; a host without maintenance has none to show."""
+def router(host: Holder | None) -> APIRouter:
+    """Held sessions and their recovery; a host without maintenance has none to show.
+
+    Recovery is the owner's act on the page: a chat tool's call is refused, as the decisions' writes are.
+    """
     routes = APIRouter()
 
     @routes.get("/maintenance/sessions")
     def sessions() -> dict[str, list[dict[str, Any]]]:
         return _bound(host).read()
 
-    @routes.post("/maintenance/sessions/{ident}/recover")
+    @routes.post("/maintenance/sessions/{ident}/recover", dependencies=[Depends(decision_routes.owner)])
     def recover(ident: str, body: RecoverBody) -> dict[str, list[dict[str, Any]]]:
         manager = _bound(host)
         if body.rebooted is not True:
@@ -41,7 +51,7 @@ def router(host: Host | None) -> APIRouter:
     return routes
 
 
-def _bound(host: Host | None) -> maintenance.Maintenance:
+def _bound(host: Holder | None) -> maintenance.Maintenance:
     manager = host.maintenance if host is not None else None
     if manager is None:
         raise HTTPException(503, "OwlBear is not running; start it to see maintenance sessions")

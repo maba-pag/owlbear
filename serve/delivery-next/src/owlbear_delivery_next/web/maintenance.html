@@ -245,6 +245,8 @@ function sessionsSection() {
       Could not read the held sessions: ${state.unread.sessions}.</p-inline-notification>` : nothing}
     ${held.length ? html`<ul id="sessions" class="actions">${held.map(sessionRow)}</ul>`
       : s ? html`<p-text id="sessions-none" size="sm">No maintenance session is held.</p-text>` : nothing}
+    ${[...state.refusedRecover].filter(([id]) => !held.some((x) => x.id === id)).map(([, text]) => html`
+      <p-inline-notification state="error" dismiss-button="false">${sentence(text)}</p-inline-notification>`)}
   </section>`;
 }
 
@@ -288,7 +290,9 @@ async function recover(id) {
   state.refusedRecover.delete(id);
   show();
   try {
-    await call(`/maintenance/sessions/${encodeURIComponent(id)}/recover`, { body: { rebooted: true }, timeout: 15000 });
+    await call(`/maintenance/sessions/${encodeURIComponent(id)}/recover`, {
+      machine: true, body: { rebooted: true }, timeout: 15000,
+    });
     state.confirmed.delete(id);
   } catch (e) {
     state.refusedRecover.set(id, e.message);
@@ -383,7 +387,7 @@ async function refresh() {
     state.unread.curation = curation.reason.status === 404 && !state.curation ? "" : curation.reason.message;
   }
   const [sessions] = await Promise.allSettled([
-    call("/maintenance/sessions", { timeout: 15000 }),
+    call("/maintenance/sessions", { machine: true, timeout: 15000 }),
   ]);
   if (generation !== state.reading) return;
   if (sessions.status === "fulfilled") {

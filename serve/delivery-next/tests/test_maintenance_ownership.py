@@ -129,3 +129,38 @@ def test_admitted_sdk_entry_is_durable_and_unknown_work_keeps_its_workspace(fail
         assert len(events) == 2
     assert root.exists() is fails
     assert owner.slots.counts("p") == ((1, 1, 1) if fails else (0, 1, 0))
+
+
+def test_a_recovered_generation_does_not_suppress_a_later_unknown_legacy_run(tmp_path):
+    first = manager(Slots(lambda: 1, closed=True)).adopt_uncertain(
+        "legacy", "p", "pack", workspace=str(tmp_path), generation="run-a:t1"
+    )
+    rebooted = manager(Slots(lambda: 1, closed=True), boot=20.0)
+    rebooted.slots.open()
+    rebooted.recover(first.id, rebooted=True)
+    later = rebooted.adopt_uncertain("legacy", "p", "pack", workspace=str(tmp_path), generation="run-b:t2")
+    assert later.id != first.id
+    assert later.state == "held"
+    assert (
+        rebooted.adopt_uncertain("legacy", "p", "pack", workspace=str(tmp_path), generation="run-a:t1").id == first.id
+    )
+    assert {s["id"] for s in rebooted.read()["sessions"]} == {first.id, later.id}
+
+
+def test_an_unproven_generation_dedupes_only_against_a_held_lease(tmp_path):
+    held = manager(Slots(lambda: 1, closed=True)).adopt_uncertain("legacy", "p", "pack", workspace=str(tmp_path))
+    rebooted = manager(Slots(lambda: 1, closed=True), boot=20.0)
+    rebooted.slots.open()
+    assert rebooted.adopt_uncertain("legacy", "p", "pack", workspace=str(tmp_path)).id == held.id
+    rebooted.recover(held.id, rebooted=True)
+    fresh = rebooted.adopt_uncertain("legacy", "p", "pack", workspace=str(tmp_path))
+    assert fresh.id != held.id
+    assert fresh.state == "held"
+
+
+def test_a_workspace_already_in_the_ledger_is_owned_and_not_imported_again(tmp_path):
+    owner = manager(Slots(lambda: 1))
+    ident = begin(owner, tmp_path)
+    assert owner.owns(str(tmp_path))
+    assert not owner.owns(str(tmp_path / "other"))
+    assert owner.read()["sessions"][0]["id"] == ident

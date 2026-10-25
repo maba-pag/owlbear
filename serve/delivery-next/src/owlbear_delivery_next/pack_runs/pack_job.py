@@ -125,6 +125,7 @@ class Job:
         self.held: int | None = None
         self.maintenance: Maintenance | None = None  # bound by session_slots.packed; without it nothing is removed
         self.interrupted: dict[str, str] | None = None  # a run the last host left running; its SDK stage may still work
+        self.replays = 0
         self.state = self._read()
         if self.state["state"] == "running" and (self.state.get("context") or {}).get("publication"):
             reason = "the host stopped while the update was being published"
@@ -173,8 +174,13 @@ class Job:
         return json.loads(json.dumps({k: v for k, v in self.state.items() if k != "context"}))
 
     def busy(self) -> bool:
-        """Whether an update's thread runs now."""
-        return self.thread is not None and self.thread.is_alive()
+        """Whether an update's thread or a tracked calibration replay runs now."""
+        return self.replays > 0 or (self.thread is not None and self.thread.is_alive())
+
+    def count_replay(self, delta: int) -> None:
+        """Count a calibration replay in (+1) or out (-1), so a stop waits for it and no update starts beside it."""
+        with self.lock:
+            self.replays += delta
 
     def start(self) -> dict[str, Any]:
         """Start a run on its own thread and return its first state.

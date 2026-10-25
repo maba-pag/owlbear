@@ -32,8 +32,14 @@ HELD = {
 }
 
 
+EMPTY = {"sessions": []}
+
+
 @pytest.mark.browser
-def test_a_held_session_is_released_only_after_a_confirmed_reboot_by_its_captured_id(tmp_path: Path, pds) -> None:
+@pytest.mark.parametrize("still_held", [True, False], ids=["row-kept", "row-dropped"])
+def test_a_held_session_is_released_only_after_a_confirmed_reboot_by_its_captured_id(
+    tmp_path: Path, pds, *, still_held: bool
+) -> None:
     from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
 
     sock = socket.socket()
@@ -58,7 +64,7 @@ def test_a_held_session_is_released_only_after_a_confirmed_reboot_by_its_capture
                     posted.append((route.request.url, route.request.post_data))
                     route.fulfill(status=409, json={"detail": "this maintenance session is no longer held"})
                     return
-                route.fulfill(json=HELD)
+                route.fulfill(json=HELD if still_held or not posted else EMPTY)
 
             page.route("**/maintenance/sessions**", sessions)
             page.goto(f"{base}/maintenance#token=tok")
@@ -69,7 +75,7 @@ def test_a_held_session_is_released_only_after_a_confirmed_reboot_by_its_capture
             expect(release).to_be_enabled()
             release.click()
             page.get_by_role("button", name="Release", exact=True).click()
-            expect(page.locator("#sessions")).to_contain_text("no longer held")
+            expect(page.get_by_text("no longer held")).to_be_visible()
             assert len(posted) == 1
             url, body = posted[0]
             assert url.endswith("/maintenance/sessions/s-1/recover")
