@@ -337,6 +337,100 @@ def test_a_legacy_run_whose_metadata_cannot_be_read_is_held_again_after_a_real_r
     )
 
 
+PARTIAL = {"state": "running", "run": "partial-run", "started_at": STARTED}  # no stages or log: a damaged record
+
+
+def write_bare(folder: Path, body: dict[str, object]) -> None:
+    """A record a host left with no updater directory beside it."""
+    (folder / pack_job.FILE).write_text(json.dumps(body), encoding="utf-8")
+
+
+def test_the_reader_names_a_partial_record_unreadable_and_a_valid_idle_record_readable(tmp_path):
+    path = tmp_path / pack_job.FILE
+    assert pack_state.read_version(path)[1] == "absent"
+    path.write_text(json.dumps(PARTIAL), encoding="utf-8")
+    assert pack_state.read_version(path)[1] == "", "a partial running record was read as a readable run"
+    path.write_text(json.dumps(pack_job._blank()), encoding="utf-8")  # noqa: SLF001
+    assert pack_state.read_version(path)[1] != "", "a valid idle record was read as unreadable"
+
+
+@pytest.mark.parametrize("loaded", [False, True])
+def test_a_partial_running_record_is_held_once_and_is_held_again_after_recovery_while_still_unreadable(
+    tmp_path, machines, shared_repo, loaded
+):
+    """Recovery covers the receipt, not bytes still unreadable: an unreadable current record stays conservative."""
+    shared, _remote = shared_repo
+    entry, folder = project_with_legacy_run(tmp_path, shared, loaded=loaded)
+    write_bare(folder, PARTIAL)
+    first = machines()
+    first.load_all()
+    assert len(held(first, entry.id)) == 1, sessions_of(first, entry.id)
+    reboot_then_recover(first, held(first, entry.id)[0]["id"])
+    first.stop_all()
+
+    restarted = machines()
+    restarted.load_all()
+    assert [s["state"] for s in sessions_of(restarted, entry.id)] == ["recovered", "held"]
+    restarted.stop_all()
+
+
+@pytest.mark.parametrize("loaded", [False, True])
+def test_an_active_partial_record_hold_is_not_duplicated_when_the_project_is_reconstructed(
+    tmp_path, machines, shared_repo, loaded
+):
+    shared, _remote = shared_repo
+    entry, folder = project_with_legacy_run(tmp_path, shared, loaded=loaded)
+    write_bare(folder, PARTIAL)
+    first = machines()
+    first.load_all()
+    assert len(held(first, entry.id)) == 1, sessions_of(first, entry.id)
+    first.stop_all()
+
+    restarted = machines()
+    restarted.load_all()
+    assert len(held(restarted, entry.id)) == 1, "reconstruction duplicated an active partial-record hold"
+    assert len(sessions_of(restarted, entry.id)) == 1
+
+
+@pytest.mark.parametrize("loaded", [False, True])
+def test_a_fresh_partial_record_after_recovery_gets_its_own_hold(tmp_path, machines, shared_repo, loaded):
+    shared, _remote = shared_repo
+    entry, folder = project_with_legacy_run(tmp_path, shared, loaded=loaded)
+    write_bare(folder, PARTIAL)
+    first = machines()
+    first.load_all()
+    reboot_then_recover(first, held(first, entry.id)[0]["id"])
+    first.stop_all()
+    folder = live_folder(entry, folder, loaded=loaded)
+
+    write_bare(folder, PARTIAL | {"run": "later-run", "started_at": "2026-10-26T00:00:00+00:00"})
+    later = machines()
+    later.load_all()
+    assert [s["state"] for s in sessions_of(later, entry.id)] == ["recovered", "held"]
+
+
+@pytest.mark.parametrize("loaded", [False, True])
+@pytest.mark.parametrize(
+    "body",
+    [
+        pytest.param(None, id="absent"),
+        pytest.param(pack_job._blank(), id="valid-idle"),  # noqa: SLF001
+        pytest.param(pack_job._blank() | {"state": "failed", "reason": "the pack was refused"}, id="definitive"),  # noqa: SLF001
+    ],
+)
+def test_an_absent_valid_idle_or_definitively_failed_record_holds_nothing(
+    tmp_path, machines, shared_repo, loaded, body
+):
+    shared, _remote = shared_repo
+    entry, folder = project_with_legacy_run(tmp_path, shared, loaded=loaded)
+    if body is not None:
+        write_bare(folder, body)
+    loaded_machine = machines()
+    loaded_machine.load_all()
+    assert held(loaded_machine, entry.id) == [], sessions_of(loaded_machine, entry.id)
+    loaded_machine.stop_all()
+
+
 @pytest.mark.parametrize("loaded", [False, True])
 def test_an_incomplete_running_record_replaced_after_recovery_gets_a_new_hold_and_is_not_resurrected_untouched(
     tmp_path, machines, shared_repo, loaded
