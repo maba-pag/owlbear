@@ -145,6 +145,15 @@ def _leave(ctx: Ctx, c: Change, pr: PullRequest, held: StepResult) -> tuple[Chan
     return c, held
 
 
+def _unset_left(ctx: Ctx, c: Change, pr: PullRequest, reason: str) -> tuple[Change, StepResult] | None:
+    """A missing setting for a queued PR: its removal is confirmed first; None once out and the question may escape."""
+    if (result := _withdraw(ctx, c, pr)) is not None:
+        return c, result
+    ctx.log(c.slug, "queue-left", pr=pr.number, reason=reason)
+    ctx.store.write(ctx.lock, c)  # the runner re-reads the Change to ask, so the cleared claim must land first
+    return None
+
+
 def hold(ctx: Ctx, c: Change, held: StepResult) -> tuple[Change, StepResult]:
     """A question the merge step asks before reading the queue (a rules change): a queued PR is taken out first."""
     pr = ctx.gh.read_pull_request(ctx.repository, c.names.pr or 0)
@@ -156,6 +165,7 @@ def hold(ctx: Ctx, c: Change, held: StepResult) -> tuple[Change, StepResult]:
 
 def _enqueue(ctx: Ctx, c: Change, pr: PullRequest, q: QueueState) -> StepResult:
     """Write the claim, then send once; only a definite answer settles it (``expectedHeadOid`` guards the head)."""
+    wake = ctx.poll()  # a missing interval is asked before any claim or send, so nothing is queued meanwhile
     c.queue = QueueClaim(head=pr.head_sha, at=ctx.now)
     _seen(c, q)
     ctx.store.write(ctx.lock, c)  # the claim outlives a crash between the send and the step's own write
@@ -164,9 +174,9 @@ def _enqueue(ctx: Ctx, c: Change, pr: PullRequest, q: QueueState) -> StepResult:
     message = result.message or ""
     if result.status == EnqueueStatus.ENQUEUED or "already in the queue" in message:
         c.queue.settled, c.queue.queued_at = True, result.queued_at  # a refusal's entry binds on the next read
-        return engine.pending(Waiting.GITHUB, f"PR #{pr.number} added to the merge queue", ctx.poll())
+        return engine.pending(Waiting.GITHUB, f"PR #{pr.number} added to the merge queue", wake)
     if result.status == EnqueueStatus.UNKNOWN:
-        return engine.pending(Waiting.GITHUB, f"waiting for GitHub to show PR #{pr.number} queued", ctx.poll())
+        return engine.pending(Waiting.GITHUB, f"waiting for GitHub to show PR #{pr.number} queued", wake)
     c.queue = None
     if "head oid does not match" in message:
         cause = cause_key(ErrorKind.CONFLICT, M, "head")
@@ -203,15 +213,19 @@ def _queued(  # noqa: PLR0913, PLR0917 - the merge step's own inputs and this pa
     try:
         c, held = gate(ctx, c, pr, rules)
     except SettingsUnset:  # the owner is asked next, so GitHub must not merge the PR meanwhile
-        if (result := _withdraw(ctx, c, pr)) is not None:
-            return c, result
-        ctx.log(c.slug, "queue-left", pr=pr.number, reason="merge method unset")
-        ctx.store.write(ctx.lock, c)  # the runner re-reads the Change to ask, so the cleared claim must land first
+        if (done := _unset_left(ctx, c, pr, "merge method unset")) is not None:
+            return done
         raise
     if held is not None:
         return _leave(ctx, c, pr, held)
     where = f"position {e.position}, {e.state.lower().replace('_', ' ')}" if e else "queued"
-    return c, engine.pending(Waiting.GITHUB, f"PR #{pr.number} in the merge queue: {where}", ctx.poll())
+    try:
+        wake = ctx.poll()
+    except SettingsUnset:  # the same rule for the poll interval: the PR is withdrawn before the owner is asked
+        if (done := _unset_left(ctx, c, pr, "ci poll interval unset")) is not None:
+            return done
+        raise
+    return c, engine.pending(Waiting.GITHUB, f"PR #{pr.number} in the merge queue: {where}", wake)
 
 
 def _untraced(ctx: Ctx, c: Change, pr: PullRequest) -> StepResult:
@@ -252,7 +266,7 @@ def run(ctx: Ctx, c: Change, pr: PullRequest, rules: Rules, gate: Gate) -> tuple
         return c, _merged(ctx, c, pr)
     if (r := _relevant(c, q)) is not None:  # before the owner's "again": a removal's repair comes first
         if q.entry is not None:  # removed after this attempt, yet queued: GitHub's reads disagree for now
-            return c, engine.pending(Waiting.GITHUB, f"reading PR #{pr.number}'s merge queue again", ctx.poll())
+            return c, engine.pending(Waiting.GITHUB, f"reading PR #{pr.number}'s merge queue again", _wake(ctx))
         return c, _removed(ctx, c, pr, r)
     _owner_cleared(c, ctx.now)
     if q.entry is not None:

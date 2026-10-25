@@ -75,6 +75,22 @@ def test_an_owner_clear_before_the_first_import_is_not_refilled_by_a_later_impor
     assert local.read_config().prefs.ci_poll_seconds is None
 
 
+def test_an_explicit_review_before_the_first_import_settles_it_so_a_deleted_config_stays_absent(local, tmp_path):
+    local.write_profile(Profile(entries={profile.POLL: confirmed("45")}))
+    c = client(local, tmp_path / "global" / "config.json", headers=AUTH)
+    first = c.get("/api/next/config").json()
+    body = {"rev": first["project_rev"], "layer": first["project"], "prefs_reviewed": True}
+    assert c.put("/api/next/config/project", json=body).status_code == 200
+    assert local.read_profile().prefs_import == "done"
+
+    local.config_path.unlink()  # the owner deletes the config; a fresh claim must not resurrect the legacy value
+    fresh = Store(tmp_path / "store")
+    prefs_import.run(fresh)
+
+    assert not fresh.config_path.exists()
+    assert fresh.read_profile().prefs_import == "done"
+
+
 def test_an_owner_review_that_sets_a_value_keeps_it_when_the_import_runs_later(local, tmp_path):
     local.write_profile(Profile(entries={profile.POLL: confirmed("45")}))
     c = client(local, tmp_path / "global" / "config.json", headers=AUTH)

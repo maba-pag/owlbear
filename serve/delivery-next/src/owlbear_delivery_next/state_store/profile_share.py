@@ -53,17 +53,22 @@ def write(store: Store, prof: Profile, *, replace_unreadable: bool = False) -> s
         if current is not None:  # only mark() moves the legacy import marker; a snapshot never rewinds it
             prof = prof.model_copy(update={"prefs_import": current.prefs_import, "prefs_basis": current.prefs_basis})
         _keep_local(store, prof)
-        if prof.prefs_import == "done" and unpublished(store) and (notice := publish_config_unlocked(store)):
+        if prof.prefs_import == "done" and (notice := publish_config_unlocked(store)):
             _stage(store, prof)  # the new shared facts wait here for the retry; done is not exposed before the config
+            _unpublished(store, failed=True)
             return notice
         notice = _publish(store, store.shared, prof, f"settings: {store.name}: project profile")
-        if not notice and prof.prefs_import == "done":
-            _unpublished(store, failed=False)
+        if prof.prefs_import == "done":
+            _unpublished(store, failed=bool(notice))
         return notice
 
 
 def publish_config_unlocked(store: Store) -> str:
-    """Publish the project config as it is now: an edit, or its removal; the caller holds the shared lock."""
+    """Publish the project config as it is now: an edit, or its removal; the caller holds the shared lock.
+
+    Every completed import publishes it first, whichever clone writes the marker: the shared repository's state decides,
+    not one clone's flag, so a DONE never reaches the shared profile ahead of the config it depends on.
+    """
     if not store.shared:
         return ""
     try:
@@ -87,6 +92,10 @@ def mark(store: Store, expect: str, to: str, basis: str = "") -> tuple[str, str,
             return (prof.prefs_import if prof else "", "", False)
         marked = prof.model_copy(update={"prefs_import": to, "prefs_basis": basis if to == "pending" else ""})
         _keep_local(store, marked)
+        if to == "done" and (notice := publish_config_unlocked(store)):
+            _stage(store, marked)  # done waits locally until the config's edit or removal is published
+            _unpublished(store, failed=True)
+            return to, notice, True
         try:
             notice = _publish(store, store.shared, marked, f"settings: {store.name}: legacy preference import {to}")
         except DataRepoError as exc:
@@ -121,6 +130,9 @@ def retry(store: Store) -> str:
         if prof is None or prof.prefs_import != "done":
             _unpublished(store, failed=False)
             return ""
+        if notice := publish_config_unlocked(store):
+            _unpublished(store, failed=True)
+            return notice
         try:
             notice = _publish(store, store.shared, prof, f"settings: {store.name}: legacy preference import done")
         except DataRepoError as exc:

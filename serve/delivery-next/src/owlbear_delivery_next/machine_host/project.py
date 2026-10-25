@@ -175,7 +175,7 @@ class Project:
     def _ready(self) -> None:
         if not (self.store and self.host):
             return
-        checks = readiness.ready(self.store, Path(self.entry.path))
+        checks = readiness.ready(self.store, Path(self.entry.path), carry=True)
         failed = [f"{c.name}: {c.detail} · fix: {c.fix}" for c in checks if not c.ok]
         self.host.record = self.host.record.model_copy(update={"ready": failed})
         self._publish()

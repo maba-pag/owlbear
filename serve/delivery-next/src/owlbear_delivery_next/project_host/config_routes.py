@@ -329,8 +329,8 @@ def _settle_prefs_import(store: Store, *, reviewed: bool) -> None:
     prof = store.read_profile()
     if prof is None:
         return
-    if reviewed and prof.prefs_import == "pending":
-        _, notice, _ = store.mark_prefs_import("pending", "done")
+    if reviewed and prof.prefs_import in ("", "pending"):  # an explicit review also closes an unclaimed import
+        _, notice, _ = store.mark_prefs_import(prof.prefs_import, "done")
         if notice:
             raise HTTPException(503, f"the legacy preference import was not completed: {notice}")
     try:

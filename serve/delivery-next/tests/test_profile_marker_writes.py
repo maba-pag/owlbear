@@ -109,3 +109,32 @@ def test_a_stale_writer_after_an_owner_clear_does_not_reopen_the_claim(shared_re
     prefs_import.run(fresh)  # the importer must not reclaim or refill after the owner's clear
     assert fresh.read_profile().prefs_import == "done"
     assert not fresh.config_path.exists()
+
+
+def test_a_second_store_cannot_publish_done_while_the_config_removal_is_unpublished(shared_repo, tmp_path, monkeypatch):
+    root, remote = shared_repo
+    owner = shared_store(root, tmp_path, "owner")
+    owner.write_profile(Profile())
+    assert owner.mark_prefs_import("", "pending", "basis-1")[2] is True
+    owner.config_path.parent.mkdir(parents=True, exist_ok=True)
+    owner.config_path.write_text("{}")
+    owner.config_path.unlink()  # the owner removes the config; the removal is not yet published
+    real = DataRepo.publish
+
+    def refuse_config(self, path, message, until=None):
+        if path == owner.config_path:
+            return "remote refused"
+        return real(self, path, message, until)
+
+    monkeypatch.setattr(DataRepo, "publish", refuse_config)
+    second = shared_store(root, tmp_path, "second")  # another clone of the repo: its own flags, no unpublished mark
+    assert second.mark_prefs_import("pending", "done")[1] == "remote refused"
+
+    _, got = clone_profile(remote, tmp_path)
+    assert got.prefs_import == "pending"  # the remote never sees done ahead of the config removal
+
+    monkeypatch.setattr(DataRepo, "publish", real)
+    assert second.retry_prefs_import() == ""
+    fresh, got = clone_profile(remote, tmp_path / "again")
+    assert got.prefs_import == "done"
+    assert not fresh.config_path.exists()

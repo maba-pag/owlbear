@@ -167,7 +167,7 @@ def _readback(ctx: Ctx, c: Change, req: MergeRequest, result: MergeResult) -> St
             if held := engine.landed(ctx, c, pr):
                 return held
             sha = pr.merge_commit_sha or result.sha or ""
-            method = pref(ctx.store.settings(), "merge_method")
+            method = req.method  # the method sent, not the preference as it reads now
             ctx.log(c.slug, "merged", pr=number, head=head, sha=sha, method=method)
             return StepResult(exit=Exit.DONE, reason=f"merged PR #{number} as {sha[:7]} ({method})")
         case "not-applied":  # confirmed absence: the next attempt sends the merge again

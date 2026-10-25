@@ -17,7 +17,8 @@ from owlbear_delivery_next.design_packs import pack_update
 from owlbear_delivery_next.local_system.git_files import probe_in
 from owlbear_delivery_next.runtimes import copilot_cli
 from owlbear_delivery_next.settings import profile
-from owlbear_delivery_next.state_store import profile_share
+from owlbear_delivery_next.state_store import prefs_import, profile_share
+from owlbear_delivery_next.state_store.database import StoreError
 
 if TYPE_CHECKING:
     from owlbear_delivery_next.local_system.git_files import Probe
@@ -161,9 +162,24 @@ def readiness(host: str, probe: Probe, network: str | None, copilot: str | None)
     return [*out, _signing(probe)]
 
 
-def ready(store: Store, repo: Path) -> list[Check]:
-    """The readiness check at a host start, after a shared profile's facts were detected in this clone (TD-147)."""
-    return check(repo, profile_share.checked(store, repo))
+def ready(store: Store, repo: Path, *, carry: bool = False) -> list[Check]:
+    """The readiness check at a host start, after a shared profile's facts were detected in this clone (TD-147).
+
+    With *carry* (a host start) the legacy preference import runs after that detection and its failure is a check.
+    """
+    prof = profile_share.checked(store, repo)
+    carried = _carried(store) if carry else []
+    return [*carried, *check(repo, prof)]
+
+
+def _carried(store: Store) -> list[Check]:
+    """The one-time legacy preference import at a host start: a review or unpublished step is reported, not hidden."""
+    try:
+        prefs_import.run(store)
+    except StoreError as exc:
+        fix = "review the Merge and cleanup preferences on the Settings page, or fix the repository and restart"
+        return [Check("legacy preferences", ok=False, detail=str(exc), fix=fix)]
+    return []
 
 
 def check(repo: Path, prof: Profile | None) -> list[Check]:
