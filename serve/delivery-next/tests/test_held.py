@@ -310,3 +310,49 @@ def test_an_accepted_hold_survives_a_failed_final_write_and_is_applied_once_afte
     assert (done.step.kind, done.outcome.exit) == (K.REVIEW, Exit.DONE)
     assert [e["session"] for e in accepted] == [session]
     assert not held_file.exists()
+
+
+@pytest.mark.parametrize("failure", ["unlink", "log"])
+def test_an_accepted_hold_is_not_applied_or_charged_again_when_its_cleanup_fails_after_the_result_is_written(
+    gated, clone, monkeypatch, failure
+):
+    store, c = gated
+    session = c.step.session
+    c = answer(store, c, "accept")
+    held_file = store.root / "changes" / "c1" / "held.json"
+    real_unlink, real_log = Path.unlink, Store.log
+
+    def broken_unlink(self, *args, **kwargs):
+        if self == held_file:
+            msg = "unlink refused"
+            raise OSError(msg)
+        return real_unlink(self, *args, **kwargs)
+
+    def broken_log(self, lock, slug, event):
+        if event.get("event") == "held-accepted":
+            msg = "log refused"
+            raise OSError(msg)
+        return real_log(self, lock, slug, event)
+
+    if failure == "unlink":
+        monkeypatch.setattr(Path, "unlink", broken_unlink)
+    else:
+        monkeypatch.setattr(Store, "log", broken_log)
+    with pytest.raises(OSError, match=f"{failure} refused"):
+        runner._step(store, Lock("c1"), c, c.step, clone)  # noqa: SLF001
+    monkeypatch.setattr(Path, "unlink", real_unlink)
+    monkeypatch.setattr(Store, "log", real_log)
+
+    recorded = store.read("c1")
+    assert recorded.outcome.exit == Exit.DONE
+    assert len(recorded.accepted_holds) == 1
+    assert held_file.exists()
+
+    monkeypatch.setattr(runner.loop, "apply", lambda *_a: pytest.fail("a recorded hold is never applied again"))
+    monkeypatch.setattr(runner.sdk_adapter, "run", lambda _cfg: pytest.fail("a recorded hold starts no session"))
+    runner._step(store, Lock("c1"), store.read("c1"), store.read("c1").step, clone)  # noqa: SLF001
+
+    accepted = [e for e in store.events("c1") if e.get("event") == "held-accepted"]
+    assert [e["session"] for e in accepted] == [session]
+    assert not held_file.exists()
+    assert store.read("c1").outcome.exit == Exit.DONE

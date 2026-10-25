@@ -240,9 +240,39 @@ def take(store: Store, lock: Lock, change: Change) -> Run | None:
     return run
 
 
-def consume(store: Store, lock: Lock, slug: str, run: Run) -> None:
-    """Record an accepted hold once its result is durably applied, then remove it."""
+def _gen(held: Held) -> str:
+    """The identity of a held result: its session and when it was kept, so each hold is distinct (RUN-04)."""
+    return f"{held.run.session_id}@{held.at.isoformat()}"
+
+
+def receipted(store: Store, change: Change, accepted: Run | None) -> Change:
+    """The Change with an accepted hold's identity recorded, so its result is written with the receipt."""
+    if accepted is None:
+        return change
+    held = _read(store, change.slug)
+    if held is None:
+        msg = "the accepted held result is unreadable; the step stays for a restart"
+        raise OSError(msg)
+    change.accepted_holds = [*change.accepted_holds, _gen(held)]
+    return change
+
+
+def consume(store: Store, lock: Lock, slug: str) -> None:
+    """Remove an accepted hold once its result is durably recorded; its event is logged once."""
     lock.check(slug)
-    at = datetime.now(UTC).isoformat(timespec="seconds")
-    store.log(lock, slug, {"event": "held-accepted", "at": at, "session": run.session_id})
+    held = _read(store, slug)
+    if held is not None:
+        gen = _gen(held)
+        if gen not in {e.get("gen") for e in store.events(slug) if e.get("event") == "held-accepted"}:
+            at = datetime.now(UTC).isoformat(timespec="seconds")
+            store.log(lock, slug, {"event": "held-accepted", "at": at, "session": held.run.session_id, "gen": gen})
     _path(store, slug).unlink(missing_ok=True)
+
+
+def settled(store: Store, lock: Lock, change: Change) -> bool:
+    """Whether the hold on disk is already recorded with the Change: then it is only cleaned up, never applied again."""
+    held = _read(store, change.slug)
+    if held is None or _gen(held) not in change.accepted_holds:
+        return False
+    consume(store, lock, change.slug)
+    return True

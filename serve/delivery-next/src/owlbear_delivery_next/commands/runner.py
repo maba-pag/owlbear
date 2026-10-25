@@ -99,6 +99,8 @@ _out = sessions.out
 
 def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:  # noqa: PLR0915 - session lifecycle
     now, s, slug = datetime.now(UTC), change.step, change.slug
+    if held.settled(store, lock, change):  # its result is recorded already: only the hold's cleanup remains (RUN-04)
+        return
     profile = store.read_profile() or Profile()
     path = worktree.ensure(repo, git_common_dir(repo), slug, change.names.branch, change.names.target)
     change.names.worktree = str(path)
@@ -197,9 +199,14 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:  # noq
         result = prepare.chosen(store, change, path, run.payload, ctx, result)
     if isinstance(p := run.payload, tools.CheckRecipe) and result.exit == Exit.PENDING:
         change.env = Environment(check=s.task or "", command=p.command, directory=p.directory, ready_url=p.ready_url)
-    store.write(lock, loop.apply(change, result, end))
-    if accepted:
-        held.consume(store, lock, slug, accepted)  # once durable: a failed write leaves the hold for a restart
+    _write_result(store, lock, change, accepted, loop.apply(change, result, end))
+
+
+def _write_result(store: Store, lock: Lock, change: Change, accepted: session_result.Run | None, final: Change) -> None:
+    """Write a step's result with an accepted hold's receipt, then remove the hold once that write is durable."""
+    store.write(lock, held.receipted(store, final, accepted))
+    if accepted:  # a failed write, or a failed cleanup, leaves the hold: the receipt stops it running again
+        held.consume(store, lock, change.slug)
 
 
 def _helpers(
