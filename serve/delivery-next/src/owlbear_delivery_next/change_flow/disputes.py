@@ -19,6 +19,7 @@ from owlbear_delivery_next.change_flow import repairs
 from owlbear_delivery_next.change_flow.moves import ask, go, loop_of
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
     from datetime import datetime
 
     from owlbear_delivery_next.change_contracts.models import Change, Task
@@ -36,7 +37,7 @@ REJECT = (
     "Fix the findings that hold. Reject one you judge wrong in `rejected`, by its key, with your evidence: the next "
     "round's reviewer judges whether your rejection is acceptable, so make your case complete. A finding marked as the "
     "owner's is never rejected. This overrides Finish step 1 when you reject every finding: then commit nothing, run "
-    "no checks, and call `submit_result` with `rejected` and empty `changed_paths` and `checks`."
+    "no checks, and call `submit_result` with `rejected` and empty `checks`."
 )
 OWNERS = (
     "A finding marked as the owner's is decided: fix it as the owner's note guides, within the approved brief, and do "
@@ -219,10 +220,12 @@ def _reconsidered(given: list[dispute_tools.Reconsidered], wanted: tuple[str, ..
     ]
 
 
-def processed(c: Change, task: Task | None, session: str, payload: object, result: StepResult) -> StepResult:
+def processed(  # noqa: PLR0913, PLR0917 - the Change, its task, the session, its result and Delivery's paths
+    c: Change, task: Task | None, session: str, payload: object, result: StepResult, changed: Sequence[str] = ()
+) -> StepResult:
     """What an accepted build or review leaves for the findings loop (TD-123, TD-124, TD-208)."""
     if c.step.kind in {StepKind.BUILD, StepKind.PLAN}:
-        repairs.bind(c, task, session, payload, result)
+        repairs.bind(c, task, session, payload, result, changed)
     if c.step.kind == StepKind.BUILD:
         _record(c, task, payload, result)
     return _settle(c, target(c, task), payload, result) if c.step.kind == StepKind.REVIEW else result
