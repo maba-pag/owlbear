@@ -76,8 +76,13 @@ def memory(store: Path | None) -> dict[str, Any] | None:
     if store is None or find_spec(MEMORY_MODULE) is None:
         return None
     command = {"command": sys.executable, "args": ["-m", MEMORY_MODULE]}
-    env = {MEMORY_DIR: str(store), MEMORY_GLOBAL: str(store.parent.parent / "memory")}  # store: <shared>/<name>/memory
+    env = {MEMORY_DIR: str(store), MEMORY_GLOBAL: str(global_memory(store))}
     return command | {"env": env, "tools": ["*"]}
+
+
+def global_memory(store: Path) -> Path:
+    """Global memory, ``<shared>/memory``, beside the project's memory folder *store*, ``<shared>/<name>/memory``."""
+    return store.parent.parent / "memory"
 
 
 def directory() -> Path:
