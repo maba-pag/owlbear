@@ -115,10 +115,18 @@ class Curation:
             interrupted=any(r.state == "running" for r in runs.folders.values()),
         )
         for name, r in runs.folders.items():
-            if legacy_uncertain(r):  # adopted once: its key keeps a recovered run from being imported again
+            if legacy_uncertain(r):  # the run's ledger lease, or its one-time import; its key keeps a recovered run from being imported again
                 source = f"{self.path()}#{name}:{r.started_at}"
-                self.maintenance.adopt(source, SLOT, "curation", {}, interrupted=True)
-                runs.folders[name] = r.model_copy(update={"key": source})
+                lease = self.maintenance.adopt_uncertain(
+                    source,
+                    SLOT,
+                    "curation",
+                    workspace="",
+                    covers=lambda s, p=f"curate:{name}:": (
+                        s.project == SLOT and s.kind == "curation" and s.slot.startswith(p)
+                    ),
+                )
+                runs.folders[name] = r.model_copy(update={"key": lease.slot})
         for name, r in runs.folders.items():
             if r.state in {"waiting", "running"}:
                 runs.folders[name] = r.model_copy(update={"state": "failed", "reason": INTERRUPTED})

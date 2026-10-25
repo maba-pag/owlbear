@@ -192,6 +192,46 @@ class Maintenance:
             ledger.imported.append(source)
             self._save(ledger)
 
+    def adopt_uncertain(
+        self,
+        source: str,
+        project: str,
+        kind: Kind,
+        *,
+        workspace: str,
+        covers: Callable[[Lease], bool] | None = None,
+    ) -> Lease:
+        """Import an older host's uncertain work, unless a lease already covers it in any state.
+
+        An empty import receipt never suppresses this; only genuine ledger history does, so a recovered
+        generation is not resurrected and a current lease is not duplicated.
+        """
+        same = covers or (lambda s: s.project == project and s.kind == kind and s.workspace == workspace)
+        with self._locked() as ledger:
+            known = [s for s in ledger.sessions if same(s)]
+            if known:
+                return max(known, key=lambda s: s.started_at)
+            ident = uuid.uuid4().hex
+            lease = Lease(
+                id=ident,
+                project=project,
+                slot=f"pack:legacy-{ident}",
+                kind=kind,
+                workspace=workspace,
+                started_at=datetime.now(UTC),
+                boot=self.boot(),
+                owner_pid=os.getpid(),
+                owner_created=processes.started(os.getpid()),
+                state="held",
+                reason="legacy maintenance stopped without complete termination proof",
+            )
+            ledger.sessions.append(lease)
+            if source not in ledger.imported:
+                ledger.imported.append(source)
+            self._save(ledger)
+        self.slots.restore_one(lease.project, lease.slot, 1)
+        return lease
+
     def held(self, project: str, slot: str) -> bool:
         """Whether a particular admitted reservation still belongs to uncertain work."""
         with self._locked() as ledger:

@@ -161,7 +161,7 @@ def interrupted(job: Job, key: str) -> None:
         source = f"{key}:run:{run['run']}:{run['started_at']}"  # the same run adopted once, wherever its folder lies
         maintenance.adopt(source, key, "pack", {}, interrupted=True, workspace=run["workspace"] or str(legacy))
     elif "workspace" not in job.state and (legacy.is_dir() or pack_job.legacy_uncertain(job.state)):
-        maintenance.adopt(f"{key}:legacy", key, "pack", {}, interrupted=True, workspace=str(legacy))
+        maintenance.adopt_uncertain(f"{key}:legacy", key, "pack", workspace=str(legacy))
 
 
 def unloaded(maintenance: Maintenance, key: str, repo: Path) -> None:
@@ -184,13 +184,13 @@ def unloaded(maintenance: Maintenance, key: str, repo: Path) -> None:
         return
     if kept is None:
         if legacy.is_dir():
-            maintenance.adopt(f"{key}:legacy", key, "pack", {}, interrupted=True, workspace=str(legacy))
+            maintenance.adopt_uncertain(f"{key}:legacy", key, "pack", workspace=str(legacy))
     elif kept.get("state") == "running":
         run, started = str(kept.get("run") or ""), str(kept.get("started_at") or "")
         workspace = str(kept.get("workspace") or legacy)
         maintenance.adopt(f"{key}:run:{run}:{started}", key, "pack", {}, interrupted=True, workspace=workspace)
     elif "workspace" not in kept and (legacy.is_dir() or pack_job.legacy_uncertain(kept)):
-        maintenance.adopt(f"{key}:legacy", key, "pack", {}, interrupted=True, workspace=str(legacy))
+        maintenance.adopt_uncertain(f"{key}:legacy", key, "pack", workspace=str(legacy))
 
 
 def pack_live(host: Host | None, live: Live, note: Callable[[str], None]) -> Live:

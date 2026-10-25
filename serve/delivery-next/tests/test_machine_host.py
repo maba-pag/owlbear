@@ -22,7 +22,7 @@ from owlbear_delivery_next.change_contracts.chat_contract import HostFound
 from owlbear_delivery_next.change_contracts.decision_records import DecisionBaseline
 from owlbear_delivery_next.change_contracts.models import Change, Environment, Step, StepKind
 from owlbear_delivery_next.commands import chat_client, cli, mcp_server, replay_client, setup
-from owlbear_delivery_next.local_system import codebase
+from owlbear_delivery_next.local_system import codebase, maintenance
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.machine_host import app, project, registry, serve
 from owlbear_delivery_next.machine_host.machine import Machine
@@ -406,6 +406,42 @@ def test_a_loaded_projects_older_failed_uncertain_pack_holds_its_slot_and_refuse
 
     refused = http.post(f"/p/{good.id}/api/next/design-pack/replay")
     assert (refused.status_code, refused.json()["detail"]) == (409, REFUSED)
+
+
+@pytest.mark.parametrize("project_kind", ["loaded", "unloaded"])
+def test_an_empty_legacy_import_receipt_never_suppresses_repair_of_an_older_failed_uncertain_pack(
+    tmp_path, http, machine, monkeypatch, project_kind
+):
+    """An earlier import marker with no lease behind it is not evidence that the older record was handled."""
+    monkeypatch.setattr(pack_replay, "sdk_run", lambda _cfg: pytest.fail("no SDK session starts"))
+    bad, folder = legacy_pack_folder(tmp_path, "bad")
+    good = registry.register(clone(tmp_path / "good"))
+    project = good if project_kind == "loaded" else bad
+    if project_kind == "loaded":
+        older_failed_pack(project_home.located(Path(good.path)), REPLAY_UNCERTAIN)
+    else:
+        older_failed_pack(folder, REPLAY_UNCERTAIN)
+    machine.maintenance._save(maintenance.Ledger(imported=[f"{project.id}:legacy"]))  # noqa: SLF001 - an older import receipt
+    machine.slots.total = lambda: 2
+    machine.load_all()
+    refused = http.post(f"/p/{good.id}/api/next/design-pack/replay")
+    assert (refused.status_code, refused.json()["detail"]) == (409, REFUSED)
+    assert (machine.slots.counts(project.id)[2], len(machine.maintenance.read()["sessions"])) == (1, 1)
+
+
+def test_a_recovered_legacy_pack_generation_is_not_resurrected_by_an_empty_receipt_on_restart(tmp_path, machine):
+    good = registry.register(clone(tmp_path / "good"))
+    older_failed_pack(project_home.located(Path(good.path)), REPLAY_UNCERTAIN)
+    machine.slots.total = lambda: 2
+    machine.load_all()
+    [session] = machine.maintenance.read()["sessions"]
+    booted = machine.maintenance.boot
+    machine.maintenance.boot = lambda: booted() + 1  # the computer rebooted since the failed session
+    machine.maintenance.recover(session["id"], rebooted=True)
+    for _ in range(2):
+        machine.load_all()
+        sessions = machine.maintenance.read()["sessions"]
+        assert (len(sessions), sessions[0]["state"], machine.slots.counts(good.id)[2]) == (1, "recovered", 0)
 
 
 def test_a_modern_failed_uncertain_pack_with_its_workspace_recorded_is_not_adopted_as_older_work(tmp_path, machine):

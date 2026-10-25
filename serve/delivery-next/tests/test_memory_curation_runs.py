@@ -401,6 +401,36 @@ def test_a_recovered_older_unknown_curation_run_stays_released_across_repeated_r
         assert (again.maintenance.pending("curation"), len(again.maintenance.read()["sessions"])) == (False, 1)
 
 
+def test_a_2bf_unkeyed_unknown_curation_run_is_correlated_with_its_held_generation_without_a_second_lease(root) -> None:
+    """The 2bf producer owned the uncertain run in the common ledger but wrote no FolderRun.key."""
+    first = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root))
+    slot = "curate:shop:2bf0000000000000"
+    lease = first.maintenance.begin(curation.SLOT, slot, "curation", "")
+    first.maintenance.failed(lease, RuntimeError("synthetic unconfirmed runtime"))
+    older_unknown_run(first, datetime.now(UTC))
+    slots = Slots(lambda: 1, closed=True)
+    restarted = curation.Curation(slots, shared=lambda: DataRepo(root), run=lambda _cfg: pytest.fail("it ran"))
+    assert restarted.load().folders["shop"].key == slot
+    restarted.start("shop")
+    drained(restarted)
+    sessions = restarted.maintenance.read()["sessions"]
+    assert (len(sessions), sessions[0]["id"] == lease, slots.counts(curation.SLOT)[2]) == (1, True, 1)
+
+
+def test_a_2bf_unkeyed_recovered_curation_generation_stays_recovered_across_restarts(root) -> None:
+    first = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root))
+    lease = first.maintenance.begin(curation.SLOT, "curate:shop:2bf0000000000001", "curation", "")
+    first.maintenance.failed(lease, RuntimeError("synthetic unconfirmed runtime"))
+    older_unknown_run(first, datetime.now(UTC))
+    booted = first.maintenance.boot
+    first.maintenance.boot = lambda: booted() + 1  # the computer rebooted since the failed session
+    first.maintenance.recover(lease, rebooted=True)
+    for _ in range(2):
+        again = curation.Curation(Slots(lambda: 1, closed=True), shared=lambda: DataRepo(root))
+        sessions = again.maintenance.read()["sessions"]
+        assert (len(sessions), sessions[0]["state"], again.maintenance.pending("curation")) == (1, "recovered", False)
+
+
 def test_a_new_unknown_curation_run_is_not_imported_again_at_restart(root) -> None:
     def run(cfg) -> Run:
         return Run(cfg.session_id, ending="error", detail="runtime PID unknown",
