@@ -359,6 +359,58 @@ def test_an_accepted_hold_is_not_applied_or_charged_again_when_its_cleanup_fails
     assert store.read("c1").outcome.exit == Exit.DONE
 
 
+def test_a_consumed_fallback_hold_does_not_suppress_the_next_legitimate_step(tmp_path, clone, monkeypatch):
+    git(clone, "branch", "main")
+    store = Store(tmp_path / "store")
+    names = Names(branch="owlbear/c1", target="main", worktree=str(clone))
+    plan = Plan(tasks=[Task(id="t1", title="one", scope=["b.txt"])])
+    change = Change(slug="c1", brief=Brief(version=1), plan=plan, step=Step(kind=K.BUILD, task="t1"), names=names)
+    store.write(Lock("c1"), change)
+
+    async def unread(cfg):
+        return built(cfg, commit(clone, "b.txt"), unread=True)
+
+    real_write = held.atomic_write
+
+    def disk_full(*_args, **_kwargs):
+        msg = "disk full"
+        raise OSError(msg)
+
+    monkeypatch.setattr(held, "atomic_write", disk_full)
+    monkeypatch.setattr(runner.sdk_adapter, "run", unread)
+    runner._step(store, Lock("c1"), change, change.step, clone)  # noqa: SLF001
+    held_fallback = store.read("c1")
+    assert held_fallback.held_fallback is not None
+    monkeypatch.setattr(held, "atomic_write", real_write)
+
+    c = answer(store, store.read("c1"), "accept")
+    runner._step(store, Lock("c1"), c, c.step, clone)  # noqa: SLF001
+    recorded = store.read("c1")
+    assert recorded.step.kind == K.REVIEW
+    assert recorded.held_fallback is None
+    assert len(recorded.accepted_holds) == 1
+    accepted = [e for e in store.events("c1") if e.get("event") == "held-accepted"]
+    assert len(accepted) == 1
+
+    class BoundaryReachedError(Exception):
+        """The next step's session started: the fake worker boundary was reached."""
+
+    starts = []
+
+    async def boundary(cfg):
+        starts.append(cfg.session_id)
+        raise BoundaryReachedError
+
+    monkeypatch.setattr(runner.sdk_adapter, "run", boundary)
+    with pytest.raises(BoundaryReachedError):
+        runner._step(store, Lock("c1"), store.read("c1"), store.read("c1").step, clone)  # noqa: SLF001
+    after = store.read("c1")
+    assert len(starts) == 1
+    assert after.step.kind == K.REVIEW
+    assert after.accepted_holds == recorded.accepted_holds
+    assert [e for e in store.events("c1") if e.get("event") == "held-accepted"] == accepted
+
+
 REVIEW_USAGE = [
     pytest.param(
         {"credits": 2.5, "models": {"m": {"credits": 2.5, "tokens": 100}}},

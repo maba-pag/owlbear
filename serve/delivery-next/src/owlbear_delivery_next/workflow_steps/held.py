@@ -328,7 +328,10 @@ def receipted(store: Store, change: Change, accepted: Run | None) -> Change:
 
 
 def consume(store: Store, lock: Lock, slug: str) -> None:
-    """Remove an accepted hold once its result is durably recorded; its event is logged once."""
+    """Remove an accepted hold once its result is durably recorded; its event is logged once.
+
+    A hold the Change kept as its fallback is cleared from the Change last, so a failed step leaves it for the retry.
+    """
     lock.check(slug)
     held = _read(store, slug)
     if held is not None:
@@ -337,6 +340,10 @@ def consume(store: Store, lock: Lock, slug: str) -> None:
             at = datetime.now(UTC).isoformat(timespec="seconds")
             store.log(lock, slug, {"event": "held-accepted", "at": at, "session": held.run.session_id, "gen": gen_})
     _path(store, slug).unlink(missing_ok=True)
+    kept = store.read(slug)
+    if kept.held_fallback is not None:
+        kept.held_fallback = None
+        store.write(lock, kept)
 
 
 def settled(store: Store, lock: Lock, change: Change) -> bool:
