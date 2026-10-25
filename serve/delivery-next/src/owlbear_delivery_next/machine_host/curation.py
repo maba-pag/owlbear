@@ -14,7 +14,6 @@ import asyncio
 import threading
 import uuid
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 from owlbear_memory import MemoryEngine, MemoryState
@@ -34,6 +33,7 @@ from owlbear_delivery_next.workflow_steps import lookup
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from pathlib import Path
 
     from owlbear_delivery_next.local_system.slots import Slots
     from owlbear_delivery_next.runtimes.session_result import Run
