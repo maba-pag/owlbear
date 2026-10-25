@@ -18,8 +18,8 @@ repository and its checks rather than an installed project directly.
 
 ## What belongs elsewhere
 
-- Tool configuration, Renovate's [`renovate.json`](../renovate.json) and CodeRabbit's included, lives at the
-  repository root.
+- Tool configuration, including Renovate's [`renovate.json`](../renovate.json) and CodeRabbit's
+  `.coderabbit.yaml`, lives at the repository root.
 - Portable agents, skills, instructions, and prompts live in [`share/`](../share/README.md).
 - Consumer-project Copilot and VS Code templates live under `seed/` and are applied by
   [`setup/init.py`](../setup/init.py).
