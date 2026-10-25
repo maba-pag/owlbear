@@ -58,14 +58,15 @@ def test_a_capture_keeps_the_log_gzipped_and_the_runtime_s_own_saved_outputs_onl
         own.unlink()
         linked.unlink()
     folder = chatlogs.root() / "chatlogs"
-    with gzip.open(folder / "s1.jsonl.gz", "rt") as log:
+    with gzip.open(folder / "s1" / "log.jsonl.gz", "rt") as log:
         assert log.read() == (records / "s1" / "events.jsonl").read_text()
     assert [o["state"] for o in said["outputs"]] == ["kept", "refused", "refused", "missing"]
-    with gzip.open(folder / "s1.outputs" / f"{own.name}.gz", "rt") as out:
+    with gzip.open(folder / "s1" / "outputs" / f"{own.name}.gz", "rt") as out:
         assert out.read() == "the full output"
-    assert json.loads((folder / "s1.json").read_text()) == said
-    modes = {p.name: p.stat().st_mode & 0o777 for p in (folder, folder / "s1.jsonl.gz", folder / "s1.json")}
-    assert modes == {"chatlogs": 0o700, "s1.jsonl.gz": 0o600, "s1.json": 0o600}
+    assert json.loads((folder / "s1" / "sidecar.json").read_text()) == said
+    paths = (folder, folder / "s1", folder / "s1" / "log.jsonl.gz", folder / "s1" / "sidecar.json")
+    modes = {p.name: p.stat().st_mode & 0o777 for p in paths}
+    assert modes == {"chatlogs": 0o700, "s1": 0o700, "log.jsonl.gz": 0o600, "sidecar.json": 0o600}
 
 
 def test_a_capture_is_a_snapshot_refreshed_when_the_log_grows_or_was_provisional(tmp_path):
@@ -80,7 +81,7 @@ def test_a_capture_is_a_snapshot_refreshed_when_the_log_grows_or_was_provisional
         log.write(json.dumps({"type": "session.resume"}) + "\n")  # the session resumed and wrote on
     grown = chatlogs.capture("s2", provisional=False, records=records)
     assert grown["size"] > again["size"]
-    with gzip.open(chatlogs.root() / "chatlogs" / "s2.jsonl.gz", "rt") as log:
+    with gzip.open(chatlogs.root() / "chatlogs" / "s2" / "log.jsonl.gz", "rt") as log:
         assert "session.resume" in log.read()
 
 
@@ -126,7 +127,7 @@ def test_a_capture_stopped_while_copying_outputs_publishes_nothing(tmp_path, mon
             chatlogs.capture("s8", provisional=False, records=records, stop=stop)
     finally:
         own.unlink()
-    assert not (chatlogs.root() / "chatlogs" / "s8.json").exists()  # no final snapshot to keep: taken again later
+    assert not (chatlogs.root() / "chatlogs" / "s8").exists()  # no final snapshot to keep: taken again later
     assert not [p for p in (chatlogs.root() / "chatlogs").iterdir() if p.name.startswith(".stage")]
 
 
@@ -152,16 +153,45 @@ def test_a_stopped_refresh_keeps_the_previous_snapshot_whole(tmp_path, monkeypat
     finally:
         own.unlink()
     folder = chatlogs.root() / "chatlogs"
-    assert json.loads((folder / "s9.json").read_text()) == first
-    with gzip.open(folder / "s9.jsonl.gz", "rt") as log:
+    assert json.loads((folder / "s9" / "sidecar.json").read_text()) == first
+    with gzip.open(folder / "s9" / "log.jsonl.gz", "rt") as log:
         assert "session.resume" not in log.read()  # the log, too, as the sidecar says
-    with gzip.open(folder / "s9.outputs" / f"{own.name}.gz", "rt") as out:
+    with gzip.open(folder / "s9" / "outputs" / f"{own.name}.gz", "rt") as out:
         assert out.read() == "first"
+
+
+def test_an_output_whose_temporary_file_is_gone_is_carried_over_on_refresh(tmp_path):
+    own = Path(tempfile.gettempdir()) / f"{os.getpid()}-copilot-tool-output-carried.txt"
+    own.write_text("only copy")
+    records = _records(tmp_path, "s10", [_saved(str(own))])
+    chatlogs.capture("s10", provisional=True, records=records)
+    own.unlink()  # the runtime's temporary file is gone
+    said = chatlogs.capture("s10", provisional=False, records=records)
+    assert [o["state"] for o in said["outputs"]] == ["kept"]
+    with gzip.open(chatlogs.root() / "chatlogs" / "s10" / "outputs" / f"{own.name}.gz", "rt") as out:
+        assert out.read() == "only copy"
+
+
+def test_a_failed_switch_keeps_the_old_snapshot(tmp_path, monkeypatch):
+    records = _records(tmp_path, "s11", [{"type": "session.start"}])
+    first = chatlogs.capture("s11", provisional=True, records=records)
+    real = chatlogs._write  # noqa: SLF001
+
+    def full(path, data):
+        if path.name == "sidecar.json":
+            raise OSError(28, "No space left on device")
+        real(path, data)
+
+    monkeypatch.setattr(chatlogs, "_write", full)
+    with pytest.raises(OSError, match="No space"):
+        chatlogs.capture("s11", provisional=False, records=records)
+    monkeypatch.setattr(chatlogs, "_write", real)
+    assert json.loads((chatlogs.root() / "chatlogs" / "s11" / "sidecar.json").read_text()) == first
 
 
 def test_a_session_without_a_record_is_said_missing(tmp_path):
     said = chatlogs.capture("nowhere", provisional=False, records=tmp_path)
-    assert (said["missing"], (chatlogs.root() / "chatlogs" / "nowhere.json").exists()) == (True, True)
+    assert (said["missing"], (chatlogs.root() / "chatlogs" / "nowhere" / "sidecar.json").exists()) == (True, True)
 
 
 def _run(ending: str = "finished", *, confirmed: bool = True) -> Run:
@@ -294,4 +324,4 @@ def test_only_judged_unpinned_sessions_a_month_old_are_pruned(tmp_path):
     judged = {"a": now - timedelta(days=31), "b": now - timedelta(days=31), "c": now - timedelta(days=2)}
     assert chatlogs.prune(now, judged, pinned={"b"}) == ["a"]
     left = sorted(p.name for p in (chatlogs.root() / "chatlogs").iterdir() if not p.name.startswith("."))
-    assert left == ["b.json", "b.jsonl.gz", "c.json", "c.jsonl.gz", "d.json", "d.jsonl.gz"]  # d: never judged
+    assert left == ["b", "c", "d"]  # d: never judged

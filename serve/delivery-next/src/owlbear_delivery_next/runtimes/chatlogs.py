@@ -1,13 +1,13 @@
 """Retro chatlogs (Improvement design §5): the evidence Retro reads, kept on this machine so it survives.
 
 ``~/.owlbear/retro/`` (owner-only) holds an append-only ``manifest.jsonl`` (each SDK session OwlBear runs: ``started``
-with its owner, ``ended`` with its ending) and ``chatlogs/<session>.jsonl.gz``: the runtime's own
-``~/.copilot/session-state/<session>/events.jsonl``, gzipped, with a sidecar ``<session>.json`` saying when and from
+with its owner, ``ended`` with its ending) and one snapshot folder per session, ``chatlogs/<session>/``: the runtime's
+own ``~/.copilot/session-state/<session>/events.jsonl`` as ``log.jsonl.gz``, a ``sidecar.json`` saying when and from
 which size and time it was copied, whether the copy is provisional (its session's end was not confirmed, or it may
-resume), and the large outputs the agent saw only as a saved file: copied when they are the runtime's own output files
-in the temp folder, still there and within the bounds; listed as missing or refused otherwise. A capture is a snapshot:
-taking it again refreshes it when the log grew. Nothing here reads a chat outside the enrolled folders, or judges
-anything; Retro does (design §5).
+resume), and in ``outputs/`` the large outputs the agent saw only as a saved file: copied when they are the runtime's
+own output files in the temp folder, still there and within the bounds; listed as missing or refused otherwise. A
+capture is a whole snapshot switched in for the last one: taking it again refreshes it when the log grew. Nothing here
+reads a chat outside the enrolled folders, or judges anything; Retro does (design §5).
 """
 
 from __future__ import annotations
@@ -194,59 +194,77 @@ def capture(
     stop: threading.Event | None = None,
     seconds: float = CAPTURE,
 ) -> dict[str, Any]:
-    """Copy *session*'s log and saved outputs as one snapshot under the session's lock; the sidecar's contents.
+    """Copy *session*'s log and saved outputs as one snapshot folder under the session's lock; the sidecar's contents.
 
-    A final, unchanged copy is kept as it is; a provisional one, or one asked for as provisional, is taken again.
+    A final, unchanged copy is kept as it is; a provisional one, or one asked for as provisional, is taken again. A new
+    snapshot is staged whole and switched in for the old one, which stays if anything fails; an output whose temporary
+    file is gone is carried over from the old snapshot.
     """
     folder, log = _private(root() / "chatlogs"), (records or state()) / session / "events.jsonl"
-    side, stop, until = folder / f"{session}.json", stop or threading.Event(), time.monotonic() + seconds
+    live, stop, until = folder / session, stop or threading.Event(), time.monotonic() + seconds
     with _locked(folder / f".{session}.lock"):
+        before: dict[str, Any] = {}
+        with suppress(OSError, ValueError):
+            before = json.loads((live / "sidecar.json").read_text())
         try:
             st = log.stat()
         except OSError:
             said = {"session": session, "copied_at": _now(), "missing": True, "provisional": provisional,
                     "outputs": []}  # fmt: skip
-            if not side.exists():
-                _write(side, said)
-            return said
-        with suppress(OSError, ValueError):
-            before = json.loads(side.read_text())
-            final = (before.get("size"), before.get("mtime"), before.get("provisional")) == (
-                st.st_size,
-                st.st_mtime,
-                False,
-            )
-            if final and not provisional:
-                return before
+            if not before:
+                _switch(folder, session, said, None)
+            return before or said
+        final = (before.get("size"), before.get("mtime"), before.get("provisional")) == (st.st_size, st.st_mtime, False)
+        if final and not provisional:
+            return before
         stage = Path(tempfile.mkdtemp(dir=folder, prefix=f".stage-{session}-"))
-        try:  # the whole snapshot is staged, then published; a stop keeps the previous one as it was
+        try:
             with log.open("rb") as src:
                 size = _copy(src, stage / "log.jsonl.gz", None, stop, until)
-            used, outputs = 0, []
-            for path in _named(log, stop, until):
-                _private(stage / "outputs")
-                verdict, n = _output(path, stage / "outputs" / f"{Path(path).name}.gz", OUTPUT_BYTES - used, stop,
-                                     until)  # fmt: skip
-                used += n
-                outputs.append({"path": path, "state": verdict})
+            outputs = _outputs(log, stage, live, stop, until)
             _go_on(stop, until, over=False)
             said = {"session": session, "copied_at": _now(), "size": size, "mtime": st.st_mtime,
                     "provisional": provisional or size != st.st_size, "outputs": outputs}  # fmt: skip
-            _publish(stage, folder, session, said)
+            _switch(folder, session, said, stage)
             return said
         finally:
             shutil.rmtree(stage, ignore_errors=True)
 
 
-def _publish(stage: Path, folder: Path, session: str, said: dict[str, Any]) -> None:
-    """Move a staged snapshot into place, its sidecar last; the caller holds the session's lock."""
-    (stage / "log.jsonl.gz").replace(folder / f"{session}.jsonl.gz")
-    outputs, old = folder / f"{session}.outputs", stage / "old-outputs"
-    if outputs.exists():
-        outputs.rename(old)
-    if (stage / "outputs").exists():
-        (stage / "outputs").rename(outputs)
-    _write(folder / f"{session}.json", said)
+def _outputs(log: Path, stage: Path, live: Path, stop: threading.Event, until: float) -> list[dict[str, str]]:
+    """Each named output copied into *stage*, or carried over from the live snapshot when its file is gone."""
+    used, outputs = 0, []
+    for path in _named(log, stop, until):
+        name = f"{Path(path).name}.gz"
+        _private(stage / "outputs")
+        verdict, n = _output(path, stage / "outputs" / name, OUTPUT_BYTES - used, stop, until)
+        if verdict == "missing" and (live / "outputs" / name).is_file():  # the only copy left: keep it
+            shutil.copy2(live / "outputs" / name, stage / "outputs" / name)
+            verdict, n = "kept", (live / "outputs" / name).stat().st_size
+        used += n
+        outputs.append({"path": path, "state": verdict})
+    return outputs
+
+
+def _switch(folder: Path, session: str, said: dict[str, Any], stage: Path | None) -> None:
+    """Put a complete snapshot, its sidecar written into it first, in place of the old one.
+
+    The old one comes back if the switch fails; the caller holds the session's lock.
+    """
+    stage = stage or Path(tempfile.mkdtemp(dir=folder, prefix=f".stage-{session}-"))
+    _write(stage / "sidecar.json", said)
+    live, old = folder / session, folder / f".old-{session}"
+    shutil.rmtree(old, ignore_errors=True)
+    if live.exists():
+        live.rename(old)
+    try:
+        stage.rename(live)
+        live.chmod(0o700)
+    except BaseException:
+        if old.exists() and not live.exists():
+            old.rename(live)
+        raise
+    shutil.rmtree(old, ignore_errors=True)
 
 
 def _write(path: Path, data: dict[str, Any]) -> None:
@@ -354,8 +372,6 @@ def prune(now: datetime, judged: dict[str, datetime], pinned: set[str]) -> list[
         if session in pinned or now - at < KEPT:
             continue
         with _locked(folder / f".{session}.lock"):  # never under a capture of the same session
-            for path in (folder / f"{session}.json", folder / f"{session}.jsonl.gz"):
-                path.unlink(missing_ok=True)
-            shutil.rmtree(folder / f"{session}.outputs", ignore_errors=True)
+            shutil.rmtree(folder / session, ignore_errors=True)
         gone.append(session)
     return gone
