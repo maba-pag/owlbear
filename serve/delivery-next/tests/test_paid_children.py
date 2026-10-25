@@ -830,7 +830,9 @@ def test_an_old_unread_capture_only_counts_under_a_later_child_and_never_gates_i
         c.step.mode = "challenge"
         later = Run("c1-plan-challenge-v2", "result", tools.ReviewResult(verdict="pass"), termination=DONE)
         later.usage, later.tool_calls, later.model_check = dict(CHILD), {"grep": {"calls": 2}}, "verified"
-        c.pending_child = PendingChild(label=plan_round.LABEL, parent="2", run=held.dump_run(later))
+        c.pending_child = PendingChild(
+            label=plan_round.LABEL, parent="2", brief=c.brief.version, run=held.dump_run(later)
+        )
     else:  # another candidate awaits its own challenge
         (a1,) = c.amendments
         c.amendments.append(a1.model_copy(update={"id": "A2"}))
@@ -856,6 +858,45 @@ def test_an_old_unread_capture_only_counts_under_a_later_child_and_never_gates_i
     with pytest.raises(NextSessionError):  # the next step goes on: no gate, nothing of the old child again
         restart(tmp_path, change_repo)
     assert store.read("c1").counted_children == c.counted_children  # nothing counts twice
+
+
+@pytest.mark.parametrize("parent", ["plan", "amend"])
+def test_an_unread_capture_of_a_departed_brief_only_counts_when_a_new_brief_reuses_its_ids(
+    tmp_path, change_repo, monkeypatch, parent
+):
+    paid, store = unread_captured(tmp_path, change_repo, monkeypatch, parent)
+    (path,) = captures(store)
+    old_brief = json.loads(path.read_text())["brief"]
+    c = store.read("c1")
+    assert old_brief == c.brief.version  # the capture is bound to the generation it ran on
+    new = c.brief.version + 1
+    c.brief = c.brief.model_copy(update={"version": new, "approved_version": new, "challenged": new})
+    c.outcome = None
+    paid.verdicts.append(passing(parent))
+    if parent == "plan":  # a new brief's plan, its version 1 again, in its challenge: no child of its own yet
+        c.plan = Plan(tasks=[Task(id="t1", title="another plan", scope=["src"])])
+        c.step.mode = "challenge"
+    else:  # a new brief's candidate, its id the old one's again, awaiting its own challenge
+        (a1,) = c.amendments
+        c.amendments = [a1.model_copy(update={"base": new, "reason": "the new brief's proposal"})]
+        route = loop.StepResult(exit=Exit.BACK, back_to=K.PLAN, cause="review:build:premise", reason="new")
+        c.pending_child = pending_child.awaited(amendments.LABEL, a1.id, route, c)
+    assert c.pending_child is None or c.pending_child.parent == json.loads(path.read_text())["parent"]
+    store.write(Lock("c1"), c)
+
+    c = restart(tmp_path, change_repo).read("c1")
+    old = paid.children[0]
+    unread = [q for q in c.questions if (q.cause or "").endswith(f":{failures.UNREAD}") and q.answer is None]
+    assert unread == []  # no gate for the departed brief's child
+    assert (c.spend.unread, c.counted_children) == ([old], paid.children)  # old counted once; the new child too
+    assert (len(paid.parents), len(paid.children)) == (1, 2)  # the new target's own challenger ran
+    assert (c.pending_child, captures(store)) == (None, [])
+    if parent == "plan":
+        assert (c.plan.version, c.loops[PLAN].round, c.step.kind) == (1, 1, K.BUILD)
+    else:
+        (a,) = c.amendments
+        assert (a.verdict, a.base, a.challenger) == ("equivalent", new, paid.children[1])
+        assert (c.step.kind, c.outcome.exit) == (K.PLAN, Exit.BACK)
 
 
 def stored(store: Store) -> str:

@@ -32,7 +32,7 @@ if TYPE_CHECKING:
 
     from owlbear_delivery_next.change_contracts.amendment_records import Amendment
     from owlbear_delivery_next.change_contracts.held_records import HeldRun
-    from owlbear_delivery_next.change_contracts.models import Change, Step
+    from owlbear_delivery_next.change_contracts.models import Change
     from owlbear_delivery_next.runtimes.session_result import Run
     from owlbear_delivery_next.state_store.store import Lock, Store
 
@@ -41,10 +41,15 @@ type Start = Callable[[sessions.Keep], Judged]
 CAPTURE = "child-"  # a returned child's run, kept in its own file when its Change write failed
 
 
-def awaited(label: str, parent: str, route: loop.StepResult, step: Step) -> PendingChild:
-    """The record of a child about to start, with the proposing step and its own route kept for its settlement."""
+def awaited(label: str, parent: str, route: loop.StepResult, change: Change) -> PendingChild:
+    """The record of a child about to start, bound to its brief version and proposing step, with that step's route."""
+    s = change.step
     return PendingChild(
-        label=label, parent=parent, route=route.model_dump(mode="json"), step=(step.kind, step.task, step.mode)
+        label=label,
+        parent=parent,
+        brief=change.brief.version,
+        route=route.model_dump(mode="json"),
+        step=(s.kind, s.task, s.mode),
     )
 
 
@@ -70,17 +75,19 @@ def child(store: Store, lock: Lock, change: Change, parent: tuple[str, str], sta
         return session_result.to_result(run, StepKind.REVIEW, datetime.now(UTC), change.step.kind), run
     label, judged = parent
     seen: list[Run] = []
+    brief = change.brief.version  # the generation the child judges, as it started
 
     def keep(runs: list[Run]) -> None:
         for run in runs:
             seen.append(run)
             if sessions.deferrable(run):
-                kept = change.pending_child or PendingChild(label=label, parent=judged)
+                kept = change.pending_child or PendingChild(label=label, parent=judged, brief=brief)
                 kept.run = held.dump_run(run)
                 change.pending_child = kept
                 _kept(store, lock, change, kept)
             elif sessions.unread(run):
-                _unread(store, lock, change, PendingChild(label=label, parent=judged, run=held.dump_run(run)))
+                evidence = PendingChild(label=label, parent=judged, brief=brief, run=held.dump_run(run))
+                _unread(store, lock, change, evidence)
 
     verdict, run = start(keep)
     if all(r is not run for r in seen):
@@ -200,10 +207,14 @@ def _gates(change: Change, captured: PendingChild) -> bool:
 
 
 def _awaits(pending: PendingChild | None, captured: PendingChild) -> bool:
-    """The Change waits for the captured child: it keeps no child, or this child's record without its run."""
+    """The Change waits for the captured child: it keeps no child, or this child's record without its run.
+
+    This child is the same label and parent on the same brief version: an id a later brief reuses is another child.
+    """
     if pending is None:
         return True
-    return pending.run is None and (pending.label, pending.parent) == (captured.label, captured.parent)
+    same = (pending.label, pending.parent, pending.brief) == (captured.label, captured.parent, captured.brief)
+    return pending.run is None and same
 
 
 def judgeable(verdict: loop.StepResult) -> bool:
@@ -232,12 +243,14 @@ def candidate(change: Change, pending: PendingChild) -> Amendment | None:
 def fits(change: Change) -> bool:
     """Whether the step the pending child answers is still the Change's own, so its verdict may still route it.
 
-    An amendment's proposing step is the same step, task and mode on the brief version its candidate was prepared
-    against, whatever its session: the owner's retry of a challenge reruns the challenger, never its proposer.
+    The child is bound to the brief version its parent step ran on: under a later brief, ids that repeat (a plan
+    version, an amendment id) are another child's. An amendment's proposing step is the same step, task and mode on
+    the brief version its candidate was prepared against, whatever its session: the owner's retry of a challenge
+    reruns the challenger, never its proposer.
     """
     pending, s = change.pending_child, change.step
-    if pending is None:
-        return False
+    if pending is None or pending.brief is None or pending.brief != change.brief.version:
+        return False  # its own brief generation is gone, or it was never bound to one
     if pending.label == amendments.LABEL:
         made = candidate(change, pending)
         if made is None or made.verdict or made.base != change.brief.version:

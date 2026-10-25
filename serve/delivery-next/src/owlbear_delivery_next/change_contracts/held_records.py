@@ -40,6 +40,7 @@ class PendingChild(BaseModel):
 
     label: str  # the session's step label: plan-challenge or amendment-challenge
     parent: str  # what the child judges: the plan version, or the candidate amendment's id
+    brief: int | None = None  # the brief version its parent step ran on; a record without one never fits a step
     route: dict[str, Any] | None = None  # the proposing step's own result, which stands unless the challenger stops
     step: tuple[str, str | None, str | None] | None = None  # the proposing step's kind, task and mode
     run: HeldRun | None = None  # the child's validated run, kept as soon as it returns

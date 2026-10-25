@@ -52,7 +52,7 @@ def challenge(  # noqa: PLR0913 - the proposer's writes, its candidate and its o
 
     *settings* is the snapshot the proposer started with, which checked the challenger's (``review.started``).
     """
-    change.pending_child = pending_child.awaited(amendments.LABEL, made, route, change.step)
+    change.pending_child = pending_child.awaited(amendments.LABEL, made, route, change)
     store = held_writes.checkpoint(post, lock, change)  # a lost challenge leaves the candidate unjudged, its step kept
     _settled(store, lock, change, path, settings)
 
