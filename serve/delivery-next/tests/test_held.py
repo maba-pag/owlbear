@@ -461,10 +461,10 @@ def test_a_held_review_counts_once_and_applies_once_whichever_write_fails(  # no
     assert review_loop(store) == (0, 0)  # nothing is applied before the owner accepts
     assert "plan-judge" in [e.get("label") for e in store.events("c1") if e.get("event") == "step"]
 
-    if stage == "hold-write":  # nothing was held, so the owner can only ask for a new session
-        assert [o.id for o in loop.open_question(counted).options] == ["retry"]
+    if stage == "hold-write":  # the held file is not written: the Change keeps the held record and the same gate
+        assert "accept" in [o.id for o in loop.open_question(counted).options]
         assert not held_file.exists()
-        return
+        assert counted.held_fallback is not None
 
     accepted = answer(store, counted, "accept")
     step = loop.next_step(accepted, NOW)
@@ -486,6 +486,34 @@ def test_a_held_review_counts_once_and_applies_once_whichever_write_fails(  # no
     assert review_loop(store) == (1, 1)
     assert [e["session"] for e in store.events("c1") if e.get("event") == "held-accepted"] == ["s1"]
     assert not held_file.exists()
+
+
+def test_a_held_review_whose_file_and_change_writes_both_fail_is_reported_and_leaves_nothing(
+    tmp_path, clone, monkeypatch
+):
+    store, run = review_store(tmp_path, clone, {"credits": 2.5, "models": {}}, "")
+    exc = sessions.UsageUnreadError(run)
+    exc.worktree = clone
+    real_write = Store.write
+
+    def refuse(*_args):
+        msg = "held file refused"
+        raise OSError(msg)
+
+    def write(self, lock, change):
+        if change.counted_holds:
+            msg = "change refused"
+            raise OSError(msg)
+        return real_write(self, lock, change)
+
+    monkeypatch.setattr(held, "atomic_write", refuse)
+    monkeypatch.setattr(Store, "write", write)
+    with pytest.raises(OSError, match="change refused"):
+        runner._gate_unread(store, Lock("c1"), exc)  # noqa: SLF001
+    recorded = store.read("c1")
+    assert (recorded.spend.credits, recorded.counted_holds, recorded.held_fallback) == (0, [], None)
+    assert review_loop(store) == (0, 0)
+    assert not (store.root / "changes" / "c1" / "held.json").exists()
 
 
 @pytest.mark.parametrize(

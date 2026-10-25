@@ -505,9 +505,8 @@ def _run(store: Store, lock: Lock, change: Change, step: Step | None, repo: Path
 def _gate_unread(store: Store, lock: Lock, exc: UsageUnreadError) -> None:
     """TD-54: the owner decides; an agent step's own result is held so it can be accepted instead (TD-56).
 
-    The hold is written before anything is counted, so a failed write never loses the run: the step asks the owner
-    without accept, and the usage is counted now. Once held, counting happens in one write, and a restart counts it
-    from the hold alone.
+    The hold is written before anything is counted. When the held file cannot be written, the Change keeps the same
+    record, so the run is never lost and never paid for again; the gate and its count then come from that one Change.
     """
     kept = store.read(lock.slug)  # what the step wrote before and during the session; nothing after it
     head = held.head(exc.worktree) if exc.worktree else None
@@ -515,13 +514,8 @@ def _gate_unread(store: Store, lock: Lock, exc: UsageUnreadError) -> None:
     label = {"label": exc.label} if exc.label else {}  # whose session it was, when not the step's own (TD-376)
     if head:
         gated = loop.apply(kept, session_result.usage_gate(exc.run, kept.step.kind, accept=True), datetime.now(UTC))
-        try:
-            pending = held.hold(store, lock, gated, exc.run, head, label)
-        except OSError:  # nothing could be held: the owner decides without accept, and the usage is counted now
-            pass
-        else:
-            _counted_hold(store, lock, pending)
-            return
+        _counted_hold(store, lock, held.hold(store, lock, gated, exc.run, head, label))
+        return
     gated = loop.apply(kept, session_result.usage_gate(exc.run, kept.step.kind, accept=False), datetime.now(UTC))
     store.write(lock, gated)
     sessions.logged(store, lock, gated, exc.run, {"kind": kept.step.kind, "exit": Exit.ASK} | label)

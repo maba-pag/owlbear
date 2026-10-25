@@ -241,7 +241,9 @@ and keeps an accepted held result until its final write is durable, so a restart
 applies it once without a paid rerun. An accepted review's round and findings are
 buffered until that final write. A held result is written to its hold file first, with its full run, usage, tool
 accounting and step label; it is counted once through a receipt written with the spend, and a restart with an
-uncounted hold counts it before any step runs. A hold written before this receipt existed is marked unread once,
+uncounted hold counts it before any step runs. When the hold file cannot be written, the Change keeps the same held
+record (format 8), so the owner's accept and the count survive without a paid rerun; if the Change write fails too,
+the error is reported and nothing is counted. A hold written before this receipt existed is marked unread once,
 never zero-filled or recharged. Other packages remain open until their own merged-code
 acceptance evidence is verified.
 

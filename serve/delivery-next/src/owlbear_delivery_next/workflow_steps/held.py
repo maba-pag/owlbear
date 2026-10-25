@@ -12,12 +12,13 @@ import subprocess
 from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any
 
-from pydantic import BaseModel, ValidationError
+from pydantic import ValidationError
 
 from owlbear_delivery_next.change_contracts import tools
 from owlbear_delivery_next.change_contracts.failures import UNREAD, VISUAL_MODEL
+from owlbear_delivery_next.change_contracts.held_records import HeldRecord, HeldRun
 from owlbear_delivery_next.change_contracts.models import Change, StepKind
 from owlbear_delivery_next.change_flow import worktree
 from owlbear_delivery_next.local_system.processes import Termination
@@ -38,44 +39,13 @@ UNRECORDED = "the usage of a session held by an older build was not recorded; it
 OBSOLETE = {"BuildResult": ("changed_paths",)}
 
 
-class HeldRun(BaseModel):
-    """The parts of a session's run its processing reads, with the accounting its gate would have counted (RUN-04)."""
+class Held(HeldRecord):
+    """A held record in the held file, with the Change the gate question was asked on (RUN-04).
 
-    session_id: str
-    ending: str
-    detail: str = ""
-    head: str | None = None
-    changed: list[str] = []  # the paths the commits change at head, as Delivery read them; empty in older holds
-    payload: dict[str, Any] | None = None  # {"model": a result model's name, "args": its fields}
-    denials: list[str] = []
-    denied: dict[str, str] = {}
-    runtime: str = "sdk"
-    quota: bool = False
-    quota_reset: datetime | None = None
-    usage: dict[str, Any] = {}
-    usage_unread: str = ""
-    model_check: Literal["verified", "mismatch", "unknown"] = "unknown"
-    subagents: list[dict[str, Any]] = []
-    tool_calls: dict[str, dict[str, int]] = {}
-    counted: bool = False  # the usage and tool calls above were kept with the hold; an older build kept none
-
-
-class Held(BaseModel):
-    """What the held result depends on, the gate question that offers it, and the result itself.
-
-    The hold is the first durable record of a session whose usage stayed unread: it keeps the Change the gate
-    question was asked on, the step label, and the run with its accounting, so counting it needs no session (RUN-04).
+    The hold is the first durable record of a session whose usage stayed unread: it keeps the Change, the step label,
+    and the run with its accounting, so counting it needs no session.
     """
 
-    question: str
-    kind: str
-    task: str | None
-    mode: str | None
-    brief: int
-    head: str
-    at: datetime
-    run: HeldRun
-    label: dict[str, Any] = {}  # whose session it was when not the step's own (TD-376)
     change: Change | None = None  # None in a hold an older build kept; its Change is then the stored one
 
 
@@ -152,10 +122,9 @@ def hold(  # noqa: PLR0913, PLR0917 - the store, its lock, the step's change and
     """Hold an agent step's unread result for the gate question just asked, before anything is counted (RUN-04).
 
     A held build's session ends at *head*: its span closes there, as a recorded session's does (TD-210). The Change
-    written here is a copy: the stored Change gets the span and the count with the hold's accounting.
-
-    Raises:
-        OSError: The held file could not be written, so nothing was held.
+    written here is a copy: the stored Change gets the span and the count with the hold's accounting. When the held
+    file cannot be written, the Change keeps the same record in `held_fallback`, so the gate and its count still
+    survive; the caller's Change write is then the only durable write, and its failure is raised to the caller.
     """
     lock.check(change.slug)
     snap = change.model_copy(deep=True)
@@ -175,7 +144,10 @@ def hold(  # noqa: PLR0913, PLR0917 - the store, its lock, the step's change and
         label=label,
         change=snap,
     )
-    atomic_write(_path(store, change.slug), held.model_dump_json())
+    try:
+        atomic_write(_path(store, change.slug), held.model_dump_json())
+    except OSError:
+        snap.held_fallback = HeldRecord.model_validate(held.model_dump(exclude={"change"}))
     return held
 
 
@@ -202,10 +174,13 @@ def head(path: Path) -> str | None:
 
 
 def _read(store: Store, slug: str) -> Held | None:
+    """The held record: the held file when it is written, else the one the Change keeps (RUN-04)."""
     try:
         return Held.model_validate_json(_path(store, slug).read_text())
     except OSError, ValueError, ValidationError:
-        return None
+        pass
+    record = store.read(slug).held_fallback
+    return Held.model_validate(record.model_dump()) if record is not None else None
 
 
 def _matches(held: Held, change: Change) -> bool:
@@ -250,19 +225,18 @@ def take(store: Store, lock: Lock, change: Change) -> Run | None:
     declined one is removed here.
     """
     lock.check(change.slug)
-    file = _path(store, change.slug)
-    if not file.exists():
-        return None
     held = _read(store, change.slug)
+    if held is None or gen(held) in change.accepted_holds:
+        return None
     try:
-        run = _load(held.run) if held else None
+        run = _load(held.run)
     except ValueError, ValidationError, TypeError:
         run = None
-    if held is None or run is None or not _accepted(change, held.question):
-        file.unlink(missing_ok=True)
+    if run is None or not _accepted(change, held.question):
+        _path(store, change.slug).unlink(missing_ok=True)
         return None
     if not _matches(held, change):
-        file.unlink(missing_ok=True)
+        _path(store, change.slug).unlink(missing_ok=True)
         at = datetime.now(UTC).isoformat(timespec="seconds")
         store.log(lock, change.slug, {"event": "held-stale", "at": at, "session": run.session_id})
         return None

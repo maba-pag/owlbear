@@ -145,6 +145,11 @@ def waivers_added(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+def held_records_added(data: dict[str, Any]) -> dict[str, Any]:
+    """Change format 7 to 8: held results kept with the Change and their receipts (RUN-04); older runtimes refuse 8."""
+    return data
+
+
 CHANGE: Migrations = {
     1: brief_challenged,
     2: visual_decided,
@@ -152,6 +157,7 @@ CHANGE: Migrations = {
     4: labelled_added,
     5: tests_added,
     6: waivers_added,
+    7: held_records_added,
 }
 PROFILE: Migrations = {1: roles_moved}
 CONFIG: Migrations = {
