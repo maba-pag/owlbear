@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 
 from owlbear_decisions import DecisionFileError
 from owlbear_decisions.storage import DECISIONS_DIR, parse
+from owlbear_delivery_next.local_system.data_repo import DataRepoError
 
 if TYPE_CHECKING:
     from owlbear_delivery_next.local_system.data_repo import DataRepo
@@ -39,9 +40,12 @@ def _decision_file(rel: str) -> bool:
     return len(parts) > 1 and parts[-2] == DECISIONS_DIR and rel.endswith(".md")
 
 
-def _rev(shared: DataRepo, ref: str, until: float) -> str:
+def _rev(shared: DataRepo, ref: str, until: float) -> str | None:
+    """The commit *ref* names; "" when it names none yet (an unborn HEAD), None when Git could not say."""
     said = shared.git("rev-parse", "--verify", "-q", ref, until=until)
-    return "" if said.returncode else said.stdout.strip()
+    if said.returncode == 0:
+        return said.stdout.strip()
+    return "" if said.returncode == 1 and not said.stdout.strip() else None
 
 
 def _changed(shared: DataRepo, base: str, tip: str, until: float) -> set[str] | None:
@@ -94,9 +98,12 @@ def publish(shared: DataRepo, paths: list[Path], message: str, until: float) -> 
     this call's own and holds the files as they are, so a lost commit is never guessed from a moved head.
     """
     before = _rev(shared, "HEAD", until)
+    if before is None:  # nothing is committed when HEAD cannot be read: never guess its position
+        return Sent(notice=f"HEAD of {shared.root} could not be read, so nothing was committed", ambiguous=True)
     rels = {p.relative_to(shared.root).as_posix() for p in paths}
     failed = shared.commit(paths, message, until)
-    if failed and _rev(shared, "HEAD", until) == before:
+    now = _rev(shared, "HEAD", until)
+    if failed and now is not None and now == before:
         return Sent(notice=failed, uncommitted=True)
     made = _ours(shared, before, rels, until)
     if failed and not (made and _in_head(shared, paths, until)):
@@ -131,6 +138,14 @@ def _ours(shared: DataRepo, before: str, rels: set[str], until: float) -> str:
     return after if not said.returncode and changed and changed <= rels else ""
 
 
+def _rebase_failed(shared: DataRepo, where: str, failed: str, until: float) -> Sent:
+    try:
+        left = shared.rebasing(until)
+    except DataRepoError as exc:  # unknown whether Git is mid-rebase: ambiguous, never "no rebase"
+        return Sent(notice=f"{where}, but it could not be rebased on the remote: {failed}; {exc}", ambiguous=True)
+    return Sent(notice=f"{where}, but it could not be rebased on the remote: {failed}; push it by hand", ambiguous=left)
+
+
 def _rejected(shared: DataRepo, rels: set[str], why: str, until: float, *, own: bool) -> Sent:
     where = f"saved and committed in {shared.root}"
     if shared.git("fetch", "-q", until=until).returncode or (sides := _diverged(shared, until)) is None:
@@ -149,11 +164,7 @@ def _rejected(shared: DataRepo, rels: set[str], why: str, until: float, *, own: 
         listed = ", ".join(sorted(both))
         return Sent(notice=f"{where}, but not published: {listed} changed here and on the remote; the owner decides")
     if failed := shared.rebase(until):
-        left = shared.rebasing(until)
-        return Sent(
-            notice=f"{where}, but it could not be rebased on the remote: {failed}; push it by hand",
-            ambiguous=left,
-        )
+        return _rebase_failed(shared, where, failed, until)
     sent = shared.git("push", "-q", until=until)
     if sent.returncode:
         return Sent(notice=f"{where}, but the push failed: {sent.stderr.strip()[:200]}")

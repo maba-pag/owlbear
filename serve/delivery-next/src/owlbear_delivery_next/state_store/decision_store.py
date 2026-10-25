@@ -267,7 +267,7 @@ def _save_all(shared: DataRepo, items: list[Placed], message: str) -> list[Recei
     before = {path: _content(path) for path in paths}
     if refused := _refusals(items):
         return _refused(shared, decisions, refused, behind)
-    generation = _begin(shared, items, before, message)
+    generation, head, rows = _begin(shared, items, before, message)
     try:
         refused = write_batch(items)
     except OSError:
@@ -285,6 +285,9 @@ def _save_all(shared: DataRepo, items: list[Placed], message: str) -> list[Recei
         else:  # the batch stays interrupted: only the owner's finish or abandon settles it
             notice = f"{sent.notice} (interrupted batch {generation}: finish or abandon it in Decisions)"
         return [Receipt(d.id, saved=False, commit=_head(shared), notice=notice[:300]) for d in decisions]
+    if not decision_transaction.landed(shared, head, rows):  # a sent publication is not proof of landing
+        notice = f"{sent.notice} (interrupted batch {generation}: not landed in Git; finish or abandon it in Decisions)"
+        return [Receipt(d.id, saved=False, commit=_head(shared), notice=notice[:300]) for d in decisions]
     decision_batch.complete(shared, generation)
     held = [decision_sync.revision_at(shared, "HEAD", p.relative_to(shared.root).as_posix(), until) for p in paths]
     said = [sent.notice]
@@ -297,14 +300,21 @@ def _save_all(shared: DataRepo, items: list[Placed], message: str) -> list[Recei
     ]
 
 
-def _begin(shared: DataRepo, items: list[Placed], before: dict[Path, bytes | None], message: str) -> str:
-    """Journal the batch, with each file's bytes before and after, before its first file is written."""
-    files = []
+def _begin(
+    shared: DataRepo, items: list[Placed], before: dict[Path, bytes | None], message: str
+) -> tuple[str, str, list[tuple[str, bytes | None, bytes]]]:
+    """Journal the batch, with each file's bytes before and after, before its first file is written.
+
+    Returns the generation, the head it was journalled on and the rows, which the publication must land.
+    """
+    rows = []
     for decision, folder, _ in items:
         path = decision_path(decision, folder)
-        files.append((path.relative_to(shared.root).as_posix(), before[path], serialize(decision).encode("utf-8")))
+        rows.append((path.relative_to(shared.root).as_posix(), before[path], serialize(decision).encode("utf-8")))
     project = next((d.project for d, _, _ in items if d.project), "")
-    return decision_batch.begin(shared, project, _head(shared), message, [d.id for d, _, _ in items], files)
+    head = _head(shared)
+    generation = decision_batch.begin(shared, project, head, message, [d.id for d, _, _ in items], rows)
+    return generation, head, rows
 
 
 def _refusals(items: list[Placed]) -> dict[str, str]:

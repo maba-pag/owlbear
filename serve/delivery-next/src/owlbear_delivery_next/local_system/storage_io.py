@@ -54,3 +54,24 @@ def atomic_write(target: Path, content: str) -> None:
         with contextlib.suppress(OSError):
             Path(tmp_path).unlink()
         raise
+
+
+def fsync_dir(folder: Path) -> None:
+    """Make the entries of *folder* durable: a rename or unlink in it survives power loss only after this."""
+    dir_fd = os.open(str(folder), os.O_RDONLY)
+    try:
+        os.fsync(dir_fd)
+    finally:
+        os.close(dir_fd)
+
+
+def make_dirs(folder: Path) -> None:
+    """Create *folder* and its missing ancestors, fsyncing each new folder's parent so the new entry is durable."""
+    missing: list[Path] = []
+    for candidate in (folder, *folder.parents):
+        if candidate.exists():
+            break
+        missing.append(candidate)
+    for created in reversed(missing):
+        created.mkdir()
+        fsync_dir(created.parent)

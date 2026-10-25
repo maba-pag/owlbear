@@ -21,7 +21,7 @@ from pathlib import Path
 from tempfile import mkstemp
 from typing import TYPE_CHECKING
 
-from owlbear_delivery_next.local_system.storage_io import open_lock
+from owlbear_delivery_next.local_system.storage_io import fsync_dir, open_lock
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Sequence
@@ -81,9 +81,10 @@ def journal_path(shared: DataRepo) -> Path:
 
 
 def replace_file(path: Path, data: bytes | None) -> None:
-    """Make *path* hold *data* atomically, or no file at all when *data* is None."""
+    """Make *path* hold *data* atomically, or no file at all when *data* is None; the rename or unlink is fsynced."""
     if data is None:
         path.unlink(missing_ok=True)
+        fsync_dir(path.parent)
         return
     descriptor, temporary = mkstemp(dir=path.parent, prefix=".", suffix=".tmp")
     try:
@@ -92,6 +93,7 @@ def replace_file(path: Path, data: bytes | None) -> None:
             handle.flush()
             os.fsync(handle.fileno())
         Path(temporary).replace(path)
+        fsync_dir(path.parent)
     except BaseException:
         Path(temporary).unlink(missing_ok=True)
         raise
@@ -117,9 +119,15 @@ def _decode(raw: bytes) -> Batch:
     def data(value: str | None) -> bytes | None:
         return None if value is None else base64.b64decode(value, validate=True)
 
+    def after(value: str | None) -> bytes:
+        if value is None:  # a null after image would make the batch delete a decision file
+            msg = "a decision file's after image is null"
+            raise ValueError(msg)
+        return base64.b64decode(value, validate=True)
+
     try:
         record = json.loads(raw)
-        files = tuple((f["path"], data(f["before"]), data(f["after"])) for f in record["files"])
+        files = tuple((f["path"], data(f["before"]), after(f["after"])) for f in record["files"])
         return Batch(
             str(record["generation"]),
             str(record["project"]),
@@ -202,13 +210,15 @@ def stamp(shared: DataRepo) -> tuple[bytes | None, bytes | None]:
 
 
 def complete(shared: DataRepo, generation: str) -> None:
-    """Record *generation* as completed for good, then clear the journal if it is still this batch's."""
+    """Record *generation* as completed for good, then clear the journal if it is still this batch's.
+
+    A journal that cannot be read is refused before the completed list changes.
+    """
     admin = _admin(shared)
     with _locked(shared):
+        raw = _read(admin / JOURNAL)
+        journal = None if raw is None else _decode(raw)
         listed = _generations(_read(admin / COMPLETED)) | {generation}
         replace_file(admin / COMPLETED, json.dumps(sorted(listed), indent=1).encode("utf-8"))
-        try:
-            if _decode((admin / JOURNAL).read_bytes()).generation == generation:
-                (admin / JOURNAL).unlink()
-        except FileNotFoundError:
-            pass
+        if journal is not None and journal.generation == generation:
+            replace_file(admin / JOURNAL, None)

@@ -270,9 +270,17 @@ class DataRepo:
         return self._settle(done, "git rebase failed", until)
 
     def rebasing(self, until: float | None = None) -> bool:
-        """Whether Git has a rebase in progress in this checkout, whoever started it; never aborted here."""
+        """Whether Git has a rebase in progress in this checkout, whoever started it; never aborted here.
+
+        Raises `DataRepoError` when Git cannot name its admin directory: that is unknown, never "no rebase".
+        """
         until = time.monotonic() + SAVE_SECONDS if until is None else until
-        admin = Path(_git(self.root, "rev-parse", "--absolute-git-dir", until=until).stdout.strip() or self.root)
+        probe = _git(self.root, "rev-parse", "--absolute-git-dir", until=until)
+        if probe.returncode or not probe.stdout.strip():
+            why = probe.stderr.strip()[:200] or "git named no git directory"
+            msg = f"cannot tell whether a rebase is in progress in {self.root}: {why}"
+            raise DataRepoError(msg)
+        admin = Path(probe.stdout.strip())
         return any((admin / d).exists() for d in ("rebase-merge", "rebase-apply"))
 
     def _settle(self, done: subprocess.CompletedProcess[str], failed: str, until: float) -> str:
@@ -280,7 +288,11 @@ class DataRepo:
         if done.returncode == 0:
             return ""
         why = done.stderr.strip()[:200] or failed
-        if self.rebasing(until):
+        try:
+            rebasing = self.rebasing(until)
+        except DataRepoError as exc:
+            return f"{why}; {exc}, so it was left as it is for the owner to check"
+        if rebasing:
             return f"{why}; a rebase is in progress in {self.root} and was left as it is for the owner to resolve"
         return why
 

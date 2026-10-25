@@ -12,11 +12,14 @@ import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from owlbear_decisions.snapshot import CONFLICT
+from owlbear_delivery_next.local_system import storage_io
 from owlbear_delivery_next.local_system.data_repo import SAVE_SECONDS, DataRepoError
 from owlbear_delivery_next.state_store import decision_batch, decision_store, decision_sync, decision_transaction
 from owlbear_delivery_next.state_store.decision_store import RECOVER, DecisionsUnavailable
 
 if TYPE_CHECKING:
+    from owlbear_decisions import Entry, Finding
     from owlbear_delivery_next.local_system.data_repo import DataRepo
 
 
@@ -65,12 +68,21 @@ def _at_head(shared: DataRepo, batch: decision_batch.Batch) -> None:
 
 
 def _preflight(root: DataRepo, batch: decision_batch.Batch) -> None:
-    """Refuse before any write unless every file still holds its before or its after image, as a plain file."""
+    """Refuse before any write unless every file still holds its before or its after image, under plain folders."""
     for rel, before, after in batch.files:
         path = root.root / rel
         if path.is_symlink():
             msg = f"{rel} is a symlink, so batch {batch.generation} is not changed; resolve it by hand"
             raise DecisionsUnavailable(msg, RECOVER)
+        for folder in path.parents:
+            if folder == root.root:
+                break
+            if folder.is_symlink() or (folder.exists() and not folder.is_dir()):
+                msg = (
+                    f"{rel} lies under {folder.name}, which is not a plain folder; "
+                    f"batch {batch.generation} is not changed"
+                )
+                raise DecisionsUnavailable(msg, RECOVER)
         current = path.read_bytes() if path.exists() else None
         if current not in (before, after):
             msg = f"{rel} was edited since batch {batch.generation} began, so nothing is changed; resolve it by hand"
@@ -91,16 +103,15 @@ def finish(shared: DataRepo, generation: str) -> Recovery:
             _at_head(root, batch)
             _preflight(root, batch)
             for rel, _, after in batch.files:
+                storage_io.make_dirs((root.root / rel).parent)
                 decision_batch.replace_file(root.root / rel, after)
             _validate(root, batch)
             paths = [root.root / rel for rel, _, _ in batch.files]
             sent = decision_sync.publish(root, paths, batch.message, time.monotonic() + SAVE_SECONDS)
-            if sent.uncommitted or sent.stale or sent.ambiguous:
-                return Recovery(
-                    generation=generation,
-                    done=False,
-                    notice=f"not published, so it stays: {sent.notice[:300]}",
-                )
+            landed = decision_transaction.landed(root, batch.head, batch.files)
+            if sent.uncommitted or sent.stale or sent.ambiguous or not landed:
+                why = sent.notice[:300] or "Git does not hold the batch as written"
+                return Recovery(generation=generation, done=False, notice=f"not published, so it stays: {why}")
             decision_batch.complete(root, generation)
             return Recovery(generation=generation, done=True, notice="finished: the batch is published as one commit")
     except (DataRepoError, OSError) as exc:
@@ -110,12 +121,36 @@ def finish(shared: DataRepo, generation: str) -> Recovery:
 def _validate(root: DataRepo, batch: decision_batch.Batch) -> None:
     seen = decision_store.files(root, batch.project)
     decision_store.usable(seen, batch.project)
-    _, findings = decision_store.whole(root)
+    by_id, findings = decision_store.whole(root)
     involved = [f for f in findings if set(f.involves) & set(batch.ids)]
-    if involved:
+    if involved and not _rivals_flagged(by_id, findings, batch.ids):
         named = "; ".join(f"{f.path}: {f.message}" for f in involved[:3])
         msg = f"the interrupted batch {batch.generation} does not validate, so it is not published: {named}"[:600]
         raise DecisionsUnavailable(msg, RECOVER)
+
+
+def _rivals_flagged(by_id: dict[str, Entry], findings: list[Finding], ids: tuple[str, ...]) -> bool:
+    """Whether a flag batch flagged every rival its findings touch, leaving only the expected two-successors findings.
+
+    Every decision of the batch must be flagged `conflict`; each finding touched must be a two-successors finding; and a
+    target may keep one unflagged successor (the decision that was saved), any other successor being flagged already.
+    """
+    def flagged(decision_id: str) -> bool:
+        entry = by_id.get(decision_id)
+        return entry is not None and entry.decision.conflict
+
+    if not ids or not all(flagged(i) for i in ids):
+        return False
+    touched = [f for f in findings if set(f.involves) & set(ids)]
+    targets = {f.involves[-1] for f in touched}
+    named = [f for f in findings if set(f.involves) & (set(ids) | targets)]
+    if any(f.rule != CONFLICT for f in named):
+        return False
+    unflagged: dict[str, set[str]] = {}
+    for f in named:
+        if not flagged(f.involves[0]):
+            unflagged.setdefault(f.involves[-1], set()).add(f.involves[0])
+    return all(len(rivals) <= 1 for rivals in unflagged.values())
 
 
 def abandon(shared: DataRepo, generation: str) -> Recovery:
