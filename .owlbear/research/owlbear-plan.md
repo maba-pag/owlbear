@@ -270,6 +270,23 @@ tracking or staged-diff probes and stops before acknowledging a failed commit.
 Pending-status failures are reported instead of reading as fully published;
 unchanged saves still retry prior commits without consuming unrelated staging.
 
+Profile provenance (#615) binds confirmed intent to the complete observation,
+including its state and value, rather than an evidence label. Push permission,
+hooks and install facts remain in each clone's local overlay; repeated reads
+cannot borrow another clone's capabilities. Legacy facts are observed once,
+publication failures keep local progress without file/index undo, and new Changes
+use the current target while existing Changes retain their stored target.
+Confirmation retains the raw workflow digest without nesting its evidence label,
+so owner-selected CI checks still govern the same workflows. A returned publication
+failure notice leaves detection incomplete and retryable, just like a raised failure.
+Profile pairs use their writer lock; detection preserves newer local edits and
+clears per key, retains unchanged fresh capabilities, and retries before acknowledging
+a raced snapshot. Explicit install commands for undetected packages bind to the same
+absence observation on confirmation and refresh.
+Readers take the same pair lock, with an internal unlocked reader for the guarded
+save, so neither shared nor unshared reads combine halves across saves. A missing
+private profile remains a read-only absence; lock failures are reported.
+
 Brief approval (#617) rejects blank required decision wording and refuses the
 whole approval if any current ID-bearing project rule cannot be built or saved.
 It never publishes a valid subset or acknowledges project rules without shared

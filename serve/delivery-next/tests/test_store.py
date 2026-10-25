@@ -177,10 +177,10 @@ def test_profile_has_its_own_format_gate(store, monkeypatch):
     assert store.read_profile() is None
     store.write_profile(Profile(version=2, entries={"rules": ProfileEntry(state="unknown", evidence="HTTP 403")}))
     assert store.read_profile().entries["rules"].state == "unknown"
-    monkeypatch.setattr(store_mod, "PROFILE_FORMAT", PROFILE_FORMAT + 1)
+    monkeypatch.setattr(store_mod.profile_share, "PROFILE_FORMAT", PROFILE_FORMAT + 1)
     with pytest.raises(StoreError, match="cannot be migrated"):
         store.read_profile()
-    monkeypatch.setattr(store_mod, "PROFILE_FORMAT", PROFILE_FORMAT - 1)
+    monkeypatch.setattr(store_mod.profile_share, "PROFILE_FORMAT", PROFILE_FORMAT - 1)
     with pytest.raises(FormatTooNewError):
         store.read_profile()
 
