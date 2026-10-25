@@ -239,3 +239,102 @@ def test_an_owner_edit_during_a_retained_recovery_publish_cannot_complete(shared
     assert done is None or not done.done
     assert decision_batch.pending(shared).generation == pending.generation
     assert (root / lost_before_commit[0][0].relative_to(root)).read_bytes() == b"owner edit during recovery\n"
+
+
+def recorded_git(monkeypatch) -> list[str]:
+    """Every Git subcommand the public writers run from here on."""
+    commands: list[str] = []
+    real_git = DataRepo.git
+
+    def recording(self, *args, **kwargs):
+        commands.append(args[0] if args else "")
+        return real_git(self, *args, **kwargs)
+
+    monkeypatch.setattr(DataRepo, "git", recording)
+    return commands
+
+
+@pytest.mark.usefixtures("lost_before_commit")
+def test_an_archive_refuses_an_interrupted_uncommitted_batch_before_any_remote_work(
+    shared_repo, tmp_path, monkeypatch
+) -> None:
+    root, remote = shared_repo
+    owner_commit(root, "owner words\n")
+    shared = DataRepo(root)
+    save(shared, make(), expected_revision=None, message="decisions: notes")
+    pending = decision_batch.pending(shared)
+    assert pending is not None
+    advance_remote(tmp_path, remote, "elsewhere.txt")
+    head, before, remote_head = git(root, "rev-parse", "HEAD"), tree_bytes(root), git(remote, "rev-parse", "main")
+    commands = recorded_git(monkeypatch)
+
+    with pytest.raises(DecisionsUnavailable, match="finished or abandoned"):
+        decision_archive.archive(root, PROJECT, finished(), STEM, "merged")
+
+    assert not {"fetch", "push", "pull", "rebase"} & set(commands)
+    assert git(root, "rev-parse", "HEAD") == head
+    assert git(remote, "rev-parse", "main") == remote_head
+    assert tree_bytes(root) == before
+    assert decision_batch.pending(shared).generation == pending.generation
+
+
+@pytest.mark.usefixtures("lost_before_commit")
+def test_a_record_refuses_an_interrupted_uncommitted_batch_before_any_remote_work(
+    shared_repo, tmp_path, monkeypatch
+) -> None:
+    root, remote = shared_repo
+    owner_commit(root, "owner words\n")
+    shared = DataRepo(root)
+    save(shared, make(), expected_revision=None, message="decisions: notes")
+    pending = decision_batch.pending(shared)
+    assert pending is not None
+    advance_remote(tmp_path, remote, "elsewhere.txt")
+    head, before, remote_head = git(root, "rev-parse", "HEAD"), tree_bytes(root), git(remote, "rev-parse", "main")
+    commands = recorded_git(monkeypatch)
+
+    notice = change_record.save(Store(root), finished(), MERGED, AT)
+
+    assert "finished or abandoned" in notice
+    assert not {"fetch", "push", "pull", "rebase"} & set(commands)
+    assert git(root, "rev-parse", "HEAD") == head
+    assert git(remote, "rev-parse", "main") == remote_head
+    assert tree_bytes(root) == before
+    assert decision_batch.pending(shared).generation == pending.generation
+
+
+def test_an_interrupted_committed_batch_is_not_pushed_by_a_new_writer_and_the_owner_finishes_it(
+    shared_repo, tmp_path, monkeypatch
+) -> None:
+    root, remote = shared_repo
+    owner_commit(root, "owner words\n")
+    shared = DataRepo(root)
+    real_publish, origin = decision_sync.publish, git(root, "remote", "get-url", "origin")
+    gone = tmp_path / "gone"
+
+    def publish_without_push(shared_, paths, message, until, head):
+        git(root, "remote", "set-url", "origin", str(gone))  # the commit lands; its push cannot reach the remote
+        try:
+            real_publish(shared_, paths, message, until, head)
+        finally:
+            git(root, "remote", "set-url", "origin", origin)
+        return decision_sync.Sent(notice="acknowledgement lost after the commit", ambiguous=True)
+
+    monkeypatch.setattr(decision_sync, "publish", publish_without_push)
+    save(shared, make(), expected_revision=None, message="decisions: notes")
+    monkeypatch.setattr(decision_sync, "publish", real_publish)
+    pending = decision_batch.pending(shared)
+    assert pending is not None
+    assert git(root, "rev-parse", "HEAD") != git(remote, "rev-parse", "main")  # committed, not published
+    advance_remote(tmp_path, remote, "elsewhere.txt")
+    remote_head = git(remote, "rev-parse", "main")
+    commands = recorded_git(monkeypatch)
+
+    with pytest.raises(DecisionsUnavailable, match="finished or abandoned"):
+        decision_archive.archive(root, PROJECT, finished(), STEM, "merged")
+
+    assert "push" not in commands
+    assert git(remote, "rev-parse", "main") == remote_head
+    monkeypatch.undo()  # the owner's own Finish, outside the new writer, completes the matching generation
+    done = decision_recovery.finish(shared, pending.generation)
+    assert done.done
+    assert decision_batch.pending(shared) is None

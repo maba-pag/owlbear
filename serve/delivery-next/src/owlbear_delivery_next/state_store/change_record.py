@@ -72,6 +72,7 @@ def save(
     message = f"changes: {store.name}: {c.slug} {outcome}"
     try:
         with store.shared.locked():
+            decision_transaction.guard(store.shared)
             head, behind = decision_sync.prepare(store.shared, time.monotonic() + SAVE_SECONDS)
             if not head:
                 return f"the record of {c.slug} was not saved: {behind}"[:300]

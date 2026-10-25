@@ -28,6 +28,15 @@ class Step(NamedTuple):
     refused: bool = False
 
 
+def guard(shared: DataRepo) -> None:
+    """Refuse a new write while an interrupted batch is pending; the caller holds the lock.
+
+    Producers call this before `decision_sync.prepare`, so a refused write never fetches, rebases or pushes. Owner
+    Finish and Abandon do not come through here: they recover the pending generation.
+    """
+    store._interrupted(shared)  # noqa: SLF001 - same package; store helpers stay private to it
+
+
 def transaction(  # noqa: PLR0913, PLR0917 - the head the caller proved travels with its project, files and step
     shared: DataRepo,
     project: str,

@@ -77,6 +77,7 @@ def archive(root: Path, project: str, c: Change, stem: str, outcome: str) -> tup
     """
     shared = DataRepo(root)
     with shared.locked():
+        decision_transaction.guard(shared)
         head, behind = decision_sync.prepare(shared, time.monotonic() + SAVE_SECONDS)
         if not head:
             return [], [behind]
