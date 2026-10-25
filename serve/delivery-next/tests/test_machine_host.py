@@ -18,14 +18,15 @@ import pytest
 import uvicorn
 from fastapi.testclient import TestClient
 
+from owlbear_delivery_next.change_contracts.chat_contract import HostFound
 from owlbear_delivery_next.change_contracts.decision_records import DecisionBaseline
 from owlbear_delivery_next.change_contracts.models import Change, Environment, Step, StepKind
-from owlbear_delivery_next.commands import chat_client, mcp_server, setup
+from owlbear_delivery_next.commands import chat_client, cli, mcp_server, replay_client, setup
 from owlbear_delivery_next.local_system import codebase
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.machine_host import app, project, registry, serve
 from owlbear_delivery_next.machine_host.machine import Machine
-from owlbear_delivery_next.pack_runs import pack_job, pack_run
+from owlbear_delivery_next.pack_runs import pack_job, pack_replay, pack_run
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import ENDING, Host, HostRecord, RunnerRecord, running
 from owlbear_delivery_next.state_store import decision_store, project_home
@@ -303,6 +304,63 @@ def test_an_unreadable_pack_record_of_an_unloaded_project_is_held_not_taken_for_
     machine.load_all()
     assert machine.slots.counts(bad.id)[2] == 1
     assert machine.slots.take(good.id, "probe", 1, 1) == 0
+
+
+class _LoopbackToApp:
+    """The CLI's local transport, answered by the machine app's own handler instead of a socket."""
+
+    def __init__(self, client: TestClient) -> None:
+        self.client = client
+
+    def open(self, request, timeout):  # noqa: ARG002 - urllib's opener signature
+        out = self.client.post(urllib.parse.urlsplit(request.full_url).path)
+        if out.status_code >= 400:  # noqa: PLR2004 - HTTP status
+            raise urllib.error.HTTPError(request.full_url, out.status_code, out.reason_phrase, out.headers, io.BytesIO(out.content))
+        return io.BytesIO(out.content)
+
+
+def test_a_manual_replay_of_another_project_waits_for_a_failed_projects_legacy_pack_even_with_a_free_slot(
+    tmp_path, http, machine, monkeypatch, capsys
+):
+    """Route and CLI: the ledger's uncertain pack refuses before any SDK, although a machine slot is free."""
+    monkeypatch.setattr(pack_replay, "sdk_run", lambda _cfg: pytest.fail("no SDK session starts"))
+    bad, folder = legacy_pack_folder(tmp_path, "bad")
+    good = registry.register(clone(tmp_path / "good"))
+    updater = legacy_pack_record(folder, "running")
+    machine.slots.total = lambda: 2
+    machine.load_all()
+    assert (machine.projects[bad.id].state, machine.projects[good.id].state) == ("failed", "loaded")
+    assert machine.slots.counts(bad.id)[2] == 1 and machine.slots.counts(good.id)[1] == 2  # one slot still free
+
+    refused = http.post(f"/p/{good.id}/api/next/design-pack/replay")
+    assert refused.status_code == 409
+    reason = "an earlier design pack session is unproven; recover it on the Maintenance page first"
+    assert refused.json()["detail"] == reason
+
+    monkeypatch.setattr(replay_client.project_home, "clone_id", lambda _dir: good.id)
+    record = HostFound(url="http://127.0.0.1:9/", token="t", pid=1, started_at=datetime.now(UTC), project=good.id)  # noqa: S106
+    monkeypatch.setattr(replay_client.host, "running_at", lambda _root, _model: record)
+    monkeypatch.setattr(replay_client, "_LOCAL", _LoopbackToApp(TestClient(app.create(machine), base_url="http://127.0.0.1", headers=AUTH)))
+    assert cli.main(["--repo", str(good.path), "design-pack", "--replay"]) == 1
+    assert capsys.readouterr().out.splitlines()[-1] == reason  # the host's own log lines come first
+
+    assert machine.slots.counts(bad.id)[2] == 1  # the reservation stays
+    assert updater.is_dir() and (folder / pack_job.FILE).is_file()  # the workspace and record stay
+
+
+def test_a_manual_replay_of_a_project_whose_legacy_pack_finished_is_not_refused_by_the_ledger(tmp_path, http, machine, monkeypatch):
+    """Control: with the failed project's pack finished, the same replay passes the guard and reaches its own checks."""
+    monkeypatch.setattr(pack_replay, "sdk_run", lambda _cfg: pytest.fail("no SDK session starts"))
+    bad, folder = legacy_pack_folder(tmp_path, "bad")
+    good = registry.register(clone(tmp_path / "good"))
+    legacy_pack_record(folder, "up-to-date", updater=False)
+    machine.slots.total = lambda: 2
+    machine.load_all()
+    assert machine.slots.counts(bad.id)[2] == 0
+
+    reached = http.post(f"/p/{good.id}/api/next/design-pack/replay")
+    assert reached.status_code == 422  # pack_replay's own check: no shared repository, before any SDK session
+    assert "shared repository" in reached.json()["detail"]
 
 
 def test_removal_is_refused_while_a_step_runs_and_then_stops_the_project_before_forgetting_it(tmp_path, http, machine):
