@@ -31,6 +31,7 @@ K = StepKind
 
 
 class Host:
+    maintenance = None
     wake = type("W", (), {"set": lambda _self: None})()
     record = None
 

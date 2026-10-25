@@ -20,6 +20,7 @@ from owlbear_delivery_next.change_contracts.models import ErrorKind, StepKind
 from owlbear_delivery_next.design_packs import design_pack
 from owlbear_delivery_next.local_system.slots import PACK
 from owlbear_delivery_next.pack_runs import pack_job, pack_replay, pack_run
+from owlbear_delivery_next.runtimes import maintained
 from owlbear_delivery_next.state_store import project_home
 from owlbear_delivery_next.state_store.store import StoreError
 from owlbear_delivery_next.workflow_steps import check, pick
@@ -201,7 +202,9 @@ def pack_live(host: Host | None, live: Live, note: Callable[[str], None]) -> Liv
             if host is None or host.maintenance is None:
                 msg = "the machine's maintenance ownership is not bound; the design pack's sessions cannot start"
                 raise design_pack.PackError(msg)
-            return host.maintenance.run(cfg, work, project=project(host), slot=admit(host, note), kind="pack")
+            return maintained.run_owned(
+                host.maintenance, cfg, work, project=project(host), slot=admit(host, note), kind="pack"
+            )
 
         return run
 

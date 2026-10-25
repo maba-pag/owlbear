@@ -8,14 +8,12 @@ import os
 import shutil
 import tempfile
 import uuid
-from dataclasses import replace
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, Protocol
 
 import psutil
-from pydantic import Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from owlbear_delivery_next.change_contracts.models import Record
 from owlbear_delivery_next.local_system import local_home, processes
 from owlbear_delivery_next.local_system.storage_io import atomic_write, open_lock
 
@@ -24,12 +22,24 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from owlbear_delivery_next.local_system.slots import Slots
-    from owlbear_delivery_next.runtimes.sdk_adapter import Session
-    from owlbear_delivery_next.runtimes.session_result import Run
 
 FILE = "maintenance-sessions.json"
 HELD = frozenset({"running", "held"})
 type Kind = Literal["pack", "curation", "replay"]
+
+
+class Record(BaseModel):
+    """Strict base: unknown fields are a format error, not silently dropped."""
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class Outcome(Protocol):
+    """What a finished SDK run reports; a runtimes Run satisfies it without this layer importing it."""
+
+    pids: processes.Pids
+    termination: processes.Termination | None
+    runtime_pid: int | None
 
 
 class MaintenanceError(RuntimeError):
@@ -265,42 +275,6 @@ class Maintenance:
             self._record(lease, pids)
             self._save(ledger)
 
-    def run(
-        self,
-        cfg: Session,
-        execute: Callable[[Session], Run],
-        *,
-        project: str,
-        slot: str,
-        kind: Kind,
-    ) -> Run:
-        """Enter SDK only after admission is durable; keep its lease after every exception or uncertain result."""
-        try:
-            ident = self.begin(project, slot, kind, str(cfg.worktree))
-        except BaseException:
-            self.slots.give(project, slot)  # SDK entry has not happened
-            raise
-
-        def event(found: dict[str, object]) -> None:
-            if found.get("event") == "pids":
-                raw = found.get("pids")
-                Lease.identities(raw)
-                if not isinstance(raw, dict):
-                    raise MaintenanceError("the SDK returned invalid process identities")  # noqa: TRY003, EM101
-                self.record(ident, {int(pid): born for pid, born in raw.items()})
-            cfg.journal.event(found)
-
-        try:
-            done = execute(replace(cfg, journal=replace(cfg.journal, event=event)))
-        except BaseException as primary:
-            try:
-                self.failed(ident, primary)
-            except BaseException as cleanup:  # noqa: BLE001 - recorded for any exit, then re-raised
-                primary.add_note(f"maintenance ownership also failed to persist ({type(cleanup).__name__})")
-            raise
-        self.finished(ident, done)
-        return done
-
     @contextlib.contextmanager
     def workspace(self, prefix: str) -> Iterator[Path]:
         """Remove a newly created workspace only if no held or recovered lease retains it."""
@@ -321,7 +295,7 @@ class Maintenance:
             lease.reason = f"session ended without termination proof ({type(error).__name__})"
             self._save(ledger)
 
-    def finished(self, ident: str, run: Run) -> None:
+    def finished(self, ident: str, run: Outcome) -> None:
         """Persist complete termination evidence before releasing a reservation; unknown work remains held."""
         with self._locked() as ledger:
             lease = self._lease(ledger, ident)

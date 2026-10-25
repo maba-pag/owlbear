@@ -120,6 +120,7 @@ def asked(clone: Path) -> Change:
 
 @dataclass
 class Host:
+    maintenance = None
     runs: bool = False
     wake = type("W", (), {"set": lambda _self: None})()
     record = None

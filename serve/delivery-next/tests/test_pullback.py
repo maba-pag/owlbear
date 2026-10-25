@@ -324,6 +324,7 @@ def test_the_pull_action_is_queued_by_the_api_and_rerun_by_the_host(repos):
     class Fake:
         wake = type("W", (), {"set": lambda _self: None})()
         record = None
+        maintenance = None
 
         def activity(self, _slug):
             return Activity(host_up=True)

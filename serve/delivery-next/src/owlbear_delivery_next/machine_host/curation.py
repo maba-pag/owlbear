@@ -27,7 +27,7 @@ from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.local_system import data_repo, local_home, maintenance
 from owlbear_delivery_next.local_system.storage_io import atomic_write
 from owlbear_delivery_next.machine_host import machine_settings, registry
-from owlbear_delivery_next.runtimes import sdk_adapter
+from owlbear_delivery_next.runtimes import maintained, sdk_adapter
 from owlbear_delivery_next.settings import roles
 from owlbear_delivery_next.settings.config import Settings, SettingsUnset
 from owlbear_delivery_next.workflow_steps import lookup
@@ -369,7 +369,7 @@ class Curation:
                 subagents=roles.subagents(settings, LABEL),
                 role=tools.CURATOR, job=LABEL, journal=sdk_adapter.Journal(event=self._pids), memory=store,
             )  # fmt: skip
-            done = self.maintenance.run(cfg, self.run, project=SLOT, slot=key, kind="curation")
+            done = maintained.run_owned(self.maintenance, cfg, self.run, project=SLOT, slot=key, kind="curation")
         t = done.termination
         with self.lock:
             watched = dict.fromkeys((*t.survivors, *t.unknown)) | done.pids if t is not None and not t.confirmed else {}

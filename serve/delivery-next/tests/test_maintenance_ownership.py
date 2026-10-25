@@ -9,7 +9,7 @@ from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.local_system import maintenance, processes
 from owlbear_delivery_next.local_system.slots import Slots
-from owlbear_delivery_next.runtimes import sdk_adapter
+from owlbear_delivery_next.runtimes import maintained, sdk_adapter
 from owlbear_delivery_next.runtimes.session_result import Run
 
 AT = datetime(2026, 10, 25, tzinfo=UTC)
@@ -123,9 +123,9 @@ def test_admitted_sdk_entry_is_durable_and_unknown_work_keeps_its_workspace(fail
         assert owner.slots.take("p", "pack:one", 1, 1) == 1
         if fails:
             with pytest.raises(RuntimeError, match="synthetic runtime failure"):
-                owner.run(cfg, execute, project="p", slot="pack:one", kind="pack")
+                maintained.run_owned(owner, cfg, execute, project="p", slot="pack:one", kind="pack")
         else:
-            owner.run(cfg, execute, project="p", slot="pack:one", kind="pack")
+            maintained.run_owned(owner, cfg, execute, project="p", slot="pack:one", kind="pack")
         assert len(events) == 2
     assert root.exists() is fails
     assert owner.slots.counts("p") == ((1, 1, 1) if fails else (0, 1, 0))
