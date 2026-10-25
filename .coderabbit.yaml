@@ -1,5 +1,6 @@
 # yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
 # Inherits the organisation's CodeRabbit settings; only owlbear's specifics live here (D-01M5TN7BEVN9YWFEYCHH9GJZG0).
+---
 inheritance: true
 reviews:
   auto_apply_labels: false  # PR labels cut releases
