@@ -15,7 +15,7 @@ from owlbear_delivery_next.change_flow import loop
 from owlbear_delivery_next.change_flow.loop import StepResult
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.local_system.data_repo import DataRepo
-from owlbear_delivery_next.project_host import api
+from owlbear_delivery_next.project_host import api, config_routes
 from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.settings import config, profile
 from owlbear_delivery_next.settings.config import Prefs
@@ -223,3 +223,39 @@ def test_a_refused_completion_is_published_by_the_settings_settlement(shared_rep
     fresh, got = clone_profile(remote, tmp_path)
     assert got.prefs_import == "done"
     assert fresh.read_config().prefs.ci_poll_seconds == 45
+
+
+# Finding 4: the owner's config deletion is published before a retried completion marker
+
+
+def test_a_deleted_config_is_removed_before_the_automatic_retry_marks_done(shared_repo, tmp_path, monkeypatch):
+    root, remote = shared_repo
+    store = Store(tmp_path / "store", DataRepo(root), "shop-site")
+    store.write_profile(Profile(entries={profile.POLL: confirmed("45")}))
+    refuse_completion_once(monkeypatch, store)
+    with pytest.raises(StoreError):
+        prefs_import.run(store)
+    store.config_path.unlink()  # the owner deletes the project config after the refused completion
+
+    prefs_import.run(store)  # the automatic retry commits the removal, then publishes done
+    fresh, got = clone_profile(remote, tmp_path)
+    assert got.prefs_import == "done"
+    assert not fresh.config_path.exists()
+    assert fresh.read_config().prefs is None
+    assert not profile_share.unpublished(store)
+
+
+def test_a_deleted_config_stays_absent_through_the_settings_retry(shared_repo, tmp_path, monkeypatch):
+    root, remote = shared_repo
+    store = Store(tmp_path / "store", DataRepo(root), "shop-site")
+    store.write_profile(Profile(entries={profile.POLL: confirmed("45")}))
+    refuse_completion_once(monkeypatch, store)
+    with pytest.raises(StoreError):
+        prefs_import.run(store)
+    store.config_path.unlink()
+
+    config_routes._settle_prefs_import(store, reviewed=False)  # noqa: SLF001 - the Settings save's own settlement, no page
+    fresh, got = clone_profile(remote, tmp_path)
+    assert got.prefs_import == "done"
+    assert not fresh.config_path.exists()
+    assert not store.config_path.exists()

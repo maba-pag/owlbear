@@ -12,6 +12,7 @@ from __future__ import annotations
 import hashlib
 from typing import TYPE_CHECKING
 
+from owlbear_delivery_next.local_system.data_repo import DataRepoError
 from owlbear_delivery_next.settings.prefs_import import plan
 from owlbear_delivery_next.state_store import profile_share
 
@@ -54,14 +55,26 @@ def _fill(store: Store, prof: Profile, basis: str, *, resumed: bool) -> None:
         raise StoreError(msg)
 
 
+def _publish_config(store: Store) -> str:
+    """Publish the project config as it is now: an edit when present, else its removal, never a rewrite."""
+    if store.config_path.exists():
+        return store.update_config(lambda cur: cur, "legacy preferences carried")
+    if not store.shared:
+        return ""
+    try:
+        with store.shared.locked():
+            return store.shared.publish(store.config_path, f"settings: {store.name}: project layer removed")
+    except DataRepoError as exc:
+        return str(exc)
+
+
 def republish(store: Store) -> None:
     """Publish a completion that a refused publication left local: the current config first, then the marker."""
     from owlbear_delivery_next.state_store.store import StoreError  # noqa: PLC0415 - the store imports its helpers
 
     if not profile_share.unpublished(store):
         return
-    notice = store.update_config(lambda cur: cur, "legacy preferences carried") if store.config_path.exists() else ""
-    notice = notice or store.retry_prefs_import()
+    notice = _publish_config(store) or store.retry_prefs_import()
     if notice:
         msg = f"the legacy import completion was not published: {notice}"
         raise StoreError(msg)

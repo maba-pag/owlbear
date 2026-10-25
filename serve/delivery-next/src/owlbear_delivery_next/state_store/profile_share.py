@@ -43,6 +43,9 @@ def path(store: Store) -> Path:
 def write(store: Store, prof: Profile) -> str:
     """Write the profile; in the shared folder also commit and push it: what the owner should know, else nothing."""
     with _writer(store):
+        current = _read_unlocked(store)
+        if current is not None:  # only mark() moves the legacy import marker; a snapshot never rewinds it
+            prof = prof.model_copy(update={"prefs_import": current.prefs_import, "prefs_basis": current.prefs_basis})
         _keep_local(store, prof)
         return _publish(store, store.shared, prof, f"settings: {store.name}: project profile")
 
