@@ -285,7 +285,10 @@ may be replaced without a fresh reason. Wording provenance follows the
 producer-set source, not rationale text: a supplied frame in a proposal or
 replacement reason stays a note, promotion of an ordinary answer is framed with
 its whole statement, and an archived replacement with a literal ellipsis is
-read as canonical.
+read as canonical. A readable legacy managed archive whose statement ends in a
+literal ellipsis is framed before any note is appended, even when its whole
+wording equals the canonical statement, so promotion and origin correction keep
+one unambiguous rule.
 
 Shared-settings publication (#622) distinguishes a missing path from failed Git
 tracking or staged-diff probes and stops before acknowledging a failed commit.

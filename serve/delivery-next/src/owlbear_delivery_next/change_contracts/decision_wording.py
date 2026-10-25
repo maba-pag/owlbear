@@ -85,7 +85,14 @@ def framed(decision: Decision, *, promoting: bool = False) -> str:
     if promoting and not _managed(decision):
         return rationale(decision.statement, decision.rationale, force=True)
     text = whole(decision)
-    return rationale(text, explanation(decision)) if text != decision.statement else decision.rationale
+    if text == decision.statement and not _unframed_terminal(decision):
+        return decision.rationale
+    return rationale(text, explanation(decision), force=True)
+
+
+def _unframed_terminal(decision: Decision) -> bool:
+    """A managed archive ending in a literal ellipsis must be framed before any note can follow it."""
+    return _managed(decision) and decision.statement.endswith("\u2026") and not decision.rationale.startswith(FRAME)
 
 
 def problem(decision: Decision) -> str:

@@ -462,3 +462,44 @@ def test_an_archived_replacement_with_a_literal_ellipsis_is_usable_and_promotes_
     assert decision_wording.whole(widened) == CANON
     assert decision_wording.problem(widened) == ""
     assert "Whole wording: kept it." in decision_wording.explanation(widened)
+
+
+LEGACY_NOTE = "From Change notes (approved).\n\nWhy it changed: Apply globally"
+
+
+def legacy_short_ellipsis():
+    """An archive from before framing: a literal terminal ellipsis, canonical wording, and no Whole wording note."""
+    return archived(CANON).model_copy(
+        update={"rationale": LEGACY_NOTE, "origin": Origin.DECIDED, "read_back": AT.date().isoformat()}
+    )
+
+
+def test_a_legacy_managed_ellipsis_is_framed_before_any_note_even_when_its_whole_wording_is_canonical():
+    rule = legacy_short_ellipsis()
+    assert decision_wording.framed(rule).startswith(decision_wording.FRAME)
+    survivor = rule.model_copy(update={"rationale": decision_wording.framed(rule)})
+    assert decision_wording.whole(parse(serialize(survivor))) == CANON
+    assert decision_wording.explanation(survivor) == LEGACY_NOTE
+
+
+def test_an_ordinary_answer_ending_in_an_ellipsis_keeps_its_raw_rationale_until_promotion():
+    ordinary = legacy_short_ellipsis().model_copy(update={"source": "chat", "rationale": "A plain reason."})
+    assert decision_wording.framed(ordinary) == "A plain reason."
+
+
+@pytest.mark.parametrize("route", ["promote", "correct-origin"])
+def test_a_legacy_short_ellipsis_archive_stays_canonical_after_a_real_reason_write(picking, route):
+    rule = legacy_short_ellipsis()
+    picking.put(rule)
+    body = {"revision": rule.revision, "reason": "Whole wording: kept it."}
+    if route == "correct-origin":
+        body |= {"origin": "autonomous", "confirmed": True}
+
+    got = picking.http.post(f"/api/next/decisions/{rule.id}/{route}", json=body)
+
+    assert got.status_code == 200, got.text
+    successor = parse(serialize(stored(picking, got.json()["receipts"][0]["id"])))
+    assert decision_wording.whole(successor) == CANON
+    assert decision_wording.problem(successor) == ""
+    assert "Whole wording: kept it." in decision_wording.explanation(successor)
+    assert "Apply globally" in decision_wording.explanation(successor)
