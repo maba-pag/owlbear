@@ -37,16 +37,19 @@ def test_make_dirs_fsyncs_the_parent_of_each_new_folder(tmp_path: Path, monkeypa
     storage_io.make_dirs(tmp_path / "a" / "b")
 
     assert (tmp_path / "a" / "b").is_dir()
-    assert synced == [tmp_path, tmp_path / "a"]
+    assert synced == [tmp_path.parent, tmp_path, tmp_path / "a"]
 
 
-def test_make_dirs_does_nothing_for_an_existing_folder(tmp_path: Path, monkeypatch) -> None:
+def test_make_dirs_creates_nothing_for_an_existing_folder_but_resyncs_its_parent_link(
+    tmp_path: Path, monkeypatch
+) -> None:
     synced: list[Path] = []
     monkeypatch.setattr(storage_io, "fsync_dir", synced.append)
 
     storage_io.make_dirs(tmp_path)
 
-    assert synced == []
+    assert tmp_path.is_dir()
+    assert synced == [tmp_path.parent]
 
 
 def test_replace_file_fsyncs_the_parent_after_rename_and_after_unlink(tmp_path: Path, monkeypatch) -> None:

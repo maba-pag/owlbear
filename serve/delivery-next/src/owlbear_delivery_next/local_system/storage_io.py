@@ -66,10 +66,16 @@ def fsync_dir(folder: Path) -> None:
 
 
 def make_dirs(folder: Path) -> None:
-    """Create *folder* and its missing ancestors, fsyncing each new folder's parent so the new entry is durable."""
+    """Create *folder* and its missing ancestors, fsyncing each new folder's parent so the new entry is durable.
+
+    The deepest existing ancestor's parent link is re-synced before anything is created: an interrupted earlier call
+    may have made that folder without confirming its entry.
+    """
     missing: list[Path] = []
     for candidate in (folder, *folder.parents):
         if candidate.exists():
+            if candidate.parent != candidate:
+                fsync_dir(candidate.parent)
             break
         missing.append(candidate)
     for created in reversed(missing):

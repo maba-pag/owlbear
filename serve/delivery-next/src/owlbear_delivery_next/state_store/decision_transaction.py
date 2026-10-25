@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 from typing import TYPE_CHECKING, NamedTuple
 
-from owlbear_delivery_next.local_system.data_repo import SAVE_SECONDS
+from owlbear_delivery_next.local_system.data_repo import SAVE_SECONDS, DataRepoError
 from owlbear_delivery_next.state_store import decision_batch
 from owlbear_delivery_next.state_store import decision_store as store
 
@@ -79,16 +79,31 @@ def landed(shared: DataRepo, head: str, rows: Sequence[tuple[str, bytes | None, 
     """The one proof that a batch is published.
 
     HEAD descends from *head* and holds each file's after image, and each worktree file is exactly that after image.
-    Finish and every completion path use this same check.
+    One HEAD commit is read for all of it and checked again at the end, so a commit moving mid-proof cannot pass. An
+    active or unknown rebase is never published. Finish and every completion path use this same check.
     """
-    if shared.git("merge-base", "--is-ancestor", head, "HEAD").returncode:
+    try:
+        if shared.rebasing():
+            return False
+    except DataRepoError:
         return False
-    return all(in_head(shared, rel, after) and worktree_holds(shared, rel, after) for rel, _, after in rows)
+    commit = head_commit(shared)
+    if commit is None or shared.git("merge-base", "--is-ancestor", head, commit).returncode:
+        return False
+    if not all(in_head(shared, rel, after, commit) and worktree_holds(shared, rel, after) for rel, _, after in rows):
+        return False
+    return head_commit(shared) == commit
 
 
-def in_head(shared: DataRepo, rel: str, after: bytes) -> bool:
-    """Whether HEAD holds *rel* as the after image."""
-    said = shared.git("show", f"HEAD:{rel}")
+def head_commit(shared: DataRepo) -> str | None:
+    """HEAD's commit, or None when Git cannot name it; a proof reads it once and checks it again last."""
+    said = shared.git("rev-parse", "--verify", "-q", "HEAD")
+    return None if said.returncode or not said.stdout.strip() else said.stdout.strip()
+
+
+def in_head(shared: DataRepo, rel: str, after: bytes, commit: str) -> bool:
+    """Whether *commit* holds *rel* as the after image."""
+    said = shared.git("show", f"{commit}:{rel}")
     return not said.returncode and said.stdout.encode("utf-8") == after
 
 

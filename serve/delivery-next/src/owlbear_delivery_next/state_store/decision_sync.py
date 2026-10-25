@@ -132,6 +132,14 @@ def prepare(shared: DataRepo, until: float) -> tuple[str, str]:
     remote moved on again before HEAD could be proved; nothing may be written then. When the remote is unreachable
     and not known to be ahead, the head is returned unproved: its commit then stays unpublished, as before.
     """
+    try:
+        if shared.rebasing(until):
+            return (
+                "",
+                "a rebase is in progress in the checkout, so nothing was written; the owner finishes or aborts it",
+            )
+    except DataRepoError as exc:  # unknown is not "no rebase": nothing is written
+        return "", f"{exc}, so nothing was written"
     notice = ""
     for _ in range(PREPARE_TRIES):
         notice = catch_up(shared, until)
@@ -142,6 +150,21 @@ def prepare(shared: DataRepo, until: float) -> tuple[str, str]:
     return "", "the remote moved on again before HEAD was proved, so nothing was written; save again"
 
 
+def _ready(shared: DataRepo, until: float) -> tuple[str, Sent | None]:
+    """HEAD to commit on; else why nothing is committed: HEAD is unknown, or a rebase is active or unknown.
+
+    An unknown rebase is not "no rebase", so it leaves the batch interrupted rather than uncommitted.
+    """
+    if (head := _rev(shared, "HEAD", until)) is None:
+        return "", Sent(notice="HEAD is not known, so nothing was committed", ambiguous=True)
+    try:
+        if shared.rebasing(until):
+            return "", Sent(notice="a rebase is in progress, so nothing was committed", uncommitted=True)
+    except DataRepoError as exc:
+        return "", Sent(notice=f"{exc}, so nothing was committed", ambiguous=True)
+    return head, None
+
+
 def publish(shared: DataRepo, paths: list[Path], message: str, until: float, head: str) -> Sent:
     """Commit *paths* alone and push; a rejected push never rebases over a remote change of a decision file here.
 
@@ -150,9 +173,9 @@ def publish(shared: DataRepo, paths: list[Path], message: str, until: float, hea
     failed commit is known only when HEAD did not move; when it moved, the commit is accepted only if it is provably
     this call's own and holds the files as they are, so a lost commit is never guessed from a moved head.
     """
-    before = _rev(shared, "HEAD", until)
-    if before is None:  # nothing is committed unless HEAD is read
-        return Sent(notice="HEAD is not known, so nothing was committed", ambiguous=True)
+    before, busy = _ready(shared, until)
+    if busy is not None:  # nothing is committed unless HEAD is read, and never while a rebase is active or unknown
+        return busy
     rels = {p.relative_to(shared.root).as_posix() for p in paths}
     failed = shared.commit(paths, message, until)
     now = _rev(shared, "HEAD", until)

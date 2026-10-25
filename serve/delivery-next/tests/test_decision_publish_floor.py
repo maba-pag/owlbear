@@ -6,6 +6,7 @@ loss and an owner edit are injected.
 
 from __future__ import annotations
 
+import json
 import subprocess
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
@@ -50,6 +51,10 @@ class Store:
 
 def git(cwd: Path, *args: str) -> str:
     return subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True).stdout.strip()  # noqa: S603, S607
+
+
+def head_blob(cwd: Path, rel_path: str) -> bytes:
+    return subprocess.run(["git", "show", f"HEAD:{rel_path}"], cwd=cwd, check=True, capture_output=True).stdout  # noqa: S603, S607
 
 
 def is_ancestor(root: Path, older: str, newer: str) -> bool:
@@ -302,6 +307,27 @@ def test_a_record_refuses_an_interrupted_uncommitted_batch_before_any_remote_wor
     assert decision_batch.pending(shared).generation == pending.generation
 
 
+@pytest.mark.usefixtures("lost_before_commit")
+def test_a_refused_record_with_no_writes_publishes_nothing(shared_repo, tmp_path, monkeypatch) -> None:
+    root, remote = shared_repo
+    owner_commit(root, "owner words\n")
+    shared = DataRepo(root)
+    save(shared, make(), expected_revision=None, message="decisions: notes")
+    pending = decision_batch.pending(shared)
+    assert pending is not None
+    advance_remote(tmp_path, remote, "elsewhere.txt")
+    head, remote_head = git(root, "rev-parse", "HEAD"), git(remote, "rev-parse", "main")
+    commands = recorded_git(monkeypatch)
+
+    notice = change_record.save(Store(root), finished(), MERGED, AT)
+
+    assert "finished or abandoned" in notice
+    assert not {"fetch", "push", "pull", "rebase", "commit"} & set(commands)
+    assert git(root, "rev-parse", "HEAD") == head
+    assert git(remote, "rev-parse", "main") == remote_head
+    assert decision_batch.pending(shared).generation == pending.generation
+
+
 def test_an_interrupted_committed_batch_is_not_pushed_by_a_new_writer_and_the_owner_finishes_it(
     shared_repo, tmp_path, monkeypatch
 ) -> None:
@@ -319,25 +345,28 @@ def test_an_interrupted_committed_batch_is_not_pushed_by_a_new_writer_and_the_ow
             git(root, "remote", "set-url", "origin", origin)
         return decision_sync.Sent(notice="acknowledgement lost after the commit", ambiguous=True)
 
-    monkeypatch.setattr(decision_sync, "publish", publish_without_push)
-    save(shared, make(), expected_revision=None, message="decisions: notes")
-    monkeypatch.setattr(decision_sync, "publish", real_publish)
+    with monkeypatch.context() as hooks:
+        hooks.setattr(decision_sync, "publish", publish_without_push)
+        save(shared, make(), expected_revision=None, message="decisions: notes")
     pending = decision_batch.pending(shared)
     assert pending is not None
     assert git(root, "rev-parse", "HEAD") != git(remote, "rev-parse", "main")  # committed, not published
     advance_remote(tmp_path, remote, "elsewhere.txt")
     remote_head = git(remote, "rev-parse", "main")
-    commands = recorded_git(monkeypatch)
 
-    with pytest.raises(DecisionsUnavailable, match="finished or abandoned"):
-        decision_archive.archive(root, PROJECT, finished(), STEM, "merged")
+    with monkeypatch.context() as hooks:
+        commands = recorded_git(hooks)
+        with pytest.raises(DecisionsUnavailable, match="finished or abandoned"):
+            decision_archive.archive(root, PROJECT, finished(), STEM, "merged")
 
     assert "push" not in commands
     assert git(remote, "rev-parse", "main") == remote_head
-    monkeypatch.undo()  # the owner's own Finish, outside the new writer, completes the matching generation
+    # the owner's own Finish, outside the new writer, completes the matching generation
     done = decision_recovery.finish(shared, pending.generation)
     assert done.done
     assert decision_batch.pending(shared) is None
+    for rel_path, _, after_image in pending.files:
+        assert head_blob(root, rel_path) == after_image
 
 
 def test_a_flag_batch_that_lands_nothing_but_looks_sent_halts_the_next_round_before_any_remote_work(
@@ -373,5 +402,55 @@ def test_a_flag_batch_that_lands_nothing_but_looks_sent_halts_the_next_round_bef
     assert recovered.done
     assert decision_batch.pending(shared) is None
     for rel_path, _, after_image in pending.files:
-        blob = subprocess.run(["git", "show", f"HEAD:{rel_path}"], cwd=root, check=True, capture_output=True)  # noqa: S603, S607
-        assert blob.stdout == after_image
+        assert head_blob(root, rel_path) == after_image
+
+
+@pytest.mark.usefixtures("lost_before_commit")
+def test_a_journal_whose_files_are_not_a_list_is_refused_and_its_bytes_are_kept(shared_repo) -> None:
+    root, _ = shared_repo
+    owner_commit(root, "owner words\n")
+    shared = DataRepo(root)
+    save(shared, make(), expected_revision=None, message="decisions: notes")
+    journal = decision_batch.journal_path(shared)
+    raw = journal.read_bytes()
+    damaged = json.loads(raw)
+    damaged["files"] = "not-a-list"
+    journal.write_bytes(json.dumps(damaged).encode())
+    kept = journal.read_bytes()
+
+    with pytest.raises(decision_batch.JournalError):
+        decision_batch.pending(shared)
+
+    assert journal.read_bytes() == kept
+    assert kept != raw
+
+
+def test_an_owned_file_that_is_a_symlink_is_never_followed_while_a_plain_file_still_matches(tmp_path: Path) -> None:
+    checkout = tmp_path / "checkout"
+    (checkout / ".git").mkdir(parents=True)
+    plain = checkout / "real.txt"
+    plain.write_bytes(b"after")
+    link = checkout / "linked.txt"
+    link.symlink_to(plain)
+
+    assert decision_batch.owned({plain: (None, b"after")})  # positive control: a plain matching file is owned
+    assert not decision_batch.owned({link: (None, b"after")})  # the symlink refuses even though its referent matches
+    assert link.is_symlink()
+
+
+def test_a_rebase_in_progress_blocks_a_new_save_before_any_commit(shared_repo, monkeypatch) -> None:
+    root, _ = shared_repo
+    owner_commit(root, "owner words\n")
+    (root / ".git" / "rebase-merge").mkdir()
+    shared = DataRepo(root)
+    head, before = git(root, "rev-parse", "HEAD"), tree_bytes(root)
+    commands = recorded_git(monkeypatch)
+
+    receipt = save(shared, make(), expected_revision=None, message="decisions: notes")
+
+    assert not receipt.saved
+    assert "rebase is in progress" in receipt.notice
+    assert not {"fetch", "push", "pull", "rebase", "commit"} & set(commands)
+    assert git(root, "rev-parse", "HEAD") == head
+    assert tree_bytes(root) == before
+    assert decision_batch.pending(shared) is None

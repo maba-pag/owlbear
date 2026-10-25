@@ -43,11 +43,14 @@ def _current(shared: DataRepo, generation: str) -> decision_batch.Batch:
     return batch
 
 
-def _committed(shared: DataRepo, batch: decision_batch.Batch) -> bool:
-    """Whether HEAD descends from the batch's head and holds every file's after image: the batch is in Git."""
-    if shared.git("merge-base", "--is-ancestor", batch.head, "HEAD").returncode:
-        return False
-    return all(decision_transaction.in_head(shared, rel, after) for rel, _, after in batch.files)
+def _committed(shared: DataRepo, batch: decision_batch.Batch) -> str | None:
+    """HEAD's commit, when it descends from the batch's head and holds every file's after image; else None."""
+    commit = decision_transaction.head_commit(shared)
+    if commit is None or shared.git("merge-base", "--is-ancestor", batch.head, commit).returncode:
+        return None
+    if all(decision_transaction.in_head(shared, rel, after, commit) for rel, _, after in batch.files):
+        return commit
+    return None
 
 
 def _written(root: DataRepo, batch: decision_batch.Batch) -> None:
@@ -95,8 +98,13 @@ def finish(shared: DataRepo, generation: str) -> Recovery:
     try:
         with root.locked():
             batch = _current(root, generation)
-            if _committed(root, batch):
+            if _committed(root, batch) is not None:
                 _written(root, batch)
+                if not decision_transaction.landed(root, batch.head, batch.files):  # the last proof, before completion
+                    msg = (
+                        f"batch {generation} is committed but not proved now (Git or a file changed); it stays for you"
+                    )
+                    raise DecisionsUnavailable(msg, RECOVER)
                 decision_batch.complete(root, generation)
                 notice = "committed locally; no push/rebase retried: its marker is completed"
                 return Recovery(generation=generation, done=True, notice=notice)
@@ -116,6 +124,9 @@ def finish(shared: DataRepo, generation: str) -> Recovery:
                 why = sent.notice[:300] or "Git does not hold the batch as written"
                 return Recovery(generation=generation, done=False, notice=f"not published, so it stays: {why}")
             _written(root, batch)
+            if not decision_transaction.landed(root, batch.head, batch.files):  # the last proof, before completion
+                msg = f"batch {generation} was published but not proved now (Git or a file changed); it stays for you"
+                raise DecisionsUnavailable(msg, RECOVER)
             decision_batch.complete(root, generation)
             return Recovery(generation=generation, done=True, notice="finished: the batch is published as one commit")
     except (DataRepoError, OSError) as exc:
@@ -160,7 +171,7 @@ def abandon(shared: DataRepo, generation: str) -> Recovery:
     try:
         with root.locked():
             batch = _current(root, generation)
-            if _committed(root, batch):
+            if _committed(root, batch) is not None:
                 msg = f"batch {generation} is already committed in Git: finish it, which completes its marker, instead"
                 raise DecisionsUnavailable(msg, RECOVER)
             _at_head(root, batch)

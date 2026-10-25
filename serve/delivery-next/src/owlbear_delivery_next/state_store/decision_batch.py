@@ -109,8 +109,25 @@ def _held(path: Path) -> bytes | None:
         return None
 
 
+def _plain_in_checkout(path: Path) -> bool:
+    """Whether *path* is a plain file or absent, under plain folders up to the checkout holding its `.git`."""
+    if path.is_symlink() or (path.exists() and not path.is_file()):
+        return False
+    for folder in path.parents:
+        if folder.is_symlink() or not folder.is_dir():
+            return False
+        if (folder / ".git").exists():
+            return True
+    return False
+
+
 def owned(images: dict[Path, tuple[bytes | None, bytes | None]]) -> bool:
-    """Whether every file holds its before or after image; other content is an owner's edit, never overwritten."""
+    """Whether every file is plain and holds its before or after image; an owner's other content is never overwritten.
+
+    A symlink or a path outside a checkout is refused before anything is read, so a matching referent is never followed.
+    """
+    if not all(_plain_in_checkout(path) for path in images):
+        return False
     return all(_held(path) in (before, after) for path, (before, after) in images.items())
 
 
@@ -152,15 +169,29 @@ def _decode(raw: bytes) -> Batch:
             raise ValueError(msg)
         return base64.b64decode(value, validate=True)
 
+    def listed(value: object) -> list:
+        if not isinstance(value, list):  # a string or object here would decode as an empty batch
+            msg = "a journal list is not a list"
+            raise TypeError(msg)
+        return value
+
+    def record_of(value: object) -> dict:
+        if not isinstance(value, dict) or not isinstance(value.get("path"), str):
+            msg = "a journal file record has no string path"
+            raise TypeError(msg)
+        return value
+
     try:
         record = json.loads(raw)
-        files = tuple((f["path"], data(f["before"]), after(f["after"])) for f in record["files"])
+        files = tuple(
+            (f["path"], data(f["before"]), after(f["after"])) for f in map(record_of, listed(record["files"]))
+        )
         return Batch(
             str(record["generation"]),
             str(record["project"]),
             str(record["head"]),
             str(record["message"]),
-            tuple(str(i) for i in record["ids"]),
+            tuple(str(i) for i in listed(record["ids"])),
             files,
         )
     except (KeyError, TypeError, ValueError, binascii.Error) as exc:

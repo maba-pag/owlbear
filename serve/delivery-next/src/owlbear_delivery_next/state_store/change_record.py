@@ -82,7 +82,7 @@ def save(
 
             def publish(head: str) -> decision_transaction.Step:
                 files, left = decision_archive.write_plan(planned, problems, c.slug)
-                if writes and left:  # a decision refused: the record commits with none of the batch
+                if left:  # a decision refused: the record commits with none of the batch
                     return decision_transaction.Step(
                         f"the record of {c.slug} was not saved; " + "; ".join(left), refused=True
                     )
