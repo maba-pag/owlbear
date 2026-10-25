@@ -517,13 +517,13 @@ def test_an_unrelated_earlier_curation_generation_never_covers_a_later_unkeyed_2
     assert calls == []
 
 
-def survived_run(root, monkeypatch, pid: int = 4242) -> curation.Curation:
+def survived_run(root, monkeypatch, pid: int = 4242, birth: float | None = 1.0) -> curation.Curation:
     """A run whose process survives it: its PIDs are kept on the run's own lease and on the ledger's ``left``."""
     monkeypatch.setattr(processes, "alive", lambda _pid, _created: True)
 
     def run(cfg) -> Run:
         return Run(cfg.session_id, ending="result", payload=MemoryCurationResult(summary="ok", entries=[]),
-                   runtime_pid=pid, pids={pid: 1.0},
+                   runtime_pid=pid, pids={pid: birth},
                    termination=Termination(confirmed=False, survivors=(pid,)))  # fmt: skip
 
     job = curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root), run=run)
@@ -564,6 +564,43 @@ def test_pids_a_later_snapshot_records_are_held_and_never_borrow_the_recovered_r
     again._pids({"event": "pids", "pids": {"5555": 2.0}})  # noqa: SLF001 - a process the earlier run never recorded
     later = curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root))
     assert (later.maintenance.pending("curation"), len(later.maintenance.read()["sessions"])) == (True, 2)
+
+
+def test_a_known_birth_after_a_settled_runs_end_is_held_not_covered_by_its_unknown_birth(root, monkeypatch) -> None:
+    """The settled run's PID had an unknown birth; a later known birth after it ended is another process."""
+    job = survived_run(root, monkeypatch, birth=None)
+    recovered_by_reboot(job)
+    again = curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root))
+    again._pids({"event": "pids", "pids": {4242: time.time() + 3600}})  # noqa: SLF001 - born after the run ended
+    rebuilt = curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root))
+    assert (rebuilt.maintenance.pending("curation"), len(rebuilt.maintenance.read()["sessions"])) == (True, 2)
+
+
+def test_the_public_start_runs_nothing_while_that_contradiction_is_held(root, monkeypatch) -> None:
+    calls: list[str] = []
+    job = survived_run(root, monkeypatch, birth=None)
+    recovered_by_reboot(job)
+    curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root))._pids(  # noqa: SLF001
+        {"event": "pids", "pids": {4242: time.time() + 3600}}
+    )
+
+    def run(cfg) -> Run:
+        calls.append(cfg.session_id)
+        return Run(cfg.session_id, ending="result", payload=MemoryCurationResult(summary="ok", entries=[]))
+
+    rebuilt = curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root), run=run)
+    rebuilt.start("shop")
+    drained(rebuilt)
+    assert calls == []
+
+
+def test_a_known_birth_before_a_settled_runs_end_is_still_that_recovered_run(root, monkeypatch) -> None:
+    job = survived_run(root, monkeypatch, birth=None)
+    recovered_by_reboot(job)
+    again = curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root))
+    again._pids({"event": "pids", "pids": {4242: time.time() - 3600}})  # noqa: SLF001 - born while the run ran
+    rebuilt = curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root))
+    assert (rebuilt.maintenance.pending("curation"), len(rebuilt.maintenance.read()["sessions"])) == (False, 1)
 
 
 def test_a_new_unknown_curation_run_is_not_imported_again_at_restart(root) -> None:
