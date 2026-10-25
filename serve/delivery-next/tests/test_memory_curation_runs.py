@@ -1,5 +1,6 @@
 """Item 5 slice 4: automatic memory curation runs one curator session per memory folder of the shared repository."""
 
+import json
 import threading
 import time
 from datetime import UTC, datetime, timedelta
@@ -539,6 +540,15 @@ def recovered_by_reboot(job: curation.Curation) -> None:
     job.maintenance.recover(session["id"], rebooted=True)
 
 
+def without_ended_at(job: curation.Curation) -> None:
+    """Serialize the recovered ledger as it would be written without an end time, which the schema allows."""
+    path = job.maintenance.path
+    data = json.loads(path.read_text())
+    for session in data["sessions"]:
+        session.pop("ended_at", None)
+    path.write_text(json.dumps(data))
+
+
 def test_a_settled_runs_pids_are_not_held_again_when_rebuilt_after_its_recovery(root, monkeypatch) -> None:
     """Reconstruction runs without an intervening working() or lingering(), so the same PIDs stay released."""
     job = survived_run(root, monkeypatch)
@@ -564,6 +574,43 @@ def test_pids_a_later_snapshot_records_are_held_and_never_borrow_the_recovered_r
     again._pids({"event": "pids", "pids": {"5555": 2.0}})  # noqa: SLF001 - a process the earlier run never recorded
     later = curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root))
     assert (later.maintenance.pending("curation"), len(later.maintenance.read()["sessions"])) == (True, 2)
+
+
+def test_a_recovered_lease_without_an_end_time_is_not_covered_by_a_later_known_birth(root, monkeypatch) -> None:
+    job = survived_run(root, monkeypatch, birth=None)
+    recovered_by_reboot(job)
+    without_ended_at(job)
+    again = curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root))
+    again._pids({"event": "pids", "pids": {4242: time.time() + 3600}})  # noqa: SLF001 - no end bound to prove it
+    rebuilt = curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root))
+    assert (rebuilt.maintenance.pending("curation"), len(rebuilt.maintenance.read()["sessions"])) == (True, 2)
+
+
+def test_the_public_start_runs_nothing_for_a_recovered_lease_without_an_end_time(root, monkeypatch) -> None:
+    calls: list[str] = []
+    job = survived_run(root, monkeypatch, birth=None)
+    recovered_by_reboot(job)
+    without_ended_at(job)
+    curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root))._pids(  # noqa: SLF001
+        {"event": "pids", "pids": {4242: time.time() + 3600}}
+    )
+
+    def run(cfg) -> Run:
+        calls.append(cfg.session_id)
+        return Run(cfg.session_id, ending="result", payload=MemoryCurationResult(summary="ok", entries=[]))
+
+    rebuilt = curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root), run=run)
+    rebuilt.start("shop")
+    drained(rebuilt)
+    assert calls == []
+
+
+def test_an_active_unknown_birth_still_covers_a_later_known_birth_without_a_second_hold(root, monkeypatch) -> None:
+    survived_run(root, monkeypatch, birth=None)  # the run's lease stays active: its process survived
+    again = curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root))
+    again._pids({"event": "pids", "pids": {4242: time.time() + 3600}})  # noqa: SLF001
+    rebuilt = curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root))
+    assert (rebuilt.maintenance.pending("curation"), len(rebuilt.maintenance.read()["sessions"])) == (True, 1)
 
 
 def test_a_known_birth_after_a_settled_runs_end_is_held_not_covered_by_its_unknown_birth(root, monkeypatch) -> None:

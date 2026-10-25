@@ -432,18 +432,20 @@ def legacy_uncertain(run: FolderRun) -> bool:
 def _observed(lease: maintenance.Lease, left: dict[int, float | None]) -> bool:
     """Whether a lease recorded every one of these PIDs.
 
-    A birth unknown on either side matches, except that a settled lease never covers a process born after it ended.
+    A birth unknown on either side matches, except that a settled lease covers an unknown birth only up to its end.
     """
+    settled = lease.state not in maintenance.HELD
     ended = lease.ended_at.timestamp() if lease.ended_at else None
     return bool(left) and all(
-        pid in lease.pids and _same_process(lease.pids[pid], born, ended) for pid, born in left.items()
+        pid in lease.pids and _same_process(lease.pids[pid], born, settled=settled, ended=ended)
+        for pid, born in left.items()
     )
 
 
-def _same_process(recorded: float | None, born: float | None, ended: float | None) -> bool:
-    if recorded is None:
-        return born is None or ended is None or born <= ended
-    return born is None or born == recorded
+def _same_process(recorded: float | None, born: float | None, *, settled: bool, ended: float | None) -> bool:
+    if recorded is None and born is not None and settled:
+        return ended is not None and born <= ended
+    return recorded is None or born is None or born == recorded
 
 
 def _left_covers(runs: Runs) -> Callable[[maintenance.Lease], bool]:
