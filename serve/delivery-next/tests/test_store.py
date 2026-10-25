@@ -93,9 +93,7 @@ def test_every_worktree_opens_the_same_store_in_the_projects_folder(repo, store)
     pid = (folder / "clone-id").read_text().strip()
     assert Store.open(repo.parent / "wt").root == store.root == local_home.root() / "projects" / pid
     names = sorted(p.name for p in folder.iterdir() if p.name not in {"move.lock", "prepare.json"})
-    sentinels = [n for n in names if n.startswith(".tmp-clone-id-")]  # kept, not unlinked, after a draft write
-    assert len(sentinels) == 1
-    assert [n for n in names if n not in sentinels] == ["clone-id", "format"]
+    assert names == ["clone-id", "format"]  # no draft is left beside the id
 
 
 def offline_move(repo, monkeypatch):

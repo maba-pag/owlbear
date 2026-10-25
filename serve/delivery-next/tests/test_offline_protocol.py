@@ -5,10 +5,12 @@ import pytest
 
 from owlbear_delivery_next.state_store import offline_protocol as op
 from owlbear_delivery_next.state_store.database import MARKER, STORE_FORMAT, StoreError
+from owlbear_delivery_next.state_store.legacy_family import Gap
 
 BOOT_A = "F045833C-37D3-44BA-A5B0-4E9EAFDBDEFA"
 BOOT_B = "11111111-2222-3333-4444-555555555555"
 NO_GAPS = ()
+UNKNOWN_BINDING = Gap(path="owlbear", version="none", reason="no owlbear launcher is on PATH: unknown binding")
 
 
 def snapshot(folder):
@@ -64,10 +66,10 @@ def test_a_platform_without_the_facility_refuses(monkeypatch):
 
 
 @pytest.mark.usefixtures("boot")
-def test_production_prepare_refuses_on_unfenced_legacy_producers_and_changes_nothing(folder):
+def test_prepare_refuses_on_a_reported_legacy_gap_and_changes_nothing(folder):
     before = snapshot(folder)
     with pytest.raises(StoreError, match="not proven fenced") as err:
-        op.prepare(folder)
+        op.prepare(folder, gaps=lambda: (UNKNOWN_BINDING,))
     assert "binding" in str(err.value)
     assert snapshot(folder) == before
     assert not (folder / op.PREPARED).exists()
@@ -130,12 +132,12 @@ def test_finish_refuses_a_replaced_folder_identity(folder, boot, tmp_path):
         op.finish(folder, gaps=lambda: NO_GAPS)
 
 
-def test_finish_refuses_while_any_legacy_producer_is_unfenced(folder, boot):
+def test_finish_refuses_while_any_legacy_gap_is_reported(folder, boot):
     op.prepare(folder, gaps=lambda: NO_GAPS)
     boot["value"] = BOOT_B
     before = snapshot(folder)
     with pytest.raises(StoreError, match="not proven fenced"):
-        op.finish(folder)  # production inventory
+        op.finish(folder, gaps=lambda: (UNKNOWN_BINDING,))
     assert snapshot(folder) == before
 
 

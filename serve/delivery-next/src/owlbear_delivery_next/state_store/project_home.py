@@ -56,6 +56,9 @@ def _clone_id_at(folder: Path, folder_fd: int) -> str | None:
     except OSError as exc:
         msg = f"{folder / project_move.CLONE_ID} is unreadable"
         raise StoreError(msg) from exc
+    if text and not text.endswith("\n"):  # the id is written with its newline last, so this one was cut short
+        msg = f"{folder / project_move.CLONE_ID} is incomplete: its write was cut short; nothing was changed"
+        raise StoreError(msg)
     return (text or "").strip() or None
 
 
@@ -68,14 +71,11 @@ def _pin(folder: Path) -> int:
 
 
 def _ensure_at(folder: Path, folder_fd: int) -> str:
-    """The clone's id: reused when present, else created once, whole, by a hard link; never rewritten."""
+    """The clone's id: reused when present, else created once, exclusively; never rewritten or replaced."""
     if found := _clone_id_at(folder, folder_fd):
         return found
-    new = secrets.token_hex(8)
-    draft = f".tmp-{project_move.CLONE_ID}-{new}"  # the ``.tmp-`` prefix keeps a crash's draft out of the leftovers
-    fd_tree.write_at(folder_fd, draft, new + "\n")
-    with contextlib.suppress(FileExistsError):  # another opener's id came first; the draft is kept, never unlinked
-        fd_tree.link_at(folder_fd, draft, project_move.CLONE_ID)  # appears with its content, or not at all
+    with contextlib.suppress(FileExistsError):  # another opener's id came first; it is read below
+        fd_tree.create_at(folder_fd, project_move.CLONE_ID, secrets.token_hex(8) + "\n")
     if found := _clone_id_at(folder, folder_fd):
         return found
     msg = f"{folder / project_move.CLONE_ID} is empty: remove it, then start again"

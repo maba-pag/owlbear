@@ -30,9 +30,9 @@ CURRENT_MODULES = (
     ("machine_host/selfcheck.py", "46d943bd54994aec5715282c0405b459c4b7b27400302afa944f155a4b3cba63"),
     ("project_host/host.py", "1f6ddaa755930923e86387615c2085f562b4c5cbb176cbc9c522229e1478a5ba"),
     ("state_store/database.py", "4c58bfc55a9db87a2d6aba3c52de794c06cddfce5aeb19bf3bd84c531bddc901"),
-    ("state_store/fd_tree.py", "79b7fa4cece77b79e8e5639fd54de87b20224ac910bec86a88179b9e3ea7586c"),
+    ("state_store/fd_tree.py", "02a7562796f8b5abf7e915807fbbb90a1392b9c98baed2d07836ab4f315f9313"),
     ("state_store/offline_protocol.py", "15f8b6301e0df818eb6ec769b1afefeca35f88b70b62b8b6b198246235412daf"),
-    ("state_store/project_home.py", "94d36b3b949165a1d610022bc69f554b1cc5f0524a19e309ebaf21529adf97eb"),
+    ("state_store/project_home.py", "1b73b9b89b4b7fb9d44fa5ef100bce77e7cb54194923b0f20dda2f91dd466075"),
     ("state_store/project_move.py", "9b52fb4bbc46d68d72f83836e76cdcc8963a56c5dd614376518a5614ba099a6d"),
     ("state_store/store.py", "e0439c41372c84ab4bd032bb94a3daece67da8142dc72e4174398524da5a4e63"),
 )

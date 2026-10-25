@@ -375,6 +375,17 @@ instead of passing; conflict paths retain whitespace without Git quoting losses.
 Record repairs made with this document: the trim of 2026-10-19 had listed TD-228, TD-250 and TD-358 as spent,
 dropped C-21's lines for TD-199 and TD-201 and cut TD-318's schedule to one of its four parts; they are back in force.
 
+**R16 store relocation (issue [#623](https://github.com/maba-pag/owlbear/issues/623)): CANDIDATE, not merged or done.**
+The candidate, on `fix/audit-r16-relocation` at `2c447127`, moves a project's store to its folder only by a manual
+`owlbear prepare --repo PATH`, a reboot, then `owlbear finish --repo PATH` from the new boot session. Prepare changes
+nothing; an ordinary `Store.open` refuses until Finish. Finish refuses an unknown, dirty or altered OwlBear build,
+a split install, and a missing, replaced or malformed target, and it never runs on its own. The proof covers the
+legacy 51aa, 9074, v1.50, v1.51 and v1.0 gate families (fixed, audited tables) and the current candidate family
+(a fixed table of the integrated gate bytes, maintained as described in [operating-owlbear.md](../../setup/operating-owlbear.md)).
+The source store is kept at its original format 999 as a non-authoritative backup, never deleted by OwlBear; the
+receipt and target identity are checked at each admission. Status: the local candidate awaits the parent's final
+integration review and CI; no push, PR or merge has happened.
+
 ## 5. Open Questions for the Owner
 
 Ask each with the question tool in the owner's format (workspace instructions, "Asking the Owner"). Answered on

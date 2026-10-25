@@ -72,6 +72,35 @@ def write_at(dfd: int, name: str, text: str) -> None:
     os.fsync(dfd)
 
 
+def create_at(dfd: int, name: str, text: str) -> None:
+    """Create file *name* under *dfd* exclusively with *text*, then sync the file and the folder.
+
+    An existing entry, link included, is never followed or replaced: it raises FileExistsError and nothing is
+    written. A write that fails after the name is created leaves that entry in place, never unlinked by name,
+    and raises StoreError.
+
+    Raises:
+        FileExistsError: *name* already exists.
+        StoreError: The file could not be created, or was not finished; what is there is kept.
+    """
+    try:
+        fd = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=dfd)
+    except FileExistsError:
+        raise
+    except OSError as exc:
+        msg = f"{name} cannot be created ({exc.strerror}): nothing was written"
+        raise StoreError(msg) from exc
+    try:
+        with os.fdopen(fd, "wb") as fh:
+            fh.write(text.encode())
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.fsync(dfd)
+    except OSError as exc:
+        msg = f"{name} was not finished ({exc.strerror}): it was left in place; move it away, then start again"
+        raise StoreError(msg) from exc
+
+
 def keep_entry(dfd: int, name: str) -> str:
     """Rename entry *name* under *dfd* to a fresh quarantine name, synced in its folder, and return that name.
 
@@ -99,11 +128,6 @@ def read_at(dfd: int, name: str) -> str | None:
         return b"".join(chunks).decode()
     finally:
         os.close(fd)
-
-
-def link_at(dfd: int, src: str, dst: str) -> None:
-    """Hard-link *src* to *dst* under *dfd*; a link is never followed, and an existing *dst* raises FileExistsError."""
-    os.link(src, dst, src_dir_fd=dfd, dst_dir_fd=dfd, follow_symlinks=False)
 
 
 def names_at(dfd: int) -> list[str]:

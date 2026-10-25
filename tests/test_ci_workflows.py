@@ -59,6 +59,13 @@ def test_replaced_workflows_are_gone() -> None:
         assert not (WORKFLOWS / name).exists()
 
 
+def test_python_checks_out_history_for_immutable_legacy_fixtures() -> None:
+    job = _jobs("python.yml")["tests"]
+    checkout = next(step for step in job["steps"] if str(step.get("uses", "")).startswith("actions/checkout@"))
+    assert checkout["with"]["fetch-depth"] == 0
+    assert checkout["with"]["persist-credentials"] is False
+
+
 @pytest.mark.parametrize("name", SUITE_WORKFLOWS)
 def test_suites_run_only_when_the_ci_gate_calls_them_and_also_on_drafts(name: str) -> None:
     assert set(_workflow(name)["on"]) == {"workflow_call", "workflow_dispatch"}
