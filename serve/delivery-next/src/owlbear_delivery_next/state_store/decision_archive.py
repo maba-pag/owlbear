@@ -51,9 +51,14 @@ def plan(root: Path, project: str, c: Change, stem: str, outcome: str) -> tuple[
     return planned, problems or _graph(root, project, c, planned)
 
 
+def _selected(planned: list[Placed]) -> list[Placed]:
+    """The planned decisions whose files change: the only ones journalled, written and published."""
+    return [(d, layer, rev) for d, layer, rev in planned if rev != d.revision]
+
+
 def batch_files(planned: list[Placed]) -> list[tuple[Path, bytes]]:
     """The files `write_plan` writes, with their bytes after: what a journal records before the first of them."""
-    return [(decision_path(d, layer), serialize(d).encode("utf-8")) for d, layer, rev in planned if rev != d.revision]
+    return [(decision_path(d, layer), serialize(d).encode("utf-8")) for d, layer, _ in _selected(planned)]
 
 
 def write_plan(
@@ -65,19 +70,21 @@ def write_plan(
 ) -> tuple[list[Path], list[str]]:
     """Write the planned decisions unless *problems* keep them all out; the files to publish, and what kept them out.
 
-    *fence* is the transaction's proof each write runs before its folder is made and immediately before its rename;
-    *root*, the checkout, bounds the folders each rename checks are still plain (`decision_store.write_batch`).
+    Only the files that change are written and returned, the same ones `batch_files` journals: a decision left as it
+    is was never journalled, so it is never published either, whatever its file holds by then. *fence* is the
+    transaction's proof each write runs before its folder is made and immediately before its rename; *root*, the
+    checkout, bounds the folders each rename checks are still plain (`decision_store.write_batch`).
     """
+    writes = _selected(planned)
     if not problems:
         try:
-            writes = [(d, layer, rev) for d, layer, rev in planned if rev != d.revision]
             refused = decision_store.write_batch(writes, fence, root)
         except OSError as exc:
             refused = {"files": f"cannot be written: {exc}"}
         problems = [f"decision {key} of {slug}: {' '.join(why.split())}"[:240] for key, why in refused.items()]
     if problems:
         return [], [f"no decision of {slug} was archived", *problems]
-    return [decision_path(decision, layer) for decision, layer, _ in planned], []
+    return [decision_path(decision, layer) for decision, layer, _ in writes], []
 
 
 def archive(root: Path, project: str, c: Change, stem: str, outcome: str) -> tuple[list[Path], list[str]]:

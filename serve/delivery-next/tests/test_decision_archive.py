@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING
+from pathlib import Path
 
 import pytest
 
@@ -28,9 +29,6 @@ from owlbear_delivery_next.state_store import (
 )
 from owlbear_delivery_next.state_store.store import Lock
 from owlbear_delivery_next.state_store.store import Store as LocalStore
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 AT = datetime(2026, 10, 15, 9, tzinfo=UTC)
 STEM = "20261015-090000-notes"
@@ -514,3 +512,117 @@ def test_an_archive_is_published_while_its_batch_is_still_pending(store, monkeyp
     assert decision_batch.pending(store.shared) is not None
     with pytest.raises(decision_store.DecisionsUnavailable, match="interrupted decision batch"):
         decision_store.load(store.shared, "shop-site")
+
+
+OWNER_WIP = b"the owner's edit, not yet committed\n"
+
+
+def _published_once(root: Path, store: Store, c: Change, *, record: bool) -> Path:
+    """Publish *c* once through the record or the archive, then give it one more decision: the next publication plans
+    every earlier decision unchanged and only the new one changed. The path of an unchanged project decision."""
+    if record:
+        assert change_record.save(store, c, MERGED, AT) == ""
+    else:
+        assert decision_archive.archive(root, "shop-site", c, STEM, "merged")[0]
+    at = AT + timedelta(hours=2)
+    c.decisions.append(Decision(id=new_id(AT), text="Notes keep their order", origin="decided", at=at, paths=["a.css"]))
+    return root / "shop-site" / "decisions" / f"{c.brief.approved[0].decisions[1].id}.md"
+
+
+def _spy_archive(
+    monkeypatch, root: Path, unchanged: Path, *, owner_edit: bool
+) -> tuple[list[set[str]], list[set[str]]]:
+    """Record each journal's files and each `write_plan` result; with *owner_edit*, the owner edits *unchanged* during
+    the fsync of a changed file's temporary, so a commit of every planned path would publish that edit."""
+    journals: list[set[str]] = []
+    written: list[set[str]] = []
+    real_begin, real_plan, real_fsync = decision_batch.begin, decision_archive.write_plan, os.fsync
+    changes = root / "shop-site" / "changes" / STEM / "decisions"
+
+    def begin(*args):
+        journals.append({rel for rel, _, _ in args[-1]})  # the journal's files, its last argument
+        return real_begin(*args)
+
+    def write_plan(*args, **kwargs):
+        files, left = real_plan(*args, **kwargs)
+        written.append({p.relative_to(root).as_posix() for p in files})
+        return files, left
+
+    def fsync_then_owner_edits(descriptor):
+        real_fsync(descriptor)
+        if not owner_edit or not changes.is_dir() or unchanged.read_bytes() == OWNER_WIP:
+            return
+        found = os.fstat(descriptor)
+        if any(os.path.samestat(found, p.stat()) for p in changes.iterdir() if p.name.endswith(".tmp")):
+            unchanged.write_bytes(OWNER_WIP)
+
+    monkeypatch.setattr(decision_batch, "begin", begin)
+    monkeypatch.setattr(decision_archive, "write_plan", write_plan)
+    monkeypatch.setattr(os, "fsync", fsync_then_owner_edits)
+    return journals, written
+
+
+def _committed(root: Path) -> set[str]:
+    return set(git(root, "show", "--name-only", "--format=", "HEAD").split())
+
+
+@pytest.mark.parametrize("owner_edit", [True, False], ids=["owner-edits-the-unchanged-file", "healthy"])
+def test_a_record_publishes_only_the_decision_files_it_journalled(store, shared_repo, monkeypatch, owner_edit) -> None:
+    root, _ = shared_repo
+    c = finished()
+    unchanged = _published_once(root, store, c, record=True)
+    published = unchanged.read_bytes()
+
+    with monkeypatch.context() as m:
+        journals, written = _spy_archive(m, root, unchanged, owner_edit=owner_edit)
+        assert change_record.save(store, c, MERGED, AT) == ""
+
+    (journal,) = journals
+    record = f"shop-site/{decision_archive.CHANGES}/{STEM}.json"
+    assert unchanged.relative_to(root).as_posix() not in journal  # planned unchanged, so never journalled
+    assert _committed(root) == journal  # the commit holds exactly the journalled files
+    assert written == [journal - {record}]  # and the files write_plan returns are the journal's, no more
+    assert decision_batch.pending(store.shared) is None
+    rel = unchanged.relative_to(root).as_posix()
+    shown = subprocess.run(["git", "show", f"HEAD:{rel}"], cwd=root, check=True, capture_output=True)  # noqa: S603, S607
+    assert shown.stdout == published  # HEAD still holds the published bytes
+    if owner_edit:
+        assert unchanged.read_bytes() == OWNER_WIP  # the owner's edit stays theirs, unpublished
+        assert git(root, "status", "--porcelain").split() == ["M", unchanged.relative_to(root).as_posix()]
+    else:
+        assert git(root, "status", "--porcelain") == ""
+
+
+@pytest.mark.parametrize("owner_edit", [True, False], ids=["owner-edits-the-unchanged-file", "healthy"])
+def test_an_archive_publishes_only_the_decision_files_it_journalled(store, shared_repo, monkeypatch, owner_edit):
+    root, _ = shared_repo
+    c = finished()
+    unchanged = _published_once(root, store, c, record=False)
+
+    with monkeypatch.context() as m:
+        journals, written = _spy_archive(m, root, unchanged, owner_edit=owner_edit)
+        files, left = decision_archive.archive(root, "shop-site", c, STEM, "merged")
+
+    (journal,) = journals
+    assert unchanged.relative_to(root).as_posix() not in journal
+    assert _committed(root) == journal
+    assert {p.relative_to(root).as_posix() for p in files} == journal
+    assert written[-1] == journal
+    assert not left
+    assert decision_batch.pending(store.shared) is None
+    assert (unchanged.read_bytes() == OWNER_WIP) == owner_edit
+
+
+def test_an_archive_with_nothing_to_change_journals_and_publishes_nothing(shared_repo, monkeypatch) -> None:
+    root, _ = shared_repo
+    c = finished()
+    assert decision_archive.archive(root, "shop-site", c, STEM, "merged")[0]  # every file written and published once
+    head = git(root, "rev-parse", "HEAD")
+
+    with monkeypatch.context() as m:
+        journals, written = _spy_archive(m, root, root / "unused", owner_edit=False)
+        files, left = decision_archive.archive(root, "shop-site", c, STEM, "merged")
+
+    assert (files, left, journals, written) == ([], [], [], [set()])
+    assert git(root, "rev-parse", "HEAD") == head
+    assert git(root, "status", "--porcelain") == ""
