@@ -16,7 +16,7 @@ from owlbear_delivery_next.commands import cli
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import HostRecord
-from owlbear_delivery_next.runtimes import sdk_adapter, vscode_adapter
+from owlbear_delivery_next.runtimes import sdk_adapter
 from owlbear_delivery_next.settings import carried, profile, roles
 from owlbear_delivery_next.settings.config import Agent, Layer, resolve
 from owlbear_delivery_next.state_store.store import Store, StoreError
@@ -92,6 +92,12 @@ def test_a_role_model_is_refused_everywhere_it_is_built(tmp_path, model, effort)
         Store(tmp_path).read_profile()
 
 
+def test_a_profile_stored_with_the_retired_runtime_switch_loads_without_it(tmp_path):
+    raw = Profile().model_dump(mode="json") | {"format": 2, "runtime": "vscode"}
+    (tmp_path / "profile.json").write_text(json.dumps(raw))
+    assert Store(tmp_path).read_profile() == Profile()
+
+
 def test_luna_low_and_haiku_medium_load_and_the_defaults_are_valid():
     assert roles.parse("builder=gpt-6-luna:low") == ("builder", RoleModel(model="gpt-6-luna", effort="low"))
     assert roles.parse("reviewer=claude-haiku-5.5:medium")[1].effort == "medium"
@@ -120,7 +126,6 @@ def test_every_role_runs_autopilot_and_only_delivery_can_ask_the_owner(kind):
     assert "on_user_input_request" not in opts
     assert opts["agent"] == f"owlbear-{sdk_adapter.ROLES[kind]}"  # TD-169
     assert tools.ASK.name in {t.name for t in opts["tools"]}
-    assert vscode_adapter.CONFIG["mode"] == "autopilot"
     st = sdk_adapter._Step(cfg, SimpleNamespace(call_soon_threadsafe=lambda *_: None))  # noqa: SLF001
     question = {
         "question": "Which key?",

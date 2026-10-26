@@ -9,8 +9,7 @@ from pydantic import Field, model_validator
 
 from owlbear_delivery_next.change_contracts.models import Context, Effort, Record
 
-PROFILE_FORMAT = 4  # 2: role overrides moved to config.json; 3: preference import; 4: its basis
-type Runtime = Literal["managed", "vscode"]
+PROFILE_FORMAT = 5  # 2: role overrides moved to config.json; 3: preference import; 4: its basis; 5: no runtime switch
 
 
 def named(model: str) -> str:
@@ -59,16 +58,6 @@ class Profile(Record):
     version: int = 0
     confirmed_at: datetime | None = None
     entries: dict[str, ProfileEntry] = Field(default_factory=dict)
-    runtime: Runtime = "managed"  # TD-35: managed runs agent steps through the SDK; vscode runs them in VS Code
     prefs_import: Literal["", "pending", "done"] = ""  # R15: the one-time legacy import; "done" is permanent
     prefs_basis: str = ""  # R15: while pending, the project config's digest at the claim ("absent" if none); else ""
     prefs_claim: str | None = None  # R15: the nonce of the claim attempt that wrote "pending"; None on older profiles
-
-
-WINDOW_PAUSED = True  # TD-137: until the window probes pass, every agent step runs through the SDK
-PAUSED_NOTE = "window steps are paused until the window probes pass (TD-137); agent steps run through the SDK"
-
-
-def in_window(profile: Profile | None) -> bool:
-    """Whether agent steps run in a VS Code window: the profile says so and window steps are not paused."""
-    return not WINDOW_PAUSED and (profile or Profile()).runtime == "vscode"

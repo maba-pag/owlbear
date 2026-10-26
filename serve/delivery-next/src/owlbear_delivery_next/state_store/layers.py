@@ -26,10 +26,13 @@ _DIR_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
 def _parse[T: Record](raw: str, name: str, model: type[T], current: int, forward: Migrations) -> T:
     try:
         data = json.loads(raw)
-        version = int(data.get("format", 0))
+        version = data.get("format", 0)
     except (AttributeError, TypeError, ValueError) as exc:
         msg = f"state of {name} is unreadable"
         raise StoreError(msg) from exc
+    if type(version) is not int:  # int() would take 4.5 as 4, true as 1 and "4" as 4: a format is an integer only
+        msg = f"state of {name} is unreadable"
+        raise StoreError(msg)
     if version > current:
         msg = f"{name} has format {version}, newer than {current}"
         raise FormatTooNewError(msg)

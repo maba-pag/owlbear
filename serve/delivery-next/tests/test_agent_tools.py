@@ -1,7 +1,6 @@
-"""TD-69/TD-70/TD-72: each worker role is offered only the tools its agent file names, in both runtimes, and the
-project's owlbear-memory in the shared repository."""
+"""TD-69/TD-70/TD-72: each worker role is offered only the tools its agent file names, and the project's owlbear-memory
+in the shared repository."""
 
-import json
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -11,7 +10,6 @@ from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_contracts.tools import Worktree
 from owlbear_delivery_next.local_system import preload
 from owlbear_delivery_next.runtimes import sdk_adapter, subagents
-from owlbear_delivery_next.runtimes import window_files as wf
 
 ROLES = ("builder", "planner", "reviewer", "challenger", "design-judge")
 SDK_TOOLS = {  # the runtime's built-in tools, the same for every model (tools.list, runtime research P24)
@@ -22,7 +20,6 @@ MEMORY_TOOLS = {"recall_memory", "save_memory", "assess_memories"}
 RESULT_TOOLS = [s.name for s in tools.SPECS]
 
 
-INBOX = Path("/s/0123456789abcdef0123.json")
 FIELDS = {
     "kind": StepKind.BUILD,
     "worktree": Path(),
@@ -39,12 +36,6 @@ FIELDS = {
 def options(**kw) -> dict:
     loop = SimpleNamespace(call_soon_threadsafe=lambda *_: None)
     return sdk_adapter._Step(sdk_adapter.Session(**(FIELDS | kw)), loop).options()  # noqa: SLF001
-
-
-def window_names(role: str, memory: Path | None = None) -> list[str]:
-    head = wf.agent(role, INBOX, memory)(None).split("---")[1]
-    line = next(ln for ln in head.splitlines() if ln.startswith("tools: ["))
-    return line.removeprefix("tools: [").removesuffix("]").split(", ")
 
 
 def test_each_agent_names_only_tools_both_runtimes_know() -> None:
@@ -83,7 +74,6 @@ def test_without_a_memory_folder_or_the_memory_server_the_agents_go_on_without_m
     assert options()["enable_file_hooks"] is False  # the project's agent hooks stay off too (TD-142)
     monkeypatch.setattr(preload, "find_spec", lambda _name: None)
     assert options(memory=tmp_path)["mcp_servers"] == {}
-    assert list(json.loads(wf.mcp(INBOX, tmp_path)(None))["mcpServers"]) == [wf.names(INBOX)[0]]
 
 
 def test_a_step_loads_only_its_role_and_delivery_skills_never_discovered_or_bundled_ones() -> None:
@@ -106,24 +96,6 @@ def test_the_sdk_approves_only_the_mcp_tools_the_role_is_offered(tmp_path) -> No
     assert asked(StepKind.REVIEW, preload.MEMORY, "save_memory") == "PermissionDecisionReject"
     assert asked(StepKind.BUILD, preload.MEMORY, "curate_memories") == "PermissionDecisionReject"
     assert asked(StepKind.BUILD, "uv", "uv-init") == "PermissionDecisionReject"
-
-
-def test_the_window_agent_offers_the_same_tools_and_this_steps_servers_tools(tmp_path) -> None:
-    relay, memory = wf.names(INBOX)
-    servers = json.loads(wf.mcp(INBOX, tmp_path)(None))["mcpServers"]
-    assert list(servers) == [relay, memory]  # unique to the step: the host disables a name another holds (P21)
-    assert servers[memory]["env"][preload.MEMORY_DIR] == str(tmp_path)
-    assert servers[memory]["args"] == ["-m", preload.MEMORY_MODULE]
-    for role in ROLES:  # the window runs the same harness, which offered exactly these names live (TD-69)
-        own = [n.replace(f"{preload.MEMORY}/", f"{memory}/") for n in preload.tools(role)]
-        assert window_names(role, tmp_path) == [*own, *(f"{relay}/{t}" for t in tools.results(role))]
-
-
-def test_a_window_without_a_memory_folder_gets_no_memory_server_and_no_memory_tools() -> None:
-    assert list(json.loads(wf.mcp(INBOX)(None))["mcpServers"]) == [wf.names(INBOX)[0]]
-    for role in ROLES:
-        assert not [n for n in window_names(role) if "memory" in n]
-        assert [n for n in window_names(role) if "/" not in n] == [n for n in preload.tools(role) if "/" not in n]
 
 
 def test_each_role_is_offered_only_its_own_agent_and_the_builtins_follow_its_setting() -> None:

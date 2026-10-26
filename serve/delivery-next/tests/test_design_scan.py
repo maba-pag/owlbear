@@ -20,7 +20,7 @@ from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_contracts.visual_records import DetectorFinding, DetectorScan, VisualResult
 from owlbear_delivery_next.design_packs import design_pack, design_tools, detector
 from owlbear_delivery_next.local_system import local_home
-from owlbear_delivery_next.runtimes import sdk_adapter, window_files
+from owlbear_delivery_next.runtimes import sdk_adapter
 from owlbear_delivery_next.runtimes.results import Gate
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.workflow_steps import design, visual
@@ -276,7 +276,7 @@ def test_the_builders_scan_reads_only_ui_sources_of_its_worktree(tmp_path, monke
     assert len(asked) == 1  # nothing outside the worktree was scanned
 
 
-def test_the_scan_answers_without_ending_the_builders_step_in_both_runtimes(tmp_path) -> None:
+def test_the_scan_answers_without_ending_the_builders_step(tmp_path) -> None:
     calls = []
     helper = (design_tools.SCAN, lambda args: calls.append(args) or "No design detector findings.")
     cfg = sdk_adapter.Session(
@@ -301,8 +301,6 @@ def test_the_scan_answers_without_ending_the_builders_step_in_both_runtimes(tmp_
     assert (answer.text_result_for_llm, ran[0] != loop_thread) == ("ok", True)
     assert tools.SCAN_DESIGN in sdk_adapter.agent(StepKind.BUILD, ui=True)["tools"]
     assert tools.SCAN_DESIGN not in sdk_adapter.agent(StepKind.BUILD)["tools"]
-    relay, _ = window_files.names(tmp_path / "inbox.json")
-    assert f"{relay}/{tools.SCAN_DESIGN}" in window_files.agent("builder", tmp_path / "inbox.json", ui=True)(None)
 
 
 def test_a_real_scan_of_a_builders_page(tmp_path, monkeypatch, machine_home) -> None:

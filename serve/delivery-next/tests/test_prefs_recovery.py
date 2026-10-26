@@ -569,9 +569,7 @@ def test_a_refused_config_during_an_ordinary_save_keeps_new_facts_for_the_retry(
     store.config_path.unlink()  # the owner deletes the config; its removal is not yet published
     refused = refuse_config_once(monkeypatch, store)
 
-    late = Profile(
-        version=2, runtime="vscode", entries={profile.POLL: confirmed("45"), profile.WINDOW: confirmed("30")}
-    )
+    late = Profile(version=2, entries={profile.POLL: confirmed("45"), profile.WINDOW: confirmed("30")})
     assert store.write_profile(late)  # the config removal is refused, so the save reports it
     assert refused
     assert store.read_profile().entries[profile.WINDOW].value == "30"  # the new shared fact is kept locally
@@ -585,7 +583,6 @@ def test_a_refused_config_during_an_ordinary_save_keeps_new_facts_for_the_retry(
     fresh, got = clone_profile(remote, tmp_path)
     assert got.prefs_import == "done"
     assert got.version == 2
-    assert got.runtime == "vscode"
     assert got.entries[profile.WINDOW].value == "30"
     assert not fresh.config_path.exists()
     assert not profile_share.unpublished(retried)
@@ -1595,6 +1592,74 @@ def test_a_failed_sync_keeps_the_confirmed_replacement_and_a_healthy_retry_publi
     assert "Profile v" in capsys.readouterr().out
     assert not receipt.exists()
     assert (store.root / profile_share.ROLES_MOVED).exists()
+
+
+def format_4_profile(**changes: object) -> dict:
+    """A confirmed profile as format 4 wrote it, with the per-project runtime switch its older build kept."""
+    raw = Profile(version=1, confirmed_at=NOW, prefs_import="done").model_dump(mode="json")
+    return raw | {"format": 4, "runtime": "vscode"} | changes
+
+
+def pending_receipt(store: Store, profile: dict) -> Path:
+    """A pending repair receipt as an older build staged it: its embedded profile as given, unmigrated."""
+    digest = profile_share.config_digest(store.root / profile_share.PROFILE)
+    receipt = store.root / profile_repair.RECEIPT
+    body = {
+        "format": 1, "id": "a" * 32, "scope": profile_repair.scope(store), "source": digest, "target": "absent",
+        "profile": profile,
+    }  # fmt: skip
+    receipt.write_text(json.dumps(body))
+    return receipt
+
+
+def test_a_pending_repair_receipt_written_at_format_4_with_runtime_resumes(
+    repo: Path, shared_repo, monkeypatch
+) -> None:
+    store = shared_project(repo, shared_repo, monkeypatch)
+    (store.root / profile_share.PROFILE).write_text(BAD_EFFORT)
+    receipt = pending_receipt(store, format_4_profile())
+
+    assert setup.run(repo, [], yes=False, local_files="no") == 0  # the owner's confirmation stands: no new ask
+    assert not receipt.exists()
+    published = Store.open(repo).read_profile()
+    assert (published.format, published.version, published.confirmed_at) == (profile_repair.PROFILE_FORMAT, 1, NOW)
+    assert (published.prefs_import, "runtime" in published.model_dump()) == ("done", False)
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        format_4_profile(format=6),
+        format_4_profile(colour="red"),
+        format_4_profile(confirmed_at=None),
+        {k: v for k, v in format_4_profile().items() if k != "format"},
+        format_4_profile(format=4.5),
+        format_4_profile(format=4.0),
+        format_4_profile(format=True),
+        format_4_profile(format="4"),
+    ],
+    ids=[
+        "future-format",
+        "unknown-field",
+        "unconfirmed",
+        "no-format",
+        "fractional-format",
+        "float-format",
+        "boolean-format",
+        "string-format",
+    ],
+)
+def test_a_pending_repair_receipt_that_is_future_or_malformed_is_still_refused_and_kept(
+    repo: Path, shared_repo, monkeypatch, raw: dict
+) -> None:
+    store = shared_project(repo, shared_repo, monkeypatch)
+    (store.root / profile_share.PROFILE).write_text(BAD_EFFORT)
+    receipt = pending_receipt(store, raw)
+    before = receipt.read_bytes()
+
+    with pytest.raises(StoreError, match="malformed or from another version"):
+        profile_repair.pending(store)
+    assert receipt.read_bytes() == before
 
 
 def test_a_receipt_replaced_before_publication_refuses_the_older_one_before_any_write(

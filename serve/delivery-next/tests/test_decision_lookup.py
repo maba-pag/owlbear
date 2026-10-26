@@ -1,5 +1,5 @@
-"""The decision lookup (TD-456, TD-459): workers in SDK and window steps and lead chats ask the picker, which reads the
-complete list. A failed lookup says failed, never "none apply"; a lookup attaches nothing to the Change.
+"""The decision lookup (TD-456, TD-459): workers in SDK steps and lead chats ask the picker, which reads the complete
+list. A failed lookup says failed, never "none apply"; a lookup attaches nothing to the Change.
 """
 
 import asyncio
@@ -15,7 +15,6 @@ from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
-from mcp import types
 
 from owlbear_decisions import Decision, Link, LinkType, Origin, Scope, State, new_id, write
 from owlbear_decisions.models import STATEMENT_LIMIT
@@ -24,7 +23,7 @@ from owlbear_delivery_next.change_contracts.decision_records import Decision as 
 from owlbear_delivery_next.change_contracts.decision_records import Pick
 from owlbear_delivery_next.change_contracts.models import Plan, Step, StepKind, Task
 from owlbear_delivery_next.change_flow import loop
-from owlbear_delivery_next.commands import chat_client, mcp_server, runner, step_mcp
+from owlbear_delivery_next.commands import chat_client, mcp_server, runner
 from owlbear_delivery_next.local_system import codebase
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.local_system.processes import Termination
@@ -32,12 +31,10 @@ from owlbear_delivery_next.machine_host import app
 from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.runtimes import sdk_adapter, step_decisions
-from owlbear_delivery_next.runtimes.results import Gate
 from owlbear_delivery_next.runtimes.session_result import Run
-from owlbear_delivery_next.runtimes.step_inbox import Inbox
 from owlbear_delivery_next.state_store import decision_archive, decision_store
 from owlbear_delivery_next.state_store.store import Lock
-from owlbear_delivery_next.workflow_steps import decisions_gate, lookup, pick, sessions
+from owlbear_delivery_next.workflow_steps import decisions_gate, lookup, pick
 
 AT = datetime(2026, 10, 22, 9, tzinfo=UTC)
 PROJECT = "shop-site"
@@ -83,15 +80,6 @@ def build(picking):
     return picking.change()
 
 
-def asked(question: str = QUESTION) -> types.CallToolRequestParams:
-    return types.CallToolRequestParams(name=tools.LOOKUP, arguments={"question": question})
-
-
-def relayed(inbox, params: types.CallToolRequestParams) -> types.CallToolResult:
-    call = step_mcp.relay(inbox)._request_handlers["tools/call"].handler  # noqa: SLF001 - the relay's own handler
-    return asyncio.run(call(None, params))
-
-
 def test_a_workers_lookup_in_an_sdk_step_reads_the_complete_list_answers_whole_and_counts_its_spend(
     picking, monkeypatch
 ):
@@ -127,72 +115,6 @@ def test_a_workers_lookup_in_an_sdk_step_reads_the_complete_list_answers_whole_a
     assert set(c.decisions_baseline.said) == {rule.id}  # a lookup answers; it attaches nothing
     exits = [e["exit"] for e in picking.store.events(picking.slug) if e.get("kind") == lookup.LABEL]
     assert exits == ["ok", "failed"]
-
-
-def test_a_workers_lookup_in_a_window_step_goes_through_the_relay_with_a_picks_timeout(picking, monkeypatch):
-    rule, other = picking.put(make()), picking.put(fonts())
-    building(picking, rule)
-    picking.picks.append(picked(other.id))
-    waited, said, real = [], [], step_mcp._LOCAL  # noqa: SLF001
-
-    class Opener:
-        def open(self, request, timeout):
-            waited.append(timeout)
-            return real.open(request, timeout=timeout)
-
-    def window(cfg, inbox):
-        gate = Gate(cfg, Run(cfg.session_id, runtime="window"), lambda **_e: None, lambda: None)
-        with Inbox(gate, inbox):
-            names = [t["name"] for t in step_mcp.forward(inbox, "GET", "/tools")["tools"]]
-            done = relayed(inbox, asked())
-        said.append((names, done.is_error, json.loads(done.content[0].text)))
-        return Run(cfg.session_id, "error", detail="stopped after its lookup", termination=DONE, runtime="window")
-
-    monkeypatch.setattr(sessions, "in_window", lambda _profile: True)
-    monkeypatch.setattr(sessions.vscode_adapter, "run", window)
-    monkeypatch.setattr(step_mcp, "_LOCAL", Opener())
-
-    c = build(picking)
-
-    [(names, error, answer)] = said
-    assert tools.LOOKUP in names
-    assert (error, [d["id"] for d in answer["decisions"]]) == (False, [other.id])
-    assert waited == [step_mcp.TIMEOUT, pick_tools.WAIT]  # a pick's time, not a result check's
-    assert c.spend.credits == 12.0
-    assert set(c.decisions_baseline.said) == {rule.id}
-
-
-def test_a_window_lookup_still_running_when_the_window_delivers_keeps_its_spend(picking, monkeypatch):
-    rule, other = picking.put(make()), picking.put(fonts())
-    building(picking, rule)
-    picking.picks.append(picked(other.id))
-    started, release, said, asking = threading.Event(), threading.Event(), [], []
-
-    async def blocked(cfg):
-        started.set()
-        await asyncio.to_thread(release.wait, 10)
-        return await picking.run(cfg)
-
-    def window(cfg, inbox):
-        gate = Gate(cfg, Run(cfg.session_id, runtime="window"), lambda **_e: None, lambda: None)
-        with Inbox(gate, inbox):
-            asking.append(threading.Thread(target=lambda: said.append(relayed(inbox, asked()))))
-            asking[0].start()
-            assert started.wait(10)
-            gate.finish("error", None, "stopped while its lookup runs")
-        cfg.journal.delivered()  # the runner's Change is replaced by a copy while the lookup runs
-        release.set()
-        return Run(cfg.session_id, "error", detail="stopped", termination=DONE, runtime="window")
-
-    monkeypatch.setattr(runner.sdk_adapter, "run", blocked)
-    monkeypatch.setattr(sessions, "in_window", lambda _profile: True)
-    monkeypatch.setattr(sessions.vscode_adapter, "run", window)
-
-    c = build(picking)
-    asking[0].join(10)
-
-    assert [d["id"] for d in json.loads(said[0].content[0].text)["decisions"]] == [other.id]
-    assert c.spend.credits == 12.0  # the shaping pick and the lookup that ended after the delivery
 
 
 def test_a_workers_lookup_lists_the_changes_own_decisions_whole(picking, monkeypatch):
@@ -299,7 +221,7 @@ def test_a_steps_settlement_rejects_later_lookups_waits_for_the_running_one_and_
     with ThreadPoolExecutor(2) as pool:
         running = pool.submit(asked_, question)
         until(lambda: asked_.admitted == 1 and work.entered)
-        change[0] = "the runner's now"  # a window's delivery replaced it
+        change[0] = "the runner's now"  # a delivery replaced it
         settling = pool.submit(asked_.settled, lambda: "the step's run")
         until(lambda: not asked_.open)
         assert json.loads(asked_(question)) == {"failed": lookup.ENDED}
@@ -346,16 +268,6 @@ def test_a_lead_chats_lookup_whose_processes_are_not_confirmed_gone_holds_the_ne
     assert held == {"failed": lookup.LEFT}
     assert rescanned["failed"].startswith("its pick cannot be trusted")  # it ran: the processes were seen gone
     assert len(picking.pickers()) == 2
-
-
-def test_a_lookup_the_relay_gets_no_answer_for_is_failed_not_a_stopped_step(tmp_path):
-    lost = relayed(tmp_path / "gone.json", asked())
-    assert (lost.is_error, json.loads(lost.content[0].text)) == (
-        True,
-        {"failed": "Delivery gave no answer to the lookup"},
-    )
-    gone = relayed(tmp_path / "gone.json", types.CallToolRequestParams(name="submit_result", arguments={}))
-    assert gone.content[0].text == step_mcp.NOT_RUNNING
 
 
 class Answer(io.BytesIO):

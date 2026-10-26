@@ -5,7 +5,7 @@ import { SOURCES, ROUNDS, LOOPS, state, drafts, show, notify, shown } from "./st
 import {
   cell, row, table, button, numberCell, designFailures, widths, sessionsAtOnce, prLabels, prMarker, subagentsCell,
   curatorThreshold, spotterCell, prefRows,
-  contextCell, ratesCell, editable, inactive,
+  contextCell, ratesCell, editable,
 } from "./cells.mjs";
 import { pendingLine, save, rename, reviewPrefs } from "./layers.mjs";
 import { packSection } from "./pack.mjs";
@@ -115,10 +115,6 @@ function folderSection() {
 function settingsSections() {
   const loaded = state.loaded, roles = Object.keys(loaded.settings.agents);
   const share = (n, of) => `${n} (${Math.round((100 * n) / of)}%)`;
-  const later = [["runtime", "Runtime"], ["visible", "Needs visibility"], ["categories", "Categories"]];
-  const general = [["Always visible (global switch)", loaded.settings.visible, "visible"],
-    ...Object.entries(loaded.settings.runtimes).map(([n, on]) => [`Runtime ${n} switched on`, on, `runtimes.${n}`])];
-  const { baseline, runtimes, categories } = loaded.catalogue;
   const text = (v) => cell(html`<p-text>${v}</p-text>`);
   const machine = (state.machine?.resolved?.missing ?? []).map((k) => `machine.${k}`);  // this machine's in force
   const unset = [...(loaded.settings.missing ?? []), ...machine];
@@ -243,20 +239,6 @@ function settingsSections() {
         [row(text("Labels"), prLabels()), row(text("Marker line"), prMarker())])}
     </section>
     ${packSection()}
-    <details class="panel">
-      <summary>Not applied yet: runtimes, visibility and tool categories</summary>
-      ${table("Per agent; not applied yet", ["Agent", "Runtime", "Needs visibility", "Categories"], "agents-later",
-        Object.entries(loaded.settings.agents).map(([role, eff]) => row(text(role),
-          ...later.map(([f, label]) => inactive(`${label} for ${role}`, eff[f], `agents.${role}.${f}`)))))}
-      ${table("Switches; not applied yet", ["Setting", "Value"], "general-later",
-        general.map(([label, value, key]) => row(text(label), inactive(label, value, key))))}
-      <p-text id="baseline" size="xs" color="contrast-medium">Every runtime has the baseline: ${baseline}.</p-text>
-      ${table("What each runtime adds; not used for routing yet", ["Runtime", "Adds over the baseline", "MCP servers",
-        "Live view", "Writes outside the work folder"], "runtimes", runtimes.map((r) => row(
-        ...[r.runtime, r.adds, r.mcp, r.live_view, r.outside_writes].map(text))))}
-      ${table("Tool categories an agent can ask for; not applied yet", ["Category", "Runtime", "Tools"], "categories",
-        Object.entries(categories).map(([name, c]) => row(...[name, c.runtime, c.tools.join(", ")].map(text))))}
-    </details>
     <div class="bar" role="region" aria-label="Save settings">
       ${button({ global: "Save global defaults", machine: "Save this machine's preferences" }[state.layer]
         ?? "Save project settings", save,

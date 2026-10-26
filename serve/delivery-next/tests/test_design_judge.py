@@ -14,7 +14,7 @@ from owlbear_delivery_next.change_contracts.visual_records import DetectorFindin
 from owlbear_delivery_next.design_packs import design_tools
 from owlbear_delivery_next.local_system import preload
 from owlbear_delivery_next.local_system.processes import Termination
-from owlbear_delivery_next.runtimes import sdk_adapter, window_files
+from owlbear_delivery_next.runtimes import sdk_adapter
 from owlbear_delivery_next.runtimes.results import ACCEPTED, Gate
 from owlbear_delivery_next.runtimes.session_result import Run, to_result
 from owlbear_delivery_next.settings import carried, roles
@@ -53,7 +53,7 @@ def look(verdict="pass", **fields):
     return base | fields
 
 
-def test_the_designer_is_its_own_role_with_its_skills_and_first_look_in_both_runtimes(tmp_path) -> None:
+def test_the_designer_is_its_own_role_with_its_skills_and_first_look() -> None:
     chosen = roles.chosen(resolve(None, Layer()), "design-review")
     assert (chosen.model, chosen.effort) == ("claude-opus-5.5", "high")  # TD-27: Opus high as designer
     agent = sdk_adapter.agent(StepKind.REVIEW, role="design-judge")
@@ -64,10 +64,6 @@ def test_the_designer_is_its_own_role_with_its_skills_and_first_look_in_both_run
     assert tools.FIRST_LOOK in agent["tools"]
     assert tools.FIRST_LOOK not in sdk_adapter.agent(StepKind.REVIEW)["tools"]  # the reviewer has none
     assert preload.missing("design-judge") == []
-    text = window_files.agent("design-judge", tmp_path / "inbox.json")(None)
-    relay, _ = window_files.names(tmp_path / "inbox.json")
-    assert f"{relay}/{tools.FIRST_LOOK}" in text
-    assert "skills: [owlbear-interface-design, owlbear-design-review]" in text
 
 
 def test_a_first_look_comes_once_before_the_final_verdict_and_releases_the_detectors_findings() -> None:
@@ -251,7 +247,7 @@ def test_a_judge_never_runs_the_judged_steps_callbacks(tmp_path, change_repo, mo
     step = sdk_adapter.Journal(delivered=lambda: touched.append("delivered"), replaced=lambda: touched.append("new"))
 
     async def fake(cfg):
-        cfg.journal.delivered()  # both runtimes call it once the first message is acknowledged
+        cfg.journal.delivered()  # the SDK calls it once the first message is acknowledged
         usage = {"credits": 4.37, "models": {"gpt-6.1-sol": {"credits": 4.37, "tokens": 65556}}}
         return Run(cfg.session_id, ending="result", usage=usage, termination=Termination(confirmed=True))
 
