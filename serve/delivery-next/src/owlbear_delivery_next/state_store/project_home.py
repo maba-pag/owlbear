@@ -240,10 +240,14 @@ def _hold(dfd: int, rel: str, held: list[int]) -> None:
 
 def _lock_at(dfd: int, name: str, path: str, held: list[int]) -> None:
     try:
-        fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_CREAT, 0o600, dir_fd=dfd)
+        fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CREAT, 0o600, dir_fd=dfd)
     except OSError as exc:
         msg = f"{path} cannot be locked ({exc.strerror}): nothing was moved"
         raise StoreError(msg) from exc
+    if not stat.S_ISREG(os.fstat(fd).st_mode):  # a special file would block a lock or a read: refused, untouched
+        os.close(fd)
+        msg = f"{path} is not a regular file: nothing was moved"
+        raise StoreError(msg)
     held.append(fd)
     try:
         fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)

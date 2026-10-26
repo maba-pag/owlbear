@@ -34,7 +34,7 @@ CURRENT_MODULES = (
     ("state_store/offline_proof.py", "5a4fb1b44ab554ba5e1174da3ae195882284180371011e46da85f4472c344688"),
     ("state_store/offline_protocol.py", "5142f7302a0e813785c5dd7944496b31c483b3969fc6440cb53defa721208946"),
     ("state_store/switched_authority.py", "15843f18dd3f41f041144dc5d3bfbbe38a2b390450dffb72cff3a0c35ff32624"),
-    ("state_store/project_home.py", "3fc7b495a987e6aa054b3f2b77ab5fafcc6e6c00b00dc02122807b6ad9a9e977"),
+    ("state_store/project_home.py", "a90dc8c12656999c47259dd7908a7eea67bbbbd71fd2078e9b3ca4079e4c9210"),
     ("state_store/project_move.py", "728486a956b1434a73e44a114edc229d4151eaf0ee8521915b02430d3d84f4b0"),
     ("state_store/store.py", "c93ae35c9fb506201ebb4ba6010c4be04fd6a8fb9f9ccb3cc1522fbc5e821561"),
 )
