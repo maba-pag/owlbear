@@ -12,6 +12,7 @@ import binascii
 import json
 import os
 import re
+import stat
 import unicodedata
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -206,14 +207,31 @@ def _generation(value: object) -> str:
 
 
 def read(path: Path) -> bytes | None:
-    """A journal file's bytes; None when it is not there, and a `JournalError` when it cannot be read."""
+    """A journal file's bytes; None only when no entry has its name, and a `JournalError` when it cannot be read.
+
+    The entry is opened without following a link and without blocking, and must be a regular file: a link, even a
+    dangling one, a pipe or a folder at its name is damage, never a missing journal that would clear the barrier.
+    """
     try:
-        return path.read_bytes()
+        descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
     except FileNotFoundError:
         return None
     except OSError as exc:
-        msg = f"the interrupted-batch journal cannot be read: {exc}"
+        msg = f"the interrupted-batch journal {path.name} cannot be read: {exc}"
         raise JournalError(msg) from exc
+    try:
+        if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+            msg = f"the interrupted-batch journal {path.name} is not a regular file"
+            raise JournalError(msg)
+        chunks = []
+        while chunk := os.read(descriptor, 1 << 16):
+            chunks.append(chunk)
+        return b"".join(chunks)
+    except OSError as exc:
+        msg = f"the interrupted-batch journal {path.name} cannot be read: {exc}"
+        raise JournalError(msg) from exc
+    finally:
+        os.close(descriptor)
 
 
 def pending(shared: DataRepo) -> Batch | None:

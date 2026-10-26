@@ -27,6 +27,7 @@ from owlbear_delivery_next.local_system.storage_io import atomic_write
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Sequence
+    from typing import Self
 
 CONFIG, CLAIM, MEMORY = "config.json", "repository", "memory"
 POINTER, OLD_POINTER = local_home.POINTER, local_home.OLD_POINTER
@@ -43,6 +44,21 @@ _log = logging.getLogger(__name__)
 
 class DataRepoError(ValueError):
     """The pointer names no usable repository, or a project folder belongs to another repository."""
+
+
+class Committed(str):
+    """What `DataRepo.commit` says: why it failed, else nothing, as before; and the commit it made, "" when none.
+
+    It is the notice string every caller already reads, so they need nothing new; a publication also reads `commit`
+    to tell its own commit from one the owner made meanwhile, never by a moved HEAD alone.
+    """
+
+    __slots__ = ("commit",)
+
+    def __new__(cls, notice: str, commit: str = "") -> Self:  # noqa: D102 - the class says it
+        made = super().__new__(cls, notice)
+        made.commit = commit
+        return made
 
 
 def _held(path: Path) -> str:
@@ -216,27 +232,38 @@ class DataRepo:
         until = time.monotonic() + SAVE_SECONDS if until is None else until
         return self.commit(paths, message, until) or self._push(until)
 
-    def commit(self, paths: Path | Sequence[Path], message: str, until: float | None = None) -> str:
-        """Commit ``paths`` alone if they changed; why that failed, else nothing. The caller holds ``locked``."""
+    def commit(self, paths: Path | Sequence[Path], message: str, until: float | None = None) -> Committed:
+        """Commit ``paths`` alone if they changed; why that failed, else nothing. The caller holds ``locked``.
+
+        The answer also names the commit made (`Committed.commit`): HEAD read right after Git made it, "" when none.
+        """
         until = time.monotonic() + SAVE_SECONDS if until is None else until
         rels = [p.relative_to(self.root).as_posix() for p in ([paths] if isinstance(paths, Path) else paths)]
+        why, rels = self._stage(rels, until)
+        if why or not rels:
+            return Committed(why)  # failed, or nothing changed: no commit was made
+        if (made := _git(self.root, "commit", "-q", "-m", message, "--", *rels, until=until)).returncode:
+            return Committed(f"saved, but not committed: {made.stderr.strip()[:200]}")
+        head = _git(self.root, "rev-parse", "--verify", "-q", "HEAD", until=until)
+        if head.returncode or not head.stdout.strip():
+            return Committed("saved and committed, but Git could not name the commit it made")
+        return Committed("", head.stdout.strip())
+
+    def _stage(self, rels: list[str], until: float) -> tuple[str, list[str]]:
+        """Stage those of *rels* that exist or are tracked; why that failed, and those to commit, none if unchanged."""
         try:
             rels = [r for r in rels if (self.root / r).exists() or self._tracked(r, until)]
         except DataRepoError as exc:
-            return f"saved, but not committed: {exc}"
+            return f"saved, but not committed: {exc}", []
         if not rels:
-            return ""  # removed before it was ever committed: nothing to commit
+            return "", []  # removed before it was ever committed: nothing to commit
         if (added := _git(self.root, "add", "--", *rels, until=until)).returncode:
-            return f"saved, but not committed: {added.stderr.strip()[:200]}"
+            return f"saved, but not committed: {added.stderr.strip()[:200]}", []
         staged = _git(self.root, "diff", "--cached", "--quiet", "--", *rels, until=until)
         if staged.returncode not in (0, 1):
-            return f"saved, but not committed: {staged.stderr.strip()[:200] or 'git could not read staged changes'}"
-        if (
-            staged.returncode == 1
-            and (made := _git(self.root, "commit", "-q", "-m", message, "--", *rels, until=until)).returncode
-        ):
-            return f"saved, but not committed: {made.stderr.strip()[:200]}"
-        return ""
+            why = staged.stderr.strip()[:200] or "git could not read staged changes"
+            return f"saved, but not committed: {why}", []
+        return "", rels if staged.returncode == 1 else []
 
     def _tracked(self, rel: str, until: float) -> bool:
         """Whether the index holds ``rel``; a failed probe cannot establish absence."""

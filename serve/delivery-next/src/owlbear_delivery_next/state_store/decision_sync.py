@@ -10,11 +10,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NamedTuple
 
 from owlbear_decisions import DecisionFileError
 from owlbear_decisions.storage import DECISIONS_DIR, parse
-from owlbear_delivery_next.local_system.data_repo import DataRepoError
+from owlbear_delivery_next.local_system.data_repo import Committed, DataRepoError
 from owlbear_delivery_next.state_store import decision_batch
 
 if TYPE_CHECKING:
@@ -68,43 +68,67 @@ def _merge_base(shared: DataRepo, until: float) -> str:
     return "" if said.returncode else said.stdout.strip()
 
 
-def _on_remote(shared: DataRepo, head: str, until: float) -> bool:
-    """Whether the fetched remote branch descends from *head*; unknown counts as not."""
-    return not shared.git("merge-base", "--is-ancestor", head, UPSTREAM, until=until).returncode
+def _on_remote(shared: DataRepo, head: str, until: float, tracking: str = UPSTREAM) -> bool:
+    """Whether the fetched remote branch (*tracking*) descends from *head*; unknown counts as not."""
+    return not shared.git("merge-base", "--is-ancestor", head, tracking, until=until).returncode
+
+
+class Target(NamedTuple):
+    """Where a publication goes: the local branch, its remote and remote branch, and that branch's fetched copy.
+
+    Read once, when the publication starts, and carried with it: a branch checked out later never retargets it.
+    """
+
+    branch: str
+    remote: str
+    ref: str
+    tracking: str
+
+
+def target(shared: DataRepo, until: float) -> Target | None:
+    """The checked-out branch and the remote branch it follows; None when it follows none, or HEAD is detached."""
+    branch = shared.git("symbolic-ref", "-q", "HEAD", until=until)
+    name = branch.stdout.strip()
+    if branch.returncode or not name:
+        return None
+    fields = "%(upstream:remotename)%00%(upstream:remoteref)%00%(upstream)"
+    said = shared.git("for-each-ref", f"--format={fields}", name, until=until)
+    remote, ref, tracking = ([*said.stdout.strip().split("\0"), "", ""])[:3]
+    if said.returncode or not remote or not ref.startswith("refs/heads/") or not tracking.startswith("refs/remotes/"):
+        return None
+    return Target(name, remote, ref, tracking)
 
 
 def proved(shared: DataRepo, head: str, until: float) -> bool:
     """Whether *head* is on the remote, pushing *head* itself first when it is HEAD's ancestor and the remote lacks it.
 
     Only *head*'s own commit is sent (`push_commit`), never HEAD: a commit made after it, a batch's or an owner's,
-    is not published by proving the head it grew from. The push is never forced: a remote that moved on refuses it
-    and nothing is proved.
+    is not published by proving the head it grew from. It goes to the remote branch the checkout followed when this
+    began, read once. The push is never forced: a remote that moved on refuses it and nothing is proved.
     """
+    goal = target(shared, until)
+    tracking = goal.tracking if goal else UPSTREAM
     if shared.git("fetch", "-q", until=until).returncode:
         return False
-    if _on_remote(shared, head, until):
+    if _on_remote(shared, head, until, tracking):
         return True
     current = _rev(shared, "HEAD", until)
     if current is None or shared.git("merge-base", "--is-ancestor", head, current, until=until).returncode:
         return False
-    if push_commit(shared, head, until) or shared.git("fetch", "-q", until=until).returncode:
+    if push_commit(shared, head, goal, until) or shared.git("fetch", "-q", until=until).returncode:
         return False
-    return _on_remote(shared, head, until)
+    return _on_remote(shared, head, until, tracking)
 
 
-def push_commit(shared: DataRepo, commit: str, until: float) -> str:
-    """Push exactly *commit* to the branch the checkout's branch follows, never forced; why not, else nothing.
+def push_commit(shared: DataRepo, commit: str, goal: Target | None, until: float) -> str:
+    """Push exactly *commit* to *goal*'s remote branch, never forced; why not, else nothing.
 
-    The commit is named by its id in the refspec, so what Git sends is the commit checked, whatever HEAD or the branch
-    names by the time the push reads them. A checkout whose branch follows no remote branch pushes nothing.
+    The commit is named by its id and the destination by the remote and branch read when the publication began, so
+    neither HEAD nor the branch checked out by the time the push runs changes what is sent or where.
     """
-    branch = shared.git("symbolic-ref", "-q", "HEAD", until=until)
-    name = branch.stdout.strip()
-    said = shared.git("for-each-ref", "--format=%(upstream:remotename)%00%(upstream:remoteref)", name, until=until)
-    remote, _, ref = said.stdout.strip().partition("\0")
-    if branch.returncode or not name or said.returncode or not remote or not ref.startswith("refs/heads/"):
+    if goal is None:
         return "the checkout's branch follows no remote branch, so nothing was pushed"
-    sent = shared.git("push", "-q", remote, f"{commit}:{ref}", until=until)
+    sent = shared.git("push", "-q", goal.remote, f"{commit}:{goal.ref}", until=until)
     return sent.stderr.strip()[:200] or "git push failed" if sent.returncode else ""
 
 
@@ -198,45 +222,49 @@ def publish(shared: DataRepo, paths: list[Path], message: str, until: float, hea
     made or the one a rebase made of it, must hold every after image too, checked on that pinned commit before its
     push. Otherwise the commit, if made, stays local and unpushed and the batch stays interrupted; nothing is undone.
     """
+    goal = target(shared, until)  # where this goes, read with its proof: a later checkout never retargets it
     before, busy = _ready(shared, until)
     rels = {p.relative_to(shared.root).as_posix() for p in paths}
     # nothing is committed unless HEAD is read, never while a rebase is active or unknown, nor before the batch is whole
     rows, refused = (None, busy) if busy is not None else _journalled(shared, rels, before)
     if refused is not None:
         return refused
-    failed = shared.commit(paths, message, until)
+    said = shared.commit(paths, message, until)
+    failed, created = str(said), said.commit if isinstance(said, Committed) else ""  # no identity: none is trusted
     now = _rev(shared, "HEAD", until)
     made = _ours(shared, before, rels, until)
-    if stop := _failed(shared, (failed, before, now, made), rows, paths, until) or _unproved(
+    if stop := _failed(shared, (failed, before, now, made, created), rows, paths, until) or _unproved(
         shared, now, rows, paths, until
     ):
         return stop
-    pushed = push_commit(shared, now, until) if now else "HEAD is not known"  # `_unproved` refused an unknown HEAD
+    pushed = push_commit(shared, now, goal, until) if now else "HEAD is not known"  # `_unproved` refused that
     if not pushed:
         return Sent()
     if refused := _rejected(shared, rels, pushed, until, own=bool(made)):
         return refused
-    return _rebase_push(shared, head, until, (rows, paths, rels, made, now))
+    return _rebase_push(shared, head, until, (rows, paths, rels, made, now, goal))
 
 
 type Rows = dict[str, bytes] | None  # the batch's after images by path, or None outside a journalled batch
 
 
 def _failed(
-    shared: DataRepo, commit: tuple[str, str, str | None, str], rows: Rows, paths: list[Path], until: float
+    shared: DataRepo, commit: tuple[str, str, str | None, str, str], rows: Rows, paths: list[Path], until: float
 ) -> Sent | None:
     """Why the commit is not pushed, with HEAD proved to be this call's own commit or the head it began on.
 
-    A failed commit is known only when HEAD did not move, else accepted only when provably ours and whole. Whatever
-    HEAD names must be this call's own commit or, for a save that changed nothing, the head it began on: an owner's
-    commit made meanwhile, even one keeping every file, is never pushed.
+    A failed commit is known only when HEAD did not move, else accepted only when provably ours and whole. A commit
+    that succeeded names the commit it made (`Committed.commit`): when it made none, HEAD must still be the head
+    it began on; when it made one, HEAD must be that very commit, also proved this call's own. An owner's commit made
+    meanwhile, even one keeping every file, is never pushed.
     """
-    failed, before, now, made = commit
+    failed, before, now, made, created = commit
     if failed and now is not None and now == before:
         return Sent(notice=failed, uncommitted=True)
     if failed and not (made and _holds(shared, made, rows, paths, until)):
         return Sent(notice=failed, ambiguous=True)
-    if now is not None and now in {before, made}:
+    allowed = {made} if failed else ({before} if not created else {created} & {made})
+    if now is not None and now in allowed:
         return None
     notice = f"saved in {shared.root}, but HEAD moved past this save's commit to one not provably its own, so nothing"
     return Sent(notice=f"{notice} is pushed; check it", ambiguous=True)
@@ -345,14 +373,22 @@ def _rejected(shared: DataRepo, rels: set[str], why: str, until: float, *, own: 
     return None
 
 
-def _not_rebased(shared: DataRepo, where: str, head: str, sent: str | None, until: float) -> Sent | None:
-    """Why nothing is rebased; then an owner's commit made meanwhile is never replayed or rewritten.
+def _not_rebased(
+    shared: DataRepo, where: str, head: str, refused: tuple[str | None, Target | None], until: float
+) -> Sent | None:
+    """Why nothing is rebased; then an owner's commit or branch switch made meanwhile is never replayed or rewritten.
 
-    The batch's *head* must be on the remote, or a rebase would rewrite it; and HEAD, read after that remote probe and
-    immediately before the rebase, must still be *sent*, the commit whose push was refused.
+    *refused* is the commit whose push was refused and the target it went to. The batch's *head* must be on that
+    target's remote branch, or a rebase would rewrite it; the checkout must still be on the target's branch, following
+    the same remote branch; and HEAD, read after those probes and immediately before the rebase, must still be that
+    commit.
     """
-    if not _on_remote(shared, head, until):
+    sent, goal = refused
+    if goal is None or not _on_remote(shared, head, until, goal.tracking):
         notice = f"{where}, but {head[:12]} is not on the remote, so it is not rebased; the owner resolves it"
+        return Sent(notice=notice, ambiguous=True)
+    if target(shared, until) != goal:
+        notice = f"{where}, but the checkout left the branch it was published from, so nothing is rebased; check it"
         return Sent(notice=notice, ambiguous=True)
     if sent is None or _rev(shared, "HEAD", until) != sent:
         notice = f"{where}, but HEAD moved past the commit whose push was refused, so nothing is rebased; check it"
@@ -361,30 +397,34 @@ def _not_rebased(shared: DataRepo, where: str, head: str, sent: str | None, unti
 
 
 def _rebase_push(
-    shared: DataRepo, head: str, until: float, batch: tuple[Rows, list[Path], set[str], str, str | None]
+    shared: DataRepo,
+    head: str,
+    until: float,
+    batch: tuple[Rows, list[Path], set[str], str, str | None, Target | None],
 ) -> Sent:
     """Rebase on the remote and push again; a rebase that would rewrite *head*, the batch's proof, is refused.
 
-    HEAD must still be the commit whose push was refused, read after the remote probes and immediately before the
-    rebase: an owner's commit made meanwhile is never replayed or rewritten. Afterwards the rebased commit must be
-    provably this save's own: its one commit replayed directly on the remote's branch and changing only the batch's
-    files, or, for a save that committed nothing, the remote's branch itself. It is checked to hold the batch, and
-    that very commit is what is pushed. An owner's commit made after the rebase is never pushed.
+    HEAD must still be the commit whose push was refused, on the branch the publication began on, read after the remote
+    probes and immediately before the rebase: an owner's commit or branch switch made meanwhile is never replayed or
+    rewritten. Afterwards the rebased commit must be provably this save's own: its one commit replayed directly on the
+    remote branch the publication began with and changing only the batch's files, or, for a save that committed
+    nothing, that remote branch itself. It is checked to hold the batch, and that very commit is what is pushed, to
+    that same remote branch. An owner's commit made after the rebase is never pushed.
     """
     where = f"saved and committed in {shared.root}"
-    rows, paths, rels, made, sent = batch
-    if refused := _not_rebased(shared, where, head, sent, until):
+    rows, paths, rels, made, sent, goal = batch
+    if refused := _not_rebased(shared, where, head, (sent, goal), until):
         return refused
     if failed := shared.rebase(until):
         return _rebase_failed(shared, where, failed, until)
-    rebased, upstream = _rev(shared, "HEAD", until), _rev(shared, UPSTREAM, until)
+    rebased, upstream = _rev(shared, "HEAD", until), _rev(shared, goal.tracking, until) if goal else None
     own = _ours(shared, upstream, rels, until) if made and upstream else ""
     if rebased is None or rebased not in {own or upstream, upstream}:  # upstream itself: nothing of ours left to send
         notice = f"{where}, but after the rebase HEAD is not provably this save's commit, so it is not pushed"
         return Sent(notice=f"{notice}; check it", ambiguous=True)
     if unproved := _unproved(shared, rebased, rows, paths, until):
         return unproved
-    if failed := push_commit(shared, rebased, until):
+    if failed := push_commit(shared, rebased, goal, until):
         return Sent(notice=f"{where}, but the push failed: {failed}")
     return Sent()
 

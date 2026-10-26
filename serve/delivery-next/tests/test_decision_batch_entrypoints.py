@@ -2996,3 +2996,171 @@ def test_an_owner_commit_before_publication_is_never_adopted_as_the_batch_base(
         assert shared.git("status", "--porcelain").stdout == ""
     assert decision_batch.pending(shared) is not None
     _no_authority(picking)
+
+
+@pytest.mark.parametrize("name", ["journal", "completed"])
+def test_a_dangling_link_at_the_journal_or_its_completed_list_holds_every_writer(
+    picking, shared_repo, monkeypatch, tmp_path, name
+):
+    """A link to nothing at the journal's name, or at its completed list's, is damage, never a missing file: no
+    decision is saved, no ordinary publication pushes or rebases, no reader answers, and the link is left as it is."""
+    _seed(picking)
+    shared, remote = picking.shared, shared_repo[1]
+    journal = decision_batch.journal_path(shared)
+    at = journal if name == "journal" else _completed_list(shared)
+    at.parent.mkdir(parents=True, exist_ok=True)
+    at.unlink(missing_ok=True)
+    nowhere = tmp_path / "nowhere"
+    at.symlink_to(nowhere)
+    published, git, seen = _remote_main(remote), _git_state(shared), []
+    real_git = DataRepo.git
+
+    def recording_git(self, *args, **kwargs):
+        seen.append(args[0] if args else "")
+        return real_git(self, *args, **kwargs)
+
+    new = make(title="Use UTC", statement="All timestamps use UTC.")
+    with pytest.raises(decision_batch.JournalError, match="cannot be read"):
+        decision_batch.pending(shared)
+    with monkeypatch.context() as m:
+        m.setattr(DataRepo, "git", recording_git)
+        with pytest.raises(decision_store.DecisionsUnavailable):
+            decision_store.save(shared, new, expected_revision=None, message="decisions: one")
+    assert not {"fetch", "commit", "push", "add", "rebase"} & set(seen)
+    assert not (shared.root / f"{PROJECT}/decisions/{new.id}.md").exists()
+    assert _git_state(shared) == git
+
+    settings = shared.root / "settings-note.txt"
+    settings.write_text("a setting\n")
+    with shared.locked():
+        said, pulled = shared.publish(settings, "settings: a note"), shared.pull()
+    assert "cannot be read" in said
+    assert "cannot be read" in pulled
+    assert _remote_main(remote) == published  # the setting is committed here, never pushed
+    assert at.is_symlink()
+    assert at.readlink() == nowhere
+    assert not nowhere.exists()
+    _no_authority(picking)
+
+
+def _git_in(where: Path, *args: str) -> str:
+    said = subprocess.run(["git", *args], cwd=where, check=True, capture_output=True, text=True)  # noqa: S603, S607
+    return said.stdout.strip()
+
+
+def _second_remote(shared: DataRepo, tmp_path: Path) -> Path:
+    """A second remote, ``elsewhere``, whose branch ``side`` is at HEAD and which a local ``side`` follows."""
+    elsewhere = tmp_path / "elsewhere.git"
+    _git_in(tmp_path, "init", "-q", "--bare", "-b", "main", str(elsewhere))
+    shared.git("remote", "add", "elsewhere", str(elsewhere))
+    shared.git("branch", "-q", "side")
+    shared.git("push", "-q", "-u", "elsewhere", "side")
+    return elsewhere
+
+
+def _push_refused_and_owner_branches(m: pytest.MonkeyPatch, remote: Path, other: Path, rebased: list) -> None:
+    """As the first push starts, another clone moves the remote on, so it is refused, and the owner checks out a new
+    branch at the refused commit, following ``elsewhere/side``; every rebase is recorded."""
+    real_git = DataRepo.git
+
+    def push_refused_and_owner_branches(self, *args, **kwargs):
+        if args[:1] == ("push",) and not other.exists():
+            _git_in(other.parent, "clone", "-q", str(remote), str(other))
+            (other / "unrelated.txt").write_text("another clone\n")
+            _git_in(other, "add", "-A")
+            _git_in(other, "-c", "user.name=t", "-c", "user.email=t@e", "commit", "-qm", "o")
+            _git_in(other, "push", "-q")
+            real_git(self, "checkout", "-q", "-b", "side2", "--track", "elsewhere/side")
+            real_git(self, "reset", "-q", "--keep", "main")  # the owner's new branch sits at the refused commit
+        if args[:1] == ("rebase",):
+            rebased.append(args)
+        return real_git(self, *args, **kwargs)
+
+    m.setattr(DataRepo, "git", push_refused_and_owner_branches)
+
+
+@pytest.mark.parametrize("case", ["checked-out-after-the-proof", "branched-before-the-rebase", "side-branch-healthy"])
+def test_a_publication_goes_where_it_began_whatever_branch_is_checked_out_later(
+    picking, shared_repo, monkeypatch, tmp_path, case
+):
+    """A save's commit is pushed to the remote branch the checkout followed when its publication began. The owner
+    checks out another branch, at the same commit and following another remote's branch a push could fast-forward,
+    after the commit is proved, or makes one at the refused commit before the rebase: nothing reaches that other
+    remote, and nothing is rebased. A save begun on a branch following another remote publishes there."""
+    _seed(picking)
+    shared, remote = picking.shared, shared_repo[1]
+    items, _, _ = _update_and_successor(picking)
+    elsewhere = _second_remote(shared, tmp_path)
+    if case == "side-branch-healthy":
+        shared.git("checkout", "-q", "side")
+    published, side = _remote_main(remote), _git_in(tmp_path, "--git-dir", str(elsewhere), "rev-parse", "side")
+    other, rebased = tmp_path / "other", []
+    real_unproved = decision_sync._unproved  # noqa: SLF001
+
+    def proved_then_owner_checks_out(repo, *args, **kwargs):
+        said = real_unproved(repo, *args, **kwargs)
+        repo.git("checkout", "-q", "side")
+        return said
+
+    with monkeypatch.context() as m:
+        if case == "checked-out-after-the-proof":
+            m.setattr(decision_sync, "_unproved", proved_then_owner_checks_out)
+        if case == "branched-before-the-rebase":
+            _push_refused_and_owner_branches(m, remote, other, rebased)
+        receipts = decision_store.save_all(shared, items, message="decisions: two")
+
+    on_side = _git_in(tmp_path, "--git-dir", str(elsewhere), "rev-parse", "side")
+    if case == "side-branch-healthy":
+        assert all(r.published for r in receipts)
+        assert on_side == shared.git("rev-parse", "HEAD").stdout.strip() != side
+        assert _remote_main(remote) == published
+        assert decision_batch.pending(shared) is None
+        return
+    assert on_side == side  # the other remote's branch is never fast-forwarded to this save's commit
+    if case == "checked-out-after-the-proof":
+        batch = shared.git("rev-parse", "main").stdout.strip()
+        assert shared.git("symbolic-ref", "HEAD").stdout.strip() == "refs/heads/side"  # the owner's checkout stays
+        assert shared.git("rev-parse", "HEAD").stdout.strip() == side
+        assert _remote_main(remote) == batch  # the commit proved, sent where the publication began
+        assert not any(r.saved for r in receipts)  # the owner's checkout no longer holds the batch: held for Finish
+        assert "not landed in Git" in receipts[0].notice
+        assert decision_batch.pending(shared) is not None
+        return
+    assert rebased == []
+    assert not any(r.saved for r in receipts)
+    assert "left the branch it was published from" in receipts[0].notice
+    assert shared.git("symbolic-ref", "HEAD").stdout.strip() == "refs/heads/side2"
+    assert shared.git("rev-parse", "HEAD").stdout.strip() == shared.git("rev-parse", "main").stdout.strip()
+    assert _remote_main(remote) == _git_in(other, "rev-parse", "HEAD")  # only the other clone's commit
+    assert decision_batch.pending(shared) is not None
+    _no_authority(picking)
+
+
+def test_an_owner_commit_of_the_batch_files_during_its_checks_is_never_pushed_as_a_no_op_save(
+    picking, shared_repo, monkeypatch
+):
+    """After the publication proved HEAD is the batch's head, and while it checks the batch's after images, the owner
+    commits the batch's files: the publisher's commit then makes nothing, so HEAD is the owner's commit, not this
+    save's and not the head it began on; nothing is pushed, the owner's commit stays and the batch stays interrupted."""
+    _seed(picking)
+    shared, remote = picking.shared, shared_repo[1]
+    items, _, _ = _update_and_successor(picking)
+    published, made = _remote_main(remote), []
+    real_journalled = decision_sync._journalled  # noqa: SLF001
+
+    def checked_while_the_owner_commits(repo, *args, **kwargs):
+        said = real_journalled(repo, *args, **kwargs)
+        repo.git("add", "-A", "--", PROJECT)
+        repo.git("commit", "-qm", "the owner commits the batch's files")
+        made.append(repo.git("rev-parse", "HEAD").stdout.strip())
+        return said
+
+    with monkeypatch.context() as m:
+        m.setattr(decision_sync, "_journalled", checked_while_the_owner_commits)
+        receipts = decision_store.save_all(shared, items, message="decisions: two")
+
+    assert not any(r.saved for r in receipts)
+    assert "not provably its own" in receipts[0].notice
+    _owner_commit_not_sent(shared, remote, published, made[0])
+    assert shared.git("log", "-1", "--format=%s").stdout.strip() == "the owner commits the batch's files"
+    _no_authority(picking)
