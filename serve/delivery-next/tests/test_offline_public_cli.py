@@ -214,3 +214,44 @@ def test_a_no_op_quarantine_refusal_helper_refuses_public_prepare(run, repo, cur
     assert REFUSED in capsys.readouterr().err
     assert not (project_home.clone_dir(repo) / offline_protocol.PREPARED).exists()
     assert source_marker(repo) == "7"
+
+
+def tree(root: Path) -> dict[str, bytes | None]:
+    """Every entry under *root* except git metadata: directories map to None, files to their bytes."""
+    found: dict[str, bytes | None] = {}
+    for path in sorted(root.rglob("*")):
+        rel = path.relative_to(root).as_posix()
+        if rel != ".git" and not rel.startswith(".git/"):
+            found[rel] = None if path.is_dir() else path.read_bytes()
+    return found
+
+
+@pytest.mark.usefixtures("current_binding", "boot")
+def test_the_unmodified_storage_io_build_prepares_through_the_default_public_prepare(run, repo) -> None:
+    assert run(repo, "prepare") == 0
+    assert (project_home.clone_dir(repo) / offline_protocol.PREPARED).exists()
+    assert source_marker(repo) == "999"
+
+
+@pytest.mark.usefixtures("current_binding", "boot")
+def test_a_committed_storage_io_guard_removal_refuses_default_public_prepare_before_any_write(
+    run, repo, current_package, capsys
+) -> None:
+    storage = current_package / "local_system" / "storage_io.py"
+    guard = (
+        "    if not stat.S_ISREG(os.fstat(lock_fd).st_mode):\n"
+        "        os.close(lock_fd)\n"
+        '        msg = "storage lock must be a regular file"\n'
+        "        raise ValueError(msg)\n"
+    )
+    text = storage.read_text(encoding="utf-8")
+    assert text.count(guard) == 1
+    storage.write_text(text.replace(guard, ""), encoding="utf-8")
+    who = ["-c", "user.name=t", "-c", "user.email=t@t"]
+    subprocess.run(["git", *who, "-C", str(current_package), "commit", "-qam", "drop lock guard"], check=True)  # noqa: S603, S607
+    before = tree(repo)
+
+    assert run(repo, "prepare") == 1
+    assert REFUSED in capsys.readouterr().err
+    assert tree(repo) == before
+    assert source_marker(repo) == "7"
