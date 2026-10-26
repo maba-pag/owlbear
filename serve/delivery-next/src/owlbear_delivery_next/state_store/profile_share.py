@@ -306,8 +306,8 @@ def retry(store: Store) -> str:
 
 
 @contextlib.contextmanager
-def _writer(store: Store, *, create: bool = True) -> Iterator[None]:
-    if store.shared:
+def _writer(store: Store, *, create: bool = True, shared: bool = True) -> Iterator[None]:
+    if store.shared and shared:
         with store.shared.locked():
             yield
         return

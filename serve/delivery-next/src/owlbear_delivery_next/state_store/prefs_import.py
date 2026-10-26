@@ -28,21 +28,39 @@ REVIEW = (
 )
 
 
-def _fill(store: Store, prof: Profile, basis: str, *, resumed: bool) -> None:
-    """Carry the legacy values into the project layer under its lock, if the layer is still the claimed one."""
+class _SupersededError(Exception):
+    """The claim was settled, cleared or replaced before the fill: the fill writes nothing."""
+
+
+def _fill(store: Store, prof: Profile, basis: str, *, resumed: bool) -> bool:
+    """Carry the legacy values into the project layer under its lock, if the layer is still the claimed one.
+
+    Returns False when the claim is no longer held: the config write is refused, so nothing is recreated.
+    """
     from owlbear_delivery_next.state_store.store import StoreError  # noqa: PLC0415 - the store imports its helpers
+
+    claim = prof.prefs_claim
 
     def change(cur: Layer) -> Layer:
         if cur.prefs_imported:
             return cur  # landed earlier (a crash before done): republish only
+        # the caller holds the shared lock or the config lock; the profile lock is taken inside it, as in the writer
+        with profile_share._writer(store, create=False, shared=False):  # noqa: SLF001 - claim read under its lock
+            held = profile_share._read_unlocked(store)  # noqa: SLF001 - the same lock as the claim
+        if held is None or (held.prefs_import, held.prefs_claim, held.prefs_basis) != ("pending", claim, basis):
+            raise _SupersededError
         if (resumed and basis in ("", ABSENT)) or profile_share.config_digest(store.config_path) != basis:
             raise StoreError(REVIEW)  # raised before any write: a deleted or changed config is not recreated
         return plan(cur, prof)
 
-    notice = store.update_config(Prepared(basis, change), "legacy preferences carried")
+    try:
+        notice = store.update_config(Prepared(basis, change), "legacy preferences carried")
+    except _SupersededError:
+        return False
     if notice:
         msg = f"the legacy preferences were not published: {notice}"
         raise StoreError(msg)
+    return True
 
 
 def _publish_config(store: Store) -> str:
@@ -67,6 +85,30 @@ def republish(store: Store) -> None:
         raise StoreError(msg)
 
 
+def _claimed(store: Store, prof: Profile) -> tuple[Profile, bool] | None:
+    """The pending claim this run may fill, with whether this run won it; None when there is nothing to fill.
+
+    The fresh read is the one the fill checks its claim against, so a claim replaced after this read is refused there.
+    """
+    from owlbear_delivery_next.state_store.store import StoreError  # noqa: PLC0415 - the store imports its helpers
+
+    if prof.prefs_import == "":
+        _, notice, won = store.mark_prefs_import(
+            "", "pending", profile_share.config_digest(store.config_path), uuid4().hex
+        )
+    elif profile_share.claim_unconfirmed(store, prof):
+        notice, won = profile_share.confirm_claim(store)
+    else:
+        return prof, False  # resumed from its own durable basis
+    if notice:
+        msg = f"the legacy import claim was not published: {notice}"
+        raise StoreError(msg)
+    fresh = store.read_profile()
+    if fresh is None or fresh.prefs_import != "pending":
+        return None
+    return fresh, won
+
+
 def run(store: Store) -> None:
     """Carry the owner's confirmed legacy preferences into the project layer once; raises on an unpublished step.
 
@@ -83,28 +125,12 @@ def run(store: Store) -> None:
     if prof.prefs_import == "done":
         republish(store)
         return
-    if prof.prefs_import == "":
-        _, notice, won = store.mark_prefs_import(
-            "", "pending", profile_share.config_digest(store.config_path), uuid4().hex
-        )
-        if notice:
-            msg = f"the legacy import claim was not published: {notice}"
-            raise StoreError(msg)
-        prof = store.read_profile()
-        if prof is None or prof.prefs_import != "pending":
-            return
-        _fill(store, prof, prof.prefs_basis, resumed=not won)  # a lost claim never creates the config
-    elif profile_share.claim_unconfirmed(store, prof):
-        notice, won = profile_share.confirm_claim(store)
-        if notice:
-            msg = f"the legacy import claim was not published: {notice}"
-            raise StoreError(msg)
-        prof = store.read_profile()
-        if prof is None or prof.prefs_import != "pending":
-            return
-        _fill(store, prof, prof.prefs_basis, resumed=not won)
-    else:
-        _fill(store, prof, prof.prefs_basis, resumed=True)
+    claimed = _claimed(store, prof)
+    if claimed is None:
+        return
+    fresh, won = claimed
+    if not _fill(store, fresh, fresh.prefs_basis, resumed=not won):  # a lost or superseded claim creates nothing
+        return
     _, notice, _ = store.mark_prefs_import("pending", "done")
     if notice:
         msg = f"the legacy import completion was not published: {notice}"

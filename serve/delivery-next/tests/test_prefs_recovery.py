@@ -95,6 +95,69 @@ def test_an_explicit_review_before_the_first_import_settles_it_so_a_deleted_conf
     assert fresh.read_profile().prefs_import == "done"
 
 
+def paused_after_claim(local: Store, monkeypatch, pause) -> Store:
+    """An importer over the same root that runs *pause* once, after it read its own claim and before it fills."""
+    winner = Store(local.root)
+    fill = winner.update_config
+
+    def paused(change, what="project layer", on_written=None):
+        monkeypatch.setattr(winner, "update_config", fill)
+        pause()
+        return fill(change, what, on_written)
+
+    monkeypatch.setattr(winner, "update_config", paused)
+    return winner
+
+
+def test_a_claim_settled_and_deleted_while_paused_is_not_refilled_by_the_stale_importer(local, monkeypatch):
+    local.write_profile(Profile(entries={profile.POLL: confirmed("45")}))
+
+    def owner_settles() -> None:
+        assert local.read_profile().prefs_import == "pending"  # the winner read its own claim first
+        local.mark_prefs_import("pending", "done")  # Settings completes the import
+        local.config_path.unlink(missing_ok=True)  # the owner deletes the project config
+
+    prefs_import.run(paused_after_claim(local, monkeypatch, owner_settles))
+
+    assert not local.config_path.exists()  # the stale fill never recreates the deleted config with legacy values
+    assert local.read_profile().prefs_import == "done"
+
+
+def test_a_claim_replaced_while_paused_is_not_filled_or_marked_done_by_the_stale_importer(local, monkeypatch):
+    local.write_profile(Profile(entries={profile.POLL: confirmed("45")}))
+
+    def newer_claim() -> None:
+        local.mark_prefs_import("pending", "pending", profile_share.ABSENT, "newer")  # the only path that moves it
+        local.config_path.unlink(missing_ok=True)
+
+    prefs_import.run(paused_after_claim(local, monkeypatch, newer_claim))
+
+    assert not local.config_path.exists()
+    prof = local.read_profile()
+    assert (prof.prefs_import, prof.prefs_claim) == ("pending", "newer")  # the newer claim is left to its own importer
+
+
+def test_a_healthy_claim_still_fills_its_config_once(local):
+    local.write_profile(Profile(entries={profile.POLL: confirmed("45")}))
+
+    prefs_import.run(local)
+
+    assert local.read_config().prefs.ci_poll_seconds == 45
+    assert local.read_profile().prefs_import == "done"
+
+
+def test_an_unreadable_profile_while_paused_is_a_visible_failure_that_writes_nothing(local, monkeypatch):
+    local.write_profile(Profile(entries={profile.POLL: confirmed("45")}))
+
+    def corrupt() -> None:
+        profile_share.path(local).write_text("{ not json")
+
+    with pytest.raises(StoreError, match="state of profile is unreadable"):
+        prefs_import.run(paused_after_claim(local, monkeypatch, corrupt))
+
+    assert not local.config_path.exists()
+
+
 def test_an_owner_review_that_sets_a_value_keeps_it_when_the_import_runs_later(local, tmp_path):
     local.write_profile(Profile(entries={profile.POLL: confirmed("45")}))
     c = client(local, tmp_path / "global" / "config.json", headers=AUTH)
