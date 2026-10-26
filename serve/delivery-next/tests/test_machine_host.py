@@ -22,7 +22,7 @@ from owlbear_delivery_next.change_contracts.chat_contract import HostFound
 from owlbear_delivery_next.change_contracts.decision_records import DecisionBaseline
 from owlbear_delivery_next.change_contracts.models import Change, Environment, Step, StepKind
 from owlbear_delivery_next.commands import chat_client, cli, mcp_server, replay_client, setup
-from owlbear_delivery_next.local_system import codebase, maintenance
+from owlbear_delivery_next.local_system import codebase, local_home, maintenance
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.machine_host import app, project, serve
 from owlbear_delivery_next.machine_host.machine import Machine
@@ -172,6 +172,26 @@ def test_only_the_registry_makes_a_clone_a_project_never_an_id_and_folder_left_b
 
     assert type(chat_client.workspace(own)) is chat_client.OwlBear
     assert type(chat_client.workspace(Path(p["path"]))) is chat_client.Chat
+
+
+def test_an_unreadable_registry_makes_no_clone_id_a_project_and_its_leftovers_stay(tmp_path, http):
+    """TD-435: with the registry unreadable no id counts, not even a registered one; nothing is removed."""
+    own = origin(clone(tmp_path / "owlbear"), "https://github.com/maba-pag/owlbear.git")
+    pid = project_home.ensure_id(project_home.clone_dir(own))
+    project_home.home(pid).mkdir(parents=True)
+    (project_home.home(pid) / "format").write_text("1\n")  # the leftover folder holds only the marker
+    shop = Path(add(http, clone(tmp_path / "shop"))["path"])
+    machine_json = local_home.root() / project_home.MACHINE
+    kept = machine_json.read_text()
+    machine_json.write_text("{not json")
+    try:
+        said = [type(chat_client.workspace(own)), type(chat_client.workspace(shop))]
+    finally:
+        machine_json.write_text(kept)
+
+    assert said == [chat_client.OwlBear, chat_client.Closed]
+    assert project_home.clone_id(project_home.clone_dir(own)) == pid
+    assert [p.name for p in project_home.home(pid).iterdir()] == ["format"]
 
 
 def test_a_folder_that_is_no_owlbear_project_gets_every_tool_refused_and_nothing_written(
@@ -683,6 +703,8 @@ def test_a_clone_without_its_chat_server_shows_the_setup_it_needs(tmp_path, http
     assert listed["setup"] == f"owlbear setup --repo {work}"
     (work / ".mcp.json").write_text(json.dumps(setup.with_server({}, "/py", work)))
     assert "setup" not in http.get("/api/next/projects").json()["projects"][0]
+    (work / ".mcp.json").write_text(json.dumps(setup.with_server({}, "/py")))  # it serves the folder it starts in
+    assert "setup" not in http.get("/api/next/projects").json()["projects"][0]
     (work / ".mcp.json").unlink()
     setup.user_mcp(Path.home()).parent.mkdir(parents=True)
     servers = setup.with_server({}, "/py", work)["mcpServers"]
@@ -728,8 +750,14 @@ def test_malformed_or_unrelated_server_entries_never_count_as_setup(tmp_path):
     assert setup.registered(work) is False
     setup.user_mcp(Path.home()).parent.mkdir(parents=True)
     unrelated = {"x": {"args": ["-m", "owlbear_delivery_next", "mcp", "--repo", "/other"]}, "y": {"args": [str(work)]}}
+    unrelated["z"] = setup.with_server({}, "/py")["mcpServers"][setup.SERVER]  # user-level: no folder of its own
     setup.user_mcp(Path.home()).write_text(json.dumps({"servers": unrelated}))
     assert setup.registered(work) is False
+    other = setup.with_server({}, "/py", Path("/other"))
+    (work / ".mcp.json").write_text(json.dumps(other))
+    assert setup.registered(work) is False
+    (work / ".mcp.json").write_text(json.dumps(setup.with_server({}, "/py", Path(f"{work}-old"))))
+    assert setup.registered(work) is False  # a path that merely contains this one
 
 
 def test_each_project_line_in_the_log_names_its_project(tmp_path, http, machine, capsys):

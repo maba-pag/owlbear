@@ -1,7 +1,7 @@
 # Tests
 
-The top-level `tests/` tree verifies workspace-wide contracts: setup and seed behavior, package
-boundaries, MCP registrations, memory and knowledge persistence, hooks, CI workflows, and the agent
+The top-level `tests/` tree verifies workspace-wide contracts: package
+boundaries, MCP registrations, memory and knowledge persistence, CI workflows, and the agent
 ecosystem. It is development evidence, not a runtime package.
 
 ## What lives here
@@ -30,7 +30,7 @@ uv run pytest tests/test_ci_workflows.py -q
 ```
 
 A focused run should report the selected tests and a zero exit status. If collection or imports
-fail, run the locked workspace setup from the [development README](../README.md) before treating a
+fail, run the locked workspace setup from the [contributing guide](../CONTRIBUTING.md) before treating a
 behavioral failure as a product defect.
 
 ## What is not here

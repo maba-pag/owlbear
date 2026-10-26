@@ -28,11 +28,11 @@ _SCOPE_SPEC.loader.exec_module(_CI_SCOPE)
 _EXPECTED_AGENTS = {
     "knowledge-enricher",
     "knowledge-ingestor",
-    "memory-curator",
-    "test-curator",
 }
 _RETIRED_AGENTS = {
     "acceptor",
+    "memory-curator",
+    "test-curator",
     "auditor",
     "builder-challenger",
     "collector",
@@ -42,6 +42,8 @@ _RETIRED_AGENTS = {
     "verifier-challenger",
 }
 _RETIRED_SKILLS = {
+    "w-mem-curation",
+    "w-test-curation",
     "h-excalidraw-diagram",
     "h-mcp-delivery",
     "r-pipeline-protocol",
@@ -207,7 +209,6 @@ def test_agent_workflow_covers_its_contract_tests_without_duplicate_paths() -> N
         path in pytest_run
         for path in (
             "tests/test_agent_ecosystem_validation.py",
-            "tests/test_write_guard_hooks.py",
             "tests/test_knowledge_ops_contract.py",
         )
     )
@@ -362,14 +363,6 @@ def test_agent_validator_rejects_unresolved_required_skills(tmp_path: Path) -> N
     assert any("required skills do not resolve" in error for error in errors)
 
 
-def test_agent_validator_requires_declared_role_hooks(tmp_path: Path) -> None:
-    path = _write_agent(tmp_path, "test-curator", _agent_text("test-curator"))
-
-    errors = _AGENT_VALIDATOR.validate_agent(path)
-
-    assert any("missing required PreToolUse hook" in error for error in errors)
-
-
 def test_agent_validator_rejects_missing_hook_scripts(tmp_path: Path) -> None:
     content = _agent_text("reader").replace(
         "agents: []\n---",
@@ -377,7 +370,7 @@ def test_agent_validator_rejects_missing_hook_scripts(tmp_path: Path) -> None:
 hooks:
   PreToolUse:
     - type: command
-      command: uv run python .owlbear/hooks/missing.py
+      command: uv run python .owlbear/scripts/missing.py
 ---""",
     )
     path = _write_agent(tmp_path, "reader", content)
@@ -565,31 +558,3 @@ def test_project_doc_instruction_declares_local_standard_route() -> None:
     } <= set(apply_to.split(","))
     assert "`r-doc-standards`" in content
     assert (_SKILLS_ROOT / "r-doc-standards/SKILL.md").is_file()
-
-
-def test_memory_curator_identity_deferral_reporting_split() -> None:
-    """Automatic curation keeps identity-only uncertainty pending without reporting it."""
-    workflow = (_SKILLS_ROOT / "w-mem-curation/SKILL.md").read_text(encoding="utf-8")
-    curator = (_AGENTS_ROOT / "memory-curator.agent.md").read_text(encoding="utf-8")
-    structure = (_SKILLS_ROOT / "h-memory-structure/SKILL.md").read_text(encoding="utf-8")
-
-    content = " ".join(f"{workflow}\n{curator}\n{structure}".split())
-
-    assert "Classify content before provenance or scope." in content
-    assert "`*` is anonymous provenance" in content
-    assert (
-        "Identity-only uncertainty remains pending and is omitted from automatic skip and conflict summaries."
-        in content
-    )
-    assert "Conflicts and ordinary content or scope uncertainty remain reportable." in content
-    assert "another reviewed non-pending entry or a readable local definition" in content
-
-
-def test_memory_curator_required_skill_falls_back_to_shared_root() -> None:
-    """The curator's logical workflow resolves when no project-local override exists."""
-    path = _AGENTS_ROOT / "memory-curator.agent.md"
-    agent = path.read_text(encoding="utf-8")
-
-    assert "`w-mem-curation`" in agent.split("<required_reading>", 1)[1].split("</required_reading>", 1)[0]
-    assert _AGENT_VALIDATOR._check_required_reading(agent, path) == []  # noqa: SLF001
-    assert {"owlbear-memory/list_memories", "owlbear-memory/commit_memory_batch"} <= set(_frontmatter(path)["tools"])

@@ -157,12 +157,6 @@ def test_an_unrouted_python_source_falls_back_to_full_python_suite() -> None:
     assert scope is None
 
 
-def test_hook_source_routes_guard_tests() -> None:
-    scope = testing_module._python_scope(".owlbear/hooks/deny-src-writes.py")  # noqa: SLF001
-
-    assert scope == ["tests/test_write_guard_hooks.py"]
-
-
 def test_deleted_test_path_falls_back_to_full_python_suite() -> None:
     commands = _commands_for_paths(["tests/test_deleted.py"], all_tests=False, coverage=False)
 

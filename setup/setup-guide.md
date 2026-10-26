@@ -105,8 +105,12 @@ New Change's shaping chat recalls and saves memory with, also in `.mcp.json`, an
 line for the settings file. Reload the project's VS Code window; the **Setup required** note
 disappears.
 
+The `.mcp.json` entries name OwlBear's Python through `${HOME}` and no project path: VS Code and the
+Copilot CLI start them in the project folder, so they serve whichever project they sit in.
+
 Setup never writes a file Git tracks. For a tracked `.mcp.json` it prints the Delivery server entry
-to add under `"servers"` with **MCP: Open User Configuration** instead. The memory server has no such
+to add under `"servers"` with **MCP: Open User Configuration** instead; that entry names the project
+with `--repo`, because a user-level server has no project folder of its own. The memory server has no such
 fallback: without it the shaping chat works on without memory. Setup offers it only once a folder in the
 shared data repository holds the project, because that folder is where the memory lives; without one it
 prints `Memory server not registered:` and the reason.

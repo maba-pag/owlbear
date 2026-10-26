@@ -8,7 +8,6 @@ portable source tree copied into a consumer project.
 
 | Area | Role |
 | --- | --- |
-| `hooks/` | Project-local write hooks used by the development checkout |
 | `instructions/`, `prompts/`, and `skills/` | Project-local operational customizations loaded alongside the portable shared ecosystem |
 | `scripts/` | Development validators and operational helper scripts |
 | `research/` | OwlBear's plan and status, and build designs of work not yet built; other research lives in the project's folder of the data repository |

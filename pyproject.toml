@@ -54,9 +54,8 @@ src = [
   "serve/tools/src",
 ]
 
-# Hooks run under the machine's python3 and CI runs these scripts with the runner's, not the workspace Python.
+# CI runs these scripts with the runner's python3, not the workspace Python.
 [tool.ruff.per-file-target-version]
-".owlbear/hooks/*.py" = "py312"
 ".owlbear/scripts/diagrams/*.py" = "py312"
 ".github/scripts/*.py" = "py312"
 "serve/tools/src/owlbear_tools/dependency_ci.py" = "py312"
@@ -72,12 +71,6 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-".owlbear/hooks/*.py" = [
-  "C901",   # hook scripts have inherently complex path-extraction logic
-  "INP001", # .owlbear/hooks/ is not a package — direct-run scripts are expected here
-  "PLR0912", # guard scripts branch by path rule category
-  "T201",   # print() is the stdout I/O contract for VS Code hook scripts
-]
 "serve/browser/src/owlbear_browser/_errors.py" = [
   "N818",   # AuthenticationRequired is an established public API name
 ]
