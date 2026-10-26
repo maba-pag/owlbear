@@ -37,29 +37,15 @@ read-only view, and the old decision record is Git history (TD-466). Look decisi
 ### Asking the Owner
 
 When the owner decides or re-decides anything consequential, including a read-back or a recorded
-decision under review, ask one decision per question with the structured question tool, as his
-decisions TD-41..43, TD-150 and TD-156 in [the decisions](../.owlbear/decisions.md) define:
+decision under review, ask one decision per question in his format (TD-41..43, TD-156), written out in
+the [shaping skill's Read-Back](../serve/delivery-next/src/owlbear_delivery_next/skills/owlbear-change-shaping/SKILL.md#read-back).
+Before asking, challenge the proposal against his intent: what it lacks and what it overdoes, not only
+what is wrong (TD-150). In OwlBear also:
 
-- The message shows the decision's record (its statement and origin) and what changed since.
-- Options: three close variants of the decision (fewer only when fewer really differ, never padded),
-  the matching one at a varying position and never verbatim; one or two other directions, the opposite
-  among them; then, in this order,
-  "take your recommendation (…)" naming the recommendation in the brackets, "none of these: show me
-  more options" and "explain first". No other recommendation mark; free text stays open.
-- "Take your recommendation" records what the option showed as `approved` (`record_decision` with
-  `confirmed=true` and `origin="approved"`); details you add when recording stay `autonomous` with
-  their reason.
-  "Show me more options" asks again across directions, each with pro, con, risk and its own
-  percentage that it is a good choice. "Explain first" (his shorthand "nmdpcro": details, pro, con,
-  risk, opinion) explains each option neutrally, then asks again.
-- Free text is never recorded as written: offer two to five readings that fill its gaps differently,
-  plus "your words as written", "show me more readings" and "explain first". Read back free text and
-  unclear answers at once; a chosen option counts as confirmed; end the session with one check of
-  everything you record (TD-448).
-- Before asking, challenge the proposal against his intent: what it lacks and what it overdoes,
-  not only what is wrong (TD-150).
 - Record each answer with `record_decision`: his confirmed intent, never his words (TD-449); a changed
-  decision names the one it replaces.
+  decision names the one it replaces. "Take your recommendation" records what the option showed as
+  `approved` (`confirmed=true`, `origin="approved"`); details you add stay `autonomous` with their reason.
+- End the session with one check of everything you record (TD-448).
 
 ## Directory Structure
 
