@@ -9,6 +9,7 @@ failure, like a raised error.
 
 from __future__ import annotations
 
+import contextlib
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
@@ -32,23 +33,35 @@ class _SupersededError(Exception):
     """The claim was settled, cleared or replaced before the fill: the fill writes nothing."""
 
 
+def _claim_held(store: Store, claim: str, basis: str) -> None:
+    """Raise _SupersededError unless the profile still holds this pending claim; the caller holds the private lock."""
+    held = profile_share._read_unlocked(store)  # noqa: SLF001 - the claim is read under the private lock
+    if held is None or (held.prefs_import, held.prefs_claim, held.prefs_basis) != ("pending", claim, basis):
+        raise _SupersededError
+
+
 def _fill(store: Store, prof: Profile, basis: str, *, resumed: bool) -> bool:
     """Carry the legacy values into the project layer under its lock, if the layer is still the claimed one.
 
-    Returns False when the claim is no longer held: the config write is refused, so nothing is recreated.
+    The claim is checked under the private lock. An unshared clone keeps that lock through the write, so a mark or
+    clear that waits for it cannot land between the check and the write. Returns False when the claim is no longer
+    held: nothing is written, so nothing is recreated.
     """
     from owlbear_delivery_next.state_store.store import StoreError  # noqa: PLC0415 - the store imports its helpers
 
     claim = prof.prefs_claim
+    held_through_write = contextlib.ExitStack()
 
     def change(cur: Layer) -> Layer:
+        # a shared clone's shared lock already orders marks, and its publication takes the private lock itself
+        if store.shared:
+            with profile_share._writer(store, create=False, shared=False):  # noqa: SLF001 - the claim's own lock
+                _claim_held(store, claim, basis)
+        else:
+            held_through_write.enter_context(profile_share._writer(store, create=False, shared=False))  # noqa: SLF001
+            _claim_held(store, claim, basis)
         if cur.prefs_imported:
             return cur  # landed earlier (a crash before done): republish only
-        # the caller holds the shared lock or the config lock; the profile lock is taken inside it, as in the writer
-        with profile_share._writer(store, create=False, shared=False):  # noqa: SLF001 - claim read under its lock
-            held = profile_share._read_unlocked(store)  # noqa: SLF001 - the same lock as the claim
-        if held is None or (held.prefs_import, held.prefs_claim, held.prefs_basis) != ("pending", claim, basis):
-            raise _SupersededError
         if (resumed and basis in ("", ABSENT)) or profile_share.config_digest(store.config_path) != basis:
             raise StoreError(REVIEW)  # raised before any write: a deleted or changed config is not recreated
         return plan(cur, prof)
@@ -57,6 +70,8 @@ def _fill(store: Store, prof: Profile, basis: str, *, resumed: bool) -> bool:
         notice = store.update_config(Prepared(basis, change), "legacy preferences carried")
     except _SupersededError:
         return False
+    finally:
+        held_through_write.close()
     if notice:
         msg = f"the legacy preferences were not published: {notice}"
         raise StoreError(msg)

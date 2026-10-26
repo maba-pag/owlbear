@@ -25,7 +25,7 @@ from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.runtimes import readiness
 from owlbear_delivery_next.settings import config, profile
 from owlbear_delivery_next.settings.config import Layer, Prefs
-from owlbear_delivery_next.state_store import prefs_import, profile_repair, profile_share, roles_move
+from owlbear_delivery_next.state_store import layers, prefs_import, profile_repair, profile_share, roles_move
 from owlbear_delivery_next.state_store.store import RoleSourceError, Store, StoreError
 
 AUTH = {"authorization": "Bearer " + "t"}
@@ -135,6 +135,52 @@ def test_a_claim_replaced_while_paused_is_not_filled_or_marked_done_by_the_stale
     assert not local.config_path.exists()
     prof = local.read_profile()
     assert (prof.prefs_import, prof.prefs_claim) == ("pending", "newer")  # the newer claim is left to its own importer
+
+
+def test_a_mark_and_an_owner_clear_during_an_unshared_claims_locked_write_wait_for_it(local, monkeypatch):
+    local.write_profile(Profile(entries={profile.POLL: confirmed("45")}))
+    real_write = layers.atomic_write
+    racers: list[threading.Thread] = []
+    errors: list[BaseException] = []
+    waiting: list[bool] = []
+
+    def in_thread(action) -> threading.Thread:
+        def body() -> None:
+            try:
+                action()
+            except BaseException as exc:  # noqa: BLE001 - a worker failure must fail the test, not vanish
+                errors.append(exc)
+
+        thread = threading.Thread(target=body)
+        thread.start()
+        return thread
+
+    def owner_clears() -> None:
+        local.save(local.config_path, Layer, lambda cur: cur.model_copy(update={"prefs": Prefs()}), "owner", owner=True)
+
+    def write_with_racers(target, content) -> None:
+        if not racers:  # the winner's own write, under the config lock and the claim's private lock
+            racers.extend(
+                [
+                    in_thread(lambda: Store(local.root).mark_prefs_import("pending", "done")),
+                    in_thread(owner_clears),
+                ]
+            )
+            for thread in racers:
+                thread.join(0.3)
+            waiting.extend(thread.is_alive() for thread in racers)
+        real_write(target, content)
+
+    monkeypatch.setattr(layers, "atomic_write", write_with_racers)
+    prefs_import.run(local)
+    for thread in racers:
+        thread.join(10)
+
+    assert waiting == [True, True]  # the mark and the clear waited for the write: neither landed inside it
+    assert not any(thread.is_alive() for thread in racers)  # no deadlock: every racer finished
+    assert errors == []
+    assert local.read_config().prefs.ci_poll_seconds is None  # the owner's clear came after the import's write
+    assert local.read_profile().prefs_import == "done"
 
 
 def test_a_healthy_claim_still_fills_its_config_once(local):
