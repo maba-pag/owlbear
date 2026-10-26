@@ -90,19 +90,23 @@ def proved(shared: DataRepo, head: str, until: float, cont: Continuation | None 
     is never forced: a remote that moved on refuses it and nothing is proved.
     """
     goal = cont.goal if cont else target(shared, until)
-    tracking = goal.tracking if goal else UPSTREAM
-    if goal is not None and moved(shared, goal, until):  # another repository's branch never proves this one
+    if goal is None or moved(shared, goal, until):  # an unknown or different repository proves nothing
         return False
+    tracking = goal.tracking
     if shared.git("fetch", "-q", until=until).returncode:
         return False
     if _on_remote(shared, head, until, tracking):
-        return True
+        return not moved(shared, goal, until)
     current = _rev(shared, "HEAD", until)
     if current is None or shared.git("merge-base", "--is-ancestor", head, current, until=until).returncode:
         return False
-    if push_commit(shared, head, goal, until) or (goal is not None and moved(shared, goal, until)):
+    if push_commit(shared, head, goal, until) or moved(shared, goal, until):
         return False  # sent nowhere, or the remote now points at another repository than the one pushed to
-    return not shared.git("fetch", "-q", until=until).returncode and _on_remote(shared, head, until, tracking)
+    return (
+        not shared.git("fetch", "-q", until=until).returncode
+        and _on_remote(shared, head, until, tracking)
+        and not moved(shared, goal, until)
+    )
 
 
 def rebase(shared: DataRepo, until: float, guard: Callable[[], str] | None = None) -> str:
@@ -185,7 +189,10 @@ def _stray(shared: DataRepo, cont: Continuation, until: float) -> tuple[str | No
     branch as last fetched, or is unknown.
     """
     if target(shared, until) != cont.goal:
-        notice = f"the checkout left the branch {cont.own[:12]} was published from, so nothing more was written"
+        notice = (
+            f"the checkout left the branch or repository {cont.own[:12]} was published from, "
+            "so nothing more was written"
+        )
         return None, f"{notice}; check it"
     head, tracking = _rev(shared, "HEAD", until), cont.goal.tracking if cont.goal else UPSTREAM
     if head and (head == cont.own or _on_remote(shared, head, until, tracking)):
@@ -228,7 +235,10 @@ def publish(  # noqa: PLR0913, PLR0917 - a flag round's publication also carries
     """
     goal = target(shared, until)  # where this goes, read with its proof: a later checkout never retargets it
     if cont is not None and goal != cont.goal:
-        notice = "the checkout left the branch this save was published from, so nothing more is committed; check it"
+        notice = (
+            "the checkout left the branch or repository this save was published from, "
+            "so nothing more is committed; check it"
+        )
         return Sent(notice=notice, ambiguous=True)
     before, busy = _ready(shared, until)
     rels = {p.relative_to(shared.root).as_posix() for p in paths}
@@ -402,7 +412,10 @@ def _not_rebased(
         notice = f"{where}, but {head[:12]} is not on the remote, so it is not rebased; the owner resolves it"
         return Sent(notice=notice, ambiguous=True)
     if target(shared, until) != goal:
-        notice = f"{where}, but the checkout left the branch it was published from, so nothing is rebased; check it"
+        notice = (
+            f"{where}, but the checkout left the branch or repository it was published from, "
+            "so nothing is rebased; check it"
+        )
         return Sent(notice=notice, ambiguous=True)
     if sent is None or _rev(shared, "HEAD", until) != sent:
         notice = f"{where}, but HEAD moved past the commit whose push was refused, so nothing is rebased; check it"

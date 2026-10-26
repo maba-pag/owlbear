@@ -3130,7 +3130,7 @@ def test_a_publication_goes_where_it_began_whatever_branch_is_checked_out_later(
         return
     assert rebased == []
     assert not any(r.saved for r in receipts)
-    assert "left the branch it was published from" in receipts[0].notice
+    assert "left the branch or repository it was published from" in receipts[0].notice
     assert shared.git("symbolic-ref", "HEAD").stdout.strip() == "refs/heads/side2"
     assert shared.git("rev-parse", "HEAD").stdout.strip() == shared.git("rev-parse", "main").stdout.strip()
     assert _remote_main(remote) == _git_in(other, "rev-parse", "HEAD")  # only the other clone's commit

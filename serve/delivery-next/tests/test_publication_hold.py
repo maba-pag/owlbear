@@ -1101,6 +1101,52 @@ def test_a_continuation_never_proves_its_commit_on_a_remote_repointed_to_another
     assert remote_head(remote) != made
 
 
+def test_a_repoint_during_the_proof_fetch_never_proves_another_repositorys_commit(three, tmp_path, monkeypatch):
+    from owlbear_delivery_next.state_store.decision_target import Continuation  # noqa: PLC0415
+
+    winner, remote, fork, made, goal = repointed(three, tmp_path)
+    root = winner.shared.root
+    git(root, "push", "-q", str(fork), f"{made}:refs/heads/main")  # B holds it; the captured repository A does not
+    git(root, "remote", "set-url", "origin", str(remote))
+    git(root, "config", "remote.origin.pushurl", str(remote))
+    before, fired, owner, real_git = (remote_refs(remote), remote_refs(fork)), [], [], DataRepo.git
+
+    def fetch_after_repoint(self, *args, until=None):
+        if self.root == root and args[:1] == ("fetch",) and not fired:
+            fired.append(True)
+            git(root, "remote", "set-url", "origin", str(fork))
+            git(root, "config", "remote.origin.pushurl", str(fork))
+            owner.append(owner_state(root))
+        return real_git(self, *args, until=until)
+
+    monkeypatch.setattr(DataRepo, "git", fetch_after_repoint)
+    proved = decision_sync.proved(winner.shared, made, time.monotonic() + 30, Continuation(made, goal))
+    assert fired == [True]
+    assert not proved
+    assert (remote_refs(remote), remote_refs(fork)) == before
+    assert owner_state(root) == owner[0]
+
+
+def test_a_proof_with_unreadable_repository_addresses_is_not_known_or_fetched(three, monkeypatch):
+    from owlbear_delivery_next.state_store import decision_target  # noqa: PLC0415
+
+    winner, _, remote = three
+    root = winner.shared.root
+    head = git(root, "rev-parse", "HEAD")
+    assert remote_head(remote) == head
+    calls, real_git = [], DataRepo.git
+
+    def record(self, *args, until=None):
+        if self.root == root:
+            calls.append(args)
+        return real_git(self, *args, until=until)
+
+    monkeypatch.setattr(decision_target, "addresses", lambda *_args: None)
+    monkeypatch.setattr(DataRepo, "git", record)
+    assert not decision_sync.proved(winner.shared, head, time.monotonic() + 30)
+    assert not [args for args in calls if args[:1] in {("fetch",), ("push",)}]
+
+
 def test_an_owned_decision_push_to_an_unchanged_address_with_spaces_lands(three, tmp_path):
     winner, _, remote = three
     root = winner.shared.root
