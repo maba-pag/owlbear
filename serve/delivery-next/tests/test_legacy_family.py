@@ -137,7 +137,7 @@ def test_a_no_op_current_open_switched_is_an_unknown_build(current_binding: Bind
     _edit(
         current_binding.package,
         "state_store/project_home.py",
-        "_publish_markers(folder_fd, pfd, target, previous, moved=True)",
+        "_publish_markers(folder_fd, tfd, previous, moved=True)",
         "None",
     )
     reasons = _reasons(current_binding)

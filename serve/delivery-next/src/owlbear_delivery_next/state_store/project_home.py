@@ -268,16 +268,22 @@ def _has_locks(folder_fd: int) -> bool:
     return any(_is_lock(n) and n != project_move.MOVE_LOCK for n in os.listdir(folder_fd))
 
 
-def _publish_markers(folder_fd: int, pfd: int, target: Path, previous: int, *, moved: bool) -> None:
-    project_move.make_dir(pfd, target.name)
-    tfd = fd_tree.open_dir(pfd, target.name)
-    try:
-        if fd_tree.stat_at(tfd, MARKER) is None:
-            fd_tree.write_at(tfd, MARKER, f"{previous or STORE_FORMAT}\n")  # keeps the format it was written in
-    finally:
-        os.close(tfd)
+def _publish_markers(folder_fd: int, tfd: int, previous: int, *, moved: bool) -> None:
+    """Write the target's format through the descriptor already validated: the name is never reopened here."""
+    if fd_tree.stat_at(tfd, MARKER) is None:
+        fd_tree.write_at(tfd, MARKER, f"{previous or STORE_FORMAT}\n")  # keeps the format it was written in
     # a moved clone keeps the fence: its retained source must not be opened again as a store by an older runtime
     fd_tree.write_at(folder_fd, MARKER, f"{project_move.FENCE if moved else STORE_FORMAT}\n")
+
+
+def _publish_proven(folder_fd: int, pfd: int, target: Path, rec: dict, previous: int) -> None:
+    """Publish the switched target's format through the folder the switch validated, then recheck its name."""
+    tfd = project_move.check_switched(target, pfd, rec)
+    try:
+        _publish_markers(folder_fd, tfd, previous, moved=True)
+        project_move.named_switched(target, rec)  # the name still reaches the descriptor written through
+    finally:
+        os.close(tfd)
 
 
 def located(cwd: Path) -> Path:
@@ -397,19 +403,7 @@ def _open(cwd: Path, proof: OfflineProof | None) -> Path:
                 require_proof(folder, folder_fd, target, proof)  # refused before anything is fenced or moved
             held = _fence(folder_fd) if pending or _has_locks(folder_fd) else []  # nothing to fence otherwise
             try:
-                pfd = project_move.pin_parent(target)
-                try:
-                    if pending:
-                        project_move.relocate(folder, folder_fd, target, pfd, rec, proof)
-                finally:
-                    os.close(pfd)
-                pfd = project_move.pin_parent(target)  # re-pinned: the path may have been swapped during the move
-                try:
-                    if pending:
-                        project_move.check_switched(target, pfd, project_move.record_at(folder, folder_fd))
-                    _publish_markers(folder_fd, pfd, target, found, moved=pending or proof is not None)
-                finally:
-                    os.close(pfd)
+                _move_and_publish(folder, folder_fd, target, proof, rec, found, pending=pending)
             finally:
                 for fd in held:
                     os.close(fd)
@@ -418,6 +412,38 @@ def _open(cwd: Path, proof: OfflineProof | None) -> Path:
     finally:
         os.close(folder_fd)
     return target
+
+
+def _move_and_publish(  # noqa: PLR0913, PLR0917
+    folder: Path,
+    folder_fd: int,
+    target: Path,
+    proof: OfflineProof | None,
+    rec: dict | None,
+    found: str,
+    *,
+    pending: bool,
+) -> None:
+    """Move the store into *target* when pending, then publish its markers, re-pinning the parent after the move."""
+    pfd = project_move.pin_parent(target)
+    try:
+        if pending:
+            project_move.relocate(folder, folder_fd, target, pfd, rec, proof)
+    finally:
+        os.close(pfd)
+    pfd = project_move.pin_parent(target)  # re-pinned: the path may have been swapped during the move
+    try:
+        if pending:
+            _publish_proven(folder_fd, pfd, target, project_move.record_at(folder, folder_fd), found)
+        else:
+            project_move.make_dir(pfd, target.name)
+            tfd = fd_tree.open_dir(pfd, target.name)
+            try:
+                _publish_markers(folder_fd, tfd, found, moved=proof is not None)
+            finally:
+                os.close(tfd)
+    finally:
+        os.close(pfd)
 
 
 def _switched_source_at(folder_fd: int) -> None:
@@ -449,8 +475,7 @@ def _open_switched(folder_fd: int, target: Path, rec: dict, previous: int) -> No
     try:
         pfd = project_move.pin_parent(target)
         try:
-            project_move.check_switched(target, pfd, rec)
-            _publish_markers(folder_fd, pfd, target, previous, moved=True)
+            _publish_proven(folder_fd, pfd, target, rec, previous)
         finally:
             os.close(pfd)
     finally:

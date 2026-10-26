@@ -457,10 +457,13 @@ def named_switched(target: Path, rec: dict) -> None:
         raise _not_published(target)
 
 
-def check_switched(target: Path, pfd: int, rec: dict) -> None:
-    """Refuse unless the store at *target* is still the copy the switch recorded: by identity, not by contents.
+def _refuse_unless_held(target: Path, tfd: int, rec: dict) -> None:
+    if _ident(os.fstat(tfd)) != rec["stage_id"] or not same_folder(target, tfd) or not _proof_ok(tfd, rec):
+        raise _not_published(target)  # a freed folder can return with the same identity: the proof decides
 
-    The target is in use once switched, so its bytes are not compared. A quarantined entry in it is refused, unowned.
+
+def check_switched(target: Path, pfd: int, rec: dict) -> int:
+    """Refuse unless *target* is still the copy the switch recorded, by identity; return its validated descriptor.
 
     Raises:
         StoreError: The target is missing or is another folder, or it holds a quarantined entry.
@@ -468,11 +471,12 @@ def check_switched(target: Path, pfd: int, rec: dict) -> None:
     named_switched(target, rec)
     tfd = _open_at(pfd, target.name)
     try:
-        if _ident(os.fstat(tfd)) != rec["stage_id"] or not same_folder(target, tfd) or not _proof_ok(tfd, rec):
-            raise _not_published(target)  # a freed folder can return with the same identity: the proof decides
+        _refuse_unless_held(target, tfd, rec)
         fd_tree.refuse_quarantined(tfd, target)
-    finally:
+    except BaseException:
         os.close(tfd)
+        raise
+    return tfd
 
 
 def relocate(  # noqa: PLR0913, PLR0917

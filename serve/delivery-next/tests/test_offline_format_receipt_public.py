@@ -17,7 +17,7 @@ import pytest
 from owlbear_delivery_next.commands import cli
 from owlbear_delivery_next.machine_host import registry, selfcheck
 from owlbear_delivery_next.state_store import offline_protocol, project_home, project_move
-from owlbear_delivery_next.state_store.database import MARKER, StoreError
+from owlbear_delivery_next.state_store.database import MARKER, STORE_FORMAT, StoreError
 from owlbear_delivery_next.state_store.store import Store
 
 BEFORE = "AAAAAAAA-0000-4000-8000-000000000001"
@@ -70,7 +70,7 @@ def _prepare_and_finish(repo: Path, boot: dict, marker: str) -> Path:
 
 
 @pytest.mark.usefixtures("current_binding", "boot")
-@pytest.mark.parametrize("marker", ["8", "998", "1000", "0", "x9"])
+@pytest.mark.parametrize("marker", ["8", "998", "1000", "0", "x9", "", " \n"])
 def test_prepare_refuses_an_unsupported_prior_format_before_any_write(repo, marker, capsys) -> None:
     (_source(repo) / MARKER).write_text(marker)
     before = _snapshot(_source(repo))
@@ -79,6 +79,21 @@ def test_prepare_refuses_an_unsupported_prior_format_before_any_write(repo, mark
 
     assert "not a supported store format" in capsys.readouterr().err
     assert _snapshot(_source(repo)) == before, "a refused prepare wrote to the source"
+
+
+@pytest.mark.usefixtures("current_binding")
+def test_a_markerless_store_is_a_legitimate_prior_zero_and_still_moves(repo, boot) -> None:
+    (_source(repo) / MARKER).unlink()
+
+    assert cli.main(["--repo", str(repo), "prepare"]) == 0
+    boot["id"] = AFTER
+    assert cli.main(["--repo", str(repo), "finish"]) == 0
+
+    target = Store.open(repo).root
+    assert (target / MARKER).read_text().strip() == str(STORE_FORMAT), (
+        "a markerless prior must publish the current format"
+    )
+    assert (_source(repo) / MARKER).read_text().strip() == project_move.FENCE
 
 
 @pytest.mark.usefixtures("current_binding")

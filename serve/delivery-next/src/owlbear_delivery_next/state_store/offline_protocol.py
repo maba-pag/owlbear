@@ -119,14 +119,18 @@ def _prepare_at(folder: Path, fd: int, boot: str) -> dict:
 
 
 def _refuse_unsupported_marker(folder: Path, fd: int) -> None:
-    """Refuse before any write when the marker is neither the fence nor a prior format this runtime can move."""
-    raw = _read(fd, folder, MARKER) or ""
-    if raw.strip() != FENCE:
-        try:
-            project_home.prior_format(raw)
-        except StoreError as exc:
-            msg = f"{folder / MARKER}: {exc}"
-            raise StoreError(msg) from exc
+    """Refuse before any write when a present marker is neither the fence nor a supported prior format.
+
+    An absent marker (None) is the markerless prior 0; a present blank marker is refused, not treated as absent.
+    """
+    raw = _read(fd, folder, MARKER)
+    if raw is None or raw.strip() == FENCE:
+        return
+    try:
+        project_home.supported_format(raw)
+    except StoreError as exc:
+        msg = f"{folder / MARKER}: {exc}"
+        raise StoreError(msg) from exc
 
 
 def _refuse_unsupported_prior(folder: Path, record: dict) -> None:

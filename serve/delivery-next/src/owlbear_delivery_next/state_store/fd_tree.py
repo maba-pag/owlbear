@@ -113,6 +113,23 @@ def keep_entry(dfd: int, name: str) -> str:
     return held
 
 
+def open_file(dfd: int, name: str) -> int:
+    """Open regular file *name* under *dfd* for reading; a FIFO, device or other entry is refused, never waited on.
+
+    The open is non-blocking and the type is checked on the descriptor, so an entry swapped to a FIFO after a
+    stat still cannot block the open or be read.
+
+    Raises:
+        StoreError: The entry is not a regular file; nothing was read or removed.
+    """
+    fd = os.open(name, FILE_FLAGS | os.O_NONBLOCK, dir_fd=dfd)
+    if not stat.S_ISREG(os.fstat(fd).st_mode):
+        os.close(fd)
+        msg = f"{name} is not a regular file: refusing to read it; nothing was removed"
+        raise StoreError(msg)
+    return fd
+
+
 def read_at(dfd: int, name: str) -> str | None:
     """The text of regular file *name* under *dfd*, or None when it is absent; a link or other entry is an OSError."""
     try:
@@ -200,7 +217,7 @@ def _feed(digest: hashlib._Hash, dfd: int, name: str, rel: str) -> None:
             os.close(fd)
     else:
         digest.update(b"file\0")
-        fd = os.open(name, FILE_FLAGS, dir_fd=dfd)
+        fd = open_file(dfd, name)
         with os.fdopen(fd, "rb") as fh:
             for chunk in iter(lambda: fh.read(CHUNK), b""):
                 digest.update(chunk)
@@ -221,7 +238,7 @@ def sync(dfd: int, name: str) -> None:
         finally:
             os.close(fd)
         return
-    fd = os.open(name, FILE_FLAGS, dir_fd=dfd)
+    fd = open_file(dfd, name)
     try:
         os.fsync(fd)
     finally:
@@ -243,7 +260,7 @@ def copy(sfd: int, name: str, dfd: int) -> None:
             os.close(src)
             os.close(dst)
     elif stat.S_ISREG(st.st_mode):
-        src = os.open(name, FILE_FLAGS, dir_fd=sfd)
+        src = open_file(sfd, name)
         try:
             dst = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=dfd)
             try:
@@ -291,8 +308,12 @@ def _partial_dir(sfd: int, dfd: int, name: str) -> bool:
 
 
 def _partial_bytes(sfd: int, dfd: int, name: str) -> bool:
-    dst = os.open(name, FILE_FLAGS, dir_fd=dfd)
-    src = os.open(name, FILE_FLAGS, dir_fd=sfd)
+    dst = open_file(dfd, name)
+    try:
+        src = open_file(sfd, name)
+    except BaseException:
+        os.close(dst)
+        raise
     try:
         with os.fdopen(dst, "rb", closefd=False) as fd_dst, os.fdopen(src, "rb", closefd=False) as fd_src:
             while chunk := fd_dst.read(CHUNK):
