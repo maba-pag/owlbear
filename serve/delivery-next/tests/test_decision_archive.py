@@ -294,19 +294,24 @@ def test_an_autonomous_choices_reason_is_its_rationale_when_published_and_archiv
     assert why in read(root / "shop-site" / "decisions" / f"{shaped[1].id}.md").rationale
 
 
-def test_one_decision_that_cannot_be_written_keeps_all_out_and_the_record_still_publishes(store, shared_repo) -> None:
+def test_one_decision_that_cannot_be_written_keeps_all_out_and_the_record_is_unchanged(store, shared_repo) -> None:
     root, _ = shared_repo
     c = finished()
     assert change_record.save(store, c, None, AT) == ""  # abandoned: withdrawn, and the lasting rule a draft
     before = {p: p.read_text() for p in root.rglob("decisions/*.md")}
+    record = root / "shop-site" / "changes" / f"{STEM}.json"
+    record_before, head_before = record.read_bytes(), git(root, "rev-parse", "HEAD")
 
     notice = change_record.save(store, c, MERGED, AT)
 
-    assert notice.startswith("no decision of notes was archived"), notice
+    assert notice.startswith("the record of notes was not saved; no decision of notes was archived"), notice
     assert "cannot go from withdrawn to spent" in notice
     assert {p: p.read_text() for p in root.rglob("decisions/*.md")} == before  # not even the allowed draft move
     assert archived(root)[WHERE][2] is State.DRAFT
-    assert json.loads((root / "shop-site" / "changes" / f"{STEM}.json").read_text())["outcome"] == "merged"
+    assert (
+        record.read_bytes() == record_before
+    )  # the abandoned record stays exactly as it was, not republished as merged
+    assert git(root, "rev-parse", "HEAD") == head_before
     assert git(root, "status", "--porcelain") == ""
 
 
@@ -314,13 +319,16 @@ def test_an_invalid_decision_is_a_notice_and_nothing_is_archived(store, shared_r
     root, _ = shared_repo
     c = finished()
     c.decisions.append(Decision(id="D-NOTANID", text="A malformed id", origin="decided", at=AT))
+    head_before = git(root, "rev-parse", "HEAD")
     notice = change_record.save(store, c, MERGED, AT)
     assert c.decisions[1].id in notice
     assert list(root.rglob("decisions/*.md")) == []
-    assert (root / "shop-site" / "changes" / f"{STEM}.json").exists()
+    assert not (root / "shop-site" / "changes" / f"{STEM}.json").exists()  # no record without its decisions
+    assert git(root, "rev-parse", "HEAD") == head_before
+    assert git(root, "status", "--porcelain") == ""
 
 
-def test_a_decision_that_would_break_the_repositorys_rules_keeps_all_out_and_the_record_publishes(
+def test_a_decision_that_would_break_the_repositorys_rules_keeps_all_out_and_the_record_is_not_written(
     store, shared_repo
 ) -> None:
     root, _ = shared_repo
@@ -332,16 +340,19 @@ def test_a_decision_that_would_break_the_repositorys_rules_keeps_all_out_and_the
         write(d, root / "shop-site")
     git(root, "add", "-A")
     git(root, "commit", "-qm", "replaced in another Change")
+    rivals = {p: p.read_text() for p in root.rglob("decisions/*.md")}
+    head_before = git(root, "rev-parse", "HEAD")
     c = finished()
     decisions = c.brief.approved[0].decisions
     decisions[1] = lasting = decisions[1].model_copy(update={"replaces": old.id})  # a second in-force successor
 
     notice = change_record.save(store, c, MERGED, AT)
 
-    assert notice.startswith("no decision of notes was archived"), notice
+    assert notice.startswith("the record of notes was not saved; no decision of notes was archived"), notice
     assert f"decision {lasting.id}, {old.id} of notes: two-successors" in notice
-    assert sorted(p.stem for p in root.rglob("decisions/*.md")) == sorted([old.id, later.id])
-    assert (root / "shop-site" / "changes" / f"{STEM}.json").exists()
+    assert {p: p.read_text() for p in root.rglob("decisions/*.md")} == rivals  # rival rules untouched
+    assert not (root / "shop-site" / "changes" / f"{STEM}.json").exists()
+    assert git(root, "rev-parse", "HEAD") == head_before
     assert git(root, "status", "--porcelain") == ""
 
 
