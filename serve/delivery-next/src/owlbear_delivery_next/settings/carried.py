@@ -57,7 +57,7 @@ def layer() -> GlobalLayer:
     }  # fmt: skip
     return GlobalLayer(
         agents=agents, runtimes={"sdk": True, "window": True}, widths=[1280, 1920, 2400], design_failures="ask",
-        pr_labels=[], pr_marker=True, sessions=2, spotter=Spotter(mode="learning"), visible=False, curator_threshold=95,
+        pr_labels=[], pr_marker=True, sessions=2, spotter=Spotter(switch="on"), visible=False, curator_threshold=95,
     )  # fmt: skip
 
 

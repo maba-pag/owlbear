@@ -149,18 +149,27 @@ export function curatorThreshold() {
 }
 
 // Improvement's Spotter (design §4): each setting layered field by field; a project may set its own (2026-10-25).
+// Each category's actions are the server's (``spotter_actions``): an action outside its category is refused there.
 const SPOT_CHOICES = {
-  mode: [["off", "off"], ["learning", "learning: record what it would do"], ["live", "live: steer"]],
+  switch: [["off", "off"], ["on", "on"]],
   verbose: [["off", "off"], ["on", "on: a short rationale with its evidence per look"]],
 };
+const ACTION_NAMES = { record: "record", "show-owner": "show the owner", steer: "steer: a note into the running turn",
+  "refuse-hand-off": "refuse the hand-off", "stop-and-resume": "stop, then resume with the note",
+  "stop-and-ask": "stop and ask the owner" };
+
+function spotChoices(field) {
+  const actions = state.loaded.settings.spotter_actions?.[field];
+  return actions ? actions.map((a) => [a, ACTION_NAMES[a] ?? a]) : SPOT_CHOICES[field];
+}
 
 export function spotterCell(field, label) {
   const key = `spot.${field}`, value = own(key), below = inherited().spotter?.[field];
   const words = (v) => (Array.isArray(v) ? v.join(", ") : v);
-  const looks = state.loaded.settings.spotter?.looks ?? [];
-  const needed = field === "verbose_until" ? false : field === "sample_rate" ? looks.includes("sample") : true;
-  const control = SPOT_CHOICES[field]
-    ? choose(label, [[INHERIT, `inherit (${said(below)})`], ...SPOT_CHOICES[field]], value || INHERIT,
+  const needed = (state.loaded.settings.missing ?? []).includes(`spotter.${field}`);  // the server's rule
+  const choices = spotChoices(field);
+  const control = choices
+    ? choose(label, [[INHERIT, `inherit (${said(below)})`], ...choices], value || INHERIT,
       (v) => edit(key, v), { key, disabled: state.saving })
     : typed(label, value, (v) => edit(key, v, true), { key, placeholder: `inherit (${said(words(below))})`,
       inputmode: ["looks", "verbose_until"].includes(field) ? undefined : "numeric", disabled: state.saving });

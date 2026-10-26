@@ -180,13 +180,23 @@ function settingsSections() {
     <section class="panel" aria-labelledby="spotter-title">
       <p-heading size="lg"><h2 id="spotter-title">Spotter</h2></p-heading>
       <p-text>The Spotter looks at an agent's work beside it: at hand-offs, plans, state changes and a sample of
-        actions. In learning mode it only records what it would do, and Retro grades those records; live mode
-        steers, and comes only after a steered-versus-silent test. Its model, effort and context are the spotter row
-        under Agents; the budgets and enrolled chats are machine settings. So far only the mode is used: off stops
-        recording new outside writes for each Change's page; the reports already recorded stay.</p-text>
+        actions. It files each finding under one of four categories, each set to an action its category allows; so
+        far every look only records its finding with that action, and Retro grades those records. Steering,
+        refusing and stopping come with live delivery, discretionary ones only after a steered-versus-silent test.
+        Its model, effort and context are the spotter row under Agents; the budgets and enrolled chats are machine
+        settings. Off stops its looks and the recording of new outside writes for each Change's page; the reports
+        already recorded stay, and steps no longer need its other settings.</p-text>
       ${table("Spotter: it applies to the next look", ["Setting", "Value"], "spotter", [
-        row(text("Mode"), spotterCell("mode", "Mode")),
-        row(text("Steered share in live mode (%)"), spotterCell("steer_share", "Steered share")),
+        row(text("On or off"), spotterCell("switch", "On or off")),
+        row(text("Hand-off fitness: the result should not be accepted as it stands"),
+          spotterCell("hand_off_fitness", "Hand-off fitness")),
+        row(text("Course and constraints: recoverable work heading materially wrong"),
+          spotterCell("course_and_constraints", "Course and constraints")),
+        row(text("Outside-state changes: a consequential change beyond the task's files"),
+          spotterCell("outside_state_changes", "Outside-state changes")),
+        row(text("Irreversible harm, in the Spotter's own judgement; it takes precedence"),
+          spotterCell("irreversible_harm", "Irreversible harm")),
+        row(text("Steered share (%)"), spotterCell("steer_share", "Steered share")),
         row(text("Steering notes at most, per step or chat turn"), spotterCell("intervention_cap", "Notes at most")),
         row(text("Verbose"), spotterCell("verbose", "Verbose")),
         row(text("Verbose until (YYYY-MM-DD; empty: no end)"), spotterCell("verbose_until", "Verbose until")),

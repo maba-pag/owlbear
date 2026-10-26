@@ -81,7 +81,7 @@ def test_the_changes_row_counts_its_outside_writes_and_its_page_lists_the_report
         store.save(
             store.config_path,
             Layer,
-            lambda layer: layer.model_copy(update={"spotter": Spotter(mode="off")}),
+            lambda layer: layer.model_copy(update={"spotter": Spotter(switch="off")}),
             "setup",
             owner=True,
         )
@@ -107,7 +107,7 @@ def test_a_change_without_reports_counts_none(tmp_path) -> None:
     s = Store(tmp_path)
     s.write(Lock("quiet"), m.Change(slug="quiet"))
     assert api.watcher(s, "quiet") == {"on": True, "reports": [], "outside": 0, "unresolved": 0}
-    assert Layer(spotter=Spotter(mode="off")).spotter.mode == "off"
+    assert Layer(spotter=Spotter(switch="off")).spotter.switch == "off"
 
 
 @pytest.fixture

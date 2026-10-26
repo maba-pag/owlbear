@@ -19,6 +19,7 @@ from owlbear_delivery_next.runtimes import readiness
 from owlbear_delivery_next.settings import config, profile
 from owlbear_delivery_next.settings.config import CONFIG_FORMAT as F
 from owlbear_delivery_next.settings.config import Prefs
+from owlbear_delivery_next.settings.improvement import CATEGORIES
 from owlbear_delivery_next.state_store.store import Store
 
 AUTH = {"authorization": "Bearer t"}
@@ -99,11 +100,8 @@ def test_a_format_12_project_upgrades_and_carries_each_legacy_value_once(shared_
     assert layer.format == F
     assert layer.prefs == CARRIED
     assert layer.prefs_imported is True
-    assert (layer.spotter.mode, layer.spotter.steer_share, layer.agents["spotter"].model) == (
-        "learning",
-        20,
-        "gpt-6-luna",
-    )
+    assert (layer.spotter.switch, layer.spotter.steer_share, layer.agents["spotter"].model) == ("on", 20, "gpt-6-luna")
+    assert layer.spotter.actions() == dict.fromkeys(CATEGORIES, "record")  # learning recorded: each category records
     assert (layer.widths, layer.sessions, layer.pr_labels, layer.pr_marker) == ([1600], 3, ["ready"], True)
     started(reopen(root, tmp_path), root)  # a restart fills nothing again
     assert reopen(root, tmp_path).read_config() == layer
@@ -117,7 +115,7 @@ def test_an_owner_save_and_a_restart_keep_the_new_values_and_an_owner_null_stays
 
     def edit(project: dict) -> dict:
         return project | {
-            "spotter": project["spotter"] | {"mode": "off"},
+            "spotter": project["spotter"] | {"switch": "off"},
             "prefs": project["prefs"] | {"ci_poll_seconds": None},
         }
 
@@ -126,12 +124,12 @@ def test_an_owner_save_and_a_restart_keep_the_new_values_and_an_owner_null_stays
     started(restarted, root)
     got = restarted.read_config()
 
-    assert got.spotter.mode == "off"
+    assert got.spotter.switch == "off"
     assert got.prefs == CARRIED.model_copy(update={"ci_poll_seconds": None})
     assert got.prefs_imported is True
     assert got.agents["spotter"].model == "gpt-6-luna"
     fresh = fresh_clone(remote, tmp_path).read_config()
-    assert (fresh.format, fresh.spotter.mode, fresh.prefs.ci_poll_seconds) == (F, "off", None)
+    assert (fresh.format, fresh.spotter.switch, fresh.prefs.ci_poll_seconds) == (F, "off", None)
 
 
 @pytest.mark.usefixtures("no_network")
