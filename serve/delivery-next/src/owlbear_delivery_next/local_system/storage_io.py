@@ -100,19 +100,69 @@ def read_regular(path: Path) -> bytes | None:
         os.close(fd)
 
 
+_FOLDER = os.O_RDONLY | os.O_DIRECTORY | os.O_NONBLOCK | os.O_CLOEXEC
+
+
+def _sync_held(fd: int, folder: Path) -> None:
+    """Make the entries of *folder* durable through the descriptor held for it; a failure names *folder*."""
+    try:
+        os.fsync(fd)
+    except OSError as exc:
+        raise OSError(exc.errno, exc.strerror, str(folder)) from exc
+
+
+def _mkdir_at(parent: int, name: str, path: Path) -> None:
+    """Make the folder *name* inside the folder held open as *parent*, never through a path; a failure names *path*."""
+    try:
+        os.mkdir(name, 0o777, dir_fd=parent)
+    except OSError as exc:  # the same kind of error, e.g. `FileExistsError`, now naming the whole path
+        raise OSError(exc.errno, exc.strerror, str(path)) from exc
+
+
+def _unchanged(held: list[tuple[Path, int]]) -> None:
+    """Raise unless each path still names the very folder held open for it, read after the blocking sync before."""
+    for path, fd in held:
+        try:
+            same = os.path.samestat(path.stat(), os.fstat(fd))
+        except OSError as exc:
+            msg = f"{path} changed while its folders were made, so nothing more is made there"
+            raise OSError(msg) from exc
+        if not same:
+            msg = f"{path} changed while its folders were made, so nothing more is made there"
+            raise OSError(msg)
+
+
 def make_dirs(folder: Path) -> None:
-    """Create *folder* and its missing ancestors, fsyncing each new folder's parent so the new entry is durable.
+    """Create *folder* and its missing ancestors, syncing each new folder's parent so the new entry is durable.
 
     The deepest existing ancestor's parent link is re-synced before anything is created: an interrupted earlier call
-    may have made that folder without confirming its entry.
+    may have made that folder without confirming its entry. That ancestor and its parent are opened before that sync
+    and every new folder is made and opened inside the folder held open above it, never through a path, without
+    waiting on a pipe and without following a link at a new folder's name. After every sync, before anything more is
+    made, each path must still name the folder held for it: a folder moved and linked away meanwhile is refused, so
+    nothing is ever made in the foreign folder a link names. The descriptors are closed on every path.
     """
     missing: list[Path] = []
     for candidate in (folder, *folder.parents):
         if candidate.exists():
-            if candidate.parent != candidate:
-                fsync_dir(candidate.parent)
             break
         missing.append(candidate)
-    for created in reversed(missing):
-        created.mkdir()
-        fsync_dir(created.parent)
+    held: list[tuple[Path, int]] = []
+    try:
+        top = candidate.parent if candidate.parent != candidate else None
+        if top is not None:  # the existing folders are held open before any blocking sync
+            held.append((top, os.open(top, _FOLDER)))
+        if missing:
+            held.append((candidate, os.open(candidate, _FOLDER)))
+        if top is not None:
+            _sync_held(held[0][1], top)
+        for created in reversed(missing):
+            _unchanged(held)
+            outer = held[-1][1]
+            _mkdir_at(outer, created.name, created)
+            held.append((created, os.open(created.name, _FOLDER | os.O_NOFOLLOW, dir_fd=outer)))
+            _sync_held(outer, created.parent)
+        _unchanged(held)
+    finally:
+        for _, fd in held:
+            os.close(fd)

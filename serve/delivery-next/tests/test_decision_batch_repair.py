@@ -34,7 +34,7 @@ def test_an_empty_rebase_probe_is_unknown_not_fallen_back_to_the_checkout(tmp_pa
 
 def test_make_dirs_fsyncs_the_parent_of_each_new_folder(tmp_path: Path, monkeypatch) -> None:
     synced: list[Path] = []
-    monkeypatch.setattr(storage_io, "fsync_dir", synced.append)
+    monkeypatch.setattr(storage_io, "_sync_held", lambda _fd, folder: synced.append(folder))
 
     storage_io.make_dirs(tmp_path / "a" / "b")
 
@@ -46,7 +46,7 @@ def test_make_dirs_creates_nothing_for_an_existing_folder_but_resyncs_its_parent
     tmp_path: Path, monkeypatch
 ) -> None:
     synced: list[Path] = []
-    monkeypatch.setattr(storage_io, "fsync_dir", synced.append)
+    monkeypatch.setattr(storage_io, "_sync_held", lambda _fd, folder: synced.append(folder))
 
     storage_io.make_dirs(tmp_path)
 

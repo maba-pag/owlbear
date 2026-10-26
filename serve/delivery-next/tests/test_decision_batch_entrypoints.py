@@ -977,17 +977,17 @@ def test_an_owner_commit_while_finish_makes_the_folder_is_never_overwritten(pick
     assert folder.exists() == (parent == "existing")
     owned = {"third": b"the owner's own third image\n", "after": serialize(new).encode("utf-8")}.get(image)
     seen: list[str] = []
-    real_fsync = storage_io.fsync_dir
+    real_sync = storage_io._sync_held  # noqa: SLF001 - make_dirs' own sync of the folder it holds open
 
-    def final_fsync_then_owner_commits(path):
-        real_fsync(path)
+    def final_fsync_then_owner_commits(fd, path):
+        real_sync(fd, path)
         if owned is not None and not seen and Path(path) == folder.parent:  # make_dirs' last fsync, both cases
             seen.append("owner")
             (shared.root / rel).write_bytes(owned)
             _commit_file(shared, rel)
 
     with monkeypatch.context() as m:
-        m.setattr(storage_io, "fsync_dir", final_fsync_then_owner_commits)
+        m.setattr(storage_io, "_sync_held", final_fsync_then_owner_commits)
         _record_checkout_writes(m, shared, seen)
         if owned is None:
             assert decision_recovery.finish(shared, generation).done
@@ -1349,12 +1349,12 @@ def test_abandoning_a_save_stopped_before_its_first_folder_completes_and_unblock
     shared = picking.shared
     new = make(project="new-site", title="Use UTC", statement="All timestamps use UTC.")
 
-    def stopped_in_the_first_fsync(_path):
+    def stopped_in_the_first_fsync(_fd, _path):
         msg = "interrupted in make_dirs' first fsync"
         raise RuntimeError(msg)
 
     with monkeypatch.context() as m:
-        m.setattr(storage_io, "fsync_dir", stopped_in_the_first_fsync)
+        m.setattr(storage_io, "_sync_held", stopped_in_the_first_fsync)
         with pytest.raises(RuntimeError, match="first fsync"):
             decision_store.save(shared, new, expected_revision=None, message="decisions: before any folder")
     generation = decision_batch.pending(shared).generation
@@ -1534,12 +1534,12 @@ def test_a_folder_swapped_for_a_link_during_the_final_absence_read_keeps_the_bat
     (foreign / "marker.txt").write_text("foreign\n")
     new = make(project="new-site", title="Use UTC", statement="All timestamps use UTC.")
 
-    def stopped_in_the_first_fsync(_path):
+    def stopped_in_the_first_fsync(_fd, _path):
         msg = "interrupted in make_dirs' first fsync"
         raise RuntimeError(msg)
 
     with monkeypatch.context() as m:
-        m.setattr(storage_io, "fsync_dir", stopped_in_the_first_fsync)
+        m.setattr(storage_io, "_sync_held", stopped_in_the_first_fsync)
         with pytest.raises(RuntimeError, match="first fsync"):
             decision_store.save(shared, new, expected_revision=None, message="decisions: before its folder")
     generation = decision_batch.pending(shared).generation
@@ -3777,7 +3777,7 @@ elif when == "make-dirs":  # past the save's fence and preflight: its folder's f
         armed.append(True)
         return real_batch(*args, **kwargs)
     decision_store.write_batch = armed_batch
-    after(storage_io, "fsync_dir", lambda: to_pipe() if armed else None)
+    after(storage_io, "_sync_held", lambda: to_pipe() if armed else None)
 elif when == "after-replace":  # the temporary is renamed into place; then its folder is moved and a pipe takes its name
     real_replace = Path.replace
     def replace_then_swap(self, dest):
@@ -4001,3 +4001,50 @@ def test_a_decision_file_swapped_for_a_pipe_as_its_folder_is_synced_is_refused_a
     assert decision_batch.pending(shared) is not None
     assert _git_state(shared) == git
     assert _remote_main(remote) == published
+
+
+def _entries_below(folder: Path) -> dict[str, bytes | None]:
+    """Every entry under *folder*, folders included (None), each file with its bytes; links are listed, not followed."""
+    return {
+        p.relative_to(folder).as_posix(): p.read_bytes() if p.is_file() and not p.is_symlink() else None
+        for p in sorted(folder.rglob("*"))
+    }
+
+
+def test_a_project_folder_linked_away_as_the_root_is_synced_never_gets_a_folder_made_through_it(
+    picking, monkeypatch, tmp_path
+):
+    """A save makes its project's missing `decisions` folder. While the checkout's root is synced first, the owner
+    moves the project folder aside and links its name to a foreign folder. Nothing is made in the foreign folder, nor
+    in the owner's moved one: the save refuses before it makes any folder, and its batch stays interrupted."""
+    shared = picking.shared
+    project, foreign, moved = shared.root / PROJECT, tmp_path / "foreign", tmp_path / "moved"
+    assert project.is_dir()
+    assert not (project / "decisions").exists()
+    foreign.mkdir()
+    (foreign / "keep.txt").write_text("the foreign folder's own file\n")
+    theirs, ours, root = _entries_below(foreign), _entries_below(project), shared.root.stat()
+    real_fsync, real_batch, armed, fired = os.fsync, decision_store.write_batch, [], []
+
+    def batch(*args, **kwargs):
+        armed.append(True)
+        return real_batch(*args, **kwargs)
+
+    def fsync(fd: int) -> None:
+        real_fsync(fd)
+        if armed and not fired and os.path.samestat(os.fstat(fd), root):  # the real sync of the root itself
+            fired.append(True)
+            project.rename(moved)
+            project.symlink_to(foreign, target_is_directory=True)
+
+    with monkeypatch.context() as m:
+        m.setattr(decision_store, "write_batch", batch)
+        m.setattr(os, "fsync", fsync)
+        with contextlib.suppress(decision_store.DecisionsUnavailable):
+            decision_store.save(shared, make(title="Use UTC"), expected_revision=None, message="decisions: one")
+
+    assert fired, "the root was never synced while the save made its folders"
+    assert _entries_below(foreign) == theirs  # first: nothing was made or written in the foreign folder
+    assert _entries_below(moved) == ours  # nor in the owner's project folder, moved aside
+    assert project.is_symlink()
+    assert decision_batch.pending(shared) is not None

@@ -190,22 +190,34 @@ def _where(folder: Path, root: Path) -> str:
     return Path(folder).relative_to(root).as_posix() or "."
 
 
-def test_a_new_project_folder_and_its_parent_are_fsynced_before_the_record_is_published(shared_repo, monkeypatch):
-    root, _ = shared_repo
-    store = _Store(root)
-    events: list[str] = []
-    real_fsync, real_publish = storage_io.fsync_dir, decision_sync.publish
+def _trace_syncs(monkeypatch, root: Path, events: list[str]) -> None:
+    """Every folder sync, by path or of a folder `make_dirs` holds open, listed by its place under *root*."""
+    real_fsync, real_sync = storage_io.fsync_dir, storage_io._sync_held  # noqa: SLF001
 
     def traced_fsync(folder: Path) -> None:
         events.append(f"fsync {_where(folder, root)}")
         real_fsync(folder)
+
+    def traced_sync(fd: int, folder: Path) -> None:
+        events.append(f"fsync {_where(folder, root)}")
+        real_sync(fd, folder)
+
+    monkeypatch.setattr(storage_io, "fsync_dir", traced_fsync)
+    monkeypatch.setattr(storage_io, "_sync_held", traced_sync)
+
+
+def test_a_new_project_folder_and_its_parent_are_fsynced_before_the_record_is_published(shared_repo, monkeypatch):
+    root, _ = shared_repo
+    store = _Store(root)
+    events: list[str] = []
+    real_publish = decision_sync.publish
 
     def traced_publish(*args, **kwargs):
         events.append("publish")
         return real_publish(*args, **kwargs)
 
     assert not (root / PROJECT).exists()
-    monkeypatch.setattr(storage_io, "fsync_dir", traced_fsync)
+    _trace_syncs(monkeypatch, root, events)
     monkeypatch.setattr(decision_sync, "publish", traced_publish)
 
     change_record.save(store, _finished_change(), None, AT)
@@ -219,22 +231,19 @@ def test_an_existing_project_folder_publishes_without_refsyncing_the_root(shared
     store = _Store(root)
     (root / PROJECT / "changes").mkdir(parents=True)
     events: list[str] = []
-    real_fsync, real_publish = storage_io.fsync_dir, decision_sync.publish
-
-    def traced_fsync(folder: Path) -> None:
-        events.append(f"fsync {_where(folder, root)}")
-        real_fsync(folder)
+    real_publish = decision_sync.publish
 
     def traced_publish(*args, **kwargs):
         events.append("publish")
         return real_publish(*args, **kwargs)
 
-    monkeypatch.setattr(storage_io, "fsync_dir", traced_fsync)
+    _trace_syncs(monkeypatch, root, events)
     monkeypatch.setattr(decision_sync, "publish", traced_publish)
 
     assert change_record.save(store, _finished_change(), None, AT) == ""
 
     assert "fsync ." not in events
+    assert f"fsync {PROJECT}" in events  # the existing folder's own link is re-synced, so the trace saw make_dirs
     assert "publish" in events
 
 
