@@ -294,6 +294,7 @@ def test_a_projects_folder_swapped_for_a_link_during_the_move_is_reported_and_no
     monkeypatch.setattr(fd_tree, "sync", sync)
     with pytest.raises(StoreError, match=r"is not the copy this move published"):
         move(repo, monkeypatch)
+    assert swapped == [SOURCE_ID]
     assert list(elsewhere.iterdir()) == []
     assert (aside / SOURCE_ID / "changes" / "c1" / "runner.log").read_text() == "ran\n"
     assert (folder / "changes" / "c1" / "runner.log").read_text() == "ran\n"
