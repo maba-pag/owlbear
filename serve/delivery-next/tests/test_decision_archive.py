@@ -403,12 +403,12 @@ def test_a_write_failing_midway_puts_every_file_back_and_the_record_is_refused(s
     root, _ = shared_repo
     replaced, real = [], storage._replace
 
-    def full(path: Path, text: str) -> None:
+    def full(path: Path, text: str, *fence) -> None:
         if replaced:
             msg = "disk full"
             raise OSError(msg)
         replaced.append(path)
-        real(path, text)
+        real(path, text, *fence)
 
     monkeypatch.setattr(storage, "_replace", full)
 

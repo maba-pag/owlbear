@@ -16,7 +16,7 @@ from pathlib import Path, PurePosixPath
 
 import pytest
 
-from owlbear_decisions import Decision, DecisionError, Link, LinkType, Origin, Scope, State, new_id, write
+from owlbear_decisions import Decision, DecisionError, Link, LinkType, Origin, Scope, State, new_id, storage, write
 from owlbear_decisions.storage import serialize
 from owlbear_delivery_next.change_contracts import pick_tools
 from owlbear_delivery_next.local_system import storage_io
@@ -55,12 +55,12 @@ def _interrupt(picking, monkeypatch, items: list[Decision]) -> None:
     calls = {"n": 0}
     real_write = decision_store.write
 
-    def interrupted_write(decision, folder, expected=None):
+    def interrupted_write(decision, folder, expected=None, **fence):
         calls["n"] += 1
         if calls["n"] == 1:
             msg = "interrupted before the first write"
             raise RuntimeError(msg)
-        return real_write(decision, folder, expected)
+        return real_write(decision, folder, expected, **fence)
 
     with monkeypatch.context() as m:
         m.setattr(decision_store, "write", interrupted_write)
@@ -355,11 +355,11 @@ def test_a_refused_put_back_unlink_is_fsynced_in_its_parent_before_the_refusal_r
             seen.append({p.name for p in Path(path).iterdir()})
         real_fsync(path)
 
-    def first_lands_second_refuses(decision, folder, expected=None):
+    def first_lands_second_refuses(decision, folder, expected=None, **fence):
         if decision.project == "new-site":
             msg = "refused by the test"
             raise DecisionError(msg)
-        return real_write(decision, folder, expected)
+        return real_write(decision, folder, expected, **fence)
 
     monkeypatch.setattr(decision_batch, "fsync_dir", snapshot_then_fsync)
     monkeypatch.setattr(decision_store, "write", first_lands_second_refuses)
@@ -476,13 +476,13 @@ def test_an_owner_commit_between_two_writes_is_kept_and_the_batch_stays_pending(
     real_write = decision_store.write
     calls = {"n": 0}
 
-    def owner_commits_then_second_write_fails(decision, folder, expected=None):
+    def owner_commits_then_second_write_fails(decision, folder, expected=None, **fence):
         calls["n"] += 1
         if calls["n"] == 2:
             _owner_commit(shared, "owner commit between writes")
             msg = "disk full on the second file"
             raise DecisionError(msg)
-        return real_write(decision, folder, expected)
+        return real_write(decision, folder, expected, **fence)
 
     with monkeypatch.context() as m:
         m.setattr(decision_store, "write", owner_commits_then_second_write_fails)
@@ -655,11 +655,11 @@ def test_a_head_move_during_the_put_back_keeps_the_batch(picking, monkeypatch):
     second = make(title="Use ISO dates", statement="Dates are ISO 8601.")
     real_write, real_put_back = decision_store.write, decision_store._put_back  # noqa: SLF001
 
-    def second_refused(decision, folder, expected=None):
+    def second_refused(decision, folder, expected=None, **fence):
         if decision.id == second.id:
             msg = "refused by the test"
             raise DecisionError(msg)
-        return real_write(decision, folder, expected)
+        return real_write(decision, folder, expected, **fence)
 
     def put_back_then_owner_commits(path, text, *fence):
         real_put_back(path, text, *fence)
@@ -724,7 +724,7 @@ def test_a_known_refusal_after_an_owner_commit_keeps_the_transaction_batch(picki
     first, second = (shared.root / PROJECT / "changes" / f"{name}.json" for name in ("first", "second"))
     first.parent.mkdir(parents=True)
 
-    def owner_commits_part_then_refused(_head: str) -> decision_transaction.Step:
+    def owner_commits_part_then_refused(_head: str, _fence) -> decision_transaction.Step:
         first.write_text("{}", encoding="utf-8")
         _owner_commit(shared, "owner commits the first file")
         return decision_transaction.Step("the commit was refused", refused=True)
@@ -897,7 +897,7 @@ def test_an_owner_commit_of_every_after_image_is_a_landing_and_completes(picking
     target = shared.root / PROJECT / "changes" / "landed.json"
     target.parent.mkdir(parents=True)
 
-    def owner_commits_all_then_refused(_head: str) -> decision_transaction.Step:
+    def owner_commits_all_then_refused(_head: str, _fence) -> decision_transaction.Step:
         target.write_text("{}", encoding="utf-8")
         _owner_commit(shared, "owner commits the whole batch")
         return decision_transaction.Step("the commit was refused", refused=True)
@@ -1018,7 +1018,7 @@ def _two_files(picking, monkeypatch, surface: str) -> tuple[list[str], list[byte
         afters = [b'{"n": 1}\n', b'{"n": 2}\n']
         (shared.root / PROJECT / "changes").mkdir(parents=True)
 
-        def step(_head: str) -> decision_transaction.Step:
+        def step(_head: str, _fence) -> decision_transaction.Step:
             for rel, after in zip(rels, afters, strict=True):
                 (shared.root / rel).write_bytes(after)
             return decision_transaction.Step("the commit was refused", refused=True)
@@ -1148,7 +1148,7 @@ def _one_update(picking, monkeypatch, surface: str) -> tuple[Path, bytes, bytes,
         _commit_file(shared, path.relative_to(shared.root).as_posix())
         head = shared.git("rev-parse", "HEAD").stdout.strip()
 
-        def step(_head: str) -> decision_transaction.Step:
+        def step(_head: str, _fence) -> decision_transaction.Step:
             path.write_bytes(b'{"n": 1}\n')
             return decision_transaction.Step("the commit was refused", refused=True)
 
@@ -1547,7 +1547,7 @@ def _read_swap_surface(picking, monkeypatch, surface: str) -> tuple[Path, object
         target.parent.mkdir(parents=True)
         head = shared.git("rev-parse", "HEAD").stdout.strip()
 
-        def step(_head: str) -> decision_transaction.Step:
+        def step(_head: str, _fence) -> decision_transaction.Step:
             target.write_bytes(b'{"n": 1}\n')
             return decision_transaction.Step("the commit was refused", refused=True)
 
@@ -1636,3 +1636,141 @@ def test_a_folder_swapped_for_a_link_while_a_proof_reads_a_file_is_never_trusted
 
 def _git_state(shared: DataRepo) -> tuple[str, str]:
     return shared.git("rev-parse", "HEAD").stdout, shared.git("ls-files", "-s").stdout
+
+
+def _own_files(folder: Path, read) -> dict[str, bytes]:
+    """A folder's files, without a writer's leftover temporary (`.name.tmp`), which is never the owner's."""
+    return {name: data for name, data in _tree(folder, read).items() if not name.endswith(".tmp")}
+
+
+def _swap_while_saving(m: pytest.MonkeyPatch, moment: str, target: Path, swap) -> None:
+    """Call *swap* once: after the save's planning read of *target*, or after its temporary file's fsync."""
+    real_read, real_fsync, real_mkstemp = Path.read_bytes, os.fsync, storage.mkstemp
+    real_journal = decision_store._journal  # noqa: SLF001
+    inside, temporaries = [False], []
+
+    def journal(*args, **kwargs):
+        inside[0] = True
+        try:
+            return real_journal(*args, **kwargs)
+        finally:
+            inside[0] = False
+
+    def planning_read(path: Path) -> bytes:
+        data = real_read(path)
+        if moment == "planning-read" and inside[0] and path == target:
+            swap()
+        return data
+
+    def recording_mkstemp(*args, **kwargs):
+        descriptor, name = real_mkstemp(*args, **kwargs)
+        if Path(name).parent == target.parent:
+            temporaries.append(descriptor)
+        return descriptor, name
+
+    def temporary_fsync(descriptor):
+        real_fsync(descriptor)
+        if moment == "temporary-fsync" and descriptor in temporaries:
+            swap()
+
+    m.setattr(decision_store, "_journal", journal)
+    m.setattr(Path, "read_bytes", planning_read)
+    m.setattr(storage, "mkstemp", recording_mkstemp)
+    m.setattr(os, "fsync", temporary_fsync)
+
+
+@pytest.mark.parametrize("moment", ["planning-read", "temporary-fsync", "none"])
+def test_a_folder_swapped_while_a_save_plans_or_writes_never_writes_the_foreign_file(
+    picking, monkeypatch, tmp_path, moment
+):
+    """A save updates a decision and its publication is refused. The owner swaps the `decisions` folder for a link to
+    a foreign copy holding the same before bytes, while the save reads the file to plan it or while the new bytes'
+    temporary file is fsynced. The foreign file is never written, the owner's files stay where the owner moved them,
+    Git is as the owner left it, and no reader gets authority. `none` is the healthy refused save, put back.
+    """
+    _seed(picking)
+    shared = picking.shared
+    old = make(title="Notes stay in one table")
+    assert decision_store.save(shared, old, expected_revision=None, message="decisions: old").published
+    update = old.model_copy(update={"title": "Notes stay in one SQLite table"})
+    target = shared.root / f"{PROJECT}/decisions/{old.id}.md"
+    before = target.read_bytes()
+    folder, moved, foreign = target.parent, tmp_path / "moved", tmp_path / "foreign"
+    real_read, fired = Path.read_bytes, {}
+
+    def swap() -> None:
+        if fired:
+            return
+        folder.rename(moved)
+        shutil.copytree(moved, foreign, ignore=shutil.ignore_patterns("*.tmp"))  # the same before bytes
+        folder.symlink_to(foreign, target_is_directory=True)
+        fired.update(tree=_own_files(moved, real_read), git=_git_state(shared))
+
+    with monkeypatch.context() as m:
+        _swap_while_saving(m, moment, target, swap)
+        m.setattr(DataRepo, "commit", lambda *_a, **_k: "git refused the commit")
+        refusal = ""
+        try:
+            receipt = decision_store.save(shared, update, expected_revision=old.revision, message="decisions: one")
+            assert not receipt.saved
+        except decision_store.DecisionsUnavailable as exc:
+            refusal = str(exc)
+
+    if moment == "none":
+        assert not fired
+        assert not refusal
+        assert target.read_bytes() == before  # the refused save is put back
+        assert decision_batch.pending(shared) is None
+        return
+    assert fired
+    expected = {"planning-read": "changed while the batch was planned", "temporary-fsync": "changed during the write"}
+    assert expected[moment] in refusal, refusal  # the fence of that moment refused, not a failure of something else
+    assert _tree(foreign, Path.read_bytes) == fired["tree"]  # the foreign file holds its before bytes, nothing more
+    assert _own_files(moved, Path.read_bytes) == fired["tree"]
+    assert fired["tree"][target.name] == before
+    assert _git_state(shared) == fired["git"]
+    _no_authority(picking)
+
+
+def test_a_folder_swapped_while_a_transaction_step_writes_never_writes_the_foreign_file(picking, monkeypatch, tmp_path):
+    """A transaction's step writes through the fence it was given; the folder is swapped during that write's fsync."""
+    _seed(picking)
+    shared = picking.shared
+    folder = shared.root / PROJECT / "changes"
+    folder.mkdir(parents=True)
+    target = folder / "record.json"
+    target.write_bytes(b'{"n": 0}\n')
+    _commit_file(shared, target.relative_to(shared.root).as_posix())
+    head = shared.git("rev-parse", "HEAD").stdout.strip()
+    moved, foreign = tmp_path / "moved", tmp_path / "foreign"
+    real_fsync, real_mkstemp, temporaries, fired = os.fsync, decision_batch.mkstemp, [], {}
+
+    def recording_mkstemp(*args, **kwargs):
+        descriptor, name = real_mkstemp(*args, **kwargs)
+        if Path(name).parent == folder:
+            temporaries.append(descriptor)
+        return descriptor, name
+
+    def temporary_fsync_then_swap(descriptor):
+        real_fsync(descriptor)
+        if descriptor in temporaries and not fired:
+            folder.rename(moved)
+            shutil.copytree(moved, foreign, ignore=shutil.ignore_patterns("*.tmp"))
+            folder.symlink_to(foreign, target_is_directory=True)
+            fired.update(tree=_own_files(moved, Path.read_bytes), git=_git_state(shared))
+
+    def step(_head: str, fence) -> decision_transaction.Step:
+        decision_batch.replace_file(target, b'{"n": 1}\n', fence)
+        return decision_transaction.Step("written")
+
+    with monkeypatch.context() as m:
+        m.setattr(decision_batch, "mkstemp", recording_mkstemp)
+        m.setattr(os, "fsync", temporary_fsync_then_swap)
+        with pytest.raises(decision_store.DecisionsUnavailable, match="changed during the write"):
+            decision_transaction.transaction(shared, PROJECT, "changes: one", [(target, b'{"n": 1}\n')], step, head)
+
+    assert _tree(foreign, Path.read_bytes) == fired["tree"] == {"record.json": b'{"n": 0}\n'}
+    assert _own_files(moved, Path.read_bytes) == fired["tree"]
+    assert _git_state(shared) == fired["git"]
+    assert decision_batch.pending(shared) is not None
+    _no_authority(picking)

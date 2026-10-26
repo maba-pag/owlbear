@@ -13,11 +13,11 @@ from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.local_system import storage_io
 from owlbear_delivery_next.local_system.data_repo import SAVE_SECONDS, DataRepoError
-from owlbear_delivery_next.local_system.storage_io import atomic_write
-from owlbear_delivery_next.state_store import decision_archive, decision_sync, decision_transaction
+from owlbear_delivery_next.state_store import decision_archive, decision_batch, decision_sync, decision_transaction
 from owlbear_delivery_next.state_store.decision_store import DecisionsUnavailable
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from datetime import datetime
 
     from owlbear_delivery_next.change_contracts.models import Change
@@ -85,13 +85,13 @@ def save(
             storage_io.make_dirs(path.parent)
             writes = decision_archive.batch_files(planned)
 
-            def publish(head: str) -> decision_transaction.Step:
-                files, left = decision_archive.write_plan(planned, [], c.slug)
+            def publish(head: str, fence: Callable[[], None]) -> decision_transaction.Step:
+                files, left = decision_archive.write_plan(planned, [], c.slug, fence)
                 if left:  # a decision refused: the record commits with none of the batch
                     return decision_transaction.Step(
                         f"the record of {c.slug} was not saved; " + "; ".join(left), refused=True
                     )
-                atomic_write(path, text)
+                decision_batch.replace_file(path, text.encode("utf-8"), fence)
                 sent = decision_sync.publish(
                     store.shared, [path, *files], message, time.monotonic() + SAVE_SECONDS, head
                 )

@@ -22,7 +22,7 @@ from owlbear_decisions.errors import ConcurrencyError, DecisionFileError, Immuta
 from owlbear_decisions.models import Decision, State
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Callable, Iterator
 
 DECISIONS_DIR = "decisions"
 _FENCE = "---\n"
@@ -197,13 +197,15 @@ def check_write(current: Decision | None, decision: Decision, expected_revision:
         raise ImmutableError(msg)
 
 
-def _replace(path: Path, text: str) -> None:
+def _replace(path: Path, text: str, fence: Callable[[], None] | None = None) -> None:
     descriptor, temporary = mkstemp(dir=path.parent, prefix=".", suffix=".tmp")
     try:
         with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
             handle.write(text)
             handle.flush()
             os.fsync(handle.fileno())
+        if fence is not None:  # last, once the new bytes are durable: the caller's proof that the file is its to change
+            fence()
         Path(temporary).replace(path)
     except BaseException:
         Path(temporary).unlink(missing_ok=True)
@@ -215,11 +217,14 @@ def _replace(path: Path, text: str) -> None:
         os.close(directory)
 
 
-def write(decision: Decision, folder: Path, expected_revision: str | None = None) -> str:
+def write(
+    decision: Decision, folder: Path, expected_revision: str | None = None, *, fence: Callable[[], None] | None = None
+) -> str:
     """Write `decision` atomically into the layer `folder` and return its revision.
 
     `expected_revision=None` creates a new file and refuses an existing one; otherwise the file's
-    current revision must equal it. An in-force decision's statement never changes.
+    current revision must equal it. An in-force decision's statement never changes. *fence*, when given, runs after
+    the new bytes are durable and immediately before the rename; when it raises, only the temporary file is removed.
     """
     path = decision_path(decision, folder)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -233,5 +238,5 @@ def write(decision: Decision, folder: Path, expected_revision: str | None = None
     with _locked(path.parent):
         current = read(path) if path.exists() else None
         check_write(current, decision, expected_revision)
-        _replace(path, text)
+        _replace(path, text, fence)
     return decision.revision

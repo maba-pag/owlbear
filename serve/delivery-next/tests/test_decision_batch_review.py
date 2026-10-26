@@ -58,7 +58,7 @@ def test_an_empty_publication_outcome_is_not_a_known_refusal_and_stays_interrupt
     target = shared.root / "shop-site" / "changes" / "note.json"
     target.parent.mkdir(parents=True)
 
-    def silent(_head: str) -> decision_transaction.Step:
+    def silent(_head: str, _fence) -> decision_transaction.Step:
         target.write_text("{}", encoding="utf-8")
         return decision_transaction.Step("")  # success-looking, no landing proof, no refusal
 
@@ -75,7 +75,7 @@ def test_a_known_refusal_with_unmoved_head_puts_the_files_back_and_completes(pic
     target = shared.root / "shop-site" / "changes" / "refused.json"
     target.parent.mkdir(parents=True)
 
-    def refused(_head: str) -> decision_transaction.Step:
+    def refused(_head: str, _fence) -> decision_transaction.Step:
         return decision_transaction.Step("the commit was refused", refused=True)
 
     head = shared.git("rev-parse", "HEAD").stdout.strip()

@@ -279,12 +279,12 @@ def test_a_write_that_fails_midway_puts_back_every_file_of_the_batch(shared, mon
     assert save(set_up(shared), decision, expected_revision=None, message="m").published
     real, calls = decision_store.write, []
 
-    def failing(d, folder, expected):
+    def failing(d, folder, expected, **fence):
         calls.append(d.id)
         if len(calls) == 2:
-            real(d, folder, expected)  # the rename lands, then the fsync fails
+            real(d, folder, expected, **fence)  # the rename lands, then the fsync fails
             raise OSError(5, "I/O error")
-        return real(d, folder, expected)
+        return real(d, folder, expected, **fence)
 
     monkeypatch.setattr(decision_store, "write", failing)
     successor, retired = replacing(decision), decision.model_copy(update={"state": State.REPLACED})

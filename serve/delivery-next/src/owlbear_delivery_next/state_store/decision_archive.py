@@ -27,6 +27,7 @@ from owlbear_delivery_next.local_system.data_repo import SAVE_SECONDS, DataRepo
 from owlbear_delivery_next.state_store import decision_store, decision_sync, decision_transaction
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from datetime import datetime
     from pathlib import Path
 
@@ -55,11 +56,17 @@ def batch_files(planned: list[Placed]) -> list[tuple[Path, bytes]]:
     return [(decision_path(d, layer), serialize(d).encode("utf-8")) for d, layer, rev in planned if rev != d.revision]
 
 
-def write_plan(planned: list[Placed], problems: list[str], slug: str) -> tuple[list[Path], list[str]]:
-    """Write the planned decisions unless *problems* keep them all out; the files to publish, and what kept them out."""
+def write_plan(
+    planned: list[Placed], problems: list[str], slug: str, fence: Callable[[], None] | None = None
+) -> tuple[list[Path], list[str]]:
+    """Write the planned decisions unless *problems* keep them all out; the files to publish, and what kept them out.
+
+    *fence* is the transaction's proof each write runs before its folder is made and immediately before its rename.
+    """
     if not problems:
         try:
-            refused = decision_store.write_batch([(d, layer, rev) for d, layer, rev in planned if rev != d.revision])
+            writes = [(d, layer, rev) for d, layer, rev in planned if rev != d.revision]
+            refused = decision_store.write_batch(writes, fence)
         except OSError as exc:
             refused = {"files": f"cannot be written: {exc}"}
         problems = [f"decision {key} of {slug}: {' '.join(why.split())}"[:240] for key, why in refused.items()]
@@ -88,8 +95,8 @@ def archive(root: Path, project: str, c: Change, stem: str, outcome: str) -> tup
             return written, [n for n in (*left, behind) if n]
         done: dict[str, tuple[list[Path], list[str]]] = {}
 
-        def step(head: str) -> decision_transaction.Step:
-            written, left = write_plan(planned, problems, c.slug)
+        def step(head: str, fence: Callable[[], None]) -> decision_transaction.Step:
+            written, left = write_plan(planned, problems, c.slug, fence)
             done["result"] = (written, left)
             if not written:
                 return decision_transaction.Step("", refused=True)

@@ -139,10 +139,11 @@ def owned(root: Path, images: dict[Path, tuple[bytes | None, bytes | None]]) -> 
 
     A symlink or a path outside *root* is refused before anything is read, so a matching referent is never followed,
     and every path is checked again after all reads (`still_plain`), so a folder swapped for a link meanwhile refuses.
+    A file that is absent may lie under folders that do not exist yet, as a new project's first decision does.
     """
-    if not all(plain_in_checkout(root, path) for path in images):
-        return False
     try:
+        if not still_plain(root, images):
+            return False
         held = all(_held(path) in (before, after) for path, (before, after) in images.items())
         return held and still_plain(root, images)
     except OSError:

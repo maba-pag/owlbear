@@ -15,6 +15,8 @@ if TYPE_CHECKING:
 
     from owlbear_delivery_next.local_system.data_repo import DataRepo
 
+    type Fence = Callable[[], None]  # a writer's last proof before its rename; it raises when the write must not land
+
 
 class Step(NamedTuple):
     """What a batch's step reports: its notice, whether its publication is unknown, and whether it is a known refusal.
@@ -42,22 +44,26 @@ def transaction(  # noqa: PLR0913, PLR0917 - the head the caller proved travels 
     project: str,
     message: str,
     files: Sequence[tuple[Path, bytes]],
-    step: Callable[[str], Step],
+    step: Callable[[str, Fence], Step],
     head: str,
 ) -> str:
     """Run *step*, which writes and publishes *files*, as one journaled batch; the caller holds the lock.
 
     *head* is the one `decision_sync.prepare` proved on the remote before the caller planned *files*; the journal names
-    it and *step* receives it for every publication. The journal completes once the files landed in HEAD, or when the
-    producer's known refusal left HEAD unmoved and put them back as they were. An unknown publication, a partial
-    commit, a bare notice without that refusal, or an exception stays interrupted for the owner: it is never completed
-    on a guess. Nothing nests: a batch within it would be a second one.
+    it and *step* receives it for every publication, with the fence (`write_fence`) each of its writes runs immediately
+    before its rename. The before images are read, then every path is checked plain again before the journal. The
+    journal completes once the files landed in HEAD, or when the producer's known refusal left HEAD unmoved and put
+    them back as they were. An unknown publication, a partial commit, a bare notice without that refusal, or an
+    exception stays interrupted for the owner: it is never completed on a guess. Nothing nests: a batch within it would
+    be a second one.
     """
     store._interrupted(shared)  # noqa: SLF001 - same package; store helpers stay private to it
     rows = [(p.relative_to(shared.root).as_posix(), store._content(p), data) for p, data in files]  # noqa: SLF001
+    planned(shared, [p for p, _ in files])
     generation = decision_batch.begin(shared, project, head, message, [p.stem for p, _ in files], rows)
+    images = {shared.root / rel: (before, after) for rel, before, after in rows}
     try:
-        outcome = step(head)
+        outcome = step(head, write_fence(shared, images, head))
     except BaseException:
         if landed(shared, head, rows):
             decision_batch.complete(shared, generation)
@@ -65,11 +71,34 @@ def transaction(  # noqa: PLR0913, PLR0917 - the head the caller proved travels 
     if landed(shared, head, rows) and not outcome.unknown:
         decision_batch.complete(shared, generation)
         return outcome.notice
-    images = {shared.root / rel: (before, after) for rel, before, after in rows}
     if outcome.refused and not outcome.unknown and settle(shared, images, head, generation):
         return outcome.notice
     text = f"interrupted batch {generation}: finish or abandon it in Decisions"
     return store._join(outcome.notice, text)[:300]  # noqa: SLF001
+
+
+def planned(shared: DataRepo, paths: Sequence[Path]) -> None:
+    """Refuse before any journal unless every path read for the batch's plan still lies under plain folders."""
+    if not decision_batch.still_plain(shared.root, paths):
+        msg = "a decision folder changed while the batch was planned, so nothing is written; check the checkout"
+        raise store.DecisionsUnavailable(msg, store.READ)
+
+
+def write_fence(shared: DataRepo, images: dict[Path, tuple[bytes | None, bytes]], head: str) -> Fence:
+    """The proof each of a batch's own writes runs after its new bytes are durable and immediately before its rename.
+
+    No rebase is active or unknown, every file of the batch is plain and holds its before or after image (checked
+    again after those reads), and HEAD, read last, is still *head*. Nothing more is written when it fails, and the
+    batch stays interrupted for the owner; the index is not part of it, as a write never needed it clean.
+    """
+
+    def fence() -> None:
+        if operation_idle(shared) and decision_batch.owned(shared.root, images) and head_commit(shared) == head:
+            return
+        msg = "a decision file, its folder, Git's head or a rebase changed during the write, so nothing more is written"
+        raise store.DecisionsUnavailable(msg, store.RECOVER)
+
+    return fence
 
 
 class _Moved(Exception):  # noqa: N818 - a refused proof, not an error: the batch stays for the owner
