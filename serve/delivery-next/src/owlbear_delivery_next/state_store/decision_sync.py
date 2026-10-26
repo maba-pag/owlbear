@@ -74,9 +74,11 @@ def _on_remote(shared: DataRepo, head: str, until: float) -> bool:
 
 
 def proved(shared: DataRepo, head: str, until: float) -> bool:
-    """Whether *head* is on the remote, pushing HEAD first when *head* is its ancestor and the remote lacks it.
+    """Whether *head* is on the remote, pushing *head* itself first when it is HEAD's ancestor and the remote lacks it.
 
-    The push is never forced: a remote that moved on refuses it and nothing is proved.
+    Only *head*'s own commit is sent (`push_commit`), never HEAD: a commit made after it, a batch's or an owner's,
+    is not published by proving the head it grew from. The push is never forced: a remote that moved on refuses it
+    and nothing is proved.
     """
     if shared.git("fetch", "-q", until=until).returncode:
         return False
@@ -85,9 +87,25 @@ def proved(shared: DataRepo, head: str, until: float) -> bool:
     current = _rev(shared, "HEAD", until)
     if current is None or shared.git("merge-base", "--is-ancestor", head, current, until=until).returncode:
         return False
-    if shared.git("push", "-q", until=until).returncode or shared.git("fetch", "-q", until=until).returncode:
+    if push_commit(shared, head, until) or shared.git("fetch", "-q", until=until).returncode:
         return False
     return _on_remote(shared, head, until)
+
+
+def push_commit(shared: DataRepo, commit: str, until: float) -> str:
+    """Push exactly *commit* to the branch the checkout's branch follows, never forced; why not, else nothing.
+
+    The commit is named by its id in the refspec, so what Git sends is the commit checked, whatever HEAD or the branch
+    names by the time the push reads them. A checkout whose branch follows no remote branch pushes nothing.
+    """
+    branch = shared.git("symbolic-ref", "-q", "HEAD", until=until)
+    name = branch.stdout.strip()
+    said = shared.git("for-each-ref", "--format=%(upstream:remotename)%00%(upstream:remoteref)", name, until=until)
+    remote, _, ref = said.stdout.strip().partition("\0")
+    if branch.returncode or not name or said.returncode or not remote or not ref.startswith("refs/heads/"):
+        return "the checkout's branch follows no remote branch, so nothing was pushed"
+    sent = shared.git("push", "-q", remote, f"{commit}:{ref}", until=until)
+    return sent.stderr.strip()[:200] or "git push failed" if sent.returncode else ""
 
 
 def rebase(shared: DataRepo, until: float) -> str:
@@ -193,10 +211,10 @@ def publish(shared: DataRepo, paths: list[Path], message: str, until: float, hea
         shared, now, rows, paths, until
     ):
         return stop
-    pushed = shared.git("push", "-q", until=until)
-    if pushed.returncode == 0:
+    pushed = push_commit(shared, now, until) if now else "HEAD is not known"  # `_unproved` refused an unknown HEAD
+    if not pushed:
         return Sent()
-    if refused := _rejected(shared, rels, pushed.stderr, until, own=bool(made)):
+    if refused := _rejected(shared, rels, pushed, until, own=bool(made)):
         return refused
     return _rebase_push(shared, head, until, (rows, paths))
 
@@ -257,9 +275,10 @@ def _holds(shared: DataRepo, commit: str, rows: Rows, paths: list[Path], until: 
 
 
 def _unproved(shared: DataRepo, commit: str | None, rows: Rows, paths: list[Path], until: float) -> Sent | None:
-    """Why *commit* is not pushed: it does not hold the batch, or HEAD moved from it; else nothing.
+    """Why *commit* is not pushed: it does not hold the batch, or HEAD already moved from it; else nothing.
 
-    HEAD is read last, immediately before the push, so the commit pushed is the one checked.
+    The push then names *commit* itself (`push_commit`), so what is sent is exactly the commit checked here, even if
+    HEAD moves after this; HEAD having moved already is refused only so that a moved checkout is reported.
     """
     where = f"saved and committed in {shared.root}"
     if commit is None or not _holds(shared, commit, rows, paths, until):
@@ -316,7 +335,7 @@ def _rejected(shared: DataRepo, rels: set[str], why: str, until: float, *, own: 
 def _rebase_push(shared: DataRepo, head: str, until: float, batch: tuple[Rows, list[Path]]) -> Sent:
     """Rebase on the remote and push again; a rebase that would rewrite *head*, the batch's proof, is refused.
 
-    The rebased commit is checked to hold the batch before it is pushed, as the commit it replaced was.
+    The rebased commit is checked to hold the batch, and that very commit is what is pushed, as before the rebase.
     """
     where = f"saved and committed in {shared.root}"
     if not _on_remote(shared, head, until):  # a rebase would rewrite the batch's head: refused, the batch stays
@@ -327,11 +346,11 @@ def _rebase_push(shared: DataRepo, head: str, until: float, batch: tuple[Rows, l
     if failed := shared.rebase(until):
         return _rebase_failed(shared, where, failed, until)
     rows, paths = batch
-    if unproved := _unproved(shared, _rev(shared, "HEAD", until), rows, paths, until):
+    rebased = _rev(shared, "HEAD", until)
+    if unproved := _unproved(shared, rebased, rows, paths, until):
         return unproved
-    sent = shared.git("push", "-q", until=until)
-    if sent.returncode:
-        return Sent(notice=f"{where}, but the push failed: {sent.stderr.strip()[:200]}")
+    if failed := push_commit(shared, rebased, until) if rebased else "HEAD is not known":
+        return Sent(notice=f"{where}, but the push failed: {failed}")
     return Sent()
 
 

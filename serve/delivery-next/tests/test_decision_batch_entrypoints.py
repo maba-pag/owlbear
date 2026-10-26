@@ -13,6 +13,7 @@ import os
 import shutil
 import stat
 import subprocess
+import time
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 
@@ -2645,3 +2646,95 @@ def test_a_lock_failing_when_a_published_save_completes_is_a_recovery_refusal(pi
     assert refused.value.action == decision_store.RECOVER
     assert json.loads(decision_batch.journal_path(shared).read_bytes())["ids"] == [new.id]  # still journalled
     assert _remote_main(shared_repo[1]) == shared.git("rev-parse", "HEAD").stdout.strip()  # published, not completed
+
+
+def _owner_commits_as_git_pushes(m: pytest.MonkeyPatch, first: Path, at: int, pushes: list, before=None) -> None:
+    """At the *at*-th push, after every check and HEAD's last read, the owner commits a third image on top of HEAD;
+    only then does Git run the push. Each push's arguments are recorded; *before* runs ahead of the first push."""
+    real_git = DataRepo.git
+
+    def git(self, *args, **kwargs):
+        if args[:1] == ("push",):
+            pushes.append(args)
+            if len(pushes) == 1 and before is not None:
+                before()
+            if len(pushes) == at:
+                first.write_bytes(THIRD)
+                real_git(self, "commit", "-qam", "the owner's own commit")
+        return real_git(self, *args, **kwargs)
+
+    m.setattr(DataRepo, "git", git)
+
+
+def _owner_commit_kept_unpublished(shared: DataRepo, remote: Path, first: Path, pushes: list) -> str:
+    """The pushed commit is HEAD's parent, named by its id in the refspec; the owner's commit stays local only."""
+    local = shared.git("rev-parse", "HEAD").stdout.strip()
+    sent = _remote_main(remote)
+    assert shared.git("log", "-1", "--format=%s").stdout.strip() == "the owner's own commit"
+    assert sent == shared.git("rev-parse", "HEAD~1").stdout.strip()
+    assert pushes[-1][-1] == f"{sent}:refs/heads/main"  # the refspec names the commit checked, not HEAD
+    assert shared.git("merge-base", "--is-ancestor", local, sent).returncode  # the owner's commit was not sent
+    assert first.read_bytes() == THIRD
+    assert shared.git("status", "--porcelain").stdout == ""  # the owner's commit, index and worktree as they were
+    return sent
+
+
+def test_an_owner_commit_made_as_git_pushes_a_batch_is_never_sent(picking, shared_repo, monkeypatch):
+    _seed(picking)
+    shared, remote = picking.shared, shared_repo[1]
+    items, first, _ = _update_and_successor(picking)
+    pushes: list = []
+
+    with monkeypatch.context() as m:
+        _owner_commits_as_git_pushes(m, first, 1, pushes)
+        receipts = decision_store.save_all(shared, items, message="decisions: two")
+
+    sent = _owner_commit_kept_unpublished(shared, remote, first, pushes)
+    rel = first.relative_to(shared.root).as_posix()
+    assert shared.git("show", f"{sent}:{rel}").stdout.encode() == serialize(items[0][0]).encode()  # the whole batch
+    assert not any(r.saved for r in receipts)  # HEAD no longer holds the batch, so it is not proved landed
+    assert decision_batch.pending(shared) is not None
+
+
+def test_an_owner_commit_made_as_git_pushes_a_rebased_batch_is_never_sent(picking, shared_repo, monkeypatch):
+    _seed(picking)
+    shared, remote = picking.shared, shared_repo[1]
+    items, first, _ = _update_and_successor(picking)
+    other = shared.root.parent / "other"
+    subprocess.run(["git", "clone", "-q", str(remote), str(other)], check=True)  # noqa: S603, S607
+    pushes: list = []
+
+    def another_clone_publishes_first() -> None:  # so the first push is refused and the batch is rebased
+        (other / "unrelated.txt").write_text("another clone\n")
+        for step in (
+            ["add", "-A"],
+            ["-c", "user.name=t", "-c", "user.email=t@e", "commit", "-qm", "o"],
+            ["push", "-q"],
+        ):
+            subprocess.run(["git", *step], cwd=other, check=True)  # noqa: S603, S607
+
+    with monkeypatch.context() as m:
+        _owner_commits_as_git_pushes(m, first, 2, pushes, another_clone_publishes_first)
+        decision_store.save_all(shared, items, message="decisions: two")
+
+    assert len(pushes) == 2  # refused, then the rebased commit
+    _owner_commit_kept_unpublished(shared, remote, first, pushes)
+    assert (shared.root / "unrelated.txt").exists()  # rebased on the other clone's commit
+    assert decision_batch.pending(shared) is not None
+
+
+def test_proving_a_head_sends_that_head_and_not_an_owner_commit_made_as_git_pushes(picking, shared_repo, monkeypatch):
+    _seed(picking)
+    shared, remote = picking.shared, shared_repo[1]
+    first = shared.root / "notes.txt"
+    first.write_text("an unpublished commit\n")
+    shared.git("add", "-A")
+    shared.git("commit", "-qm", "unpublished")
+    head = shared.git("rev-parse", "HEAD").stdout.strip()
+    pushes: list = []
+
+    with monkeypatch.context() as m:
+        _owner_commits_as_git_pushes(m, first, 1, pushes)
+        assert decision_sync.proved(shared, head, time.monotonic() + 60)
+
+    assert _owner_commit_kept_unpublished(shared, remote, first, pushes) == head
