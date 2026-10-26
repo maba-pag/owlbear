@@ -222,7 +222,8 @@ def test_samples_follow_the_seeded_rate_and_a_state_change_is_preliminary() -> N
         for i in range(20):
             spot.seen(started(f"c{i}", "bash", {"command": "ls"}))
             spot.seen(done(f"c{i}", "ok"))
-            await asyncio.sleep(0.01)  # each look ends before the next action
+            if spot.tasks:  # the look, its record included, ends before the next action
+                await asyncio.wait(set(spot.tasks))
         await spot.drain()
         rng = random.Random(7)  # noqa: S311
         return sum(rng.random() * 100 < 30 for _ in range(20))
@@ -236,8 +237,9 @@ def test_samples_follow_the_seeded_rate_and_a_state_change_is_preliminary() -> N
 
 def test_live_mode_still_only_records_and_a_hand_off_is_not_looked_at_unless_chosen() -> None:
     async def main() -> None:
-        spotter.Spotter(ctx(mode="live"), lambda: "s-1", judge()).handed_off("c", {})
-        await asyncio.sleep(0.05)
+        live = spotter.Spotter(ctx(mode="live"), lambda: "s-1", judge())
+        live.handed_off("c", {})
+        await live.drain()
         quiet = spotter.Spotter(ctx(looks=("sample",)), lambda: "s-1", judge())
         quiet.handed_off("c", {})
         assert not quiet.tasks
