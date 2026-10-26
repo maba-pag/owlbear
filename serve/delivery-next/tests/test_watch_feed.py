@@ -15,7 +15,7 @@ from typing import Any, ClassVar
 import pytest
 from copilot.generated.session_events import PermissionRequestWrite, SessionEvent
 
-from owlbear_delivery_next.change_contracts.models import StepKind
+from owlbear_delivery_next.change_contracts.models import Change, StepKind
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_contracts.tools import Worktree
 from owlbear_delivery_next.change_contracts.watch_policy import Places
@@ -70,6 +70,7 @@ def place(tmp_path) -> SimpleNamespace:
     elsewhere.mkdir()
     store = Store(tmp_path / "store")
     store.db.check()
+    store.write(Lock("c1"), Change(slug="c1"))
     notes: list[str] = []
     places = Places((tmp_path / "worktrees",), (), (), tmp_path / "home", None)  # pytest's own folders are exempt
     writer = partial(watch_reports.Writer, store.db, Lock("c1"), note=notes.append)
@@ -287,7 +288,7 @@ def test_a_call_seen_only_in_a_permission_request_is_its_owners_or_unknown_never
 
 def test_a_cancelled_run_waits_until_its_watcher_closed_then_is_cancelled() -> None:
     release, closed = threading.Event(), threading.Event()
-    feed = SimpleNamespace(close=lambda: (release.wait(5), closed.set()))
+    feed = SimpleNamespace(close=lambda: (release.wait(5), closed.set()), spotter=None)
 
     async def work() -> str:
         return "done"

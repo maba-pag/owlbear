@@ -24,6 +24,7 @@ from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.change_contracts import watch_policy
 from owlbear_delivery_next.change_contracts.permissions import view
+from owlbear_delivery_next.improvement import spotter
 from owlbear_delivery_next.local_system.mask import redact
 from owlbear_delivery_next.state_store import watch_reports
 
@@ -54,6 +55,7 @@ class Watching:
     step: str
     places: watch_policy.Places
     writer: Callable[[], watch_reports.Writer]
+    spot: spotter.Context | None = None  # the Spotter's looks at this session (Improvement design §4), if any
 
 
 @dataclass
@@ -81,9 +83,15 @@ class Feed:
         self.launched: dict[str, str] = {}  # launcher call id to the subagent it started, as this feed saw it
         self.open = True
         self.writer = watching.writer()
+        self.spotter = spotter.Spotter(watching.spot, session) if watching.spot is not None else None
 
     def seen(self, kind: str, ev: Any) -> None:  # noqa: ANN401 - an SDK session event
-        """Observe one event; a start or a permission request updates its call's report."""
+        """Observe one event; a start or a permission request updates its call's report; the Spotter takes it in."""
+        if self.spotter is not None and self.open:
+            try:
+                self.spotter.seen(ev)
+            except Exception as exc:  # noqa: BLE001 - a look never ends the step
+                sys.stderr.write(f"spotter {self.watching.slug}: {type(exc).__name__}: {exc}\n")
         if kind == LAUNCHED:
             self._launched(ev)
             return
@@ -213,8 +221,14 @@ async def around[T](feed: Feed | None, work: Awaitable[T]) -> T:
 
 
 async def _closed(feed: Feed) -> bool:
-    """Close *feed* in a thread, whatever cancels the caller meanwhile; whether it was cancelled."""
-    closing, cancelled = asyncio.ensure_future(asyncio.to_thread(feed.close)), False
+    """Close *feed* in a thread after its Spotter's looks end (briefly), whatever cancels the caller; whether it was."""
+    cancelled = False
+    if feed.spotter is not None:
+        try:
+            await feed.spotter.drain()
+        except asyncio.CancelledError:
+            cancelled = True
+    closing = asyncio.ensure_future(asyncio.to_thread(feed.close))
     while not closing.done():
         try:
             await asyncio.shield(closing)

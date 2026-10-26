@@ -20,6 +20,7 @@ from owlbear_delivery_next.change_flow import worktree
 from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.design_packs import design_pack
+from owlbear_delivery_next.improvement import spotter
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.local_system.data_repo import DataRepo
@@ -140,6 +141,11 @@ def _no_shared_settings(tmp_path_factory, monkeypatch):
     root = tmp_path_factory.mktemp("worktrees").resolve()
     monkeypatch.setattr(worktree, "data_root", lambda: root)  # never the machine's worktrees
     monkeypatch.setattr(sdk_adapter, "CopilotClient", _no_runtime)  # never a real model session; fakes replace it
+    monkeypatch.setattr(spotter, "_judged", _silent_look)  # nor a real Spotter look
+
+
+async def _silent_look(_card: dict, _ctx: object) -> tuple[str, float]:
+    return '{"verdict": "silent", "note": "", "evidence": [], "state_change": null}', 0.0
 
 
 def _no_runtime(**_kw: object) -> None:

@@ -273,6 +273,8 @@ class _Step:
         return ToolResult(text_result_for_llm=(await asyncio.to_thread(self.gate.call, spec, inv.arguments))[0])
 
     async def _submitted(self, spec: tools.Spec, inv: ToolInvocation) -> ToolResult:  # lints off the loop (TD-87)
+        if self.feed is not None and self.feed.spotter is not None:  # the hand-off, before Delivery may accept it
+            self.feed.spotter.handed_off(inv.tool_call_id, inv.arguments)
         return await asyncio.to_thread(self._handle, spec, inv)
 
     def tools(self) -> list[Tool]:
