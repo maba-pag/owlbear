@@ -61,7 +61,7 @@ def write_plan(planned: list[Placed], problems: list[str], slug: str) -> tuple[l
         try:
             refused = decision_store.write_batch([(d, layer, rev) for d, layer, rev in planned if rev != d.revision])
         except OSError as exc:
-            refused = {"files": f"cannot be written, all put back: {exc}"}
+            refused = {"files": f"cannot be written: {exc}"}
         problems = [f"decision {key} of {slug}: {' '.join(why.split())}"[:240] for key, why in refused.items()]
     if problems:
         return [], [f"no decision of {slug} was archived", *problems]

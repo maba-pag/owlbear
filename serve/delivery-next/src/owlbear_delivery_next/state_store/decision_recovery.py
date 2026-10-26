@@ -54,7 +54,7 @@ def _committed(shared: DataRepo, batch: decision_batch.Batch) -> str | None:
 
 
 def _written(root: DataRepo, batch: decision_batch.Batch) -> None:
-    """Refuse unless each file is a plain file holding exactly its after image, as committed in Git."""
+    """Refuse unless each file is a plain file in the checkout holding exactly its after image, as committed in Git."""
     for rel, _, after in batch.files:
         if not decision_transaction.worktree_holds(root, rel, after):
             msg = (
@@ -62,6 +62,21 @@ def _written(root: DataRepo, batch: decision_batch.Batch) -> None:
                 "is changed; resolve it by hand"
             )
             raise DecisionsUnavailable(msg, RECOVER)
+
+
+def _idle(shared: DataRepo, batch: decision_batch.Batch) -> None:
+    """Refuse while a rebase is active or unknown: it is read before any other Git read, restore or remote proof."""
+    if not decision_transaction.operation_idle(shared):
+        msg = f"a rebase is active or unknown, so batch {batch.generation} is not recovered; resolve it in Git first"
+        raise DecisionsUnavailable(msg, RECOVER)
+
+
+def _unmoved(shared: DataRepo, batch: decision_batch.Batch) -> None:
+    """Refuse unless no rebase is in flight and HEAD still names the batch's head, which is read last."""
+    _idle(shared, batch)
+    if decision_transaction.head_commit(shared) != batch.head:
+        msg = f"Git's head moved while batch {batch.generation} was recovered, so it stays interrupted; check Git"
+        raise DecisionsUnavailable(msg, RECOVER)
 
 
 def _at_head(shared: DataRepo, batch: decision_batch.Batch) -> None:
@@ -98,6 +113,7 @@ def finish(shared: DataRepo, generation: str) -> Recovery:
     try:
         with root.locked():
             batch = _current(root, generation)
+            _idle(root, batch)
             if _committed(root, batch) is not None:
                 _written(root, batch)
                 if not decision_transaction.landed(root, batch.head, batch.files):  # the last proof, before completion
@@ -113,6 +129,7 @@ def finish(shared: DataRepo, generation: str) -> Recovery:
                 msg = f"the remote moved past {batch.head[:12]}, so batch {generation} is not republished here"
                 raise DecisionsUnavailable(msg, RECOVER)
             _preflight(root, batch)
+            _unmoved(root, batch)  # after the remote proof, immediately before the first file is written
             for rel, _, after in batch.files:
                 storage_io.make_dirs((root.root / rel).parent)
                 decision_batch.replace_file(root.root / rel, after)
@@ -171,13 +188,16 @@ def abandon(shared: DataRepo, generation: str) -> Recovery:
     try:
         with root.locked():
             batch = _current(root, generation)
+            _idle(root, batch)
             if _committed(root, batch) is not None:
                 msg = f"batch {generation} is already committed in Git: finish it, which completes its marker, instead"
                 raise DecisionsUnavailable(msg, RECOVER)
             _at_head(root, batch)
             _preflight(root, batch)
+            _unmoved(root, batch)  # immediately before the first file is put back
             for rel, before, _ in batch.files:
                 decision_batch.replace_file(root.root / rel, before)
+            _unmoved(root, batch)  # last, immediately before completion: a move during the put-back keeps the batch
             decision_batch.complete(root, generation)
             notice = "abandoned: the files are as they were; Git is unchanged"
             return Recovery(generation=generation, done=True, notice=notice)

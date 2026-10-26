@@ -109,24 +109,27 @@ def _held(path: Path) -> bytes | None:
         return None
 
 
-def _plain_in_checkout(path: Path) -> bool:
-    """Whether *path* is a plain file or absent, under plain folders up to the checkout holding its `.git`."""
+def plain_in_checkout(root: Path, path: Path) -> bool:
+    """Whether *path* is a plain file or absent, under plain folders all the way up to the checkout *root*.
+
+    Every folder between them is checked, so a linked folder holding a `.git` of its own cannot end the walk early.
+    """
     if path.is_symlink() or (path.exists() and not path.is_file()):
         return False
     for folder in path.parents:
+        if folder == root:
+            return True
         if folder.is_symlink() or not folder.is_dir():
             return False
-        if (folder / ".git").exists():
-            return True
     return False
 
 
-def owned(images: dict[Path, tuple[bytes | None, bytes | None]]) -> bool:
+def owned(root: Path, images: dict[Path, tuple[bytes | None, bytes | None]]) -> bool:
     """Whether every file is plain and holds its before or after image; an owner's other content is never overwritten.
 
-    A symlink or a path outside a checkout is refused before anything is read, so a matching referent is never followed.
+    A symlink or a path outside *root* is refused before anything is read, so a matching referent is never followed.
     """
-    if not all(_plain_in_checkout(path) for path in images):
+    if not all(plain_in_checkout(root, path) for path in images):
         return False
     return all(_held(path) in (before, after) for path, (before, after) in images.items())
 
@@ -184,17 +187,31 @@ def _record_of(value: object) -> dict:
     return value
 
 
+_IGNORED = dict.fromkeys([*range(0x200C, 0x2010), *range(0x202A, 0x202F), *range(0x206A, 0x2070), 0xFEFF])
+
+
+def _git_alias(part: str) -> bool:
+    """Whether a file system may resolve *part* to `.git`, as Git itself refuses such names.
+
+    Any case counts, and so do HFS's ignored code points and NTFS's trailing dots, spaces and short name.
+    """
+    name = part.translate(_IGNORED).casefold().rstrip(". ")
+    return name in {".git", "git~1"}
+
+
 def _inside(value: str) -> str:
     """Recovery joins this path to the checkout root, so it must stay under it and outside the Git folder."""
     parts = PurePosixPath(value).parts
-    if not parts or PurePosixPath(value).is_absolute() or ".." in parts or any(p.lower() == ".git" for p in parts):
+    if not parts or PurePosixPath(value).is_absolute() or "\0" in value or ".." in parts or any(map(_git_alias, parts)):
         msg = "a journal path is empty, absolute, escapes the checkout or names the Git folder"
         raise ValueError(msg)
     return value
 
 
-def _paired(ids: tuple[str, ...], files: tuple[object, ...]) -> None:
-    if len(ids) != len(files):  # each producer journals one id per file; a partial list would hide a replacement
+def _paired(ids: tuple[str, ...], files: tuple[tuple[str, bytes | None, bytes], ...]) -> None:
+    """Every producer journals one id per file, the file's own name, each file once; anything else is damage."""
+    paths = [rel for rel, _, _ in files]
+    if [PurePosixPath(rel).stem for rel in paths] != list(ids) or len(set(paths)) != len(paths):
         msg = "the journal's decision ids and files do not pair up"
         raise ValueError(msg)
 

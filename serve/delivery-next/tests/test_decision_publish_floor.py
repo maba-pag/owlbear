@@ -580,8 +580,8 @@ def test_an_owned_file_that_is_a_symlink_is_never_followed_while_a_plain_file_st
     link = checkout / "linked.txt"
     link.symlink_to(plain)
 
-    assert decision_batch.owned({plain: (None, b"after")})  # positive control: a plain matching file is owned
-    assert not decision_batch.owned({link: (None, b"after")})  # the symlink refuses even though its referent matches
+    assert decision_batch.owned(checkout, {plain: (None, b"after")})  # positive control: a plain matching file
+    assert not decision_batch.owned(checkout, {link: (None, b"after")})  # refused though its referent matches
     assert link.is_symlink()
 
 

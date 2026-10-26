@@ -65,14 +65,44 @@ def transaction(  # noqa: PLR0913, PLR0917 - the head the caller proved travels 
     if landed(shared, head, rows) and not outcome.unknown:
         decision_batch.complete(shared, generation)
         return outcome.notice
-    moved = store._head(shared) != head  # noqa: SLF001
-    if outcome.refused and not outcome.unknown and not moved:
-        images = {shared.root / rel: (before, after) for rel, before, after in rows}
-        if store._refusal_settles(shared, images, time.monotonic() + SAVE_SECONDS):  # noqa: SLF001
-            decision_batch.complete(shared, generation)
-            return outcome.notice
+    images = {shared.root / rel: (before, after) for rel, before, after in rows}
+    if outcome.refused and not outcome.unknown and settle(shared, images, head, generation):
+        return outcome.notice
     text = f"interrupted batch {generation}: finish or abandon it in Decisions"
     return store._join(outcome.notice, text)[:300]  # noqa: SLF001
+
+
+def settle(shared: DataRepo, images: dict[Path, tuple[bytes | None, bytes]], head: str, generation: str) -> bool:
+    """Put a failed or refused batch's files back and complete it, only while HEAD is proved still *head* around it.
+
+    Nothing is put back while a rebase is active or unknown, once HEAD moved from *head* (an owner's commit is never
+    reverted), while the index holds a change to any of the files, or when a file holds neither image. HEAD is proved
+    again after the put-back, so a move during it keeps the batch too. Returns whether the batch was completed; when
+    not, it stays interrupted for the owner's finish or abandon.
+    """
+    if not _still(shared, head) or _staged(shared, images) or not decision_batch.owned(shared.root, images):
+        return False
+    try:
+        for path, (text, _) in images.items():
+            store._put_back(path, text)  # noqa: SLF001 - same package; store helpers stay private to it
+    except OSError:
+        return False
+    if not decision_batch.restored({path: text for path, (text, _) in images.items()}) or not _still(shared, head):
+        return False
+    decision_batch.complete(shared, generation)
+    return True
+
+
+def _staged(shared: DataRepo, images: dict[Path, tuple[bytes | None, bytes]]) -> bool:
+    """Whether the index differs from HEAD for any of the files, or Git cannot tell; the index is never reset here."""
+    until = time.monotonic() + SAVE_SECONDS
+    rels = [path.relative_to(shared.root).as_posix() for path in images]
+    return any(shared.git("diff", "--cached", "--quiet", "--", rel, until=until).returncode for rel in rels)
+
+
+def _still(shared: DataRepo, head: str) -> bool:
+    """No rebase in flight, and HEAD read last is still *head*: the proof that a failed batch is unpublished."""
+    return operation_idle(shared) and head_commit(shared) == head
 
 
 def landed(shared: DataRepo, head: str, rows: Sequence[tuple[str, bytes | None, bytes]]) -> bool:
@@ -114,6 +144,9 @@ def in_head(shared: DataRepo, rel: str, after: bytes, commit: str) -> bool:
 
 
 def worktree_holds(shared: DataRepo, rel: str, after: bytes) -> bool:
-    """Whether *rel* is a plain file in the worktree holding exactly the after image."""
+    """Whether *rel* is a plain file under plain folders of the checkout, holding exactly the after image.
+
+    The folders are checked before the file is read, so a linked project or `decisions` folder is never followed.
+    """
     path = shared.root / rel
-    return not path.is_symlink() and path.is_file() and path.read_bytes() == after
+    return decision_batch.plain_in_checkout(shared.root, path) and path.is_file() and path.read_bytes() == after

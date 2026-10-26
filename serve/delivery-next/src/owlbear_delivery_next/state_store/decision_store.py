@@ -279,23 +279,23 @@ def _journal(shared: DataRepo, items: list[Placed], message: str, head: str, beh
     try:
         refused = write_batch(items)
     except OSError:
-        if decision_batch.restored(before):  # the failed write put every file back: nothing of the batch is in flight
-            decision_batch.complete(shared, generation)
+        decision_transaction.settle(shared, images, head, generation)  # kept interrupted unless HEAD is proved
         raise
     if refused:
-        decision_batch.complete(shared, generation)
-        return _refused(shared, decisions, refused, behind)
+        why = "; ".join(f"{key}: {text}" for key, text in sorted(refused.items()))
+        held = f"not saved ({why[:120]}), and the files are not proved put back on HEAD {head[:12]}"
+        settled = decision_transaction.settle(shared, images, head, generation)
+        return (
+            _refused(shared, decisions, refused, behind) if settled else _held_back(shared, decisions, held, generation)
+        )
     sent = decision_sync.publish(shared, paths, message, until, head)
-    if sent.uncommitted or sent.ambiguous or sent.stale:
-        if sent.uncommitted and _refusal_settles(shared, images, until):  # the files are put back: nothing is in flight
-            decision_batch.complete(shared, generation)
-            notice = f"not saved, the files are put back: {sent.notice.removeprefix('saved, but ')}"
-        else:  # the batch stays interrupted: only the owner's finish or abandon settles it
-            notice = f"{sent.notice} (interrupted batch {generation}: finish or abandon it in Decisions)"
-        return [Receipt(d.id, saved=False, commit=_head(shared), notice=notice[:300]) for d in decisions]
+    if sent.uncommitted or sent.ambiguous or sent.stale:  # only a known refusal on the proved head settles here
+        put_back = sent.uncommitted and decision_transaction.settle(shared, images, head, generation)
+        said = f"not saved, the files are put back: {sent.notice.removeprefix('saved, but ')}"
+        return _unsaved(shared, decisions, said) if put_back else _held_back(shared, decisions, sent.notice, generation)
     if not decision_transaction.landed(shared, head, rows):  # a sent publication is not proof of landing
         notice = f"{sent.notice} (interrupted batch {generation}: not landed in Git; finish or abandon it in Decisions)"
-        return [Receipt(d.id, saved=False, commit=_head(shared), notice=notice[:300]) for d in decisions]
+        return _unsaved(shared, decisions, notice)
     decision_batch.complete(shared, generation)
     held = [decision_sync.revision_at(shared, "HEAD", p.relative_to(shared.root).as_posix(), until) for p in paths]
     said = [sent.notice]
@@ -334,24 +334,12 @@ def _refusals(items: list[Placed]) -> dict[str, str]:
 
 
 def write_batch(items: Sequence[Placed]) -> dict[str, str]:
-    """Write the batch; a refused or failed file puts back every file of the batch as it was and says why.
-
-    A file the owner changed during the write is never overwritten: that raises, and the batch stays interrupted.
-    """
-    before = {decision_path(d, folder): _content(decision_path(d, folder)) for d, folder, _ in items}
-    after = {decision_path(d, folder): serialize(d).encode("utf-8") for d, folder, _ in items}
+    """Write in order and stop at the first refused file; the caller settles the written files once HEAD is proved."""
     for decision, folder, expected in items:
         try:
             storage_io.make_dirs(decision_path(decision, folder).parent)  # ancestors are durable before the write
             write(decision, folder, expected)
-        except (DecisionError, OSError) as exc:
-            if not decision_batch.owned({path: (text, after[path]) for path, text in before.items()}):
-                msg = "a file was edited during the write: nothing was put back, the batch stays interrupted"
-                raise DecisionsUnavailable(msg) from exc
-            for path, text in before.items():  # the failing file too: a rename may land before its fsync fails
-                _put_back(path, text)
-            if isinstance(exc, OSError):
-                raise
+        except DecisionError as exc:
             return {decision.id: str(exc)}
     return {}
 
@@ -368,24 +356,13 @@ def _put_back(path: Path, text: bytes | None) -> None:
         decision_batch.replace_file(path, text)
 
 
-def _refusal_settles(shared: DataRepo, images: dict[Path, tuple[bytes | None, bytes]], until: float) -> bool:
-    """Put a refused batch's files back, if the index holds none of them and no owner edit would be overwritten.
+def _unsaved(shared: DataRepo, decisions: list[Decision], notice: str) -> list[Receipt]:
+    return [Receipt(d.id, saved=False, commit=_head(shared), notice=notice[:300]) for d in decisions]
 
-    Git and the index are never reset here. The index is compared with `HEAD` only; any staged difference (ours or the
-    owner's) keeps the batch interrupted, and so does any file holding neither its before nor its after image.
-    """
-    for path in images:
-        rel = path.relative_to(shared.root).as_posix()
-        if shared.git("diff", "--cached", "--quiet", "--", rel, until=until).returncode:
-            return False
-    if not decision_batch.owned(images):
-        return False
-    try:
-        for path, (text, _) in images.items():
-            _put_back(path, text)
-    except OSError:
-        return False
-    return decision_batch.restored({path: text for path, (text, _) in images.items()})
+
+def _held_back(shared: DataRepo, decisions: list[Decision], why: str, generation: str) -> list[Receipt]:
+    """The receipts of a batch that stays interrupted: nothing is saved until the owner settles it."""
+    return _unsaved(shared, decisions, f"{why} (interrupted batch {generation}: finish or abandon it in Decisions)")
 
 
 def _refused(shared: DataRepo, decisions: list[Decision], refused: dict[str, str], behind: str) -> list[Receipt]:
