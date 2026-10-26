@@ -293,15 +293,15 @@ def check(repo: DataRepo, until: float | None, *, fetch: bool) -> str:
 def pushing(repo: DataRepo, push: Sequence[str], until: float | None) -> tuple[str, tuple[str, ...]]:
     """Why the git *push* may not run, after fetching and checking as `check` does; else the push to run.
 
-    Every push of the shared checkout, whether a change is held or not, must be proven to land on the upstream branch
-    it reads and rebases from, and a plain push runs as that one non-forced refspec: a configured forced or matching
-    push never overwrites another checkout's work, and a held change's checks still apply once its record retires.
+    Plain and held pushes must land on the checked upstream. With nothing held, an explicit non-forced push may
+    name its caller's captured destination. A plain push still runs as one non-forced refspec after a hold retires:
+    configured forced or matching pushes cannot overwrite another checkout's work.
     """
     return _checked(repo, until, fetch=True, push=tuple(push))
 
 
 def _bound(repo: DataRepo, push: tuple[str, ...], until: float | None) -> tuple[str, tuple[str, ...]]:
-    """The push to run with no change held: refused, never redirected, when it cannot be proven to land upstream."""
+    """The checked, non-forced push with nothing held: plain to the upstream, explicit to its captured destination."""
     if not push:
         return "", push
     try:

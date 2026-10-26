@@ -141,9 +141,9 @@ class DataRepo:
     def git(self, *args: str, until: float | None = None) -> subprocess.CompletedProcess[str]:
         """One git command in the checkout; a timeout or a missing folder is a failed command.
 
-        A push runs only as one non-forced refspec proven to land on the upstream branch the checkout reads from; one
-        that cannot be proven, or whose held automatic change no longer meets the fetched remote, is a failed command
-        that sends nothing (`publication_hold.pushing`).
+        A push runs only as one checked, non-forced refspec. Plain and held pushes must land on the checked upstream;
+        with nothing held, an explicit push may name its caller's captured destination. An unproved destination or
+        a held change that no longer meets the fetched remote sends nothing (`publication_hold.pushing`).
         """
         pushing = args[:1] == ("push",)
         run = args
