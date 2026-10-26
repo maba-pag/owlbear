@@ -350,12 +350,12 @@ def test_a_refused_put_back_unlink_is_fsynced_in_its_parent_before_the_refusal_r
     real_write = decision_store.write
     project_folder = shared.root / PROJECT / "decisions"
     seen: list[set[str]] = []
-    real_fsync = decision_batch.fsync_dir
+    real_fsync = os.fsync
 
-    def snapshot_then_fsync(path: Path) -> None:
-        if Path(path) == project_folder:
-            seen.append({p.name for p in Path(path).iterdir()})
-        real_fsync(path)
+    def snapshot_then_fsync(descriptor: int) -> None:
+        if os.path.samestat(os.fstat(descriptor), project_folder.stat()):  # the folder held open for the unlink
+            seen.append({p.name for p in project_folder.iterdir()})
+        real_fsync(descriptor)
 
     def first_lands_second_refuses(decision, folder, expected=None, **fence):
         if decision.project == "new-site":
@@ -363,7 +363,7 @@ def test_a_refused_put_back_unlink_is_fsynced_in_its_parent_before_the_refusal_r
             raise DecisionError(msg)
         return real_write(decision, folder, expected, **fence)
 
-    monkeypatch.setattr(decision_batch, "fsync_dir", snapshot_then_fsync)
+    monkeypatch.setattr(os, "fsync", snapshot_then_fsync)
     monkeypatch.setattr(decision_store, "write", first_lands_second_refuses)
     receipts = decision_store.save_all(shared, [(project, None), (global_new, None)], message="decisions: refused")
 
@@ -1793,12 +1793,15 @@ def test_a_folder_swapped_while_a_transaction_step_writes_never_writes_the_forei
 
 
 def _write_with(writer: str, tmp_path: Path, fence) -> Path:
-    """Write one new file through *writer* with *fence*; its path."""
+    """Write one new file through *writer* with *fence*, or remove an existing one (`remove`); its path."""
     decision = make(title="Use UTC", statement="All timestamps use UTC.")
     layer = tmp_path / "layer"
     path = storage.decision_path(decision, layer)
     path.parent.mkdir(parents=True)
-    if writer == "batch":
+    if writer == "remove":
+        path.write_bytes(b"the old bytes\n")
+        decision_batch.replace_file(path, None, fence)
+    elif writer == "batch":
         decision_batch.replace_file(path, b"the new bytes\n", fence)
     else:
         storage.write(decision, layer, None, fence=fence)
@@ -1986,18 +1989,18 @@ def test_a_fault_while_the_temporary_is_made_leaks_no_descriptor(tmp_path, monke
         assert left[0].endswith(".tmp")
 
 
-@pytest.mark.parametrize("writer", ["batch", "decisions"])
-def test_a_folder_swapped_after_the_fence_gets_the_rename_and_fsync_in_the_original_folder(
-    tmp_path, monkeypatch, writer
-):
-    """After the fence passes, the owner moves the folder aside and links its path to a foreign folder. The rename and
-    its fsync both stay in the folder the temporary was made in; the foreign folder is neither written nor fsynced."""
+@pytest.mark.parametrize("writer", ["batch", "decisions", "remove"])
+def test_a_folder_moved_or_linked_away_during_the_fence_changes_nothing_in_either_folder(tmp_path, monkeypatch, writer):
+    """While the fence runs, after its own checks, the owner moves the folder aside and links its path to a foreign
+    folder. The folder held open no longer is the one the path names, so nothing is renamed, removed or fsynced in
+    either: the owner's moved folder keeps what it held, the foreign one is untouched, and no descriptor stays open."""
     folder = tmp_path / "layer" / "decisions"
     moved, foreign = tmp_path / "moved", tmp_path / "foreign"
     foreign.mkdir()
     (foreign / "marker.txt").write_text("foreign\n")
     synced: list[os.stat_result] = []
     real_fsync = os.fsync
+    held: dict[str, bytes] = {}
 
     def recording_fsync(descriptor: int) -> None:
         found = os.fstat(descriptor)
@@ -2006,14 +2009,72 @@ def test_a_folder_swapped_after_the_fence_gets_the_rename_and_fsync_in_the_origi
         real_fsync(descriptor)
 
     def fence_then_owner_swaps() -> None:
+        held.update({p.name: p.read_bytes() for p in folder.iterdir() if not p.name.endswith(".tmp")})
         folder.rename(moved)
         folder.symlink_to(foreign, target_is_directory=True)
 
+    open_before = sum(1 for _ in Path("/dev/fd").iterdir())
     with monkeypatch.context() as m:
         m.setattr(os, "fsync", recording_fsync)
-        path = _write_with(writer, tmp_path, fence_then_owner_swaps)
+        with pytest.raises(storage.FolderMovedError):
+            _write_with(writer, tmp_path, fence_then_owner_swaps)
 
-    assert {p.name for p in moved.iterdir()} == {path.name}  # renamed in the original folder, no temporary left
+    assert sum(1 for _ in Path("/dev/fd").iterdir()) == open_before
+    assert {p.name: p.read_bytes() for p in moved.iterdir()} == held  # nothing renamed or removed, no temporary left
     assert {p.name: p.read_text() for p in foreign.iterdir()} == {"marker.txt": "foreign\n"}
-    assert any(os.path.samestat(found, moved.stat()) for found in synced)
     assert not any(os.path.samestat(found, foreign.stat()) for found in synced)
+
+
+@pytest.mark.parametrize("swap", [True, False], ids=["swap-during-head-probe", "healthy"])
+@pytest.mark.parametrize("surface", ["abandon", "store-put-back", "generic-put-back"])
+def test_a_folder_swapped_during_the_fences_head_probe_never_loses_a_file_to_a_removal(
+    picking, monkeypatch, tmp_path, surface, swap
+):
+    """A put-back removes a file the batch added. While its fence reads HEAD, after every path and image check, the
+    owner moves the folder aside and links its path to a foreign copy holding the same after bytes. HEAD is unchanged,
+    so the fence passes; the removal must still change nothing: the foreign file and the owner's moved files stay,
+    Git is as at the swap, the batch stays pending and no reader gets authority. Without the swap it completes."""
+    _seed(picking)
+    shared = picking.shared
+    target, run, _ = _read_swap_surface(picking, monkeypatch, surface)
+    folder, moved, foreign = target.parent, tmp_path / "moved", tmp_path / "foreign"
+    real_replace, real_git = decision_batch.replace_file, DataRepo.git
+    removing, fired = [False], {}
+
+    def scoped_replace(path, data, *fence):
+        removing[0] = data is None and path == target
+        try:
+            return real_replace(path, data, *fence)
+        finally:
+            removing[0] = False
+
+    def head_probe_then_owner_swaps(self, *args, **kwargs):
+        said = real_git(self, *args, **kwargs)
+        if swap and removing[0] and not fired and args[:2] == ("rev-parse", "--verify"):
+            folder.rename(moved)
+            shutil.copytree(moved, foreign)  # the same after bytes, so only the folder's identity tells them apart
+            folder.symlink_to(foreign, target_is_directory=True)
+            fired.update(tree=_tree(moved, Path.read_bytes), git=_git_state(shared))
+        return said
+
+    with monkeypatch.context() as m:
+        m.setattr(decision_batch, "replace_file", scoped_replace)
+        m.setattr(DataRepo, "git", head_probe_then_owner_swaps)
+        refused = ""
+        try:
+            run()
+        except decision_store.DecisionsUnavailable as exc:
+            refused = str(exc)
+
+    assert bool(refused) <= bool(fired), refused  # a refusal is only ever this swap's
+    if not swap:
+        assert not target.exists()
+        assert decision_batch.pending(shared) is None
+        return
+    assert fired
+    assert fired["tree"][target.name]  # the file the removal was for is in the owner's moved folder
+    assert _tree(foreign, Path.read_bytes) == fired["tree"]  # nothing removed behind the link
+    assert _tree(moved, Path.read_bytes) == fired["tree"]  # nor in the folder the owner moved aside
+    assert _git_state(shared) == fired["git"]
+    assert decision_batch.pending(shared) is not None
+    _no_authority(picking)

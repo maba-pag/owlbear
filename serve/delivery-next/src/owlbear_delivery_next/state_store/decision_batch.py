@@ -16,12 +16,12 @@ import json
 import os
 import unicodedata
 import uuid
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
 
-from owlbear_decisions.storage import install, own_temporary
+from owlbear_decisions.storage import bound, install, own_temporary
 from owlbear_delivery_next.local_system.storage_io import fsync_dir, open_lock
 
 if TYPE_CHECKING:
@@ -86,24 +86,34 @@ def replace_file(path: Path, data: bytes | None, fence: Callable[[], None] | Non
     """Make *path* hold *data* atomically, or no file at all when *data* is None; the rename or unlink is fsynced.
 
     *fence*, when given, runs last before the rename or unlink, after the new bytes are durable in their temporary
-    file: a slow fsync cannot outlast the caller's proof that the file is still its to change. The temporary file is
-    made, checked, renamed and fsynced in the folder it was made in, held open throughout (`own_temporary`,
-    `install`); it is removed only while its name still holds it, and *path* is then left as it is.
+    file: a slow fsync cannot outlast the caller's proof that the file is still its to change. The folder is held open
+    before *fence* runs; the rename or unlink and its fsync are made in that folder, and only while *path*'s folder
+    still leads to it (`bound`), so a folder moved aside or linked away during *fence* changes nothing. The temporary
+    file is made, checked and renamed held open throughout (`own_temporary`, `install`); it is removed only while its
+    name still holds it, and *path* is then left as it is. A folder that does not exist holds no file to remove, and
+    none is made to find out.
     """
     if data is None:
-        if not path.parent.exists():  # no folder means no file to remove, and nothing to make durable
+        try:
+            folder = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+        except FileNotFoundError:
             return
-        if fence is not None:
-            fence()
-        path.unlink(missing_ok=True)
-        fsync_dir(path.parent)
+        try:
+            if fence is not None:
+                fence()
+            bound(folder, path.parent)
+            with suppress(FileNotFoundError):
+                os.unlink(path.name, dir_fd=folder)
+            os.fsync(folder)
+        finally:
+            os.close(folder)
         return
     folder = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
     try:
         with own_temporary(folder, data) as temporary:
             if fence is not None:
                 fence()
-            install(temporary, path.name)
+            install(temporary, path.name, path.parent)
     finally:
         os.close(folder)
 

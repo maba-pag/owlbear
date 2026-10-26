@@ -261,17 +261,39 @@ def own_temporary(folder: int, data: bytes) -> Iterator[Temporary]:
         os.close(descriptor)
 
 
-def install(temporary: Temporary, target: str) -> None:
+def install(temporary: Temporary, target: str, path: Path | None = None) -> None:
     """Rename *temporary* to *target* in its own folder once its name is proved to hold it still; fsync the folder.
 
     The folder fsynced is the one the rename changed, held open since the file was made, never one reached again by
-    path. A name that now holds another file raises `TemporaryReplacedError`, and nothing is moved.
+    path. A name that now holds another file raises `TemporaryReplacedError`; when *path*, the folder's own path, no
+    longer leads to that folder, `bound` raises; either way nothing is moved.
     """
     if not temporary.holds_name():
         msg = f"the temporary file {temporary.name} was replaced, so nothing is written"
         raise TemporaryReplacedError(msg)
+    if path is not None:
+        bound(temporary.folder, path)
     os.replace(temporary.name, target, src_dir_fd=temporary.folder, dst_dir_fd=temporary.folder)
     os.fsync(temporary.folder)
+
+
+class FolderMovedError(OSError):
+    """A folder's path no longer leads to the folder held open for a write, so nothing is changed in either."""
+
+
+def bound(folder: int, path: Path) -> None:
+    """Raise `FolderMovedError` unless *path* itself, not followed through a link, is the folder open as *folder*.
+
+    A folder moved aside, or a link put in its place, refuses: the write would otherwise change a file the folder's
+    path no longer names. A missing *path* refuses too; any other error reading it is raised as it is.
+    """
+    try:
+        found = os.lstat(path)
+    except FileNotFoundError:
+        found = None
+    if found is None or not stat.S_ISDIR(found.st_mode) or not os.path.samestat(found, os.fstat(folder)):
+        msg = f"the folder {path} was moved or replaced while it was written, so nothing is changed"
+        raise FolderMovedError(msg)
 
 
 def _replace(path: Path, text: str, fence: Callable[[], None] | None = None) -> None:
@@ -280,7 +302,7 @@ def _replace(path: Path, text: str, fence: Callable[[], None] | None = None) -> 
         with own_temporary(folder, text.encode("utf-8")) as temporary:
             if fence is not None:  # last, once the new bytes are durable: the caller's proof the file is its to change
                 fence()
-            install(temporary, path.name)
+            install(temporary, path.name, path.parent)
     finally:
         os.close(folder)
 

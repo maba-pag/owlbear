@@ -6,6 +6,7 @@ Each test drives the real temporary repository; only the probe output or the dir
 
 from __future__ import annotations
 
+import os
 import subprocess
 
 import pytest
@@ -32,6 +33,7 @@ def test_the_git_folder_of_a_real_repository_is_still_found(picking):
 def test_abandoning_a_new_file_in_an_absent_folder_fsyncs_nothing(tmp_path, monkeypatch):
     synced: list[object] = []
     monkeypatch.setattr(decision_batch, "fsync_dir", synced.append)
+    monkeypatch.setattr(os, "fsync", synced.append)
     absent = tmp_path / "decisions" / "new.md"
 
     decision_batch.replace_file(absent, None)
@@ -41,8 +43,14 @@ def test_abandoning_a_new_file_in_an_absent_folder_fsyncs_nothing(tmp_path, monk
 
 
 def test_removing_a_file_from_an_existing_folder_still_fsyncs_its_parent(tmp_path, monkeypatch):
-    synced: list[object] = []
-    monkeypatch.setattr(decision_batch, "fsync_dir", synced.append)
+    synced: list[os.stat_result] = []
+    real_fsync = os.fsync
+
+    def recording_fsync(descriptor: int) -> None:
+        synced.append(os.fstat(descriptor))
+        real_fsync(descriptor)
+
+    monkeypatch.setattr(os, "fsync", recording_fsync)
     folder = tmp_path / "decisions"
     folder.mkdir()
     (folder / "old.md").write_text("x", encoding="utf-8")
@@ -50,7 +58,7 @@ def test_removing_a_file_from_an_existing_folder_still_fsyncs_its_parent(tmp_pat
     decision_batch.replace_file(folder / "old.md", None)
 
     assert not (folder / "old.md").exists()
-    assert synced == [folder]
+    assert [os.path.samestat(found, folder.stat()) for found in synced] == [True]  # the folder held open, once
 
 
 def test_an_empty_publication_outcome_is_not_a_known_refusal_and_stays_interrupted(picking):
