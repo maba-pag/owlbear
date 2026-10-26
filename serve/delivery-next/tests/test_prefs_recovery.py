@@ -475,6 +475,45 @@ def test_declined_repair_of_an_unreadable_profile_leaves_every_file_unchanged(
     assert not store.config_path.exists()
 
 
+def test_a_confirmed_repair_of_an_unreadable_done_local_profile_keeps_the_guard(
+    repo: Path, tmp_path_factory, monkeypatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path_factory.mktemp("home")))
+    monkeypatch.setattr(readiness, "check", lambda *_a: [])
+    monkeypatch.setattr(setup.profile, "detect", lambda *_a: Profile(version=1))
+    store = Store.open(repo)
+    store.root.mkdir(parents=True, exist_ok=True)
+    (store.root / profile_share.PROFILE).write_text(UNREADABLE % "done")
+    assert setup.run(repo, [], yes=True, local_files="no") == 0
+    saved = store.read_profile()
+    assert saved.confirmed_at is not None
+    assert saved.prefs_import == "done"
+    assert profile_repair.pending(store) is None
+    assert not (store.root / profile_repair.RECEIPT).exists()
+
+
+def test_a_local_source_changed_while_the_owner_confirms_is_refused_without_overwrite(
+    repo: Path, tmp_path_factory, monkeypatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path_factory.mktemp("home")))
+    monkeypatch.setattr(readiness, "check", lambda *_a: [])
+    monkeypatch.setattr(setup.profile, "detect", lambda *_a: Profile(version=1))
+    store = Store.open(repo)
+    store.root.mkdir(parents=True, exist_ok=True)
+    (store.root / profile_share.PROFILE).write_text(UNREADABLE % "done")
+    newer = '{"format": 1, "roles": {"reviewer": {"model": "r-9", "effort": "max"}}}'
+
+    def answer(_question: str) -> str:
+        (store.root / profile_share.PROFILE).write_text(newer)
+        return "y"
+
+    assert setup.run(repo, [], yes=False, local_files="no", ask=answer) == 1
+    assert (store.root / profile_share.PROFILE).read_text() == newer
+    assert not store.config_path.exists()
+    assert not (store.root / profile_share.ROLES_MOVED).exists()
+    assert profile_repair.pending(store) is None
+
+
 def shared_project(repo: Path, shared_repo, monkeypatch) -> Store:
     """The project *repo* in a shared repository (OWLBEAR_DATA), its clone's local folder created."""
     data, _remote = shared_repo
