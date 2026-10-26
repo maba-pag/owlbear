@@ -3771,6 +3771,17 @@ elif when == "git":  # the rebase probe after every file is put back and proved,
     after(DataRepo, "rebasing", lambda: to_pipe() if armed else None)
 elif when == "put-back":  # the commit is refused, so the save puts its files back, reading each first
     DataRepo.commit = lambda *_args, **_kwargs: (to_pipe(), "git refused the commit")[1]
+elif when == "after-replace":  # the temporary is renamed into place; then its folder is moved and a pipe takes its name
+    real_replace = Path.replace
+    def replace_then_swap(self, dest):
+        said = real_replace(self, dest)
+        if not fired:
+            fired.append(True)
+            folder = Path(dest).parent
+            folder.rename(folder.with_name(folder.name + "-moved"))
+            os.mkfifo(folder)
+        return said
+    Path.replace = replace_then_swap
 try:
     if action in ("finish", "abandon"):
         said = getattr(decision_recovery, action)(shared, spec["generation"]).done
@@ -3781,6 +3792,8 @@ try:
     elif action == "transaction":
         step = lambda *_args: decision_transaction.Step("", refused=True)
         said = decision_transaction.transaction(shared, spec["project"], "m", [(target, b"{}")], step, spec["head"])
+    elif action == "atomic-write":
+        said = storage_io.atomic_write(target, "the new content\n").st_ino
     else:
         storage_io.fsync_dir(target)
         said = "synced"
@@ -3881,3 +3894,36 @@ def test_a_regular_file_is_read_and_a_missing_one_is_none(tmp_path):
         storage_io.read_regular(pipe)
     with pytest.raises(OSError, match=r"Errno"):
         storage_io.read_regular(link)
+
+
+def test_an_atomic_writes_folder_swapped_for_a_pipe_after_its_rename_is_refused_without_waiting(tmp_path):
+    """The writer renames its temporary into place; then the folder is moved aside and a pipe takes its name before
+    the folder is synced. The sync refuses without waiting, the pipe is left as it is, and the moved folder holds the
+    written file alone, with no temporary left behind."""
+    folder = tmp_path / "decisions"
+    folder.mkdir()
+    (folder / "record.json").write_text("the old content\n")
+    spec = {"root": str(tmp_path), "target": str(folder / "record.json"), "action": "atomic-write"}
+
+    said = _bounded({**spec, "when": "after-replace"})
+
+    assert said["outcome"] != "hung", said
+    assert said["fired"]
+    assert said["outcome"] in {"NotADirectoryError", "OSError"}, said
+    assert stat.S_ISFIFO(os.lstat(folder).st_mode)  # the pipe stays, never followed, recreated or written into
+    moved = tmp_path / "decisions-moved"
+    assert {p.name: p.read_text() for p in moved.iterdir()} == {"record.json": "the new content\n"}
+
+
+def test_an_atomic_write_returns_the_identity_of_the_file_it_wrote(tmp_path):
+    """With nothing swapped, the write lands, its folder is synced and its answer is the written file's own inode."""
+    target = tmp_path / "record.json"
+    target.write_text("the old content\n")
+    old = target.stat().st_ino
+
+    written = storage_io.atomic_write(target, "the new content\n")
+
+    assert target.read_text() == "the new content\n"
+    assert (written.st_ino, written.st_dev) == (target.stat().st_ino, target.stat().st_dev)
+    assert written.st_ino != old  # a new file, renamed over the old one
+    assert [p.name for p in tmp_path.iterdir()] == ["record.json"]  # no temporary left

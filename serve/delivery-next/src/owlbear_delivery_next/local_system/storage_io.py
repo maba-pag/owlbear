@@ -48,12 +48,7 @@ def atomic_write(target: Path, content: str) -> os.stat_result:
             os.fsync(fh.fileno())
             Path(tmp_path).replace(target)
             written = os.fstat(fh.fileno())
-        # POSIX: fsync parent directory so the rename survives a power loss
-        dir_fd = os.open(str(target.parent), os.O_RDONLY)
-        try:
-            os.fsync(dir_fd)
-        finally:
-            os.close(dir_fd)
+        fsync_dir(target.parent)  # POSIX: so the rename survives a power loss; a pipe or link there raises, never waits
     except Exception:
         with contextlib.suppress(OSError):
             Path(tmp_path).unlink()
