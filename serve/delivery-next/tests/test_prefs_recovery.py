@@ -1,5 +1,6 @@
 """The legacy preference import recovers from owner reviews, stored values, and failed publications (R15, FND-01)."""
 
+import contextlib
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
@@ -21,7 +22,7 @@ from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.runtimes import readiness
 from owlbear_delivery_next.settings import config, profile
 from owlbear_delivery_next.settings.config import Layer, Prefs
-from owlbear_delivery_next.state_store import prefs_import, profile_share
+from owlbear_delivery_next.state_store import prefs_import, profile_repair, profile_share
 from owlbear_delivery_next.state_store.store import RoleSourceError, Store, StoreError
 
 AUTH = {"authorization": "Bearer " + "t"}
@@ -381,7 +382,6 @@ def test_a_refused_config_during_an_ordinary_save_keeps_new_facts_for_the_retry(
 
 
 UNREADABLE = '{"format": 4, "prefs_import": "%s", "prefs_basis": "", "models": {}}'
-PROFILE_CHECKS = ("profile detection", "legacy preferences")  # the host checks that depend on this clone's profile
 
 
 def test_repair_keeps_a_done_import_guard_and_does_not_reimport(local: Store) -> None:
@@ -597,14 +597,19 @@ def test_shared_repair_refuses_a_malformed_guard_and_keeps_the_source_bytes(
 def test_shared_repair_success_lets_a_fresh_open_and_readiness_run_with_the_published_guard(
     repo: Path, shared_repo, monkeypatch, capsys
 ) -> None:
-    real_check = readiness.check
     store = shared_project(repo, shared_repo, monkeypatch)
     source = store.root / profile_share.PROFILE
     raw = '{"format": 4, "prefs_import": "done", "prefs_basis": "basis-1", "prefs_claim": "nonce-1", "models": 5}'
     source.write_text(raw)
     assert setup.run(repo, [], yes=False, local_files="no", ask=lambda _q: "y") == 0
     assert "cannot be read" in capsys.readouterr().out
-    monkeypatch.setattr(readiness, "check", real_check)
+    real_run, carried_runs = prefs_import.run, []
+
+    def spy_run(running):
+        carried_runs.append(running)
+        return real_run(running)
+
+    monkeypatch.setattr(prefs_import, "run", spy_run)
     fresh = Store.open(repo)
     assert fresh.deferred_roles is None
     published = fresh.read_profile()
@@ -614,7 +619,14 @@ def test_shared_repair_success_lets_a_fresh_open_and_readiness_run_with_the_publ
     assert source.read_text() == raw
     assert (store.root / profile_share.ROLES_MOVED).exists()
     assert not store.config_path.exists()
-    assert [check for check in readiness.ready(fresh, repo) if not check.ok and check.name in PROFILE_CHECKS] == []
+    # As the real detection, keep the previous profile and its guard.
+    monkeypatch.setattr(setup.profile, "detect", lambda _repo, _gh, prev: prev)
+    checks = readiness.ready(fresh, repo, carry=True)
+    assert len(carried_runs) == 1  # the host start's legacy import ran, and it reported no failure
+    assert [check for check in checks if not check.ok] == []
+    after = Store.open(repo).read_profile()
+    assert (after.prefs_import, after.prefs_basis, after.prefs_claim) == ("done", "basis-1", "nonce-1")
+    assert not store.config_path.exists()
 
 
 def test_shared_repair_of_a_readable_profile_refuses_when_its_role_write_fails_before_probe(
@@ -640,6 +652,155 @@ def test_shared_repair_of_a_readable_profile_refuses_when_its_role_write_fails_b
     assert not profile_share.path(store).exists()
     assert not store.config_path.exists()
     assert not (store.root / profile_share.ROLES_MOVED).exists()
+
+
+GOOD_ROLES = '{"format": 1, "roles": {"reviewer": {"model": "r-2", "effort": "max"}}}'
+
+
+def probed_repair(monkeypatch) -> list[str]:
+    """Record every profile probe and profile write; a refused repair makes neither."""
+    calls: list[str] = []
+
+    def detect(*_a: object) -> Profile:
+        calls.append("detect")
+        return Profile(version=1)
+
+    def write(_self, *_a: object, **_k: object) -> str:
+        calls.append("write")
+        return ""
+
+    monkeypatch.setattr(setup.profile, "detect", detect)
+    monkeypatch.setattr(Store, "write_profile", write)
+    return calls
+
+
+def test_shared_repair_source_fixed_during_the_first_read_is_inspected_again(
+    repo: Path, shared_repo, monkeypatch, capsys
+) -> None:
+    store = shared_project(repo, shared_repo, monkeypatch)
+    source = store.root / profile_share.PROFILE
+    source.write_text(BAD_EFFORT)
+    calls = probed_repair(monkeypatch)
+    real_read = Store.read_profile
+
+    def fixed_then_read(self: Store) -> Profile | None:
+        source.write_text(GOOD_ROLES)  # the bytes behind the captured refusal change before the digest is taken
+        return real_read(self)
+
+    monkeypatch.setattr(Store, "read_profile", fixed_then_read)
+    try:
+        code: object = setup.run(repo, [], yes=True, local_files="no")
+    except StoreError as exc:
+        code = exc
+    assert "Profile v" not in capsys.readouterr().out
+    assert calls == []
+    assert source.read_text() == GOOD_ROLES
+    assert not (store.root / profile_share.ROLES_MOVED).exists()
+    assert not profile_share.path(store).exists()
+    assert not store.config_path.exists()
+    assert code != 0
+
+
+def test_shared_repair_source_changed_while_the_writer_lock_is_awaited_is_refused(
+    repo: Path, shared_repo, monkeypatch, capsys
+) -> None:
+    store = shared_project(repo, shared_repo, monkeypatch)
+    source = store.root / profile_share.PROFILE
+    source.write_text(BAD_EFFORT)
+    real_writer = profile_share._writer  # noqa: SLF001 - the writer lock itself is what the probe sits in
+    armed: list[bool] = []
+
+    @contextlib.contextmanager
+    def changed_at_entry(st: Store, *, create: bool = True):
+        if armed:
+            armed.clear()
+            source.write_text(GOOD_ROLES)  # changed after the pre-save digest, before the writer lock is taken
+        with real_writer(st, create=create):
+            yield
+
+    real_write = Store.write_profile
+
+    def armed_write(self: Store, prof: Profile, **kwargs: object) -> str:
+        armed.append(True)
+        try:
+            return real_write(self, prof, **kwargs)
+        finally:
+            armed.clear()
+
+    monkeypatch.setattr(profile_share, "_writer", changed_at_entry)
+    monkeypatch.setattr(Store, "write_profile", armed_write)
+    try:
+        code: object = setup.run(repo, [], yes=True, local_files="no")
+    except StoreError as exc:
+        code = exc
+    assert "Profile v" not in capsys.readouterr().out
+    assert source.read_text() == GOOD_ROLES
+    assert not profile_share.path(store).exists()
+    assert not (store.root / profile_share.ROLES_MOVED).exists()
+    assert not store.config_path.exists()
+    assert code != 0
+
+
+def test_shared_repair_publication_refusal_is_visible_and_retires_nothing(
+    repo: Path, shared_repo, monkeypatch, capsys
+) -> None:
+    store = shared_project(repo, shared_repo, monkeypatch)
+    source = store.root / profile_share.PROFILE
+    source.write_text(BAD_EFFORT)
+    notice = "saved, but not pushed: the shared repository refused the push"
+    monkeypatch.setattr(DataRepo, "publish", lambda *_a, **_k: notice)
+    try:
+        code: object = setup.run(repo, [], yes=True, local_files="no")
+    except StoreError as exc:
+        code = exc
+    out = capsys.readouterr().out
+    assert "Profile v" not in out
+    assert not (store.root / profile_share.ROLES_MOVED).exists()
+    assert source.read_text() == BAD_EFFORT
+    assert code != 0
+
+
+def refuse_publish(monkeypatch) -> None:
+    notice = "saved, but not pushed: the shared repository refused the push"
+    monkeypatch.setattr(DataRepo, "publish", lambda *_a, **_k: notice)
+
+
+def test_a_refused_repair_publication_stays_pending_and_the_next_setup_publishes_it(
+    repo: Path, shared_repo, monkeypatch, capsys
+) -> None:
+    store = shared_project(repo, shared_repo, monkeypatch)
+    source = store.root / profile_share.PROFILE
+    source.write_text(BAD_EFFORT)
+    with monkeypatch.context() as refused:
+        refuse_publish(refused)
+        assert setup.run(repo, [], yes=True, local_files="no") == 1
+    assert (store.root / profile_repair.RECEIPT).exists()
+    assert not (store.root / profile_share.ROLES_MOVED).exists()
+    capsys.readouterr()
+    assert setup.run(repo, [], yes=False, local_files="no") == 0  # the staged replacement is published, not asked again
+    assert "Profile v" in capsys.readouterr().out
+    assert not (store.root / profile_repair.RECEIPT).exists()
+    assert (store.root / profile_share.ROLES_MOVED).exists()
+
+
+def test_a_refused_repair_is_not_resumed_once_the_old_profile_changed(
+    repo: Path, shared_repo, monkeypatch, capsys
+) -> None:
+    store = shared_project(repo, shared_repo, monkeypatch)
+    source = store.root / profile_share.PROFILE
+    source.write_text(BAD_EFFORT)
+    with monkeypatch.context() as refused:
+        refuse_publish(refused)
+        assert setup.run(repo, [], yes=True, local_files="no") == 1
+    assert not (store.root / profile_share.ROLES_MOVED).exists()
+    source.write_text(GOOD_ROLES)
+    capsys.readouterr()
+    assert setup.run(repo, [], yes=True, local_files="no") == 1
+    out = capsys.readouterr().out
+    assert "changed while you answered" in out
+    assert "Profile v" not in out
+    assert source.read_text() == GOOD_ROLES
+    assert not (store.root / profile_repair.RECEIPT).exists()
 
 
 # Finding 6: a legacy claim is won only by its own published nonce, never by an equal absent basis

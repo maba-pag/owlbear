@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from typing import TYPE_CHECKING
@@ -11,14 +12,14 @@ from owlbear_delivery_next.local_system.storage_io import atomic_write, open_loc
 from owlbear_delivery_next.settings import migrations
 from owlbear_delivery_next.settings.config import Layer
 from owlbear_delivery_next.state_store.layers import read_layer
-from owlbear_delivery_next.state_store.profile_share import PROFILE, ROLES_MOVED, config_digest
+from owlbear_delivery_next.state_store.profile_share import ABSENT, PROFILE, ROLES_MOVED, config_digest
 
 if TYPE_CHECKING:
     from pathlib import Path
 
     from owlbear_delivery_next.change_contracts.models import Role
     from owlbear_delivery_next.change_contracts.profile_record import RoleModel
-    from owlbear_delivery_next.state_store.store import Store
+    from owlbear_delivery_next.state_store.store import RoleSourceError, Store
 
 
 def move_roles(store: Store) -> None:
@@ -81,6 +82,15 @@ def _old_roles(old: Path) -> dict[Role, RoleModel]:
     Anything else, an unknown, future, malformed or unreadable profile, raises ``StoreError`` before any marker,
     receipt or config write: the move stays retryable and the store cannot open with its roles silently lost.
     """
+    try:
+        data = old.read_bytes()
+    except OSError as exc:
+        raise _unreadable(old, exc) from exc
+    return roles_of(data, old)
+
+
+def roles_of(data: bytes, old: Path) -> dict[Role, RoleModel]:
+    """The role overrides of the old profile's *data*, judged as the move judges them (see ``_old_roles``)."""
     from owlbear_delivery_next.state_store.store import (  # noqa: PLC0415 - the store imports this module
         RoleSourceError,
         StoreError,
@@ -88,18 +98,15 @@ def _old_roles(old: Path) -> dict[Role, RoleModel]:
     )
 
     try:
-        raw = old.read_text()
-        data = json.loads(raw)
-        version = _format_of(data)
-    except (OSError, TypeError, ValueError) as exc:
-        msg = (
-            f"the old profile could not be read to move its role overrides: {exc}; repair or replace {old}, then reopen"
-        )
-        raise RoleSourceError(msg) from exc
+        raw = data.decode()
+        content = json.loads(raw)
+        version = _format_of(content)
+    except (TypeError, ValueError) as exc:  # a UnicodeDecodeError is a ValueError too
+        raise _unreadable(old, exc) from exc
     roles: dict[Role, RoleModel] = {}
     if version == 1:
         try:
-            roles = migrations.ROLES.validate_python(data.get("roles", {}))
+            roles = migrations.ROLES.validate_python(content.get("roles", {}))
         except ValueError as exc:  # pydantic's ValidationError is a ValueError
             msg = f"the old profile's role overrides are invalid: {exc}; repair {old}, then reopen"
             raise RoleSourceError(msg) from exc
@@ -108,6 +115,33 @@ def _old_roles(old: Path) -> dict[Role, RoleModel]:
     except StoreError as exc:
         raise RoleSourceError(str(exc)) from exc
     return roles
+
+
+def snapshot(old: Path) -> tuple[str, RoleSourceError | None]:
+    """The digest of the old profile's bytes now, and why its role overrides cannot be read from those same bytes.
+
+    ``ABSENT`` with no reason when the file is gone; the caller judges any other ``None`` reason as readable.
+    """
+    from owlbear_delivery_next.state_store.store import RoleSourceError  # noqa: PLC0415 - the store imports this module
+
+    try:
+        data = old.read_bytes()
+    except FileNotFoundError:
+        return ABSENT, None
+    except OSError as exc:
+        return "", _unreadable(old, exc)
+    try:
+        roles_of(data, old)
+    except RoleSourceError as exc:
+        return hashlib.sha256(data).hexdigest(), exc
+    return hashlib.sha256(data).hexdigest(), None
+
+
+def _unreadable(old: Path, exc: Exception) -> RoleSourceError:
+    from owlbear_delivery_next.state_store.store import RoleSourceError  # noqa: PLC0415 - the store imports this module
+
+    msg = f"the old profile could not be read to move its role overrides: {exc}; repair or replace {old}, then reopen"
+    return RoleSourceError(msg)
 
 
 def retire_source(store: Store) -> None:

@@ -10,11 +10,8 @@ from __future__ import annotations
 
 import contextlib
 import hashlib
-import json
 import os
 from typing import TYPE_CHECKING
-
-from pydantic import ValidationError
 
 from owlbear_delivery_next.change_contracts.profile_record import PROFILE_FORMAT, Profile
 from owlbear_delivery_next.design_packs.detector import DetectorError
@@ -54,12 +51,20 @@ def path(store: Store) -> Path:
     return store.shared.root / store.name / PROFILE if store.shared else store.root / PROFILE
 
 
-def write(store: Store, prof: Profile, *, replace_unreadable: bool = False) -> str:
+class SourceChangedError(RuntimeError):
+    """The clone's old profile changed after the owner confirmed its replacement; nothing was written."""
+
+
+def write(store: Store, prof: Profile, *, replace_unreadable: bool = False, source: str = "") -> str:
     """Write the profile; in the shared folder also commit and push it: what the owner should know, else nothing.
 
-    An ordinary save refuses an unreadable saved profile; only the explicit repair (*replace_unreadable*) replaces it.
+    An ordinary save refuses an unreadable saved profile; only the explicit repair (*replace_unreadable*) replaces
+    it, and only while the old profile still has the digest *source* the owner confirmed (checked under the lock).
     """
     with _writer(store):
+        if source and config_digest(store.root / PROFILE) != source:
+            msg = "The old profile changed while you answered; nothing was saved. Run setup again to review it."
+            raise SourceChangedError(msg)
         current = _current_for_write(store, replace_unreadable=replace_unreadable)
         if current is not None:  # only mark() moves the legacy import marker; a snapshot never rewinds it
             prof = prof.model_copy(
@@ -324,6 +329,7 @@ def _read_unlocked(store: Store) -> Profile | None:
 
 def _current_for_write(store: Store, *, replace_unreadable: bool) -> Profile | None:
     """The saved profile whose legacy guard an ordinary save keeps, or, for the explicit repair, only that guard."""
+    from owlbear_delivery_next.state_store.profile_repair import unreadable_guard  # noqa: PLC0415 - circular
     from owlbear_delivery_next.state_store.store import StoreError  # noqa: PLC0415 - the store imports this module
 
     if not replace_unreadable:
@@ -331,33 +337,8 @@ def _current_for_write(store: Store, *, replace_unreadable: bool) -> Profile | N
     try:  # an absent shared target keeps the clone's own valid legacy guard, a malformed one refuses
         current = _read_unlocked(store)
     except StoreError:
-        return _unreadable_guard(path(store))
-    return current or (_unreadable_guard(store.root / PROFILE) if store.shared else None)
-
-
-def _unreadable_guard(source: Path) -> Profile | None:
-    """The legacy import guard of a saved profile that cannot be read: kept when valid, malformed evidence raises."""
-    from owlbear_delivery_next.state_store.store import StoreError  # noqa: PLC0415 - the store imports this module
-
-    if not _present(source):
-        return None
-    try:
-        data = json.loads(source.read_text())
-    except (OSError, ValueError) as exc:
-        msg = f"the saved profile's legacy import guard cannot be read: {source}"
-        raise StoreError(msg) from exc
-    if not isinstance(data, dict):
-        msg = f"the saved profile's legacy import guard is malformed: {source}"
-        raise StoreError(msg)
-    try:
-        return Profile(
-            prefs_import=data.get("prefs_import", ""),
-            prefs_basis=data.get("prefs_basis", ""),
-            prefs_claim=data.get("prefs_claim"),
-        )
-    except ValidationError as exc:
-        msg = f"the saved profile's legacy import guard is malformed: {source}"
-        raise StoreError(msg) from exc
+        return unreadable_guard(path(store))
+    return current or (unreadable_guard(store.root / PROFILE) if store.shared else None)
 
 
 def _present(source: Path) -> bool:

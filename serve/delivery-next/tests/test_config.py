@@ -298,6 +298,50 @@ def test_a_clone_that_read_roles_before_another_cleared_them_never_reinstates(sh
     assert roles.chosen(shared.settings(), StepKind.REVIEW) == carried.MODELS["reviewer"]
 
 
+def test_a_clone_on_the_same_config_that_another_cleared_never_reinstates(shared_repo, tmp_path, monkeypatch):
+    root, _remote = shared_repo
+    a = Store(tmp_path / "a-store", DataRepo(root), "shop-site")
+    b = Store(tmp_path / "b-store", DataRepo(root), "shop-site")
+    assert a.root != b.root
+    assert a.config_path == b.config_path
+    _old_profile(a.root, {"reviewer": {"model": "r-1", "effort": "max"}})
+    _old_profile(b.root, {"reviewer": {"model": "r-1", "effort": "max"}})
+    real_digest, real_update = roles_move.config_digest, Store.update_config
+    raced, cleared, seen = [], [], []
+
+    def a_imports_then_owner_clears(path):
+        if not raced:  # B has read roles_moved as False; A imports, then the owner clears the roles
+            raced.append(True)
+            roles_move.move_roles(a)
+            owner_save(a, lambda _cur: Layer())
+            cleared.append(real_digest(a.config_path))
+        return real_digest(path)
+
+    def watch_b_callback(self, prepared, what="project layer", on_written=None):
+        if self.root == b.root:  # the locked callback B's basis reaches: what it reads, not only what B stored
+            inner = prepared.change
+
+            def seen_by_callback(cur):
+                seen.append((prepared.basis, cur.roles_moved))
+                return inner(cur)
+
+            prepared.change = seen_by_callback
+        return real_update(self, prepared, what, on_written=on_written)
+
+    monkeypatch.setattr(roles_move, "config_digest", a_imports_then_owner_clears)
+    monkeypatch.setattr(Store, "update_config", watch_b_callback)
+    roles_move.move_roles(b)
+
+    assert raced
+    assert seen == [(cleared[0], True)]  # B's basis is the cleared config, and its locked callback sees the receipt
+    assert (b.root / profile_share.ROLES_MOVED).exists()
+    fresh = tmp_path / "fresh"
+    subprocess.run(["git", "clone", "-q", str(_remote), str(fresh)], check=True, capture_output=True)  # noqa: S603, S607
+    shared = Store(tmp_path / "fresh-store", DataRepo(fresh), "shop-site")
+    assert read_layer(shared.config_path, Layer).roles_moved
+    assert roles.chosen(shared.settings(), StepKind.REVIEW) == carried.MODELS["reviewer"]
+
+
 def test_a_move_whose_marker_cannot_be_written_fails_the_open(repo, monkeypatch):
     root = repo / ".git" / "owlbear-delivery"
     _old_profile(root, {"reviewer": {"model": "r-1", "effort": "max"}})
