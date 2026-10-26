@@ -61,6 +61,7 @@ def test_a_capture_keeps_the_log_gzipped_and_the_runtime_s_own_saved_outputs_onl
     with gzip.open(folder / "s1" / "log.jsonl.gz", "rt") as log:
         assert log.read() == (records / "s1" / "events.jsonl").read_text()
     assert [o["state"] for o in said["outputs"]] == ["kept", "refused", "refused", "missing"]
+    assert [o["bytes"] for o in said["outputs"]] == [15, 0, 0, 0]
     with gzip.open(folder / "s1" / "outputs" / f"{own.name}.gz", "rt") as out:
         assert out.read() == "the full output"
     assert json.loads((folder / "s1" / "sidecar.json").read_text()) == said
@@ -167,7 +168,7 @@ def test_an_output_whose_temporary_file_is_gone_is_carried_over_on_refresh(tmp_p
     chatlogs.capture("s10", provisional=True, records=records)
     own.unlink()  # the runtime's temporary file is gone
     said = chatlogs.capture("s10", provisional=False, records=records)
-    assert [o["state"] for o in said["outputs"]] == ["kept"]
+    assert [(o["state"], o["bytes"]) for o in said["outputs"]] == [("kept", 9)]  # its bytes still count
     with gzip.open(chatlogs.root() / "chatlogs" / "s10" / "outputs" / f"{own.name}.gz", "rt") as out:
         assert out.read() == "only copy"
 
@@ -312,6 +313,8 @@ def test_finished_chats_are_quiet_for_a_day_enrolled_and_never_owlbear_s_own(tmp
     chatlogs.note({"event": "started", "session": "ours"})  # a Delivery or curation session, not a chat
     assert list(chatlogs.finished_chats([str(work)], now, records)) == ["old"]
     assert list(chatlogs.finished_chats([], now, records)) == []  # none enrolled: none read
+    (records / "old" / "workspace.yaml").write_bytes(b"cwd: \xff\xfe")  # wrongly encoded: never enrolled, never fatal
+    assert list(chatlogs.finished_chats([str(work)], now, records)) == []
 
 
 def test_only_judged_unpinned_sessions_a_month_old_are_pruned(tmp_path):

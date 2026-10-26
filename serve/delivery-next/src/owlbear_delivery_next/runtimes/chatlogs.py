@@ -221,7 +221,7 @@ def capture(
         try:
             with log.open("rb") as src:
                 size = _copy(src, stage / "log.jsonl.gz", None, stop, until)
-            outputs = _outputs(log, stage, live, stop, until)
+            outputs = _outputs(log, stage, live, before, stop, until)
             _go_on(stop, until, over=False)
             said = {"session": session, "copied_at": _now(), "size": size, "mtime": st.st_mtime,
                     "provisional": provisional or size != st.st_size, "outputs": outputs}  # fmt: skip
@@ -231,18 +231,29 @@ def capture(
             shutil.rmtree(stage, ignore_errors=True)
 
 
-def _outputs(log: Path, stage: Path, live: Path, stop: threading.Event, until: float) -> list[dict[str, str]]:
-    """Each named output copied into *stage*, or carried over from the live snapshot when its file is gone."""
+def _outputs(  # noqa: PLR0913, PLR0917 - the log, both snapshots and the capture's bounds
+    log: Path, stage: Path, live: Path, before: dict[str, Any], stop: threading.Event, until: float
+) -> list[dict[str, Any]]:
+    """Each named output copied into *stage*, or carried over from the live snapshot when its file is gone.
+
+    Every kept output's bytes, carried ones included, count against the budget.
+    """
+    sizes = {o.get("path"): o.get("bytes") for o in before.get("outputs", []) if isinstance(o, dict)}
     used, outputs = 0, []
     for path in _named(log, stop, until):
         name = f"{Path(path).name}.gz"
         _private(stage / "outputs")
         verdict, n = _output(path, stage / "outputs" / name, OUTPUT_BYTES - used, stop, until)
-        if verdict == "missing" and (live / "outputs" / name).is_file():  # the only copy left: keep it
-            shutil.copy2(live / "outputs" / name, stage / "outputs" / name)
-            verdict, n = "kept", (live / "outputs" / name).stat().st_size
+        kept = live / "outputs" / name
+        if verdict == "missing" and kept.is_file() and isinstance(sizes.get(path), int):  # the only copy left
+            n = sizes[path]
+            verdict = "kept" if used + n <= OUTPUT_BYTES else "over the bound"
+            if verdict == "kept":
+                shutil.copy2(kept, stage / "outputs" / name)
+            else:
+                n = 0
         used += n
-        outputs.append({"path": path, "state": verdict})
+        outputs.append({"path": path, "state": verdict, "bytes": n})
     return outputs
 
 
@@ -338,7 +349,7 @@ def enrolled(cwd: str, folders: Iterable[str]) -> bool:
 
 def _cwd(folder: Path) -> str:
     """A session's workspace folder, from ``workspace.yaml``: the only file read before enrolment is checked."""
-    with suppress(OSError):
+    with suppress(OSError, ValueError):  # unreadable or wrongly encoded metadata: no folder, so never enrolled
         for line in (folder / "workspace.yaml").read_text().splitlines():
             if line.startswith("cwd:"):
                 return line.split(":", 1)[1].strip()
