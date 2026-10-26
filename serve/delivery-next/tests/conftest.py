@@ -141,6 +141,7 @@ def _no_shared_settings(tmp_path_factory, monkeypatch):
     monkeypatch.setattr(worktree, "data_root", lambda: root)  # never the machine's worktrees
     monkeypatch.setattr(sdk_adapter, "CopilotClient", _no_runtime)  # never a real model session; fakes replace it
     monkeypatch.setattr(spotter_look, "judged", _silent_look)  # nor a real Spotter look
+    monkeypatch.setattr(sdk_adapter, "own_instructions", _no_instructions)  # fakes list no instruction sources
 
 
 @pytest.fixture(autouse=True)
@@ -154,6 +155,10 @@ def _spotter_writes_end(_no_shared_settings):
 
 async def _silent_look(_card: dict, _ctx: object) -> tuple[str, float]:
     return '{"verdict": "silent", "note": "", "evidence": [], "state_change": null}', 0.0
+
+
+async def _no_instructions(_session: object, _worktree: Path) -> list[str]:
+    return []
 
 
 def _no_runtime(**_kw: object) -> None:

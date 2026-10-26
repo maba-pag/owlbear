@@ -25,6 +25,7 @@ from owlbear_delivery_next.local_system.processes import Termination, verdict
 from owlbear_delivery_next.runtimes import lessons, sdk_teardown, step_decisions, step_input, subagents, watch_feed
 from owlbear_delivery_next.runtimes.chatlogs import around as chatlogged
 from owlbear_delivery_next.runtimes.copilot_cli import cli_path
+from owlbear_delivery_next.runtimes.instruction_scope import own as own_instructions
 from owlbear_delivery_next.runtimes.model_choices import takes_effort
 from owlbear_delivery_next.runtimes.results import ENDED, Gate
 from owlbear_delivery_next.runtimes.sdk_teardown import CALL
@@ -417,6 +418,8 @@ async def _open(client: CopilotClient, st: _Step) -> CopilotSession | None:
         session = await _call(client.create_session(session_id=sid, **opts), "session create", START)
         st.session, st.created = session, True
         message, exposure = lessons.opening(role_of(cfg), cfg.memory, message, st.log)  # once per new conversation
+    if off := await own_instructions(session, cfg.worktree):
+        st.log(event="instructions-off", sources=off)
     st.log(event="session", id=sid, resumed=resumed, resent=resent, runtime=st.run.runtime_pid)
     st.billed = await usage_read(session, cfg.model) if resumed else {}
     extra = {"attachments": list(cfg.attachments)} if cfg.attachments else {}  # e.g. visual screenshots
