@@ -82,7 +82,11 @@ def test_each_setting_is_this_machine_s_else_global_s_else_unset():
     got = machine_settings.resolve(registry.Settings(sessions=2), MachineValues(channel="major", sessions=6))
     assert (got.channel, got.sessions, got.update_when_idle) == ("major", 2, None)
     assert (got.sources, got.shared["sessions"]) == ({"channel": "global", "sessions": "machine"}, 6)
-    assert got.missing == ["update_when_idle", "update_while_paused", "curate_after_merge", "curate_when_idle"]
+    assert got.missing == ["update_when_idle", "update_while_paused", "curate_after_merge", "curate_when_idle",
+                           "spotter_budget", "retro_budget", "retro_verbose_cap", "retro_after_change",
+                           "retro_when_idle", "enrolled_chats"]  # fmt: skip
+    chats = machine_settings.resolve(registry.Settings(enrolled_chats=[]), None)
+    assert (chats.enrolled_chats, "enrolled_chats" in chats.missing) == ([], False)  # none enrolled is set, not unset
     assert machine_settings.resolve(registry.Settings(), None).missing == list(machine_settings.FIELDS)
 
 

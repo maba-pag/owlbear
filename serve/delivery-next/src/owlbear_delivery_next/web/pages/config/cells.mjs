@@ -122,12 +122,23 @@ export function curatorThreshold() {
   source(key, state.loaded.settings[key]));
 }
 
-// The watcher judges agent steps' outside actions; on in Global, a project may turn it off (owner, 2026-10-23).
-export function watcherSwitch() {
-  const key = "watcher", below = onOff(inherited()[key]);
-  return cell(choose("The watcher", [[INHERIT, `inherit (${said(below)})`], ["on", "on: judge agent steps"],
-    ["off", "off: no watcher"]], own(key) || INHERIT, (v) => edit(key, v), { key, disabled: state.saving }),
-  source(key, state.loaded.settings[key]));
+// Improvement's Spotter (design §4): each setting layered field by field; a project may set its own (2026-10-25).
+const SPOT_CHOICES = {
+  mode: [["off", "off"], ["learning", "learning: record what it would do"], ["live", "live: steer"]],
+  verbose: [["off", "off"], ["on", "on: a short rationale with its evidence per look"]],
+};
+
+export function spotterCell(field, label) {
+  const key = `spot.${field}`, value = own(key), below = inherited().spotter?.[field];
+  const words = (v) => (Array.isArray(v) ? v.join(", ") : v);
+  const looks = state.loaded.settings.spotter?.looks ?? [];
+  const needed = field === "verbose_until" ? false : field === "sample_rate" ? looks.includes("sample") : true;
+  const control = SPOT_CHOICES[field]
+    ? choose(label, [[INHERIT, `inherit (${said(below)})`], ...SPOT_CHOICES[field]], value || INHERIT,
+      (v) => edit(key, v), { key, disabled: state.saving })
+    : typed(label, value, (v) => edit(key, v, true), { key, placeholder: `inherit (${said(words(below))})`,
+      inputmode: ["looks", "verbose_until"].includes(field) ? undefined : "numeric", disabled: state.saving });
+  return cell(control, source(`spotter.${field}`, words(state.loaded.settings.spotter?.[field]), needed));
 }
 
 // TD-308: the labels on every pull request OwlBear opens; a project's list replaces the global one.

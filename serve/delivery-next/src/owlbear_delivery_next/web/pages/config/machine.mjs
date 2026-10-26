@@ -16,13 +16,22 @@ const MACHINE_LABELS = {
   update_while_paused: "Update itself while paused", curate_after_merge: "Curate memory after a merge",
   curate_when_idle: "Curate memory when idle (the Maintenance button always runs)",
   sessions: "Agent sessions at once on this machine, across its projects",
+  spotter_budget: "Spotter: credits a day", retro_budget: "Retro: credits a day",
+  retro_verbose_cap: "Retro: credits a day it may spend turning the Spotter's verbose on",
+  retro_after_change: "Retro after a Change ends (the Improvement button always runs)",
+  retro_when_idle: "Retro over finished enrolled chats when idle",
+  enrolled_chats: "Enrolled chats: workspace folders whose chats the Spotter and Retro may read, comma-separated; "
+    + "none for no chats",
 };
 const CHOICES = { channel: CHANNELS, update_when_idle: SWITCH, update_while_paused: SWITCH,
-  curate_after_merge: CURATE, curate_when_idle: CURATE };
+  curate_after_merge: CURATE, curate_when_idle: CURATE, retro_after_change: CURATE, retro_when_idle: CURATE };
+// Typed, not chosen.
+const TYPED = ["sessions", "spotter_budget", "retro_budget", "retro_verbose_cap", "enrolled_chats"];
 
 // A machine setting's value in words; "unset" where none is set.
 function said(key, v) {
   if (v === null || v === undefined || v === "") return "unset";
+  if (Array.isArray(v)) return v.join(", ") || "none";
   return (CHOICES[key] ?? []).find(([c]) => c === String(v))?.[1] ?? String(v);
 }
 
@@ -32,9 +41,10 @@ function machineValue(key) {
   return state.machineDraft && key in state.machineDraft ? state.machineDraft[key] : state.machine.settings[key];
 }
 
+// Lists compare by content; null (inherit) and [] (none) stay apart.
 function machineEdit(key, value) {
   const draft = { ...(state.machineDraft ?? {}), [key]: value };
-  if (value === state.machine.settings[key]) delete draft[key];
+  if (JSON.stringify(value) === JSON.stringify(state.machine.settings[key] ?? null)) delete draft[key];
   state.machineDraft = Object.keys(draft).length ? draft : null;
   show();
 }
@@ -54,13 +64,22 @@ function ownControl(key) {
   const below = `inherit (${said(key, state.machine.resolved?.shared?.[key])})`, value = machineValue(key);
   const common = { disabled: state.machineSaving };
   let control;
-  if (key === "sessions") {
-    const count = (e) => {
-      const v = (e.target.value ?? "").trim();
-      machineEdit(key, v === "" ? null : /^\d+$/.test(v) ? Number(v) : v);
+  if (TYPED.includes(key)) {
+    const list = key === "enrolled_chats";
+    const count = (e) => {  // a list keeps the text as typed until saved, so a comma or a space is never lost
+      const raw = e.target.value ?? "", v = raw.trim();
+      if (list) state.machineText = { ...(state.machineText ?? {}), [key]: raw };
+      machineEdit(key, v === "" ? null : list ? (v === "none" ? [] : v.split(",").map((f) => f.trim()).filter(Boolean))
+        : /^\d+$/.test(v) ? Number(v) : v);
     };
-    control = html`<p-input-text id="machine-sessions" label=${MACHINE_LABELS[key]} inputmode="numeric"
-      placeholder=${below} .value=${live(value === null || value === undefined ? "" : String(value))}
+    const typedText = state.machineText?.[key];  // as typed, shown only while its items are the field's own now
+    const items = (t) => JSON.stringify(t.split(",").map((f) => f.trim()).filter(Boolean));
+    const same = (t) => items(t) === JSON.stringify(value ?? []);
+    const fresh = value === null || value === undefined ? "" : list ? said(key, value) : String(value);
+    const shown = typedText !== undefined && (typedText.trim() === "none" ? Array.isArray(value) && !value.length
+      : typedText.trim() === "" ? value === null : same(typedText)) ? typedText : fresh;
+    control = html`<p-input-text id=${`machine-${key}`} label=${MACHINE_LABELS[key]}
+      inputmode=${list ? nothing : "numeric"} placeholder=${below} .value=${live(shown)}
       ?disabled=${common.disabled} @input=${count} @change=${count}></p-input-text>`;
   } else {
     const pick = (e) => {
@@ -78,9 +97,10 @@ function ownControl(key) {
 // Global's value of one setting, edited in the global layer and saved with it.
 function sharedControl(key) {
   const draftKey = `machine.${key}`, value = own(draftKey), label = `Every machine: ${MACHINE_LABELS[key]}`;
-  if (key === "sessions") {
-    return html`<p-input-text id="global-machine-sessions" label=${label} inputmode="numeric" data-key=${draftKey}
-      placeholder="unset" .value=${live(value)} ?disabled=${state.saving}
+  if (TYPED.includes(key)) {
+    return html`<p-input-text id=${`global-machine-${key}`} label=${label} data-key=${draftKey}
+      inputmode=${key === "enrolled_chats" ? nothing : "numeric"} placeholder="unset" .value=${live(value)}
+      ?disabled=${state.saving}
       @input=${(e) => edit(draftKey, e.target.value ?? "")}></p-input-text>`;
   }
   return html`<p-select id=${`global-machine-${key}`} label=${label} data-key=${draftKey}
@@ -124,6 +144,7 @@ async function saveMachine() {
     state.machine = await call("/machine/settings", { method: "PUT", machine: true, timeout: WRITE,
       body: { rev: state.machine.settings_rev, settings: { ...state.machine.settings, ...state.machineDraft } } });
     state.machineDraft = null;
+    state.machineText = null;
     state.status = "Saved this machine's settings.";
   } catch (e) {
     if (e.status === 409) state.machine = await call("/machine", { machine: true }).catch(() => state.machine);
@@ -176,7 +197,9 @@ export async function readMachine() {
   const writes = state.machineWrites;
   if (state.machineSaving) return;
   const read = await call("/machine", { machine: true }).catch(() => undefined);
-  if (read !== undefined && !state.machineSaving && writes === state.machineWrites) state.machine = read;
+  if (read !== undefined && !state.machineSaving && writes === state.machineWrites) {
+    state.machine = read;  // typed text stays: it shows only while its items are the field's own (ownControl)
+  }
 }
 
 // The machine host's values and every other project's settings, each shared folder once (twin clones share one).
