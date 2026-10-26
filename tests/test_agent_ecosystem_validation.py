@@ -391,8 +391,27 @@ def test_agent_validator_discovers_project_local_root(tmp_path: Path, monkeypatc
 def test_prompt_validator_accepts_current_prompt_roots() -> None:
     prompt_files = _PROMPT_VALIDATOR._discover_prompt_files()  # noqa: SLF001
 
-    assert prompt_files
     assert all(_PROMPT_VALIDATOR.validate_prompt(path) == [] for path in prompt_files)
+    assert _PROMPT_VALIDATOR.main([]) == 0
+
+
+def test_prompt_validator_passes_when_no_prompt_files_exist(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(_PROMPT_VALIDATOR, "_PROMPT_ROOTS", (tmp_path / "prompts",))
+
+    assert _PROMPT_VALIDATOR.main([]) == 0
+    assert "no prompt files" in capsys.readouterr().out
+
+
+def test_prompt_validator_discovers_and_checks_added_prompt_files(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    prompt_root = tmp_path / "prompts"
+    _write_prompt(prompt_root, "broken", "---\nagent: missing-agent\n---\n")
+    monkeypatch.setattr(_PROMPT_VALIDATOR, "_PROMPT_ROOTS", (prompt_root,))
+
+    assert _PROMPT_VALIDATOR.main([]) == 1
 
 
 def test_prompt_validator_rejects_unresolved_agent_and_skill(tmp_path: Path) -> None:

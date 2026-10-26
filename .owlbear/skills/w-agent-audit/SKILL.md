@@ -1,7 +1,9 @@
 ---
 name: w-agent-audit
 description: "Workflow: Read-only broad and deep audits of agent authority, loading, structure, and signal quality"
-user-invocable: false
+argument-hint: "Optional: 'all', a scope, or one agent, skill, instruction, or prompt"
+user-invocable: true
+disable-model-invocation: true
 ---
 
 # Agent Ecosystem Audit
@@ -12,11 +14,16 @@ time without contradiction or unnecessary context.
 
 ## Boundary
 
-This workflow is report-only. The launcher selects VS Code's built-in `agent` mode and omits edit
-tools. Terminal access exists only for read-only inspection and validators: record `git status
---short` before the first command and confirm it is unchanged at close. Do not run generators,
-formatters, fixes, tests with snapshot updates, or any mutating command. Approved changes become an
-implementation package for a normal editing turn.
+This workflow is report-only. The owner invokes it by name in a normal chat; text supplied with the
+invocation is the audit request. The chat keeps its own tools, so read-only is a rule you follow,
+not one a tool list or hook enforces: do not edit, create, rename or delete files. Terminal access
+exists only for read-only inspection and validators: record `git status --short` before the first
+command and confirm it is unchanged at close. Do not run generators, formatters, fixes, tests with
+snapshot updates, or any mutating command. Approved changes become an implementation package for a
+normal editing turn.
+
+The audit is limited to trusted local use and is not a security boundary: do not claim it proves
+the workspace unchanged, and do not report the absence of a hard write-denial hook as a defect.
 
 Two modes share this workflow:
 
@@ -46,11 +53,11 @@ every directory exists.
 
 Load only what the selected scope needs:
 
-1. `share/README.md` for the loading model and current ecosystem inventory.
-2. `share/WIRING.md` for declared consumers and delegation paths.
-3. `share/skills/h-agent-structure/SKILL.md` for file-type and structural conventions.
-4. The target files and their actual loading relationships.
-5. Domain authorities only when the audited claim depends on them.
+1. `share/README.md` for the loading model, the current ecosystem inventory and its Relationship Map of
+   declared consumers and delegation paths.
+2. `share/skills/h-agent-structure/SKILL.md` for file-type and structural conventions.
+3. The target files and their actual loading relationships.
+4. Domain authorities only when the audited claim depends on them.
 
 Existing standards are evidence, not untouchable truth. When a prompt and skill disagree, determine
 which behavior best serves the system. Recommend changing the named authority, both consumers, or a
@@ -169,7 +176,7 @@ sufficient loading cluster. Drift is a cross-cutting audit concern, not a separa
 lifecycle.
 
 1. Check mechanical drift across references, frontmatter, `applyTo` surfaces, loading relationships,
-   `WIRING.md`, tool and delegate declarations, validators, and representative tests.
+   the `share/README.md` Relationship Map, tool and delegate declarations, validators, and representative tests.
 2. Check semantic drift in high-consumer or flagged blocks: compare repeated guidance with its
    canonical authority and identify contradictions, stale claims, late loading, weaker wording,
    missing enforcement, or unnecessary context cost.
@@ -201,8 +208,8 @@ Use broad mode to identify patterns and priorities, not to deeply rewrite every 
    only when relevant. If a validator is absent or fails to run, record the command and result under
    Coverage, then continue with source inspection. Validator output is evidence, not the entire
    audit.
-4. Build a metadata-level loading map from frontmatter, `required_reading`, `applyTo`, prompt agents,
-   tool lists, hooks, and `WIRING.md`.
+4. Build a metadata-level loading map from frontmatter, `required_reading`, `applyTo`, tool lists,
+   hooks, and the `share/README.md` Relationship Map.
 5. Prioritize full body reads for:
    - conflicting or missing loading paths;
    - universal and high-consumer authorities;
