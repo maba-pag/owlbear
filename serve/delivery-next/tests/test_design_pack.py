@@ -13,7 +13,6 @@ from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.design_packs import design_pack, detector
 from owlbear_delivery_next.local_system import local_home, preload
 from owlbear_delivery_next.runtimes import sdk_adapter
-from owlbear_delivery_next.runtimes import window_files as wf
 
 ENGINE_JSON = [
     {"antipattern": "side-tab", "category": "slop", "severity": "warning", "name": "Side-tab", "file": "a.html",
@@ -189,11 +188,8 @@ def test_the_in_page_detector_runs_without_overlay_and_a_refusing_page_is_an_err
         detector.scan_page(SimpleNamespace(evaluate=refuse, add_script_tag=print), pack)
 
 
-def test_a_ui_change_gives_its_builder_the_design_skill_in_both_runtimes() -> None:
+def test_a_ui_change_gives_its_builder_the_design_skill() -> None:
     assert preload.required("builder", ui=True) == (*preload.REQUIRED["builder"], "owlbear-interface-design")
     assert preload.required("reviewer", ui=True) == preload.REQUIRED["reviewer"]
     assert "owlbear-interface-design" in sdk_adapter.agent(StepKind.BUILD, ui=True)["skills"]
     assert "owlbear-interface-design" not in sdk_adapter.agent(StepKind.BUILD)["skills"]
-    placed = [rel for rel, _render in wf.skills("builder", ui=True)]
-    assert wf.skill_path("owlbear-interface-design") in placed
-    assert "owlbear-interface-design]" in wf.agent("builder", Path("/i.json"), ui=True)(None)

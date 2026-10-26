@@ -3,13 +3,19 @@
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 
 
 class HeldRun(BaseModel):
     """The parts of a session's run its processing reads, with the accounting its gate would have counted (RUN-04)."""
 
     model_config = ConfigDict(extra="forbid")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _runtime_dropped(cls, data: Any) -> Any:  # noqa: ANN401 - the stored JSON as it was read
+        """A hold written before the window runtime was retired names its runtime; that name is dropped (D-01M5WG8)."""
+        return {k: v for k, v in data.items() if k != "runtime"} if isinstance(data, dict) else data
 
     session_id: str
     ending: str
@@ -19,7 +25,6 @@ class HeldRun(BaseModel):
     payload: dict[str, Any] | None = None  # {"model": a result model's name, "args": its fields}
     denials: list[str] = []
     denied: dict[str, str] = {}
-    runtime: str = "sdk"
     quota: bool = False
     quota_reset: datetime | None = None
     usage: dict[str, Any] = {}

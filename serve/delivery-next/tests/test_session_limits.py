@@ -195,7 +195,6 @@ def test_a_step_without_an_agent_reserves_nothing_and_a_visual_check_asks_for_th
 def test_a_session_under_a_grant_of_0_is_refused_before_any_adapter_and_stops_the_change(store, tmp_path, monkeypatch):
     monkeypatch.setattr(sessions, "GRANT", 0)
     monkeypatch.setattr(sessions.sdk_adapter, "run", lambda _cfg: pytest.fail("an adapter started"))
-    monkeypatch.setattr(sessions.vscode_adapter, "run", lambda *_a: pytest.fail("an adapter started"))
     cfg = SimpleNamespace(job="", kind=StepKind.BUILD)
     with pytest.raises(sessions.SessionGrantError, match="no session slot"):
         sessions.run(store, cfg)

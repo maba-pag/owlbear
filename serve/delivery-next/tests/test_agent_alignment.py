@@ -16,7 +16,6 @@ from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.commands import mcp_server, setup
 from owlbear_delivery_next.local_system import preload
 from owlbear_delivery_next.runtimes import readiness, sdk_adapter, step_input, subagents
-from owlbear_delivery_next.runtimes import window_files as wf
 from owlbear_delivery_next.runtimes.results import Gate
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.settings import roles
@@ -58,7 +57,6 @@ SHAPER_TOOLS = [  # the names a window chat's agent file grants, each verified l
 VERBS = "submit|report|ask|recall|save|assess|scan|read|list|write|stop"
 LOOKALIKE = re.compile(rf"(?:{VERBS})_[a-z_]+|[a-z_]+_(?:bash|agents?|memory|memories)")  # unknown: a tool typo
 NOT_GRANTED = "Not granted:"
-INBOX = Path("/s/0123456789abcdef0123.json")
 
 
 def bare(name: str) -> str:
@@ -122,15 +120,6 @@ def test_each_agent_explains_exactly_its_grants_and_names_only_granted_tools(rol
     assert audit(granted(role), body) == []
 
 
-@pytest.mark.parametrize("role", AGENTS)
-def test_the_window_offers_the_same_tools_its_note_names(role, tmp_path) -> None:
-    window = wf.agent(role, INBOX, tmp_path, ui=True)(None)
-    offered = {n.split("/")[-1] for n in window.split("tools: [", 1)[1].split("]", 1)[0].split(", ")}
-    assert offered == {bare(n) for n in preload.tools(role)} | {*tools.results(role, ui=True)}
-    note = window.rsplit("\n\n", 1)[1]
-    assert ticks(note) & VOCABULARY == set(tools.results(role, ui=True))
-
-
 def test_the_launcher_comes_from_the_role_setting_never_from_an_agent_file() -> None:
     assert {r for r in AGENTS if set(preload.tools(r)) & {"task", "read_agent", "list_agents", "write_agent"}} == set()
 
@@ -153,12 +142,10 @@ def test_judges_are_never_offered_or_told_of_a_question() -> None:
         assert asks == (role not in {"challenger", "design-judge", "updater", "test-reviewer", "picker", "curator"}), (
             role
         )  # the updater's stops are the job's; a test reviewer only reports (TD-339); the picker only picks
-        assert (tools.ASK.name in wf.tools_note(role)) == asks
         assert (tools.ASK.name in step_input.reminder(role)) == asks
     for label in tools.VERDICTS:
         role = roles.SESSIONS[label]
         assert tools.ASK.name not in tools.results(role, judging=True), label
-        assert tools.ASK.name not in wf.tools_note(role, judging=True)
         assert tools.ASK.name not in step_input.reminder(role, judging=True)
 
 
@@ -208,7 +195,7 @@ class _Made(Exception):  # noqa: N818 - stops the round once its sessions are bu
         ("visual-review", "reviewer"),
     ],
 )
-def test_a_judge_runs_as_its_labels_role_in_both_runtimes(label, role, monkeypatch, tmp_path) -> None:
+def test_a_judge_runs_as_its_labels_role(label, role, monkeypatch) -> None:
     built: list[sdk_adapter.Session] = []
 
     def isolated(_store, _lock, _change, source, make, _go, **_kw):
@@ -235,23 +222,17 @@ def test_a_judge_runs_as_its_labels_role_in_both_runtimes(label, role, monkeypat
     assert offered == {s.name for s in Gate(cfg, Run("s"), lambda **_: None, lambda: None).specs}
     asks = role == "reviewer" and label != "visual-review"  # the screenshot judgement answers with a verdict (TD-108)
     assert (tools.ASK.name in offered) == (tools.ASK.name in opts["custom_agents"][0]["tools"]) == asks
-    window = wf.agent(role, INBOX, tmp_path, judging=cfg.judging)(None)
-    granted_there, note = window.split("tools: [", 1)[1].split("]", 1)[0], window.rsplit("\n\n", 1)[1]
     reminder = step_input.reminder(role, judging=cfg.judging)
-    assert (tools.ASK.name in granted_there) == (tools.ASK.name in note) == (tools.ASK.name in reminder) == asks
-    assert wf.agent_path(sdk_adapter.role_of(cfg)) == f".github/agents/owlbear-{role}.agent.md"
+    assert (tools.ASK.name in reminder) == asks
 
 
-def test_check_preparation_runs_as_the_preparer_in_both_runtimes(tmp_path) -> None:
+def test_check_preparation_runs_as_the_preparer() -> None:
     cfg = _session("check", kind=StepKind.CHECK, submit=tools.RECIPE, policy=Policy(Path(), write=True))
     role = sdk_adapter.role_of(cfg)
     opts = sdk_adapter._Step(cfg, SimpleNamespace(call_soon_threadsafe=lambda *_: None)).options()  # noqa: SLF001
     assert (role, opts["agent"], opts["custom_agents"][0]["skills"]) == ("preparer", "owlbear-preparer", [])
     assert {"create", "edit", "owlbear-memory/save_memory"} <= set(opts["custom_agents"][0]["tools"])
     assert roles.SESSIONS[StepKind.CHECK] == role  # its model is the preparer's (TD-80)
-    window = wf.agent(role, INBOX, tmp_path)(None)
-    assert window.startswith("---\nname: owlbear-preparer\n")
-    assert wf.agent_path(role) == ".github/agents/owlbear-preparer.agent.md"
 
 
 def shaper_file() -> tuple[dict[str, str], list[str], str]:

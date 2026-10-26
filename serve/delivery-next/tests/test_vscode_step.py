@@ -1,5 +1,4 @@
 import base64
-import dataclasses
 import hashlib
 import json
 import queue
@@ -9,31 +8,15 @@ import subprocess
 import tempfile
 import threading
 from collections.abc import Callable
-from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 
-from owlbear_delivery_next.change_contracts.models import Exit, StepKind
-from owlbear_delivery_next.change_contracts.permissions import Policy
-from owlbear_delivery_next.change_contracts.tools import Worktree
-from owlbear_delivery_next.commands import step_mcp
-from owlbear_delivery_next.local_system.processes import Termination
-from owlbear_delivery_next.runtimes import ahp, host_record, readiness, sdk_adapter, session_result, vscode_adapter
-from owlbear_delivery_next.runtimes import window_files as wf
+from owlbear_delivery_next.runtimes import ahp, readiness, vscode_adapter
 from owlbear_delivery_next.runtimes.ahp import HostError
-from owlbear_delivery_next.runtimes.vscode_contract import Control, Hooks, Outcome, StepSpec, ToolCall
-from owlbear_delivery_next.runtimes.vscode_step import ACK, Step
-from owlbear_delivery_next.runtimes.window_files import (
-    DEFAULT_MODEL,
-    HARNESS,
-    HOOKS,
-    MCP_ACCESS,
-    NO_HOOKS,
-    SettingsError,
-    write_window_settings,
-)
+from owlbear_delivery_next.runtimes.vscode_contract import Hooks, Outcome, StepSpec
+from owlbear_delivery_next.runtimes.vscode_step import Step
+from owlbear_delivery_next.runtimes.window_files import HARNESS
 from owlbear_delivery_next.settings import carried
 
 MODEL, EFFORT, AGENT = "gpt-6-luna", "max", ".github/agents/owlbear-builder.agent.md"
@@ -57,17 +40,12 @@ class FakeHost:
         self.reconnects, self.closed, self.twin = 0, 0, None
         self.listed = [(folder / AGENT).resolve().as_uri()]  # agent files the sessions list
         self.listed_at = 0.0  # host clock time from which the sessions list them
-        self.pinned: list[tuple[Path, str]] = []
         self.sent: list[tuple[str, dict]] = []
         self.events: list[dict] = []
         self.launched: list[list[str]] = []
 
     def clock(self) -> float:
         return self.t
-
-    def pin(self, folder: Path, model: str) -> None:
-        write_window_settings(folder, model)
-        self.pinned.append((folder, model))
 
     def launch(self, args: list[str], _cwd: Path) -> None:
         self.launched.append(args)
@@ -86,12 +64,11 @@ class FakeHost:
     def close(self) -> None:
         self.closed += 1
 
-    def add(  # noqa: PLR0913 - one keyword per scripted session property
+    def add(
         self,
         *,
         nonce: str,
         folder: Path | None = None,
-        model: str = MODEL,
         text: str | None = None,
         billed: str | None = None,
         pending: str | None = None,
@@ -100,7 +77,7 @@ class FakeHost:
         resource, chat = f"copilotcli:/s{n}", f"ahp-chat://default/c{n}"
         msg = {
             "text": text if text is not None else f"!echo OWLBEAR-{nonce}",
-            "model": {"id": model, "config": {"thinkingLevel": "high"}},
+            "model": {"id": MODEL, "config": {"thinkingLevel": "high"}},
         }
         turn = {"id": f"boot{n}", "message": msg, "usage": {"model": billed} if billed else None}
         if pending is not None:
@@ -148,9 +125,6 @@ class FakeHost:
                 self.play(channel, action["turnId"], self.scripts.pop(0))
         elif kind == "chat/toolCallConfirmed" and str(action["turnId"]).startswith("boot") and action["approved"]:
             self.chats[channel]["activeTurn"] = None  # the confirmed echo runs and the bootstrap ends
-        elif kind == "chat/pendingMessageSet" and self.scripts:
-            started = {"type": "chat/turnStarted", "message": action["message"]}
-            self.play(channel, "follow-up", [started, *self.scripts.pop(0)])
 
     def play(self, chat: str, turn: str, script: list[dict]) -> None:
         for a in script:
@@ -171,18 +145,15 @@ class FakeHost:
 
 
 class Twin:
-    """A second connection to the same fake host; it records what went through it."""
+    """A second connection to the same fake host."""
 
     def __init__(self, host: FakeHost) -> None:
         self.host, self.closed = host, 0
-        self.calls: list[tuple[str, str]] = []
 
     def request(self, method: str, params: dict, timeout: float = 60) -> dict:
-        self.calls.append((method, params.get("channel", "")))
         return self.host.request(method, params, timeout)
 
     def dispatch(self, channel: str, action: dict) -> None:
-        self.calls.append((action["type"], channel))
         self.host.dispatch(channel, action)
 
     def next_event(self, timeout: float) -> dict | None:
@@ -204,50 +175,12 @@ def spec(folder: Path, **kw: object) -> StepSpec:
     )
 
 
-def step(host: FakeHost, s: StepSpec, approve=lambda _c: True) -> Step:
-    hooks = Hooks(launch=host.launch, clock=host.clock, settings=host.pin, reconnect=host.reconnect)
-    return Step(host, s, approve, hooks=hooks)
+def step(host: FakeHost, s: StepSpec) -> Step:
+    hooks = Hooks(launch=host.launch, clock=host.clock, settings=lambda _f, _m: None, reconnect=host.reconnect)
+    return Step(host, s, hooks)
 
 
 DONE = [{"type": "chat/usage", "usage": {"model": MODEL}}, {"type": "chat/turnComplete"}]
-
-
-def test_step_binds_its_session_after_a_shell_only_bootstrap_and_runs_named_model(tmp_path: Path) -> None:
-    host = FakeHost(
-        tmp_path,
-        [{}],
-        [
-            [
-                {"type": "chat/toolCallStart", "toolCallId": "t1", "toolName": "openBrowserPage"},
-                {"type": "chat/toolCallReady", "toolCallId": "t1", "toolInput": "http://x", "confirmed": None},
-                *DONE,
-            ]
-        ],
-    )
-    seen: list[ToolCall] = []
-    out = step(host, spec(tmp_path, config={"sandboxEnabled": "on"}), lambda c: seen.append(c) or True).run(
-        Control(), limit=60
-    )
-
-    assert out.end == "complete"
-    assert host.pinned == [(tmp_path, MODEL)]
-    assert json.loads((tmp_path / ".vscode" / "settings.json").read_text())[DEFAULT_MODEL] == MODEL
-    assert (out.cancel_confirmed, host.reconnects) == (None, 1)
-    chat = "ahp-chat://default/c0"
-    calls = host.twin.calls
-    assert calls.index(("subscribe", chat)) < calls.index(("chat/turnStarted", chat))
-    assert (host.twin.closed, host.closed) == (1, 0)
-    assert host.launched == [["code", "chat", "-m", "agent", "!echo OWLBEAR-n0nce"]]
-    assert host.actions("chat/turnCancelled") == []
-    assert host.config["copilotcli:/s0"] == {"sandboxEnabled": "on"}
-    ((_, started),) = host.actions("chat/turnStarted")
-    assert started["message"]["model"] == {"id": MODEL, "config": {"thinkingLevel": EFFORT}}
-    assert started["message"]["agent"] == {"uri": (tmp_path / AGENT).resolve().as_uri()}
-    assert seen == [ToolCall("openBrowserPage", "http://x", None)]
-    ((_, confirm),) = host.actions("chat/toolCallConfirmed")
-    assert confirm["approved"] is True
-    assert out.tools == {"t1": "openBrowserPage"}
-    assert out.usage == {"model": MODEL}
 
 
 def test_step_sends_the_tiers_context_size_and_only_an_effort_the_model_takes(tmp_path: Path) -> None:
@@ -256,7 +189,7 @@ def test_step_sends_the_tiers_context_size_and_only_an_effort_the_model_takes(tm
     def config(schema: dict, context: str = "default") -> dict:
         host = FakeHost(tmp_path, [{}], [DONE])
         host.schema = schema
-        step(host, spec(tmp_path, context=context)).run(Control(), limit=60)
+        step(host, spec(tmp_path, context=context)).open()
         ((_, started),) = host.actions("chat/turnStarted")
         return started["message"]["model"]["config"]
 
@@ -271,16 +204,16 @@ def test_step_never_touches_the_users_chats(tmp_path: Path) -> None:
     other = tmp_path / "other"
     other.mkdir()
     host = FakeHost(tmp_path, [{"text": "my own question"}, {"folder": other}, {}], [DONE])
-    out = step(host, spec(tmp_path)).run(Control(), limit=60)
+    out = step(host, spec(tmp_path)).open()
 
-    assert out.end == "complete"
+    assert out.end == "started"
     assert out.session == "copilotcli:/s2"
     assert {c for c, _ in host.sent} <= {"ahp-chat://default/c2", "copilotcli:/s2"}
 
 
 def test_step_acts_on_nothing_when_two_sessions_match(tmp_path: Path) -> None:
     host = FakeHost(tmp_path, [{}, {}], [DONE])
-    out = step(host, spec(tmp_path)).run(Control(), limit=60, bind_limit=5)
+    out = step(host, spec(tmp_path)).open(bind_limit=5)
 
     assert out.end == "unbound"
     assert host.sent == []
@@ -290,58 +223,15 @@ def test_step_ignores_sessions_that_existed_before_launch(tmp_path: Path) -> Non
     host = FakeHost(tmp_path, [], [DONE])
     host.boot_active = False
     host.add(nonce="n0nce")
-    out = step(host, spec(tmp_path)).run(Control(), limit=60, bind_limit=5)
+    out = step(host, spec(tmp_path)).open(bind_limit=5)
 
     assert out.end == "unbound"
     assert host.sent == []
 
 
-def test_a_turn_billed_to_another_model_is_cancelled(tmp_path: Path) -> None:
-    script = [{"type": "chat/usage", "usage": {"model": "mai-code-1.1-flash"}}, {"type": "chat/turnComplete"}]
-    host = FakeHost(tmp_path, [{"model": "auto"}], [script])
-    out = step(host, spec(tmp_path)).run(Control(), limit=60)
-
-    assert out.end == "wrong-model"
-    assert "mai-code-1.1-flash" in out.detail
-    ((_, started),) = host.actions("chat/turnStarted")
-    assert host.actions("chat/turnCancelled")[-1][1]["turnId"] == started["turnId"]
-
-
-def _announced(call: str, name: str) -> list[dict]:
-    """A ``task`` call and the host's announcement of the subagent it started (P28, gate probes)."""
-    part = {"type": "subagent", "resource": f"ahp-chat:/{call}", "agentName": name}
-    return [
-        {"type": "chat/toolCallStart", "toolCallId": call, "toolName": "task"},
-        {"type": "chat/toolCallContentChanged", "toolCallId": call, "content": [part]},
-    ]
-
-
-@pytest.mark.parametrize(
-    ("allowed", "name", "why"),
-    [(False, "explore", "no subagent may run"), (True, "my-helper", "only a built-in may run")],
-)
-def test_a_subagent_the_role_may_not_start_ends_the_step(tmp_path: Path, *, allowed: bool, name: str, why: str) -> None:
-    host = FakeHost(tmp_path, [{}], [[*_announced("t1", name), {"type": "chat/turnComplete"}]])
-    out = step(host, spec(tmp_path, subagents=allowed)).run(Control(), limit=60)
-
-    assert (out.end, out.subagents) == ("subagent", {"t1": name})
-    assert why in out.detail
-    ((_, started),) = host.actions("chat/turnStarted")
-    assert host.actions("chat/turnCancelled")[-1][1]["turnId"] == started["turnId"]
-
-
-def test_an_allowed_built_in_subagent_is_noted_once_and_the_turn_goes_on(tmp_path: Path) -> None:
-    script = [*_announced("t1", "explore"), _announced("t1", "explore")[1], USAGE, {"type": "chat/turnComplete"}]
-    host = FakeHost(tmp_path, [{}], [script])
-    out = step(host, spec(tmp_path, subagents=True)).run(Control(), limit=60)
-
-    assert (out.end, out.subagents) == ("complete", {"t1": "explore"})
-    assert not host.actions("chat/turnCancelled")
-
-
 def test_a_bootstrap_that_called_a_model_fails_closed(tmp_path: Path) -> None:
     host = FakeHost(tmp_path, [{"billed": "mai-code-1.1-flash"}], [DONE])
-    out = step(host, spec(tmp_path)).run(Control(), limit=60)
+    out = step(host, spec(tmp_path)).open()
 
     assert (out.end, out.detail) == ("bootstrap-model", "the window's first turn called mai-code-1.1-flash")
     assert host.actions("chat/turnStarted") == []
@@ -354,9 +244,9 @@ def test_only_the_bootstraps_own_echo_is_confirmed(tmp_path: Path) -> None:
         {"type": "chat/toolCallReady", "toolCallId": "b1", "toolInput": "echo OWLBEAR-n0nce", "confirmed": None},
         {"type": "chat/turnComplete"},
     ]
-    out = step(host, spec(tmp_path)).run(Control(), limit=60)
+    out = step(host, spec(tmp_path)).open()
     ((_, confirm),) = host.actions("chat/toolCallConfirmed")[:1]
-    assert (out.end, confirm["toolCallId"], confirm["approved"]) == ("complete", "b1", True)
+    assert (out.end, confirm["toolCallId"], confirm["approved"]) == ("started", "b1", True)
 
     host = FakeHost(tmp_path, [{}], [DONE])
     host.boot_active = True
@@ -364,7 +254,7 @@ def test_only_the_bootstraps_own_echo_is_confirmed(tmp_path: Path) -> None:
         {"type": "chat/toolCallReady", "toolCallId": "b1", "toolInput": "rm -rf ~", "confirmed": None},
         {"type": "chat/turnComplete"},
     ]
-    out = step(host, spec(tmp_path)).run(Control(), limit=60)
+    out = step(host, spec(tmp_path)).open()
     ((_, confirm),) = host.actions("chat/toolCallConfirmed")
     assert (out.end, confirm["approved"], host.actions("chat/turnStarted")) == ("bootstrap-unexpected", False, [])
 
@@ -374,21 +264,21 @@ def test_a_pending_echo_seen_in_the_snapshot_and_as_an_event_is_confirmed_once(t
         host = FakeHost(tmp_path, [{"pending": "echo OWLBEAR-n0nce"}], [DONE])
         host.boot_active = True
         host.boot_script = script
-        out = step(host, spec(tmp_path)).run(Control(), limit=60)
+        out = step(host, spec(tmp_path)).open()
 
         confirms = [(a["turnId"], a["toolCallId"], a["approved"]) for _, a in host.actions("chat/toolCallConfirmed")]
-        assert (out.end, confirms) == ("complete", [("boot0", "p1", True)])
+        assert (out.end, confirms) == ("started", [("boot0", "p1", True)])
 
 
 def test_the_step_waits_until_the_host_lists_its_model_and_never_starts_without_it(tmp_path: Path) -> None:
     host = FakeHost(tmp_path, [{}], [DONE])
     host.models_at = 5.0
-    out = step(host, spec(tmp_path)).run(Control(), limit=60)
-    assert (out.end, len(host.actions("chat/turnStarted"))) == ("complete", 1)
+    out = step(host, spec(tmp_path)).open()
+    assert (out.end, len(host.actions("chat/turnStarted"))) == ("started", 1)
 
     host = FakeHost(tmp_path, [{}], [DONE])
     host.models = ["mai-code-1.1-flash"]
-    out = step(host, spec(tmp_path)).run(Control(), limit=60)
+    out = step(host, spec(tmp_path)).open()
     assert (out.end, out.detail) == ("model-unavailable", f"the agent host does not list {MODEL}")
     assert host.actions("chat/turnStarted") == []
 
@@ -396,7 +286,7 @@ def test_the_step_waits_until_the_host_lists_its_model_and_never_starts_without_
 def test_an_agent_the_session_does_not_list_starts_no_turn(tmp_path: Path) -> None:
     host = FakeHost(tmp_path, [{}], [DONE])
     host.listed = [(Path.home() / ".copilot/agents/owlbear-builder.agent.md").as_uri()]
-    out = step(host, spec(tmp_path)).run(Control(), limit=60)
+    out = step(host, spec(tmp_path)).open()
 
     assert (out.end, out.detail) == ("no-agent", f"the session does not list {(tmp_path / AGENT).resolve().as_uri()}")
     assert host.actions("chat/turnCancelled") == []
@@ -406,110 +296,33 @@ def test_an_agent_the_session_does_not_list_starts_no_turn(tmp_path: Path) -> No
 def test_the_turn_waits_until_the_session_lists_the_agent(tmp_path: Path) -> None:
     host = FakeHost(tmp_path, [{}], [DONE])
     host.listed_at = 3.0
-    out = step(host, spec(tmp_path)).run(Control(), limit=60)
+    out = step(host, spec(tmp_path)).open()
 
-    assert out.end == "complete"
+    assert out.end == "started"
     ((_, started),) = host.actions("chat/turnStarted")
     assert started["message"]["agent"] == {"uri": (tmp_path / AGENT).resolve().as_uri()}
-
-
-def test_a_turn_still_running_in_the_folder_launches_nothing(tmp_path: Path) -> None:
-    host = FakeHost(tmp_path, [{}], [DONE])
-    host.boot_active = True
-    host.add(nonce="earlier")
-    out = step(host, spec(tmp_path)).run(Control(), limit=60)
-
-    assert (out.end, host.launched, host.sent) == ("folder-busy", [], [])
-
-
-def test_a_turn_that_ends_without_a_result_gets_one_reminder(tmp_path: Path) -> None:
-    usage = {"type": "chat/usage", "usage": {"model": MODEL, "inputTokens": 100, "outputTokens": 20}}
-    host = FakeHost(tmp_path, [{}], [[usage, {"type": "chat/turnComplete"}], [usage, {"type": "chat/turnComplete"}]])
-    control = Control()
-    out = step(host, spec(tmp_path, reminder="Call submit_result.")).run(control, limit=60)
-
-    texts = [a["message"]["text"] for _, a in host.actions("chat/turnStarted")]
-    assert texts == ["Check the page at 390px.", "Call submit_result."]
-    assert (out.end, out.tokens, control.started.is_set()) == ("complete", {MODEL: 240}, True)
-
-
-def test_a_stopped_turn_gets_no_reminder(tmp_path: Path) -> None:
-    host = FakeHost(tmp_path, [{}], [[{"type": "chat/turnComplete"}], DONE])
-    control = Control()
-    original = host.next_event
-
-    def next_event(timeout: float) -> dict | None:
-        ev = original(timeout)
-        if ev and ev["params"]["action"]["type"] == "chat/turnComplete":
-            control.stop.set()
-        return ev
-
-    host.next_event = next_event
-    step(host, spec(tmp_path, reminder="Call submit_result.")).run(control, limit=60)
-
-    assert len(host.actions("chat/turnStarted")) == 1
 
 
 def test_step_fails_closed_when_host_ignores_the_config(tmp_path: Path) -> None:
     host = FakeHost(tmp_path, [{}], [DONE])
     host.accept_config = False
-    out = step(host, spec(tmp_path, config={"sandboxEnabled": "on"})).run(Control(), limit=60)
+    out = step(host, spec(tmp_path, config={"sandboxEnabled": "on"})).open()
 
     assert out.end == "config-refused"
     assert host.actions("chat/turnStarted") == []
-
-
-def test_step_denies_a_tool_call_the_policy_refuses(tmp_path: Path) -> None:
-    host = FakeHost(
-        tmp_path,
-        [{}],
-        [
-            [
-                {"type": "chat/toolCallStart", "toolCallId": "t1", "toolName": "bash"},
-                {"type": "chat/toolCallReady", "toolCallId": "t1", "toolInput": "rm -rf /", "confirmed": None},
-                {"type": "chat/toolCallReady", "toolCallId": "t2", "toolInput": "x", "confirmed": "not-needed"},
-                *DONE,
-            ]
-        ],
-    )
-    out = step(host, spec(tmp_path), lambda c: c.name != "bash").run(Control(), limit=60)
-
-    ((_, confirm),) = host.actions("chat/toolCallConfirmed")
-    assert confirm["approved"] is False
-    assert confirm["toolCallId"] == "t1"
-    assert out.denied == ["bash"]
-
-
-def test_a_stop_before_launch_launches_nothing(tmp_path: Path) -> None:
-    host = FakeHost(tmp_path, [{}], [DONE])
-    control = Control()
-    control.stop.set()
-    out = step(host, spec(tmp_path)).run(control, limit=60)
-
-    assert out.end == "stopped"
-    assert (host.launched, host.sent, host.pinned) == ([], [], [])
-
-
-def test_auto_is_refused_before_anything_launches(tmp_path: Path) -> None:
-    host = FakeHost(tmp_path, [{"model": "auto"}], [DONE])
-    s = StepSpec(folder=tmp_path, agent=tmp_path / AGENT, model="auto", effort=EFFORT, prompt="x", nonce="n0nce")
-    out = step(host, s).run(Control(), limit=60)
-
-    assert out.end == "settings-refused"
-    assert (host.launched, host.sent) == ([], [])
 
 
 def test_a_bootstrap_that_never_finishes_is_cancelled_and_starts_no_turn(tmp_path: Path) -> None:
     host = FakeHost(tmp_path, [{}], [DONE])
     host.boot_active = True
     host.ignore_cancel = True
-    out = step(host, spec(tmp_path)).run(Control(), limit=60)
+    out = step(host, spec(tmp_path)).open()
     assert (out.end, out.cancel_confirmed) == ("cancel-unconfirmed", False)
     assert host.actions("chat/turnStarted") == []
 
     host = FakeHost(tmp_path, [{}], [DONE])
     host.boot_active = True
-    out = step(host, spec(tmp_path)).run(Control(), limit=60)
+    out = step(host, spec(tmp_path)).open()
     assert (out.end, out.cancel_confirmed) == ("bootstrap-stuck", True)
     assert host.actions("chat/turnStarted") == []
 
@@ -524,162 +337,10 @@ def test_a_user_turn_in_the_bound_chat_blocks_the_start(tmp_path: Path) -> None:
             host.chats["ahp-chat://default/c0"]["activeTurn"] = {"id": "user", "message": {"text": "mine"}}
 
     host.dispatch = dispatch
-    out = step(host, spec(tmp_path, config={"sandboxEnabled": "on"})).run(Control(), limit=60)
+    out = step(host, spec(tmp_path, config={"sandboxEnabled": "on"})).open()
 
     assert out.end == "busy"
     assert host.actions("chat/turnStarted") == []
-
-
-def test_steering_that_never_runs_is_not_a_success(tmp_path: Path) -> None:
-    host = FakeHost(tmp_path, [{}], [DONE])
-    control = Control()
-    control.steering.put("Also check 1280px.")
-    out = step(host, spec(tmp_path)).run(control, limit=120)
-
-    assert out.end == "steering-unrun"
-
-
-def test_stop_cancels_the_running_turn_and_waits_for_the_host(tmp_path: Path) -> None:
-    host = FakeHost(
-        tmp_path,
-        [{}],
-        [[{"type": "chat/toolCallReady", "toolCallId": "t1", "toolInput": "x", "confirmed": None}]],
-    )
-    control = Control()
-    out = step(host, spec(tmp_path), lambda _c: control.stop.set() or True).run(control, limit=60)
-
-    assert out.end == "stopped"
-    assert out.cancel_confirmed is True
-    (_, cancel) = host.actions("chat/turnCancelled")[-1]
-    assert cancel["turnId"] == out.turns[0]
-    assert host.chats["ahp-chat://default/c0"]["activeTurn"] is None
-
-
-def test_a_silent_turn_times_out_and_is_cancelled(tmp_path: Path) -> None:
-    host = FakeHost(tmp_path, [{}], [[]])
-    out = step(host, spec(tmp_path)).run(Control(), limit=30)
-
-    assert out.end == "timeout"
-    assert host.actions("chat/turnCancelled")[-1][1]["turnId"] == out.turns[0]
-
-
-def test_steering_runs_as_a_follow_up_turn_that_the_step_waits_for(tmp_path: Path) -> None:
-    host = FakeHost(
-        tmp_path,
-        [{}],
-        [
-            [{"type": "chat/toolCallStart", "toolCallId": "t0", "toolName": "y"}, {"type": "chat/turnComplete"}],
-            [{"type": "chat/turnComplete"}],
-        ],
-    )
-    control = Control()
-    control.steering.put("Also check 1280px.")
-    out = step(host, spec(tmp_path)).run(control, limit=120)
-
-    assert out.end == "complete"
-    ((_, steer),) = host.actions("chat/pendingMessageSet")
-    assert steer["message"]["text"].startswith("Also check 1280px.\n\n(OwlBear steering n0nce-")
-    assert steer["message"]["model"] == {"id": MODEL, "config": {"thinkingLevel": EFFORT}}
-    assert steer["message"]["agent"] == {"uri": (tmp_path / AGENT).resolve().as_uri()}
-    assert out.turns[-1] == "follow-up"
-
-
-def test_a_user_turn_with_the_same_words_as_pending_steering_is_not_adopted(tmp_path: Path) -> None:
-    script = [
-        {"type": "chat/turnComplete"},
-        {"type": "chat/turnStarted", "turnId": "user", "message": {"text": "continue"}},
-        {"type": "chat/toolCallReady", "turnId": "user", "toolCallId": "u1", "confirmed": None},
-    ]
-    host = FakeHost(tmp_path, [{}], [script])
-    control = Control()
-    control.steering.put("continue")
-    out = step(host, spec(tmp_path)).run(control, limit=60)
-
-    assert out.end == "user-turn"
-    assert host.actions("chat/toolCallConfirmed") == []
-    assert host.actions("chat/turnCancelled") == []  # the user's turn is theirs: Delivery's part just ends
-
-
-def test_a_stalled_snapshot_during_stop_ends_unconfirmed_within_the_ack_window(tmp_path: Path) -> None:
-    host = FakeHost(
-        tmp_path,
-        [{}],
-        [[{"type": "chat/toolCallReady", "toolCallId": "t1", "toolInput": "x", "confirmed": None}]],
-    )
-    timeouts: list[float] = []
-    original = host.request
-
-    def request(method: str, params: dict, timeout: float = 60) -> dict:
-        if host.actions("chat/turnStarted") and method == "subscribe":
-            timeouts.append(timeout)
-            raise HostError("subscribe: no answer")  # noqa: EM101, TRY003
-        return original(method, params, timeout)
-
-    host.request = request
-    control = Control()
-    out = step(host, spec(tmp_path), lambda _c: control.stop.set() or True).run(control, limit=60)
-
-    assert (out.end, out.cancel_confirmed) == ("stopped", False)
-    assert timeouts
-    assert all(t <= ACK for t in timeouts)
-
-
-def test_closed_connection_ends_the_step(tmp_path: Path) -> None:
-    host = FakeHost(tmp_path, [{}], [[]])
-    host.events.append({"method": "closed", "params": {"error": "gone"}})
-    out = step(host, spec(tmp_path)).run(Control(), limit=60)
-
-    assert (out.end, out.detail) == ("closed", "gone")
-
-
-def test_window_settings_pin_harness_and_model_and_keep_other_keys(tmp_path: Path) -> None:
-    (tmp_path / ".vscode").mkdir()
-    (tmp_path / ".vscode" / "settings.json").write_text('{"editor.tabSize": 2}')
-    write_window_settings(tmp_path, MODEL)
-
-    assert json.loads((tmp_path / ".vscode" / "settings.json").read_text()) == {
-        "editor.tabSize": 2,
-        HARNESS: True,
-        DEFAULT_MODEL: MODEL,
-        MCP_ACCESS: "none",
-    }
-
-
-@pytest.mark.parametrize(
-    ("content", "model"),
-    [
-        ("[]", MODEL),
-        ('{ // mine\n  "chat.defaultModel": "x",\n}', MODEL),
-        ('{ // mine\n  "chat.mcp.access": "all",\n}', MODEL),
-        ('// team\n{ "chat.mcp.\\u0061ccess": "all" }', MODEL),
-        ('{ /* c */ "chat.default\\u004dodel": "x", }', MODEL),
-        ('// team\n{ "a": 1 "b": 2 }', MODEL),
-        ('// team\n{"a": NaN}', MODEL),
-        ('// team\n{"a": {"b": [-Infinity]}}', MODEL),
-        ("// x\n[1,]", MODEL),
-        (None, "auto"),
-        (None, " "),
-    ],
-)
-def test_window_settings_fail_closed(tmp_path: Path, content: str | None, model: str) -> None:
-    if content is not None:
-        (tmp_path / ".vscode").mkdir()
-        (tmp_path / ".vscode" / "settings.json").write_text(content)
-    with pytest.raises(SettingsError):
-        write_window_settings(tmp_path, model)
-    if content is not None:
-        assert (tmp_path / ".vscode" / "settings.json").read_text() == content
-
-
-def test_settings_with_comments_get_the_pins_after_the_opening_brace(tmp_path: Path) -> None:
-    (tmp_path / ".vscode").mkdir()
-    (tmp_path / ".vscode" / "settings.json").write_text('// team settings\n{ // mine\n  "a": 1,\n}\n')
-    write_window_settings(tmp_path, MODEL)
-
-    assert (tmp_path / ".vscode" / "settings.json").read_text() == (
-        f'// team settings\n{{\n  "{HARNESS}": true,\n  "{DEFAULT_MODEL}": "{MODEL}",\n'
-        f'  "{MCP_ACCESS}": "none", // mine\n  "a": 1,\n}}\n'
-    )
 
 
 def _ws_send(conn: socket.socket, obj: dict | bytes, op: int = 1) -> None:
@@ -948,9 +609,15 @@ def test_endpoint_is_none_without_a_running_editor_host(tmp_path: Path) -> None:
     assert ahp.endpoint(tmp_path) == {"endpoint": {"path": "/x"}}
 
 
-HEAD, BASE = "a" * 40, "b" * 40
-GOOD = {"summary": "Added greet().", "checks": []}
-USAGE = {"type": "chat/usage", "usage": {"model": MODEL, "inputTokens": 100, "outputTokens": 20}}
+def test_connect_uses_a_running_host_without_opening_a_window(tmp_path: Path, monkeypatch) -> None:
+    calls: list[object] = []
+    monkeypatch.setattr(ahp, "endpoint", lambda: "entry")
+    monkeypatch.setattr(ahp, "connect", lambda entry, _client, _token: calls.append(("connect", entry)) or "conn")
+    monkeypatch.setattr(vscode_adapter, "_token", lambda: "t")
+    monkeypatch.setattr(vscode_adapter, "launch_code_chat", lambda args, cwd: calls.append(("open", args, cwd)))
+
+    assert vscode_adapter.connect(tmp_path) == "conn"
+    assert calls == [("connect", "entry")]
 
 
 def git(cwd: Path, *args: str) -> str:
@@ -973,157 +640,6 @@ def wt(tmp_path: Path, monkeypatch) -> Path:
     git(path, "add", "-A")
     git(path, "commit", "-qm", "init")
     return path
-
-
-class Adapted:
-    """One adapter run against the fake host; ``submit`` is what the agent sends through the relay per turn."""
-
-    def __init__(self, folder: Path, inbox: Path, scripts: list[list[dict]], submit: list[dict | None]) -> None:
-        self.host = FakeHost(folder, [{}], scripts)
-        self.inbox, self.submit, self.replies = inbox, submit, []
-        self.events: list[dict] = []
-        self.delivered: list[int] = []
-        self.files_during: list[bool] = []
-        self.placed_agent: str | None = None
-        original = self.host.dispatch
-
-        def dispatch(channel: str, action: dict) -> None:
-            if action["type"] == "chat/turnStarted":
-                relay = str(inbox) in (folder / ".mcp.json").read_text()
-                self.files_during.append(relay and json.loads((folder / HOOKS).read_text()) == {NO_HOOKS: True})
-                self.placed_agent = (folder / AGENT).read_text()
-                if self.submit and (args := self.submit.pop(0)) is not None:
-                    body = {"name": "submit_result", "arguments": args}
-                    self.replies.append(step_mcp.forward(inbox, "POST", "/call", body))
-            original(channel, action)
-
-        self.host.dispatch = dispatch
-        journal = sdk_adapter.Journal(event=self.events.append, delivered=lambda: self.delivered.append(1))
-        self.cfg = sdk_adapter.Session(
-            StepKind.BUILD, folder, "s1", "Build it.", resume=False, policy=Policy(folder),
-            observe=lambda: Worktree(HEAD, BASE, changed=("src/greet.ts",)), checks=(), model=MODEL, effort=EFFORT,
-            journal=journal,
-        )  # fmt: skip
-        self.settled = Termination(confirmed=True)
-        self.env = vscode_adapter.Env(
-            connect=lambda _f: self.host,
-            reconnect=lambda _c: self.host.reconnect(),
-            launch=self.host.launch,
-            clock=self.host.clock,
-            settle=lambda *_a: self.settled,
-            reminder="Call submit_result.",
-            record=lambda *_a: host_record.Record(found=False, why="no host record"),
-        )
-
-    def run(self) -> session_result.Run:
-        return vscode_adapter.run(self.cfg, self.inbox, self.env)
-
-    def texts(self) -> list[str]:
-        return [a["message"]["text"] for _, a in self.host.actions("chat/turnStarted")]
-
-
-def test_screenshots_go_to_the_window_as_embedded_images_with_the_first_turn_only(wt: Path, tmp_path: Path) -> None:
-    done = [USAGE, {"type": "chat/turnComplete"}]
-    a = Adapted(wt, tmp_path / "steps" / "1.json", [done, done], [None, GOOD])
-    png = base64.b64encode(b"\x89PNG").decode()
-    shot = {"type": "blob", "data": png, "mimeType": "image/png", "displayName": "home-1280.png"}
-    a.cfg = dataclasses.replace(a.cfg, attachments=(shot,))
-    run = a.run()
-
-    first, reminder = (action["message"] for _, action in a.host.actions("chat/turnStarted"))
-    image = {"type": "embeddedResource", "label": "home-1280.png", "displayKind": "image", "data": png}
-    assert first["attachments"] == [image | {"contentType": "image/png"}]
-    assert "attachments" not in reminder
-    assert run.ending == "result"
-
-
-def test_a_vscode_session_returns_the_gated_result_and_leaves_no_window_files(wt: Path, tmp_path: Path) -> None:
-    a = Adapted(wt, tmp_path / "steps" / "1.json", [[USAGE, {"type": "chat/turnComplete"}]], [GOOD])
-    run = a.run()
-
-    assert a.replies[0]["ok"] is True
-    assert a.files_during == [True]
-    assert (run.ending, run.head, run.payload.summary) == ("result", HEAD, "Added greet().")
-    assert run.usage == {"credits": None, "models": {MODEL: {"credits": None, "tokens": 120}}, "model_mismatch": False}
-    assert (run.model_check, run.usage_unread) == ("verified", "")
-    assert (run.termination.confirmed, a.delivered, a.texts()) == (True, [1], ["Build it."])
-    assert a.host.config["copilotcli:/s0"] == vscode_adapter.CONFIG
-    assert a.host.launched[0][:4] == ["code", "chat", "-m", "agent"]
-    assert git(wt, "status", "--porcelain", "--ignored") == ""
-    assert not (tmp_path / "steps" / "1.json").exists()
-    assert not (wt / ".github").exists()
-    assert not (wt / ".vscode").exists()
-    assert session_result.to_result(run, StepKind.BUILD, datetime.now(UTC)).exit == Exit.DONE
-
-
-def test_a_result_from_a_turn_billed_to_another_model_is_discarded(wt: Path, tmp_path: Path) -> None:
-    other = {"type": "chat/usage", "usage": {"model": "mai-code-1.1-flash", "inputTokens": 1, "outputTokens": 1}}
-    a = Adapted(wt, tmp_path / "steps" / "2.json", [[other, {"type": "chat/turnComplete"}]], [GOOD])
-    run = a.run()
-
-    assert a.replies[0]["ok"] is True
-    assert (run.ending, run.payload, run.head) == ("error", None, None)
-    assert "mai-code-1.1-flash" in run.detail
-    assert run.usage["model_mismatch"] is True
-
-
-def test_a_turn_without_a_result_is_reminded_once_then_retried(wt: Path, tmp_path: Path) -> None:
-    done = [USAGE, {"type": "chat/turnComplete"}]
-    a = Adapted(wt, tmp_path / "steps" / "3.json", [done, done], [None, None])
-    run = a.run()
-
-    assert a.texts() == ["Build it.", "Call submit_result."]
-    assert (run.ending, run.usage["models"][MODEL]["tokens"]) == ("no-result", 240)
-    assert session_result.to_result(run, StepKind.BUILD, datetime.now(UTC)).exit == Exit.RETRY
-
-
-def test_an_unlisted_agent_ends_the_step_and_restores_the_users_settings(wt: Path, tmp_path: Path) -> None:
-    (wt / ".vscode").mkdir()
-    (wt / ".vscode" / "settings.json").write_text('{ // mine\n  "a": 1,\n}\n')
-    a = Adapted(wt, tmp_path / "steps" / "4.json", [[USAGE, {"type": "chat/turnComplete"}]], [GOOD])
-    a.host.listed = []
-    run = a.run()
-
-    assert len(a.host.launched) == 1
-    assert [e["end"] for e in a.events if e.get("event") == "vscode-step"] == ["no-agent"]
-    assert (run.ending, a.texts(), a.delivered) == ("error", [], [])
-    assert (wt / ".vscode" / "settings.json").read_text() == '{ // mine\n  "a": 1,\n}\n'
-
-
-def test_an_unconfirmed_bootstrap_cancel_is_a_termination_problem(wt: Path, tmp_path: Path) -> None:
-    a = Adapted(wt, tmp_path / "steps" / "7.json", [], [])
-    a.host.boot_active = True
-    a.host.ignore_cancel = True
-    run = a.run()
-
-    assert len(a.host.launched) == 1
-    assert run.ending == "error"
-    assert run.termination.confirmed is False
-    assert "cancel" in run.termination.problems[0]
-
-
-def test_an_unreachable_editor_ends_in_a_retry_and_restores_the_files(wt: Path, tmp_path: Path) -> None:
-    a = Adapted(wt, tmp_path / "steps" / "5.json", [], [])
-
-    def refuse(_folder: Path) -> ahp.Transport:
-        raise HostError("no agent host")  # noqa: EM101, TRY003
-
-    a.env = vscode_adapter.Env(connect=refuse, settle=a.env.settle)
-    run = a.run()
-
-    assert (run.ending, run.detail) == ("error", "VS Code step error: HostError: no agent host")
-    assert (run.termination.confirmed, a.delivered) == (True, [])
-    assert git(wt, "status", "--porcelain", "--ignored") == ""
-
-
-def test_a_process_left_in_the_worktree_stops_the_step(wt: Path, tmp_path: Path) -> None:
-    a = Adapted(wt, tmp_path / "steps" / "6.json", [[USAGE, {"type": "chat/turnComplete"}]], [GOOD])
-    a.settled = Termination(confirmed=False, survivors=(4242,))
-    run = a.run()
-
-    result = session_result.to_result(run, StepKind.BUILD, datetime.now(UTC))
-    assert (run.ending, result.exit) == ("result", Exit.STOP)
-    assert "4242" in result.reason
 
 
 SHAPER = carried.layer().agents["shaper"]  # module level runs before the carried-settings fixture
@@ -1304,168 +820,3 @@ def test_an_unreachable_editor_leaves_no_shaping_files(wt: Path) -> None:
     out, warning = shape(wt, vscode_adapter.Env(connect=refuse, shaper=None))
     assert (out.end, out.detail, warning) == ("error", "HostError: VS Code published no agent host within 60 s", "")
     assert git(wt, "status", "--porcelain", "--ignored") == ""
-
-
-def test_comments_and_slashes_inside_strings_still_get_the_pins(tmp_path: Path) -> None:
-    (tmp_path / ".vscode").mkdir()
-    text = '// team\n{ /* proxy */ "http.proxy": "http://x//y", "a": [1,], }\n'
-    (tmp_path / ".vscode" / "settings.json").write_text(text)
-    write_window_settings(tmp_path, MODEL)
-
-    assert f'"{MCP_ACCESS}": "none",' in (tmp_path / ".vscode" / "settings.json").read_text()
-    assert (tmp_path / ".vscode" / "settings.json").read_text().endswith(text.split("{", 1)[1])
-
-
-def _record(a: Adapted, tools: list[str] | None = None, subagents: list | None = None) -> host_record.Record:
-    allowed = wf.agent_tools("builder", a.inbox, subagents=a.cfg.subagents)
-    return host_record.Record(found=True, tools=allowed if tools is None else tools, subagents=subagents or [])
-
-
-def _subagent(**kw: object) -> SimpleNamespace:
-    return SimpleNamespace(**({"tool_call_id": "call_1", "agent_name": "explore", "model": "gpt-5.6-luna"} | kw))
-
-
-def test_a_window_subagent_is_counted_from_the_host_record(wt: Path, tmp_path: Path) -> None:
-    done = [*_announced("t1", "explore"), USAGE, {"type": "chat/turnComplete"}]
-    a = Adapted(wt, tmp_path / "steps" / "1.json", [done], [GOOD])
-    a.cfg = dataclasses.replace(a.cfg, subagents=True)
-    ended = _subagent(total_tokens=6958, total_tool_calls=1, duration=timedelta(milliseconds=2929))
-    record = _record(a, subagents=[("subagent.started", _subagent()), ("subagent.completed", ended)])
-    seen: list[tuple] = []
-    a.env = dataclasses.replace(a.env, record=lambda *args: seen.append(args) or record)
-    run = a.run()
-
-    assert run.ending == "result"
-    assert seen[0][0] == wt
-    assert seen[0][2] == "owlbear-builder"
-    ((sub,),) = [run.subagents]
-    assert (sub["agent"], sub["model"], sub["outcome"]) == ("explore", "gpt-5.6-luna", "completed")
-    assert (sub["tokens"], sub["tool_calls"], sub["seconds"], sub["allowed"]) == (6958, 1, 2.929, True)
-    assert sub["credits_known"] is False
-    assert "task" in (a.placed_agent or "")
-
-
-def test_tools_beyond_the_allowlist_in_the_host_record_void_the_result(wt: Path, tmp_path: Path) -> None:
-    a = Adapted(wt, tmp_path / "steps" / "1.json", [[USAGE, {"type": "chat/turnComplete"}]], [GOOD])
-    record = _record(a, tools=[*wf.agent_tools("builder", a.inbox), "skill", "uv-init"])
-    a.env = dataclasses.replace(a.env, record=lambda *_a: record)
-    run = a.run()
-
-    assert (run.ending, run.payload) == ("error", None)
-    assert "outside its allowlist: uv-init" in run.detail
-
-
-def test_a_recorded_subagent_the_role_may_not_start_voids_the_result(wt: Path, tmp_path: Path) -> None:
-    a = Adapted(wt, tmp_path / "steps" / "1.json", [[USAGE, {"type": "chat/turnComplete"}]], [GOOD])
-    record = _record(a, subagents=[("subagent.started", _subagent())])
-    a.env = dataclasses.replace(a.env, record=lambda *_a: record)
-    run = a.run()
-
-    assert (run.ending, run.payload) == ("error", None)
-    assert "no subagent may run" in run.detail
-
-
-def test_an_announced_start_the_record_lacks_is_kept_and_none_is_counted_twice(wt: Path, tmp_path: Path) -> None:
-    done = [*_announced("t1", "explore"), *_announced("t2", "explore"), USAGE, {"type": "chat/turnComplete"}]
-    a = Adapted(wt, tmp_path / "steps" / "1.json", [done], [GOOD])
-    a.cfg = dataclasses.replace(a.cfg, subagents=True)
-    ended = _subagent(total_tokens=10, total_tool_calls=1, duration=timedelta(seconds=1))
-    record = _record(a, subagents=[("subagent.started", _subagent()), ("subagent.completed", ended)])
-    a.env = dataclasses.replace(a.env, record=lambda *_a: record)
-    run = a.run()
-
-    assert [(s["agent"], s["tokens"], s["outcome"]) for s in run.subagents] == [
-        ("explore", 10, "completed"),
-        ("explore", None, "unfinished"),
-    ]
-    logged = next(e for e in a.events if e.get("event") == "subagent")
-    assert (logged["credits_known"], all(s["credits_known"] is False for s in run.subagents)) == (False, True)
-
-
-def test_an_announced_subagent_survives_a_send_that_raises(wt: Path, tmp_path: Path) -> None:
-    ask = [
-        {"type": "chat/toolCallStart", "toolCallId": "c1", "toolName": "bash"},
-        {"type": "chat/toolCallReady", "toolCallId": "c1", "toolInput": "{}", "confirmed": None},
-    ]
-    a = Adapted(wt, tmp_path / "steps" / "1.json", [[*_announced("t1", "explore"), *ask]], [None])
-    a.cfg = dataclasses.replace(a.cfg, subagents=True)
-    sent = a.host.dispatch
-
-    def dispatch(channel: str, action: dict) -> None:
-        if action["type"] == "chat/toolCallConfirmed":
-            msg = "chat/toolCallConfirmed: connection closed: server closed"
-            raise HostError(msg)
-        sent(channel, action)
-
-    a.host.dispatch = dispatch
-    run = a.run()
-
-    assert "connection closed" in run.detail
-    assert [(s["agent"], s["tokens"], s["outcome"]) for s in run.subagents] == [("explore", None, "unfinished")]
-
-
-def test_without_a_host_record_the_announced_subagents_stay_with_unknown_counts(wt: Path, tmp_path: Path) -> None:
-    done = [*_announced("t1", "explore"), USAGE, {"type": "chat/turnComplete"}]
-    a = Adapted(wt, tmp_path / "steps" / "1.json", [done], [GOOD])
-    a.cfg = dataclasses.replace(a.cfg, subagents=True)
-    a.env = dataclasses.replace(a.env, record=lambda *_a: host_record.Record(found=False, why="no host record"))
-    run = a.run()
-
-    assert run.ending == "result"
-    assert [(s["agent"], s["tokens"], s["outcome"]) for s in run.subagents] == [("explore", None, "unfinished")]
-    assert {"event": "host-record", "found": False, "why": "no host record"}.items() <= next(
-        e for e in a.events if e.get("event") == "host-record"
-    ).items()
-
-
-def _asks(*calls: tuple[str, str, str]) -> list[dict]:
-    """Tool calls the window asks Delivery to confirm: (call id, tool name, input)."""
-    return [
-        a
-        for call, name, given in calls
-        for a in (
-            {"type": "chat/toolCallStart", "toolCallId": call, "toolName": name},
-            {"type": "chat/toolCallReady", "toolCallId": call, "toolInput": given, "confirmed": None},
-        )
-    ]
-
-
-def test_a_read_only_window_step_asks_and_the_sdk_policy_answers(wt: Path, tmp_path: Path) -> None:
-    inbox = tmp_path / "steps" / "1.json"
-    relay = wf.names(inbox)[0]
-    asks = _asks(
-        ("c1", "bash", json.dumps({"command": "touch judge-wrote.txt"})),
-        ("c2", "bash", json.dumps({"command": "git status --short"})),
-        ("c3", f"{relay}-submit_result", "{}"),
-        ("c4", "uv-init", "{}"),
-    )
-    a = Adapted(wt, inbox, [[*asks, USAGE, {"type": "chat/turnComplete"}]], [GOOD])
-    a.cfg = dataclasses.replace(a.cfg, policy=Policy(wt, write=False))
-    run = a.run()
-
-    confirms = {c["toolCallId"]: c["approved"] for _, c in a.host.actions("chat/toolCallConfirmed")}
-    assert confirms == {"c1": False, "c2": True, "c3": True, "c4": False}
-    assert a.host.config["copilotcli:/s0"] == vscode_adapter.READ_ONLY
-    assert a.host.config["copilotcli:/s0"]["autoApprove"] == "default"
-    assert any("touch" in d and "read-only" in d for d in run.denials)
-    assert "uv-init: uv-init is not allowed in a read-only step" in run.denials
-
-
-def test_a_read_only_answer_reads_the_whole_input_and_keeps_only_redacted_text(wt: Path, tmp_path: Path) -> None:
-    token = "ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghij"  # noqa: S105 - a fake, to see it redacted
-    hidden = "git status" + " " * 2100 + "; touch judge-wrote.txt"  # the write past any preview
-    asks = _asks(
-        ("c1", "bash", json.dumps({"command": f"git config http.extraheader 'Authorization: Bearer {token}'"})),
-        ("c2", "bash", hidden),
-        ("c3", "bash", json.dumps({"command": "git log -1"})),
-    )
-    a = Adapted(wt, tmp_path / "steps" / "1.json", [[*asks, USAGE, {"type": "chat/turnComplete"}]], [GOOD])
-    a.cfg = dataclasses.replace(a.cfg, policy=Policy(wt, write=False))
-    run = a.run()
-
-    confirms = {c["toolCallId"]: c["approved"] for _, c in a.host.actions("chat/toolCallConfirmed")}
-    assert confirms == {"c1": False, "c2": False, "c3": True}
-    kept = json.dumps([run.denials, run.denied, a.events])
-    assert token not in kept
-    assert "touch" in run.denied.get("touch", "")
-    assert "git" not in run.denied  # the later approval of git cleared its denial

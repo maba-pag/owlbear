@@ -71,7 +71,6 @@ class Run:
     termination: Termination | None = None
     denials: list[str] = field(default_factory=list)
     denied: dict[str, str] = field(default_factory=dict)  # each denied tool or program, lower case: its last denial
-    runtime: str = "sdk"  # the catalogue's runtime the session ran in
     invalid: int = 0
     quota: bool = False  # the runtime reported the Copilot quota exhausted
     quota_reset: datetime | None = None  # when it said the quota resets
