@@ -75,15 +75,16 @@ def transaction(  # noqa: PLR0913, PLR0917 - the head the caller proved travels 
 def settle(shared: DataRepo, images: dict[Path, tuple[bytes | None, bytes]], head: str, generation: str) -> bool:
     """Put a failed or refused batch's files back and complete it, only while HEAD is proved still *head* around it.
 
-    Nothing is put back while a rebase is active or unknown, once HEAD moved from *head* (an owner's commit is never
-    reverted), while the index holds a change to any of the files, or when a file holds neither image. HEAD is proved
-    again after the put-back, so a move during it keeps the batch too. Returns whether the batch was completed; when
-    not, it stays interrupted for the owner's finish or abandon.
+    Immediately before each file is put back, the owner's epoch is proved anew (`_owner_epoch`); the first failure stops
+    the put-back, so a file the owner committed meanwhile is never touched. Nothing is put back while a rebase is active
+    or unknown, once HEAD moved from *head* (an owner's commit is never reverted), while the index holds a change to
+    any of the files, or when a file holds neither image. HEAD is proved again after the put-back. Returns whether the
+    batch was completed; when not, it stays interrupted for the owner's finish or abandon.
     """
-    if not _still(shared, head) or _staged(shared, images) or not decision_batch.owned(shared.root, images):
-        return False
     try:
         for path, (text, _) in images.items():
+            if not _owner_epoch(shared, images, head):
+                return False
             store._put_back(path, text)  # noqa: SLF001 - same package; store helpers stay private to it
     except OSError:
         return False
@@ -91,6 +92,13 @@ def settle(shared: DataRepo, images: dict[Path, tuple[bytes | None, bytes]], hea
         return False
     decision_batch.complete(shared, generation)
     return True
+
+
+def _owner_epoch(shared: DataRepo, images: dict[Path, tuple[bytes | None, bytes]], head: str) -> bool:
+    """No rebase, a clean index and every file owned, then HEAD read last, so no probe can hide an owner's commit."""
+    if not operation_idle(shared) or _staged(shared, images) or not decision_batch.owned(shared.root, images):
+        return False
+    return head_commit(shared) == head
 
 
 def _staged(shared: DataRepo, images: dict[Path, tuple[bytes | None, bytes]]) -> bool:

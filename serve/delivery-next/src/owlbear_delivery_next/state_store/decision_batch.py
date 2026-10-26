@@ -14,6 +14,7 @@ import base64
 import binascii
 import json
 import os
+import unicodedata
 import uuid
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -200,24 +201,37 @@ def _git_alias(part: str) -> bool:
 
 
 def _inside(value: str) -> str:
-    """Recovery joins this path to the checkout root, so it must stay under it and outside the Git folder."""
-    parts = PurePosixPath(value).parts
-    if not parts or PurePosixPath(value).is_absolute() or "\0" in value or ".." in parts or any(map(_git_alias, parts)):
+    """Recovery joins this path to the checkout root, so it must stay under it and outside the Git folder.
+
+    Only the canonical spelling is accepted: `./`, `//` or a trailing `/` would name a file another row names too.
+    """
+    path = PurePosixPath(value)
+    parts = path.parts
+    if not parts or path.is_absolute() or "\0" in value or ".." in parts or any(map(_git_alias, parts)):
         msg = "a journal path is empty, absolute, escapes the checkout or names the Git folder"
         raise ValueError(msg)
+    if str(path) != value:
+        msg = "a journal path is not written in its one canonical form"
+        raise ValueError(msg)
     return value
+
+
+def _physical(rel: str) -> str:
+    """The file *rel* may land on where names ignore case, Unicode normalization and HFS's ignored code points."""
+    return unicodedata.normalize("NFD", rel.translate(_IGNORED)).casefold()
 
 
 def _paired(ids: tuple[str, ...], files: tuple[tuple[str, bytes | None, bytes], ...]) -> None:
     """Every producer journals one id per file, the file's own name, each file once; anything else is damage.
 
     A journal naming no file is damage too: no producer writes one, and it would complete without proving any image.
+    Two rows that one file system could put in one file are one file twice, with images that contradict.
     """
     paths = [rel for rel, _, _ in files]
     if not paths:
         msg = "the journal names no file, so nothing of the batch can be proved"
         raise ValueError(msg)
-    if [PurePosixPath(rel).stem for rel in paths] != list(ids) or len(set(paths)) != len(paths):
+    if [PurePosixPath(rel).stem for rel in paths] != list(ids) or len({_physical(p) for p in paths}) != len(paths):
         msg = "the journal's decision ids and files do not pair up"
         raise ValueError(msg)
 

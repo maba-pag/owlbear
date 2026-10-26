@@ -15,6 +15,7 @@ from pathlib import Path, PurePosixPath
 import pytest
 
 from owlbear_decisions import Decision, DecisionError, Link, LinkType, Origin, Scope, State, new_id, write
+from owlbear_decisions.storage import serialize
 from owlbear_delivery_next.local_system import storage_io
 from owlbear_delivery_next.local_system.data_repo import DataRepo, DataRepoError
 from owlbear_delivery_next.state_store import (
@@ -175,6 +176,10 @@ def test_a_journal_with_a_wrongly_typed_file_list_raises_journal_error_and_keeps
         pytest.param(".git /config", id="git-folder-ntfs-trailing-space"),
         pytest.param("GIT~1/config", id="git-folder-ntfs-short-name"),
         pytest.param("shop-site/decisions/a\0.md", id="nul"),
+        pytest.param("shop-site/./decisions/a1.md", id="dot-segment"),
+        pytest.param("shop-site//decisions/a1.md", id="double-slash"),
+        pytest.param("./shop-site/decisions/a1.md", id="leading-dot"),
+        pytest.param("shop-site/decisions/a1.md/", id="trailing-slash"),
         pytest.param("", id="empty"),
         pytest.param(".", id="checkout-root"),
     ],
@@ -761,8 +766,16 @@ def test_each_producer_shaped_journal_still_decodes(picking, rel):
         (["a1"], []),
         (["other"], [(f"{PROJECT}/decisions/a1.md", None, b"after\n")]),
         (["config"], [(".git/config", None, b"after\n")]),
+        (
+            ["a1", "a1"],
+            [(f"{PROJECT}/decisions/a1.md", None, b"x\n"), (f"{PROJECT}/./decisions/a1.md", b"x\n", b"y\n")],
+        ),
+        (
+            ["a1", "A1"],
+            [(f"{PROJECT}/decisions/a1.md", None, b"x\n"), (f"{PROJECT}/Decisions/A1.md", b"x\n", b"y\n")],
+        ),
     ],
-    ids=["no-file-and-no-id", "id-without-file", "id-not-its-file", "git-folder"],
+    ids=["no-file-and-no-id", "id-without-file", "id-not-its-file", "git-folder", "dot-alias", "case-alias"],
 )
 def test_a_batch_a_reader_could_not_decode_is_never_journalled(picking, ids, files):
     shared = picking.shared
@@ -829,3 +842,184 @@ def test_a_journal_emptied_after_a_partial_write_refuses_every_entry_point_and_c
     assert decision_batch.journal_path(shared).read_bytes() == journal
     assert {p.name: p.read_bytes() for p in folder.iterdir()} == held
     assert (shared.git("rev-parse", "HEAD").stdout, shared.git("ls-files", "-s").stdout) == (head, index)
+
+
+def _no_authority(picking) -> None:
+    """Every reader refuses: no load, and a lookup fails without a governing answer or a picker."""
+    shared = picking.shared
+    picking.picks.clear()
+    pickers = len(picking.pickers())
+    with pytest.raises(decision_store.DecisionsUnavailable):
+        decision_store.load(shared, PROJECT)
+    answer, done = lookup.chat(shared, PROJECT, "Which timestamps apply?", picking.store.settings)
+    assert answer.get("failed"), answer
+    assert "decisions" not in answer
+    assert done is None
+    assert len(picking.pickers()) == pickers
+
+
+def test_a_journal_naming_one_file_twice_by_a_dot_alias_refuses_every_entry_point(picking, monkeypatch):
+    """HEAD holds nothing of the batch and the worktree holds its first after image; the alias row would undo it."""
+    _seed(picking)
+    shared = picking.shared
+    new = make(title="Use UTC", statement="All timestamps use UTC.")
+    _interrupt(picking, monkeypatch, [new])
+    write(new, shared.root / PROJECT)
+    rel = f"{PROJECT}/decisions/{new.id}.md"
+    written = (shared.root / rel).read_bytes()
+    alias = {
+        "path": f"{PROJECT}/./decisions/{new.id}.md",
+        "before": base64.b64encode(written).decode("ascii"),
+        "after": base64.b64encode(b"other\n").decode("ascii"),
+    }
+    _rewrite_journal(shared, lambda record: (record["files"].append(alias), record["ids"].append(new.id)))
+    journal = decision_batch.journal_path(shared).read_bytes()
+    generation = json.loads(journal)["generation"]
+    head, index = shared.git("rev-parse", "HEAD").stdout, shared.git("ls-files", "-s").stdout
+
+    with pytest.raises(decision_batch.JournalError, match="canonical"):
+        decision_batch.pending(shared)
+    for action in (decision_recovery.finish, decision_recovery.abandon):
+        with pytest.raises(decision_store.DecisionsUnavailable, match="canonical"):
+            action(shared, generation)
+    _no_authority(picking)
+
+    assert (shared.root / rel).read_bytes() == written
+    assert decision_batch.journal_path(shared).read_bytes() == journal
+    assert (shared.git("rev-parse", "HEAD").stdout, shared.git("ls-files", "-s").stdout) == (head, index)
+
+
+def test_an_owner_commit_of_every_after_image_is_a_landing_and_completes(picking):
+    shared = picking.shared
+    target = shared.root / PROJECT / "changes" / "landed.json"
+    target.parent.mkdir(parents=True)
+
+    def owner_commits_all_then_refused(_head: str) -> decision_transaction.Step:
+        target.write_text("{}", encoding="utf-8")
+        _owner_commit(shared, "owner commits the whole batch")
+        return decision_transaction.Step("the commit was refused", refused=True)
+
+    head = shared.git("rev-parse", "HEAD").stdout.strip()
+    notice = decision_transaction.transaction(
+        shared, PROJECT, "changes: landed", [(target, b"{}")], owner_commits_all_then_refused, head
+    )
+
+    assert notice == "the commit was refused"
+    assert shared.git("show", f"HEAD:{PROJECT}/changes/landed.json").stdout == "{}"
+    assert target.read_text(encoding="utf-8") == "{}"
+    assert decision_batch.pending(shared) is None
+
+
+def _commit_file(shared: DataRepo, rel: str) -> None:
+    shared.git("add", "--", rel)
+    shared.git("commit", "-qm", f"owner commits {rel}")
+
+
+def _two_files(picking, monkeypatch, surface: str) -> tuple[list[str], list[bytes], object]:
+    """Two files of one batch written as their after images, and the call that puts them back."""
+    shared = picking.shared
+    if surface == "generic":
+        rels = [f"{PROJECT}/changes/first.json", f"{PROJECT}/changes/second.json"]
+        afters = [b'{"n": 1}\n', b'{"n": 2}\n']
+        (shared.root / PROJECT / "changes").mkdir(parents=True)
+
+        def step(_head: str) -> decision_transaction.Step:
+            for rel, after in zip(rels, afters, strict=True):
+                (shared.root / rel).write_bytes(after)
+            return decision_transaction.Step("the commit was refused", refused=True)
+
+        head = shared.git("rev-parse", "HEAD").stdout.strip()
+        files = [(shared.root / rel, after) for rel, after in zip(rels, afters, strict=True)]
+        return (
+            rels,
+            afters,
+            lambda: decision_transaction.transaction(shared, PROJECT, "changes: two", files, step, head),
+        )
+    pair = [make(title="Use UTC", statement="All timestamps use UTC."), make(title="Use ISO", statement="ISO dates.")]
+    rels = [f"{PROJECT}/decisions/{d.id}.md" for d in pair]
+    afters = [serialize(d).encode("utf-8") for d in pair]
+    if surface == "store":
+
+        def save() -> None:
+            with monkeypatch.context() as m:
+                m.setattr(DataRepo, "commit", lambda *_a, **_k: "git refused the commit")
+                receipts = decision_store.save_all(shared, [(d, None) for d in pair], message="decisions: two")
+            assert not any(r.saved for r in receipts)
+
+        return rels, afters, save
+    _interrupt(picking, monkeypatch, pair)
+    for decision in pair:
+        write(decision, shared.root / PROJECT)
+    generation = decision_batch.pending(shared).generation
+
+    def abandon() -> None:
+        with pytest.raises(decision_store.DecisionsUnavailable, match="moved"):
+            decision_recovery.abandon(shared, generation)
+
+    return rels, afters, abandon
+
+
+def _owner_commits_at(m: pytest.MonkeyPatch, surface: str, moment: str, owner_commits) -> None:
+    """Make the owner commit at *moment* of *surface*'s put-back, through real Git in the disposable checkout."""
+    if moment == "between":
+        target, name = (decision_batch, "replace_file") if surface == "abandon" else (decision_store, "_put_back")
+        real = getattr(target, name)
+
+        def put_back_then_owner_commits(path, data):
+            real(path, data)
+            owner_commits()
+
+        m.setattr(target, name, put_back_then_owner_commits)
+    elif surface == "abandon":
+        real_preflight, calls = decision_recovery._preflight, []  # noqa: SLF001
+
+        def preflight_then_owner_commits(root, batch):  # its second call is the first put-back's epoch probe
+            real_preflight(root, batch)
+            calls.append(1)
+            if len(calls) == 2:
+                owner_commits()
+
+        m.setattr(decision_recovery, "_preflight", preflight_then_owner_commits)
+    else:
+        real_git = DataRepo.git
+
+        def index_probe_then_owner_commits(self, *args, **kwargs):
+            if args[:2] == ("diff", "--cached"):
+                owner_commits()
+            return real_git(self, *args, **kwargs)
+
+        m.setattr(DataRepo, "git", index_probe_then_owner_commits)
+
+
+@pytest.mark.parametrize("moment", ["probe", "between"])
+@pytest.mark.parametrize("surface", ["store", "generic", "abandon"])
+def test_an_owner_commit_during_the_put_back_stops_it_and_keeps_every_owner_file(picking, monkeypatch, surface, moment):
+    """`probe`: the owner commits the first file while the epoch is probed before the first put-back.
+
+    `between`: the owner commits the second file after the first is put back. Either way the owner's file, HEAD and
+    index stay as the owner left them, the batch stays pending and no reader gets authority.
+    """
+    _seed(picking)
+    shared = picking.shared
+    rels, afters, run = _two_files(picking, monkeypatch, surface)
+    owner = rels[0] if moment == "probe" else rels[1]
+    fired: list[str] = []
+
+    def owner_commits() -> None:
+        if not fired:
+            fired.append(owner)
+            _commit_file(shared, owner)
+
+    with monkeypatch.context() as m:
+        _owner_commits_at(m, surface, moment, owner_commits)
+        run()
+
+    assert fired == [owner]
+    assert shared.git("log", "-1", "--format=%s").stdout.strip() == f"owner commits {owner}"
+    assert (shared.root / owner).read_bytes() == afters[rels.index(owner)]
+    assert shared.git("show", f"HEAD:{owner}").stdout.encode("utf-8") == afters[rels.index(owner)]
+    assert shared.git("diff", "--cached", "--name-only").stdout == ""
+    if moment == "probe":  # nothing was put back
+        assert [(shared.root / rel).read_bytes() for rel in rels] == afters
+    assert decision_batch.pending(shared) is not None
+    _no_authority(picking)

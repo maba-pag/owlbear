@@ -74,6 +74,20 @@ def _idle(shared: DataRepo, batch: decision_batch.Batch) -> None:
 def _unmoved(shared: DataRepo, batch: decision_batch.Batch) -> None:
     """Refuse unless no rebase is in flight and HEAD still names the batch's head, which is read last."""
     _idle(shared, batch)
+    _same_head(shared, batch)
+
+
+def _fenced(shared: DataRepo, batch: decision_batch.Batch) -> None:
+    """The owner's epoch, proved immediately before each file is written: idle Git, every file owned, HEAD read last.
+
+    A refusal stops the remaining writes, so a file the owner committed or edited meanwhile is never touched.
+    """
+    _idle(shared, batch)
+    _preflight(shared, batch)
+    _same_head(shared, batch)
+
+
+def _same_head(shared: DataRepo, batch: decision_batch.Batch) -> None:
     if decision_transaction.head_commit(shared) != batch.head:
         msg = f"Git's head moved while batch {batch.generation} was recovered, so it stays interrupted; check Git"
         raise DecisionsUnavailable(msg, RECOVER)
@@ -129,8 +143,8 @@ def finish(shared: DataRepo, generation: str) -> Recovery:
                 msg = f"the remote moved past {batch.head[:12]}, so batch {generation} is not republished here"
                 raise DecisionsUnavailable(msg, RECOVER)
             _preflight(root, batch)
-            _unmoved(root, batch)  # after the remote proof, immediately before the first file is written
             for rel, _, after in batch.files:
+                _fenced(root, batch)  # after the remote proof, immediately before this file's folder and write
                 storage_io.make_dirs((root.root / rel).parent)
                 decision_batch.replace_file(root.root / rel, after)
             _validate(root, batch)
@@ -194,8 +208,8 @@ def abandon(shared: DataRepo, generation: str) -> Recovery:
                 raise DecisionsUnavailable(msg, RECOVER)
             _at_head(root, batch)
             _preflight(root, batch)
-            _unmoved(root, batch)  # immediately before the first file is put back
             for rel, before, _ in batch.files:
+                _fenced(root, batch)  # immediately before each put-back: an owner's commit meanwhile stops the rest
                 decision_batch.replace_file(root.root / rel, before)
             _unmoved(root, batch)  # last, immediately before completion: a move during the put-back keeps the batch
             decision_batch.complete(root, generation)
