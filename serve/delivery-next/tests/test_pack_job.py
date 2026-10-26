@@ -7,7 +7,6 @@ import json
 import os
 import shutil
 import subprocess
-import sys
 import threading
 from datetime import UTC, datetime
 from importlib.resources import files
@@ -1658,11 +1657,10 @@ def test_the_maintenance_page_links_each_action_and_shows_what_is_not_built(tmp_
 
 
 class RecordDescriptors:
-    """Each descriptor ``pack_state.open_record`` hands out, and how often pack_state's own code closes it.
+    """Each descriptor ``pack_state.open_record`` hands out, and how often that module closes it.
 
-    A descriptor number is reused by later opens anywhere in the process, so only a close pack_state makes while the
-    descriptor it acquired is still open counts for it; any other close by pack_state is a stray, a second close.
-    Only the owned descriptor's handover fails; every other ``fdopen`` in the process runs as it does.
+    The module gets its own OS bindings so unrelated process-wide opens and closes cannot affect the oracle.
+    Only an owned descriptor's handover fails; a close outside its acquisition lifetime is a stray.
     """
 
     def __init__(self, fault: type[BaseException]) -> None:
@@ -1681,18 +1679,16 @@ class RecordDescriptors:
         return self.real_fdopen(fd, *args, **kwargs)
 
     def close(self, fd: int) -> None:
-        if sys._getframe(1).f_globals.get("__name__") == pack_state.__name__:  # noqa: SLF001 - who closes it
-            held = next((t for t in self.owned if t["fd"] == fd and t["open"]), None)
-            if held is None:
-                self.strays.append(fd)
-            else:
-                held["closes"], held["open"] = held["closes"] + 1, False
+        held = next((t for t in self.owned if t["fd"] == fd and t["open"]), None)
+        if held is None:
+            self.strays.append(fd)
+        else:
+            held["closes"], held["open"] = held["closes"] + 1, False
         self.real_close(fd)
 
     def patch(self, patch: pytest.MonkeyPatch) -> None:
         patch.setattr(pack_state, "open_record", self.open_record)
-        patch.setattr(pack_state.os, "fdopen", self.fdopen)
-        patch.setattr(pack_state.os, "close", self.close)
+        patch.setattr(pack_state, "os", SimpleNamespace(**(vars(os) | {"fdopen": self.fdopen, "close": self.close})))
 
     def closed_once(self) -> bool:
         return len(self.owned) == 1 and self.owned[0]["closes"] == 1 and not self.strays
@@ -1718,16 +1714,17 @@ def test_the_descriptor_oracle_ignores_a_reused_number_closed_elsewhere_and_catc
     pack_state of its already closed descriptor does."""
     (tmp_path / "record").write_text("{}")
     spy = RecordDescriptors(OSError)
-    as_pack_state = {"__name__": pack_state.__name__, "os": os}
     with pytest.MonkeyPatch.context() as patch:
         spy.patch(patch)
         fd = pack_state.open_record(tmp_path / "record")
-        exec("os.close(fd)", as_pack_state | {"fd": fd})  # noqa: S102 - a close made from pack_state's own code
-        reused = os.open(tmp_path / "record", os.O_RDONLY)  # another owner, often given the same number
-        os.close(reused)  # closed by this test's code: not pack_state's
+        pack_state.os.close(fd)
+        reused = os.open(tmp_path / "record", os.O_RDONLY)
+        assert reused == fd
+        os.close(reused)
         assert spy.closed_once(), (spy.owned, spy.strays)
         again = os.open(tmp_path / "record", os.O_RDONLY)
-        exec("os.close(fd)", as_pack_state | {"fd": again})  # noqa: S102 - pack_state closing what it does not own
+        assert again == fd
+        pack_state.os.close(again)
     assert (spy.closed_once(), spy.strays) == (False, [again])
 
 
