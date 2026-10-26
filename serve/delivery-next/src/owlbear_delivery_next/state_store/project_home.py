@@ -334,9 +334,11 @@ def supported_format(text: object) -> int:
 def prior_format(text: object) -> int:
     """A format the store held before its offline move: 0 when it had no marker, else a supported format.
 
-    The fence itself is never a prior format, and nothing above STORE_FORMAT is one.
+    Only the exact empty string (how an absent marker is recorded) or None is 0; any other text, including
+    whitespace, must be a supported format. The fence itself is never a prior format, and nothing above
+    STORE_FORMAT is one.
     """
-    if text is None or (isinstance(text, str) and not text.strip()):
+    if text is None or text == "":
         return 0
     return supported_format(text)
 

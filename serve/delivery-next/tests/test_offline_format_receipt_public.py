@@ -127,6 +127,24 @@ def test_finish_refuses_a_tampered_prior_format_and_writes_nothing(repo, boot, s
 
 
 @pytest.mark.usefixtures("current_binding")
+@pytest.mark.parametrize("stored", [" ", " \n", "\t\n", "\n"])
+def test_finish_refuses_a_saved_blank_prior_format_and_is_not_absence(repo, boot, stored, capsys) -> None:
+    assert cli.main(["--repo", str(repo), "prepare"]) == 0
+    record_path = _source(repo) / offline_protocol.PREPARED
+    record = json.loads(record_path.read_text()) | {"marker": stored}
+    record_path.write_text(json.dumps(record) + "\n")
+    boot["id"] = AFTER
+    before = _snapshot(_source(repo))
+
+    assert cli.main(["--repo", str(repo), "finish"]) == 1
+
+    assert "not a supported store format" in capsys.readouterr().err
+    assert _snapshot(_source(repo)) == before, "a blank saved prior was treated as absence and the source changed"
+    with pytest.raises(StoreError):
+        Store.open(repo)
+
+
+@pytest.mark.usefixtures("current_binding")
 @pytest.mark.parametrize("record", ["null", "false", "0", "[]"])
 def test_a_non_object_move_record_is_refused_by_finish_before_any_write(repo, boot, record) -> None:
     assert cli.main(["--repo", str(repo), "prepare"]) == 0
