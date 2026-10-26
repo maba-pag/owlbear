@@ -87,17 +87,30 @@ def _old_roles(old: Path) -> dict[Role, RoleModel]:
     try:
         raw = old.read_text()
         data = json.loads(raw)
-        version = int(data.get("format", 0))
-    except (AttributeError, OSError, TypeError, ValueError) as exc:
+        version = _format_of(data)
+    except (OSError, TypeError, ValueError) as exc:
         msg = (
             f"the old profile could not be read to move its role overrides: {exc}; repair or replace {old}, then reopen"
         )
         raise StoreError(msg) from exc
-    if version != 1:
-        _parse(raw, PROFILE, Profile, PROFILE_FORMAT, migrations.PROFILE)  # validates or raises StoreError
-        return {}
-    try:
-        return migrations.ROLES.validate_python(data.get("roles", {}))
-    except ValueError as exc:  # pydantic's ValidationError is a ValueError
-        msg = f"the old profile's role overrides are invalid: {exc}; repair {old}, then reopen"
-        raise StoreError(msg) from exc
+    roles: dict[Role, RoleModel] = {}
+    if version == 1:
+        try:
+            roles = migrations.ROLES.validate_python(data.get("roles", {}))
+        except ValueError as exc:  # pydantic's ValidationError is a ValueError
+            msg = f"the old profile's role overrides are invalid: {exc}; repair {old}, then reopen"
+            raise StoreError(msg) from exc
+    _parse(raw, PROFILE, Profile, PROFILE_FORMAT, migrations.PROFILE)  # the whole profile must be this build's
+    return roles
+
+
+def _format_of(data: object) -> int:
+    """The profile's format: a whole number as an int or a digit string; a bool, float or other type is refused."""
+    if not isinstance(data, dict):
+        msg = "not a profile object"
+        raise TypeError(msg)
+    fmt = data.get("format", 0)
+    if isinstance(fmt, bool) or not isinstance(fmt, int | str):
+        msg = f"format {fmt!r} is not a whole number"
+        raise TypeError(msg)
+    return int(fmt)  # a string such as "1.5" raises ValueError here

@@ -527,6 +527,9 @@ def test_a_valid_empty_old_roles_profile_counts_as_already_satisfied(repo):
         b'{"format": 999, "roles": {"reviewer": {"model": "r-1", "effort": "max"}}}',  # a newer OwlBear wrote it
         b'[{"format": 1, "roles": {}}]',  # not a profile object
         b'{"roles": {"reviewer": {"model": "r-1", "effort": "max"}}}',  # no format at all
+        b'{"format": 1, "roles": {}, "runtime": "unknown"}',
+        b'{"format": 1.5, "roles": {"reviewer": {"model": "r-1", "effort": "max"}}}',
+        b'{"format": true, "roles": {"reviewer": {"model": "r-1", "effort": "max"}}}',
     ],
 )
 def test_an_unknown_old_profile_refuses_before_any_marker_or_config_and_a_valid_one_then_imports(repo, raw):
