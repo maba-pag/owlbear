@@ -198,10 +198,7 @@ export async function readMachine() {
   if (state.machineSaving) return;
   const read = await call("/machine", { machine: true }).catch(() => undefined);
   if (read !== undefined && !state.machineSaving && writes === state.machineWrites) {
-    state.machine = read;
-    for (const key of Object.keys(state.machineText ?? {})) {  // typed text without an edit shows the fresh value
-      if (!(state.machineDraft && key in state.machineDraft)) delete state.machineText[key];
-    }
+    state.machine = read;  // typed text stays: it shows only while its items are the field's own (ownControl)
   }
 }
 
