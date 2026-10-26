@@ -6,6 +6,7 @@ stays in flight exactly as the crash would leave it, then drives the public reco
 
 from __future__ import annotations
 
+import base64
 import json
 import subprocess
 from datetime import UTC, datetime
@@ -121,8 +122,10 @@ def test_a_null_before_image_for_a_new_file_is_accepted_and_finishes(picking, mo
         lambda record: record["files"][0].__setitem__("path", 7),
         lambda record: record.__setitem__("files", {"path": "decisions/x.md"}),
         lambda record: record.__setitem__("files", ["decisions/x.md"]),
+        lambda record: record.__setitem__("files", []),  # ids without the files they name
+        lambda record: record.__setitem__("ids", []),  # files without the ids that name them
     ],
-    ids=["path-not-string", "files-not-list", "file-entry-not-object"],
+    ids=["path-not-string", "files-not-list", "file-entry-not-object", "ids-without-files", "files-without-ids"],
 )
 def test_a_journal_with_a_wrongly_typed_file_list_raises_journal_error_and_keeps_its_bytes(picking, monkeypatch, edit):
     _seed(picking)
@@ -137,6 +140,72 @@ def test_a_journal_with_a_wrongly_typed_file_list_raises_journal_error_and_keeps
     with pytest.raises(decision_store.DecisionsUnavailable):
         decision_recovery.finish(shared, "any")
     assert decision_batch.journal_path(shared).read_bytes() == journal
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        pytest.param("<outside>", id="absolute"),
+        pytest.param("../outside.txt", id="traversal"),
+        pytest.param(".git/config", id="git-folder"),
+        pytest.param("shop-site/.git/config", id="nested-git-folder"),
+        pytest.param(".GIT/config", id="git-folder-case"),
+        pytest.param("", id="empty"),
+        pytest.param(".", id="checkout-root"),
+    ],
+)
+@pytest.mark.parametrize("action", ["pending", "finish", "abandon"])
+def test_a_journal_path_outside_the_checkout_or_in_git_is_corruption_and_nothing_is_touched(
+    picking, monkeypatch, value, action
+):
+    _seed(picking)
+    shared = picking.shared
+    _interrupt(picking, monkeypatch, [make(title="Notes use UTC", statement="All note timestamps use UTC.")])
+    outside = shared.root.parent / "outside.txt"
+    outside.write_text("before\n")
+    path = str(outside) if value == "<outside>" else value
+    target = shared.root / path
+    matching = target.read_bytes() if target.is_file() else None  # the before image matches what is there now
+    _rewrite_journal(
+        shared,
+        lambda record: record["files"][0].update(
+            path=path,
+            before=None if matching is None else base64.b64encode(matching).decode("ascii"),
+            after=base64.b64encode(b"after\n").decode("ascii"),
+        ),
+    )
+    journal = decision_batch.journal_path(shared).read_bytes()
+    head = shared.git("rev-parse", "HEAD").stdout
+    index = shared.git("ls-files", "-s").stdout
+    writes, reads = [], []
+    real_replace, real_held = decision_batch.replace_file, decision_batch._held  # noqa: SLF001
+
+    def recording_replace(file_path, data):
+        writes.append(file_path)
+        return real_replace(file_path, data)
+
+    def recording_held(file_path):
+        reads.append(file_path)
+        return real_held(file_path)
+
+    monkeypatch.setattr(decision_batch, "replace_file", recording_replace)
+    monkeypatch.setattr(decision_batch, "_held", recording_held)
+    call = {
+        "pending": lambda: decision_batch.pending(shared),
+        "finish": lambda: decision_recovery.finish(shared, "any"),
+        "abandon": lambda: decision_recovery.abandon(shared, "any"),
+    }[action]
+    error = decision_batch.JournalError if action == "pending" else decision_store.DecisionsUnavailable
+    with pytest.raises(error):
+        call()
+
+    assert outside.read_bytes() == b"before\n"
+    assert (target.read_bytes() if target.is_file() else None) == matching
+    assert decision_batch.journal_path(shared).read_bytes() == journal
+    assert shared.git("rev-parse", "HEAD").stdout == head
+    assert shared.git("ls-files", "-s").stdout == index
+    assert writes == []
+    assert reads == []
 
 
 def test_an_ambiguous_head_after_a_landed_commit_keeps_the_journal_and_the_written_file(picking, monkeypatch):

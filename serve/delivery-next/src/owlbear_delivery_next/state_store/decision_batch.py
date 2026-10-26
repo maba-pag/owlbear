@@ -17,7 +17,7 @@ import os
 import uuid
 from contextlib import contextmanager
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from tempfile import mkstemp
 from typing import TYPE_CHECKING
 
@@ -159,39 +159,61 @@ def _encode(batch: Batch) -> bytes:
     return json.dumps(record, indent=1).encode("utf-8")
 
 
+def _data(value: str | None) -> bytes | None:
+    return None if value is None else base64.b64decode(value, validate=True)
+
+
+def _after(value: str | None) -> bytes:
+    if value is None:  # a null after image would make the batch delete a decision file
+        msg = "a decision file's after image is null"
+        raise ValueError(msg)
+    return base64.b64decode(value, validate=True)
+
+
+def _listed(value: object) -> list:
+    if not isinstance(value, list):  # a string or object here would decode as an empty batch
+        msg = "a journal list is not a list"
+        raise TypeError(msg)
+    return value
+
+
+def _record_of(value: object) -> dict:
+    if not isinstance(value, dict) or not isinstance(value.get("path"), str):
+        msg = "a journal file record has no string path"
+        raise TypeError(msg)
+    return value
+
+
+def _inside(value: str) -> str:
+    """Recovery joins this path to the checkout root, so it must stay under it and outside the Git folder."""
+    parts = PurePosixPath(value).parts
+    if not parts or PurePosixPath(value).is_absolute() or ".." in parts or any(p.lower() == ".git" for p in parts):
+        msg = "a journal path is empty, absolute, escapes the checkout or names the Git folder"
+        raise ValueError(msg)
+    return value
+
+
+def _paired(ids: tuple[str, ...], files: tuple[object, ...]) -> None:
+    if len(ids) != len(files):  # each producer journals one id per file; a partial list would hide a replacement
+        msg = "the journal's decision ids and files do not pair up"
+        raise ValueError(msg)
+
+
 def _decode(raw: bytes) -> Batch:
-    def data(value: str | None) -> bytes | None:
-        return None if value is None else base64.b64decode(value, validate=True)
-
-    def after(value: str | None) -> bytes:
-        if value is None:  # a null after image would make the batch delete a decision file
-            msg = "a decision file's after image is null"
-            raise ValueError(msg)
-        return base64.b64decode(value, validate=True)
-
-    def listed(value: object) -> list:
-        if not isinstance(value, list):  # a string or object here would decode as an empty batch
-            msg = "a journal list is not a list"
-            raise TypeError(msg)
-        return value
-
-    def record_of(value: object) -> dict:
-        if not isinstance(value, dict) or not isinstance(value.get("path"), str):
-            msg = "a journal file record has no string path"
-            raise TypeError(msg)
-        return value
-
     try:
         record = json.loads(raw)
         files = tuple(
-            (f["path"], data(f["before"]), after(f["after"])) for f in map(record_of, listed(record["files"]))
+            (_inside(f["path"]), _data(f["before"]), _after(f["after"]))
+            for f in map(_record_of, _listed(record["files"]))
         )
+        ids = tuple(str(i) for i in _listed(record["ids"]))
+        _paired(ids, files)
         return Batch(
             str(record["generation"]),
             str(record["project"]),
             str(record["head"]),
             str(record["message"]),
-            tuple(str(i) for i in listed(record["ids"])),
+            ids,
             files,
         )
     except (KeyError, TypeError, ValueError, binascii.Error) as exc:

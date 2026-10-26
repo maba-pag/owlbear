@@ -76,12 +76,17 @@ def save(
             head, behind = decision_sync.prepare(store.shared, time.monotonic() + SAVE_SECONDS)
             if not head:
                 return f"the record of {c.slug} was not saved: {behind}"[:300]
-            storage_io.make_dirs(path.parent)
             planned, problems = decision_archive.plan(store.shared.root, store.name, c, stem, outcome)
-            writes = [] if problems else decision_archive.batch_files(planned)
+            if problems:  # refused before any journal, folder or file: the record stays out with its decisions
+                refusal = f"the record of {c.slug} was not saved; " + "; ".join(
+                    [f"no decision of {c.slug} was archived", *problems]
+                )
+                return "; ".join(filter(None, [behind, refusal]))[:1000]
+            storage_io.make_dirs(path.parent)
+            writes = decision_archive.batch_files(planned)
 
             def publish(head: str) -> decision_transaction.Step:
-                files, left = decision_archive.write_plan(planned, problems, c.slug)
+                files, left = decision_archive.write_plan(planned, [], c.slug)
                 if left:  # a decision refused: the record commits with none of the batch
                     return decision_transaction.Step(
                         f"the record of {c.slug} was not saved; " + "; ".join(left), refused=True

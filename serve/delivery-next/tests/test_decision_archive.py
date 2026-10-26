@@ -356,6 +356,33 @@ def test_a_decision_that_would_break_the_repositorys_rules_keeps_all_out_and_the
     assert git(root, "status", "--porcelain") == ""
 
 
+def test_a_refused_planning_creates_no_journal_and_publishes_no_record(store, shared_repo, monkeypatch) -> None:
+    root, _ = shared_repo
+    said = {"title": "Notes", "statement": "Notes live in SQLite.", "scope": Scope.PROJECT, "project": "shop-site",
+            "origin": Origin.AUTONOMOUS, "actor": "shaper", "created_at": AT}  # fmt: skip
+    old = Rule(id=new_id(AT), state=State.REPLACED, **said)
+    later = Rule(id=new_id(AT), state=State.IN_FORCE, links=(Link(type=LinkType.REPLACES, target=old.id),), **said)
+    for d in (old, later):
+        write(d, root / "shop-site")
+    git(root, "add", "-A")
+    git(root, "commit", "-qm", "replaced in another Change")
+    head_before = git(root, "rev-parse", "HEAD")
+    c = finished()
+    decisions = c.brief.approved[0].decisions
+    decisions[1] = lasting = decisions[1].model_copy(update={"replaces": old.id})  # a second in-force successor
+    begun = []
+    monkeypatch.setattr(decision_batch, "begin", lambda *args, **_: begun.append(args))
+
+    notice = change_record.save(store, c, MERGED, AT)
+
+    assert notice.startswith("the record of notes was not saved; no decision of notes was archived"), notice
+    assert f"decision {lasting.id}, {old.id} of notes: two-successors" in notice
+    assert begun == []  # no journal is created before the refusal
+    assert not (root / "shop-site" / "changes" / f"{STEM}.json").exists()
+    assert git(root, "rev-parse", "HEAD") == head_before
+    assert git(root, "status", "--porcelain") == ""
+
+
 def test_a_project_answer_narrowed_to_the_change_is_withdrawn_and_its_successor_relates_to_it(store, shared_repo):
     root, _ = shared_repo
     first = BriefDecision(id=new_id(AT), question=WHERE, answer="One SQLite table", origin="decided", scope="project")
