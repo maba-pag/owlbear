@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import errno
 import os
+import threading
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -132,12 +134,38 @@ def _entries_below(folder: Path) -> dict[str, bytes | None]:
     }
 
 
-def _open_descriptors() -> set[str]:
-    return {p.name for p in Path("/dev/fd").iterdir()}
+@pytest.fixture
+def descriptors(monkeypatch):
+    reader = threading.current_thread()
+    opened, active, strays = [], set(), []
+    real_open, real_close = os.open, os.close
+
+    def acquire(*args, **kwargs):
+        fd = real_open(*args, **kwargs)
+        if threading.current_thread() is reader:
+            opened.append(fd)
+            active.add(fd)
+        return fd
+
+    def close(fd):
+        if threading.current_thread() is reader:
+            if fd in active:
+                active.remove(fd)
+            else:
+                strays.append(fd)
+        real_close(fd)
+
+    monkeypatch.setattr(storage_io, "os", SimpleNamespace(**(vars(os) | {"open": acquire, "close": close})))
+    yield active
+    assert opened
+    assert not active
+    assert not strays
 
 
 @pytest.mark.parametrize("folder", ["existing", "made-here"])
-def test_a_folder_linked_away_as_its_parent_is_synced_gets_nothing_made_through_it(tmp_path: Path, folder: str) -> None:
+def test_a_folder_linked_away_as_its_parent_is_synced_gets_nothing_made_through_it(
+    tmp_path: Path, folder: str, descriptors
+) -> None:
     """``base/x/y/z`` is made with ``x`` already there, or made by this call. At the real sync of ``base``, the owner
     moves ``x`` aside and links its name to a foreign folder: nothing is made in the foreign folder or in the moved
     ``x``, the call raises, and every descriptor it opened is closed."""
@@ -156,24 +184,22 @@ def test_a_folder_linked_away_as_its_parent_is_synced_gets_nothing_made_through_
             (base / "x").rename(moved)
             (base / "x").symlink_to(foreign, target_is_directory=True)
 
-    held = _open_descriptors()
     with pytest.MonkeyPatch.context() as m:
-        m.setattr(os, "fsync", fsync)
+        m.setattr(storage_io.os, "fsync", fsync)
         with pytest.raises(OSError):  # noqa: PT011 - any refusal; what matters is what was made where
             storage_io.make_dirs(base / "x" / "y" / "z")
 
     assert fired, "base was never synced with x in it"
     assert _entries_below(foreign) == theirs  # first: nothing was made in the foreign folder
     assert _entries_below(moved) == {}  # nor below the owner's x, moved aside
-    assert _open_descriptors() == held
+    assert not descriptors
 
 
-def test_making_folders_or_refusing_a_pipe_in_their_way_closes_every_descriptor(tmp_path: Path) -> None:
-    held = _open_descriptors()
+def test_making_folders_or_refusing_a_pipe_in_their_way_closes_every_descriptor(tmp_path: Path, descriptors) -> None:
     storage_io.make_dirs(tmp_path / "a" / "b" / "c")
     assert (tmp_path / "a" / "b" / "c").is_dir()
     os.mkfifo(tmp_path / "pipe")
     with pytest.raises(NotADirectoryError):
         storage_io.make_dirs(tmp_path / "pipe" / "x")
     assert not (tmp_path / "pipe" / "x").exists()
-    assert _open_descriptors() == held
+    assert not descriptors
