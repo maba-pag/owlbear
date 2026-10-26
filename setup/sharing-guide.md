@@ -102,7 +102,6 @@ No further platform-specific configuration is required:
 | Agents (`.agent.md`) | `~/.owlbear/runtime/share/agents/` | Yes — all teammates get the same agents |
 | Skills (`SKILL.md`) | `~/.owlbear/runtime/share/skills/` | Yes — all teammates get the same skills |
 | Instructions (`*.instructions.md`) | `~/.owlbear/runtime/share/instructions/` | Yes — shared baseline |
-| Prompts (`*.prompt.md`) | `~/.owlbear/runtime/share/prompts/` | Yes — shared baseline |
 | MCP server code | `~/.owlbear/versions/<tag>/serve/` | Yes — each server runs from the version it started with, through `~/.owlbear/runtime` |
 | Hook runtime files | `.owlbear/hooks/` in project | No — copied from `seed/` into each project |
 | `.github/copilot-instructions.md` | project root | No — per-project (override layer) |
