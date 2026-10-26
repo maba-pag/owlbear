@@ -27,7 +27,7 @@ from fastapi.testclient import TestClient
 from owlbear_decisions import Decision, DecisionError, Link, LinkType, Origin, Scope, State, new_id, storage, write
 from owlbear_decisions.storage import serialize
 from owlbear_delivery_next.change_contracts import pick_tools
-from owlbear_delivery_next.local_system import batch_journal, data_repo, storage_io
+from owlbear_delivery_next.local_system import batch_journal, data_repo, publication_hold, storage_io
 from owlbear_delivery_next.local_system.data_repo import DataRepo, DataRepoError
 from owlbear_delivery_next.project_host import decision_recovery_routes
 from owlbear_delivery_next.state_store import (
@@ -2582,8 +2582,8 @@ def test_a_commit_rebased_into_one_that_does_not_hold_the_batch_is_never_pushed(
             subprocess.run(["git", "push", "-q"], cwd=other, check=True)  # noqa: S607
         return real_push(self, *args, **kwargs)
 
-    def rebase_then_owner_commits(self, until=None):
-        said = real_rebase(self, until)
+    def rebase_then_owner_commits(self, until=None, *guard):
+        said = real_rebase(self, until, *guard)
         first.write_bytes(THIRD)
         self.git("commit", "-qam", "the owner's own commit")
         return said
@@ -2818,8 +2818,8 @@ def test_a_rebased_head_that_is_not_this_saves_own_commit_is_never_pushed(pickin
                 subprocess.run(["git", *step], cwd=other, check=True)  # noqa: S603, S607
         return real_git(self, *args, **kwargs)
 
-    def rebase_then_owner_commits(self, until=None):
-        said = real_rebase(self, until)
+    def rebase_then_owner_commits(self, until=None, *guard):
+        said = real_rebase(self, until, *guard)
         if owner:
             made.append(_owner_unrelated_commit(self))
         return said
@@ -2930,9 +2930,9 @@ def test_an_owner_commit_made_while_the_push_is_refused_is_never_rebased(picking
             owner.append((real_git(self, "rev-parse", "HEAD").stdout.strip(), _owner_unrelated_commit(self)))
         return real_git(self, *args, **kwargs)
 
-    def recording_rebase(self, until=None):
+    def recording_rebase(self, until=None, *guard):
         rebased.append(1)
-        return real_rebase(self, until)
+        return real_rebase(self, until, *guard)
 
     with monkeypatch.context() as m:
         m.setattr(DataRepo, "git", push_refused_while_the_owner_commits)
@@ -3670,3 +3670,67 @@ def test_a_save_continuation_still_catches_up_with_a_remote_that_moved_on(pickin
     assert all(r.published for r in receipts)
     assert shared.git("rev-parse", "HEAD").stdout.strip() == moved[0] == _remote_main(remote)
     assert decision_batch.pending(shared) is None
+
+
+def _owner_commits_in_the_holds_probe(
+    m: pytest.MonkeyPatch, shared: DataRepo, remote: Path, path: str, seen: dict
+) -> None:
+    """Another clone moves the remote on: in the continuation's first fetch after the save's push, or before that push,
+    so it is refused. Then, in the publication hold's own Git probe as `DataRepo.rebase` starts, the owner commits C.
+    *seen* gets that commit, B as it was then, the remote's commit and every Git command."""
+    real_git, other = data_repo._git, remote.parent / "other"  # noqa: SLF001
+    seen.update(ran=[], armed=False, fired=False, pushed=False)
+
+    def git(cwd, *args, until=None):
+        if path == "continuation" and args[:1] == ("fetch",) and seen["pushed"] and "remote" not in seen:
+            seen["remote"], seen["armed"] = _another_clone_moves_the_remote_on(remote, other), True
+        if path == "rejected-push" and args[:1] == ("push",) and "remote" not in seen:
+            seen["remote"] = _another_clone_moves_the_remote_on(remote, other)
+        if seen["armed"] and not seen["fired"] and args[:3] == ("rev-parse", "--git-path", publication_hold.RECORD):
+            seen["fired"] = True
+            seen["batch"] = real_git(cwd, "rev-parse", "HEAD").stdout.strip()
+            seen["owner"] = _owner_unrelated_commit(shared)
+        said = real_git(cwd, *args, until=until)
+        seen["ran"].append(args)
+        if args[:1] == ("push",):
+            seen["pushed"] = not said.returncode
+            seen["armed"] = seen["armed"] or (path == "rejected-push" and bool(said.returncode))
+        return said
+
+    m.setattr(data_repo, "_git", git)
+
+
+@pytest.mark.parametrize("path", ["continuation", "rejected-push"])
+def test_an_owner_commit_made_in_the_holds_probe_as_a_rebase_starts_is_never_rebased(
+    picking, shared_repo, monkeypatch, path
+):
+    """A rebase that may go on, the continuation's catch-up or the retry of a refused push, reaches `DataRepo.rebase`;
+    its publication hold probes Git, and in that probe the owner commits C. The ownership check runs again after the
+    hold's probes, as Git is about to rebase: C is never rebased, the owner's commit, index and files stay as made,
+    and the other clone's commit stays the remote's."""
+    _seed(picking)
+    shared, remote = picking.shared, shared_repo[1]
+    items, _, _ = _update_and_successor(picking)
+    seen: dict = {}
+
+    with monkeypatch.context() as m:
+        _owner_commits_in_the_holds_probe(m, shared, remote, path, seen)
+        receipts = decision_store.save_all(shared, items, message="decisions: two")
+
+    assert "remote" in seen, "the other clone never moved the remote on"
+    assert seen["fired"], "the publication hold's probe in DataRepo.rebase was never reached"
+    assert not publication_hold.recorded(shared, None)  # nothing was held: the real hold check ran and let it through
+    assert not [args for args in seen["ran"] if "rebase" in args]
+    assert shared.git("rev-parse", "HEAD").stdout.strip() == seen["owner"]  # C itself, never rebased into C'
+    assert shared.git("rev-parse", "HEAD~1").stdout.strip() == seen["batch"]
+    assert shared.git("status", "--porcelain").stdout == ""
+    assert _remote_main(remote) == seen["remote"]  # the other clone's commit; C is never sent
+    if path == "continuation":  # B landed before; only the continuation stops
+        assert all(r.saved for r in receipts)
+        assert "HEAD moved past this save's commit" in receipts[0].notice
+        assert decision_batch.pending(shared) is None
+        return
+    assert not any(r.saved for r in receipts)  # B stays local, unpushed, its batch interrupted
+    assert "HEAD moved past the commit whose push was refused" in receipts[0].notice
+    assert decision_batch.pending(shared) is not None
+    _no_authority(picking)

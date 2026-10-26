@@ -105,16 +105,14 @@ def proved(shared: DataRepo, head: str, until: float, cont: Continuation | None 
 def rebase(shared: DataRepo, until: float, guard: Callable[[], str] | None = None) -> str:
     """Rebase on the fetched remote unless both sides changed one decision file; why it did not, else nothing.
 
-    *guard*, a continuation's, runs after every probe and immediately before the rebase: what it refuses, nothing
-    is rebased.
+    *guard*, a continuation's, is handed to `DataRepo.rebase`, which runs it after the publication hold's probes and
+    immediately before Git starts the rebase: what it refuses, nothing is rebased.
     """
     if (sides := _diverged(shared, until)) is None:
         return "Git cannot compare the checkout with its remote"
     if both := sides[0] & sides[1]:
         return f"{', '.join(sorted(both))} changed here and on the remote; the owner resolves it"
-    if guard is not None and (why := guard()):
-        return why
-    return shared.rebase(until)
+    return shared.rebase(until, guard)
 
 
 def catch_up(shared: DataRepo, until: float, guard: Callable[[], str] | None = None) -> str:
@@ -427,8 +425,15 @@ def _rebase_push(
     rows, paths, rels, made, sent, goal = batch
     if refused := _not_rebased(shared, where, head, (sent, goal), until):
         return refused
-    if failed := shared.rebase(until):
-        return _bound(_rebase_failed(shared, where, failed, until), sent, goal)  # never aborted: HEAD must be *sent*
+    stopped: list[Sent] = []
+
+    def guard() -> str:  # the same check, again after the publication hold's probes, as Git is about to rebase
+        if again := _not_rebased(shared, where, head, (sent, goal), until):
+            stopped.append(again)
+        return again.notice if again else ""
+
+    if failed := shared.rebase(until, guard):  # never aborted: HEAD must still be *sent*
+        return stopped[0] if stopped else _bound(_rebase_failed(shared, where, failed, until), sent, goal)
     rebased, upstream = _rev(shared, "HEAD", until), _rev(shared, goal.tracking, until) if goal else None
     own = _ours(shared, upstream, rels, until) if made and upstream else ""
     if rebased is None or rebased not in {own or upstream, upstream}:  # upstream itself: nothing of ours left to send

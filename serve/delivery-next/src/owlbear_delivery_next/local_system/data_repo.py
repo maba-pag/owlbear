@@ -26,7 +26,7 @@ from owlbear_delivery_next.local_system import batch_journal, git_run, local_hom
 from owlbear_delivery_next.local_system.storage_io import atomic_write
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator, Sequence
+    from collections.abc import Callable, Iterator, Sequence
     from typing import Self
 
 CONFIG, CLAIM, MEMORY = "config.json", "repository", "memory"
@@ -361,11 +361,17 @@ class DataRepo:
         done = _git(self.root, "-c", "rebase.autoStash=false", "rebase", "-q", "@{upstream}", until=until)
         return self._settle(done, "git rebase failed", until)
 
-    def rebase(self, until: float | None = None) -> str:
-        """Rebase on the upstream as last fetched, without fetching. A failed rebase is never aborted. Why it failed."""
+    def rebase(self, until: float | None = None, guard: Callable[[], str] | None = None) -> str:
+        """Rebase on the upstream as last fetched, without fetching. A failed rebase is never aborted. Why it failed.
+
+        *guard*, an owned caller's final check, runs after the publication hold's own probes and immediately before
+        Git starts the rebase: what it refuses, nothing is rebased. Without one the hold alone decides, as before.
+        """
         until = time.monotonic() + SAVE_SECONDS if until is None else until
         if held := publication_hold.check(self, until, fetch=False):
             return held
+        if guard is not None and (why := guard()):
+            return why
         done = _git(self.root, "-c", "rebase.autoStash=false", "rebase", "-q", "@{upstream}", until=until)
         return self._settle(done, "git rebase failed", until)
 
