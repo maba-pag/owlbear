@@ -224,7 +224,8 @@ def _saved(store: Store, say: Callable[[str], object]) -> tuple[Profile | None, 
         return prev, reason is not None, "", ""
     if prev is not None or not digest:  # a readable shared profile with an unreadable clone file: open refuses it
         raise now
-    target = profile_share.config_digest(profile_share.path(store)) if store.shared else ""
+    # unshared: the shared profile is this same local file, so its target is the bytes just observed
+    target = profile_share.config_digest(profile_share.path(store)) if store.shared else digest
     say(f"The saved profile cannot be read ({reason or now}); detecting a new one.")
     say(
         "Confirming replacement discards the unreadable profile, including any unrecoverable legacy role "

@@ -4,6 +4,7 @@ import contextlib
 import json
 import os
 import subprocess
+import threading
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -24,7 +25,7 @@ from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.runtimes import readiness
 from owlbear_delivery_next.settings import config, profile
 from owlbear_delivery_next.settings.config import Layer, Prefs
-from owlbear_delivery_next.state_store import prefs_import, profile_repair, profile_share
+from owlbear_delivery_next.state_store import prefs_import, profile_repair, profile_share, roles_move
 from owlbear_delivery_next.state_store.store import RoleSourceError, Store, StoreError
 
 AUTH = {"authorization": "Bearer " + "t"}
@@ -933,6 +934,7 @@ def test_a_stale_repair_receipt_does_not_clear_a_newer_pending_receipt(repo: Pat
     first = profile_repair.stage(store, Profile(version=1, confirmed_at=NOW), digest, "absent")
     receipt = store.root / profile_repair.RECEIPT
     newer = profile_repair.Receipt(
+        format=1,
         id="b" * 32,
         scope=profile_repair.scope(store),
         source=digest,
@@ -995,6 +997,7 @@ def test_a_receipt_replaced_before_publication_refuses_the_older_one_before_any_
     first = stage_confirmed(store, version=1)
     receipt = store.root / profile_repair.RECEIPT
     newer = profile_repair.Receipt(
+        format=1,
         id="b" * 32,
         scope=profile_repair.scope(store),
         source=first.source,
@@ -1027,6 +1030,7 @@ def test_a_receipt_replaced_during_publication_is_not_retired(repo: Path, shared
     first = stage_confirmed(store, version=1)
     receipt = store.root / profile_repair.RECEIPT
     newer = profile_repair.Receipt(
+        format=1,
         id="c" * 32,
         scope=profile_repair.scope(store),
         source=first.source,
@@ -1083,6 +1087,174 @@ def test_an_unreadable_or_invalid_receipt_is_refused_by_name_before_any_change(
 
 
 # Finding 6: a legacy claim is won only by its own published nonce, never by an equal absent basis
+
+
+def other_logical_store(store: Store, tmp_path: Path, name: str) -> Store:
+    """A second logical shared repository (another origin, no network) on the same private root."""
+    other = tmp_path / name
+    subprocess.run(["git", "init", "-q", "-b", "main", str(other)], check=True)  # noqa: S603, S607
+    origin = f"https://github.com/acme/{name}.git"
+    subprocess.run(["git", "-C", str(other), "remote", "add", "origin", origin], check=True)  # noqa: S603, S607
+    return Store(store.root, DataRepo(other), store.name)
+
+
+def stage_in_thread(store: Store, digest: str) -> tuple[threading.Thread, dict[str, object]]:
+    """Stage a second confirmed replacement on another thread, keeping its outcome instead of raising it."""
+    outcome: dict[str, object] = {}
+
+    def run() -> None:
+        try:
+            outcome["receipt"] = profile_repair.stage(store, Profile(version=2, confirmed_at=NOW), digest, "absent")
+        except StoreError as exc:
+            outcome["error"] = exc
+
+    thread = threading.Thread(target=run, daemon=True)
+    thread.start()
+    return thread, outcome
+
+
+def test_a_second_logical_repair_waits_for_the_first_stage_on_the_same_private_root(
+    repo: Path, shared_repo, monkeypatch, tmp_path
+) -> None:
+    store = shared_project(repo, shared_repo, monkeypatch)
+    source = store.root / profile_share.PROFILE
+    source.write_text(BAD_EFFORT)
+    digest = profile_share.config_digest(source)
+    other = other_logical_store(store, tmp_path, "other-data")
+    real_atomic_write = profile_repair.atomic_write
+    seen: dict[str, object] = {}
+
+    def stage_second_while_first_writes(path: Path, text: str) -> None:
+        if "thread" not in seen:
+            thread, outcome = stage_in_thread(other, digest)
+            thread.join(0.5)
+            seen.update(thread=thread, outcome=outcome, blocked=thread.is_alive())
+        real_atomic_write(path, text)
+
+    monkeypatch.setattr(profile_repair, "atomic_write", stage_second_while_first_writes)
+    first = stage_confirmed(store, version=1)
+    thread = seen["thread"]
+    assert isinstance(thread, threading.Thread)
+    assert seen["blocked"] is True  # the second stage waits for the first receipt's lock
+    thread.join(5)
+    assert not thread.is_alive()
+    error = seen["outcome"]["error"]  # type: ignore[index]
+    assert isinstance(error, StoreError)
+    assert "already pending" in str(error)
+    pending_receipt = profile_repair.pending(store)
+    assert pending_receipt is not None
+    assert pending_receipt.id == first.id
+
+
+def test_a_second_logical_repair_waits_while_the_first_publication_finishes_on_the_same_private_root(
+    repo: Path, shared_repo, monkeypatch, tmp_path
+) -> None:
+    store = shared_project(repo, shared_repo, monkeypatch)
+    source = store.root / profile_share.PROFILE
+    source.write_text(BAD_EFFORT)
+    digest = profile_share.config_digest(source)
+    first = stage_confirmed(store, version=1)
+    other = other_logical_store(store, tmp_path, "other-data")
+    real_retire = roles_move.retire_source
+    seen: dict[str, object] = {}
+
+    def stage_second_while_first_finishes(retiring: Store) -> None:
+        thread, outcome = stage_in_thread(other, digest)
+        thread.join(0.5)
+        seen.update(thread=thread, outcome=outcome, blocked=thread.is_alive())
+        real_retire(retiring)
+
+    monkeypatch.setattr(roles_move, "retire_source", stage_second_while_first_finishes)
+    profile_repair.publish(store, first, resumed=False)
+    thread = seen["thread"]
+    assert isinstance(thread, threading.Thread)
+    assert seen["blocked"] is True  # the second stage waits for the first receipt's lock while it finishes
+    thread.join(5)
+    assert not thread.is_alive()
+    assert "error" not in seen["outcome"]  # type: ignore[operator]
+    second = seen["outcome"]["receipt"]  # type: ignore[index]
+    assert isinstance(second, profile_repair.Receipt)
+    assert second.id != first.id
+    assert profile_repair.pending(other) == second  # the second logical repository sees its own receipt
+    assert (store.root / profile_share.ROLES_MOVED).exists()
+
+
+def test_a_same_id_receipt_whose_profile_changed_is_refused_before_any_write(
+    repo: Path, shared_repo, monkeypatch, tmp_path
+) -> None:
+    _data, remote = shared_repo
+    store = shared_project(repo, shared_repo, monkeypatch)
+    source = store.root / profile_share.PROFILE
+    source.write_text(BAD_EFFORT)
+    first = stage_confirmed(store, version=1)
+    receipt = store.root / profile_repair.RECEIPT
+    receipt.write_text(first.model_copy(update={"profile": Profile(version=2, confirmed_at=NOW)}).model_dump_json())
+    before = receipt.read_bytes()
+    with pytest.raises(StoreError, match="replaced or removed"):
+        profile_repair.publish(store, first, resumed=False)
+    assert receipt.read_bytes() == before
+    assert not (store.root / profile_share.ROLES_MOVED).exists()
+    assert source.read_text() == BAD_EFFORT
+    _fresh, landed = clone_profile(remote, tmp_path)
+    assert landed is None
+
+
+def test_a_receipt_without_a_format_version_is_refused_before_any_publication(
+    repo: Path, shared_repo, monkeypatch, tmp_path
+) -> None:
+    _data, remote = shared_repo
+    store = shared_project(repo, shared_repo, monkeypatch)
+    source = store.root / profile_share.PROFILE
+    source.write_text(BAD_EFFORT)
+    stage_confirmed(store, version=1)
+    receipt = store.root / profile_repair.RECEIPT
+    payload = json.loads(receipt.read_text())
+    del payload["format"]
+    receipt.write_text(json.dumps(payload))
+    before = receipt.read_bytes()
+    with pytest.raises(StoreError) as caught:
+        profile_repair.pending(store)
+    assert str(receipt) in str(caught.value)
+    assert receipt.read_bytes() == before
+    _fresh, landed = clone_profile(remote, tmp_path)
+    assert landed is None
+
+
+@pytest.mark.parametrize("failing", ["fstat", "read"])
+def test_a_receipt_read_failure_closes_its_descriptor_once_and_names_the_receipt(
+    repo: Path, shared_repo, monkeypatch, failing: str
+) -> None:
+    store = shared_project(repo, shared_repo, monkeypatch)
+    source = store.root / profile_share.PROFILE
+    source.write_text(BAD_EFFORT)
+    stage_confirmed(store, version=1)
+    receipt = store.root / profile_repair.RECEIPT
+    opened: list[int] = []
+    closed: list[int] = []
+    real_open, real_close = os.open, os.close
+
+    def spy_open(path: object, *args: object, **kwargs: object) -> int:
+        fd = real_open(path, *args, **kwargs)  # type: ignore[arg-type]
+        if os.fspath(path) == str(receipt):  # type: ignore[arg-type]
+            opened.append(fd)
+        return fd
+
+    def spy_close(fd: int) -> None:
+        closed.append(fd)
+        real_close(fd)
+
+    def fault(*_args: object) -> object:
+        msg = "disk fault"
+        raise OSError(msg)
+
+    monkeypatch.setattr(os, "open", spy_open)
+    monkeypatch.setattr(os, "close", spy_close)
+    monkeypatch.setattr(os, failing, fault)
+    with pytest.raises(StoreError) as caught:
+        profile_repair._read(store)  # noqa: SLF001 - the descriptor lifetime is the probe's subject
+    assert str(receipt) in str(caught.value)
+    assert len(opened) == 1
+    assert closed.count(opened[0]) == 1
 
 
 def clone_as(remote: Path, tmp_path: Path, name: str, project: str = "shop-site") -> tuple[Store, Profile]:
