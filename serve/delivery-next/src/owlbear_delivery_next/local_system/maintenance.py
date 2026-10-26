@@ -180,41 +180,6 @@ class Maintenance:
             self._save(ledger)
         return lease.id
 
-    def adopt(  # noqa: PLR0913 - one import record's fields, all needed to write its lease
-        self, source: str, project: str, kind: Kind, pids: processes.Pids, *, interrupted: bool, workspace: str = ""
-    ) -> str:
-        """Import pre-ledger ownership once; no legacy record can prove complete process coverage.
-
-        Returns the slot of the lease it created, or empty when it created none.
-        """
-        with self._locked() as ledger:
-            if source in ledger.imported:
-                return ""
-            slot = ""
-            if pids or interrupted:
-                ident = uuid.uuid4().hex
-                slot = f"pack:legacy-{ident}"
-                lease = Lease(
-                    id=ident,
-                    project=project,
-                    slot=slot,
-                    kind=kind,
-                    workspace=workspace,
-                    started_at=datetime.now(UTC),
-                    boot=self.boot(),
-                    owner_pid=os.getpid(),
-                    owner_created=processes.started(os.getpid()),
-                    pids=dict(pids),
-                    state="held",
-                    reason="legacy maintenance stopped without complete termination proof",
-                )
-                ledger.sessions.append(lease)
-                ledger.imported.append(f"{source}:slot:{slot}")  # the lease and its slot are written together
-                self.slots.restore_one(lease.project, lease.slot, 1)
-            ledger.imported.append(source)
-            self._save(ledger)
-            return slot
-
     def receipted(self, key: str, digest: str) -> str:
         """The generation an older host gave the record version *digest*, when it rewrote that record; else empty."""
         prefix = f"{key}:receipt:{digest}:"
@@ -229,31 +194,17 @@ class Maintenance:
                 ledger.imported.append(mark)
                 self._save(ledger)
 
-    def imported_slot(self, source: str) -> str:
-        """The slot of the lease that *source*'s import created, so a restart still finds it; empty when none."""
-        prefix = f"{source}:slot:"
-        with self._locked() as ledger:
-            return next((s[len(prefix) :] for s in ledger.imported if s.startswith(prefix)), "")
+    def records(self, project: str, kind: Kind, slot: str, pids: dict[int, float | None]) -> bool:
+        """Whether the lease *slot* names, in any state, records every one of *pids*.
 
-    def recording(self, project: str, kind: Kind, pids: dict[int, float | None], hint: str) -> str:
-        """The slot of the lease that records every one of *pids*: *hint* when it is one, else the newest.
-
-        Empty when none does. A lease that records other processes never matches, so a stale hint or import mark
-        cannot name it. A settled lease matches only as *hint*: a later process with the same PID and an unknown birth
-        is not evidence that it is the settled run's process.
+        Only the named lease is judged, never one found by PID: a reused PID with an unknown birth is no evidence
+        that another lease's process is the one on file.
         """
         with self._locked() as ledger:
-            found = [
-                s
+            return any(
+                s.project == project and s.kind == kind and s.slot == slot and recorded(s, pids, self.boot())
                 for s in ledger.sessions
-                if s.project == project
-                and s.kind == kind
-                and (s.state in HELD or s.slot == hint)
-                and recorded(s, pids, self.boot())
-            ]
-        if not found:
-            return ""
-        return next((s.slot for s in found if s.slot == hint), max(found, key=lambda s: s.started_at).slot)
+            )
 
     def adopt_uncertain(  # noqa: PLR0913 - one import's identity, all needed to decide its generation
         self,
@@ -267,6 +218,7 @@ class Maintenance:
         covers: Callable[[Lease], bool] | None = None,
         pids: processes.Pids | None = None,
         keyed: bool = False,
+        marks: tuple[str, ...] = (),
     ) -> Lease:
         """Import an older host's uncertain work once per proven generation.
 
@@ -274,7 +226,8 @@ class Maintenance:
         one (empty *generation*) is covered only by a held lease, so a later unknown run gets its own hold. *covers*
         replaces that rule for a caller that keys its own history. *pids* are the processes a new lease records.
         A *keyed* import also marks *source* with the lease it created, in the same save, so a retry finds that very
-        lease again instead of matching by window.
+        lease again instead of matching by window. Each of *marks* is another source a new lease accounts for, marked
+        in that same save, so its keyed import finds this lease after a lost write.
         """
 
         def same(s: Lease) -> bool:
@@ -313,8 +266,7 @@ class Maintenance:
             ledger.sessions.append(lease)
             if source not in ledger.imported:
                 ledger.imported.append(source)
-            if keyed:
-                ledger.imported.append(f"{source}:slot:{lease.slot}")
+            ledger.imported.extend(f"{s}:slot:{lease.slot}" for s in ((source,) if keyed else ()) + marks)
             self._save(ledger)
         self.slots.restore_one(lease.project, lease.slot, 1)
         return lease
@@ -334,6 +286,12 @@ class Maintenance:
         self.sweep()
         with self._locked() as ledger:
             return any(s.state in HELD and (kind is None or s.kind == kind) for s in ledger.sessions)
+
+    def holding(self, kind: Kind) -> list[str]:
+        """The projects whose sessions in *kind* are active or not confirmed ended, whether or not they are loaded."""
+        self.sweep()
+        with self._locked() as ledger:
+            return sorted({s.project for s in ledger.sessions if s.state in HELD and s.kind == kind})
 
     @staticmethod
     def _record(lease: Lease, found: processes.Pids) -> None:

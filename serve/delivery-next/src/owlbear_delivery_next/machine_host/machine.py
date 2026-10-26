@@ -34,6 +34,7 @@ if TYPE_CHECKING:
 RETRY = 60.0  # seconds between loads of a project that failed to load
 IDLE = 2.0  # seconds between looks whether a stop when idle may stop OwlBear
 CURATE_EVERY = 60.0  # seconds between looks whether idle time may curate memory (item 5 slice 4)
+UNPROVEN_PACK = "a design pack session not confirmed ended; the Maintenance page shows it"
 
 
 class MachineError(Exception):
@@ -273,8 +274,9 @@ class Machine:
                 p.host.wake.set()
 
     def _unproven_packs(self) -> list[str]:
-        """An unconfirmed pack run holds its lease at machine scope, even when its project is unloaded or failed."""
-        return ["pack: an unconfirmed run still holds its lease"] if self.maintenance.pending("pack") else []
+        """Each project whose pack session the ledger holds, loaded or not: its job is idle once the SDK returns."""
+        names = {pid: p.name for pid, p in list(self.projects.items())}
+        return [f"{names.get(key, key)}: {UNPROVEN_PACK}" for key in self.maintenance.holding("pack")]
 
     def left(self) -> list[str]:
         """What a stop when idle still waits for: each project's running steps, environments and admitted work."""

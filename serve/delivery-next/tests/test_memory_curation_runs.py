@@ -550,7 +550,7 @@ def older_unknown_run(job: curation.Curation, started: datetime) -> None:
 @pytest.mark.parametrize("ledger", ["empty", "imported"])
 def test_an_older_hosts_unknown_curation_run_holds_one_slot_at_restart_and_its_start_never_runs(root, ledger) -> None:
     first = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root))
-    first.maintenance.path.unlink()  # a pre-ledger installation
+    first.maintenance.path.unlink(missing_ok=True)  # a pre-ledger installation
     if ledger == "imported":  # the old source was imported already, by an earlier adoption of the same file
         first.maintenance._save(maintenance.Ledger(imported=[str(first.path())]))  # noqa: SLF001
     older_unknown_run(first, datetime.now(UTC))
@@ -568,7 +568,7 @@ def test_an_older_hosts_unknown_curation_run_holds_one_slot_at_restart_and_its_s
 
 def test_a_recovered_older_unknown_curation_run_stays_released_across_repeated_restarts(root) -> None:
     first = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root))
-    first.maintenance.path.unlink()
+    first.maintenance.path.unlink(missing_ok=True)
     older_unknown_run(first, datetime.now(UTC))
     adopted = curation.Curation(Slots(lambda: 1, closed=True), shared=lambda: DataRepo(root))
     [session] = adopted.maintenance.read()["sessions"]
@@ -1041,7 +1041,7 @@ def test_a_keyless_snapshot_is_released_only_by_its_own_recovery_across_a_restar
 def test_a_retry_after_a_failed_write_of_an_adopted_unknown_row_reuses_its_one_lease(root) -> None:
     """The lease is created after the row ended, so the retry must find it by the row's own mark, not its window."""
     first = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root))
-    first.maintenance.path.unlink()
+    first.maintenance.path.unlink(missing_ok=True)
     older_unknown_run(first, datetime.now(UTC) - timedelta(minutes=5))
 
     def fail(*_args: object) -> None:
@@ -1061,7 +1061,7 @@ def test_a_retry_after_a_failed_write_of_an_adopted_unknown_row_reuses_its_one_l
 
 def test_a_recovered_row_lease_is_not_duplicated_by_a_restart_and_a_new_row_holds_again(root) -> None:
     first = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root))
-    first.maintenance.path.unlink()
+    first.maintenance.path.unlink(missing_ok=True)
     older_unknown_run(first, datetime.now(UTC) - timedelta(minutes=5))
     adopted = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root))
     [session] = adopted.maintenance.read()["sessions"]
@@ -1073,3 +1073,138 @@ def test_a_recovered_row_lease_is_not_duplicated_by_a_restart_and_a_new_row_hold
     older_unknown_run(again, datetime.now(UTC) - timedelta(minutes=1))
     newer = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root))
     assert (newer.maintenance.pending("curation"), len(newer.maintenance.read()["sessions"])) == (True, 2)
+
+
+def main_session_row(started: datetime, pids: dict[int, float | None], *, running: bool = False) -> None:
+    """What main's producer leaves after a session: it cannot read a keyed record, so it writes its own afresh.
+
+    The row is the generic-exception failure ``_work`` writes, or the running row of a host stopped mid-run; ``left``
+    holds the PIDs its journal kept, their births unknown. It knows no lease key.
+    """
+    row = {
+        "state": "running" if running else "failed",
+        "started_at": started.isoformat(),
+        "ended_at": None if running else (started + timedelta(seconds=30)).isoformat(),
+        "summary": "",
+        "reason": "" if running else "RuntimeError: synthetic SDK failure",
+        "entries": [],
+        "skipped": {},
+        "seen": {},
+    }
+    path = local_home.root() / curation.STATE
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"folders": {"shop": row}, "left": {str(p): b for p, b in pids.items()}}))
+
+
+def ledger_on_disk() -> dict:
+    return json.loads((local_home.root() / maintenance.FILE).read_text())
+
+
+def never_runs(calls: list[str]):
+    def run(cfg) -> Run:
+        calls.append(cfg.session_id)
+        return pytest.fail("no SDK session starts")
+
+    return run
+
+
+def lost_write(*_args: object) -> None:
+    msg = "synthetic runs write failure"
+    raise OSError(msg)
+
+
+@pytest.mark.parametrize("a_state", ["recovered", "held"])
+def test_a_later_main_failure_row_reusing_an_imported_runs_pid_is_its_own_hold_and_starts_nothing(
+    root, a_state
+) -> None:
+    """Review 4373338504: A's one-time import never names B, a later keyless row's snapshot of the same PID.
+
+    B's row has its own times, so it is another producer observation: B is held under its own lease and key before
+    lingering() could clear it, recovering A never releases it, and only B's own recovery does.
+    """
+    t0 = datetime.now(UTC) - timedelta(hours=2)
+    main_session_row(t0, {4242: None})
+    first = curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root))  # imports A
+    [a] = ledger_on_disk()["sessions"]
+    if a_state == "recovered":
+        recovered_by_reboot(first)
+        assert (first.working(), first.load().left) == ([], {})  # A's snapshot is cleared as history
+    main_session_row(t0 + timedelta(hours=1), {4242: None})  # B: main ran again; the PID is reused, birth unknown
+    calls: list[str] = []
+    rebuilt = curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root), run=never_runs(calls))
+    sessions = {s["slot"]: s for s in ledger_on_disk()["sessions"]}
+    b = rebuilt.left_key
+    assert (len(sessions), b != a["slot"], sessions[b]["state"], sessions[a["slot"]]["state"]) == (
+        2, True, "held", a_state,
+    )  # fmt: skip
+    assert (rebuilt.load().left_key, rebuilt.left) == (b, {4242: None})
+    if a_state == "held":
+        rebooted(rebuilt)
+        rebuilt.maintenance.recover(a["id"], rebooted=True)  # the owner recovers A only
+    assert rebuilt.working() == [curation.LINGERING]
+    rebuilt.start("shop")
+    drained(rebuilt)
+    assert (calls, rebuilt.load().folders["shop"].reason, rebuilt.load().left) == ([], curation.LEFT, {4242: None})
+    restarted = curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root), run=never_runs(calls))
+    assert (len(ledger_on_disk()["sessions"]), restarted.left_key, restarted.maintenance.pending("curation")) == (
+        2, b, True,
+    )  # fmt: skip
+    rebooted(restarted)
+    restarted.maintenance.recover(sessions[b]["id"], rebooted=True)
+    assert (restarted.working(), restarted.load().left, calls) == ([], {}, [])
+
+
+def test_an_unchanged_main_snapshot_keeps_its_one_lease_across_a_lost_write_and_after_its_recovery(root) -> None:
+    """Control: main's running row and PIDs, read again after a lost write or once recovered, are one generation."""
+    t0 = datetime.now(UTC) - timedelta(hours=1)
+    main_session_row(t0, {4242: None}, running=True)  # main stopped mid-run
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(curation.Curation, "_write", lost_write)
+        with pytest.raises(OSError, match="synthetic runs write failure"):
+            curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root))
+    [lease] = ledger_on_disk()["sessions"]  # durable before the runs record could be written
+    retry = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root))
+    assert ([s["id"] for s in ledger_on_disk()["sessions"]], retry.left_key) == ([lease["id"]], lease["slot"])
+    assert retry.load().folders["shop"].key == lease["slot"]  # the running row is that same generation
+    recovered_by_reboot(retry)
+    main_session_row(t0, {4242: None}, running=True)  # the identical observation, written again without our keys
+    again = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root))
+    assert (again.maintenance.pending("curation"), len(ledger_on_disk()["sessions"]), again.left_key) == (
+        False, 1, lease["slot"],
+    )  # fmt: skip
+    assert (again.load().folders["shop"].key, again.working(), again.load().left) == (lease["slot"], [], {})
+
+
+def test_an_adopted_unknown_row_keeps_its_one_lease_through_a_lost_key_write_its_recovery_and_a_restart(root) -> None:
+    """Review 4373338555: the row's lease and its association are one save, so the lost key write is repaired.
+
+    The lease begins after the row ended, so no window could find it again; a later row with its own start is held anew.
+    """
+    first = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root))
+    first.maintenance.path.unlink(missing_ok=True)
+    started = datetime.now(UTC) - timedelta(minutes=5)
+    older_unknown_run(first, started)
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(curation.Curation, "_write", lost_write)
+        with pytest.raises(OSError, match="synthetic runs write failure"):
+            curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root))
+    on_disk = ledger_on_disk()
+    [b] = on_disk["sessions"]
+    assert (b["state"], [m for m in on_disk["imported"] if m.endswith(f":slot:{b['slot']}")] != []) == ("held", True)
+    assert first.load().folders["shop"].key == ""  # the key write was lost
+    retry = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root))
+    assert ([s["id"] for s in ledger_on_disk()["sessions"]], retry.load().folders["shop"].key) == ([b["id"]], b["slot"])
+    rebooted(retry)
+    retry.maintenance.recover(b["id"], rebooted=True)
+    older_unknown_run(retry, started)  # the same row, its key lost again before any clearing
+    again = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root))
+    sessions = [s["id"] for s in ledger_on_disk()["sessions"]]
+    assert (again.maintenance.pending("curation"), sessions) == (False, [b["id"]])
+    assert again.load().folders["shop"].key == b["slot"]
+    older_unknown_run(again, started + timedelta(minutes=2))  # a later unknown run
+    calls: list[str] = []
+    later = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root), run=never_runs(calls))
+    assert (later.maintenance.pending("curation"), len(ledger_on_disk()["sessions"])) == (True, 2)
+    later.start("shop")
+    drained(later)
+    assert calls == []
