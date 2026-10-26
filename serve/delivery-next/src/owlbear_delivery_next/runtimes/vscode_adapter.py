@@ -27,7 +27,16 @@ from typing import TYPE_CHECKING, Any
 from owlbear_delivery_next.change_contracts import permissions
 from owlbear_delivery_next.local_system.mask import redact
 from owlbear_delivery_next.local_system.processes import Termination
-from owlbear_delivery_next.runtimes import ahp, host_record, leftovers, readiness, step_input, subagents
+from owlbear_delivery_next.runtimes import (
+    ahp,
+    chatlogs,
+    host_record,
+    leftovers,
+    lessons,
+    readiness,
+    step_input,
+    subagents,
+)
 from owlbear_delivery_next.runtimes import window_files as wf
 from owlbear_delivery_next.runtimes.results import Gate
 from owlbear_delivery_next.runtimes.sdk_adapter import DEADLINES, role_of
@@ -131,6 +140,7 @@ class _Driver:
         self.gate = Gate(cfg, run, self.log, _grace(self.control))
         self.stepper: Step | None = None
         self.inbox = Path()
+        self.exposure: lessons.Exposure | None = None  # what its first prompt says from memory
 
     def log(self, **event: Any) -> None:  # noqa: ANN401 - JSON values
         self.cfg.journal.event({"at": datetime.now(UTC).isoformat(timespec="seconds"), **event})
@@ -184,6 +194,8 @@ class _Driver:
 
     def drive(self, conn: ahp.Transport) -> Outcome:
         cfg, reminder = self.cfg, self.env.reminder
+        first = cfg.fresh if cfg.resume and cfg.fresh else cfg.message
+        prompt, self.exposure = lessons.opening(self.role, cfg.memory, first, self.log)  # every window chat is new
         hooks = Hooks(
             launch=self.env.launch,
             clock=self.env.clock,
@@ -195,7 +207,7 @@ class _Driver:
             agent=cfg.worktree / wf.agent_path(self.role),
             model=cfg.model or "",
             effort=cfg.effort or "",
-            prompt=cfg.fresh if cfg.resume and cfg.fresh else cfg.message,
+            prompt=prompt,
             config=CONFIG if cfg.policy.write else READ_ONLY,
             context=cfg.context,
             reminder=step_input.reminder(self.role, judging=cfg.judging) if reminder is None else reminder,
@@ -331,16 +343,36 @@ def _termination(out: Outcome, scanned: Termination, *, started: bool) -> Termin
 def run(cfg: Session, inbox: Path, env: Env | None = None) -> Run:
     """Run the session in a VS Code window; ``inbox`` is this step's own path outside the worktree."""
     env, result, since = env or Env(), Run(cfg.session_id, runtime="window"), datetime.now(UTC)
-    driver = _Driver(cfg, env, result)
-    out = driver.step(inbox)
-    started = driver.control.started.is_set()
-    if started:
-        cfg.journal.delivered()
-        _recorded(driver, out, inbox, env.record(cfg.worktree, since, wf.agent_name(driver.role)))
-    result.usage = _usage(out, cfg.model)
-    _proven(result, out, cfg.model)
-    result.termination = _termination(out, env.settle(cfg.worktree, since), started=started)
+    driver, record = _Driver(cfg, env, result), None
+    chatlogs.note({"event": "started", "session": cfg.session_id, **chatlogs.owner(cfg.kind.value, cfg.role, cfg.job,
+                                                                                   cfg.worktree)})  # fmt: skip
+    try:
+        out = driver.step(inbox)
+        started = driver.control.started.is_set()
+        if started:
+            lessons.shown(driver.exposure, cfg.session_id, driver.log, confirmed=False)  # dispatched, not acknowledged
+            cfg.journal.delivered()
+            record = env.record(cfg.worktree, since, wf.agent_name(driver.role))
+            _recorded(driver, out, inbox, record)
+        result.usage = _usage(out, cfg.model)
+        _proven(result, out, cfg.model)
+        result.termination = _termination(out, env.settle(cfg.worktree, since), started=started)
+    except BaseException:  # every ending path gets its line (design §5); no capture while interrupted
+        chatlogs.note({"event": "ended", "session": cfg.session_id, "ending": "interrupted", "provisional": True})
+        raise
+    _kept(cfg.session_id, record, result)
     return result
+
+
+def _kept(session: str, record: host_record.Record | None, result: Run) -> None:
+    """The step's Retro chatlog (design §5): the host's own record, mapped to the step's session, else why not."""
+    if record is None or not record.found:
+        why = record.why if record else "the window did not start"
+        chatlogs.note({"event": "ended", "session": session, "ending": result.ending, "record": "", "why": why})
+        return
+    chatlogs.note({"event": "mapped", "session": session, "record": record.session})
+    confirmed = result.termination is not None and result.termination.confirmed
+    chatlogs.kept(record.session, result.ending, provisional=not confirmed)
 
 
 def open_chat(folder: Path, role: Effective, prompt: str, env: Env | None = None) -> tuple[Outcome, str]:

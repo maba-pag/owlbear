@@ -17,20 +17,21 @@ from owlbear_delivery_next.change_contracts.decision_records import (
     Pick,
     Published,
 )
+from owlbear_delivery_next.change_contracts.held_records import HeldRecord, PendingChild
 from owlbear_delivery_next.change_contracts.merge_records import Episode, Pullback, QueueClaim
 from owlbear_delivery_next.change_contracts.round_records import RoundLoop
 from owlbear_delivery_next.change_contracts.spend import Spend
 from owlbear_delivery_next.change_contracts.tool_use import ToolUse
 from owlbear_delivery_next.change_contracts.visual_records import OwnerCriterion, VisualResult, VisualRound
 
-FORMAT = 7
+FORMAT = 8
 DETAIL = 60000  # one review batch: up to 20 new and 20 owner-decided findings of about 1,300 characters
 
 type Actor = Literal["you", "admin", "delivery", "github"]
 type Channel = Literal["status-view", "chat"]
 type Role = Literal[
     "planner", "builder", "reviewer", "challenger", "design-judge", "preparer", "shaper", "updater", "test-reviewer",
-    "test-curator", "picker", "curator", "watcher",
+    "test-curator", "picker", "curator", "spotter", "retro", "retro-review",
 ]  # fmt: skip
 type Effort = Literal["low", "medium", "high", "xhigh", "max"]
 type Context = Literal["default", "long"]  # the model's default context tier, or its long-context tier
@@ -459,6 +460,11 @@ class Change(Record):
     reviews: list[Review] = Field(default_factory=list)
     step: Step = Field(default_factory=lambda: Step(kind=StepKind.SHAPE))
     outcome: Outcome | None = None
+    accepted_holds: list[str] = Field(default_factory=list)  # held results recorded with this Change's result (RUN-04)
+    counted_holds: list[str] = Field(default_factory=list)  # held results whose usage and tool calls the Change counts
+    held_fallback: HeldRecord | None = None  # a held result the held file could not keep, with its gate (RUN-04)
+    pending_child: PendingChild | None = None  # a paid challenge of a durable parent step, until it settles (RUN-04)
+    counted_children: list[str] = Field(default_factory=list)  # paid child sessions counted with their settlement
     budgets: Budgets = Field(default_factory=Budgets)
     consent: MergeConsent | None = None
     queue: QueueClaim | None = None  # TD-226: Delivery's open enqueue attempt

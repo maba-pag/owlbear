@@ -32,9 +32,11 @@ def no_base(monkeypatch):
 @pytest.mark.usefixtures("no_base")
 def test_a_setting_no_layer_sets_is_unset_and_listed_never_filled_from_code():
     empty = resolve(None, Layer())
-    assert (empty.agents, empty.sessions, empty.watcher, empty.final_review) == ({}, None, None, None)
-    assert {"agents.builder.model", "agents.watcher.effort", "sessions", "watcher"} <= set(empty.missing)
-    inactive = {"runtimes.sdk", "visible", "agents.builder.runtime", "agents.watcher.minutes"}
+    assert (empty.agents, empty.sessions, empty.spotter.mode, empty.final_review) == ({}, None, None, None)
+    assert {"agents.builder.model", "agents.spotter.effort", "sessions", "spotter.mode"} <= set(empty.missing)
+    assert {"agents.retro.model", "agents.retro-review.minutes", "spotter.looks"} <= set(empty.missing)
+    inactive = {"runtimes.sdk", "visible", "agents.builder.runtime", "agents.spotter.minutes", "spotter.sample_rate"}
+    inactive |= {"spotter.verbose_until"}
     inactive |= {"agents.picker.max_rounds"}
     assert not inactive & set(empty.missing)  # nothing reads them, and the page edits none of them
     assert empty.page()["agents"]["builder"]["model"] is None
@@ -98,7 +100,7 @@ def test_todays_built_in_values_are_carried_into_global_once_keeping_what_it_set
         "medium",
         [1440],
     )
-    assert (glob.agents["watcher"].model, glob.sessions, glob.pr_marker, glob.curator_threshold) == (
+    assert (glob.agents["spotter"].model, glob.sessions, glob.pr_marker, glob.curator_threshold) == (
         "gpt-6-luna", 2, True, 95)  # fmt: skip
     assert json.loads(shared.global_path.read_text())["format"] == config.CONFIG_FORMAT >= config.CARRIED_FORMAT
     assert _git(shared.root, "log", "-1", "--format=%s") == "settings: today's built-in values carried into Global"
@@ -112,29 +114,32 @@ def test_todays_built_in_values_are_carried_into_global_once_keeping_what_it_set
 def test_a_carried_global_resolves_every_setting(shared_repo):
     shared = DataRepo(shared_repo[0])
     settings_carry.carry(shared)  # no Global file yet: today's values in full
-    assert resolve(read_layer(shared.global_path, GlobalLayer), Layer()).missing == []
+    later = {f"spotter.{k}" for k in ("steer_share", "intervention_cap", "verbose", "looks")}  # added after the carry
+    later |= {f"agents.{r}.{f}" for r in ("retro", "retro-review") for f in ("model", "effort", "context", "minutes",
+                                                                             "subagents")}  # fmt: skip
+    assert set(resolve(read_layer(shared.global_path, GlobalLayer), Layer()).missing) == later
 
 
 @pytest.mark.usefixtures("no_base")
 def test_a_role_needs_only_the_fields_its_work_reads():
     fields = ("model", "effort", "context")
-    watcher = carried.layer().agents["watcher"].model_dump(include=set(fields))
+    spotter = carried.layer().agents["spotter"].model_dump(include=set(fields))
     shaper = carried.layer().agents["shaper"].model_dump(include={*fields, *config.RoundPolicy.model_fields})
-    agents = {"watcher": config.Agent.model_validate(watcher), "shaper": config.Agent.model_validate(shaper)}
+    agents = {"spotter": config.Agent.model_validate(spotter), "shaper": config.Agent.model_validate(shaper)}
     some = resolve(GlobalLayer(agents=agents), Layer())
-    assert (some.agent("watcher").model, some.agent("watcher").minutes) == (carried.MODELS["watcher"].model, None)
+    assert (some.agent("spotter").model, some.agent("spotter").minutes) == (carried.MODELS["spotter"].model, None)
     assert some.agent("shaper").max_rounds is not None
-    assert not [k for k in some.missing if k.startswith(("agents.watcher.", "agents.shaper."))]
+    assert not [k for k in some.missing if k.startswith(("agents.spotter.", "agents.shaper."))]
     picker = carried.layer().agents["picker"].model_dump(include=set(fields))
     with pytest.raises(SettingsUnset, match=r"agents\.picker\.minutes"):  # a picker session has a time limit
         resolve(GlobalLayer(agents={"picker": config.Agent.model_validate(picker)}), Layer()).agent("picker")
     assert set(config.used("builder")) == set(config.Effective.model_fields) - {"runtime", "visible", "categories"}
 
 
-def test_the_decision_gate_asking_for_an_unset_setting_asks_the_owner(monkeypatch):
+def test_the_decision_gate_asking_for_an_unset_setting_asks_the_owner(monkeypatch, tmp_path):
     asked: list[SettingsUnset] = []
     c = change(StepKind.BUILD)
-    store = SimpleNamespace(settings=lambda: None)
+    store = SimpleNamespace(root=tmp_path, read=lambda _slug: c, settings=lambda: None)
     monkeypatch.setattr(decision_publication, "resume", lambda *_a: c)
     monkeypatch.setattr(runner.clarification, "checked", lambda _s, _l, c: c)
     monkeypatch.setattr(unset_settings, "asked", lambda _s, _l, exc: asked.append(exc))
@@ -242,14 +247,20 @@ def test_the_page_shows_final_review_values_set_while_others_are_unset():
 
 
 @pytest.mark.usefixtures("no_base")
-def test_an_unset_watcher_switch_asks_before_a_step_records_anything(monkeypatch, tmp_path):
-    no_switch = resolve(carried.layer().model_copy(update={"watcher": None}), Layer())
+def test_an_unset_spotter_mode_asks_before_a_step_records_anything(monkeypatch, tmp_path):
+    no_switch = resolve(carried.layer().model_copy(update={"spotter": None}), Layer())
     recorded: list[object] = []
     monkeypatch.setattr(runner.worktree, "ensure", lambda *_a: tmp_path)
     monkeypatch.setattr(runner, "git_common_dir", lambda _repo: tmp_path / ".git")
     monkeypatch.setattr(runner.review, "started", lambda *a: recorded.append(a))
-    store = SimpleNamespace(read_profile=lambda: None, settings=lambda: no_switch, write=lambda *a: recorded.append(a))
+    store = SimpleNamespace(
+        root=tmp_path,
+        read=lambda _slug: c,
+        read_profile=lambda: None,
+        settings=lambda: no_switch,
+        write=lambda *a: recorded.append(a),
+    )
     c = change(StepKind.BUILD)
-    with pytest.raises(SettingsUnset, match="watcher"):
+    with pytest.raises(SettingsUnset, match=r"spotter\.mode"):
         runner._agent(store, SimpleNamespace(slug="c1"), c, tmp_path)  # noqa: SLF001
     assert (recorded, c.plan.tasks[0].spans) == ([], [])  # no open span left behind

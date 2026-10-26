@@ -6,6 +6,9 @@ govern the answer; the reply lists each whole. Decisions that do not load, or an
 ``{"failed": reason}``, never an empty answer. A lookup answers and attaches nothing: the Change's pinned set changes
 only at a step boundary. A worker's lookup counts its spend on the Change like a pick, once its step has settled;
 a lead chat's has no Change. A step runs one lookup at a time and a host one lead chat's (TD-336).
+
+Any scoped in-force rule that is conflicted or semantically invalid fails the whole lookup, with unresolved ids
+and reasons and no governing answer, before a picker runs. Valid rules beside it do not make a partial success.
 """
 
 from __future__ import annotations
@@ -21,17 +24,20 @@ from typing import TYPE_CHECKING, Any
 from owlbear_decisions import Decision, Scope, State, new_id
 from owlbear_delivery_next.change_contracts import pick_tools
 from owlbear_delivery_next.change_contracts.decision_records import Pick
+from owlbear_delivery_next.change_contracts.decision_wording import problem
 from owlbear_delivery_next.local_system import local_home, processes
 from owlbear_delivery_next.runtimes import loop_owner, sdk_adapter
 from owlbear_delivery_next.settings import roles
 from owlbear_delivery_next.settings.config import GlobalLayer, Layer, MachineLayer, resolve
 from owlbear_delivery_next.state_store import decision_store
+from owlbear_delivery_next.state_store.decision_archive import whole
 from owlbear_delivery_next.state_store.store import MACHINE_SETTINGS, StoreError, read_layer
 from owlbear_delivery_next.workflow_steps import decisions_gate, pick, sessions
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from owlbear_decisions import Snapshot
     from owlbear_delivery_next.change_contracts import tools
     from owlbear_delivery_next.change_contracts.models import Change
     from owlbear_delivery_next.local_system.data_repo import DataRepo
@@ -48,6 +54,9 @@ ASKED = (
 )
 NO_SHARED = "no shared data repository is set up, so no decision could be read"
 NONE = "no decision is in force"
+UNRESOLVED = (
+    "the scoped decision authority is conflicted or invalid; resolve the listed rules before relying on a lookup"
+)
 ENDED = "the step has ended"
 BUSY = "another lookup is running; try again"
 LEFT = "a previous lookup's processes are not confirmed gone"
@@ -60,9 +69,11 @@ def worker(store: Store, lock: Lock, c: Change, question: str) -> tuple[dict[str
         return {"failed": NO_SHARED}, None
     try:
         view = decision_store.load(store.shared, store.name)
-        log, settings = pick.corrections(view.snapshot.root, store.name), store.settings()
         found = decisions_gate.in_force(view.snapshot, c)
+        if blocked := _unresolved(view.snapshot, found):
+            return blocked, None
         found += _own(c, store.name, found)
+        log, settings = pick.corrections(view.snapshot.root, store.name), store.settings()
     except (StoreError, OSError, ValueError) as exc:
         return {"failed": _one(str(exc))}, None
     if not found:
@@ -116,13 +127,15 @@ def chat(
         return {"failed": NO_SHARED}, None
     try:
         view = decision_store.load(shared, project)
+        found = [
+            e.decision for e in view.snapshot.entries
+            if e.decision.state is State.IN_FORCE and e.decision.scope is not Scope.CHANGE
+        ]  # fmt: skip
+        if blocked := _unresolved(view.snapshot, found):
+            return blocked, None
         log, resolved = pick.corrections(view.snapshot.root, project), settings() if settings else machine(shared)
     except (StoreError, OSError, ValueError) as exc:
         return {"failed": _one(str(exc))}, None
-    found = [
-        e.decision for e in view.snapshot.entries
-        if e.decision.state is State.IN_FORCE and e.decision.scope is not Scope.CHANGE
-    ]  # fmt: skip
     if not found:
         return {"decisions": [], "note": NONE}, None
     try:
@@ -170,6 +183,27 @@ def machine(shared: DataRepo) -> Settings:
     return resolve(glob, Layer(), read_layer(local_home.root() / MACHINE_SETTINGS, MachineLayer))
 
 
+def _unresolved(seen: Snapshot, found: list[Decision]) -> dict[str, Any] | None:
+    """An unresolved scoped rule fails the whole lookup, even beside otherwise valid authority."""
+    held = []
+    for d in found:
+        reasons = ["flagged conflict"] if d.conflict else []
+        reasons += [f"{f.rule}: {f.message}" for f in seen.findings_for(d.id)]
+        if why := problem(d):
+            reasons.append(why)
+        if seen.active(d.id) and not reasons:
+            continue
+        held.append(
+            {
+                "id": d.id,
+                "title": d.title,
+                "scope": str(d.scope),
+                "reason": "; ".join(reasons) or "not semantically active",
+            }
+        )
+    return {"failed": UNRESOLVED, "unresolved": held} if held else None
+
+
 def answered(done: Run, found: list[Decision]) -> dict[str, Any]:
     """The decisions the session picked, each whole with its scope and origin; else why the lookup failed."""
     said = pick.judged(done, found, Pick(version=0))
@@ -181,7 +215,7 @@ def answered(done: Run, found: list[Decision]) -> dict[str, Any]:
 
 
 def _row(d: Decision, note: str) -> dict[str, str]:
-    row = {"id": d.id, "title": d.title, "statement": d.statement, "scope": str(d.scope), "origin": str(d.origin)}
+    row = {"id": d.id, "title": d.title, "statement": whole(d), "scope": str(d.scope), "origin": str(d.origin)}
     return row | ({"note": note} if note else {})
 
 

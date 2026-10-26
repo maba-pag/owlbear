@@ -50,10 +50,12 @@ from owlbear_delivery_next.workflow_steps import (
     engine,
     follow,
     held,
+    held_writes,
     judges,
     lookup,
     merge,
     overlap,
+    pending_child,
     plan_round,
     prepare,
     publish,
@@ -74,7 +76,6 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.state_store.store import Lock
 
 AGENT = frozenset({StepKind.PLAN, StepKind.BUILD, StepKind.REVIEW, StepKind.CHECK})
-READ_ONLY = frozenset({StepKind.PLAN, StepKind.REVIEW})  # their sessions run in the Change's read-only worktree
 TARGET = ("target", StepKind.BUILD, Exit.BACK)  # a builder's accepted target premise; a stop on its processes wins
 
 
@@ -95,10 +96,13 @@ ENGINE: dict[StepKind, engine.Step] = {
     StepKind.CLEANUP: cleanup.run,
 }
 _out = sessions.out
+_kept = held.kept_session
 
 
-def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:  # noqa: PLR0915 - session lifecycle
+def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:  # noqa: C901, PLR0915 - session lifecycle
     now, s, slug = datetime.now(UTC), change.step, change.slug
+    if held.settled(store, lock, change):  # its result is recorded already: only the hold's cleanup remains (RUN-04)
+        return
     profile = store.read_profile() or Profile()
     path = worktree.ensure(repo, git_common_dir(repo), slug, change.names.branch, change.names.target)
     change.names.worktree = str(path)
@@ -108,7 +112,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:  # noq
     if stopped := overlap.starting(change, task):
         store.write(lock, loop.apply(change, stopped, now))
         return
-    settings.need("watcher")  # before anything is recorded: an unset switch asks the owner, leaving no open span
+    settings.need("spotter.mode")  # before anything is recorded: an unset mode asks the owner, leaving no open span
     review.started(change, task, path, settings)  # one snapshot, checked before anything is taken (TD-208, TD-179)
     answer, accepted, repair, resume = session_choice.opening(store, lock, change, task)  # unset settings take nothing
     s.started_at = now
@@ -177,27 +181,33 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:  # noq
     # The session's callbacks replace ``change``; objects taken from it before the session are stale.
     task = next((t for t in change.plan.tasks if t.id == s.task), None) if change.plan else None
     curation_build.recorded(change, run, path)
+    post = held_writes.Deferred(store, slug) if accepted else store  # an accepted hold's writes wait for its receipt
     result = review.recorded(change, task, run, path, session_result.to_result(run, s.kind, end))
     result = disputes.processed(change, task, run.session_id, run.payload, result, run.changed)
-    result = amend.challenge(store, lock, change, path, run, result=result, settings=settings)  # TD-179: judged only
+    proposal = amend.proposed(change, run, result)  # TD-179: judged once this step's own result is durable
     result = conversation.disputed(task, run.payload, result)
     conversation.respond(task, run.payload, run.head, result.exit)
+    change = budgets.effect_observed(change, answer.id, end) if answer and session_result.effect_seen(run) else change
     sessions.logged(
-        store, lock, change, run, {"kind": s.kind, "exit": result.exit} | ({"held": True} if accepted else {})
+        post, lock, change, run, {"kind": s.kind, "exit": result.exit} | ({"held": True} if accepted else {})
     )
+    events: list[dict[str, object]] = []
     if s.kind == StepKind.PLAN and result.plan:  # recorded, then challenged in its loop (TD-190)
-        result = plan_round.planned(store, lock, change, path, run.payload, result, profile, others)
+        result = plan_round.planned(post, lock, change, path, run.payload, result, profile, others, events)
         overlap.record(change, result, others, path)
         end = datetime.now(UTC)
-    result = overlap.integrated(store, change, path, (start, run.ending), result)
+    result = overlap.integrated(post, change, path, (start, run.ending), result)
     if isinstance(p := run.payload, tools.WrongPremise) and (p.stage, s.kind, result.exit) == TARGET:
         result = engine.needs_target(change, path, f"{p.reason} ({'; '.join(p.evidence)})", end)
-    change = budgets.effect_observed(change, answer.id, end) if answer and session_result.effect_seen(run) else change
     if ctx is not None:
-        result = prepare.chosen(store, change, path, run.payload, ctx, result)
+        result = prepare.chosen(post, change, path, run.payload, ctx, result)
     if isinstance(p := run.payload, tools.CheckRecipe) and result.exit == Exit.PENDING:
         change.env = Environment(check=s.task or "", command=p.command, directory=p.directory, ready_url=p.ready_url)
-    store.write(lock, loop.apply(change, result, end))
+    if proposal is not None:  # its challenger's stop, else this result, is written with the verdict and its spend
+        amend.challenge(post, lock, change, path, proposal, route=result, settings=settings)
+        return
+    held_writes.write_result(store, lock, change, accepted, loop.apply(change, result, end), post)
+    sessions.announce_all(store, lock, slug, events)  # logged once the result that counts their round is durable
 
 
 def _helpers(
@@ -206,26 +216,6 @@ def _helpers(
     """The tools that answer within the turn: the builder's design detector on a UI Change (slice 7), the lookup."""
     ui = change.step.kind == StepKind.BUILD and change.brief.ui
     return (*(((design_tools.SCAN, partial(design.builder_scan, at)),) if ui else ()), asked.helper())
-
-
-def _kept(
-    store: Store, lock: Lock, change: Change, path: Path, config: Callable[[Path], sdk_adapter.Session]
-) -> session_result.Run:
-    """The step's own session, a read-only one in the Change's read-only worktree.
-
-    An unread one names the Change worktree, whose HEAD is the commit judged, so the gate can hold its result (TD-56).
-    """
-
-    def own(cfgs: list[sdk_adapter.Session]) -> list[session_result.Run]:
-        try:
-            return [sessions.run(store, cfgs[0])]
-        except UsageUnreadError as exc:
-            exc.worktree = path
-            raise
-
-    if change.step.kind in READ_ONLY:
-        return sessions.isolated(store, lock, change, path, lambda at: [config(at)], own)[0]
-    return own([config(path)])[0]
 
 
 def _planning(store: Store, lock: Lock, slug: str, path: Path) -> dict[str, list[str]]:
@@ -419,6 +409,11 @@ def main(argv: list[str] | None = None) -> int:
 
 def _step(store: Store, lock: Lock, change: Change, step: Step | None, repo: Path) -> None:
     """Run the folded Change's next step; a session whose usage stayed unread stops it for the owner (TD-54)."""
+    if (settled := pending_child.retired(store, lock, change)) is not change:  # a captured child's gate: it decides
+        change, step = settled, loop.next_step(settled, datetime.now(UTC))  # a left child counts once (retired)
+    if (pending := held.uncounted(store, change)) is not None:  # a held session counts before anything else runs
+        held.counted_hold(store, lock, pending)
+        return
     if step is not None:
         try:
             store.settings()
@@ -459,18 +454,17 @@ def _run(store: Store, lock: Lock, change: Change, step: Step | None, repo: Path
             _out("nothing to run; the host owns a check environment" if change.env else "nothing to run")
         elif step.kind == StepKind.TESTS:  # a test review's reviewers (TD-373)
             curation.run(store, lock, change, repo)
-        elif step.kind in AGENT:
-            agent = _reused(store, lock, change) or prepare.refused(store, lock, change)
-            agent = (
-                agent or review.completed(store, lock, change, repo) or plan_round.continued(store, lock, change, repo)
-            )
+        elif step.kind in AGENT:  # a step whose amendment challenge did not settle goes on from it (TD-179)
+            agent = amend.resumed(store, lock, change, repo) or _reused(store, lock, change)
+            agent = agent or prepare.refused(store, lock, change) or review.completed(store, lock, change, repo)
+            agent = agent or plan_round.continued(store, lock, change, repo)
             agent or _agent(store, lock, change, repo)
         elif step.kind == StepKind.SHAPE and brief_round.due(change):  # TD-221: before approval
             brief_round.run(store, lock, change, repo)
         else:
             _engine(store, lock, change, repo)
     except UsageUnreadError as exc:
-        _gate_unread(store, lock, exc)
+        held.gate_unread(store, lock, exc)
     except sessions.SessionGrantError as exc:
         now = datetime.now(UTC)
         store.write(lock, loop.apply(store.read(lock.slug), exc.result(now), now))
@@ -478,19 +472,6 @@ def _run(store: Store, lock: Lock, change: Change, step: Step | None, repo: Path
         store.write(lock, loop.apply(store.read(lock.slug), _unshelved(exc), datetime.now(UTC)))
     except SettingsUnset as exc:
         unset_settings.asked(store, lock, exc)
-
-
-def _gate_unread(store: Store, lock: Lock, exc: UsageUnreadError) -> None:
-    """TD-54: the owner decides; an agent step's own result is held so it can be accepted instead (TD-56)."""
-    kept = store.read(lock.slug)  # what the step wrote before and during the session; nothing after it
-    head = held.head(exc.worktree) if exc.worktree else None
-    head = head if head and exc.run.head in {None, head} else None  # the result's own commit is still HEAD
-    gated = loop.apply(kept, session_result.usage_gate(exc.run, kept.step.kind, accept=bool(head)), datetime.now(UTC))
-    store.write(lock, gated)
-    if head:  # after its question exists: a hold no question offers is never taken
-        held.keep(store, lock, gated, exc.run, head)
-    label = {"label": exc.label} if exc.label else {}  # whose session it was, when not the step's own (TD-376)
-    sessions.logged(store, lock, gated, exc.run, {"kind": kept.step.kind, "exit": Exit.ASK} | label)
 
 
 def _unshelved(exc: worktree.ShelveError) -> Result:

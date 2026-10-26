@@ -178,11 +178,12 @@ def summary(store: Store, slug: str, act: Activity, now: datetime) -> dict[str, 
 
 
 def watcher(store: Store, slug: str) -> dict[str, Any]:
-    """The Change's watcher list: its newest reports, their counts and the master switch (None when unreadable)."""
+    """The Change's watcher list: its newest reports, their counts and whether the Spotter watches (None: unknown)."""
     try:
-        on = store.settings().watcher
+        mode = store.settings().spotter.mode
     except StoreError:
-        on = None
+        mode = None
+    on = None if mode is None else mode != "off"
     return {"on": on, "reports": watch_reports.reports(store.db, slug)} | watch_reports.counts(store.db, slug)
 
 

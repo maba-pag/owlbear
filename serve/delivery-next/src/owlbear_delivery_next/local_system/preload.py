@@ -28,7 +28,9 @@ REQUIRED: dict[str, tuple[str, ...]] = {
     "test-reviewer": ("owlbear-review-judgment",),  # evidence and operating context; no code to design
     "test-curator": ("owlbear-review-judgment",),
     "curator": (),  # its automatic workflow lives in its agent file; it judges memory, not code
-    "watcher": (),  # one tool call against the task, no code to design
+    "spotter": (),  # one look at an agent's work, no code to design
+    "retro": (),  # whole finished tasks with hindsight, no code to design
+    "retro-review": ("owlbear-review-judgment",),  # challenges Retro's proposals
 }
 UI: dict[str, tuple[str, ...]] = {"builder": ("owlbear-interface-design",)}  # added when the brief has a UI (TD-76)
 JUDGED = ("owlbear-acceptance-criteria", "owlbear-review-judgment")  # no code to judge: no module design (TD-166)
@@ -76,8 +78,13 @@ def memory(store: Path | None) -> dict[str, Any] | None:
     if store is None or find_spec(MEMORY_MODULE) is None:
         return None
     command = {"command": sys.executable, "args": ["-m", MEMORY_MODULE]}
-    env = {MEMORY_DIR: str(store), MEMORY_GLOBAL: str(store.parent.parent / "memory")}  # store: <shared>/<name>/memory
+    env = {MEMORY_DIR: str(store), MEMORY_GLOBAL: str(global_memory(store))}
     return command | {"env": env, "tools": ["*"]}
+
+
+def global_memory(store: Path) -> Path:
+    """Global memory, ``<shared>/memory``, beside the project's memory folder *store*, ``<shared>/<name>/memory``."""
+    return store.parent.parent / "memory"
 
 
 def directory() -> Path:

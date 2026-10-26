@@ -82,8 +82,19 @@ class Machine:
         self.updater = Updater(self)
         self.auto = Auto(self)
         self.curation = Curation(
-            self.slots, fenced=lambda: self.updating or ("stopping" if self.stopping.is_set() else "")
+            self.slots,
+            fenced=self._curation_fence,
+            paused=lambda: self.paused,
+            admission=lambda: self.lock,  # the stop barrier pause_stop and idle_stop already use
         )
+
+    def _curation_fence(self) -> str:
+        """Why no memory curation starts now: an update's fence, a stop, or a stop when idle, which starts nothing."""
+        if self.updating:
+            return self.updating
+        if self.stopping.is_set():
+            return "stopping"
+        return "OwlBear stops once nothing runs: no memory curation starts" if self.ending else ""
 
     def _sessions(self) -> int:
         """The machine's sessions at once, read at each grant; the last one read while machine.json is unreadable."""
@@ -129,7 +140,7 @@ class Machine:
             h.closed = lambda: self.stopping.is_set() or not p.gate.open
             h.updating = lambda: self.updating
             h.slots = self.slots
-            h.merged = lambda: self.curation.nudge([h.store.name], "merge", paused=self.paused)
+            h.merged = lambda: self.curation.nudge([h.store.name], "merge")
 
         try:
             p.load(self.record, lambda: self.paused or self.stopping.is_set(), bind)
@@ -309,7 +320,7 @@ class Machine:
             try:
                 idle = self.auto.mono() - self.auto.last_use >= IDLE_FOR
                 if idle and not (self.updating or self.ending or self.busy()):
-                    self.curation.nudge(None, "idle", paused=self.paused)
+                    self.curation.nudge(None, "idle")
             except Exception as exc:  # noqa: BLE001 - the loop outlives one failed look
                 self.say(f"looking whether to curate memory failed: {type(exc).__name__}: {exc}")
 

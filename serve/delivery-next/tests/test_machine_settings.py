@@ -82,7 +82,11 @@ def test_each_setting_is_this_machine_s_else_global_s_else_unset():
     got = machine_settings.resolve(registry.Settings(sessions=2), MachineValues(channel="major", sessions=6))
     assert (got.channel, got.sessions, got.update_when_idle) == ("major", 2, None)
     assert (got.sources, got.shared["sessions"]) == ({"channel": "global", "sessions": "machine"}, 6)
-    assert got.missing == ["update_when_idle", "update_while_paused", "curate_after_merge", "curate_when_idle"]
+    assert got.missing == ["update_when_idle", "update_while_paused", "curate_after_merge", "curate_when_idle",
+                           "spotter_budget", "retro_budget", "retro_verbose_cap", "retro_after_change",
+                           "retro_when_idle", "enrolled_chats"]  # fmt: skip
+    chats = machine_settings.resolve(registry.Settings(enrolled_chats=[]), None)
+    assert (chats.enrolled_chats, "enrolled_chats" in chats.missing) == ([], False)  # none enrolled is set, not unset
     assert machine_settings.resolve(registry.Settings(), None).missing == list(machine_settings.FIELDS)
 
 
@@ -91,9 +95,9 @@ def test_with_its_settings_unset_nothing_that_needs_them_runs(monkeypatch):
     monkeypatch.setenv(data_repo.VIEW, "")  # no shared repository: no Global either
     with pytest.raises(versions.VersionError, match="unset"):
         versions.target()
-    job = curation.Curation(Slots(lambda: 1), shared=lambda: None)
-    assert not job.allowed("merge", paused=False)
-    assert not job.allowed("idle", paused=False)
+    job = curation.Curation(Slots(lambda: 1), shared=lambda: None, paused=lambda: False)
+    assert not job.allowed("merge")
+    assert not job.allowed("idle")
     assert Machine._sessions(SimpleNamespace(total=4)) == 0  # noqa: SLF001 - no session starts
     assert not Auto.permitted(SimpleNamespace(machine=SimpleNamespace(paused=False)))  # never updates by itself
 

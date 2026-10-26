@@ -2,6 +2,7 @@
 the step."""
 
 import asyncio
+import json
 import subprocess
 from pathlib import Path
 from types import SimpleNamespace
@@ -14,7 +15,7 @@ from owlbear_delivery_next.change_contracts.tools import Worktree
 from owlbear_delivery_next.design_packs import design_pack
 from owlbear_delivery_next.local_system import preload
 from owlbear_delivery_next.local_system.processes import Termination
-from owlbear_delivery_next.runtimes import sdk_adapter, vscode_adapter
+from owlbear_delivery_next.runtimes import chatlogs, sdk_adapter, vscode_adapter
 from owlbear_delivery_next.runtimes import window_files as wf
 
 ROLES = ("builder", "planner", "reviewer")
@@ -130,6 +131,11 @@ def test_a_step_whose_skills_are_missing_never_starts_a_runtime(monkeypatch) -> 
         "Delivery's worker skills are missing: owlbear-acceptance-criteria, owlbear-module-design",
     )
     assert run.termination == Termination(confirmed=True)
+    lines = [json.loads(x) for x in (chatlogs.root() / "manifest.jsonl").read_text().splitlines()]  # design §5
+    assert [(x["event"], x["session"], x.get("kind")) for x in lines] == [
+        ("started", "s1", "plan"),
+        ("ended", "s1", None),
+    ]
 
 
 def step(kind=StepKind.REVIEW) -> sdk_adapter._Step:

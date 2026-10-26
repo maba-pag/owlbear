@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 
 import pytest
 
+from owlbear_delivery_next.change_contracts.held_records import HeldRecord, HeldRun
 from owlbear_delivery_next.change_contracts.inbox import AnswerItem, BriefApproval
 from owlbear_delivery_next.change_contracts.models import (
     FORMAT,
@@ -84,6 +85,12 @@ def record(store, slug):
 def overwrite(store, slug, text):
     with store.db.write() as db:
         db.execute("UPDATE changes SET record = ? WHERE slug = ?", (text, slug))
+
+
+def held_record() -> HeldRecord:
+    """A held review result as its Change keeps it when the held file cannot be written (RUN-04)."""
+    run = HeldRun(session_id="s1", ending="result")
+    return HeldRecord(question="q", kind="review", task="t1", mode=None, brief=1, head="h", at=NOW, run=run)
 
 
 def test_every_worktree_opens_the_same_store_in_the_projects_folder(repo, store):
@@ -194,6 +201,31 @@ def test_change_records_migrate_forward_or_refuse(store, monkeypatch):
     assert store.read("c1").profile_version == 7
     monkeypatch.setattr(store_mod, "FORMAT", 0)
     with pytest.raises(FormatTooNewError):
+        store.read("c1")
+
+
+def test_a_change_from_format_seven_reads_with_no_held_record(store):
+    save(store, Change(slug="c1"))
+    data = json.loads(record(store, "c1")) | {"format": 7}
+    data.pop("held_fallback")
+    overwrite(store, "c1", json.dumps(data))
+    assert store.read("c1").held_fallback is None
+
+
+def test_a_change_from_a_newer_format_is_refused_even_with_a_held_record(store):
+    save(store, Change(slug="c1", held_fallback=held_record()))
+    data = json.loads(record(store, "c1")) | {"format": FORMAT + 1}
+    overwrite(store, "c1", json.dumps(data))
+    with pytest.raises(FormatTooNewError):
+        store.read("c1")
+
+
+def test_a_current_held_record_with_an_unknown_field_is_written_by_another_delivery(store):
+    save(store, Change(slug="c1", held_fallback=held_record()))
+    data = json.loads(record(store, "c1"))
+    data["held_fallback"]["surprise"] = 1
+    overwrite(store, "c1", json.dumps(data))
+    with pytest.raises(StoreError, match="written by a newer or different Delivery"):
         store.read("c1")
 
 
