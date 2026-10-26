@@ -11,7 +11,8 @@ was checked. Every push of the checkout runs so, held or not: an automatic publi
 never falls back to a configured forced push. A remote that no longer meets the record holds the checkout: nothing is
 pushed or rebased, the refusal is kept in the record and reported, and nothing in Git is undone. The record lapses only
 once the checkout itself holds no change of the file the remote lacks: no unpushed commit touches it and its copies are
-the committed one. A record that cannot be read or is malformed is kept as it is and holds.
+the committed one. A record that cannot be read, is malformed or is not a regular file is kept as it is and holds:
+a dangling link is a damaged record, never an absent one.
 """
 
 from __future__ import annotations
@@ -21,7 +22,7 @@ import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from owlbear_delivery_next.local_system.storage_io import atomic_write
+from owlbear_delivery_next.local_system.storage_io import atomic_write, read_regular
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -116,11 +117,15 @@ def _malformed(data: object) -> str:
 
 
 def _load(path: Path) -> dict[str, object] | None:
-    """The record as written; a record that cannot be read or is malformed stays, byte for byte, and holds."""
+    """The regular record's bytes, never through a link or waiting on a pipe; only a missing entry is absent.
+
+    An unreadable, nonregular or malformed record stays as it is and holds.
+    """
     try:
-        data = json.loads(path.read_bytes())
-    except FileNotFoundError:
-        return None
+        raw = read_regular(path)
+        if raw is None:
+            return None
+        data = json.loads(raw)
     except (OSError, ValueError) as exc:
         msg = f"the held publication record {path} cannot be read ({exc}); check it before removing it"
         raise _UnknownError(msg) from exc
@@ -153,11 +158,14 @@ def _blob_at(repo: DataRepo, rev: str, rel: str, until: float | None) -> str:
 
 
 def recorded(repo: DataRepo, until: float | None) -> bool:
-    """Whether a held change is recorded here; a record Git cannot locate counts as one."""
+    """Whether the record's entry exists, links included; an unlocatable or unreadable entry counts as held."""
     try:
-        return _path(repo, until).exists()
-    except _UnknownError:
+        _path(repo, until).lstat()
+    except FileNotFoundError:
+        return False
+    except _UnknownError, OSError:
         return True
+    return True
 
 
 def hold(repo: DataRepo, watch: Path, requires: Requires, until: float | None) -> None:
