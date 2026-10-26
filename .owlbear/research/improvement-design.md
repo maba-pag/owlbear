@@ -105,12 +105,21 @@ widening the agent's scope. Otherwise silence, and the moment feeds Retro's less
 
 ### Modes and settings
 All settings have no code default; an unset one is an error on the Settings page (Global, with a machine override):
-- **mode:** off, **learning** (records what it would do; the start) or live (acts);
-- **steer share:** in live mode, the share of whole Changes and chats whose notes are sent; the rest record only
-  (the test below);
-- **intervention cap:** at most this many steering notes per step or chat turn;
-- **interrupt:** steer or stop, what a live `interrupt` verdict does (D-01M5W4DEP9WABMSXN3HEKH30HR); every other note
-  steers; no code default, Global to be set to `steer` when it is built;
+- **on/off:** replaces the former mode (D-01M5WB09Z3ZKJVN02WGWVHGWBH, D-01M5WBAFQPZT6QBMV3V3HZ83ES); off also stops
+  W1a's feed. "Learning" and "live" now describe the actions configured below, not a setting;
+- **actions per category of finding:** the Spotter files each finding under one of four broad categories, the
+  examples illustrating, never limiting: **hand-off fitness** (the result should not be accepted as it stands: an
+  unmet criterion, an unsupported claim, a weakened test), **course and constraints** (recoverable work heading
+  materially wrong: a scope or decision conflict, a wrong direction, a costly loop), **outside-state changes** (a
+  consequential change beyond the task's files that is not irreversible) and **irreversible harm** (which takes
+  precedence). Each category is set to one action it allows: record, show the owner, steer (a note into the running
+  turn), refuse the hand-off, stop and resume with the note, or stop and ask the owner. What warrants irreversible
+  harm is the Spotter's own judgement within broad categories, never a closed list or a confidence threshold
+  (D-01M5W6NGXW27VW024E1B29W3GA). A repeated unresolved finding becomes a question to the owner, never a loop;
+- **steer share:** the share of whole Changes and chats whose steering acts; the rest record only (the test below);
+  Spotter hand-off refusals take part in it;
+- **intervention cap:** at most this many steering notes per step or chat turn; irreversible-harm actions and hand-off
+  refusals are never capped (D-01M5W9S636SC6C6JC4EQAM24NN was folded into the category decision);
 - **verbose:** a bounded rationale with its evidence per look, scoped to the machine, a project or a Change, with an
   expiry. Retro may switch it on within a credit cap and for a named reason, shown on the page; never live mode;
 - **looks:** which looks are on, and the sample rate;
@@ -150,27 +159,30 @@ comes with live delivery. The card holds credentials as the agent saw them; only
 are stripped (the owner, 2026-10-26: a look sends the model what the agent's session already sent it, and the records
 are temporary and owner-only; D-01M5VXXFBSWVZ0DZ68G1QG4CYG).
 
-Notes from sampled and state-change looks stay record-only until Retro shows their class is worth it; a live
-`interrupt` verdict is the exception and follows the `interrupt` setting without that wait (it still waits, like all
-of live mode, for the steered-versus-silent test). In learning mode every look only records. The line from §3 holds in
+Findings from sampled and state-change looks stay record-only until Retro shows their class is worth it, whatever
+their category's action; irreversible harm is the exception and acts per its category at once, also before the
+steered-versus-silent test, which is about discretionary steering (D-01M5WB09Z3ZKJVN02WGWVHGWBH,
+D-01M5W68MMV8JCVKNKH4VJQ9V14). A stop after the fact only halts what follows; it cannot undo what happened. The line from §3 holds in
 every mode: correct is not enough; the value must clearly exceed the risk of pulling the agent off course.
 
 ### Where
-- **Delivery steps:** from the SDK adapter's event stream (W1a's feed).
+- **Delivery steps:** from the SDK adapter's event stream (W1a's feed). Steps run only through the SDK: window steps
+  are retired (D-01M5WG8RGCBKADW6XPGP0E2FAP; their code's removal is #694), and every runtime used must be readable,
+  steerable and stoppable by the Spotter (D-01M5W9YB6VHT7RW53M3133WD3C).
 - **Chats:** a follower in the machine host tails each enrolled chat's `events.jsonl`.
 
 ### Live delivery
 - **Delivery hand-off:** an accepted `submit_result` is final (the SDK skips another model round), so the Spotter
   judges the submission before acceptance. When it steers, the tool answers with a non-success note that does not
   count as an invalid submission; the next submission is validated again.
-- **Other Delivery notes:** steer: sent into the running turn (D-01M5W4DEP9WABMSXN3HEKH30HR, replacing TD-55's stop
-  and retry). Only an `interrupt` verdict follows the `interrupt` setting: steer like a note, or stop (abort the turn,
-  then resume it with the note). The Spotter decides what warrants an interrupt by its own judgement, given broad
-  categories of harm that cannot be undone, each with at most a rough example, never a closed list or a confidence
-  threshold; Retro grades its calls (D-01M5W6NGXW27VW024E1B29W3GA). Aborting and resuming a turn is not built yet.
+- **Other Delivery findings:** act as their category is set: a steer is sent into the running turn; a stop aborts
+  the turn, then resumes it with the note, or waits for the owner. Aborting and resuming a turn is not built yet.
+- **Asking the owner:** a stop-and-ask, or a repeated unresolved finding, asks him to allow it (a brief amendment his
+  answer approves), run again with the reason, or replan the task with the whole plan in view
+  (D-01M5WB8V8ZRGZWWVS9K2CV209E).
 - **Outside writes:** W1a's reports stay on the Change, leaving out Delivery's own state, temporary files and tool
-  caches; the state-change look sees every outside write, those included. Live, its notes on them stay record-only
-  until Retro shows that class is worth it, but an interrupt follows its setting at once
+  caches; the state-change look sees every outside write, those included. Its findings on them stay record-only until
+  Retro shows that class is worth it, but irreversible harm acts per its category at once
   (D-01M5W68MMV8JCVKNKH4VJQ9V14, D-01M5W7C4R6M99MVWHR8X1GMCBT).
 - **Chats:** a `Stop` hook (shipped in the seed and wired by the install, inert unless live) asks the machine host for the note tied to
   that chat's turn, waits a bounded time, takes it only once, drops expired notes and honours `stop_hook_active`.
@@ -213,15 +225,25 @@ hindsight verdicts. Raw cards stay on this machine; only reviewed, minimised and
   - a lesson for the Primer;
   - a change to an agent, a skill or a prompt;
   - a change to Delivery's logic or a tool contract.
+- **Marks** each finding that a look during the task could have caught in time to change its course; if such
+  findings are frequent, a periodic big-picture look is reconsidered with the owner (the rethinker was dropped,
+  D-01M5WBKHD13WNNR1C7PJ6FV6NT).
+- Lessons need causal evidence repeated across independent tasks, counterexamples weighed; merging them is the
+  curator's (Global, D-01M5WC085F34Y2RVPXFC3ZX53C). A fix becomes an issue (OwlBear) or a backlog entry (a project);
+  memory is a bandage, a fix the stitches (D-01M5WAK48NRE79JZFAHDGWS4DA).
 - Judgement is saved first; each finding has a stable id visible where it is published, and a retry reconciles by id
   before creating anything.
 
 ## 6. Proposals and the owner
 
 Each proposal is challenged by `retro-review` (Sol): is the evidence real, is the direction right, what could it
-break. Survivors, capped per week, reach the owner on the **Improvement page**, which also shows the Spotter (mode,
-verbose, budget used, recent records with grades), Retro (runs, state, a button) and the Spotter cases (stages,
-versions).
+break. Survivors, capped per week, reach the owner on the **Improvement page**, which also shows the Spotter (its
+switch and category actions, verbose, budget used, recent records with grades), its looks and outside writes across
+Changes (filterable by Change, marking those whose irreversible-harm action stopped a step), Retro (runs, state, a
+button) and the Spotter cases (stages, versions). There, and on a Change's page, a finding can be turned into
+follow-up work (D-01M5W9AE1G5T7B5NY998CASAJ9). A Change's page shows the Spotter's and Retro's detail for it only
+behind a machine-local display switch, clearly labelled and exposed like the theme toggle; a stopped step's reason
+always shows (D-01M5W9AEB412SNWYM2CS27H68M).
 - A proposal states its direction in one line, why (evidence, cost seen), what would change and the review's verdict.
 - The owner decides **direction, not details**: accept, reject, redirect (free text, read back) or later.
 - Accepted: a Spotter case moves a stage (with the regression); a lesson becomes a pending memory in its folder; a
