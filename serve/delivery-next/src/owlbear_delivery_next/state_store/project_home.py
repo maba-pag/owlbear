@@ -21,7 +21,7 @@ from owlbear_delivery_next.state_store.database import MARKER, STORE_FORMAT, For
 
 STORE_DIR = "owlbear-delivery"
 PROJECTS = "projects"
-MACHINE = "machine.json"  # the registry (``machine_host.registry``); read here only to tell a project from leftovers
+MACHINE = "machine.json"  # the registry (``state_store.registry``); read here only to tell a project from leftovers
 CLONE_ID = "clone-id"
 MOVE_LOCK = "move.lock"
 KEPT = frozenset({CLONE_ID, MARKER, MOVE_LOCK})  # what stays in the clone

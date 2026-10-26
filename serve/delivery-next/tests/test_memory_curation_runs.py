@@ -15,11 +15,11 @@ from owlbear_delivery_next.local_system import local_home, maintenance, processe
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.local_system.slots import Slots
-from owlbear_delivery_next.machine_host import curation, curation_snapshots, registry
+from owlbear_delivery_next.machine_host import curation, curation_snapshots
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.settings import config
 from owlbear_delivery_next.settings.config import GlobalLayer
-from owlbear_delivery_next.state_store import settings_carry, store
+from owlbear_delivery_next.state_store import registry, settings_carry, store
 from owlbear_delivery_next.state_store.store import update_layer
 
 
@@ -117,7 +117,7 @@ def test_without_a_shared_repository_nothing_is_curated() -> None:
 def test_a_trigger_starts_only_folders_with_pending_entries_no_run_saw_and_as_its_own_setting_says(root) -> None:
     """The merge and idle triggers: a skipped entry starts no run until it changes; each trigger's machine setting
     is off, on (not while paused, the default) or on even while paused (the owner, 2026-10-23)."""
-    from owlbear_delivery_next.machine_host import registry  # noqa: PLC0415
+    from owlbear_delivery_next.state_store import registry  # noqa: PLC0415
 
     left = pending(root / "shop" / "memory", "Unsure lesson")
     report = MemoryCurationResult(

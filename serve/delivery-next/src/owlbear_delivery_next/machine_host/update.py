@@ -14,7 +14,8 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.local_system import local_home
-from owlbear_delivery_next.machine_host import alias, handover, registry, versions
+from owlbear_delivery_next.machine_host import alias, handover, versions
+from owlbear_delivery_next.state_store import registry
 
 if TYPE_CHECKING:
     from pathlib import Path

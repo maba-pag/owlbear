@@ -9,9 +9,10 @@ from fastapi.testclient import TestClient
 
 from owlbear_delivery_next.change_contracts import chat_contract
 from owlbear_delivery_next.local_system import codebase
-from owlbear_delivery_next.machine_host import app, curation, project, registry
+from owlbear_delivery_next.machine_host import app, curation, project
 from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.project_host.host import Host, HostRecord
+from owlbear_delivery_next.state_store import registry
 
 CHAT_USE = {chat_contract.HEADER: str(chat_contract.CHAT), "x-owlbear-use": "chat"}
 
