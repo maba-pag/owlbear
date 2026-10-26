@@ -174,12 +174,15 @@ def _stamp(shared: DataRepo) -> tuple[bytes | None, bytes | None]:
 
 
 def _paired(shared: DataRepo, project: str) -> DataView:
-    """HEAD and the snapshot read as one: a batch that began or completed while they were read is refused."""
+    """Pair files with HEAD and journal, refusing active or unknown rebases; HEAD is checked after the final probes."""
+    if not decision_transaction.operation_idle(shared):
+        msg = "a rebase is active or unknown, so the decisions are unavailable; resolve it in Git first"
+        raise DecisionsUnavailable(msg)
     first = _stamp(shared)
     commit = _head(shared)
     seen = _files(shared, project)
-    if _head(shared) != commit or _stamp(shared) != first:
-        msg = "the decisions changed while they were read, so they are not a settled rule set; read them again"
+    if _stamp(shared) != first or not decision_transaction.operation_idle(shared) or _head(shared) != commit:
+        msg = "the decisions or rebase state changed while they were read, so they are not settled; read them again"
         raise DecisionsUnavailable(msg, READ)
     return DataView(seen, commit)
 
