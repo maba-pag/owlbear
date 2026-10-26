@@ -16,8 +16,11 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.state_store.store import Store
 
 
+STALE = "the project config changed after this automatic change was prepared: nothing was written; review it"
+
+
 class HeldByPendingError(Exception):
-    """An automatic change held back, before any write, by another clone's different pending config intent."""
+    """An automatic change held back, before any write, by another clone's pending intent or a changed basis."""
 
 
 def locked_save[T: Layer](  # noqa: PLR0913, PLR0917
@@ -34,6 +37,21 @@ def locked_save[T: Layer](  # noqa: PLR0913, PLR0917
         except HeldByPendingError as exc:
             return str(exc)
         return profile_share.publish_layer(store, path, message, until, owner=owner)
+
+
+def based_on[T: Layer](store: Store, basis: str, change: Callable[[T], T]) -> Callable[[T], T]:
+    """The automatic change, refused unless the project config is still the *basis* it was prepared against.
+
+    *basis* is the config's digest read when the change was prepared; a payload built from an older config never
+    replaces a newer one, whatever the current file holds. The caller reads the digest before preparing the change.
+    """
+
+    def guarded(cur: T) -> T:
+        if profile_share.config_digest(store.config_path) != basis:
+            raise HeldByPendingError(STALE)
+        return change(cur)
+
+    return guarded
 
 
 def _held_while_pending[T: Layer](store: Store, change: Callable[[T], T]) -> Callable[[T], T]:
