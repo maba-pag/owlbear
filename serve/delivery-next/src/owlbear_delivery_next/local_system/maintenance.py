@@ -194,9 +194,14 @@ class Maintenance:
         with self._locked() as ledger:
             return next((s[len(prefix) :] for s in ledger.imported if s.startswith(prefix)), "")
 
+    @staticmethod
+    def receipt_note(key: str, digest: str, generation: str) -> str:
+        """The ledger entry that says record version *digest* is the rewrite of run *generation*."""
+        return f"{key}:receipt:{digest}:{generation}"
+
     def receipt(self, key: str, digest: str, generation: str) -> None:
         """Record that record version *digest* is the rewrite of run *generation*, so a restart keeps it."""
-        mark = f"{key}:receipt:{digest}:{generation}"
+        mark = self.receipt_note(key, digest, generation)
         with self._locked() as ledger:
             if mark not in ledger.imported:
                 ledger.imported.append(mark)
@@ -228,6 +233,7 @@ class Maintenance:
         keyed: bool = False,
         marks: tuple[str, ...] = (),
         observed: tuple[str, ...] = (),
+        notes: tuple[str, ...] = (),
     ) -> Lease:
         """Import an older host's uncertain work once per proven generation.
 
@@ -237,7 +243,8 @@ class Maintenance:
         *observed* the producer evidence it saw, for such a caller's later comparison.
         A *keyed* import also marks *source* with the lease it created, in the same save, so a retry finds that very
         lease again instead of matching by window. Each of *marks* is another source a new lease accounts for, marked
-        in that same save, so its keyed import finds this lease after a lost write.
+        in that same save, so its keyed import finds this lease after a lost write. Each of *notes*, such as a
+        rewrite's receipt, is recorded in the one save that holds or finds the lease, so neither is ever without it.
         """
 
         def same(s: Lease) -> bool:
@@ -248,14 +255,17 @@ class Maintenance:
             return bool(generation) or s.state in HELD
 
         with self._locked() as ledger:
+            missing = [n for n in dict.fromkeys(notes) if n not in ledger.imported]
+            found = None
             if keyed:
                 prefix = f"{source}:slot:"
                 marked = next((s[len(prefix) :] for s in ledger.imported if s.startswith(prefix)), "")
-                owned = next((s for s in ledger.sessions if marked and s.slot == marked), None)
-                if owned is not None:
-                    return owned
-            known = [s for s in ledger.sessions if same(s)]
+                found = next((s for s in ledger.sessions if marked and s.slot == marked), None)
+            known = [s for s in ledger.sessions if same(s)] if found is None else [found]
             if known:
+                if missing:
+                    ledger.imported.extend(missing)
+                    self._save(ledger)
                 return max(known, key=lambda s: s.started_at)
             ident = uuid.uuid4().hex
             lease = Lease(
@@ -278,6 +288,7 @@ class Maintenance:
             if source not in ledger.imported:
                 ledger.imported.append(source)
             ledger.imported.extend(f"{s}:slot:{lease.slot}" for s in ((source,) if keyed else ()) + marks)
+            ledger.imported.extend(missing)
             self._save(ledger)
         self.slots.restore_one(lease.project, lease.slot, 1)
         return lease

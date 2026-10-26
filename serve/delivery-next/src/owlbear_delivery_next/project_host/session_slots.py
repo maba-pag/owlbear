@@ -173,9 +173,10 @@ def interrupted(job: Job, key: str) -> None:
         run = job.interrupted
         if run["workspace"] and maintenance.owns(run["workspace"]):
             return  # the ledger already holds this run's own lease; importing it again would hold it twice
-        _hold(maintenance, key, run["workspace"] or str(legacy), run["generation"])
+        notes: tuple[str, ...] = ()
         if not run["workspace"] and job.version not in {"", "absent"}:  # the rewrite this host made keeps its identity
-            maintenance.receipt(key, pack_state.digest(job.version), run["generation"])
+            notes = (maintenance.receipt_note(key, pack_state.digest(job.version), run["generation"]),)
+        _hold(maintenance, key, run["workspace"] or str(legacy), run["generation"], notes=notes)  # one save, both
     elif job.version == "":
         maintenance.adopt_uncertain(f"{key}:unreadable", key, "pack", workspace=str(legacy))
     elif "workspace" not in job.state and (legacy.is_dir() or pack_job.legacy_uncertain(job.state)):
@@ -191,11 +192,23 @@ def _identity(
     return pack_state.generation(record, version)
 
 
-def _hold(maintenance: Maintenance, key: str, workspace: str, generation: str, started: datetime | None = None) -> None:
-    """Hold one run's uncertain work once per generation; a recovered generation is not held again."""
+def _hold(  # noqa: PLR0913 - one run's identity and what its hold records with it
+    maintenance: Maintenance,
+    key: str,
+    workspace: str,
+    generation: str,
+    started: datetime | None = None,
+    *,
+    notes: tuple[str, ...] = (),
+) -> None:
+    """Hold one run's uncertain work once per generation; a recovered generation is not held again.
+
+    *notes* are recorded in the same ledger save, so a rewrite's receipt never lands without its hold, or after it.
+    """
     maintenance.adopt_uncertain(
-        f"{key}:{workspace}:{generation}", key, "pack", workspace=workspace, generation=generation, started=started
-    )
+        f"{key}:{workspace}:{generation}", key, "pack", workspace=workspace, generation=generation, started=started,
+        notes=notes,
+    )  # fmt: skip
 
 
 def _adopt_legacy(maintenance: Maintenance, key: str, legacy: Path, record: dict[str, object], version: str) -> None:

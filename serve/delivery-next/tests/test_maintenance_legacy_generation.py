@@ -10,11 +10,12 @@ from pathlib import Path
 
 import pytest
 
-from owlbear_delivery_next.local_system import codebase
+from owlbear_delivery_next.local_system import codebase, maintenance
 from owlbear_delivery_next.local_system.data_repo import DataRepo
+from owlbear_delivery_next.local_system.slots import Slots
 from owlbear_delivery_next.local_system.storage_io import atomic_write
 from owlbear_delivery_next.machine_host import project, registry
-from owlbear_delivery_next.machine_host.machine import Machine
+from owlbear_delivery_next.machine_host.machine import UNPROVEN_PACK, Machine
 from owlbear_delivery_next.pack_runs import pack_job, pack_run, pack_state
 from owlbear_delivery_next.project_host.host import Host, HostRecord
 from owlbear_delivery_next.state_store import project_home
@@ -720,3 +721,150 @@ def test_an_ordinary_definitive_failure_without_a_workspace_is_not_held(tmp_path
     m = machines()
     m.load_all()
     assert sessions_of(m, entry.id) == [], "a definitive failure was held as uncertain"
+
+
+def main_stage_failure(folder: Path, stage: str, reason: str, run: str = "main-run") -> None:
+    """What main's ``_finish`` leaves when one stage's work raised: the stage failed, the reason prefixed by its name
+    unless it ended with a stage verdict, the updater folder removed, and no workspace or PIDs."""
+    ended = {"state": "failed", "run": run, "started_at": STARTED, "ended_at": ENDED, "reason": reason}
+    body = pack_job._blank() | ended  # noqa: SLF001
+    body["stages"] = [s | {"result": "failed", "detail": reason} if s["name"] == stage else s for s in body["stages"]]
+    (folder / pack_job.FILE).write_text(json.dumps(body, indent=1) + "\n", encoding="utf-8")
+    shutil.rmtree(folder / pack_run.UPDATER, ignore_errors=True)
+
+
+SDK_RAISED = [
+    ("update", "update: RuntimeError: synthetic SDK failure"),
+    ("replay", "replay: RuntimeError: synthetic SDK failure"),
+    ("challenger", "challenger: RuntimeError: synthetic SDK failure"),
+    ("update", "update: PackError: the updater could not be configured"),  # no text proves the session never began
+]
+
+
+@pytest.mark.parametrize("loaded", [False, True])
+@pytest.mark.parametrize("failure", SDK_RAISED)
+def test_a_main_sdk_stage_failure_with_its_folder_removed_is_held_and_starts_nothing_until_recovered(
+    tmp_path, machines, shared_repo, loaded, failure
+):
+    """Review 4373927946: an exception from an SDK stage proves nothing about its session, whatever its folder."""
+    shared, _remote = shared_repo
+    stage, reason = failure
+    entry, folder = project_with_legacy_run(tmp_path, shared, loaded=loaded)
+    main_stage_failure(folder, stage, reason)
+    other = registry.register(clone(tmp_path / "other"))
+    first = machines()
+    first.load_all()
+    [hold] = held(first, entry.id)
+    assert (first.slots.take(other.id, "probe", 1, 1), first.maintenance.pending("pack")) == (0, True)
+    assert any(UNPROVEN_PACK in w for w in first.busy()), first.busy()
+    reboot_then_recover(first, hold["id"])
+    first.stop_all()
+    restarted = machines()
+    restarted.load_all()
+    assert (held(restarted, entry.id), len(sessions_of(restarted, entry.id))) == ([], 1), "recovery was resurrected"
+    restarted.stop_all()
+    main_stage_failure(live_folder(entry, folder, loaded=loaded), stage, reason, run="main-run-b")
+    later = machines()
+    later.load_all()
+    assert len(held(later, entry.id)) == 1, "a later run's failure was not held as its own generation"
+
+
+@pytest.mark.parametrize("loaded", [False, True])
+@pytest.mark.parametrize(
+    "failure",
+    [
+        ("update", "update: PackError: the updater ended with error: no result"),
+        ("update", "update: PackError: the updater asks the owner: the premise is wrong (evidence)"),
+        ("challenger", "challenger: PackError: the challenger ended with error: no verdict"),
+        ("replay", "calibration replay: 1 of 3 calibration rounds judged as expected"),
+        ("candidate", "candidate: RuntimeError: the download failed"),
+        ("golden", "golden: RuntimeError: the golden pages could not be rendered"),
+    ],
+)
+def test_a_main_failure_after_a_confirmed_session_or_outside_any_session_holds_nothing(
+    tmp_path, machines, shared_repo, loaded, failure
+):
+    shared, _remote = shared_repo
+    entry, folder = project_with_legacy_run(tmp_path, shared, loaded=loaded)
+    main_stage_failure(folder, *failure)
+    m = machines()
+    m.load_all()
+    assert (sessions_of(m, entry.id), m.maintenance.pending("pack")) == ([], False)
+
+
+def test_a_running_record_without_identity_keeps_one_lease_when_its_hold_is_interrupted_by_a_crash(
+    tmp_path, machines, shared_repo
+):
+    """Review 4373927978: the hold and the receipt for the constructor's own rewrite are one ledger save.
+
+    A crash right after that save, or a failed save, leaves exactly one lease across restarts; after its recovery none
+    is held, and a later running record is held anew.
+    """
+    shared, _remote = shared_repo
+    good, folder = open_project(tmp_path, shared, "good")
+    write_pack(folder, {"state": "running"})  # no run id and no start: its identity is its file
+    first = machines()
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(Slots, "restore_one", crash_once(Slots.restore_one))  # the process dies after the save
+        first.load_all()
+    assert (first.projects[good.id].state, len(sessions_of(first, good.id))) == ("failed", 1)
+    first.stop_all()
+    for _ in range(2):
+        again = machines()
+        again.load_all()
+        assert (again.projects[good.id].state, len(sessions_of(again, good.id))) == ("loaded", 1)
+        again.stop_all()
+    [lease] = held(again, good.id)
+    reboot_then_recover(again, lease["id"])
+    after = machines()
+    after.load_all()
+    assert (held(after, good.id), len(sessions_of(after, good.id))) == ([], 1)
+    after.stop_all()
+    write_pack(project_home.home(good.id), {"state": "running"})  # a later run, again without identity
+    later = machines()
+    later.load_all()
+    assert (len(held(later, good.id)), len(sessions_of(later, good.id))) == (1, 2)
+
+
+def test_a_failed_hold_save_after_the_constructors_rewrite_leaves_no_lease_and_the_next_start_holds_once(
+    tmp_path, machines, shared_repo
+):
+    shared, _remote = shared_repo
+    good, folder = open_project(tmp_path, shared, "good")
+    write_pack(folder, {"state": "running"})
+    first = machines()
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(maintenance.Maintenance, "_save", fail_save_once(maintenance.Maintenance._save))  # noqa: SLF001
+        first.load_all()
+    first.stop_all()
+    for _ in range(2):
+        again = machines()
+        again.load_all()
+        assert (len(held(again, good.id)), len(sessions_of(again, good.id))) == (1, 1)
+        again.stop_all()
+
+
+def crash_once(real):
+    crashed: list[bool] = []
+
+    def restore_one(self, project_id: str, key: str, count: int) -> None:
+        if key.startswith("pack:legacy-") and not crashed:
+            crashed.append(True)
+            msg = "synthetic crash after the hold was saved"
+            raise RuntimeError(msg)
+        real(self, project_id, key, count)
+
+    return restore_one
+
+
+def fail_save_once(real):
+    failed: list[bool] = []
+
+    def save(self, ledger) -> None:
+        if any(s.kind == "pack" for s in ledger.sessions) and not failed:
+            failed.append(True)
+            msg = "synthetic: the ledger could not be saved"
+            raise maintenance.MaintenanceError(msg)
+        real(self, ledger)
+
+    return save

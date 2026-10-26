@@ -117,19 +117,32 @@ def read_only(root: Path) -> dict[str, Any] | None:
 
 
 HOST_STOPPED = "the host stopped during this run; check the package checkout before running again"
+SESSIONS = ("update", "replay", "challenger")  # the stages whose work enters the SDK
+RETURNED = (  # what an older host wrote once a stage's SDK session returned with its termination confirmed
+    "update: PackError: the updater asks the owner: ",
+    "update: PackError: the updater ended with ",
+    "challenger: PackError: the challenger ended with ",
+    "calibration replay: ",  # the judges' failed verdict, each judge's session confirmed gone
+)
 
 
 def legacy_uncertain(kept: dict[str, Any]) -> bool:
-    """A failed record an older host wrote while its updater or replay judge may still run; it has no workspace.
+    """A failed record an older host wrote while its updater, replay judge or challenger may still run; no workspace.
 
-    The host that stopped a run it found running wrote HOST_STOPPED instead, whether or not its directory survived.
+    It wrote "may still be running" when a session returned unconfirmed, and HOST_STOPPED for a run it found running.
+    Any other failure of a stage that enters the SDK, an exception raised from the session itself among them, proves
+    nothing about the session's end, whether or not its folder survived: only a reason it wrote after the session
+    returned confirmed does. A failure in any other stage happened with no session open.
     """
     reason = str(kept.get("reason", ""))
-    return (
-        kept.get("state") == "failed"
-        and "workspace" not in kept
-        and ("may still be running" in reason or reason == HOST_STOPPED)
-    )
+    if kept.get("state") != "failed" or "workspace" in kept:
+        return False
+    if "may still be running" in reason or reason == HOST_STOPPED:
+        return True
+    stages = kept.get("stages") if isinstance(kept.get("stages"), list) else []
+    failed = {s.get("name") for s in stages if isinstance(s, dict) and s.get("result") == "failed"}
+    in_session = bool(failed & set(SESSIONS)) or reason.startswith(tuple(f"{s}: " for s in SESSIONS))
+    return in_session and not reason.startswith(RETURNED)
 
 
 OBSERVED = ("state", "stage", "run", "started_at", "ended_at", "reason", "workspace")
