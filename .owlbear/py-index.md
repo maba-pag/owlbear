@@ -288,25 +288,6 @@ Extract bounded review evidence from a persisted Copilot JSONL transcript.
 - `def main(argv: Sequence[str] | None = None) -> int`
 - `def _require_file(path: Path) -> None`
 
-## .owlbear/hooks/deny-src-writes.py
-
-deny-src-writes.py — PreToolUse hook for test-only roles.
-
-### Imports
-
-- `__future__`
-- `json`
-- `pathlib`
-- `re`
-- `sys`
-
-### Interfaces
-
-- `def _extract_paths(tool_input: object) -> list[str]`
-- `def _is_allowed_path(path: str) -> bool`
-- `def _normalize(path: str) -> str | None`
-- `def main() -> None`
-
 ## .owlbear/scripts/clean_scratch.py
 
 Clean up stale files from the .owlbear/scratch directory.
@@ -2562,6 +2543,7 @@ Setup: profile confirmation and consented untracked local writes, after readines
 - `def _loose_json(text: str) -> object`
 - `def _serves(servers: object, repo: Path) -> bool`
 - `def registered(repo: Path, home: Path | None = None) -> bool`
+- `def memory_missing(repo: Path) -> str | None`
 - `def consent(repo: Path, path: Path, merge: Callable[[dict[str, Any]], dict[str, Any]], question: str, ask: Ask, *, yes: bool) -> str`
 - `def refused(repo: Path, path: Path) -> str | None`
 - `def ask_tty(question: str) -> str`

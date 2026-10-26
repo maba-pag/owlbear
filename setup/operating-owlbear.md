@@ -238,8 +238,8 @@ Running setup again rewrites only its own entries and keeps yours.
 ### Memory MCP storage
 
 MCP memory entries are markdown files in the project's folder of the shared data repository (`<folder>/memory/`),
-with Global memory at that repository's `memory/`; a workspace no folder there claims keeps them in
-`.owlbear/memory/` ([memory server configuration](../serve/memory-mcp/README.md#configuration)). The
+with Global memory at that repository's `memory/`. Setup offers the memory server only once a folder there holds
+the project; OwlBear's own repository, which no folder claims, keeps them in `.owlbear/memory/` ([memory server configuration](../serve/memory-mcp/README.md#configuration)). The
 `owlbear-memory` server creates the directory when it starts.
 
 ### Knowledge MCP storage

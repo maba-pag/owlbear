@@ -55,11 +55,11 @@ an actual affected file from an edit request that contains no supported path.
 
 ## Place And Wire The Change
 
-- Development hook scripts belong under `.owlbear/hooks/`.
-- Agent hook declarations belong in the owning `.agent.md` frontmatter.
-- Agent hook contracts are checked by `.owlbear/scripts/validate_agents.py`.
-- Behavioral guarantees belong in focused tests beside the existing hook tests, such as
-  `tests/test_write_guard_hooks.py`.
+- OwlBear has no hook scripts now; the last, `deny-src-writes.py`, went with the shared `test-curator`.
+  A new development hook brings its own place, focused behavioral test, and wiring with it: CI scope
+  (`.github/scripts/ci_scope.py`), test routing (`owlbear_tools.testing`), and lint settings.
+- Agent hook declarations belong in the owning `.agent.md` frontmatter; `.owlbear/scripts/validate_agents.py`
+  checks their shape and that a declared `.py` script exists.
 - OwlBear installs no hooks into consumer projects; a Delivery step's guards belong in its step
   configuration, not in a hook script.
 - Keep hook authoring guidance here; do not copy the same contract into every agent or into
@@ -74,7 +74,7 @@ an actual affected file from an edit request that contains no supported path.
 4. Cover malformed and empty input, unknown tools, the permitted case, the blocked case, traversal
    or scope escapes, and dependency failures relevant to the chosen failure policy.
 5. Validate the output shape and exit behavior independently of the model's interpretation.
-6. Update declarations, validators, seed copies, or documentation only when the ownership boundary
+6. Update declarations, validators, or documentation only when the ownership boundary
    requires it. Do not broaden the hook because a nearby rule is merely convenient to enforce.
 7. Run the focused hook tests and the agent/customization validator from the repository root.
 
@@ -87,7 +87,7 @@ an actual affected file from an edit request that contains no supported path.
 | Is the contract observable? | Tests assert parsed output, decision, context, or exit behavior rather than invocation alone |
 | Are negative paths covered? | Malformed input, unknown tools, traversal, and dependency failure follow the named policy |
 | Is the scope bounded? | Supported tools and paths are enumerated; unrelated lifecycle or Delivery state is untouched |
-| Is it portable by intent? | Consumer wiring and seed parity are explicit, or the skill/script is clearly developer-only |
+| Is it portable by intent? | Consumer wiring is explicit, or the skill/script is clearly developer-only |
 
 ## Known Pitfalls
 
