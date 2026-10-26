@@ -4011,12 +4011,13 @@ def _entries_below(folder: Path) -> dict[str, bytes | None]:
     }
 
 
+@pytest.mark.parametrize("linked_to", ["foreign", "moved"])
 def test_a_project_folder_linked_away_as_the_root_is_synced_never_gets_a_folder_made_through_it(
-    picking, monkeypatch, tmp_path
+    picking, monkeypatch, tmp_path, linked_to
 ):
     """A save makes its project's missing `decisions` folder. While the checkout's root is synced first, the owner
-    moves the project folder aside and links its name to a foreign folder. Nothing is made in the foreign folder, nor
-    in the owner's moved one: the save refuses before it makes any folder, and its batch stays interrupted."""
+    moves the project folder aside and links its name to a foreign folder or back to the moved folder. Neither folder
+    is changed: the save refuses before it makes any folder, and its batch stays interrupted."""
     shared = picking.shared
     project, foreign, moved = shared.root / PROJECT, tmp_path / "foreign", tmp_path / "moved"
     assert project.is_dir()
@@ -4035,7 +4036,7 @@ def test_a_project_folder_linked_away_as_the_root_is_synced_never_gets_a_folder_
         if armed and not fired and os.path.samestat(os.fstat(fd), root):  # the real sync of the root itself
             fired.append(True)
             project.rename(moved)
-            project.symlink_to(foreign, target_is_directory=True)
+            project.symlink_to(foreign if linked_to == "foreign" else moved, target_is_directory=True)
 
     with monkeypatch.context() as m:
         m.setattr(decision_store, "write_batch", batch)

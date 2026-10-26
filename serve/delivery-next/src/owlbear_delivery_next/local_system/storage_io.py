@@ -119,15 +119,25 @@ def _mkdir_at(parent: int, name: str, path: Path) -> None:
         raise OSError(exc.errno, exc.strerror, str(path)) from exc
 
 
-def _unchanged(held: list[tuple[Path, int]]) -> None:
-    """Raise unless each path still names the very folder held open for it, read after the blocking sync before."""
-    for path, fd in held:
+def _folder_entries(folder: Path) -> list[tuple[Path, os.stat_result]]:
+    logical, physical = folder.absolute(), folder.resolve(strict=True)
+    paths = dict.fromkeys((logical, *logical.parents, physical, *physical.parents))
+    return [(path, path.lstat()) for path in paths]
+
+
+def _unchanged(held: list[tuple[Path, int]], entries: list[tuple[Path, os.stat_result]]) -> None:
+    """Revalidate both the original entries/aliases and the folders held open, after each blocking sync."""
+    for path, before in entries:
         try:
-            same = os.path.samestat(path.stat(), os.fstat(fd))
+            same = os.path.samestat(path.lstat(), before)
         except OSError as exc:
             msg = f"{path} changed while its folders were made, so nothing more is made there"
             raise OSError(msg) from exc
         if not same:
+            msg = f"{path} changed while its folders were made, so nothing more is made there"
+            raise OSError(msg)
+    for path, fd in held:
+        if not os.path.samestat(path.stat(), os.fstat(fd)):
             msg = f"{path} changed while its folders were made, so nothing more is made there"
             raise OSError(msg)
 
@@ -139,14 +149,16 @@ def make_dirs(folder: Path) -> None:
     may have made that folder without confirming its entry. That ancestor and its parent are opened before that sync
     and every new folder is made and opened inside the folder held open above it, never through a path, without
     waiting on a pipe and without following a link at a new folder's name. After every sync, before anything more is
-    made, each path must still name the folder held for it: a folder moved and linked away meanwhile is refused, so
-    nothing is ever made in the foreign folder a link names. The descriptors are closed on every path.
+    made, each path must still name the folder held for it and its original directory entries and ancestor aliases
+    must be unchanged. Existing aliases remain supported; a new link back to the same moved folder is refused too.
+    The descriptors are closed on every path.
     """
     missing: list[Path] = []
     for candidate in (folder, *folder.parents):
         if candidate.exists():
             break
         missing.append(candidate)
+    entries = _folder_entries(candidate)
     held: list[tuple[Path, int]] = []
     try:
         top = candidate.parent if candidate.parent != candidate else None
@@ -157,12 +169,13 @@ def make_dirs(folder: Path) -> None:
         if top is not None:
             _sync_held(held[0][1], top)
         for created in reversed(missing):
-            _unchanged(held)
+            _unchanged(held, entries)
             outer = held[-1][1]
             _mkdir_at(outer, created.name, created)
             held.append((created, os.open(created.name, _FOLDER | os.O_NOFOLLOW, dir_fd=outer)))
+            entries.append((created, os.fstat(held[-1][1])))
             _sync_held(outer, created.parent)
-        _unchanged(held)
+        _unchanged(held, entries)
     finally:
         for _, fd in held:
             os.close(fd)

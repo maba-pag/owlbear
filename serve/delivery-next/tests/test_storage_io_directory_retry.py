@@ -203,3 +203,49 @@ def test_making_folders_or_refusing_a_pipe_in_their_way_closes_every_descriptor(
         storage_io.make_dirs(tmp_path / "pipe" / "x")
     assert not (tmp_path / "pipe" / "x").exists()
     assert not descriptors
+
+
+@pytest.mark.parametrize("swapped", ["folder", "ancestor", "aliased-ancestor"])
+def test_a_new_link_back_to_a_moved_directory_refuses_before_creating_descendants(
+    tmp_path: Path, monkeypatch, descriptors, swapped: str
+) -> None:
+    base, moved = tmp_path / "base", tmp_path / "moved"
+    (base / "x").mkdir(parents=True)
+    target = base / "x" / "y"
+    if swapped == "aliased-ancestor":
+        alias = tmp_path / "alias"
+        alias.symlink_to(base, target_is_directory=True)
+        target = alias / "x" / "y"
+    original = base / "x" if swapped == "folder" else base
+    before, synced = _entries_below(original), base.stat()
+    real_fsync, fired = os.fsync, []
+
+    def fsync(fd: int) -> None:
+        real_fsync(fd)
+        if not fired and os.path.samestat(os.fstat(fd), synced):
+            fired.append(True)
+            original.rename(moved)
+            original.symlink_to(moved, target_is_directory=True)
+
+    monkeypatch.setattr(storage_io.os, "fsync", fsync)
+    with pytest.raises(OSError):  # noqa: PT011 - identity refusal, before the next mkdir
+        storage_io.make_dirs(target)
+
+    assert fired
+    assert _entries_below(moved) == before
+    assert not descriptors
+
+
+@pytest.mark.parametrize("aliased", ["folder", "ancestor"])
+def test_aliases_present_before_making_folders_remain_supported(tmp_path: Path, descriptors, aliased: str) -> None:
+    real, alias = tmp_path / "real", tmp_path / "alias"
+    (real / "x").mkdir(parents=True)
+    alias.symlink_to(real / "x" if aliased == "folder" else real, target_is_directory=True)
+    target = alias / "y" if aliased == "folder" else alias / "x" / "y"
+    before = alias.lstat()
+
+    storage_io.make_dirs(target)
+
+    assert (real / "x" / "y").is_dir()
+    assert os.path.samestat(alias.lstat(), before)
+    assert not descriptors
