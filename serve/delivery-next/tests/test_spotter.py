@@ -130,15 +130,16 @@ def test_the_card_holds_intent_superseding_requests_edits_failures_and_the_runne
         ["t2: docs"], "## Decisions in force\n- D1", 1)  # fmt: skip
 
 
-def test_the_card_is_redacted_and_bounded() -> None:
+def test_the_card_drops_emails_keeps_credentials_as_the_agent_saw_them_and_is_bounded() -> None:
     kept = Kept()
-    kept.add(asked("Use token=ghp_" + "a" * 36 + " and mail owner@example.com. " + "x" * 9000))
+    token = "ghp_" + "a" * 36
+    kept.add(asked(f"Use token={token} and mail owner@example.com. " + "x" * 9000))
     for i in range(60):
         kept.add(started(f"c{i}", "bash", {"command": f"uv run pytest -k t{i} " + "y" * 3000}, second=i))
         kept.add(done(f"c{i}", "z" * 5000, ok=False, second=i))
     built = card.build(kept.snapshot(), {"at": "2026-10-26T10:01:00+00:00"}, {"decisions": ["d" * 20000]})
     text = json.dumps(built, ensure_ascii=False)
-    assert "ghp_" + "a" * 36 not in text
+    assert token in text  # not masked: the owner's choice, the look sees what the agent saw
     assert "owner@example.com" not in text
     assert len(text) <= card.BOUND
 
@@ -493,10 +494,7 @@ def test_a_reservation_settles_on_its_own_day_and_an_unreadable_ledger_skips(mon
     assert [r["skipped"][:26] for r in records()] == ["budget: the ledger failed:"]
 
 
-def test_no_rule_spares_a_credential_inside_a_path_and_cut_browser_context_is_dropped() -> None:
-    token = "ghp_" + "a" * 36
-    assert token not in card.clean(f"cat /tmp/{token}/x")
-    assert "/Users/x/" + "b" * 40 + "/f.py" in card.clean("see: /Users/x/" + "b" * 40 + "/f.py")
+def test_cut_browser_context_is_dropped_whole() -> None:
     assert events.no_browser("secret page</browser_context> after") == events.OMITTED + " after"
     assert events.no_browser("before <browser_context>secret page") == "before " + events.OMITTED
     kept = Kept()
@@ -557,13 +555,6 @@ def test_a_long_task_on_an_oversized_card_still_ends_within_the_bound() -> None:
                        {"open_work": ["word " * 400] * 12, "decisions": ["d " * 3000]})  # fmt: skip
     assert len(json.dumps(built, ensure_ascii=False)) <= card.BOUND
     assert all(len(events.clip("x" * 900, n)) <= n for n in (1, 7, 8, 50, 500))
-
-
-def test_a_credential_is_cleaned_before_a_clip_could_cut_it_from_its_label() -> None:
-    secret = "Q1w2E3r4" * 8
-    kept = Kept()
-    kept.add(asked("a" * 5000 + " password=" + secret + " " + "b" * (events.TEXT // 2 - 80)))
-    assert "Q1w2E3r4" not in json.dumps(kept.snapshot())
 
 
 def test_through_passes_on_a_cancellation_that_races_the_tasks_end() -> None:
@@ -641,20 +632,6 @@ def test_a_burst_of_samples_while_looks_run_is_counted_once_not_queued() -> None
     assert sorted(r["skipped"][:30] for r in got) == ["", "", "capacity: 298 sampled looks sk"]
 
 
-@pytest.mark.parametrize("at", ["head", "tail"])
-def test_a_text_too_long_to_clean_is_omitted_and_counted_whatever_it_quotes(at: str) -> None:
-    quoted = "pass" + 'word="Q1w2 E3r4 ' + "secret words " * 20 + '"'
-    filler = "a " * (events.RAW // 2)
-    text = filler + quoted + filler if at == "head" else filler + filler + quoted
-    kept = Kept()
-    kept.add(asked(text))
-    snapshot = kept.snapshot()
-    assert snapshot["task"] == events.omitted(len(text))
-    assert snapshot["dropped"]["texts too long to clean"] == 1
-    assert "Q1w2" not in json.dumps(snapshot)
-    assert "1 earlier texts too long to clean" in card.build(snapshot, {}, {})["gaps"][-1]
-
-
 def test_a_spotter_writes_where_it_started_whatever_changes_later(monkeypatch, tmp_path) -> None:
     async def main() -> spotter.Spotter:
         spot = spotter.Spotter(ctx(), lambda: "s-1", judge())
@@ -688,18 +665,6 @@ def test_the_process_exits_within_the_grace_though_spotter_work_is_still_queued(
     assert ended - float(proc.stdout.strip()) < spotter.GRACE + 1.5
 
 
-def test_structured_arguments_and_decisions_are_cleaned_before_they_are_encoded_or_clipped() -> None:
-    secret = "Q1w2 E3r4 secret"  # noqa: S105 - a synthetic credential
-    nested = {"command": "curl -d '{\"pass" + 'word": "' + secret + "\"}' x", "api_token": "plain-value-123"}
-    kept = Kept()
-    kept.add(started("c1", "bash", nested))
-    args = kept.snapshot()["actions"][0]["args"]
-    assert "Q1w2" not in args
-    assert "plain-value-123" not in args
-    decisions = ["x" * 9000 + " pass" + 'word="' + secret + '" ' + "y" * 2978]  # the clip's tail starts at its quote
-    assert "Q1w2" not in json.dumps(card.build(Kept().snapshot(), {}, {"decisions": decisions}))
-
-
 def test_a_hand_off_skipped_for_capacity_keeps_the_events_seen_as_its_cutoff() -> None:
     async def main() -> None:
         spot = spotter.Spotter(ctx(), lambda: "s-1", judge(wait=0.1))
@@ -713,24 +678,7 @@ def test_a_hand_off_skipped_for_capacity_keeps_the_events_seen_as_its_cutoff() -
     assert sorted((r["skipped"][:8], r["cutoff"]) for r in records()) == [("", 3), ("", 3), ("capacity", 3)]
 
 
-def test_credential_named_containers_and_structured_errors_are_cleaned_before_encoding() -> None:
-    kept = Kept()
-    kept.add(started("c1", "bash", {"credentials": ["canary collection private value"], "command": "ls"}))
-    failure = {"message": "denied: pass" + 'word="Q1w2 E3r4 secret"', "code": "denied"}
-    kept.add(event("tool.execution_complete", {"toolCallId": "c1", "success": False, "error": failure}))
-    text = json.dumps(card.build(kept.snapshot(), {"at": "2026-10-26T10:01:00+00:00"}, {}))
-    assert "canary" not in text
-    assert "Q1w2" not in text
-    assert "denied" in text
-
-
-def test_a_credential_flags_spaced_value_is_masked_and_an_unread_usage_keeps_the_answer(monkeypatch) -> None:
-    kept = Kept()
-    kept.add(started("c1", "bash", {"command": "docker login --password 'canary private registry' --token x1 r"}))
-    args = kept.snapshot()["actions"][0]["args"]
-    assert "canary" not in args
-    assert "x1" not in args
-    assert "docker login --password" in args
+def test_an_unread_usage_keeps_the_answer_and_counts_at_the_cap(monkeypatch) -> None:
     made: dict[str, Any] = {}
 
     class Session:
@@ -825,28 +773,7 @@ def test_a_look_the_runtime_reports_as_free_costs_nothing(monkeypatch) -> None:
     assert asyncio.run(REAL_LOOK({}, ctx())) == ('{"verdict": "silent"}', 0.0)
 
 
-SHAPES = [
-    "d",
-    "a.",
-    "--key ",
-    "https://",
-    "<browser_context>",
-    "</browser_context>",
-    '{"k": ',
-    "key_",
-    "--key-",
-    "password.",
-    "a@",
-    "x=",
-    "a=b&",
-    '"a=',
-    "Cookie: ",
-    'password="',
-    'password="\\"',
-    "[{",
-    "--password [",
-    'k={"password": [',
-]
+SHAPES = ["d", "a.", "a@", "x@y.", "<browser_context>", "</browser_context>", "<browser_context>x</browser_context>"]
 
 
 @pytest.mark.parametrize("unit", SHAPES)
@@ -856,47 +783,17 @@ def test_cleaning_the_largest_text_takes_linear_time_whatever_its_shape(unit: st
     text = (unit * (events.RAW // len(unit) + 1))[: events.RAW]
     began = time.monotonic()
     events.kept_text(text, events.RESULT)
-    assert time.monotonic() - began < 1  # about 0.03 s here; a quadratic pattern took seconds
+    assert time.monotonic() - began < 1  # milliseconds here; a quadratic pattern took seconds
 
 
-def test_cookie_fields_are_credentials_and_an_edit_mentioning_tests_keeps_its_change() -> None:
+def test_an_edit_mentioning_tests_keeps_its_change() -> None:
     kept = Kept()
-    kept.add(started("c1", "fetch", {"headers": {"Cookie": "sessionid=spotter_canary_session_7d2a"}}))
     change = {"path": "/Users/x/t.py", "old_str": "def test_a():", "new_str": "@pytest.mark.skip\ndef test_a():"}
     kept.add(started("e1", "edit", change))
     kept.add(done("e1", "ok"))
     built = card.build(kept.snapshot(), {"at": "2026-10-26T10:01:00+00:00"}, {})
-    assert "spotter_canary" not in json.dumps(built)
     [edit] = [e for e in built["evidence"] if e["tool"] == "edit"]
     assert (edit["why"], "@pytest.mark.skip" in edit["output"]) == ("edit", True)
-
-
-def test_a_long_key_still_has_its_value_masked() -> None:
-    long_key = "MY_" + "VERY_" * 30 + "PASSWORD"
-    assert "hunter2" not in events.clean(f"export {long_key}=hunter2")
-
-
-def test_raw_cookie_headers_and_long_credential_keys_are_masked_through_a_tool_result() -> None:
-    long_key = "MY_PASSWORD_" + "A" * 65
-    output = f"HTTP/1.1 200\nSet-Cookie: sessionid=spotter_canary_7d2a; HttpOnly\nexport {long_key}=hunter2\nauthor=bob"
-    kept = Kept()
-    kept.add(started("c1", "bash", {"command": "curl -i x"}))
-    kept.add(done("c1", output))
-    text = json.dumps(card.build(kept.snapshot(), {"at": "2026-10-26T10:01:00+00:00"}, {}))
-    assert "spotter_canary" not in text
-    assert "hunter2" not in text
-    assert "author=bob" in text  # a key that only starts like a credential's name keeps its value
-
-
-def test_json_tool_output_and_escaped_quotes_never_carry_a_credential_through() -> None:
-    kept = Kept()
-    kept.add(started("c1", "bash", {"command": "cat config.json"}))
-    kept.add(done("c1", '{"credentials": ["private canary value"], "name": "demo"}'))
-    kept.add(started("c2", "bash", {"command": "cat secret.json"}))
-    kept.add(done("c2", 'noise {"pass' + 'word": "prefix\\"private canary suffix"} and "pass' + 'word": "open canary'))
-    text = json.dumps(card.build(kept.snapshot(), {"at": "2026-10-26T10:01:00+00:00"}, {}))
-    assert "canary" not in text
-    assert "demo" in text
 
 
 @pytest.mark.parametrize("answer", ['{"verdict": "silent", "evidence": "e1"}', '{"verdict": "note", "note": 3}',
@@ -908,16 +805,10 @@ def test_an_answer_with_a_known_verdict_but_malformed_fields_is_failed(answer: s
     )
 
 
-def test_flags_with_escaped_quotes_embedded_json_containers_and_dropped_answers() -> None:
+def test_answers_the_ring_drops_are_a_gap() -> None:
     kept = Kept()
-    kept.add(started("c1", "bash", {"command": 'docker login --password "prefix\\"private canary_suffix" r.example'}))
-    kept.add(done("c1", 'DEBUG: {"credentials": ["private canary value", {"x": "canary"}], "user": "demo"} done'))
     for i in range(5):
         kept.add(started(f"q{i}", "ask_user", {"question": f"Which {i}?"}))
         kept.add(done(f"q{i}", f"answer {i}"))
     built = card.build(kept.snapshot(), {"at": "2026-10-26T10:01:00+00:00"}, {})
-    text = json.dumps(built)
-    assert "canary" not in text
-    assert "r.example" in text
-    assert '"user": "demo"' in text.replace("\\", "")
     assert any("2 earlier answers" in g for g in built["gaps"])

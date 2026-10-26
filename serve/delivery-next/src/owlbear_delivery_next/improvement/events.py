@@ -9,13 +9,10 @@ frozen copy: a result that completes after it is not in it.
 
 from __future__ import annotations
 
-import contextlib
 import json
 import re
 from collections import deque
 from typing import Any
-
-from owlbear_delivery_next.local_system.mask import SECRET_NAME, redact, secret_key, value_end
 
 ACTIONS, CALLS = 120, 200  # actions kept; calls awaiting their completion
 TEXT, SAID, ARGS, RESULT = 6000, 1500, 1500, 4000  # characters kept of a request, a message, arguments, a result
@@ -52,11 +49,8 @@ def as_dict(ev: Any) -> dict[str, Any]:  # noqa: ANN401 - an SDK event object or
 
 
 CUT = " [...] "
-RAW = 65536  # characters cleaned whole, on the step's loop; a longer text is omitted: no cut of it is known safe
+RAW = 65536  # characters of one text cleaned at most, on the step's loop; a longer one is clipped to this first
 EMAIL = re.compile(r"(?<![\w.+-])[\w.+-]+@[\w-]+\.[\w.-]+")  # tried only where a word starts: linear
-FLAG = re.compile(r"(?<!\S)(?P<f>--?[\w-]++)(?P<s>\s+)")  # each flag scanned once: linear; judged in ``_flags``
-SECRET = re.compile(rf"(?i){SECRET_NAME}")
-PROTECT = re.compile(r"(?:/(?:Users|private|var|tmp|Library|home)/[^\s\"'`:;,)\]}]+)|\b[0-9a-f]{40}\b")
 
 
 def _text(value: object) -> str:
@@ -75,71 +69,21 @@ def clip(text: object, n: int) -> str:
 
 
 def clean(text: str) -> str:
-    """*text* without credentials, emails or browser context.
+    """*text* without the browser context VS Code attaches or email addresses: noise and personal data, no evidence.
 
-    Every credential rule applies everywhere; only the long-value rule spares file paths and commit ids, which are no
-    secrets (as the pilot's cards were).
+    Credentials are not masked (the owner's choice, 2026-10-26): a look sends the model what the agent's own session
+    already sent it, and the records stay on this machine, owner-only, until Retro has judged them.
     """
-    kept: list[str] = []
-
-    def hold(m: re.Match[str]) -> str:
-        kept.append(m.group(0))
-        return f"\x00{len(kept) - 1}\x00"
-
-    text = _flags(no_browser(text.replace("\x00", "")))
-    text = PROTECT.sub(hold, redact(text, blobs=False))
-    return EMAIL.sub("<email>", re.sub(r"\x00(\d+)\x00", lambda m: kept[int(m.group(1))], redact(text)))
-
-
-def omitted(length: int) -> str:
-    """What stands for a text too long to clean."""
-    return f"[{length} characters, too long to clean: omitted]"
-
-
-def _scrubbed(value: Any) -> Any:  # noqa: ANN401 - JSON values
-    """*value* with every string cleaned and every credential-named field's value masked, before it is encoded."""
-    if isinstance(value, str):
-        return clean(value)
-    if isinstance(value, list):
-        return [_scrubbed(v) for v in value]
-    if isinstance(value, dict):
-        return {k: "***" if secret_key(str(k)) else _scrubbed(v) for k, v in value.items()}
-    return value
-
-
-def _flags(text: str) -> str:
-    """*text* with the spaced value of every credential-named flag masked, in one pass."""
-    out, at = [], 0
-    for m in FLAG.finditer(text):
-        start = m.end()
-        if (m.start() < at or not SECRET.search(m["f"]) or text[start : start + 1] == "-"
-                or (end := value_end(text, start)) is None):  # fmt: skip
-            continue
-        out.append(f"{text[at:start]}***")
-        at = end
-    return "".join(out) + text[at:]
+    return EMAIL.sub("<email>", no_browser(text))
 
 
 def kept_text(value: object, n: int) -> str:
-    """*value* cleaned whole, then clipped to *n*: a credential is never cut from what names it or quotes it.
-
-    Structured values are cleaned field by field before they are encoded, so no escaped quote hides a credential. A
-    text over ``RAW`` is omitted: a cut could split a quoted or labelled credential, and no cut is known to be safe.
-    """
-    if not isinstance(value, str):
-        size = len(_text(value))
-        return omitted(size) if size > RAW else clip(_text(_scrubbed(json.loads(_text(value)))), n)
-    if len(value) > RAW:
-        return omitted(len(value))
-    if value.lstrip()[:1] in {"{", "["}:  # a JSON object or array in text: its fields are cleaned before it is encoded
-        with contextlib.suppress(ValueError):
-            if isinstance(decoded := json.loads(value), dict | list):
-                return clip(_text(_scrubbed(decoded)), n)
-    return clip(clean(value), n)
+    """*value* cleaned, then clipped to *n*: browser context cut in two is still dropped whole."""
+    return clip(clean(clip(_text(value), RAW)), n)
 
 
 def result_text(data: dict[str, Any]) -> Any:  # noqa: ANN401 - a text, or a structured error as given
-    """A completed call's result as the agent saw it, else its error (a structured one as it is, cleaned later)."""
+    """A completed call's result as the agent saw it, else its error (a structured one as it is)."""
     result = data.get("result")
     if isinstance(result, dict):
         return str(result.get("content") or result.get("detailedContent") or "")
@@ -159,7 +103,7 @@ class Kept:
         self.said: deque[dict[str, Any]] = deque(maxlen=12)
         self.actions: deque[dict[str, Any]] = deque(maxlen=ACTIONS)
         self.calls: dict[str, dict[str, Any]] = {}
-        self.dropped = {"actions": 0, "requests": 0, "messages": 0, "answers": 0, "texts too long to clean": 0}
+        self.dropped = {"actions": 0, "requests": 0, "messages": 0, "answers": 0}  # what the rings no longer hold
         self.n = 0  # events seen
 
     def add(self, ev: Any) -> bool:  # noqa: ANN401 - an SDK event object or a logged event
@@ -170,23 +114,23 @@ class Kept:
         if not main_agent(d):
             return False
         if kind == "user.message":
-            text = self._kept(str(data.get("content") or ""), TEXT)
+            text = kept_text(str(data.get("content") or ""), TEXT)
             if not self.task:
                 self.task, self.task_n = text, self.n
             self._ring(self.requests, {"n": self.n, "at": at, "text": text}, "requests")
             self.first_reply = None
         elif kind == "assistant.message" and str(data.get("content") or "").strip():
-            message = {"n": self.n, "at": at, "text": self._kept(str(data["content"]), SAID)}
+            message = {"n": self.n, "at": at, "text": kept_text(str(data["content"]), SAID)}
             self.first_reply = self.first_reply or message
             self._ring(self.said, message, "messages")
         elif kind == "tool.execution_start":
             call = {"n": self.n, "at": at, "tool": str(data.get("toolName") or ""), "id": str(data.get("toolCallId")),
-                    "args": self._kept(data.get("arguments"), ARGS)}  # fmt: skip
+                    "args": kept_text(data.get("arguments"), ARGS)}  # fmt: skip
             self._push(call)
             if len(self.calls) < CALLS:
                 self.calls[call["id"]] = call
         elif kind == "tool.execution_complete" and (call := self.calls.pop(str(data.get("toolCallId")), None)):
-            call |= {"done_at": at, "ok": data.get("success"), "result": self._kept(result_text(data), RESULT)}
+            call |= {"done_at": at, "ok": data.get("success"), "result": kept_text(result_text(data), RESULT)}
             if call["tool"] in QUESTIONS and not self._stopped(call):
                 answer = {"at": at, "question": clip(call["args"], 400), "answer": clip(call["result"], 400)}
                 self._ring(self.answers, answer, "answers")
@@ -200,12 +144,6 @@ class Kept:
         return "cancelled the request" in call.get("result", "") and any(
             a.get("kind") == "stop" for a in list(self.actions)[-3:]
         )
-
-    def _kept(self, value: object, n: int) -> str:
-        text = kept_text(value, n)
-        if text.endswith("too long to clean: omitted]") and text.startswith("["):
-            self.dropped["texts too long to clean"] += 1
-        return text
 
     def _push(self, action: dict[str, Any]) -> None:
         self._ring(self.actions, action, "actions")

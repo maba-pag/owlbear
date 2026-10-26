@@ -1,11 +1,11 @@
-"""A Spotter look's card (design §4): what a look sees, built from a frozen intake snapshot; pure, redacted, bounded.
+"""A Spotter look's card (design §4): what a look sees, built from a frozen intake snapshot; pure and bounded.
 
 The card holds the intent (the step's task and the requester's later messages and answers; the latest one rules), the
 agent's plan (its first message after the latest request, and its latest), the moment (the hand-off or the sampled
 call), the recent actions, evidence (full outputs of failed calls, tests, waits and edits, the edit's change itself
 included), timing (minutes since the request and the last edit, real waiting in the last 30 minutes), the open work and
-the decisions in force that the step's worker has, and the gaps: what it cannot show. Every text is redacted
-(credentials, emails, browser context) before anything leaves the machine; the whole card stays within ``BOUND``.
+the decisions in force that the step's worker has, and the gaps: what it cannot show. Every text is cleaned of
+browser context and email addresses (credentials are not masked); the whole card stays within ``BOUND``.
 """
 
 from __future__ import annotations
