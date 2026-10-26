@@ -8,6 +8,8 @@ still has the bytes the owner confirmed.
 from __future__ import annotations
 
 import json
+import os
+import stat
 import uuid
 from typing import TYPE_CHECKING, Literal
 
@@ -17,7 +19,12 @@ from owlbear_delivery_next.change_contracts.profile_record import PROFILE_FORMAT
 from owlbear_delivery_next.local_system import data_repo
 from owlbear_delivery_next.local_system.storage_io import atomic_write
 from owlbear_delivery_next.state_store import profile_share, roles_move
-from owlbear_delivery_next.state_store.profile_errors import Basis, SourceChangedError, TargetChangedError
+from owlbear_delivery_next.state_store.profile_errors import (
+    Basis,
+    SharedSyncError,
+    SourceChangedError,
+    TargetChangedError,
+)
 from owlbear_delivery_next.state_store.profile_share import PROFILE, _present
 
 if TYPE_CHECKING:
@@ -60,9 +67,9 @@ class Receipt(BaseModel):
 
     format: Literal[1] = 1
     id: str = Field(pattern=r"^[0-9a-f]{32}$")
-    scope: str  # the logical shared repository and project folder, or ``local``
-    source: str  # the digest of the old unreadable profile the owner confirmed
-    target: str  # the digest of the shared profile the owner confirmed against, or ``absent``
+    scope: str = Field(min_length=1)  # the logical shared repository and project folder, or ``local``
+    source: str = Field(pattern=r"^[0-9a-f]{64}$")  # the digest of the old unreadable profile the owner confirmed
+    target: str = Field(pattern=r"^(absent|[0-9a-f]{64})$")  # the shared profile's digest the owner confirmed against
     profile: Profile
 
     @field_validator("profile")
@@ -82,20 +89,32 @@ def scope(store: Store) -> str:
     return "local" if store.shared is None else f"{data_repo.identity(store.shared.root)}/{store.name}"
 
 
+RECEIPT_LIMIT = 1 << 20  # a replacement profile is a few kilobytes; more is not a receipt
+
+
 def _read(store: Store) -> Receipt | None:
     """The pending receipt, validated: malformed, future or unconfirmed evidence is refused, never replayed."""
     from owlbear_delivery_next.state_store.store import StoreError  # noqa: PLC0415 - the store imports this module
 
     receipt = store.root / RECEIPT
     try:
-        text = receipt.read_text()
+        fd = os.open(receipt, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | os.O_NONBLOCK)
     except FileNotFoundError:
         return None
     except OSError as exc:
-        msg = f"the pending profile repair cannot be read: {receipt}; check the file, then run setup again"
+        msg = f"the pending profile repair cannot be read: {receipt}; check or remove the file, then run setup again"
         raise StoreError(msg) from exc
+    if not stat.S_ISREG(os.fstat(fd).st_mode):  # a FIFO or directory is refused before any read could block
+        os.close(fd)
+        msg = f"the pending profile repair is not a regular file: {receipt}; remove it, then run setup again"
+        raise StoreError(msg)
+    with os.fdopen(fd, "rb") as handle:
+        raw = handle.read(RECEIPT_LIMIT + 1)
+    if len(raw) > RECEIPT_LIMIT:
+        msg = f"the pending profile repair is too large to be a receipt: {receipt}; remove it, then run setup again"
+        raise StoreError(msg)
     try:
-        return Receipt.model_validate_json(text)
+        return Receipt.model_validate_json(raw)
     except ValidationError as exc:
         msg = (
             f"the pending profile repair is malformed or from another version: {receipt}; "
@@ -104,13 +123,34 @@ def _read(store: Store) -> Receipt | None:
         raise StoreError(msg) from exc
 
 
-def _own(store: Store, receipt_id: str) -> Receipt | None:
-    """The pending receipt while it is still the one *receipt_id* names; another operation's receipt is not ours."""
-    try:
-        current = Receipt.model_validate_json((store.root / RECEIPT).read_text())
-    except OSError, ValidationError:
+def _claimed(store: Store, receipt_id: str) -> Receipt | None:
+    """The pending receipt while it is still the one *receipt_id* names; None once another or none is there."""
+    from owlbear_delivery_next.state_store.store import StoreError  # noqa: PLC0415 - the store imports this module
+
+    current = _read(store)
+    if current is None or current.id != receipt_id:
         return None
-    return current if current.id == receipt_id else None
+    if current.scope != scope(store):
+        msg = (
+            f"the pending profile repair was staged for another shared repository or folder: {store.root / RECEIPT}; "
+            "remove it to discard the staged replacement, then run setup again"
+        )
+        raise StoreError(msg)
+    return current
+
+
+def _own(store: Store, receipt_id: str) -> Receipt:
+    """The pending receipt this operation staged; a replaced or removed one is refused, never completed."""
+    from owlbear_delivery_next.state_store.store import StoreError  # noqa: PLC0415 - the store imports this module
+
+    current = _claimed(store, receipt_id)
+    if current is None:
+        msg = (
+            f"the pending profile repair was replaced or removed while it was being published: {store.root / RECEIPT}; "
+            "run setup again to review the current profile"
+        )
+        raise StoreError(msg)
+    return current
 
 
 def pending(store: Store) -> Receipt | None:
@@ -146,9 +186,13 @@ def publish(store: Store, receipt: Receipt, *, resumed: bool) -> str:
         source=receipt.source,
         target=receipt.target,
         rebind=lambda target: _rebind(store, receipt.id, target),
+        owned=lambda: _own(store, receipt.id),
     )
     try:
         notice = store.write_profile(receipt.profile, replace_unreadable=True, basis=basis)
+    except SharedSyncError as exc:  # nothing was decided about the shared bytes: the receipt is kept for a retry
+        tail = f"The confirmed replacement is kept in {store.root / RECEIPT}; run setup again to publish it."
+        raise SharedSyncError(exc.why, tail) from exc
     except TargetChangedError as exc:
         if resumed:  # the staged replacement stays visible; the owner decides whether to discard it
             msg = (
@@ -169,7 +213,7 @@ def publish(store: Store, receipt: Receipt, *, resumed: bool) -> str:
 
 def _rebind(store: Store, receipt_id: str, target: str) -> None:
     """Bind the receipt to the shared bytes now present, published or refused; the caller holds the writer lock."""
-    current = _own(store, receipt_id)
+    current = _claimed(store, receipt_id)
     if current is not None and current.target != target:
         atomic_write(store.root / RECEIPT, current.model_copy(update={"target": target}).model_dump_json())
 
@@ -177,17 +221,17 @@ def _rebind(store: Store, receipt_id: str, target: str) -> None:
 def finish(store: Store, receipt: Receipt) -> None:
     """Retire the old profile once its replacement is published, while it still has the confirmed bytes."""
     with profile_share._writer(store):  # noqa: SLF001 - the same writer lock the publication held
+        _own(store, receipt.id)  # a replaced receipt is not this publication's: its old source stays untouched
         if store.shared:
             if profile_share.config_digest(store.root / PROFILE) != receipt.source:
                 msg = "the old profile changed after the replacement was published; run setup again to review it"
                 raise SourceChangedError(msg)
             roles_move.retire_source(store)
-        if _own(store, receipt.id) is not None:
-            (store.root / RECEIPT).unlink(missing_ok=True)
+        (store.root / RECEIPT).unlink(missing_ok=True)
 
 
 def _drop(store: Store, receipt_id: str) -> None:
     """Drop the receipt only while it is still the one this operation staged; a newer receipt is left intact."""
     with profile_share._writer(store):  # noqa: SLF001 - the writer lock serializes receipt ownership
-        if _own(store, receipt_id) is not None:
+        if _claimed(store, receipt_id) is not None:
             (store.root / RECEIPT).unlink(missing_ok=True)

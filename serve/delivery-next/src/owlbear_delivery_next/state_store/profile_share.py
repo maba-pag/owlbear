@@ -28,7 +28,12 @@ from owlbear_delivery_next.state_store.pending_intents import (
 from owlbear_delivery_next.state_store.pending_intents import (
     shared_pending as _shared_pending,
 )
-from owlbear_delivery_next.state_store.profile_errors import Basis, SourceChangedError, TargetChangedError
+from owlbear_delivery_next.state_store.profile_errors import (
+    Basis,
+    SharedSyncError,
+    SourceChangedError,
+    TargetChangedError,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -59,10 +64,16 @@ def write(store: Store, prof: Profile, *, replace_unreadable: bool = False, basi
     it, and only while the old profile and the shared profile still have the digests in *basis* (under the lock).
     """
     with _writer(store):
-        # the target is judged against the remote's current bytes, not a stale clone
-        if basis and store.shared and (why := store.shared.pull()):
-            msg = f"the shared profile could not be synced before the repair: {why}; nothing was saved."
-            raise TargetChangedError(msg)
+        if basis and basis.owned:
+            basis.owned()  # a newer or missing replacement is refused before anything is pulled or written
+        # the target is judged against the remote's current bytes, not a stale clone; a failed sync says nothing of them
+        if basis and store.shared:
+            try:
+                why = store.shared.pull()
+            except (DataRepoError, OSError) as exc:
+                why = str(exc) or type(exc).__name__
+            if why:
+                raise SharedSyncError(why)
         if basis and basis.source and config_digest(store.root / PROFILE) != basis.source:
             msg = "The old profile changed while you answered; nothing was saved. Run setup again to review it."
             raise SourceChangedError(msg)

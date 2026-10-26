@@ -2,6 +2,7 @@
 
 import contextlib
 import json
+import os
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
@@ -17,7 +18,7 @@ from owlbear_delivery_next.change_flow import loop
 from owlbear_delivery_next.change_flow.loop import StepResult
 from owlbear_delivery_next.commands import setup
 from owlbear_delivery_next.local_system.codebase import CURRENT
-from owlbear_delivery_next.local_system.data_repo import DataRepo
+from owlbear_delivery_next.local_system.data_repo import DataRepo, DataRepoError
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.runtimes import readiness
@@ -948,6 +949,137 @@ def test_a_stale_repair_receipt_does_not_clear_a_newer_pending_receipt(repo: Pat
     with pytest.raises(profile_share.SourceChangedError):
         profile_repair.publish(store, first, resumed=False)
     assert receipt.read_text() == newer.model_dump_json()
+
+
+def stage_confirmed(store: Store, version: int = 1) -> profile_repair.Receipt:
+    """Stage a confirmed replacement against the current old profile and the absent shared profile."""
+    digest = profile_share.config_digest(store.root / profile_share.PROFILE)
+    return profile_repair.stage(store, Profile(version=version, confirmed_at=NOW), digest, "absent")
+
+
+def test_a_failed_sync_keeps_the_confirmed_replacement_and_a_healthy_retry_publishes_it(
+    repo: Path, shared_repo, monkeypatch, capsys
+) -> None:
+    store = shared_project(repo, shared_repo, monkeypatch)
+    source = store.root / profile_share.PROFILE
+    source.write_text(BAD_EFFORT)
+    receipt = store.root / profile_repair.RECEIPT
+    with monkeypatch.context() as offline:
+
+        def pull_fails(*_args: object) -> str:
+            msg = "fetch failed"
+            raise DataRepoError(msg)
+
+        offline.setattr(DataRepo, "pull", pull_fails)
+        assert setup.run(repo, [], yes=True, local_files="no") == 1
+    out = capsys.readouterr().out
+    assert "could not be synced" in out
+    assert str(receipt) in out
+    assert "run setup again" in out
+    assert receipt.exists()
+    assert source.read_text() == BAD_EFFORT
+    assert not (store.root / profile_share.ROLES_MOVED).exists()
+    assert setup.run(repo, [], yes=False, local_files="no") == 0  # healthy again: published without a new ask
+    assert "Profile v" in capsys.readouterr().out
+    assert not receipt.exists()
+    assert (store.root / profile_share.ROLES_MOVED).exists()
+
+
+def test_a_receipt_replaced_before_publication_refuses_the_older_one_before_any_write(
+    repo: Path, shared_repo, monkeypatch, tmp_path
+) -> None:
+    _data, remote = shared_repo
+    store = shared_project(repo, shared_repo, monkeypatch)
+    source = store.root / profile_share.PROFILE
+    source.write_text(BAD_EFFORT)
+    first = stage_confirmed(store, version=1)
+    receipt = store.root / profile_repair.RECEIPT
+    newer = profile_repair.Receipt(
+        id="b" * 32,
+        scope=profile_repair.scope(store),
+        source=first.source,
+        target="absent",
+        profile=Profile(version=2, confirmed_at=NOW),
+    )
+    receipt.write_text(newer.model_dump_json())
+    before = receipt.read_bytes()
+    real_write = Store.write_profile
+    writes: list[str] = []
+
+    def spy(self: Store, *args: object, **kwargs: object) -> str:
+        writes.append("write")
+        return real_write(self, *args, **kwargs)
+
+    monkeypatch.setattr(Store, "write_profile", spy)
+    with pytest.raises(StoreError, match="replaced or removed"):
+        profile_repair.publish(store, first, resumed=False)
+    assert writes == ["write"]
+    assert receipt.read_bytes() == before
+    assert source.read_text() == BAD_EFFORT
+    _, landed = clone_profile(remote, tmp_path / "after", store.name)
+    assert landed is None
+
+
+def test_a_receipt_replaced_during_publication_is_not_retired(repo: Path, shared_repo, monkeypatch) -> None:
+    store = shared_project(repo, shared_repo, monkeypatch)
+    source = store.root / profile_share.PROFILE
+    source.write_text(BAD_EFFORT)
+    first = stage_confirmed(store, version=1)
+    receipt = store.root / profile_repair.RECEIPT
+    newer = profile_repair.Receipt(
+        id="c" * 32,
+        scope=profile_repair.scope(store),
+        source=first.source,
+        target="absent",
+        profile=Profile(version=2, confirmed_at=NOW),
+    )
+    real_write = Store.write_profile
+
+    def replace_after_write(self: Store, *args: object, **kwargs: object) -> str:
+        notice = real_write(self, *args, **kwargs)
+        receipt.write_text(newer.model_dump_json())  # a newer confirmed replacement lands after this publication
+        return notice
+
+    monkeypatch.setattr(Store, "write_profile", replace_after_write)
+    with pytest.raises(StoreError, match="replaced or removed"):
+        profile_repair.publish(store, first, resumed=False)
+    assert not (store.root / profile_share.ROLES_MOVED).exists()
+    assert source.read_text() == BAD_EFFORT
+    assert receipt.read_text() == newer.model_dump_json()
+
+
+@pytest.mark.parametrize("damage", ["fifo", "directory", "symlink", "empty_source", "bad_target", "blank_scope"])
+def test_an_unreadable_or_invalid_receipt_is_refused_by_name_before_any_change(
+    damage: str, repo: Path, shared_repo, monkeypatch, capsys
+) -> None:
+    store, receipt = refused_repair_receipt(repo, shared_repo, monkeypatch, capsys)
+    if damage == "fifo":
+        receipt.unlink()
+        os.mkfifo(receipt)
+    elif damage == "directory":
+        receipt.unlink()
+        receipt.mkdir()
+    elif damage == "symlink":
+        elsewhere = receipt.parent / "elsewhere.json"
+        elsewhere.write_bytes(receipt.read_bytes())
+        receipt.unlink()
+        receipt.symlink_to(elsewhere)
+    else:
+        key, value = {"empty_source": ("source", ""), "bad_target": ("target", ""), "blank_scope": ("scope", "")}[
+            damage
+        ]
+        data = json.loads(receipt.read_text())
+        data[key] = value
+        receipt.write_text(json.dumps(data))
+    source_before = (store.root / profile_share.PROFILE).read_bytes()
+    target_before = profile_share.path(store).read_bytes()
+    calls = probed_repair(monkeypatch)
+    with pytest.raises(StoreError) as info:
+        setup.run(repo, [], yes=False, local_files="no")
+    assert str(receipt) in str(info.value)
+    assert calls == []
+    assert (store.root / profile_share.PROFILE).read_bytes() == source_before
+    assert profile_share.path(store).read_bytes() == target_before
 
 
 # Finding 6: a legacy claim is won only by its own published nonce, never by an equal absent basis

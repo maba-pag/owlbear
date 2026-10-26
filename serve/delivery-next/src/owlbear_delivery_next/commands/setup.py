@@ -16,7 +16,7 @@ from owlbear_delivery_next.local_system import data_repo, git_files, local_home,
 from owlbear_delivery_next.runtimes import readiness, window_files
 from owlbear_delivery_next.settings import profile, roles
 from owlbear_delivery_next.state_store import prefs_import, profile_repair, profile_share, roles_move
-from owlbear_delivery_next.state_store.profile_errors import SourceChangedError
+from owlbear_delivery_next.state_store.profile_errors import SharedSyncError, SourceChangedError
 from owlbear_delivery_next.state_store.store import Store, StoreError
 
 if TYPE_CHECKING:
@@ -300,7 +300,7 @@ def _publish_repair(
     """Publish the owner's confirmed replacement of an unreadable old profile; False after saying why it did not."""
     try:
         notice = profile_repair.publish(store, receipt, resumed=resumed)
-    except SourceChangedError as exc:
+    except (SourceChangedError, SharedSyncError) as exc:
         say(str(exc))
         return False
     if notice:  # the replacement is staged and kept for the next setup: nothing is retired yet
