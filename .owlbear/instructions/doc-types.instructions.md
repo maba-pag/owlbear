@@ -1,6 +1,6 @@
 ---
 description: "Project-specific documentation type rules for OwlBear canonical docs"
-applyTo: "README.md,README-consumer.md,SECURITY.md,serve/*/README.md,share/README.md,setup/setup-guide.md,setup/operating-owlbear.md,setup/sharing-guide.md,.github/README-automation.md,.owlbear/README.md,store/README.md,tests/README.md"
+applyTo: "README.md,CONTRIBUTING.md,SECURITY.md,serve/*/README.md,share/README.md,setup/setup-guide.md,setup/operating-owlbear.md,setup/sharing-guide.md,.github/README-automation.md,.owlbear/README.md,store/README.md,tests/README.md"
 ---
 
 # OwlBear Documentation Types
@@ -20,22 +20,24 @@ cross-reference integrity, audience fitness, and the eight audit dimensions.
 
 ## 1. Doc Types and Required Sections
 
-### 1.1 Root READMEs (`README.md`, `README-consumer.md`)
+### 1.1 Root README and Contributing Guide (`README.md`, `CONTRIBUTING.md`)
 
-`README.md` is the repository's front page and the development checkout's front door; it routes
-product readers to `README-consumer.md` first.
+`README.md` is the repository's front page and the first page of every installed copy; it is the
+product page. `CONTRIBUTING.md` is the guide for developing OwlBear itself.
 
-`STR-1` `README-consumer.md` must contain, in this order: product name and tagline, what using
+`STR-1` `README.md` must contain, in this order: product name and tagline, what using
 OwlBear looks like, fit and non-fit expectations, requirements, quick start, verification, first
 change, what setup changes and how to undo it, surface status, and a routing table to deeper
-authority. Value and expectations come before vocabulary, architecture, and routing.
+authority that includes `CONTRIBUTING.md`. Value and expectations come before vocabulary,
+architecture, and routing.
 
-`STR-2` Neither root README may duplicate content from `setup/setup-guide.md` or
+`STR-2` Neither `README.md` nor `CONTRIBUTING.md` may duplicate content from `setup/setup-guide.md` or
 `setup/operating-owlbear.md` beyond the shortest usable form. Link to the authority instead.
 
-`STR-3` `README.md` must contain: project identity, a pointer to `README-consumer.md` for
-the product story and installation, a reader route, the development checkout and its checks, and a
-directory structure overview. It must not carry consumer status tables or installation procedure.
+`STR-3` `CONTRIBUTING.md` must contain: a pointer to `README.md` for the product story and
+installation, the branch and release model, the development checkout and its checks, a starting
+point per surface, and a directory structure overview. It must not carry consumer status tables or
+installation procedure.
 
 ### 1.2 `SECURITY.md`
 
@@ -82,7 +84,7 @@ customization; it starts after installation and does not repeat the install path
 | Doc type | Canonical location |
 | --- | --- |
 | Root README | `/README.md` |
-| Consumer README | `/README-consumer.md` (if needed) |
+| Contributing guide | `/CONTRIBUTING.md` |
 | SECURITY.md | `/SECURITY.md` |
 | Package README | `serve/{package}/README.md` |
 | Share README | `share/README.md` |
@@ -97,7 +99,8 @@ customization; it starts after installation and does not repeat the install path
 
 | Doc type | Primary audience | Knowledge level |
 | --- | --- | --- |
-| Root README | New evaluators, contributors | No prior OwlBear knowledge |
+| Root README | New evaluators and installers | No prior OwlBear knowledge |
+| Contributing guide | OwlBear contributors | Python-fluent, new to this repository |
 | SECURITY.md | Security researchers, users | Familiar with disclosure norms |
 | Package README | Developers integrating the package | Python-fluent, unfamiliar with this package |
 | Share README | Pipeline agents, contributors | OwlBear internals familiar |
