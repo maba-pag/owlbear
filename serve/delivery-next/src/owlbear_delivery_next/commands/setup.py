@@ -16,7 +16,7 @@ from owlbear_delivery_next.local_system import data_repo, git_files, local_home,
 from owlbear_delivery_next.runtimes import readiness, window_files
 from owlbear_delivery_next.settings import profile, roles
 from owlbear_delivery_next.state_store import prefs_import, profile_repair, profile_share, roles_move
-from owlbear_delivery_next.state_store.profile_share import SourceChangedError
+from owlbear_delivery_next.state_store.profile_errors import SourceChangedError
 from owlbear_delivery_next.state_store.store import Store, StoreError
 
 if TYPE_CHECKING:
@@ -203,12 +203,13 @@ def project_folder(repo: Path, chosen: str, ask: Ask, say: Callable[[str], objec
     return False
 
 
-def _saved(store: Store, say: Callable[[str], object]) -> tuple[Profile | None, bool, str]:
-    """The saved profile setup may replace, as ``(prev, unreadable, source)``.
+def _saved(store: Store, say: Callable[[str], object]) -> tuple[Profile | None, bool, str, str]:
+    """The saved profile setup may replace, as ``(prev, unreadable, source, target)``.
 
-    *source* is the digest of this clone's old profile file when its role overrides cannot be inspected. Readability
-    and that digest come from one observation of the same bytes, taken now, so a stale open-time error never offers a
-    replacement for a file that reads. A readable profile is never replaced for its old roles.
+    *source* is the digest of this clone's old profile file when its role overrides cannot be inspected; *target* is
+    the digest of the shared profile it is confirmed against. Readability and that digest come from one observation of
+    the same bytes, taken now, so a stale open-time error never offers a replacement for a file that reads. A readable
+    profile is never replaced for its old roles.
     """
     reason: StoreError | None = None
     try:
@@ -220,15 +221,16 @@ def _saved(store: Store, say: Callable[[str], object]) -> tuple[Profile | None, 
         if store.deferred_roles is not None:
             msg = "the old profile can be read now; run setup again to review it"
             raise StoreError(msg)
-        return prev, reason is not None, ""
+        return prev, reason is not None, "", ""
     if prev is not None or not digest:  # a readable shared profile with an unreadable clone file: open refuses it
         raise now
+    target = profile_share.config_digest(profile_share.path(store)) if store.shared else ""
     say(f"The saved profile cannot be read ({reason or now}); detecting a new one.")
     say(
         "Confirming replacement discards the unreadable profile, including any unrecoverable legacy role "
         "overrides; declining keeps it."
     )
-    return None, True, digest
+    return None, True, digest, target
 
 
 def run(
@@ -250,11 +252,11 @@ def run(
         str(local_home.stable(Path(sys.executable))),
         lambda t: sys.stdout.write(t + "\n"),
     )
-    if pending := profile_repair.pending(store):  # an owner-confirmed replacement that was not yet published
-        if not _publish_repair(store, pending[1], pending[0], say):
+    if receipt := profile_repair.pending(store):  # an owner-confirmed replacement that was not yet published
+        if not _publish_repair(store, receipt, say, resumed=True):
             return 1
-        return _settle(store, pending[1], say, _project_files(repo, python, local_files, ask, say))
-    prev, unreadable, source = _saved(store, say)
+        return _settle(store, receipt.profile, say, _project_files(repo, python, local_files, ask, say))
+    prev, unreadable, source, target = _saved(store, say)
     checks = readiness.check(repo, prev)
     say("Readiness")
     say("\n".join(f"  {'ok ' if c.ok else 'FIX'} {c.name}: {c.detail}" for c in checks))
@@ -277,7 +279,8 @@ def run(
         say("Profile not confirmed; nothing was saved. Run setup again to confirm it.")
         return 1
     if source:
-        if not _publish_repair(store, prof, source, say):
+        receipt = profile_repair.stage(store, prof, source, target)
+        if not _publish_repair(store, receipt, say, resumed=False):
             return 1
     else:
         store.write_profile(prof, replace_unreadable=unreadable)
@@ -291,14 +294,16 @@ def _project_files(
     return partial(write_project_files, repo, python, local_ask, say, given=given)
 
 
-def _publish_repair(store: Store, prof: Profile, source: str, say: Callable[[str], object]) -> bool:
+def _publish_repair(
+    store: Store, receipt: profile_repair.Receipt, say: Callable[[str], object], *, resumed: bool
+) -> bool:
     """Publish the owner's confirmed replacement of an unreadable old profile; False after saying why it did not."""
     try:
-        notice = profile_repair.publish(store, prof, source)
+        notice = profile_repair.publish(store, receipt, resumed=resumed)
     except SourceChangedError as exc:
         say(str(exc))
         return False
-    if notice:  # the replacement is staged and kept for the next setup: nothing is published or retired yet
+    if notice:  # the replacement is staged and kept for the next setup: nothing is retired yet
         say(notice)
         say("The replacement is kept; run setup again to publish it.")
         return False

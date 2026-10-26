@@ -1,6 +1,7 @@
 """The legacy preference import recovers from owner reviews, stored values, and failed publications (R15, FND-01)."""
 
 import contextlib
+import json
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
@@ -53,10 +54,10 @@ def local(tmp_path: Path, monkeypatch) -> Store:
     return Store(tmp_path / "store")
 
 
-def clone_profile(remote: Path, tmp_path: Path) -> tuple[Store, Profile]:
+def clone_profile(remote: Path, tmp_path: Path, project: str = "shop-site") -> tuple[Store, Profile]:
     second = tmp_path / "fresh"
     subprocess.run(["git", "clone", "-q", str(remote), str(second)], check=True, capture_output=True)  # noqa: S603, S607
-    fresh = Store(tmp_path / "fresh-store", DataRepo(second), "shop-site")
+    fresh = Store(tmp_path / "fresh-store", DataRepo(second), project)
     return fresh, fresh.read_profile()
 
 
@@ -789,10 +790,12 @@ def test_a_refused_repair_is_not_resumed_once_the_old_profile_changed(
     store = shared_project(repo, shared_repo, monkeypatch)
     source = store.root / profile_share.PROFILE
     source.write_text(BAD_EFFORT)
+    config_before = store.config_path.read_bytes() if store.config_path.exists() else None
     with monkeypatch.context() as refused:
         refuse_publish(refused)
         assert setup.run(repo, [], yes=True, local_files="no") == 1
     assert not (store.root / profile_share.ROLES_MOVED).exists()
+    assert (store.config_path.read_bytes() if store.config_path.exists() else None) == config_before
     source.write_text(GOOD_ROLES)
     capsys.readouterr()
     assert setup.run(repo, [], yes=True, local_files="no") == 1
@@ -801,18 +804,162 @@ def test_a_refused_repair_is_not_resumed_once_the_old_profile_changed(
     assert "Profile v" not in out
     assert source.read_text() == GOOD_ROLES
     assert not (store.root / profile_repair.RECEIPT).exists()
+    # The second open applies the now-valid old roles through the ordinary move (fills only empty settings),
+    # atomically with its receipt; the repair itself is refused and never reviewed these roles.
+    merged = store.read_config()
+    assert merged.roles_moved is True
+    assert merged.agents["reviewer"].model == "r-2"
+    assert merged.agents["reviewer"].effort == "max"
+    assert (store.root / profile_share.ROLES_MOVED).exists()
+
+
+def refused_repair_receipt(repo: Path, shared_repo, monkeypatch, capsys) -> tuple[Store, Path]:
+    """A shared repair whose publication was refused: the replacement stays staged in the private receipt."""
+    store = shared_project(repo, shared_repo, monkeypatch)
+    source = store.root / profile_share.PROFILE
+    source.write_text(BAD_EFFORT)
+    with monkeypatch.context() as refused:
+        refuse_publish(refused)
+        assert setup.run(repo, [], yes=True, local_files="no") == 1
+    capsys.readouterr()
+    return store, store.root / profile_repair.RECEIPT
+
+
+def test_a_newer_shared_profile_is_not_overwritten_by_a_staged_repair(
+    repo: Path, shared_repo, monkeypatch, capsys, tmp_path
+) -> None:
+    _data, remote = shared_repo
+    store = shared_project(repo, shared_repo, monkeypatch)
+    source = store.root / profile_share.PROFILE
+    source.write_text(BAD_EFFORT)
+    with monkeypatch.context() as refused:
+        refuse_publish(refused)
+        assert setup.run(repo, [], yes=True, local_files="no") == 1
+    capsys.readouterr()
+    assert (store.root / profile_repair.RECEIPT).exists()
+    owner, _ = clone_as(remote, tmp_path, "owner", store.name)
+    newer = Profile(version=3, confirmed_at=NOW)  # distinct from the staged replacement, which is version 2
+    owner.write_profile(newer)  # a newer shared profile lands while the local source is unchanged
+    assert source.read_text() == BAD_EFFORT
+    code: object
+    try:
+        code = setup.run(repo, [], yes=False, local_files="no")
+    except StoreError as exc:
+        code = exc
+    out = capsys.readouterr().out
+    assert str(store.root / profile_repair.RECEIPT) in out
+    assert "remove" in out
+    assert (store.root / profile_repair.RECEIPT).exists()
+    _, landed = clone_profile(remote, tmp_path / "after", store.name)
+    assert landed == newer
+    assert code == 1
+
+
+def test_a_receipt_with_an_unknown_format_is_refused_before_any_publication(
+    repo: Path, shared_repo, monkeypatch, capsys
+) -> None:
+    store, receipt = refused_repair_receipt(repo, shared_repo, monkeypatch, capsys)
+    data = json.loads(receipt.read_text())
+    data["profile"]["format"] = 999
+    receipt.write_text(json.dumps(data))
+    before = receipt.read_bytes()
+    source_before = (store.root / profile_share.PROFILE).read_bytes()
+    target_before = profile_share.path(store).read_bytes()  # the refused publication already saved it locally
+    calls = probed_repair(monkeypatch)
+    with pytest.raises(StoreError, match="pending profile repair"):
+        setup.run(repo, [], yes=False, local_files="no")
+    assert calls == []
+    assert receipt.read_bytes() == before
+    assert (store.root / profile_share.PROFILE).read_bytes() == source_before
+    assert profile_share.path(store).read_bytes() == target_before
+
+
+def test_a_receipt_without_a_confirmation_time_is_refused_before_any_publication(
+    repo: Path, shared_repo, monkeypatch, capsys
+) -> None:
+    store, receipt = refused_repair_receipt(repo, shared_repo, monkeypatch, capsys)
+    data = json.loads(receipt.read_text())
+    data["profile"]["confirmed_at"] = None
+    receipt.write_text(json.dumps(data))
+    before = receipt.read_bytes()
+    source_before = (store.root / profile_share.PROFILE).read_bytes()
+    target_before = profile_share.path(store).read_bytes()  # the refused publication already saved it locally
+    calls = probed_repair(monkeypatch)
+    with pytest.raises(StoreError, match="pending profile repair"):
+        setup.run(repo, [], yes=False, local_files="no")
+    assert calls == []
+    assert receipt.read_bytes() == before
+    assert (store.root / profile_share.PROFILE).read_bytes() == source_before
+    assert profile_share.path(store).read_bytes() == target_before
+
+
+def test_a_staged_repair_cannot_publish_into_a_different_shared_repository(
+    repo: Path, shared_repo, monkeypatch, capsys, tmp_path
+) -> None:
+    _store, receipt = refused_repair_receipt(repo, shared_repo, monkeypatch, capsys)
+    other_remote = tmp_path / "other.git"
+    other_root = tmp_path / "other-data"
+    subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(other_remote)], check=True)  # noqa: S603, S607
+    subprocess.run(["git", "clone", "-q", str(other_remote), str(other_root)], check=True)  # noqa: S603, S607
+    for key, value in (("user.name", "t"), ("user.email", "t@example.com")):
+        subprocess.run(["git", "-C", str(other_root), "config", key, value], check=True)  # noqa: S603, S607
+    subprocess.run(["git", "-C", str(other_root), "commit", "-q", "--allow-empty", "-m", "start"], check=True)  # noqa: S603, S607
+    subprocess.run(["git", "-C", str(other_root), "push", "-q", "-u", "origin", "HEAD"], check=True)  # noqa: S603, S607
+    monkeypatch.setenv("OWLBEAR_DATA", str(other_root))
+    (tmp_path / "before").mkdir()
+    (tmp_path / "after").mkdir()
+    _, before_landed = clone_profile(other_remote, tmp_path / "before")
+    assert before_landed is None
+    before = receipt.read_bytes()
+    code: object
+    try:
+        code = setup.run(repo, [], yes=False, local_files="no")
+    except StoreError as exc:
+        code = exc
+    _, landed = clone_profile(other_remote, tmp_path / "after")
+    assert landed is None
+    assert receipt.read_bytes() == before
+    assert isinstance(code, StoreError)
+    assert "another shared repository" in str(code)
+    assert str(receipt) in str(code)
+
+
+def test_a_stale_repair_receipt_does_not_clear_a_newer_pending_receipt(repo: Path, shared_repo, monkeypatch) -> None:
+    store = shared_project(repo, shared_repo, monkeypatch)
+    source = store.root / profile_share.PROFILE
+    source.write_text(BAD_EFFORT)
+    digest = profile_share.config_digest(source)
+    first = profile_repair.stage(store, Profile(version=1, confirmed_at=NOW), digest, "absent")
+    receipt = store.root / profile_repair.RECEIPT
+    newer = profile_repair.Receipt(
+        id="b" * 32,
+        scope=profile_repair.scope(store),
+        source=digest,
+        target="absent",
+        profile=Profile(version=2, confirmed_at=NOW),
+    )
+
+    def replace_then_fail(_self: Store, _prof: Profile, **_kwargs: object) -> str:
+        receipt.write_text(newer.model_dump_json())  # a newer confirmed replacement is staged while this one fails
+        msg = "the old profile changed"
+        raise profile_share.SourceChangedError(msg)
+
+    monkeypatch.setattr(Store, "write_profile", replace_then_fail)
+    with pytest.raises(profile_share.SourceChangedError):
+        profile_repair.publish(store, first, resumed=False)
+    assert receipt.read_text() == newer.model_dump_json()
 
 
 # Finding 6: a legacy claim is won only by its own published nonce, never by an equal absent basis
 
 
-def clone_as(remote: Path, tmp_path: Path, name: str) -> tuple[Store, Profile]:
+def clone_as(remote: Path, tmp_path: Path, name: str, project: str = "shop-site") -> tuple[Store, Profile]:
     """A separate checkout of *remote* named *name*, another clone of the same shared record with its own identity."""
     second = tmp_path / name
     subprocess.run(["git", "clone", "-q", str(remote), str(second)], check=True, capture_output=True)  # noqa: S603, S607
     for key, value in (("user.name", "t"), ("user.email", "t@example.com")):
         subprocess.run(["git", "-C", str(second), "config", key, value], check=True)  # noqa: S603, S607
-    fresh = Store(tmp_path / f"{name}-store", DataRepo(second), "shop-site")
+    fresh = Store(tmp_path / f"{name}-store", DataRepo(second), project)
     return fresh, fresh.read_profile()
 
 

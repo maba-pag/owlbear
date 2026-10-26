@@ -28,6 +28,7 @@ from owlbear_delivery_next.state_store.pending_intents import (
 from owlbear_delivery_next.state_store.pending_intents import (
     shared_pending as _shared_pending,
 )
+from owlbear_delivery_next.state_store.profile_errors import Basis, SourceChangedError, TargetChangedError
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -51,31 +52,38 @@ def path(store: Store) -> Path:
     return store.shared.root / store.name / PROFILE if store.shared else store.root / PROFILE
 
 
-class SourceChangedError(RuntimeError):
-    """The clone's old profile changed after the owner confirmed its replacement; nothing was written."""
-
-
-def write(store: Store, prof: Profile, *, replace_unreadable: bool = False, source: str = "") -> str:
+def write(store: Store, prof: Profile, *, replace_unreadable: bool = False, basis: Basis | None = None) -> str:
     """Write the profile; in the shared folder also commit and push it: what the owner should know, else nothing.
 
     An ordinary save refuses an unreadable saved profile; only the explicit repair (*replace_unreadable*) replaces
-    it, and only while the old profile still has the digest *source* the owner confirmed (checked under the lock).
+    it, and only while the old profile and the shared profile still have the digests in *basis* (under the lock).
     """
     with _writer(store):
-        if source and config_digest(store.root / PROFILE) != source:
+        # the target is judged against the remote's current bytes, not a stale clone
+        if basis and store.shared and (why := store.shared.pull()):
+            msg = f"the shared profile could not be synced before the repair: {why}; nothing was saved."
+            raise TargetChangedError(msg)
+        if basis and basis.source and config_digest(store.root / PROFILE) != basis.source:
             msg = "The old profile changed while you answered; nothing was saved. Run setup again to review it."
             raise SourceChangedError(msg)
-        current = _current_for_write(store, replace_unreadable=replace_unreadable)
-        if current is not None:  # only mark() moves the legacy import marker; a snapshot never rewinds it
-            prof = prof.model_copy(
-                update={
-                    "prefs_import": current.prefs_import,
-                    "prefs_basis": current.prefs_basis,
-                    "prefs_claim": current.prefs_claim,
-                }
-            )
-        _keep_local(store, prof)
-        return _publish_locked(store, prof, f"settings: {store.name}: project profile")
+        if basis and basis.target and config_digest(path(store)) != basis.target:
+            msg = "The shared profile changed while you answered; nothing was saved. Run setup again to review it."
+            raise TargetChangedError(msg)
+        try:
+            current = _current_for_write(store, replace_unreadable=replace_unreadable)
+            if current is not None:  # only mark() moves the legacy import marker; a snapshot never rewinds it
+                prof = prof.model_copy(
+                    update={
+                        "prefs_import": current.prefs_import,
+                        "prefs_basis": current.prefs_basis,
+                        "prefs_claim": current.prefs_claim,
+                    }
+                )
+            _keep_local(store, prof)
+            return _publish_locked(store, prof, f"settings: {store.name}: project profile")
+        finally:
+            if basis and basis.rebind and store.shared:
+                basis.rebind(config_digest(path(store)))
 
 
 def _publish_locked(store: Store, prof: Profile, message: str) -> str:
