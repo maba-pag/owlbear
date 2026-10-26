@@ -18,13 +18,15 @@ import pytest
 import uvicorn
 from fastapi.testclient import TestClient
 
+from owlbear_delivery_next.change_contracts.chat_contract import HostFound
 from owlbear_delivery_next.change_contracts.decision_records import DecisionBaseline
 from owlbear_delivery_next.change_contracts.models import Change, Environment, Step, StepKind
-from owlbear_delivery_next.commands import chat_client, mcp_server, setup
-from owlbear_delivery_next.local_system import codebase, local_home
+from owlbear_delivery_next.commands import chat_client, cli, mcp_server, replay_client, setup
+from owlbear_delivery_next.local_system import codebase, local_home, maintenance
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.machine_host import app, project, serve
 from owlbear_delivery_next.machine_host.machine import Machine
+from owlbear_delivery_next.pack_runs import pack_job, pack_replay, pack_run
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import ENDING, Host, HostRecord, RunnerRecord, running
 from owlbear_delivery_next.state_store import decision_store, project_home, registry
@@ -267,6 +269,244 @@ def test_a_project_that_did_not_load_counts_its_runners_until_a_host_confirms_th
     runner.unlink()  # as a host's check of its processes does
     assert http.delete(f"/api/next/projects/{bad.id}").json() == {"removed": bad.id}
     assert machine.slots.counts(bad.id)[2] == 0
+
+
+def legacy_pack_folder(tmp_path, name: str, *, format_too_new: bool = True) -> tuple[dict, Path]:
+    """A registered clone whose store will not open (format 99), with its store folder for a pre-ledger pack record."""
+    entry = registry.register(clone(tmp_path / name))
+    folder = Path(entry.path) / ".git" / "owlbear-delivery"
+    if format_too_new:
+        (folder / "format").write_text("99\n")
+    return entry, folder
+
+
+def legacy_pack_record(folder: Path, state: str, *, updater: bool = True) -> Path:
+    """The last pack run as a pre-ledger host left it, with its SDK stage uncertain and no PID map."""
+    stage = {"name": "update", "label": "Update", "result": "running", "detail": ""}
+    record = pack_job._blank() | {  # noqa: SLF001 - the record's own shape
+        "state": state, "stage": "update", "stages": [stage], "started_at": "2026-10-24T00:00:00+00:00", "run": "r1",
+    }  # fmt: skip
+    (folder / pack_job.FILE).write_text(json.dumps(record), encoding="utf-8")
+    if updater:
+        (folder / pack_run.UPDATER).mkdir(exist_ok=True)
+    return folder / pack_run.UPDATER
+
+
+def test_a_project_whose_store_did_not_open_holds_its_legacy_running_pack_before_another_project_can_take_the_slot(
+    tmp_path, machine
+):
+    """HIGH review: an unloaded project's readable legacy running record keeps the machine's one session."""
+    bad, folder = legacy_pack_folder(tmp_path, "bad")
+    good = registry.register(clone(tmp_path / "good"))
+    updater = legacy_pack_record(folder, "running")
+    machine.slots.total = lambda: 1
+    machine.load_all()
+    assert machine.projects[bad.id].state == "failed"
+    assert machine.slots.counts(bad.id)[2] == 1
+    assert machine.slots.take(good.id, "probe", 1, 1) == 0  # the other project waits behind the uncertain update
+    assert (updater.is_dir(), (folder / pack_job.FILE).is_file()) == (True, True)  # workspace and record are kept
+
+
+def test_an_unloaded_project_whose_pack_record_is_finished_holds_nothing_and_another_project_takes_the_slot(
+    tmp_path, machine
+):
+    bad, folder = legacy_pack_folder(tmp_path, "bad")
+    good = registry.register(clone(tmp_path / "good"))
+    legacy_pack_record(folder, "up-to-date", updater=False)
+    machine.slots.total = lambda: 1
+    machine.load_all()
+    assert (machine.projects[bad.id].state, machine.slots.counts(bad.id)[2]) == ("failed", 0)
+    assert machine.slots.take(good.id, "probe", 1, 1) == 1
+
+
+def test_an_unreadable_pack_record_of_an_unloaded_project_is_held_not_taken_for_empty(tmp_path, machine):
+    bad, folder = legacy_pack_folder(tmp_path, "bad")
+    good = registry.register(clone(tmp_path / "good"))
+    (folder / pack_job.FILE).write_text("{not json", encoding="utf-8")
+    machine.slots.total = lambda: 1
+    machine.load_all()
+    assert machine.slots.counts(bad.id)[2] == 1
+    assert machine.slots.take(good.id, "probe", 1, 1) == 0
+
+
+class _LoopbackToApp:
+    """The CLI's local transport, answered by the machine app's own handler instead of a socket."""
+
+    def __init__(self, client: TestClient) -> None:
+        self.client = client
+
+    def open(self, request, timeout):  # noqa: ARG002 - urllib's opener signature
+        out = self.client.post(urllib.parse.urlsplit(request.full_url).path)
+        if out.status_code >= 400:
+            raise urllib.error.HTTPError(
+                request.full_url, out.status_code, out.reason_phrase, out.headers, io.BytesIO(out.content)
+            )
+        return io.BytesIO(out.content)
+
+
+def test_a_manual_replay_of_another_project_waits_for_a_failed_projects_legacy_pack_even_with_a_free_slot(
+    tmp_path, http, machine, monkeypatch, capsys
+):
+    """Route and CLI: the ledger's uncertain pack refuses before any SDK, although a machine slot is free."""
+    monkeypatch.setattr(pack_replay, "sdk_run", lambda _cfg: pytest.fail("no SDK session starts"))
+    bad, folder = legacy_pack_folder(tmp_path, "bad")
+    good = registry.register(clone(tmp_path / "good"))
+    updater = legacy_pack_record(folder, "running")
+    machine.slots.total = lambda: 2
+    machine.load_all()
+    assert (machine.projects[bad.id].state, machine.projects[good.id].state) == ("failed", "loaded")
+    assert machine.slots.counts(bad.id)[2] == 1  # one slot is held
+    assert machine.slots.counts(good.id)[1] == 2  # one slot still free
+
+    refused = http.post(f"/p/{good.id}/api/next/design-pack/replay")
+    assert refused.status_code == 409
+    reason = "an earlier design pack session is unproven; recover it on the Maintenance page first"
+    assert refused.json()["detail"] == reason
+
+    monkeypatch.setattr(replay_client.project_home, "clone_id", lambda _dir: good.id)
+    record = HostFound(url="http://127.0.0.1:9/", token="t", pid=1, started_at=datetime.now(UTC), project=good.id)  # noqa: S106
+    monkeypatch.setattr(replay_client.host, "running_at", lambda _root, _model: record)
+    loopback = _LoopbackToApp(TestClient(app.create(machine), base_url="http://127.0.0.1", headers=AUTH))
+    monkeypatch.setattr(replay_client, "_LOCAL", loopback)
+    assert cli.main(["--repo", str(good.path), "design-pack", "--replay"]) == 1
+    assert capsys.readouterr().out.splitlines()[-1] == reason  # the host's own log lines come first
+
+    assert machine.slots.counts(bad.id)[2] == 1  # the reservation stays
+    assert updater.is_dir()  # the workspace stays
+    assert (folder / pack_job.FILE).is_file()  # and the record stays
+
+
+def test_a_manual_replay_of_a_project_whose_legacy_pack_finished_is_not_refused_by_the_ledger(
+    tmp_path, http, machine, monkeypatch
+):
+    """Control: with the failed project's pack finished, the same replay passes the guard and reaches its own checks."""
+    monkeypatch.setattr(pack_replay, "sdk_run", lambda _cfg: pytest.fail("no SDK session starts"))
+    bad, folder = legacy_pack_folder(tmp_path, "bad")
+    good = registry.register(clone(tmp_path / "good"))
+    legacy_pack_record(folder, "up-to-date", updater=False)
+    machine.slots.total = lambda: 2
+    machine.load_all()
+    assert machine.slots.counts(bad.id)[2] == 0
+
+    reached = http.post(f"/p/{good.id}/api/next/design-pack/replay")
+    assert reached.status_code == 422  # pack_replay's own check: no shared repository, before any SDK session
+    assert "shared repository" in reached.json()["detail"]
+
+
+def older_failed_pack(folder: Path, reason: str, *, run: str = "legacy-run") -> None:
+    """The record an older host left when its SDK session may still run: failed, with no workspace or PIDs."""
+    stage = {"name": "update", "label": "Update", "result": "failed", "detail": ""}
+    record = pack_job._blank() | {  # noqa: SLF001 - the record's own shape
+        "state": "failed", "stages": [stage], "started_at": "2026-10-25T00:00:00+00:00", "run": run, "reason": reason,
+    }  # fmt: skip
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / pack_job.FILE).write_text(json.dumps(record), encoding="utf-8")
+
+
+REPLAY_UNCERTAIN = (
+    "replay: ReplayError: the replay judge replay-0123abcd may still be running; stop it before replaying again"
+)
+REFUSED = "an earlier design pack session is unproven; recover it on the Maintenance page first"
+
+
+def test_a_manual_replay_of_another_project_refuses_an_unloaded_projects_older_failed_uncertain_pack_with_a_free_slot(
+    tmp_path, http, machine, monkeypatch
+):
+    """An older failed replay record, updater directory gone, holds its project's slot before any SDK."""
+    monkeypatch.setattr(pack_replay, "sdk_run", lambda _cfg: pytest.fail("no SDK session starts"))
+    bad, folder = legacy_pack_folder(tmp_path, "bad")
+    good = registry.register(clone(tmp_path / "good"))
+    older_failed_pack(folder, REPLAY_UNCERTAIN)
+    machine.slots.total = lambda: 2
+    machine.load_all()
+    assert (machine.projects[bad.id].state, machine.slots.counts(bad.id)[2]) == ("failed", 1)
+
+    refused = http.post(f"/p/{good.id}/api/next/design-pack/replay")
+    assert (refused.status_code, refused.json()["detail"]) == (409, REFUSED)
+    assert machine.slots.counts(bad.id)[2] == 1  # the reservation stays
+    assert machine.slots.counts(good.id)[2] == 0
+    assert (folder / pack_job.FILE).is_file()
+
+
+def test_a_loaded_projects_older_failed_uncertain_pack_holds_its_slot_and_refuses_its_own_replay(
+    tmp_path, http, machine, monkeypatch
+):
+    """The loaded path: the same older record is adopted through the project's job before a replay can start."""
+    monkeypatch.setattr(pack_replay, "sdk_run", lambda _cfg: pytest.fail("no SDK session starts"))
+    good = registry.register(clone(tmp_path / "good"))
+    # the store folder, as the project opens it
+    older_failed_pack(project_home.located(Path(good.path)), REPLAY_UNCERTAIN)
+    machine.slots.total = lambda: 2
+    machine.load_all()
+    assert (machine.projects[good.id].state, machine.slots.counts(good.id)[2]) == ("loaded", 1)
+
+    refused = http.post(f"/p/{good.id}/api/next/design-pack/replay")
+    assert (refused.status_code, refused.json()["detail"]) == (409, REFUSED)
+
+
+@pytest.mark.parametrize("project_kind", ["loaded", "unloaded"])
+def test_an_empty_legacy_import_receipt_never_suppresses_repair_of_an_older_failed_uncertain_pack(
+    tmp_path, http, machine, monkeypatch, project_kind
+):
+    """An earlier import marker with no lease behind it is not evidence that the older record was handled."""
+    monkeypatch.setattr(pack_replay, "sdk_run", lambda _cfg: pytest.fail("no SDK session starts"))
+    bad, folder = legacy_pack_folder(tmp_path, "bad")
+    good = registry.register(clone(tmp_path / "good"))
+    project = good if project_kind == "loaded" else bad
+    if project_kind == "loaded":
+        older_failed_pack(project_home.located(Path(good.path)), REPLAY_UNCERTAIN)
+    else:
+        older_failed_pack(folder, REPLAY_UNCERTAIN)
+    # an older import receipt
+    machine.maintenance._save(maintenance.Ledger(imported=[f"{project.id}:legacy"]))  # noqa: SLF001
+    machine.slots.total = lambda: 2
+    machine.load_all()
+    refused = http.post(f"/p/{good.id}/api/next/design-pack/replay")
+    assert (refused.status_code, refused.json()["detail"]) == (409, REFUSED)
+    assert (machine.slots.counts(project.id)[2], len(machine.maintenance.read()["sessions"])) == (1, 1)
+
+
+def test_a_recovered_legacy_pack_generation_is_not_resurrected_by_an_empty_receipt_on_restart(tmp_path, machine):
+    good = registry.register(clone(tmp_path / "good"))
+    older_failed_pack(project_home.located(Path(good.path)), REPLAY_UNCERTAIN)
+    machine.slots.total = lambda: 2
+    machine.load_all()
+    [session] = machine.maintenance.read()["sessions"]
+    booted = machine.maintenance.boot
+    machine.maintenance.boot = lambda: booted() + 1  # the computer rebooted since the failed session
+    machine.maintenance.recover(session["id"], rebooted=True)
+    for _ in range(2):
+        machine.load_all()
+        sessions = machine.maintenance.read()["sessions"]
+        assert (len(sessions), sessions[0]["state"], machine.slots.counts(good.id)[2]) == (1, "recovered", 0)
+
+
+def test_an_unconfirmed_pack_run_keeps_the_machine_busy_and_not_left_until_its_reboot_recovery(machine):
+    """The pack ledger holds at machine scope even with no loaded project, so an update or stop waits for it."""
+    ident = machine.maintenance.begin("unloaded", "pack:unloaded", "pack", "", now=datetime.now(UTC))
+    machine.maintenance.failed(ident, RuntimeError("synthetic unconfirmed run"))
+    assert (bool(machine.busy()), bool(machine.left())) == (True, True)
+    booted = machine.maintenance.boot
+    machine.maintenance.boot = lambda: booted() + 1  # the computer rebooted since the unconfirmed run
+    machine.maintenance.recover(ident, rebooted=True)
+    assert (machine.busy(), machine.left()) == ([], [])
+
+
+def test_a_modern_failed_uncertain_pack_with_its_workspace_recorded_is_not_adopted_as_older_work(tmp_path, machine):
+    """Control: a run that recorded its workspace is ledger-owned already, so nothing is imported from its record."""
+    good = registry.register(clone(tmp_path / "good"))
+    root = project_home.located(Path(good.path))
+    older_failed_pack(root, REPLAY_UNCERTAIN)
+    record = json.loads((root / pack_job.FILE).read_text(encoding="utf-8"))
+    record["workspace"] = str(root / "runs" / "legacy-run")
+    (root / pack_job.FILE).write_text(json.dumps(record), encoding="utf-8")
+    machine.slots.total = lambda: 2
+    machine.load_all()
+    assert (
+        machine.projects[good.id].state,
+        machine.slots.counts(good.id)[2],
+        machine.maintenance.read()["sessions"],
+    ) == ("loaded", 0, [])
 
 
 def test_removal_is_refused_while_a_step_runs_and_then_stops_the_project_before_forgetting_it(tmp_path, http, machine):

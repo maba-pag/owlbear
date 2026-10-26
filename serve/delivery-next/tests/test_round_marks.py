@@ -113,7 +113,11 @@ def test_the_page_gets_each_tasks_markers_apart_and_what_is_left(tmp_path):
     ]
     store = Store(tmp_path / "store")
     store.write(Lock("c1"), c)
-    host = type("H", (), {"wake": None, "record": None, "activity": lambda _s, _slug: Activity(host_up=True)})()
+    host = type(
+        "H",
+        (),
+        {"wake": None, "record": None, "maintenance": None, "activity": lambda _s, _slug: Activity(host_up=True)},
+    )()
     client = TestClient(
         api.create_app(store, "t", host), base_url="http://127.0.0.1", headers={"authorization": "Bearer t"}
     )

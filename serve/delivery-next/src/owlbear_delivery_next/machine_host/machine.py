@@ -16,10 +16,11 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.change_flow.status import RESUME, status
-from owlbear_delivery_next.local_system import data_repo
+from owlbear_delivery_next.local_system import data_repo, maintenance
 from owlbear_delivery_next.local_system.slots import Slots
 from owlbear_delivery_next.machine_host.curation import Curation
 from owlbear_delivery_next.machine_host.project import Project
+from owlbear_delivery_next.project_host import session_slots
 from owlbear_delivery_next.project_host.host import RunnerRecord
 from owlbear_delivery_next.state_store import machine_settings, project_home, registry, settings_carry
 from owlbear_delivery_next.state_store.store import StoreError
@@ -32,6 +33,7 @@ if TYPE_CHECKING:
 RETRY = 60.0  # seconds between loads of a project that failed to load
 IDLE = 2.0  # seconds between looks whether a stop when idle may stop OwlBear
 CURATE_EVERY = 60.0  # seconds between looks whether idle time may curate memory (item 5 slice 4)
+UNPROVEN_PACK = "a design pack session not confirmed ended; the Maintenance page shows it"
 
 
 class MachineError(Exception):
@@ -75,6 +77,7 @@ class Machine:
         self.on_stop: Callable[[], None] = lambda: None
         self.total = 0  # until the machine's total is read; unset, no session starts (2026-10-23)
         self.slots = Slots(self._sessions, closed=True)  # opened once every project's live steps are counted
+        self.maintenance = maintenance.Maintenance(self.slots)
         from owlbear_delivery_next.machine_host.auto_update import Auto  # noqa: PLC0415 - it names this class
         from owlbear_delivery_next.machine_host.update import Updater  # noqa: PLC0415 - it names this class
 
@@ -85,6 +88,7 @@ class Machine:
             fenced=self._curation_fence,
             paused=lambda: self.paused,
             admission=lambda: self.lock,  # the stop barrier pause_stop and idle_stop already use
+            ownership=self.maintenance,
         )
 
     def _curation_fence(self) -> str:
@@ -139,6 +143,7 @@ class Machine:
             h.closed = lambda: self.stopping.is_set() or not p.gate.open
             h.updating = lambda: self.updating
             h.slots = self.slots
+            h.maintenance = self.maintenance
             h.merged = lambda: self.curation.nudge([h.store.name], "merge")
 
         try:
@@ -147,6 +152,8 @@ class Machine:
             p.state, p.reason = "failed", f"it could not load: {type(exc).__name__}: {exc}"
         if p.state == "failed":
             self.slots.restore(entry.id, recorded(Path(entry.path)))  # its runners may live on without a host
+            # read from its folder, never through a Job: the store may belong to another host that still runs (TD-242)
+            session_slots.unloaded(self.maintenance, entry.id, Path(entry.path))
         self.say(f"{p.name}: {p.state}" + (f": {p.reason}" if p.reason else ""))
         return p
 
@@ -265,10 +272,17 @@ class Machine:
             if p.host:
                 p.host.wake.set()
 
+    def _unproven_packs(self) -> list[str]:
+        """Each project whose pack session the ledger holds, loaded or not: its job is idle once the SDK returns."""
+        names = {pid: p.name for pid, p in list(self.projects.items())}
+        return [f"{names.get(key, key)}: {UNPROVEN_PACK}" for key in self.maintenance.holding("pack")]
+
     def left(self) -> list[str]:
         """What a stop when idle still waits for: each project's running steps, environments and admitted work."""
-        return [f"{p.name}: {w}" for p in list(self.projects.values()) for w in p.working(stopping=True)] + (
-            self.curation.working()
+        return (
+            [f"{p.name}: {w}" for p in list(self.projects.values()) for w in p.working(stopping=True)]
+            + self.curation.working()
+            + self._unproven_packs()
         )
 
     def fence(self, text: str) -> list[str]:
@@ -284,8 +298,10 @@ class Machine:
     def busy(self) -> list[str]:
         """What an update waits for: each project's running steps, environments and admitted work."""
         projects = list(self.projects.values())
-        return [f"{p.name}: {w}" for p in projects for w in p.working(stopping=True, requests=False)] + (
-            self.curation.working()
+        return (
+            [f"{p.name}: {w}" for p in projects for w in p.working(stopping=True, requests=False)]
+            + self.curation.working()
+            + self._unproven_packs()
         )
 
     def fenced(self) -> None:

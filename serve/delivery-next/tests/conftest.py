@@ -282,6 +282,7 @@ class Host:
     wake = SimpleNamespace(set=lambda: None)
     paused = staticmethod(lambda: False)
     draining = staticmethod(lambda: False)
+    maintenance = None  # the real host's seam; None: no maintenance owns this fake's sessions
     started = datetime(2026, 10, 21, 9, tzinfo=UTC)
     record = HostRecord(url="http://127.0.0.1:9/", token="tok", pid=1, started_at=started, code=CURRENT)  # noqa: S106
 

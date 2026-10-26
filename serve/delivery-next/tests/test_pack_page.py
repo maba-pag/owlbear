@@ -27,6 +27,7 @@ NOW = datetime(2026, 10, 17, 2, tzinfo=UTC)
 
 
 class Host:
+    maintenance = None
     wake = type("W", (), {"set": staticmethod(lambda: None)})()
     record = HostRecord(url="http://127.0.0.1:9/", token="tok", pid=1, started_at=NOW, code=CURRENT)  # noqa: S106
     paused = staticmethod(lambda: False)

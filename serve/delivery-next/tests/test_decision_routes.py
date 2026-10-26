@@ -37,6 +37,7 @@ class Host:
     wake = SimpleNamespace(set=lambda: None)
     record = HostRecord(url="http://127.0.0.1:9/", token="tok", pid=1, started_at=datetime.now(UTC), code=CURRENT)  # noqa: S106
     repo = None  # the impact report says it does not know the clone
+    maintenance = None  # no running maintenance: owns no pack sessions
 
 
 def git(cwd: Path, *args: str) -> str:
