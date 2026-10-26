@@ -5,53 +5,44 @@ applyTo: "serve/**"
 
 ## Architecture Overview
 
-OwlBear v2 has no custom Python agent runtime. Agents are `.agent.md` files executed by VS Code and GitHub Copilot. Tools are provided by MCP servers (`serve/*-mcp/`) or VS Code built-in tools.
+OwlBear's runtime is the Delivery engine, `serve/delivery-next/`. It runs its workers on the GitHub Copilot SDK
+(`github-copilot-sdk`): `runtimes/sdk_adapter.py` opens one bounded session on the installed Copilot CLI per step.
+The workers' agents and skills ship inside the package, in `owlbear_delivery_next/agents/*.agent.md` and
+`owlbear_delivery_next/skills/`; `local_system/preload.py` gives each role its agent file, tools, memory and
+skills. The engine also serves the pages, the `owlbear` command and the `owlbear-delivery` MCP server, and
+publishes Changes to GitHub.
+
+VS Code chats use the agents and skills under `share/` and the MCP servers in `.mcp.json`. Each of those servers
+runs through `python -m owlbear_delivery_next serve <name>` (memory, knowledge, browser) or `... mcp` (delivery).
+`commands/mcp_launch.py` runs the named server module; Delivery does not import it.
 
 ```text
-agents/*.agent.md             (agent definitions — pure markdown, no Python)
-    use tools from the MCP servers below
-
-serve/delivery-next/           (Delivery engine: Change loop, MCP tools, GitHub publication, pages)
-    import from memory and decisions
-serve/tools/                   (repository tools: quality, testing, and indexing)
-
-serve/decisions/                (core library: decision files, validator, record migration)
-
-serve/memory-mcp/              (MCP server: persistent agent memory)
-    import from
-serve/memory/                   (core library: memory state and storage)
-
-serve/knowledge-mcp/            (MCP server: knowledge base operations)
-    import from
-serve/knowledge/                (core library: graph, vector, ingest, query)
-
-serve/browser-mcp/              (MCP server: authenticated content acquisition)
-    import from
-serve/browser/                   (core library: browser acquisition)
-
-serve/web-content/               (core library: shared HTML extraction and Markdown normalization)
+serve/delivery-next/   Delivery engine: SDK workers, packaged agents and skills, pages, MCP server, GitHub
+    imports decisions, memory
+serve/decisions/       core: decision files, validator, record migration
+serve/memory/          core: memory state, scoring, storage
+serve/memory-mcp/      MCP server for agent memory; imports memory
+serve/knowledge/       core: graph, vector, ingest, query; imports web-content
+serve/knowledge-mcp/   MCP server for the knowledge base; imports knowledge
+serve/browser/         core: browser acquisition; imports web-content
+serve/browser-mcp/     MCP server for authenticated content; imports browser
+serve/web-content/     core: HTML extraction and Markdown normalisation
+serve/tools/           repository tools: quality, tests, indexes
 ```
-
-Each MCP server is a standalone MCPServer application. Core libraries, the Delivery engine,
-and repository tools are separate packages. Cross-package imports are enforced by
-`tests/test_package_boundary.py`, which scans runtime and `TYPE_CHECKING` imports.
 
 ## Dependency Rules
 
-Cross-namespace imports are enforced by `tests/test_package_boundary.py`. The `ALLOWED_IMPORTS`
-constant in that file maps each package namespace to its permitted owlbear-namespace imports.
+`tests/test_package_boundary.py` enforces them. Its `ALLOWED_IMPORTS` maps each `owlbear_*` package to the
+`owlbear_*` packages it may import, in runtime and `TYPE_CHECKING` imports. Each package's `pyproject.toml`
+declares the same workspace dependencies.
 
-**Rules:**
-
-- When adding a new package, update `ALLOWED_IMPORTS` — the manifest guard will fail otherwise.
-- Core libraries do not import applications, MCP servers, or repository tools.
-- Delivery Next (`serve/delivery-next/`) may import Memory for its Memory tab and Decisions, and nothing else.
-- Each MCP server may import its corresponding core package, but MCP servers must not import other
-  MCP servers.
-- Repository tools import no other OwlBear package, and product packages must not import repository tools.
-- Relative imports remain within the owning package; the boundary test reports only external
-  `owlbear_*` namespaces.
-- Browser and Knowledge may import the shared web-content core; web-content imports neither.
+- A new package needs an `ALLOWED_IMPORTS` entry; the test fails on any package without one.
+- Core packages (`decisions`, `memory`, `knowledge`, `browser`, `web-content`) import no MCP server, no Delivery
+  and no tools. `knowledge` and `browser` may import `web-content`; the others import no OwlBear package.
+- An MCP server imports only its own core package, never another MCP server.
+- Delivery imports only `decisions` and `memory`. It names the MCP servers it launches; it does not import them.
+- `tools` imports no OwlBear package, and no product package imports `tools`.
+- Relative imports stay within their package; the test checks only absolute `owlbear_*` imports.
 
 ## Domain Scope Map
 
@@ -59,7 +50,7 @@ Each task targets exactly one domain. Multi-domain work must be split into separ
 
 | Domain | Scope |
 | --- | --- |
-| delivery | `serve/delivery-next/` (Delivery engine: Change loop, MCP tools, GitHub publication, pages) |
+| delivery | `serve/delivery-next/` (engine, packaged agents and skills, pages, MCP server, GitHub publication) |
 | decisions | `serve/decisions/` (decision files, validator, and record migration preview) |
 | knowledge | `serve/knowledge/` (graph, vector, ingest, query, embeddings) |
 | knowledge-mcp | `serve/knowledge-mcp/` |
@@ -67,10 +58,10 @@ Each task targets exactly one domain. Multi-domain work must be split into separ
 | memory-mcp | `serve/memory-mcp/` |
 | browser | `serve/browser/` |
 | browser-mcp | `serve/browser-mcp/` |
-| web-content | `serve/web-content/` (shared HTML extraction and Markdown normalization) |
+| web-content | `serve/web-content/` (shared HTML extraction and Markdown normalisation) |
 | tools | `serve/tools/` (repository utilities, quality, and indexing commands) |
 | agent-config | `share/agents/`, `share/skills/`, `share/instructions/`, `.github/copilot-instructions.md` |
 | test-infra | shared conftest, fixtures, factories (not individual test files) |
-| docs | `docs/`, `README.md`, `SECURITY.md` |
+| docs | `README.md`, `SECURITY.md`, `setup/`, package `README.md` files |
 
 **Edge case:** Adding a `config.py` field as part of a core feature is NOT a domain violation — domain = primary concern.

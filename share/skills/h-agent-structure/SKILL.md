@@ -199,7 +199,7 @@ Agent files must NOT contain:
 
 **Current ND3 agents:** none.
 
-Caller inventory is intentionally not duplicated here. The source of truth for caller → subagent relationships is each caller's frontmatter `agents:` array plus its `<agents>` body table; see [share/WIRING.md](../../WIRING.md) for the inverse ecosystem map. When adding a new caller, update the caller's agent file. When adding a new ND3 agent, set `disable-model-invocation: false`, tag the description with `(ND3)`, and add it to this list.
+Caller inventory is intentionally not duplicated here. The source of truth for caller → subagent relationships is each caller's frontmatter `agents:` array plus its `<agents>` body table; see the [relationship map](../../README.md#relationship-map) in `share/README.md` for the inverse view. When adding a new caller, update the caller's agent file. When adding a new ND3 agent, set `disable-model-invocation: false`, tag the description with `(ND3)`, and add it to this list.
 
 Built-in agents (`Explore`, `General Purpose`) resolve at any depth regardless of settings.
 

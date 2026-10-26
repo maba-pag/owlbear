@@ -94,8 +94,8 @@ Keep it focused and source-grounded:
 ## 4. Recommendation, Confidence, And Limits
 ```
 
-Log materially used external sources in `.owlbear/sources/overview.md` per
-`r-workspace-governance`. Delete approved clones from `.owlbear/scratch/research/` before returning.
+Cite the sources in the research document's Sources Studied table. When the work adopts external code, text
+or patterns into the repository, add its row to `.owlbear/sources/overview.md` per `r-workspace-governance`. Delete approved clones from `.owlbear/scratch/research/` before returning.
 
 ## Step 7 — Return Evidence To The Caller
 

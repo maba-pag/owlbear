@@ -1,6 +1,6 @@
 ---
-description: "Frontend development conventions — design systems, accessibility, component structure"
-applyTo: "**/*.tsx,**/*.jsx,**/*.vue,**/*.svelte,**/*.css,**/*.scss"
+description: "Frontend conventions for the Delivery engine's pages — plain HTML, CSS and JavaScript, accessibility"
+applyTo: "serve/delivery-next/src/owlbear_delivery_next/web/**/*.html,serve/delivery-next/src/owlbear_delivery_next/web/**/*.js,serve/delivery-next/src/owlbear_delivery_next/web/**/*.mjs,serve/delivery-next/src/owlbear_delivery_next/web/**/*.css"
 ---
 
-For project-specific frontend conventions, read the `h-frontend-conventions` skill.
+For frontend conventions, read the `h-frontend-conventions` skill.
