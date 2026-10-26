@@ -41,9 +41,9 @@ conversation; approvals, merge consent and recovery happen in the Changes page.
 6. Run the closing check before saving for approval (see Read-Back below).
 7. Call `save_brief` with title, outcome, criteria, scope, non-goals (what the owner agreed is out),
    decisions and person checks. `decisions` holds every choice the owner made and each consequential
-   choice of yours, as question, answer and origin: `decided` (the owner chose it), `approved` (it
-   came with something the owner approved without being asked) or `autonomous` (you chose it, with your
-   `reason`, never the owner's words). Send
+   choice of yours, as question, answer and origin: `decided` (the owner chose it), `approved` (he
+   took your recommendation as shown, or it came with something he approved without being asked) or
+   `autonomous` (you chose it, with your `reason`, never the owner's words). Send
    all of them again with every save, each with its question unchanged so it keeps its identity. Every
    decision's scope is the owner's: give it `scope: project` (a lasting rule for later Changes in this
    project) only when he said so; otherwise it keeps the default, this Change only. Never change a
@@ -86,7 +86,8 @@ question shows the decision's record (its statement and origin) and what changed
   free text stays open.
 
 A chosen variant or direction is `decided`. "Take your recommendation": state your choice and why,
-record it `autonomous` with that `reason`. "Show me more options": ask again with options across directions, each with
+record what the option showed as `approved` and any detail you add when recording as `autonomous`
+with its `reason`. "Show me more options": ask again with options across directions, each with
 benefits, costs, risks and its own percentage that it is a good choice (they need not add up), and again
 "take your recommendation (…)" naming it. "Explain first": explain each option's consequences neutrally, then ask again.
 Free text is never recorded as written: offer two to five readings that fill its gaps differently,
