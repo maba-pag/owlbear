@@ -55,6 +55,7 @@ def move_roles(store: Store) -> None:
         if not found:
             atomic_write(marker, text)
             return
+        from owlbear_delivery_next.local_system.publication_hold import Requires  # noqa: PLC0415 - with Prepared
         from owlbear_delivery_next.state_store.config_save import Prepared  # noqa: PLC0415 (import cycle)
 
         def change(cur: Layer) -> Layer:
@@ -64,8 +65,10 @@ def move_roles(store: Store) -> None:
 
         # The receipt and the roles are one config write; the marker only caches the receipt, so its failure
         # after that write leaves the move applied. A write or refusal failure raises here, never a silent return.
+        # A shared write is held to the remote config it was checked on until it is published, so another clone's
+        # move or clear that lands first is never overwritten by a rebase of this one.
         notice = store.update_config(
-            Prepared(config_digest(store.config_path), change),
+            Prepared(config_digest(store.config_path), change, Requires("the role move over the shared config")),
             "role overrides from the old profile",
             on_written=lambda: atomic_write(marker, text),
         )

@@ -69,7 +69,7 @@ def _fill(store: Store, prof: Profile, basis: str, *, resumed: bool) -> bool:
 
     # held until published: a remote that settled, cleared or replaced the claim meanwhile never gets this fill
     fields = {"prefs_import": "pending", "prefs_claim": claim, "prefs_basis": basis}
-    requires = Requires(profile_share.path(store), fields, "the legacy preference import claim this checkout filled")
+    requires = Requires("the legacy preference import claim this checkout filled", profile_share.path(store), fields)
     try:
         notice = store.update_config(Prepared(basis, change, requires), "legacy preferences carried")
     except _SupersededError:

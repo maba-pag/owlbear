@@ -120,12 +120,16 @@ class DataRepo:
         """One git command in the checkout; a timeout or a missing folder is a failed command.
 
         A push is a failed command, sending nothing, while a held automatic change no longer meets the fetched remote
-        (`publication_hold`).
+        or cannot be proven to land where it was checked; a held plain push runs as its one proven refspec
+        (`publication_hold.pushing`).
         """
         pushing = args[:1] == ("push",)
-        if pushing and (held := publication_hold.check(self, until, fetch=True, push=args)):
-            return subprocess.CompletedProcess(["git", *args], 1, "", held)
-        done = _git(self.root, *args, until=until)
+        run = args
+        if pushing:
+            held, run = publication_hold.pushing(self, args, until)
+            if held:
+                return subprocess.CompletedProcess(["git", *args], 1, "", held)
+        done = _git(self.root, *run, until=until)
         if pushing and done.returncode == 0:
             publication_hold.settled(self, until)
         return done
@@ -264,18 +268,22 @@ class DataRepo:
             raise DataRepoError(msg)
         return bool(probe.stdout)
 
-    def _push(self, until: float) -> str:
+    def _push(self, until: float) -> str:  # noqa: PLR0911 - each push and the rebase between report apart
         """Push; once rejected, rebase on the remote and push again. A held automatic change is checked first."""
-        if held := publication_hold.check(self, until, fetch=True, push=("push", "-q")):
+        held, run = publication_hold.pushing(self, ("push", "-q"), until)
+        if held:
             return f"saved and committed in {self.root}, but not pushed: {held}"
-        if _git(self.root, "push", "-q", until=until).returncode == 0:
+        if _git(self.root, *run, until=until).returncode == 0:
             publication_hold.settled(self, until)
             return ""
         if pulled := self.pull(until):
             if publication_hold.recorded(self, until):  # never pushed by hand: the remote must be checked first
                 return f"saved and committed in {self.root}, but not pushed: {pulled}"
             return f"saved and committed in {self.root}, but it could not be merged with the remote; push it by hand"
-        sent = _git(self.root, "push", "-q", until=until)
+        held, run = publication_hold.pushing(self, ("push", "-q"), until)  # the remote may have moved since the rebase
+        if held:
+            return f"saved and committed in {self.root}, but not pushed: {held}"
+        sent = _git(self.root, *run, until=until)
         if sent.returncode:
             return f"saved and committed in {self.root}, but the push failed: {sent.stderr.strip()[:200]}"
         publication_hold.settled(self, until)
@@ -347,6 +355,8 @@ class DataRepo:
         parts = [f"{len(files)} file(s) not committed"] if files else []
         if unpushed:
             parts.append(f"{unpushed} commit(s) not pushed")
+        if held := publication_hold.refusal(self, until):  # a held change waits for the owner, not for a retry
+            return f"unpublished in {self.root}: {', '.join(parts) or 'nothing'}; an automatic change is held: {held}"
         return f"unpublished in {self.root}: {', '.join(parts)}; the next save retries" if parts else ""
 
     def _unpushed(self, until: float) -> tuple[int, str]:

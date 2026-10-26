@@ -5,6 +5,7 @@ remote before each push or rebase, wherever the other checkout's completion land
 by a later publication, a restart or a raw push. Nothing in Git is undone.
 """
 
+import json
 import subprocess
 import time
 from pathlib import Path
@@ -122,7 +123,7 @@ def test_a_completion_after_the_winners_pull_holds_the_fill_before_any_push(thre
     winner, settler, remote = three
     fired = at_git(monkeypatch, winner, after_pull, lambda: complete_and_delete(settler))
 
-    with pytest.raises(StoreError, match="is held because the legacy preference import claim"):
+    with pytest.raises(StoreError, match="is held because"):
         prefs_import.run(winner)
 
     assert fired == [True]
@@ -404,7 +405,7 @@ def test_identical_bytes_from_another_lineage_never_retire_the_hold_of_an_unpush
 def test_a_hold_that_never_wrote_lapses_with_the_next_healthy_publication(three):
     winner, _, remote = three
     root = winner.shared.root
-    requires = publication_hold.Requires(profile_share.path(winner), {"prefs_import": "pending"}, "a claim")
+    requires = publication_hold.Requires("a claim", profile_share.path(winner), {"prefs_import": "pending"})
     with winner.shared.locked():
         winner.shared.hold(winner.config_path, requires)  # recorded, then nothing was written
     notes = root / "unrelated" / "notes.md"
@@ -436,6 +437,8 @@ def mutate(record: dict, case: str) -> bytes:
         "file null": ("file", None),
         "base shape": ("base", "not-a-blob"),
         "base number": ("base", 0),
+        "since null": ("since", None),
+        "since short": ("since", "abc123"),
         "fields list": ("fields", ["prefs_import"]),
         "field number": ("fields", {"prefs_import": 1}),
         "fields empty": ("fields", {}),
@@ -468,6 +471,8 @@ def mutate(record: dict, case: str) -> bytes:
         "file null",
         "base shape",
         "base number",
+        "since null",
+        "since short",
         "fields list",
         "field number",
         "fields empty",
@@ -583,7 +588,7 @@ def test_a_held_fill_is_never_pushed_to_another_remote_than_the_one_its_claim_wa
     importer, remote, publication, claim = forked_publication(three, tmp_path)
     fork_before, origin_before = remote_head(publication), remote_head(remote)
     fields = {"prefs_import": "pending", "prefs_claim": "fresh", "prefs_basis": ABSENT}
-    requires = publication_hold.Requires(profile_share.path(importer), fields, "the import claim")
+    requires = publication_hold.Requires("the import claim", profile_share.path(importer), fields)
     prepared = config_save.Prepared(ABSENT, lambda cur: plan(cur, claim), requires)
 
     notice = importer.update_config(prepared, "legacy preferences carried")
@@ -639,7 +644,7 @@ def spaced_forks(three, tmp_path) -> tuple[Store, Path, Path, config_save.Prepar
     importer = checkout(source, tmp_path, "importer")
     claim = importer.read_profile()
     fields = {"prefs_import": "pending", "prefs_claim": "fresh", "prefs_basis": ABSENT}
-    requires = publication_hold.Requires(profile_share.path(importer), fields, "the import claim")
+    requires = publication_hold.Requires("the import claim", profile_share.path(importer), fields)
     return importer, source, dest, config_save.Prepared(ABSENT, lambda cur: plan(cur, claim), requires)
 
 
@@ -670,3 +675,159 @@ def test_a_push_address_with_spaces_that_is_exactly_the_fetched_one_publishes(th
 
     assert remote_has_config(source)
     assert remote_head(dest) == dest_before
+
+
+FORCED = "+refs/heads/main:refs/heads/main"  # the owner's configured push refspec: a plain push is forced
+
+
+def config_bytes(store: Store) -> bytes:
+    return (Path(git(store.shared.root, "rev-parse", "--absolute-git-dir")) / "config").read_bytes()
+
+
+def test_a_configured_forced_push_never_overwrites_a_remote_that_moved_after_the_check(three, monkeypatch):
+    winner, settler, remote = three
+    git(winner.shared.root, "config", "remote.origin.push", FORCED)
+    before = config_bytes(winner)
+    fired = at_git(monkeypatch, winner, nth_push(1), lambda: complete_and_delete(settler))
+
+    with pytest.raises(StoreError, match="is held because"):
+        prefs_import.run(winner)
+
+    assert fired == [True]
+    assert remote_head(remote) == git(settler.shared.root, "rev-parse", "HEAD")  # not overwritten
+    assert remote_marker(remote) == "done"
+    assert not remote_has_config(remote)
+    assert config_bytes(winner) == before  # the owner's push configuration stays as it is
+    assert winner.shared.git("push", "-q").returncode == 1  # a raw plain push is held too
+    assert remote_head(remote) == git(settler.shared.root, "rev-parse", "HEAD")
+
+
+def test_a_configured_forced_push_of_a_held_fill_keeps_a_healthy_remote_advance(three, tmp_path, monkeypatch):
+    winner, other, remote = three
+    git(winner.shared.root, "config", "remote.origin.push", FORCED)
+    fired = at_git(monkeypatch, winner, nth_push(1), lambda: unrelated_advance(other))
+
+    prefs_import.run(winner)  # the forced refspec would overwrite the advance; the bound push is rejected instead
+
+    assert fired == [True]
+    assert remote_marker(remote) == "done"
+    assert remote_has_config(remote)
+    fresh = checkout(remote, tmp_path, "fresh")
+    assert (fresh.shared.root / "unrelated" / "notes.md").exists()  # the other clone's commit was not overwritten
+
+
+def test_an_explicit_push_is_still_checked_whatever_push_refspec_is_configured(held):
+    winner, remote = held
+    git(winner.shared.root, "config", "remote.origin.push", FORCED)
+    before = remote_head(remote)
+    for args in (("push", "-q", "origin", "+HEAD:refs/heads/main"), ("push", "-q", "origin", "HEAD:refs/heads/main")):
+        said = winner.shared.git(*args)
+        assert said.returncode == 1
+        assert "nothing was pushed" in said.stderr
+    assert remote_head(remote) == before
+
+
+def old_roles(store: Store, roles_: dict) -> None:
+    store.root.mkdir(parents=True, exist_ok=True)
+    (store.root / profile_share.PROFILE).write_text(json.dumps({"format": 1, "roles": roles_}))
+
+
+@pytest.fixture
+def two_movers(shared_repo, tmp_path) -> tuple[Store, Store, Path]:
+    """Two checkouts of a remote whose project config is published empty; the first has old role overrides."""
+    root, remote = shared_repo
+    seed = Store(tmp_path / "seed-store", DataRepo(root), PROJECT)
+    seed.config_path.parent.mkdir(parents=True, exist_ok=True)
+    seed.config_path.write_text(Layer().model_dump_json(indent=1))
+    assert seed.shared.publish(seed.config_path, f"settings: {PROJECT}: project layer") == ""
+    a, b = checkout(remote, tmp_path, "mover-a"), checkout(remote, tmp_path, "mover-b")
+    old_roles(a, {"builder": {"model": "m-1", "effort": "low"}})
+    return a, b, remote
+
+
+def remote_config(remote: Path) -> Layer:
+    return Layer.model_validate_json(git(remote, "--git-dir=.", "show", f"main:{PROJECT}/config.json"))
+
+
+def move_then_clear(b: Store) -> None:
+    """The other checkout moves its own, different old roles, then the owner clears them; both are published."""
+    from owlbear_delivery_next.state_store import roles_move  # noqa: PLC0415
+
+    assert b.shared.pull() == ""
+    old_roles(b, {"reviewer": {"model": "r-9", "effort": "max"}})
+    roles_move.move_roles(b)
+    assert b.read_config().agents
+    assert (
+        b.save(b.config_path, Layer, lambda cur: cur.model_copy(update={"agents": {}}), "owner clear", owner=True) == ""
+    )
+
+
+def test_a_role_move_never_restores_overrides_another_checkout_moved_and_cleared_first(two_movers, monkeypatch):
+    from owlbear_delivery_next.state_store import roles_move  # noqa: PLC0415
+
+    a, b, remote = two_movers
+    fired = at_git(monkeypatch, a, nth_push(1), lambda: move_then_clear(b))
+
+    roles_move.move_roles(a)  # applied here with its receipt; its publication is held, as Settings shows
+
+    assert fired == [True]
+    published = remote_config(remote)
+    assert published.roles_moved is True
+    assert published.agents == {}  # the owner's clear dominates
+    assert remote_head(remote) == git(b.shared.root, "rev-parse", "HEAD")
+    assert "an automatic change is held" in a.shared.pending()
+    assert "changed on the shared remote" in a.shared.held()
+    assert "is held because" in publish_memory(a, "later.md")  # a later publication never sends the move
+    assert remote_config(remote).agents == {}
+
+
+def test_a_role_move_over_an_unchanged_remote_config_publishes_its_overrides_and_receipt(two_movers):
+    from owlbear_delivery_next.state_store import roles_move  # noqa: PLC0415
+
+    a, _, remote = two_movers
+    roles_move.move_roles(a)
+
+    published = remote_config(remote)
+    assert published.roles_moved is True
+    assert published.agents["builder"].model == "m-1"
+    assert (a.root / profile_share.ROLES_MOVED).exists()
+    assert not publication_hold.recorded(a.shared, None)
+
+
+@pytest.fixture
+def absent_movers(shared_repo, tmp_path) -> tuple[Store, Store, Path]:
+    """Two checkouts of a remote with no project config yet; the first has old role overrides."""
+    root, remote = shared_repo
+    seed = Store(tmp_path / "seed-store", DataRepo(root), PROJECT)
+    seed.write_profile(Profile())
+    a, b = checkout(remote, tmp_path, "mover-a"), checkout(remote, tmp_path, "mover-b")
+    old_roles(a, {"builder": {"model": "m-1", "effort": "low"}})
+    return a, b, remote
+
+
+def move_then_delete(b: Store) -> None:
+    """The other checkout moves its own, different old roles; the owner then deletes the config: absent again."""
+    from owlbear_delivery_next.state_store import roles_move  # noqa: PLC0415
+
+    assert b.shared.pull() == ""
+    old_roles(b, {"reviewer": {"model": "r-9", "effort": "max"}})
+    roles_move.move_roles(b)
+    assert remote_has_config(b.shared.root.parent / "remote.git")
+    b.config_path.unlink()
+    assert b.shared.publish(b.config_path, f"settings: {PROJECT}: project layer removed") == ""
+
+
+def test_a_role_move_is_held_when_the_config_came_and_went_on_the_remote_meanwhile(absent_movers, monkeypatch):
+    from owlbear_delivery_next.state_store import roles_move  # noqa: PLC0415
+
+    a, b, remote = absent_movers
+    fired = at_git(monkeypatch, a, nth_push(1), lambda: move_then_delete(b))
+
+    roles_move.move_roles(a)
+
+    assert fired == [True]
+    assert not remote_has_config(remote)  # the owner's deletion stands: nothing restores the moved overrides
+    assert remote_head(remote) == git(b.shared.root, "rev-parse", "HEAD")
+    assert "an automatic change is held" in a.shared.pending()
+    assert "is held because" in publish_memory(a, "later.md")
+    assert not remote_has_config(remote)
