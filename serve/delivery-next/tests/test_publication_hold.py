@@ -1052,3 +1052,69 @@ def test_a_single_explicit_sha_push_to_a_captured_branch_still_publishes(three):
     assert winner.shared.git("push", "-q", "origin", f"{made}:refs/heads/main").returncode == 0
 
     assert remote_head(remote) == made
+
+
+def repointed(three, tmp_path: Path, name: str = "fork-b.git") -> tuple[Store, Path, Path, str, object]:
+    """A checkout whose owned commit was captured for its origin, repository A; then origin, both its fetch and its
+    push address, is pointed at repository B, a separate copy, while branch, remote branch and commit stay as they were.
+    """
+    winner, _, remote = three
+    root = winner.shared.root
+    fork = tmp_path / name
+    git(tmp_path, "clone", "-q", "--bare", str(remote), str(fork))
+    git(root, "commit", "-q", "--allow-empty", "-m", "decisions: an owned batch")
+    made = git(root, "rev-parse", "HEAD")
+    goal = decision_sync.target(winner.shared, time.monotonic() + 30)
+    assert goal is not None
+    git(root, "remote", "set-url", "origin", str(fork))  # the actor's deliberate change, after the capture
+    git(root, "config", "remote.origin.pushurl", str(fork))
+    assert publication_hold.check(winner.shared, None, fetch=False) == ""  # no hold: only the target can refuse
+    return winner, remote, fork, made, goal
+
+
+def test_an_owned_decision_push_never_goes_to_a_remote_repointed_after_its_target_was_read(three, tmp_path):
+    winner, remote, fork, made, goal = repointed(three, tmp_path)
+    root = winner.shared.root
+    refs, owner = (remote_refs(remote), remote_refs(fork)), owner_state(root)
+
+    said = decision_sync.push_commit(winner.shared, made, goal, time.monotonic() + 30)
+    retried = decision_sync.push_commit(winner.shared, made, goal, time.monotonic() + 30)
+
+    assert (remote_refs(remote), remote_refs(fork)) == refs  # neither repository got the commit
+    assert said == retried
+    assert said == "the remote origin points elsewhere than when this publication began, so nothing was pushed"
+    assert str(fork) not in said
+    assert owner_state(root) == owner
+    assert decision_sync.target(winner.shared, time.monotonic() + 30) != goal  # the guards' equality sees it too
+
+
+def test_a_continuation_never_proves_its_commit_on_a_remote_repointed_to_another_repository(three, tmp_path):
+    from owlbear_delivery_next.state_store.decision_target import Continuation  # noqa: PLC0415
+
+    winner, remote, fork, made, goal = repointed(three, tmp_path)
+    git(winner.shared.root, "push", "-q", str(fork), f"{made}:refs/heads/main")  # B already has it, A does not
+    refs = (remote_refs(remote), remote_refs(fork))
+
+    assert not decision_sync.proved(winner.shared, made, time.monotonic() + 30, Continuation(made, goal))
+
+    assert (remote_refs(remote), remote_refs(fork)) == refs
+    assert remote_head(remote) != made
+
+
+def test_an_owned_decision_push_to_an_unchanged_address_with_spaces_lands(three, tmp_path):
+    winner, _, remote = three
+    root = winner.shared.root
+    spaced = tmp_path / "authority  repo.git"
+    git(tmp_path, "clone", "-q", "--bare", str(remote), str(spaced))
+    git(root, "remote", "set-url", "origin", str(spaced))
+    git(root, "fetch", "-q")
+    git(root, "commit", "-q", "--allow-empty", "-m", "decisions: an owned batch")
+    made = git(root, "rev-parse", "HEAD")
+    until = time.monotonic() + 30
+    goal = decision_sync.target(winner.shared, until)
+    assert goal is not None
+    assert goal.fetch == str(spaced)
+
+    assert decision_sync.push_commit(winner.shared, made, goal, until) == ""
+
+    assert remote_head(spaced) == made
