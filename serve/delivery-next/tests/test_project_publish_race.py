@@ -67,7 +67,8 @@ def repo(tmp_path: Path) -> Path:
 def _loaded(machine: Machine, repo: Path, monkeypatch, ready_go: threading.Event):
     """Load the project with its readiness check held until *ready_go* is set, so its publish is the one under test."""
 
-    def held_ready(_store, _repo) -> list:
+    def held_ready(_store, _repo, *, carry=False) -> list:
+        assert carry
         ready_go.wait(WAIT)
         return []
 

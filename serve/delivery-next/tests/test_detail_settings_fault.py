@@ -20,6 +20,7 @@ AUTH = {"authorization": "Bearer " + "t"}
 
 class Host:
     wake = type("W", (), {"set": lambda _self: None})()
+    maintenance = None
     record = None
 
     def activity(self, _slug):

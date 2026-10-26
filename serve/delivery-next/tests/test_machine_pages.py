@@ -52,7 +52,7 @@ def test_changes_of_all_projects_or_one_and_the_bar_switches_adds_removes_and_re
 ) -> None:
     from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
 
-    monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo: [])
+    monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
     monkeypatch.setattr(Host, "_launch", lambda _self, _slug: False)  # the scheduler runs; no runner starts
     a, b = (registry.register(clone(tmp_path / n)) for n in ("alpha", "beta"))
     third = clone(tmp_path / "gamma")
@@ -124,7 +124,7 @@ def test_two_projects_with_one_slug_stay_apart_in_list_detail_actions_and_links(
 ) -> None:
     from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
 
-    monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo: [])
+    monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
     monkeypatch.setattr(Host, "_launch", lambda _self, _slug: False)
     a, b = (registry.register(clone(tmp_path / n, "same")) for n in ("alpha", "beta"))
     machine, server, base = serve()

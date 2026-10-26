@@ -33,6 +33,7 @@ SETTINGS = (True, False, None)  # ask before merging, merge by itself, not set y
 
 class Host:
     wake = type("W", (), {"set": staticmethod(lambda: None)})()
+    maintenance = None
     record = HostRecord(url="http://127.0.0.1:9/", token="tok", pid=1, started_at=NOW, code=CURRENT)  # noqa: S106
 
     def activity(self, _slug: str) -> Activity:
