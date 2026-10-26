@@ -1,7 +1,7 @@
 # share/ - Agent Ecosystem
 
 `share/` is the portable GitHub Copilot customization layer that OwlBear-enabled workspaces load.
-It contains roles, reusable instructions, user-invoked prompts, and visual references. This guide
+It contains roles, reusable instructions, and visual references. This guide
 is for contributors changing that layer and for agents that need to locate the correct authority.
 
 [Project README](../README.md) · [Package map](../serve/README.md) ·
@@ -14,7 +14,6 @@ is for contributors changing that layer and for agents that need to locate the c
 | Add or change a Copilot role | [Agents](#agents) | An `.agent.md` file and its required readings |
 | Add a reusable workflow or rule | [Skills](#skills) | A `w-`, `r-`, or `h-` skill file |
 | Apply a rule automatically by file type | [Instructions](#instructions) | An `.instructions.md` file and its `applyTo` scope |
-| Add a user command | [Prompts](#prompts) | A `.prompt.md` file and its selected agent |
 | Understand why something loaded | [Effective instruction stack](#effective-instruction-stack) | The matching roots and direct dependency |
 | Check delegation, hooks, or tools | [WIRING.md](WIRING.md) | Executable frontmatter and hook/source files |
 | Validate an ecosystem change | [Validation](#validation) | The focused validator and regression test |
@@ -22,7 +21,7 @@ is for contributors changing that layer and for agents that need to locate the c
 ## The one-minute model
 
 Agents are Copilot roles. Skills teach reusable procedures or domain knowledge. Instructions apply
-rules to matching files. Prompts are user-facing entry points. Hooks and MCP schemas are the hard
+rules to matching files. Hooks and MCP schemas are the hard
 controls that can reject an operation; prose can only guide a model. WIRING.md summarizes the live
 relationships, but the executable files remain authoritative.
 
@@ -43,7 +42,6 @@ diagnosing a loading problem.
 | `agents/` | Persistent roles with identity, model, tools, hooks, dependencies, and output contracts | `{role}.agent.md` |
 | `skills/` | Reusable workflows, shared rules, and domain handbooks | `{prefix}-{domain}/SKILL.md` |
 | `instructions/` | Auto-applied universal authorities and narrow safety-net stubs | `{domain}.instructions.md` |
-| `prompts/` | User-invoked one-shot entry points | `{verb}.prompt.md` or `{scope}-{verb}.prompt.md` |
 | `diagrams/` | Shared explanatory visual assets | Descriptive filenames |
 
 Delivery's own role agents and skills are not here: they ship inside the Delivery package
@@ -71,14 +69,15 @@ resolve conflicts by identifying the job and its fit authority.
 
 ## Prompts
 
-Prompts are user-facing workflow entry points. They collect the smallest input needed and route to
-the agent or workflow that owns the next decision. They should not become a second copy of a skill.
+`share/` ships no prompts: Delivery's pages and steps replaced its chat commands. Project-local prompts
+live in `.owlbear/prompts/`. They collect the smallest input needed and route to the agent or workflow
+that owns the next decision; they should not become a second copy of a skill.
 
 ## Visual Orientation
 
-The [MCP topology diagram](diagrams/mcp-topology.svg) shows the four seeded stdio servers and the
+The [MCP topology diagram](diagrams/mcp-topology.svg) shows OwlBear's stdio tool servers and the
 runtime surfaces behind them. Its [Archify source](diagrams/mcp-topology.architecture.json) and
-[coverage manifest](diagrams/manifest.json) are descriptive; `seed/.vscode/mcp.json` and the server
+[coverage manifest](diagrams/manifest.json) are descriptive; the root `.mcp.json` and the server
 implementations remain authoritative.
 
 ## Product Boundary
@@ -202,8 +201,8 @@ inventory and the agent files for authority.
 
 ## Change Workflow For Agents And Skills
 
-Use this sequence for changes under `share/{agents,skills,instructions,prompts}/` or the equivalent
-project-local `.owlbear/` roots:
+Use this sequence for changes under `share/{agents,skills,instructions}/` or the project-local
+`.owlbear/` roots (which also hold prompts):
 
 1. **Confirm the active roots.** Read `.vscode/settings.json` and distinguish the loaded tree from
  source, seed, generated, or consumer copies.

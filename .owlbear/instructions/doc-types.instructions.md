@@ -67,7 +67,7 @@ customization; it starts after installation and does not repeat the install path
 
 `STR-12` Must NOT assume the reader has prior knowledge of OwlBear internals. Write for a first-time installer.
 
-`STR-13` Must stay in sync with `setup/init.py` — any flag, path, or behavior change in the script must be reflected in the guide.
+`STR-13` Must stay in sync with `owlbear setup` — any flag, consent, path, or behavior change in the files it writes must be reflected in the guide.
 
 ### 1.6 Folder Orientation Guide (`.github/README-automation.md`, `.owlbear/README.md`, `store/README.md`, `tests/README.md`)
 

@@ -2,20 +2,27 @@
   "mcpServers": {
     "owlbear-browser": {
       "type": "stdio",
-      "command": "/bin/sh",
-      "args": ["-c", "exec \"$HOME/.owlbear/runtime/.venv/bin/python\" -m owlbear_delivery_next serve browser"],
+      "command": "${HOME}/.owlbear/runtime/.venv/bin/python",
+      "args": ["-m", "owlbear_delivery_next", "serve", "browser"],
+      "env": { "BROWSER_ALLOWED_DOMAINS": "*" },
+      "tools": ["*"]
+    },
+    "owlbear-delivery": {
+      "type": "stdio",
+      "command": "${HOME}/.owlbear/runtime/.venv/bin/python",
+      "args": ["-m", "owlbear_delivery_next", "mcp"],
       "tools": ["*"]
     },
     "owlbear-knowledge": {
       "type": "stdio",
-      "command": "/bin/sh",
-      "args": ["-c", "exec \"$HOME/.owlbear/runtime/.venv/bin/python\" -m owlbear_delivery_next serve knowledge"],
+      "command": "${HOME}/.owlbear/runtime/.venv/bin/python",
+      "args": ["-m", "owlbear_delivery_next", "serve", "knowledge"],
       "tools": ["*"]
     },
     "owlbear-memory": {
       "type": "stdio",
-      "command": "/bin/sh",
-      "args": ["-c", "exec \"$HOME/.owlbear/runtime/.venv/bin/python\" -m owlbear_delivery_next serve memory"],
+      "command": "${HOME}/.owlbear/runtime/.venv/bin/python",
+      "args": ["-m", "owlbear_delivery_next", "serve", "memory"],
       "tools": ["*"]
     }
   }

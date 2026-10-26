@@ -636,9 +636,11 @@ def test_yes_confirms_only_the_profile_and_local_files_need_their_own_consent(
     asked = []
     assert setup.run(repo, [], yes=True, ask=lambda q: asked.append(q) or "") == 0
     assert [p.exists() for p in written] == [False] * 2
-    assert len(asked) == 2  # the two local files were asked, never assumed; no folder-open task
+    assert len(asked) == 2  # the local writes were asked, never assumed; no folder-open task
     assert "chat.defaultToCopilotHarness" in asked[1]
-    assert "run `owlbear install` and let it link the shaper" in capsys.readouterr().out  # TD-335: never copied
+    out = capsys.readouterr().out
+    assert "run `owlbear install` and let it link the shaper" in out  # TD-335: never copied
+    assert "Memory server not registered: no shared repository" in out  # it would start with no store
     asked.clear()
     assert setup.run(repo, [], yes=True, local_files="no", ask=lambda q: asked.append(q) or "y") == 0
     assert (asked, [p.exists() for p in written]) == ([], [False] * 2)

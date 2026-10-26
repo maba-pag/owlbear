@@ -15,20 +15,18 @@ repository and its checks rather than an installed project directly.
 | `scripts/` | Small checks used by workflows |
 | `skills/` | Development-only specialist guidance, including session review and hook authoring |
 | `copilot-instructions.md` | The development checkout's workspace identity and repository map |
-| `renovate.json` | Repository configuration for dependency update automation |
 
 ## What belongs elsewhere
 
+- Tool configuration, including Renovate's [`renovate.json`](../renovate.json) and CodeRabbit's
+  `.coderabbit.yaml`, lives at the repository root.
 - Portable agents, skills, instructions, and prompts live in [`share/`](../share/README.md).
-- Consumer-project Copilot and VS Code templates live under `seed/` and are applied by
-  [`setup/init.py`](../setup/init.py).
 - Runtime packages and MCP servers live under [`serve/`](../serve/README.md).
 - Installation and operating procedures live in the [setup guide](../setup/setup-guide.md) and
   [Operating OwlBear](../setup/operating-owlbear.md).
 
-The development instructions in `.github/copilot-instructions.md` are not the same artifact as the
-consumer template at `seed/.github/copilot-instructions.md`. The former describes this repository;
-the latter is a placeholder that `init.py` adapts for a project using OwlBear.
+The development instructions in `.github/copilot-instructions.md` describe this repository; OwlBear
+writes no Copilot instructions into a project using it.
 
 ## Pull-request checks
 
@@ -50,7 +48,7 @@ Within a suite every job starts immediately (no `needs`) and installs only what 
 
 | Workflow | Jobs | Runs when the PR touches |
 | --- | --- | --- |
-| [Python](workflows/python.yml) | 4 hash-sharded test jobs (`worksteal` inside each) | Python sources, tests, setup, seed, manifests, locks |
+| [Python](workflows/python.yml) | 4 hash-sharded test jobs (`worksteal` inside each) | Python sources, tests, manifests, locks |
 | [Python browser](workflows/python-browser.yml) | Browser-marked tests with Chromium | `serve/browser*`, `serve/web-content`, manifests, locks |
 | [Static checks](workflows/static.yml) | `uv run lint --no-fix` and `uv run format --no-fix`, as locally: every hook in `.pre-commit-config.yaml` (the three validators in Agent ecosystem), each fixer through its check, plus Biome | Every change |
 | [Tooling](workflows/tooling.yml) | Lock, toolchain, workflow, hook, and diagram proofs, selected per changed surface | Manifests, locks, workflows, tool configuration, diagrams |
@@ -110,7 +108,7 @@ workflow token a tag on a commit whose workflow files differ from every branch t
 
 ## Dependency updates
 
-[Renovate](renovate.json) is the only updater (TD-382, TD-408): routine updates arrive grouped per ecosystem on
+[Renovate](../renovate.json) is the only updater (TD-382, TD-408): routine updates arrive grouped per ecosystem on
 Friday, majors on Sunday after 72 hours. Ruff, Biome and every pre-commit hook share one weekly **lint toolchain**
 pull request with a three-day minimum age, and their majors share one on Sunday, so the Ruff pin, its hook and the
 installed Ruff that [`check_ruff_toolchain.py`](scripts/check_ruff_toolchain.py) compares move together (TD-409).
@@ -122,9 +120,11 @@ off (TD-408). pre-commit.ci is not installed, since its hook updates cannot be s
 
 ## Reviews
 
-CodeRabbit reviews a pull request once, when it gets the `coderabbit` label, whoever opened it (TD-413), as
-[`.coderabbit.yaml`](../.coderabbit.yaml) sets, with the [review brief](instructions/code-review.instructions.md)
-as its guideline (TD-411). Its free open-source allowance is about one review an hour for all of `maba-pag`'s
+CodeRabbit reviews a pull request once, when it gets the `coderabbit` label, whoever opened it (TD-413). Those rules
+and the balanced `chill` profile come from the `maba-pag` organisation's CodeRabbit settings, which
+[`.coderabbit.yaml`](../.coderabbit.yaml) inherits; the file adds only owlbear's excluded paths, its path
+instructions and the [review brief](instructions/code-review.instructions.md) as its guideline
+(D-01M5TN7BEVN9YWFEYCHH9GJZG0). Its free open-source allowance is about one review an hour for all of `maba-pag`'s
 pull requests, so agents add the label only to a pull request that changes runtime code or CI workflows, once its CI
 passed, and merge it only after the review is in and handled, or after 60 minutes without one, said in the pull
 request; others merge after CI and Sol's review, and only the owner labels them (TD-447). `@coderabbitai review` asks

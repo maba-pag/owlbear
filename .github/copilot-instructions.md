@@ -8,7 +8,7 @@ OwlBear is a laptop-resident AI development system built around VS Code and GitH
 
 | Branch | Role | Contents |
 | --- | --- | --- |
-| `main` | The only long-lived branch and GitHub's default | Full workspace: `share/`, `serve/`, `seed/`, `setup/`, `.owlbear/`, `store/`, `tests/`, `pyproject.toml` |
+| `main` | The only long-lived branch and GitHub's default | Full workspace: `share/`, `serve/`, `setup/`, `.owlbear/`, `store/`, `tests/`, `pyproject.toml` |
 
 Uncoordinated repository maintenance reaches `main` through a pull request: its required `CI`
 check must pass on a branch that is up to date with `main`, and it merges with a merge commit
@@ -66,11 +66,9 @@ decisions TD-41..43, TD-150 and TD-156 in [the decisions](../.owlbear/decisions.
 | `share/agents/` | Agent definitions (`.agent.md`) |
 | `share/skills/` | Agent skills (`SKILL.md` — `w-`, `r-`, `h-` prefixed) |
 | `share/instructions/` | Instruction stubs (`.instructions.md` — pointers to skills) |
-| `share/prompts/` | Prompt files (`.prompt.md` — user-facing one-shot commands) |
 | `.owlbear/` | Project ops data: Delivery authority, research, sources, scratch, scripts, hooks |
 | `store/` | Reference-only knowledge corpus manifest and placeholder directories |
-| `seed/` | Template files copied to new projects by `setup/init.py` |
-| `setup/` | Workspace initialiser (`init.py`), setup guide, sharing guide |
+| `setup/` | Setup guide, operating guide, sharing guide |
 | `tests/` | Workspace regression and integration tests |
 
 ## 3. Web Frontend

@@ -4,6 +4,7 @@ Global once (the owner, 2026-10-23: move all), on a current checkout, keeping it
 
 import json
 import subprocess
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -31,6 +32,8 @@ def no_base(monkeypatch):
 
 
 def _git(root, *args: str) -> str:
+    if (Path(root) / "HEAD").is_file():  # a bare repository: safe.bareRepository=explicit wants it named
+        args = ("--git-dir=.", *args)
     return subprocess.run(["git", *args], cwd=root, check=True, capture_output=True, text=True).stdout.strip()  # noqa: S603, S607
 
 

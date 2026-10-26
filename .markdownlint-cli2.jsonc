@@ -1,6 +1,33 @@
 {
-  // Ignores for markdownlint-cli2 consumers: the pre-commit hook and the VS Code extension.
-  // Rules live in .markdownlint.json, which markdownlint-cli2 also reads.
+  // Rules and ignores for markdownlint-cli2 consumers: the pre-commit hook and the VS Code extension.
+  "config": {
+    "MD013": false,
+    "MD024": {
+      "siblings_only": true
+    },
+    "MD029": {
+      "style": "ordered"
+    },
+    "MD033": {
+      "allowed_elements": [
+        "agents",
+        "boundaries",
+        "critical_rules",
+        "examples",
+        "output_format",
+        "path",
+        "persona",
+        "required_reading",
+        "tools"
+      ]
+    },
+    "MD041": {
+      "front_matter_title": "^\\s*(?:title|name|description)\\s*[:=]"
+    },
+    "MD060": {
+      "style": "compact"
+    }
+  },
   "ignores": [
     ".owlbear/delivery/packages/**",
     ".owlbear/delivery/runtime/**",

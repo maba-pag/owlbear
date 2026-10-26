@@ -35,5 +35,4 @@ behavioral failure as a product defect.
 
 ## What is not here
 
-Runtime source belongs under `serve/`, portable agent assets belong under `share/`, and
-consumer-project templates belong under `seed/`.
+Runtime source belongs under `serve/` and portable agent assets belong under `share/`.
