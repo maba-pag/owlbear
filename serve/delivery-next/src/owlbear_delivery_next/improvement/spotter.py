@@ -5,7 +5,7 @@ It looks at a Delivery step's hand-offs and a sample of its actions, never delay
 A look runs as a task on the step's own event loop when the hand-off (the submit tool's call) or a sampled completion
 happens, over a frozen snapshot of the step's intake: the same moment and inputs a live look will have. The loop only
 freezes the snapshot; the reservation, the card and every file write run in threads. A look is one tool-less SDK
-session on the spotter role in an empty folder, its credits capped at ``ESTIMATE``, noted in the chatlogs manifest so
+session on the spotter role in an empty folder, with no SDK credit cap, noted in the chatlogs manifest so
 it is never taken for a chat. At most ``RUNNING`` looks run at once per step; each reserves ``ESTIMATE`` against the
 day's Spotter budget in a locked ledger before it starts and settles its spend after (the estimate when unknown). A look
 over capacity, over budget, past ``LOOK``, or still running ``DRAIN`` seconds after the step ends is recorded as
@@ -46,7 +46,7 @@ if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Iterable, Iterator
 
 PROMPT = Path(__file__).with_name("spotter_prompt.md")
-RUNNING, ESTIMATE = 2, 0.5  # looks at once per step; credits a look reserves, and its SDK credit limit
+RUNNING, ESTIMATE = 2, 0.5  # looks at once per step; credits a look reserves, and counts as when its spend is unknown
 LOOK, TEARDOWN, DRAIN = 90.0, 5.0, 5.0  # seconds a look's answer, each teardown stage and the step's end may take
 LOCK, GRACE = 5.0, 1.0  # seconds a file lock is waited for; and the Spotter's writes at the process's exit
 VERDICTS = frozenset({"silent", "note", "interrupt", "insufficient-context"})
@@ -419,7 +419,7 @@ def _finished(
     record.credits = spent if token else 0.0
     store(folder, record, the_card)
     if token is not None:
-        settle(folder, token, spent)  # an unknown spend counts as the estimate, the look's credit limit
+        settle(folder, token, spent)  # an unknown spend counts as the estimate
 
 
 class Worker:
