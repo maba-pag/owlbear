@@ -350,3 +350,21 @@ def test_a_failed_shared_lookup_holds_the_automatic_change_without_a_local_copy(
     assert b.save(b.config_path, Layer, widths(1300), "automatic", owner=False) == CONFIG_WAITING
     assert config_publishes == []
     assert remote_bytes(remote, SHARED_CONFIG) == before
+
+
+def test_an_unshared_store_refuses_a_stale_automatic_write_after_an_owner_save(tmp_path):
+    store = Store(tmp_path / "store")
+    assert store.update_config(config_save.Prepared(profile_share.config_digest(store.config_path), widths(1300))) == ""
+    cached = config_save.Prepared(profile_share.config_digest(store.config_path), widths(1300))
+    assert store.save(store.config_path, Layer, widths(1700), "owner", owner=True) == ""
+
+    assert store.update_config(widths(1300)) != ""  # an unprepared changed automatic write is refused
+    assert store.update_config(cached) != ""  # a prepared basis from before the owner save no longer matches
+    assert store.read_config().widths == [1700]
+
+
+def test_an_unshared_store_still_carries_a_prepared_first_change(tmp_path):
+    store = Store(tmp_path / "store")
+    basis = profile_share.config_digest(store.config_path)
+    assert store.update_config(config_save.Prepared(basis, widths(1500))) == ""
+    assert Store(tmp_path / "store").read_config().widths == [1500]

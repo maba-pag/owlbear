@@ -145,10 +145,10 @@ def test_a_project_layer_round_trips_and_concurrent_saves_are_never_lost(repo, m
         return cur.model_copy(update={"widths": [1280]})
 
     monkeypatch.setattr(store_mod, "read_layer", spy)
-    first = threading.Thread(target=store.update_config, args=(slow,))
+    first = threading.Thread(target=owner_save, args=(store, slow))
     second = threading.Thread(
-        target=store.update_config,
-        args=(lambda cur: cur.model_copy(update={"agents": {"builder": Agent(effort="low")}}),),
+        target=owner_save,
+        args=(store, lambda cur: cur.model_copy(update={"agents": {"builder": Agent(effort="low")}})),
     )
     first.start()
     assert entered.wait(5)
@@ -163,11 +163,11 @@ def test_a_project_layer_round_trips_and_concurrent_saves_are_never_lost(repo, m
 
 def test_an_invalid_save_writes_nothing(repo):
     store = Store.open(repo)
-    store.update_config(lambda cur: cur.model_copy(update={"widths": [1280]}))
+    owner_save(store, lambda cur: cur.model_copy(update={"widths": [1280]}))
     saved = (store.root / "config.json").read_bytes()
     for bad in ({"widths": [999]}, {"format": 99}):
         with pytest.raises(ValidationError):
-            store.update_config(lambda cur, bad=bad: cur.model_copy(update=bad))
+            owner_save(store, lambda cur, bad=bad: cur.model_copy(update=bad))
     assert (store.root / "config.json").read_bytes() == saved
 
 
@@ -187,6 +187,11 @@ def test_an_existing_layer_that_is_empty_or_not_utf8_is_refused_not_read_as_defa
     path.write_bytes(damaged)
     with pytest.raises(StoreError, match="unreadable"):
         read_layer(path, Layer)
+
+
+def owner_save(store: Store, change) -> str:
+    """The owner's current-revision save, as the settings page makes it; automatic writes never bypass the guard."""
+    return store.save(store.config_path, Layer, change, "owner", owner=True)
 
 
 def _old_profile(root, roles_: object, fmt: object = 1) -> None:
@@ -222,7 +227,7 @@ def test_a_format_1_profile_moves_its_roles_into_the_project_config_once(repo, f
     Store.open(repo).read_profile()
     assert (root / "config.json").read_text() == saved
 
-    store.update_config(lambda _cur: Layer())  # the owner clears the overrides
+    owner_save(store, lambda _cur: Layer())  # the owner clears the overrides
     _old_profile(root, {"builder": {"model": "m-1", "effort": "low"}})  # e.g. a crash before the profile rewrite
     assert roles.chosen(Store.open(repo).settings(), StepKind.BUILD) == carried.MODELS["builder"]
 
@@ -238,7 +243,7 @@ def test_old_roles_fill_only_the_fields_an_existing_project_config_leaves_empty(
     assert roles.chosen(store.settings(), StepKind.REVIEW) == RoleModel(model="r-1", effort="max")
     assert store.read_config().widths == [1600]
 
-    store.update_config(lambda _cur: Layer())  # the owner clears everything; the old profile is still on disk
+    owner_save(store, lambda _cur: Layer())  # the owner clears everything; the old profile is still on disk
     assert roles.chosen(Store.open(repo).settings(), StepKind.REVIEW) == carried.MODELS["reviewer"]
 
 
@@ -251,7 +256,7 @@ def test_a_move_that_another_opener_finished_meanwhile_is_not_repeated(repo, mon
         if kw.get("name") == f".{profile_share.ROLES_MOVED}.lock" and not raced:
             raced.append(True)  # another process moves the roles, then the owner clears them through its page
             profile_share.move_roles(Store(root))
-            Store(root).update_config(lambda _cur: Layer())
+            owner_save(Store(root), lambda _cur: Layer())
         return real(fd, **kw)
 
     monkeypatch.setattr(profile_share, "open_lock", other_opener_first)
@@ -290,6 +295,33 @@ def test_a_merge_that_fails_after_replacing_the_config_fails_the_open(repo, monk
     with pytest.raises(OSError, match="Input/output"):
         profile_share.move_roles(Store(root))
     assert not (root / profile_share.ROLES_MOVED).exists()
+
+
+@pytest.mark.parametrize("mode", ["held", "raised", "applied-unpublished"])
+def test_a_role_move_that_was_not_applied_is_not_marked_and_runs_again(repo, monkeypatch, mode):
+    root = repo / ".git" / "owlbear-delivery"
+    _old_profile(root, {"reviewer": {"model": "r-1", "effort": "max"}})
+    real = Store.update_config
+
+    def refused(self, change, what="project layer"):
+        if mode == "raised":
+            msg = "simulated: fetch failed"
+            raise StoreError(msg)
+        if mode == "applied-unpublished":
+            real(self, change, what)
+            return "simulated: publication refused; retry in settings"
+        return "simulated: fetch refused"
+
+    monkeypatch.setattr(Store, "update_config", refused)
+    profile_share.move_roles(Store(root))
+    assert (root / profile_share.ROLES_MOVED).exists() == (mode == "applied-unpublished")
+    if mode != "applied-unpublished":
+        assert not Store(root).config_path.exists()
+
+    monkeypatch.setattr(Store, "update_config", real)
+    profile_share.move_roles(Store(root))
+    assert (root / profile_share.ROLES_MOVED).exists()
+    assert Store(root).read_config().agents["reviewer"].model == "r-1"
 
 
 @pytest.mark.parametrize(

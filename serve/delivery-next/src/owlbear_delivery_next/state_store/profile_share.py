@@ -483,18 +483,18 @@ def move_roles(store: Store) -> None:
             try:
                 from owlbear_delivery_next.state_store.config_save import Prepared  # noqa: PLC0415 (import cycle)
 
-                if (
-                    store.update_config(
-                        Prepared(config_digest(store.config_path), lambda cur: migrations.with_roles(cur, found)),
-                        "role overrides from the old profile",
-                    )
-                    == CONFIG_WAITING
-                ):
-                    return  # held behind another clone's pending owner intent: nothing was written, the move waits
+                # Whether the roles were applied is read from the layer below, never from the notice.
+                store.update_config(
+                    Prepared(config_digest(store.config_path), lambda cur: migrations.with_roles(cur, found)),
+                    "role overrides from the old profile",
+                )
             except SharedError:
                 raise  # the old roles move later; never mark a move that did not happen
             except StoreError:
                 return  # refused before writing; read_config reports the damaged settings
+            layer = store.read_config()
+            if migrations.with_roles(layer, found) != layer:
+                return  # not applied: the move runs again on the next open
         atomic_write(marker, "the format-1 profile's role overrides are merged into config.json\n")
     finally:
         os.close(fd)

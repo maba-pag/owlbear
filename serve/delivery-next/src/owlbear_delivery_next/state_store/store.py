@@ -230,8 +230,7 @@ class Store:
     ) -> str:
         """Change one settings layer and publish it; what the owner should know about the publication, else nothing."""
         if not self.shared:
-            update_layer(path, model, change)
-            return ""
+            return config_save.unshared_save(self, path, model, change, owner=owner)
         try:
             until = time.monotonic() + data_repo.SAVE_SECONDS  # the lock wait and every git command share it
             return config_save.locked_save(self, path, model, change, f"settings: {what}", until, owner=owner)
@@ -248,7 +247,7 @@ class Store:
         return local_home.root() / MACHINE_SETTINGS
 
     def update_config(self, change: Callable[[Layer], Layer], what: str = "project layer") -> str:
-        """Change and publish the project's settings layer; the publication notice, else nothing."""
+        """Change and publish the settings layer; changed automatic writes need a prepared basis, else a notice."""
         return self.save(self.config_path, Layer, change, f"{self.name or 'the project'}: {what}")
 
     def settings(self) -> Settings:

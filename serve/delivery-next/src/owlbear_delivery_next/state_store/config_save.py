@@ -40,6 +40,19 @@ def locked_save[T: Layer](  # noqa: PLR0913, PLR0917
         return profile_share.publish_layer(store, path, message, until, owner=owner)
 
 
+def unshared_save[T: Layer](store: Store, path: Path, model: type[T], change: Callable[[T], T], *, owner: bool) -> str:
+    """Change one settings layer of an unshared clone, with the same automatic guard and no publication."""
+    from owlbear_delivery_next.state_store.store import update_layer  # noqa: PLC0415 - the store imports this module
+
+    if path == store.config_path and not owner:
+        change = _automatic(store, change)
+    try:
+        update_layer(path, model, change)
+    except HeldByPendingError as exc:
+        return str(exc)
+    return ""
+
+
 class Prepared[T: Layer]:
     """An automatic change prepared against the project config whose digest was *basis* when the caller read it.
 
@@ -72,9 +85,9 @@ def _automatic[T: Layer](store: Store, change: Callable[[T], T]) -> Callable[[T]
         try:
             if changed and basis is not None and profile_share.config_digest(store.config_path) != basis:
                 raise HeldByPendingError(STALE)
-            if profile_share.held_by_pending(store, data.encode()):
+            if store.shared and profile_share.held_by_pending(store, data.encode()):
                 raise HeldByPendingError(CONFIG_WAITING)
-            if changed and basis is None and store.shared and not pending_intents(store):
+            if changed and basis is None and not (store.shared and pending_intents(store)):
                 raise HeldByPendingError(STALE)
         except DataRepoError as exc:
             raise HeldByPendingError(str(exc)) from exc
