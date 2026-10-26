@@ -35,7 +35,6 @@ from owlbear_delivery_next.pack_runs.pack_state import (
     HOST_STOPPED,
     LOG,
     MACHINE_LOCK,
-    OPEN,
     RUNS,
     STAGES,
     last,
@@ -51,6 +50,9 @@ from owlbear_delivery_next.pack_runs.pack_state import (
 )
 from owlbear_delivery_next.pack_runs.pack_state import (
     describe as _pack,
+)
+from owlbear_delivery_next.pack_runs.pack_state import (
+    ended as _ended,
 )
 from owlbear_delivery_next.pack_runs.pack_state import (
     interrupted as _interrupted,
@@ -335,11 +337,7 @@ class Job:
             self._finish(state, reason)
 
     def _finish(self, state: str, reason: str, *, keep: bool = False) -> None:
-        for s in self.state["stages"]:
-            if s["result"] in OPEN:
-                s["result"] = "failed" if s["result"] == "running" and state == "failed" else "skipped"
-        self.state |= {"state": state, "stage": "", "ended_at": _now(), "reason": reason, "questions": []}
-        self.state["context"] = None
+        _ended(self.state, state, reason)
         if not keep and self._removable(self.workspace):
             shutil.rmtree(self.workspace, ignore_errors=True)
         self._save()

@@ -11,6 +11,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.local_system import local_home
+from owlbear_delivery_next.local_system.storage_io import atomic_write
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -146,7 +147,17 @@ def legacy_uncertain(kept: dict[str, Any]) -> bool:
 
 
 OBSERVED = ("state", "stage", "run", "started_at", "ended_at", "reason", "workspace")
-REWRITTEN = "interrupted_generation"  # the generation this host's own rewrite of a running record carries forward
+REWRITTEN = "interrupted_generation"  # the generation this host's own rewrite of a legacy record carries forward
+
+
+def carried(record: dict[str, Any]) -> str:
+    """The generation this host wrote into a legacy record, in the only shape it writes it.
+
+    That shape is failed, uncertain and without a workspace. Any other record gets an empty answer, so a running or
+    later record never borrows it.
+    """
+    kept = record.get(REWRITTEN)
+    return kept if isinstance(kept, str) and kept and legacy_uncertain(record) else ""
 
 
 def generation(record: dict[str, Any], version: str) -> tuple[str, datetime | None]:
@@ -154,19 +165,12 @@ def generation(record: dict[str, Any], version: str) -> tuple[str, datetime | No
 
     The fingerprint binds the observed fields and the file's identity and version, read from the one descriptor the
     record came from. A same-bytes replacement is then a different file, and an untouched file keeps its identity.
-    This host's own rewrite of a running record carries that run's generation in the record itself, so it survives
-    whether or not the ledger could note the rewrite; it counts only in the very shape that rewrite writes. An older
-    host starts a later run afresh, without it.
+    This host's own rewrite or settling of a legacy record carries that run's generation in the record itself, so it
+    survives a ledger write that fails and a copy of the file; it counts only in the shape ``carried`` accepts. An
+    older host starts a later run afresh, without it.
     """
-    carried = record.get(REWRITTEN)
-    if (
-        isinstance(carried, str)
-        and carried
-        and record.get("state") == "failed"
-        and record.get("reason") == HOST_STOPPED
-        and "workspace" not in record
-    ):
-        return carried, None
+    if kept := carried(record):
+        return kept, None
     run, started = str(record.get("run") or ""), str(record.get("started_at") or "")
     if run and started:
         with contextlib.suppress(ValueError):
@@ -196,6 +200,41 @@ def interrupted(record: dict[str, Any], version: str) -> dict[str, str]:
         "workspace": str(record.get("workspace") or ""),
         "generation": identity,
     }
+
+
+def ended(record: dict[str, Any], state: str, reason: str) -> None:
+    """End the run *record* names, as a Job writes it: its open stages failed or skipped, no question left open."""
+    for s in record["stages"]:
+        if s["result"] in OPEN:
+            s["result"] = "failed" if s["result"] == "running" and state == "failed" else "skipped"
+    record |= {"state": state, "stage": "", "ended_at": now(), "reason": reason, "questions": []}
+    record["context"] = None
+
+
+def settle(root: Path) -> bool:
+    """Carry a legacy record's generation into the record itself, before its store is copied; whether it wrote.
+
+    A copy is another file, so a fingerprint would name another run: the generation carried in the record names the
+    one this host saw. A running record without a workspace is ended as the Job's own rewrite ends it, still uncertain;
+    an uncertain failed one keeps every field. Nothing is held, recovered or released here, and a record already
+    carrying its generation, a modern one or any other is left as it is. Raises OSError or ValueError when the record
+    cannot be read or written: an unreadable record is never taken for a settled one.
+    """
+    got = observed(root)
+    if got is None:
+        return False
+    record, version = got
+    if "workspace" in record or carried(record):
+        return False
+    if record["state"] == "running":
+        interrupted(record, version)  # carries the run's generation, taken before this rewrite
+        ended(record, "failed", HOST_STOPPED)
+    elif legacy_uncertain(record):
+        record[REWRITTEN] = generation(record, version)[0]
+    else:
+        return False
+    atomic_write(root / FILE, json.dumps(record, indent=1) + "\n")
+    return True
 
 
 def last(store: Store) -> dict[str, Any] | None:

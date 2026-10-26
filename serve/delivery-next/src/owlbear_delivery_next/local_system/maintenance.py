@@ -237,8 +237,10 @@ class Maintenance:
     ) -> Lease:
         """Import an older host's uncertain work once per proven generation.
 
-        A proven generation is covered by its lease in any state, so a recovered one is never resurrected. An unproven
-        one (empty *generation*) is covered only by a held lease, so a later unknown run gets its own hold. *covers*
+        A proven generation is covered by its lease in any state, so a recovered one is never resurrected, and wherever
+        its workspace now lies: a run's generation names that run, and a store copied elsewhere keeps it while the lease
+        keeps the workspace, state and history it was taken with. An unproven one (empty *generation*) is covered only
+        by a held lease of the same workspace, so a later unknown run gets its own hold. *covers*
         replaces that rule for a caller that keys its own history. *pids* are the processes a new lease records, and
         *observed* the producer evidence it saw, for such a caller's later comparison.
         A *keyed* import also marks *source* with the lease it created, in the same save, so a retry finds that very
@@ -250,9 +252,9 @@ class Maintenance:
         def same(s: Lease) -> bool:
             if covers is not None:
                 return covers(s)
-            if s.project != project or s.kind != kind or s.workspace != workspace or s.generation != generation:
+            if s.project != project or s.kind != kind or s.generation != generation:
                 return False
-            return bool(generation) or s.state in HELD
+            return bool(generation) or (s.workspace == workspace and s.state in HELD)
 
         with self._locked() as ledger:
             missing = [n for n in dict.fromkeys(notes) if n not in ledger.imported]

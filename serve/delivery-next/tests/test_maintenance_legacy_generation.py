@@ -948,5 +948,5 @@ def test_the_carried_generation_counts_only_in_the_shape_of_this_hosts_own_rewri
     """A replacement in any other shape is judged by its own identity, so it can never borrow the carried run's."""
     carried = {"state": "failed", "reason": pack_state.HOST_STOPPED, pack_state.REWRITTEN: "observed:a"}
     assert pack_state.generation(carried, "v1")[0] == "observed:a"
-    for other in ({"state": "running"}, {"reason": "update: RuntimeError: x"}, {"workspace": "/w"}):
+    for other in ({"state": "running"}, {"reason": "candidate: RuntimeError: x"}, {"workspace": "/w"}):
         assert pack_state.generation(carried | other, "v1")[0] != "observed:a"
