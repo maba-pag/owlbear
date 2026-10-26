@@ -43,7 +43,7 @@ SUITES: dict[str, tuple[str, ...]] = {
     ),
     "static": ("**",),  # `uv run lint` checks every text file, EditorConfig included
     "tooling": (
-        ".github/renovate.json",
+        "renovate.json",
         ".github/scripts/**",
         ".github/workflows/**",
         ".pre-commit-config.yaml",
@@ -74,7 +74,6 @@ SUITES: dict[str, tuple[str, ...]] = {
         ".github/scripts/check_uv_version.py",
         ".pre-commit-config.yaml",
         ".mcp.json",
-        ".vscode/mcp.json",
         "seed/.vscode/mcp.json",
         "serve/*-mcp/**",
         "share/agents/**",

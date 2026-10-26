@@ -71,9 +71,8 @@ KNOWN_STANDALONE_TOOLS: frozenset[str] = frozenset({"newWorkspace", "selection",
 _BANNED_TOOL_NAMES: frozenset[str] = frozenset({"todos", "todo", "manage_todo_list", "resolveMemoryFileUri"})
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
-_MCP_CONFIG_PATHS = (_REPO_ROOT / "seed/.vscode/mcp.json", _REPO_ROOT / ".vscode/mcp.json")
 _ROOT_MCP_CONFIG = _REPO_ROOT / ".mcp.json"  # the Copilot runtime's format; VS Code reads it too
-_CANONICAL_MCP_CONFIG = _MCP_CONFIG_PATHS[0]
+_CANONICAL_MCP_CONFIG = _REPO_ROOT / "seed/.vscode/mcp.json"
 _AGENT_ROOTS = (_REPO_ROOT / "share" / "agents", _REPO_ROOT / ".owlbear" / "agents")
 _INSTRUCTION_ROOTS = (_REPO_ROOT / "share" / "instructions", _REPO_ROOT / ".owlbear" / "instructions")
 _SKILL_ROOTS = (_REPO_ROOT / "share" / "skills", _REPO_ROOT / ".owlbear" / "skills")
@@ -135,19 +134,16 @@ def _read_mcp_config(path: Path, key: str = "servers") -> tuple[frozenset[str], 
 
 
 def _configured_mcp_servers() -> tuple[frozenset[str], list[str]]:
-    """Read canonical and active MCP server names, checking their key sets; the active ones span both files."""
+    """Read canonical and active MCP server names, checking their key sets; the active ones are the root file's."""
     canonical, errors = _read_mcp_config(_CANONICAL_MCP_CONFIG)
-    files = [(p, k) for p, k in ((_MCP_CONFIG_PATHS[1], "servers"), (_ROOT_MCP_CONFIG, "mcpServers")) if p.is_file()]
-    if files:
-        read = [_read_mcp_config(path, key) for path, key in files]
-        active = frozenset().union(*(names for names, _ in read))
-        active_errors = [error for _, found in read for error in found]
+    if _ROOT_MCP_CONFIG.is_file():
+        active, active_errors = _read_mcp_config(_ROOT_MCP_CONFIG, "mcpServers")
         errors.extend(active_errors)
         if not active_errors and (
             active - canonical - _WORKSPACE_MCP_SERVERS or canonical - active - _EXTERNAL_MCP_SERVERS
         ):
             errors.append(
-                f"{' and '.join(str(p) for p, _ in files)}: MCP server names differ from {_CANONICAL_MCP_CONFIG} "
+                f"{_ROOT_MCP_CONFIG}: MCP server names differ from {_CANONICAL_MCP_CONFIG} "
                 f"beyond external servers: expected={sorted(canonical)}, actual={sorted(active)}"
             )
     return canonical, errors

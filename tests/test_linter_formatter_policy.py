@@ -130,6 +130,18 @@ def _read_cli2_ignores(path: Path) -> set[str]:
     return {_normalize_pattern(ignore, cli2=True) for ignore in ignores}
 
 
+def _markdownlint_rule_authorities() -> list[dict[str, object]]:
+    """The root rules live in the cli2 file; seed keeps .markdownlint.json for standalone markdownlint-cli."""
+    root = json.loads(_JSONC_LINE_COMMENT.sub("", (_ROOT / ".markdownlint-cli2.jsonc").read_text(encoding="utf-8")))
+    seed = json.loads((_ROOT / "seed/.markdownlint.json").read_text(encoding="utf-8"))
+    assert isinstance(root, dict)
+    assert isinstance(root.get("config"), dict)
+    assert isinstance(seed, dict)
+    assert not (_ROOT / ".markdownlint.json").exists()  # it would override the cli2 file's config
+    assert root["config"] == seed
+    return [root["config"], seed]
+
+
 def _read_yaml_mapping(path: Path) -> dict[str, object]:
     payload = yaml.safe_load(path.read_text(encoding="utf-8"))
     assert isinstance(payload, dict)
@@ -204,9 +216,7 @@ def test_markdownlint_ignore_authorities_share_normalized_policy() -> None:
 
 
 def test_markdownlint_inline_html_allows_only_agent_sections() -> None:
-    for path in (_ROOT / ".markdownlint.json", _ROOT / "seed/.markdownlint.json"):
-        config = json.loads(path.read_text(encoding="utf-8"))
-        assert isinstance(config, dict)
+    for config in _markdownlint_rule_authorities():
         assert config.get("MD033") == {"allowed_elements": _M04_ALLOWED_ELEMENTS}
 
     assert "<strong>" not in (_ROOT / "setup/sharing-guide.md").read_text(encoding="utf-8")
@@ -214,9 +224,7 @@ def test_markdownlint_inline_html_allows_only_agent_sections() -> None:
 
 def test_markdownlint_rule_authorities_and_source_suppression_remain_explicit() -> None:
     expected_front_matter_title = r"^\s*(?:title|name|description)\s*[:=]"
-    for path in (_ROOT / ".markdownlint.json", _ROOT / "seed/.markdownlint.json"):
-        config = json.loads(path.read_text(encoding="utf-8"))
-        assert isinstance(config, dict)
+    for config in _markdownlint_rule_authorities():
         assert config.get("MD013") is False
         assert config.get("MD024") == {"siblings_only": True}
         assert config.get("MD029") == {"style": "ordered"}
