@@ -79,9 +79,7 @@ def _fill(store: Store, prof: Profile, basis: str, *, resumed: bool) -> bool:
 
 
 def _publish_config(store: Store) -> str:
-    """Publish the project config as it is now: an edit when present, else its removal, never a rewrite."""
-    if store.config_path.exists():
-        return store.update_config(lambda cur: cur, "legacy preferences carried")
+    """Publish the project config as it is now under the shared lock: an edit when present, else its removal."""
     if not store.shared:
         return ""
     with store.shared.locked():

@@ -1,6 +1,7 @@
 """The legacy preference import recovers from owner reviews, stored values, and failed publications (R15, FND-01)."""
 
 import contextlib
+import inspect
 import json
 import os
 import subprocess
@@ -441,6 +442,105 @@ def test_an_ordinary_profile_save_publishes_the_deleted_config_before_done(share
     assert got.entries[profile.WINDOW].value == "30"
     assert not fresh.config_path.exists()
     assert fresh.read_config().prefs is None
+    assert not profile_share.unpublished(store)
+
+
+def delete_config_before_the_shared_lock(monkeypatch, store: Store) -> list[str]:
+    """Delete the project config as the retry takes the shared lock, after its existence check; returns the callers."""
+    real_locked, callers = DataRepo.locked, []
+
+    def locked(self, wait: float | None = None):
+        under_publish = any(frame.function == "_publish_config" for frame in inspect.stack()[1:])
+        if self == store.shared and under_publish and not callers:
+            callers.append("_publish_config")
+            store.config_path.unlink()
+        return real_locked(self, wait)
+
+    monkeypatch.setattr(DataRepo, "locked", locked)
+    return callers
+
+
+def remote_config_bytes(remote: Path, store: Store) -> bytes:
+    relative = store.config_path.relative_to(store.shared.root).as_posix()
+    shown = subprocess.run(  # noqa: S603 - the bare remote's branch as published
+        ["git", "--git-dir", str(remote), "show", f"main:{relative}"],  # noqa: S607
+        capture_output=True,
+        check=False,
+    )
+    return shown.stdout
+
+
+def test_a_config_deleted_before_the_retry_takes_the_shared_lock_stays_absent(shared_repo, tmp_path, monkeypatch):
+    root, remote = shared_repo
+    store = Store(tmp_path / "store", DataRepo(root), "shop-site")
+    store.write_profile(Profile(entries={profile.POLL: confirmed("45")}))
+    refuse_completion_once(monkeypatch, store)
+    with pytest.raises(StoreError):
+        prefs_import.run(store)
+    callers = delete_config_before_the_shared_lock(monkeypatch, store)
+
+    prefs_import.run(store)  # the retry publishes the owner's removal, never an empty config, then done
+    assert callers == ["_publish_config"]
+    fresh, got = clone_profile(remote, tmp_path)
+    assert got.prefs_import == "done"
+    assert not fresh.config_path.exists()
+    assert fresh.read_config().prefs is None
+    assert not store.config_path.exists()
+    assert not profile_share.unpublished(store)
+
+
+def test_a_retry_with_a_healthy_config_publishes_its_unchanged_bytes(shared_repo, tmp_path, monkeypatch):
+    root, remote = shared_repo
+    store = Store(tmp_path / "store", DataRepo(root), "shop-site")
+    store.write_profile(Profile(entries={profile.POLL: confirmed("45")}))
+    refuse_completion_once(monkeypatch, store)
+    with pytest.raises(StoreError):
+        prefs_import.run(store)
+    before = remote_config_bytes(remote, store)
+    local = store.config_path.read_bytes()
+
+    prefs_import.run(store)
+    assert before == local
+    assert remote_config_bytes(remote, store) == local  # the publication leaves the config as it was
+    fresh, got = clone_profile(remote, tmp_path)
+    assert got.prefs_import == "done"
+    assert fresh.read_config().prefs.ci_poll_seconds == 45
+
+
+def test_an_unshared_retry_creates_no_config_once_the_owner_deleted_it(local):
+    local.write_profile(Profile(entries={profile.POLL: confirmed("45")}))
+    prefs_import.run(local)
+    profile_share._unpublished(local, failed=True)  # noqa: SLF001 - a refused completion left the flag behind
+    local.config_path.unlink()
+
+    prefs_import.run(local)
+    assert not local.config_path.exists()
+    assert local.read_profile().prefs_import == "done"
+    assert not profile_share.unpublished(local)
+
+
+def test_a_refused_config_on_the_retry_keeps_the_flag_and_done_until_a_later_retry_publishes(
+    shared_repo, tmp_path, monkeypatch
+):
+    root, remote = shared_repo
+    store = Store(tmp_path / "store", DataRepo(root), "shop-site")
+    store.write_profile(Profile(entries={profile.POLL: confirmed("45")}))
+    refuse_completion_once(monkeypatch, store)
+    with pytest.raises(StoreError):
+        prefs_import.run(store)
+    refused = refuse_config_once(monkeypatch, store)
+
+    with pytest.raises(StoreError, match="completion was not published"):
+        prefs_import.run(store)
+    assert refused
+    assert profile_share.unpublished(store)
+    assert store.read_profile().prefs_import == "done"
+    assert store.read_config().prefs.ci_poll_seconds == 45
+
+    prefs_import.run(store)
+    fresh, got = clone_profile(remote, tmp_path)
+    assert got.prefs_import == "done"
+    assert fresh.read_config().prefs.ci_poll_seconds == 45
     assert not profile_share.unpublished(store)
 
 
