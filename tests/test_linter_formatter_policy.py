@@ -299,7 +299,9 @@ def test_sources_attribution_rows_are_well_formed() -> None:
         cells = [cell.strip() for cell in row.strip("|").split(" | ")]
         assert len(cells) == 5, row
         source, url, licence, what, where = cells
-        assert source and licence and what, row
+        assert source, row
+        assert licence, row
+        assert what, row
         assert re.fullmatch(r"<https://[^\s<>]+>", url), row
         paths = re.findall(r"`([^`]+)`", where)
         assert paths, row
