@@ -90,7 +90,8 @@ record what the option showed as `approved` (`record_decision` takes `origin="ap
 detail you add when recording as `autonomous`
 with its `reason`. "Show me more options": ask again with options across directions, each with
 benefits, costs, risks and its own percentage that it is a good choice (they need not add up), and again
-"take your recommendation (…)" naming it. "Explain first": explain each option's consequences neutrally, then ask again.
+"take your recommendation (…)" naming it. "Explain first" (his shorthand "nmdpcro": details, pro, con, risk,
+opinion): explain each option's consequences neutrally, then ask again.
 Free text is never recorded as written: offer two to five readings that fill its gaps differently,
 plus "your words as written", "show me more readings" and "explain first". When the direction itself
 is in doubt, ask the direction first, then its variants, and tell the owner why.
