@@ -280,11 +280,16 @@ def _outputs(  # noqa: PLR0913, PLR0917 - the log, both snapshots and the captur
 
 
 def _recover(folder: Path, session: str) -> None:
-    """Finish a switch an exit interrupted: the old snapshot comes back if no new one took its place."""
+    """Finish what an exit interrupted: the old snapshot back if no new one took its place; abandoned stages go.
+
+    The caller holds the session's lock, so no capture of it is staging now.
+    """
     live, old = folder / session, folder / f".old-{session}"
     if old.exists() and not live.exists():
         old.rename(live)
     shutil.rmtree(old, ignore_errors=True)
+    for stage in folder.glob(f".stage-{session}-*"):
+        shutil.rmtree(stage, ignore_errors=True)
 
 
 def _switch(folder: Path, session: str, said: dict[str, Any], stage: Path | None) -> None:
@@ -413,6 +418,7 @@ def prune(now: datetime, judged: dict[str, datetime], pinned: set[str]) -> list[
         if session in pinned or now - at < KEPT:
             continue
         with _locked(folder / f".{session}.lock"):  # never under a capture of the same session
+            _recover(folder, session)
             shutil.rmtree(folder / session, ignore_errors=True)
         gone.append(session)
     return gone

@@ -202,8 +202,9 @@ def test_a_switch_an_exit_interrupted_is_recovered_before_the_next_capture(tmp_p
     first = chatlogs.capture("s13", provisional=True, records=records)
     folder = chatlogs.root() / "chatlogs"
     (folder / "s13").rename(folder / ".old-s13")  # the process died between the two renames of a switch
+    (folder / ".stage-s13-abandoned").mkdir()  # and an earlier one while staging
     chatlogs.capture("s13", provisional=False, records=records)
-    assert not (folder / ".old-s13").exists()
+    assert not [p.name for p in folder.iterdir() if p.name.startswith((".old-s13", ".stage-s13-"))]
     assert json.loads((folder / "s13" / "sidecar.json").read_text())["copied_at"] >= first["copied_at"]
 
 
