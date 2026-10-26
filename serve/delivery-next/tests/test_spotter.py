@@ -68,10 +68,18 @@ def ledger() -> dict[str, Any]:
     return json.loads((spotter.root() / f"ledger-{spotter._today()}.json").read_text())  # noqa: SLF001
 
 
-def judge(answer: str = '{"verdict": "silent"}', *, wait: float = 0.0, seen: list | None = None) -> spotter.Judge:
+def judge(
+    answer: str = '{"verdict": "silent"}',
+    *,
+    wait: float = 0.0,
+    seen: list | None = None,
+    entered: asyncio.Event | None = None,
+) -> spotter.Judge:
     async def look(the_card: dict[str, Any], _ctx: spotter.Context) -> tuple[str, float]:
         if seen is not None:
             seen.append(the_card)
+        if entered is not None:  # the look's model call has begun: its reservation and card are done
+            entered.set()
         await asyncio.sleep(wait)
         return answer, 0.25
 
@@ -174,8 +182,10 @@ def test_a_look_still_running_at_the_steps_end_is_recorded_skipped(monkeypatch) 
     monkeypatch.setattr(spotter, "DRAIN", 0.05)
 
     async def main() -> None:
-        spot = spotter.Spotter(ctx(), lambda: "s-1", judge(wait=5))
+        entered = asyncio.Event()
+        spot = spotter.Spotter(ctx(), lambda: "s-1", judge(wait=5, entered=entered))
         spot.handed_off("call-1", {})
+        await asyncio.wait_for(entered.wait(), timeout=30)  # running when the step ends, not merely queued
         await spot.drain()
         assert not spot.tasks
 
@@ -222,7 +232,8 @@ def test_samples_follow_the_seeded_rate_and_a_state_change_is_preliminary() -> N
         for i in range(20):
             spot.seen(started(f"c{i}", "bash", {"command": "ls"}))
             spot.seen(done(f"c{i}", "ok"))
-            await asyncio.sleep(0.01)  # each look ends before the next action
+            while spot.tasks:  # each look, record and settlement end before the next action
+                await asyncio.wait(set(spot.tasks))
         await spot.drain()
         rng = random.Random(7)  # noqa: S311
         return sum(rng.random() * 100 < 30 for _ in range(20))
