@@ -48,3 +48,18 @@ def ensure_target(tfd: int, previous: int) -> None:
         fd_tree.write_at(tfd, MARKER, f"{previous or STORE_FORMAT}\n")  # keeps the format it was written in
         return
     supported_format(text)
+
+
+def written_format(tfd: int, previous: int) -> None:
+    """Refuse unless the target's marker is still present and holds the format ensure_target wrote for *previous*.
+
+    Called after the target is synced, so a marker removed or changed while it was made durable stops the switch.
+    """
+    try:
+        text = fd_tree.read_at(tfd, MARKER)
+    except OSError as exc:
+        msg = "the target's format marker is not a regular file: nothing was switched"
+        raise StoreError(msg) from exc
+    if text is None or supported_format(text) != (previous or STORE_FORMAT):
+        msg = "the target's format marker changed while it was published: nothing was switched; start again"
+        raise StoreError(msg)

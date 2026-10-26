@@ -329,15 +329,8 @@ def _format_at(folder_fd: int, proof: OfflineProof | None) -> int:
 
 
 def _previous_at(folder_fd: int) -> int:
-    """The prior format the preparation recorded for a switched move; 0 when no preparation exists."""
-    try:
-        text = fd_tree.read_at(folder_fd, project_move.PREPARED)
-        found = json.loads(text) if text else {}
-        marker = found.get("marker") if isinstance(found, dict) else None
-    except (OSError, ValueError) as exc:
-        msg = f"{project_move.PREPARED} is unreadable: refusing to admit the moved store"
-        raise StoreError(msg) from exc
-    return format_marker.prior_format(marker)
+    """The prior format the preparation recorded for a switched move; a missing preparation is refused."""
+    return project_switch.prepared_prior(folder_fd)
 
 
 def _generation_at(folder: Path, folder_fd: int, proof: OfflineProof) -> None:

@@ -31,13 +31,14 @@ def retained_target(folder: Path, pid: str) -> Path | None:
         raise StoreError(msg) from exc
     try:
         rec = project_move.record_at(folder, fd)
+        if rec is None:
+            return None
+        if rec["phase"] != project_move.SWITCHED or rec["target"] != str(target):
+            msg = f"{folder} was not switched to {target}: its receipt names another store; nothing was changed"
+            raise StoreError(msg)
+        project_switch.prepared_prior(fd)  # the owned repair of a missing target marker writes this proven prior
     finally:
         os.close(fd)
-    if rec is None:
-        return None
-    if rec["phase"] != project_move.SWITCHED or rec["target"] != str(target):
-        msg = f"{folder} was not switched to {target}: its receipt names another store; nothing was changed"
-        raise StoreError(msg)
     project_switch.named_switched(target, rec)
     _proven(target, rec)
     return target

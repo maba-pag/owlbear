@@ -369,12 +369,15 @@ def _commit(  # noqa: PLR0913, PLR0917
 ) -> None:
     """Record the switch only after the held copy is durable, still the one published, and the source unchanged.
 
-    The target's format marker is written first, through the held descriptor, so a switch is never recorded without
-    it. Every check runs after the sync, so a change made during the sync is refused before the switch.
+    The copy is proven ours before anything is written into it. The target's format marker is then written through
+    the held descriptor, so a switch is never recorded without it. Every check runs after the sync, and the marker
+    must still hold the format written, so a change made during the sync is refused before the switch.
     """
+    _published(pfd, target, tfd, rec)  # a foreign or altered copy is refused before any byte is written into it
     format_marker.ensure_target(tfd, previous)
     _sync_published(pfd, target, tfd)  # a retry re-syncs before any switch, so a failure stays uncommitted
     _published(pfd, target, tfd, rec)  # the name, identity and digests are rechecked after the sync
+    format_marker.written_format(tfd, previous)  # the marker survived the sync with the format it was written in
     if not _source_unchanged(folder_fd, rec):  # a write after the copy: the switch is refused, nothing is lost
         msg = (
             f"{folder} changed after it was copied: the copy is kept at {target} and the switch was not recorded; "
