@@ -10,7 +10,6 @@ empty, and the project memory it reads is today's.
 
 from __future__ import annotations
 
-import asyncio
 import dataclasses
 import re
 import uuid
@@ -24,7 +23,7 @@ from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.design_packs import calibration, design_pack
 from owlbear_delivery_next.local_system import git_files
 from owlbear_delivery_next.pack_runs.scratch import scratch
-from owlbear_delivery_next.runtimes import sdk_adapter
+from owlbear_delivery_next.runtimes import loop_owner, sdk_adapter
 from owlbear_delivery_next.settings import roles
 from owlbear_delivery_next.workflow_steps import judges, sessions
 
@@ -47,7 +46,7 @@ class ReplayError(RuntimeError):
 
 def sdk_run(cfg: sdk_adapter.Session) -> Run:
     """One judge session through the SDK; callers wrap it so its slot is owned while it runs."""
-    return asyncio.run(sdk_adapter.run(cfg))
+    return loop_owner.run(sdk_adapter.run(cfg))
 
 
 def replay(
