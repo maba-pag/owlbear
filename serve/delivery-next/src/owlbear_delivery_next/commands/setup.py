@@ -216,7 +216,7 @@ def run(
     (``project_folder``).
     """
     store, python, say = (
-        Store.open(repo),
+        Store.open(repo, repair=True),
         str(local_home.stable(Path(sys.executable))),
         lambda t: sys.stdout.write(t + "\n"),
     )
@@ -226,6 +226,8 @@ def run(
     except StoreError as exc:  # setup replaces a profile it cannot read; confirming saves the new one
         say(f"The saved profile cannot be read ({exc}); detecting a new one.")
         prev, unreadable = None, True
+    if store.deferred_roles and not unreadable:  # a readable profile whose roles cannot be inspected is not replaced
+        raise store.deferred_roles
     checks = readiness.check(repo, prev)
     say("Readiness")
     say("\n".join(f"  {'ok ' if c.ok else 'FIX'} {c.name}: {c.detail}" for c in checks))

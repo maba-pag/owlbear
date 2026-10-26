@@ -68,10 +68,12 @@ class FakeStore:
         self.prof = prof
         return self.notices.pop(0) if self.notices else ""
 
-    def mark_prefs_import(self, expect: str, to: str, basis: str = "") -> tuple[str, str, bool]:
+    def mark_prefs_import(self, expect: str, to: str, basis: str = "", claim: str = "") -> tuple[str, str, bool]:
         if self.prof.prefs_import != expect:
             return self.prof.prefs_import, "", False
         update = {"prefs_import": to, "prefs_basis": basis if to == "pending" else ""}
+        if to == "pending":
+            update["prefs_claim"] = claim
         self.prof = self.prof.model_copy(update=update)
         return to, self.notices.pop(0) if self.notices else "", True
 
@@ -229,10 +231,10 @@ def test_a_crash_after_the_fill_landed_completes_without_refilling_an_owner_clea
     store = FakeStore()
     original_mark = store.mark_prefs_import
 
-    def crash_before_done(expect, to, basis=""):
+    def crash_before_done(expect, to, basis="", claim=""):
         if to == "done":
             raise KeyboardInterrupt
-        return original_mark(expect, to, basis)
+        return original_mark(expect, to, basis, claim)
 
     store.mark_prefs_import = crash_before_done
     with pytest.raises(KeyboardInterrupt):

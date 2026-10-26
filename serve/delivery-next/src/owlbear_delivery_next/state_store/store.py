@@ -116,6 +116,7 @@ class Store:
         self.root, self.shared, self.name = root, shared, name
         self.global_path = shared.global_path if shared else None
         self.db = Database(root)
+        self.deferred_roles: StoreError | None = None  # a repair open keeps the role refusal for its caller
 
     @property
     def config_path(self) -> Path:
@@ -123,8 +124,12 @@ class Store:
         return self.shared.project_path(self.name) if self.shared else self.root / CONFIG
 
     @classmethod
-    def open(cls, cwd: Path) -> Store:
-        """Open or create the store for the clone containing *cwd* and gate its format."""
+    def open(cls, cwd: Path, *, repair: bool = False) -> Store:
+        """Open or create the store for the clone containing *cwd* and gate its format.
+
+        A *repair* open keeps a refused role move in ``deferred_roles`` instead of raising, so the owner's profile
+        repair can replace an unreadable profile; the caller raises it when the profile itself is readable.
+        """
         try:
             shared = data_repo.locate()
             name = data_repo.folder(shared, cwd) if shared else ""
@@ -136,7 +141,12 @@ class Store:
             raise FormatTooNewError(msg)
         try:
             store.adopt(data_repo.identity(cwd) if shared else "")
-            roles_move.move_roles(store)
+            try:
+                roles_move.move_roles(store)
+            except StoreError as exc:
+                if not repair:
+                    raise
+                store.deferred_roles = exc
             profile_share.adopt(store)
         except data_repo.DataRepoError as exc:
             raise StoreError(str(exc)) from exc
