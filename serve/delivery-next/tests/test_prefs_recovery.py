@@ -424,6 +424,53 @@ def test_setup_repair_with_a_pending_guard_keeps_the_pending_marker(
     assert not store.config_path.exists()
 
 
+def test_repair_of_a_readable_profile_refuses_when_its_role_write_fails(
+    repo: Path, tmp_path_factory, monkeypatch, capsys
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path_factory.mktemp("home")))
+    monkeypatch.setattr(readiness, "check", lambda *_a: pytest.fail("the refusal must come before the probe"))
+    store = Store.open(repo)
+    store.root.mkdir(parents=True, exist_ok=True)
+    raw = '{"format": 1, "roles": {"reviewer": {"model": "r-1", "effort": "max"}}}'
+    (store.root / profile_share.PROFILE).write_text(raw)
+    real_update = Store.update_config
+
+    def refused_role_write(self, change, what: str = "", **kwargs):
+        if what == "role overrides from the old profile":
+            msg = "fetch failed"
+            raise StoreError(msg)
+        return real_update(self, change, what, **kwargs)
+
+    monkeypatch.setattr(Store, "update_config", refused_role_write)
+    monkeypatch.setattr(Store, "write_profile", lambda *_a, **_k: pytest.fail("no profile write after a refusal"))
+    with pytest.raises(StoreError, match="fetch failed"):
+        setup.run(repo, [], yes=True, local_files="no")
+    assert "cannot be read" not in capsys.readouterr().out
+    assert (store.root / profile_share.PROFILE).read_text() == raw
+    assert not (store.root / profile_share.ROLES_MOVED).exists()
+    assert not store.config_path.exists()
+
+
+def test_declined_repair_of_an_unreadable_profile_leaves_every_file_unchanged(
+    repo: Path, tmp_path_factory, monkeypatch, capsys
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path_factory.mktemp("home")))
+    monkeypatch.setattr(readiness, "check", lambda *_a: [])
+    monkeypatch.setattr(setup.profile, "detect", lambda *_a: Profile(version=1))
+    monkeypatch.setattr(Store, "write_profile", lambda *_a, **_k: pytest.fail("no profile write before confirmation"))
+    store = Store.open(repo)
+    store.root.mkdir(parents=True, exist_ok=True)
+    raw = '{"format": 1, "models": {}}'
+    (store.root / profile_share.PROFILE).write_text(raw)
+    assert setup.run(repo, [], yes=False, local_files="no", ask=lambda _q: "n") == 1
+    out = capsys.readouterr().out
+    assert "cannot be read" in out
+    assert "discards the unreadable profile" in out
+    assert (store.root / profile_share.PROFILE).read_text() == raw
+    assert not (store.root / profile_share.ROLES_MOVED).exists()
+    assert not store.config_path.exists()
+
+
 # Finding 6: a legacy claim is won only by its own published nonce, never by an equal absent basis
 
 

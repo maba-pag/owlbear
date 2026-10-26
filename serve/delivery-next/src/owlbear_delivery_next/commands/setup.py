@@ -225,6 +225,10 @@ def run(
         prev = store.read_profile()
     except StoreError as exc:  # setup replaces a profile it cannot read; confirming saves the new one
         say(f"The saved profile cannot be read ({exc}); detecting a new one.")
+        say(
+            "Confirming replacement discards the unreadable profile, including any unrecoverable legacy role "
+            "overrides; declining keeps it."
+        )
         prev, unreadable = None, True
     if store.deferred_roles and not unreadable:  # a readable profile whose roles cannot be inspected is not replaced
         raise store.deferred_roles
