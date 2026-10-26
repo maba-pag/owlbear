@@ -50,7 +50,7 @@ def test_get_shows_each_layer_the_resolved_values_their_source_and_what_is_appli
     assert got["project"] == {
         "format": F, "agents": {}, "runtimes": {}, "widths": None, "preparations": None, "data": None,
         "design_failures": None, "final_review": None, "pr_labels": None, "pr_marker": None, "sessions": None,
-        "watcher": None,
+        "spotter": None,
     }  # fmt: skip
     assert (got["global"], got["global_location"]) == (None, False)
     assert got["settings"]["agents"]["builder"]["model"] == "claude-opus-5.5"
@@ -142,14 +142,20 @@ def test_an_invalid_project_layer_is_refused_and_nothing_changes(store, layer):
     assert not (store.root / "config.json").exists()
 
 
-def test_the_watcher_is_on_in_global_and_a_project_may_turn_it_off() -> None:
+def test_the_spotter_learns_by_global_and_a_project_may_turn_it_off() -> None:
     from owlbear_delivery_next.settings import config  # noqa: PLC0415
+    from owlbear_delivery_next.settings.improvement import Spotter  # noqa: PLC0415
 
     on = config.resolve(None, config.Layer())
-    off = config.resolve(config.GlobalLayer(), config.Layer(watcher=False))
-    assert (on.watcher, on.sources["watcher"], on.agents["watcher"].model, on.agents["watcher"].effort) == (
-        True, "default", "gpt-6-luna", "medium")  # fmt: skip
-    assert (on.agents["watcher"].context, off.watcher, off.sources["watcher"]) == ("default", False, "project")
+    off = config.resolve(config.GlobalLayer(), config.Layer(spotter=Spotter(mode="off")))
+    assert (on.spotter.mode, on.sources["spotter.mode"], on.agents["spotter"].model, on.agents["spotter"].effort) == (
+        "learning", "default", "gpt-6-luna", "medium")  # fmt: skip
+    assert (on.agents["spotter"].context, off.spotter.mode, off.sources["spotter.mode"]) == (
+        "default",
+        "off",
+        "project",
+    )
+    assert off.spotter.looks == ["hand-off"]  # the rest of the Spotter's settings still inherit, field by field
 
 
 def test_the_global_layer_is_saved_only_where_a_location_is_configured(store, tmp_path):
@@ -165,7 +171,7 @@ def test_the_global_layer_is_saved_only_where_a_location_is_configured(store, tm
     assert (got["global"], got["global_location"]) == ({"format": F, "agents": {}, "runtimes": {}, "widths": None,
                                                          "preparations": None, "data": None, "design_failures": None,
                                                          "final_review": None, "pr_labels": None,
-                                                         "pr_marker": None, "sessions": None, "watcher": None,
+                                                         "pr_marker": None, "sessions": None, "spotter": None,
                                                          "visible": None,
                                                          "curator_threshold": None, "machine": None,
                                                          "machine_moved": None},
