@@ -125,7 +125,7 @@ CURRENT_IMPORTS = (
     ("machine_host/registry.py", "9b665c270866f57d7056583906a29a7a0762e1aa0bc6613d70d07f614d305b76"),
     ("machine_host/selfcheck.py", "2aa2fa0c3f7e09a66cecd16cb5e0d101cd4a819bbbab976d42be1d6647fc354b"),
     ("project_host/host.py", "85b64468f9280421471aa535a39b9ae196e7af672b4896b93e08ac4e0e0f0c8d"),
-    ("state_store/project_home.py", "259e40135b59fa645a77dd1b90b242505e3a864542c2e123850a98e9aeda0b78"),
+    ("state_store/project_home.py", "be6ffc905aff251ac71afb2407ad8958daa91588e43577b551b2d11b8d28efcf"),
     ("state_store/store.py", "df2cea9222c0d873feda15e06169e77256ac374712daa9457910c5bba4260776"),
 )
 CONSTANTS = (

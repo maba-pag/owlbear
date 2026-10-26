@@ -6,15 +6,16 @@ readable, the record and the fence still match the folder, and every legacy prod
 """
 
 import json
+import os
 import re
 import subprocess
 import sys
 from typing import TYPE_CHECKING
 
-from owlbear_delivery_next.local_system.storage_io import atomic_write
-from owlbear_delivery_next.state_store import project_home, project_move
+from owlbear_delivery_next.state_store import fd_tree, project_home, project_move
 from owlbear_delivery_next.state_store.database import MARKER, StoreError
 from owlbear_delivery_next.state_store.legacy_family import Gap, open_gaps
+from owlbear_delivery_next.state_store.offline_proof import OfflineProof, same_folder
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -45,23 +46,34 @@ def boot_session() -> str:
     return text
 
 
-def _identity(folder: Path) -> list[int]:
-    st = folder.stat(follow_symlinks=False)
-    return [st.st_dev, st.st_ino]
+def _pinned(folder: Path) -> int:
+    fd = project_move.pin(folder)
+    if fd is None:
+        msg = f"{folder} is missing: nothing was prepared, so nothing moves"
+        raise StoreError(msg)
+    return fd
 
 
-def _record(folder: Path) -> dict:
-    path = folder / PREPARED
+def _read(fd: int, folder: Path, name: str) -> str | None:
     try:
-        data = json.loads(path.read_text())
-    except FileNotFoundError as exc:
-        msg = f"{path} is missing: nothing was prepared, so nothing moves"
-        raise StoreError(msg) from exc
+        return fd_tree.read_at(fd, name)
     except (OSError, ValueError) as exc:
-        msg = f"{path} is unreadable: refusing the offline move"
+        msg = f"{folder / name} is not a regular file OwlBear can read: refusing the offline move"
+        raise StoreError(msg) from exc
+
+
+def _record(folder: Path, fd: int) -> dict:
+    text = _read(fd, folder, PREPARED)
+    if text is None:
+        msg = f"{folder / PREPARED} is missing: nothing was prepared, so nothing moves"
+        raise StoreError(msg)
+    try:
+        data = json.loads(text)
+    except ValueError as exc:
+        msg = f"{folder / PREPARED} is unreadable: refusing the offline move"
         raise StoreError(msg) from exc
     if not isinstance(data, dict) or set(data) != {"boot", "folder", "marker"} or not _witnessed(data):
-        msg = f"{path} is not a preparation record OwlBear wrote: refusing the offline move"
+        msg = f"{folder / PREPARED} is not a preparation record OwlBear wrote: refusing the offline move"
         raise StoreError(msg)
     return data
 
@@ -79,49 +91,75 @@ def _witnessed(data: dict) -> bool:
     )
 
 
-def prepare(folder: Path, gaps: Callable[[], tuple[Gap, ...]] = open_gaps) -> dict:
-    """Record the folder's identity and boot session and install the fence; refuse first if a producer is unfenced."""
-    boot = boot_session()
-    open_gaps = gaps()
-    if open_gaps:
-        msg = _unfenced(open_gaps)
+def _refuse_replaced(folder: Path, fd: int) -> None:
+    if not same_folder(folder, fd):
+        msg = f"{folder} no longer names the folder that was pinned: nothing was prepared; check it, then start again"
         raise StoreError(msg)
-    marker = folder / MARKER
-    current = marker.read_text().strip() if marker.exists() else ""
+
+
+def _prepare_at(folder: Path, fd: int, boot: str) -> dict:
+    raw = _read(fd, folder, MARKER) or ""
+    current = raw.strip()
     if current == FENCE:
         # Repeated prepare keeps the existing generation; the fence is never recorded as the prior format.
-        return _record(folder)
+        return _record(folder, fd)
     if current and not current.isdigit():
         msg = f"the format marker {current!r} is malformed: refusing the offline move"
         raise StoreError(msg)
     if current and int(current) >= int(FENCE):
         msg = f"the format marker {current} is not a prior format: refusing the offline move"
         raise StoreError(msg)
-    previous = marker.read_text() if marker.exists() else ""
-    record = {"boot": boot, "folder": _identity(folder), "marker": previous}
-    atomic_write(folder / PREPARED, json.dumps(record) + "\n")
-    atomic_write(marker, f"{FENCE}\n")
+    dev, ino = fd_tree.ident(os.fstat(fd))
+    record = {"boot": boot, "folder": [dev, ino], "marker": raw}
+    fd_tree.write_at(fd, PREPARED, json.dumps(record) + "\n")
+    fd_tree.write_at(fd, MARKER, f"{FENCE}\n")
     return record
 
 
-def finish(folder: Path, gaps: Callable[[], tuple[Gap, ...]] = open_gaps) -> project_move.OfflineProof:
-    """Verify every precondition; return the only proof the migrator accepts, or raise before any state changes."""
-    record = _record(folder)
+def prepare(folder: Path, gaps: Callable[[], tuple[Gap, ...]] = open_gaps) -> dict:
+    """Record the folder's identity and boot session and install the fence; refuse first if a producer is unfenced.
+
+    The folder is pinned before anything is read; every read and write goes through that descriptor.
+    """
     boot = boot_session()
-    if boot.upper() == record["boot"].upper():  # UUID case variants name the same boot session
-        msg = "still the boot session the source was prepared in: reboot before finishing; nothing moves"
-        raise StoreError(msg)
-    if record["folder"] != _identity(folder):
-        msg = f"{folder} is not the folder that was prepared: refusing the offline move"
-        raise StoreError(msg)
-    marker = folder / MARKER
-    if not marker.exists() or marker.read_text().strip() != FENCE:
-        msg = f"the format fence on {folder} is missing or altered: refusing the offline move"
-        raise StoreError(msg)
-    open_gaps = gaps()
-    if open_gaps:
-        raise StoreError(_unfenced(open_gaps))
-    return project_move.OfflineProof(folder, str(record["marker"]))
+    fd = _pinned(folder)
+    try:
+        open_gaps = gaps()
+        if open_gaps:
+            msg = _unfenced(open_gaps)
+            raise StoreError(msg)
+        _refuse_replaced(folder, fd)
+        return _prepare_at(folder, fd, boot)
+    finally:
+        os.close(fd)
+
+
+def finish(folder: Path, gaps: Callable[[], tuple[Gap, ...]] = open_gaps) -> OfflineProof:
+    """Verify every precondition; return the only proof the migrator accepts, or raise before any state changes.
+
+    The proof carries the identity of the folder verified through this descriptor, so the move can refuse a swap.
+    """
+    fd = _pinned(folder)
+    try:
+        record = _record(folder, fd)
+        boot = boot_session()
+        if boot.upper() == record["boot"].upper():  # UUID case variants name the same boot session
+            msg = "still the boot session the source was prepared in: reboot before finishing; nothing moves"
+            raise StoreError(msg)
+        dev, ino = fd_tree.ident(os.fstat(fd))
+        if record["folder"] != [dev, ino] or not same_folder(folder, fd):
+            msg = f"{folder} is not the folder that was prepared: refusing the offline move"
+            raise StoreError(msg)
+        marker = _read(fd, folder, MARKER)
+        if marker is None or marker.strip() != FENCE:
+            msg = f"the format fence on {folder} is missing or altered: refusing the offline move"
+            raise StoreError(msg)
+        open_gaps = gaps()
+        if open_gaps:
+            raise StoreError(_unfenced(open_gaps))
+        return OfflineProof(folder, str(record["marker"]), (dev, ino))
+    finally:
+        os.close(fd)
 
 
 def prepare_clone(cwd: Path, gaps: Callable[[], tuple[Gap, ...]] = open_gaps) -> dict:

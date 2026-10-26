@@ -28,6 +28,7 @@ from owlbear_delivery_next.state_store.database import (
     FormatTooNewError,
     StoreError,
 )
+from owlbear_delivery_next.state_store.offline_proof import OfflineProof, require_identity, require_proof
 
 STORE_DIR = "owlbear-delivery"
 PROJECTS = "projects"
@@ -270,7 +271,7 @@ def located(cwd: Path) -> Path:
     return _open(cwd, None)
 
 
-def migrated(cwd: Path, proof: project_move.OfflineProof) -> Path:
+def migrated(cwd: Path, proof: OfflineProof) -> Path:
     """Prepared-and-finished move entry: the store moves to its folder under *proof*, which only ``finish`` issues."""
     return _open(cwd, proof)
 
@@ -301,7 +302,7 @@ def _prior(text: str | None) -> int:
     return value
 
 
-def _format_at(folder_fd: int, proof: project_move.OfflineProof | None) -> int:
+def _format_at(folder_fd: int, proof: OfflineProof | None) -> int:
     """The store's format for this open: the prior format a proof names, else the clone's own marker, unfenced."""
     if proof is not None:
         return _prior(proof.previous)
@@ -324,11 +325,13 @@ def _previous_at(folder_fd: int) -> int:
     return _prior(marker)
 
 
-def _open(cwd: Path, proof: project_move.OfflineProof | None) -> Path:
+def _open(cwd: Path, proof: OfflineProof | None) -> Path:
     folder = clone_dir(cwd)
     folder.mkdir(mode=0o700, exist_ok=True)
     folder_fd = _pin(folder)
     try:
+        if proof is not None:
+            require_identity(folder, folder_fd, proof)  # before anything in the folder is read or written
         pid = _ensure_at(folder, folder_fd)
         target = home(pid)
         lock = open_lock(folder_fd, blocking=True, name=project_move.MOVE_LOCK)
@@ -343,9 +346,7 @@ def _open(cwd: Path, proof: project_move.OfflineProof | None) -> Path:
             _refuse_links(folder, folder_fd, left)
             pending = bool(left) or rec is not None
             if pending:
-                project_move.require_proof(
-                    folder, folder_fd, target, proof
-                )  # refused before anything is fenced or moved
+                require_proof(folder, folder_fd, target, proof)  # refused before anything is fenced or moved
             held = _fence(folder_fd) if pending or _has_locks(folder_fd) else []  # nothing to fence otherwise
             try:
                 pfd = project_move.pin_parent(target)

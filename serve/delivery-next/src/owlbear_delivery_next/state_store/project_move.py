@@ -15,7 +15,6 @@ import json
 import os
 import secrets
 import stat
-from dataclasses import dataclass
 from pathlib import Path
 
 from owlbear_delivery_next.local_system import codebase, local_home
@@ -39,6 +38,7 @@ from owlbear_delivery_next.state_store.fd_tree import (
 from owlbear_delivery_next.state_store.fd_tree import (
     stat_at as _stat_at,
 )
+from owlbear_delivery_next.state_store.offline_proof import OfflineProof, require_proof, same_folder
 
 CLONE_ID = "clone-id"
 MOVE_LOCK = "move.lock"
@@ -50,17 +50,6 @@ COPYING, SWITCHED = "copying", "switched"
 RECORD_KEYS = frozenset({"target", "stage", "stage_id", "proof", "manifest", "copied", "pending", "phase"})
 KEPT = frozenset({CLONE_ID, MARKER, MOVE_LOCK, MOVE_RECORD, PREPARED})
 STAGE_ID_FIELDS = 2  # a folder's identity: its device and inode
-
-
-@dataclass(frozen=True)
-class OfflineProof:
-    """Issued only by ``offline_protocol.finish`` after every precondition held; nothing else can build one.
-
-    *previous* is the format marker the store had before the fence, as the preparation recorded it.
-    """
-
-    folder: Path
-    previous: str
 
 
 def pin(folder: Path) -> int | None:
@@ -148,7 +137,7 @@ def _proof_ok(dfd: int, rec: dict) -> bool:
 
 def _save(folder: Path, folder_fd: int, rec: dict) -> None:
     """Write the move record into the pinned folder; refused, not written, when the clone path no longer names it."""
-    if not _same_folder(folder, folder_fd):
+    if not same_folder(folder, folder_fd):
         msg = f"{folder} no longer names the folder being moved: nothing was changed; check it, then start again"
         raise StoreError(msg)
     fd_tree.write_at(folder_fd, MOVE_RECORD, json.dumps(rec, sort_keys=True) + "\n")
@@ -198,14 +187,6 @@ def pin_parent(target: Path) -> int:
     return fd
 
 
-def _same_folder(folder: Path, folder_fd: int) -> bool:
-    """Whether the path *folder* still names the folder the descriptor pins."""
-    try:
-        return _ident(folder.stat()) == _ident(os.fstat(folder_fd))
-    except OSError:
-        return False
-
-
 def _not_published(target: Path) -> StoreError:
     msg = f"{target} is not the copy this move published: nothing was removed; move it away, then start again"
     return StoreError(msg)
@@ -240,7 +221,7 @@ def _published(pfd: int, target: Path, tfd: int, rec: dict) -> None:
         or not stat.S_ISDIR(st.st_mode)
         or _ident(st) != rec["stage_id"]
         or _ident(os.fstat(tfd)) != rec["stage_id"]
-        or not _same_folder(target, tfd)  # the path must still reach the pinned folder through its ancestors
+        or not same_folder(target, tfd)  # the path must still reach the pinned folder through its ancestors
     ):
         raise _not_published(target)
     if not all(_entry_ok(tfd, n, d) for n, d in rec["manifest"].items()) or not _proof_ok(tfd, rec):
@@ -370,7 +351,7 @@ def _move(folder: Path, folder_fd: int, target: Path, pfd: int) -> None:
     fd_tree.sync_names(pfd, target, local_home.root())  # durable in its parent and above before the switch
     tfd = _open_at(pfd, target.name)  # held until the switch is recorded: the published copy cannot swap under it
     try:
-        if not _same_folder(target, tfd):  # the path moved under the pinned parent: refuse before the switch
+        if not same_folder(target, tfd):  # the path moved under the pinned parent: refuse before the switch
             msg = (
                 f"{target} no longer names the published store: nothing was removed; "
                 "check the folders, then start again"
@@ -455,24 +436,11 @@ def check_switched(target: Path, pfd: int, rec: dict) -> None:
     named_switched(target, rec)
     tfd = _open_at(pfd, target.name)
     try:
-        if _ident(os.fstat(tfd)) != rec["stage_id"] or not _same_folder(target, tfd) or not _proof_ok(tfd, rec):
+        if _ident(os.fstat(tfd)) != rec["stage_id"] or not same_folder(target, tfd) or not _proof_ok(tfd, rec):
             raise _not_published(target)  # a freed folder can return with the same identity: the proof decides
         fd_tree.refuse_quarantined(tfd, target)
     finally:
         os.close(tfd)
-
-
-def require_proof(folder: Path, folder_fd: int, target: Path, proof: OfflineProof | None) -> None:
-    """Refuse a move that no offline proof for *folder* covers; the caller has touched nothing yet.
-
-    The proof names the folder by path; the pinned descriptor must still be that folder.
-
-    Raises:
-        StoreError: No offline proof was issued for *folder*, or the path no longer names the pinned folder.
-    """
-    if proof is None or proof.folder != folder or not _same_folder(folder, folder_fd):
-        msg = f"{folder} cannot move to {target} yet: no offline proof that nothing else writes it; nothing was moved"
-        raise StoreError(msg)
 
 
 def relocate(  # noqa: PLR0913, PLR0917
