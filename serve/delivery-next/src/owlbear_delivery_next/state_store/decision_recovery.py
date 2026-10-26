@@ -177,7 +177,10 @@ def finish(shared: DataRepo, generation: str) -> Recovery:
                 msg = f"batch {generation} was published but not proved now (Git or a file changed); it stays for you"
                 raise DecisionsUnavailable(msg, RECOVER)
             decision_batch.complete(root, generation)
-            return Recovery(generation=generation, done=True, notice="finished: the batch is published as one commit")
+            said = "finished: the batch is published as one commit"
+            if sent.notice:  # committed and proved here, but its push did not go through: the owner still needs to know
+                said = f"finished here, but not yet on the remote: {sent.notice}"[:300]
+            return Recovery(generation=generation, done=True, notice=said)
     except (DataRepoError, OSError) as exc:
         raise DecisionsUnavailable(str(exc)[:600], RECOVER) from exc
 

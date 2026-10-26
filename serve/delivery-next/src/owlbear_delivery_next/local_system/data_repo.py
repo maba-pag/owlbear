@@ -247,7 +247,9 @@ class DataRepo:
         return bool(probe.stdout)
 
     def _push(self, until: float) -> str:
-        """Push; once rejected, rebase on the remote and push again."""
+        """Push; once rejected, rebase on the remote and push again. Nothing while a decision batch is unsettled."""
+        if held := self._decision_batch_held():
+            return f"saved and committed in {self.root}, but not pushed: {held}"
         if _git(self.root, "push", "-q", until=until).returncode == 0:
             return ""
         if self.pull(until):
@@ -257,8 +259,29 @@ class DataRepo:
             return f"saved and committed in {self.root}, but the push failed: {sent.stderr.strip()[:200]}"
         return ""
 
+    def _decision_batch_held(self) -> str:
+        """Why nothing may be pushed or rebased here: a decision batch is interrupted, or its journal cannot be read.
+
+        An interrupted batch may have left an incomplete commit in this checkout; another clone, holding no journal,
+        would read it as settled decisions. Only the batch's own publisher and the owner's finish or abandon move it.
+        """
+        from owlbear_delivery_next.state_store import decision_batch  # noqa: PLC0415 - the journal is the store's
+
+        try:
+            batch = decision_batch.pending(self)
+        except decision_batch.JournalError as exc:
+            return f"the decision batch journal cannot be read ({str(exc)[:200]}); repair it in Decisions"
+        if batch is None:
+            return ""
+        return f"the decision batch {batch.generation} is interrupted; finish or abandon it in Decisions first"
+
     def pull(self, until: float | None = None) -> str:
-        """Rebase on the remote; a failed rebase is undone, never left half done. Why it failed, else nothing."""
+        """Rebase on the remote; a failed rebase is undone, never left half done. Why it failed, else nothing.
+
+        Nothing is rebased while a decision batch is unsettled (`_decision_batch_held`).
+        """
+        if held := self._decision_batch_held():
+            return f"not rebased on the remote: {held}"
         until = time.monotonic() + SAVE_SECONDS if until is None else until
         pulled = _git(self.root, "-c", "rebase.autoStash=false", "pull", "-q", "--rebase", until=until)
         return self._settle(pulled, "git pull failed", until)

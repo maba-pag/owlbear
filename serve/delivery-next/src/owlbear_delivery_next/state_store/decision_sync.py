@@ -216,7 +216,7 @@ def publish(shared: DataRepo, paths: list[Path], message: str, until: float, hea
         return Sent()
     if refused := _rejected(shared, rels, pushed, until, own=bool(made)):
         return refused
-    return _rebase_push(shared, head, until, (rows, paths))
+    return _rebase_push(shared, head, until, (rows, paths, rels, made))
 
 
 type Rows = dict[str, bytes] | None  # the batch's after images by path, or None outside a journalled batch
@@ -225,13 +225,21 @@ type Rows = dict[str, bytes] | None  # the batch's after images by path, or None
 def _failed(
     shared: DataRepo, commit: tuple[str, str, str | None, str], rows: Rows, paths: list[Path], until: float
 ) -> Sent | None:
-    """A failed commit: known only when HEAD did not move, else accepted only when provably ours and whole."""
+    """Why the commit is not pushed, with HEAD proved to be this call's own commit or the head it began on.
+
+    A failed commit is known only when HEAD did not move, else accepted only when provably ours and whole. Whatever
+    HEAD names must be this call's own commit or, for a save that changed nothing, the head it began on: an owner's
+    commit made meanwhile, even one keeping every file, is never pushed.
+    """
     failed, before, now, made = commit
-    if not failed:
-        return None
-    if now is not None and now == before:
+    if failed and now is not None and now == before:
         return Sent(notice=failed, uncommitted=True)
-    return None if made and _holds(shared, made, rows, paths, until) else Sent(notice=failed, ambiguous=True)
+    if failed and not (made and _holds(shared, made, rows, paths, until)):
+        return Sent(notice=failed, ambiguous=True)
+    if now is not None and now in {before, made}:
+        return None
+    notice = f"saved in {shared.root}, but HEAD moved past this save's commit to one not provably its own, so nothing"
+    return Sent(notice=f"{notice} is pushed; check it", ambiguous=True)
 
 
 def _journalled(shared: DataRepo, rels: set[str]) -> tuple[Rows, Sent | None]:
@@ -332,10 +340,12 @@ def _rejected(shared: DataRepo, rels: set[str], why: str, until: float, *, own: 
     return None
 
 
-def _rebase_push(shared: DataRepo, head: str, until: float, batch: tuple[Rows, list[Path]]) -> Sent:
+def _rebase_push(shared: DataRepo, head: str, until: float, batch: tuple[Rows, list[Path], set[str], str]) -> Sent:
     """Rebase on the remote and push again; a rebase that would rewrite *head*, the batch's proof, is refused.
 
-    The rebased commit is checked to hold the batch, and that very commit is what is pushed, as before the rebase.
+    The rebased commit must be provably this save's own: its one commit replayed directly on the remote's branch and
+    changing only the batch's files, or, for a save that committed nothing, the remote's branch itself. It is checked to
+    hold the batch, and that very commit is what is pushed. An owner's commit made after the rebase is never pushed.
     """
     where = f"saved and committed in {shared.root}"
     if not _on_remote(shared, head, until):  # a rebase would rewrite the batch's head: refused, the batch stays
@@ -345,11 +355,15 @@ def _rebase_push(shared: DataRepo, head: str, until: float, batch: tuple[Rows, l
         )
     if failed := shared.rebase(until):
         return _rebase_failed(shared, where, failed, until)
-    rows, paths = batch
-    rebased = _rev(shared, "HEAD", until)
+    rows, paths, rels, made = batch
+    rebased, upstream = _rev(shared, "HEAD", until), _rev(shared, UPSTREAM, until)
+    own = _ours(shared, upstream, rels, until) if made and upstream else ""
+    if rebased is None or rebased not in {own or upstream, upstream}:  # upstream itself: nothing of ours left to send
+        notice = f"{where}, but after the rebase HEAD is not provably this save's commit, so it is not pushed"
+        return Sent(notice=f"{notice}; check it", ambiguous=True)
     if unproved := _unproved(shared, rebased, rows, paths, until):
         return unproved
-    if failed := push_commit(shared, rebased, until) if rebased else "HEAD is not known":
+    if failed := push_commit(shared, rebased, until):
         return Sent(notice=f"{where}, but the push failed: {failed}")
     return Sent()
 

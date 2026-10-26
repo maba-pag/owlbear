@@ -2738,3 +2738,165 @@ def test_proving_a_head_sends_that_head_and_not_an_owner_commit_made_as_git_push
         assert decision_sync.proved(shared, head, time.monotonic() + 60)
 
     assert _owner_commit_kept_unpublished(shared, remote, first, pushes) == head
+
+
+def _owner_unrelated_commit(shared: DataRepo) -> str:
+    """The owner commits a file of their own, leaving every decision file as it is; that commit."""
+    (shared.root / "owner.txt").write_text("the owner's own work\n")
+    shared.git("add", "owner.txt")
+    shared.git("commit", "-qm", "the owner's own commit")
+    return shared.git("rev-parse", "HEAD").stdout.strip()
+
+
+def _owner_commit_not_sent(shared: DataRepo, remote: Path, published: str, owner: str) -> None:
+    assert _remote_main(remote) == published  # nothing of this save or the owner's is pushed
+    assert shared.git("rev-parse", "HEAD").stdout.strip() == owner  # the owner's commit stays, as made
+    assert shared.git("status", "--porcelain").stdout == ""
+    assert decision_batch.pending(shared) is not None
+
+
+@pytest.mark.parametrize("case", ["owner-commits-after-the-batch", "healthy", "no-op-save"])
+def test_only_this_saves_own_commit_or_its_unchanged_head_is_pushed(picking, shared_repo, monkeypatch, case):
+    """The owner commits an unrelated file after the batch's commit, before HEAD is read: HEAD keeps every after
+    image, but it is not provably this save's commit, so nothing is pushed. A healthy save and a save that changes
+    nothing publish as before."""
+    _seed(picking)
+    shared, remote = picking.shared, shared_repo[1]
+    old = make(title="Notes stay in one table")
+    assert decision_store.save(shared, old, expected_revision=None, message="decisions: old").published
+    decision = old if case == "no-op-save" else old.model_copy(update={"title": "Notes stay in one SQLite table"})
+    published, owner = _remote_main(remote), []
+    real_commit = DataRepo.commit
+
+    def commit_then_owner_commits(self, *args, **kwargs):
+        said = real_commit(self, *args, **kwargs)
+        owner.append(_owner_unrelated_commit(self))
+        return said
+
+    with monkeypatch.context() as m:
+        if case == "owner-commits-after-the-batch":
+            m.setattr(DataRepo, "commit", commit_then_owner_commits)
+        receipt = decision_store.save(shared, decision, expected_revision=old.revision, message="decisions: one")
+
+    if case != "owner-commits-after-the-batch":
+        assert receipt.published
+        assert _remote_main(remote) == shared.git("rev-parse", "HEAD").stdout.strip()
+        assert (_remote_main(remote) == published) == (case == "no-op-save")
+        assert decision_batch.pending(shared) is None
+        return
+    assert not receipt.saved
+    assert "not provably its own" in receipt.notice
+    _owner_commit_not_sent(shared, remote, published, owner[0])
+    _no_authority(picking)
+
+
+@pytest.mark.parametrize("owner", [True, False], ids=["owner-commits-after-the-rebase", "healthy-rebase"])
+def test_a_rebased_head_that_is_not_this_saves_own_commit_is_never_pushed(picking, shared_repo, monkeypatch, owner):
+    """The first push is refused, the batch's commit is rebased on the remote, and the owner then commits an unrelated
+    file: HEAD keeps every after image but is not the rebased commit, so nothing is pushed. Without the owner's
+    commit, the rebased batch is published."""
+    _seed(picking)
+    shared, remote = picking.shared, shared_repo[1]
+    items, _, _ = _update_and_successor(picking)
+    other = shared.root.parent / "other"
+    subprocess.run(["git", "clone", "-q", str(remote), str(other)], check=True)  # noqa: S603, S607
+    pushes, made = [], []
+    real_git, real_rebase = DataRepo.git, DataRepo.rebase
+
+    def first_push_refused(self, *args, **kwargs):
+        if args[:1] == ("push",) and not pushes:
+            pushes.append(1)
+            (other / "unrelated.txt").write_text("another clone\n")
+            for step in (
+                ["add", "-A"],
+                ["-c", "user.name=t", "-c", "user.email=t@e", "commit", "-qm", "o"],
+                ["push", "-q"],
+            ):
+                subprocess.run(["git", *step], cwd=other, check=True)  # noqa: S603, S607
+        return real_git(self, *args, **kwargs)
+
+    def rebase_then_owner_commits(self, until=None):
+        said = real_rebase(self, until)
+        if owner:
+            made.append(_owner_unrelated_commit(self))
+        return said
+
+    with monkeypatch.context() as m:
+        m.setattr(DataRepo, "git", first_push_refused)
+        m.setattr(DataRepo, "rebase", rebase_then_owner_commits)
+        receipts = decision_store.save_all(shared, items, message="decisions: two")
+    other_head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=other, check=True, capture_output=True, text=True)  # noqa: S607
+
+    if not owner:
+        assert all(r.published for r in receipts)
+        assert shared.git("rev-parse", "HEAD~1").stdout.strip() == other_head.stdout.strip()
+        assert _remote_main(remote) == shared.git("rev-parse", "HEAD").stdout.strip()
+        return
+    assert not any(r.saved for r in receipts)
+    assert "not provably this save's commit" in receipts[0].notice
+    _owner_commit_not_sent(shared, remote, other_head.stdout.strip(), made[0])
+    _no_authority(picking)
+
+
+@pytest.mark.parametrize("state", ["interrupted", "corrupt", "settled"])
+def test_ordinary_shared_publication_waits_while_a_decision_batch_is_unsettled(
+    picking, shared_repo, monkeypatch, state
+):
+    """A batch left an incomplete commit local and stays interrupted, or its journal is damaged: a settings save
+    commits but neither pushes nor rebases, so no other clone reads that commit as settled. With no batch in flight
+    it publishes as before."""
+    _seed(picking)
+    shared, remote = picking.shared, shared_repo[1]
+    items, _, _ = _update_and_successor(picking)
+    if state != "settled":
+        with monkeypatch.context() as m:
+            _owner_changes_the_first_path_before_the_commit(m, [])
+            decision_store.save_all(shared, items, message="decisions: two")  # committed, never pushed
+        if state == "corrupt":
+            decision_batch.journal_path(shared).write_text("{not json")
+    published, local = _remote_main(remote), shared.git("rev-parse", "HEAD").stdout.strip()
+    settings = shared.root / "settings-note.txt"
+    settings.write_text("a setting\n")
+
+    with shared.locked():
+        said = shared.publish(settings, "settings: a note")
+        pulled = shared.pull()
+
+    if state == "settled":
+        assert (said, pulled) == ("", "")
+        assert _remote_main(remote) == shared.git("rev-parse", "HEAD").stdout.strip() != published
+        return
+    expected = "is interrupted" if state == "interrupted" else "cannot be read"
+    assert expected in said
+    assert expected in pulled
+    assert _remote_main(remote) == published  # neither the incomplete batch nor the setting is sent
+    assert shared.git("rev-parse", "HEAD~1").stdout.strip() == local  # the setting is committed on top, locally
+    assert shared.git("log", "-1", "--format=%s").stdout.strip() == "settings: a note"
+
+
+def test_a_finish_committed_here_whose_push_fails_says_so(picking, shared_repo, monkeypatch, tmp_path):
+    """A fresh Finish commits and proves the batch locally, but its push fails: it completes, and its notice says
+    the remote does not have it yet instead of reporting it published."""
+    _seed(picking)
+    shared, remote = picking.shared, shared_repo[1]
+    items, _, _ = _update_and_successor(picking)
+    generation = _interrupt_at(picking, monkeypatch, items)
+    published, away = _remote_main(remote), tmp_path / "remote-away"
+    real_publish = decision_sync.publish
+
+    def publish_while_the_remote_is_gone(*args, **kwargs):
+        remote.rename(away)
+        try:
+            return real_publish(*args, **kwargs)
+        finally:
+            away.rename(remote)
+
+    with monkeypatch.context() as m:
+        m.setattr(decision_sync, "publish", publish_while_the_remote_is_gone)
+        done = decision_recovery.finish(shared, generation)
+
+    assert done.done
+    assert done.notice.startswith("finished here, but not yet on the remote")
+    assert "push failed" in done.notice
+    assert _remote_main(remote) == published
+    assert decision_batch.pending(shared) is None
