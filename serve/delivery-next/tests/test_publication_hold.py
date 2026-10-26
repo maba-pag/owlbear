@@ -6,7 +6,10 @@ by a later publication, a restart or a raw push. Nothing in Git is undone.
 """
 
 import json
+import os
+import stat
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -14,7 +17,7 @@ import pytest
 
 from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
 from owlbear_delivery_next.local_system import data_repo, publication_hold
-from owlbear_delivery_next.local_system.data_repo import DataRepo
+from owlbear_delivery_next.local_system.data_repo import DataRepo, DataRepoError
 from owlbear_delivery_next.settings import profile
 from owlbear_delivery_next.settings.config import Layer
 from owlbear_delivery_next.state_store import config_save, decision_sync, prefs_import, profile_share
@@ -22,6 +25,21 @@ from owlbear_delivery_next.state_store.pending_intents import pending_file
 from owlbear_delivery_next.state_store.store import Store, StoreError
 
 PROJECT = "shop-site"
+
+
+@pytest.fixture(autouse=True)
+def explicit_bare_policy():
+    """Every real-Git fixture runs under the explicit bare-repository policy, including child processes."""
+    policy = {
+        "GIT_CONFIG_COUNT": "1",
+        "GIT_CONFIG_KEY_0": "safe.bareRepository",
+        "GIT_CONFIG_VALUE_0": "explicit",
+    }
+    with pytest.MonkeyPatch.context() as patch:
+        for key, value in policy.items():
+            patch.setenv(key, value)
+        assert {key: os.environ[key] for key in policy} == policy
+        yield
 
 
 def git(where: Path, *args: str) -> str:
@@ -207,6 +225,242 @@ def held(three, monkeypatch) -> tuple[Store, Path]:
         prefs_import.run(winner)
     monkeypatch.undo()
     return winner, remote
+
+
+HOLD_CALLERS = ["push", "pull", "rebase", "raw-push", "owned-push"]
+
+
+def held_call(shared: DataRepo, action: str) -> str:
+    until = time.monotonic() + 30
+    if action == "push":
+        return shared._push(until)  # noqa: SLF001 - the ordinary shared publication path
+    if action == "raw-push":
+        return shared.git("push", "-q", until=until).stderr
+    if action == "owned-push":
+        goal = decision_sync.target(shared, until)
+        assert goal is not None
+        return decision_sync.push_commit(shared, git(shared.root, "rev-parse", "HEAD"), goal, until)
+    return getattr(shared, action)(until)
+
+
+@pytest.mark.parametrize("action", HOLD_CALLERS)
+def test_a_dangling_hold_introduced_during_its_git_probe_never_replays_or_pushes_the_stale_fill(
+    held, monkeypatch, action
+):
+    winner, remote = held
+    shared, root = winner.shared, winner.shared.root
+    record = root / git(root, "rev-parse", "--git-path", publication_hold.RECORD)
+    saved = record.with_suffix(".saved")
+    raw, before, owner = record.read_bytes(), remote_head(remote), owner_state(root)
+    assert "changed on the shared remote" in shared.held()  # a normal refusal precedes the damaged entry
+    real, fired, ran = data_repo._git, [], []  # noqa: SLF001
+
+    def at_probe(cwd, *args, until=None):
+        if cwd == root:
+            if not fired and args == ("rev-parse", "--git-path", publication_hold.RECORD):
+                fired.append(True)
+                record.rename(saved)
+                record.symlink_to("missing-held-publication.json")
+            if command(args) in {"pull", "rebase", "push"}:
+                ran.append(args)
+        return real(cwd, *args, until=until)
+
+    monkeypatch.setattr(data_repo, "_git", at_probe)
+    with shared.locked():
+        said = held_call(shared, action)
+
+    observed = {
+        "remote_has_config": remote_has_config(remote),
+        "remote_marker": remote_marker(remote),
+        "remote_unchanged": remote_head(remote) == before,
+        "owner_unchanged": owner_state(root) == owner,
+        "git_writes": ran,
+    }
+    assert observed == {
+        "remote_has_config": False,
+        "remote_marker": "done",
+        "remote_unchanged": True,
+        "owner_unchanged": True,
+        "git_writes": [],
+    }, said
+    assert fired == [True]
+    if action == "owned-push":
+        assert said.startswith("nothing was pushed or rebased in ")  # the owned publisher keeps only 200 characters
+    else:
+        assert "held publication record" in said
+        assert "cannot be read" in said
+    assert publication_hold.recorded(shared, None)
+    assert record.is_symlink()
+    assert record.readlink() == Path("missing-held-publication.json")
+    assert saved.read_bytes() == raw
+
+
+@pytest.mark.parametrize("damage", ["dangling", "symlink", "directory", "unreadable"])
+def test_every_hold_reader_keeps_a_damaged_entry_and_its_original_without_publishing(held, monkeypatch, damage):
+    winner, remote = held
+    shared, root = winner.shared, winner.shared.root
+    record = root / git(root, "rev-parse", "--git-path", publication_hold.RECORD)
+    saved = record.with_suffix(".saved")
+    raw, before, owner = record.read_bytes(), remote_head(remote), owner_state(root)
+    record.rename(saved)
+    if damage in {"dangling", "symlink"}:
+        record.symlink_to(saved if damage == "symlink" else "missing-held-publication.json")
+    elif damage == "directory":
+        record.mkdir()
+    else:
+        record.write_bytes(raw)
+        record.chmod(0)
+    entry, real, ran = record.lstat(), data_repo._git, []  # noqa: SLF001
+
+    def spy(cwd, *args, until=None):
+        if cwd == root and command(args) in {"pull", "rebase", "push"}:
+            ran.append(args)
+        return real(cwd, *args, until=until)
+
+    monkeypatch.setattr(data_repo, "_git", spy)
+    try:
+        assert publication_hold.recorded(shared, None)
+        for action in HOLD_CALLERS:
+            said = held_call(shared, action)
+            if action == "owned-push":
+                assert said.startswith("nothing was pushed or rebased in ")
+            else:
+                assert "held publication record" in said
+        assert "cannot be read" in publication_hold.check(shared, None, fetch=False)
+        assert "cannot be read" in shared.held()
+        publication_hold.settled(shared, None)
+        requires = publication_hold.Requires("an automatic fill")
+        with pytest.raises(DataRepoError, match=r"the automatic change was not written: .*cannot be read"):
+            shared.hold(winner.config_path, requires)
+        assert os.path.samestat(entry, record.lstat())
+        assert saved.read_bytes() == raw
+        assert ran == []
+        assert remote_head(remote) == before
+        assert not remote_has_config(remote)
+        assert remote_marker(remote) == "done"
+        assert owner_state(root) == owner
+    finally:
+        if damage == "unreadable":
+            record.chmod(0o600)
+    if damage == "unreadable":
+        assert record.read_bytes() == raw
+
+
+def test_a_hold_presence_probe_that_is_unreadable_dispatches_to_the_checked_pull(held, monkeypatch):
+    winner, remote = held
+    shared, root = winner.shared, winner.shared.root
+    record = root / git(root, "rev-parse", "--git-path", publication_hold.RECORD)
+    raw, before, owner = record.read_bytes(), remote_head(remote), owner_state(root)
+    real_stat, real_git, ran = Path.stat, data_repo._git, []  # noqa: SLF001
+
+    def unreadable(self, *args, **kwargs):
+        if self == record:
+            msg = "synthetic unreadable held entry"
+            raise PermissionError(msg)
+        return real_stat(self, *args, **kwargs)
+
+    def spy(cwd, *args, until=None):
+        if cwd == root and command(args) in {"pull", "rebase", "push"}:
+            ran.append(args)
+        return real_git(cwd, *args, until=until)
+
+    monkeypatch.setattr(Path, "stat", unreadable)  # both entry-aware lstat and referent-following exists fail
+    monkeypatch.setattr(data_repo, "_git", spy)
+
+    assert publication_hold.recorded(shared, None)
+    assert "is held because" in shared.pull()
+    assert ran == []
+    assert record.read_bytes() == raw
+    assert remote_head(remote) == before
+    assert not remote_has_config(remote)
+    assert owner_state(root) == owner
+
+
+# The batch-file subprocess harness's pattern: a FIFO read can fail this proof, never hang the test process.
+HOLD_CHILD = r"""
+import json, os, sys, time
+from pathlib import Path
+from owlbear_delivery_next.local_system import publication_hold
+from owlbear_delivery_next.local_system.data_repo import DataRepo
+from owlbear_delivery_next.state_store import decision_sync
+assert (os.environ["GIT_CONFIG_COUNT"], os.environ["GIT_CONFIG_KEY_0"], os.environ["GIT_CONFIG_VALUE_0"]) == (
+    "1", "safe.bareRepository", "explicit")
+shared = DataRepo(Path(sys.argv[1]))
+assert Path(publication_hold.__file__).resolve().is_relative_to(Path(sys.argv[2]).resolve())
+until = time.monotonic() + 10
+goal = decision_sync.target(shared, until)
+head = shared.git("rev-parse", "HEAD", until=until).stdout.strip()
+notices = [
+    shared._push(until), shared.pull(until), shared.rebase(until), shared.git("push", "-q", until=until).stderr,
+    decision_sync.push_commit(shared, head, goal, until),
+    publication_hold.check(shared, until, fetch=False), shared.held(until),
+]
+publication_hold.settled(shared, until)
+try:
+    shared.hold(shared.root / "shop-site/config.json", publication_hold.Requires("an automatic fill"), until)
+except Exception as exc:
+    notices.append(str(exc))
+print(json.dumps({"notices": notices, "recorded": publication_hold.recorded(shared, until)}))
+"""
+
+
+def test_a_fifo_hold_is_refused_by_every_caller_without_waiting(held):
+    winner, remote = held
+    root = winner.shared.root
+    record = root / git(root, "rev-parse", "--git-path", publication_hold.RECORD)
+    saved = record.with_suffix(".saved")
+    raw, before, owner = record.read_bytes(), remote_head(remote), owner_state(root)
+    record.rename(saved)
+    os.mkfifo(record)
+    entry = record.lstat()
+    env = {**os.environ, "PYTHONPATH": os.pathsep.join(p for p in sys.path if p)}
+    done = subprocess.run(  # noqa: S603 - a fixed script, this interpreter and disposable fixtures
+        [sys.executable, "-c", HOLD_CHILD, str(root), str(Path(__file__).resolve().parents[3])],
+        capture_output=True, text=True, timeout=15, env=env, check=False,
+    )  # fmt: skip
+    assert done.returncode == 0, done.stderr
+    said = json.loads(done.stdout.strip().splitlines()[-1])
+    assert said["recorded"]
+    assert len(said["notices"]) == 8
+    assert said["notices"][4].startswith("nothing was pushed or rebased in ")
+    assert all("cannot be read" in notice for i, notice in enumerate(said["notices"]) if i != 4), said
+    assert stat.S_ISFIFO(record.lstat().st_mode)
+    assert os.path.samestat(entry, record.lstat())
+    assert saved.read_bytes() == raw
+    assert remote_head(remote) == before
+    assert not remote_has_config(remote)
+    assert remote_marker(remote) == "done"
+    assert owner_state(root) == owner
+
+
+@pytest.mark.parametrize("alias", ["none", "checkout", "ancestor"])
+def test_absent_and_valid_regular_holds_still_publish_through_preexisting_checkout_aliases(three, tmp_path, alias):
+    winner, _, remote = three
+    root = winner.shared.root
+    if alias != "none":
+        link = tmp_path / "checkout-alias"
+        link.symlink_to(root if alias == "checkout" else root.parent, target_is_directory=True)
+        root = link if alias == "checkout" else link / root.name
+    shared = DataRepo(root)
+    record = root / git(root, "rev-parse", "--git-path", publication_hold.RECORD)
+    assert not publication_hold.recorded(shared, None)
+    assert publication_hold._load(record) is None  # noqa: SLF001 - genuine absence alone permits the ordinary path
+    assert shared.pull() == ""
+    watch = shared.project_path(PROJECT)
+    requires = publication_hold.Requires("an automatic config fill")
+    with shared.locked():
+        shared.hold(watch, requires)
+        raw = record.read_bytes()
+        watch.write_text(Layer().model_dump_json(indent=1))
+        assert shared.commit(watch, "settings: an automatic config fill") == ""
+        assert publication_hold.recorded(shared, None)
+        assert publication_hold.check(shared, None, fetch=True) == ""
+        assert record.read_bytes() == raw  # the valid, unpushed change keeps its record
+        assert held_call(shared, "push") == ""
+    assert remote_has_config(remote)
+    assert remote_head(remote) == git(root, "rev-parse", "HEAD")
+    assert not publication_hold.recorded(shared, None)  # its successful publication retires the regular record
+    assert not shared.held()
 
 
 def test_no_later_publication_of_the_held_checkout_pushes_its_stale_fill(held, tmp_path):
