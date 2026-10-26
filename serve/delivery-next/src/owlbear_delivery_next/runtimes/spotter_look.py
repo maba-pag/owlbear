@@ -3,8 +3,8 @@
 It runs in an empty folder without the project's or the user's configuration, noted in the chatlogs manifest so it is
 never taken for a chat. It has a 90-second answer deadline followed by a bounded teardown: ``spotter.TEARDOWN`` per
 stage, whatever cancels it meanwhile. The session and runtime stop gracefully, or the runtime is forced to; an end it
-could not confirm is noted provisional. Its spend is what the day's budget ledger reserves, ``spotter.ESTIMATE``, and an
-unknown spend counts as that.
+could not confirm is noted provisional. The day's budget ledger reserves ``spotter.ESTIMATE`` and settles the reported
+spend, using the estimate when the spend is unknown.
 """
 
 from __future__ import annotations
