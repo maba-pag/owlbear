@@ -240,7 +240,7 @@ def _old_profile(root, roles_: object, fmt: object = 1) -> None:
     (root / "profile.json").write_text(json.dumps(raw))
 
 
-@pytest.mark.parametrize("fmt", [1, "1"])
+@pytest.mark.parametrize("fmt", [1])
 def test_a_format_1_profile_moves_its_roles_into_the_project_config_once(repo, fmt):
     root = repo / ".git" / "owlbear-delivery"
     old = {"builder": {"model": "m-1", "effort": "low"}, "reviewer": {"model": "r-1", "effort": "max"}}
@@ -262,6 +262,15 @@ def test_a_format_1_profile_moves_its_roles_into_the_project_config_once(repo, f
     owner_save(store, lambda _cur: Layer())  # the owner clears the overrides
     _old_profile(root, {"builder": {"model": "m-1", "effort": "low"}})  # e.g. a crash before the profile rewrite
     assert roles.chosen(Store.open(repo).settings(), StepKind.BUILD) == carried.MODELS["builder"]
+
+
+def test_a_format_1_profile_whose_format_is_a_string_is_refused_and_kept(repo):
+    root = repo / ".git" / "owlbear-delivery"
+    _old_profile(root, {"builder": {"model": "m-1", "effort": "low"}}, "1")
+    before = (root / "profile.json").read_bytes()
+    with pytest.raises(StoreError, match=r"state of profile\.json is unreadable"):
+        Store.open(repo)
+    assert (project_home.located(repo) / "profile.json").read_bytes() == before  # moved with its store, never rewritten
 
 
 def test_old_roles_fill_only_the_fields_an_existing_project_config_leaves_empty(repo):

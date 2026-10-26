@@ -7,7 +7,7 @@ import pytest
 from owlbear_delivery_next.settings import config
 from owlbear_delivery_next.settings.config import Layer
 from owlbear_delivery_next.settings.improvement import Spotter
-from owlbear_delivery_next.state_store.store import FormatTooNewError, read_layer
+from owlbear_delivery_next.state_store.store import FormatTooNewError, StoreError, read_layer
 
 
 def _written(tmp_path, data: dict, fmt: int) -> object:
@@ -58,3 +58,12 @@ def test_an_existing_format_13_layer_keeps_its_preferences_and_its_mode_becomes_
 def test_a_newer_format_than_15_is_refused(tmp_path):
     with pytest.raises(FormatTooNewError):
         read_layer(_written(tmp_path, {}, 16), Layer)
+
+
+@pytest.mark.parametrize("fmt", [14.5, 15.0, True, "15", "abc"])  # "abc" is malformed today: the same refusal
+def test_a_config_layer_whose_format_is_not_an_integer_is_unreadable_and_kept(tmp_path, fmt):
+    path = _written(tmp_path, {"spotter": {"mode": "off"}}, fmt)
+    before = path.read_bytes()
+    with pytest.raises(StoreError, match="state of config is unreadable"):
+        read_layer(path, Layer)
+    assert path.read_bytes() == before

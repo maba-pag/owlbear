@@ -160,11 +160,8 @@ def _receipt(raw: bytes, receipt: Path) -> Receipt:
 
 def _embedded(raw: dict[str, Any]) -> Profile:
     """The profile a receipt embeds, read as a saved profile is: migrated forward; newer or malformed is refused."""
-    from owlbear_delivery_next.state_store.store import StoreError, _parse  # noqa: PLC0415 - circular at import time
+    from owlbear_delivery_next.state_store.store import _parse  # noqa: PLC0415 - circular at import time
 
-    if type(raw.get("format", 0)) is not int:  # _parse takes int() of any value: 4.5 would migrate as 4, true as 1
-        msg = "the embedded profile's format is not a whole number"
-        raise StoreError(msg)
     return _parse(json.dumps(raw), "the embedded profile", Profile, PROFILE_FORMAT, migrations.PROFILE)
 
 
