@@ -246,24 +246,26 @@ def _target(repo: DataRepo, push: Sequence[str], until: float | None, *, held: b
     """Why the git *push* may land elsewhere than the upstream branch the record was checked on, else the push to run.
 
     Git itself resolves where a plain push goes (``branch.<name>.pushRemote``, ``remote.pushDefault``,
-    ``push.default``); an explicit push names one remote and one ``source:destination``. Any other form cannot be
-    proven, and a remote whose push address differs from the one fetched from may be another repository. A plain push
-    runs as the one non-forced refspec it was proven to be, ``HEAD:<upstream branch>``: configured push refspecs, a
-    forced ``+`` one or ``push.default=matching``'s other branches, apply only to a plain push. With no change *held*,
-    an explicit non-forced push may go to the branch its caller captured, such as a decision publication's own target,
-    whatever branch is checked out by then; a held change's push must land on the upstream it was checked on.
+    ``push.default``); an explicit push names one remote and one ``source:destination``, with no ``*`` pattern. Any
+    other form cannot be proven, and a remote whose push address differs from the one fetched from may be another
+    repository. A plain push runs as the one non-forced refspec it was proven to be, ``HEAD:<upstream branch>``:
+    configured push refspecs, a forced ``+`` one or ``push.default=matching``'s other branches, apply only to a plain
+    push. With no change *held*, an explicit non-forced push may go to the branch its caller captured, such as a
+    decision publication's own target, whatever branch is checked out by then; a held change's push must land on the
+    upstream it was checked on.
     """
     branch = _run(repo, until, "symbolic-ref", "-q", "HEAD").strip()
     atoms = "%(upstream:remotename)%00%(upstream:remoteref)%00%(push:remotename)"
     said = _lines(_run(repo, until, "for-each-ref", f"--format={atoms}", branch), "branch")
     up_remote, up_ref, remote = [*said[0].split("\0"), "", "", ""][:3] if len(said) == 1 else ("", "", "")
     words = [a for a in push[1:] if a != "-q"]
-    if words:  # an explicit push: exactly one remote and one source:destination, never forced
+    if words:  # an explicit push: exactly one remote and one source:destination, never forced, never a pattern
         if (
             len(words) != _EXPLICIT
             or words[0].startswith("-")
             or ":" not in words[1]
             or words[1].startswith(("-", "+"))
+            or "*" in words[1]  # a pattern refspec sends every matching branch, not the one destination it names
         ):
             return f"its push ({' '.join(push)}) names no single remote and branch to check", ()
         remote, ref = words[0], words[1].split(":", 1)[1]
