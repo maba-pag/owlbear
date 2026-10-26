@@ -996,3 +996,59 @@ def test_with_nothing_held_an_explicit_push_is_still_never_forced_or_sent_to_ano
     assert aliased.returncode == 1
     assert "is not exactly the one address" in aliased.stderr
     assert remote_head(remote) == before
+
+
+def remote_refs(remote: Path) -> str:
+    return git(remote, "--git-dir=.", "for-each-ref", "--format=%(refname) %(objectname)")
+
+
+def owner_state(root: Path) -> tuple[str, ...]:
+    admin = Path(git(root, "rev-parse", "--absolute-git-dir"))
+    return (
+        git(root, "symbolic-ref", "HEAD"),
+        git(root, "rev-parse", "HEAD"),
+        git(root, "status", "--porcelain", "--untracked-files=all"),
+        git(root, "ls-files", "--stage"),
+        (admin / "config").read_text(),
+    )
+
+
+@pytest.mark.parametrize(
+    "refspec",
+    ["refs/heads/*:refs/heads/*", "refs/heads/*:refs/heads/main", "HEAD:refs/heads/*", "main*:refs/heads/main"],
+)
+def test_an_explicit_pattern_push_never_sends_more_than_one_captured_branch(three, monkeypatch, refspec):
+    winner, _, remote = three
+    root = winner.shared.root
+    for name in ("side", "other"):  # local branches a pattern would create on the remote along with main
+        git(root, "branch", name)
+    (root / "owner-wip.txt").write_text("the owner's untracked work\n")
+    assert not publication_hold.recorded(winner.shared, None)
+    before, owner = remote_refs(remote), owner_state(root)
+    checked = []
+    real = publication_hold.pushing
+
+    def seen(repo, push, until):
+        checked.append(tuple(push))
+        return real(repo, push, until)
+
+    monkeypatch.setattr(publication_hold, "pushing", seen)
+
+    said = winner.shared.git("push", "-q", "origin", refspec)  # the application's own wrapper, not raw Git
+
+    assert checked == [("push", "-q", "origin", refspec)]
+    assert remote_refs(remote) == before  # no remote ref was created or moved
+    assert said.returncode == 1
+    assert "names no single remote and branch to check" in said.stderr
+    assert owner_state(root) == owner
+
+
+def test_a_single_explicit_sha_push_to_a_captured_branch_still_publishes(three):
+    winner, _, remote = three
+    root = winner.shared.root
+    git(root, "commit", "-q", "--allow-empty", "-m", "an owned commit")
+    made = git(root, "rev-parse", "HEAD")
+
+    assert winner.shared.git("push", "-q", "origin", f"{made}:refs/heads/main").returncode == 0
+
+    assert remote_head(remote) == made
