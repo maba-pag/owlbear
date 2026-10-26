@@ -85,6 +85,7 @@
 - ## `Reviews`
 
 ### Outbound links
+- [`renovate.json`](../renovate.json)
 - [`share/`](../share/README.md)
 - [`serve/`](../serve/README.md)
 - [setup guide](../setup/setup-guide.md)
@@ -105,7 +106,7 @@
 - [Snyk ignore](../.github/workflows/snyk-ignore.yml)
 - [Release](../.github/workflows/release.yml)
 - [`release.py`](../.github/scripts/release.py)
-- [Renovate](../.github/renovate.json)
+- [Renovate](../renovate.json)
 - [`check_ruff_toolchain.py`](../.github/scripts/check_ruff_toolchain.py)
 - [`biome.json`](../biome.json)
 - [`.coderabbit.yaml`](../.coderabbit.yaml)

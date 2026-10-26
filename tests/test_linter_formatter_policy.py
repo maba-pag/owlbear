@@ -118,6 +118,15 @@ def _read_cli2_ignores(path: Path) -> set[str]:
     return {_normalize_pattern(ignore) for ignore in ignores}
 
 
+def _markdownlint_rules() -> dict[str, object]:
+    """The rules live in the cli2 file's ``config``."""
+    root = json.loads(_JSONC_LINE_COMMENT.sub("", (_ROOT / ".markdownlint-cli2.jsonc").read_text(encoding="utf-8")))
+    assert isinstance(root, dict)
+    assert isinstance(root.get("config"), dict)
+    assert not (_ROOT / ".markdownlint.json").exists()  # it would override the cli2 file's config
+    return root["config"]
+
+
 def _read_yaml_mapping(path: Path) -> dict[str, object]:
     payload = yaml.safe_load(path.read_text(encoding="utf-8"))
     assert isinstance(payload, dict)
@@ -186,17 +195,14 @@ def test_markdownlint_ignores_live_in_the_cli2_config_only() -> None:
 
 
 def test_markdownlint_inline_html_allows_only_agent_sections() -> None:
-    config = json.loads((_ROOT / ".markdownlint.json").read_text(encoding="utf-8"))
-    assert isinstance(config, dict)
-    assert config.get("MD033") == {"allowed_elements": _M04_ALLOWED_ELEMENTS}
+    assert _markdownlint_rules().get("MD033") == {"allowed_elements": _M04_ALLOWED_ELEMENTS}
 
     assert "<strong>" not in (_ROOT / "setup/sharing-guide.md").read_text(encoding="utf-8")
 
 
 def test_markdownlint_rule_authorities_and_source_suppression_remain_explicit() -> None:
     expected_front_matter_title = r"^\s*(?:title|name|description)\s*[:=]"
-    config = json.loads((_ROOT / ".markdownlint.json").read_text(encoding="utf-8"))
-    assert isinstance(config, dict)
+    config = _markdownlint_rules()
     assert config.get("MD013") is False
     assert config.get("MD024") == {"siblings_only": True}
     assert config.get("MD029") == {"style": "ordered"}
