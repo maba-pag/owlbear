@@ -146,8 +146,8 @@ class Curation:
             # records this row's evidence. Each row is judged before it is rewritten below, so the rewrite never
             # erases what an older host held.
             lease = self.maintenance.adopt_uncertain(
-                self._row(name, r), SLOT, "curation", workspace="", covers=_row_lease(name, r), keyed=True,
-                observed=(curation_snapshots.window(name, r),),
+                self._row(name, r), SLOT, "curation", workspace="", keyed=True,
+                covers=curation_snapshots.recorded_row(SLOT, name, r), observed=(curation_snapshots.window(name, r),),
             )  # fmt: skip
             runs.folders[name] = r.model_copy(update={"key": lease.slot})
         for name, r in runs.folders.items():
@@ -305,14 +305,14 @@ class Curation:
                     return
                 folder = self.queue[0]
             started = datetime.now(UTC)
+            key = f"curate:{folder}:{uuid.uuid4().hex}"  # one generation per admission, named on every row it writes
             refused = False
             try:
-                refused = self._one(folder, started)
+                refused = self._one(folder, started, key)
             except Exception as exc:  # noqa: BLE001 - one folder's failure never strands the others
                 why = f"{type(exc).__name__}: {exc}"[:300]
-                self._save(
-                    folder, FolderRun(state="failed", started_at=started, ended_at=datetime.now(UTC), reason=why)
-                )
+                failed = FolderRun(state="failed", started_at=started, ended_at=datetime.now(UTC), reason=why, key=key)
+                self._save(folder, failed)  # its session, if one began, is the ledger's lease under this key
             with self.lock:  # a follow-up joins before the run leaves, so the queue never looks empty between
                 trigger = self.again.pop(folder, None)
                 # a Curate now that landed after this automatic request was refused is not lost: it runs once
@@ -328,15 +328,19 @@ class Curation:
                     self.queue.append(folder)
                     self.asked[folder] = "manual" if manual else trigger
 
-    def _one(self, folder: str, started: datetime) -> bool:
-        """Run one folder's curation; True when an automatic request was refused its admission."""
+    def _one(self, folder: str, started: datetime, key: str) -> bool:
+        """Run one folder's curation under admission *key*; True when an automatic request was refused its admission.
+
+        Each row it writes once admitted names *key*: a session enters the SDK only after the ledger holds its lease
+        under that key, so a restart finds the run by its key, never by when its row says it ran.
+        """
         shared = self.shared()
         why = NO_SHARED if shared is None else LEFT if self.lingering() else self.fenced()
         why = why or _unset(lookup.machine(shared))  # checked again on the snapshot it starts with
         if shared is None or why:
             self._save(folder, FolderRun(state="failed", started_at=started, ended_at=started, reason=why))
             return False
-        turn, key = threading.Event(), f"curate:{folder}:{uuid.uuid4().hex}"  # one generation per admission
+        turn = threading.Event()
         while True:
             turn.clear()  # cleared before the take, so a wake during it is never lost
             if self.slots.take(SLOT, key, 1, 1, wake=turn.set):
@@ -364,7 +368,7 @@ class Curation:
             self._save(folder, prior.model_copy(update=update))
             return True
         try:
-            self._save(folder, FolderRun(state="running", started_at=started))
+            self._save(folder, FolderRun(state="running", started_at=started, key=key))
             self._save(folder, self._session(shared, folder, started, key))
         finally:
             if not self.maintenance.held(SLOT, key):
@@ -448,32 +452,6 @@ def legacy_uncertain(run: FolderRun) -> bool:
     if run.state not in {"failed", "waiting"} or run.summary:
         return False  # never and done, a finished run's copy, and running, which the caller takes on its own
     return not run.reason.startswith("ended ") or UNKNOWN in run.reason
-
-
-def _row_lease(folder: str, run: FolderRun) -> Callable[[maintenance.Lease], bool]:
-    """Whether a lease already owns this row: this host's own run of it, or the snapshot lease that saw it imported."""
-    own, imported = _same_run(folder, run), curation_snapshots.recorded_row(SLOT, folder, run)
-    return lambda lease: own(lease) or imported(lease)
-
-
-def _same_run(folder: str, run: FolderRun) -> Callable[[maintenance.Lease], bool]:
-    """Whether a lease is this host's own run of the very generation this row records.
-
-    It must be this folder's run slot and begin inside the row's own window. The producer takes the row's start while
-    it waits for a slot and begins the lease later, inside the run; a lease from an earlier or later run begins outside
-    that window, whatever its state. An imported lease is never found by its window: it begins when it was imported.
-    """
-
-    def covers(lease: maintenance.Lease) -> bool:
-        if lease.project != SLOT or lease.kind != "curation" or not lease.slot.startswith(f"curate:{folder}:"):
-            return False
-        if run.started_at is None or (run.ended_at is None and run.state != "running"):
-            return False
-        if run.ended_at is not None and lease.started_at > run.ended_at:
-            return False
-        return lease.started_at >= run.started_at
-
-    return covers
 
 
 def _unset(settings: Settings) -> str:
