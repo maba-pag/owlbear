@@ -263,8 +263,8 @@ def _finish(store: Store, held: _Held) -> None:
             if profile_share.config_digest(store.root / PROFILE) != held.receipt.source:
                 msg = "the old profile changed after the replacement was published; run setup again to review it"
                 raise SourceChangedError(msg)
-            if held.receipt.source != profile_share.ABSENT:  # an absent clone profile has no roles to mark
-                roles_move.retire_source(store)
+            if held.receipt.source != profile_share.ABSENT and roles_move.snapshot(store.root / PROFILE)[1] is not None:
+                roles_move.retire_source(store)  # only an uninspectable old profile; a readable one keeps its roles
         (store.root / RECEIPT).unlink(missing_ok=True)
 
 

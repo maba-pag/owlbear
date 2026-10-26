@@ -925,6 +925,132 @@ def test_shared_only_sync_failure_keeps_the_approved_repair_and_resumes_without_
     assert not (store.root / profile_share.ROLES_MOVED).exists()
 
 
+PRIVATE_READABLE = GOOD_ROLES
+
+
+def test_shared_damaged_target_is_repaired_while_the_readable_private_profile_stays_byte_for_byte(
+    repo: Path, shared_repo, monkeypatch
+) -> None:
+    store = shared_project(repo, shared_repo, monkeypatch)
+    (store.root / profile_share.PROFILE).write_text(PRIVATE_READABLE)
+    shared_only_damaged(store, UNREADABLE % "")
+    assert setup.run(repo, [], yes=True, local_files="no") == 0
+    assert (store.root / profile_share.PROFILE).read_text() == PRIVATE_READABLE
+    assert not (store.root / profile_repair.RECEIPT).exists()
+    assert "r-2" in store.config_path.read_text()  # the ordinary open imports the readable private roles once
+    assert (store.root / profile_share.ROLES_MOVED).exists()
+    assert profile_share.path(store).exists()
+    assert "prefs_import" in profile_share.path(store).read_text()
+
+
+def test_shared_damaged_target_replaced_during_confirmation_keeps_the_owner_bytes_with_readable_private(
+    repo: Path, shared_repo, monkeypatch
+) -> None:
+    store = shared_project(repo, shared_repo, monkeypatch)
+    (store.root / profile_share.PROFILE).write_text(PRIVATE_READABLE)
+    target = shared_only_damaged(store, UNREADABLE % "")
+    newer = '{"format": 1, "roles": {"planner": {"model": "p-2", "effort": "max"}}}'
+
+    def newer_then_yes(_question: str) -> str:
+        target.write_text(newer)
+        return "y"
+
+    assert setup.run(repo, [], yes=False, local_files="no", ask=newer_then_yes) != 0
+    assert target.read_text() == newer
+    assert (store.root / profile_share.PROFILE).read_text() == PRIVATE_READABLE
+    assert not (store.root / profile_repair.RECEIPT).exists()
+    assert "r-2" in store.config_path.read_text()
+
+
+def test_shared_damaged_target_replaced_while_the_writer_lock_is_awaited_keeps_the_owner_bytes_with_readable_private(
+    repo: Path, shared_repo, monkeypatch
+) -> None:
+    store = shared_project(repo, shared_repo, monkeypatch)
+    (store.root / profile_share.PROFILE).write_text(PRIVATE_READABLE)
+    target = shared_only_damaged(store, UNREADABLE % "")
+    newer = '{"format": 1, "roles": {"planner": {"model": "p-2", "effort": "max"}}}'
+    real_writer = profile_share._writer  # noqa: SLF001 - the writer lock is where the race is injected
+    armed: list[bool] = []
+
+    @contextlib.contextmanager
+    def changed_at_entry(st: Store, *, create: bool = True):
+        if armed:
+            armed.clear()
+            target.write_text(newer)
+        with real_writer(st, create=create):
+            yield
+
+    real_write = Store.write_profile
+
+    def armed_write(self: Store, prof: Profile, **kwargs: object) -> str:
+        armed.append(True)
+        try:
+            return real_write(self, prof, **kwargs)
+        finally:
+            armed.clear()
+
+    monkeypatch.setattr(profile_share, "_writer", changed_at_entry)
+    monkeypatch.setattr(Store, "write_profile", armed_write)
+    assert setup.run(repo, [], yes=True, local_files="no") != 0
+    assert target.read_text() == newer
+    assert (store.root / profile_share.PROFILE).read_text() == PRIVATE_READABLE
+    assert not (store.root / profile_repair.RECEIPT).exists()
+    assert "r-2" in store.config_path.read_text()
+
+
+def test_shared_damaged_target_repair_declined_with_readable_private_writes_nothing(
+    repo: Path, shared_repo, monkeypatch
+) -> None:
+    store = shared_project(repo, shared_repo, monkeypatch)
+    (store.root / profile_share.PROFILE).write_text(PRIVATE_READABLE)
+    raw = UNREADABLE % ""
+    target = shared_only_damaged(store, raw)
+    monkeypatch.setattr(Store, "write_profile", lambda *_a, **_k: pytest.fail("no profile write before confirmation"))
+    assert setup.run(repo, [], yes=False, local_files="no", ask=lambda _q: "n") == 1
+    assert target.read_text() == raw
+    assert (store.root / profile_share.PROFILE).read_text() == PRIVATE_READABLE
+    assert not (store.root / profile_repair.RECEIPT).exists()
+    assert "r-2" in store.config_path.read_text()
+
+
+def test_bad_local_overlay_never_replaces_a_readable_shared_profile(repo: Path, shared_repo, monkeypatch) -> None:
+    store = shared_project(repo, shared_repo, monkeypatch)
+    (store.root / profile_share.PROFILE).write_text(PRIVATE_READABLE)
+    shared = profile_share.path(store)
+    shared.parent.mkdir(parents=True, exist_ok=True)
+    shared.write_text(GOOD_ROLES)
+    overlay = store.root / profile_share.LOCAL
+    overlay.write_text("{not json")
+    monkeypatch.setattr(Store, "write_profile", lambda *_a, **_k: pytest.fail("a readable profile is never replaced"))
+    with pytest.raises(StoreError, match="reads now"):
+        setup.run(repo, [], yes=True, local_files="no")
+    assert shared.read_text() == GOOD_ROLES
+    assert (store.root / profile_share.PROFILE).read_text() == PRIVATE_READABLE
+    assert overlay.read_text() == "{not json"
+    assert not (store.root / profile_repair.RECEIPT).exists()
+    assert "r-2" in store.config_path.read_text()
+
+
+def test_bad_local_overlay_never_replaces_a_readable_unshared_profile(
+    repo: Path, tmp_path_factory, monkeypatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path_factory.mktemp("home")))
+    monkeypatch.setattr(readiness, "check", lambda *_a: [])
+    monkeypatch.setattr(setup.profile, "detect", lambda *_a: Profile(version=1))
+    store = Store.open(repo)
+    store.root.mkdir(parents=True, exist_ok=True)
+    (store.root / profile_share.PROFILE).write_text(PRIVATE_READABLE)
+    overlay = store.root / profile_share.LOCAL
+    overlay.write_text("{not json")
+    monkeypatch.setattr(Store, "write_profile", lambda *_a, **_k: pytest.fail("a readable profile is never replaced"))
+    with pytest.raises(StoreError, match="reads now"):
+        setup.run(repo, [], yes=True, local_files="no")
+    assert (store.root / profile_share.PROFILE).read_text() == PRIVATE_READABLE
+    assert overlay.read_text() == "{not json"
+    assert not (store.root / profile_repair.RECEIPT).exists()
+    assert "r-2" in store.config_path.read_text()
+
+
 def refuse_publish(monkeypatch) -> None:
     notice = "saved, but not pushed: the shared repository refused the push"
     monkeypatch.setattr(DataRepo, "publish", lambda *_a, **_k: notice)

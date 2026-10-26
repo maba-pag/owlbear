@@ -227,7 +227,13 @@ def _saved(store: Store, say: Callable[[str], object]) -> tuple[Profile | None, 
             return prev, False, "", ""
         if store.shared and digest == profile_share.ABSENT:  # the shared profile alone is unreadable
             return _shared_only(target, target_now, reason, say)
-        return prev, True, "", ""
+        if target_now is None:  # the destination reads now: the error came from elsewhere, so nothing is replaced
+            msg = f"the saved profile could not be read ({reason}) and reads now; nothing was replaced; run setup again"
+            raise StoreError(msg)
+        if not target:
+            raise target_now
+        _announce(reason, say)
+        return None, True, digest, target
     if prev is not None or not digest:  # a readable shared profile with an unreadable clone file: open refuses it
         raise now
     if not target:  # the shared profile cannot be read to a digest: its own error is the explanation
