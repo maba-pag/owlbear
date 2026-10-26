@@ -35,6 +35,7 @@ NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
 
 class Host:
     wake = SimpleNamespace(set=lambda: None)
+    maintenance = None
     record = HostRecord(url="http://127.0.0.1:9/", token="tok", pid=1, started_at=datetime.now(UTC), code=CURRENT)  # noqa: S106
 
 
