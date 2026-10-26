@@ -143,6 +143,13 @@ def ensure_id(folder: Path) -> str:
         os.close(fd)
 
 
+def ensure_pinned(folder: Path, folder_fd: int) -> str:
+    """The clone's id, made on the descriptor the caller already pinned to *folder*; refused if the path moved."""
+    found = _ensure_at(folder, folder_fd)
+    _same_folder(folder, folder_fd)
+    return found
+
+
 def home(pid: str) -> Path:
     """The project's folder in ``~/.owlbear``."""
     return local_home.root() / PROJECTS / pid
@@ -325,13 +332,28 @@ def _previous_at(folder_fd: int) -> int:
     return _prior(marker)
 
 
+def _generation_at(folder: Path, folder_fd: int, proof: OfflineProof) -> None:
+    """Refuse unless the pinned folder still holds the exact preparation and the fence that finish verified."""
+    try:
+        prepared = fd_tree.read_at(folder_fd, project_move.PREPARED)
+        marker = fd_tree.read_at(folder_fd, MARKER)
+    except (OSError, ValueError) as exc:
+        msg = f"{folder} holds an unexpected entry where its preparation belongs: nothing was changed"
+        raise StoreError(msg) from exc
+    if prepared != proof.prepared or marker is None or marker.strip() != project_move.FENCE:
+        msg = f"{folder} is not the folder finish verified as prepared and fenced: nothing was changed; start again"
+        raise StoreError(msg)
+
+
 def _open(cwd: Path, proof: OfflineProof | None) -> Path:
     folder = clone_dir(cwd)
     folder.mkdir(mode=0o700, exist_ok=True)
     folder_fd = _pin(folder)
     try:
         if proof is not None:
-            require_identity(folder, folder_fd, proof)  # before anything in the folder is read or written
+            # Both checks run before anything in the folder is read for admission or written.
+            require_identity(folder, folder_fd, proof)
+            _generation_at(folder, folder_fd, proof)  # the verified preparation and fence, not a reused inode
         pid = _ensure_at(folder, folder_fd)
         target = home(pid)
         lock = open_lock(folder_fd, blocking=True, name=project_move.MOVE_LOCK)

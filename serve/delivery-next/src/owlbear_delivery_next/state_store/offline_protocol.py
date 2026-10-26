@@ -62,19 +62,27 @@ def _read(fd: int, folder: Path, name: str) -> str | None:
         raise StoreError(msg) from exc
 
 
-def _record(folder: Path, fd: int) -> dict:
+def _record(folder: Path, fd: int) -> tuple[dict, str]:
+    """The preparation record and the exact text it was read as; finish keeps the text as its proof."""
     text = _read(fd, folder, PREPARED)
     if text is None:
         msg = f"{folder / PREPARED} is missing: nothing was prepared, so nothing moves"
         raise StoreError(msg)
+    data = _parsed(folder, text)
+    if data is None:
+        msg = f"{folder / PREPARED} is not a preparation record OwlBear wrote: refusing the offline move"
+        raise StoreError(msg)
+    return data, text
+
+
+def _parsed(folder: Path, text: str) -> dict | None:
     try:
         data = json.loads(text)
     except ValueError as exc:
         msg = f"{folder / PREPARED} is unreadable: refusing the offline move"
         raise StoreError(msg) from exc
     if not isinstance(data, dict) or set(data) != {"boot", "folder", "marker"} or not _witnessed(data):
-        msg = f"{folder / PREPARED} is not a preparation record OwlBear wrote: refusing the offline move"
-        raise StoreError(msg)
+        return None
     return data
 
 
@@ -102,7 +110,7 @@ def _prepare_at(folder: Path, fd: int, boot: str) -> dict:
     current = raw.strip()
     if current == FENCE:
         # Repeated prepare keeps the existing generation; the fence is never recorded as the prior format.
-        return _record(folder, fd)
+        return _record(folder, fd)[0]
     if current and not current.isdigit():
         msg = f"the format marker {current!r} is malformed: refusing the offline move"
         raise StoreError(msg)
@@ -110,16 +118,29 @@ def _prepare_at(folder: Path, fd: int, boot: str) -> dict:
         msg = f"the format marker {current} is not a prior format: refusing the offline move"
         raise StoreError(msg)
     dev, ino = fd_tree.ident(os.fstat(fd))
+    _refuse_foreign_preparation(folder, fd, raw, [dev, ino])
     record = {"boot": boot, "folder": [dev, ino], "marker": raw}
     fd_tree.write_at(fd, PREPARED, json.dumps(record) + "\n")
     fd_tree.write_at(fd, MARKER, f"{FENCE}\n")
     return record
 
 
+def _refuse_foreign_preparation(folder: Path, fd: int, raw: str, identity: list[int]) -> None:
+    """Refuse to overwrite a preparation record that this folder's own interrupted prepare did not write."""
+    text = _read(fd, folder, PREPARED)
+    if text is None:
+        return
+    data = _parsed(folder, text)
+    if data is None or data["folder"] != identity or data["marker"] != raw:
+        msg = f"{folder / PREPARED} is not this folder's own preparation: refusing; nothing was written"
+        raise StoreError(msg)
+
+
 def prepare(folder: Path, gaps: Callable[[], tuple[Gap, ...]] = open_gaps) -> dict:
     """Record the folder's identity and boot session and install the fence; refuse first if a producer is unfenced.
 
-    The folder is pinned before anything is read; every read and write goes through that descriptor.
+    The folder is pinned once, before anything is read. The clone id and the preparation are both made through that
+    descriptor, so a path swapped after the pin cannot receive a write.
     """
     boot = boot_session()
     fd = _pinned(folder)
@@ -129,6 +150,7 @@ def prepare(folder: Path, gaps: Callable[[], tuple[Gap, ...]] = open_gaps) -> di
             msg = _unfenced(open_gaps)
             raise StoreError(msg)
         _refuse_replaced(folder, fd)
+        project_home.ensure_pinned(folder, fd)
         return _prepare_at(folder, fd, boot)
     finally:
         os.close(fd)
@@ -137,11 +159,12 @@ def prepare(folder: Path, gaps: Callable[[], tuple[Gap, ...]] = open_gaps) -> di
 def finish(folder: Path, gaps: Callable[[], tuple[Gap, ...]] = open_gaps) -> OfflineProof:
     """Verify every precondition; return the only proof the migrator accepts, or raise before any state changes.
 
-    The proof carries the identity of the folder verified through this descriptor, so the move can refuse a swap.
+    The proof carries the identity of the folder verified through this descriptor and the exact preparation text, so
+    the move can refuse a swap or a folder that was not prepared as it was verified.
     """
     fd = _pinned(folder)
     try:
-        record = _record(folder, fd)
+        record, prepared = _record(folder, fd)
         boot = boot_session()
         if boot.upper() == record["boot"].upper():  # UUID case variants name the same boot session
             msg = "still the boot session the source was prepared in: reboot before finishing; nothing moves"
@@ -157,7 +180,7 @@ def finish(folder: Path, gaps: Callable[[], tuple[Gap, ...]] = open_gaps) -> Off
         open_gaps = gaps()
         if open_gaps:
             raise StoreError(_unfenced(open_gaps))
-        return OfflineProof(folder, str(record["marker"]), (dev, ino))
+        return OfflineProof(folder, str(record["marker"]), (dev, ino), prepared)
     finally:
         os.close(fd)
 
@@ -165,6 +188,7 @@ def finish(folder: Path, gaps: Callable[[], tuple[Gap, ...]] = open_gaps) -> Off
 def prepare_clone(cwd: Path, gaps: Callable[[], tuple[Gap, ...]] = open_gaps) -> dict:
     """Prepare the clone's own store folder for the offline move; the only entry that installs the fence."""
     folder = project_home.clone_dir(cwd)
+    folder.mkdir(mode=0o700, exist_ok=True)
     return prepare(folder, gaps)
 
 

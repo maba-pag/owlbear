@@ -9,7 +9,7 @@ import subprocess
 
 import pytest
 
-from owlbear_delivery_next.state_store import offline_protocol, project_home, project_move
+from owlbear_delivery_next.state_store import fd_tree, offline_protocol, project_home, project_move
 from owlbear_delivery_next.state_store.database import MARKER, StoreError
 
 SOURCE_ID = "abc123"
@@ -106,3 +106,69 @@ def test_a_folder_replaced_after_its_proof_is_refused_before_anything_in_it_is_w
     assert (folder / MARKER).read_text() == f"{offline_protocol.FENCE}\n"
     assert not (folder / project_move.MOVE_RECORD).exists()
     assert (aside / "changes" / "c1" / "runner.log").read_text() == "ran\n"
+
+
+def prepared_text_from_another_boot(tmp_path, monkeypatch):
+    other = tmp_path / "other"
+    other.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=other, check=True, capture_output=True)  # noqa: S607
+    monkeypatch.setattr(offline_protocol, "boot_session", lambda: "CCCCCCCC-0000-4000-8000-000000000003")
+    offline_protocol.prepare_clone(other, gaps=no_gaps)
+    return (other / ".git" / "owlbear-delivery" / PREPARED).read_bytes()
+
+
+def test_a_foreign_unprepared_folder_at_the_proofs_identity_is_refused_and_nothing_in_it_is_written(
+    clone, monkeypatch, tmp_path
+):
+    repo, folder = clone
+    monkeypatch.setattr(offline_protocol, "boot_session", lambda: BEFORE)
+    offline_protocol.prepare_clone(repo, gaps=no_gaps)
+    monkeypatch.setattr(offline_protocol, "boot_session", lambda: AFTER)
+    proof = offline_protocol.finish(folder, gaps=no_gaps)
+    aside = tmp_path / "source-aside"
+    folder.rename(aside)
+    folder.mkdir()
+    (folder / MARKER).write_text("7\n")
+    (folder / "clone-id").write_text("FOREIGN\n")
+    monkeypatch.setattr(fd_tree, "ident", lambda _st: list(proof.identity))
+    with pytest.raises(StoreError):
+        project_home.migrated(repo, proof)
+    assert sorted(p.name for p in folder.iterdir()) == sorted([MARKER, "clone-id"])
+    assert (folder / MARKER).read_text() == "7\n"
+    assert (folder / "clone-id").read_text() == "FOREIGN\n"
+    assert not (folder / project_move.MOVE_LOCK).exists()
+    assert not (folder / project_move.MOVE_RECORD).exists()
+
+
+def test_a_foreign_fenced_folder_with_another_boots_prepared_record_is_refused_and_kept(clone, monkeypatch, tmp_path):
+    repo, folder = clone
+    monkeypatch.setattr(offline_protocol, "boot_session", lambda: BEFORE)
+    offline_protocol.prepare_clone(repo, gaps=no_gaps)
+    monkeypatch.setattr(offline_protocol, "boot_session", lambda: AFTER)
+    proof = offline_protocol.finish(folder, gaps=no_gaps)
+    foreign_prepared = prepared_text_from_another_boot(tmp_path, monkeypatch)
+    aside = tmp_path / "source-aside"
+    folder.rename(aside)
+    folder.mkdir()
+    (folder / MARKER).write_text(f"{offline_protocol.FENCE}\n")
+    (folder / PREPARED).write_bytes(foreign_prepared)
+    (folder / "clone-id").write_text("FOREIGN\n")
+    monkeypatch.setattr(fd_tree, "ident", lambda _st: list(proof.identity))
+    with pytest.raises(StoreError):
+        project_home.migrated(repo, proof)
+    assert (folder / PREPARED).read_bytes() == foreign_prepared
+    assert (folder / "clone-id").read_text() == "FOREIGN\n"
+    assert not (folder / project_move.MOVE_LOCK).exists()
+    assert not (folder / project_move.MOVE_RECORD).exists()
+
+
+def test_prepare_refuses_a_foreign_prepared_record_with_an_unfenced_marker_and_keeps_it(clone, monkeypatch, tmp_path):
+    repo, folder = clone
+    foreign_prepared = prepared_text_from_another_boot(tmp_path, monkeypatch)
+    (folder / PREPARED).write_bytes(foreign_prepared)
+    (folder / MARKER).write_text("7\n")
+    monkeypatch.setattr(offline_protocol, "boot_session", lambda: BEFORE)
+    with pytest.raises(StoreError):
+        offline_protocol.prepare_clone(repo, gaps=no_gaps)
+    assert (folder / PREPARED).read_bytes() == foreign_prepared
+    assert (folder / MARKER).read_text() == "7\n"

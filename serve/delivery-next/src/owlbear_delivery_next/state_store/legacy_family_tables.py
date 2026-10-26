@@ -15,7 +15,7 @@ IMPORT_OVERRIDES_V151 = (
 )
 CURRENT_MODULES = (
     ("commands/chat_client.py", "f8a9634488077d9baaa97f6888d345c58f898d8f095e86edd72bc8e3a9241490"),
-    ("commands/cli.py", "cb83b6412ace59c6b194c4ba9efa5ad0285b6802c6fdcaa1be379695251c824f"),
+    ("commands/cli.py", "75aff8bf969c93532f6062c64c5bc462180ec120f5bc97164a8fd16a84f55343"),
     ("commands/dispatch.py", "1ed30b1f119758a6a16345a4d1737d62f7d0500d393256ec3edcff8f2ac22984"),
     ("commands/mcp_server.py", "29fe5386b0f51906622e6cfd681d16c393a0c6b04d73fa505b3ec6ddd4bb72cd"),
     ("commands/runner.py", "ddc814dda8899939558b445104db0c6e2e044d4b805f81171fa9cdc38f883fb8"),
@@ -31,9 +31,9 @@ CURRENT_MODULES = (
     ("project_host/host.py", "b13e3538bf2cb9373550ea39084fabce719c7ffc0e2b13b85f8f7b48e8aea0ce"),
     ("state_store/database.py", "4c58bfc55a9db87a2d6aba3c52de794c06cddfce5aeb19bf3bd84c531bddc901"),
     ("state_store/fd_tree.py", "4c3bd8c8aff0b96d75dff0bfe7ea30b8528200e1f2c3b83be7c3449cf48dee3b"),
-    ("state_store/offline_proof.py", "6df2428ecf1ca7260a7b8e7620fd01b3ebbda49ff019272f8828e4a6e06c03a0"),
-    ("state_store/offline_protocol.py", "271a25b8c9b5c3cacd999726300b18d188b5f89e15139bd0e73e90019137a0a6"),
-    ("state_store/project_home.py", "62d8979444f3d08e541f98e65542cefe47b2dc1e73aea315648279ff36e73246"),
+    ("state_store/offline_proof.py", "5a4fb1b44ab554ba5e1174da3ae195882284180371011e46da85f4472c344688"),
+    ("state_store/offline_protocol.py", "1492afea832e56a53418293acd34c496a0f77b6dbaf5dde06b1de539bdc995e1"),
+    ("state_store/project_home.py", "3fc7b495a987e6aa054b3f2b77ab5fafcc6e6c00b00dc02122807b6ad9a9e977"),
     ("state_store/project_move.py", "728486a956b1434a73e44a114edc229d4151eaf0ee8521915b02430d3d84f4b0"),
     ("state_store/store.py", "c93ae35c9fb506201ebb4ba6010c4be04fd6a8fb9f9ccb3cc1522fbc5e821561"),
 )

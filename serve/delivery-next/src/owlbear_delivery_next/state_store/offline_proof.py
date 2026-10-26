@@ -19,11 +19,13 @@ class OfflineProof:
 
     *previous* is the format marker the store had before the fence, as the preparation recorded it.
     *identity* is the (device, inode) of the folder that finish verified through its own descriptor.
+    *prepared* is the exact preparation record text finish read; admission requires the same bytes to be there.
     """
 
     folder: Path
     previous: str
     identity: tuple[int, int]
+    prepared: str
 
 
 def same_folder(folder: Path, folder_fd: int) -> bool:

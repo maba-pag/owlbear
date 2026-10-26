@@ -271,7 +271,6 @@ def _role(text: str) -> tuple[Role, RoleModel]:
 def prepare_move(repo: Path) -> int:
     """Bind the clone's store id, then record its boot session and fence the move; nothing is copied or switched."""
     try:
-        project_home.ensure_id(project_home.clone_dir(repo))
         offline_protocol.prepare_clone(repo)
     except StoreError as exc:
         sys.stderr.write(f"{exc}\n")

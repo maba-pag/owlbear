@@ -247,7 +247,7 @@ def test_a_resumed_move_syncs_the_published_name_before_it_switches(clone, monke
 
     monkeypatch.setattr(os, "fsync", fsync)
     monkeypatch.setattr(project_move, "_save", save)
-    with pytest.raises(CrashError):
+    with pytest.raises(StoreError, match=r"was not made durable"):
         move(repo, monkeypatch)
     assert move(repo, monkeypatch) == target
     before = events[: events.index(("switch",))]
