@@ -518,6 +518,16 @@ def test_malformed_or_unrelated_server_entries_never_count_as_setup(tmp_path):
     assert setup.registered(work) is False
     (work / ".mcp.json").write_text(json.dumps(setup.with_server({}, "/py", Path(f"{work}-old"))))
     assert setup.registered(work) is False  # a path that merely contains this one
+    joined = {"mcpServers": {"x": {"args": ["-m", "owlbear_delivery_next", "mcp", "--repo=/other"]}}}
+    (work / ".mcp.json").write_text(json.dumps(joined))
+    assert setup.registered(work) is False  # --repo=X names a folder as --repo X does
+
+
+def test_a_server_entry_naming_its_folder_as_repo_equals_counts_as_setup(tmp_path):
+    work = clone(tmp_path / "a")
+    joined = {"mcpServers": {"x": {"args": ["-m", "owlbear_delivery_next", "mcp", f"--repo={work}"]}}}
+    (work / ".mcp.json").write_text(json.dumps(joined))
+    assert setup.registered(work)
 
 
 def test_each_project_line_in_the_log_names_its_project(tmp_path, http, machine, capsys):

@@ -126,6 +126,7 @@ and the balanced `chill` profile come from the `maba-pag` organisation's CodeRab
 instructions and the [review brief](instructions/code-review.instructions.md) as its guideline
 (D-01M5TN7BEVN9YWFEYCHH9GJZG0). Its free open-source allowance is about one review an hour for all of `maba-pag`'s
 pull requests, so agents add the label only to a pull request that changes runtime code or CI workflows, once its CI
-passed, and merge it only after the review is in and handled, or after 60 minutes without one, said in the pull
-request; others merge after CI and Sol's review, and only the owner labels them (TD-447). `@coderabbitai review` asks
+passed, and merge it only after the review is in and handled. If CodeRabbit reports its limit or sends no review within
+60 minutes, they request a Copilot review instead and merge once that is handled, said in the pull request; others
+merge after CI and Sol's review, and only the owner labels them (`D-01M5WG5KS3N4PK44FTHJTCX7RC`). `@coderabbitai review` asks
 again; CodeRabbit never replies on its own (TD-412).

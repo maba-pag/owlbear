@@ -61,7 +61,7 @@ Renovate's pull requests come back now that the old engine is gone (owner, 2026-
 | Decisions as confirmed intent (item 14): inherited decisions, saving at confirmation, the picker and lookups, answers classed by their relayer, the migration and the switch to `owlbear-data` (TD-466) | [decisions as confirmed intent](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/decision-intent-build.md) | #556 to #565, #570, #571 |
 | Improvement (item 9) slices 1 to 4 and 6's Delivery part: the design, settings and roles, Retro chatlogs, the Spotter's card and learning-mode looks at Delivery steps | [Improvement](improvement-design.md) | #659, #660, #662, #663, #668 |
 | The workspace-era installer retired: Delivery's chat server path-free in the root `.mcp.json`, `share/prompts`, `setup/init.py` and `seed/`; `owlbear setup` offers the memory server for the shaper (`D-01M5TYMBBBHQRN172N977ND3VS`) | — | #665 to #667 |
-| No generated indexes, Archify diagrams or prompt files: agents find code by search and package READMEs, doc-audit and agent-audit are skills invoked by name (`D-01M5WA09V20PP0K0HV920FT3Q8`, `D-01M5WA09TYBTV36TBRZY1RWSY8`) | — | #689 |
+| No generated indexes, Archify diagrams, prompt files or prompt validator: agents find code by search and package READMEs (`D-01M5WA09V20PP0K0HV920FT3Q8`, `D-01M5WG5KH9R31YWK82YDF3RX7W`, `D-01M5WG6AX489EK20815YJECZ7E`) | — | #689, #694 |
 
 ## 2. The Plan
 
@@ -91,6 +91,7 @@ names, not positions: the table lists the items in their order.
 | 16 | Amendment design session with the owner (TD-185), end to end, before any amendment code | TD-185, TD-422 | none yet | Not started |
 | 10 | First real project: the per-project GitHub account setting first; memory publication and curation (F17) fixed; two Changes merged in consumer projects; OwlBear builds itself through Delivery | TD-338, TD-402, TD-90, TD-319 | none yet | Waits for item 9 |
 | 17 | Browser and knowledge rebuilt from scratch, from the [ideas of the closed issues](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/closed-issue-ideas-2026-10.md); until then the packages stay untouched | TD-434 | none yet | After item 10 |
+| 20 | Audits as Maintenance actions: agent-audit for OwlBear, doc-audit also for consumer projects; the two skills then go | `D-01M5WG5KHAXT8P99VXHKWW5EBJ` | none yet | Not started |
 
 **Not yet placed** (decided or planned, no position in the order):
 

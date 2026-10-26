@@ -156,12 +156,6 @@ repos:
           |^\.mcp\.json$
           |^serve/[^/]+-mcp/.*$
         pass_filenames: false
-      - id: validate-prompts
-        name: Validate Agent Prompts
-        language: unsupported
-        entry: uv run --frozen python .owlbear/scripts/validate_prompts.py
-        files: '^(?:share|\.owlbear)/(?:agents|prompts|skills)/.*|^\.owlbear/scripts/validate_prompts\.py$'
-        pass_filenames: false
       # The generated decisions view is unedited; stdlib only, no owlbear-data token (TD-436)
       - id: decisions-view-hash
         name: Decisions view hash
