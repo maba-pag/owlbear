@@ -7,13 +7,16 @@ from types import SimpleNamespace
 import pytest
 from fastapi.testclient import TestClient
 
+from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.local_system import data_repo
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.runtimes import model_choices
+from owlbear_delivery_next.settings import carried, roles
 from owlbear_delivery_next.settings.config import CONFIG_FORMAT as F
 from owlbear_delivery_next.settings.config import Layer
+from owlbear_delivery_next.state_store import profile_share, project_home, roles_move
 from owlbear_delivery_next.state_store.store import Store
 
 AUTH = {"authorization": "Bearer t"}
@@ -446,3 +449,87 @@ def test_a_project_only_in_the_shared_repository_never_meets_this_machine_s_laye
     got = c.get("/api/next/config").json()
     unfit = {"format": F, "agents": {"builder": {"ask_owner_at": 6}}}  # the other project's own 6 needs more
     assert c.put("/api/next/config/global", json={"rev": got["global_rev"], "layer": unfit}).status_code == 422
+
+
+class _Abrupt(BaseException):
+    """A stop the process cannot catch, such as a kill between the two writes."""
+
+
+def _git_project(path: Path) -> Path:
+    path.mkdir()
+    for args in (("init", "-q"), ("remote", "add", "origin", "https://github.com/acme/shop.git")):
+        subprocess.run(["git", *args], cwd=path, check=True)  # noqa: S603, S607
+    return path
+
+
+def _legacy_reviewer(cwd: Path) -> None:
+    """A format 1 profile whose reviewer role the project config has not yet taken."""
+    root = cwd / ".git" / "owlbear-delivery"
+    root.mkdir(parents=True)
+    raw = {
+        "format": 1,
+        "version": 3,
+        "confirmed_at": "2026-10-01T10:00:00Z",
+        "entries": {"rules": {"state": "unknown", "value": "", "evidence": "HTTP 403"}},
+        "roles": {"reviewer": {"model": "r-1", "effort": "max"}},
+        "runtime": "vscode",
+    }
+    (root / "profile.json").write_text(json.dumps(raw))
+
+
+def _lose_the_marker(monkeypatch, exc: type[BaseException]) -> None:
+    """Fail the first receipt-marker write: the role is applied in the config, the marker is not."""
+    real, failed = roles_move.atomic_write, []
+
+    def fails_once(target, content):
+        if target.name == profile_share.ROLES_MOVED and not failed:
+            failed.append(True)
+            raise exc(28, "No space left on device")
+        real(target, content)
+
+    monkeypatch.setattr(roles_move, "atomic_write", fails_once)
+
+
+def _store_as_opened(cwd: Path, shared: data_repo.DataRepo | None) -> Store:
+    """The store ``Store.open`` returns for *cwd*, built without running the role move."""
+    name = data_repo.folder(shared, cwd) if shared else ""
+    return Store(project_home.located(cwd), shared, name)
+
+
+def _owner_clears_after_a_lost_marker(cwd: Path, monkeypatch, exc, shared: data_repo.DataRepo | None) -> None:
+    _legacy_reviewer(cwd)
+    _lose_the_marker(monkeypatch, exc)
+    with pytest.raises(exc):
+        Store.open(cwd)  # the role is applied to the config; the receipt marker write is the one that fails
+    store = _store_as_opened(cwd, shared)
+    assert store.read_config().agents["reviewer"].model == "r-1"
+
+    c = client(store, store.global_path, headers=AUTH)
+    got = c.get("/api/next/config").json()
+    assert got["project"]["roles_moved"] is True  # the receipt went out with the role, in the one config write
+    layer = {"format": F}  # the owner clears the role: the body omits roles_moved, as the settings page does
+    saved = c.put("/api/next/config/project", json={"rev": got["project_rev"], "layer": layer})
+    assert saved.status_code == 200
+    assert not saved.json()["unpublished"]
+    cleared = store.config_path.read_bytes()
+    assert store.read_config().agents == {}
+    assert store.read_config().roles_moved is True
+
+    for opened in (Store.open(cwd), Store.open(cwd)):  # a restart, then another start: the same outcome each time
+        assert roles.chosen(opened.settings(), StepKind.REVIEW) == carried.MODELS["reviewer"]
+        assert opened.config_path.read_bytes() == cleared
+        assert (opened.root / profile_share.ROLES_MOVED).exists()
+
+
+@pytest.mark.parametrize("exc", [OSError, _Abrupt], ids=["marker-fails", "abrupt-stop"])
+def test_an_owner_clear_over_http_survives_a_lost_receipt_marker_unshared(tmp_path, monkeypatch, exc):
+    cwd = _git_project(tmp_path / "shop")
+    monkeypatch.delenv(data_repo.VIEW, raising=False)
+    _owner_clears_after_a_lost_marker(cwd, monkeypatch, exc, None)
+
+
+@pytest.mark.parametrize("exc", [OSError, _Abrupt], ids=["marker-fails", "abrupt-stop"])
+def test_an_owner_clear_over_http_survives_a_lost_receipt_marker_shared(tmp_path, monkeypatch, shared_repo, exc):
+    cwd = _git_project(tmp_path / "shop")
+    monkeypatch.setenv(data_repo.VIEW, str(shared_repo[0]))
+    _owner_clears_after_a_lost_marker(cwd, monkeypatch, exc, data_repo.DataRepo(shared_repo[0]))
