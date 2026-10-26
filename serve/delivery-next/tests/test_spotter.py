@@ -825,8 +825,28 @@ def test_a_look_the_runtime_reports_as_free_costs_nothing(monkeypatch) -> None:
     assert asyncio.run(REAL_LOOK({}, ctx())) == ('{"verdict": "silent"}', 0.0)
 
 
-SHAPES = ["d", "a.", "--key ", "https://", "<browser_context>", "</browser_context>", '{"k": ', "key_", "--key-",
-          "password.", "a@", "x=", "a=b&", '"a=', "Cookie: ", 'password="', 'password="\\"', "[{"]  # fmt: skip
+SHAPES = [
+    "d",
+    "a.",
+    "--key ",
+    "https://",
+    "<browser_context>",
+    "</browser_context>",
+    '{"k": ',
+    "key_",
+    "--key-",
+    "password.",
+    "a@",
+    "x=",
+    "a=b&",
+    '"a=',
+    "Cookie: ",
+    'password="',
+    'password="\\"',
+    "[{",
+    "--password [",
+    'k={"password": [',
+]
 
 
 @pytest.mark.parametrize("unit", SHAPES)
@@ -886,3 +906,18 @@ def test_an_answer_with_a_known_verdict_but_malformed_fields_is_failed(answer: s
     assert (
         spotter.parse('{"verdict": "note", "note": "n", "evidence": ["e"], "state_change": null}')["verdict"] == "note"
     )
+
+
+def test_flags_with_escaped_quotes_embedded_json_containers_and_dropped_answers() -> None:
+    kept = Kept()
+    kept.add(started("c1", "bash", {"command": 'docker login --password "prefix\\"private canary_suffix" r.example'}))
+    kept.add(done("c1", 'DEBUG: {"credentials": ["private canary value", {"x": "canary"}], "user": "demo"} done'))
+    for i in range(5):
+        kept.add(started(f"q{i}", "ask_user", {"question": f"Which {i}?"}))
+        kept.add(done(f"q{i}", f"answer {i}"))
+    built = card.build(kept.snapshot(), {"at": "2026-10-26T10:01:00+00:00"}, {})
+    text = json.dumps(built)
+    assert "canary" not in text
+    assert "r.example" in text
+    assert '"user": "demo"' in text.replace("\\", "")
+    assert any("2 earlier answers" in g for g in built["gaps"])

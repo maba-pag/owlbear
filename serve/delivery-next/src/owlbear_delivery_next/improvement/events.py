@@ -15,7 +15,7 @@ import re
 from collections import deque
 from typing import Any
 
-from owlbear_delivery_next.local_system.mask import SECRET_NAME, redact, secret_key
+from owlbear_delivery_next.local_system.mask import SECRET_NAME, redact, secret_key, value_end
 
 ACTIONS, CALLS = 120, 200  # actions kept; calls awaiting their completion
 TEXT, SAID, ARGS, RESULT = 6000, 1500, 1500, 4000  # characters kept of a request, a message, arguments, a result
@@ -54,9 +54,8 @@ def as_dict(ev: Any) -> dict[str, Any]:  # noqa: ANN401 - an SDK event object or
 CUT = " [...] "
 RAW = 65536  # characters cleaned whole, on the step's loop; a longer text is omitted: no cut of it is known safe
 EMAIL = re.compile(r"(?<![\w.+-])[\w.+-]+@[\w-]+\.[\w.-]+")  # tried only where a word starts: linear
-FLAG = re.compile(
-    rf"(?i)(?<!\S)(?P<f>--?[\w-]{{0,64}}{SECRET_NAME}[\w-]{{0,64}})(?P<s>\s+)(?P<v>\"[^\"]*\"|'[^']*'|[^\s-]\S*)"
-)
+FLAG = re.compile(r"(?<!\S)(?P<f>--?[\w-]++)(?P<s>\s+)")  # each flag scanned once: linear; judged in ``_flags``
+SECRET = re.compile(rf"(?i){SECRET_NAME}")
 PROTECT = re.compile(r"(?:/(?:Users|private|var|tmp|Library|home)/[^\s\"'`:;,)\]}]+)|\b[0-9a-f]{40}\b")
 
 
@@ -87,7 +86,7 @@ def clean(text: str) -> str:
         kept.append(m.group(0))
         return f"\x00{len(kept) - 1}\x00"
 
-    text = FLAG.sub(r"\g<f>\g<s>***", no_browser(text.replace("\x00", "")))  # a credential flag's value, spaced
+    text = _flags(no_browser(text.replace("\x00", "")))
     text = PROTECT.sub(hold, redact(text, blobs=False))
     return EMAIL.sub("<email>", re.sub(r"\x00(\d+)\x00", lambda m: kept[int(m.group(1))], redact(text)))
 
@@ -106,6 +105,19 @@ def _scrubbed(value: Any) -> Any:  # noqa: ANN401 - JSON values
     if isinstance(value, dict):
         return {k: "***" if secret_key(str(k)) else _scrubbed(v) for k, v in value.items()}
     return value
+
+
+def _flags(text: str) -> str:
+    """*text* with the spaced value of every credential-named flag masked, in one pass."""
+    out, at = [], 0
+    for m in FLAG.finditer(text):
+        start = m.end()
+        if (m.start() < at or not SECRET.search(m["f"]) or text[start : start + 1] == "-"
+                or (end := value_end(text, start)) is None):  # fmt: skip
+            continue
+        out.append(f"{text[at:start]}***")
+        at = end
+    return "".join(out) + text[at:]
 
 
 def kept_text(value: object, n: int) -> str:
@@ -147,7 +159,7 @@ class Kept:
         self.said: deque[dict[str, Any]] = deque(maxlen=12)
         self.actions: deque[dict[str, Any]] = deque(maxlen=ACTIONS)
         self.calls: dict[str, dict[str, Any]] = {}
-        self.dropped = {"actions": 0, "requests": 0, "messages": 0, "texts too long to clean": 0}  # what is not held
+        self.dropped = {"actions": 0, "requests": 0, "messages": 0, "answers": 0, "texts too long to clean": 0}
         self.n = 0  # events seen
 
     def add(self, ev: Any) -> bool:  # noqa: ANN401 - an SDK event object or a logged event
@@ -176,9 +188,8 @@ class Kept:
         elif kind == "tool.execution_complete" and (call := self.calls.pop(str(data.get("toolCallId")), None)):
             call |= {"done_at": at, "ok": data.get("success"), "result": self._kept(result_text(data), RESULT)}
             if call["tool"] in QUESTIONS and not self._stopped(call):
-                self.answers.append(
-                    {"at": at, "question": clip(call["args"], 400), "answer": clip(call["result"], 400)}
-                )
+                answer = {"at": at, "question": clip(call["args"], 400), "answer": clip(call["result"], 400)}
+                self._ring(self.answers, answer, "answers")
             return True
         elif kind in STOPS or kind == "session.compaction_complete":
             self._push({"n": self.n, "at": at, "kind": "stop" if kind in STOPS else "compaction"})

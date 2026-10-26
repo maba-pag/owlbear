@@ -37,14 +37,48 @@ def _secret(key: str) -> bool:
     return False
 
 
+def _container_end(text: str, at: int) -> int:
+    """Where the JSON array or object opening at *at* closes, strings and escapes respected; the text's end if never."""
+    depth, quote, i = 0, "", at
+    while i < len(text):
+        c = text[i]
+        if quote:
+            if c == "\\":
+                i += 1
+            elif c == quote:
+                quote = ""
+        elif c in "\"'":
+            quote = c
+        elif c in "[{":
+            depth += 1
+        elif c in "]}":
+            depth -= 1
+            if depth == 0:
+                return i + 1
+        i += 1
+    return len(text)
+
+
+def value_end(text: str, at: int) -> int | None:
+    """Where a value starting at *at* ends; None when no value starts there.
+
+    An array or object ends where it balances, a quoted value past escaped quotes (at the line's end if it never
+    closes), any other at its word's end.
+    """
+    if at < len(text) and text[at] in "[{":
+        return _container_end(text, at)
+    value = _VALUE.match(text, at)
+    return value.end() if value else None
+
+
 def _assignments(text: str) -> str:
     """*text* with every credential assignment's value masked, in one pass; a key inside another's value counts."""
     out, at = [], 0
     for m in _KEY.finditer(text):
-        if m.start() < at or not _secret(m["k"]) or not (value := _VALUE.match(text, m.end())):
+        if m.start() < at or not _secret(m["k"]) or (end := value_end(text, m.end())) is None:
             continue
         out.append(f"{text[at : m.end()]}***")
-        at = value.end()
+        at = end
     return "".join(out) + text[at:]
 
 
