@@ -63,7 +63,13 @@ def write(store: Store, prof: Profile, *, replace_unreadable: bool = False) -> s
     with _writer(store):
         current = _current_for_write(store, replace_unreadable=replace_unreadable)
         if current is not None:  # only mark() moves the legacy import marker; a snapshot never rewinds it
-            prof = prof.model_copy(update={"prefs_import": current.prefs_import, "prefs_basis": current.prefs_basis})
+            prof = prof.model_copy(
+                update={
+                    "prefs_import": current.prefs_import,
+                    "prefs_basis": current.prefs_basis,
+                    "prefs_claim": current.prefs_claim,
+                }
+            )
         _keep_local(store, prof)
         return _publish_locked(store, prof, f"settings: {store.name}: project profile")
 
@@ -186,26 +192,65 @@ def publish_layer(store: Store, path: Path, message: str, until: float, *, owner
     return settle_config(store, notice, owner=owner) if path == store.config_path else notice
 
 
-def mark(store: Store, expect: str, to: str, basis: str = "") -> tuple[str, str, bool]:
-    """Move the legacy import marker from *expect* to *to* on the latest profile.
+def mark(store: Store, expect: str, to: str, basis: str = "", claim: str = "") -> tuple[str, str, bool]:
+    """Move the legacy import marker from *expect* to *to*; returns (state after, notice, applied).
 
-    Returns (state after, publication notice, applied): *applied* is False when the marker was not at *expect*, so
-    another run made the move and this one changed nothing. A pending claim records its config *basis*; leaving
-    pending clears it.
+    *applied* is False when the marker was not at *expect*. A pending claim records its *basis* and *claim* nonce;
+    for a claim, *applied* is True only when the published, freshly read profile carries this nonce.
     """
-    from owlbear_delivery_next.state_store.store import SharedError  # noqa: PLC0415 - the store imports this module
-
     with _writer(store):
         prof = _read_unlocked(store)
         if prof is None or prof.prefs_import != expect:
             return (prof.prefs_import if prof else "", "", False)
-        marked = prof.model_copy(update={"prefs_import": to, "prefs_basis": basis if to == "pending" else ""})
+        if to == "pending":
+            marked = prof.model_copy(update={"prefs_import": to, "prefs_basis": basis, "prefs_claim": claim})
+        else:
+            marked = prof.model_copy(update={"prefs_import": to, "prefs_basis": ""})
         _keep_local(store, marked)
-        try:
-            notice = _publish_locked(store, marked, f"settings: {store.name}: legacy preference import {to}")
-        except DataRepoError as exc:
-            raise SharedError(str(exc)) from exc
-        return to, notice, True
+        claimed = to == "pending"
+        notice = _publish_mark(store, marked, f"settings: {store.name}: legacy preference import {to}", claimed=claimed)
+        return to, notice, not claimed or _settle_claim(store, notice, claim)
+
+
+UNCONFIRMED = "prefs-claim.unconfirmed"
+
+
+def _settle_claim(store: Store, notice: str, claim: str) -> bool:
+    flag = store.root / UNCONFIRMED
+    if notice:
+        store.root.mkdir(parents=True, exist_ok=True)
+        flag.write_text(claim)
+        return False
+    flag.unlink(missing_ok=True)
+    prof = _read_unlocked(store)
+    return prof is not None and prof.prefs_import == "pending" and prof.prefs_claim == claim
+
+
+def _publish_mark(store: Store, prof: Profile, message: str, *, claimed: bool) -> str:
+    from owlbear_delivery_next.state_store.store import SharedError  # noqa: PLC0415 - the store imports this module
+
+    try:
+        return _publish_locked(store, prof, message)
+    except DataRepoError as exc:
+        if claimed:
+            _settle_claim(store, str(exc), prof.prefs_claim or "")
+        raise SharedError(str(exc)) from exc
+
+
+def claim_unconfirmed(store: Store, prof: Profile) -> bool:
+    """Whether this pending claim was never confirmed as published, so it must be published again before a fill."""
+    flag = store.root / UNCONFIRMED
+    return prof.prefs_import == "pending" and flag.exists() and flag.read_text() == prof.prefs_claim
+
+
+def confirm_claim(store: Store) -> tuple[str, bool]:
+    """Publish an unconfirmed pending claim again; returns (publication notice, whether it won)."""
+    with _writer(store):
+        prof = _read_unlocked(store)
+        if prof is None or not claim_unconfirmed(store, prof):
+            return "", False
+        notice = _publish_mark(store, prof, f"settings: {store.name}: legacy preference import pending", claimed=True)
+        return notice, _settle_claim(store, notice, prof.prefs_claim or "")
 
 
 def unpublished(store: Store) -> bool:
@@ -305,7 +350,11 @@ def _unreadable_guard(source: Path) -> Profile | None:
         msg = f"the saved profile's legacy import guard is malformed: {source}"
         raise StoreError(msg)
     try:
-        return Profile(prefs_import=data.get("prefs_import", ""), prefs_basis=data.get("prefs_basis", ""))
+        return Profile(
+            prefs_import=data.get("prefs_import", ""),
+            prefs_basis=data.get("prefs_basis", ""),
+            prefs_claim=data.get("prefs_claim"),
+        )
     except ValidationError as exc:
         msg = f"the saved profile's legacy import guard is malformed: {source}"
         raise StoreError(msg) from exc

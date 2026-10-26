@@ -62,6 +62,7 @@ class Profile(Record):
     runtime: Runtime = "managed"  # TD-35: managed runs agent steps through the SDK; vscode runs them in VS Code
     prefs_import: Literal["", "pending", "done"] = ""  # R15: the one-time legacy import; "done" is permanent
     prefs_basis: str = ""  # R15: while pending, the project config's digest at the claim ("absent" if none); else ""
+    prefs_claim: str | None = None  # R15: the nonce of the claim attempt that wrote "pending"; None on older profiles
 
 
 WINDOW_PAUSED = True  # TD-137: until the window probes pass, every agent step runs through the SDK

@@ -407,3 +407,61 @@ def test_invalid_old_roles_are_refused_and_never_copied(repo, bad):
     assert not (root / "config.json").exists()
     with pytest.raises(StoreError, match="cannot be migrated"):
         store.read_profile()
+
+
+def test_a_damaged_old_profile_is_not_marked_moved_and_its_roles_come_back_once_repaired(repo):
+    root = repo / ".git" / "owlbear-delivery"
+    root.mkdir(parents=True, exist_ok=True)
+    (root / "profile.json").write_bytes(b'{"format": 1, "roles": {"reviewer": ')  # truncated mid-write
+    store = Store.open(repo)
+    root = store.root
+
+    assert not (root / profile_share.ROLES_MOVED).exists()
+    assert not (root / "config.json").exists()
+
+    own = Layer(agents={"builder": Agent(model="own")})
+    owner_save(store, lambda _cur: own)  # the owner's own settings meanwhile
+    _old_profile(root, {"reviewer": {"model": "r-1", "effort": "max"}, "builder": {"model": "old", "effort": "low"}})
+    healthy = Store.open(repo)
+
+    assert healthy.read_config().agents["reviewer"].model == "r-1"
+    assert healthy.read_config().agents["builder"].model == "own"  # the owner's model is kept
+    assert (root / profile_share.ROLES_MOVED).exists()
+
+
+def test_an_old_profile_with_an_invalid_role_is_not_marked_moved_and_restores_once_repaired(repo):
+    legacy = repo / ".git" / "owlbear-delivery"
+    _old_profile(legacy, {"reviewer": {"model": "r-1"}})  # no effort: the role does not validate
+    store = Store.open(repo)
+    root = store.root
+    assert not (root / profile_share.ROLES_MOVED).exists()
+    assert not (root / "config.json").exists()
+
+    _old_profile(root, {"reviewer": {"model": "r-1", "effort": "max"}})
+    healthy = Store.open(repo)
+    assert healthy.read_config().agents["reviewer"].model == "r-1"
+    assert (root / profile_share.ROLES_MOVED).exists()
+
+
+def test_an_old_profile_that_cannot_be_read_is_not_marked_moved_and_restores_once_repaired(repo):
+    legacy = repo / ".git" / "owlbear-delivery"
+    (legacy / "profile.json").mkdir(parents=True)  # a directory where the profile file should be: the read fails
+    store = Store.open(repo)
+    root = store.root
+    assert not (root / profile_share.ROLES_MOVED).exists()
+    assert not (root / "config.json").exists()
+
+    (root / "profile.json").rmdir()
+    _old_profile(root, {"reviewer": {"model": "r-1", "effort": "max"}})
+    healthy = Store.open(repo)
+    assert healthy.read_config().agents["reviewer"].model == "r-1"
+    assert (root / profile_share.ROLES_MOVED).exists()
+
+
+def test_a_valid_empty_old_roles_profile_counts_as_already_satisfied(repo):
+    root = repo / ".git" / "owlbear-delivery"
+    _old_profile(root, {})
+    store = Store.open(repo)
+
+    assert (store.root / profile_share.ROLES_MOVED).exists()
+    assert not (store.root / "config.json").exists()

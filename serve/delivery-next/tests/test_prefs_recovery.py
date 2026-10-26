@@ -422,3 +422,102 @@ def test_setup_repair_with_a_pending_guard_keeps_the_pending_marker(
     assert "cannot be read" in capsys.readouterr().out
     assert store.read_profile().prefs_import == "pending"
     assert not store.config_path.exists()
+
+
+# Finding 6: a legacy claim is won only by its own published nonce, never by an equal absent basis
+
+
+def clone_as(remote: Path, tmp_path: Path, name: str) -> tuple[Store, Profile]:
+    """A separate checkout of *remote* named *name*, another clone of the same shared record with its own identity."""
+    second = tmp_path / name
+    subprocess.run(["git", "clone", "-q", str(remote), str(second)], check=True, capture_output=True)  # noqa: S603, S607
+    for key, value in (("user.name", "t"), ("user.email", "t@example.com")):
+        subprocess.run(["git", "-C", str(second), "config", key, value], check=True)  # noqa: S603, S607
+    fresh = Store(tmp_path / f"{name}-store", DataRepo(second), "shop-site")
+    return fresh, fresh.read_profile()
+
+
+def crash_before_fill(monkeypatch) -> None:
+    msg = "crash before the fill"
+
+    def boom(*_args, **_kwargs):
+        raise RuntimeError(msg)
+
+    monkeypatch.setattr(prefs_import, "_fill", boom)
+
+
+def test_a_published_absent_claim_is_not_won_by_a_stale_clone(shared_repo, tmp_path, monkeypatch):
+    root, remote = shared_repo
+    a = Store(tmp_path / "a-store", DataRepo(root), "shop-site")
+    a.write_profile(Profile(entries={profile.POLL: confirmed("45")}))
+    b, _ = clone_as(remote, tmp_path, "b")  # B reads the profile before A claims, so B's marker is still unclaimed
+    with monkeypatch.context() as m:
+        crash_before_fill(m)
+        with pytest.raises(RuntimeError, match="crash before the fill"):
+            prefs_import.run(a)
+    claimed = a.read_profile()
+    assert (claimed.prefs_import, claimed.prefs_basis) == ("pending", "absent")
+
+    with pytest.raises(StoreError, match="claim was not published") as first:
+        prefs_import.run(b)  # B's own claim conflicts with A's published one and must not create the config
+    assert "could not be merged with the remote" in str(first.value)
+    assert not b.config_path.exists()
+
+    with pytest.raises(StoreError, match="claim was not published"):
+        prefs_import.run(b)  # the unconfirmed claim is published again, still conflicts, and never fills
+    assert not b.config_path.exists()
+    assert b.read_profile().prefs_import == "pending"
+
+    fresh, got = clone_as(remote, tmp_path, "c")
+    assert (got.prefs_import, got.prefs_claim) == ("pending", claimed.prefs_claim)
+    assert not fresh.config_path.exists()
+
+
+def test_an_unconfirmed_claim_is_published_again_and_wins_before_it_fills(shared_repo, tmp_path, monkeypatch):
+    root, remote = shared_repo
+    store = Store(tmp_path / "store", DataRepo(root), "shop-site")
+    store.write_profile(Profile(entries={profile.POLL: confirmed("45")}))
+    real, refused = DataRepo.publish, []
+
+    def publish(self, path, message, until=None):
+        if path == profile_share.path(store) and message.endswith("import pending") and not refused:
+            refused.append(message)
+            return "remote refused"
+        return real(self, path, message, until)
+
+    monkeypatch.setattr(DataRepo, "publish", publish)
+    with pytest.raises(StoreError, match="claim was not published"):
+        prefs_import.run(store)
+    assert refused
+    assert not store.config_path.exists()
+    assert profile_share.claim_unconfirmed(store, store.read_profile())
+
+    prefs_import.run(store)  # the retry confirms the claim as the winner, and the absent basis fills once
+    fresh, got = clone_as(remote, tmp_path, "fresh")
+    assert got.prefs_import == "done"
+    assert fresh.read_config().prefs.ci_poll_seconds == 45
+
+
+def test_an_ordinary_save_keeps_the_published_claim_id_and_basis(shared_repo, tmp_path, monkeypatch):
+    root, remote = shared_repo
+    store = Store(tmp_path / "store", DataRepo(root), "shop-site")
+    store.write_profile(Profile(entries={profile.POLL: confirmed("45")}))
+    with monkeypatch.context() as m:
+        crash_before_fill(m)
+        with pytest.raises(RuntimeError):
+            prefs_import.run(store)
+    claim = store.read_profile().prefs_claim
+    store.write_profile(Profile(entries={profile.POLL: confirmed("30")}))  # an ordinary save omits the claim
+    _, got = clone_as(remote, tmp_path, "fresh")
+    assert (got.prefs_import, got.prefs_basis, got.prefs_claim) == ("pending", "absent", claim)
+    assert got.entries[profile.POLL].value == "30"
+
+
+def test_a_published_fresh_claim_fills_once_and_marks_done(shared_repo, tmp_path):
+    root, remote = shared_repo
+    store = Store(tmp_path / "store", DataRepo(root), "shop-site")
+    store.write_profile(Profile(entries={profile.POLL: confirmed("45")}))
+    prefs_import.run(store)
+    fresh, got = clone_as(remote, tmp_path, "fresh")
+    assert got.prefs_import == "done"
+    assert fresh.read_config().prefs.ci_poll_seconds == 45

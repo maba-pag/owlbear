@@ -76,11 +76,22 @@ def move_roles(store: Store) -> None:
 
 
 def _old_roles(old: Path) -> dict[Role, RoleModel]:
-    """The format-1 profile's role overrides; a damaged profile has none, and ``read_profile`` reports it."""
+    """The format-1 profile's role overrides; a non-format-1 profile has none, and a damaged one is an error.
+
+    A format-1 profile that cannot be read or whose roles are invalid raises ``StoreError``: the move stays
+    retryable and is never marked done with its roles lost.
+    """
+    from owlbear_delivery_next.state_store.store import StoreError  # noqa: PLC0415 - the store imports this module
+
     try:
         data = json.loads(old.read_text())
-        if int(data.get("format", 0)) != 1:
+        if not isinstance(data, dict) or int(data.get("format", 0)) != 1:
             return {}
+    except (OSError, TypeError, ValueError) as exc:
+        msg = f"the old profile could not be read to move its role overrides: {exc}"
+        raise StoreError(msg) from exc
+    try:
         return migrations.ROLES.validate_python(data.get("roles", {}))
-    except AttributeError, OSError, TypeError, ValueError:
-        return {}
+    except ValueError as exc:  # pydantic's ValidationError is a ValueError
+        msg = f"the old profile's role overrides are invalid: {exc}"
+        raise StoreError(msg) from exc

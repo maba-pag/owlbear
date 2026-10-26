@@ -10,6 +10,7 @@ failure, like a raised error.
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+from uuid import uuid4
 
 from owlbear_delivery_next.settings.prefs_import import plan
 from owlbear_delivery_next.state_store import profile_share
@@ -69,8 +70,9 @@ def republish(store: Store) -> None:
 def run(store: Store) -> None:
     """Carry the owner's confirmed legacy preferences into the project layer once; raises on an unpublished step.
 
-    A claim is acquired only when the marker reads ``""`` and the durable claim then carries this run's basis. Any other
-    pending claim, including one a concurrent run made, resumes only from its own durable basis. A completed import
+    A claim is acquired only when the marker reads ``""``: it gets a fresh nonce, and it is the winner only when its
+    publication is confirmed by a fresh read that carries that nonce. Any other pending claim resumes only from its own
+    durable basis. A claim whose publication was not confirmed is published again before any fill. A completed import
     whose publication was refused is published again here.
     """
     from owlbear_delivery_next.state_store.store import StoreError  # noqa: PLC0415 - the store imports its helpers
@@ -82,14 +84,25 @@ def run(store: Store) -> None:
         republish(store)
         return
     if prof.prefs_import == "":
-        _, notice, claimed = store.mark_prefs_import("", "pending", profile_share.config_digest(store.config_path))
+        _, notice, won = store.mark_prefs_import(
+            "", "pending", profile_share.config_digest(store.config_path), uuid4().hex
+        )
         if notice:
             msg = f"the legacy import claim was not published: {notice}"
             raise StoreError(msg)
         prof = store.read_profile()
         if prof is None or prof.prefs_import != "pending":
             return
-        _fill(store, prof, prof.prefs_basis, resumed=not claimed)  # a lost claim never creates the config
+        _fill(store, prof, prof.prefs_basis, resumed=not won)  # a lost claim never creates the config
+    elif profile_share.claim_unconfirmed(store, prof):
+        notice, won = profile_share.confirm_claim(store)
+        if notice:
+            msg = f"the legacy import claim was not published: {notice}"
+            raise StoreError(msg)
+        prof = store.read_profile()
+        if prof is None or prof.prefs_import != "pending":
+            return
+        _fill(store, prof, prof.prefs_basis, resumed=not won)
     else:
         _fill(store, prof, prof.prefs_basis, resumed=True)
     _, notice, _ = store.mark_prefs_import("pending", "done")

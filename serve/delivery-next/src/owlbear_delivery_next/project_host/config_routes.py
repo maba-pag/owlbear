@@ -31,6 +31,7 @@ from owlbear_delivery_next.state_store.store import StoreError, read_layer_bytes
 if TYPE_CHECKING:
     from pathlib import Path
 
+    from owlbear_delivery_next.change_contracts.profile_record import Profile
     from owlbear_delivery_next.project_host.host import Host
     from owlbear_delivery_next.settings.config import Settings
     from owlbear_delivery_next.state_store.store import Store
@@ -118,7 +119,11 @@ def _state(store: Store, notice: str = "") -> dict[str, Any]:
             f"The challenge-round values of the global layer and this machine do not fit together on their own "
             f"({alone[0]}); a project without its own values stops until you fix them there"
         )
-    prof = store.read_profile()
+    try:
+        prof = store.read_profile()
+    except StoreError as exc:  # a profile this build cannot read is shown as its repair notice, never a 500
+        prof = None
+        notice = notice or f"{exc}; repair or replace the profile file, or update OwlBear if it is newer, then reload"
     if not notice and prof is not None and prof.prefs_import == "pending":
         notice = PREFS_REVIEW
     return {
@@ -326,9 +331,17 @@ def _project_notice(store: Store, host: Host, body: Save) -> str:
     return ""
 
 
+def _intent_readable(store: Store) -> Profile | None:
+    """The profile a project save must read before it writes; an unreadable one refuses the save (409)."""
+    try:
+        return store.read_profile()
+    except StoreError as exc:
+        raise HTTPException(409, str(exc)) from exc
+
+
 def _settle_prefs_import(store: Store, *, reviewed: bool) -> None:
     """Mark a pending legacy import reviewed through Settings, then publish a completion that failed earlier."""
-    prof = store.read_profile()
+    prof = _intent_readable(store)
     if prof is None:
         return
     if reviewed and prof.prefs_import in ("", "pending"):  # an explicit review also closes an unclaimed import
@@ -355,6 +368,7 @@ def router(store: Store, host: Host) -> APIRouter:
 
     @routes.put("/config/project")
     def put_project(body: Save) -> dict[str, Any]:
+        _intent_readable(store)  # refused before the write: the import intent it must settle is unknown
         notice = _project_notice(store, host, body)
         if not notice:  # a publication notice leaves the import pending for a retry
             _settle_prefs_import(store, reviewed=body.prefs_reviewed)

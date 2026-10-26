@@ -9,6 +9,7 @@ from owlbear_delivery_next.change_contracts.inbox import IntentItem
 from owlbear_delivery_next.change_contracts.models import Change, Names, Plan, Step, StepKind, Task
 from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.settings import config
+from owlbear_delivery_next.state_store.database import StoreError
 from owlbear_delivery_next.state_store.store import Store
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
@@ -55,7 +56,16 @@ def test_an_unreadable_machine_layer_still_folds_an_owner_pause(store):
 def test_an_invalid_cross_layer_policy_still_folds_an_owner_abandon(store):
     seed(store)
     bad = config.Agent(max_rounds=3, max_findings=10, last_round_at=8, ask_owner_at=7)  # rounds do not hold together
-    store.update_config(lambda cur: cur.model_copy(update={"agents": {"shaper": bad}}))
+    notice = store.save(
+        store.config_path,
+        config.Layer,
+        lambda cur: cur.model_copy(update={"agents": {"shaper": bad}}),
+        "owner",
+        owner=True,
+    )
+    assert notice == ""  # the owner's policy is written, so the fold below meets the invalid policy
+    with pytest.raises(StoreError, match="do not combine"):
+        store.settings()  # the merged policy is invalid: the fold must still fold the owner's abandon over it
     change_after, _ = fold(store, "abandon")
     assert (change_after.intent.abandoned_at, store.read("c1").intent.abandoned_at) == (NOW, NOW)
 

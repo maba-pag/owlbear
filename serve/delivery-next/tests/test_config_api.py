@@ -533,3 +533,43 @@ def test_an_owner_clear_over_http_survives_a_lost_receipt_marker_shared(tmp_path
     cwd = _git_project(tmp_path / "shop")
     monkeypatch.setenv(data_repo.VIEW, str(shared_repo[0]))
     _owner_clears_after_a_lost_marker(cwd, monkeypatch, exc, data_repo.DataRepo(shared_repo[0]))
+
+
+@pytest.mark.parametrize("raw", ["{not json", '{"format": 99, "entries": {}}'], ids=["damaged", "future"])
+def test_a_profile_this_build_cannot_read_is_a_repair_notice_on_settings_not_a_server_error(store, raw):
+    store.root.mkdir(parents=True)
+    (store.root / profile_share.PROFILE).write_text(raw)
+    got = client(store, headers=AUTH).get("/api/next/config")
+    assert got.status_code == 200
+    assert "profile" in got.json()["notice"]
+    assert "repair" in got.json()["notice"]
+
+
+def test_a_machine_save_with_an_unreadable_profile_applies_and_says_so_truthfully(store):
+    store.root.mkdir(parents=True)
+    (store.root / profile_share.PROFILE).write_text("{not json")
+    c = client(store, headers=AUTH)
+    got = c.get("/api/next/config").json()
+    saved = c.put(
+        "/api/next/config/machine",
+        json={
+            "rev": got["machine_rev"],
+            "layer": {"format": F, "agents": {"builder": {"effort": "high", "minutes": 50}}},
+        },
+    )
+    assert saved.status_code == 200
+    assert "profile" in saved.json()["notice"]
+    assert store.machine_path.exists()
+
+
+def test_a_project_save_with_an_unreadable_profile_is_refused_before_it_writes_anything(store):
+    store.root.mkdir(parents=True)
+    (store.root / profile_share.PROFILE).write_text("{not json")
+    c = client(store, headers=AUTH)
+    got = c.get("/api/next/config").json()
+    refused = c.put(
+        "/api/next/config/project",
+        json={"rev": got["project_rev"], "layer": {"format": F, "agents": {"builder": {"effort": "high"}}}},
+    )
+    assert refused.status_code == 409
+    assert not store.config_path.exists()
