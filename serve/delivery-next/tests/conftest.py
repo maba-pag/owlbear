@@ -370,17 +370,48 @@ class Pds:
     """The pages' Porsche Design System controls in Playwright, with the PDS CDN reachable (TD-39, TD-398)."""
 
     CDN = "https://cdn.ui.porsche.com/"
+    _fetched: ClassVar[dict[str, tuple[int, dict[str, str], bytes]]] = {}  # CDN URL -> its answer, per test worker
 
     @classmethod
     def only(cls, page, base: str) -> None:
-        """Let *page* reach the test host and the PDS CDN only; anything else is refused."""
-        page.route("**/*", lambda r: r.continue_() if r.request.url.startswith((base, cls.CDN)) else r.abort())
+        """Let *page* reach the test host and the PDS CDN only; anything else is refused. Routing turns the browser's
+        cache off, so each CDN file is fetched once and then answered from memory, as that cache would: a page a click
+        opens then loads as fast as a browser loads it, not at the CDN's speed of the moment."""
+
+        def route(r) -> None:
+            url = r.request.url
+            if url.startswith(base):
+                return r.continue_()
+            if not url.startswith(cls.CDN):
+                return r.abort()
+            if url not in cls._fetched:
+                got = r.fetch()
+                if not got.ok:
+                    return r.fulfill(response=got)
+                kept = {k: v for k, v in got.headers.items() if k not in ("content-encoding", "content-length")}
+                cls._fetched[url] = (got.status, kept, got.body())
+            status, headers, body = cls._fetched[url]
+            return r.fulfill(status=status, headers=headers, body=body)
+
+        page.route("**/*", route)
 
     @staticmethod
     def modal(page):
         """The newest open ``p-modal`` (one just answered fades out for a moment): its content is slotted, so its text
         and buttons are found from it, not from its dialog."""
         return page.locator("p-modal").filter(has=page.get_by_role("dialog")).last
+
+    @classmethod
+    def answer(cls, page, button: str) -> None:
+        """Click *button* in the newest open ``p-modal``, then wait until its dialog has closed: while it fades out the
+        page behind it is inert, so a fill or a pick there would be lost without an error. A locator, unlike a handle,
+        also ends the wait when the answer opens another page."""
+        from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+        modal = cls.modal(page)
+        modal.evaluate("m => m.setAttribute('data-test-answered', '')")
+        modal.get_by_role("button", name=button).click()
+        expect(page.locator("p-modal[data-test-answered]").get_by_role("dialog")).to_have_count(0)
 
     @staticmethod
     def select(scope, label: str):
