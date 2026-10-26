@@ -1,17 +1,32 @@
 """RUN-03 across R04 maintenance ownership: a real SDK step keeps its lease through a late deadline and late PID."""
 
 import asyncio
+import contextvars
+import shutil
+import time
 from datetime import UTC, datetime
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from owlbear_memory import MemoryCategory, MemoryEngine
 
 from owlbear_delivery_next.change_contracts import tools
+from owlbear_delivery_next.change_contracts.memory_curation_tools import MemoryCurationResult
 from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.local_system import maintenance, processes
+from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.local_system.slots import Slots
+from owlbear_delivery_next.machine_host import curation
 from owlbear_delivery_next.runtimes import loop_owner, maintained, sdk_adapter, sdk_teardown
+from owlbear_delivery_next.runtimes.session_result import Run
+from owlbear_delivery_next.settings import config
+from owlbear_delivery_next.settings.config import GlobalLayer
+from owlbear_delivery_next.state_store import settings_carry
+from owlbear_delivery_next.state_store.store import update_layer
+
+OWNER = contextvars.ContextVar("owner", default="none")
 
 ROOT, CHILD = 4242, 4343
 BIRTH = {ROOT: 111.0, CHILD: 112.0}
@@ -30,8 +45,9 @@ class Clock:
 class World:
     """Synthetic SDK transport: the request ignores cancellation and reports a child PID only after teardown starts."""
 
-    def __init__(self, clock, *, resistant, absent):
+    def __init__(self, clock, *, resistant, absent, payload=PAYLOAD, jump=2.0):
         self.clock, self.resistant, self.absent = clock, resistant, absent
+        self.payload, self.jump = payload, jump
         self.live, self.steps, self.signals, self.accepted = {}, [], [], []
         self.cancels = 0
         self.release = None
@@ -49,9 +65,10 @@ class World:
 
     async def listing(self):
         if not self.accepted:  # teardown's own tasks.list must not submit a second result
-            self.clock.now += 2.0  # the valid result arrives after the one-second session budget
+            self.clock.now += self.jump  # the valid result arrives after the session budget
             st = self.steps[0]
-            _, accepted = st.gate.call(st.cfg.submit, PAYLOAD.model_dump())
+            (st.cfg.worktree / "owned.txt").write_text("the session's output")  # data the session owns
+            _, accepted = st.gate.call(st.cfg.submit, self.payload.model_dump())
             self.accepted.append(accepted)
         if self.resistant:
             while True:
@@ -103,8 +120,8 @@ def bridge(tmp_path, monkeypatch):
 
     monkeypatch.setattr(sdk_adapter._Step, "__init__", spy)  # noqa: SLF001
 
-    def make(*, resistant, absent):
-        world = World(clock, resistant=resistant, absent=absent)
+    def make(*, resistant, absent, payload=PAYLOAD, jump=2.0):
+        world = World(clock, resistant=resistant, absent=absent, payload=payload, jump=jump)
         world.steps = steps
         world.session = SimpleNamespace(
             rpc=SimpleNamespace(tasks=SimpleNamespace(list=world.listing, cancel=world.cancel)),
@@ -203,3 +220,113 @@ def test_identity_aware_absence_after_a_deadline_releases_the_slot(bridge):
     assert owner.read()["sessions"][0]["state"] == "released"
     assert owner.slots.counts("p") == (0, 1, 0)
     assert not owner.retained(str(root))
+
+
+def test_a_late_pid_from_a_delivered_in_bs_context_updates_only_a(tmp_path):
+    owner = manager(Slots(lambda: 2))
+    root_a, root_b = tmp_path / "a", tmp_path / "b"
+    root_a.mkdir()
+    root_b.mkdir()
+    a_pids, late_child, b_pid = {ROOT: BIRTH[ROOT]}, {CHILD: BIRTH[CHILD]}, 5151
+    callbacks = {}
+
+    def run_a(bound):
+        async def main():
+            callbacks["a"] = bound.journal.event  # the run_owned callback that owns A's captured identity
+            bound.journal.event({"event": "pids", "pids": dict(a_pids)})
+            return Run(
+                bound.session_id, ending="deadline", termination=processes.Termination(confirmed=False, unknown=(ROOT,))
+            )
+
+        return loop_owner.run(main())
+
+    assert owner.slots.take("p", "pack:a", 1, 2) == 1
+    held = maintained.run_owned(owner, cfg_for(root_a, []), run_a, project="p", slot="pack:a", kind="pack")
+    assert held.termination.confirmed is False
+
+    def run_b(bound):
+        async def main():
+            assert OWNER.get() == "b"  # B's admission context is live inside the real loop thread
+            bound.journal.event({"event": "pids", "pids": {b_pid: 300.0}})
+            callbacks["a"]({"event": "pids", "pids": dict(late_child)})  # A's delayed PID, delivered from B's context
+            return Run(bound.session_id, ending="result", termination=processes.Termination(confirmed=True))
+
+        return loop_owner.run(main())
+
+    assert owner.slots.take("p", "pack:b", 1, 2) == 1
+    token = OWNER.set("b")
+    try:
+        released = maintained.run_owned(owner, cfg_for(root_b, []), run_b, project="p", slot="pack:b", kind="pack")
+    finally:
+        OWNER.reset(token)
+
+    assert released.termination.confirmed is True
+    leases = {s["workspace"]: s for s in owner.read()["sessions"]}
+    assert leases[str(root_a)]["state"] == "held"
+    assert leases[str(root_b)]["state"] == "released"
+    assert owner.records("p", "pack", "pack:a", {**a_pids, **late_child})  # A holds its own and its late PID
+    assert not owner.records("p", "pack", "pack:a", {b_pid: 300.0})  # B's PID never lands on A
+    assert owner.records("p", "pack", "pack:b", {b_pid: 300.0})
+    assert not owner.records("p", "pack", "pack:b", late_child)  # A's late PID never lands on B
+    assert not owner.retained(str(root_b))
+    assert owner.retained(str(root_a))
+
+    fresh = manager(Slots(lambda: 2, closed=True))
+    fresh.slots.open()
+    assert fresh.retained(str(root_a))
+    assert owner.slots.take("p", "pack:c", 1, 2) == 1  # one of two slots is still A's; B's is free
+    assert owner.slots.take("p", "pack:d", 1, 2) == 0  # the global quota keeps A's slot
+
+
+def curator(root, **changes):
+    """The curator role in Global, written by the production layer writer; a run's settings are never guessed."""
+    if not DataRepo(root).global_path.exists():
+        settings_carry.carry(DataRepo(root))
+
+    def change(glob: GlobalLayer) -> GlobalLayer:
+        agent = glob.agents.get("curator", config.Agent()).model_copy(update=changes)
+        return glob.model_copy(update={"agents": glob.agents | {"curator": agent}})
+
+    update_layer(DataRepo(root).global_path, GlobalLayer, change)
+
+
+@pytest.mark.parametrize(("resistant", "absent", "held"), [(True, None, True), (False, False, False)])
+def test_a_curation_worker_keeps_its_workspace_only_while_its_deadline_lease_is_held(
+    bridge, shared_repo, resistant, absent, held
+):
+    make, _ = bridge
+    data = shared_repo[0]
+    folder = data / "shop" / "memory"
+    folder.mkdir(parents=True)
+    MemoryEngine(folder).save(
+        title="Lesson", content="Lesson: what to know", categories=[MemoryCategory.PROCESS], confidence=0.8,
+        source_agent="builder", scope_agents=[],
+    )  # fmt: skip
+    curator(data, subagents=False, minutes=1)  # one minute: the session budget the fake clock passes
+    world = make(
+        resistant=resistant,
+        absent=absent,
+        payload=MemoryCurationResult(summary="ok", entries=[]),
+        jump=61.0,
+    )
+    slots = Slots(lambda: 1)
+    owner = manager(slots)
+    job = curation.Curation(slots, shared=lambda: DataRepo(data), ownership=owner)
+
+    assert job.start("shop") == ["shop"]
+    for _ in range(400):
+        if world.accepted and job.working() == ([curation.LINGERING] if held else []):
+            break
+        time.sleep(0.02)
+    assert job.working() == ([curation.LINGERING] if held else [])
+
+    assert world.accepted == [False]  # the late valid result is never accepted
+    [lease] = owner.read()["sessions"]
+    workspace = Path(lease["workspace"])
+    assert lease["state"] == ("held" if held else "released")
+    assert owner.retained(str(workspace)) is held
+    assert workspace.exists() is held  # the workspace survives only with the held lease
+    assert (workspace / "owned.txt").exists() is held
+    assert slots.counts(curation.SLOT)[2] == (1 if held else 0)
+    if held:
+        shutil.rmtree(workspace)  # the test's own leftover; production keeps it for the owner to reconcile
