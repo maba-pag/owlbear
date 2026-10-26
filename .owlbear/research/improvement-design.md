@@ -1,13 +1,14 @@
 # Improvement: Design
 
 > **Owning task:** the plan's item 9 (formerly "the watcher"), redesigned with the owner on 2026-10-25
-> **Date:** 2026-10-25
+> **Date:** 2026-10-25 (approved); status 2026-10-26
 > **Question:** How do agents get better from their own work: fewer common mistakes, wrong tool arguments,
 > rabbit holes and local optimums that miss the real intent, without being steered off course?
 > **Status:** the owner's choices of 2026-10-25, after a pilot, a hindsight review of 83 real moments and Sol's
 > challenges (§3); built complete, for Delivery steps and chats, before item 10 (the owner's choice, same day). They replace the live coach of this design's first version and the per-call outside-write watcher
 > of [the earlier draft](delivery-next-watcher-design.md). Catching malicious calls is out of scope for now. Built so
-> far: W1a's feed (#640), phase 1a (#652) and the Primer (#653).
+> far: W1a's feed (#640), phase 1a (#652), the Primer (#653), and slices 1 to 4 and 6's Delivery part (#659 to #668,
+> §8).
 
 ## Names
 
@@ -20,7 +21,8 @@
 | **Retro** | The after-task analysis: reads whole tasks with hindsight, grades the Spotter, proposes lessons and fixes (§5) |
 | **Retro chatlogs** | The kept logs of finished agent conversations (Delivery steps, enrolled chats) that Retro reads (§5) |
 
-"Watcher" was the working name; the role and setting called `watcher` are renamed when the Spotter is built.
+"Watcher" was the working name; the role and setting called `watcher` became `spotter` and the Spotter's settings
+(#662).
 
 The evidence came from two investigations:
 - prior art on live critics, monitors and cross-run learning, cited in §1;
@@ -107,6 +109,8 @@ All settings have no code default; an unset one is an error on the Settings page
 - **steer share:** in live mode, the share of whole Changes and chats whose notes are sent; the rest record only
   (the test below);
 - **intervention cap:** at most this many steering notes per step or chat turn;
+- **interrupt:** steer or stop, what a live `interrupt` verdict does (D-01M5W4DEP9WABMSXN3HEKH30HR); every other note
+  steers; no code default, Global to be set to `steer` when it is built;
 - **verbose:** a bounded rationale with its evidence per look, scoped to the machine, a project or a Change, with an
   expiry. Retro may switch it on within a credit cap and for a named reason, shown on the page; never live mode;
 - **looks:** which looks are on, and the sample rate;
@@ -132,7 +136,23 @@ carries on as without a Spotter.
 - **State change:** W1a's outside writes, publishing, deleting, settings.
 - **Sample:** any completed action with the configured probability.
 
-Sampled and state-change looks stay record-only until Retro shows their class is worth it. The line from §3 holds in
+As built for Delivery steps (#668): the hand-off look starts at the submit call, before Delivery may accept it, over a
+frozen snapshot of a bounded intake of the step's own agent (subagents left out; a resumed session's transcript seeds
+it); at most two looks run at once per step, each reserving 0.5 credits of the day's budget in a locked ledger and
+settling its spend after (an unknown spend counts as 0.5; a look sets no SDK credit cap, since the runtime's minimum is
+30, D-01M5W0HKR9RBAF3G4H8BTZS8E0); a look gets 90 seconds. A look never blocks or changes the step's work or its
+acceptance: its files and model call run beside it. Only the session's end waits, bounded: at most 5 seconds for running
+looks, then they are stopped, with up to 15 seconds more for their teardown and records; stopped looks are recorded as
+skipped. Each record keeps its call and event cutoff, and Delivery's answer to the hand-off is kept beside it in
+`outcomes-<date>.jsonl` as the SDK's result type (`success`, `rejected` when the session had ended, `failure` for a
+submission Delivery refused). A record naming a state change is marked preliminary until the conflict check
+comes with live delivery. The card holds credentials as the agent saw them; only browser context and email addresses
+are stripped (the owner, 2026-10-26: a look sends the model what the agent's session already sent it, and the records
+are temporary and owner-only; D-01M5VXXFBSWVZ0DZ68G1QG4CYG).
+
+Notes from sampled and state-change looks stay record-only until Retro shows their class is worth it; a live
+`interrupt` verdict is the exception and follows the `interrupt` setting without that wait (it still waits, like all
+of live mode, for the steered-versus-silent test). In learning mode every look only records. The line from §3 holds in
 every mode: correct is not enough; the value must clearly exceed the risk of pulling the agent off course.
 
 ### Where
@@ -143,9 +163,18 @@ every mode: correct is not enough; the value must clearly exceed the risk of pul
 - **Delivery hand-off:** an accepted `submit_result` is final (the SDK skips another model round), so the Spotter
   judges the submission before acceptance. When it steers, the tool answers with a non-success note that does not
   count as an invalid submission; the next submission is validated again.
-- **Other Delivery notes:** sent into the session with an explicit `enqueue`, never taken to have stopped an action.
+- **Other Delivery notes:** steer: sent into the running turn (D-01M5W4DEP9WABMSXN3HEKH30HR, replacing TD-55's stop
+  and retry). Only an `interrupt` verdict follows the `interrupt` setting: steer like a note, or stop (abort the turn,
+  then resume it with the note). The Spotter decides what warrants an interrupt by its own judgement, given broad
+  categories of harm that cannot be undone, each with at most a rough example, never a closed list or a confidence
+  threshold; Retro grades its calls (D-01M5W6NGXW27VW024E1B29W3GA). Aborting and resuming a turn is not built yet.
+- **Outside writes:** W1a's reports stay on the Change, leaving out Delivery's own state, temporary files and tool
+  caches; the state-change look sees every outside write, those included. Live, its notes on them stay record-only
+  until Retro shows that class is worth it, but an interrupt follows its setting at once
+  (D-01M5W68MMV8JCVKNKH4VJQ9V14, D-01M5W7C4R6M99MVWHR8X1GMCBT).
 - **Chats:** a `Stop` hook (shipped in the seed and wired by the install, inert unless live) asks the machine host for the note tied to
   that chat's turn, waits a bounded time, takes it only once, drops expired notes and honours `stop_hook_active`.
+  Whether a running chat turn can take a steer before its end is open.
 
 ### The steered-versus-silent test
 A test starts only once Retro's grades of the learning-mode records are high enough for the looks it would steer
@@ -199,26 +228,37 @@ versions).
   project's agent, skill or Delivery change becomes a backlog entry (source `retro`); OwlBear's own becomes an issue
   in its repository for a chat to build. Nothing is edited silently, and a Change's brief bounds what it may change.
 - Every publication outside this machine (cases, proposal evidence, backlog entries, issues, memories) is reviewed,
-  minimised and sanitised; raw cards, chatlogs and records stay on this machine.
+  minimised and sanitised, credentials included; raw cards, chatlogs and records stay on this machine, unmasked.
 
 ## 7. Build order
 
 Each slice is a pull request, with Sol on its plan and its code:
-1. this design;
-2. settings and roles;
-3. Retro chatlogs;
-4. the card builder;
-5. Spotter records and cases;
-6. the Spotter's looks in learning mode, for Delivery and chats;
+1. this design: built (#659, #660);
+2. settings and roles: built (#662);
+3. Retro chatlogs: built (#663);
+4. the card builder: built with 6's Delivery part (#668);
+5. Spotter records and cases: records built (#668); cases next;
+6. the Spotter's looks in learning mode, for Delivery and chats: Delivery built (#668); the chats follower next;
 7. Retro;
 8. the Improvement page;
 9. live delivery and the test machinery.
 
-Then item 10.
+Then item 16 (the amendment design session, TD-422), then item 10.
 
 ## 8. Built work
 
 - W1a (#640): its feed, identity and writer are reused by the Spotter.
 - #647 (shell parsing) is closed.
 - Phase 1a (#652) and the Primer (#653) are built.
+- Settings and roles (#662): the `watcher` role and switch became the `spotter` role and the Spotter's settings
+  (settings format 12); the `retro` and `retro-review` roles; the machine values for budgets, Retro's triggers and
+  enrolled chats; none has a code default.
+- Retro chatlogs (#663): the Change-to-session manifest, each step's `events.jsonl` and saved outputs captured at its
+  end, enrolled-chat discovery and pruning.
+- The Spotter's core (#668): the intake (`improvement/events.py`), the card (`improvement/card.py`), the looks and
+  their records, budget ledger and lifecycle (`improvement/spotter.py`, `runtimes/spotter_look.py`) and the prompt
+  (`improvement/spotter_prompt.md`); `improvement` is a layer between `state_store` and `runtimes`. A live test
+(2026-10-26) found that the runtime refuses a session credit cap under 30; a look now sets none. The machine
+  registry and machine settings moved to `state_store` so a step reads its budget (D-01M5VXXFC28ZFHV7HVDTKFHPVF).
+  A live test on 2026-10-26 ran a real hand-off look after #682: a correct note for 0.07 credits in 7.5 seconds.
 - The pilot's harness and data stay in `.owlbear/scratch/watcher-replay/` (not committed).
