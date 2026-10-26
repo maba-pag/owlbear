@@ -112,7 +112,9 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:  # noq
     if stopped := overlap.starting(change, task):
         store.write(lock, loop.apply(change, stopped, now))
         return
-    watched.needed(settings)  # before anything is recorded: an unset Spotter setting asks, leaving no open span
+    budget = watched.needed(
+        settings
+    )  # before anything is recorded: an unset Spotter setting asks, leaving no open span
     review.started(change, task, path, settings)  # one snapshot, checked before anything is taken (TD-208, TD-179)
     answer, accepted, repair, resume = session_choice.opening(store, lock, change, task)  # unset settings take nothing
     s.started_at = now
@@ -172,7 +174,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:  # noq
             ui=change.brief.ui,
             helpers=_helpers(change, at, asked),
             preparing=ctx,
-            watch=watched.watching(store, lock, session, settings, at, _out),  # its master switch (W1a)
+            watch=watched.watching(store, lock, session, settings, at, _out, budget),  # its master switch (W1a)
         )
 
     made = (lambda at: curation_build.curator(config(at), change, settings)) if curated else config

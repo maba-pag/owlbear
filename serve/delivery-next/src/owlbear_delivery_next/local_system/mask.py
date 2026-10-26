@@ -11,13 +11,13 @@ _HEADER_NAME = re.compile(rf"(?i){_NAME}|cookie|session")
 _USERINFO = re.compile(r"(?i)\b(?P<scheme>[a-z][a-z0-9+.-]{0,31}://)[^/\s@]+@")  # a bounded scheme: linear time
 _GITHUB = re.compile(r"\b(?:gh[pousr]_|github_pat_)\w+")
 _ASSIGN = re.compile(
-    rf"(?i)(?<![\w.-])(?P<k>[\w.-]*{_NAME}(?:_\w*)?)(?P<kq>[\"']?)(?P<s>\s*[=:]\s*)"
+    rf"(?i)(?P<k>{_NAME}(?:_\w{{0,64}})?)(?P<kq>[\"']?)(?P<s>\s*[=:]\s*)"  # from the name on, a bounded suffix: linear
     r"(?P<v>\"[^\"]*\"|'[^']*'|[^\s\"']+)"
 )
 _BLOB = re.compile(r"(?P<s>[=:]\s*)(?P<q>[\"']?)(?!//)[A-Za-z0-9+/_-]{32,}={0,2}")
 _BEARER = re.compile(r"(?i)\bbearer\s+(?!\*\*\*)\S+")
 SECRET_NAME = _NAME  # what names a credential: a key, a field or a flag
-_SECRET_KEY = re.compile(rf"(?i){_NAME}")
+_SECRET_KEY = re.compile(rf"(?i){_NAME}|cookie|session")  # a field holding a credential, as a header names one
 
 
 def secret_key(name: str) -> bool:

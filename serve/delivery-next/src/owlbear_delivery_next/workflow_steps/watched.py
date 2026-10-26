@@ -36,18 +36,15 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.state_store.store import Lock, Store
 
 
-def watching(  # noqa: PLR0913, PLR0917 - the session's Change, step, settings and folder, and the runner's log
-    store: Store, lock: Lock, step: str, settings: Settings, at: Path, note: Callable[[str], None]
+def watching(  # noqa: PLR0913, PLR0917 - the session's Change, step, settings and folder, the runner's log, budget
+    store: Store, lock: Lock, step: str, settings: Settings, at: Path, note: Callable[[str], None], budget: int | None
 ) -> watch_feed.Watching | None:
     """The watcher of a session of *lock*'s Change in *at*; None when the Spotter's mode is ``off``.
 
-    *note* writes a line to the runner's log, where what the database could not take is told.
-
-    Raises:
-        SettingsUnset: No layer sets the Spotter's mode, or, when it is on, another of its settings, its role or the
-            machine's Spotter budget.
+    *note* writes a line to the runner's log, where what the database could not take is told. *budget* is what
+    ``needed`` returned before the step recorded anything (None: the mode is off), so nothing is read again here.
     """
-    if needed(settings) is None:
+    if budget is None:
         return None
     store.db.check()  # the writer's bounded writes need the database open
     home, changes = Path.home(), store.root / "changes"
@@ -61,7 +58,7 @@ def watching(  # noqa: PLR0913, PLR0917 - the session's Change, step, settings a
     tmp = Path(os.environ["TMPDIR"]) if os.environ.get("TMPDIR") else None
     places = watch_policy.Places(tuple(dict.fromkeys(guarded)), (changes / lock.slug,), exempt, home, tmp)
     writer = partial(watch_reports.Writer, store.db, lock, note=note)
-    return watch_feed.Watching(lock.slug, step, places, writer, spot(store, lock, step, settings))
+    return watch_feed.Watching(lock.slug, step, places, writer, spot(store, lock, step, settings, budget))
 
 
 def needed(settings: Settings) -> int | None:
@@ -80,13 +77,8 @@ def needed(settings: Settings) -> int | None:
     return budget
 
 
-def spot(store: Store, lock: Lock, step: str, settings: Settings) -> spotter.Context:
-    """What the Spotter's looks at a session of *lock*'s Change get; its mode is on.
-
-    Raises:
-        SettingsUnset: A Spotter setting, its role or the machine's Spotter budget is unset.
-    """
-    budget = needed(settings) or 0
+def spot(store: Store, lock: Lock, step: str, settings: Settings, budget: int) -> spotter.Context:
+    """What the Spotter's looks at a session of *lock*'s Change get; its mode is on and ``needed`` gave *budget*."""
     s, role, gaps = settings.spotter, settings.agent("spotter"), []
     try:
         change = store.read(lock.slug)

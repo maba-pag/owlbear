@@ -73,7 +73,7 @@ def _evidence(actions: list[dict[str, Any]]) -> list[dict[str, Any]]:
     out, used = [], 0
     for a in reversed(actions[-40:]):
         tool, args = a.get("tool", ""), a.get("args", "")
-        why = ("failed" if a.get("ok") is False else "test" if TEST.search(args) else "edit" if tool in EDITS
+        why = ("failed" if a.get("ok") is False else "edit" if tool in EDITS else "test" if TEST.search(args)
                else "wait" if tool in WAITS or WAIT.search(args) else "")  # fmt: skip
         if not why:
             continue

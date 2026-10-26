@@ -53,7 +53,9 @@ def as_dict(ev: Any) -> dict[str, Any]:  # noqa: ANN401 - an SDK event object or
 CUT = " [...] "
 RAW = 65536  # characters cleaned whole, on the step's loop; a longer text is omitted: no cut of it is known safe
 EMAIL = re.compile(r"(?<![\w.+-])[\w.+-]+@[\w-]+\.[\w.-]+")  # tried only where a word starts: linear
-FLAG = re.compile(rf"(?i)(?<!\S)(?P<f>--?[\w-]*{SECRET_NAME}[\w-]*)(?P<s>\s+)(?P<v>\"[^\"]*\"|'[^']*'|[^\s-]\S*)")
+FLAG = re.compile(
+    rf"(?i)(?<!\S)(?P<f>--?[\w-]{{0,64}}{SECRET_NAME}[\w-]{{0,64}})(?P<s>\s+)(?P<v>\"[^\"]*\"|'[^']*'|[^\s-]\S*)"
+)
 PROTECT = re.compile(r"(?:/(?:Users|private|var|tmp|Library|home)/[^\s\"'`:;,)\]}]+)|\b[0-9a-f]{40}\b")
 
 
@@ -114,8 +116,7 @@ def kept_text(value: object, n: int) -> str:
     if not isinstance(value, str):
         size = len(_text(value))
         return omitted(size) if size > RAW else clip(_text(_scrubbed(json.loads(_text(value)))), n)
-    s = no_browser(value)
-    return omitted(len(s)) if len(s) > RAW else clip(clean(s), n)
+    return omitted(len(value)) if len(value) > RAW else clip(clean(value), n)
 
 
 def result_text(data: dict[str, Any]) -> Any:  # noqa: ANN401 - a text, or a structured error as given

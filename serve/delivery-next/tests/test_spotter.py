@@ -283,19 +283,19 @@ def test_the_runner_gives_the_look_its_settings_open_work_and_decisions(tmp_path
     store.write(Lock("c1"), Change(slug="c1", plan=plan))
     settings = resolve(None, Layer())
     with step_decisions.using(["## Decisions in force", "- D1: keep it"]):
-        got = watched.spot(store, Lock("c1"), "build", settings)
+        got = watched.spot(store, Lock("c1"), "build", settings, watched.needed(settings))
     assert (got.project, got.change, got.looks, got.budget, got.model, got.open_work) == (
         "proj", "c1", ("hand-off",), 50, settings.agents["spotter"].model, ("two",))  # fmt: skip
     assert got.decisions == ("## Decisions in force", "- D1: keep it")
     unset = resolve(None, Layer(spotter=Spotter(mode="learning")))
     unset.missing.append("spotter.looks")
     with pytest.raises(SettingsUnset, match=r"spotter\.looks"):
-        watched.spot(store, Lock("c1"), "build", unset)
+        watched.needed(unset)
     from owlbear_delivery_next.state_store import machine_settings  # noqa: PLC0415
 
     monkeypatch.setattr(machine_settings, "BASE", None)
     with pytest.raises(SettingsUnset, match="spotter_budget"):
-        watched.spot(store, Lock("c1"), "build", settings)
+        watched.needed(settings)
 
 
 def test_a_look_is_one_toolless_session_noted_in_the_chatlogs_manifest(monkeypatch) -> None:
@@ -825,7 +825,11 @@ def test_a_look_the_runtime_reports_as_free_costs_nothing(monkeypatch) -> None:
     assert asyncio.run(REAL_LOOK({}, ctx())) == ('{"verdict": "silent"}', 0.0)
 
 
-@pytest.mark.parametrize("unit", ["d", "a.", "--key ", "https://", "<browser_context>", "</browser_context>", '{"k": '])
+SHAPES = ["d", "a.", "--key ", "https://", "<browser_context>", "</browser_context>", '{"k": ', "key_", "--key-",
+          "password.", "a@", "x="]  # fmt: skip
+
+
+@pytest.mark.parametrize("unit", SHAPES)
 def test_cleaning_the_largest_text_takes_linear_time_whatever_its_shape(unit: str) -> None:
     import time  # noqa: PLC0415
 
@@ -833,3 +837,20 @@ def test_cleaning_the_largest_text_takes_linear_time_whatever_its_shape(unit: st
     began = time.monotonic()
     events.kept_text(text, events.RESULT)
     assert time.monotonic() - began < 1  # about 0.03 s here; a quadratic pattern took seconds
+
+
+def test_cookie_fields_are_credentials_and_an_edit_mentioning_tests_keeps_its_change() -> None:
+    kept = Kept()
+    kept.add(started("c1", "fetch", {"headers": {"Cookie": "sessionid=spotter_canary_session_7d2a"}}))
+    change = {"path": "/Users/x/t.py", "old_str": "def test_a():", "new_str": "@pytest.mark.skip\ndef test_a():"}
+    kept.add(started("e1", "edit", change))
+    kept.add(done("e1", "ok"))
+    built = card.build(kept.snapshot(), {"at": "2026-10-26T10:01:00+00:00"}, {})
+    assert "spotter_canary" not in json.dumps(built)
+    [edit] = [e for e in built["evidence"] if e["tool"] == "edit"]
+    assert (edit["why"], "@pytest.mark.skip" in edit["output"]) == ("edit", True)
+
+
+def test_a_long_key_still_has_its_value_masked() -> None:
+    long_key = "MY_" + "VERY_" * 30 + "PASSWORD"
+    assert "hunter2" not in events.clean(f"export {long_key}=hunter2")
