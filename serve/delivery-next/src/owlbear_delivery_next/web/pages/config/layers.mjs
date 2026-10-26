@@ -86,9 +86,9 @@ function changes(layer) {
 }
 
 // Confirms a pending legacy import's Merge and cleanup preferences as reviewed, with no edit: the saved values stand.
+// The review is the owner's only once the save is confirmed; a cancel leaves any earlier review intent as it was.
 export function reviewPrefs() {
-  state.prefsReview = true;
-  return save();
+  return saveLayer(true);
 }
 
 export function pendingLine() {
@@ -169,7 +169,11 @@ export async function reload() {
   }
 }
 
-export async function save() {
+export function save() {
+  return saveLayer(false);
+}
+
+async function saveLayer(review) {
   if (state.saving || !state.loaded) return;
   const roles = Object.keys(state.loaded.settings.agents);
   const wrong = roles.flatMap((r) => [mismatch(r), tierMismatch(r)]).filter(Boolean);
@@ -199,6 +203,7 @@ export async function save() {
     after: "Change them back here at any time.",
     instead: "Your edits stay unsaved on this page.",
   }))) return;
+  if (review) state.prefsReview = true;  // confirmed: from now on it is sent until it is published
   state.saving = true;
   state.status = "Saving…";
   show();
