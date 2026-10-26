@@ -328,6 +328,8 @@
 - [Browser core](../serve/browser/README.md)
 - [Web content](../serve/web-content/README.md)
 - [Tools](../serve/tools/README.md)
+- [project README](../README.md)
+- [contributing guide](../CONTRIBUTING.md)
 - [setup guide](../setup/setup-guide.md)
 - [Operating OwlBear](../setup/operating-owlbear.md)
 
