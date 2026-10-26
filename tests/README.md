@@ -30,7 +30,7 @@ uv run pytest tests/test_ci_workflows.py -q
 ```
 
 A focused run should report the selected tests and a zero exit status. If collection or imports
-fail, run the locked workspace setup from the [development README](../README.md) before treating a
+fail, run the locked workspace setup from the [contributing guide](../CONTRIBUTING.md) before treating a
 behavioral failure as a product defect.
 
 ## What is not here
