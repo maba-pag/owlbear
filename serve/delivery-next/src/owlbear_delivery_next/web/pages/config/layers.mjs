@@ -13,7 +13,11 @@ function saved(layer, key) {
   }
   if (key === "widths") return (loaded[layer]?.widths ?? []).join(", ");
   if (["design_failures", "sessions", "curator_threshold"].includes(key)) return String(loaded[layer]?.[key] ?? "");
-  if (key === "pr_labels" || key === "pr_marker" || key === "watcher") {
+  if (key.startsWith("spot.")) {  // the Spotter's settings (design §4)
+    const v = loaded[layer]?.spotter?.[key.slice(5)];
+    return v === null || v === undefined ? "" : Array.isArray(v) ? v.join(", ") : String(v);
+  }
+  if (key === "pr_labels" || key === "pr_marker") {
     const v = loaded[layer]?.[key];
     if (v === null || v === undefined) return "";
     return key === "pr_labels" ? v.join(", ") || "none" : v ? "on" : "off";
@@ -21,12 +25,19 @@ function saved(layer, key) {
   const [role, field] = key.split(".");
   const value = role === "final_review" ? loaded[layer]?.final_review?.[field]
     : role === "machine" ? loaded[layer]?.machine?.[field] : loaded[layer]?.agents?.[role]?.[field];
-  return value === null || value === undefined ? "" : String(value);
+  if (value === null || value === undefined) return "";
+  return Array.isArray(value) ? value.join(", ") || "none" : String(value);
 }
+
+// A list's text as typed, shown only while its items are what the field holds now: an edit's, else the saved
+// ones; display only, never an edit itself (so a reload or a conflict never turns old text into one).
+const typing = { project: {}, machine: {}, global: {} };
 
 // The edited layer's value of *key*: the draft as typed, else the saved value.
 export function own(key) {
-  return key in drafts[state.layer] ? drafts[state.layer][key] : saved(state.layer, key);
+  const value = key in drafts[state.layer] ? drafts[state.layer][key] : saved(state.layer, key);
+  const text = typing[state.layer][key];
+  return text !== undefined && canonical(key, text) === canonical(key, value) ? text : value;
 }
 
 export function inherited() {
@@ -40,7 +51,8 @@ export function edit(key, raw, literal = false) {
   // even a no-op clear is a review
 if (state.layer === "project" && key.startsWith("prefs.")) state.prefsReview = true;
   const value = !literal && !NUMBERS.includes(field) && raw === INHERIT ? "" : raw;
-  if (value.trim() === saved(state.layer, key)) delete drafts[state.layer][key];
+  if (LISTS.includes(key)) typing[state.layer][key] = value;  // shown as typed: a comma, a space
+  if (canonical(key, value) === saved(state.layer, key)) delete drafts[state.layer][key];
   else drafts[state.layer][key] = value;
   show();
 }
@@ -53,9 +65,17 @@ function prefValue(field, value) {
   return value;
 }
 
-// The edited layer's drafts that differ from what is saved, trimmed as they will be sent.
+// A list's text as it is saved: items trimmed, empty ones dropped, joined alike; other text trimmed.
+const LISTS = ["spot.looks", "machine.enrolled_chats"];
+function canonical(key, text) {
+  const value = text.trim();
+  if (!LISTS.includes(key) || value === "none") return value;
+  return value.split(",").map((i) => i.trim()).filter(Boolean).join(", ");
+}
+
+// The edited layer's drafts that differ from what is saved, compared as they will be sent.
 function dirty(layer) {
-  return Object.entries(drafts[layer]).filter(([key, value]) => value.trim() !== saved(layer, key));
+  return Object.entries(drafts[layer]).filter(([key, value]) => canonical(key, value) !== saved(layer, key));
 }
 
 // Each unsaved edit of *layer* as "field: saved → new"; a blank value inherits.
@@ -104,7 +124,14 @@ function edited(layer) {
       next[key] = !value ? null : value === "none" ? [] : value.split(",").map((l) => l.trim()).filter(Boolean);
       continue;
     }
-    if (key === "pr_marker" || key === "watcher") {
+    if (key.startsWith("spot.")) {
+      const field = key.slice(5), mine = { ...(next.spotter ?? {}) };
+      mine[field] = value === "" ? null : NUMBERS.includes(field) ? (/^\d+$/.test(value) ? Number(value) : value)
+        : field === "looks" ? value.split(",").map((l) => l.trim()).filter(Boolean) : value;
+      next.spotter = Object.values(mine).some((v) => v !== null) ? mine : null;
+      continue;
+    }
+    if (key === "pr_marker") {
       next[key] = value ? value === "on" : null;
       continue;
     }
@@ -112,7 +139,9 @@ function edited(layer) {
     const number = !NUMBERS.includes(field) || value === "" ? null : /^\d+$/.test(value) ? Number(value) : value;
     if (role === "machine") {  // Global's machine settings (2026-10-23): "true"/"false" for the switches
       const flag = value === "" ? null : value === "true";
-      const mine = { ...(next.machine ?? {}), [field]: field.startsWith("update_") ? flag : number ?? (value || null) };
+      const list = value === "" ? null : value === "none" ? [] : value.split(",").map((f) => f.trim()).filter(Boolean);
+      const mine = { ...(next.machine ?? {}), [field]: field.startsWith("update_") ? flag
+        : field === "enrolled_chats" ? list : number ?? (value || null) };
       next.machine = Object.values(mine).some((v) => v !== null) ? mine : null;
       continue;
     }

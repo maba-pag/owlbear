@@ -21,10 +21,13 @@ from owlbear_delivery_next.change_contracts.visual_records import (
     DesignFailures,  # noqa: TC001 - pydantic resolves it at runtime
 )
 from owlbear_delivery_next.github.provider import MergeMethod  # noqa: TC001 - pydantic resolves it at runtime
+from owlbear_delivery_next.settings import improvement
+from owlbear_delivery_next.settings.improvement import Spotter
 
-CONFIG_FORMAT = 12  # 3 renamed the designer to design-judge (TD-169); 4 minutes; 5 PR labels; 6 subagents; 7 sessions;
+CONFIG_FORMAT = 13  # 3 renamed the designer to design-judge (TD-169); 4 minutes; 5 PR labels; 6 subagents; 7 sessions;
 # 8 the test reviewer and curator roles; 9 the watcher's role and switch; 10 no code defaults; 11 Global's machine part;
-# 12 the five unset-by-default preferences and their one-time import marker
+# 12 the watcher became the Spotter (role and settings), with the retro roles (2026-10-25);
+# 13 the five unset-by-default preferences and their one-time import marker
 CARRIED_FORMAT = 10  # a Global layer below it has not had the built-in values carried in (``settings_carry.carry``)
 ROLES: tuple[Role, ...] = get_args(Role.__value__)
 RUNTIMES: tuple[str, ...] = ("sdk", "window")
@@ -113,7 +116,7 @@ class Layer(Record):
     pr_labels: list[str] | None = None  # TD-308: on every PR OwlBear opens; a project's list replaces the global one
     pr_marker: bool | None = None  # TD-308: the "Opened by OwlBear Delivery" line, switched per project
     sessions: int | None = Field(default=None, ge=1)  # TD-336: agent sessions at once in a project, layered
-    watcher: bool | None = None  # the watcher judges agent steps; on in Global, a project may turn it off (2026-10-23)
+    spotter: Spotter | None = None  # Improvement's Spotter (design §4); a project may set its own, e.g. mode off
 
     @field_validator("format")
     @classmethod
@@ -170,6 +173,19 @@ class MachineValues(Record):
     curate_after_merge: Curate | None = None  # automatic memory curation per trigger (the owner, 2026-10-23)
     curate_when_idle: Curate | None = None
     sessions: int | None = Field(default=None, ge=1)  # TD-336: agent sessions at once on the machine, all projects
+    spotter_budget: int | None = Field(default=None, ge=0)  # Improvement (design §4): credits a day for the Spotter
+    retro_budget: int | None = Field(default=None, ge=0)  # credits a day for Retro
+    retro_verbose_cap: int | None = Field(default=None, ge=0)  # credits a day Retro may spend turning verbose on
+    retro_after_change: Curate | None = None  # Retro after a Change ends, like curation's triggers
+    retro_when_idle: Curate | None = None  # Retro over finished enrolled chats when idle
+    enrolled_chats: list[str] | None = None  # workspace folders whose chats the Spotter and Retro may read; [] is none
+
+    @field_validator("enrolled_chats")
+    @classmethod
+    def _folders(cls, v: list[str] | None) -> list[str] | None:
+        if v is not None and (len(set(v)) < len(v) or any(not x.startswith("/") or x != x.strip() for x in v)):
+            raise ValueError("enrolled chats are distinct absolute workspace folders")  # noqa: EM101, TRY003
+        return v
 
 
 class GlobalLayer(WideLayer):
@@ -210,7 +226,7 @@ class Effective(Record):
 
 
 LOOPED: tuple[Role, ...] = ("shaper", "planner", "builder", "updater")  # whose work runs a challenge loop (TD-209)
-UNTIMED: tuple[Role, ...] = ("shaper", "watcher")  # the shaping chat has no session limit; the watcher is no session
+UNTIMED: tuple[Role, ...] = ("shaper", "spotter")  # the shaping chat has no session limit; a Spotter look is no session
 
 
 def used(role: Role) -> tuple[str, ...]:
@@ -247,8 +263,8 @@ class Settings(Record):
     pr_labels: list[str] | None = None
     pr_marker: bool | None = None
     sessions: int | None = None
-    watcher: bool | None = None
     prefs: Prefs = Field(default_factory=Prefs)  # R15: each field None where no layer sets it
+    spotter: Spotter = Field(default_factory=Spotter)
     curator_threshold: int | None = None
     sources: dict[str, Source]
     missing: list[str] = Field(default_factory=list)
@@ -316,8 +332,9 @@ def resolve(glob: GlobalLayer | None, project: Layer, machine: MachineLayer | No
     }  # fmt: skip
     general = {
         key: _pick(key, sources, *((s, getattr(layer, key)) for s, layer in layers))
-        for key in ("widths", "design_failures", "pr_labels", "pr_marker", "sessions", "watcher")
+        for key in ("widths", "design_failures", "pr_labels", "pr_marker", "sessions")
     }
+    spotter, unset = improvement.resolve(lambda key, *values: _pick(key, sources, *values), layers)
     for key in ("visible", "curator_threshold"):  # global only (TD-35, TD-400)
         general[key] = _pick(key, sources, *((s, getattr(layer, key, None)) for s, layer in wide if s != "machine"))
     prep = _pick("preparations", sources, ("project", project.preparations), ("default", []))
@@ -339,9 +356,11 @@ def resolve(glob: GlobalLayer | None, project: Layer, machine: MachineLayer | No
     missing += [k for k, v in general.items() if v is None and k != "visible"]
     missing += [f"prefs.{k}" for k, v in prefs.items() if v is None]
     missing += [f"final_review.{n}" for n, v in final.items() if v is None]
+    missing += unset
     return Settings(
         **general,
         prefs=Prefs.model_validate(prefs),
+        spotter=spotter,
         agents=agents,
         roles=roles,
         runtimes=runtimes,

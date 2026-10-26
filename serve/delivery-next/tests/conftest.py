@@ -101,8 +101,28 @@ def _carried_settings(monkeypatch):
         ci_start_window_seconds=300,
         ask_before_merge=False,
     )
-    monkeypatch.setattr(config, "BASE", carried.layer().model_copy(update={"prefs": prefs}))
-    monkeypatch.setattr(machine_settings, "BASE", carried.MACHINE)
+    monkeypatch.setattr(config, "BASE", complete_layer().model_copy(update={"prefs": prefs}))
+    monkeypatch.setattr(machine_settings, "BASE", carried.MACHINE.model_copy(update=IMPROVEMENT_MACHINE))
+
+
+IMPROVEMENT_MACHINE = {  # tests only: settings added after the carry start unset in production (2026-10-25)
+    "spotter_budget": 50, "retro_budget": 50, "retro_verbose_cap": 5, "retro_after_change": "on",
+    "retro_when_idle": "on", "enrolled_chats": [],
+}  # fmt: skip
+
+
+def complete_layer():
+    """The carried values plus test values for what came later: the Spotter's settings and the retro roles."""
+    from owlbear_delivery_next.settings import carried  # noqa: PLC0415
+    from owlbear_delivery_next.settings.improvement import Spotter  # noqa: PLC0415
+
+    base = carried.layer()
+    spotter = Spotter(mode="learning", steer_share=0, intervention_cap=1, verbose="off", looks=["hand-off"])
+    agents = base.agents | {
+        role: base.agents["curator"].model_copy(update={"model": "gpt-6.1-sol", "effort": "medium"})
+        for role in ("retro", "retro-review")
+    }
+    return base.model_copy(update={"spotter": spotter, "agents": agents})
 
 
 @pytest.fixture(autouse=True)

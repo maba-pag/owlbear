@@ -112,7 +112,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:  # noq
     if stopped := overlap.starting(change, task):
         store.write(lock, loop.apply(change, stopped, now))
         return
-    settings.need("watcher")  # before anything is recorded: an unset switch asks the owner, leaving no open span
+    settings.need("spotter.mode")  # before anything is recorded: an unset mode asks the owner, leaving no open span
     review.started(change, task, path, settings)  # one snapshot, checked before anything is taken (TD-208, TD-179)
     answer, accepted, repair, resume = session_choice.opening(store, lock, change, task)  # unset settings take nothing
     s.started_at = now

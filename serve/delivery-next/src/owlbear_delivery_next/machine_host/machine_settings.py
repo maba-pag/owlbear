@@ -33,6 +33,12 @@ class Resolved(Record):
     curate_after_merge: Literal["off", "on", "paused"] | None = None
     curate_when_idle: Literal["off", "on", "paused"] | None = None
     sessions: int | None = None
+    spotter_budget: int | None = None
+    retro_budget: int | None = None
+    retro_verbose_cap: int | None = None
+    retro_after_change: Literal["off", "on", "paused"] | None = None
+    retro_when_idle: Literal["off", "on", "paused"] | None = None
+    enrolled_chats: list[str] | None = None
     sources: dict[str, Literal["machine", "global", "default"]] = Field(default_factory=dict)
     missing: list[str] = Field(default_factory=list)
     shared: dict[str, Any] = Field(default_factory=dict)  # Global's values, for the page's "inherit (…)"

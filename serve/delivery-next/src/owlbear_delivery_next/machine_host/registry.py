@@ -29,8 +29,9 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
 
 MACHINE, LOCK = project_home.MACHINE, "machine.lock"
-MACHINE_FORMAT = 6  # 2: the machine's own settings (TD-243, TD-288, TD-300); 3: its sessions (TD-336); 4: `active`;
-# 5: one curation setting per trigger; 6: settings inherit Global's and were moved there once (the owner, 2026-10-23)
+MACHINE_FORMAT = 7  # 2: the machine's own settings (TD-243, TD-288, TD-300); 3: its sessions (TD-336); 4: `active`;
+# 5: one curation setting per trigger; 6: settings inherit Global's and were moved there once (the owner, 2026-10-23);
+# 7: Improvement's machine settings: the budgets, Retro's triggers and the enrolled chats (2026-10-25)
 STALE = "the machine settings changed since this page loaded them"
 
 

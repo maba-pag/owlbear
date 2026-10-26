@@ -8,7 +8,8 @@ export const SOURCES = { default: "built-in default", global: "global", machine:
 export const LAYERS = { project: "This project", machine: "This machine", global: "All projects" };
 export const ROUNDS = [["max_rounds", "Rounds at most"], ["max_findings", "New findings per round at most"],
   ["last_round_at", "Last round at or below"], ["ask_owner_at", "Ask you at or above"]];  // TD-209
-export const NUMBERS = [...ROUNDS.map(([f]) => f), "minutes", "sessions", "curator_threshold"];  // whole numbers
+export const NUMBERS = [...ROUNDS.map(([f]) => f), "minutes", "sessions", "curator_threshold", "steer_share",
+  "intervention_cap", "sample_rate", "spotter_budget", "retro_budget", "retro_verbose_cap"];  // whole numbers
 export const LOOPS = [["shaper", "Brief challenges (shaper)"], ["planner", "Plan challenges (planner)"],
   ["builder", "Task reviews (builder)"], ["final_review", "Final review"],
   ["updater", "Design pack updates (updater)"]];
@@ -35,6 +36,7 @@ export const state = {
   machine: null, others: [], unread: [],  // the machine's values and the other projects' settings (TD-243)
   everything: false,  // the overview shows every setting, not only those a project sets apart (TD-295)
   machineDraft: null, machineSaving: false,  // the machine's settings as edited, before they are saved
+  machineText: null,  // a list setting's text as typed, until a save
   machineWrites: 0,  // counts machine saves, so a read that started before one never shows older values
   // Owner edited or cleared a project Merge and cleanup preference; kept until a save publishes.
   prefsReview: false,
