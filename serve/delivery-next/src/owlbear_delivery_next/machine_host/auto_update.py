@@ -14,8 +14,9 @@ import threading
 import time
 from typing import TYPE_CHECKING, Any
 
-from owlbear_delivery_next.machine_host import machine_settings, registry, versions
+from owlbear_delivery_next.machine_host import versions
 from owlbear_delivery_next.machine_host.update import ATTEMPTS
+from owlbear_delivery_next.state_store import machine_settings, registry
 
 if TYPE_CHECKING:
     from collections.abc import Callable

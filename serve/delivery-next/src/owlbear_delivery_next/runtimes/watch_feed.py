@@ -24,7 +24,9 @@ from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.change_contracts import watch_policy
 from owlbear_delivery_next.change_contracts.permissions import view
+from owlbear_delivery_next.improvement import spotter
 from owlbear_delivery_next.local_system.mask import redact
+from owlbear_delivery_next.runtimes import spotter_look
 from owlbear_delivery_next.state_store import watch_reports
 
 if TYPE_CHECKING:
@@ -54,6 +56,7 @@ class Watching:
     step: str
     places: watch_policy.Places
     writer: Callable[[], watch_reports.Writer]
+    spot: spotter.Context | None = None  # the Spotter's looks at this session (Improvement design §4), if any
 
 
 @dataclass
@@ -80,10 +83,21 @@ class Feed:
         self.calls: dict[tuple[str, str], _Seen] = {}
         self.launched: dict[str, str] = {}  # launcher call id to the subagent it started, as this feed saw it
         self.open = True
+        self.spotter: spotter.Spotter | None = None
+        if watching.spot is not None:
+            try:
+                self.spotter = spotter.Spotter(watching.spot, session, spotter_look.judged)
+            except Exception as exc:  # noqa: BLE001 - without its Spotter the watcher still watches
+                sys.stderr.write(f"spotter {watching.slug}: not started ({type(exc).__name__}: {exc})\n")
         self.writer = watching.writer()
 
     def seen(self, kind: str, ev: Any) -> None:  # noqa: ANN401 - an SDK session event
-        """Observe one event; a start or a permission request updates its call's report."""
+        """Observe one event; a start or a permission request updates its call's report; the Spotter takes it in."""
+        if self.spotter is not None and self.open:
+            try:
+                self.spotter.seen(ev)
+            except Exception as exc:  # noqa: BLE001 - a look never ends the step
+                sys.stderr.write(f"spotter {self.watching.slug}: {type(exc).__name__}: {exc}\n")
         if kind == LAUNCHED:
             self._launched(ev)
             return
@@ -213,8 +227,14 @@ async def around[T](feed: Feed | None, work: Awaitable[T]) -> T:
 
 
 async def _closed(feed: Feed) -> bool:
-    """Close *feed* in a thread, whatever cancels the caller meanwhile; whether it was cancelled."""
-    closing, cancelled = asyncio.ensure_future(asyncio.to_thread(feed.close)), False
+    """Close *feed* in a thread after its Spotter's looks end (bounded), whatever cancels the caller; whether it was."""
+    cancelled = False
+    if feed.spotter is not None:
+        try:
+            await spotter.through(asyncio.ensure_future(feed.spotter.drain()))
+        except asyncio.CancelledError:
+            cancelled = True
+    closing = asyncio.ensure_future(asyncio.to_thread(feed.close))
     while not closing.done():
         try:
             await asyncio.shield(closing)
@@ -222,6 +242,15 @@ async def _closed(feed: Feed) -> bool:
             cancelled = True
     closing.result()
     return cancelled
+
+
+def spotted(feed: Feed | None, act: Callable[[spotter.Spotter], None]) -> None:
+    """Tell the session's Spotter, if any: a hand-off, its outcome or a resumed history; never ends the step."""
+    if feed is not None and feed.spotter is not None:
+        try:
+            act(feed.spotter)
+        except Exception as exc:  # noqa: BLE001 - a look never ends the step
+            sys.stderr.write(f"spotter {feed.watching.slug}: {type(exc).__name__}: {exc}\n")
 
 
 def opened(watching: Watching | None, own: Path, session: Callable[[], str], agents: Watch) -> Feed | None:

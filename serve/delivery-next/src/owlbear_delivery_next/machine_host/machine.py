@@ -18,11 +18,10 @@ from typing import TYPE_CHECKING, Any
 from owlbear_delivery_next.change_flow.status import RESUME, status
 from owlbear_delivery_next.local_system import data_repo
 from owlbear_delivery_next.local_system.slots import Slots
-from owlbear_delivery_next.machine_host import machine_settings, registry
 from owlbear_delivery_next.machine_host.curation import Curation
 from owlbear_delivery_next.machine_host.project import Project
 from owlbear_delivery_next.project_host.host import RunnerRecord
-from owlbear_delivery_next.state_store import project_home, settings_carry
+from owlbear_delivery_next.state_store import machine_settings, project_home, registry, settings_carry
 from owlbear_delivery_next.state_store.store import StoreError
 
 if TYPE_CHECKING:
