@@ -320,32 +320,41 @@ def test_an_unknown_shared_pending_lookup_holds_the_automatic_change(shared_repo
 
 
 @pytest.mark.usefixtures("no_network")
-def test_a_failed_shared_lookup_holds_the_automatic_change(
+def test_a_failed_shared_lookup_holds_the_automatic_change_without_a_local_copy(
     shared_repo, tmp_path, refusing, config_publishes, monkeypatch
 ):
     root, remote = shared_repo
     a = Store(tmp_path / "a-store", DataRepo(root), "shop-site")
-    refusing[0] = "notice"
-    assert a.save(a.config_path, Layer, widths(1600), "owner edit", owner=True)
-    b = clone(remote, tmp_path / "b", "b")
-    real = DataRepo.git
+    b = clone(remote, tmp_path / "b", "b")  # B's clean checkout is cloned before A's pending record exists
+    real_pull, real_git, landed = DataRepo.pull, DataRepo.git, []
+
+    def pull(self, until=None):
+        pulled = real_pull(self, until)
+        if self.root == b.shared.root and not landed:  # A's refused owner save lands right after B's catch-up
+            refusing[0] = "notice"
+            landed.append(a.save(a.config_path, Layer, widths(1600), "owner edit", owner=True))
+            refusing[0] = None
+            config_publishes.clear()
+        return pulled
 
     def git(self, *args, until=None):
         if args[:1] == ("ls-tree",):
+            assert not pending_file(b).exists()  # the lookup is B's only source of the record
             return subprocess.CompletedProcess(["git", *args], 128, "", "fatal: simulated lookup failure")
-        return real(self, *args, until=until)
+        return real_git(self, *args, until=until)
 
+    monkeypatch.setattr(DataRepo, "pull", pull)
     monkeypatch.setattr(DataRepo, "git", git)
-    before = remote_bytes(remote, SHARED_CONFIG)
-    refusing[0] = None
-    config_publishes.clear()
     assert b.save(b.config_path, Layer, widths(1300), "automatic", owner=False)  # refused: lookup is unknown
+    assert landed[0]  # A's save was refused: its record is pending on the remote
+    assert profile_share._shared_pending(a)  # noqa: SLF001
     assert config_publishes == []
     assert not b.config_path.exists()
-    assert remote_bytes(remote, SHARED_CONFIG) == before
+    before = remote_bytes(remote, SHARED_CONFIG)
+    assert b"1300" not in before
 
     # control: once the lookup works, the remote record is found and the same change is held as CONFIG_WAITING
-    monkeypatch.setattr(DataRepo, "git", real)
+    monkeypatch.setattr(DataRepo, "git", real_git)
     assert b.save(b.config_path, Layer, widths(1300), "automatic", owner=False) == CONFIG_WAITING
     assert config_publishes == []
     assert remote_bytes(remote, SHARED_CONFIG) == before

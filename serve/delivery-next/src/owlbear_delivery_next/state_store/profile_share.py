@@ -167,9 +167,9 @@ def settle_config(store: Store, notice: str, *, owner: bool = False) -> str:
     A refused change is recorded by its digest, and only the publication of the same bytes clears it, unless an *owner*
     save (its revision validated under the lock) published: that supersedes any earlier pending digest. An automatic
     refusal never replaces a different pending digest. The record is a file of its own, so recording a refused change
-    never publishes the profile's unpublished completion.
+    never publishes the profile's unpublished completion. A held checkout (``DataRepo.held``) records nothing.
     """
-    if not store.shared:
+    if not store.shared or (notice and store.shared.held()):
         return notice
     digest = config_digest(store.config_path)
     pending = _shared_pending(store)

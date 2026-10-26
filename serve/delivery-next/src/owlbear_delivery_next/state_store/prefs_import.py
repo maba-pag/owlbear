@@ -13,6 +13,7 @@ import contextlib
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
+from owlbear_delivery_next.local_system.publication_hold import Requires
 from owlbear_delivery_next.settings.prefs_import import plan
 from owlbear_delivery_next.state_store import profile_share
 from owlbear_delivery_next.state_store.config_save import Prepared
@@ -66,8 +67,11 @@ def _fill(store: Store, prof: Profile, basis: str, *, resumed: bool) -> bool:
             raise StoreError(REVIEW)  # raised before any write: a deleted or changed config is not recreated
         return plan(cur, prof)
 
+    # held until published: a remote that settled, cleared or replaced the claim meanwhile never gets this fill
+    fields = {"prefs_import": "pending", "prefs_claim": claim, "prefs_basis": basis}
+    requires = Requires(profile_share.path(store), fields, "the legacy preference import claim this checkout filled")
     try:
-        notice = store.update_config(Prepared(basis, change), "legacy preferences carried")
+        notice = store.update_config(Prepared(basis, change, requires), "legacy preferences carried")
     except _SupersededError:
         return False
     finally:
