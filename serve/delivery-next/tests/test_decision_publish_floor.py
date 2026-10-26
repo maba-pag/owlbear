@@ -175,11 +175,11 @@ def test_a_remote_that_moves_between_catch_up_and_proof_is_caught_up_again(share
     owner_commit(root, "owner words\n")
     real_proved, moved = decision_sync.proved, []
 
-    def move_then_prove(shared, head, until):
+    def move_then_prove(shared, head, until, *cont):
         if not moved:
             moved.append(True)
             advance_remote(tmp_path, remote, "moved.txt")
-        return real_proved(shared, head, until)
+        return real_proved(shared, head, until, *cont)
 
     monkeypatch.setattr(decision_sync, "proved", move_then_prove)
     shared = DataRepo(root)

@@ -16,7 +16,8 @@ from owlbear_delivery_next.state_store import decision_batch, decision_transacti
 
 
 def test_an_empty_git_folder_answer_with_success_is_a_journal_error(picking, monkeypatch):
-    def empty(_self, *_args: str) -> subprocess.CompletedProcess[str]:
+    def empty(_self, *_args: str, until: float | None = None) -> subprocess.CompletedProcess[str]:
+        assert until is None
         return subprocess.CompletedProcess(args=(), returncode=0, stdout="\n", stderr="")
 
     monkeypatch.setattr(DataRepo, "git", empty)

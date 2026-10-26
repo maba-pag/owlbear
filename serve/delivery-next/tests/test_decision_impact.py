@@ -360,8 +360,8 @@ def test_keeping_existing_code_is_taken_back_when_the_rule_changed_between_catch
     peer, caught_up = tmp_path / "peer", decision_sync.catch_up
     git(tmp_path, "clone", "-q", str(shared_repo[1]), str(peer))
 
-    def overtaken(repo: DataRepo, until: float) -> str:
-        said = caught_up(repo, until)
+    def overtaken(repo: DataRepo, until: float, *guard) -> str:
+        said = caught_up(repo, until, *guard)
         monkeypatch.setattr(decision_sync, "catch_up", caught_up)
         write(new.model_copy(update={"state": State.WITHDRAWN}), peer / PROJECT, new.revision)
         git(peer, "commit", "-qam", "withdrawn after the catch-up")
