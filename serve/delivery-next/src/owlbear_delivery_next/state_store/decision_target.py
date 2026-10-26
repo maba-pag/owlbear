@@ -9,19 +9,25 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, NamedTuple
 
 if TYPE_CHECKING:
+    import subprocess
+
     from owlbear_delivery_next.local_system.data_repo import DataRepo
 
 
 class Target(NamedTuple):
-    """Where a publication goes: the local branch, its remote and remote branch, and that branch's fetched copy.
+    """Where a publication goes: its branch, remote, remote branch, fetched copy and the remote's addresses then.
 
-    Read once, when the publication starts, and carried with it: a branch checked out later never retargets it.
+    The addresses are its one fetch address and its push addresses, each a whole value. Read once, when the
+    publication starts, and carried with it: a branch checked out later never retargets it, and a remote pointed at
+    another repository later never receives or proves what was checked against the first.
     """
 
     branch: str
     remote: str
     ref: str
     tracking: str
+    fetch: str
+    pushes: tuple[str, ...]
 
 
 class Continuation(NamedTuple):
@@ -36,7 +42,10 @@ class Continuation(NamedTuple):
 
 
 def target(shared: DataRepo, until: float) -> Target | None:
-    """The checked-out branch and the remote branch it follows; None when it follows none, or HEAD is detached."""
+    """The checked-out branch, the remote branch it follows and that remote's addresses; None when it lacks one.
+
+    None when it follows no remote branch, HEAD is detached, or the remote's addresses cannot be read whole.
+    """
     branch = shared.git("symbolic-ref", "-q", "HEAD", until=until)
     name = branch.stdout.strip()
     if branch.returncode or not name:
@@ -46,16 +55,50 @@ def target(shared: DataRepo, until: float) -> Target | None:
     remote, ref, tracking = ([*said.stdout.strip().split("\0"), "", ""])[:3]
     if said.returncode or not remote or not ref.startswith("refs/heads/") or not tracking.startswith("refs/remotes/"):
         return None
-    return Target(name, remote, ref, tracking)
+    found = addresses(shared, remote, until)
+    return Target(name, remote, ref, tracking, *found) if found else None
+
+
+def addresses(shared: DataRepo, remote: str, until: float) -> tuple[str, tuple[str, ...]] | None:
+    """*remote*'s one fetch address and its push addresses as Git prints them; None when Git cannot say.
+
+    Each line is kept whole, spaces and all. A remote that names no single fetch address is also None.
+    """
+    fetched = _lines(shared.git("remote", "get-url", remote, until=until))
+    pushes = _lines(shared.git("remote", "get-url", "--push", "--all", remote, until=until))
+    if fetched is None or pushes is None or len(fetched) != 1 or not fetched[0] or not all(pushes):
+        return None
+    return fetched[0], tuple(pushes)
+
+
+def _lines(said: subprocess.CompletedProcess[str]) -> list[str] | None:
+    """Git's newline-terminated values, each kept whole; a failed command or unterminated output is unknown."""
+    if said.returncode or not said.stdout.endswith("\n"):
+        return None
+    return said.stdout[:-1].split("\n")
+
+
+def moved(shared: DataRepo, goal: Target, until: float) -> str:
+    """Why *goal*'s remote no longer has the addresses it had when the publication began; nothing when it does.
+
+    The addresses themselves are never shown: they may hold credentials.
+    """
+    if addresses(shared, goal.remote, until) == (goal.fetch, goal.pushes):
+        return ""
+    return f"the remote {goal.remote} points elsewhere than when this publication began, so nothing was pushed"
 
 
 def push_commit(shared: DataRepo, commit: str, goal: Target | None, until: float) -> str:
     """Push exactly *commit* to *goal*'s remote branch, never forced; why not, else nothing.
 
     The commit is named by its id and the destination by the remote and branch read when the publication began, so
-    neither HEAD nor the branch checked out by the time the push runs changes what is sent or where.
+    neither HEAD nor the branch checked out by the time the push runs changes what is sent or where. The remote's
+    addresses are read again right before the push and must still be those it had then; only the moment between that
+    last read and Git starting the push is left, as for any check made before a command runs.
     """
     if goal is None:
         return "the checkout's branch follows no remote branch, so nothing was pushed"
+    if why := moved(shared, goal, until):
+        return why
     sent = shared.git("push", "-q", goal.remote, f"{commit}:{goal.ref}", until=until)
     return sent.stderr.strip()[:200] or "git push failed" if sent.returncode else ""

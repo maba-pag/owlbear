@@ -17,7 +17,7 @@ from owlbear_decisions.storage import DECISIONS_DIR, parse
 from owlbear_delivery_next.local_system import storage_io
 from owlbear_delivery_next.local_system.data_repo import Committed, DataRepoError
 from owlbear_delivery_next.state_store import decision_batch
-from owlbear_delivery_next.state_store.decision_target import Continuation, Target, push_commit, target
+from owlbear_delivery_next.state_store.decision_target import Continuation, Target, moved, push_commit, target
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -91,6 +91,8 @@ def proved(shared: DataRepo, head: str, until: float, cont: Continuation | None 
     """
     goal = cont.goal if cont else target(shared, until)
     tracking = goal.tracking if goal else UPSTREAM
+    if goal is not None and moved(shared, goal, until):  # another repository's branch never proves this one
+        return False
     if shared.git("fetch", "-q", until=until).returncode:
         return False
     if _on_remote(shared, head, until, tracking):
@@ -98,9 +100,9 @@ def proved(shared: DataRepo, head: str, until: float, cont: Continuation | None 
     current = _rev(shared, "HEAD", until)
     if current is None or shared.git("merge-base", "--is-ancestor", head, current, until=until).returncode:
         return False
-    if push_commit(shared, head, goal, until) or shared.git("fetch", "-q", until=until).returncode:
-        return False
-    return _on_remote(shared, head, until, tracking)
+    if push_commit(shared, head, goal, until) or (goal is not None and moved(shared, goal, until)):
+        return False  # sent nowhere, or the remote now points at another repository than the one pushed to
+    return not shared.git("fetch", "-q", until=until).returncode and _on_remote(shared, head, until, tracking)
 
 
 def rebase(shared: DataRepo, until: float, guard: Callable[[], str] | None = None) -> str:
