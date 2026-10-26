@@ -370,11 +370,30 @@ class Pds:
     """The pages' Porsche Design System controls in Playwright, with the PDS CDN reachable (TD-39, TD-398)."""
 
     CDN = "https://cdn.ui.porsche.com/"
+    _fetched: ClassVar[dict[str, tuple[int, dict[str, str], bytes]]] = {}  # CDN URL -> its answer, per test worker
 
     @classmethod
     def only(cls, page, base: str) -> None:
-        """Let *page* reach the test host and the PDS CDN only; anything else is refused."""
-        page.route("**/*", lambda r: r.continue_() if r.request.url.startswith((base, cls.CDN)) else r.abort())
+        """Let *page* reach the test host and the PDS CDN only; anything else is refused. Routing turns the browser's
+        cache off, so each CDN file is fetched once and then answered from memory, as that cache would: a page a click
+        opens then loads as fast as a browser loads it, not at the CDN's speed of the moment."""
+
+        def route(r) -> None:
+            url = r.request.url
+            if url.startswith(base):
+                return r.continue_()
+            if not url.startswith(cls.CDN):
+                return r.abort()
+            if url not in cls._fetched:
+                got = r.fetch()
+                if not got.ok:
+                    return r.fulfill(response=got)
+                kept = {k: v for k, v in got.headers.items() if k not in ("content-encoding", "content-length")}
+                cls._fetched[url] = (got.status, kept, got.body())
+            status, headers, body = cls._fetched[url]
+            return r.fulfill(status=status, headers=headers, body=body)
+
+        page.route("**/*", route)
 
     @staticmethod
     def modal(page):
