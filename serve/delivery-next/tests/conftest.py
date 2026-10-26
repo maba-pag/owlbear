@@ -382,6 +382,15 @@ class Pds:
         and buttons are found from it, not from its dialog."""
         return page.locator("p-modal").filter(has=page.get_by_role("dialog")).last
 
+    @classmethod
+    def answer(cls, page, button: str) -> None:
+        """Click *button* in the newest open ``p-modal``, then wait until its dialog has closed: while it fades out the
+        page behind it is inert, so a fill or a pick there would be lost without an error."""
+        modal = cls.modal(page)
+        answered = modal.element_handle()
+        modal.get_by_role("button", name=button).click()
+        page.wait_for_function("m => !m.isConnected || !m.shadowRoot?.querySelector('dialog')?.open", arg=answered)
+
     @staticmethod
     def select(scope, label: str):
         """The ``p-select`` labelled *label*; its label names its combobox and listbox, so get_by_label finds two."""
