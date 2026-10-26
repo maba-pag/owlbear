@@ -7,6 +7,7 @@ import fcntl
 import hashlib
 import json
 import os
+import stat
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
@@ -61,13 +62,37 @@ def describe(src: pack_git.Source, c: pack_candidate.Candidate) -> str:
     return f"{c.pins['pack']}: upstream {c.tag} at {up['commit'][:12]}, engine {up['engine']}; from {src.base[:12]}"
 
 
+def open_record(path: Path) -> int:
+    """A descriptor for the run file at *path*, opened without following a link or waiting on a pipe; regular only.
+
+    Raises FileNotFoundError when there is no file, and OSError or ValueError when it is anything but a regular file
+    that can be opened: no other kind is ever read, or taken for absent. The descriptor is closed on every failure.
+    """
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    try:
+        regular = stat.S_ISREG(os.fstat(fd).st_mode)
+    except BaseException:
+        os.close(fd)
+        raise
+    if not regular:
+        os.close(fd)
+        msg = f"{path} is not a regular file"
+        raise ValueError(msg)
+    return fd
+
+
 def read_fd(fd: int) -> tuple[dict[str, Any], str]:
-    """The run *fd* holds and that file's version, both from the one open descriptor.
+    """The run *fd* holds and that file's version, both from the one open descriptor, which this always closes.
 
     The version is the file's identity and metadata as opened, so a replacement made after the open is not mixed
     into what was read. Raises OSError or ValueError when the record cannot be read as a run.
     """
-    with os.fdopen(fd, encoding="utf-8") as f:
+    try:
+        source = os.fdopen(fd, encoding="utf-8")
+    except BaseException:
+        os.close(fd)
+        raise
+    with source as f:
         st = os.fstat(f.fileno())
         kept = json.load(f)
     if not isinstance(kept, dict):
@@ -88,10 +113,10 @@ def version_of(st: os.stat_result) -> str:
 def read_version(path: Path) -> tuple[dict[str, Any], str]:
     """The last run at *path* as a Job reads it, and its version: "absent" when there is no file, "" when unreadable."""
     try:
-        fd = os.open(path, os.O_RDONLY)
+        fd = open_record(path)
     except FileNotFoundError:
         return blank(), "absent"
-    except OSError:
+    except OSError, ValueError:
         return blank(), ""
     try:
         kept, version = read_fd(fd)
@@ -103,7 +128,7 @@ def read_version(path: Path) -> tuple[dict[str, Any], str]:
 def observed(root: Path) -> tuple[dict[str, Any], str] | None:
     """The last run as *root* holds it with its file version; None when it has no record. Reads without writing."""
     try:
-        fd = os.open(root / FILE, os.O_RDONLY | os.O_NOFOLLOW)
+        fd = open_record(root / FILE)
     except FileNotFoundError:
         return None
     return read_fd(fd)
@@ -253,9 +278,22 @@ def settle(root: Path, *, receipted: Callable[[str], str]) -> bool:
 
 
 def last(store: Store) -> dict[str, Any] | None:
-    """The last run's state, ending and times, for the Maintenance page; None when it never ran."""
+    """The last run's state, ending and times, for the Maintenance page; None when it never ran or cannot be read."""
     try:
-        kept = json.loads((store.root / FILE).read_text(encoding="utf-8"))
+        fd = open_record(store.root / FILE)
+    except OSError, ValueError:
+        return None
+    try:
+        source = os.fdopen(fd, encoding="utf-8")
+    except OSError, ValueError:
+        os.close(fd)
+        return None  # a record whose descriptor cannot be read as text is shown as unread, like any other
+    except BaseException:
+        os.close(fd)
+        raise
+    try:
+        with source:
+            kept = json.load(source)
     except OSError, ValueError:
         return None
     if not isinstance(kept, dict) or not kept.get("started_at"):

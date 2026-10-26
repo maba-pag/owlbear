@@ -5,6 +5,7 @@ import json
 import os
 import shutil
 import subprocess
+import threading
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -950,3 +951,20 @@ def test_the_carried_generation_counts_only_in_the_shape_of_this_hosts_own_rewri
     assert pack_state.generation(carried, "v1")[0] == "observed:a"
     for other in ({"state": "running"}, {"reason": "candidate: RuntimeError: x"}, {"workspace": "/w"}):
         assert pack_state.generation(carried | other, "v1")[0] != "observed:a"
+
+
+def test_a_failed_projects_pack_record_that_is_a_fifo_is_held_at_once_and_another_project_waits(tmp_path, machines):
+    """Review 4375573453: restoring a project whose store cannot open never waits on a pipe at its record's name.
+
+    The machine loads within a bound, holds that project's pack work as unreadable, and admits no other session.
+    """
+    bad, folder = store_too_new(tmp_path, "bad")
+    os.mkfifo(folder / pack_job.FILE)
+    other = registry.register(clone(tmp_path / "other"))
+    m = machines()
+    loading = threading.Thread(target=m.load_all, daemon=True)
+    loading.start()
+    loading.join(10)
+    assert not loading.is_alive(), "loading the machine waited on the pack record"
+    assert (m.projects[bad.id].state, [s["state"] for s in sessions_of(m, bad.id)]) == ("failed", ["held"])
+    assert (m.slots.take(other.id, "probe", 1, 1), m.maintenance.pending("pack")) == (0, True)
