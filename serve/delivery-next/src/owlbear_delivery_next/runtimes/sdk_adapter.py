@@ -34,6 +34,7 @@ from owlbear_delivery_next.runtimes import (
 )
 from owlbear_delivery_next.runtimes.chatlogs import around as chatlogged
 from owlbear_delivery_next.runtimes.copilot_cli import cli_path
+from owlbear_delivery_next.runtimes.model_choices import takes_effort
 from owlbear_delivery_next.runtimes.results import ENDED, Gate
 from owlbear_delivery_next.runtimes.sdk_teardown import CALL
 from owlbear_delivery_next.runtimes.sdk_teardown import call as _call
@@ -284,7 +285,13 @@ class _Step:
         return ToolResult(text_result_for_llm=(await self.workers.call(lambda: self.gate.call(spec, inv.arguments)))[0])
 
     async def _submitted(self, spec: tools.Spec, inv: ToolInvocation) -> ToolResult:  # lints off the loop (TD-87)
-        return await self.workers.call(lambda: self._handle(spec, inv))
+        watch_feed.spotted(self.feed, lambda s: s.handed_off(inv.tool_call_id, inv.arguments))  # before Gate accepts
+        return await self.workers.call(lambda: self._answered(spec, inv))
+
+    def _answered(self, spec: tools.Spec, inv: ToolInvocation) -> ToolResult:  # in its thread: kept if cancelled
+        result = self._handle(spec, inv)
+        watch_feed.spotted(self.feed, lambda s: s.answered(inv.tool_call_id, str(result.result_type)))
+        return result
 
     def tools(self) -> list[Tool]:
         helped = {spec for spec, _ in self.cfg.helpers}  # these answer, and the turn goes on; so does a first look
@@ -370,16 +377,6 @@ class _Step:
         )
 
 
-async def _efforts(client: CopilotClient, model: str) -> bool:
-    """Whether the model takes a reasoning effort; a model missing from the list, or an unread list, is trusted to."""
-    try:
-        listed = await _call(client.list_models(), "model list")
-    except Exception:  # noqa: BLE001 - the session create then reports a refused effort itself
-        return True
-    found = next((m for m in listed if m.id == model), None)
-    return found is None or bool(found.supported_reasoning_efforts)
-
-
 async def _open(client: CopilotClient, st: _Step) -> CopilotSession | None:
     """Resume or create the session and send the first message; the answer counts as delivered once acknowledged.
 
@@ -387,7 +384,7 @@ async def _open(client: CopilotClient, st: _Step) -> CopilotSession | None:
     an unread transcript sends nothing.
     """
     cfg, opts = st.cfg, st.options()
-    if cfg.effort and not await _efforts(client, cfg.model):
+    if cfg.effort and not await takes_effort(client, cfg.model):
         opts.pop("reasoning_effort")  # the runtime refuses any effort for such a model
         st.log(event="effort-omitted", model=cfg.model, effort=cfg.effort)
     sid, message, resumed, resent, exposure = cfg.session_id, cfg.message, False, True, None
@@ -396,6 +393,7 @@ async def _open(client: CopilotClient, st: _Step) -> CopilotSession | None:
         st.session, resumed = session, True
         try:
             events = await _call(session.get_events(), "transcript read")
+            watch_feed.spotted(st.feed, lambda s: s.history(events))  # the task and evidence it had before
         except Exception as exc:  # noqa: BLE001 - an unobserved transcript never authorizes a resend
             st.finish("unread", detail=f"transcript read failed ({type(exc).__name__}); the answer was not resent")
             return session

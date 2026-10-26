@@ -16,13 +16,14 @@ from owlbear_delivery_next.change_contracts import tools
 from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.local_system import codebase, processes
-from owlbear_delivery_next.machine_host import app, project, registry
+from owlbear_delivery_next.machine_host import app, project
 from owlbear_delivery_next.machine_host.machine import UNPROVEN_PACK, Machine
 from owlbear_delivery_next.pack_runs import pack_job
 from owlbear_delivery_next.project_host import session_slots
 from owlbear_delivery_next.project_host.host import Host, HostRecord
 from owlbear_delivery_next.runtimes import sdk_adapter
 from owlbear_delivery_next.runtimes.session_result import Run
+from owlbear_delivery_next.state_store import registry
 
 
 def clone(path: Path) -> Path:

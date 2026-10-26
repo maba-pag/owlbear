@@ -6,10 +6,10 @@ from datetime import date
 import pytest
 from pydantic import ValidationError
 
-from owlbear_delivery_next.machine_host import machine_settings, registry
 from owlbear_delivery_next.settings import config
 from owlbear_delivery_next.settings.config import GlobalLayer, Layer, MachineLayer, resolve
 from owlbear_delivery_next.settings.improvement import Spotter
+from owlbear_delivery_next.state_store import machine_settings, registry
 from owlbear_delivery_next.state_store.store import read_layer
 
 
