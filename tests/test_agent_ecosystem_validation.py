@@ -18,7 +18,6 @@ _INSTRUCTIONS_ROOT = _REPO_ROOT / "share/instructions"
 _LOCAL_INSTRUCTIONS_ROOT = _REPO_ROOT / ".owlbear/instructions"
 _AGENT_VALIDATOR_PATH = _REPO_ROOT / ".owlbear/scripts/validate_agents.py"
 _SKILL_VALIDATOR_PATH = _REPO_ROOT / ".owlbear/scripts/validate_skills.py"
-_PROMPT_VALIDATOR_PATH = _REPO_ROOT / ".owlbear/scripts/validate_prompts.py"
 _AGENT_WORKFLOW_PATH = _REPO_ROOT / ".github/workflows/agent-ecosystem.yml"
 _SCOPE_SPEC = importlib.util.spec_from_file_location("ci_scope_agent_test", _REPO_ROOT / ".github/scripts/ci_scope.py")
 _CI_SCOPE = importlib.util.module_from_spec(_SCOPE_SPEC)
@@ -126,7 +125,6 @@ def _load_module(path: Path, name: str) -> types.ModuleType:
 
 _AGENT_VALIDATOR = _load_module(_AGENT_VALIDATOR_PATH, "agent_validator")
 _SKILL_VALIDATOR = _load_module(_SKILL_VALIDATOR_PATH, "skill_validator")
-_PROMPT_VALIDATOR = _load_module(_PROMPT_VALIDATOR_PATH, "prompt_validator")
 
 
 def _agent_text(
@@ -163,13 +161,6 @@ agents: {agents}
 def _write_agent(tmp_path: Path, name: str, content: str) -> Path:
     tmp_path.mkdir(parents=True, exist_ok=True)
     path = tmp_path / f"{name}.agent.md"
-    path.write_text(content, encoding="utf-8")
-    return path
-
-
-def _write_prompt(tmp_path: Path, name: str, content: str) -> Path:
-    tmp_path.mkdir(parents=True, exist_ok=True)
-    path = tmp_path / f"{name}.prompt.md"
     path.write_text(content, encoding="utf-8")
     return path
 
@@ -388,52 +379,6 @@ def test_agent_validator_discovers_project_local_root(tmp_path: Path, monkeypatc
     assert _AGENT_VALIDATOR._discover_agent_files() == [path]  # noqa: SLF001
 
 
-def test_prompt_validator_accepts_current_prompt_roots() -> None:
-    prompt_files = _PROMPT_VALIDATOR._discover_prompt_files()  # noqa: SLF001
-
-    assert all(_PROMPT_VALIDATOR.validate_prompt(path) == [] for path in prompt_files)
-    assert _PROMPT_VALIDATOR.main([]) == 0
-
-
-def test_prompt_validator_passes_when_no_prompt_files_exist(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    monkeypatch.setattr(_PROMPT_VALIDATOR, "_PROMPT_ROOTS", (tmp_path / "prompts",))
-
-    assert _PROMPT_VALIDATOR.main([]) == 0
-    assert "no prompt files" in capsys.readouterr().out
-
-
-def test_prompt_validator_discovers_and_checks_added_prompt_files(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    prompt_root = tmp_path / "prompts"
-    _write_prompt(prompt_root, "broken", "---\nagent: missing-agent\n---\n")
-    monkeypatch.setattr(_PROMPT_VALIDATOR, "_PROMPT_ROOTS", (prompt_root,))
-
-    assert _PROMPT_VALIDATOR.main([]) == 1
-
-
-def test_prompt_validator_rejects_unresolved_agent_and_skill(tmp_path: Path) -> None:
-    path = _write_prompt(
-        tmp_path / "prompts",
-        "broken",
-        """---
-description: Broken prompt
-agent: missing-agent
----
-
-Read `h-missing` and `../skills/h-missing/SKILL.md`.
-""",
-    )
-
-    errors = _PROMPT_VALIDATOR.validate_prompt(path)
-
-    assert any("prompt agent does not resolve" in error for error in errors)
-    assert any("referenced skill file does not exist" in error for error in errors)
-    assert any("referenced skill does not exist" in error for error in errors)
-
-
 def test_skill_validator_discovers_project_local_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     local_root = tmp_path / ".owlbear/skills"
     skill_dir = local_root / "h-local"
@@ -521,7 +466,6 @@ def test_retired_delivery_operations_are_absent_from_active_customization_prose(
         _REPO_ROOT / "share/skills",
         _REPO_ROOT / ".owlbear/agents",
         _REPO_ROOT / ".owlbear/instructions",
-        _REPO_ROOT / ".owlbear/prompts",
         _REPO_ROOT / ".owlbear/skills",
     )
     active_files = [path for root in roots if root.is_dir() for path in root.rglob("*") if path.is_file()]
@@ -545,7 +489,6 @@ def test_retired_skills_are_absent_from_active_customization_prose() -> None:
         _REPO_ROOT / "share/skills",
         _REPO_ROOT / ".owlbear/agents",
         _REPO_ROOT / ".owlbear/instructions",
-        _REPO_ROOT / ".owlbear/prompts",
         _REPO_ROOT / ".owlbear/skills",
     )
     active_files = [path for root in roots if root.is_dir() for path in root.rglob("*") if path.is_file()]

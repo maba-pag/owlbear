@@ -19,7 +19,7 @@ repeat them. Delivery's `owlbear-curator` role ships its own curation workflow.
 | Outcome owners | the Delivery engine's builder, planner, preparer, updater, shaper | `recall_memory`, `save_memory` (`builder` also assesses) |
 | Specialist producers | knowledge-ingestor, knowledge-enricher | `recall_memory`, `save_memory` |
 | Read-only reviewers | the Delivery engine's reviewer, challenger, design-judge, test-reviewer | `recall_memory`; return candidates to their parent |
-| Memory curator | Delivery's `owlbear-curator` | `list_memories`, `read_memory`, `curate_memory`, `delete_memory`, `commit_memory_batch` (each with an optional `folder`), `make_global`, `curation_threshold`, agent lifecycle tools |
+| Memory curator | Delivery's `owlbear-curator` | `list_memories`, `read_memory`, `curate_memory`, `delete_memory`, `commit_memory_batch`, `make_global`, `curation_threshold`; each run is bound to one folder, so it never passes `folder` |
 
 Producers save unscoped pending candidates with any non-blank provenance label; the curator later deduplicates and
 assigns relevance scope. Reviewers stay mutation-free and return qualified `memory_candidate` values to their
