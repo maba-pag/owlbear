@@ -314,3 +314,30 @@ def test_every_added_git_step_of_the_automatic_save_shares_the_saves_one_deadlin
     assert len(untils) >= 5
     assert None not in untils
     assert len(set(untils)) == 1
+
+
+def test_a_remote_profile_that_is_not_utf8_holds_the_fill_with_a_notice(three, monkeypatch):
+    winner, other, remote = three
+    root = winner.shared.root
+
+    def malformed() -> None:
+        assert other.shared.pull() == ""
+        target = profile_share.path(other)
+        target.write_bytes(b'{"prefs_import": "\xff\xfe pending"}\n')
+        assert other.shared.publish(target, "settings: a profile that is not UTF-8") == ""
+
+    fired = at_git(monkeypatch, winner, nth_push(1), malformed)
+    with pytest.raises(
+        StoreError, match=r"not pushed: .*is held because .*profile.json on the shared remote is unreadable"
+    ):
+        prefs_import.run(winner)
+
+    assert fired == [True]
+    assert remote_head(remote) == git(other.shared.root, "rev-parse", "HEAD")  # the fill never reached it
+    assert not remote_has_config(remote)
+    assert git(root, "diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD") == f"{PROJECT}/config.json"
+    assert git(root, "status", "--porcelain") == ""  # nothing rebased, staged or rewritten
+    assert "unreadable" in winner.shared.held()  # the refusal is kept, so no pending intent is recorded
+    assert not pending_file(winner).exists()
+    with winner.shared.locked():
+        assert "unreadable" in winner.shared.pull()

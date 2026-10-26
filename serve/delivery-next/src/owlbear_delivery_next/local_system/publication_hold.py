@@ -161,9 +161,10 @@ def _unmet(repo: DataRepo, held: Mapping[str, object], until: float | None) -> s
         return f"{watch} changed on the shared remote after the change was prepared"
     if _blob_at(repo, UPSTREAM, rel, until) == ABSENT:
         return f"{rel} is gone from the shared remote"
-    shown = _run(repo, until, "show", f"{UPSTREAM}:{rel}")
     try:
-        data = json.loads(shown)
+        data = json.loads(_run(repo, until, "show", f"{UPSTREAM}:{rel}"))
+    except UnicodeDecodeError:  # Git's text output of a blob that is not UTF-8: no field of it can be proven
+        return f"{rel} on the shared remote is unreadable: it is not UTF-8"
     except ValueError:
         return f"{rel} on the shared remote is unreadable"
     if not isinstance(data, dict) or not isinstance(fields, dict) or any(data.get(k) != v for k, v in fields.items()):
