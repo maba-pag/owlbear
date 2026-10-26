@@ -216,18 +216,14 @@ def digest(version: str) -> str:
     return hashlib.sha256(version.encode()).hexdigest()
 
 
-def holds(root: Path, record: dict[str, Any], version: str) -> bool:
-    """Whether *root*'s run file, read whole and stable, is *record* at *version*: the rewrite a receipt may name.
+def holds(seen: tuple[dict[str, Any], str], record: dict[str, Any], version: str) -> bool:
+    """Whether *seen*, the run file as ``read_version`` read it whole and stable, is *record* at *version*.
 
     A writer's own version can describe another run's bytes, written over the published file before the writer read
-    its descriptor, so only this read's agreement on both proves the version is the rewrite's. A file that cannot be
-    read so proves nothing, and is not taken for it.
+    its descriptor, so only this read's agreement on both proves the version is the rewrite's. "absent" and ""
+    (unreadable) match only themselves: a record the Job found absent or unreadable says nothing of a run read now.
     """
-    try:
-        got = observed(root)
-    except OSError, ValueError:
-        return False
-    return got is not None and got[1] == version and blank() | got[0] == json.loads(json.dumps(record))
+    return seen[1] == version and seen[0] == json.loads(json.dumps(record))
 
 
 def resolved(record: dict[str, Any], version: str, receipted: Callable[[str], str]) -> tuple[str, datetime | None]:

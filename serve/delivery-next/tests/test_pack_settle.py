@@ -408,3 +408,78 @@ def test_the_constructors_own_rewrite_is_still_receipted_to_its_run_and_read_aga
     again = ledger()
     import_at(again, root)
     assert leases(again) == [(a, "held")]
+
+
+B_RUN = {"state": "running", "stage": "update"}  # a run with no identity, written once the Job had read the file
+
+
+def write_record(root: Path, record: dict) -> None:
+    (root / pack_state.FILE).write_text(json.dumps(pack_job._blank() | record, indent=1) + "\n")  # noqa: SLF001
+
+
+def started(job: pack_job.Job) -> maintenance.Maintenance:
+    """The Job's startup restoration against a fresh ledger at one slot."""
+    owner = maintenance.Maintenance(Slots(lambda: 1), boot=lambda: 10.0, observe=lambda *_args: False)
+    job.maintenance = owner
+    session_slots.interrupted(job, "p")
+    return owner
+
+
+def test_a_run_written_after_the_job_found_no_record_is_held_at_its_startup(tmp_path):
+    """Review on c963: an absent record the Job read is no proof of what the file holds at its startup."""
+    root = store(tmp_path, "store")
+    job = pack_job.Job(Store(root))
+    assert job.version == "absent"
+    write_record(root, B_RUN)
+    owner = started(job)
+    assert ([s for _, s in leases(owner)], owner.slots.take("other", "probe", 1, 1)) == (["held"], 0)
+
+
+def test_a_fresh_store_with_no_record_holds_nothing_at_its_startup(tmp_path):
+    """Control: no record, then or now: no hold, the slot free."""
+    owner = started(pack_job.Job(Store(store(tmp_path, "store"))))
+    assert (leases(owner), owner.slots.take("other", "probe", 1, 1)) == ([], 1)
+
+
+def test_a_run_written_over_a_record_the_job_could_not_read_is_held_beside_that_unknown_one(tmp_path):
+    """The unreadable record keeps its own conservative hold; the run now there is held too, nothing proves them one."""
+    root = store(tmp_path, "store")
+    (root / pack_state.FILE).write_text("{")
+    job = pack_job.Job(Store(root))
+    assert job.version == ""
+    (root / pack_state.FILE).unlink()
+    write_record(root, B_RUN)
+    owner = started(job)
+    assert [s for _, s in leases(owner)] == ["held", "held"]
+
+
+PUBLISHING = {  # a run stopped while it was published: the Job's startup sets it waiting, with no hold of its own
+    "state": "running", "run": "pub-a", "started_at": STARTED, "stage": "pull-request",
+    "context": {
+        "tag": "v9", "why": "design pack: v8 to v9", "diff": "", "golden": "", "pins": {}, "manifest": "",
+        "notice": "", "baseline": {}, "checkout": {}, "start": {}, "sid": "s",
+        "publication": {"root": "/r", "repository": "o/r", "base": "b", "branch": "pack/v9", "body": "the PR text"},
+    },
+}  # fmt: skip
+
+
+def test_a_run_observed_at_startup_stays_held_when_the_file_is_gone_before_it_is_restored(tmp_path):
+    """Review on c963: what the startup observed is what it restores; a later removal does not erase it."""
+    root = store(tmp_path, "store", PUBLISHING)
+    job = pack_job.Job(Store(root))
+    assert job.state["state"] == "waiting"
+    write_record(root, B_RUN)  # B over the publication the Job set waiting
+    real_read_fd, reads = pack_state.read_fd, []
+
+    def read_then_gone(fd: int) -> tuple[dict, str]:
+        got = real_read_fd(fd)
+        if not reads:
+            reads.append(got)
+            (root / pack_state.FILE).unlink()  # gone right after the startup's own read
+        return got
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(pack_state, "read_fd", read_then_gone)
+        owner = started(job)
+    assert (reads[0][0]["stage"], [s for _, s in leases(owner)]) == ("update", ["held"])
+    assert owner.slots.take("other", "probe", 1, 1) == 0

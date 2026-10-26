@@ -13,7 +13,7 @@ import dataclasses
 import subprocess
 import threading
 import uuid
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.change_contracts.failures import cause_key
 from owlbear_delivery_next.change_contracts.models import ErrorKind, StepKind
@@ -174,7 +174,8 @@ def interrupted(job: Job, key: str) -> None:
     maintenance, legacy = job.maintenance, job.store.root / pack_run.UPDATER
     if maintenance is None:
         return
-    current = job.version in {"", "absent"} or pack_state.holds(job.store.root, job.state, job.version)
+    seen = pack_state.read_version(job.store.root / pack_state.FILE)  # one read, compared and restored alike
+    current = pack_state.holds(seen, job.state, job.version)
     if job.interrupted is not None:
         run = job.interrupted
         if not (run["workspace"] and maintenance.owns(run["workspace"])):  # owned: importing it again holds it twice
@@ -187,7 +188,7 @@ def interrupted(job: Job, key: str) -> None:
     elif "workspace" not in job.state and (legacy.is_dir() or pack_job.legacy_uncertain(job.state)):
         _adopt_legacy(maintenance, key, legacy, job.state, job.version)
     if not current:
-        restore(maintenance, key, job.store.root)
+        restore(maintenance, key, job.store.root, seen)
 
 
 def _identity(
@@ -242,22 +243,21 @@ def unloaded(maintenance: Maintenance, key: str, repo: Path) -> None:
     restore(maintenance, key, root)
 
 
-def restore(maintenance: Maintenance, key: str, root: Path) -> None:
-    """Hold the uncertain pack work the run file in *root* records now, read whole and stable; never write it.
+def restore(maintenance: Maintenance, key: str, root: Path, seen: tuple[dict[str, Any], str] | None = None) -> None:
+    """Hold the uncertain pack work the run file in *root* records, as *seen* read it, else as read now; never write.
 
-    A record that cannot be read is held too: unreadable ownership is never taken for none (TD-242).
+    *seen* is a whole, stable read by ``pack_state.read_version``: "absent" when there was no file, "" when it could
+    not be read. A record that cannot be read is held too: unreadable ownership is never taken for none (TD-242).
     """
     legacy = root / pack_run.UPDATER
-    try:
-        got = pack_job.observed(root)
-    except OSError, ValueError:
+    kept, version = seen if seen is not None else pack_state.read_version(root / pack_state.FILE)
+    if version == "":
         maintenance.adopt_uncertain(f"{key}:unreadable", key, "pack", workspace=str(legacy))
         return
-    if got is None:
+    if version == "absent":
         if legacy.is_dir():
             _adopt_legacy(maintenance, key, legacy, {}, "absent")
         return
-    kept, version = got
     if kept.get("state") == "running":
         if kept.get("workspace") and maintenance.owns(str(kept["workspace"])):
             return  # a modern run the ledger already owns; the same record is not a second hold
