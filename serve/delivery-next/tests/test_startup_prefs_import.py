@@ -136,9 +136,8 @@ def test_a_refused_completion_is_reported_at_start_and_published_by_the_next_sta
 
 
 def remote_subjects(remote: Path) -> list[str]:
-    return subprocess.run(
-        ["git", "log", "--reverse", "--format=%s", "main"],  # noqa: S607
-        cwd=remote,
+    return subprocess.run(  # noqa: S603
+        ["git", f"--git-dir={remote}", "log", "--reverse", "--format=%s", "main"],  # noqa: S607
         check=True,
         capture_output=True,
         text=True,

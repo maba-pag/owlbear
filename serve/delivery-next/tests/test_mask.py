@@ -70,6 +70,7 @@ def _fragment(rng: random.Random) -> str:
     return "".join(rng.choices(_B64, k=rng.randint(28, 40))) + rng.choice(["", "=", "=="])
 
 
+@pytest.mark.timeout(120)  # 120,000 texts take about 10 s alone; a loaded runner needs more than 30 s
 def test_redact_masks_exactly_as_the_old_patterns_over_a_random_corpus():
     rng = random.Random(20261026)  # noqa: S311
     texts = ["".join(_fragment(rng) for _ in range(rng.randint(1, 12))) for _ in range(120_000)]
