@@ -110,7 +110,7 @@ All settings have no code default; an unset one is an error on the Settings page
   (the test below);
 - **intervention cap:** at most this many steering notes per step or chat turn;
 - **interrupt:** steer or stop, what a live `interrupt` verdict does (D-01M5W4DEP9WABMSXN3HEKH30HR); every other note
-  steers;
+  steers; no code default, Global to be set to `steer` when it is built;
 - **verbose:** a bounded rationale with its evidence per look, scoped to the machine, a project or a Change, with an
   expiry. Retro may switch it on within a credit cap and for a named reason, shown on the page; never live mode;
 - **looks:** which looks are on, and the sample rate;
@@ -150,7 +150,9 @@ comes with live delivery. The card holds credentials as the agent saw them; only
 are stripped (the owner, 2026-10-26: a look sends the model what the agent's session already sent it, and the records
 are temporary and owner-only; D-01M5VXXFBSWVZ0DZ68G1QG4CYG).
 
-Sampled and state-change looks stay record-only until Retro shows their class is worth it. The line from §3 holds in
+Notes from sampled and state-change looks stay record-only until Retro shows their class is worth it; a live
+`interrupt` verdict is the exception and follows the `interrupt` setting without that wait (it still waits, like all
+of live mode, for the steered-versus-silent test). In learning mode every look only records. The line from §3 holds in
 every mode: correct is not enough; the value must clearly exceed the risk of pulling the agent off course.
 
 ### Where
