@@ -111,6 +111,16 @@ def test_a_saved_output_that_is_a_fifo_is_refused_without_blocking(tmp_path):
     assert [o["state"] for o in said["outputs"]] == ["refused"]
 
 
+def test_a_saved_output_that_is_a_folder_is_refused(tmp_path):
+    folder = Path(tempfile.gettempdir()) / f"{os.getpid()}-copilot-tool-output-dir.txt"
+    folder.mkdir(exist_ok=True)
+    try:
+        said = chatlogs.capture("s14", provisional=False, records=_records(tmp_path, "s14", [_saved(str(folder))]))
+    finally:
+        folder.rmdir()
+    assert [o["state"] for o in said["outputs"]] == ["refused"]
+
+
 def test_a_capture_stopped_while_copying_outputs_publishes_nothing(tmp_path, monkeypatch):
     own = Path(tempfile.gettempdir()) / f"{os.getpid()}-copilot-tool-output-late.txt"
     own.write_text("x")

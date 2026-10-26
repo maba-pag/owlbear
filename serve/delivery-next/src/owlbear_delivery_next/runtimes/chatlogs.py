@@ -196,9 +196,10 @@ def _output(path: str, target: Path, room: int, stop: threading.Event, until: fl
         return "missing", 0
     except OSError as exc:
         return ("refused" if exc.errno == errno.ELOOP else "missing"), 0
+    if not stat.S_ISREG(os.fstat(fd).st_mode):  # checked on the descriptor itself: a folder or device never opens
+        os.close(fd)
+        return "refused", 0
     with os.fdopen(fd, "rb") as src:
-        if not stat.S_ISREG(os.fstat(src.fileno()).st_mode):
-            return "refused", 0
         try:
             return "kept", _copy(src, target, room, stop, until)
         except Stopped:
