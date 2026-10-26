@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
 from owlbear_delivery_next.local_system import codebase, leases, local_home
-from owlbear_delivery_next.machine_host import machine_settings, registry
+from owlbear_delivery_next.state_store import machine_settings, registry
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping

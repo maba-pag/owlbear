@@ -18,10 +18,11 @@ import pytest
 from fastapi.testclient import TestClient
 
 from owlbear_delivery_next.local_system import leases, local_home, processes
-from owlbear_delivery_next.machine_host import alias, app, control, handover, registry, serve, update, versions
+from owlbear_delivery_next.machine_host import alias, app, control, handover, serve, update, versions
 from owlbear_delivery_next.machine_host.machine import Machine, MachineError
 from owlbear_delivery_next.machine_host.versions import Choice
 from owlbear_delivery_next.project_host.host import HostRecord
+from owlbear_delivery_next.state_store import registry
 
 OLD, TOKEN = "old-token", "t"  # the hosts' tokens
 

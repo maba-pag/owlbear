@@ -6,10 +6,11 @@ from types import SimpleNamespace
 import pytest
 from fastapi.testclient import TestClient
 
-from owlbear_delivery_next.machine_host import app, auto_update, registry, versions
+from owlbear_delivery_next.machine_host import app, auto_update, versions
 from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.machine_host.versions import Choice
 from owlbear_delivery_next.project_host.host import HostRecord
+from owlbear_delivery_next.state_store import registry
 
 TOKEN = "t"  # noqa: S105 - a test host's token
 

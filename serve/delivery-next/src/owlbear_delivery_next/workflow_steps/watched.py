@@ -24,10 +24,9 @@ from owlbear_delivery_next.change_flow import worktree
 from owlbear_delivery_next.improvement import spotter
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.local_system.git_files import git_common_dir
-from owlbear_delivery_next.machine_host import machine_settings
 from owlbear_delivery_next.runtimes import step_decisions, watch_feed
 from owlbear_delivery_next.settings.config import SettingsUnset
-from owlbear_delivery_next.state_store import project_home, watch_reports
+from owlbear_delivery_next.state_store import machine_settings, project_home, watch_reports
 from owlbear_delivery_next.state_store.database import StoreError
 
 if TYPE_CHECKING:

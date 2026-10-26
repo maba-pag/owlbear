@@ -26,6 +26,7 @@ from owlbear_delivery_next.change_contracts import watch_policy
 from owlbear_delivery_next.change_contracts.permissions import view
 from owlbear_delivery_next.improvement import spotter
 from owlbear_delivery_next.local_system.mask import redact
+from owlbear_delivery_next.runtimes import spotter_look
 from owlbear_delivery_next.state_store import watch_reports
 
 if TYPE_CHECKING:
@@ -83,7 +84,7 @@ class Feed:
         self.launched: dict[str, str] = {}  # launcher call id to the subagent it started, as this feed saw it
         self.open = True
         self.writer = watching.writer()
-        self.spotter = spotter.Spotter(watching.spot, session) if watching.spot is not None else None
+        self.spotter = spotter.Spotter(watching.spot, session, spotter_look.judged) if watching.spot else None
 
     def seen(self, kind: str, ev: Any) -> None:  # noqa: ANN401 - an SDK session event
         """Observe one event; a start or a permission request updates its call's report; the Spotter takes it in."""

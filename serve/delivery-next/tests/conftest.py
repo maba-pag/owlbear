@@ -20,14 +20,13 @@ from owlbear_delivery_next.change_flow import worktree
 from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.design_packs import design_pack
-from owlbear_delivery_next.improvement import spotter
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import HostRecord
-from owlbear_delivery_next.runtimes import model_choices, sdk_adapter
+from owlbear_delivery_next.runtimes import model_choices, sdk_adapter, spotter_look
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.state_store import backlog, backlog_issues
 from owlbear_delivery_next.state_store.store import Lock, Store
@@ -90,8 +89,8 @@ def _carried_settings(monkeypatch):
 
     A test of unset settings sets ``config.BASE`` or ``machine_settings.BASE`` to ``None``.
     """
-    from owlbear_delivery_next.machine_host import machine_settings  # noqa: PLC0415
     from owlbear_delivery_next.settings import carried, config  # noqa: PLC0415
+    from owlbear_delivery_next.state_store import machine_settings  # noqa: PLC0415
 
     monkeypatch.setattr(config, "BASE", complete_layer())
     monkeypatch.setattr(machine_settings, "BASE", carried.MACHINE.model_copy(update=IMPROVEMENT_MACHINE))
@@ -141,7 +140,7 @@ def _no_shared_settings(tmp_path_factory, monkeypatch):
     root = tmp_path_factory.mktemp("worktrees").resolve()
     monkeypatch.setattr(worktree, "data_root", lambda: root)  # never the machine's worktrees
     monkeypatch.setattr(sdk_adapter, "CopilotClient", _no_runtime)  # never a real model session; fakes replace it
-    monkeypatch.setattr(spotter, "_judged", _silent_look)  # nor a real Spotter look
+    monkeypatch.setattr(spotter_look, "judged", _silent_look)  # nor a real Spotter look
 
 
 async def _silent_look(_card: dict, _ctx: object) -> tuple[str, float]:

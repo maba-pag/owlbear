@@ -22,10 +22,10 @@ from pydantic import Field
 
 from owlbear_delivery_next.change_contracts import chat_contract
 from owlbear_delivery_next.local_system import codebase, data_repo, leases, local_home
-from owlbear_delivery_next.machine_host import control, machine_settings, registry, versions
+from owlbear_delivery_next.machine_host import control, versions
 from owlbear_delivery_next.machine_host.machine import Machine, MachineError
 from owlbear_delivery_next.project_host import api, chat_routes, decision_routes, impact_routes, pages
-from owlbear_delivery_next.state_store import decision_impact
+from owlbear_delivery_next.state_store import decision_impact, machine_settings, registry
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Awaitable, Callable

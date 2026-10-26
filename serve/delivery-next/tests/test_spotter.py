@@ -21,13 +21,13 @@ from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_contracts.tools import Worktree
 from owlbear_delivery_next.improvement import card, events, spotter
 from owlbear_delivery_next.improvement.events import Kept
-from owlbear_delivery_next.runtimes import chatlogs, sdk_adapter, step_decisions
+from owlbear_delivery_next.runtimes import chatlogs, sdk_adapter, spotter_look, step_decisions
 from owlbear_delivery_next.settings.config import Layer, SettingsUnset, resolve
 from owlbear_delivery_next.settings.improvement import Spotter
 from owlbear_delivery_next.state_store.store import Lock, Store
 from owlbear_delivery_next.workflow_steps import watched
 
-REAL_LOOK = spotter._judged  # noqa: SLF001 - taken before the suite's fixture replaces it
+REAL_LOOK = spotter_look.judged  # taken before the suite's fixture replaces it
 
 
 def event(kind: str, data: dict[str, Any], *, second: int = 0, agent: str | None = None) -> SessionEvent:
@@ -291,7 +291,7 @@ def test_the_runner_gives_the_look_its_settings_open_work_and_decisions(tmp_path
     unset.missing.append("spotter.looks")
     with pytest.raises(SettingsUnset, match=r"spotter\.looks"):
         watched.spot(store, Lock("c1"), "build", unset)
-    from owlbear_delivery_next.machine_host import machine_settings  # noqa: PLC0415
+    from owlbear_delivery_next.state_store import machine_settings  # noqa: PLC0415
 
     monkeypatch.setattr(machine_settings, "BASE", None)
     with pytest.raises(SettingsUnset, match="spotter_budget"):
@@ -331,12 +331,8 @@ def test_a_look_is_one_toolless_session_noted_in_the_chatlogs_manifest(monkeypat
         async def stop(self) -> None:
             made["stopped"] = True
 
-    import copilot  # noqa: PLC0415
-
-    from owlbear_delivery_next.runtimes import copilot_cli  # noqa: PLC0415
-
-    monkeypatch.setattr(copilot, "CopilotClient", Client)
-    monkeypatch.setattr(copilot_cli, "cli_path", lambda: "/bin/false")
+    monkeypatch.setattr(spotter_look, "CopilotClient", Client)
+    monkeypatch.setattr(spotter_look, "cli_path", lambda: "/bin/false")
     assert asyncio.run(REAL_LOOK({"step": "build"}, ctx(verbose=True))) == ('{"verdict": "silent"}', 0.2)
     chosen = ("available_tools", "mcp_servers", "enable_config_discovery", "model", "reasoning_effort", "timeout")
     assert [made[k] for k in chosen] == [[], {}, False, "gpt-6-luna", "medium", spotter.LOOK]
@@ -349,10 +345,10 @@ def test_a_look_is_one_toolless_session_noted_in_the_chatlogs_manifest(monkeypat
 
 
 class Stalled:
-    """A runtime whose session and stop never answer; ``force_stop`` ends it."""
+    """A runtime whose session and stop never answer; ``force_stop`` ends it, unless it fails too."""
 
-    def __init__(self, made: dict[str, Any], *, start_fails: bool = False) -> None:
-        self.made, self.start_fails = made, start_fails
+    def __init__(self, made: dict[str, Any], *, start_fails: bool = False, force_fails: bool = False) -> None:
+        self.made, self.start_fails, self.force_fails = made, start_fails, force_fails
 
     async def start(self) -> None:
         if self.start_fails:
@@ -370,17 +366,21 @@ class Stalled:
 
     async def force_stop(self) -> None:
         self.made["forced"] = True
+        if self.force_fails:
+            raise OSError(self.made.setdefault("left", "the runtime would not die"))
 
 
-@pytest.mark.parametrize("start_fails", [False, True])
-def test_a_stalled_or_failed_runtime_is_torn_down_within_its_bounds(monkeypatch, start_fails) -> None:
-    import copilot  # noqa: PLC0415
+ENDS = [(False, False, [False]), (False, True, [True]), (True, False, [])]  # an unconfirmed end is provisional
 
-    from owlbear_delivery_next.runtimes import copilot_cli  # noqa: PLC0415
 
+@pytest.mark.parametrize(("start_fails", "force_fails", "ends"), ENDS)
+def test_a_stalled_or_failed_runtime_is_torn_down_within_its_bounds(
+    monkeypatch, start_fails, force_fails, ends
+) -> None:
     made: dict[str, Any] = {}
-    monkeypatch.setattr(copilot, "CopilotClient", lambda **_kw: Stalled(made, start_fails=start_fails))
-    monkeypatch.setattr(copilot_cli, "cli_path", lambda: "/bin/false")
+    monkeypatch.setattr(spotter_look, "CopilotClient", lambda **_kw: Stalled(made, start_fails=start_fails,
+                                                                               force_fails=force_fails))  # fmt: skip
+    monkeypatch.setattr(spotter_look, "cli_path", lambda: "/bin/false")
     monkeypatch.setattr(spotter, "TEARDOWN", 0.05)
 
     async def main() -> float:
@@ -396,6 +396,9 @@ def test_a_stalled_or_failed_runtime_is_torn_down_within_its_bounds(monkeypatch,
 
     assert asyncio.run(main()) < 1
     assert made.get("forced") is True  # the graceful stop hung
+    manifest = chatlogs.root() / "manifest.jsonl"
+    lines = [json.loads(x) for x in manifest.read_text().splitlines()] if manifest.exists() else []
+    assert [x["provisional"] for x in lines if x["event"] == "ended"] == ends  # unconfirmed when the force failed
 
 
 def test_a_drain_ends_within_its_bound_even_when_a_look_resists(monkeypatch) -> None:
@@ -543,3 +546,96 @@ def test_a_resumed_session_gets_its_history_without_looks_and_subagent_completio
 
     snapshot = asyncio.run(main()).kept.snapshot()
     assert (snapshot["task"], [a["id"] for a in snapshot["actions"]]) == ("The original task.", ["h1"])
+
+
+def test_a_long_task_on_an_oversized_card_still_ends_within_the_bound() -> None:
+    kept = Kept()
+    kept.add(asked("t" * 6000))
+    for i in range(4):
+        kept.add(asked(f"later {i} " + "word " * 1200))
+    built = card.build(kept.snapshot(), {"at": "2026-10-26T10:01:00+00:00", "result": "word " * 600},
+                       {"open_work": ["word " * 400] * 12, "decisions": ["d " * 3000]})  # fmt: skip
+    assert len(json.dumps(built, ensure_ascii=False)) <= card.BOUND
+    assert all(len(events.clip("x" * 900, n)) <= n for n in (1, 7, 8, 50, 500))
+
+
+def test_a_credential_is_cleaned_before_a_clip_could_cut_it_from_its_label() -> None:
+    secret = "Q1w2E3r4" * 8
+    kept = Kept()
+    kept.add(asked("a" * 5000 + " password=" + secret + " " + "b" * (events.TEXT // 2 - 80)))
+    assert "Q1w2E3r4" not in json.dumps(kept.snapshot())
+
+
+def test_through_passes_on_a_cancellation_that_races_the_tasks_end() -> None:
+    async def main() -> None:
+        child = asyncio.get_running_loop().create_future()
+        waiting = asyncio.ensure_future(spotter.through(child))
+        await asyncio.sleep(0)
+        child.set_result(None)
+        waiting.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await waiting
+
+    asyncio.run(main())
+
+
+def test_a_look_cancelled_twice_while_reserving_still_settles_and_records(monkeypatch) -> None:
+    import time  # noqa: PLC0415
+
+    real = spotter.reserve
+    monkeypatch.setattr(spotter, "reserve", lambda budget: (time.sleep(0.2), real(budget))[1])
+
+    async def main() -> None:
+        spot = spotter.Spotter(ctx(), lambda: "s-1", judge())
+        spot.handed_off("c", {})
+        [task] = spot.tasks
+        for _ in range(2):
+            await asyncio.sleep(0.02)
+            task.cancel()
+        await asyncio.wait({task})
+
+    asyncio.run(main())
+    spotter.WORK.submit(lambda: None).result(5)
+    for _ in range(100):  # the finishing work goes on after the step's loop
+        if records():
+            break
+        time.sleep(0.02)
+    assert [r["skipped"] for r in records()] == ["the step ended before the look began"]
+    assert ledger() == {"reserved": {}, "spent": 0.0}
+
+
+def test_the_steps_loop_ends_without_waiting_for_the_spotters_writes(monkeypatch) -> None:
+    import threading  # noqa: PLC0415
+    import time  # noqa: PLC0415
+
+    monkeypatch.setattr(spotter, "DRAIN", 0.02)
+    monkeypatch.setattr(spotter, "TEARDOWN", 0.02)
+    written = threading.Event()
+    monkeypatch.setattr(spotter, "store", lambda *_a: (time.sleep(0.5), written.set()))
+
+    async def main() -> None:
+        spot = spotter.Spotter(ctx(), lambda: "s-1", judge())
+        spot.handed_off("c", {})
+        await spot.drain()
+
+    began = time.monotonic()
+    asyncio.run(main())  # leftovers are cancelled by asyncio.run itself
+    took = time.monotonic() - began
+    written.wait(5)
+    spotter.WORK.submit(lambda: None).result(5)
+    assert took < 0.3
+
+
+def test_a_burst_of_samples_while_looks_run_is_counted_once_not_queued() -> None:
+    async def main() -> int:
+        spot = spotter.Spotter(ctx(looks=("sample",), sample_rate=100), lambda: "s-1", judge(wait=0.2))
+        for i in range(300):
+            spot.seen(started(f"c{i}", "bash", {"command": "ls"}))
+            spot.seen(done(f"c{i}", "ok"))
+        most = len(spot.tasks)
+        await spot.drain()
+        return most
+
+    assert asyncio.run(main()) == 2
+    got = records()
+    assert sorted(r["skipped"][:30] for r in got) == ["", "", "capacity: 298 sampled looks sk"]

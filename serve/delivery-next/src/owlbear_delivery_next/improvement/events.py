@@ -14,6 +14,8 @@ import re
 from collections import deque
 from typing import Any
 
+from owlbear_delivery_next.local_system.mask import redact
+
 ACTIONS, CALLS = 120, 200  # actions kept; calls awaiting their completion
 TEXT, SAID, ARGS, RESULT = 6000, 1500, 1500, 4000  # characters kept of a request, a message, arguments, a result
 QUESTIONS = frozenset({"ask_user", "askQuestions"})
@@ -45,10 +47,46 @@ def as_dict(ev: Any) -> dict[str, Any]:  # noqa: ANN401 - an SDK event object or
     return data if isinstance(data, dict) else {}
 
 
+CUT = " [...] "
+MARGIN = 4096  # characters cleaned beyond what a clip keeps, so no credential is cut from its label
+EMAIL = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
+PROTECT = re.compile(r"(?:/(?:Users|private|var|tmp|Library|home)/[^\s\"'`:;,)\]}]+)|\b[0-9a-f]{40}\b")
+
+
+def _text(value: object) -> str:
+    return value if isinstance(value, str) else json.dumps(value, ensure_ascii=False, default=str)
+
+
 def clip(text: object, n: int) -> str:
     """*text* as a string of at most *n* characters, its start and end kept."""
-    s = text if isinstance(text, str) else json.dumps(text, ensure_ascii=False, default=str)
-    return s if len(s) <= n else s[: n // 2] + " [...] " + s[-(n // 2) :]
+    s = _text(text)
+    if len(s) <= n:
+        return s
+    if n <= len(CUT):
+        return s[:n]
+    head = (n - len(CUT)) // 2
+    return s[:head] + CUT + s[len(s) - (n - len(CUT) - head) :]
+
+
+def clean(text: str) -> str:
+    """*text* without credentials, emails or browser context.
+
+    Every credential rule applies everywhere; only the long-value rule spares file paths and commit ids, which are no
+    secrets (as the pilot's cards were).
+    """
+    kept: list[str] = []
+
+    def hold(m: re.Match[str]) -> str:
+        kept.append(m.group(0))
+        return f"\x00{len(kept) - 1}\x00"
+
+    text = PROTECT.sub(hold, redact(no_browser(text.replace("\x00", "")), blobs=False))
+    return EMAIL.sub("<email>", re.sub(r"\x00(\d+)\x00", lambda m: kept[int(m.group(1))], redact(text)))
+
+
+def kept_text(value: object, n: int) -> str:
+    """*value* cleaned, then clipped to *n*: cleaned whole near what the clip keeps, never cut before it is cleaned."""
+    return clip(clean(clip(_text(value), n + 2 * MARGIN)), n)
 
 
 def result_text(data: dict[str, Any]) -> str:
@@ -84,23 +122,23 @@ class Kept:
         if not main_agent(d):
             return False
         if kind == "user.message":
-            text = clip(no_browser(str(data.get("content") or "")), TEXT)
+            text = kept_text(str(data.get("content") or ""), TEXT)
             if not self.task:
                 self.task, self.task_n = text, self.n
             self._ring(self.requests, {"n": self.n, "at": at, "text": text}, "requests")
             self.first_reply = None
         elif kind == "assistant.message" and str(data.get("content") or "").strip():
-            message = {"n": self.n, "at": at, "text": clip(no_browser(str(data["content"])), SAID)}
+            message = {"n": self.n, "at": at, "text": kept_text(str(data["content"]), SAID)}
             self.first_reply = self.first_reply or message
             self._ring(self.said, message, "messages")
         elif kind == "tool.execution_start":
             call = {"n": self.n, "at": at, "tool": str(data.get("toolName") or ""), "id": str(data.get("toolCallId")),
-                    "args": clip(data.get("arguments"), ARGS)}  # fmt: skip
+                    "args": kept_text(data.get("arguments"), ARGS)}  # fmt: skip
             self._push(call)
             if len(self.calls) < CALLS:
                 self.calls[call["id"]] = call
         elif kind == "tool.execution_complete" and (call := self.calls.pop(str(data.get("toolCallId")), None)):
-            call |= {"done_at": at, "ok": data.get("success"), "result": clip(no_browser(result_text(data)), RESULT)}
+            call |= {"done_at": at, "ok": data.get("success"), "result": kept_text(result_text(data), RESULT)}
             if call["tool"] in QUESTIONS and not self._stopped(call):
                 self.answers.append(
                     {"at": at, "question": clip(call["args"], 400), "answer": clip(call["result"], 400)}

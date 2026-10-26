@@ -15,38 +15,17 @@ import re
 from datetime import datetime
 from typing import Any
 
-from owlbear_delivery_next.improvement.events import clip, no_browser
-from owlbear_delivery_next.local_system.mask import redact
+from owlbear_delivery_next.improvement.events import clean, clip
 
 BOUND = 30000  # characters of the whole card
 KEEP_RECENT, KEEP_OPEN, KEEP_DECISIONS, KEEP_TASK = 5, 12, 1000, 500  # what ``bounded`` cuts down to, at least
 EACH, EVIDENCE = 4000, 16000  # characters of one piece of evidence, and of all
-EMAIL = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
 TEST = re.compile(r"\b(pytest|npm (run )?test|vitest|jest|uv run test|go test|cargo test|node --test)\b")
 WAITS = frozenset({"read_bash", "read_agent"})
 WAIT = re.compile(r"\bsleep\s+\d|--watch\b|gh pr checks|gh run (watch|view)")
 EDITS = frozenset({"edit", "create", "apply_patch", "str_replace_editor", "write"})
 GAPS = ["the agent's instructions and loaded skills are not in its event stream",
         "the agent's full reasoning is encrypted; only its messages show"]  # fmt: skip
-
-
-PROTECT = re.compile(r"(?:/(?:Users|private|var|tmp|Library|home)/[^\s\"'`:;,)\]}]+)|\b[0-9a-f]{40}\b")
-
-
-def clean(text: str) -> str:
-    """*text* without credentials, emails or browser context.
-
-    Every credential rule applies everywhere; only the long-value rule spares file paths and commit ids, which are no
-    secrets (as the pilot's cards were).
-    """
-    kept: list[str] = []
-
-    def hold(m: re.Match[str]) -> str:
-        kept.append(m.group(0))
-        return f"\x00{len(kept) - 1}\x00"
-
-    text = PROTECT.sub(hold, redact(no_browser(text.replace("\x00", "")), blobs=False))
-    return EMAIL.sub("<email>", re.sub(r"\x00(\d+)\x00", lambda m: kept[int(m.group(1))], redact(text)))
 
 
 def _time(at: str) -> datetime | None:
