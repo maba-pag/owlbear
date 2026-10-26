@@ -14,7 +14,7 @@ import re
 from collections import deque
 from typing import Any
 
-from owlbear_delivery_next.local_system.mask import redact, secret_key
+from owlbear_delivery_next.local_system.mask import SECRET_NAME, redact, secret_key
 
 ACTIONS, CALLS = 120, 200  # actions kept; calls awaiting their completion
 TEXT, SAID, ARGS, RESULT = 6000, 1500, 1500, 4000  # characters kept of a request, a message, arguments, a result
@@ -50,6 +50,7 @@ def as_dict(ev: Any) -> dict[str, Any]:  # noqa: ANN401 - an SDK event object or
 CUT = " [...] "
 RAW = 262144  # characters cleaned whole; a longer text is omitted, as no cut of it is known to be safe
 EMAIL = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
+FLAG = re.compile(rf"(?i)(?<!\S)(?P<f>--?[\w-]*{SECRET_NAME}[\w-]*)(?P<s>\s+)(?P<v>\"[^\"]*\"|'[^']*'|[^\s-]\S*)")
 PROTECT = re.compile(r"(?:/(?:Users|private|var|tmp|Library|home)/[^\s\"'`:;,)\]}]+)|\b[0-9a-f]{40}\b")
 
 
@@ -80,7 +81,8 @@ def clean(text: str) -> str:
         kept.append(m.group(0))
         return f"\x00{len(kept) - 1}\x00"
 
-    text = PROTECT.sub(hold, redact(no_browser(text.replace("\x00", "")), blobs=False))
+    text = FLAG.sub(r"\g<f>\g<s>***", no_browser(text.replace("\x00", "")))  # a credential flag's value, spaced
+    text = PROTECT.sub(hold, redact(text, blobs=False))
     return EMAIL.sub("<email>", re.sub(r"\x00(\d+)\x00", lambda m: kept[int(m.group(1))], redact(text)))
 
 

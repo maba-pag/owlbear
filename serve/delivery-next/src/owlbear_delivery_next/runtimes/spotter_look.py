@@ -55,7 +55,8 @@ async def judged(the_card: dict[str, Any], ctx: spotter.Context) -> tuple[str, f
                        "worktree": empty}  # fmt: skip
             await spotter.offload(chatlogs.note, started)
             await session.send_and_wait(message, timeout=spotter.LOOK)
-            nano = getattr(await session.rpc.usage.get_metrics(), "total_nano_aiu", None)
+            with contextlib.suppress(Exception):  # an unread usage keeps the answer and counts as the cap
+                nano = getattr(await session.rpc.usage.get_metrics(), "total_nano_aiu", None)
     finally:
         await spotter.through(asyncio.ensure_future(teardown(client, session, sid)))
     return (said[-1] if said else ""), (nano / 1e9 if nano else spotter.ESTIMATE)

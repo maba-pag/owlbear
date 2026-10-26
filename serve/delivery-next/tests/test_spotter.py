@@ -722,3 +722,46 @@ def test_credential_named_containers_and_structured_errors_are_cleaned_before_en
     assert "canary" not in text
     assert "Q1w2" not in text
     assert "denied" in text
+
+
+def test_a_credential_flags_spaced_value_is_masked_and_an_unread_usage_keeps_the_answer(monkeypatch) -> None:
+    kept = Kept()
+    kept.add(started("c1", "bash", {"command": "docker login --password 'canary private registry' --token x1 r"}))
+    args = kept.snapshot()["actions"][0]["args"]
+    assert "canary" not in args
+    assert "x1" not in args
+    assert "docker login --password" in args
+    made: dict[str, Any] = {}
+
+    class Session:
+        session_id = "look-3"
+
+        async def send_and_wait(self, *_a: Any, **_kw: Any) -> None:
+            made["on_event"](said('{"verdict": "note", "note": "Run the tests."}'))
+
+        async def disconnect(self) -> None:
+            pass
+
+        @property
+        def rpc(self) -> Any:
+            raise ConnectionError(made.setdefault("why", "usage unread"))
+
+    class Client:
+        def __init__(self, **_kw: Any) -> None:
+            pass
+
+        async def start(self) -> None:
+            pass
+
+        async def create_session(self, **kw: Any) -> Session:
+            made.update(kw)
+            return Session()
+
+        async def stop(self) -> None:
+            pass
+
+    monkeypatch.setattr(spotter_look, "CopilotClient", Client)
+    monkeypatch.setattr(spotter_look, "cli_path", lambda: "/bin/false")
+    text, spent = asyncio.run(REAL_LOOK({}, ctx()))
+    assert spotter.parse(text)["verdict"] == "note"
+    assert spent == spotter.ESTIMATE

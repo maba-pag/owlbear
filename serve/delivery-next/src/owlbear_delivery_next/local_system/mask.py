@@ -16,6 +16,7 @@ _ASSIGN = re.compile(
 )
 _BLOB = re.compile(r"(?P<s>[=:]\s*)(?P<q>[\"']?)(?!//)[A-Za-z0-9+/_-]{32,}={0,2}")
 _BEARER = re.compile(r"(?i)\bbearer\s+(?!\*\*\*)\S+")
+SECRET_NAME = _NAME  # what names a credential: a key, a field or a flag
 _SECRET_KEY = re.compile(rf"(?i){_NAME}")
 
 
