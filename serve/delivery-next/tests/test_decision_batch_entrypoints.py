@@ -564,19 +564,18 @@ def test_a_committed_finish_refuses_a_symlinked_parent_with_matching_images(pick
     head, index = shared.git("rev-parse", "HEAD").stdout, shared.git("ls-files", "-s").stdout
     journal = decision_batch.journal_path(shared).read_bytes()
     reads: list[Path] = []
-    real_read = Path.read_bytes
+    real_read = storage_io.read_regular
 
-    def recording_read(path: Path) -> bytes:
-        if str(path).startswith((str(folder), str(outside))):
-            reads.append(path)
+    def recording_read(path: Path) -> bytes | None:
+        reads.append(path)
         return real_read(path)
 
     with monkeypatch.context() as m:
-        m.setattr(Path, "read_bytes", recording_read)
+        m.setattr(storage_io, "read_regular", recording_read)
         with pytest.raises(decision_store.DecisionsUnavailable, match="differs"):
             decision_recovery.finish(shared, generation)
 
-    assert reads == []  # no referent behind the link is read
+    assert not [p for p in reads if str(p).startswith((str(folder), str(outside)))]  # no referent behind the link
     assert folder.is_symlink()
     assert {p.name: p.read_bytes() for p in referent.iterdir()} == held
     assert (shared.git("rev-parse", "HEAD").stdout, shared.git("ls-files", "-s").stdout) == (head, index)
@@ -1637,7 +1636,7 @@ def test_a_folder_swapped_for_a_link_while_a_proof_reads_a_file_is_never_trusted
     shared = picking.shared
     target, run, (module, name) = _read_swap_surface(picking, monkeypatch, surface)
     folder, moved, foreign = target.parent, tmp_path / "moved", tmp_path / "foreign"
-    real_read, real_scope = Path.read_bytes, getattr(module, name)
+    real_read, real_bytes, real_scope = storage_io.read_regular, Path.read_bytes, getattr(module, name)
     inside, calls, fired = [False], [0], {}
 
     def scoped(*args, **kwargs):
@@ -1647,7 +1646,7 @@ def test_a_folder_swapped_for_a_link_while_a_proof_reads_a_file_is_never_trusted
         finally:
             inside[0] = False
 
-    def read_then_owner_swaps(path: Path) -> bytes:
+    def read_then_owner_swaps(path: Path) -> bytes | None:
         data = real_read(path)
         if inside[0] and not fired and path == target:
             calls[0] += 1
@@ -1655,12 +1654,12 @@ def test_a_folder_swapped_for_a_link_while_a_proof_reads_a_file_is_never_trusted
                 folder.rename(moved)
                 shutil.copytree(moved, foreign)  # the same bytes, so only the folder chain can tell them apart
                 folder.symlink_to(foreign, target_is_directory=True)
-                fired.update(tree=_tree(moved, real_read), git=_git_state(shared))
+                fired.update(tree=_tree(moved, real_bytes), git=_git_state(shared))
         return data
 
     with monkeypatch.context() as m:
         m.setattr(module, name, scoped)
-        m.setattr(Path, "read_bytes", read_then_owner_swaps)
+        m.setattr(storage_io, "read_regular", read_then_owner_swaps)  # every proof's read of a batch file
         try:
             run()
         except decision_store.DecisionsUnavailable:
@@ -1688,7 +1687,7 @@ def _own_files(folder: Path, read) -> dict[str, bytes]:
 
 def _swap_while_saving(m: pytest.MonkeyPatch, moment: str, target: Path, swap) -> None:
     """Call *swap* once: after the save's planning read of *target*, or after its temporary file's fsync."""
-    real_read = Path.read_bytes
+    real_read = storage_io.read_regular
     real_journal = decision_store._journal  # noqa: SLF001
     inside = [False]
 
@@ -1699,14 +1698,14 @@ def _swap_while_saving(m: pytest.MonkeyPatch, moment: str, target: Path, swap) -
         finally:
             inside[0] = False
 
-    def planning_read(path: Path) -> bytes:
+    def planning_read(path: Path) -> bytes | None:
         data = real_read(path)
         if moment == "planning-read" and inside[0] and path == target:
             swap()
         return data
 
     m.setattr(decision_store, "_journal", journal)
-    m.setattr(Path, "read_bytes", planning_read)
+    m.setattr(storage_io, "read_regular", planning_read)  # the save's planning read, `decision_store._content`
     if moment == "temporary-fsync":
         _after_temporary_fsync_in(m, target.parent, swap)
 
@@ -3734,3 +3733,151 @@ def test_an_owner_commit_made_in_the_holds_probe_as_a_rebase_starts_is_never_reb
     assert "HEAD moved past the commit whose push was refused" in receipts[0].notice
     assert decision_batch.pending(shared) is not None
     _no_authority(picking)
+
+
+# One recovery, save, transaction or folder fsync, run against the disposable checkout in a child process: code that
+# would wait on a pipe is killed at the child's timeout, its locks go with it, and nothing is ever written into the
+# pipe. *when* is the moment the batch's file becomes a pipe; the last line printed is what came of it.
+CHILD = r"""
+import json, os, sys
+from pathlib import Path
+from owlbear_delivery_next.local_system import storage_io
+from owlbear_delivery_next.local_system.data_repo import DataRepo
+from owlbear_delivery_next.state_store import decision_batch, decision_recovery, decision_store, decision_transaction
+spec = json.loads(sys.argv[1])
+shared, target, fired, armed = DataRepo(Path(spec["root"])), Path(spec["target"]), [], []
+
+def to_pipe():
+    if not fired:
+        fired.append(True)
+        target.unlink(missing_ok=True)
+        os.mkfifo(target)
+
+def after(owner, name, then):
+    real = getattr(owner, name)
+    def wrapped(*args, **kwargs):
+        said = real(*args, **kwargs)
+        then()
+        return said
+    setattr(owner, name, wrapped)
+
+when, action = spec["when"], spec["action"]
+if when == "before":
+    to_pipe()
+elif when == "fsync":  # the put-back proof's folder fsync, before it reads the files again
+    after(decision_batch, "fsync_dir", to_pipe)
+elif when == "git":  # the rebase probe after every file is put back and proved, before they are read once more
+    after(decision_recovery, "_all_before", lambda: armed.append(True))
+    after(DataRepo, "rebasing", lambda: to_pipe() if armed else None)
+elif when == "put-back":  # the commit is refused, so the save puts its files back, reading each first
+    DataRepo.commit = lambda *_args, **_kwargs: (to_pipe(), "git refused the commit")[1]
+try:
+    if action in ("finish", "abandon"):
+        said = getattr(decision_recovery, action)(shared, spec["generation"]).done
+    elif action == "save":
+        old = decision_store.load(shared, spec["project"]).snapshot.get(spec["id"]).decision
+        update = old.model_copy(update={"title": "Notes stay in one SQLite table"})
+        said = [r.saved for r in decision_store.save_all(shared, [(update, old.revision)], message="decisions: one")]
+    elif action == "transaction":
+        step = lambda *_args: decision_transaction.Step("", refused=True)
+        said = decision_transaction.transaction(shared, spec["project"], "m", [(target, b"{}")], step, spec["head"])
+    else:
+        storage_io.fsync_dir(target)
+        said = "synced"
+    print(json.dumps({"fired": bool(fired), "outcome": "returned", "said": said}))
+except Exception as exc:
+    print(json.dumps({"fired": bool(fired), "outcome": type(exc).__name__, "said": str(exc)}))
+"""
+CHILD_SECONDS = 15  # under the suite's own per-test timeout, so a child still waiting is reported here as hung
+
+
+def _bounded(spec: dict) -> dict:
+    """What *spec*'s child reported; "hung" when it was still waiting at its timeout and was killed."""
+    env = {**os.environ, "PYTHONPATH": os.pathsep.join(p for p in sys.path if p)}
+    try:
+        done = subprocess.run(  # noqa: S603 - this interpreter and a fixed script
+            [sys.executable, "-c", CHILD, json.dumps(spec)],
+            capture_output=True, text=True, timeout=CHILD_SECONDS, env=env, check=False,
+        )  # fmt: skip
+    except subprocess.TimeoutExpired:
+        return {"outcome": "hung", "fired": True, "said": ""}
+    assert done.returncode == 0, done.stderr
+    return json.loads(done.stdout.strip().splitlines()[-1])
+
+
+PIPE_CASES = [
+    ("finish", "before"), ("abandon", "before"), ("abandon", "fsync"), ("abandon", "git"),
+    ("save", "put-back"), ("transaction", "before"),
+]  # fmt: skip
+
+
+@pytest.mark.parametrize(("action", "when"), PIPE_CASES, ids=[f"{a}-{w}" for a, w in PIPE_CASES])
+def test_a_batch_file_that_becomes_a_pipe_is_refused_and_never_waited_on(picking, monkeypatch, action, when):
+    """A batch's file is a pipe before Finish or Abandon, or before a transaction plans its batch, or becomes one
+    during the put-back proof's folder fsync, during the Git probe after it, or as a refused commit's files are
+    put back. Every read opens it without waiting: the call refuses, the batch keeps its journal, Git stays as it was.
+    """
+    _seed(picking)
+    shared = picking.shared
+    items, first, _ = _update_and_successor(picking)
+    spec = {"root": str(shared.root), "target": str(first), "action": action, "when": when, "project": PROJECT}
+    if action in ("finish", "abandon"):
+        spec["generation"] = _interrupt_at(picking, monkeypatch, items)
+    spec["id"], spec["head"] = items[0][0].id, shared.git("rev-parse", "HEAD").stdout.strip()
+    if action == "transaction":
+        target = shared.root / PROJECT / "changes" / "record.json"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        spec["target"] = str(target)
+    journal = decision_batch.journal_path(shared)
+    kept, git = journal.read_bytes() if journal.exists() else None, _git_state(shared)
+
+    said = _bounded(spec)
+
+    assert said["outcome"] != "hung", said
+    assert said["fired"]
+    assert stat.S_ISFIFO(os.lstat(spec["target"]).st_mode)  # the pipe is left as it is, never written into
+    assert _git_state(shared) == git
+    if action in ("finish", "abandon"):
+        assert said["outcome"] == "DecisionsUnavailable", said
+        assert journal.read_bytes() == kept  # the batch stays interrupted, its journal untouched
+        return
+    if (action, when) == ("save", "put-back"):
+        assert (said["outcome"], said["said"]) == ("returned", [False])
+        assert decision_batch.pending(shared) is not None  # nothing proved put back: kept for the owner
+        return
+    assert said["outcome"] in {"DecisionsUnavailable", "NotRegularError"}, said  # refused before any journal
+    assert decision_batch.pending(shared) is None
+    assert (journal.read_bytes() if journal.exists() else None) == kept
+
+
+def test_a_folder_fsync_refuses_a_pipe_or_a_link_at_the_folders_name(tmp_path):
+    """A pipe swapped in for a moved folder is refused without waiting, a link is never synced through, and a plain
+    folder is synced as before."""
+    pipe, link, folder = tmp_path / "pipe", tmp_path / "link", tmp_path / "folder"
+    folder.mkdir()
+    os.mkfifo(pipe)
+    link.symlink_to(folder, target_is_directory=True)
+
+    said = _bounded({"root": str(tmp_path), "target": str(pipe), "action": "fsync-dir", "when": "none"})
+
+    assert said["outcome"] != "hung", said
+    assert said["outcome"] in {"NotADirectoryError", "OSError"}, said
+    with pytest.raises(OSError, match=r"Errno"):
+        storage_io.fsync_dir(link)
+    storage_io.fsync_dir(folder)
+
+
+def test_a_regular_file_is_read_and_a_missing_one_is_none(tmp_path):
+    """The checked reader reads a regular file whole and names a missing one None; a link or a pipe raises at once."""
+    regular, missing, pipe, link = tmp_path / "regular", tmp_path / "missing", tmp_path / "pipe", tmp_path / "link"
+    regular.write_bytes(b"bytes\n" * 20000)
+    os.mkfifo(pipe)
+    link.symlink_to(regular)
+
+    assert storage_io.read_regular(regular) == b"bytes\n" * 20000
+    assert storage_io.read_regular(missing) is None
+    assert storage_io.read_regular(tmp_path / "no-folder" / "missing") is None
+    with pytest.raises(storage_io.NotRegularError):
+        storage_io.read_regular(pipe)
+    with pytest.raises(OSError, match=r"Errno"):
+        storage_io.read_regular(link)

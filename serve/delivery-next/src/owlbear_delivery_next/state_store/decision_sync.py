@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 
 from owlbear_decisions import DecisionFileError
 from owlbear_decisions.storage import DECISIONS_DIR, parse
+from owlbear_delivery_next.local_system import storage_io
 from owlbear_delivery_next.local_system.data_repo import Committed, DataRepoError
 from owlbear_delivery_next.state_store import decision_batch
 from owlbear_delivery_next.state_store.decision_target import Continuation, Target, push_commit, target
@@ -307,11 +308,12 @@ def _journalled(shared: DataRepo, rels: set[str], before: str) -> tuple[Rows, Se
     return rows, Sent(notice=notice, ambiguous=True)
 
 
-def _bytes(path: Path) -> bytes | None:
+def _bytes(path: Path) -> bytes | OSError | None:
+    """*path*'s bytes as the batch check reads them (`storage_io.read_regular`); a pipe or a link is never held."""
     try:
-        return path.read_bytes()
-    except FileNotFoundError:
-        return None
+        return storage_io.read_regular(path)
+    except OSError as exc:
+        return exc
 
 
 def _holds(shared: DataRepo, commit: str, rows: Rows, paths: list[Path], until: float) -> bool:

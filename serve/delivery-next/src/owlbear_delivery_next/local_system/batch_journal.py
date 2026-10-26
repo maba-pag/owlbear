@@ -12,7 +12,6 @@ import binascii
 import json
 import os
 import re
-import stat
 import time
 import unicodedata
 from contextlib import contextmanager
@@ -20,7 +19,7 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
 
-from owlbear_delivery_next.local_system.storage_io import open_lock
+from owlbear_delivery_next.local_system.storage_io import NotRegularError, open_lock, read_regular
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -259,25 +258,13 @@ def read(path: Path) -> bytes | None:
     dangling one, a pipe or a folder at its name is damage, never a missing journal that would clear the barrier.
     """
     try:
-        descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
-    except FileNotFoundError:
-        return None
+        return read_regular(path)
+    except NotRegularError as exc:
+        msg = f"the interrupted-batch journal {path.name} is not a regular file"
+        raise JournalError(msg) from exc
     except OSError as exc:
         msg = f"the interrupted-batch journal {path.name} cannot be read: {exc}"
         raise JournalError(msg) from exc
-    try:
-        if not stat.S_ISREG(os.fstat(descriptor).st_mode):
-            msg = f"the interrupted-batch journal {path.name} is not a regular file"
-            raise JournalError(msg)
-        chunks = []
-        while chunk := os.read(descriptor, 1 << 16):
-            chunks.append(chunk)
-        return b"".join(chunks)
-    except OSError as exc:
-        msg = f"the interrupted-batch journal {path.name} cannot be read: {exc}"
-        raise JournalError(msg) from exc
-    finally:
-        os.close(descriptor)
 
 
 def pending(shared: DataRepo, until: float | None = None) -> Batch | None:

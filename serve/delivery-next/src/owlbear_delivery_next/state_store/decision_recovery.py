@@ -124,7 +124,11 @@ def _preflight(root: DataRepo, batch: decision_batch.Batch) -> None:
                     f"batch {batch.generation} is not changed"
                 )
                 raise DecisionsUnavailable(msg, RECOVER)
-        current = path.read_bytes() if path.exists() else None
+        try:
+            current = storage_io.read_regular(path)
+        except OSError as exc:  # a pipe, a link or an unreadable file: refused before any write, the batch kept
+            msg = f"{rel} cannot be read as a plain file ({exc}), so batch {batch.generation} is not changed"
+            raise DecisionsUnavailable(msg, RECOVER) from exc
         if current not in (before, after):
             msg = f"{rel} was edited since batch {batch.generation} began, so nothing is changed; resolve it by hand"
             raise DecisionsUnavailable(msg, RECOVER)

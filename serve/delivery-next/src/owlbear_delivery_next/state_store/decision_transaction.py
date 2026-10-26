@@ -5,6 +5,7 @@ from __future__ import annotations
 import time
 from typing import TYPE_CHECKING, NamedTuple
 
+from owlbear_delivery_next.local_system import storage_io
 from owlbear_delivery_next.local_system.data_repo import SAVE_SECONDS, DataRepoError
 from owlbear_delivery_next.state_store import decision_batch
 from owlbear_delivery_next.state_store import decision_store as store
@@ -211,4 +212,8 @@ def worktree_holds(shared: DataRepo, rel: str, after: bytes) -> bool:
     path = shared.root / rel
     if not (decision_batch.plain_in_checkout(shared.root, path) and path.is_file()):
         return False
-    return path.read_bytes() == after and decision_batch.still_plain(shared.root, [path])
+    try:
+        held = storage_io.read_regular(path) == after  # a pipe swapped in after the check raises, never blocks
+    except OSError:
+        return False
+    return held and decision_batch.still_plain(shared.root, [path])

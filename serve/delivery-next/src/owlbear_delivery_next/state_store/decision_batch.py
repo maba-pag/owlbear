@@ -18,6 +18,7 @@ from contextlib import suppress
 from typing import TYPE_CHECKING
 
 from owlbear_decisions.storage import bound, install, own_temporary
+from owlbear_delivery_next.local_system import storage_io
 from owlbear_delivery_next.local_system.batch_journal import (  # noqa: F401 - the store's journal API, read below it
     COMPLETED,
     GENERATION,
@@ -88,10 +89,8 @@ def replace_file(
 
 
 def _held(path: Path) -> bytes | None:
-    try:
-        return path.read_bytes()
-    except FileNotFoundError:
-        return None
+    """*path*'s bytes as a proof reads them (`storage_io.read_regular`): a pipe or a link there raises `OSError`."""
+    return storage_io.read_regular(path)
 
 
 def plain_in_checkout(root: Path, path: Path) -> bool:

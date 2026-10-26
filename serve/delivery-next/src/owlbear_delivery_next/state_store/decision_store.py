@@ -360,10 +360,8 @@ def write_batch(
 
 
 def _content(path: Path) -> bytes | None:
-    try:
-        return path.read_bytes()
-    except FileNotFoundError:
-        return None
+    """*path*'s bytes, None only when absent; a pipe, a link or any unreadable file raises `OSError`, never a blank."""
+    return storage_io.read_regular(path)
 
 
 def _put_back(

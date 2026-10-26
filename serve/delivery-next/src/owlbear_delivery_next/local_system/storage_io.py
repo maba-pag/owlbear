@@ -62,12 +62,43 @@ def atomic_write(target: Path, content: str) -> os.stat_result:
 
 
 def fsync_dir(folder: Path) -> None:
-    """Make the entries of *folder* durable: a rename or unlink in it survives power loss only after this."""
-    dir_fd = os.open(str(folder), os.O_RDONLY)
+    """Make the entries of *folder* durable: a rename or unlink in it survives power loss only after this.
+
+    *folder* is opened as a folder only, without following a link at its name or waiting on a pipe: anything else
+    there raises, so a pipe swapped in for a moved folder never blocks and a link is never synced through.
+    """
+    dir_fd = os.open(str(folder), os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
     try:
         os.fsync(dir_fd)
     finally:
         os.close(dir_fd)
+
+
+class NotRegularError(OSError):
+    """A name holds something other than a regular file: a pipe, a folder or a device, so it is never read."""
+
+
+def read_regular(path: Path) -> bytes | None:
+    """*path*'s bytes, from a regular file only; None only when no entry has its name.
+
+    It is opened without following a link and without waiting on a pipe: a link raises `OSError`, any other kind of
+    file `NotRegularError`, and every other failure its `OSError`, never an empty or missing answer. The descriptor
+    is closed on every path.
+    """
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
+    except FileNotFoundError:
+        return None
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            msg = f"{path.name} is not a regular file"
+            raise NotRegularError(msg)
+        chunks = []
+        while chunk := os.read(fd, 1 << 16):
+            chunks.append(chunk)
+        return b"".join(chunks)
+    finally:
+        os.close(fd)
 
 
 def make_dirs(folder: Path) -> None:
