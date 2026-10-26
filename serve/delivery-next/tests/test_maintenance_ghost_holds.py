@@ -1,5 +1,6 @@
 """Ghost holds: a modern run whose workspace the ledger already owns is not imported again; a legacy hold still is."""
 
+import json
 from datetime import UTC, datetime
 from types import SimpleNamespace
 
@@ -76,9 +77,11 @@ def test_the_unloaded_ownership_check_is_what_keeps_a_modern_run_from_a_second_h
 def test_a_genuine_legacy_uncertain_run_is_still_held_with_its_generation(tmp_path):
     (tmp_path / session_slots.pack_run.UPDATER).mkdir()
     owner = maintenance.Maintenance(Slots(lambda: 1), boot=lambda: 10.0)
-    state = {"state": "running", "run": "legacy-1", "started_at": STARTED}
-    session_slots.interrupted(job_for(owner, tmp_path, state=state), "p")
+    record = session_slots.pack_state.blank() | {"state": "running", "run": "legacy-1", "started_at": STARTED}
+    (tmp_path / session_slots.pack_state.FILE).write_text(json.dumps(record))  # the record the Job read, on disk
+    state, version = session_slots.pack_state.read_version(tmp_path / session_slots.pack_state.FILE)
+    session_slots.interrupted(job_for(owner, tmp_path, state=state, version=version), "p")
     (lease,) = owner.read()["sessions"]
     assert lease["state"] == "held"
-    session_slots.interrupted(job_for(owner, tmp_path, state=state), "p")
+    session_slots.interrupted(job_for(owner, tmp_path, state=state, version=version), "p")
     assert len(owner.read()["sessions"]) == 1

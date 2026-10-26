@@ -165,29 +165,29 @@ def packed(host: Host | None, job: Job) -> Job:
 
 
 def interrupted(job: Job, key: str) -> None:
-    """Hold the uncertain pack work a last host left running, whether or not it has PIDs or a directory."""
+    """Hold the uncertain pack work a last host left running, whether or not it has PIDs or a directory.
+
+    Whatever the Job's startup did with the record, kept it as read, ended an interrupted run or set a stopped
+    publication waiting, only the file still holding that very record at that version is what the Job saw: anything
+    written over it is restored as it stands, held before any admission, and never receipted to the Job's run.
+    """
     maintenance, legacy = job.maintenance, job.store.root / pack_run.UPDATER
     if maintenance is None:
         return
+    current = job.version in {"", "absent"} or pack_state.holds(job.store.root, job.state, job.version)
     if job.interrupted is not None:
         run = job.interrupted
-        # Only the file's own rewrite, read whole and stable at the version the Job wrote, is this run: anything
-        # written over it is restored as it stands, whatever this run is, so it is held before admission.
-        own = pack_state.holds(job.store.root, job.state, job.version)
-        if run["workspace"] and maintenance.owns(run["workspace"]):
-            if not own:
-                restore(maintenance, key, job.store.root)
-            return  # the ledger already holds this run's own lease; importing it again would hold it twice
-        notes: tuple[str, ...] = ()
-        if own and not run["workspace"]:  # the file holds its own rewrite at that version: receipted to its run
-            notes = (maintenance.receipt_note(key, pack_state.digest(job.version), run["generation"]),)
-        _hold(maintenance, key, run["workspace"] or str(legacy), run["generation"], notes=notes)  # one save, both
-        if not own:  # another run was written over the rewrite: what the file holds now is held as it is, unreceipted
-            restore(maintenance, key, job.store.root)
+        if not (run["workspace"] and maintenance.owns(run["workspace"])):  # owned: importing it again holds it twice
+            notes: tuple[str, ...] = ()
+            if current and not run["workspace"]:  # the file holds its own rewrite at that version: receipted to it
+                notes = (maintenance.receipt_note(key, pack_state.digest(job.version), run["generation"]),)
+            _hold(maintenance, key, run["workspace"] or str(legacy), run["generation"], notes=notes)  # one save
     elif job.version == "":
         maintenance.adopt_uncertain(f"{key}:unreadable", key, "pack", workspace=str(legacy))
     elif "workspace" not in job.state and (legacy.is_dir() or pack_job.legacy_uncertain(job.state)):
         _adopt_legacy(maintenance, key, legacy, job.state, job.version)
+    if not current:
+        restore(maintenance, key, job.store.root)
 
 
 def _identity(

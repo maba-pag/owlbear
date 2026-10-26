@@ -227,7 +227,7 @@ def holds(root: Path, record: dict[str, Any], version: str) -> bool:
         got = observed(root)
     except OSError, ValueError:
         return False
-    return got is not None and got[1] == version and got[0] == json.loads(json.dumps(record))
+    return got is not None and got[1] == version and blank() | got[0] == json.loads(json.dumps(record))
 
 
 def resolved(record: dict[str, Any], version: str, receipted: Callable[[str], str]) -> tuple[str, datetime | None]:

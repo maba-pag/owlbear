@@ -1096,3 +1096,64 @@ def test_a_modern_owned_runs_own_rewrite_adds_no_hold_beside_it(tmp_path, machin
         m.load_all()
         assert [s["id"] for s in sessions_of(m, good.id)] == [a]
         m.stop_all()
+
+
+PUBLISHING = {  # a run main stopped while it published: the Job's startup returns it to the owner, waiting
+    "state": "running", "run": "pub-a", "started_at": STARTED, "stage": "pull-request",
+    "context": {
+        "tag": "v9", "why": "design pack: v8 to v9", "diff": "", "golden": "", "pins": {}, "manifest": "",
+        "notice": "", "baseline": {}, "checkout": {}, "start": {}, "sid": "s",
+        "publication": {"root": "/r", "repository": "o/r", "base": "b", "branch": "pack/v9", "body": "the PR text",
+                        "number": 7, "url": "https://example.invalid/pull/7"},
+    },
+}  # fmt: skip
+
+
+def publishing_project(machines, tmp_path, shared_repo):
+    shared, _remote = shared_repo
+    good, _clone_folder = open_project(tmp_path, shared, "good")
+    settled = machines()
+    settled.load_all()  # the store moves to its home folder
+    settled.stop_all()
+    live = project_home.current(Path(good.path))
+    write_pack(live, PUBLISHING)
+    shutil.rmtree(live / pack_run.UPDATER)  # a publication's folder is gone: no legacy folder holds on its own
+    return good, live
+
+
+def test_a_run_written_over_a_publication_the_job_returns_to_its_owner_is_held_before_another_project_is_admitted(
+    tmp_path, machines, shared_repo
+):
+    """Review 4379379502: the startup rewrite that sets a stopped publication waiting is checked as every other one.
+
+    B overwrites the file right after that rewrite; the loaded project holds B at once, and the publication waits.
+    """
+    good, _live = publishing_project(machines, tmp_path, shared_repo)
+    other = registry.register(clone(tmp_path / "other"))
+    m = machines()
+    m.slots.total = lambda: 2
+    patch = overwritten_after_publish({"state": "running", "stage": "update"})  # B: no identity
+    try:
+        with pytest.MonkeyPatch.context() as no_unloaded:
+            no_unloaded.setattr(session_slots, "unloaded", lambda *_a: pytest.fail("a loaded project read unloaded"))
+            m.load_all()
+    finally:
+        patch.undo()
+    assert (m.projects[good.id].state, [s["state"] for s in sessions_of(m, good.id)]) == ("loaded", ["held"])
+    assert (m.slots.take(other.id, "probe", 1, 1), m.slots.take(other.id, "probe2", 1, 2)) == (1, 0)
+
+
+def test_a_publication_the_job_returns_to_its_owner_holds_nothing_and_keeps_its_context(
+    tmp_path, machines, shared_repo
+):
+    """Control: with nothing written over it, the publication waits for its owner, whole, and holds no slot."""
+    good, live = publishing_project(machines, tmp_path, shared_repo)
+    for _ in range(2):
+        m = machines()
+        m.load_all()
+        kept = json.loads((live / pack_job.FILE).read_text())
+        assert (sessions_of(m, good.id), kept["state"], kept["context"]["publication"]["body"]) == (
+            [], "waiting", "the PR text",
+        )  # fmt: skip
+        assert [q["kind"] for q in kept["questions"]] == ["publish"]
+        m.stop_all()
