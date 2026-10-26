@@ -96,8 +96,7 @@ def _scrubbed(value: Any) -> Any:  # noqa: ANN401 - JSON values
     if isinstance(value, list):
         return [_scrubbed(v) for v in value]
     if isinstance(value, dict):
-        return {k: "***" if secret_key(str(k)) and not isinstance(v, dict | list) else _scrubbed(v)
-                for k, v in value.items()}  # fmt: skip
+        return {k: "***" if secret_key(str(k)) else _scrubbed(v) for k, v in value.items()}
     return value
 
 
@@ -114,15 +113,14 @@ def kept_text(value: object, n: int) -> str:
     return omitted(len(s)) if len(s) > RAW else clip(clean(s), n)
 
 
-def result_text(data: dict[str, Any]) -> str:
-    """A completed call's result as the agent saw it, else its error."""
+def result_text(data: dict[str, Any]) -> Any:  # noqa: ANN401 - a text, or a structured error as given
+    """A completed call's result as the agent saw it, else its error (a structured one as it is, cleaned later)."""
     result = data.get("result")
     if isinstance(result, dict):
         return str(result.get("content") or result.get("detailedContent") or "")
     if isinstance(result, str):
         return result
-    error = data.get("error")
-    return error if isinstance(error, str) else json.dumps(error) if error else ""
+    return data.get("error") or ""
 
 
 class Kept:

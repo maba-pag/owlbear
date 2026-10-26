@@ -711,3 +711,14 @@ def test_a_hand_off_skipped_for_capacity_keeps_the_events_seen_as_its_cutoff() -
 
     asyncio.run(main())
     assert sorted((r["skipped"][:8], r["cutoff"]) for r in records()) == [("", 3), ("", 3), ("capacity", 3)]
+
+
+def test_credential_named_containers_and_structured_errors_are_cleaned_before_encoding() -> None:
+    kept = Kept()
+    kept.add(started("c1", "bash", {"credentials": ["canary collection private value"], "command": "ls"}))
+    failure = {"message": "denied: pass" + 'word="Q1w2 E3r4 secret"', "code": "denied"}
+    kept.add(event("tool.execution_complete", {"toolCallId": "c1", "success": False, "error": failure}))
+    text = json.dumps(card.build(kept.snapshot(), {"at": "2026-10-26T10:01:00+00:00"}, {}))
+    assert "canary" not in text
+    assert "Q1w2" not in text
+    assert "denied" in text
