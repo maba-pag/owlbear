@@ -22,7 +22,7 @@ from owlbear_delivery_next.runtimes import readiness
 from owlbear_delivery_next.settings import config, profile
 from owlbear_delivery_next.settings.config import Layer, Prefs
 from owlbear_delivery_next.state_store import prefs_import, profile_share
-from owlbear_delivery_next.state_store.store import Store, StoreError
+from owlbear_delivery_next.state_store.store import RoleSourceError, Store, StoreError
 
 AUTH = {"authorization": "Bearer " + "t"}
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
@@ -381,6 +381,7 @@ def test_a_refused_config_during_an_ordinary_save_keeps_new_facts_for_the_retry(
 
 
 UNREADABLE = '{"format": 4, "prefs_import": "%s", "prefs_basis": "", "models": {}}'
+PROFILE_CHECKS = ("profile detection", "legacy preferences")  # the host checks that depend on this clone's profile
 
 
 def test_repair_keeps_a_done_import_guard_and_does_not_reimport(local: Store) -> None:
@@ -587,6 +588,54 @@ def test_shared_repair_refuses_a_malformed_guard_and_keeps_the_source_bytes(
     source.write_text(raw)
     with pytest.raises(StoreError):
         setup.run(repo, [], yes=True, local_files="no")
+    assert source.read_text() == raw
+    assert not profile_share.path(store).exists()
+    assert not store.config_path.exists()
+    assert not (store.root / profile_share.ROLES_MOVED).exists()
+
+
+def test_shared_repair_success_lets_a_fresh_open_and_readiness_run_with_the_published_guard(
+    repo: Path, shared_repo, monkeypatch, capsys
+) -> None:
+    real_check = readiness.check
+    store = shared_project(repo, shared_repo, monkeypatch)
+    source = store.root / profile_share.PROFILE
+    raw = '{"format": 4, "prefs_import": "done", "prefs_basis": "basis-1", "prefs_claim": "nonce-1", "models": 5}'
+    source.write_text(raw)
+    assert setup.run(repo, [], yes=False, local_files="no", ask=lambda _q: "y") == 0
+    assert "cannot be read" in capsys.readouterr().out
+    monkeypatch.setattr(readiness, "check", real_check)
+    fresh = Store.open(repo)
+    assert fresh.deferred_roles is None
+    published = fresh.read_profile()
+    assert published is not None
+    assert published.confirmed_at is not None
+    assert (published.prefs_import, published.prefs_basis, published.prefs_claim) == ("done", "basis-1", "nonce-1")
+    assert source.read_text() == raw
+    assert (store.root / profile_share.ROLES_MOVED).exists()
+    assert not store.config_path.exists()
+    assert [check for check in readiness.ready(fresh, repo) if not check.ok and check.name in PROFILE_CHECKS] == []
+
+
+def test_shared_repair_of_a_readable_profile_refuses_when_its_role_write_fails_before_probe(
+    repo: Path, shared_repo, monkeypatch, capsys
+) -> None:
+    store = shared_project(repo, shared_repo, monkeypatch)
+    source = store.root / profile_share.PROFILE
+    raw = '{"format": 1, "roles": {"reviewer": {"model": "r-1", "effort": "max"}}}'
+    source.write_text(raw)
+    monkeypatch.setattr(setup.profile, "detect", lambda *_a: pytest.fail("no probe before the role write succeeds"))
+    monkeypatch.setattr(Store, "write_profile", lambda *_a, **_k: pytest.fail("no profile write before the roles"))
+
+    def refused_config(*_a: object, **_k: object) -> None:
+        msg = "fetch failed"
+        raise StoreError(msg)
+
+    monkeypatch.setattr(Store, "update_config", refused_config)
+    with pytest.raises(StoreError, match="fetch failed") as info:
+        setup.run(repo, [], yes=True, local_files="no")
+    assert not isinstance(info.value, RoleSourceError)
+    assert "cannot be read" not in capsys.readouterr().out
     assert source.read_text() == raw
     assert not profile_share.path(store).exists()
     assert not store.config_path.exists()
