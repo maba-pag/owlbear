@@ -21,7 +21,7 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
 
-from owlbear_decisions.storage import discard_temporary, own_temporary
+from owlbear_decisions.storage import install, own_temporary
 from owlbear_delivery_next.local_system.storage_io import fsync_dir, open_lock
 
 if TYPE_CHECKING:
@@ -87,8 +87,8 @@ def replace_file(path: Path, data: bytes | None, fence: Callable[[], None] | Non
 
     *fence*, when given, runs last before the rename or unlink, after the new bytes are durable in their temporary
     file: a slow fsync cannot outlast the caller's proof that the file is still its to change. The temporary file is
-    made, renamed and, when *fence* or the rename fails, removed relative to the folder it was made in, and only while
-    it is still this write's own (`discard_temporary`); *path* is then left as it is.
+    made, checked, renamed and fsynced in the folder it was made in, held open throughout (`own_temporary`,
+    `install`); it is removed only while its name still holds it, and *path* is then left as it is.
     """
     if data is None:
         if not path.parent.exists():  # no folder means no file to remove, and nothing to make durable
@@ -100,17 +100,12 @@ def replace_file(path: Path, data: bytes | None, fence: Callable[[], None] | Non
         return
     folder = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
     try:
-        name, identity = own_temporary(folder, data)
-        try:
+        with own_temporary(folder, data) as temporary:
             if fence is not None:
                 fence()
-            os.replace(name, path.name, src_dir_fd=folder, dst_dir_fd=folder)
-        except BaseException:
-            discard_temporary(folder, name, identity)  # only this write's own file, in the folder it was made in
-            raise
+            install(temporary, path.name)
     finally:
         os.close(folder)
-    fsync_dir(path.parent)
 
 
 def _held(path: Path) -> bytes | None:

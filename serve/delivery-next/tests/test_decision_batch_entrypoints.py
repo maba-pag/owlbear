@@ -7,9 +7,11 @@ stays in flight exactly as the crash would leave it, then drives the public reco
 from __future__ import annotations
 
 import base64
+import contextlib
 import json
 import os
 import shutil
+import stat
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
@@ -1145,10 +1147,13 @@ def _after_temporary_fsync(m: pytest.MonkeyPatch, module, folder: Path, action) 
     real_own, real_fsync = module.own_temporary, os.fsync
     inside, done = [False], [False]
 
+    @contextlib.contextmanager
     def own(folder_fd, data):
         inside[0] = os.path.samestat(os.fstat(folder_fd), folder.stat())
         try:
-            return real_own(folder_fd, data)
+            with real_own(folder_fd, data) as temporary:  # its write and fsync run on entering
+                inside[0] = False
+                yield temporary
         finally:
             inside[0] = False
 
@@ -1851,3 +1856,164 @@ def test_a_refused_write_removes_only_its_own_temporary(tmp_path, monkeypatch, w
         assert left == {seen[0]: owner}
     else:
         assert list(left) == seen  # not removed while it is unknown whose it is
+
+
+def _temporaries(folder: Path) -> list[Path]:
+    return [p for p in folder.iterdir() if p.name.endswith(".tmp")]
+
+
+def _substitute(folder: Path, data: bytes) -> str:
+    """Put another file, holding *data*, at the name of the one temporary file in *folder*; that name."""
+    (temporary,) = _temporaries(folder)
+    other = folder / "other"
+    other.write_bytes(data)
+    other.replace(temporary)
+    return temporary.name
+
+
+@pytest.mark.parametrize("writer", ["batch", "decisions"])
+def test_a_temporary_name_holding_another_file_when_the_fence_passes_is_never_installed(tmp_path, writer):
+    folder = tmp_path / "layer" / "decisions"
+    substitute = b"someone else's file\n"
+    names: list[str] = []
+
+    def passing_fence_after_a_substitute() -> None:
+        names.append(_substitute(folder, substitute))
+
+    with pytest.raises(storage.TemporaryReplacedError):
+        _write_with(writer, tmp_path, passing_fence_after_a_substitute)
+
+    assert {p.name: p.read_bytes() for p in folder.iterdir()} == {names[0]: substitute}  # nothing moved or removed
+
+
+def test_a_save_whose_temporary_name_is_substituted_installs_nothing(picking, monkeypatch):
+    """During the save's own write, after its temporary is durable and before its fence, another file takes the name."""
+    _seed(picking)
+    shared = picking.shared
+    old = make(title="Notes stay in one table")
+    assert decision_store.save(shared, old, expected_revision=None, message="decisions: old").published
+    update = old.model_copy(update={"title": "Notes stay in one SQLite table"})
+    target = shared.root / f"{PROJECT}/decisions/{old.id}.md"
+    before, substitute = target.read_bytes(), b"someone else's file\n"
+    git, names = _git_state(shared), []
+
+    with monkeypatch.context() as m:
+        _after_temporary_fsync(m, storage, target.parent, lambda: names.append(_substitute(target.parent, substitute)))
+        with pytest.raises(decision_store.DecisionsUnavailable, match="was replaced"):
+            decision_store.save(shared, update, expected_revision=old.revision, message="decisions: one")
+
+    assert target.read_bytes() == before  # the decision is not overwritten by the substitute
+    assert (target.parent / names[0]).read_bytes() == substitute  # and the substitute is not removed
+    assert _git_state(shared) == git
+    assert decision_batch.pending(shared) is None  # nothing of the batch changed, so its put-back settles it
+    assert decision_store.load(shared, PROJECT).snapshot.get(old.id).decision.revision == old.revision
+
+
+@pytest.mark.parametrize("writer", ["batch", "decisions"])
+def test_a_recreated_temporary_name_is_left_while_the_write_still_holds_its_file_open(tmp_path, monkeypatch, writer):
+    """The owner removes the temporary and makes another file at its name; the write's descriptor is still open, so
+    that file cannot have the same device and inode, and the cleanup leaves it."""
+    folder = tmp_path / "layer" / "decisions"
+    recreated = b"the owner's new file\n"
+    held: list[tuple[int, tuple[int, int]]] = []
+    real_holds = storage.Temporary.holds_name
+
+    def holds_with_a_live_descriptor(self) -> bool:
+        found = os.fstat(self.descriptor)  # raises if the descriptor were already closed
+        held.append(((found.st_dev, found.st_ino) == self.identity, self.identity))
+        return real_holds(self)
+
+    def recreating_fence() -> None:
+        (temporary,) = _temporaries(folder)
+        temporary.unlink()
+        temporary.write_bytes(recreated)
+        msg = "the fence refused"
+        raise RuntimeError(msg)
+
+    with monkeypatch.context() as m:
+        m.setattr(storage.Temporary, "holds_name", holds_with_a_live_descriptor)
+        with pytest.raises(RuntimeError, match="fence refused"):
+            _write_with(writer, tmp_path, recreating_fence)
+
+    ((live, identity),) = held
+    assert live
+    ((name, data),) = [(p, p.read_bytes()) for p in folder.iterdir()]
+    assert data == recreated
+    found = name.stat()
+    assert (found.st_dev, found.st_ino) != identity
+
+
+@pytest.mark.parametrize("fault", ["first-fstat", "write"])
+@pytest.mark.parametrize("writer", ["batch", "decisions"])
+def test_a_fault_while_the_temporary_is_made_leaks_no_descriptor(tmp_path, monkeypatch, writer, fault):
+    """`first-fstat`: the file's identity cannot be read, so its name is left rather than guessed at. `write`: the
+    identity is known, so the file is removed. Either way every descriptor is closed and the error is raised."""
+    folder = tmp_path / "layer" / "decisions"
+    made: list[int] = []
+    real_open, real_fstat, real_write = os.open, os.fstat, os.write
+
+    def recording_open(path, flags, *args, **kwargs):
+        descriptor = real_open(path, flags, *args, **kwargs)
+        if kwargs.get("dir_fd") is not None and str(path).endswith(".tmp"):
+            made.append(descriptor)
+        return descriptor
+
+    def failing_fstat(descriptor, *args, **kwargs):
+        if fault == "first-fstat" and descriptor in made:
+            raise OSError(5, "Input/output error")
+        return real_fstat(descriptor, *args, **kwargs)
+
+    def failing_write(descriptor, data):
+        if fault == "write" and descriptor in made:
+            raise OSError(5, "Input/output error")
+        return real_write(descriptor, data)
+
+    open_before = sum(1 for _ in Path("/dev/fd").iterdir())
+    with monkeypatch.context() as m:
+        m.setattr(os, "open", recording_open)
+        m.setattr(os, "fstat", failing_fstat)
+        m.setattr(os, "write", failing_write)
+        with pytest.raises(OSError, match="Input/output error"):
+            _write_with(writer, tmp_path, None)
+
+    assert sum(1 for _ in Path("/dev/fd").iterdir()) == open_before  # every descriptor of the write is closed
+    assert made
+    left = [p.name for p in folder.iterdir()]
+    if fault == "write":
+        assert left == []  # its identity was known, so its own file is removed
+    else:
+        assert len(left) == 1  # whose file the name holds is unknown, so it is left, and the error is raised
+        assert left[0].endswith(".tmp")
+
+
+@pytest.mark.parametrize("writer", ["batch", "decisions"])
+def test_a_folder_swapped_after_the_fence_gets_the_rename_and_fsync_in_the_original_folder(
+    tmp_path, monkeypatch, writer
+):
+    """After the fence passes, the owner moves the folder aside and links its path to a foreign folder. The rename and
+    its fsync both stay in the folder the temporary was made in; the foreign folder is neither written nor fsynced."""
+    folder = tmp_path / "layer" / "decisions"
+    moved, foreign = tmp_path / "moved", tmp_path / "foreign"
+    foreign.mkdir()
+    (foreign / "marker.txt").write_text("foreign\n")
+    synced: list[os.stat_result] = []
+    real_fsync = os.fsync
+
+    def recording_fsync(descriptor: int) -> None:
+        found = os.fstat(descriptor)
+        if stat.S_ISDIR(found.st_mode):
+            synced.append(found)
+        real_fsync(descriptor)
+
+    def fence_then_owner_swaps() -> None:
+        folder.rename(moved)
+        folder.symlink_to(foreign, target_is_directory=True)
+
+    with monkeypatch.context() as m:
+        m.setattr(os, "fsync", recording_fsync)
+        path = _write_with(writer, tmp_path, fence_then_owner_swaps)
+
+    assert {p.name for p in moved.iterdir()} == {path.name}  # renamed in the original folder, no temporary left
+    assert {p.name: p.read_text() for p in foreign.iterdir()} == {"marker.txt": "foreign\n"}
+    assert any(os.path.samestat(found, moved.stat()) for found in synced)
+    assert not any(os.path.samestat(found, foreign.stat()) for found in synced)

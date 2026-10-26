@@ -197,11 +197,41 @@ def check_write(current: Decision | None, decision: Decision, expected_revision:
         raise ImmutableError(msg)
 
 
-def own_temporary(folder: int, data: bytes) -> tuple[str, tuple[int, int]]:
-    """Create a new temporary file in the folder open as *folder*, holding *data* durably; its name and identity.
+class TemporaryReplacedError(OSError):
+    """The temporary file's name no longer holds the file this write made, so nothing is installed or removed."""
 
-    The file is made exclusively, never through a link, mode 0600, and named relative to *folder*, so a cleanup reaches
-    this very file even when the folder's path is moved meanwhile. The identity is its device and inode.
+
+@dataclass(frozen=True)
+class Temporary:
+    """A write's own temporary file: the folder it was made in, its name there, and its still-open descriptor.
+
+    The descriptor stays open until the write ends, so the file's device and inode cannot be reused by another file
+    meanwhile: a name holding that identity is this file.
+    """
+
+    folder: int
+    name: str
+    descriptor: int
+    identity: tuple[int, int]
+
+    def holds_name(self) -> bool:
+        """Whether the name still holds this very file; a missing name does not."""
+        try:
+            found = os.stat(self.name, dir_fd=self.folder, follow_symlinks=False)
+        except FileNotFoundError:
+            return False
+        return (found.st_dev, found.st_ino) == self.identity
+
+
+@contextlib.contextmanager
+def own_temporary(folder: int, data: bytes) -> Iterator[Temporary]:
+    """A new temporary file in the folder open as *folder*, holding *data* durably, for the length of the block.
+
+    The file is made exclusively, never through a link, mode 0600, and named relative to *folder*, so it is reached
+    there even when the folder's path is moved meanwhile. When the block raises, the file is removed only while its name
+    still holds it; a name now holding another file is left as it is. The descriptor is closed on every exit, and an
+    error closing or checking it is raised, never guessed past. When even its identity could not be read, the name is
+    left, since whose file it holds is then unknown.
     """
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC
     while True:
@@ -211,45 +241,46 @@ def own_temporary(folder: int, data: bytes) -> tuple[str, tuple[int, int]]:
         except FileExistsError:
             continue
         break
-    found = os.fstat(descriptor)
-    identity = (found.st_dev, found.st_ino)
     try:
-        with os.fdopen(descriptor, "wb") as handle:
-            handle.write(data)
-            handle.flush()
-            os.fsync(handle.fileno())
+        found = os.fstat(descriptor)
     except BaseException:
-        discard_temporary(folder, name, identity)
+        os.close(descriptor)
         raise
-    return name, identity
-
-
-def discard_temporary(folder: int, name: str, identity: tuple[int, int]) -> None:
-    """Remove the temporary file *name* in *folder*, only while it is still the one `own_temporary` made.
-
-    A name now holding another file (someone else's) is left as it is, and a missing one needs nothing; any other error
-    is raised, since whether the file is gone is then unknown.
-    """
+    temporary = Temporary(folder, name, descriptor, (found.st_dev, found.st_ino))
     try:
-        found = os.stat(name, dir_fd=folder, follow_symlinks=False)
-    except FileNotFoundError:
-        return
-    if (found.st_dev, found.st_ino) == identity:
-        os.unlink(name, dir_fd=folder)
+        view = memoryview(data)
+        while view:
+            view = view[os.write(descriptor, view) :]
+        os.fsync(descriptor)
+        yield temporary
+    except BaseException:
+        if temporary.holds_name():
+            os.unlink(name, dir_fd=folder)
+        raise
+    finally:
+        os.close(descriptor)
+
+
+def install(temporary: Temporary, target: str) -> None:
+    """Rename *temporary* to *target* in its own folder once its name is proved to hold it still; fsync the folder.
+
+    The folder fsynced is the one the rename changed, held open since the file was made, never one reached again by
+    path. A name that now holds another file raises `TemporaryReplacedError`, and nothing is moved.
+    """
+    if not temporary.holds_name():
+        msg = f"the temporary file {temporary.name} was replaced, so nothing is written"
+        raise TemporaryReplacedError(msg)
+    os.replace(temporary.name, target, src_dir_fd=temporary.folder, dst_dir_fd=temporary.folder)
+    os.fsync(temporary.folder)
 
 
 def _replace(path: Path, text: str, fence: Callable[[], None] | None = None) -> None:
     folder = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
     try:
-        name, identity = own_temporary(folder, text.encode("utf-8"))
-        try:
+        with own_temporary(folder, text.encode("utf-8")) as temporary:
             if fence is not None:  # last, once the new bytes are durable: the caller's proof the file is its to change
                 fence()
-            os.replace(name, path.name, src_dir_fd=folder, dst_dir_fd=folder)
-        except BaseException:
-            discard_temporary(folder, name, identity)
-            raise
-        os.fsync(folder)
+            install(temporary, path.name)
     finally:
         os.close(folder)
 

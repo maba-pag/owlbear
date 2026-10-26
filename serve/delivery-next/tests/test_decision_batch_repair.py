@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+import stat
 import subprocess
 from pathlib import Path
 
@@ -54,14 +56,25 @@ def test_make_dirs_creates_nothing_for_an_existing_folder_but_resyncs_its_parent
 
 def test_replace_file_fsyncs_the_parent_after_rename_and_after_unlink(tmp_path: Path, monkeypatch) -> None:
     synced: list[Path] = []
+    folders: list[os.stat_result] = []
+    real_fsync = os.fsync
+
+    def recording_fsync(descriptor: int) -> None:
+        found = os.fstat(descriptor)
+        if stat.S_ISDIR(found.st_mode):
+            folders.append(found)
+        real_fsync(descriptor)
+
     monkeypatch.setattr(decision_batch, "fsync_dir", synced.append)
     target = tmp_path / "decision.json"
 
-    decision_batch.replace_file(target, b"after")
+    with monkeypatch.context() as m:
+        m.setattr(os, "fsync", recording_fsync)
+        decision_batch.replace_file(target, b"after")
     assert target.read_bytes() == b"after"
-    assert synced[-1] == tmp_path
+    assert synced == []  # the rename's folder is fsynced through the descriptor it was made in, not by path again
+    assert any(os.path.samestat(found, tmp_path.stat()) for found in folders)
 
-    synced.clear()
     decision_batch.replace_file(target, None)
     assert not target.exists()
     assert synced == [tmp_path]
