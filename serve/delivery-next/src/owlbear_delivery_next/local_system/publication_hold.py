@@ -55,6 +55,14 @@ def _run(repo: DataRepo, until: float | None, *args: str) -> str:
     return said.stdout
 
 
+def _lines(out: str, what: str) -> list[str]:
+    """Git's newline-terminated values, each kept whole, spaces included; output Git did not terminate is unknown."""
+    if not out.endswith("\n"):
+        msg = f"git printed no complete {what}"
+        raise _UnknownError(msg)
+    return out[:-1].split("\n")
+
+
 def _path(repo: DataRepo, until: float | None) -> Path:
     named = _run(repo, until, "rev-parse", "--git-path", RECORD).strip()
     if not named:
@@ -213,8 +221,8 @@ def _target(repo: DataRepo, push: Sequence[str], until: float | None) -> str:
     """
     branch = _run(repo, until, "symbolic-ref", "-q", "HEAD").strip()
     atoms = "%(upstream:remotename)%00%(upstream:remoteref)%00%(push:remotename)"
-    said = _run(repo, until, "for-each-ref", f"--format={atoms}", branch).strip().split("\0")
-    up_remote, up_ref, remote = [*said, "", "", ""][:3]
+    said = _lines(_run(repo, until, "for-each-ref", f"--format={atoms}", branch), "branch")
+    up_remote, up_ref, remote = [*said[0].split("\0"), "", "", ""][:3] if len(said) == 1 else ("", "", "")
     words = [a for a in push[1:] if a != "-q"]
     if words:  # an explicit push: exactly one remote and one source:destination, never forced
         if (
@@ -232,9 +240,10 @@ def _target(repo: DataRepo, push: Sequence[str], until: float | None) -> str:
     if not (up_remote and up_ref and lands):
         goes = f"{remote or 'no remote'} ({ref or 'no branch'})"
         return f"would be pushed to {goes}, not to its upstream {up_remote} {up_ref} where it was checked"
-    fetched = _run(repo, until, "remote", "get-url", up_remote).split()
-    if _run(repo, until, "remote", "get-url", "--push", "--all", up_remote).split() != fetched:
-        return f"the push address of {up_remote} is not the address its state was read from"
+    fetched = _lines(_run(repo, until, "remote", "get-url", up_remote), "remote address")
+    pushed = _lines(_run(repo, until, "remote", "get-url", "--push", "--all", up_remote), "push address")
+    if len(fetched) != 1 or not fetched[0] or pushed != fetched:  # whole values, compared exactly: one address
+        return f"the push address of {up_remote} is not exactly the one address its state was read from"
     return ""
 
 

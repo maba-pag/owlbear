@@ -617,3 +617,56 @@ def test_a_full_import_through_a_non_default_remote_that_pushes_where_it_fetches
     assert remote_has_config(remote)
     assert winner.read_config().prefs.ci_poll_seconds == 45
     assert not publication_hold.recorded(winner.shared, None)
+
+
+def spaced_forks(three, tmp_path) -> tuple[Store, Path, Path, config_save.Prepared]:
+    """A pending source fork and a settled destination fork whose paths differ only in their inner spaces."""
+    from owlbear_delivery_next.settings.prefs_import import plan  # noqa: PLC0415
+    from owlbear_delivery_next.state_store.profile_share import ABSENT  # noqa: PLC0415
+
+    _, settler, remote = three
+    settler.mark_prefs_import("", "pending", ABSENT, "first")
+    settler.mark_prefs_import("pending", "done")
+    settler.config_path.write_text(Layer().model_dump_json(indent=1))
+    assert settler.shared.publish(settler.config_path, f"settings: {PROJECT}: project layer") == ""
+    settler.config_path.unlink()
+    assert settler.shared.publish(settler.config_path, f"settings: {PROJECT}: project layer removed") == ""
+    dest = tmp_path / "authority  repo.git"  # two spaces: settled, config deleted
+    git(tmp_path, "clone", "-q", "--bare", str(remote), str(dest))
+    settler.mark_prefs_import("done", "pending", ABSENT, "fresh")
+    source = tmp_path / "authority repo.git"  # one space: the fresh claim
+    git(tmp_path, "clone", "-q", "--bare", str(remote), str(source))
+    importer = checkout(source, tmp_path, "importer")
+    claim = importer.read_profile()
+    fields = {"prefs_import": "pending", "prefs_claim": "fresh", "prefs_basis": ABSENT}
+    requires = publication_hold.Requires(profile_share.path(importer), fields, "the import claim")
+    return importer, source, dest, config_save.Prepared(ABSENT, lambda cur: plan(cur, claim), requires)
+
+
+def test_a_push_address_that_differs_only_in_inner_spaces_is_another_repository(three, tmp_path):
+    importer, source, dest, prepared = spaced_forks(three, tmp_path)
+    root = importer.shared.root
+    git(root, "config", "remote.origin.pushurl", str(dest))
+    assert git(root, "rev-parse", "--symbolic-full-name", "@{push}") == "refs/remotes/origin/main"
+    source_before, dest_before = remote_head(source), remote_head(dest)
+
+    assert "is not exactly the one address its state was read from" in importer.update_config(prepared, "carried")
+    _, done, _ = importer.mark_prefs_import("pending", "done")
+    assert "is not exactly the one address" in done
+    assert importer.shared.git("push", "-q", "origin", "HEAD:refs/heads/main").returncode == 1
+
+    assert (remote_head(source), remote_head(dest)) == (source_before, dest_before)
+    assert remote_marker(dest) == "done"
+    assert not remote_has_config(dest)
+    assert not remote_has_config(source)
+
+
+def test_a_push_address_with_spaces_that_is_exactly_the_fetched_one_publishes(three, tmp_path):
+    importer, source, dest, prepared = spaced_forks(three, tmp_path)
+    git(importer.shared.root, "config", "remote.origin.pushurl", str(source))  # the same path, spaces and all
+    dest_before = remote_head(dest)
+
+    assert importer.update_config(prepared, "carried") == ""
+
+    assert remote_has_config(source)
+    assert remote_head(dest) == dest_before
