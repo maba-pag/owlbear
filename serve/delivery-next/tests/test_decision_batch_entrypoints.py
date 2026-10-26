@@ -24,7 +24,7 @@ from fastapi.testclient import TestClient
 from owlbear_decisions import Decision, DecisionError, Link, LinkType, Origin, Scope, State, new_id, storage, write
 from owlbear_decisions.storage import serialize
 from owlbear_delivery_next.change_contracts import pick_tools
-from owlbear_delivery_next.local_system import storage_io
+from owlbear_delivery_next.local_system import data_repo, storage_io
 from owlbear_delivery_next.local_system.data_repo import DataRepo, DataRepoError
 from owlbear_delivery_next.project_host import decision_recovery_routes
 from owlbear_delivery_next.state_store import (
@@ -3164,3 +3164,116 @@ def test_an_owner_commit_of_the_batch_files_during_its_checks_is_never_pushed_as
     _owner_commit_not_sent(shared, remote, published, made[0])
     assert shared.git("log", "-1", "--format=%s").stdout.strip() == "the owner commits the batch's files"
     _no_authority(picking)
+
+
+def _is_commit(args: tuple[str, ...]) -> bool:
+    return "commit" in args[:3] and "--amend" not in args
+
+
+@pytest.mark.parametrize("case", ["owner-amends-the-commit-git-made", "git-names-no-commit", "healthy"])
+def test_the_commit_a_save_made_is_the_one_git_named_never_head_read_afterwards(
+    picking, shared_repo, monkeypatch, case
+):
+    """Git makes the batch's commit B; before anything reads HEAD, the owner amends it into C, with the same parent and
+    tree but another message. C holds every after image and changes only the batch's files, yet it is not the commit
+    this save made, so nothing is pushed. A commit Git does not name is never guessed either; a healthy save
+    publishes as before."""
+    _seed(picking)
+    shared, remote = picking.shared, shared_repo[1]
+    items, _, _ = _update_and_successor(picking)
+    published, made = _remote_main(remote), []
+    real_git = data_repo._git  # noqa: SLF001
+
+    def commit_then_owner_amends(cwd, *args, **kwargs):
+        said = real_git(cwd, *args, **kwargs)
+        if _is_commit(args) and not made:
+            made.append(real_git(cwd, "rev-parse", "HEAD").stdout.strip())
+            if case == "git-names-no-commit":
+                return subprocess.CompletedProcess(said.args, 0, "", said.stderr)
+            real_git(cwd, "commit", "-q", "--amend", "-m", "the owner rewords the batch's commit")
+            made.append(real_git(cwd, "rev-parse", "HEAD").stdout.strip())
+        return said
+
+    with monkeypatch.context() as m:
+        if case != "healthy":
+            m.setattr(data_repo, "_git", commit_then_owner_amends)
+        receipts = decision_store.save_all(shared, items, message="decisions: two")
+
+    if case == "healthy":
+        assert all(r.published for r in receipts)
+        assert _remote_main(remote) == shared.git("rev-parse", "HEAD").stdout.strip() != published
+        assert decision_batch.pending(shared) is None
+        return
+    assert not any(r.saved for r in receipts)
+    said = "did not name the commit" if case == "git-names-no-commit" else "not provably its own"
+    assert said in receipts[0].notice
+    _owner_commit_not_sent(shared, remote, published, made[-1])
+    if case == "owner-amends-the-commit-git-made":
+        assert made[0] != made[1]
+        assert shared.git("rev-parse", "HEAD^{tree}").stdout == shared.git("rev-parse", f"{made[0]}^{{tree}}").stdout
+        assert shared.git("log", "-1", "--format=%s").stdout.strip() == "the owner rewords the batch's commit"
+    _no_authority(picking)
+
+
+@pytest.mark.parametrize("case", ["owner-commits-the-staged-batch", "commit-refused-head-unchanged"])
+def test_a_failed_commit_never_adopts_a_commit_made_meanwhile(picking, shared_repo, monkeypatch, case):
+    """The batch's files are staged, then the owner commits exactly them, so the save's own commit fails with nothing
+    to commit: HEAD is a child of the batch's head holding every after image, but no commit of this save's, so
+    nothing is pushed and the batch stays interrupted. A commit refused while HEAD stays put is still a known refusal
+    whose batch stays interrupted for Finish or Abandon."""
+    _seed(picking)
+    shared, remote = picking.shared, shared_repo[1]
+    items, _, _ = _update_and_successor(picking)
+    published, head, made = _remote_main(remote), shared.git("rev-parse", "HEAD").stdout.strip(), []
+    real_stage, real_git = DataRepo._stage, data_repo._git  # noqa: SLF001
+
+    def staged_then_owner_commits(self, rels, until):
+        said = real_stage(self, rels, until)
+        self.git("commit", "-qm", "the owner commits the staged batch")
+        made.append(self.git("rev-parse", "HEAD").stdout.strip())
+        return said
+
+    def commit_refused(cwd, *args, **kwargs):
+        if _is_commit(args):
+            return subprocess.CompletedProcess(["git", *args], 1, "", "refused by a hook")
+        return real_git(cwd, *args, **kwargs)
+
+    with monkeypatch.context() as m:
+        if case == "owner-commits-the-staged-batch":
+            m.setattr(DataRepo, "_stage", staged_then_owner_commits)
+        else:
+            m.setattr(data_repo, "_git", commit_refused)
+        receipts = decision_store.save_all(shared, items, message="decisions: two")
+
+    assert not any(r.saved for r in receipts)
+    assert _remote_main(remote) == published
+    if case == "commit-refused-head-unchanged":
+        assert "refused by a hook" in receipts[0].notice
+        assert shared.git("rev-parse", "HEAD").stdout.strip() == head
+        assert "HEAD moved" not in receipts[0].notice  # a known refusal, never an index undo: Finish or Abandon it
+        assert decision_batch.pending(shared) is not None
+        return
+    assert "HEAD moved meanwhile" in receipts[0].notice
+    _owner_commit_not_sent(shared, remote, published, made[0])
+    assert shared.git("rev-parse", "HEAD~1").stdout.strip() == head
+    _no_authority(picking)
+
+
+def test_hook_output_never_names_the_commit_a_save_made(picking, shared_repo):
+    """Hooks that print a summary line of their own, naming another commit, do not change which commit Git names:
+    the save's commit is published as before."""
+    _seed(picking)
+    shared, remote = picking.shared, shared_repo[1]
+    items, _, _ = _update_and_successor(picking)
+    head = shared.git("rev-parse", "HEAD").stdout.strip()
+    hooks = Path(shared.git("rev-parse", "--absolute-git-dir").stdout.strip()) / "hooks"
+    hooks.mkdir(exist_ok=True)
+    for name in ("pre-commit", "commit-msg", "post-commit"):
+        (hooks / name).write_text(f'#!/bin/sh\necho "[main {head}] {name} prints a summary of its own"\n')
+        (hooks / name).chmod(0o755)
+
+    receipts = decision_store.save_all(shared, items, message="decisions: two")
+
+    assert all(r.published for r in receipts)
+    assert _remote_main(remote) == shared.git("rev-parse", "HEAD").stdout.strip() != head
+    assert decision_batch.pending(shared) is None

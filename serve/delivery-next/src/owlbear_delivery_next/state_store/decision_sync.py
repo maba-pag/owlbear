@@ -231,11 +231,10 @@ def publish(shared: DataRepo, paths: list[Path], message: str, until: float, hea
         return refused
     said = shared.commit(paths, message, until)
     failed, created = str(said), said.commit if isinstance(said, Committed) else ""  # no identity: none is trusted
+    created = None if getattr(said, "unnamed", False) else created  # a commit made that Git did not name
     now = _rev(shared, "HEAD", until)
     made = _ours(shared, before, rels, until)
-    if stop := _failed(shared, (failed, before, now, made, created), rows, paths, until) or _unproved(
-        shared, now, rows, paths, until
-    ):
+    if stop := _failed(shared, (failed, before, now, made, created)) or _unproved(shared, now, rows, paths, until):
         return stop
     pushed = push_commit(shared, now, goal, until) if now else "HEAD is not known"  # `_unproved` refused that
     if not pushed:
@@ -248,23 +247,24 @@ def publish(shared: DataRepo, paths: list[Path], message: str, until: float, hea
 type Rows = dict[str, bytes] | None  # the batch's after images by path, or None outside a journalled batch
 
 
-def _failed(
-    shared: DataRepo, commit: tuple[str, str, str | None, str, str], rows: Rows, paths: list[Path], until: float
-) -> Sent | None:
+def _failed(shared: DataRepo, commit: tuple[str, str, str | None, str, str | None]) -> Sent | None:
     """Why the commit is not pushed, with HEAD proved to be this call's own commit or the head it began on.
 
-    A failed commit is known only when HEAD did not move, else accepted only when provably ours and whole. A commit
-    that succeeded names the commit it made (`Committed.commit`): when it made none, HEAD must still be the head
-    it began on; when it made one, HEAD must be that very commit, also proved this call's own. An owner's commit made
-    meanwhile, even one keeping every file, is never pushed.
+    A failed commit is known only when HEAD did not move; when it moved, nothing names the commit made, if any, so
+    nothing is pushed, however much a commit there looks like this call's. A commit that succeeded names the commit it
+    made (`Committed.commit`): when it made none, HEAD must still be the head it began on; when it made one, HEAD must
+    be that very commit, also proved this call's own; when Git did not name it, nothing is pushed. An owner's commit
+    made meanwhile, even one keeping every file, is never pushed.
     """
     failed, before, now, made, created = commit
     if failed and now is not None and now == before:
         return Sent(notice=failed, uncommitted=True)
-    if failed and not (made and _holds(shared, made, rows, paths, until)):
-        return Sent(notice=failed, ambiguous=True)
-    allowed = {made} if failed else ({before} if not created else {created} & {made})
-    if now is not None and now in allowed:
+    if failed:
+        return Sent(notice=f"{failed}; HEAD moved meanwhile, so nothing is pushed; check it", ambiguous=True)
+    if created is None:
+        notice = f"saved and committed in {shared.root}, but Git did not name the commit it made, so nothing is pushed"
+        return Sent(notice=f"{notice}; check it", ambiguous=True)
+    if now is not None and now in ({before} if not created else {created} & {made}):
         return None
     notice = f"saved in {shared.root}, but HEAD moved past this save's commit to one not provably its own, so nothing"
     return Sent(notice=f"{notice} is pushed; check it", ambiguous=True)

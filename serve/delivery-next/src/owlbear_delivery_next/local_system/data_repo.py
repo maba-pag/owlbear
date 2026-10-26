@@ -50,15 +50,21 @@ class Committed(str):
     """What `DataRepo.commit` says: why it failed, else nothing, as before; and the commit it made, "" when none.
 
     It is the notice string every caller already reads, so they need nothing new; a publication also reads `commit`
-    to tell its own commit from one the owner made meanwhile, never by a moved HEAD alone.
+    to tell its own commit from one the owner made meanwhile, never by a moved HEAD alone. `unnamed` says Git made a
+    commit whose id its own answer did not name: then no commit is known to be this call's.
     """
 
-    __slots__ = ("commit",)
+    __slots__ = ("commit", "unnamed")
 
-    def __new__(cls, notice: str, commit: str = "") -> Self:  # noqa: D102 - the class says it
+    def __new__(cls, notice: str, commit: str = "", *, unnamed: bool = False) -> Self:  # noqa: D102 - the class says it
         made = super().__new__(cls, notice)
-        made.commit = commit
+        made.commit, made.unnamed = commit, unnamed
         return made
+
+
+# The first line `git commit` prints names the commit it made, in full with `core.abbrev=no`: "[branch id] subject",
+# "[branch (root-commit) id] ..." or "[detached HEAD id] ...". A branch name holds no space, so the first " id]" is it.
+_MADE = re.compile(r"\[[^\n]*? ([0-9a-f]{40}|[0-9a-f]{64})\](?: |$)")
 
 
 def _held(path: Path) -> str:
@@ -235,19 +241,23 @@ class DataRepo:
     def commit(self, paths: Path | Sequence[Path], message: str, until: float | None = None) -> Committed:
         """Commit ``paths`` alone if they changed; why that failed, else nothing. The caller holds ``locked``.
 
-        The answer also names the commit made (`Committed.commit`): HEAD read right after Git made it, "" when none.
+        The answer also names the commit made (`Committed.commit`), "" when none: the id `git commit` itself printed for
+        the commit it made, never HEAD read afterwards, which an owner's commit or amend may already have moved. Hooks
+        print to stderr, so stdout's first line is Git's own; when it names no full id of an existing commit, the
+        commit made is `unnamed`. Hooks and signing run as configured: only the printed id's length is set.
         """
         until = time.monotonic() + SAVE_SECONDS if until is None else until
         rels = [p.relative_to(self.root).as_posix() for p in ([paths] if isinstance(paths, Path) else paths)]
         why, rels = self._stage(rels, until)
         if why or not rels:
             return Committed(why)  # failed, or nothing changed: no commit was made
-        if (made := _git(self.root, "commit", "-q", "-m", message, "--", *rels, until=until)).returncode:
+        made = _git(self.root, "-c", "core.abbrev=no", "commit", "-m", message, "--", *rels, until=until)
+        if made.returncode:
             return Committed(f"saved, but not committed: {made.stderr.strip()[:200]}")
-        head = _git(self.root, "rev-parse", "--verify", "-q", "HEAD", until=until)
-        if head.returncode or not head.stdout.strip():
-            return Committed("saved and committed, but Git could not name the commit it made")
-        return Committed("", head.stdout.strip())
+        named = _MADE.match(made.stdout.partition("\n")[0])
+        oid = named.group(1) if named else ""
+        known = _git(self.root, "rev-parse", "--verify", "-q", f"{oid}^{{commit}}", until=until) if oid else None
+        return Committed("", oid) if known and known.stdout.strip() == oid else Committed("", unnamed=True)
 
     def _stage(self, rels: list[str], until: float) -> tuple[str, list[str]]:
         """Stage those of *rels* that exist or are tracked; why that failed, and those to commit, none if unchanged."""
