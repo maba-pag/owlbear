@@ -17,6 +17,7 @@ from owlbear_delivery_next.project_host.host import Host
 from owlbear_delivery_next.runtimes import sdk_adapter
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.state_store.store import Store
+from owlbear_delivery_next.workflow_steps import sessions
 
 AT = datetime(2026, 10, 25, tzinfo=UTC)
 
@@ -129,3 +130,59 @@ def test_the_machine_pack_lock_stays_blocked_while_a_pack_lease_is_unproven(tmp_
 
     with pytest.raises(pack_job.Busy):
         job._claim()  # noqa: SLF001 - the claim a starting run takes
+
+
+def usage_unread(termination: processes.Termination | None) -> sessions.UsageUnreadError:
+    """What ``sessions.run``, the default updater and challenger, raises when the model check could not run."""
+    run = Run("pack-update", ending="result", termination=termination, usage_unread="the model's use was unread")
+    return sessions.UsageUnreadError(run, "pack-update")
+
+
+@pytest.mark.parametrize("live", ["update", "challenge"])
+def test_a_usage_unread_session_confirmed_gone_releases_its_slot_and_still_raises(tmp_path, live):
+    """Review 5655440664: the error carries a run whose processes were confirmed gone; that proof is kept.
+
+    The slot goes back with no reboot, the next pack session is admitted, and the same error still reaches the caller.
+    """
+    slots = Slots(lambda: 1)
+    host, store = host_with(tmp_path, slots)
+    raised = usage_unread(processes.Termination(confirmed=True))
+
+    def gated(_store, _cfg):
+        raise raised
+
+    job = pack_job.Job(store, pack_job.Live(**{live: gated}))
+    session_slots.packed(host, job)
+    root = tmp_path / "wt"
+    root.mkdir()
+    with pytest.raises(sessions.UsageUnreadError) as caught:
+        getattr(job.live, live)(store, session(root))
+    assert caught.value is raised
+    [lease] = host.maintenance.read()["sessions"]
+    project = session_slots.project(host)
+    assert (lease["state"], host.maintenance.pending("pack"), slots.counts(project)[2]) == ("released", False, 0)
+    assert slots.take(project, "successor", 1, 1) == 1
+
+
+@pytest.mark.parametrize(
+    "raised",
+    [usage_unread(processes.Termination(confirmed=False, problems=("request task pending",))), usage_unread(None),
+     RuntimeError("no run returned")],
+    ids=["usage-unread-unconfirmed", "usage-unread-no-termination", "generic"],
+)  # fmt: skip
+def test_a_session_error_without_confirmed_termination_still_holds_its_slot(tmp_path, raised):
+    slots = Slots(lambda: 1)
+    host, store = host_with(tmp_path, slots)
+
+    def gated(_store, _cfg):
+        raise raised
+
+    job = pack_job.Job(store, pack_job.Live(update=gated))
+    session_slots.packed(host, job)
+    root = tmp_path / "wt"
+    root.mkdir()
+    with pytest.raises(type(raised)):
+        job.live.update(store, session(root))
+    [lease] = host.maintenance.read()["sessions"]
+    assert (lease["state"], host.maintenance.pending("pack")) == ("held", True)
+    assert slots.take(session_slots.project(host), "successor", 1, 1) == 0

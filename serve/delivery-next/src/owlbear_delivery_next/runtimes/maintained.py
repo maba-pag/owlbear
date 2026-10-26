@@ -6,6 +6,7 @@ from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.local_system import maintenance
+from owlbear_delivery_next.runtimes import session_result
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -41,6 +42,12 @@ def run_owned(  # noqa: PLR0913 - owner, session and work are the inputs; the ad
 
     try:
         done = execute(replace(cfg, journal=replace(cfg.journal, event=event)))
+    except session_result.ReturnedRunError as returned:  # the session returned: its Run's termination stands
+        try:
+            owner.finished(ident, returned.run)
+        except BaseException as cleanup:  # noqa: BLE001 - recorded for any exit, then re-raised
+            returned.add_note(f"maintenance ownership also failed to persist ({type(cleanup).__name__})")
+        raise
     except BaseException as primary:
         try:
             owner.failed(ident, primary)
