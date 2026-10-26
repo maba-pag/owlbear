@@ -868,3 +868,85 @@ def fail_save_once(real):
         real(self, ledger)
 
     return save
+
+
+def receipt_fault_once(real, *, saved: bool):
+    """The first ledger save that notes a rewrite's receipt fails: before it is written, or once it was."""
+    failed: list[bool] = []
+
+    def save(self, ledger) -> None:
+        if failed or not any(":receipt:" in m for m in ledger.imported):
+            real(self, ledger)
+            return
+        failed.append(True)
+        if saved:
+            real(self, ledger)
+        msg = "synthetic fault noting the receipt"
+        raise maintenance.MaintenanceError(msg)
+
+    return save
+
+
+@pytest.mark.parametrize("recovered", [False, True], ids=["held", "recovered"])
+@pytest.mark.parametrize("saved", [False, True], ids=["before-save", "after-save"])
+def test_an_existing_hold_keeps_its_one_lease_when_the_receipt_for_the_constructors_rewrite_fails(
+    tmp_path, machines, shared_repo, recovered, saved
+):
+    """Review on 8dfa: the rewrite carries its run's generation, so the lease survives a failed receipt either way.
+
+    The project's store first could not open, so its running record without identity was held read-only as A. Once it
+    opens, its Job rewrites that record and the receipt fails: the project falls back to the read-only path, and every
+    later start still finds A alone, held or recovered. A later running record is held anew.
+    """
+    shared, _remote = shared_repo
+    good, _clone_folder = open_project(tmp_path, shared, "good")
+    other = registry.register(clone(tmp_path / "other"))
+    settled = machines()
+    settled.load_all()  # the store moves to its home folder, where every later read finds this record
+    settled.stop_all()
+    live = project_home.current(Path(good.path))
+    fmt = live / "format"
+    opens = fmt.read_text()
+    fmt.write_text("99\n")  # this store will not open for now
+    write_pack(live, {"state": "running"})  # no run id and no start: its identity is its file
+    first = machines()
+    first.load_all()
+    [a] = held(first, good.id)
+    assert first.projects[good.id].state == "failed"
+    if recovered:
+        reboot_then_recover(first, a["id"])
+    first.stop_all()
+    fmt.write_text(opens)
+
+    faulted = machines()
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(maintenance.Maintenance, "_save", receipt_fault_once(maintenance.Maintenance._save, saved=saved))  # noqa: SLF001
+        faulted.load_all()
+    rewritten = json.loads((live / pack_job.FILE).read_text())
+    assert (faulted.projects[good.id].state, rewritten["state"], rewritten["reason"]) == (
+        "failed", "failed", pack_state.HOST_STOPPED,
+    )  # fmt: skip
+    state = "recovered" if recovered else "held"
+    assert [(s["id"], s["state"]) for s in sessions_of(faulted, good.id)] == [(a["id"], state)]
+    faulted.stop_all()
+    for _ in range(2):
+        again = machines()
+        again.load_all()
+        assert [(s["id"], s["state"]) for s in sessions_of(again, good.id)] == [(a["id"], state)]
+        assert (again.slots.take(other.id, "probe", 1, 1), again.maintenance.pending("pack")) == (
+            (1, False) if recovered else (0, True)
+        )
+        again.slots.give(other.id, "probe")
+        again.stop_all()
+    write_pack(live, {"state": "running"})  # a later run, again without identity
+    later = machines()
+    later.load_all()
+    assert [s["state"] for s in sessions_of(later, good.id)] == [state, "held"]
+
+
+def test_the_carried_generation_counts_only_in_the_shape_of_this_hosts_own_rewrite():
+    """A replacement in any other shape is judged by its own identity, so it can never borrow the carried run's."""
+    carried = {"state": "failed", "reason": pack_state.HOST_STOPPED, pack_state.REWRITTEN: "observed:a"}
+    assert pack_state.generation(carried, "v1")[0] == "observed:a"
+    for other in ({"state": "running"}, {"reason": "update: RuntimeError: x"}, {"workspace": "/w"}):
+        assert pack_state.generation(carried | other, "v1")[0] != "observed:a"

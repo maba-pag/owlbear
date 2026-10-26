@@ -146,6 +146,7 @@ def legacy_uncertain(kept: dict[str, Any]) -> bool:
 
 
 OBSERVED = ("state", "stage", "run", "started_at", "ended_at", "reason", "workspace")
+REWRITTEN = "interrupted_generation"  # the generation this host's own rewrite of a running record carries forward
 
 
 def generation(record: dict[str, Any], version: str) -> tuple[str, datetime | None]:
@@ -153,7 +154,19 @@ def generation(record: dict[str, Any], version: str) -> tuple[str, datetime | No
 
     The fingerprint binds the observed fields and the file's identity and version, read from the one descriptor the
     record came from. A same-bytes replacement is then a different file, and an untouched file keeps its identity.
+    This host's own rewrite of a running record carries that run's generation in the record itself, so it survives
+    whether or not the ledger could note the rewrite; it counts only in the very shape that rewrite writes. An older
+    host starts a later run afresh, without it.
     """
+    carried = record.get(REWRITTEN)
+    if (
+        isinstance(carried, str)
+        and carried
+        and record.get("state") == "failed"
+        and record.get("reason") == HOST_STOPPED
+        and "workspace" not in record
+    ):
+        return carried, None
     run, started = str(record.get("run") or ""), str(record.get("started_at") or "")
     if run and started:
         with contextlib.suppress(ValueError):
@@ -169,12 +182,19 @@ def digest(version: str) -> str:
 
 
 def interrupted(record: dict[str, Any], version: str) -> dict[str, str]:
-    """A run an older host left running, as its record names it, with its generation taken before it is rewritten."""
+    """A run an older host left running, as its record names it, with its generation taken before it is rewritten.
+
+    A record without a workspace carries that generation into the rewrite made from it, under REWRITTEN, so the run
+    keeps its identity even when no ledger write follows the rewrite.
+    """
+    identity = generation(record, version)[0]
+    if "workspace" not in record:
+        record[REWRITTEN] = identity
     return {
         "run": str(record.get("run") or ""),
         "started_at": str(record.get("started_at") or ""),
         "workspace": str(record.get("workspace") or ""),
-        "generation": generation(record, version)[0],
+        "generation": identity,
     }
 
 

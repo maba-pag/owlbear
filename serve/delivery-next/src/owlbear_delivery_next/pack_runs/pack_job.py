@@ -139,7 +139,7 @@ class Job:
             reason = "the host stopped while the update was being published"
             self._hold(pack_run.Context.model_validate(self.state["context"]), reason)
         elif self.state["state"] == "running":
-            self.interrupted = _interrupted(self.state, self.version)  # its identity before this rewrite
+            self.interrupted = _interrupted(self.state, self.version)  # its identity before this rewrite, carried in it
             # keeps the workspace: nothing is bound to say whether an uncertain session still uses it
             self._finish("failed", HOST_STOPPED, keep=True)  # records the rewrite's own identity as self.version
 
