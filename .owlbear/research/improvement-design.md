@@ -132,6 +132,17 @@ carries on as without a Spotter.
 - **State change:** W1a's outside writes, publishing, deleting, settings.
 - **Sample:** any completed action with the configured probability.
 
+As built for Delivery steps (#668): the hand-off look starts at the submit call, before Delivery may accept it, over a
+frozen snapshot of a bounded intake of the step's own agent (subagents left out; a resumed session's transcript seeds
+it); at most two looks run at once per step, each capped at 0.5 credits by the SDK and reserved against the day's
+budget in a locked ledger; a look gets 90 seconds, and the step's end waits at most 5 seconds before stopping the rest,
+all recorded as skipped. Nothing a look does delays or changes the step: its files and model call run beside it. Each
+record keeps its call and event cutoff, and how Delivery answered the hand-off (accepted, rejected, failed) is kept
+beside it in `outcomes-<date>.jsonl`. A record naming a state change is marked preliminary until the conflict check
+comes with live delivery. The card holds credentials as the agent saw them; only browser context and email addresses
+are stripped (the owner, 2026-10-26: a look sends the model what the agent's session already sent it, and the records
+are temporary and owner-only; D-01M5VXXFBSWVZ0DZ68G1QG4CYG).
+
 Sampled and state-change looks stay record-only until Retro shows their class is worth it. The line from §3 holds in
 every mode: correct is not enough; the value must clearly exceed the risk of pulling the agent off course.
 
@@ -199,17 +210,17 @@ versions).
   project's agent, skill or Delivery change becomes a backlog entry (source `retro`); OwlBear's own becomes an issue
   in its repository for a chat to build. Nothing is edited silently, and a Change's brief bounds what it may change.
 - Every publication outside this machine (cases, proposal evidence, backlog entries, issues, memories) is reviewed,
-  minimised and sanitised; raw cards, chatlogs and records stay on this machine.
+  minimised and sanitised, credentials included; raw cards, chatlogs and records stay on this machine, unmasked.
 
 ## 7. Build order
 
 Each slice is a pull request, with Sol on its plan and its code:
-1. this design;
-2. settings and roles;
-3. Retro chatlogs;
-4. the card builder;
-5. Spotter records and cases;
-6. the Spotter's looks in learning mode, for Delivery and chats;
+1. this design: built (#659, #660);
+2. settings and roles: built (#662);
+3. Retro chatlogs: built (#663);
+4. the card builder: built with 6's Delivery part (#668);
+5. Spotter records and cases: records built (#668); cases next;
+6. the Spotter's looks in learning mode, for Delivery and chats: Delivery built (#668); the chats follower next;
 7. Retro;
 8. the Improvement page;
 9. live delivery and the test machinery.
@@ -221,4 +232,14 @@ Then item 10.
 - W1a (#640): its feed, identity and writer are reused by the Spotter.
 - #647 (shell parsing) is closed.
 - Phase 1a (#652) and the Primer (#653) are built.
+- Settings and roles (#662): the `watcher` role and switch became the `spotter` role and the Spotter's settings
+  (settings format 12); the `retro` and `retro-review` roles; the machine values for budgets, Retro's triggers and
+  enrolled chats; none has a code default.
+- Retro chatlogs (#663): the Change-to-session manifest, each step's `events.jsonl` and saved outputs captured at its
+  end, enrolled-chat discovery and pruning.
+- The Spotter's core (#668): the intake (`improvement/events.py`), the card (`improvement/card.py`), the looks and
+  their records, budget ledger and lifecycle (`improvement/spotter.py`, `runtimes/spotter_look.py`) and the prompt
+  (`improvement/spotter_prompt.md`); `improvement` is a layer between `state_store` and `runtimes`. The machine
+  registry and machine settings moved to `state_store` so a step reads its budget (D-01M5VXXFC28ZFHV7HVDTKFHPVF).
+  No look has run against a live runtime yet.
 - The pilot's harness and data stay in `.owlbear/scratch/watcher-replay/` (not committed).
