@@ -6,7 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from owlbear_delivery_next.change_contracts.models import StepKind
-from owlbear_delivery_next.change_contracts.profile_record import PROFILE_FORMAT, RoleModel
+from owlbear_delivery_next.change_contracts.profile_record import PROFILE_FORMAT, Profile, RoleModel
 from owlbear_delivery_next.settings import carried, roles
 from owlbear_delivery_next.settings.config import Agent, GlobalLayer, Layer, resolve
 from owlbear_delivery_next.state_store import layers as layers_mod
@@ -314,7 +314,11 @@ def test_a_role_move_that_was_not_applied_is_not_marked_and_runs_again(repo, mon
         return "simulated: fetch refused"
 
     monkeypatch.setattr(Store, "update_config", refused)
-    roles_move.move_roles(Store(root))
+    if mode == "held":  # a refused write is visible: the store does not open as if the move had happened
+        with pytest.raises(StoreError, match="not moved"):
+            roles_move.move_roles(Store(root))
+    else:
+        roles_move.move_roles(Store(root))
     assert (root / profile_share.ROLES_MOVED).exists() == (mode == "applied-unpublished")
     if mode != "applied-unpublished":
         assert not Store(root).config_path.exists()
@@ -400,27 +404,26 @@ def test_an_owner_clear_after_an_applied_role_move_survives_a_lost_marker(repo, 
     ],
 )
 def test_invalid_old_roles_are_refused_and_never_copied(repo, bad):
-    root = repo / ".git" / "owlbear-delivery"
-    _old_profile(root, bad)
-    store = Store.open(repo)
+    _old_profile(repo / ".git" / "owlbear-delivery", bad)
+    with pytest.raises(StoreError, match=r"role overrides|cannot be migrated"):
+        Store.open(repo)
 
+    root = project_home.located(repo)
     assert not (root / "config.json").exists()
-    with pytest.raises(StoreError, match="cannot be migrated"):
-        store.read_profile()
+    assert not (root / profile_share.ROLES_MOVED).exists()
 
 
 def test_a_damaged_old_profile_is_not_marked_moved_and_its_roles_come_back_once_repaired(repo):
-    root = repo / ".git" / "owlbear-delivery"
-    root.mkdir(parents=True, exist_ok=True)
-    (root / "profile.json").write_bytes(b'{"format": 1, "roles": {"reviewer": ')  # truncated mid-write
-    store = Store.open(repo)
-    root = store.root
-
-    assert not (root / profile_share.ROLES_MOVED).exists()
-    assert not (root / "config.json").exists()
-
+    store = Store.open(repo)  # no old profile yet: nothing to move
     own = Layer(agents={"builder": Agent(model="own")})
     owner_save(store, lambda _cur: own)  # the owner's own settings meanwhile
+    root = store.root
+    (root / "profile.json").write_bytes(b'{"format": 1, "roles": {"reviewer": ')  # truncated mid-write
+
+    with pytest.raises(StoreError, match="could not be read"):
+        Store.open(repo)
+    assert not (root / profile_share.ROLES_MOVED).exists()
+
     _old_profile(root, {"reviewer": {"model": "r-1", "effort": "max"}, "builder": {"model": "old", "effort": "low"}})
     healthy = Store.open(repo)
 
@@ -430,10 +433,10 @@ def test_a_damaged_old_profile_is_not_marked_moved_and_its_roles_come_back_once_
 
 
 def test_an_old_profile_with_an_invalid_role_is_not_marked_moved_and_restores_once_repaired(repo):
-    legacy = repo / ".git" / "owlbear-delivery"
-    _old_profile(legacy, {"reviewer": {"model": "r-1"}})  # no effort: the role does not validate
-    store = Store.open(repo)
-    root = store.root
+    _old_profile(repo / ".git" / "owlbear-delivery", {"reviewer": {"model": "r-1"}})  # no effort: the role is invalid
+    with pytest.raises(StoreError, match="role overrides are invalid"):
+        Store.open(repo)
+    root = project_home.located(repo)
     assert not (root / profile_share.ROLES_MOVED).exists()
     assert not (root / "config.json").exists()
 
@@ -444,10 +447,10 @@ def test_an_old_profile_with_an_invalid_role_is_not_marked_moved_and_restores_on
 
 
 def test_an_old_profile_that_cannot_be_read_is_not_marked_moved_and_restores_once_repaired(repo):
-    legacy = repo / ".git" / "owlbear-delivery"
-    (legacy / "profile.json").mkdir(parents=True)  # a directory where the profile file should be: the read fails
-    store = Store.open(repo)
-    root = store.root
+    (repo / ".git" / "owlbear-delivery" / "profile.json").mkdir(parents=True)  # a directory: the read fails
+    with pytest.raises(StoreError, match="could not be read"):
+        Store.open(repo)
+    root = project_home.located(repo)
     assert not (root / profile_share.ROLES_MOVED).exists()
     assert not (root / "config.json").exists()
 
@@ -458,9 +461,61 @@ def test_an_old_profile_that_cannot_be_read_is_not_marked_moved_and_restores_onc
     assert (root / profile_share.ROLES_MOVED).exists()
 
 
+def test_an_invalid_local_role_source_in_a_shared_project_is_refused_visibly_and_stays_retryable(shared_repo):
+    repo, _remote = shared_repo
+    legacy = repo / ".git" / "owlbear-delivery"
+    _old_profile(legacy, {"reviewer": {"model": "r-1", "effort": "bogus"}})
+    with pytest.raises(StoreError) as caught:
+        Store.open(repo)
+    assert "role overrides are invalid" in str(caught.value)
+    assert "then reopen" in str(caught.value)
+
+    root = project_home.located(repo)
+    assert not (root / profile_share.ROLES_MOVED).exists()
+    assert not (root / "config.json").exists()
+
+    _old_profile(root, {"reviewer": {"model": "r-1", "effort": "max"}})
+    assert Store.open(repo).read_config().agents["reviewer"].model == "r-1"
+    assert (root / profile_share.ROLES_MOVED).exists()
+
+
 def test_a_valid_empty_old_roles_profile_counts_as_already_satisfied(repo):
     root = repo / ".git" / "owlbear-delivery"
     _old_profile(root, {})
+    store = Store.open(repo)
+
+    assert (store.root / profile_share.ROLES_MOVED).exists()
+    assert not (store.root / "config.json").exists()
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        b'{"format": 999, "roles": {"reviewer": {"model": "r-1", "effort": "max"}}}',  # a newer OwlBear wrote it
+        b'[{"format": 1, "roles": {}}]',  # not a profile object
+        b'{"roles": {"reviewer": {"model": "r-1", "effort": "max"}}}',  # no format at all
+    ],
+)
+def test_an_unknown_old_profile_refuses_before_any_marker_or_config_and_a_valid_one_then_imports(repo, raw):
+    legacy = repo / ".git" / "owlbear-delivery"
+    legacy.mkdir(parents=True)
+    (legacy / "profile.json").write_bytes(raw)
+    with pytest.raises(StoreError):
+        Store.open(repo)
+
+    root = project_home.located(repo)
+    assert not (root / profile_share.ROLES_MOVED).exists()
+    assert not (root / "config.json").exists()
+
+    _old_profile(root, {"reviewer": {"model": "r-1", "effort": "max"}})
+    assert Store.open(repo).read_config().agents["reviewer"].model == "r-1"
+    assert (root / profile_share.ROLES_MOVED).exists()
+
+
+def test_a_validated_current_format_profile_has_no_roles_to_move_and_is_marked_once(repo):
+    legacy = repo / ".git" / "owlbear-delivery"
+    legacy.mkdir(parents=True)
+    (legacy / "profile.json").write_text(Profile().model_dump_json())
     store = Store.open(repo)
 
     assert (store.root / profile_share.ROLES_MOVED).exists()
