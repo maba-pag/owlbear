@@ -23,11 +23,11 @@ from owlbear_delivery_next.change_contracts.models import Change, Environment, S
 from owlbear_delivery_next.commands import chat_client, mcp_server, setup
 from owlbear_delivery_next.local_system import codebase
 from owlbear_delivery_next.local_system.data_repo import DataRepo
-from owlbear_delivery_next.machine_host import app, project, registry, serve
+from owlbear_delivery_next.machine_host import app, project, serve
 from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import ENDING, Host, HostRecord, RunnerRecord, running
-from owlbear_delivery_next.state_store import decision_store, profile_share, project_home
+from owlbear_delivery_next.state_store import decision_store, profile_share, project_home, registry
 from owlbear_delivery_next.state_store.store import Store
 
 AUTH = {"authorization": "Bearer t"}

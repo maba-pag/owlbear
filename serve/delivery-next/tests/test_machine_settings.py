@@ -4,6 +4,7 @@ Global once (the owner, 2026-10-23: move all), on a current checkout, keeping it
 
 import json
 import subprocess
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -11,12 +12,12 @@ import pytest
 from owlbear_delivery_next.local_system import data_repo
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.local_system.slots import Slots
-from owlbear_delivery_next.machine_host import curation, machine_settings, registry, versions
+from owlbear_delivery_next.machine_host import curation, versions
 from owlbear_delivery_next.machine_host.auto_update import Auto
 from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.settings import carried
 from owlbear_delivery_next.settings.config import GlobalLayer, MachineValues
-from owlbear_delivery_next.state_store import settings_carry
+from owlbear_delivery_next.state_store import machine_settings, registry, settings_carry
 from owlbear_delivery_next.state_store.store import read_layer
 
 LEGACY = registry.Settings(
@@ -31,6 +32,8 @@ def no_base(monkeypatch):
 
 
 def _git(root, *args: str) -> str:
+    if (Path(root) / "HEAD").is_file():  # a bare repository: safe.bareRepository=explicit wants it named
+        args = ("--git-dir=.", *args)
     return subprocess.run(["git", *args], cwd=root, check=True, capture_output=True, text=True).stdout.strip()  # noqa: S603, S607
 
 

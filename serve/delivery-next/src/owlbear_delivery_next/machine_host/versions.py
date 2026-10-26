@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
 from owlbear_delivery_next.local_system import codebase, leases, local_home
-from owlbear_delivery_next.machine_host import machine_settings, registry
+from owlbear_delivery_next.state_store import machine_settings, registry
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
@@ -95,7 +95,7 @@ def choose(
 
 def _git(*args: str, cwd: Path | None = None, timeout: float = FETCH) -> str:
     env = os.environ | {"GIT_TERMINAL_PROMPT": "0", "GIT_ASKPASS": "", "SSH_ASKPASS": ""}
-    verb = args[2] if args[0] == "-C" else args[0]
+    verb = args[2] if args[0] == "-C" else args[1] if args[0].startswith("--git-dir=") else args[0]
     try:
         done = subprocess.run(  # noqa: S603 - a fixed git argument vector
             [shutil.which("git") or "git", *args], cwd=cwd, env=env, capture_output=True, text=True, check=True,
@@ -110,6 +110,11 @@ def _git(*args: str, cwd: Path | None = None, timeout: float = FETCH) -> str:
     return done.stdout.strip()
 
 
+def _bare(path: Path) -> str:
+    """Name the bare clone by ``--git-dir``: ``safe.bareRepository=explicit`` refuses one found from its folder."""
+    return f"--git-dir={path}"
+
+
 def repo() -> Path:
     """``~/.owlbear/repo.git``, cloned from OwlBear's repository the first time."""
     path = local_home.root() / REPO
@@ -122,13 +127,13 @@ def repo() -> Path:
 
 def fetch(path: Path) -> dict[str, str]:
     """Fetch ``main`` and every tag; each annotated version tag's name and the commit it peels to."""
-    _git("-C", str(path), "fetch", "--quiet", "--force", "--tags", "origin", "+refs/heads/main:refs/heads/main")
-    listed = _git("-C", str(path), "for-each-ref", "refs/tags", "--format=%(refname:short) %(objecttype)")
+    _git(_bare(path), "fetch", "--quiet", "--force", "--tags", "origin", "+refs/heads/main:refs/heads/main")
+    listed = _git(_bare(path), "for-each-ref", "refs/tags", "--format=%(refname:short) %(objecttype)")
     named = [p[0] for p in (line.split() for line in listed.splitlines()) if p[1:] == ["tag"] and number(p[0])]
     found = {}
     for tag in named:  # peeled through every tag level; one naming no commit is no version
         with contextlib.suppress(VersionError):
-            found[tag] = _git("-C", str(path), "rev-parse", "--verify", "--quiet", f"refs/tags/{tag}^{{commit}}")
+            found[tag] = _git(_bare(path), "rev-parse", "--verify", "--quiet", f"refs/tags/{tag}^{{commit}}")
     return found
 
 
@@ -137,7 +142,7 @@ def descends(path: Path) -> Descends:
 
     def check(older: str, newer: str) -> bool:
         try:
-            _git("-C", str(path), "merge-base", "--is-ancestor", older, newer)
+            _git(_bare(path), "merge-base", "--is-ancestor", older, newer)
         except VersionError:
             return False
         return True
@@ -208,7 +213,7 @@ def _installed(folder: Path, commit: str) -> bool:
     if not (folder / ".venv").is_dir():
         return False
     try:
-        listed = _git("-C", str(local_home.root() / REPO), "worktree", "list", "--porcelain")
+        listed = _git(_bare(local_home.root() / REPO), "worktree", "list", "--porcelain")
         head = _git("-C", str(folder), "rev-parse", "HEAD")
     except VersionError:
         return False
@@ -216,7 +221,7 @@ def _installed(folder: Path, commit: str) -> bool:
 
 
 def _build(choice: Choice, folder: Path) -> None:
-    _git("-C", str(repo()), "worktree", "add", "--quiet", "--detach", str(folder), choice.commit)
+    _git(_bare(repo()), "worktree", "add", "--quiet", "--detach", str(folder), choice.commit)
     _sync(folder)
     if said := selfcheck(folder):
         msg = f"{choice.tag} failed its selfcheck: {said}"
@@ -258,10 +263,10 @@ def selfcheck(folder: Path) -> str:
 def remove(folder: Path) -> None:
     """Remove an installed version's worktree and folder, if there is one."""
     with contextlib.suppress(VersionError):
-        _git("-C", str(local_home.root() / REPO), "worktree", "remove", "--force", str(folder))
+        _git(_bare(local_home.root() / REPO), "worktree", "remove", "--force", str(folder))
     shutil.rmtree(folder, ignore_errors=True)
     with contextlib.suppress(VersionError):
-        _git("-C", str(local_home.root() / REPO), "worktree", "prune")
+        _git(_bare(local_home.root() / REPO), "worktree", "prune")
 
 
 def prune() -> list[str]:

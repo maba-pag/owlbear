@@ -13,11 +13,11 @@ from types import SimpleNamespace
 import pytest
 
 from owlbear_delivery_next.local_system import codebase, local_home
-from owlbear_delivery_next.machine_host import registry, selfcheck, versions
+from owlbear_delivery_next.machine_host import selfcheck, versions
 from owlbear_delivery_next.machine_host.versions import Choice
 from owlbear_delivery_next.project_host import pages
 from owlbear_delivery_next.settings.config import CONFIG_FORMAT
-from owlbear_delivery_next.state_store import project_home
+from owlbear_delivery_next.state_store import project_home, registry
 from owlbear_delivery_next.state_store.database import STORE_FORMAT
 
 
@@ -63,6 +63,8 @@ def test_a_major_and_its_dot_zero_on_different_commits_are_neither_taken_and_sai
 
 
 def git(cwd: Path, *args: str) -> str:
+    if (cwd / "HEAD").is_file():  # a bare repository: safe.bareRepository=explicit wants it named
+        args = ("--git-dir=.", *args)
     who = ["-c", "user.name=t", "-c", "user.email=t@example.com"]
     done = subprocess.run(["git", *who, *args], cwd=cwd, check=True, capture_output=True, text=True)  # noqa: S603, S607
     return done.stdout.strip()
