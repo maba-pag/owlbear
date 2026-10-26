@@ -171,10 +171,14 @@ def interrupted(job: Job, key: str) -> None:
         return
     if job.interrupted is not None:
         run = job.interrupted
+        # Only the file's own rewrite, read whole and stable at the version the Job wrote, is this run: anything
+        # written over it is restored as it stands, whatever this run is, so it is held before admission.
+        own = pack_state.holds(job.store.root, job.state, job.version)
         if run["workspace"] and maintenance.owns(run["workspace"]):
+            if not own:
+                restore(maintenance, key, job.store.root)
             return  # the ledger already holds this run's own lease; importing it again would hold it twice
         notes: tuple[str, ...] = ()
-        own = bool(run["workspace"]) or pack_state.holds(job.store.root, job.state, job.version)
         if own and not run["workspace"]:  # the file holds its own rewrite at that version: receipted to its run
             notes = (maintenance.receipt_note(key, pack_state.digest(job.version), run["generation"]),)
         _hold(maintenance, key, run["workspace"] or str(legacy), run["generation"], notes=notes)  # one save, both

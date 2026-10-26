@@ -1044,3 +1044,55 @@ def test_a_loaded_projects_own_rewrite_of_its_interrupted_run_adds_no_hold_besid
         m.load_all()
         assert len(sessions_of(m, good.id)) == 1
         m.stop_all()
+
+
+def modern_run_owned(machines, tmp_path, shared_repo, *, recovered: bool):
+    """A loaded project whose last run is modern A: its own workspace, whose lease the ledger holds or recovered."""
+    shared, _remote = shared_repo
+    good, _clone_folder = open_project(tmp_path, shared, "good")
+    settled = machines()
+    settled.load_all()  # the store moves to its home folder
+    live = project_home.current(Path(good.path))
+    workspace = live / pack_job.RUNS / "modern-a"
+    workspace.mkdir(parents=True)
+    lease = settled.maintenance.begin(good.id, "pack:modern-a", "pack", str(workspace))
+    settled.maintenance.failed(lease, RuntimeError("synthetic: the session ended without termination proof"))
+    if recovered:
+        reboot_then_recover(settled, lease)
+    settled.stop_all()
+    write_pack(live, {"state": "running", "run": "modern-a", "started_at": STARTED, "workspace": str(workspace)})
+    return good, lease
+
+
+@pytest.mark.parametrize("recovered", [False, True], ids=["a-held", "a-recovered"])
+def test_a_run_written_over_a_modern_owned_runs_rewrite_is_held_before_another_project_is_admitted(
+    tmp_path, machines, shared_repo, recovered
+):
+    """A modern A, its workspace owned by its lease, is not imported again; what was written over its rewrite is."""
+    good, a = modern_run_owned(machines, tmp_path, shared_repo, recovered=recovered)
+    other = registry.register(clone(tmp_path / "other"))
+    m = machines()
+    m.slots.total = lambda: 2
+    patch = overwritten_after_publish({"state": "running", "stage": "update"})  # B: no identity
+    try:
+        with pytest.MonkeyPatch.context() as no_unloaded:
+            no_unloaded.setattr(session_slots, "unloaded", lambda *_a: pytest.fail("a loaded project read unloaded"))
+            m.load_all()
+    finally:
+        patch.undo()
+    sessions = sessions_of(m, good.id)
+    assert (m.projects[good.id].state, [s["state"] for s in sessions if s["id"] == a]) == (
+        "loaded", ["recovered" if recovered else "held"],
+    )  # fmt: skip
+    assert [s["state"] for s in sessions if s["id"] != a] == ["held"]
+    assert m.slots.take(other.id, "probe", 1, 1) == (1 if recovered else 0)
+
+
+def test_a_modern_owned_runs_own_rewrite_adds_no_hold_beside_it(tmp_path, machines, shared_repo):
+    """Control: with nothing written over it, the modern run keeps its one lease across loads."""
+    good, a = modern_run_owned(machines, tmp_path, shared_repo, recovered=False)
+    for _ in range(2):
+        m = machines()
+        m.load_all()
+        assert [s["id"] for s in sessions_of(m, good.id)] == [a]
+        m.stop_all()
