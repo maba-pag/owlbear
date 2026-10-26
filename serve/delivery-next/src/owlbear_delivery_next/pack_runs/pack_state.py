@@ -216,6 +216,20 @@ def digest(version: str) -> str:
     return hashlib.sha256(version.encode()).hexdigest()
 
 
+def holds(root: Path, record: dict[str, Any], version: str) -> bool:
+    """Whether *root*'s run file, read whole and stable, is *record* at *version*: the rewrite a receipt may name.
+
+    A writer's own version can describe another run's bytes, written over the published file before the writer read
+    its descriptor, so only this read's agreement on both proves the version is the rewrite's. A file that cannot be
+    read so proves nothing, and is not taken for it.
+    """
+    try:
+        got = observed(root)
+    except OSError, ValueError:
+        return False
+    return got is not None and got[1] == version and got[0] == json.loads(json.dumps(record))
+
+
 def resolved(record: dict[str, Any], version: str, receipted: Callable[[str], str]) -> tuple[str, datetime | None]:
     """A legacy record's generation as every reader takes it, the receipt for its very version first.
 

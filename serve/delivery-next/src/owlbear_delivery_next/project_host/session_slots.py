@@ -174,7 +174,7 @@ def interrupted(job: Job, key: str) -> None:
         if run["workspace"] and maintenance.owns(run["workspace"]):
             return  # the ledger already holds this run's own lease; importing it again would hold it twice
         notes: tuple[str, ...] = ()
-        if not run["workspace"] and job.version not in {"", "absent"}:  # the rewrite this host made keeps its identity
+        if not run["workspace"] and pack_state.holds(job.store.root, job.state, job.version):  # its own rewrite only
             notes = (maintenance.receipt_note(key, pack_state.digest(job.version), run["generation"]),)
         _hold(maintenance, key, run["workspace"] or str(legacy), run["generation"], notes=notes)  # one save, both
     elif job.version == "":

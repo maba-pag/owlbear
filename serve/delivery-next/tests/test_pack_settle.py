@@ -16,6 +16,7 @@ from owlbear_delivery_next.local_system.slots import Slots
 from owlbear_delivery_next.local_system.storage_io import atomic_write
 from owlbear_delivery_next.pack_runs import pack_job, pack_state
 from owlbear_delivery_next.project_host import session_slots
+from owlbear_delivery_next.state_store.store import Store
 
 STARTED = "2026-10-25T00:00:00+00:00"
 IDENTITIES = {
@@ -333,3 +334,69 @@ def test_every_reader_refuses_a_run_rewritten_in_place_while_it_read_it_and_clos
     assert {p.name for p in Path("/dev/fd").iterdir()} == fds
     kept, version = pack_state.observed(root)  # control: read again unchanged, it is the new run, whole
     assert (kept["state"], version != "") == ("running", True)
+
+
+def overwritten_after_publish(record: dict | None) -> pytest.MonkeyPatch:
+    """The run file is overwritten in place, same inode, right after the Job's rewrite is renamed into place and
+    before the writer reads its descriptor's version; with no *record*, nothing interleaves."""
+    real_replace = Path.replace
+    patch = pytest.MonkeyPatch()
+
+    def replace(self: Path, target: Path) -> Path:
+        done = real_replace(self, target)
+        if record is not None and Path(target).name == pack_state.FILE:
+            with Path(target).open("r+", encoding="utf-8") as same:
+                same.write(json.dumps(pack_job._blank() | record, indent=1) + "\n")  # noqa: SLF001
+                same.truncate()
+        return done
+
+    patch.setattr(Path, "replace", replace)
+    return patch
+
+
+@pytest.mark.parametrize("recovered", [False, True], ids=["a-held", "a-recovered"])
+def test_a_run_written_over_the_constructors_rewrite_before_its_version_is_read_is_not_receipted_to_it(
+    tmp_path, recovered
+):
+    """Review 4377585375: the rewrite's version is receipted to A only when the file holds A's rewrite at that version.
+
+    B overwrites the file in place between the rename and the writer's own stat: the version the writer got is B's.
+    No receipt maps it to A, so a later stable read of B is held under its own lease, A as it was.
+    """
+    root = store(tmp_path, "store", {"state": "running"})  # A: no run id, no start
+    patch = overwritten_after_publish({"state": "running", "stage": "update"})  # B: also unidentified
+    try:
+        job = pack_job.Job(Store(root))
+    finally:
+        patch.undo()
+    first = ledger()
+    job.maintenance = first
+    session_slots.interrupted(job, "p")
+    [(a, _state)] = leases(first)
+    assert first.receipted("p", pack_state.digest(job.version)) == ""  # the version is B's: never A's
+    if recovered:
+        ledger(boot=20.0).recover(a, rebooted=True)
+    owner = ledger(boot=20.0)
+    import_at(owner, root)  # B, read whole and stable
+    assert dict(leases(owner))[a] == ("recovered" if recovered else "held")
+    assert [s for i, s in leases(owner) if i != a] == ["held"]
+    assert owner.slots.take("other", "probe", 1, 2) == (1 if recovered else 0)
+
+
+def test_the_constructors_own_rewrite_is_still_receipted_to_its_run_and_read_again_as_it(tmp_path):
+    """Control: with nothing interleaving, the rewrite is receipted to A, once, and a reread holds nothing new."""
+    root = store(tmp_path, "store", {"state": "running"})
+    patch = overwritten_after_publish(None)
+    try:
+        job = pack_job.Job(Store(root))
+    finally:
+        patch.undo()
+    owner = ledger()
+    job.maintenance = owner
+    for _ in range(2):
+        session_slots.interrupted(job, "p")
+    [(a, _state)] = leases(owner)
+    assert owner.receipted("p", pack_state.digest(job.version)) == job.interrupted["generation"]
+    again = ledger()
+    import_at(again, root)
+    assert leases(again) == [(a, "held")]
