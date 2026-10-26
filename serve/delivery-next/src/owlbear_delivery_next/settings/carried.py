@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 from owlbear_delivery_next.change_contracts.profile_record import RoleModel
 from owlbear_delivery_next.change_contracts.round_records import RoundPolicy
 from owlbear_delivery_next.settings.config import Agent, GlobalLayer, MachineValues
+from owlbear_delivery_next.settings.improvement import Spotter
 
 if TYPE_CHECKING:
     from owlbear_delivery_next.change_contracts.models import Role
@@ -32,11 +33,11 @@ MODELS: dict[Role, RoleModel] = {
     "test-curator": RoleModel(model="claude-opus-5.5", effort="high", context="long"),
     "picker": RoleModel(model="gpt-6.1-sol", effort="medium"),
     "curator": RoleModel(model="gpt-6.1-sol", effort="high"),
-    "watcher": RoleModel(model="gpt-6-luna", effort="medium"),  # the owner's benchmark pick (2026-10-23)
+    "spotter": RoleModel(model="gpt-6-luna", effort="medium"),  # the watcher's: the owner's benchmark pick (2026-10-23)
 }
 MINUTES: dict[Role, int] = {
     "planner": 30, "builder": 40, "reviewer": 20, "challenger": 20, "design-judge": 20, "preparer": 30,
-    "shaper": 40, "updater": 40, "test-reviewer": 20, "test-curator": 40, "picker": 10, "curator": 20, "watcher": 1,
+    "shaper": 40, "updater": 40, "test-reviewer": 20, "test-curator": 40, "picker": 10, "curator": 20, "spotter": 1,
 }  # fmt: skip
 MACHINE = MachineValues(
     channel="minor", update_when_idle=True, update_while_paused=True, curate_after_merge="on", curate_when_idle="on",
@@ -56,7 +57,7 @@ def layer() -> GlobalLayer:
     }  # fmt: skip
     return GlobalLayer(
         agents=agents, runtimes={"sdk": True, "window": True}, widths=[1280, 1920, 2400], design_failures="ask",
-        pr_labels=[], pr_marker=True, sessions=2, watcher=True, visible=False, curator_threshold=95,
+        pr_labels=[], pr_marker=True, sessions=2, spotter=Spotter(mode="learning"), visible=False, curator_threshold=95,
     )  # fmt: skip
 
 

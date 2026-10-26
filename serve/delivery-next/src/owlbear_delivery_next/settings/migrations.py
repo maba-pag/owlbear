@@ -135,6 +135,21 @@ def machine_added(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+def spotter_renamed(data: dict[str, Any]) -> dict[str, Any]:
+    """Settings format 11 to 12: the watcher became the Spotter (2026-10-25); older runtimes refuse format 12.
+
+    The switch's ``true`` becomes the learning mode and ``false`` the mode off; unset stays unset, and the role's
+    agent settings move to the new name. Nothing else is invented: the Spotter's other settings start unset.
+    """
+    switch = data.pop("watcher", None)
+    if switch is not None:
+        data["spotter"] = {"mode": "learning" if switch else "off"}
+    agents = data.get("agents")
+    if isinstance(agents, dict) and "watcher" in agents:
+        agents["spotter"] = agents.pop("watcher")
+    return data
+
+
 def tests_added(data: dict[str, Any]) -> dict[str, Any]:
     """Change format 5 to 6: a test review's record and step (TD-373); older runtimes refuse format 6."""
     return data
@@ -171,4 +186,5 @@ CONFIG: Migrations = {
     8: watcher_added,
     9: defaults_removed,
     10: machine_added,
+    11: spotter_renamed,
 }

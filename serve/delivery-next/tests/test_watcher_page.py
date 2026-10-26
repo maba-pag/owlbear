@@ -20,6 +20,7 @@ from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.settings.config import Layer
+from owlbear_delivery_next.settings.improvement import Spotter
 from owlbear_delivery_next.state_store import database, watch_reports
 from owlbear_delivery_next.state_store.store import Lock, Store
 from owlbear_delivery_next.state_store.watch_reports import Report
@@ -75,7 +76,7 @@ def test_the_changes_row_counts_its_outside_writes_and_its_page_lists_the_report
         ("explore", f"edit {SECRET}", [SECRET], "outside write (not judged yet)"),
     ]
     assert w["reports"][0]["verdict"] == "not recorded: 2 reports dropped"
-    store.update_config(lambda layer: layer.model_copy(update={"watcher": False}))
+    store.update_config(lambda layer: layer.model_copy(update={"spotter": Spotter(mode="off")}))
     assert http.get("/api/next/changes/flip").json()["watcher"]["on"] is False
 
 
@@ -96,7 +97,7 @@ def test_a_change_without_reports_counts_none(tmp_path) -> None:
     s = Store(tmp_path)
     s.write(Lock("quiet"), m.Change(slug="quiet"))
     assert api.watcher(s, "quiet") == {"on": True, "reports": [], "outside": 0, "unresolved": 0}
-    assert Layer(watcher=False).watcher is False
+    assert Layer(spotter=Spotter(mode="off")).spotter.mode == "off"
 
 
 @pytest.fixture

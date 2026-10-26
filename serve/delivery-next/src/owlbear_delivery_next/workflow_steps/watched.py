@@ -31,15 +31,15 @@ if TYPE_CHECKING:
 def watching(  # noqa: PLR0913, PLR0917 - the session's Change, step, settings and folder, and the runner's log
     store: Store, lock: Lock, step: str, settings: Settings, at: Path, note: Callable[[str], None]
 ) -> watch_feed.Watching | None:
-    """The watcher of a session of *lock*'s Change in *at*; None when the master switch ``watcher`` is off.
+    """The watcher of a session of *lock*'s Change in *at*; None when the Spotter's mode is ``off``.
 
     *note* writes a line to the runner's log, where what the database could not take is told.
 
     Raises:
-        SettingsUnset: No layer sets the master switch.
+        SettingsUnset: No layer sets the Spotter's mode.
     """
-    settings.need("watcher")
-    if not settings.watcher:
+    settings.need("spotter.mode")
+    if settings.spotter.mode == "off":
         return None
     store.db.check()  # the writer's bounded writes need the database open
     home, changes = Path.home(), store.root / "changes"

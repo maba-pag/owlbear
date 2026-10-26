@@ -351,7 +351,9 @@ def main(argv: list[str] | None = None) -> int:  # noqa: PLR0911, PLR0915 - one 
     add = found.add_parser("add", help="add a finding; a repeat counts up its entry")
     add.add_argument("--title", required=True)
     add.add_argument("--text", default="")
-    add.add_argument("--source", choices=("owner", "watcher", "assistant", "review", "run"), default="assistant")
+    add.add_argument(
+        "--source", choices=("owner", "spotter", "retro", "assistant", "review", "run"), default="assistant"
+    )
     add.add_argument("--evidence", action="append", default=[], help="a Change, step, session, path or URL")
     found.add_parser("migrate", help="once: move the file entries into GitHub issues, then delete the files")
     a = parser.parse_args(argv)
