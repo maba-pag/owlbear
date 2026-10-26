@@ -1653,3 +1653,76 @@ def test_two_uncertain_sessions_each_keep_a_slot_so_another_project_gets_none(ro
     again.start("shop")
     drained(again)
     assert calls == []
+
+
+def rows_keyed_to_their_snapshot_as_1a174_left(*, recovered: bool) -> maintenance.Lease:
+    """1a174's constructor on main's A (failure before any PID) and B (failure with PIDs): one snapshot lease S that
+    recorded both rows and marked them, and both rows' cached keys naming S. Built through the ledger API it used."""
+    t0 = datetime(2026, 10, 25, 1, 0, tzinfo=UTC)
+    main_rows({"owlbear": (t0, GENERIC), "shop": (t0 + timedelta(minutes=5), GENERIC)}, {4242: None})
+    path = local_home.root() / curation.STATE
+    runs = curation.Runs.model_validate_json(path.read_text())
+    ledger = maintenance.Maintenance(Slots(lambda: 2))
+    snapshot, seen = curation_snapshots.observed(runs), curation_snapshots.sessions(runs)
+    rows = {curation_snapshots.window(n, r) for n, r in runs.folders.items()}
+    lease = ledger.adopt_uncertain(
+        f"{path}#left", curation.SLOT, "curation", workspace="", generation=snapshot, pids=runs.left,
+        covers=curation_snapshots.same_snapshot(curation.SLOT, snapshot, seen), observed=tuple(sorted({*seen, *rows})),
+        marks=tuple(f"{path}#{curation_snapshots.window(n, r)}" for n, r in runs.folders.items()),
+    )  # fmt: skip
+    runs.left_key = lease.slot
+    runs.folders = {n: r.model_copy(update={"key": lease.slot}) for n, r in runs.folders.items()}
+    path.write_text(runs.model_dump_json(indent=2))
+    if recovered:
+        booted = ledger.boot
+        ledger.boot = lambda: booted() + 1
+        ledger.recover(lease.id, rebooted=True)
+    return lease
+
+
+@pytest.mark.parametrize("recovered", [False, True], ids=["snapshot-held", "snapshot-recovered"])
+def test_rows_an_earlier_build_keyed_to_their_snapshot_are_judged_again_and_each_held(root, recovered) -> None:
+    """Review on 31d: a cached key naming a snapshot's lease owns no row, so each row gets its own hold.
+
+    At two slots another project gets none and no session starts; restarts keep the same leases and keys.
+    """
+    s = rows_keyed_to_their_snapshot_as_1a174_left(recovered=recovered)
+    calls: list[str] = []
+    slots = Slots(lambda: 2)
+    job = curation.Curation(slots, shared=lambda: DataRepo(root), run=never_runs(calls))
+    keys = {n: job.load().folders[n].key for n in ("owlbear", "shop")}
+    sessions = {x["slot"]: x for x in ledger_sessions()}
+    assert (sessions[s.slot]["state"], s.slot in keys.values(), len(set(keys.values()))) == (
+        "recovered" if recovered else "held", False, 2,
+    )  # fmt: skip
+    assert [sessions[k]["state"] for k in keys.values()] == ["held", "held"]
+    assert (slots.counts(curation.SLOT)[2], slots.take("other", "probe", 1, 1)) == (2 if recovered else 3, 0)
+    for _ in range(2):
+        again = curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root), run=never_runs(calls))
+        assert ({n: again.load().folders[n].key for n in keys}, len(ledger_sessions())) == (keys, 3)
+    again.start("shop")
+    drained(again)
+    assert (calls, again.load().folders["shop"].reason) == ([], curation.LEFT)
+
+
+def test_a_true_admission_key_and_a_rows_own_import_key_stay_as_they_are() -> None:
+    """Control: only a key that proves its row stays: this host's admission, even one whose lease never began, or
+    the row's own import; a snapshot's lease or another row's lease does not."""
+    t0 = datetime(2026, 10, 25, 1, 0, tzinfo=UTC)
+    row = curation.FolderRun(state="failed", started_at=t0, ended_at=t0 + timedelta(seconds=30), reason=GENERIC)
+    own = maintenance.Lease(
+        id="a" * 32, project=curation.SLOT, slot="curate:shop:1", kind="curation", workspace="/tmp/w",  # noqa: S108
+        started_at=t0, boot=1.0, owner_pid=1, owner_created=None,
+    )  # fmt: skip
+    window = curation_snapshots.window("shop", row)
+    imported = own.model_copy(update={"slot": "pack:legacy-r", "workspace": "", "observed": [window]})
+    snapshot = imported.model_copy(update={"slot": "pack:legacy-s", "generation": "g"})
+    keyed = lambda key: row.model_copy(update={"key": key})  # noqa: E731
+    owns = curation_snapshots.owns_row
+    assert owns(curation.SLOT, own, "shop", keyed("curate:shop:1")) is True
+    assert owns(curation.SLOT, None, "shop", keyed("curate:shop:2")) is True  # admitted, never began: no session
+    assert owns(curation.SLOT, imported, "shop", keyed("pack:legacy-r")) is True
+    assert owns(curation.SLOT, snapshot, "shop", keyed("pack:legacy-s")) is False
+    assert owns(curation.SLOT, None, "shop", keyed("pack:legacy-x")) is False
+    other = imported.model_copy(update={"observed": [curation_snapshots.window("owlbear", row)]})
+    assert owns(curation.SLOT, other, "shop", keyed("pack:legacy-r")) is False

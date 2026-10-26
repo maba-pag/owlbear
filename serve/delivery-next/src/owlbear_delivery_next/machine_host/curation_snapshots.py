@@ -79,6 +79,19 @@ def recorded_row(project: str, name: str, run: FolderRun) -> Callable[[maintenan
     return covers
 
 
+def owns_row(project: str, lease: maintenance.Lease | None, name: str, run: FolderRun) -> bool:
+    """Whether the lease a row's cached key names really owns that row; a key alone is no proof.
+
+    It does when it is this host's own admission of a run in that folder, under the key the run's rows were written
+    with: the lease exists from before the SDK is entered, so a key naming none started no session. It does when it
+    is the row's own import, which recorded this very row. A snapshot's lease, which an earlier build named in its
+    rows, owns no row: its PIDs say nothing of which session left them.
+    """
+    if not run.key.startswith(f"curate:{name}:"):
+        return lease is not None and recorded_row(project, name, run)(lease)
+    return lease is None or (lease.project == project and lease.kind == "curation" and not lease.generation)
+
+
 def same_snapshot(project: str, snapshot: str, seen: tuple[str, ...]) -> Callable[[maintenance.Lease], bool]:
     """Whether a lease imported these very PIDs and saw every session row still on file, whatever its state."""
 

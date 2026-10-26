@@ -124,6 +124,11 @@ class Curation:
         self.maintenance = ownership or maintenance.Maintenance(slots)
         if runs.left_key and not self.maintenance.records(SLOT, "curation", runs.left_key, runs.left):
             runs.left_key = ""  # the lease it names does not record these PIDs, so the key proves nothing
+        # A cached key counts only while the lease it names owns its row; an earlier build named a snapshot's lease in
+        # its rows, which proves nothing of them, so such a row is judged again as one no lease of ours names.
+        for name, r in runs.folders.items():
+            if r.key and not curation_snapshots.owns_row(SLOT, self.maintenance.lease(SLOT, r.key), name, r):
+                runs.folders[name] = r.model_copy(update={"key": ""})
         # Each uncertain row is its own session's evidence, held under its own lease: a snapshot's PIDs say nothing of
         # which session left them, and rows seen beside it are no proof that any of them is that session.
         behind = {n: r for n, r in runs.folders.items() if legacy_uncertain(r) or (r.state == "running" and not r.key)}
