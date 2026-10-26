@@ -16,8 +16,8 @@ from pathlib import Path
 import pytest
 
 from owlbear_delivery_next.commands import cli
-from owlbear_delivery_next.machine_host import registry, selfcheck
-from owlbear_delivery_next.state_store import offline_protocol, project_home, project_move
+from owlbear_delivery_next.machine_host import selfcheck
+from owlbear_delivery_next.state_store import offline_protocol, project_home, project_move, registry
 from owlbear_delivery_next.state_store.database import MARKER, StoreError
 from owlbear_delivery_next.state_store.store import Store
 

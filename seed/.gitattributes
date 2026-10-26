@@ -1,9 +1,0 @@
-# Enforce LF line endings across checkouts
-* text=auto eol=lf
-
-# Binary files — do not normalize
-*.png binary
-*.jpg binary
-*.ico binary
-*.woff2 binary
-*.zip binary

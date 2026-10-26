@@ -12,10 +12,10 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from owlbear_delivery_next.local_system.slots import Slots
-from owlbear_delivery_next.machine_host import machine_settings
 from owlbear_delivery_next.pack_runs import pack_job
 from owlbear_delivery_next.project_host import pack_routes, session_slots
 from owlbear_delivery_next.settings import config
+from owlbear_delivery_next.state_store import machine_settings
 from owlbear_delivery_next.state_store.store import Store
 
 

@@ -16,6 +16,7 @@ from copilot.generated.rpc import ModelsListRequest
 
 from owlbear_delivery_next.change_contracts.models import Effort
 from owlbear_delivery_next.runtimes.copilot_cli import cli_path
+from owlbear_delivery_next.runtimes.sdk_teardown import call
 
 if TYPE_CHECKING:
     from copilot.generated.rpc import Model, ModelBillingTokenPrices, ModelBillingTokenPricesLongContext
@@ -47,6 +48,16 @@ class Offered:
                 return {"models": [], "error": f"{type(exc).__name__}: {exc}"[:200]}
             self._kept = (time.monotonic(), models)
             return {"models": models, "error": ""}
+
+
+async def takes_effort(client: CopilotClient, model: str) -> bool:
+    """Whether the model takes a reasoning effort; a model missing from the list, or an unread list, is trusted to."""
+    try:
+        listed = await call(client.list_models(), "model list")
+    except Exception:  # noqa: BLE001 - the session create then reports a refused effort itself
+        return True
+    found = next((m for m in listed if m.id == model), None)
+    return found is None or bool(found.supported_reasoning_efforts)
 
 
 def shown(m: Model) -> dict[str, Any]:

@@ -15,12 +15,12 @@ import pytest
 
 from owlbear_delivery_next.commands import cli
 from owlbear_delivery_next.local_system import codebase, local_home, maintenance
-from owlbear_delivery_next.machine_host import project, registry
+from owlbear_delivery_next.machine_host import project
 from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.pack_runs import pack_job, pack_run, pack_state
 from owlbear_delivery_next.project_host import session_slots
 from owlbear_delivery_next.project_host.host import Host, HostRecord
-from owlbear_delivery_next.state_store import offline_protocol, project_home, project_move
+from owlbear_delivery_next.state_store import offline_protocol, project_home, project_move, registry
 from owlbear_delivery_next.state_store.database import MARKER
 from owlbear_delivery_next.state_store.store import Store
 

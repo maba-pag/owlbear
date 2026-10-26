@@ -12,9 +12,8 @@ from pathlib import Path
 import pytest
 
 from owlbear_delivery_next.local_system import local_home
-from owlbear_delivery_next.machine_host import registry
-from owlbear_delivery_next.machine_host.registry import RegistryError
-from owlbear_delivery_next.state_store import fd_tree, project_home
+from owlbear_delivery_next.state_store import fd_tree, project_home, registry
+from owlbear_delivery_next.state_store.registry import RegistryError
 
 
 @pytest.fixture

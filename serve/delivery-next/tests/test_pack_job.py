@@ -159,6 +159,8 @@ class FakeGitHub:
 
 
 def git(cwd: Path, *args: str) -> str:
+    if (cwd / "HEAD").is_file():  # a bare repository: safe.bareRepository=explicit wants it named
+        args = ("--git-dir=.", *args)
     who = ["-c", "user.name=t", "-c", "user.email=t@example.com"]
     done = subprocess.run(["git", *who, *args], cwd=cwd, check=True, capture_output=True, text=True)  # noqa: S603, S607
     return done.stdout.strip()
@@ -1656,30 +1658,76 @@ def test_the_maintenance_page_links_each_action_and_shows_what_is_not_built(tmp_
                     "ended_at": "2026-10-15T10:05:00+00:00", "reason": "golden pages differ"}  # fmt: skip
 
 
+class RecordDescriptors:
+    """Each descriptor ``pack_state.open_record`` hands out, and how often that module closes it.
+
+    The module gets its own OS bindings so unrelated process-wide opens and closes cannot affect the oracle.
+    Only an owned descriptor's handover fails; a close outside its acquisition lifetime is a stray.
+    """
+
+    def __init__(self, fault: type[BaseException]) -> None:
+        self.fault, self.owned, self.strays = fault, [], []
+        self.real_open, self.real_fdopen, self.real_close = pack_state.open_record, os.fdopen, os.close
+
+    def open_record(self, path: Path) -> int:
+        fd = self.real_open(path)
+        self.owned.append({"fd": fd, "closes": 0, "open": True})
+        return fd
+
+    def fdopen(self, fd: int, *args: object, **kwargs: object) -> object:
+        if any(t["fd"] == fd and t["open"] for t in self.owned):
+            msg = "synthetic handover failure"
+            raise self.fault(msg)
+        return self.real_fdopen(fd, *args, **kwargs)
+
+    def close(self, fd: int) -> None:
+        held = next((t for t in self.owned if t["fd"] == fd and t["open"]), None)
+        if held is None:
+            self.strays.append(fd)
+        else:
+            held["closes"], held["open"] = held["closes"] + 1, False
+        self.real_close(fd)
+
+    def patch(self, patch: pytest.MonkeyPatch) -> None:
+        patch.setattr(pack_state, "open_record", self.open_record)
+        patch.setattr(pack_state, "os", SimpleNamespace(**(vars(os) | {"fdopen": self.fdopen, "close": self.close})))
+
+    def closed_once(self) -> bool:
+        return len(self.owned) == 1 and self.owned[0]["closes"] == 1 and not self.strays
+
+
 @pytest.mark.parametrize("fault", [OSError, ValueError])
 def test_a_record_whose_descriptor_cannot_be_read_as_text_shows_as_unread_on_the_maintenance_page(tmp_path, fault):
     """Review on 6dde: a failed handover of the opened record is shown like any unreadable record, never a 500."""
     store = Store(tmp_path)
     c = TestClient(api.create_app(store, "t", Host()), base_url="http://127.0.0.1", headers=AUTH)
     (store.root / pack_job.FILE).write_text(json.dumps(pack_job._blank() | {"started_at": "2026-10-15T10:00:00+00:00"}))  # noqa: SLF001
-    closed: list[int] = []
-    real_close = pack_state.os.close
-
-    def handover(*_args: object, **_kwargs: object) -> None:
-        msg = "synthetic handover failure"
-        raise fault(msg)
-
-    def close(fd: int) -> None:
-        closed.append(fd)
-        real_close(fd)
-
+    spy = RecordDescriptors(fault)
     with pytest.MonkeyPatch.context() as patch:
-        patch.setattr(pack_state.os, "fdopen", handover)
-        patch.setattr(pack_state.os, "close", close)
+        spy.patch(patch)
         got = c.get("/api/next/maintenance")
     assert got.status_code == 200, got.text
     assert {a["name"]: a for a in got.json()}["Design pack update"]["last"] is None
-    assert len(closed) == len(set(closed)) == 1  # the record's descriptor, closed exactly once
+    assert spy.closed_once(), (spy.owned, spy.strays)  # the record's descriptor, closed exactly once
+
+
+def test_the_descriptor_oracle_ignores_a_reused_number_closed_elsewhere_and_catches_a_second_own_close(tmp_path):
+    """Control for the oracle above: a reused descriptor number closed by other code never counts, a second close by
+    pack_state of its already closed descriptor does."""
+    (tmp_path / "record").write_text("{}")
+    spy = RecordDescriptors(OSError)
+    with pytest.MonkeyPatch.context() as patch:
+        spy.patch(patch)
+        fd = pack_state.open_record(tmp_path / "record")
+        pack_state.os.close(fd)
+        reused = os.open(tmp_path / "record", os.O_RDONLY)
+        assert reused == fd
+        os.close(reused)
+        assert spy.closed_once(), (spy.owned, spy.strays)
+        again = os.open(tmp_path / "record", os.O_RDONLY)
+        assert again == fd
+        pack_state.os.close(again)
+    assert (spy.closed_once(), spy.strays) == (False, [again])
 
 
 def test_maintenance_sums_each_role_s_subagents_once_per_step(tmp_path):

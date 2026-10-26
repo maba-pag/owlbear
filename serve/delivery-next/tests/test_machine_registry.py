@@ -5,9 +5,10 @@ from pathlib import Path
 import pytest
 
 from owlbear_delivery_next.local_system import local_home
-from owlbear_delivery_next.machine_host import environment, registry
-from owlbear_delivery_next.machine_host.registry import RegistryError
+from owlbear_delivery_next.machine_host import environment
+from owlbear_delivery_next.state_store import registry
 from owlbear_delivery_next.state_store.database import STORE_FORMAT
+from owlbear_delivery_next.state_store.registry import RegistryError
 
 
 @pytest.fixture

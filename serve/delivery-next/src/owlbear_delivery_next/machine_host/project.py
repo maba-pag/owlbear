@@ -17,10 +17,10 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from owlbear_delivery_next.commands import setup
 from owlbear_delivery_next.local_system.storage_io import atomic_write, open_lock
-from owlbear_delivery_next.machine_host import registry
 from owlbear_delivery_next.project_host import api, session_slots
 from owlbear_delivery_next.project_host.host import Host, HostRecord, running
 from owlbear_delivery_next.runtimes import readiness
+from owlbear_delivery_next.state_store import registry
 from owlbear_delivery_next.state_store.store import LockHeldError, Store, StoreError
 
 if TYPE_CHECKING:

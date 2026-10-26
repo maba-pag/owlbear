@@ -53,7 +53,7 @@ def _registered() -> list[tuple[str, Path]]:
     Raises:
         ValueError: It is unreadable, or newer than this version reads.
     """
-    from owlbear_delivery_next.machine_host import registry  # noqa: PLC0415 - checked above
+    from owlbear_delivery_next.state_store import registry  # noqa: PLC0415 - checked above
 
     path = _home() / registry.MACHINE
     if not path.is_file():

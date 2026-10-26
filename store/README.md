@@ -24,7 +24,6 @@ truth for their own content; do not use this directory as a substitute for regis
 | Delivery state of a registered project | `~/.owlbear/projects/<id>/`, outside the repository |
 | Knowledge implementation and MCP tools | `serve/knowledge/` and `serve/knowledge-mcp/` |
 | Cross-package regression tests | `tests/` |
-| Portable consumer templates | `seed/` |
 
 Database files and other runtime artifacts are ignored by the repository
 rules; do not add them here as a substitute for the managed runtime stores.
