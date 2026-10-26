@@ -12,7 +12,7 @@ from owlbear_delivery_next.settings.config import GlobalLayer, Layer, MachineLay
 from owlbear_delivery_next.settings.improvement import ALLOWED, CATEGORIES, Spotter
 from owlbear_delivery_next.state_store import machine_settings, registry, settings_carry
 from owlbear_delivery_next.state_store.layers import update_layer
-from owlbear_delivery_next.state_store.store import read_layer
+from owlbear_delivery_next.state_store.store import StoreError, read_layer
 
 MATRIX = {  # D-01M5WP8Z4ADZ5FN7RJDR17RQQ5, as the owner decided it
     "hand-off-fitness": {"record", "show-owner", "steer", "refuse-hand-off"},
@@ -117,6 +117,14 @@ KEPT = {"steer_share": 20, "intervention_cap": 3, "verbose": "on", "verbose_unti
 def test_each_old_mode_migrates_in_every_layer_and_keeps_the_other_values(tmp_path, mode, expected, model):
     layer = read_layer(_written(tmp_path, {"spotter": {"mode": mode, **KEPT}}, model.__name__, 13), model)
     assert (layer.format, layer.spotter) == (config.CONFIG_FORMAT, Spotter(**KEPT, **expected))
+
+
+@pytest.mark.parametrize("mode", ["typo", "Learning", "on", False, True, 7, 0.5, [], ["live"], {}, {"mode": "off"}])
+@pytest.mark.parametrize("model", [GlobalLayer, MachineLayer, Layer])
+def test_an_unknown_mode_is_refused_never_guessed_into_a_switch(tmp_path, mode, model):
+    path = _written(tmp_path, {"spotter": {"mode": mode, "looks": ["plan"]}}, model.__name__, 13)
+    with pytest.raises(StoreError, match="cannot be migrated to format 14"):
+        read_layer(path, model)
 
 
 def test_a_layer_without_a_mode_or_a_spotter_migrates_unchanged(tmp_path):

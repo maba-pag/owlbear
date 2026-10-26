@@ -173,10 +173,18 @@ def spotter_switched(data: dict[str, Any]) -> dict[str, Any]:
     ``record``. Live becomes on with the actions left unset in that layer: a wider layer's apply, else the owner
     chooses them (D-01M5WB09Z3ZKJVN02WGWVHGWBH). The Spotter's other settings keep their values; older runtimes
     refuse format 14.
+
+    An unknown mode is refused: the layer cannot be migrated, and nothing guesses its switch.
+
+    Raises:
+        ValueError: The mode is none of off, learning and live.
     """
     spotter = data.get("spotter")
     if isinstance(spotter, dict) and "mode" in spotter:
         mode = spotter.pop("mode")
+        if mode is not None and (not isinstance(mode, str) or mode not in {"off", "learning", "live"}):
+            msg = f"the Spotter's mode {mode!r} is none of off, learning and live"
+            raise ValueError(msg)
         if mode is not None:
             spotter["switch"] = "off" if mode == "off" else "on"
         if mode == "learning":
