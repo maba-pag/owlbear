@@ -59,7 +59,7 @@ async def judged(the_card: dict[str, Any], ctx: spotter.Context) -> tuple[str, f
                 nano = getattr(await session.rpc.usage.get_metrics(), "total_nano_aiu", None)
     finally:
         await spotter.through(asyncio.ensure_future(teardown(client, session, sid)))
-    return (said[-1] if said else ""), (nano / 1e9 if nano else spotter.ESTIMATE)
+    return (said[-1] if said else ""), (nano / 1e9 if nano is not None else spotter.ESTIMATE)
 
 
 async def _stage(work: Any) -> bool:  # noqa: ANN401 - an SDK coroutine

@@ -257,8 +257,8 @@ async def through(task: asyncio.Future[Any]) -> None:
 
 
 def offload[T](work: Callable[..., T], *args: Any) -> asyncio.Future[T]:  # noqa: ANN401 - the work's arguments
-    """Run *work* on the Spotter's own threads: a step's loop never waits for it when it ends."""
-    return asyncio.wrap_future(WORK.submit(work, *args))
+    """Run *work* on the Spotter's own threads: a step's end never waits for it, and a stopped wait never drops it."""
+    return asyncio.shield(asyncio.wrap_future(WORK.submit(work, *args)))
 
 
 type Judge = Callable[[dict[str, Any], Context], Awaitable[tuple[str, float]]]

@@ -765,3 +765,61 @@ def test_a_credential_flags_spaced_value_is_masked_and_an_unread_usage_keeps_the
     text, spent = asyncio.run(REAL_LOOK({}, ctx()))
     assert spotter.parse(text)["verdict"] == "note"
     assert spent == spotter.ESTIMATE
+
+
+def test_a_drain_that_stops_waiting_never_drops_queued_writes(monkeypatch) -> None:
+    import threading  # noqa: PLC0415
+
+    monkeypatch.setattr(spotter, "DRAIN", 0.02)
+    monkeypatch.setattr(spotter, "TEARDOWN", 0.02)
+    release = threading.Event()
+    for _ in range(2):  # both of the Spotter's threads are busy
+        spotter.WORK.submit(release.wait, 5)
+
+    async def main() -> None:
+        spot = spotter.Spotter(ctx(), lambda: "s-1", judge())
+        spot.answered("call-7", "success")
+        await spot.drain()
+
+    asyncio.run(main())
+    release.set()
+    assert spotter.WORK.settled(5)
+    outcomes = spotter.root() / f"outcomes-{spotter._today()}.jsonl"  # noqa: SLF001
+    assert [json.loads(x)["call"] for x in outcomes.read_text().splitlines()] == ["call-7"]
+
+
+def test_a_look_the_runtime_reports_as_free_costs_nothing(monkeypatch) -> None:
+    made: dict[str, Any] = {}
+
+    class Session:
+        session_id = "look-4"
+        rpc = SimpleNamespace(usage=SimpleNamespace(get_metrics=None))
+
+        async def send_and_wait(self, *_a: Any, **_kw: Any) -> None:
+            made["on_event"](said('{"verdict": "silent"}'))
+
+        async def disconnect(self) -> None:
+            pass
+
+    async def metrics() -> Any:
+        return SimpleNamespace(total_nano_aiu=0)
+
+    Session.rpc.usage.get_metrics = metrics
+
+    class Client:
+        def __init__(self, **_kw: Any) -> None:
+            pass
+
+        async def start(self) -> None:
+            pass
+
+        async def create_session(self, **kw: Any) -> Session:
+            made.update(kw)
+            return Session()
+
+        async def stop(self) -> None:
+            pass
+
+    monkeypatch.setattr(spotter_look, "CopilotClient", Client)
+    monkeypatch.setattr(spotter_look, "cli_path", lambda: "/bin/false")
+    assert asyncio.run(REAL_LOOK({}, ctx())) == ('{"verdict": "silent"}', 0.0)
