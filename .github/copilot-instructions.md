@@ -45,10 +45,12 @@ decisions TD-41..43, TD-150 and TD-156 in [the decisions](../.owlbear/decisions.
   among them; then, in this order,
   "take your recommendation (…)" naming the recommendation in the brackets, "none of these: show me
   more options" and "explain first". No other recommendation mark; free text stays open.
-- "Take your recommendation" is recorded `autonomous` with its reason. "Show me more options" asks
-  again across directions, each with pro, con, risk and its own percentage that it is a good
-  choice. "Explain first" (his shorthand "nmdpcro": details, pro, con, risk, opinion) explains each
-  option neutrally, then asks again.
+- "Take your recommendation" records what the option showed as `approved`; details you add when
+  recording stay `autonomous` with their reason. Until `record_decision` takes an origin, record it
+  confirmed and lower it with `correct_decision_origin`; tell him when a replacement refuses that.
+  "Show me more options" asks again across directions, each with pro, con, risk and its own
+  percentage that it is a good choice. "Explain first" (his shorthand "nmdpcro": details, pro, con,
+  risk, opinion) explains each option neutrally, then asks again.
 - Free text is never recorded as written: offer two to five readings that fill its gaps differently,
   plus "your words as written", "show me more readings" and "explain first". Read back free text and
   unclear answers at once; a chosen option counts as confirmed; end the session with one check of

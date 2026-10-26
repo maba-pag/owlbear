@@ -169,7 +169,7 @@ the chosen direction, and say why.
 | Answer | Record and next step |
 | --- | --- |
 | A variant or other direction | `decided`, limited to what the answer establishes |
-| Take your recommendation | State your choice and its reasons; record it as `autonomous` |
+| Take your recommendation | State your choice and its reasons; record what the option showed as `approved` and any detail you add when recording as `autonomous` |
 | Show me more options | Ask again with a bounded set across directions, each with benefits, costs, risks and its own percentage that it is a good choice (percentages do not add up), and again "take your recommendation (…)" naming it |
 | Explain first | Explain the subject and each option's consequences neutrally, then ask again |
 | Free text | Never record it as written. Offer the readings that really differ (two to five), each filling the gaps the answer leaves differently, plus "your words as written", "show me more readings" and "explain first"; record the reading the user chooses |
