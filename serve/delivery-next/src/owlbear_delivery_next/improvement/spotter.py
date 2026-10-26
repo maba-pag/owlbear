@@ -1,4 +1,4 @@
-"""The Spotter in learning mode (design §4): it records what it would say, never sending anything.
+"""The Spotter (design §4): it records what it would say and the action its finding's category is set to, never acting.
 
 It looks at a Delivery step's hand-offs and a sample of its actions, never delaying the step or changing its outcome.
 
@@ -13,6 +13,11 @@ skipped; its teardown takes at most ``TEARDOWN`` per stage, then its runtime is 
 each hand-off is kept beside its look. Records, outcomes and cards stay on this machine in ``~/.owlbear/spotter/``
 (owner-only). A record that names a state change is marked preliminary: the decision-conflict check comes with live
 delivery, so such records do not count toward going live.
+
+A record keeps its finding's ``category`` (one of ``CATEGORIES``; ``none`` when silent, ``insufficient-context`` when
+the card lacked the facts, ``failed`` for an unusable answer, empty when skipped) and the ``action`` the settings gave
+that category when the step started; nothing acts on it yet. Records written before the categories (2026-10-26) carry
+the earlier ``mode`` and ``verdict`` (silent, note, interrupt) instead; their lines are left as they are.
 """
 
 from __future__ import annotations
@@ -41,15 +46,16 @@ from typing import TYPE_CHECKING, Any
 from owlbear_delivery_next.improvement import card
 from owlbear_delivery_next.improvement.events import Kept, as_dict, clip, kept_text
 from owlbear_delivery_next.local_system import local_home
+from owlbear_delivery_next.settings.improvement import CATEGORIES
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable, Iterable, Iterator
+    from collections.abc import Awaitable, Callable, Iterable, Iterator, Mapping
 
 PROMPT = Path(__file__).with_name("spotter_prompt.md")
 RUNNING, ESTIMATE = 2, 0.5  # looks at once per step; credits a look reserves, and counts as when its spend is unknown
 LOOK, TEARDOWN, DRAIN = 90.0, 5.0, 5.0  # seconds a look's answer, each teardown stage and the step's end may take
 LOCK, GRACE = 5.0, 1.0  # seconds a file lock is waited for; and the Spotter's writes at the process's exit
-VERDICTS = frozenset({"silent", "note", "interrupt", "insufficient-context"})
+ANSWERS = frozenset({*CATEGORIES, "none", "insufficient-context"})  # a finding's category, or why there is none
 
 
 @dataclass(frozen=True)
@@ -66,7 +72,7 @@ class Context:
     effort: str
     budget: int  # credits a day for every look on this machine
     context: str = ""  # the role's context tier; "long" for the long one
-    mode: str = "learning"
+    actions: Mapping[str, str] = field(default_factory=dict)  # each category's configured action
     open_work: tuple[str, ...] = ()
     decisions: tuple[str, ...] = ()
     gaps: tuple[str, ...] = ()  # what the runner could not give
@@ -86,8 +92,8 @@ class Record:
     call: str  # the hand-off's or sampled action's call id
     cutoff: int  # the intake's events up to the moment
     probability: float
-    mode: str
-    verdict: str = ""
+    category: str = ""
+    action: str = ""  # the setting of the finding's category; recorded only, nothing acts yet
     note: str = ""
     evidence: list[str] = field(default_factory=list)
     state_change: str = ""
@@ -233,14 +239,14 @@ def prompt_version() -> str:
 
 
 def parse(text: str) -> dict[str, Any]:
-    """The look's JSON verdict; a verdict it did not give is "failed", never silence."""
+    """The look's JSON answer; one without a known ``category`` (an old ``verdict`` too) is "failed", never silence."""
     hit = re.search(r"\{.*\}", text or "", re.DOTALL)
     try:
         said = json.loads(hit.group(0)) if hit else {}
     except json.JSONDecodeError:
         said = {}
-    if not isinstance(said, dict) or said.get("verdict") not in VERDICTS or not _well_formed(said):
-        return {"verdict": "failed", "note": clip(text or "", 300)}
+    if not isinstance(said, dict) or said.get("category") not in ANSWERS or not _well_formed(said):
+        return {"category": "failed", "note": clip(text or "", 300)}
     return said
 
 
@@ -248,7 +254,7 @@ def _well_formed(said: dict[str, Any]) -> bool:
     """Whether every field the answer gives has its type: texts, or a list of texts for the evidence."""
     texts = all(said.get(k) is None or isinstance(said[k], str) for k in ("note", "state_change", "rationale"))
     evidence = said.get("evidence")
-    noted = said["verdict"] not in {"note", "interrupt"} or bool(str(said.get("note") or "").strip())  # one to send
+    noted = said["category"] not in CATEGORIES or bool(str(said.get("note") or "").strip())  # a finding is said
     listed = evidence is None or (isinstance(evidence, list) and all(isinstance(e, str) for e in evidence))
     return texts and noted and listed
 
@@ -332,7 +338,7 @@ class Spotter:
         return Record(id=uuid.uuid4().hex[:12], at=datetime.now(UTC).isoformat(timespec="seconds"),
                       project=ctx.project, change=ctx.change, step=ctx.step, session=self.session(), look=look,
                       call=str(moment.get("call") or ""), cutoff=int(moment.get("cutoff") or 0),
-                      probability=probability, mode=ctx.mode, model=ctx.model, effort=ctx.effort, **fields)  # fmt: skip
+                      probability=probability, model=ctx.model, effort=ctx.effort, **fields)  # fmt: skip
 
     def _look(self, look: str, probability: float, moment: dict[str, Any]) -> None:
         """Freeze the intake now; everything else runs in a task, its file work on the Spotter's own threads."""
@@ -370,7 +376,8 @@ class Spotter:
             record.skipped, spent = "the step ended while the look ran", ESTIMATE  # unknown until it answers
             text, spent = await asyncio.wait_for(self.judge(the_card, ctx), LOOK)
             said = parse(text)
-            record.skipped, record.verdict = "", said["verdict"]
+            record.skipped, record.category = "", said["category"]
+            record.action = ctx.actions.get(record.category, "")
             record.note = clip(said.get("note") or "", 1200)
             record.evidence = [clip(e, 300) for e in said.get("evidence") or [] if isinstance(e, str)][:8]
             record.state_change = clip(said.get("state_change") or "", 400)
@@ -381,7 +388,7 @@ class Spotter:
         except LedgerError as exc:
             record.skipped = f"budget: {exc}"[:300]
         except Exception as exc:  # noqa: BLE001 - a look never reaches the step
-            record.verdict, record.skipped = "failed", f"{type(exc).__name__}: {exc}"[:300]
+            record.category, record.skipped = "failed", f"{type(exc).__name__}: {exc}"[:300]
         finally:
             record.prompt, record.seconds = prompt_version(), round(time.monotonic() - started, 1)
             finishing: Future[None] = Future()

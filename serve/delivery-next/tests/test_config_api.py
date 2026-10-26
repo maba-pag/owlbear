@@ -152,15 +152,76 @@ def test_the_spotter_learns_by_global_and_a_project_may_turn_it_off() -> None:
     from owlbear_delivery_next.settings.improvement import Spotter  # noqa: PLC0415
 
     on = config.resolve(None, config.Layer())
-    off = config.resolve(config.GlobalLayer(), config.Layer(spotter=Spotter(mode="off")))
-    assert (on.spotter.mode, on.sources["spotter.mode"], on.agents["spotter"].model, on.agents["spotter"].effort) == (
-        "learning", "default", "gpt-6-luna", "medium")  # fmt: skip
-    assert (on.agents["spotter"].context, off.spotter.mode, off.sources["spotter.mode"]) == (
+    off = config.resolve(config.GlobalLayer(), config.Layer(spotter=Spotter(switch="off")))
+    spotter = on.agents["spotter"]
+    assert (on.spotter.switch, on.sources["spotter.switch"], spotter.model, spotter.effort) == (
+        "on", "default", "gpt-6-luna", "medium")  # fmt: skip
+    assert on.spotter.hand_off_fitness == "record"
+    assert (on.agents["spotter"].context, off.spotter.switch, off.sources["spotter.switch"]) == (
         "default",
         "off",
         "project",
     )
     assert off.spotter.looks == ["hand-off"]  # the rest of the Spotter's settings still inherit, field by field
+
+
+def test_the_page_gets_each_categorys_allowed_actions_from_the_matrix(store):
+    from owlbear_delivery_next.settings.improvement import ALLOWED, CATEGORIES  # noqa: PLC0415
+
+    got = client(store, headers=AUTH).get("/api/next/config").json()["settings"]["spotter_actions"]
+    assert got == {
+        "hand_off_fitness": ["record", "show-owner", "steer", "refuse-hand-off"],
+        "course_and_constraints": ["record", "show-owner", "steer", "stop-and-resume", "stop-and-ask"],
+        "outside_state_changes": ["record", "show-owner", "stop-and-resume", "stop-and-ask"],
+        "irreversible_harm": ["record", "show-owner", "stop-and-resume", "stop-and-ask"],
+    }
+    assert got == {CATEGORIES[c]: list(a) for c, a in ALLOWED.items()}
+
+
+def test_a_category_action_saves_survives_a_reload_and_clearing_it_inherits_the_wider_value(store, tmp_path):
+    path = tmp_path / "global" / "config.json"
+    c = client(store, path, headers=AUTH)
+    got = c.get("/api/next/config").json()
+    wide = {"format": F, "spotter": {"hand_off_fitness": "steer", "course_and_constraints": "stop-and-ask"}}
+    assert c.put("/api/next/config/global", json={"rev": got["global_rev"], "layer": wide}).status_code == 200
+    got = c.get("/api/next/config").json()
+    mine = {"format": F, "spotter": {"hand_off_fitness": "refuse-hand-off"}}
+    assert c.put("/api/next/config/project", json={"rev": got["project_rev"], "layer": mine}).status_code == 200
+
+    again = client(store, path, headers=AUTH).get("/api/next/config").json()  # a reload reads the files again
+    spot, sources = again["settings"]["spotter"], again["settings"]["sources"]
+    assert (spot["hand_off_fitness"], sources["spotter.hand_off_fitness"]) == ("refuse-hand-off", "project")
+    assert (spot["course_and_constraints"], sources["spotter.course_and_constraints"]) == ("stop-and-ask", "global")
+
+    cleared = {"format": F, "spotter": {"hand_off_fitness": None}}
+    r = c.put("/api/next/config/project", json={"rev": again["project_rev"], "layer": cleared}).json()
+    assert (r["settings"]["spotter"]["hand_off_fitness"], r["settings"]["sources"]["spotter.hand_off_fitness"]) == (
+        "steer", "global")  # fmt: skip
+
+
+@pytest.mark.parametrize(
+    "spotter",
+    [
+        {"hand_off_fitness": "stop-and-ask"},
+        {"course_and_constraints": "refuse-hand-off"},
+        {"outside_state_changes": "steer"},
+        {"irreversible_harm": "refuse-hand-off"},
+        {"irreversible_harm": "steer"},
+        {"switch": "learning"},
+        {"mode": "live"},
+    ],
+)
+def test_an_action_its_category_does_not_allow_is_refused_and_the_layer_stays(store, spotter):
+    c = client(store, headers=AUTH)
+    got = c.get("/api/next/config").json()
+    kept = {"format": F, "spotter": {"hand_off_fitness": "record"}}
+    saved = c.put("/api/next/config/project", json={"rev": got["project_rev"], "layer": kept}).json()
+    before = (store.root / "config.json").read_bytes()
+    r = c.put(
+        "/api/next/config/project", json={"rev": saved["project_rev"], "layer": {"format": F, "spotter": spotter}}
+    )
+    assert r.status_code == 422
+    assert (store.root / "config.json").read_bytes() == before
 
 
 def test_the_global_layer_is_saved_only_where_a_location_is_configured(store, tmp_path):

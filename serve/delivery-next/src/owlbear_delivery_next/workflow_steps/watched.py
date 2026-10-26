@@ -1,8 +1,8 @@
-"""The watcher of a Change-owned session (W1a): on by the Spotter's mode, with the places its reports are judged by.
+"""The watcher of a Change-owned session (W1a): on by the Spotter's switch, with the places its reports are judged by.
 
 The Spotter's looks at the session (Improvement design §4) get what the runner knows when the step starts: the
-Spotter's settings and role, the machine's daily budget, the Change's unfinished plan tasks and the decisions in force
-the step's worker has.
+Spotter's settings (its categories' actions among them) and role, the machine's daily budget, the Change's unfinished
+plan tasks and the decisions in force the step's worker has.
 
 The session's own folder is its worktree, given when it runs. Guarded besides: every worktree in Delivery's worktrees
 folder, every Change's state folder but this Change's own, and the project's main checkout with its Git folder, found
@@ -39,10 +39,10 @@ if TYPE_CHECKING:
 def watching(  # noqa: PLR0913, PLR0917 - the session's Change, step, settings and folder, the runner's log, budget
     store: Store, lock: Lock, step: str, settings: Settings, at: Path, note: Callable[[str], None], budget: int | None
 ) -> watch_feed.Watching | None:
-    """The watcher of a session of *lock*'s Change in *at*; None when the Spotter's mode is ``off``.
+    """The watcher of a session of *lock*'s Change in *at*; None when the Spotter is switched off.
 
     *note* writes a line to the runner's log, where what the database could not take is told. *budget* is what
-    ``needed`` returned before the step recorded anything (None: the mode is off), so nothing is read again here.
+    ``needed`` returned before the step recorded anything (None: switched off), so nothing is read again here.
     """
     if budget is None:
         return None
@@ -64,12 +64,15 @@ def watching(  # noqa: PLR0913, PLR0917 - the session's Change, step, settings a
 def needed(settings: Settings) -> int | None:
     """Check every setting a watched session needs before a step records anything; the Spotter's budget, or None off.
 
+    Switched off, a step needs nothing else of the Spotter: its other settings may stay unset (the page still shows
+    them), with its role and budget.
+
     Raises:
-        SettingsUnset: The Spotter's mode is unset or, when it is on, another of its settings, its role or the
-            machine's Spotter budget.
+        SettingsUnset: The Spotter's switch is unset or, when it is on, another of its settings (each category's
+            action among them), its role or the machine's Spotter budget.
     """
-    settings.need("spotter.mode")
-    if settings.spotter.mode == "off":
+    settings.need("spotter.switch")
+    if settings.spotter.switch == "off":
         return None
     settings.need("spotter", "agents.spotter")
     if (budget := machine_settings.current().spotter_budget) is None:
@@ -78,7 +81,7 @@ def needed(settings: Settings) -> int | None:
 
 
 def spot(store: Store, lock: Lock, step: str, settings: Settings, budget: int) -> spotter.Context:
-    """What the Spotter's looks at a session of *lock*'s Change get; its mode is on and ``needed`` gave *budget*."""
+    """What the Spotter's looks at a session of *lock*'s Change get; it is on and ``needed`` gave *budget*."""
     s, role, gaps = settings.spotter, settings.agent("spotter"), []
     try:
         change = store.read(lock.slug)
@@ -96,7 +99,7 @@ def spot(store: Store, lock: Lock, step: str, settings: Settings, budget: int) -
         effort=role.effort or "",
         budget=budget,
         context=role.context or "",
-        mode=s.mode or "learning",
+        actions=s.actions(),
         open_work=tuple(t.title for t in plan.tasks if not t.done) if plan else (),
         decisions=tuple(line for line in step_decisions.held() if line.strip()),
         gaps=tuple(gaps),

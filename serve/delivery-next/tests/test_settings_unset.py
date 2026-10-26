@@ -21,7 +21,7 @@ from owlbear_delivery_next.local_system.slots import Slots
 from owlbear_delivery_next.machine_host import curation
 from owlbear_delivery_next.settings import carried, config, profile, roles, rounds
 from owlbear_delivery_next.settings.config import GlobalLayer, Layer, Prefs, SettingsUnset, resolve
-from owlbear_delivery_next.settings.improvement import Spotter
+from owlbear_delivery_next.settings.improvement import CATEGORIES, Spotter
 from owlbear_delivery_next.state_store import machine_settings, settings_carry
 from owlbear_delivery_next.state_store.store import StoreError, read_layer
 from owlbear_delivery_next.workflow_steps import (
@@ -43,8 +43,9 @@ def no_base(monkeypatch):
 @pytest.mark.usefixtures("no_base")
 def test_a_setting_no_layer_sets_is_unset_and_listed_never_filled_from_code():
     empty = resolve(None, Layer())
-    assert (empty.agents, empty.sessions, empty.spotter.mode, empty.final_review) == ({}, None, None, None)
-    assert {"agents.builder.model", "agents.spotter.effort", "sessions", "spotter.mode"} <= set(empty.missing)
+    assert (empty.agents, empty.sessions, empty.spotter.switch, empty.final_review) == ({}, None, None, None)
+    assert {"agents.builder.model", "agents.spotter.effort", "sessions", "spotter.switch"} <= set(empty.missing)
+    assert {"spotter.hand_off_fitness", "spotter.irreversible_harm"} <= set(empty.missing)
     assert {"agents.retro.model", "agents.retro-review.minutes", "spotter.looks"} <= set(empty.missing)
     inactive = {"runtimes.sdk", "visible", "agents.builder.runtime", "agents.spotter.minutes", "spotter.sample_rate"}
     inactive |= {"spotter.verbose_until"}
@@ -127,6 +128,7 @@ def test_a_carried_global_resolves_every_setting(shared_repo):
     settings_carry.carry(shared)  # no Global file yet: today's values in full
     prefs = {f"prefs.{key}" for key in config.Prefs.model_fields}  # owner-set, never carried (no code defaults)
     later = {f"spotter.{k}" for k in ("steer_share", "intervention_cap", "verbose", "looks")}  # added after the carry
+    later |= {f"spotter.{k}" for k in CATEGORIES.values()}  # the categories' actions too (2026-10-26)
     later |= {f"agents.{r}.{f}" for r in ("retro", "retro-review") for f in ("model", "effort", "context", "minutes",
                                                                              "subagents")}  # fmt: skip
     assert set(resolve(read_layer(shared.global_path, GlobalLayer), Layer()).missing) == prefs | later
@@ -258,16 +260,18 @@ def test_the_page_shows_final_review_values_set_while_others_are_unset():
                                            "ask_owner_at": None}  # fmt: skip
 
 
-LEARNING = Spotter(mode="learning", steer_share=0, intervention_cap=1, verbose="off", looks=["hand-off"])
+ON = Spotter(switch="on", steer_share=0, intervention_cap=1, verbose="off", looks=["hand-off"],
+             **dict.fromkeys(CATEGORIES.values(), "record"))  # fmt: skip
 
 
 @pytest.mark.usefixtures("no_base")
 @pytest.mark.parametrize(
     ("spot", "budget", "unset"),
     [
-        (None, 50, r"spotter\.mode"),
-        (Spotter(mode="learning"), 50, r"spotter\.looks"),
-        (LEARNING, None, "spotter_budget"),
+        (None, 50, r"^settings unset: spotter\.switch;"),
+        (Spotter(switch="on"), 50, r"spotter\.hand_off_fitness.*spotter\.looks"),
+        (ON.model_copy(update={"irreversible_harm": None}), 50, r"^settings unset: spotter\.irreversible_harm;"),
+        (ON, None, "spotter_budget"),
     ],
 )
 def test_an_unset_spotter_setting_asks_before_a_step_records_anything(monkeypatch, tmp_path, spot, budget, unset):
@@ -288,6 +292,32 @@ def test_an_unset_spotter_setting_asks_before_a_step_records_anything(monkeypatc
     with pytest.raises(SettingsUnset, match=unset):
         runner._agent(store, SimpleNamespace(slug="c1"), c, tmp_path)  # noqa: SLF001
     assert (recorded, c.plan.tasks[0].spans) == ([], [])  # no open span left behind
+
+
+class _PastTheSpotterError(Exception):
+    pass
+
+
+@pytest.mark.usefixtures("no_base")
+def test_a_spotter_switched_off_shows_its_unset_settings_but_never_blocks_a_step(monkeypatch, tmp_path):
+    agents = {r: a for r, a in carried.layer().agents.items() if r != "spotter"}  # the spotter role unset too
+    off = resolve(carried.layer().model_copy(update={"spotter": Spotter(switch="off"), "agents": agents}), Layer())
+    shown = {f"spotter.{k}" for k in (*CATEGORIES.values(), "steer_share", "intervention_cap", "verbose", "looks")}
+    assert shown <= set(off.missing)  # the Settings page still shows each as an error
+    assert "agents.spotter.model" in off.missing
+    monkeypatch.setattr(machine_settings, "BASE", carried.MACHINE.model_copy(update={"spotter_budget": None}))
+    monkeypatch.setattr(runner.worktree, "ensure", lambda *_a: tmp_path)
+    monkeypatch.setattr(runner, "git_common_dir", lambda _repo: tmp_path / ".git")
+
+    def started(*_a: object) -> None:
+        raise _PastTheSpotterError
+
+    monkeypatch.setattr(runner.review, "started", started)
+    c = change(StepKind.BUILD)
+    store = SimpleNamespace(root=tmp_path, read=lambda _slug: c, read_profile=lambda: None, settings=lambda: off,
+                            write=lambda *_a: None)  # fmt: skip
+    with pytest.raises(_PastTheSpotterError):  # the step went on past the Spotter's check
+        runner._agent(store, SimpleNamespace(slug="c1"), c, tmp_path)  # noqa: SLF001
 
 
 def _target_ctx(settings, checks: tuple[Check, ...]) -> tuple[engine.Ctx, SimpleNamespace]:

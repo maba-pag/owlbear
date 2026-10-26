@@ -189,10 +189,10 @@ def display_prefs(store: Store) -> tuple[dict[str, bool | None], str | None]:
 def watcher(store: Store, slug: str) -> dict[str, Any]:
     """The Change's watcher list: its newest reports, their counts and whether the Spotter watches (None: unknown)."""
     try:
-        mode = store.settings().spotter.mode
+        switch = store.settings().spotter.switch
     except StoreError:
-        mode = None
-    on = None if mode is None else mode != "off"
+        switch = None
+    on = None if switch is None else switch == "on"
     return {"on": on, "reports": watch_reports.reports(store.db, slug)} | watch_reports.counts(store.db, slug)
 
 
