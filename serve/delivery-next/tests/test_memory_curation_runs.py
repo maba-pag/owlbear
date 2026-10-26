@@ -15,7 +15,7 @@ from owlbear_delivery_next.local_system import local_home, maintenance, processe
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.local_system.slots import Slots
-from owlbear_delivery_next.machine_host import curation, registry
+from owlbear_delivery_next.machine_host import curation, curation_snapshots, registry
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.settings import config
 from owlbear_delivery_next.settings.config import GlobalLayer
@@ -1296,10 +1296,10 @@ def test_an_adopted_unknown_row_keeps_its_one_lease_through_a_lost_key_write_its
     assert calls == []
 
 
-def main_row(reason: str, started: datetime, ended: datetime | None, state: str = "failed") -> None:
+def main_row(reason: str, started: datetime, ended: datetime | None, state: str = "failed", summary: str = "") -> None:
     """One row main's producer left with no PIDs on file, written afresh as it cannot read a keyed record."""
     row = {"state": state, "started_at": started.isoformat(), "ended_at": ended.isoformat() if ended else None,
-           "summary": "", "reason": reason, "entries": [], "skipped": {}, "seen": {}}  # fmt: skip
+           "summary": summary, "reason": reason, "entries": [], "skipped": {}, "seen": {}}  # fmt: skip
     path = local_home.root() / curation.STATE
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps({"folders": {"shop": row}, "left": {}}))
@@ -1360,7 +1360,6 @@ UNSET_MODEL = "settings unset: agents.curator.model; fill them in on the Setting
         (UNSET_MODEL, 0, "failed"),
         (UNSET_MODEL, 2, "failed"),  # found again by the session's own check, before the SDK
         ("agents.curator.subagents is unset", 0, "failed"),
-        (curation.INTERRUPTED, 5, "failed"),  # a waiting row a restart ended: no session started
     ],
 )
 def test_a_known_refusal_main_writes_before_any_session_holds_nothing(root, reason, after, state) -> None:
@@ -1376,6 +1375,8 @@ def test_a_known_refusal_main_writes_before_any_session_holds_nothing(root, reas
         ("RuntimeError: synthetic SDK failure", 0, 0, "failed"),  # one clock value for its start and end
         ("RuntimeError: synthetic SDK failure", 3600, 3630, "failed"),  # dated in the future
         (curation.INTERRUPTED, 0, None, "failed"),  # a running row a restart ended
+        (curation.INTERRUPTED, 0, 30, "failed"),  # a waiting copy a restart ended: its end proves nothing
+        ("RuntimeError: synthetic SDK failure", 0, 30, "waiting"),  # main's queued copy of a generic failure
         (UNSET_MODEL, 10, 0, "failed"),  # ends before it starts: no shape main writes
         (curation.LEFT, 0, 5, "failed"),  # a fixed refusal that took time: no shape main writes
         ("", 0, 30, "failed"),
@@ -1390,4 +1391,103 @@ def test_a_dated_failure_no_known_shape_explains_is_held_fail_closed(root, reaso
     assert ([s["state"] for s in ledger_sessions()], job.working()) == (["held"], [curation.LINGERING])
     job.start("shop")
     drained(job)
+    assert calls == []
+
+
+@pytest.mark.parametrize("copy", ["waiting", "interrupted"])
+def test_a_queued_copy_of_mains_failure_before_its_first_pid_keeps_one_hold_through_restarts_and_recovery(
+    root, copy
+) -> None:
+    """Review on b4: main's ``start`` copies the failed row as waiting, and main's restart then ends it interrupted.
+
+    Both still show the generic failure's session times, and the waiting one its reason; neither end proves the
+    session ended. It is held once, through a lost key write and further restarts, starts nothing, and after the
+    owner's recovery the same copy resurrects nothing.
+    """
+    t0 = datetime.now(UTC) - timedelta(hours=2)
+    reason = "RuntimeError: synthetic SDK failure" if copy == "waiting" else curation.INTERRUPTED
+    main_row(reason, t0, t0 + timedelta(seconds=30), "waiting" if copy == "waiting" else "failed")
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(curation.Curation, "_write", lost_write)
+        with pytest.raises(OSError, match="synthetic runs write failure"):
+            curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root))
+    [b] = ledger_sessions()
+    calls: list[str] = []
+    for _ in range(2):
+        again = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root), run=never_runs(calls))
+        assert ([s["id"] for s in ledger_sessions()], again.load().folders["shop"].key) == ([b["id"]], b["slot"])
+    assert again.load().folders["shop"].reason == curation.INTERRUPTED
+    again.start("shop")
+    drained(again)
+    assert (calls, again.load().folders["shop"].reason) == ([], curation.LEFT)
+    rebooted(again)
+    again.maintenance.recover(b["id"], rebooted=True)
+    main_row(reason, t0, t0 + timedelta(seconds=30), "waiting" if copy == "waiting" else "failed")  # key lost again
+    after = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root), run=never_runs(calls))
+    assert ([s["state"] for s in ledger_sessions()], after.working(), calls) == (["recovered"], [], [])
+
+
+@pytest.mark.parametrize(
+    ("reason", "state", "summary", "dated"),
+    [
+        ("", "waiting", "", False),  # queued, never started
+        (curation.LEFT, "waiting", "", True),  # a copy of a known refusal
+        ("ended error: no report was submitted", "waiting", "", True),  # a copy of a judged SDK return
+        ("", "waiting", "2 promoted", True),  # a copy of a finished run's report
+        (curation.INTERRUPTED, "failed", "2 promoted", True),  # its copy after main's restart
+    ],
+)
+def test_a_queued_copy_that_still_proves_no_unproven_session_holds_nothing_across_restarts(
+    root, reason, state, summary, dated
+) -> None:
+    t0 = datetime.now(UTC) - timedelta(hours=1)
+    main_row(reason, t0, t0 if reason == curation.LEFT else t0 + timedelta(seconds=30), state, summary)
+    if not dated:
+        path = local_home.root() / curation.STATE
+        runs = json.loads(path.read_text())
+        runs["folders"]["shop"] |= {"started_at": None, "ended_at": None}
+        path.write_text(json.dumps(runs))
+    for _ in range(3):  # this host's own rewrite of the copy is judged again at each restart
+        job = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root))
+        assert (ledger_sessions(), job.working(), job.load().folders["shop"].state) == ([], [], "failed")
+
+
+def snapshot_receipt_from_8ad(*, recovered: bool) -> maintenance.Lease:
+    """What 8ad's constructor left for main's generic failure with PIDs: a snapshot lease that saw the row, the
+    record's ``left_key`` naming it, and no association marked for the row itself."""
+    main_session_row(datetime(2026, 10, 25, 1, 0, tzinfo=UTC), {4242: None})
+    path = local_home.root() / curation.STATE
+    runs = curation.Runs.model_validate_json(path.read_text())
+    ledger = maintenance.Maintenance(Slots(lambda: 1))
+    snapshot, seen = curation_snapshots.observed(runs), curation_snapshots.sessions(runs)
+    lease = ledger.adopt_uncertain(
+        f"{path}#left", curation.SLOT, "curation", workspace="", generation=snapshot, pids=runs.left,
+        covers=curation_snapshots.same_snapshot(curation.SLOT, snapshot, seen), observed=seen,
+    )  # fmt: skip
+    runs.left_key = lease.slot
+    path.write_text(runs.model_dump_json(indent=2))  # the record as 8ad wrote it, its row unkeyed
+    if recovered:
+        booted = ledger.boot
+        ledger.boot = lambda: booted() + 1  # the owner rebooted and recovered it under 8ad
+        ledger.recover(lease.id, rebooted=True)
+    return lease
+
+
+@pytest.mark.parametrize("recovered", [False, True], ids=["held", "recovered"])
+def test_an_8ad_snapshot_receipt_covers_its_own_row_with_no_second_hold_and_no_resurrection(root, recovered) -> None:
+    """Review on b4: the snapshot lease saw this very row at its import, so the row is its own, whatever its state."""
+    lease = snapshot_receipt_from_8ad(recovered=recovered)
+    calls: list[str] = []
+    for _ in range(2):
+        again = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root), run=never_runs(calls))
+        assert ([s["id"] for s in ledger_sessions()], again.load().folders["shop"].key) == ([lease.id], lease.slot)
+        assert again.maintenance.pending("curation") is not recovered
+    main_session_row(datetime(2026, 10, 25, 2, 0, tzinfo=UTC), {4242: None})  # main's later session, same PID
+    later = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root), run=never_runs(calls))
+    states = [s["state"] for s in ledger_sessions()]
+    assert (states, later.load().folders["shop"].key != lease.slot) == (
+        ["recovered" if recovered else "held", "held"], True,
+    )  # fmt: skip
+    later.start("shop")
+    drained(later)
     assert calls == []

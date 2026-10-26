@@ -46,11 +46,36 @@ def sessions(runs: Runs) -> tuple[str, ...]:
     snapshot's own.
     """
     found = (
-        f"{name}|{r.state if r.state not in STATES else ''}|{_at(r.started_at)}|{_at(r.ended_at)}"
+        window(name, r)
         for name, r in runs.folders.items()
         if r.state not in STATES or ((r.started_at or r.ended_at) and not refused(r))
     )
     return tuple(sorted(found))
+
+
+def window(name: str, run: FolderRun) -> str:
+    """One row's session evidence: its folder and times, and its state only when no producer writes it."""
+    return f"{name}|{run.state if run.state not in STATES else ''}|{_at(run.started_at)}|{_at(run.ended_at)}"
+
+
+def recorded_row(project: str, name: str, run: FolderRun) -> Callable[[maintenance.Lease], bool]:
+    """Whether a snapshot's lease saw this very row on file when it was imported, whatever its state since.
+
+    The row predates that import, so the lease's recovery after a later reboot ends its session too. A later row has
+    its own times, which no earlier import saw.
+    """
+    seen = window(name, run)
+
+    def covers(lease: maintenance.Lease) -> bool:
+        return (
+            lease.project == project
+            and lease.kind == "curation"
+            and lease.workspace == ""
+            and bool(lease.generation)
+            and seen in lease.observed
+        )
+
+    return covers
 
 
 def same_snapshot(project: str, snapshot: str, seen: tuple[str, ...]) -> Callable[[maintenance.Lease], bool]:

@@ -142,16 +142,21 @@ class Curation:
             )  # fmt: skip
             runs.left_key = lease.slot
         for name, r in runs.folders.items():
-            # A row's own mark finds its lease after a lost key write, in any state, so a recovered one stays so.
-            # A running row is taken before it is rewritten below, so the rewrite never erases what an older host held.
+            # A row's own mark finds its lease after a lost key write, in any state, so a recovered one stays so, as
+            # does the snapshot lease that saw this very row at its import. Each row is judged before it is rewritten
+            # below, so the rewrite never erases what an older host held.
             if legacy_uncertain(r) or (r.state == "running" and not r.key):
                 lease = self.maintenance.adopt_uncertain(
-                    self._row(name, r), SLOT, "curation", workspace="", covers=_same_run(name, r), keyed=True
+                    self._row(name, r), SLOT, "curation", workspace="", covers=_row_lease(name, r), keyed=True
                 )
                 runs.folders[name] = r.model_copy(update={"key": lease.slot})
         for name, r in runs.folders.items():
-            if r.state in {"waiting", "running"}:
-                runs.folders[name] = r.model_copy(update={"state": "failed", "reason": INTERRUPTED})
+            if r.state not in {"waiting", "running"}:
+                continue
+            update: dict[str, object] = {"state": "failed", "reason": INTERRUPTED}
+            if r.state == "waiting" and not r.key:  # judged: no uncertain session, so its copied times go with it
+                update |= {"started_at": None, "ended_at": None}
+            runs.folders[name] = r.model_copy(update=update)
         self.left, self.left_key = dict(runs.left), runs.left_key
         self._write(runs)
 
@@ -427,23 +432,28 @@ def _pending(store: Path) -> list[Any]:
 
 
 def legacy_uncertain(run: FolderRun) -> bool:
-    """A dated failed row no ledger key accounts for, whose session may have entered the SDK without termination proof.
+    """A dated failed or waiting row no ledger key accounts for, whose session may have entered the SDK unproven.
 
-    Only a known shape proves otherwise: a refusal main writes before any session, a run whose SDK returned with its
-    termination judged (``ended …`` without UNKNOWN; PIDs it still watched are the snapshot's), or a waiting row a
-    restart ended, which started no session. A generic failure, which may be raised inside the SDK before any PID is
-    recorded, and every other reason count as uncertain, as does a state no producer writes. A waiting row is a copy of
-    an earlier row, whose own evidence it no longer shows.
+    A waiting row, and the interrupted row a restart makes of it, copies an earlier row with its times, reason and
+    report, so it is judged by what it still shows. Only a known shape proves no session or its proven end: a refusal
+    main writes before any session; a report, which only a finished run writes and only one whose termination was
+    confirmed or whose PIDs are the snapshot's; or ``ended …`` without UNKNOWN, an SDK return with its termination
+    judged. A generic failure, which may be raised inside the SDK before any PID is recorded, an interrupted row,
+    whose end time proves nothing, and every other reason or a state no producer writes count as uncertain.
     """
     if run.key or run.started_at is None or curation_snapshots.refused(run):
         return False
     if run.state not in curation_snapshots.STATES:
         return True
-    if run.state != "failed":
-        return False  # never, done, waiting, and running, which the caller takes on its own
-    if run.reason == INTERRUPTED:
-        return run.ended_at is None  # a running row a restart ended; a waiting one started no session
+    if run.state not in {"failed", "waiting"} or run.summary:
+        return False  # never and done, a finished run's copy, and running, which the caller takes on its own
     return not run.reason.startswith("ended ") or UNKNOWN in run.reason
+
+
+def _row_lease(folder: str, run: FolderRun) -> Callable[[maintenance.Lease], bool]:
+    """Whether a lease already owns this row: this host's own run of it, or the snapshot lease that saw it imported."""
+    own, imported = _same_run(folder, run), curation_snapshots.recorded_row(SLOT, folder, run)
+    return lambda lease: own(lease) or imported(lease)
 
 
 def _same_run(folder: str, run: FolderRun) -> Callable[[maintenance.Lease], bool]:
