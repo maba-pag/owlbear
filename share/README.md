@@ -205,7 +205,7 @@ Use this sequence for changes under `share/{agents,skills,instructions}/` or the
 `.owlbear/` roots (which also hold prompts):
 
 1. **Confirm the active roots.** Read `.vscode/settings.json` and distinguish the loaded tree from
- source, seed, generated, or consumer copies.
+ source, generated, or consumer copies.
 2. **Read the structural authority.** Load `h-agent-structure` and the matching instruction stub.
 3. **Find the executable owner.** Start from the named agent, skill, prompt, instruction, hook, or
  failing validator. Follow only the direct loading and delegation edges needed for the change.
@@ -238,9 +238,7 @@ Run ecosystem integrity and write-boundary regressions when changing agent struc
 delegation, or write restrictions:
 
 ```shell
-uv run pytest -q \
-  tests/test_agent_ecosystem_validation.py \
-  tests/test_write_guard_hooks.py
+uv run pytest -q tests/test_agent_ecosystem_validation.py
 ```
 
 Also run the narrow test or executable check owned by the changed workflow. Validator success proves

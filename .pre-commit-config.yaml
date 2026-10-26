@@ -153,7 +153,6 @@ repos:
         files: >-
           (?x)
           ^(?:share/agents|\.owlbear/agents)/.*\.agent\.md$
-          |^\.owlbear/hooks/.*\.py$
           |^\.owlbear/scripts/validate_agents\.py$
           |^\.mcp\.json$
           |^serve/[^/]+-mcp/.*$
