@@ -43,15 +43,14 @@ This table snapshots agent declarations and includes runtime-relevant built-in d
 
 | Agent | Model | Required reading | Delegates | Hooks |
 | --- | --- | --- | --- | --- |
-| test-curator | GPT-6.1 Sol (copilot) | `w-test-curation`, `r-workspace-governance` | None | `PreToolUse`: deny source writes through recognized file tools; terminal execution is trusted for this manually invoked role |
-| memory-curator | GPT-6 Luna | `w-mem-curation` | None | None |
 | knowledge-ingestor | GPT-6 Luna | `h-knowledge-ops` | None | None |
 | knowledge-enricher | GPT-6 Luna | `w-knowledge-enrichment`, `h-knowledge-ops` | None | None |
 
 Tool allowlists remain in agent frontmatter; they are not duplicated here.
 
 The new Delivery engine ships its own agents and skills in its package; they are not part of this
-shared map.
+shared map. Its `owlbear-curator` and `owlbear-test-curator` replaced the retired `memory-curator` and
+`test-curator`.
 
 ## Prompt Entry Map
 
@@ -87,16 +86,13 @@ This inverse map includes only direct `<required_reading>` consumers, not condit
 
 | Skill | Required by |
 | --- | --- |
-| `w-test-curation` | test-curator |
-| `r-workspace-governance` | test-curator |
-| `w-mem-curation` | memory-curator |
 | `h-knowledge-ops` | knowledge-ingestor, knowledge-enricher |
 | `w-knowledge-enrichment` | knowledge-enricher |
 
 ## Delegation And Nesting
 
-No shared agent delegates to a subagent. No agent triggers `memory-curator`; the user runs it or
-reviews pending entries on the Delivery engine's Memory page.
+No shared agent delegates to a subagent. Memory curation runs in Delivery (Curate now on the
+Maintenance page); the user reviews pending entries on its Memory page.
 
 The agent validator enforces frontmatter-to-`<agents>` alignment; see `h-agent-structure` for the
 nesting rules.
@@ -106,13 +102,11 @@ nesting rules.
 | Control | Attached roles | Enforcement job |
 | --- | --- | --- |
 | Agent `tools:` allowlist | Every agent | Limits runtime capabilities exposed to the role |
-| `deny-src-writes.py` | test-curator | Restricts recognized file-tool writes to tests and scratch; manually invoked terminal execution is trusted |
 | MCP schemas and stores | Tool-capable roles | Validate arguments, transitions, and persisted state |
 | `validate_agents.py` | Repository validation | Checks frontmatter, required sections, tools, hooks, and delegation |
 | `validate_skills.py` | Repository validation | Checks skill metadata and structure |
 | `validate_prompts.py` | Repository validation | Checks prompt metadata, routing targets, and explicit skill references |
 | `test_agent_ecosystem_validation.py` | Repository regression | Exercises validators and resolves declared OwlBear MCP tools against live registries |
-| Write-guard regression tests | Repository regression | Exercise path restrictions and hook behavior |
 
 Runtime and repository controls remain authoritative over prose.
 

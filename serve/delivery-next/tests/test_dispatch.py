@@ -53,3 +53,12 @@ def test_the_dispatcher_loads_only_the_command_it_runs(monkeypatch) -> None:
 def test_the_chat_server_names_only_the_dispatcher() -> None:
     server = setup.with_server({}, "/py", Path("/r"))["mcpServers"][setup.SERVER]
     assert (server["command"], server["args"]) == ("/py", ["-m", "owlbear_delivery_next", "mcp", "--repo", "/r"])
+    local = setup.with_server({}, "/py")["mcpServers"][setup.SERVER]  # a project's own: the folder it starts in
+    assert local["args"] == ["-m", "owlbear_delivery_next", "mcp"]
+
+
+def test_a_python_under_home_is_named_through_home(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    under = tmp_path / ".owlbear" / "runtime" / ".venv" / "bin" / "python"
+    assert setup.portable(str(under)) == "${HOME}/.owlbear/runtime/.venv/bin/python"
+    assert setup.portable("/opt/py") == "/opt/py"

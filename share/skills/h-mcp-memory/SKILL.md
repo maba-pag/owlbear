@@ -6,20 +6,20 @@ user-invocable: false
 
 # MCP Memory Tool Reference
 
-> **Audience:** Any agent with `save_memory` or `recall_memory` in its tools list, plus the memory-curator agent. **When:** Pre-flight knowledge loading, post-task reflection, and curation sessions. **Why:** Authoritative reference for MCP memory parameters, behavior, error cases, and usage patterns.
+> **Audience:** Any agent with `save_memory` or `recall_memory` in its tools list, plus Delivery's memory curator. **When:** Pre-flight knowledge loading, post-task reflection, and curation sessions. **Why:** Authoritative reference for MCP memory parameters, behavior, error cases, and usage patterns.
 
-The `owlbear-memory` MCP server exposes memory operations over stdio. The MCPServer app name is `owlbear-memory`; VS Code registers it in `.vscode/mcp.json` as `owlbear-memory`.
+The `owlbear-memory` MCP server exposes memory operations over stdio. The MCPServer app name is `owlbear-memory`; VS Code and the Copilot CLI register it in `.mcp.json` as `owlbear-memory`.
 
-For curation workflow, see `w-mem-curation`.
+Delivery's `owlbear-curator` role ships its own curation workflow.
 
 ## Agent Access Matrix
 
 | Role | Agents | Available Tools |
 | --- | --- | --- |
 | Outcome owners | the new Delivery engine's builder, planner, preparer, updater, shaper | `recall_memory`, `save_memory` (`builder` also assesses) |
-| Specialist producers | test-curator, knowledge-ingestor, knowledge-enricher | `recall_memory`, `save_memory` |
+| Specialist producers | knowledge-ingestor, knowledge-enricher | `recall_memory`, `save_memory` |
 | Read-only reviewers | the new Delivery engine's reviewer, challenger, design-judge, test-reviewer | `recall_memory`; return candidates to their parent |
-| Memory curator | memory-curator | `list_memories`, `read_memory`, `curate_memory`, `delete_memory`, `commit_memory_batch` (each with an optional `folder`), `make_global`, `curation_threshold`, agent lifecycle tools |
+| Memory curator | Delivery's `owlbear-curator` | `list_memories`, `read_memory`, `curate_memory`, `delete_memory`, `commit_memory_batch` (each with an optional `folder`), `make_global`, `curation_threshold`, agent lifecycle tools |
 
 These profiles are intentionally asymmetric. Producers save unscoped pending candidates with any
 non-blank provenance label; the curator
@@ -158,9 +158,8 @@ matrices and workflow cadence are the evidence boundary for this policy.
   is new-lesson capture: the reviewer returns it to its task-owning parent, and
   the parent validates and may call `save_memory`. It is not an assessment
   handoff and does not change the review or Delivery result.
-- `memory-curator` owns pending-entry curation. A human owns approval and
-  exceptional-state resolution through the existing review prompt and the
-  Memory page.
+- Delivery's `owlbear-curator` owns pending-entry curation. A human owns approval and
+  exceptional-state resolution through the Memory page.
 
 ### Assessment boundary
 
@@ -214,13 +213,11 @@ persist across those edits.
 
 ### Curation trigger, visibility, and failure handling
 
-- `memory-curator` is the owner in chats; Delivery's own `owlbear-curator` role runs automatic curation
-  from the Maintenance page's Curate now, after a merge and when OwlBear is idle, one memory folder per
-  session, and reports each entry there. Otherwise:
-  the user runs `memory-curator` with `Curate: automatic` or curates with it
-  interactively, or reviews pending entries on the Delivery engine's Memory page.
+- Delivery's `owlbear-curator` role runs curation from the Maintenance page's Curate now, after a
+  merge and when OwlBear is idle, one memory folder per session, and reports each entry there; the
+  user reviews pending entries on the Memory page.
   At or above `curation_threshold()` the curator acts alone, Make global
-  included; below it, it asks in interactive mode and skips in automatic mode.
+  included; below it, it skips the entry and leaves it pending.
 - Curation is opportunistic, not an eventual-processing SLA. No durable due
   state or age scheduler is implied.
 - The pending backlog is visible through

@@ -35,5 +35,4 @@ jobs:
       - run: >-
           uv run --frozen pytest -q
           tests/test_agent_ecosystem_validation.py
-          tests/test_write_guard_hooks.py
           tests/test_knowledge_ops_contract.py
