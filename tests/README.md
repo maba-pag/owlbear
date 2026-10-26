@@ -1,7 +1,7 @@
 # Tests
 
-The top-level `tests/` tree verifies workspace-wide contracts: setup and seed behavior, package
-boundaries, MCP registrations, memory and knowledge persistence, hooks, CI workflows, and the agent
+The top-level `tests/` tree verifies workspace-wide contracts: package
+boundaries, MCP registrations, memory and knowledge persistence, CI workflows, and the agent
 ecosystem. It is development evidence, not a runtime package.
 
 ## What lives here

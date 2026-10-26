@@ -683,6 +683,8 @@ def test_a_clone_without_its_chat_server_shows_the_setup_it_needs(tmp_path, http
     assert listed["setup"] == f"owlbear setup --repo {work}"
     (work / ".mcp.json").write_text(json.dumps(setup.with_server({}, "/py", work)))
     assert "setup" not in http.get("/api/next/projects").json()["projects"][0]
+    (work / ".mcp.json").write_text(json.dumps(setup.with_server({}, "/py")))  # it serves the folder it starts in
+    assert "setup" not in http.get("/api/next/projects").json()["projects"][0]
     (work / ".mcp.json").unlink()
     setup.user_mcp(Path.home()).parent.mkdir(parents=True)
     servers = setup.with_server({}, "/py", work)["mcpServers"]
@@ -728,8 +730,14 @@ def test_malformed_or_unrelated_server_entries_never_count_as_setup(tmp_path):
     assert setup.registered(work) is False
     setup.user_mcp(Path.home()).parent.mkdir(parents=True)
     unrelated = {"x": {"args": ["-m", "owlbear_delivery_next", "mcp", "--repo", "/other"]}, "y": {"args": [str(work)]}}
+    unrelated["z"] = setup.with_server({}, "/py")["mcpServers"][setup.SERVER]  # user-level: no folder of its own
     setup.user_mcp(Path.home()).write_text(json.dumps({"servers": unrelated}))
     assert setup.registered(work) is False
+    other = setup.with_server({}, "/py", Path("/other"))
+    (work / ".mcp.json").write_text(json.dumps(other))
+    assert setup.registered(work) is False
+    (work / ".mcp.json").write_text(json.dumps(setup.with_server({}, "/py", Path(f"{work}-old"))))
+    assert setup.registered(work) is False  # a path that merely contains this one
 
 
 def test_each_project_line_in_the_log_names_its_project(tmp_path, http, machine, capsys):

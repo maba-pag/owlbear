@@ -6,11 +6,11 @@ user-invocable: false
 
 # Memory Entry Structure
 
-> **Audience:** Agents writing post-task reflections and the memory-curator agent. **When:** Before calling `save_memory` (entry shape and quality checks) and during curation sessions. **Why:** Ensures entries meet the structural and quality bar for long-lived agent knowledge.
+> **Audience:** Agents writing post-task reflections and Delivery's memory curator. **When:** Before calling `save_memory` (entry shape and quality checks) and during curation sessions. **Why:** Ensures entries meet the structural and quality bar for long-lived agent knowledge.
 
 Structural standards for project memory entries in MCP (`owlbear-memory`) storage. Covers entry shape, tier selection, deduplication, and quality enforcement.
 
-For tool syntax, see `h-mcp-memory`. For curation workflow, see `w-mem-curation`.
+For tool syntax, see `h-mcp-memory`. Delivery's `owlbear-curator` role owns the curation workflow.
 
 ## Entry Shape
 
@@ -119,7 +119,7 @@ does not establish a named scope. A candidate cannot corroborate its own named i
 Ordinary writers do not need `list_memories` or `read_memory` authority and must not attempt
 store-wide deduplication before saving. Avoid a duplicate only when the same insight is already
 visible in the current context. The memory curator performs cross-store comparison, conflict
-handling, relevance scoping, and pruning through `w-mem-curation`.
+handling, relevance scoping, and pruning in Delivery's `owlbear-curator` role.
 
 ## Content-Quality Bar
 

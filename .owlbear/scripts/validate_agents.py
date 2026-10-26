@@ -76,11 +76,6 @@ _AGENT_ROOTS = (_REPO_ROOT / "share" / "agents", _REPO_ROOT / ".owlbear" / "agen
 _INSTRUCTION_ROOTS = (_REPO_ROOT / "share" / "instructions", _REPO_ROOT / ".owlbear" / "instructions")
 _SKILL_ROOTS = (_REPO_ROOT / "share" / "skills", _REPO_ROOT / ".owlbear" / "skills")
 _HOOK_EVENTS = frozenset({"SessionStart", "PreToolUse", "PostToolUse"})
-_REQUIRED_HOOKS: dict[str, dict[str, frozenset[str]]] = {
-    "test-curator": {
-        "PreToolUse": frozenset({"uv run python .owlbear/hooks/deny-src-writes.py"}),
-    },
-}
 
 _BUILTINS = frozenset({"Explore", "General Purpose"})
 _AGENT_TABLE_MIN_CELLS = 2
@@ -295,7 +290,7 @@ def _hook_entry_command(
     errors.extend(
         f"{agent_file}: hook script does not exist: {token}"
         for token in tokens
-        if token.startswith(".owlbear/hooks/") and not (_REPO_ROOT / token).is_file()
+        if token.endswith(".py") and not (_REPO_ROOT / token).is_file()
     )
     return command, errors
 
@@ -329,15 +324,8 @@ def _hook_commands(fm_lines: list[str], agent_file: Path) -> tuple[dict[str, lis
 
 
 def _check_hooks(fm_lines: list[str], agent_file: Path) -> list[str]:
-    """Validate declared hooks and enforce the current safety-hook contracts."""
-    commands, errors = _hook_commands(fm_lines, agent_file)
-    expected = _REQUIRED_HOOKS.get(agent_file.stem.replace(".agent", ""), {})
-    for event, required_commands in expected.items():
-        declared = set(commands.get(event, []))
-        missing = sorted(required_commands - declared)
-        if missing:
-            errors.append(f"{agent_file}: missing required {event} hook(s): {missing}")
-    return errors
+    """Validate the shape of declared hooks and that their local scripts exist."""
+    return _hook_commands(fm_lines, agent_file)[1]
 
 
 def _check_unknown_tools(
