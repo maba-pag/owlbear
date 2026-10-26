@@ -510,3 +510,42 @@ def test_an_earlier_preference_edit_stays_a_review_after_a_cancelled_review_butt
     assert [body["prefs_reviewed"] for body in sent] == [True]
     assert pending_shared.read_profile().prefs_import == "done"
     assert pending_shared.read_config().prefs.merge_method == "squash"
+
+
+@pytest.mark.browser
+def test_a_refused_save_offers_its_retry_only_once_it_has_settled(pending_shared, monkeypatch, pds) -> None:
+    """While a save runs, no earlier notice stands as its outcome; once it settles, the offered retry is taken."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    _refuse_config_once(monkeypatch, pending_shared.config_path)
+    with settings_page(pending_shared, pds) as page:
+        sent, held = _project_puts(page), []
+
+        def hold_first_put(route) -> None:
+            if route.request.method == "PUT" and not held:
+                held.append(route)  # the refused save stays in flight until the test lets it go
+            else:
+                route.fallback()
+
+        page.route("**/api/next/config/project", hold_first_put)
+        expect(page.locator("#error")).to_be_visible()  # the page's standing notice of the pending import
+        pds.pick(page, "Merge method", "squash")
+        page.locator("#save").click()
+        pds.modal(page).get_by_role("button", name="Save project settings").click()
+        page.wait_for_function("() => document.querySelector('#save')?.loading === true")
+        expect(page.locator("#status")).to_have_text("Saving…")
+        expect(page.locator("#error")).to_be_hidden()  # nothing offers a retry the running save would ignore
+
+        held[0].fallback()
+        expect(page.locator("#error")).to_be_visible()
+        expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
+        assert page.evaluate("() => document.querySelector('#save').loading") is False
+        assert pending_shared.read_profile().prefs_import == "pending"
+
+        page.locator("#save").click()  # the offered retry carries no new edit and is taken
+        pds.modal(page).get_by_role("button", name="Save project settings").click()
+        expect(page.locator("#error")).to_be_hidden()
+        expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
+
+    assert [body["prefs_reviewed"] for body in sent] == [True, True]
+    assert pending_shared.read_profile().prefs_import == "done"

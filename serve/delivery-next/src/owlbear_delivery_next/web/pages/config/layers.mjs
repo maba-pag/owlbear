@@ -204,7 +204,11 @@ async function saveLayer(review) {
     instead: "Your edits stay unsaved on this page.",
   }))) return;
   if (review) state.prefsReview = true;  // confirmed: from now on it is sent until it is published
+  // While the write and its follow-up read run, the page shows only that it is saving: no earlier notice stands as
+  // this save's outcome. The outcome is shown once it is settled, together with the save button taking a retry.
+  let error = "", status = "";
   state.saving = true;
+  state.error = "";
   state.status = "Saving…";
   show();
   try {
@@ -213,23 +217,22 @@ async function saveLayer(review) {
         prefs_reviewed: layer === "project" && state.prefsReview }, timeout: WRITE });
     if (layer === "project" && !state.loaded.unpublished) state.prefsReview = false;  // kept until published
     for (const [key, value] of Object.entries(sent)) if (drafts[layer][key] === value) delete drafts[layer][key];
-    state.error = state.loaded.notice ? state.loaded.notice.charAt(0).toUpperCase() + state.loaded.notice.slice(1) : "";
+    error = state.loaded.notice ?? "";
     const whose = { global: "the global", machine: "this machine's" }[layer]
       ?? (named() ? `${named()}'s` : "this project's");
-    state.status = `Saved ${whose} settings. They apply to the next session.`;
+    status = `Saved ${whose} settings. They apply to the next session.`;
     await readAcross();
   } catch (e) {
-    state.status = "";
+    error = e.message;
     if (e.status === 409 && await reload()) {
       await readAcross();
-      state.error = `${e.message}. The page loaded the current settings and kept your unsaved edits; `
+      error = `${e.message}. The page loaded the current settings and kept your unsaved edits; `
         + "check them and save again.";
-      state.error = state.error.charAt(0).toUpperCase() + state.error.slice(1);
-    } else {
-      state.error = e.message.charAt(0).toUpperCase() + e.message.slice(1);
     }
   } finally {
     state.saving = false;
+    state.error = error ? error.charAt(0).toUpperCase() + error.slice(1) : "";
+    state.status = status;
     showIdle();  // models that arrived during it apply now
   }
 }
