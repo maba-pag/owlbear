@@ -2,7 +2,7 @@
 
 These are fixed values, never recomputed from the binding. Module digests are SHA-256 of
 ``ast.dump(ast.parse(text), include_attributes=False)`` over the whole file, so any edit to a file on the admission
-path changes its digest, including delegated helpers such as the current ``_open_switched``.
+path changes its digest, including delegated settlement, ledger-schema/read and machine-home helpers.
 """
 
 # The v1.51 and v1.50 builds differ from the audited 51aa import table in these four modules only.
@@ -21,6 +21,8 @@ CURRENT_MODULES = (
     ("commands/runner.py", "886ad4fbb520a99b41511d4977d7bd17d5f282eb3dd4c65b03c132e69b59fc4a"),
     ("commands/setup.py", "0273f7a84e6583e2f51e9d831ca63380801b234648ff967d7eec18b8c503bde1"),
     ("commands/step_mcp.py", "94c3177cc5927009b80d25e2a9825f377749e2b543d1eb519b87b380ba7ee5bb"),
+    ("local_system/local_home.py", "628406fc116eb98f7fb5697a4bc00b94e534b07a9d3cf4be430972343bc3b4a5"),
+    ("local_system/maintenance.py", "c014ad890fcfab0be0649d3a3dc3abca738657039f54d09d5ba781c95f830651"),
     ("local_system/storage_io.py", "d497c458216512022b85e56ef3bdf74c829d4f0e54608d957ef735c526841b30"),
     ("machine_host/app.py", "357f6a77ef59e7b2b67351dfb431e6ea519052a10c81c37c73792cceaa06005f"),
     ("machine_host/command.py", "47df14591c557c39773616cbeedca135d8ac02affeeeb4d1843cd17cb9c68606"),
@@ -29,6 +31,7 @@ CURRENT_MODULES = (
     ("machine_host/project.py", "6973cf0089a1790b4bc04556e36877ee6d1d57cbd291714a8d10bcf6328010a5"),
     ("machine_host/registry.py", "568118599431852a13173fd663e83b6764640232e4f026c065f47fc77ad79582"),
     ("machine_host/selfcheck.py", "1b5401cf5ec51dd2ffbffe4b0bc3874cf3b2105f0d0df567dde45dd4240fe18f"),
+    ("pack_runs/pack_state.py", "9cdbf5cfd63c9faf6f10103cad3e9e12cccd282b76c3e5ec6fc159dc51fdc2cb"),
     ("project_host/host.py", "692c501f40c468f2ce7bce1d0a6aa74dae9099c1f4349546fb74d931e5938427"),
     ("state_store/database.py", "4c58bfc55a9db87a2d6aba3c52de794c06cddfce5aeb19bf3bd84c531bddc901"),
     ("state_store/fd_tree.py", "986e95d0e9c3e87e78245d4469e0680b84e499e7bd8482ef5f6f26fd229ace8d"),

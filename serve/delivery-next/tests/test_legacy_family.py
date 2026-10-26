@@ -51,6 +51,63 @@ def test_the_current_family_aggregate_is_the_digest_of_its_table() -> None:
     assert hashlib.sha256(text.encode("utf-8")).hexdigest() == legacy_family.CURRENT_FAMILY_AGGREGATE
 
 
+def test_the_current_settlement_read_set_covers_its_receipt_schema_reader_and_home() -> None:
+    required = {
+        "local_system/local_home.py",
+        "local_system/maintenance.py",
+        "local_system/storage_io.py",
+        "pack_runs/pack_state.py",
+        "state_store/offline_protocol.py",
+    }
+    assert required <= set(legacy_family.CURRENT_FILES)
+    assert required <= dict(legacy_family.CURRENT_MODULES).keys()
+
+
+@pytest.mark.parametrize(
+    ("rel", "old", "new"),
+    [
+        (
+            "pack_runs/pack_state.py",
+            "    record[REWRITTEN] = resolved(record, version, receipted)[0]",
+            "    return False",
+        ),
+        (
+            "local_system/maintenance.py",
+            '            return next((s[len(prefix) :] for s in ledger.imported if s.startswith(prefix)), "")',
+            '            return ""',
+        ),
+        (
+            "local_system/maintenance.py",
+            "    if missing := set(Ledger.model_fields) - ledger.model_fields_set:",
+            "    if False:",
+        ),
+        (
+            "local_system/maintenance.py",
+            '    model_config = ConfigDict(extra="forbid")',
+            '    model_config = ConfigDict(extra="ignore")',
+        ),
+        (
+            "local_system/maintenance.py",
+            "            if isinstance(pid, bool) or not str(pid).isdigit() or int(str(pid)) <= 0:",
+            "            if False:",
+        ),
+        (
+            "local_system/local_home.py",
+            '    return Path.home() / ".owlbear"',
+            '    return Path.home() / ".another-ledger"',
+        ),
+    ],
+    ids=["settle", "receipt-lookup", "strict-reader", "record-schema", "pid-schema", "ledger-home"],
+)
+def test_a_current_settlement_dependency_change_is_an_unknown_build(
+    current_binding: Binding, rel: str, old: str, new: str
+) -> None:
+    _edit(current_binding.package, rel, old, new)
+    reasons = _reasons(current_binding)
+    assert len(reasons) == 1
+    assert f"current family modules differ from the candidate: {rel}" in reasons[0]
+
+
 def test_a_current_function_change_is_an_unknown_build(current_binding: Binding) -> None:
     _edit(
         current_binding.package,
