@@ -29,6 +29,7 @@ if TYPE_CHECKING:
 READY_WITHIN = 60.0
 GRACE = 5.0
 WITHIN = 600.0  # seconds per install or preparation command
+SHOWN = 80  # characters of a command a note quotes, so a long path never pushes out why it failed
 type Action = Literal["launch", "keep", "dispose", "settle"]
 type Pids = dict[int, float | None]
 type Found = dict[int, str]
@@ -40,22 +41,28 @@ def journal(log: Callable[[dict[str, Any]], None], pids: Pids) -> None:
     log({"event": "pids", "at": datetime.now(UTC).isoformat(), "pids": {str(p): t for p, t in pids.items()}})
 
 
+def shown(argv: list[str]) -> str:
+    """The command as a note quotes it: its start and its end, which name the program, script and arguments."""
+    text = shlex.join(argv)
+    return text if len(text) <= SHOWN else f"{text[: SHOWN // 3]}…{text[-(SHOWN - SHOWN // 3 - 1) :]}"
+
+
 def run(argv: list[str], cwd: Path, log: Callable[[dict[str, Any]], None], env: Mapping[str, str] | None = None) -> str:
     """Run one command the owner made known in its own group, within ``WITHIN``; a note if it failed, else empty."""
-    within = WITHIN
+    within, cmd = WITHIN, shown(argv)
     try:
         proc = subprocess.Popen(  # noqa: S603 - argument vector of a command the owner made known
             argv, cwd=cwd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
             start_new_session=True, env=env,
         )  # fmt: skip
     except OSError as exc:
-        return f"`{shlex.join(argv)}` did not start: {exc}"
+        return f"`{cmd}` did not start: {exc}"
     born = created(proc.pid)
     try:
         journal(log, {proc.pid: born})
         out, _ = proc.communicate(timeout=within)
     except subprocess.TimeoutExpired:
-        return f"`{shlex.join(argv)}` took over {within:.0f} s"
+        return f"`{cmd}` took over {within:.0f} s"
     finally:  # timed out, interrupted or done: nothing of its group outlives the command
         if members(proc.pid, born):  # not once its id names a newer group
             with contextlib.suppress(OSError):
@@ -64,7 +71,7 @@ def run(argv: list[str], cwd: Path, log: Callable[[dict[str, Any]], None], env: 
             proc.communicate(timeout=5)  # an escaped child may hold the pipe open
     if proc.returncode:
         last = next((x for x in reversed(out.decode(errors="replace").splitlines()) if x.strip()), "")
-        return f"`{shlex.join(argv)}` failed: {last.strip()[:200]}"
+        return f"`{cmd}` failed: {last.strip()[:200]}"
     return ""
 
 
