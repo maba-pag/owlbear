@@ -448,14 +448,6 @@ def _ignore_route(routes: APIRouter, store: Store, at: At, mine: list[Any]) -> N
             raise HTTPException(409, f"{exc} ({exc.action})") from exc
 
 
-def _impact(shared: DataRepo | None, folder: str, decision_id: str, places: Places) -> dict[str, Any]:
-    """A replacement's impact report as the page shows it (TD-428), or why it cannot be made."""
-    try:
-        return decision_impact.shown(decision_impact.report(shared, folder, decision_id, places()))
-    except (decision_actions.Refused, decision_store.DecisionsUnavailable) as exc:
-        return {"error": str(exc)}
-
-
 def _shared_routes(routes: APIRouter, shared: Shared, at: At, places: Places) -> None:
     """What a chat may do as well as the page: record or propose, retire, queue a read-back and record one."""
 
@@ -468,7 +460,7 @@ def _shared_routes(routes: APIRouter, shared: Shared, at: At, places: Places) ->
             revision=body.revision, redecided=body.redecide, effect=body.effect, origin=Origin(body.origin),
         ))  # fmt: skip
         if body.confirmed and body.replaces and out["saved"] and body.effect != "wording":
-            out["impact"] = _impact(shared(), at(project), out["receipts"][0]["id"], places)
+            out["impact"] = impact_routes.after_change(shared(), at(project), out["receipts"][0]["id"], places)
         return out
 
     @routes.post("/decisions/{decision_id}/retire")
@@ -479,7 +471,7 @@ def _shared_routes(routes: APIRouter, shared: Shared, at: At, places: Places) ->
             shared(), at(project), decision_id, body.revision, reason=body.reason, redecided=body.redecide,
         ))  # fmt: skip
         if out["saved"]:
-            out["impact"] = _impact(shared(), at(project), decision_id, places)
+            out["impact"] = impact_routes.after_change(shared(), at(project), decision_id, places)
         return out
 
     @routes.post("/decisions/{decision_id}/queue-read-back")

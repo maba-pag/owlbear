@@ -36,6 +36,7 @@ AT = datetime(2026, 10, 21, 9, tzinfo=UTC)
 class Host:
     wake = SimpleNamespace(set=lambda: None)
     repo = None  # the impact report then says it cannot read the clone
+    maintenance = None
     record = HostRecord(url="http://127.0.0.1:9/", token="tok", pid=1, started_at=datetime.now(UTC), code=CURRENT)  # noqa: S106
 
 
