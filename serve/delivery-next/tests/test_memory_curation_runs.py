@@ -382,6 +382,47 @@ def test_a_newer_snapshot_binds_its_own_lease_after_a_failed_key_write(root, mon
     assert calls == []
 
 
+def rebooted(job: curation.Curation) -> None:
+    booted = job.maintenance.boot
+    job.maintenance.boot = lambda: booted() + 1
+
+
+def unmatched_snapshot_after_held_import(root, monkeypatch, pids: dict[int, float | None]) -> curation.Curation:
+    """An unrecovered import A is held; a boot change, then a new snapshot B with no key the held lease records."""
+    monkeypatch.setattr(processes, "alive", lambda _pid, _created: False)
+    legacy_left_file({4242: None})
+    first = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root))  # A held
+    rebooted(first)
+    runs = first.load()
+    runs.left = pids
+    first._write(runs)  # noqa: SLF001 - the historical producer writes the newer, unmatched snapshot B
+    return curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root))  # the constructor holds B
+
+
+def test_an_unmatched_snapshot_is_held_while_an_older_unrecovered_import_stays_held(root, monkeypatch) -> None:
+    """Review: the older held lease never hides B; B keeps its own hold and key through restart and lingering."""
+    restarted = unmatched_snapshot_after_held_import(root, monkeypatch, {4343: None})
+    sessions = restarted.maintenance.read()["sessions"]
+    assert (len(sessions), [s["state"] for s in sessions]) == (2, ["held", "held"])
+    rebooted(restarted)
+    restarted.maintenance.recover(sessions[0]["id"], rebooted=True)  # the owner recovers A only
+    slots = Slots(lambda: 1, closed=True)
+    last = curation.Curation(slots, shared=lambda: DataRepo(root))
+    assert (last.working(), slots.counts(curation.SLOT)[2], last.left) == (
+        [curation.LINGERING], 1, {4343: None},
+    )  # fmt: skip
+
+
+def test_an_unmatched_snapshot_is_released_only_by_its_own_recovery(root, monkeypatch) -> None:
+    restarted = unmatched_snapshot_after_held_import(root, monkeypatch, {4343: None})
+    sessions = restarted.maintenance.read()["sessions"]
+    rebooted(restarted)
+    restarted.maintenance.recover(sessions[1]["id"], rebooted=True)  # the owner recovers B
+    slots = Slots(lambda: 1, closed=True)
+    last = curation.Curation(slots, shared=lambda: DataRepo(root))
+    assert (last.working(), slots.counts(curation.SLOT)[2]) == ([curation.LINGERING], 1)  # only A is still held
+
+
 def test_a_run_unconfirmed_without_processes_to_watch_retains_its_slot_and_says_so(root) -> None:
     slots = Slots(lambda: 1)
 

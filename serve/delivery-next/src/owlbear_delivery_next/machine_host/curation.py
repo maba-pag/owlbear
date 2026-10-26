@@ -133,9 +133,9 @@ class Curation:
             # gate, so a stale key or an import mark for another snapshot never binds.
             hint = imported or self.maintenance.imported_slot(str(self.path()))
             runs.left_key = self.maintenance.recording(SLOT, "curation", runs.left, runs.left_key or hint)
-        if runs.left and not self.maintenance.pending("curation"):
-            # An import already recorded (even an empty one) must not let these PIDs be cleared as history. A settled
-            # run's own lease covers them again after a recovery, so an unchanged snapshot never gets a fresh hold.
+        if runs.left:
+            # Each snapshot is judged on its own: only the lease that records these exact PIDs covers them, so an
+            # unrelated held lease never hides a newer snapshot. A settled run's own lease covers an unchanged snapshot.
             lease = self.maintenance.adopt_uncertain(
                 f"{self.path()}#left", SLOT, "curation", workspace="", covers=_left_covers(runs), pids=runs.left,
             )  # fmt: skip
@@ -435,17 +435,15 @@ def legacy_uncertain(run: FolderRun) -> bool:
 
 
 def _left_covers(runs: Runs) -> Callable[[maintenance.Lease], bool]:
-    """Whether a lease already accounts for the PIDs on file: an active uncertain hold, or the run that recorded them.
+    """Whether a lease already accounts for the PIDs on file: only the lease this snapshot's key names and records.
 
     The run's own lease keeps its PIDs after a recovery, so an unchanged snapshot is covered by it and is not held
-    again. A lease of any other run, or a run whose PIDs differ, does not cover them.
+    again. Any other lease, including an unrelated held import, does not cover them.
     """
 
     def covers(lease: maintenance.Lease) -> bool:
         if lease.project != SLOT or lease.kind != "curation":
             return False
-        if lease.state in maintenance.HELD and lease.workspace == "" and lease.generation == "":
-            return True
         return bool(runs.left_key) and lease.slot == runs.left_key and maintenance.recorded(lease, runs.left)
 
     return covers

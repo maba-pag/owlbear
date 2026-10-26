@@ -141,7 +141,7 @@ def _still_admitted(host: Host) -> None:
 def _queued(host: Host, key: str, note: Callable[[str], None]) -> None:
     said, turn = False, threading.Event()
     while not host.slots.take(project(host), key, 1, limit(host), turn.set):
-        if host.closed() or host.stopped.is_set():
+        if host.closed() or host.stopped.is_set() or host.draining():
             msg = "OwlBear stops; the update did not get a session slot"
             raise design_pack.PackError(msg)
         if not said:

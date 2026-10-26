@@ -1455,6 +1455,37 @@ def test_a_successor_claim_is_never_erased_by_a_release_paused_after_its_close(t
         os.close(probe)
 
 
+def test_a_successor_that_passed_the_check_before_an_unconfirmed_release_is_refused_under_the_lock(
+    tmp_path, monkeypatch
+):
+    """The pending check runs again once the flock is taken, so a session left unconfirmed in between blocks it."""
+    job = pack_job.Job(Store(tmp_path / "store"))
+    checks = []
+
+    def unproven(_job: pack_job.Job) -> None:
+        checks.append(None)
+        if len(checks) == 2:  # the updater released the flock unconfirmed after the first check passed
+            msg = "an earlier design pack session is unproven; recover it on the Maintenance page first"
+            raise pack_job.Busy(msg)
+
+    monkeypatch.setattr(pack_job.Job, "_unproven", unproven)
+    with pytest.raises(pack_job.Busy, match="unproven"):
+        job._claim()  # noqa: SLF001 - the successor's claim
+    assert job.held is None
+    probe = os.open(pack_job.local_home.root() / pack_job.MACHINE_LOCK, os.O_RDWR)
+    try:
+        fcntl.flock(probe, fcntl.LOCK_EX | fcntl.LOCK_NB)  # the refused claim closed its descriptor
+    finally:
+        os.close(probe)
+    monkeypatch.undo()
+    job._claim()  # noqa: SLF001 - after recovery a third claim is admitted
+    try:
+        assert job.held is not None
+    finally:
+        os.close(job.held)
+        job.held = None
+
+
 def test_one_run_at_a_time_and_the_api_refuses_a_second(tmp_path, checkout, clone):
     fakes = Fakes(clone)
     fakes.hold = threading.Event()

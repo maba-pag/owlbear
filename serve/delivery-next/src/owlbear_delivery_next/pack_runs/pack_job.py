@@ -11,7 +11,6 @@ reads as failed, except during publication: it waits for the owner, and trying a
 from __future__ import annotations
 
 import contextlib
-import fcntl
 import json
 import os
 import shutil
@@ -29,6 +28,7 @@ from owlbear_delivery_next.github.gh import GhProvider
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.local_system.storage_io import atomic_write
 from owlbear_delivery_next.pack_runs import pack_candidate, pack_gates, pack_publish, pack_replay, pack_rounds, pack_run
+from owlbear_delivery_next.pack_runs.machine_lock import HeldError, take
 from owlbear_delivery_next.pack_runs.pack_run import CANDIDATE, UPDATER, Stopped
 from owlbear_delivery_next.pack_runs.pack_state import (
     FILE,
@@ -356,22 +356,20 @@ class Job:
         Raises:
             Busy: Another project's update runs now, or an earlier pack session is still unproven.
         """
+        self._unproven()
+        try:
+            # Verified again while the lock is held: an earlier updater may have released it unconfirmed before this.
+            self.held = take(
+                local_home.root() / MACHINE_LOCK, self.store.name or self.store.root.parent.parent.name, self._unproven,
+            )  # fmt: skip
+        except HeldError as exc:
+            msg = f"a design pack update runs for {exc.who}; one runs at a time on this machine"
+            raise Busy(msg) from None
+
+    def _unproven(self) -> None:
         if self.maintenance is not None and self.maintenance.pending(kind="pack"):
             msg = "an earlier design pack session is unproven; recover it on the Maintenance page first"
             raise Busy(msg)
-        path = local_home.root() / MACHINE_LOCK
-        path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-        fd = os.open(path, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
-        try:
-            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            os.close(fd)
-            who = path.read_text(encoding="utf-8").strip() or "another project"
-            msg = f"a design pack update runs for {who}; one runs at a time on this machine"
-            raise Busy(msg) from None
-        os.ftruncate(fd, 0)
-        os.write(fd, (self.store.name or self.store.root.parent.parent.name).encode())
-        self.held = fd
 
     def _run(self, work: Callable[[], str | None]) -> None:
         try:
