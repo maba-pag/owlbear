@@ -30,6 +30,8 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, BinaryIO
 
+import yaml
+
 from owlbear_delivery_next.local_system import local_home
 
 if TYPE_CHECKING:
@@ -144,17 +146,36 @@ def _go_on(stop: threading.Event, until: float, *, over: bool) -> None:
 
 
 def _named(log: Path, stop: threading.Event, until: float) -> list[str]:
-    """The first ``OUTPUTS`` saved-output paths the log's tool results name; stops with the capture."""
+    """The first ``OUTPUTS`` saved-output paths the log's tool results name; stops with the capture.
+
+    A message or a call's arguments quoting such a path never count.
+    """
     seen: dict[str, None] = {}
     with log.open(errors="replace") as lines:
         for n, line in enumerate(lines):
             if n % 1000 == 0:
                 _go_on(stop, until, over=False)
             if "Saved to:" in line:
-                seen |= dict.fromkeys(SAVED.findall(line.replace("\\n", "\n")))
+                seen |= dict.fromkeys(p for text in _results(line) for p in SAVED.findall(text))
             if len(seen) >= OUTPUTS:
                 break
     return list(seen)[:OUTPUTS]
+
+
+def _results(line: str) -> list[str]:
+    """A completed tool call's result texts, from one log line; nothing for any other event."""
+    try:
+        event = json.loads(line)
+    except ValueError:
+        return []
+    if not isinstance(event, dict) or event.get("type") != "tool.execution_complete":
+        return []
+    result = (event.get("data") or {}).get("result") if isinstance(event.get("data"), dict) else None
+    if isinstance(result, str):
+        return [result]
+    if isinstance(result, dict):
+        return [v for k in ("content", "detailedContent") if isinstance(v := result.get(k), str)]
+    return []
 
 
 def _output(path: str, target: Path, room: int, stop: threading.Event, until: float) -> tuple[str, int]:
@@ -203,6 +224,7 @@ def capture(
     folder, log = _private(root() / "chatlogs"), (records or state()) / session / "events.jsonl"
     live, stop, until = folder / session, stop or threading.Event(), time.monotonic() + seconds
     with _locked(folder / f".{session}.lock"):
+        _recover(folder, session)
         before: dict[str, Any] = {}
         with suppress(OSError, ValueError):
             before = json.loads((live / "sidecar.json").read_text())
@@ -255,6 +277,14 @@ def _outputs(  # noqa: PLR0913, PLR0917 - the log, both snapshots and the captur
         used += n
         outputs.append({"path": path, "state": verdict, "bytes": n})
     return outputs
+
+
+def _recover(folder: Path, session: str) -> None:
+    """Finish a switch an exit interrupted: the old snapshot comes back if no new one took its place."""
+    live, old = folder / session, folder / f".old-{session}"
+    if old.exists() and not live.exists():
+        old.rename(live)
+    shutil.rmtree(old, ignore_errors=True)
 
 
 def _switch(folder: Path, session: str, said: dict[str, Any], stage: Path | None) -> None:
@@ -349,10 +379,10 @@ def enrolled(cwd: str, folders: Iterable[str]) -> bool:
 
 def _cwd(folder: Path) -> str:
     """A session's workspace folder, from ``workspace.yaml``: the only file read before enrolment is checked."""
-    with suppress(OSError, ValueError):  # unreadable or wrongly encoded metadata: no folder, so never enrolled
-        for line in (folder / "workspace.yaml").read_text().splitlines():
-            if line.startswith("cwd:"):
-                return line.split(":", 1)[1].strip()
+    with suppress(OSError, ValueError, yaml.YAMLError):  # unreadable or invalid metadata: no folder, never enrolled
+        data = yaml.safe_load((folder / "workspace.yaml").read_text())
+        if isinstance(data, dict) and isinstance(cwd := data.get("cwd"), str):
+            return cwd
     return ""
 
 

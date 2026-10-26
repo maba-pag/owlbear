@@ -190,6 +190,36 @@ def test_a_failed_switch_keeps_the_old_snapshot(tmp_path, monkeypatch):
     assert json.loads((chatlogs.root() / "chatlogs" / "s11" / "sidecar.json").read_text()) == first
 
 
+def test_only_tool_results_name_saved_outputs(tmp_path):
+    quoted = {"type": "user.message", "data": {"content": "Saved to: /tmp/1-copilot-tool-output-quoted.txt"}}
+    records = _records(tmp_path, "s12", [quoted, _saved("/nowhere/2-copilot-tool-output-real.txt")])
+    said = chatlogs.capture("s12", provisional=False, records=records)
+    assert [o["path"] for o in said["outputs"]] == ["/nowhere/2-copilot-tool-output-real.txt"]
+
+
+def test_a_switch_an_exit_interrupted_is_recovered_before_the_next_capture(tmp_path):
+    records = _records(tmp_path, "s13", [{"type": "session.start"}])
+    first = chatlogs.capture("s13", provisional=True, records=records)
+    folder = chatlogs.root() / "chatlogs"
+    (folder / "s13").rename(folder / ".old-s13")  # the process died between the two renames of a switch
+    chatlogs.capture("s13", provisional=False, records=records)
+    assert not (folder / ".old-s13").exists()
+    assert json.loads((folder / "s13" / "sidecar.json").read_text())["copied_at"] >= first["copied_at"]
+
+
+def test_a_window_step_interrupted_gets_its_ending_line(monkeypatch):
+    class Boom(SimpleNamespace):
+        def step(self, _inbox):
+            raise KeyboardInterrupt
+
+    monkeypatch.setattr(vscode_adapter, "_Driver", lambda *_a: Boom())
+    cfg = SimpleNamespace(session_id="w1", kind=SimpleNamespace(value="build"), role="builder", job="", worktree="/w",
+                          model=None)  # fmt: skip
+    with pytest.raises(KeyboardInterrupt):
+        vscode_adapter.run(cfg, Path("/inbox"), SimpleNamespace())
+    assert [(e["event"], e.get("ending")) for e in _manifest()] == [("started", None), ("ended", "interrupted")]
+
+
 def test_a_session_without_a_record_is_said_missing(tmp_path):
     said = chatlogs.capture("nowhere", provisional=False, records=tmp_path)
     assert (said["missing"], (chatlogs.root() / "chatlogs" / "nowhere" / "sidecar.json").exists()) == (True, True)
@@ -306,7 +336,7 @@ def test_finished_chats_are_quiet_for_a_day_enrolled_and_never_owlbear_s_own(tmp
     work.mkdir()
     records = None
     for sid, cwd in (("old", work), ("new", work), ("other", tmp_path / "elsewhere"), ("ours", work)):
-        records = _records(tmp_path, sid, [{"type": "session.start"}], str(cwd))
+        records = _records(tmp_path, sid, [{"type": "session.start"}], json.dumps(str(cwd)))  # quoted, as YAML may
     day_ago = (now - timedelta(days=2)).timestamp()
     for sid in ("old", "other", "ours"):
         os.utime(records / sid / "events.jsonl", (day_ago, day_ago))

@@ -346,16 +346,20 @@ def run(cfg: Session, inbox: Path, env: Env | None = None) -> Run:
     driver, record = _Driver(cfg, env, result), None
     chatlogs.note({"event": "started", "session": cfg.session_id, **chatlogs.owner(cfg.kind.value, cfg.role, cfg.job,
                                                                                    cfg.worktree)})  # fmt: skip
-    out = driver.step(inbox)
-    started = driver.control.started.is_set()
-    if started:
-        lessons.shown(driver.exposure, cfg.session_id, driver.log, confirmed=False)  # dispatched, not acknowledged
-        cfg.journal.delivered()
-        record = env.record(cfg.worktree, since, wf.agent_name(driver.role))
-        _recorded(driver, out, inbox, record)
-    result.usage = _usage(out, cfg.model)
-    _proven(result, out, cfg.model)
-    result.termination = _termination(out, env.settle(cfg.worktree, since), started=started)
+    try:
+        out = driver.step(inbox)
+        started = driver.control.started.is_set()
+        if started:
+            lessons.shown(driver.exposure, cfg.session_id, driver.log, confirmed=False)  # dispatched, not acknowledged
+            cfg.journal.delivered()
+            record = env.record(cfg.worktree, since, wf.agent_name(driver.role))
+            _recorded(driver, out, inbox, record)
+        result.usage = _usage(out, cfg.model)
+        _proven(result, out, cfg.model)
+        result.termination = _termination(out, env.settle(cfg.worktree, since), started=started)
+    except BaseException:  # every ending path gets its line (design §5); no capture while interrupted
+        chatlogs.note({"event": "ended", "session": cfg.session_id, "ending": "interrupted", "provisional": True})
+        raise
     _kept(cfg.session_id, record, result)
     return result
 
