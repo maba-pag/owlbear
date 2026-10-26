@@ -59,7 +59,7 @@ def granted(label: str) -> int:
     return GRANT or sys.maxsize
 
 
-class UsageUnreadError(Exception):
+class UsageUnreadError(session_result.ReturnedRunError):
     """A session whose model check could not run; its run is never processed unless the owner accepts it."""
 
     def __init__(self, run: session_result.Run, label: str = "") -> None:

@@ -59,20 +59,37 @@ def window(name: str, run: FolderRun) -> str:
 
 
 def recorded_row(project: str, name: str, run: FolderRun) -> Callable[[maintenance.Lease], bool]:
-    """Whether an import's lease recorded this very row when it was taken, whatever its state since.
+    """Whether this row's own lease recorded this very row when it was taken, whatever its state since.
 
-    A snapshot's lease records every row on file at its import, and a row's own lease records that row. The row
-    predates the import, so the lease's recovery after a later reboot ends its session too. A later row has its own
-    times, which no earlier import recorded, even when it starts at the same moment.
+    Only a row's own import holds a row: a snapshot's lease, which carries a generation, records the rows it saw as
+    evidence of its snapshot, never as proof that any of them is the session that left its PIDs. A later row has its
+    own times, which no earlier import recorded, even when it starts at the same moment.
     """
     seen = window(name, run)
 
     def covers(lease: maintenance.Lease) -> bool:
         return (
-            lease.project == project and lease.kind == "curation" and lease.workspace == "" and seen in lease.observed
+            lease.project == project
+            and lease.kind == "curation"
+            and lease.workspace == ""
+            and not lease.generation
+            and seen in lease.observed
         )
 
     return covers
+
+
+def owns_row(project: str, lease: maintenance.Lease | None, name: str, run: FolderRun) -> bool:
+    """Whether the lease a row's cached key names really owns that row; a key alone is no proof.
+
+    It does when it is this host's own admission of a run in that folder, under the key the run's rows were written
+    with: the lease exists from before the SDK is entered, so a key naming none started no session. It does when it
+    is the row's own import, which recorded this very row. A snapshot's lease, which an earlier build named in its
+    rows, owns no row: its PIDs say nothing of which session left them.
+    """
+    if not run.key.startswith(f"curate:{name}:"):
+        return lease is not None and recorded_row(project, name, run)(lease)
+    return lease is None or (lease.project == project and lease.kind == "curation" and not lease.generation)
 
 
 def same_snapshot(project: str, snapshot: str, seen: tuple[str, ...]) -> Callable[[maintenance.Lease], bool]:

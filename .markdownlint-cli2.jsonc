@@ -31,9 +31,6 @@
   "ignores": [
     ".owlbear/delivery/packages/**",
     ".owlbear/delivery/runtime/**",
-    ".owlbear/doc-index.md",
-    ".owlbear/py-index.md",
-    ".owlbear/ts-index.md",
     ".owlbear/memory/**",
     ".owlbear/research/**",
     ".venv/**",

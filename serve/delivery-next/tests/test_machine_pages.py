@@ -92,7 +92,7 @@ def test_changes_of_all_projects_or_one_and_the_bar_switches_adds_removes_and_re
             stop = page.get_by_role("button", name="Pause and stop when idle")
             expect(bar.locator("p-button", has=stop)).to_have_attribute("title", re.compile("stops"))
             stop.click()
-            pds.modal(page).get_by_role("button", name="Pause and stop").click()
+            pds.answer(page, "Pause and stop")
             expect(page.locator("#machine .paused")).to_contain_text("OwlBear stops once nothing runs")
             assert (machine.paused, machine.ending) == (True, True)
             page.get_by_role("button", name="Resume").click()
@@ -105,7 +105,7 @@ def test_changes_of_all_projects_or_one_and_the_bar_switches_adds_removes_and_re
             added = next(p for p in registry.load().projects if p.path == str(third))
             expect(page).to_have_url(f"{base}/?project={added.id}")
             page.get_by_role("button", name="Remove project").click()
-            pds.modal(page).get_by_role("button", name="Remove project").click()
+            pds.answer(page, "Remove project")
             expect(page).to_have_url(f"{base}/")  # back to All
             assert [p.id for p in registry.load().projects] == [a.id, b.id]
             page.get_by_role("link", name="Backlog").click()
@@ -158,7 +158,7 @@ def test_two_projects_with_one_slug_stay_apart_in_list_detail_actions_and_links(
             page.get_by_role("button", name="New Change").click()
             pds.pick(page.locator("#choose"), "Shape the new Change in", b.id)
             page.get_by_role("button", name="Continue").click()
-            pds.modal(page).get_by_role("button", name="Not now").click()
+            pds.answer(page, "Not now")
             expect(page.locator("#choose")).to_have_count(0)  # declined: nothing is left to click
             page.route(f"**/p/{a.id}/api/next/changes", lambda r: r.fulfill(status=503, json={"detail": "stopping"}))
             expect(page.locator("#notes")).to_contain_text("alpha: not read just now (stopping)")
@@ -202,7 +202,7 @@ def test_a_paused_page_runs_updates_now_shows_the_update_and_says_once_which_ver
             page.locator("#update-done").get_by_role("button", name="OK").click()
             expect(page.locator("#update-done")).to_have_count(0)
             page.get_by_role("button", name="Run updates now").click()
-            pds.modal(page).get_by_role("button", name="Run updates now").click()
+            pds.answer(page, "Run updates now")
             expect(page.locator("#update-state")).to_contain_text(
                 "Update to v0.3: waiting · waits for p: c1: a running step"
             )

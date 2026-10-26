@@ -1503,6 +1503,8 @@ def test_a_successor_that_passed_the_check_before_an_unconfirmed_release_is_refu
     """The pending check runs again once the flock is taken, so a session left unconfirmed in between blocks it."""
     job = pack_job.Job(Store(tmp_path / "store"))
     checks = []
+    home = pack_job.local_home.root()
+    assert home.is_relative_to(tmp_path.parent)  # the isolated HOME the autouse fixtures give every test
 
     def unproven(_job: pack_job.Job) -> None:
         checks.append(None)
@@ -1510,19 +1512,21 @@ def test_a_successor_that_passed_the_check_before_an_unconfirmed_release_is_refu
             msg = "an earlier design pack session is unproven; recover it on the Maintenance page first"
             raise pack_job.Busy(msg)
 
-    monkeypatch.setattr(pack_job.Job, "_unproven", unproven)
-    with pytest.raises(pack_job.Busy, match="unproven"):
-        job._claim()  # noqa: SLF001 - the successor's claim
+    with monkeypatch.context() as patch:  # only this fault is undone below, never the HOME isolation
+        patch.setattr(pack_job.Job, "_unproven", unproven)
+        with pytest.raises(pack_job.Busy, match="unproven"):
+            job._claim()  # noqa: SLF001 - the successor's claim
     assert job.held is None
     probe = os.open(pack_job.local_home.root() / pack_job.MACHINE_LOCK, os.O_RDWR)
     try:
         fcntl.flock(probe, fcntl.LOCK_EX | fcntl.LOCK_NB)  # the refused claim closed its descriptor
     finally:
         os.close(probe)
-    monkeypatch.undo()
+    assert pack_job.local_home.root() == home  # still the isolated HOME for the claim below
     job._claim()  # noqa: SLF001 - after recovery a third claim is admitted
     try:
         assert job.held is not None
+        assert (home / pack_job.MACHINE_LOCK).is_file()
     finally:
         os.close(job.held)
         job.held = None

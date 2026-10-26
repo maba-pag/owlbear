@@ -22,7 +22,7 @@ from owlbear_delivery_next.change_contracts.chat_contract import HostFound
 from owlbear_delivery_next.change_contracts.decision_records import DecisionBaseline
 from owlbear_delivery_next.change_contracts.models import Change, Environment, Step, StepKind
 from owlbear_delivery_next.commands import chat_client, cli, mcp_server, replay_client, setup
-from owlbear_delivery_next.local_system import codebase, maintenance
+from owlbear_delivery_next.local_system import codebase, local_home, maintenance
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.machine_host import app, project, serve
 from owlbear_delivery_next.machine_host.machine import Machine
@@ -97,14 +97,14 @@ def test_the_chat_server_calls_its_projects_api_on_the_machine_host(tmp_path, ht
         def open(self, request, **_kw):
             sent.append((request.full_url, request.headers.get("X-owlbear-chat")))
             if request.full_url.endswith("/chat/contract"):
-                return Answer(b'{"supported": [1]}')
+                return Answer(b'{"supported": [1, 2]}')
             raise OSError
 
     monkeypatch.setattr(chat_client, "_LOCAL", Opener())
     chat = chat_client.workspace(Path(p["path"]))
     chat.call("GET", "/changes")
-    assert sent == [("http://127.0.0.1:9/api/next/chat/contract", "1"),
-                    (f"http://127.0.0.1:9/p/{p['id']}/api/next/changes", "1")]  # fmt: skip
+    assert sent == [("http://127.0.0.1:9/api/next/chat/contract", "2"),
+                    (f"http://127.0.0.1:9/p/{p['id']}/api/next/changes", "2")]  # fmt: skip
 
 
 class Answer(io.BytesIO):
@@ -151,13 +151,16 @@ def test_a_decision_confirmed_in_owlbears_unregistered_workspace_is_in_force_and
     monkeypatch.setitem(mcp_server._STATE, "chat", chat_client.workspace(own))  # noqa: SLF001 - the server's chat
 
     got = chat_tool("record_decision", title="Pages", statement="Pages are plain HTML.", confirmed=True)
+    taken = chat_tool("record_decision", title="Ids", statement="Ids are ULIDs.", confirmed=True, origin="approved")
 
     saved = decision_store.load(DataRepo(shared_repo[0]), "owlbear").snapshot.get(got["receipts"][0]["id"]).decision
     assert (saved.project, str(saved.state), str(saved.origin)) == ("owlbear", "in_force", "decided")
+    took = decision_store.load(DataRepo(shared_repo[0]), "owlbear").snapshot.get(taken["receipts"][0]["id"]).decision
+    assert (str(took.state), str(took.origin)) == ("in_force", "approved")
     assert chat_tool("show_status") == {"error": chat_client.NO_CHANGES}
     assert not (own / ".git" / "owlbear-delivery").exists()  # OwlBear's repository stays unregistered
     monkeypatch.setitem(mcp_server._STATE, "chat", chat_client.workspace(Path(p["path"])))  # noqa: SLF001
-    assert [d["title"] for d in chat_tool("find_decisions", where="owlbear")["decisions"]] == ["Pages"]
+    assert sorted(d["title"] for d in chat_tool("find_decisions", where="owlbear")["decisions"]) == ["Ids", "Pages"]
     machine.updating = "an update runs"  # fenced as a project's API is
     refused = http.post("/api/next/owlbear/decisions/propose", json={"title": "x", "statement": "x"})
     assert refused.status_code == 503
@@ -172,6 +175,26 @@ def test_only_the_registry_makes_a_clone_a_project_never_an_id_and_folder_left_b
 
     assert type(chat_client.workspace(own)) is chat_client.OwlBear
     assert type(chat_client.workspace(Path(p["path"]))) is chat_client.Chat
+
+
+def test_an_unreadable_registry_makes_no_clone_id_a_project_and_its_leftovers_stay(tmp_path, http):
+    """TD-435: with the registry unreadable no id counts, not even a registered one; nothing is removed."""
+    own = origin(clone(tmp_path / "owlbear"), "https://github.com/maba-pag/owlbear.git")
+    pid = project_home.ensure_id(project_home.clone_dir(own))
+    project_home.home(pid).mkdir(parents=True)
+    (project_home.home(pid) / "format").write_text("1\n")  # the leftover folder holds only the marker
+    shop = Path(add(http, clone(tmp_path / "shop"))["path"])
+    machine_json = local_home.root() / project_home.MACHINE
+    kept = machine_json.read_text()
+    machine_json.write_text("{not json")
+    try:
+        said = [type(chat_client.workspace(own)), type(chat_client.workspace(shop))]
+    finally:
+        machine_json.write_text(kept)
+
+    assert said == [chat_client.OwlBear, chat_client.Closed]
+    assert project_home.clone_id(project_home.clone_dir(own)) == pid
+    assert [p.name for p in project_home.home(pid).iterdir()] == ["format"]
 
 
 def test_a_folder_that_is_no_owlbear_project_gets_every_tool_refused_and_nothing_written(
@@ -197,7 +220,7 @@ def test_a_folder_that_is_no_owlbear_project_gets_every_tool_refused_and_nothing
         assert "new Copilot-runtime chat" in message
         assert "MCP: List Servers → owlbear-delivery → Stop Server, then Start Server" in message
         assert "Restart Local Agent Host" not in message
-    unsupported = "OwlBear does not serve this chat's owlbear-delivery server (chat contract 0; it serves 1)"
+    unsupported = "OwlBear does not serve this chat's owlbear-delivery server (chat contract 0; it serves 1, 2)"
     assert stale.startswith(unsupported)  # the chat asks the host's contracts first
     chat = mcp_server._STATE["chat"]  # noqa: SLF001
     chat.checked = (machine.record.pid, machine.record.started_at.isoformat())  # past the contract check
@@ -738,6 +761,16 @@ def test_malformed_or_unrelated_server_entries_never_count_as_setup(tmp_path):
     assert setup.registered(work) is False
     (work / ".mcp.json").write_text(json.dumps(setup.with_server({}, "/py", Path(f"{work}-old"))))
     assert setup.registered(work) is False  # a path that merely contains this one
+    joined = {"mcpServers": {"x": {"args": ["-m", "owlbear_delivery_next", "mcp", "--repo=/other"]}}}
+    (work / ".mcp.json").write_text(json.dumps(joined))
+    assert setup.registered(work) is False  # --repo=X names a folder as --repo X does
+
+
+def test_a_server_entry_naming_its_folder_as_repo_equals_counts_as_setup(tmp_path):
+    work = clone(tmp_path / "a")
+    joined = {"mcpServers": {"x": {"args": ["-m", "owlbear_delivery_next", "mcp", f"--repo={work}"]}}}
+    (work / ".mcp.json").write_text(json.dumps(joined))
+    assert setup.registered(work)
 
 
 def test_each_project_line_in_the_log_names_its_project(tmp_path, http, machine, capsys):

@@ -105,7 +105,7 @@ need rather than treating a generic checklist as proof of usability.
 
 ## Testing and Proof
 
-Load `h-vitest-and-linting` when the project uses its covered toolchain. Match proof to the claim:
+Use the project's own test, lint and browser tools. Match proof to the claim:
 
 - Unit/component tests protect observable behavior, public component contracts, and meaningful state
   transitions supported by their runtime environment.

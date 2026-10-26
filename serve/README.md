@@ -18,7 +18,7 @@ owns it. Start with the job, then open the package guide for commands and config
 | Fetch authenticated web content | [Browser MCP](browser-mcp/README.md) | Allowlisted browser actions and Markdown accessibility snapshots |
 | Extend browser acquisition | [Browser core](browser/README.md) | Playwright-backed page acquisition and content extraction |
 | Convert HTML to Markdown | [Web content](web-content/README.md) | Shared HTML extraction and Markdown normalization for Browser and Knowledge |
-| Maintain indexes and workspace tooling | [Tools](tools/README.md) | Documentation, Python, and TypeScript indexes plus repository utilities |
+| Run workspace commands and tooling | [Tools](tools/README.md) | Quality checks, test routing, dependency synchronization and repository utilities |
 
 ## How the packages fit
 
@@ -36,8 +36,9 @@ VS Code agents  -> MCP packages    -> core packages
 Tools
 ```
 
-The package guides are the next level of detail. The project README covers the current checkout and
-the consumer README covers installing OwlBear on a Mac. The [setup guide](../setup/setup-guide.md) owns exact
+The package guides are the next level of detail. The [project README](../README.md) introduces
+OwlBear and installing it on a Mac, and the [contributing guide](../CONTRIBUTING.md) covers the
+development checkout and its checks. The [setup guide](../setup/setup-guide.md) owns exact
 installation commands and [Operating OwlBear](../setup/operating-owlbear.md) owns daily operation
 and recovery.
 

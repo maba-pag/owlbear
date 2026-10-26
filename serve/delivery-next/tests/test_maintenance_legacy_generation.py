@@ -18,6 +18,7 @@ from owlbear_delivery_next.local_system.storage_io import atomic_write
 from owlbear_delivery_next.machine_host import project
 from owlbear_delivery_next.machine_host.machine import UNPROVEN_PACK, Machine
 from owlbear_delivery_next.pack_runs import pack_job, pack_run, pack_state
+from owlbear_delivery_next.project_host import session_slots
 from owlbear_delivery_next.project_host.host import Host, HostRecord
 from owlbear_delivery_next.state_store import project_home, registry
 from owlbear_delivery_next.state_store.store import Store
@@ -575,7 +576,7 @@ def test_a_foreign_replacement_landing_after_the_constructors_own_rewrite_gets_i
     first = machines()
     first.load_all()
     assert seams, "the constructor's own rewrite never ran"
-    assert len(held(first, good.id)) == 1, sessions_of(first, good.id)
+    assert len(held(first, good.id)) == 2, sessions_of(first, good.id)  # A, and the replacement held at once
     reboot_then_recover(first, held(first, good.id)[0]["id"])
     first.stop_all()
     monkeypatch.setattr(pack_job, "atomic_write", real_write)
@@ -694,7 +695,7 @@ def test_a_historical_finish_landing_after_the_constructors_own_rewrite_gets_its
     first = machines()
     first.load_all()
     assert seams, "the constructor's own rewrite never ran"
-    assert len(held(first, good.id)) == 1, sessions_of(first, good.id)
+    assert len(held(first, good.id)) == 2, sessions_of(first, good.id)  # A, and the historical finish held at once
     reboot_then_recover(first, held(first, good.id)[0]["id"])
     first.stop_all()
     monkeypatch.setattr(pack_job, "atomic_write", real_write)
@@ -968,3 +969,191 @@ def test_a_failed_projects_pack_record_that_is_a_fifo_is_held_at_once_and_anothe
     assert not loading.is_alive(), "loading the machine waited on the pack record"
     assert (m.projects[bad.id].state, [s["state"] for s in sessions_of(m, bad.id)]) == ("failed", ["held"])
     assert (m.slots.take(other.id, "probe", 1, 1), m.maintenance.pending("pack")) == (0, True)
+
+
+def overwritten_after_publish(record: dict) -> pytest.MonkeyPatch:
+    """The run file is overwritten in place, same inode, right after the Job's rewrite is renamed into place."""
+    real_replace = Path.replace
+    patch = pytest.MonkeyPatch()
+
+    def replace(self: Path, target: Path) -> Path:
+        done = real_replace(self, target)
+        if Path(target).name == pack_job.FILE:
+            with Path(target).open("r+", encoding="utf-8") as same:
+                same.write(json.dumps(pack_job._blank() | record, indent=1) + "\n")  # noqa: SLF001
+                same.truncate()
+        return done
+
+    patch.setattr(Path, "replace", replace)
+    return patch
+
+
+@pytest.mark.parametrize("recovered", [False, True], ids=["a-held", "a-recovered"])
+def test_a_loaded_projects_run_written_over_its_rewrite_is_held_before_another_project_is_admitted(
+    tmp_path, machines, shared_repo, recovered
+):
+    """Review 4378036659: a loaded project never takes the unloaded path, so its own restoration holds B there.
+
+    A, an interrupted run with its identity, is held or already recovered. As its Job rewrites A, B overwrites the
+    file in place: no receipt names B for A, A keeps its state, and B is held at once. At two slots another project
+    gets what A's state leaves, and no unloaded read is needed to find B.
+    """
+    shared, _remote = shared_repo
+    good, _clone_folder = open_project(tmp_path, shared, "good")
+    other = registry.register(clone(tmp_path / "other"))
+    a_run = {"state": "running", "run": "legacy-a", "started_at": STARTED, "stage": "update"}
+    settled = machines()
+    settled.load_all()  # the store moves to its home folder
+    settled.stop_all()
+    live = project_home.current(Path(good.path))
+    write_pack(live, a_run)
+    first = machines()
+    first.load_all()
+    [a] = held(first, good.id)
+    if recovered:
+        reboot_then_recover(first, a["id"])
+    first.stop_all()
+    write_pack(live, a_run)  # A running again, as a stale copy leaves it
+    m = machines()
+    m.slots.total = lambda: 2
+    patch = overwritten_after_publish({"state": "running", "stage": "update"})  # B: no identity
+    try:
+        with pytest.MonkeyPatch.context() as no_unloaded:
+            no_unloaded.setattr(session_slots, "unloaded", lambda *_a: pytest.fail("a loaded project read unloaded"))
+            m.load_all()
+    finally:
+        patch.undo()
+    sessions = sessions_of(m, good.id)
+    assert (m.projects[good.id].state, [s["state"] for s in sessions if s["id"] == a["id"]]) == (
+        "loaded", ["recovered" if recovered else "held"],
+    )  # fmt: skip
+    assert [s["state"] for s in sessions if s["id"] != a["id"]] == ["held"]
+    assert m.slots.take(other.id, "probe", 1, 1) == (1 if recovered else 0)
+
+
+def test_a_loaded_projects_own_rewrite_of_its_interrupted_run_adds_no_hold_beside_it(tmp_path, machines, shared_repo):
+    """Control: with nothing written over it, the rewrite keeps A's one lease, and a restart adds none."""
+    shared, _remote = shared_repo
+    good, _clone_folder = open_project(tmp_path, shared, "good")
+    settled = machines()
+    settled.load_all()
+    settled.stop_all()
+    write_pack(project_home.current(Path(good.path)), {"state": "running", "run": "legacy-a", "started_at": STARTED})
+    for _ in range(2):
+        m = machines()
+        m.load_all()
+        assert len(sessions_of(m, good.id)) == 1
+        m.stop_all()
+
+
+def modern_run_owned(machines, tmp_path, shared_repo, *, recovered: bool):
+    """A loaded project whose last run is modern A: its own workspace, whose lease the ledger holds or recovered."""
+    shared, _remote = shared_repo
+    good, _clone_folder = open_project(tmp_path, shared, "good")
+    settled = machines()
+    settled.load_all()  # the store moves to its home folder
+    live = project_home.current(Path(good.path))
+    workspace = live / pack_job.RUNS / "modern-a"
+    workspace.mkdir(parents=True)
+    lease = settled.maintenance.begin(good.id, "pack:modern-a", "pack", str(workspace))
+    settled.maintenance.failed(lease, RuntimeError("synthetic: the session ended without termination proof"))
+    if recovered:
+        reboot_then_recover(settled, lease)
+    settled.stop_all()
+    write_pack(live, {"state": "running", "run": "modern-a", "started_at": STARTED, "workspace": str(workspace)})
+    return good, lease
+
+
+@pytest.mark.parametrize("recovered", [False, True], ids=["a-held", "a-recovered"])
+def test_a_run_written_over_a_modern_owned_runs_rewrite_is_held_before_another_project_is_admitted(
+    tmp_path, machines, shared_repo, recovered
+):
+    """A modern A, its workspace owned by its lease, is not imported again; what was written over its rewrite is."""
+    good, a = modern_run_owned(machines, tmp_path, shared_repo, recovered=recovered)
+    other = registry.register(clone(tmp_path / "other"))
+    m = machines()
+    m.slots.total = lambda: 2
+    patch = overwritten_after_publish({"state": "running", "stage": "update"})  # B: no identity
+    try:
+        with pytest.MonkeyPatch.context() as no_unloaded:
+            no_unloaded.setattr(session_slots, "unloaded", lambda *_a: pytest.fail("a loaded project read unloaded"))
+            m.load_all()
+    finally:
+        patch.undo()
+    sessions = sessions_of(m, good.id)
+    assert (m.projects[good.id].state, [s["state"] for s in sessions if s["id"] == a]) == (
+        "loaded", ["recovered" if recovered else "held"],
+    )  # fmt: skip
+    assert [s["state"] for s in sessions if s["id"] != a] == ["held"]
+    assert m.slots.take(other.id, "probe", 1, 1) == (1 if recovered else 0)
+
+
+def test_a_modern_owned_runs_own_rewrite_adds_no_hold_beside_it(tmp_path, machines, shared_repo):
+    """Control: with nothing written over it, the modern run keeps its one lease across loads."""
+    good, a = modern_run_owned(machines, tmp_path, shared_repo, recovered=False)
+    for _ in range(2):
+        m = machines()
+        m.load_all()
+        assert [s["id"] for s in sessions_of(m, good.id)] == [a]
+        m.stop_all()
+
+
+PUBLISHING = {  # a run main stopped while it published: the Job's startup returns it to the owner, waiting
+    "state": "running", "run": "pub-a", "started_at": STARTED, "stage": "pull-request",
+    "context": {
+        "tag": "v9", "why": "design pack: v8 to v9", "diff": "", "golden": "", "pins": {}, "manifest": "",
+        "notice": "", "baseline": {}, "checkout": {}, "start": {}, "sid": "s",
+        "publication": {"root": "/r", "repository": "o/r", "base": "b", "branch": "pack/v9", "body": "the PR text",
+                        "number": 7, "url": "https://example.invalid/pull/7"},
+    },
+}  # fmt: skip
+
+
+def publishing_project(machines, tmp_path, shared_repo):
+    shared, _remote = shared_repo
+    good, _clone_folder = open_project(tmp_path, shared, "good")
+    settled = machines()
+    settled.load_all()  # the store moves to its home folder
+    settled.stop_all()
+    live = project_home.current(Path(good.path))
+    write_pack(live, PUBLISHING)
+    shutil.rmtree(live / pack_run.UPDATER)  # a publication's folder is gone: no legacy folder holds on its own
+    return good, live
+
+
+def test_a_run_written_over_a_publication_the_job_returns_to_its_owner_is_held_before_another_project_is_admitted(
+    tmp_path, machines, shared_repo
+):
+    """Review 4379379502: the startup rewrite that sets a stopped publication waiting is checked as every other one.
+
+    B overwrites the file right after that rewrite; the loaded project holds B at once, and the publication waits.
+    """
+    good, _live = publishing_project(machines, tmp_path, shared_repo)
+    other = registry.register(clone(tmp_path / "other"))
+    m = machines()
+    m.slots.total = lambda: 2
+    patch = overwritten_after_publish({"state": "running", "stage": "update"})  # B: no identity
+    try:
+        with pytest.MonkeyPatch.context() as no_unloaded:
+            no_unloaded.setattr(session_slots, "unloaded", lambda *_a: pytest.fail("a loaded project read unloaded"))
+            m.load_all()
+    finally:
+        patch.undo()
+    assert (m.projects[good.id].state, [s["state"] for s in sessions_of(m, good.id)]) == ("loaded", ["held"])
+    assert (m.slots.take(other.id, "probe", 1, 1), m.slots.take(other.id, "probe2", 1, 2)) == (1, 0)
+
+
+def test_a_publication_the_job_returns_to_its_owner_holds_nothing_and_keeps_its_context(
+    tmp_path, machines, shared_repo
+):
+    """Control: with nothing written over it, the publication waits for its owner, whole, and holds no slot."""
+    good, live = publishing_project(machines, tmp_path, shared_repo)
+    for _ in range(2):
+        m = machines()
+        m.load_all()
+        kept = json.loads((live / pack_job.FILE).read_text())
+        assert (sessions_of(m, good.id), kept["state"], kept["context"]["publication"]["body"]) == (
+            [], "waiting", "the PR text",
+        )  # fmt: skip
+        assert [q["kind"] for q in kept["questions"]] == ["publish"]
+        m.stop_all()

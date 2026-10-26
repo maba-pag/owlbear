@@ -13,7 +13,7 @@ import dataclasses
 import subprocess
 import threading
 import uuid
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.change_contracts.failures import cause_key
 from owlbear_delivery_next.change_contracts.models import ErrorKind, StepKind
@@ -165,22 +165,30 @@ def packed(host: Host | None, job: Job) -> Job:
 
 
 def interrupted(job: Job, key: str) -> None:
-    """Hold the uncertain pack work a last host left running, whether or not it has PIDs or a directory."""
+    """Hold the uncertain pack work a last host left running, whether or not it has PIDs or a directory.
+
+    Whatever the Job's startup did with the record, kept it as read, ended an interrupted run or set a stopped
+    publication waiting, only the file still holding that very record at that version is what the Job saw: anything
+    written over it is restored as it stands, held before any admission, and never receipted to the Job's run.
+    """
     maintenance, legacy = job.maintenance, job.store.root / pack_run.UPDATER
     if maintenance is None:
         return
+    seen = pack_state.read_version(job.store.root / pack_state.FILE)  # one read, compared and restored alike
+    current = pack_state.holds(seen, job.state, job.version)
     if job.interrupted is not None:
         run = job.interrupted
-        if run["workspace"] and maintenance.owns(run["workspace"]):
-            return  # the ledger already holds this run's own lease; importing it again would hold it twice
-        notes: tuple[str, ...] = ()
-        if not run["workspace"] and job.version not in {"", "absent"}:  # the rewrite this host made keeps its identity
-            notes = (maintenance.receipt_note(key, pack_state.digest(job.version), run["generation"]),)
-        _hold(maintenance, key, run["workspace"] or str(legacy), run["generation"], notes=notes)  # one save, both
+        if not (run["workspace"] and maintenance.owns(run["workspace"])):  # owned: importing it again holds it twice
+            notes: tuple[str, ...] = ()
+            if current and not run["workspace"]:  # the file holds its own rewrite at that version: receipted to it
+                notes = (maintenance.receipt_note(key, pack_state.digest(job.version), run["generation"]),)
+            _hold(maintenance, key, run["workspace"] or str(legacy), run["generation"], notes=notes)  # one save
     elif job.version == "":
         maintenance.adopt_uncertain(f"{key}:unreadable", key, "pack", workspace=str(legacy))
     elif "workspace" not in job.state and (legacy.is_dir() or pack_job.legacy_uncertain(job.state)):
         _adopt_legacy(maintenance, key, legacy, job.state, job.version)
+    if not current:
+        restore(maintenance, key, job.store.root, seen)
 
 
 def _identity(
@@ -232,17 +240,24 @@ def unloaded(maintenance: Maintenance, key: str, repo: Path) -> None:
         return
     if root is None:
         return
+    restore(maintenance, key, root)
+
+
+def restore(maintenance: Maintenance, key: str, root: Path, seen: tuple[dict[str, Any], str] | None = None) -> None:
+    """Hold the uncertain pack work the run file in *root* records, as *seen* read it, else as read now; never write.
+
+    *seen* is a whole, stable read by ``pack_state.read_version``: "absent" when there was no file, "" when it could
+    not be read. A record that cannot be read is held too: unreadable ownership is never taken for none (TD-242).
+    """
     legacy = root / pack_run.UPDATER
-    try:
-        got = pack_job.observed(root)
-    except OSError, ValueError:
+    kept, version = seen if seen is not None else pack_state.read_version(root / pack_state.FILE)
+    if version == "":
         maintenance.adopt_uncertain(f"{key}:unreadable", key, "pack", workspace=str(legacy))
         return
-    if got is None:
+    if version == "absent":
         if legacy.is_dir():
             _adopt_legacy(maintenance, key, legacy, {}, "absent")
         return
-    kept, version = got
     if kept.get("state") == "running":
         if kept.get("workspace") and maintenance.owns(str(kept["workspace"])):
             return  # a modern run the ledger already owns; the same record is not a second hold

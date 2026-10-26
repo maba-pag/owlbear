@@ -124,28 +124,28 @@ class Curation:
         self.maintenance = ownership or maintenance.Maintenance(slots)
         if runs.left_key and not self.maintenance.records(SLOT, "curation", runs.left_key, runs.left):
             runs.left_key = ""  # the lease it names does not record these PIDs, so the key proves nothing
-        # Every uncertain row on file predates this import, as does the snapshot, so one lease may account for them all:
-        # its recovery needs a reboot after the import, which ends all their processes. Each is marked with its own
-        # evidence, which that lease records, so a mark is reused only for the very row it was made for.
+        # A cached key counts only while the lease it names owns its row; an earlier build named a snapshot's lease in
+        # its rows, which proves nothing of them, so such a row is judged again as one no lease of ours names.
+        for name, r in runs.folders.items():
+            if r.key and not curation_snapshots.owns_row(SLOT, self.maintenance.lease(SLOT, r.key), name, r):
+                runs.folders[name] = r.model_copy(update={"key": ""})
+        # Each uncertain row is its own session's evidence, held under its own lease: a snapshot's PIDs say nothing of
+        # which session left them, and rows seen beside it are no proof that any of them is that session.
         behind = {n: r for n, r in runs.folders.items() if legacy_uncertain(r) or (r.state == "running" and not r.key)}
         if runs.left and not runs.left_key:
             # A snapshot no lease of ours names is a producer's own observation. Its PIDs and session evidence are
             # what that producer wrote: a lease that saw these PIDs and every session row still on file covers it in
-            # any state, though refusals since overwrote some; a later session's row is held anew. The rows behind it
-            # are associated with its lease in the same save.
+            # any state, though refusals since overwrote some; a later session's row is held anew.
             snapshot, seen = curation_snapshots.observed(runs), curation_snapshots.sessions(runs)
-            rows = {curation_snapshots.window(n, r) for n, r in behind.items()}
             lease = self.maintenance.adopt_uncertain(
                 f"{self.path()}#left", SLOT, "curation", workspace="", generation=snapshot, pids=runs.left,
-                covers=curation_snapshots.same_snapshot(SLOT, snapshot, seen), observed=tuple(sorted({*seen, *rows})),
-                marks=tuple(self._row(n, r) for n, r in behind.items()),
+                covers=curation_snapshots.same_snapshot(SLOT, snapshot, seen), observed=seen,
             )  # fmt: skip
             runs.left_key = lease.slot
         for name, r in behind.items():
-            # A row's own mark finds its lease after a lost key write, in any state, so a recovered one stays so, as
-            # does the snapshot lease that saw this very row at its import; a mark counts only while that lease
-            # records this row's evidence. Each row is judged before it is rewritten below, so the rewrite never
-            # erases what an older host held.
+            # A row's own mark finds its lease after a lost key write, in any state, so a recovered one stays so; a
+            # mark counts only while that lease records this row's evidence. Each row is judged before it is rewritten
+            # below, so the rewrite never erases what an older host held.
             lease = self.maintenance.adopt_uncertain(
                 self._row(name, r), SLOT, "curation", workspace="", keyed=True,
                 covers=curation_snapshots.recorded_row(SLOT, name, r), observed=(curation_snapshots.window(name, r),),
