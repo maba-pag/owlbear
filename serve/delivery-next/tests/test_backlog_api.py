@@ -24,6 +24,7 @@ AUTH = {"authorization": "Bearer t"}
 
 
 class Host:
+    maintenance = None
     wake = SimpleNamespace(set=lambda: None)
     draining = staticmethod(lambda: False)
     closed = staticmethod(lambda: False)

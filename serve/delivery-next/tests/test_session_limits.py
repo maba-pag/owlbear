@@ -10,18 +10,31 @@ import pytest
 from owlbear_delivery_next.change_contracts import tools
 from owlbear_delivery_next.change_contracts.inbox import IntentItem
 from owlbear_delivery_next.change_contracts.models import Change, Exit, Names, Plan, Question, Step, StepKind, Task
+from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_flow.loop import StepResult, apply
 from owlbear_delivery_next.change_flow.status import Activity, card, status
 from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.design_packs.design_pack import PackError
+from owlbear_delivery_next.local_system import maintenance, processes
 from owlbear_delivery_next.local_system.slots import Slots
 from owlbear_delivery_next.pack_runs.pack_job import Live
 from owlbear_delivery_next.project_host import session_slots
 from owlbear_delivery_next.project_host.host import Host, RunnerRecord
+from owlbear_delivery_next.runtimes import sdk_adapter
+from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.state_store.store import Store
 from owlbear_delivery_next.workflow_steps import sessions
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
+DONE = Run("done", termination=processes.Termination(confirmed=True))
+
+
+def pack_session(root):
+    """The configuration a pack session hands its maintenance ownership; the SDK never runs in these tests."""
+    return sdk_adapter.Session(
+        kind=StepKind.REVIEW, worktree=root, session_id="pack", message="pack", resume=False,
+        policy=Policy(root), observe=lambda: tools.Worktree("", ""), checks=(), model="synthetic",
+    )  # fmt: skip
 
 
 def repo(path):
@@ -44,6 +57,7 @@ class Fake:
         self.host = Host(store, path, spawn=self.spawn, scan=lambda *_a: {}, group=lambda _g: {})
         self.host.alive = lambda pid, _created: pid in self.live
         self.host.slots, self.host.record = slots, self.host.record.model_copy(update={"project": project})
+        self.host.maintenance = maintenance.Maintenance(slots)  # bound by the machine host before any project starts
         session_slots.join(self.host)
 
     def spawn(self, _slug):
@@ -189,8 +203,8 @@ def test_a_pack_updates_sessions_hold_the_projects_slots_and_its_wait_is_logged(
     fake = Fake(store, tmp_path, Slots(lambda: 1))
     assert fake.host.slots.take("p", "c1", 1, 2) == 1  # a step of the same project holds the only slot
     notes, ran = [], threading.Event()
-    live = session_slots.pack_live(fake.host, Live(update=lambda *_a: ran.set() or "done"), notes.append)
-    worker = threading.Thread(target=lambda: live.update(store, None))
+    live = session_slots.pack_live(fake.host, Live(update=lambda *_a: ran.set() or DONE), notes.append)
+    worker = threading.Thread(target=lambda: live.update(store, pack_session(tmp_path)))
     worker.start()
     worker.join(0.3)
     assert (ran.is_set(), notes) == (False, ["waiting for a session slot"])
@@ -206,7 +220,7 @@ def test_a_pack_update_waiting_when_owlbear_stops_gives_up_its_place(store, tmp_
     fake.host.stopped.set()
     live = session_slots.pack_live(fake.host, Live(challenge=lambda *_a: pytest.fail("ran")), lambda _n: None)
     with pytest.raises(PackError, match="did not get a session slot"):
-        live.challenge(store, None)
+        live.challenge(store, pack_session(tmp_path))
     assert fake.host.slots.waiting == {}
 
 

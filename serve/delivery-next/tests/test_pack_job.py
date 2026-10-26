@@ -1,6 +1,7 @@
 """The Settings page's design pack update job (TD-101) and the Maintenance overview (TD-113), with fakes for the live
 parts: upstream, downloads, golden pages, replay and the challenger. Git runs only on local repositories in tmp."""
 
+import fcntl
 import hashlib
 import json
 import os
@@ -35,6 +36,7 @@ from owlbear_delivery_next.github.provider import (
     Rules,
 )
 from owlbear_delivery_next.local_system.codebase import CURRENT
+from owlbear_delivery_next.local_system.maintenance import Maintenance
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.local_system.slots import Slots
 from owlbear_delivery_next.pack_runs import pack_gates, pack_job, pack_publish, pack_rounds, pack_updater
@@ -266,7 +268,7 @@ class Fakes:
         self.at_golden()
         return self.wrong if folder is None else self.wrong_after
 
-    def replay(self, _store: Store, candidate) -> calibration.Replay:
+    def replay(self, _store: Store, candidate, _run=None, *, keep=None) -> calibration.Replay:  # noqa: ARG002 - unused here
         self.calls.append("replay")
         self.replayed = candidate
         skill = (candidate.skills / "owlbear-design-review" / "SKILL.md").read_text()
@@ -402,7 +404,8 @@ def test_a_passing_update_runs_every_stage_then_merges_one_commit_through_a_pull
     assert results(state) == dict.fromkeys(NAMES, "passed")
     here = design_pack.platform_name()
     assert fakes.calls == ["releases", "sync", f"engine {here}", "golden", "update", "golden", "replay", "challenger"]
-    assert fakes.folders == [None, store.root / pack_job.UPDATER / "golden"]  # the package's, then the candidate's
+    # The package's folder comes first, then the candidate's.
+    assert fakes.folders == [None, store.root / pack_job.RUNS / state["run"] / "golden"]
     replayed = fakes.replayed  # the replay judges with the candidate pack, not the active one
     assert (replayed.pins["pack"], replayed.installed.bundle) == ("impeccable-4.6.0.1", "bundle skill-v4.6.0")
     assert replayed.manifest == shown(checkout, "design_pack.json")  # the pack then activated
@@ -667,7 +670,7 @@ def test_rounds_ending_without_a_pass_wait_and_a_discard_changes_nothing(tmp_pat
     assert (state["state"], fakes.calls.count("challenger")) == ("waiting", 1)  # 1 finding: the last round (TD-208)
     assert results(state)["challenger"] == "waiting"
     assert [o["id"] for o in state["questions"][0]["options"]] == ["activate", "discard"]
-    assert (store.root / "design-pack-updater").is_dir()
+    assert job.workspace.is_dir()
     with pytest.raises(pack_job.Busy, match="waits for your answers"):
         job.start()
 
@@ -1366,6 +1369,8 @@ class Host:
 
     def __init__(self) -> None:  # the session slots its pack sessions take (TD-336)
         self.slots, self.stopped = Slots(lambda: 4), threading.Event()
+        self.maintenance = Maintenance(self.slots)  # bound by the machine host before any project starts
+        self.record = SimpleNamespace(project="")  # the project's key among the machine's slots (its store root here)
         self.store = SimpleNamespace(root=Path("/project"), settings=lambda: SimpleNamespace(sessions=2))
 
 
@@ -1399,6 +1404,86 @@ def test_every_project_sees_an_update_running_on_the_machine_and_for_whom(tmp_pa
     finally:
         os.close(job.held)
     assert pack_job.running_for() is None
+
+
+def test_a_successor_claim_is_never_erased_by_a_release_paused_after_its_close(tmp_path, monkeypatch):
+    """A release closes and clears the claim under the lock a claim takes, so a successor is not erased."""
+    job = pack_job.Job(Store(tmp_path / "store"))
+    job._claim()  # noqa: SLF001 - the first run's claim
+    real_close, closed, resume = os.close, threading.Event(), threading.Event()
+    armed = [True]
+
+    def paused_close(fd: int) -> None:
+        real_close(fd)
+        if armed[0]:
+            armed[0] = False
+            closed.set()
+            resume.wait(10)
+
+    monkeypatch.setattr(pack_job.os, "close", paused_close)
+    releaser = threading.Thread(target=job._release)  # noqa: SLF001 - the first run's release
+    releaser.start()
+    assert closed.wait(10)
+    entered = threading.Event()
+
+    def successor() -> None:
+        with job.exclusive():
+            entered.set()
+
+    claimant = threading.Thread(target=successor)
+    claimant.start()
+    assert not entered.wait(0.3), "a successor entered while the first release was still clearing its claim"
+    resume.set()
+    releaser.join(10)
+    claimant.join(10)
+    assert entered.is_set()
+    assert job.held is None
+    monkeypatch.setattr(pack_job.os, "close", real_close)
+
+    job._release()  # noqa: SLF001 - idle: nothing held, nothing to close
+    with job.exclusive():
+        assert job.held is not None
+    assert job.held is None
+    failure = RuntimeError("the replay failed")
+    with pytest.raises(RuntimeError), job.exclusive():
+        raise failure
+    assert job.held is None
+    probe = os.open(pack_job.local_home.root() / pack_job.MACHINE_LOCK, os.O_RDWR)
+    try:
+        fcntl.flock(probe, fcntl.LOCK_EX | fcntl.LOCK_NB)  # no claim leaked a descriptor or the flock
+    finally:
+        os.close(probe)
+
+
+def test_a_successor_that_passed_the_check_before_an_unconfirmed_release_is_refused_under_the_lock(
+    tmp_path, monkeypatch
+):
+    """The pending check runs again once the flock is taken, so a session left unconfirmed in between blocks it."""
+    job = pack_job.Job(Store(tmp_path / "store"))
+    checks = []
+
+    def unproven(_job: pack_job.Job) -> None:
+        checks.append(None)
+        if len(checks) == 2:  # the updater released the flock unconfirmed after the first check passed
+            msg = "an earlier design pack session is unproven; recover it on the Maintenance page first"
+            raise pack_job.Busy(msg)
+
+    monkeypatch.setattr(pack_job.Job, "_unproven", unproven)
+    with pytest.raises(pack_job.Busy, match="unproven"):
+        job._claim()  # noqa: SLF001 - the successor's claim
+    assert job.held is None
+    probe = os.open(pack_job.local_home.root() / pack_job.MACHINE_LOCK, os.O_RDWR)
+    try:
+        fcntl.flock(probe, fcntl.LOCK_EX | fcntl.LOCK_NB)  # the refused claim closed its descriptor
+    finally:
+        os.close(probe)
+    monkeypatch.undo()
+    job._claim()  # noqa: SLF001 - after recovery a third claim is admitted
+    try:
+        assert job.held is not None
+    finally:
+        os.close(job.held)
+        job.held = None
 
 
 def test_one_run_at_a_time_and_the_api_refuses_a_second(tmp_path, checkout, clone):

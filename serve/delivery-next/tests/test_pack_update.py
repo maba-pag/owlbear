@@ -4,15 +4,20 @@ import dataclasses
 import hashlib
 import json
 import subprocess
+import threading
 from datetime import UTC, datetime, timedelta
 from http.client import IncompleteRead
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib.resources import files
 from pathlib import Path
+from typing import ClassVar
 
 import pytest
 
+from owlbear_delivery_next.change_contracts.chat_contract import HostFound
 from owlbear_delivery_next.change_contracts.visual_records import DesignInput, JudgeVerdict, OwnerDecision, VisualRound
-from owlbear_delivery_next.commands import cli
+from owlbear_delivery_next.commands import cli, replay_client
+from owlbear_delivery_next.commands.chat_client import NOT_RUNNING, NOT_SERVED
 from owlbear_delivery_next.design_packs import calibration, design_pack, design_tools, detector, pack_update
 from owlbear_delivery_next.local_system import local_home, preload
 from owlbear_delivery_next.local_system.processes import Termination
@@ -374,14 +379,99 @@ def test_a_replay_refuses_a_candidate_whose_skills_the_judge_does_not_load(repo)
         pack_replay.replay(Store.open(repo), candidate(skills=["other"]), run=lambda _cfg: None)
 
 
+class _Answers(BaseHTTPRequestHandler):
+    """A running host's replay route: its status and body are set per test, and each request is recorded."""
+
+    status = 200
+    body: ClassVar[dict[str, object]] = {}
+    seen: ClassVar[list[str]] = []
+
+    def do_POST(self) -> None:
+        type(self).seen.append(f"{self.path} {self.headers.get('Authorization')} {self.headers.get('X-OwlBear-Use')}")
+        raw = json.dumps(type(self).body).encode()
+        self.send_response(type(self).status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(raw)))
+        self.end_headers()
+        self.wfile.write(raw)
+
+    def log_message(self, *_args: object) -> None:
+        return
+
+
+@pytest.fixture
+def running_host(monkeypatch):
+    """The CLI's project and a loopback host; *serve* sets what the host answers to the replay."""
+    _Answers.seen = []
+    server = ThreadingHTTPServer(("127.0.0.1", 0), _Answers)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    record = HostFound(
+        url=f"http://127.0.0.1:{server.server_port}/",
+        token="tok",  # noqa: S106 - a loopback test token
+        pid=1,
+        started_at=NOW,
+        project="owlbear",
+    )
+    monkeypatch.setattr(replay_client.project_home, "clone_id", lambda _dir: "owlbear")
+    monkeypatch.setattr(replay_client.host, "running_at", lambda _root, _model: record)
+
+    def serve(status: int, body: dict[str, object]) -> None:
+        _Answers.status, _Answers.body = status, body
+
+    yield serve
+    server.shutdown()
+    server.server_close()
+
+
+def test_the_cli_replay_is_the_running_hosts_managed_job_and_nothing_replays_here(
+    repo, monkeypatch, capsys, running_host
+) -> None:
+    def ran_here(*_args: object, **_kwargs: object) -> None:
+        msg = "the CLI replayed in its own process"
+        raise AssertionError(msg)
+
+    monkeypatch.setattr(pack_replay, "replay", ran_here)
+    running_host(200, {"ok": True, "report": "calibration replay: 3 decided rounds, 0 left out"})
+    assert cli.main(["--repo", str(repo), "design-pack", "--replay"]) == 0
+    assert capsys.readouterr().out == "calibration replay: 3 decided rounds, 0 left out\n"
+    assert _Answers.seen == ["/p/owlbear/api/next/design-pack/replay Bearer tok cli"]
+
+
+def test_the_cli_replay_below_the_margin_and_a_refused_host_both_exit_one(repo, capsys, running_host) -> None:
+    running_host(200, {"ok": False, "report": "calibration replay: 9 decided rounds; below the margin"})
+    assert cli.main(["--repo", str(repo), "design-pack", "--replay"]) == 1
+    assert capsys.readouterr().out == "calibration replay: 9 decided rounds; below the margin\n"
+    running_host(409, {"detail": "a design pack update is running: wait for it to finish"})
+    assert cli.main(["--repo", str(repo), "design-pack", "--replay"]) == 1
+    assert capsys.readouterr().out == "a design pack update is running: wait for it to finish\n"
+
+
 def test_the_cli_runs_each_update_tool_and_reports_failures(repo, capsys) -> None:
     assert cli.main(["--repo", str(repo), "design-pack", "--check"]) == 0
     assert capsys.readouterr().out == "design pack impeccable-4.5.2.1: releases upstream unknown\n"
     assert cli.main(["--repo", str(repo), "design-pack", "--golden"]) == 1
     assert "not installed" in capsys.readouterr().out
-    assert cli.main(["--repo", str(repo), "design-pack", "--replay"]) == 0
-    assert capsys.readouterr().out.startswith("calibration replay: 0 decided rounds")
+    assert cli.main(["--repo", str(repo), "design-pack", "--replay"]) == 1
+    assert capsys.readouterr().out.strip() in {NOT_RUNNING.format(repo=repo), NOT_SERVED.format(repo=repo)}
     assert cli.main(["--repo", str(repo), "design-pack", "--diff", str(repo), "--to", "skill-v9"]) == 1
     assert "CalledProcessError" in capsys.readouterr().out
     with pytest.raises(SystemExit):
         cli.main(["--repo", str(repo), "design-pack", "--diff", str(repo)])
+
+
+def test_the_cli_replay_names_the_uncertain_legacy_session_it_is_refused_for(
+    repo, monkeypatch, capsys, running_host
+) -> None:
+    def ran_here(*_args: object, **_kwargs: object) -> None:
+        msg = "the CLI replayed in its own process"
+        raise AssertionError(msg)
+
+    monkeypatch.setattr(pack_replay, "replay", ran_here)
+    running_host(
+        409, {"detail": "an earlier design pack session is unproven; recover it on the Maintenance page first"}
+    )
+    assert cli.main(["--repo", str(repo), "design-pack", "--replay"]) == 1
+    assert (
+        capsys.readouterr().out
+        == "an earlier design pack session is unproven; recover it on the Maintenance page first\n"
+    )

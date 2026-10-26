@@ -165,6 +165,7 @@ def test_a_merged_change_has_every_needed_stage_done_and_an_abandoned_one_none()
 
 
 class Host:
+    maintenance = None
     wake = SimpleNamespace(set=lambda: None)
     record = None
 

@@ -46,6 +46,7 @@ DRAFT = {
 
 
 class Host:
+    maintenance = None
     wake = SimpleNamespace(set=lambda: None)
     paused = staticmethod(lambda: False)
     draining = staticmethod(lambda: False)
