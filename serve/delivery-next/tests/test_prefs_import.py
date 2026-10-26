@@ -34,6 +34,8 @@ class FakeStore:
 
     def __init__(self, marker: str = "", layer: Layer | None = None, *, exists: bool = True) -> None:
         self.root = Path(tempfile.mkdtemp())
+        self.shared = None  # an unshared clone: its profile lives in its own root under the private lock
+        self.name = ""
         self.config_path = self.root / "config.json"
         self.prof = Profile(
             entries={profile.POLL: ProfileEntry(state="known", value="45", evidence=f"{profile.CONFIRMED}; owner")},
@@ -61,6 +63,15 @@ class FakeStore:
         self.config_path.unlink(missing_ok=True)
         self._layer = Layer()
 
+    @property
+    def prof(self) -> Profile:
+        """The profile as the store reads it from its root file (the claim check reads the same file)."""
+        return profile_share._read_unlocked(self)  # noqa: SLF001 - the fake keeps the store's file layout
+
+    @prof.setter
+    def prof(self, prof: Profile) -> None:
+        profile_share._stage(self, prof)  # noqa: SLF001 - writes the root profile file as the store does
+
     def read_profile(self) -> Profile:
         return self.prof
 
@@ -69,12 +80,14 @@ class FakeStore:
         return self.notices.pop(0) if self.notices else ""
 
     def mark_prefs_import(self, expect: str, to: str, basis: str = "", claim: str = "") -> tuple[str, str, bool]:
-        if self.prof.prefs_import != expect:
-            return self.prof.prefs_import, "", False
-        update = {"prefs_import": to, "prefs_basis": basis if to == "pending" else ""}
-        if to == "pending":
-            update["prefs_claim"] = claim
-        self.prof = self.prof.model_copy(update=update)
+        with profile_share._writer(self, create=False):  # noqa: SLF001 - the marker is read and saved under the lock
+            current = profile_share._read_unlocked(self)  # noqa: SLF001
+            if current is None or current.prefs_import != expect:
+                return (current.prefs_import if current else "", "", False)
+            update = {"prefs_import": to, "prefs_basis": basis if to == "pending" else ""}
+            if to == "pending":
+                update["prefs_claim"] = claim
+            self.prof = current.model_copy(update=update)
         return to, self.notices.pop(0) if self.notices else "", True
 
     def read_config(self) -> Layer:
