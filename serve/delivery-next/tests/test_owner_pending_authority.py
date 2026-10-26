@@ -66,9 +66,8 @@ def no_network(monkeypatch) -> None:
 
 
 def remote_subjects(remote: Path) -> list[str]:
-    return subprocess.run(
-        ["git", "log", "--reverse", "--format=%s", "main"],  # noqa: S607
-        cwd=remote,
+    return subprocess.run(  # noqa: S603
+        ["git", f"--git-dir={remote}", "log", "--reverse", "--format=%s", "main"],  # noqa: S607
         check=True,
         capture_output=True,
         text=True,

@@ -34,8 +34,7 @@ def clone(remote: Path, where: Path, name: str) -> Store:
 def remote_bytes(remote: Path, rel: str) -> bytes:
     """The file's bytes on the remote's main branch; empty when it is not published yet."""
     shown = subprocess.run(  # noqa: S603
-        ["git", "show", f"main:{rel}"],  # noqa: S607
-        cwd=remote,
+        ["git", f"--git-dir={remote}", "show", f"main:{rel}"],  # noqa: S607
         check=False,
         capture_output=True,
     )
