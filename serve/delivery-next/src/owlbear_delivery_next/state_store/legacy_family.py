@@ -76,7 +76,7 @@ IMPORTS = (
     ("state_store/project_home.py", "c79464a6139fe571efd600903aa848dc67c9673f016d12c093d7d6b94b74a681"),
     ("state_store/store.py", "a3da565feeee931b40d4907f17c46372c000e573e1add938ae3679d175e75de4"),
 )
-CURRENT_FAMILY_AGGREGATE = "b0ed35d660a7ef72610e80ffae98501ffba89b4b9c1a62139ebc489aff49edd3"
+CURRENT_FAMILY_AGGREGATE = "97ac9a423406de0c43eba453d1e5a65a0f7652e265b889571b6ef72869991a6b"
 CURRENT_FUNCTIONS = (
     ("commands/chat_client.py:Chat.call", "0fc1fdb166ea555741a2aa7796a99a4eb7b71c572ad37fba1ae0a9e37171b584"),
     ("commands/chat_client.py:workspace", "d3a3e15a15d6554c1a3d9167d3b259d8890a0321c85af2df2115deaed14f13e9"),
@@ -96,11 +96,23 @@ CURRENT_FUNCTIONS = (
     ("machine_host/machine.py:Machine.retry", "89035a3934b6da831ef697ec64561953d7e56d9bb9577ea6ce69c0155097a051"),
     ("machine_host/project.py:Project.load", "90cb161f238ce91af9469fc383d03ecb7f5225e239796463fd25cb96f5a92654"),
     ("machine_host/registry.py:adopt", "ef93858628accb92fd4cdb2b27d637513b09c502fea091f10fd8e0c571618540"),
-    ("machine_host/registry.py:canonical", "b95ac624012ff18445d4e92d74028bc415c26f9c18d17e209aed4cc94cef0970"),
+    ("machine_host/registry.py:canonical", "a0e7513a73a3c561fac50fc8e373006d055fb4120c161843a34b78804671372a"),
+    ("machine_host/registry.py:_switched", "c09e214ec6098703a0076cccb04da308f14cfa98678a3d22ba839b71b2f1dbbf"),
     ("machine_host/registry.py:register", "fa6d5044b93bb08ddc2352afd7b6ab30274c9a95a00c27113721c9a62bbc954f"),
     ("machine_host/registry.py:replaced", "5d48cb39f6ea67966760e0de397f920fd7d6ebf07f403f377fec1e56b0245231"),
-    ("machine_host/selfcheck.py:_project", "57e2069ae90e55f732e86763c059f285e89636a3080e6370a0d7fb1bdd4248b0"),
+    ("machine_host/selfcheck.py:_project", "1f1d7aa8fb1f2c133892818556a8f923fa3bc55616d3a14eae13c5a376d8664d"),
+    ("machine_host/selfcheck.py:_retained", "1fd0a5f84740269dcc90e323b6ea784905f7925db864eca00ff43a756e36707c"),
     ("project_host/host.py:running_at", "cc129de6cc691f64d6624765bcfa54fbf82b1e29531f65c8ff16ebf7f7370d00"),
+    ("state_store/offline_protocol.py:prepare", "c8aff79cc593116271d17409b70f645cd18c54ddaa3df3a2d99c512f9a96d57d"),
+    (
+        "state_store/offline_protocol.py:_refuse_nothing_to_move",
+        "29153ea1b0b0381e419ac7c2b4a3b7d072cf9a85f12c8400185eaee597c14cd7",
+    ),
+    (
+        "state_store/switched_authority.py:retained_target",
+        "5433f295555fc0041355cd7a3c710050f790b346a4db73b0c8b1a51c739cf8d9",
+    ),
+    ("state_store/switched_authority.py:_proven", "cc78b854dc08781198775746dff01dd63eacc0dbdbfc59741157ef84ff34d20c"),
     ("state_store/project_home.py:_generation_at", "d048a1d7d993a3fc1fb9ad2756d4e59459e6c43fd90c604d1637de82a4c3533e"),
     ("state_store/project_home.py:clone_dir", "db1b925c614a629f720496a9473f955f44d686c0e8903da656e27288435f3c5d"),
     ("state_store/project_home.py:clone_id", "2a12145869bb15d50f90e34e18ad2ec65b57b0d96c0597797af3f3750e86fbf8"),
@@ -124,11 +136,12 @@ CURRENT_IMPORTS = (
     ("machine_host/install.py", "6d603752b47fbd5ab23342933a6b44043207e1b2e94fd4a085c8a62b1d93db62"),
     ("machine_host/machine.py", "80a839c5215e013f1a6960cfad7be1a90bbbc9524406b2f631f2405e78dd5f6f"),
     ("machine_host/project.py", "abf0c82a93a364fed92c0e98f6c91a8d4fb407f37894181720eabeafa17a9353"),
-    ("machine_host/registry.py", "9b665c270866f57d7056583906a29a7a0762e1aa0bc6613d70d07f614d305b76"),
+    ("machine_host/registry.py", "36e160d38f151ea980908cb6f18538bf6b681c07b46c5be088cea0aa03219d91"),
     ("machine_host/selfcheck.py", "2aa2fa0c3f7e09a66cecd16cb5e0d101cd4a819bbbab976d42be1d6647fc354b"),
     ("project_host/host.py", "85b64468f9280421471aa535a39b9ae196e7af672b4896b93e08ac4e0e0f0c8d"),
     ("state_store/project_home.py", "be6ffc905aff251ac71afb2407ad8958daa91588e43577b551b2d11b8d28efcf"),
     ("state_store/store.py", "df2cea9222c0d873feda15e06169e77256ac374712daa9457910c5bba4260776"),
+    ("state_store/switched_authority.py", "db36fb1022151db0e30be0a483e2e6538b30f6af884db15bb925aaceccfa0039"),
 )
 CONSTANTS = (
     ("state_store/database.py", "STORE_FORMAT", 7),

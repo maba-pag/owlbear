@@ -136,6 +136,17 @@ def _refuse_foreign_preparation(folder: Path, fd: int, raw: str, identity: list[
         raise StoreError(msg)
 
 
+def _refuse_nothing_to_move(folder: Path, fd: int) -> None:
+    """Refuse before any fence when no legacy payload is left and no move record exists: nothing could finish it."""
+    if project_move.left_at(fd) or project_move.record_at(folder, fd) is not None:
+        return
+    msg = (
+        f"{folder} holds no legacy store to move and no move record: the store is already external or new, "
+        "so no offline move applies; nothing was prepared or fenced"
+    )
+    raise StoreError(msg)
+
+
 def prepare(folder: Path, gaps: Callable[[], tuple[Gap, ...]] = open_gaps) -> dict:
     """Record the folder's identity and boot session and install the fence; refuse first if a producer is unfenced.
 
@@ -150,6 +161,7 @@ def prepare(folder: Path, gaps: Callable[[], tuple[Gap, ...]] = open_gaps) -> di
             msg = _unfenced(open_gaps)
             raise StoreError(msg)
         _refuse_replaced(folder, fd)
+        _refuse_nothing_to_move(folder, fd)
         project_home.ensure_pinned(folder, fd)
         return _prepare_at(folder, fd, boot)
     finally:

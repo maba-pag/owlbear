@@ -22,7 +22,7 @@ from owlbear_delivery_next.change_contracts.models import Record
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.local_system.storage_io import atomic_write, open_lock
 from owlbear_delivery_next.settings.config import MachineValues
-from owlbear_delivery_next.state_store import project_home
+from owlbear_delivery_next.state_store import project_home, project_move, switched_authority
 from owlbear_delivery_next.state_store.database import STORE_FORMAT, StoreError
 
 if TYPE_CHECKING:
@@ -183,10 +183,21 @@ def canonical(path: Path) -> tuple[Path, Path]:
     except (OSError, ValueError) as exc:
         msg = f"{marker} is unreadable"
         raise RegistryError(msg) from exc
-    if found > STORE_FORMAT:
+    if found > STORE_FORMAT and (found != int(project_move.FENCE) or not _switched(store)):
         msg = f"{work}'s Delivery state has format {found}, newer than {STORE_FORMAT}: this OwlBear is older"
         raise RegistryError(msg)
     return work, store
+
+
+def _switched(store: Path) -> bool:
+    """Whether the fenced *store* is a retained source whose SWITCHED receipt names a valid project store."""
+    pid = clone_id(store)
+    if pid is None:
+        return False
+    try:
+        return switched_authority.retained_target(store, pid) is not None
+    except StoreError as exc:
+        raise RegistryError(str(exc)) from exc
 
 
 def clone_id(store: Path) -> str | None:

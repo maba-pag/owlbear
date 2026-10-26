@@ -112,6 +112,8 @@ def prepared_text_from_another_boot(tmp_path, monkeypatch):
     other = tmp_path / "other"
     other.mkdir()
     subprocess.run(["git", "init", "-q"], cwd=other, check=True, capture_output=True)  # noqa: S607
+    (other / ".git" / "owlbear-delivery" / "changes" / "c1").mkdir(parents=True)
+    (other / ".git" / "owlbear-delivery" / "changes" / "c1" / "runner.log").write_text("ran\n")
     monkeypatch.setattr(offline_protocol, "boot_session", lambda: "CCCCCCCC-0000-4000-8000-000000000003")
     offline_protocol.prepare_clone(other, gaps=no_gaps)
     return (other / ".git" / "owlbear-delivery" / PREPARED).read_bytes()

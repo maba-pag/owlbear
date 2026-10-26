@@ -75,7 +75,7 @@ project's Changes while that project's VS Code window is closed.
 | `owlbear setup --repo PATH` | Checks a project's readiness, confirms its profile and registers its chat server |
 | `owlbear data [PATH]` | Shows or sets the shared settings repository |
 | `owlbear home` | Shows OwlBear's folder on this Mac |
-| `owlbear prepare --repo PATH` | Before a reboot: binds the clone's store id and records its boot session with a format fence. Nothing is copied or switched; refused while any legacy producer is unfenced |
+| `owlbear prepare --repo PATH` | Before a reboot: binds the clone's store id and records its boot session with a format fence. Nothing is copied or switched; refused while any legacy producer is unfenced, and refused with no changes when the clone holds no legacy store to move (its store is already external or new, or a move already completed) |
 | `owlbear finish --repo PATH` | After a reboot, from a different boot session: proves the preparation and moves the store to its folder. The clone's old store is kept in place as a non-authoritative source, not deleted |
 | `owlbear install`, `owlbear uninstall` | Adds or removes the command link, the shaping agent links and the login item |
 

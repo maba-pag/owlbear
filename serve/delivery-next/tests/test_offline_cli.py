@@ -21,6 +21,15 @@ def repo(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
+def legacy_repo(repo: Path) -> Path:
+    folder = project_home.clone_dir(repo)  # a legacy clone with its own store to move
+    (folder / "changes" / "c1").mkdir(parents=True)
+    (folder / "changes" / "c1" / "runner.log").write_text("ran\n")
+    (folder / MARKER).write_text("7")
+    return repo
+
+
+@pytest.fixture
 def boot(monkeypatch) -> dict:
     state = {"id": BEFORE}
     monkeypatch.setattr(offline_protocol, "boot_session", lambda: state["id"])
@@ -67,7 +76,8 @@ def test_finish_refuses_without_a_preparation(repo, capsys) -> None:
 
 
 @pytest.mark.usefixtures("current_binding")
-def test_finish_refuses_on_the_same_boot_session(repo, monkeypatch, capsys) -> None:
+def test_finish_refuses_on_the_same_boot_session(legacy_repo, monkeypatch, capsys) -> None:
+    repo = legacy_repo
     boot = {"id": BEFORE}
     monkeypatch.setattr(offline_protocol, "boot_session", lambda: boot["id"])
     assert run(repo, "prepare") == 0
@@ -77,7 +87,8 @@ def test_finish_refuses_on_the_same_boot_session(repo, monkeypatch, capsys) -> N
 
 
 @pytest.mark.usefixtures("boot", "current_binding")
-def test_finish_refuses_when_the_boot_session_is_unreadable_after_the_reboot(repo, monkeypatch, capsys) -> None:
+def test_finish_refuses_when_the_boot_session_is_unreadable_after_the_reboot(legacy_repo, monkeypatch, capsys) -> None:
+    repo = legacy_repo
     assert run(repo, "prepare") == 0
 
     def unreadable() -> str:
@@ -89,7 +100,10 @@ def test_finish_refuses_when_the_boot_session_is_unreadable_after_the_reboot(rep
     assert "refusing the offline move" in capsys.readouterr().err
 
 
-def test_finish_refuses_when_the_binding_is_no_longer_proven(repo, boot, monkeypatch, capsys, current_binding) -> None:
+def test_finish_refuses_when_the_binding_is_no_longer_proven(
+    legacy_repo, boot, monkeypatch, capsys, current_binding
+) -> None:
+    repo = legacy_repo
     assert run(repo, "prepare") == 0
     boot["id"] = AFTER
     unproven = legacy_family.Binding(None, current_binding.interpreter, current_binding.package)

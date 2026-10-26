@@ -96,9 +96,10 @@ def _project(pid: str, path: Path) -> list[str]:
     """A registered project's store and settings formats, read without opening or migrating anything."""
     from owlbear_delivery_next.state_store import project_home  # noqa: PLC0415
     from owlbear_delivery_next.state_store.database import MARKER, STORE_FORMAT  # noqa: PLC0415
+    from owlbear_delivery_next.state_store.project_move import FENCE  # noqa: PLC0415
 
-    found, clone = [], None
     markers = [project_home.home(pid) / MARKER]
+    found, clone = [], None
     if path.is_dir():
         with contextlib.suppress(Exception):  # a clone that is gone fails to load as before; not this check's
             clone = project_home.clone_dir(path)
@@ -110,9 +111,28 @@ def _project(pid: str, path: Path) -> list[str]:
             found.append(f"{marker} is unreadable")
             continue
         if value > STORE_FORMAT:
+            if clone is not None and marker == clone / MARKER and value == int(FENCE):
+                if (problem := _retained(pid, clone)) is None:
+                    continue  # the fenced clone is a retained source; the project's store is checked instead
+                found.append(problem)
+                continue
             found.append(f"its store has format {value}, newer than this version's {STORE_FORMAT}")
     layers = [project_home.home(pid) / "config.json", *([clone / "config.json"] if clone else []), *_shared(path)]
     return found + _formats("its settings", layers)
+
+
+def _retained(pid: str, clone: Path) -> str | None:
+    """None when the fenced *clone* is a retained source whose SWITCHED receipt names the project's store; else why."""
+    from owlbear_delivery_next.state_store import switched_authority  # noqa: PLC0415
+    from owlbear_delivery_next.state_store.database import STORE_FORMAT, StoreError  # noqa: PLC0415
+    from owlbear_delivery_next.state_store.project_move import FENCE  # noqa: PLC0415
+
+    try:
+        if switched_authority.retained_target(clone, pid) is not None:
+            return None
+    except StoreError as exc:
+        return str(exc)
+    return f"its store has format {FENCE}, newer than this version's {STORE_FORMAT} and no completed move names it"
 
 
 def _shared(path: Path) -> list[Path]:
