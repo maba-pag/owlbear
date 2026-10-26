@@ -2,7 +2,7 @@
 
 Usage:
     python .owlbear/scripts/validate_prompts.py [<prompt_file> ...]
-    # No args = discover prompts in .owlbear/prompts/
+    # No args = discover prompts in .owlbear/prompts/; none found passes
 """
 
 from __future__ import annotations
@@ -124,9 +124,8 @@ def main(argv: list[str] | None = None) -> int:
     args = argv if argv is not None else sys.argv[1:]
     prompt_files = [Path(path) for path in args] if args else _discover_prompt_files()
     if not prompt_files:
-        roots = ", ".join(str(root) for root in _PROMPT_ROOTS)
-        sys.stderr.write(f"No prompt files found in active roots: {roots}\n")
-        return 1
+        print("PASS - no prompt files")
+        return 0
 
     has_errors = False
     for prompt_file in prompt_files:

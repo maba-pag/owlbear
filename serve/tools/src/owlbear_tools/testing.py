@@ -197,27 +197,24 @@ def _package_for_path(normalized: str) -> _WorkspacePackage | None:
 def _python_scope(path: str) -> list[str] | None:
     normalized = path.removeprefix("./")
     scope: list[str] | None = None
-    if normalized.startswith(".owlbear/scripts/diagrams/"):
-        scope = ["tests/test_archify_diagrams.py", *_INVARIANT_TESTS]
-    else:
-        package = _package_for_path(normalized)
-        if package is not None:
-            package_prefix = f"serve/{package.directory.name}/"
-            if normalized.startswith(f"{package_prefix}src/") or normalized == f"{package_prefix}pyproject.toml":
-                scope = _package_scope(package)
-            elif normalized.startswith(f"{package_prefix}tests/"):
-                candidate = _REPOSITORY_ROOT / normalized
-                if candidate.exists():
-                    is_test_module = (
-                        candidate.is_file() and candidate.name.startswith("test_") and candidate.suffix == ".py"
-                    )
-                    scope = [normalized] if is_test_module else _relative_paths(_package_tests(package))
-        elif normalized.startswith(_DOCS_ONLY_PREFIXES) or Path(normalized).suffix.lower() == ".md":
-            scope = []
-        else:
+    package = _package_for_path(normalized)
+    if package is not None:
+        package_prefix = f"serve/{package.directory.name}/"
+        if normalized.startswith(f"{package_prefix}src/") or normalized == f"{package_prefix}pyproject.toml":
+            scope = _package_scope(package)
+        elif normalized.startswith(f"{package_prefix}tests/"):
             candidate = _REPOSITORY_ROOT / normalized
-            if normalized.startswith("tests/") and candidate.is_file() and candidate.name.startswith("test_"):
-                scope = [normalized]
+            if candidate.exists():
+                is_test_module = (
+                    candidate.is_file() and candidate.name.startswith("test_") and candidate.suffix == ".py"
+                )
+                scope = [normalized] if is_test_module else _relative_paths(_package_tests(package))
+    elif normalized.startswith(_DOCS_ONLY_PREFIXES) or Path(normalized).suffix.lower() == ".md":
+        scope = []
+    else:
+        candidate = _REPOSITORY_ROOT / normalized
+        if normalized.startswith("tests/") and candidate.is_file() and candidate.name.startswith("test_"):
+            scope = [normalized]
     return scope
 
 
