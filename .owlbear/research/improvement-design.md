@@ -260,5 +260,5 @@ Then item 16 (the amendment design session, TD-422), then item 10.
   (`improvement/spotter_prompt.md`); `improvement` is a layer between `state_store` and `runtimes`. A live test
 (2026-10-26) found that the runtime refuses a session credit cap under 30; a look now sets none. The machine
   registry and machine settings moved to `state_store` so a step reads its budget (D-01M5VXXFC28ZFHV7HVDTKFHPVF).
-  No look has run against a live runtime yet.
+  A live test on 2026-10-26 ran a real hand-off look after #682: a correct note for 0.07 credits in 7.5 seconds.
 - The pilot's harness and data stay in `.owlbear/scratch/watcher-replay/` (not committed).
