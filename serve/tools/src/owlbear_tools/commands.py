@@ -215,18 +215,6 @@ COMMANDS = (
         hidden=True,
     ),
     Command(
-        "indexes",
-        "uv run indexes [PATH]",
-        "Regenerate all workspace source indexes.",
-        "Internal",
-        includes=("doc-index", "py-index", "ts-index"),
-        development_only=True,
-        topic_only=True,
-    ),
-    _internal_command("doc-index", "uv run doc-index [PATH]", "Regenerate the documentation index."),
-    _internal_command("py-index", "uv run py-index [PATH]", "Regenerate the Python source index."),
-    _internal_command("ts-index", "uv run ts-index [PATH]", "Regenerate the TypeScript source index."),
-    Command(
         "test",
         "uv run test [OPTIONS] [PATH ...]",
         "Run tests; paths select suites.",

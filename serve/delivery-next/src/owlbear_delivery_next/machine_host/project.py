@@ -82,6 +82,7 @@ class Project:
         self.app: ASGIApp | None = None
         self.lock_fd: int | None = None
         self.scheduler: threading.Thread | None = None
+        self.publish_lock = threading.Lock()  # orders the discovery file's write against its removal in stop
 
     @property
     def name(self) -> str:
@@ -138,7 +139,7 @@ class Project:
             self.import_state(store, self.host)
         self.host.record = record.model_copy(update={"pid": os.getpid(), "project": self.entry.id, "ready": None})
         session_slots.join(self.host)  # before its first pass: what its live steps hold is counted first
-        self._publish()
+        self._publish(self.host)
         self.app = api.create_app(store, record.token, self.host)
         self.scheduler = threading.Thread(target=self.host.run, daemon=True, name=f"scheduler-{self.entry.id}")
         self.scheduler.start()
@@ -166,20 +167,23 @@ class Project:
             raise ImportWaitingError(msg) from exc
         host.say(f"moved the state of {len(slugs)} Change{'s' if len(slugs) != 1 else ''} into the database")
 
-    def _publish(self) -> None:
-        if self.store and self.host and not self.host.stopped.is_set():
-            path = self.store.root / "host.json"
-            atomic_write(path, self.host.record.model_dump_json())
-            path.chmod(0o600)
+    def _publish(self, host: Host) -> None:
+        """Write the discovery file for *host*, only while it is still this project's live, unstopped host."""
+        with self.publish_lock:
+            if self.store and self.host is host and not host.stopped.is_set():
+                path = self.store.root / "host.json"
+                atomic_write(path, host.record.model_dump_json())
+                path.chmod(0o600)
 
     def _ready(self) -> None:
-        if not (self.store and self.host):
+        host = self.host
+        if not (self.store and host):
             return
         checks = readiness.ready(self.store, Path(self.entry.path), carry=True)
         failed = [f"{c.name}: {c.detail} · fix: {c.fix}" for c in checks if not c.ok]
-        self.host.record = self.host.record.model_copy(update={"ready": failed})
-        self._publish()
-        self.host.say("readiness: " + ("; ".join(failed) or "ok"))
+        host.record = host.record.model_copy(update={"ready": failed})
+        self._publish(host)
+        host.say("readiness: " + ("; ".join(failed) or "ok"))
 
     def working(self, *, stopping: bool = False, requests: bool = True) -> list[str]:
         """What keeps the project from being removed: live runners, check environments and admitted work.
@@ -232,7 +236,8 @@ class Project:
             if self.scheduler and self.scheduler.ident is not None:  # one that never started has nothing to join
                 self.scheduler.join(JOIN)
             if self.lock_fd is not None and self.store:  # the discovery file is ours only while we hold the lock
-                (self.store.root / "host.json").unlink(missing_ok=True)
+                with self.publish_lock:  # a publish in progress finishes first; none starts after the stop above
+                    (self.store.root / "host.json").unlink(missing_ok=True)
         finally:
             if self.lock_fd is not None:
                 os.close(self.lock_fd)

@@ -24,7 +24,14 @@ from owlbear_delivery_next.change_contracts import chat_contract
 from owlbear_delivery_next.local_system import codebase, data_repo, leases, local_home
 from owlbear_delivery_next.machine_host import control, versions
 from owlbear_delivery_next.machine_host.machine import Machine, MachineError
-from owlbear_delivery_next.project_host import api, chat_routes, decision_routes, impact_routes, pages
+from owlbear_delivery_next.project_host import (
+    api,
+    chat_routes,
+    decision_routes,
+    impact_routes,
+    maintenance_routes,
+    pages,
+)
 from owlbear_delivery_next.state_store import decision_impact, machine_settings, registry
 
 if TYPE_CHECKING:
@@ -194,6 +201,7 @@ def _routes(machine: Machine) -> APIRouter:
     routes.include_router(owlbear, prefix="/owlbear", dependencies=[Depends(fenced)])  # chats in OwlBear's workspace
     routes.add_api_route("/chat/contract", chat_routes.contract, methods=["GET"])  # what a chat server asks first
     _machine_routes(routes, machine)
+    routes.include_router(maintenance_routes.router(machine))  # machine-wide: every project's held sessions
     _curation_routes(routes, machine)
     _update_routes(routes, machine)
     return routes

@@ -10,7 +10,7 @@ reads as failed, except during publication: it waits for the owner, and trying a
 
 from __future__ import annotations
 
-import fcntl
+import contextlib
 import json
 import os
 import shutil
@@ -18,10 +18,9 @@ import threading
 import time
 import uuid
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
 from importlib.resources import files
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol
 
 from owlbear_delivery_next.change_contracts.round_records import RoundLoop
 from owlbear_delivery_next.design_packs import design_pack, pack_git, pack_update
@@ -29,35 +28,51 @@ from owlbear_delivery_next.github.gh import GhProvider
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.local_system.storage_io import atomic_write
 from owlbear_delivery_next.pack_runs import pack_candidate, pack_gates, pack_publish, pack_replay, pack_rounds, pack_run
+from owlbear_delivery_next.pack_runs.machine_lock import HeldError, take
 from owlbear_delivery_next.pack_runs.pack_run import CANDIDATE, UPDATER, Stopped
+from owlbear_delivery_next.pack_runs.pack_state import (
+    FILE,
+    HOST_STOPPED,
+    LOG,
+    MACHINE_LOCK,
+    RUNS,
+    STAGES,
+    last,
+    legacy_uncertain,  # noqa: F401 - retain the existing pack_job ownership-reader API
+    observed,  # noqa: F401 - the unloaded ownership reader session_slots shares with Job
+    read_only,  # noqa: F401 - retain the existing pack_job ownership-reader API
+    read_version,
+    running_for,
+    version_of,
+)
+from owlbear_delivery_next.pack_runs.pack_state import (
+    blank as _blank,
+)
+from owlbear_delivery_next.pack_runs.pack_state import (
+    describe as _pack,
+)
+from owlbear_delivery_next.pack_runs.pack_state import (
+    ended as _ended,
+)
+from owlbear_delivery_next.pack_runs.pack_state import (
+    interrupted as _interrupted,
+)
+from owlbear_delivery_next.pack_runs.pack_state import (
+    now as _now,
+)
 from owlbear_delivery_next.workflow_steps import sessions
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Iterator
 
     from owlbear_delivery_next.design_packs.calibration import Replay
     from owlbear_delivery_next.github.provider import Provider
+    from owlbear_delivery_next.local_system.maintenance import Maintenance
+    from owlbear_delivery_next.runtimes.sdk_adapter import Session
     from owlbear_delivery_next.runtimes.session_result import Run
     from owlbear_delivery_next.state_store.store import Store
 
 __all__ = ["CANDIDATE", "FILE", "STAGES", "Busy", "Job", "Live", "Refused", "Stale", "Stopped", "last", "running_for"]
-FILE = "design-pack-update.json"  # the last run, under the store
-STAGES = (
-    ("notice", "Notice: newer upstream release"),
-    ("candidate", "Candidate: detector pins and skills"),
-    ("diff", "Diff: rules and skill files"),
-    ("golden", "Golden pages"),
-    ("update", "Updater: skills against upstream and the findings"),
-    ("replay", "Calibration replay"),
-    ("challenger", "Challenger on the whole pack"),
-    ("commit", "Commit: one commit on a pack branch"),
-    ("push", "Push the branch"),
-    ("pull-request", "Pull request to main"),
-    ("merge", "CI and merge"),
-)
-LOG = 200  # lines kept of the last run's log
-MACHINE_LOCK = "design-pack.lock"  # one running update per machine, whichever project started it (TD-242)
-OPEN = frozenset({"pending", "running", "waiting"})
 
 
 class Busy(Exception):  # noqa: N818 - the route's answer, not a fault
@@ -76,6 +91,19 @@ def _upstream() -> Path:
     return design_pack.folder().parent / "upstream"  # beside the packs, outside every project
 
 
+class Replays(Protocol):
+    """The calibration replay: its candidate's session runs under *run*, and *keep* holds its scratch directory."""
+
+    def __call__(
+        self,
+        store: Store,
+        candidate: pack_candidate.Candidate | None,
+        run: Callable[[Session], Run] | None = None,
+        *,
+        keep: Callable[[Path], bool] | None = None,
+    ) -> Replay: ...
+
+
 @dataclass
 class Live:
     """What reaches outside: upstream, downloads, the browser, model sessions and git. Tests replace each."""
@@ -86,24 +114,14 @@ class Live:
     sync: Callable[[Path, str], None] = pack_candidate.sync
     download: Callable[[str], bytes] = design_pack.fetch
     golden: Callable[..., dict[str, dict[str, list[str]]]] = pack_update.golden  # (installed, folder=None)
-    replay: Callable[[Store, pack_candidate.Candidate | None], Replay] = pack_replay.replay
-    challenge: Callable[[Store, Any], Run] = sessions.run
-    update: Callable[[Store, Any], Run] = sessions.run  # the writing updater (TD-125)
+    replay: Replays = pack_replay.replay
+    challenge: Callable[[Store, Session], Run] = sessions.run
+    update: Callable[[Store, Session], Run] = sessions.run  # the writing updater (TD-125)
     git: pack_git.Git = pack_git.git
     github: Callable[[Path], Provider] = GhProvider
     sleep: Callable[[float], None] = time.sleep
     poll: float = 30.0  # seconds between looks at the pull request's checks
     ci_wait: float = 3600.0  # seconds CI may take at one head before the owner is asked
-
-
-def _now() -> str:
-    return datetime.now(UTC).isoformat(timespec="seconds")
-
-
-def _blank() -> dict[str, Any]:
-    stages = [{"name": n, "label": label, "result": "pending", "detail": ""} for n, label in STAGES]
-    return {"state": "idle", "stage": "", "stages": stages, "started_at": None, "ended_at": None, "reason": "",
-            "log": [], "published": None, "run": "", "loop": None, "questions": [], "context": None}  # fmt: skip
 
 
 class Job:
@@ -114,28 +132,42 @@ class Job:
         self.store, self.live, self.lock = store, live or Live(), threading.Lock()
         self.thread: threading.Thread | None = None
         self.held: int | None = None
+        self.maintenance: Maintenance | None = None  # bound by session_slots.packed; without it nothing is removed
+        self.interrupted: dict[str, str] | None = None  # a run the last host left running; its SDK stage may still work
+        self.replays = 0
+        self.version = ""  # the run file's identity as read; see _read
         self.state = self._read()
         if self.state["state"] == "running" and (self.state.get("context") or {}).get("publication"):
             reason = "the host stopped while the update was being published"
             self._hold(pack_run.Context.model_validate(self.state["context"]), reason)
         elif self.state["state"] == "running":
-            self._end("failed", "the host stopped during this run; check the package checkout before running again")
+            self.interrupted = _interrupted(self.state, self.version)  # its identity before this rewrite, carried in it
+            # keeps the workspace: nothing is bound to say whether an uncertain session still uses it
+            self._finish("failed", HOST_STOPPED, keep=True)  # records the rewrite's own identity as self.version
 
     @property
     def path(self) -> Path:
         """Where the last run is kept."""
         return self.store.root / FILE
 
+    @property
+    def workspace(self) -> Path:
+        """The current run's updater repository; a run from before per-run workspaces keeps the shared root."""
+        kept = self.state.get("workspace")
+        return Path(kept) if kept else self.store.root / UPDATER
+
+    def keeps(self, path: Path) -> bool:
+        """Whether the ledger holds *path*'s session, so its scratch directory must outlive the call."""
+        return self.maintenance is not None and self.maintenance.retained(str(path))
+
     def _read(self) -> dict[str, Any]:
-        try:
-            kept = json.loads(self.path.read_text(encoding="utf-8"))
-        except OSError, ValueError:
-            return _blank()
-        return _blank() | kept if isinstance(kept, dict) and {"state", "stages", "log"} <= kept.keys() else _blank()
+        """The last run, and its file version from the same descriptor: "absent", "" when unreadable."""
+        state, self.version = read_version(self.path)
+        return state
 
     def _save(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        atomic_write(self.path, json.dumps(self.state, indent=1) + "\n")
+        self.version = version_of(atomic_write(self.path, json.dumps(self.state, indent=1) + "\n"))
 
     def read(self) -> dict[str, Any]:
         """The current or last run, as the page shows it: without the run's context."""
@@ -146,8 +178,13 @@ class Job:
         return json.loads(json.dumps({k: v for k, v in self.state.items() if k != "context"}))
 
     def busy(self) -> bool:
-        """Whether an update's thread runs now."""
-        return self.thread is not None and self.thread.is_alive()
+        """Whether an update's thread or a tracked calibration replay runs now."""
+        return self.replays > 0 or (self.thread is not None and self.thread.is_alive())
+
+    def count_replay(self, delta: int) -> None:
+        """Count a calibration replay in (+1) or out (-1), so a stop waits for it and no update starts beside it."""
+        with self.lock:
+            self.replays += delta
 
     def start(self) -> dict[str, Any]:
         """Start a run on its own thread and return its first state.
@@ -163,7 +200,11 @@ class Job:
                 msg = "a design pack update waits for your answers; answer or discard it first"
                 raise Busy(msg)
             self._claim()
-            self.state = _blank() | {"state": "running", "started_at": _now(), "run": uuid.uuid4().hex}
+            run = uuid.uuid4().hex
+            self.state = _blank() | {
+                "state": "running", "started_at": _now(), "run": run,
+                "workspace": str(self.store.root / RUNS / run),
+            }  # fmt: skip
             self._save()
             self.thread = threading.Thread(
                 target=self._run, args=(self._stages,), name="design-pack-update", daemon=True
@@ -295,42 +336,67 @@ class Job:
         with self.lock:
             self._finish(state, reason)
 
-    def _finish(self, state: str, reason: str) -> None:
-        for s in self.state["stages"]:
-            if s["result"] in OPEN:
-                s["result"] = "failed" if s["result"] == "running" and state == "failed" else "skipped"
-        self.state |= {"state": state, "stage": "", "ended_at": _now(), "reason": reason, "questions": []}
-        self.state["context"] = None
-        shutil.rmtree(self.store.root / UPDATER, ignore_errors=True)
+    def _finish(self, state: str, reason: str, *, keep: bool = False) -> None:
+        _ended(self.state, state, reason)
+        if not keep and self._removable(self.workspace):
+            shutil.rmtree(self.workspace, ignore_errors=True)
         self._save()
+
+    def _removable(self, workspace: Path) -> bool:
+        """A workspace goes unless the ledger keeps it; without a ledger only the legacy shared root is kept."""
+        if self.maintenance is None:
+            return workspace != self.store.root / UPDATER
+        return not self.maintenance.retained(str(workspace))
 
     def _claim(self) -> None:
         """Take the machine's one pack lock for the run's thread; the pack is shared by every project.
 
         Raises:
-            Busy: Another project's update runs now.
+            Busy: Another project's update runs now, or an earlier pack session is still unproven.
         """
-        path = local_home.root() / MACHINE_LOCK
-        path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-        fd = os.open(path, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+        self._unproven()
         try:
-            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            os.close(fd)
-            who = path.read_text(encoding="utf-8").strip() or "another project"
-            msg = f"a design pack update runs for {who}; one runs at a time on this machine"
+            # Verified again while the lock is held: an earlier updater may have released it unconfirmed before this.
+            self.held = take(
+                local_home.root() / MACHINE_LOCK, self.store.name or self.store.root.parent.parent.name, self._unproven,
+            )  # fmt: skip
+        except HeldError as exc:
+            msg = f"a design pack update runs for {exc.who}; one runs at a time on this machine"
             raise Busy(msg) from None
-        os.ftruncate(fd, 0)
-        os.write(fd, (self.store.name or self.store.root.parent.parent.name).encode())
-        self.held = fd
+
+    def _unproven(self) -> None:
+        if self.maintenance is not None and self.maintenance.pending(kind="pack"):
+            msg = "an earlier design pack session is unproven; recover it on the Maintenance page first"
+            raise Busy(msg)
 
     def _run(self, work: Callable[[], str | None]) -> None:
         try:
             self._steps(work)
         finally:
+            self._release()
+
+    def _release(self) -> None:
+        with self.lock:  # the close and the clear are one step, so a successor's claim is never erased
             if self.held is not None:
                 os.close(self.held)
                 self.held = None
+
+    @contextlib.contextmanager
+    def exclusive(self) -> Iterator[None]:
+        """Hold the machine's pack claim while a manual replay runs, as an update does; uncertain pack work refuses it.
+
+        Raises:
+            Busy: An update runs or waits, another project holds the machine's claim, or a pack session is unproven.
+        """
+        with self.lock:
+            if self.busy() or self.state["state"] in ("running", "waiting"):
+                msg = "a design pack update is running or waits for answers: finish it before a replay"
+                raise Busy(msg)
+            self._claim()
+        try:
+            yield
+        finally:
+            self._release()
 
     def _steps(self, work: Callable[[], str | None]) -> None:
         try:
@@ -428,35 +494,3 @@ def _decided(  # noqa: PLR0913 - the open questions, the answered one, the answe
     else:
         lp.ended, ctx.accepted, ctx.next = lp.ended, q["identity"], "activate"
     return []
-
-
-def _pack(src: pack_git.Source, c: pack_candidate.Candidate) -> str:
-    up = c.pins["upstream"]
-    return f"{c.pins['pack']}: upstream {c.tag} at {up['commit'][:12]}, engine {up['engine']}; from {src.base[:12]}"
-
-
-def last(store: Store) -> dict[str, Any] | None:
-    """The last run's state, ending and times, for the Maintenance page; None when it never ran."""
-    try:
-        kept = json.loads((store.root / FILE).read_text(encoding="utf-8"))
-    except OSError, ValueError:
-        return None
-    if not isinstance(kept, dict) or not kept.get("started_at"):
-        return None
-    return {k: kept.get(k) for k in ("state", "started_at", "ended_at", "reason")}
-
-
-def running_for() -> str | None:
-    """The project whose design pack update runs on this machine now, by its name; None while none runs (TD-290)."""
-    path = local_home.root() / MACHINE_LOCK
-    try:
-        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
-    except OSError:
-        return None
-    try:
-        fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)  # a running update holds it exclusively
-    except BlockingIOError:
-        return path.read_text(encoding="utf-8").strip() or "another project"
-    finally:
-        os.close(fd)  # closing releases a shared lock taken here
-    return None

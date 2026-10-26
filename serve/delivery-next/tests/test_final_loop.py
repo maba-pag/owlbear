@@ -336,6 +336,7 @@ def test_a_repair_of_no_task_goes_to_the_next_final_round_and_is_no_final_loop_r
 
 @dataclass
 class Host:
+    maintenance = None
     runs: bool = False
     wake = type("W", (), {"set": lambda _self: None})()
     record = None

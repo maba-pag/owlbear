@@ -31,6 +31,7 @@ MINE, LEFT_TO_SHAPER = "Turns the hero 180 degrees in under 300 ms", "A second p
 
 
 class Host:
+    maintenance = None
     wake = type("W", (), {"set": staticmethod(lambda: None)})()
     record = HostRecord(url="http://127.0.0.1:9/", token="tok", pid=1, started_at=NOW, code=CURRENT)  # noqa: S106
 

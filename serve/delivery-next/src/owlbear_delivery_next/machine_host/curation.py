@@ -11,12 +11,10 @@ paused" on (the owner, 2026-10-22). An entry a run left pending starts no other 
 from __future__ import annotations
 
 import asyncio
-import tempfile
 import threading
 import uuid
 from contextlib import AbstractContextManager, nullcontext
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 from owlbear_memory import MemoryEngine, MemoryState
@@ -26,9 +24,10 @@ from owlbear_delivery_next.change_contracts import memory_curation_tools, tools
 from owlbear_delivery_next.change_contracts.memory_curation_tools import Judged  # noqa: TC001 - a field's type
 from owlbear_delivery_next.change_contracts.models import Record, StepKind
 from owlbear_delivery_next.change_contracts.permissions import Policy
-from owlbear_delivery_next.local_system import data_repo, local_home, processes
+from owlbear_delivery_next.local_system import data_repo, local_home, maintenance
 from owlbear_delivery_next.local_system.storage_io import atomic_write
-from owlbear_delivery_next.runtimes import sdk_adapter
+from owlbear_delivery_next.machine_host import curation_snapshots
+from owlbear_delivery_next.runtimes import maintained, sdk_adapter
 from owlbear_delivery_next.settings import roles
 from owlbear_delivery_next.settings.config import Settings, SettingsUnset
 from owlbear_delivery_next.state_store import machine_settings, registry
@@ -36,6 +35,7 @@ from owlbear_delivery_next.workflow_steps import lookup
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from pathlib import Path
 
     from owlbear_delivery_next.local_system.slots import Slots
     from owlbear_delivery_next.runtimes.session_result import Run
@@ -63,6 +63,7 @@ class FolderRun(Record):
     ended_at: datetime | None = None
     summary: str = ""
     reason: str = ""
+    key: str = ""  # the ledger's source for an uncertain run; empty when an older host ended it before the ledger
     entries: list[Judged] = Field(default_factory=list)
     skipped: dict[str, str] = Field(default_factory=dict)  # entry id: its revision when the curator skipped it
     seen: dict[str, str] = Field(default_factory=dict)  # every entry still pending after the run: id to revision
@@ -73,6 +74,7 @@ class Runs(Record):
 
     folders: dict[str, FolderRun] = Field(default_factory=dict)
     left: dict[int, float | None] = Field(default_factory=dict)  # a run's processes not yet confirmed gone
+    left_key: str = ""  # the run whose lease records those processes; empty when none does
 
 
 def message(folder: str) -> str:
@@ -105,6 +107,7 @@ class Curation:
         fenced: Callable[[], str] = str,
         paused: Callable[[], bool] = lambda: False,
         admission: Callable[[], AbstractContextManager[object]] = nullcontext,
+        ownership: maintenance.Maintenance | None = None,
     ) -> None:
         """Runs a restart interrupted end as failed; their processes, if any, still count until they are gone.
 
@@ -117,27 +120,64 @@ class Curation:
         self.queue, self.worker, self.running = list[str](), None, ""
         self.asked: dict[str, Asked] = {}  # each queued folder's trigger, read again at its grant
         self.again: dict[str, Trigger] = {}  # a running folder's follow-up, when an automatic trigger asks for one
-        self.held = ""  # the slot a run whose processes may still run keeps
         runs = self.load()
+        self.maintenance = ownership or maintenance.Maintenance(slots)
+        if runs.left_key and not self.maintenance.records(SLOT, "curation", runs.left_key, runs.left):
+            runs.left_key = ""  # the lease it names does not record these PIDs, so the key proves nothing
+        # A cached key counts only while the lease it names owns its row; an earlier build named a snapshot's lease in
+        # its rows, which proves nothing of them, so such a row is judged again as one no lease of ours names.
         for name, r in runs.folders.items():
-            if r.state in {"waiting", "running"}:
-                runs.folders[name] = r.model_copy(update={"state": "failed", "reason": INTERRUPTED})
-        self.left = dict(runs.left)
-        if self.left:  # processes a stopped host left: their slot stays taken until they are seen gone
-            self.held = "curate:restored"
-            self.slots.restore(SLOT, {self.held: 1})
+            if r.key and not curation_snapshots.owns_row(SLOT, self.maintenance.lease(SLOT, r.key), name, r):
+                runs.folders[name] = r.model_copy(update={"key": ""})
+        # Each uncertain row is its own session's evidence, held under its own lease: a snapshot's PIDs say nothing of
+        # which session left them, and rows seen beside it are no proof that any of them is that session.
+        behind = {n: r for n, r in runs.folders.items() if legacy_uncertain(r) or (r.state == "running" and not r.key)}
+        if runs.left and not runs.left_key:
+            # A snapshot no lease of ours names is a producer's own observation. Its PIDs and session evidence are
+            # what that producer wrote: a lease that saw these PIDs and every session row still on file covers it in
+            # any state, though refusals since overwrote some; a later session's row is held anew.
+            snapshot, seen = curation_snapshots.observed(runs), curation_snapshots.sessions(runs)
+            lease = self.maintenance.adopt_uncertain(
+                f"{self.path()}#left", SLOT, "curation", workspace="", generation=snapshot, pids=runs.left,
+                covers=curation_snapshots.same_snapshot(SLOT, snapshot, seen), observed=seen,
+            )  # fmt: skip
+            runs.left_key = lease.slot
+        for name, r in behind.items():
+            # A row's own mark finds its lease after a lost key write, in any state, so a recovered one stays so; a
+            # mark counts only while that lease records this row's evidence. Each row is judged before it is rewritten
+            # below, so the rewrite never erases what an older host held.
+            lease = self.maintenance.adopt_uncertain(
+                self._row(name, r), SLOT, "curation", workspace="", keyed=True,
+                covers=curation_snapshots.recorded_row(SLOT, name, r), observed=(curation_snapshots.window(name, r),),
+            )  # fmt: skip
+            runs.folders[name] = r.model_copy(update={"key": lease.slot})
+        for name, r in runs.folders.items():
+            if r.state not in {"waiting", "running"}:
+                continue
+            update: dict[str, object] = {"state": "failed", "reason": INTERRUPTED}
+            if r.state == "waiting" and not r.key:  # judged: no uncertain session, so its copied times go with it
+                update |= {"started_at": None, "ended_at": None}
+            runs.folders[name] = r.model_copy(update=update)
+        self.left, self.left_key = dict(runs.left), runs.left_key
         self._write(runs)
 
     def path(self) -> Path:
         """Where the runs are kept."""
         return local_home.root() / STATE
 
+    def _row(self, folder: str, run: FolderRun) -> str:
+        """The ledger source of one row's generation: its folder and the times its producer stamped, as one window."""
+        return f"{self.path()}#{curation_snapshots.window(folder, run)}"
+
     def load(self) -> Runs:
         """Every folder's last run; none when the file is missing or unreadable."""
         try:
             return Runs.model_validate_json(self.path().read_text())
-        except OSError, ValueError:
+        except FileNotFoundError:
             return Runs()
+        except (OSError, ValueError) as exc:
+            msg = f"the memory curation ownership record cannot be read: {exc}"
+            raise maintenance.MaintenanceError(msg) from exc
 
     def _write(self, runs: Runs) -> None:
         self.path().parent.mkdir(parents=True, exist_ok=True)
@@ -166,23 +206,19 @@ class Curation:
         with self.lock:
             self.left |= {int(p): c for p, c in event.get("pids", {}).items()}
             runs = self.load()
-            runs.left = dict(self.left)
+            runs.left, runs.left_key = dict(self.left), self.left_key
             self._write(runs)
 
     def lingering(self) -> bool:
-        """Whether a run's processes may still run; once they are seen gone, their slot is given back."""
+        """Whether a run's processes may still run; the ledger alone decides, PIDs left after a recovery are history."""
         with self.lock:
-            if not self.left:
-                return False
-            if not processes.verdict(self.left, processes.alive).confirmed:
+            if self.maintenance.pending("curation"):
                 return True
-            self.left = {}
-            if self.held:
-                self.slots.give(SLOT, self.held)
-                self.held = ""
-            runs = self.load()
-            runs.left = {}
-            self._write(runs)
+            if self.left:
+                self.left, self.left_key = {}, ""
+                runs = self.load()
+                runs.left, runs.left_key = {}, ""
+                self._write(runs)
             return False
 
     def working(self) -> list[str]:
@@ -270,14 +306,14 @@ class Curation:
                     return
                 folder = self.queue[0]
             started = datetime.now(UTC)
+            key = f"curate:{folder}:{uuid.uuid4().hex}"  # one generation per admission, named on every row it writes
             refused = False
             try:
-                refused = self._one(folder, started)
+                refused = self._one(folder, started, key)
             except Exception as exc:  # noqa: BLE001 - one folder's failure never strands the others
                 why = f"{type(exc).__name__}: {exc}"[:300]
-                self._save(
-                    folder, FolderRun(state="failed", started_at=started, ended_at=datetime.now(UTC), reason=why)
-                )
+                failed = FolderRun(state="failed", started_at=started, ended_at=datetime.now(UTC), reason=why, key=key)
+                self._save(folder, failed)  # its session, if one began, is the ledger's lease under this key
             with self.lock:  # a follow-up joins before the run leaves, so the queue never looks empty between
                 trigger = self.again.pop(folder, None)
                 # a Curate now that landed after this automatic request was refused is not lost: it runs once
@@ -293,15 +329,19 @@ class Curation:
                     self.queue.append(folder)
                     self.asked[folder] = "manual" if manual else trigger
 
-    def _one(self, folder: str, started: datetime) -> bool:
-        """Run one folder's curation; True when an automatic request was refused its admission."""
+    def _one(self, folder: str, started: datetime, key: str) -> bool:
+        """Run one folder's curation under admission *key*; True when an automatic request was refused its admission.
+
+        Each row it writes once admitted names *key*: a session enters the SDK only after the ledger holds its lease
+        under that key, so a restart finds the run by its key, never by when its row says it ran.
+        """
         shared = self.shared()
         why = NO_SHARED if shared is None else LEFT if self.lingering() else self.fenced()
         why = why or _unset(lookup.machine(shared))  # checked again on the snapshot it starts with
         if shared is None or why:
             self._save(folder, FolderRun(state="failed", started_at=started, ended_at=started, reason=why))
             return False
-        turn, key = threading.Event(), f"curate:{folder}"
+        turn = threading.Event()
         while True:
             turn.clear()  # cleared before the take, so a wake during it is never lost
             if self.slots.take(SLOT, key, 1, 1, wake=turn.set):
@@ -329,10 +369,10 @@ class Curation:
             self._save(folder, prior.model_copy(update=update))
             return True
         try:
-            self._save(folder, FolderRun(state="running", started_at=started))
+            self._save(folder, FolderRun(state="running", started_at=started, key=key))
             self._save(folder, self._session(shared, folder, started, key))
         finally:
-            if self.held != key:
+            if not self.maintenance.held(SLOT, key):
                 self.slots.give(SLOT, key)
         return False
 
@@ -343,8 +383,7 @@ class Curation:
         role = roles.chosen(settings, LABEL)
         store = shared.root / folder / "memory"
         before = {e.id: e.revision for e in _pending(store)}  # what the curator can see when it starts
-        with tempfile.TemporaryDirectory(prefix="owlbear-curation-") as empty:
-            at = Path(empty)
+        with self.maintenance.workspace("owlbear-curation-") as at:
             said = message(folder)
             cfg = sdk_adapter.Session(
                 kind=StepKind.REVIEW, worktree=at, session_id=f"{LABEL}-{folder}-{uuid.uuid4().hex[:8]}",
@@ -354,21 +393,29 @@ class Curation:
                 subagents=roles.subagents(settings, LABEL),
                 role=tools.CURATOR, job=LABEL, journal=sdk_adapter.Journal(event=self._pids), memory=store,
             )  # fmt: skip
-            done = self.run(cfg)
+            with self.lock:
+                self.left_key = key  # persisted with the first PIDs this run records, so a restart knows whose they are
+            done = maintained.run_owned(self.maintenance, cfg, self.run, project=SLOT, slot=key, kind="curation")
         t = done.termination
         with self.lock:
             watched = dict.fromkeys((*t.survivors, *t.unknown)) | done.pids if t is not None and not t.confirmed else {}
-            self.left, self.held = watched, key if watched else ""  # kept until they are seen gone
+            self.left, self.left_key = watched, key if watched else ""
             runs = self.load()
-            runs.left = dict(self.left)
+            runs.left, runs.left_key = dict(self.left), self.left_key
             self._write(runs)
-        unknown = t is not None and not t.confirmed and not watched
+        unknown = not (t and t.confirmed)
         ended = datetime.now(UTC)
         report = done.payload if isinstance(done.payload, memory_curation_tools.MemoryCurationResult) else None
         if done.ending != "result" or report is None or unknown:
             why = " ".join((done.detail or "no report was submitted").split())[:300]
             why = f"{UNKNOWN}; {why}" if unknown else why
-            return FolderRun(state="failed", started_at=started, ended_at=ended, reason=f"ended {done.ending}: {why}")
+            return FolderRun(
+                state="failed",
+                started_at=started,
+                ended_at=ended,
+                reason=f"ended {done.ending}: {why}",
+                key=key if unknown else "",
+            )
         with shared.locked():
             notice = shared.publish([], f"memory {folder}: curation")  # push what the curator committed
         after = {e.id: e.revision for e in _pending(store)}
@@ -387,6 +434,25 @@ def _pending(store: Path) -> list[Any]:
     if not store.is_dir():
         return []
     return [e for e in MemoryEngine(store).get_entries() if e.state == MemoryState.PENDING]
+
+
+def legacy_uncertain(run: FolderRun) -> bool:
+    """A dated failed or waiting row no ledger key accounts for, whose session may have entered the SDK unproven.
+
+    A waiting row, and the interrupted row a restart makes of it, copies an earlier row with its times, reason and
+    report, so it is judged by what it still shows. Only a known shape proves no session or its proven end: a refusal
+    main writes before any session; a report, which only a finished run writes and only one whose termination was
+    confirmed or whose PIDs are the snapshot's; or ``ended …`` without UNKNOWN, an SDK return with its termination
+    judged. A generic failure, which may be raised inside the SDK before any PID is recorded, an interrupted row,
+    whose end time proves nothing, and every other reason or a state no producer writes count as uncertain.
+    """
+    if run.key or run.started_at is None or curation_snapshots.refused(run):
+        return False
+    if run.state not in curation_snapshots.STATES:
+        return True
+    if run.state not in {"failed", "waiting"} or run.summary:
+        return False  # never and done, a finished run's copy, and running, which the caller takes on its own
+    return not run.reason.startswith("ended ") or UNKNOWN in run.reason
 
 
 def _unset(settings: Settings) -> str:

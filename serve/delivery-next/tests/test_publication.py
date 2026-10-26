@@ -1055,6 +1055,7 @@ def test_gh_replies_in_threads_by_graphql_and_quotes_other_items_in_an_issue_com
 
 
 class Host:
+    maintenance = None
     wake = type("W", (), {"set": lambda _self: None})()
     record = None
 

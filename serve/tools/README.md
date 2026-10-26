@@ -1,8 +1,9 @@
 # owlbear-tools — Workspace Utilities
 
-Workspace utility scripts for the OwlBear project. Provides generated documentation, Python, and ECMAScript indexes used by agents for navigation.
+Workspace commands for the OwlBear project: quality checks, test routing, dependency
+synchronization and repository helpers. `uv run help` lists them.
 
-**Use this guide when:** you need to maintain documentation and source indexes or synchronize local
+**Use this guide when:** you need to run or change a workspace command or synchronize local
 dependencies.
 
 Package map: [serve/README.md](../README.md) · Project README: [README.md](../../README.md)
@@ -12,28 +13,16 @@ Package map: [serve/README.md](../README.md) · Project README: [README.md](../.
 ## Launch / Usage
 
 ```bash
-# Regenerate all indexes concurrently
-uv run indexes
+# List the workspace commands
+uv run help
 
-# Regenerate .owlbear/doc-index.md
-uv run doc-index
-
-# Regenerate .owlbear/py-index.md
-uv run py-index
-
-# Regenerate .owlbear/ts-index.md (TypeScript, TSX, JavaScript, and JSX)
-uv run ts-index
-
+# Run the tests that a change affects
+uv run test --changed
 ```
-
-Each command regenerates its complete index on every invocation. `doc-index` is also the required
-refresh step for `.owlbear/prompts/doc-audit.prompt.md`, which regenerates it before scanning and at
-closeout. `py-index` and `ts-index` are optional, on-demand orientation aids. No index is
-regenerated automatically by pre-commit or CI; source files remain authoritative.
 
 ## Configuration
 
-Index commands write fixed artifacts under `.owlbear/`. Dependency commands use the repository checkout and do not require environment variables.
+The commands use the repository checkout and do not require environment variables.
 
 ### Dependency environment
 
@@ -43,39 +32,4 @@ These commands consume the dependency versions already selected in the checkout.
 
 ### Dependency profile
 
-The dependency commands use the repository checkout and do not require environment variables. They cover the uv workspace and the repository-root npm package, which holds Biome.
-
-## Dependencies
-
-Python indexing uses the standard-library AST. ECMAScript indexing uses `tree-sitter-language-pack`.
-
-## Public API
-
-```python
-from owlbear_tools.doc_index import generate_index as generate_doc_index
-from owlbear_tools.indexes import generate_indexes
-from owlbear_tools.py_index import generate_index as generate_py_index
-from owlbear_tools.ts_index import generate_index as generate_ts_index
-
-generate_indexes(root)  # writes all three indexes concurrently
-generate_doc_index(root)  # writes .owlbear/doc-index.md
-generate_py_index(root)  # writes .owlbear/py-index.md
-generate_ts_index(root)  # writes .owlbear/ts-index.md
-```
-
-| Function | Description |
-| --- | --- |
-| `generate_indexes(root)` | Regenerate all fixed index artifacts concurrently |
-| `doc_index.generate_index(root)` | Regenerate the documentation index |
-| `py_index.generate_index(root)` | Regenerate the Python structure index |
-| `ts_index.generate_index(root)` | Regenerate the TS/TSX/JS/JSX structure index |
-| `doc_index.parse_index(content)` | Parse an existing documentation index into entries |
-
-## Excluded directories
-
-The documentation index excludes workspace state, generated indexes, caches, external stores, and
-directories named `fixtures`. It keeps the root README files from otherwise-excluded `store/` and
-`tests/` trees but excludes the rest of those trees. Manifest-backed static diagram entries retain
-their source paths and top-level `describes` globs for diagram audits. Source indexes additionally
-exclude tests and conventional test filenames, `vendor`, `public`, `generated`, coverage, and build
-output.
+The dependency commands cover the uv workspace and the repository-root npm package, which holds Biome.

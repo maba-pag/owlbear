@@ -46,7 +46,7 @@ _PRECOMMIT_CHECK_HOOKS = {
 # Config hooks whose tool a named leaf runs without pre-commit.
 _DIRECT_HOOKS = {"biome-check": "lint-biome", "todo-check": "todo"}
 # Config hooks the agent-ecosystem workflow runs with the full workspace they import; Static installs tools only.
-ELSEWHERE_HOOKS = frozenset({"validate-skills", "validate-agents", "validate-prompts"})
+ELSEWHERE_HOOKS = frozenset({"validate-skills", "validate-agents"})
 # `lint` also runs every config hook no leaf claims, so the config is the one list (TD-409).
 _AGGREGATES: dict[str, tuple[str, ...]] = {
     "lint": (

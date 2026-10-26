@@ -167,6 +167,13 @@ def record_decision(  # noqa: PLR0913 - the decision's fields
             "pass his words."
         ),
     ] = False,
+    origin: Annotated[
+        Literal["decided", "approved"],
+        Field(
+            description="With confirmed=true: decided when he chose or stated it himself; approved when he took your "
+            "recommendation as shown, never for details it did not show"
+        ),
+    ] = "decided",
     replaces: Annotated[brief_tools.Replacement | None, Field(description="The decision it replaces, if any")] = None,
 ) -> dict[str, Any]:
     """Record a decision the owner confirmed (in force at once), or propose your own as a draft.
@@ -175,7 +182,8 @@ def record_decision(  # noqa: PLR0913 - the decision's fields
     record. A replacement retires what it replaces; the reply shows its impact on existing work.
     """
     why = {"rationale": "", "reason": rationale} if replaces else {"rationale": rationale}  # a successor says why
-    body = {"title": title, "topic": topic, "statement": statement, "scope": scope, "confirmed": confirmed} | why
+    body = {"title": title, "topic": topic, "statement": statement, "scope": scope, "confirmed": confirmed}
+    body |= why | {"origin": origin}
     if replaces:
         body |= {"replaces": replaces.decision, "revision": replaces.revision, "redecide": replaces.redecide}
         body |= {"effect": replaces.effect}
@@ -228,7 +236,7 @@ def correct_decision_origin(
     revision: Annotated[str, Field(description="Its revision from find_decisions", pattern=r"^[0-9a-f]{64}$")],
     origin: Annotated[
         Literal["approved", "autonomous"],
-        Field(description="approved: an agent's proposal he accepted; autonomous: an agent's own choice"),
+        Field(description="approved: he took an agent's recommendation as shown; autonomous: an agent's own choice"),
     ],
     reason: Annotated[
         str,

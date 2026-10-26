@@ -185,7 +185,7 @@ def test_the_shown_report_names_both_rules_and_what_the_change_means(tmp_path, s
 
 def client(store: Store, repo: Path | None = None, headers=AUTH) -> TestClient:
     record = HostRecord(url="http://127.0.0.1:9/", token="tok", pid=1, started_at=datetime.now(UTC), code=CURRENT)  # noqa: S106
-    host = SimpleNamespace(wake=SimpleNamespace(set=lambda: None), repo=repo, record=record)
+    host = SimpleNamespace(wake=SimpleNamespace(set=lambda: None), repo=repo, record=record, maintenance=None)
     return TestClient(api.create_app(store, "t", host), base_url="http://127.0.0.1", headers=headers)
 
 

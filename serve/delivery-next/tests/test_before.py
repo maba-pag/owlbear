@@ -115,6 +115,7 @@ def worktrees(c):
 
 
 class Host:
+    maintenance = None
     record = None
 
     def activity(self, _slug):

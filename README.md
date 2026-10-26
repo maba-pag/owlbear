@@ -164,7 +164,7 @@ once; `owlbear versions` shows the version it runs and the next one. See
 | Share one installation with teammates | [Sharing guide](setup/sharing-guide.md) |
 | Understand the packages and tool servers | [Package map](serve/README.md) |
 | Configure the Browser capability | [Browser MCP guide](serve/browser-mcp/README.md) |
-| Change agents, skills, instructions, or prompts | [Agent ecosystem guide](share/README.md) |
+| Change agents, skills, or instructions | [Agent ecosystem guide](share/README.md) |
 | Develop OwlBear itself | [Contributing](CONTRIBUTING.md) |
 
 ## Security

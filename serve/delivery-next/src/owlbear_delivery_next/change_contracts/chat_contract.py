@@ -10,6 +10,10 @@ module was written, the routes ``commands/chat_client.py`` calls with the bodies
 (``tests/fixtures/chat_contract_1.json``), and the fields of ``host.json`` a chat finds its host by (``HostFound``).
 A host may only add to them (an optional field, a new route); anything a server of contract 1 could notice raises
 ``CHAT`` and keeps 1 in ``SUPPORTED``, with its fixture.
+
+Contract 2: contract 1, and ``record_decision`` takes ``origin`` (`approved` when the owner took the chat's
+recommendation as shown, D-01M5WAFJ99912ER7V0YEPJP2G5), sent to ``/decisions/propose``
+(``tests/fixtures/chat_contract_2.json``).
 """
 
 from __future__ import annotations
@@ -20,8 +24,8 @@ from pydantic import BaseModel, ConfigDict
 
 from owlbear_delivery_next.local_system import codebase
 
-CHAT = 1  # the contract this code's chat server speaks
-SUPPORTED = frozenset({1})  # the contracts this code's host serves
+CHAT = 2  # the contract this code's chat server speaks
+SUPPORTED = frozenset({1, 2})  # the contracts this code's host serves
 HEADER = "X-OwlBear-Chat"
 CAPABILITY = "/api/next/chat/contract"  # a host that has none predates the contract
 UNSUPPORTED = (

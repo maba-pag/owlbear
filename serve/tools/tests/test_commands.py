@@ -71,20 +71,6 @@ def test_quality_help_renders_the_command_tree(monkeypatch: object, capsys: obje
     assert "⚠ unsafe fixes (-u)" in output
 
 
-def test_internal_help_renders_indexes_aggregate(monkeypatch: object, capsys: object) -> None:
-    monkeypatch.setattr(sys, "argv", ["help", "internal"])
-
-    help_main()
-
-    output = capsys.readouterr().out
-    assert "indexes" in output
-    assert "Includes:" not in output
-    assert "  indexes [PATH]" in output
-    assert "    doc-index [PATH]" in output
-    assert "    py-index [PATH]" in output
-    assert "    ts-index [PATH]" in output
-
-
 @pytest.mark.parametrize(
     ("topic", "heading"),
     [

@@ -1050,6 +1050,7 @@ def test_attachments_are_sent_with_the_first_message_only_when_present():
 
 
 class Host:
+    maintenance = None
     wake = type("W", (), {"set": lambda _self: None})()
     record = None
 

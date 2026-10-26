@@ -14,9 +14,10 @@ Uncoordinated repository maintenance reaches `main` through a pull request: its 
 check must pass on a branch that is up to date with `main`, and it merges with a merge commit
 (TD-278). Once its CI passes, a pull request that changes runtime code or CI workflows gets the `coderabbit` label,
 which buys one CodeRabbit review from a free allowance of about one an hour; it merges only after that review is in
-and handled, or after 60 minutes without one, said in the pull request. Others merge after CI and Sol's review, without
-the label (TD-447). A chat-authored pull request that changes runtime code gets `release:minor`, one that changes only
-docs or tests none, and `release:major` only on the owner's word (TD-314). Target delivery
+and handled. If CodeRabbit reports its limit or sends no review within 60 minutes, a Copilot review replaces it and
+the pull request merges once that is handled, said in the pull request. Others merge after CI and Sol's review,
+without the label (`D-01M5WG5KS3N4PK44FTHJTCX7RC`). A chat-authored pull request that changes runtime code gets
+`release:minor`, one that changes only docs or tests none, and `release:major` only on the owner's word (TD-314). Target delivery
 uses the branch, worktree, and
 integration target in its per-change coordination record; never substitute `main` by convention.
 Consumers clone the same branch ("clone = install"); versions will be git tags. There is no
@@ -45,10 +46,9 @@ decisions TD-41..43, TD-150 and TD-156 in [the decisions](../.owlbear/decisions.
   among them; then, in this order,
   "take your recommendation (…)" naming the recommendation in the brackets, "none of these: show me
   more options" and "explain first". No other recommendation mark; free text stays open.
-- "Take your recommendation" records what the option showed as `approved`; details you add when
-  recording stay `autonomous` with their reason. Until `record_decision` takes an origin, record it
-  confirmed, then lower it with `correct_decision_origin`, also with `confirmed=true` (his choice
-  confirms both); tell him when a replacement refuses that.
+- "Take your recommendation" records what the option showed as `approved` (`record_decision` with
+  `confirmed=true` and `origin="approved"`); details you add when recording stay `autonomous` with
+  their reason.
   "Show me more options" asks again across directions, each with pro, con, risk and its own
   percentage that it is a good choice. "Explain first" (his shorthand "nmdpcro": details, pro, con,
   risk, opinion) explains each option neutrally, then asks again.

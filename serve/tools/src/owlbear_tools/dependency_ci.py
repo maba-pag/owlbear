@@ -18,7 +18,6 @@ if TYPE_CHECKING:
 
 _SHARED_NODE_RUNTIME_FILES = {".nvmrc"}
 _ROOT_NODE_FILES = {"package-lock.json", "package.json"}
-_DIAGRAM_FILES = {".owlbear/scripts/diagrams/archify.lock.json"}
 _PYTHON_BEHAVIOR_FILES = {
     ".python-version",
     "conftest.py",
@@ -245,7 +244,6 @@ class DependencyScope:
     python: bool
     shared_node_runtime: bool
     root_node: bool
-    diagrams: bool
     precommit: bool
     ruff_toolchain: bool
     workflows: bool
@@ -259,7 +257,7 @@ class DependencyScope:
     @property
     def applicable(self) -> bool:
         """Return whether the diff contains a maintained dependency surface."""
-        return self.python or self.shared_node_runtime or self.root_node or self.diagrams or self.compatibility
+        return self.python or self.shared_node_runtime or self.root_node or self.compatibility
 
     def github_outputs(self) -> dict[str, str]:
         """Serialize classifications as GitHub Actions boolean outputs."""
@@ -278,9 +276,6 @@ def classify_dependency_change(
     python = _python_behavior_changed(changed, before_files, after_files)
     shared_node_runtime = bool(changed & _SHARED_NODE_RUNTIME_FILES)
     root_node = bool(changed & _ROOT_NODE_FILES)
-    diagrams = bool(changed & _DIAGRAM_FILES) or any(
-        path.startswith((".owlbear/scripts/diagrams/", "share/diagrams/")) for path in changed
-    )
     workflows = any(path.startswith(".github/workflows/") for path in changed)
     renovate = "renovate.json" in changed
     precommit = ".pre-commit-config.yaml" in changed
@@ -290,7 +285,6 @@ def classify_dependency_change(
         python=python,
         shared_node_runtime=shared_node_runtime,
         root_node=root_node,
-        diagrams=diagrams,
         precommit=precommit,
         ruff_toolchain=ruff_toolchain,
         workflows=workflows,

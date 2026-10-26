@@ -1,6 +1,7 @@
 """The Settings page's design pack update job (TD-101) and the Maintenance overview (TD-113), with fakes for the live
 parts: upstream, downloads, golden pages, replay and the challenger. Git runs only on local repositories in tmp."""
 
+import fcntl
 import hashlib
 import json
 import os
@@ -35,10 +36,11 @@ from owlbear_delivery_next.github.provider import (
     Rules,
 )
 from owlbear_delivery_next.local_system.codebase import CURRENT
+from owlbear_delivery_next.local_system.maintenance import Maintenance
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.local_system.slots import Slots
-from owlbear_delivery_next.pack_runs import pack_gates, pack_job, pack_publish, pack_rounds, pack_updater
-from owlbear_delivery_next.project_host import api
+from owlbear_delivery_next.pack_runs import pack_gates, pack_job, pack_publish, pack_rounds, pack_state, pack_updater
+from owlbear_delivery_next.project_host import api, session_slots
 from owlbear_delivery_next.project_host.admission import STOPPING
 from owlbear_delivery_next.project_host.host import ENDING, HostRecord
 from owlbear_delivery_next.runtimes.session_result import Run
@@ -268,7 +270,7 @@ class Fakes:
         self.at_golden()
         return self.wrong if folder is None else self.wrong_after
 
-    def replay(self, _store: Store, candidate) -> calibration.Replay:
+    def replay(self, _store: Store, candidate, _run=None, *, keep=None) -> calibration.Replay:  # noqa: ARG002 - unused here
         self.calls.append("replay")
         self.replayed = candidate
         skill = (candidate.skills / "owlbear-design-review" / "SKILL.md").read_text()
@@ -404,7 +406,8 @@ def test_a_passing_update_runs_every_stage_then_merges_one_commit_through_a_pull
     assert results(state) == dict.fromkeys(NAMES, "passed")
     here = design_pack.platform_name()
     assert fakes.calls == ["releases", "sync", f"engine {here}", "golden", "update", "golden", "replay", "challenger"]
-    assert fakes.folders == [None, store.root / pack_job.UPDATER / "golden"]  # the package's, then the candidate's
+    # The package's folder comes first, then the candidate's.
+    assert fakes.folders == [None, store.root / pack_job.RUNS / state["run"] / "golden"]
     replayed = fakes.replayed  # the replay judges with the candidate pack, not the active one
     assert (replayed.pins["pack"], replayed.installed.bundle) == ("impeccable-4.6.0.1", "bundle skill-v4.6.0")
     assert replayed.manifest == shown(checkout, "design_pack.json")  # the pack then activated
@@ -669,7 +672,7 @@ def test_rounds_ending_without_a_pass_wait_and_a_discard_changes_nothing(tmp_pat
     assert (state["state"], fakes.calls.count("challenger")) == ("waiting", 1)  # 1 finding: the last round (TD-208)
     assert results(state)["challenger"] == "waiting"
     assert [o["id"] for o in state["questions"][0]["options"]] == ["activate", "discard"]
-    assert (store.root / "design-pack-updater").is_dir()
+    assert job.workspace.is_dir()
     with pytest.raises(pack_job.Busy, match="waits for your answers"):
         job.start()
 
@@ -1194,6 +1197,46 @@ def test_a_host_stop_during_publication_waits_for_the_owner_instead_of_failing(t
     assert fakes.github.calls == ["create", "merge", "delete"]  # the open pull request was found again
 
 
+def test_settling_a_publication_the_host_stopped_leaves_it_whole_and_its_copy_still_waits_for_the_owners_retry(
+    tmp_path, checkout, clone, monkeypatch
+):
+    """Review on 7679: no session runs while a run is published, and the Job's own startup returns it to the owner.
+
+    So settling leaves the record as main wrote it, context and publication whole; a byte copy of the store asks the
+    owner again, keeps the one lease the stop was held under, and retries only when he answers.
+    """
+    fakes = Fakes(clone)
+    store = Store(tmp_path / "store")
+    job = pack_job.Job(store, fakes.live(checkout))
+    fakes.github.checks = ["failure"]
+    assert run(job)["state"] == "waiting"
+    kept = json.loads((store.root / pack_job.FILE).read_text())
+    kept["state"], kept["questions"] = "running", []  # as if main's host stopped while CI ran
+    del kept["workspace"]  # main's record: no per-run workspace
+    (store.root / pack_job.FILE).write_text(json.dumps(kept))
+    publication = kept["context"]["publication"]
+    owner = Maintenance(Slots(lambda: 2), boot=lambda: 10.0, observe=lambda *_args: False)
+    monkeypatch.setattr(session_slots.project_home, "current", lambda repo: repo)
+    session_slots.unloaded(owner, "p", store.root)  # the stop is held while the store cannot open
+    [a] = owner.read()["sessions"]
+    before = (store.root / pack_job.FILE).read_bytes()
+    assert pack_state.settle(store.root, receipted=lambda found: owner.receipted("p", found)) is False
+    assert (store.root / pack_job.FILE).read_bytes() == before
+
+    home = tmp_path / "home"
+    shutil.copytree(store.root, home)  # the offline move's byte copy: every file a new one
+    again = pack_job.Job(Store(home), fakes.live(checkout))
+    (q,) = again.read()["questions"]
+    assert (again.read()["state"], q["kind"]) == ("waiting", "publish")
+    assert json.loads((home / pack_job.FILE).read_text())["context"]["publication"] == publication  # root, body too
+    session_slots.unloaded(owner, "p", home)
+    assert [(s["id"], s["state"]) for s in owner.read()["sessions"]] == [(a["id"], "held")]
+    assert fakes.github.calls == ["create"]  # nothing was retried without the owner
+    fakes.github.checks = ["success"]
+    assert answered(again, "retry")["state"] == "passed"
+    assert fakes.github.calls == ["create", "merge", "delete"]
+
+
 def test_a_retry_after_update_branch_goes_on_and_a_lost_create_answer_still_gets_its_labels(tmp_path, checkout, clone):
     """Sol: the branch GitHub updated still holds the commit; a pull request found again gets the labels too."""
     fakes = Fakes(clone)
@@ -1368,6 +1411,8 @@ class Host:
 
     def __init__(self) -> None:  # the session slots its pack sessions take (TD-336)
         self.slots, self.stopped = Slots(lambda: 4), threading.Event()
+        self.maintenance = Maintenance(self.slots)  # bound by the machine host before any project starts
+        self.record = SimpleNamespace(project="")  # the project's key among the machine's slots (its store root here)
         self.store = SimpleNamespace(root=Path("/project"), settings=lambda: SimpleNamespace(sessions=2))
 
 
@@ -1401,6 +1446,90 @@ def test_every_project_sees_an_update_running_on_the_machine_and_for_whom(tmp_pa
     finally:
         os.close(job.held)
     assert pack_job.running_for() is None
+
+
+def test_a_successor_claim_is_never_erased_by_a_release_paused_after_its_close(tmp_path, monkeypatch):
+    """A release closes and clears the claim under the lock a claim takes, so a successor is not erased."""
+    job = pack_job.Job(Store(tmp_path / "store"))
+    job._claim()  # noqa: SLF001 - the first run's claim
+    real_close, closed, resume = os.close, threading.Event(), threading.Event()
+    armed = [True]
+
+    def paused_close(fd: int) -> None:
+        real_close(fd)
+        if armed[0]:
+            armed[0] = False
+            closed.set()
+            resume.wait(10)
+
+    monkeypatch.setattr(pack_job.os, "close", paused_close)
+    releaser = threading.Thread(target=job._release)  # noqa: SLF001 - the first run's release
+    releaser.start()
+    assert closed.wait(10)
+    entered = threading.Event()
+
+    def successor() -> None:
+        with job.exclusive():
+            entered.set()
+
+    claimant = threading.Thread(target=successor)
+    claimant.start()
+    assert not entered.wait(0.3), "a successor entered while the first release was still clearing its claim"
+    resume.set()
+    releaser.join(10)
+    claimant.join(10)
+    assert entered.is_set()
+    assert job.held is None
+    monkeypatch.setattr(pack_job.os, "close", real_close)
+
+    job._release()  # noqa: SLF001 - idle: nothing held, nothing to close
+    with job.exclusive():
+        assert job.held is not None
+    assert job.held is None
+    failure = RuntimeError("the replay failed")
+    with pytest.raises(RuntimeError), job.exclusive():
+        raise failure
+    assert job.held is None
+    probe = os.open(pack_job.local_home.root() / pack_job.MACHINE_LOCK, os.O_RDWR)
+    try:
+        fcntl.flock(probe, fcntl.LOCK_EX | fcntl.LOCK_NB)  # no claim leaked a descriptor or the flock
+    finally:
+        os.close(probe)
+
+
+def test_a_successor_that_passed_the_check_before_an_unconfirmed_release_is_refused_under_the_lock(
+    tmp_path, monkeypatch
+):
+    """The pending check runs again once the flock is taken, so a session left unconfirmed in between blocks it."""
+    job = pack_job.Job(Store(tmp_path / "store"))
+    checks = []
+    home = pack_job.local_home.root()
+    assert home.is_relative_to(tmp_path.parent)  # the isolated HOME the autouse fixtures give every test
+
+    def unproven(_job: pack_job.Job) -> None:
+        checks.append(None)
+        if len(checks) == 2:  # the updater released the flock unconfirmed after the first check passed
+            msg = "an earlier design pack session is unproven; recover it on the Maintenance page first"
+            raise pack_job.Busy(msg)
+
+    with monkeypatch.context() as patch:  # only this fault is undone below, never the HOME isolation
+        patch.setattr(pack_job.Job, "_unproven", unproven)
+        with pytest.raises(pack_job.Busy, match="unproven"):
+            job._claim()  # noqa: SLF001 - the successor's claim
+    assert job.held is None
+    probe = os.open(pack_job.local_home.root() / pack_job.MACHINE_LOCK, os.O_RDWR)
+    try:
+        fcntl.flock(probe, fcntl.LOCK_EX | fcntl.LOCK_NB)  # the refused claim closed its descriptor
+    finally:
+        os.close(probe)
+    assert pack_job.local_home.root() == home  # still the isolated HOME for the claim below
+    job._claim()  # noqa: SLF001 - after recovery a third claim is admitted
+    try:
+        assert job.held is not None
+        assert (home / pack_job.MACHINE_LOCK).is_file()
+    finally:
+        os.close(job.held)
+        job.held = None
 
 
 def test_one_run_at_a_time_and_the_api_refuses_a_second(tmp_path, checkout, clone):
@@ -1531,6 +1660,78 @@ def test_the_maintenance_page_links_each_action_and_shows_what_is_not_built(tmp_
     last = {a["name"]: a for a in c.get("/api/next/maintenance").json()}["Design pack update"]["last"]
     assert last == {"state": "failed", "started_at": "2026-10-15T10:00:00+00:00",
                     "ended_at": "2026-10-15T10:05:00+00:00", "reason": "golden pages differ"}  # fmt: skip
+
+
+class RecordDescriptors:
+    """Each descriptor ``pack_state.open_record`` hands out, and how often that module closes it.
+
+    The module gets its own OS bindings so unrelated process-wide opens and closes cannot affect the oracle.
+    Only an owned descriptor's handover fails; a close outside its acquisition lifetime is a stray.
+    """
+
+    def __init__(self, fault: type[BaseException]) -> None:
+        self.fault, self.owned, self.strays = fault, [], []
+        self.real_open, self.real_fdopen, self.real_close = pack_state.open_record, os.fdopen, os.close
+
+    def open_record(self, path: Path) -> int:
+        fd = self.real_open(path)
+        self.owned.append({"fd": fd, "closes": 0, "open": True})
+        return fd
+
+    def fdopen(self, fd: int, *args: object, **kwargs: object) -> object:
+        if any(t["fd"] == fd and t["open"] for t in self.owned):
+            msg = "synthetic handover failure"
+            raise self.fault(msg)
+        return self.real_fdopen(fd, *args, **kwargs)
+
+    def close(self, fd: int) -> None:
+        held = next((t for t in self.owned if t["fd"] == fd and t["open"]), None)
+        if held is None:
+            self.strays.append(fd)
+        else:
+            held["closes"], held["open"] = held["closes"] + 1, False
+        self.real_close(fd)
+
+    def patch(self, patch: pytest.MonkeyPatch) -> None:
+        patch.setattr(pack_state, "open_record", self.open_record)
+        patch.setattr(pack_state, "os", SimpleNamespace(**(vars(os) | {"fdopen": self.fdopen, "close": self.close})))
+
+    def closed_once(self) -> bool:
+        return len(self.owned) == 1 and self.owned[0]["closes"] == 1 and not self.strays
+
+
+@pytest.mark.parametrize("fault", [OSError, ValueError])
+def test_a_record_whose_descriptor_cannot_be_read_as_text_shows_as_unread_on_the_maintenance_page(tmp_path, fault):
+    """Review on 6dde: a failed handover of the opened record is shown like any unreadable record, never a 500."""
+    store = Store(tmp_path)
+    c = TestClient(api.create_app(store, "t", Host()), base_url="http://127.0.0.1", headers=AUTH)
+    (store.root / pack_job.FILE).write_text(json.dumps(pack_job._blank() | {"started_at": "2026-10-15T10:00:00+00:00"}))  # noqa: SLF001
+    spy = RecordDescriptors(fault)
+    with pytest.MonkeyPatch.context() as patch:
+        spy.patch(patch)
+        got = c.get("/api/next/maintenance")
+    assert got.status_code == 200, got.text
+    assert {a["name"]: a for a in got.json()}["Design pack update"]["last"] is None
+    assert spy.closed_once(), (spy.owned, spy.strays)  # the record's descriptor, closed exactly once
+
+
+def test_the_descriptor_oracle_ignores_a_reused_number_closed_elsewhere_and_catches_a_second_own_close(tmp_path):
+    """Control for the oracle above: a reused descriptor number closed by other code never counts, a second close by
+    pack_state of its already closed descriptor does."""
+    (tmp_path / "record").write_text("{}")
+    spy = RecordDescriptors(OSError)
+    with pytest.MonkeyPatch.context() as patch:
+        spy.patch(patch)
+        fd = pack_state.open_record(tmp_path / "record")
+        pack_state.os.close(fd)
+        reused = os.open(tmp_path / "record", os.O_RDONLY)
+        assert reused == fd
+        os.close(reused)
+        assert spy.closed_once(), (spy.owned, spy.strays)
+        again = os.open(tmp_path / "record", os.O_RDONLY)
+        assert again == fd
+        pack_state.os.close(again)
+    assert (spy.closed_once(), spy.strays) == (False, [again])
 
 
 def test_maintenance_sums_each_role_s_subagents_once_per_step(tmp_path):

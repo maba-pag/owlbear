@@ -81,6 +81,15 @@ class Run:
     tool_calls: dict[str, dict[str, int]] = field(default_factory=dict)  # each tool's tally fields (C-28 T8)
 
 
+class ReturnedRunError(Exception):
+    """An error raised about a session that did return its Run: whatever the error, that Run says how it ended.
+
+    Its owner records the Run's termination, so processes confirmed gone release their reservation, and re-raises.
+    """
+
+    run: Run
+
+
 def usage_gate(run: Run, kind: StepKind, *, accept: bool = False) -> StepResult:
     """TD-94: an unknown model stops the Change until the owner runs the step again or accepts its held result.
 

@@ -33,7 +33,7 @@ from owlbear_delivery_next.change_contracts.profile_record import (
     in_window,
 )
 from owlbear_delivery_next.change_flow.status import status, unloadable
-from owlbear_delivery_next.commands import setup
+from owlbear_delivery_next.commands import replay_client, setup
 from owlbear_delivery_next.design_packs import design_pack, pack_update
 from owlbear_delivery_next.design_packs.detector import DetectorError
 from owlbear_delivery_next.local_system import data_repo, local_home
@@ -86,13 +86,9 @@ def update_pack(a: argparse.Namespace, repo: Path) -> int:
         if a.golden:
             return _golden()
         if a.replay:
-            r = pack_replay.replay(Store.open(repo))
-            verdict = "advisory: too few rounds" if r.advisory else "within the margin" if r.ok else "below the margin"
-            sys.stdout.write(
-                f"calibration replay: {r.rounds} decided rounds, {r.left_out} left out; the design judge agreed with "
-                f"the owner {r.before:.0%} as recorded, {r.after:.0%} with this pack ({verdict})\n"
-            )
-            return 0 if r.ok else 1
+            ok, text = replay_client.replay(repo)
+            sys.stdout.write(text + "\n")
+            return 0 if ok else 1
         sys.stdout.write(pack_update.said(pack_update.notice(refresh=True)) + "\n")
     except (
         design_pack.PackError,

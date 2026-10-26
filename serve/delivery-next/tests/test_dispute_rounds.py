@@ -46,6 +46,7 @@ NOTE = "the brief allows English in AC-1"
 
 
 class Host:
+    maintenance = None
     wake = type("W", (), {"set": lambda _self: None})()
     record = None
 
