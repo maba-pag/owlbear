@@ -10,8 +10,8 @@ Package map: [serve/README.md](../README.md) · Project README: [README.md](../.
 **Status:** Alpha. The engine is implemented and available to the pipeline, but it still needs
 real-world validation before it should be treated as a generally validated capability.
 
-`prompts/` keeps the `kb-ingest` and `kb-enrich` chat commands of the workspace era. Nothing loads or
-validates them; they wait for the decision on how knowledge lives on.
+`prompts/` keeps the `kb-ingest` and `kb-enrich` chat commands of the workspace era. Nothing loads them,
+and the prompt validator checks them only when named; they wait for the decision on how knowledge lives on.
 
 ---
 
