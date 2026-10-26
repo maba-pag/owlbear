@@ -1633,8 +1633,21 @@ def test_a_pending_repair_receipt_written_at_format_4_with_runtime_resumes(
         format_4_profile(colour="red"),
         format_4_profile(confirmed_at=None),
         {k: v for k, v in format_4_profile().items() if k != "format"},
+        format_4_profile(format=4.5),
+        format_4_profile(format=4.0),
+        format_4_profile(format=True),
+        format_4_profile(format="4"),
     ],
-    ids=["future-format", "unknown-field", "unconfirmed", "no-format"],
+    ids=[
+        "future-format",
+        "unknown-field",
+        "unconfirmed",
+        "no-format",
+        "fractional-format",
+        "float-format",
+        "boolean-format",
+        "string-format",
+    ],
 )
 def test_a_pending_repair_receipt_that_is_future_or_malformed_is_still_refused_and_kept(
     repo: Path, shared_repo, monkeypatch, raw: dict
