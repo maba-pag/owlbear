@@ -298,32 +298,65 @@ def test_a_merge_that_fails_after_replacing_the_config_fails_the_open(repo, monk
     assert not (root / profile_share.ROLES_MOVED).exists()
 
 
-@pytest.mark.parametrize("mode", ["held", "raised", "applied-unpublished"])
-def test_a_role_move_that_was_not_applied_is_not_marked_and_runs_again(repo, monkeypatch, mode):
+@pytest.mark.parametrize(("mode", "reason"), [("held", "not moved"), ("raised", "fetch failed")])
+def test_a_refused_or_failed_role_move_write_is_visible_and_not_marked(repo, monkeypatch, mode, reason):
     root = repo / ".git" / "owlbear-delivery"
     _old_profile(root, {"reviewer": {"model": "r-1", "effort": "max"}})
     real = Store.update_config
 
-    def refused(self, change, what="project layer", on_written=None):
+    def refused(*_args, **_kwargs):
         if mode == "raised":
             msg = "simulated: fetch failed"
             raise StoreError(msg)
-        if mode == "applied-unpublished":
-            real(self, change, what, on_written)
-            return "simulated: publication refused; retry in settings"
         return "simulated: fetch refused"
 
     monkeypatch.setattr(Store, "update_config", refused)
-    if mode == "held":  # a refused write is visible: the store does not open as if the move had happened
-        with pytest.raises(StoreError, match="not moved"):
-            roles_move.move_roles(Store(root))
-    else:
+    with pytest.raises(StoreError, match=reason):
         roles_move.move_roles(Store(root))
-    assert (root / profile_share.ROLES_MOVED).exists() == (mode == "applied-unpublished")
-    if mode != "applied-unpublished":
-        assert not Store(root).config_path.exists()
+    assert not (root / profile_share.ROLES_MOVED).exists()
+    assert not Store(root).config_path.exists()
+    assert (root / profile_share.PROFILE).exists()  # the source is kept for the retry
 
     monkeypatch.setattr(Store, "update_config", real)
+    roles_move.move_roles(Store(root))
+    assert (root / profile_share.ROLES_MOVED).exists()
+    assert Store(root).read_config().agents["reviewer"].model == "r-1"
+
+
+def test_a_role_move_applied_but_unpublished_is_marked_and_opens(repo, monkeypatch):
+    root = repo / ".git" / "owlbear-delivery"
+    _old_profile(root, {"reviewer": {"model": "r-1", "effort": "max"}})
+    real = Store.update_config
+
+    def applied_then_refused(self, change, what="project layer", on_written=None):
+        real(self, change, what, on_written)
+        return "simulated: publication refused; retry in settings"
+
+    monkeypatch.setattr(Store, "update_config", applied_then_refused)
+    roles_move.move_roles(Store(root))  # applied locally: the marker caches the receipt, so the open succeeds
+    assert (root / profile_share.ROLES_MOVED).exists()
+    assert Store(root).read_config().agents["reviewer"].model == "r-1"
+
+
+def test_a_role_move_applied_before_its_marker_fails_is_visible_and_heals_on_retry(repo, monkeypatch):
+    root = repo / ".git" / "owlbear-delivery"
+    _old_profile(root, {"reviewer": {"model": "r-1", "effort": "max"}})
+    real = roles_move.atomic_write
+
+    def marker_refused(target, content):
+        if target.name == profile_share.ROLES_MOVED:
+            msg = "simulated: marker write refused"
+            raise StoreError(msg)
+        real(target, content)
+
+    monkeypatch.setattr(roles_move, "atomic_write", marker_refused)
+    with pytest.raises(StoreError, match="marker write refused"):
+        roles_move.move_roles(Store(root))
+    assert not (root / profile_share.ROLES_MOVED).exists()
+    assert (root / profile_share.PROFILE).exists()
+    assert Store(root).read_config().agents["reviewer"].model == "r-1"  # applied with its config write
+
+    monkeypatch.setattr(roles_move, "atomic_write", real)
     roles_move.move_roles(Store(root))
     assert (root / profile_share.ROLES_MOVED).exists()
     assert Store(root).read_config().agents["reviewer"].model == "r-1"

@@ -29,10 +29,7 @@ def move_roles(store: Store) -> None:
     old profile this build cannot inspect raises ``StoreError`` and stays unmoved; a damaged settings file is left
     to ``read_config`` to report. A refused settings write raises too, so the store never opens as if it had moved.
     """
-    from owlbear_delivery_next.state_store.store import (  # noqa: PLC0415 - the store imports this module
-        SharedError,
-        StoreError,
-    )
+    from owlbear_delivery_next.state_store.store import StoreError  # noqa: PLC0415 - the store imports this module
 
     old, marker = store.root / PROFILE, store.root / ROLES_MOVED
     if marker.exists() or not old.exists():
@@ -47,32 +44,28 @@ def move_roles(store: Store) -> None:
             return
         text = "the format-1 profile's role overrides are merged into config.json\n"
         try:
-            if read_layer(store.config_path, Layer).roles_moved:  # applied with its config write; the marker caches it
-                atomic_write(marker, text)
-                return
+            applied = read_layer(store.config_path, Layer).roles_moved
         except StoreError:
-            return  # read_config reports the damaged settings
+            return  # a damaged settings file: read_config reports it
+        if applied:  # applied with its config write; the marker caches it
+            atomic_write(marker, text)
+            return
         found = _old_roles(old)  # an uninspectable old profile raises: the move stays retryable and visible
         if not found:
             atomic_write(marker, text)
             return
-        try:
-            from owlbear_delivery_next.state_store.config_save import Prepared  # noqa: PLC0415 (import cycle)
+        from owlbear_delivery_next.state_store.config_save import Prepared  # noqa: PLC0415 (import cycle)
 
-            # The receipt and the roles are one config write; the marker only caches the receipt, so its failure
-            # after that write leaves the move applied. A refusal never reaches the write.
-            notice = store.update_config(
-                Prepared(
-                    config_digest(store.config_path),
-                    lambda cur: migrations.with_roles(cur, found).model_copy(update={"roles_moved": True}),
-                ),
-                "role overrides from the old profile",
-                on_written=lambda: atomic_write(marker, text),
-            )
-        except SharedError:
-            raise  # the old roles move later; never mark a move that did not happen
-        except StoreError:
-            return  # refused before writing; read_config reports the damaged settings
+        # The receipt and the roles are one config write; the marker only caches the receipt, so its failure
+        # after that write leaves the move applied. A write or refusal failure raises here, never a silent return.
+        notice = store.update_config(
+            Prepared(
+                config_digest(store.config_path),
+                lambda cur: migrations.with_roles(cur, found).model_copy(update={"roles_moved": True}),
+            ),
+            "role overrides from the old profile",
+            on_written=lambda: atomic_write(marker, text),
+        )
         if notice and not marker.exists():  # a refused write is not success-shaped: the caller must see it
             msg = f"the old profile's role overrides were not moved: {notice}"
             raise StoreError(msg)

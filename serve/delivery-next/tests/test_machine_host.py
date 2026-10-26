@@ -27,7 +27,7 @@ from owlbear_delivery_next.machine_host import app, project, registry, serve
 from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import ENDING, Host, HostRecord, RunnerRecord, running
-from owlbear_delivery_next.state_store import decision_store, project_home
+from owlbear_delivery_next.state_store import decision_store, profile_share, project_home
 from owlbear_delivery_next.state_store.store import Store
 
 AUTH = {"authorization": "Bearer t"}
@@ -217,6 +217,45 @@ def test_a_project_that_fails_to_load_is_listed_with_its_reason_beside_a_working
     (Path(bad.path) / ".git" / "owlbear-delivery" / "format").unlink()
     machine.retry()
     assert http.get(f"/p/{bad.id}/api/next/changes").status_code == 200
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        '{"format": 1, "roles": {"reviewer": {"model": "r-1", "effort": "bogus"}}}',
+        "{not json",
+    ],
+    ids=["invalid-role", "unreadable"],
+)
+def test_an_unreadable_role_source_in_a_shared_project_fails_visibly_and_imports_once_repaired(
+    http, machine, shared_repo, monkeypatch, bad
+):
+    """A shared project whose local role source cannot be inspected fails with its repair reason, adopts nothing, and
+    imports once the source is repaired; its Settings request is refused, never answered as fresh or green."""
+    monkeypatch.setenv("OWLBEAR_DATA", str(shared_repo[0]))
+    shop = origin(clone(shared_repo[0].parent / "shop"), "https://github.com/acme/shop.git")
+    p = registry.register(shop)
+    legacy = shop / ".git" / "owlbear-delivery"
+    legacy.mkdir(parents=True, exist_ok=True)
+    (legacy / "profile.json").write_text(bad)
+    machine.load_all()
+
+    shown = {x["name"]: x for x in http.get("/api/next/projects").json()["projects"]}
+    assert shown["shop"]["state"] == "failed"
+    assert "its Delivery state cannot be opened" in shown["shop"]["reason"]
+    assert "then reopen" in shown["shop"]["reason"]
+    blocked = http.get(f"/p/{p.id}/api/next/config")
+    assert blocked.status_code == 404
+    assert blocked.json()["detail"].startswith("shop is failed: ")
+    assert not list(shared_repo[0].glob("*/config.json"))
+    root = project_home.located(shop)
+    assert not (root / profile_share.ROLES_MOVED).exists()
+
+    (root / "profile.json").write_text('{"format": 1, "roles": {"reviewer": {"model": "r-1", "effort": "max"}}}')
+    machine.retry()
+    assert http.get(f"/p/{p.id}/api/next/config").status_code == 200
+    assert Store.open(shop).read_config().agents["reviewer"].model == "r-1"
+    assert (root / profile_share.ROLES_MOVED).exists()
 
 
 def running_step(path: Path, sessions: int = 0) -> Path:
