@@ -63,9 +63,8 @@ procedure; the pointer should not reproduce it.
 
 ### Prompts
 
-`share/` ships no prompts: Delivery's pages and steps replaced its chat commands. Project-local prompts live in
-`.owlbear/prompts/`. They collect the smallest input needed and route to the agent or workflow that owns the next
-decision.
+`share/` ships no prompts: Delivery's pages and steps replaced its chat commands. OwlBear's own repository keeps none
+either: the Copilot harness does not load prompt files, so its audits are skills invoked by name.
 
 ## Relationship Map
 

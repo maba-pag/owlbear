@@ -53,11 +53,11 @@ every directory exists.
 
 Load only what the selected scope needs:
 
-1. `share/README.md` for the loading model and current ecosystem inventory.
-2. `share/WIRING.md` for declared consumers and delegation paths.
-3. `share/skills/h-agent-structure/SKILL.md` for file-type and structural conventions.
-4. The target files and their actual loading relationships.
-5. Domain authorities only when the audited claim depends on them.
+1. `share/README.md` for the loading model, the current ecosystem inventory and its Relationship Map of
+   declared consumers and delegation paths.
+2. `share/skills/h-agent-structure/SKILL.md` for file-type and structural conventions.
+3. The target files and their actual loading relationships.
+4. Domain authorities only when the audited claim depends on them.
 
 Existing standards are evidence, not untouchable truth. When a prompt and skill disagree, determine
 which behavior best serves the system. Recommend changing the named authority, both consumers, or a
@@ -176,7 +176,7 @@ sufficient loading cluster. Drift is a cross-cutting audit concern, not a separa
 lifecycle.
 
 1. Check mechanical drift across references, frontmatter, `applyTo` surfaces, loading relationships,
-   `WIRING.md`, tool and delegate declarations, validators, and representative tests.
+   the `share/README.md` Relationship Map, tool and delegate declarations, validators, and representative tests.
 2. Check semantic drift in high-consumer or flagged blocks: compare repeated guidance with its
    canonical authority and identify contradictions, stale claims, late loading, weaker wording,
    missing enforcement, or unnecessary context cost.
@@ -208,8 +208,8 @@ Use broad mode to identify patterns and priorities, not to deeply rewrite every 
    only when relevant. If a validator is absent or fails to run, record the command and result under
    Coverage, then continue with source inspection. Validator output is evidence, not the entire
    audit.
-4. Build a metadata-level loading map from frontmatter, `required_reading`, `applyTo`, prompt agents,
-   tool lists, hooks, and `WIRING.md`.
+4. Build a metadata-level loading map from frontmatter, `required_reading`, `applyTo`, tool lists,
+   hooks, and the `share/README.md` Relationship Map.
 5. Prioritize full body reads for:
    - conflicting or missing loading paths;
    - universal and high-consumer authorities;
