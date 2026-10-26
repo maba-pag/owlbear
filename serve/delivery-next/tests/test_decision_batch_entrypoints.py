@@ -24,6 +24,7 @@ from owlbear_delivery_next.state_store import (
     decision_sync,
     decision_transaction,
 )
+from owlbear_delivery_next.workflow_steps import lookup
 
 PROJECT = "shop-site"
 AT = datetime(2026, 10, 21, 9, tzinfo=UTC)
@@ -132,6 +133,7 @@ def test_a_null_before_image_for_a_new_file_is_accepted_and_finishes(picking, mo
         lambda record: record.__setitem__("ids", []),  # files without the ids that name them
         lambda record: record.__setitem__("ids", ["another-decision"]),  # an id that is not its file's name
         lambda record: record.__setitem__("files", record["files"] * 2) or record["ids"].append(record["ids"][0]),
+        lambda record: record.update(ids=[], files=[]),  # no file and no id: nothing of the batch could be proved
     ],
     ids=[
         "path-not-string",
@@ -141,6 +143,7 @@ def test_a_null_before_image_for_a_new_file_is_accepted_and_finishes(picking, mo
         "files-without-ids",
         "id-not-its-file",
         "one-file-twice",
+        "no-file-and-no-id",
     ],
 )
 def test_a_journal_with_a_wrongly_typed_file_list_raises_journal_error_and_keeps_its_bytes(picking, monkeypatch, edit):
@@ -749,3 +752,80 @@ def test_each_producer_shaped_journal_still_decodes(picking, rel):
 
     batch = decision_batch.pending(shared)
     assert (batch.generation, batch.ids, batch.files) == (generation, (stem,), ((rel, None, b"after\n"),))
+
+
+@pytest.mark.parametrize(
+    ("ids", "files"),
+    [
+        ([], []),
+        (["a1"], []),
+        (["other"], [(f"{PROJECT}/decisions/a1.md", None, b"after\n")]),
+        (["config"], [(".git/config", None, b"after\n")]),
+    ],
+    ids=["no-file-and-no-id", "id-without-file", "id-not-its-file", "git-folder"],
+)
+def test_a_batch_a_reader_could_not_decode_is_never_journalled(picking, ids, files):
+    shared = picking.shared
+    head = shared.git("rev-parse", "HEAD").stdout.strip()
+
+    with pytest.raises(decision_batch.JournalError, match="cannot be journalled"):
+        decision_batch.begin(shared, PROJECT, head, "decisions: unreadable", ids, files)
+
+    assert not decision_batch.journal_path(shared).exists()
+    assert decision_batch.pending(shared) is None
+
+
+def test_a_save_of_nothing_needs_no_journal_and_no_remote_work(picking, monkeypatch):
+    _seed(picking)
+    shared = picking.shared
+    head = shared.git("rev-parse", "HEAD").stdout
+    seen: list[tuple[str, ...]] = []
+    real_git = DataRepo.git
+
+    def recording_git(self, *args, **kwargs):
+        seen.append(args)
+        return real_git(self, *args, **kwargs)
+
+    with monkeypatch.context() as m:
+        m.setattr(DataRepo, "git", recording_git)
+        receipts = decision_store.save_all(shared, [], message="decisions: nothing")
+
+    assert receipts == []
+    assert not [args for args in seen if args and args[0] in {"fetch", "push", "pull", "rebase", "commit"}]
+    assert not decision_batch.journal_path(shared).exists()
+    assert shared.git("rev-parse", "HEAD").stdout == head
+
+
+def test_a_journal_emptied_after_a_partial_write_refuses_every_entry_point_and_changes_nothing(picking, monkeypatch):
+    """Two files were journalled and the first written; damage then removed both lists. Nothing may clear it."""
+    _seed(picking)
+    shared = picking.shared
+    first = make(title="Use UTC", statement="All timestamps use UTC.")
+    second = make(title="Use ISO dates", statement="Dates are ISO 8601.")
+    _interrupt(picking, monkeypatch, [first, second])
+    write(first, shared.root / PROJECT)  # the partial batch: one file of two is on disk, not committed
+    _rewrite_journal(shared, lambda record: record.update(ids=[], files=[]))
+    journal = decision_batch.journal_path(shared).read_bytes()
+    generation = json.loads(journal)["generation"]
+    folder = shared.root / PROJECT / "decisions"
+    held = {p.name: p.read_bytes() for p in folder.iterdir()}
+    head, index = shared.git("rev-parse", "HEAD").stdout, shared.git("ls-files", "-s").stdout
+    picking.picks.clear()
+    pickers = len(picking.pickers())
+
+    with pytest.raises(decision_batch.JournalError, match="names no file"):
+        decision_batch.pending(shared)
+    for action in (decision_recovery.finish, decision_recovery.abandon):
+        with pytest.raises(decision_store.DecisionsUnavailable, match="names no file"):
+            action(shared, generation)
+    with pytest.raises(decision_store.DecisionsUnavailable, match="names no file"):
+        decision_store.load(shared, PROJECT)
+    answer, done = lookup.chat(shared, PROJECT, "Which timestamps apply?", picking.store.settings)
+
+    assert answer.get("failed"), answer
+    assert "decisions" not in answer
+    assert done is None
+    assert len(picking.pickers()) == pickers  # no governing answer and no picker
+    assert decision_batch.journal_path(shared).read_bytes() == journal
+    assert {p.name: p.read_bytes() for p in folder.iterdir()} == held
+    assert (shared.git("rev-parse", "HEAD").stdout, shared.git("ls-files", "-s").stdout) == (head, index)

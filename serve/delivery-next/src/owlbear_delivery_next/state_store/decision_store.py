@@ -261,6 +261,8 @@ def save_all(shared: DataRepo | None, items: Sequence[tuple[Decision, str | None
 
 
 def _save_all(shared: DataRepo, items: list[Placed], message: str) -> list[Receipt]:
+    if not items:  # nothing to save: no remote work and no journal, which would name no file
+        return []
     until = time.monotonic() + SAVE_SECONDS
     head, behind = decision_sync.prepare(shared, until)
     if not head:  # nothing is journalled or written until HEAD is proved on the remote

@@ -168,6 +168,12 @@ def test_refused_batch_leaves_no_journal(picking):
     assert decision_batch.pending(picking.shared) is None
 
 
+def _one_file(project: str) -> tuple[list[str], list[tuple[str, bytes | None, bytes]]]:
+    """The smallest valid batch: one new decision file, named by its id; races need a journal a reader can decode."""
+    decision_id = new_id()
+    return [decision_id], [(f"{project}/decisions/{decision_id}.md", None, b"raced\n")]
+
+
 @pytest.mark.parametrize("reader", [decision_store.load, decision_store.file_snapshot], ids=["load", "file_only"])
 def test_a_batch_that_begins_and_completes_while_the_decisions_are_read_is_refused(picking, monkeypatch, reader):
     _seed(picking)
@@ -176,7 +182,7 @@ def test_a_batch_that_begins_and_completes_while_the_decisions_are_read_is_refus
     def racing(shared, project):
         seen = real_files(shared, project)
         head = decision_store._head(shared)  # noqa: SLF001
-        generation = decision_batch.begin(shared, project, head, "decisions: raced", [], [])
+        generation = decision_batch.begin(shared, project, head, "decisions: raced", *_one_file(project))
         decision_batch.complete(shared, generation)
         return seen
 
@@ -256,7 +262,7 @@ def test_a_batch_already_pending_at_the_first_stamp_is_refused(picking, monkeypa
     def begun_before_first_stamp(shared):
         if not begun:
             head = decision_store._head(shared)  # noqa: SLF001
-            begun.append(decision_batch.begin(shared, PROJECT, head, "decisions: raced", [], []))
+            begun.append(decision_batch.begin(shared, PROJECT, head, "decisions: raced", *_one_file(PROJECT)))
         return real_stamp(shared)
 
     monkeypatch.setattr(decision_store, "_stamp", begun_before_first_stamp)
@@ -274,7 +280,8 @@ def test_a_batch_begun_and_completed_while_the_decisions_are_read_is_refused(pic
     def begun_and_completed(shared, project):
         seen = real_files(shared, project)
         head = decision_store._head(shared)  # noqa: SLF001
-        decision_batch.complete(shared, decision_batch.begin(shared, project, head, "decisions: aba", [], []))
+        generation = decision_batch.begin(shared, project, head, "decisions: aba", *_one_file(project))
+        decision_batch.complete(shared, generation)
         return seen
 
     monkeypatch.setattr(decision_store, "_files", begun_and_completed)
@@ -342,7 +349,7 @@ def test_a_stamp_capture_is_not_torn_by_a_batch_that_begins_and_completes(pickin
 
             def begin_and_complete():
                 head = decision_store._head(picking.shared)  # noqa: SLF001
-                generation = decision_batch.begin(picking.shared, PROJECT, head, "decisions: torn", [], [])
+                generation = decision_batch.begin(picking.shared, PROJECT, head, "decisions: torn", *_one_file(PROJECT))
                 decision_batch.complete(picking.shared, generation)
 
             writer = threading.Thread(target=begin_and_complete)

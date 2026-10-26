@@ -209,8 +209,14 @@ def _inside(value: str) -> str:
 
 
 def _paired(ids: tuple[str, ...], files: tuple[tuple[str, bytes | None, bytes], ...]) -> None:
-    """Every producer journals one id per file, the file's own name, each file once; anything else is damage."""
+    """Every producer journals one id per file, the file's own name, each file once; anything else is damage.
+
+    A journal naming no file is damage too: no producer writes one, and it would complete without proving any image.
+    """
     paths = [rel for rel, _, _ in files]
+    if not paths:
+        msg = "the journal names no file, so nothing of the batch can be proved"
+        raise ValueError(msg)
     if [PurePosixPath(rel).stem for rel in paths] != list(ids) or len(set(paths)) != len(paths):
         msg = "the journal's decision ids and files do not pair up"
         raise ValueError(msg)
@@ -282,9 +288,17 @@ def begin(  # noqa: PLR0913, PLR0917 - a batch is its project, head, message, de
     ids: Sequence[str],
     files: Sequence[tuple[str, bytes | None, bytes]],
 ) -> str:
-    """Record a batch in flight before any of its files is written; return its new generation."""
+    """Record a batch in flight before any of its files is written; return its new generation.
+
+    The batch is checked as a reader decodes it, so a journal that could not be read back is never written.
+    """
     generation = uuid.uuid4().hex
     batch = Batch(generation, project, head, message, tuple(ids), tuple(files))
+    try:
+        _paired(batch.ids, tuple((_inside(rel), before, after) for rel, before, after in batch.files))
+    except ValueError as exc:
+        msg = f"the decision batch cannot be journalled: {exc}"
+        raise JournalError(msg) from exc
     with _locked(shared):
         replace_file(_admin(shared) / JOURNAL, _encode(batch))
     return generation
