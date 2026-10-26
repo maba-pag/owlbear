@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import base64
 import contextlib
+import errno
 import json
 import os
 import shutil
@@ -1798,6 +1799,65 @@ def test_a_folder_swapped_while_a_transaction_step_writes_never_writes_the_forei
     _no_authority(picking)
 
 
+class WriterDescriptors:
+    """Track only the caller thread's writer acquisitions; forward fault hooks to the real OS module."""
+
+    def __init__(self) -> None:
+        self.caller = threading.current_thread()
+        self.opened, self.active, self.closed, self.strays = [], set(), [], []
+
+    def __getattr__(self, name):
+        return getattr(os, name)
+
+    def open(self, *args, **kwargs):
+        descriptor = os.open(*args, **kwargs)
+        if threading.current_thread() is self.caller:
+            self.opened.append(descriptor)
+            self.active.add(descriptor)
+        return descriptor
+
+    def close(self, descriptor) -> None:
+        caller = threading.current_thread() is self.caller
+        if caller and descriptor not in self.active:
+            self.strays.append(descriptor)
+        os.close(descriptor)
+        if caller and descriptor in self.active:
+            self.active.remove(descriptor)
+            self.closed.append(descriptor)
+
+    def all_closed(self) -> bool:
+        return bool(self.opened) and not self.active and not self.strays and len(self.opened) == len(self.closed)
+
+
+@pytest.fixture
+def closed_writer_descriptors(monkeypatch):
+    """Every descriptor acquired by these writers on this thread is closed, on success or failure."""
+    descriptors = WriterDescriptors()
+    monkeypatch.setattr(storage, "os", descriptors)
+    monkeypatch.setattr(decision_batch, "os", descriptors)
+    yield descriptors
+    assert descriptors.all_closed()
+
+
+def test_the_writer_descriptor_oracle_detects_a_real_leak_and_a_stray_close():
+    descriptors = WriterDescriptors()
+    descriptor = descriptors.open(os.devnull, os.O_RDONLY)
+    try:
+        assert not descriptors.all_closed()
+        assert descriptors.active == {descriptor}
+    finally:
+        descriptors.close(descriptor)
+    assert descriptors.all_closed()
+
+    unrelated = os.open(os.devnull, os.O_RDONLY)
+    try:
+        assert descriptors.all_closed()  # a reused number is not another writer acquisition
+    finally:
+        descriptors.close(unrelated)
+    assert descriptors.strays == [unrelated]
+    assert not descriptors.all_closed()
+
+
 def _write_with(writer: str, tmp_path: Path, fence, root: Path | None = None, layer: Path | None = None) -> Path:
     """Write one new file through *writer* with *fence*, or remove an existing one (`remove`); its path.
 
@@ -1811,13 +1871,14 @@ def _write_with(writer: str, tmp_path: Path, fence, root: Path | None = None, la
         path.write_bytes(b"the old bytes\n")
         decision_batch.replace_file(path, None, fence, root)
     elif writer == "batch":
-        decision_batch.replace_file(path, b"the new bytes\n", fence, root)
+        assert decision_batch.replace_file(path, b"the new bytes\n", fence, root) is None
     else:
-        storage.write(decision, layer, None, fence=fence, root=root)
+        assert storage.write(decision, layer, None, fence=fence, root=root) == decision.revision
     return path
 
 
 @pytest.mark.parametrize("writer", ["batch", "decisions"])
+@pytest.mark.usefixtures("closed_writer_descriptors")
 def test_an_unfenced_write_lands_with_no_temporary_left(tmp_path, writer):
     path = _write_with(writer, tmp_path, None)
 
@@ -1826,8 +1887,85 @@ def test_an_unfenced_write_lands_with_no_temporary_left(tmp_path, writer):
     assert [p.name for p in path.parent.iterdir()] == [path.name]
 
 
+@pytest.mark.parametrize("writer", ["batch", "decisions"])
+@pytest.mark.usefixtures("closed_writer_descriptors")
+def test_unrelated_thread_descriptors_do_not_belong_to_the_writer(tmp_path, writer):
+    acquired, release = threading.Event(), threading.Event()
+
+    def unrelated_readers() -> None:
+        with contextlib.ExitStack() as stack:
+            for binding in (os, storage.os, decision_batch.os):
+                stack.enter_context(binding.fdopen(binding.open(os.devnull, os.O_RDONLY), "rb"))
+            acquired.set()
+            release.wait(5)
+
+    reader = threading.Thread(target=unrelated_readers)
+    reader.start()
+    try:
+        assert acquired.wait(5)
+        path = _write_with(writer, tmp_path, None)
+    finally:
+        release.set()
+        reader.join(5)
+    assert not reader.is_alive()
+    assert path.is_file()
+
+
+@pytest.mark.parametrize("sync_fails", [False, True], ids=["synced", "sync-failed"])
+@pytest.mark.parametrize("writer", ["batch", "decisions"])
+@pytest.mark.usefixtures("closed_writer_descriptors")
+def test_an_installed_file_moved_back_to_its_temporary_name_is_never_cleaned_up(
+    tmp_path, monkeypatch, writer, sync_fails
+):
+    """After the real rename, the owner moves that same open inode back during directory fsync, which may fail."""
+    folder = tmp_path / "layer" / "decisions"
+    held, moved, checks = {}, [], []
+    real_fsync, real_holds = os.fsync, storage.Temporary.holds_name
+
+    def remember_temporary() -> None:
+        (temporary,) = _temporaries(folder)
+        held.update(path=temporary, identity=temporary.stat(), data=temporary.read_bytes())
+
+    def checking_name(self) -> bool:
+        checks.append(bool(moved))
+        held["descriptor"] = self.descriptor
+        assert os.path.samestat(os.fstat(self.descriptor), held["identity"])
+        return real_holds(self)
+
+    def owner_moves_during_directory_fsync(descriptor) -> None:
+        if stat.S_ISDIR(os.fstat(descriptor).st_mode):
+            assert os.path.samestat(os.fstat(descriptor), folder.stat())
+            assert os.path.samestat(os.fstat(held["descriptor"]), held["identity"])
+            (installed,) = folder.iterdir()
+            assert installed.suffix == ".md"
+            assert os.path.samestat(installed.stat(), held["identity"])
+            installed.replace(held["path"])
+            assert os.path.samestat(held["path"].stat(), held["identity"])
+            moved.append(installed)
+            if sync_fails:
+                raise OSError(errno.EIO, "directory fsync failed")
+        real_fsync(descriptor)
+
+    monkeypatch.setattr(storage.Temporary, "holds_name", checking_name)
+    monkeypatch.setattr(os, "fsync", owner_moves_during_directory_fsync)
+    if sync_fails:
+        with pytest.raises(OSError, match="directory fsync failed") as refused:
+            _write_with(writer, tmp_path, remember_temporary)
+        assert refused.value.errno == errno.EIO
+    else:
+        _write_with(writer, tmp_path, remember_temporary)
+
+    assert len(moved) == 1
+    assert held["path"].is_file()
+    assert os.path.samestat(held["path"].stat(), held["identity"])
+    assert held["path"].read_bytes() == held["data"]
+    assert checks == [False]  # ownership is checked before install, never again after the name was consumed
+    assert list(folder.iterdir()) == [held["path"]]
+
+
 @pytest.mark.parametrize("case", ["own", "replaced-name", "unknown"])
 @pytest.mark.parametrize("writer", ["batch", "decisions"])
+@pytest.mark.usefixtures("closed_writer_descriptors")
 def test_a_refused_write_removes_only_its_own_temporary(tmp_path, monkeypatch, writer, case):
     """`own`: the refused write's temporary is removed. `replaced-name`: someone else's file now holds that name and is
     left as it is. `unknown`: whether the temporary is still its own cannot be read, so the error is raised.
@@ -1884,6 +2022,7 @@ def _substitute(folder: Path, data: bytes) -> str:
 
 
 @pytest.mark.parametrize("writer", ["batch", "decisions"])
+@pytest.mark.usefixtures("closed_writer_descriptors")
 def test_a_temporary_name_holding_another_file_when_the_fence_passes_is_never_installed(tmp_path, writer):
     folder = tmp_path / "layer" / "decisions"
     substitute = b"someone else's file\n"
@@ -1922,6 +2061,7 @@ def test_a_save_whose_temporary_name_is_substituted_installs_nothing(picking, mo
 
 
 @pytest.mark.parametrize("writer", ["batch", "decisions"])
+@pytest.mark.usefixtures("closed_writer_descriptors")
 def test_a_recreated_temporary_name_is_left_while_the_write_still_holds_its_file_open(tmp_path, monkeypatch, writer):
     """The owner removes the temporary and makes another file at its name; the write's descriptor is still open, so
     that file cannot have the same device and inode, and the cleanup leaves it."""
@@ -1957,6 +2097,7 @@ def test_a_recreated_temporary_name_is_left_while_the_write_still_holds_its_file
 
 @pytest.mark.parametrize("fault", ["first-fstat", "write"])
 @pytest.mark.parametrize("writer", ["batch", "decisions"])
+@pytest.mark.usefixtures("closed_writer_descriptors")
 def test_a_fault_while_the_temporary_is_made_leaks_no_descriptor(tmp_path, monkeypatch, writer, fault):
     """`first-fstat`: the file's identity cannot be read, so its name is left rather than guessed at. `write`: the
     identity is known, so the file is removed. Either way every descriptor is closed and the error is raised."""
@@ -1998,7 +2139,38 @@ def test_a_fault_while_the_temporary_is_made_leaks_no_descriptor(tmp_path, monke
         assert left[0].endswith(".tmp")
 
 
+@pytest.mark.parametrize("fault", ["file-fsync", "rename"])
+@pytest.mark.parametrize("writer", ["batch", "decisions"])
+@pytest.mark.usefixtures("closed_writer_descriptors")
+def test_a_failure_before_install_removes_the_owned_temporary(tmp_path, monkeypatch, writer, fault):
+    real_fsync, real_replace = os.fsync, os.replace
+    failed = []
+
+    def failing_fsync(descriptor):
+        if fault == "file-fsync" and stat.S_ISREG(os.fstat(descriptor).st_mode):
+            failed.append(fault)
+            raise OSError(errno.EIO, "file fsync failed")
+        real_fsync(descriptor)
+
+    def failing_replace(*args, **kwargs):
+        if fault == "rename":
+            failed.append(fault)
+            raise PermissionError(errno.EACCES, "rename failed")
+        return real_replace(*args, **kwargs)
+
+    monkeypatch.setattr(os, "fsync", failing_fsync)
+    monkeypatch.setattr(os, "replace", failing_replace)
+    error = PermissionError if fault == "rename" else OSError
+    with pytest.raises(error, match="failed") as refused:
+        _write_with(writer, tmp_path, None)
+
+    assert refused.value.errno == (errno.EACCES if fault == "rename" else errno.EIO)
+    assert failed == [fault]
+    assert list((tmp_path / "layer" / "decisions").iterdir()) == []
+
+
 @pytest.mark.parametrize("writer", ["batch", "decisions", "remove"])
+@pytest.mark.usefixtures("closed_writer_descriptors")
 def test_a_folder_moved_or_linked_away_during_the_fence_changes_nothing_in_either_folder(tmp_path, monkeypatch, writer):
     """While the fence runs, after its own checks, the owner moves the folder aside and links its path to a foreign
     folder. The folder held open no longer is the one the path names, so nothing is renamed, removed or fsynced in

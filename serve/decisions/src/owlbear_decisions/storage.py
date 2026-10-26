@@ -229,7 +229,23 @@ def check_write(current: Decision | None, decision: Decision, expected_revision:
 
 
 class TemporaryReplacedError(OSError):
-    """The temporary file's name no longer holds the file this write made, so nothing is installed or removed."""
+    """The temporary name was replaced or already consumed by installation, so nothing more is installed or removed."""
+
+
+class _TemporaryLifecycle:
+    """A successful rename consumes the temporary name irrevocably, independently of its file's identity."""
+
+    def __init__(self) -> None:
+        self._consumed = False
+
+    @property
+    def consumed(self) -> bool:
+        """Whether a successful rename has ended this write's ownership of the temporary name."""
+        return self._consumed
+
+    def consume(self) -> None:
+        """End ownership of the temporary name; it can never become this write's temporary again."""
+        self._consumed = True
 
 
 @dataclass(frozen=True)
@@ -237,13 +253,15 @@ class Temporary:
     """A write's own temporary file: the folder it was made in, its name there, and its still-open descriptor.
 
     The descriptor stays open until the write ends, so the file's device and inode cannot be reused by another file
-    meanwhile: a name holding that identity is this file.
+    meanwhile: a name holding that identity is this file. Identity stays frozen; the separate lifecycle records when
+    installation consumes the temporary name, even if the owner later moves this same file back to it.
     """
 
     folder: int
     name: str
     descriptor: int
     identity: tuple[int, int]
+    lifecycle: _TemporaryLifecycle = field(default_factory=_TemporaryLifecycle, init=False, repr=False, compare=False)
 
     def holds_name(self) -> bool:
         """Whether the name still holds this very file; a missing name does not."""
@@ -259,10 +277,11 @@ def own_temporary(folder: int, data: bytes) -> Iterator[Temporary]:
     """A new temporary file in the folder open as *folder*, holding *data* durably, for the length of the block.
 
     The file is made exclusively, never through a link, mode 0600, and named relative to *folder*, so it is reached
-    there even when the folder's path is moved meanwhile. When the block raises, the file is removed only while its name
-    still holds it; a name now holding another file is left as it is. The descriptor is closed on every exit, and an
-    error closing or checking it is raised, never guessed past. When even its identity could not be read, the name is
-    left, since whose file it holds is then unknown.
+    there even when the folder's path is moved meanwhile. When the block raises before installation, the file is removed
+    only while its name still holds it; a name now holding another file is left as it is. A successful rename consumes
+    the temporary name before the folder fsync: it is never checked or removed again, even if the same inode returns
+    there. The descriptor is closed on every exit, and an error closing or checking it is raised, never guessed past.
+    When even its identity could not be read, the name is left, since whose file it holds is then unknown.
     """
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC
     while True:
@@ -285,7 +304,7 @@ def own_temporary(folder: int, data: bytes) -> Iterator[Temporary]:
         os.fsync(descriptor)
         yield temporary
     except BaseException:
-        if temporary.holds_name():
+        if not temporary.lifecycle.consumed and temporary.holds_name():
             os.unlink(name, dir_fd=folder)
         raise
     finally:
@@ -296,16 +315,18 @@ def install(temporary: Temporary, target: str, path: Path | None = None, root: P
     """Rename *temporary* to *target* in its own folder once its name is proved to hold it still; fsync the folder.
 
     The folder fsynced is the one the rename changed, held open since the file was made, never one reached again by
-    path. A name that now holds another file raises `TemporaryReplacedError`; when *path*, the folder's own path, no
-    longer leads to that folder, or a folder between it and *root* is no plain folder, `bound` raises; either way
-    nothing is moved.
+    path. A replaced or already consumed temporary name raises `TemporaryReplacedError`; when *path*, the folder's own
+    path, no longer leads to that folder, or a folder between it and *root* is no plain folder, `bound` raises; either
+    way nothing is moved. Once the rename succeeds, the temporary name is consumed even if the folder fsync fails:
+    `own_temporary` must never clean it up again.
     """
-    if not temporary.holds_name():
-        msg = f"the temporary file {temporary.name} was replaced, so nothing is written"
+    if temporary.lifecycle.consumed or not temporary.holds_name():
+        msg = f"the temporary file {temporary.name} was replaced or already installed, so nothing is written"
         raise TemporaryReplacedError(msg)
     if path is not None:
         bound(temporary.folder, path, root)
     os.replace(temporary.name, target, src_dir_fd=temporary.folder, dst_dir_fd=temporary.folder)
+    temporary.lifecycle.consume()
     os.fsync(temporary.folder)
 
 
