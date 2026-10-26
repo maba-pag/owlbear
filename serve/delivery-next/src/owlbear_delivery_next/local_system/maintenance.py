@@ -242,7 +242,9 @@ class Maintenance:
         cannot name it.
         """
         with self._locked() as ledger:
-            found = [s for s in ledger.sessions if s.project == project and s.kind == kind and recorded(s, pids)]
+            found = [
+                s for s in ledger.sessions if s.project == project and s.kind == kind and recorded(s, pids, self.boot())
+            ]
         if not found:
             return ""
         return next((s.slot for s in found if s.slot == hint), max(found, key=lambda s: s.started_at).slot)
@@ -442,15 +444,18 @@ class Maintenance:
         return self.read()
 
 
-def recorded(lease: Lease, pids: dict[int, float | None]) -> bool:
+def recorded(lease: Lease, pids: dict[int, float | None], boot: float) -> bool:
     """Whether a lease recorded every one of these PIDs.
 
     A birth unknown on either side matches, except that a settled lease covers an unknown birth only up to its end.
+    A birth known after the current *boot* cannot be a process the lease started before an earlier boot.
     """
     settled = lease.state not in HELD
     ended = lease.ended_at.timestamp() if lease.ended_at else None
     return bool(pids) and all(
-        pid in lease.pids and _same_process(lease.pids[pid], born, settled=settled, ended=ended)
+        pid in lease.pids
+        and not (lease.boot < boot and born is not None and born >= boot)
+        and _same_process(lease.pids[pid], born, settled=settled, ended=ended)
         for pid, born in pids.items()
     )
 

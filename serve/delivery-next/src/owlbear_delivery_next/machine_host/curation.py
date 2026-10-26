@@ -136,10 +136,11 @@ class Curation:
         if runs.left:
             # Each snapshot is judged on its own: only the lease that records these exact PIDs covers them, so an
             # unrelated held lease never hides a newer snapshot. A settled run's own lease covers an unchanged snapshot.
+            boot = self.maintenance.boot()
             lease = self.maintenance.adopt_uncertain(
-                f"{self.path()}#left", SLOT, "curation", workspace="", covers=_left_covers(runs), pids=runs.left,
+                f"{self.path()}#left", SLOT, "curation", workspace="", covers=_left_covers(runs, boot), pids=runs.left,
             )  # fmt: skip
-            if maintenance.recorded(lease, runs.left):
+            if maintenance.recorded(lease, runs.left, boot):
                 runs.left_key = lease.slot
         for name, r in runs.folders.items():
             # The run's ledger lease, or its one-time import; its key keeps a recovered run from being imported again.
@@ -434,7 +435,7 @@ def legacy_uncertain(run: FolderRun) -> bool:
     return run.state == "failed" and UNKNOWN in run.reason and not run.key
 
 
-def _left_covers(runs: Runs) -> Callable[[maintenance.Lease], bool]:
+def _left_covers(runs: Runs, boot: float) -> Callable[[maintenance.Lease], bool]:
     """Whether a lease already accounts for the PIDs on file: only the lease this snapshot's key names and records.
 
     The run's own lease keeps its PIDs after a recovery, so an unchanged snapshot is covered by it and is not held
@@ -444,7 +445,7 @@ def _left_covers(runs: Runs) -> Callable[[maintenance.Lease], bool]:
     def covers(lease: maintenance.Lease) -> bool:
         if lease.project != SLOT or lease.kind != "curation":
             return False
-        return bool(runs.left_key) and lease.slot == runs.left_key and maintenance.recorded(lease, runs.left)
+        return bool(runs.left_key) and lease.slot == runs.left_key and maintenance.recorded(lease, runs.left, boot)
 
     return covers
 

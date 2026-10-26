@@ -786,6 +786,59 @@ def test_a_known_birth_before_a_settled_runs_end_is_still_that_recovered_run(roo
     assert (rebuilt.maintenance.pending("curation"), len(rebuilt.maintenance.read()["sessions"])) == (False, 1)
 
 
+def after_reboot(root, boot: float, run=None) -> curation.Curation:
+    """A host started after the computer rebooted at *boot*: its ledger judges leases against that boot."""
+    slots = Slots(lambda: 2)
+    ownership = maintenance.Maintenance(slots, boot=lambda: boot)
+    return curation.Curation(slots, shared=lambda: DataRepo(root), run=run, ownership=ownership)
+
+
+def test_a_held_unknown_birth_keeps_its_hold_when_a_known_birth_after_a_reboot_is_written(root, monkeypatch) -> None:
+    """A held lease A (PID 4242, unknown birth) predates a reboot; a later known birth is a new process, held as B."""
+    job = survived_run(root, monkeypatch, birth=None)
+    reboot = job.maintenance.boot() + 100
+    job._pids({"event": "pids", "pids": {4242: reboot + 10}})  # noqa: SLF001 - the historical producer after the boot
+    rebuilt = after_reboot(root, reboot)
+    assert (rebuilt.maintenance.pending("curation"), [s["state"] for s in rebuilt.maintenance.read()["sessions"]]) == (
+        True, ["held", "held"],
+    )  # fmt: skip
+
+
+def test_the_public_start_runs_nothing_while_a_reboot_contradiction_is_held(root, monkeypatch) -> None:
+    calls: list[str] = []
+    job = survived_run(root, monkeypatch, birth=None)
+    reboot = job.maintenance.boot() + 100
+    job._pids({"event": "pids", "pids": {4242: reboot + 10}})  # noqa: SLF001
+
+    def run(cfg) -> Run:
+        calls.append(cfg.session_id)
+        return Run(cfg.session_id, ending="result", payload=MemoryCurationResult(summary="ok", entries=[]))
+
+    rebuilt = after_reboot(root, reboot, run=run)
+    rebuilt.start("shop")
+    drained(rebuilt)
+    assert calls == []
+
+
+def test_a_known_birth_before_the_reboot_is_still_the_held_lease_unchanged(root, monkeypatch) -> None:
+    """The unchanged pre-boot snapshot keeps covering its lease: nothing is held again."""
+    job = survived_run(root, monkeypatch, birth=None)
+    reboot = job.maintenance.boot() + 100
+    job._pids({"event": "pids", "pids": {4242: job.maintenance.boot() + 1}})  # noqa: SLF001 - born before the reboot
+    rebuilt = after_reboot(root, reboot)
+    assert (rebuilt.maintenance.pending("curation"), len(rebuilt.maintenance.read()["sessions"])) == (True, 1)
+
+
+def test_a_recovered_settled_lease_is_not_covered_by_a_known_birth_after_a_later_reboot(root, monkeypatch) -> None:
+    """A recovered lease A with a known birth after the new boot is a new process, not A's own."""
+    job = survived_run(root, monkeypatch, birth=None)
+    recovered_by_reboot(job)
+    reboot = job.maintenance.boot() + 100
+    job._pids({"event": "pids", "pids": {4242: reboot + 10}})  # noqa: SLF001
+    rebuilt = after_reboot(root, reboot)
+    assert (rebuilt.maintenance.pending("curation"), len(rebuilt.maintenance.read()["sessions"])) == (True, 2)
+
+
 def test_a_new_unknown_curation_run_is_not_imported_again_at_restart(root) -> None:
     def run(cfg) -> Run:
         return Run(cfg.session_id, ending="error", detail="runtime PID unknown",
