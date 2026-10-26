@@ -72,23 +72,32 @@ def transaction(  # noqa: PLR0913, PLR0917 - the head the caller proved travels 
     return store._join(outcome.notice, text)[:300]  # noqa: SLF001
 
 
+class _Moved(Exception):  # noqa: N818 - a refused proof, not an error: the batch stays for the owner
+    """The owner's epoch no longer holds, so nothing more is put back."""
+
+
 def settle(shared: DataRepo, images: dict[Path, tuple[bytes | None, bytes]], head: str, generation: str) -> bool:
     """Put a failed or refused batch's files back and complete it, only while HEAD is proved still *head* around it.
 
-    Immediately before each file is put back, the owner's epoch is proved anew (`_owner_epoch`); the first failure stops
-    the put-back, so a file the owner committed meanwhile is never touched. Nothing is put back while a rebase is active
-    or unknown, once HEAD moved from *head* (an owner's commit is never reverted), while the index holds a change to
-    any of the files, or when a file holds neither image. HEAD is proved again after the put-back. Returns whether the
-    batch was completed; when not, it stays interrupted for the owner's finish or abandon.
+    The owner's epoch (`_owner_epoch`) is proved inside each put-back, after its new bytes are durable and immediately
+    before its rename or unlink; the first failure stops the put-back, so a file the owner edited or committed meanwhile
+    is never touched. Nothing is put back while a rebase is active or unknown, once HEAD moved from *head* (an owner's
+    commit is never reverted), while the index holds a change to any of the files, or when a file holds neither image.
+    At the end every file must hold exactly its before image, and HEAD is proved last. Returns whether the batch was
+    completed; when not, it stays interrupted for the owner's finish or abandon.
     """
+
+    def fence() -> None:
+        if not _owner_epoch(shared, images, head):
+            raise _Moved
+
     try:
         for path, (text, _) in images.items():
-            if not _owner_epoch(shared, images, head):
-                return False
-            store._put_back(path, text)  # noqa: SLF001 - same package; store helpers stay private to it
-    except OSError:
+            store._put_back(path, text, fence)  # noqa: SLF001 - same package; store helpers stay private to it
+    except OSError, _Moved:
         return False
-    if not decision_batch.restored({path: text for path, (text, _) in images.items()}) or not _still(shared, head):
+    before = {path: text for path, (text, _) in images.items()}
+    if not decision_batch.restored(shared.root, before) or not _owner_epoch(shared, images, head):
         return False
     decision_batch.complete(shared, generation)
     return True
@@ -106,11 +115,6 @@ def _staged(shared: DataRepo, images: dict[Path, tuple[bytes | None, bytes]]) ->
     until = time.monotonic() + SAVE_SECONDS
     rels = [path.relative_to(shared.root).as_posix() for path in images]
     return any(shared.git("diff", "--cached", "--quiet", "--", rel, until=until).returncode for rel in rels)
-
-
-def _still(shared: DataRepo, head: str) -> bool:
-    """No rebase in flight, and HEAD read last is still *head*: the proof that a failed batch is unpublished."""
-    return operation_idle(shared) and head_commit(shared) == head
 
 
 def landed(shared: DataRepo, head: str, rows: Sequence[tuple[str, bytes | None, bytes]]) -> bool:

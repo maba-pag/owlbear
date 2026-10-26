@@ -27,7 +27,7 @@ from owlbear_delivery_next.state_store import decision_batch, decision_sync, dec
 from owlbear_delivery_next.state_store.database import StoreError
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Callable, Sequence
     from pathlib import Path
 
     from owlbear_decisions import Decision, Entry, Finding, Snapshot
@@ -353,9 +353,9 @@ def _content(path: Path) -> bytes | None:
         return None
 
 
-def _put_back(path: Path, text: bytes | None) -> None:
+def _put_back(path: Path, text: bytes | None, fence: Callable[[], None] | None = None) -> None:
     if _content(path) != text:
-        decision_batch.replace_file(path, text)
+        decision_batch.replace_file(path, text, fence)
 
 
 def _unsaved(shared: DataRepo, decisions: list[Decision], notice: str) -> list[Receipt]:

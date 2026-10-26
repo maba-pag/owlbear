@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import base64
 import json
+import os
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
@@ -213,9 +214,9 @@ def test_a_journal_path_outside_the_checkout_or_in_git_is_corruption_and_nothing
     writes, reads = [], []
     real_replace, real_held = decision_batch.replace_file, decision_batch._held  # noqa: SLF001
 
-    def recording_replace(file_path, data):
+    def recording_replace(file_path, data, *fence):
         writes.append(file_path)
-        return real_replace(file_path, data)
+        return real_replace(file_path, data, *fence)
 
     def recording_held(file_path):
         reads.append(file_path)
@@ -658,8 +659,8 @@ def test_a_head_move_during_the_put_back_keeps_the_batch(picking, monkeypatch):
             raise DecisionError(msg)
         return real_write(decision, folder, expected)
 
-    def put_back_then_owner_commits(path, text):
-        real_put_back(path, text)
+    def put_back_then_owner_commits(path, text, *fence):
+        real_put_back(path, text, *fence)
         shared.git("commit", "--allow-empty", "-qm", "owner commits during the put-back")
 
     with monkeypatch.context() as m:
@@ -694,9 +695,9 @@ def test_git_moving_after_the_first_proof_keeps_the_batch_for_the_owner(picking,
         else:
             (shared.root / ".git" / "rebase-merge").mkdir()
 
-    def replace_then_move(file_path, data):
+    def replace_then_move(file_path, data, *fence):
         writes.append(file_path)
-        real_replace(file_path, data)
+        real_replace(file_path, data, *fence)
         move_git()
 
     with monkeypatch.context() as m:
@@ -935,10 +936,10 @@ def _record_checkout_writes(m: pytest.MonkeyPatch, shared: DataRepo, seen: list[
     real_replace, real_git = decision_batch.replace_file, DataRepo.git
     admin = shared.root / ".git"
 
-    def recording_replace(path, data):
+    def recording_replace(path, data, *fence):
+        real_replace(path, data, *fence)  # a write refused inside the helper, before its rename, is not a write
         if admin not in Path(path).parents:
             seen.append("replace")
-        real_replace(path, data)
 
     def recording_git(self, *args, **kwargs):
         if args and args[0] in {"commit", "push"}:
@@ -1057,8 +1058,8 @@ def _owner_commits_at(m: pytest.MonkeyPatch, surface: str, moment: str, owner_co
         target, name = (decision_batch, "replace_file") if surface == "abandon" else (decision_store, "_put_back")
         real = getattr(target, name)
 
-        def put_back_then_owner_commits(path, data):
-            real(path, data)
+        def put_back_then_owner_commits(path, data, *fence):
+            real(path, data, *fence)
             owner_commits()
 
         m.setattr(target, name, put_back_then_owner_commits)
@@ -1114,4 +1115,185 @@ def test_an_owner_commit_during_the_put_back_stops_it_and_keeps_every_owner_file
     if moment == "probe":  # nothing was put back
         assert [(shared.root / rel).read_bytes() for rel in rels] == afters
     assert decision_batch.pending(shared) is not None
+    _no_authority(picking)
+
+
+def _interrupt_at(picking, monkeypatch, items: list[tuple[Decision, str | None]]) -> str:
+    """Save *items* at their expected revisions as one batch, stopped before its first write; its generation."""
+
+    def interrupted(*_args, **_kwargs):
+        msg = "interrupted before the first write"
+        raise RuntimeError(msg)
+
+    with monkeypatch.context() as m:
+        m.setattr(decision_store, "write", interrupted)
+        with pytest.raises(RuntimeError, match="interrupted"):
+            decision_store.save_all(picking.shared, items, message="decisions: interrupted")
+    return decision_batch.pending(picking.shared).generation
+
+
+def _one_update(picking, monkeypatch, surface: str) -> tuple[Path, bytes, bytes, object]:
+    """One file with a before image, its after image, and the call that writes one of them through a temporary file.
+
+    Finish writes the after image; Abandon, the Store's refused save and a generic refused transaction put the before
+    image back.
+    """
+    shared = picking.shared
+    if surface == "generic":
+        path = shared.root / PROJECT / "changes" / "record.json"
+        path.parent.mkdir(parents=True)
+        path.write_bytes(b'{"n": 0}\n')
+        _commit_file(shared, path.relative_to(shared.root).as_posix())
+        head = shared.git("rev-parse", "HEAD").stdout.strip()
+
+        def step(_head: str) -> decision_transaction.Step:
+            path.write_bytes(b'{"n": 1}\n')
+            return decision_transaction.Step("the commit was refused", refused=True)
+
+        def transaction() -> None:
+            notice = decision_transaction.transaction(
+                shared, PROJECT, "changes: one", [(path, b'{"n": 1}\n')], step, head
+            )
+            assert "interrupted batch" in notice
+
+        return path, b'{"n": 0}\n', b'{"n": 1}\n', transaction
+    old = make(title="Notes stay in one table")
+    assert decision_store.save(shared, old, expected_revision=None, message="decisions: old").published
+    update = old.model_copy(update={"title": "Notes stay in one SQLite table"})
+    path = shared.root / f"{PROJECT}/decisions/{old.id}.md"
+    before, after = path.read_bytes(), serialize(update).encode("utf-8")
+    if surface == "store":
+
+        def save() -> None:
+            with monkeypatch.context() as m:
+                m.setattr(DataRepo, "commit", lambda *_a, **_k: "git refused the commit")
+                said = decision_store.save(shared, update, expected_revision=old.revision, message="decisions: one")
+            assert not said.saved
+
+        return path, before, after, save
+    generation = _interrupt_at(picking, monkeypatch, [(update, old.revision)])
+    if surface == "finish":
+        return path, before, after, lambda: decision_recovery.finish(shared, generation)
+    path.write_bytes(after)
+    return path, before, after, lambda: decision_recovery.abandon(shared, generation)
+
+
+@pytest.mark.parametrize("owner", ["edit", "commit", "landing"])
+@pytest.mark.parametrize("surface", ["finish", "abandon", "store", "generic"])
+def test_an_owner_change_while_the_temporary_file_syncs_is_never_overwritten(picking, monkeypatch, surface, owner):
+    """The owner changes the destination while the new bytes' temporary file is fsynced, after every earlier check.
+
+    `edit` writes a third image, `commit` commits one; both stay exactly as the owner left them. `landing` commits the
+    batch's exact after image: Finish then completes it from the owner's commit, writing and committing nothing.
+    """
+    _seed(picking)
+    shared = picking.shared
+    path, _, after, run = _one_update(picking, monkeypatch, surface)
+    rel = path.relative_to(shared.root).as_posix()
+    owned = after if owner == "landing" else b"the owner's own third image\n"
+    head, index = shared.git("rev-parse", "HEAD").stdout, shared.git("ls-files", "-s").stdout
+    temporaries: list[int] = []
+    fired: list[str] = []
+    real_mkstemp, real_fsync = decision_batch.mkstemp, os.fsync
+
+    def recording_mkstemp(*args, **kwargs):
+        descriptor, name = real_mkstemp(*args, **kwargs)
+        if Path(name).parent == path.parent:  # the destination's own temporary, not the journal's in the Git folder
+            temporaries.append(descriptor)
+        return descriptor, name
+
+    def temporary_fsync_then_owner(descriptor):
+        real_fsync(descriptor)
+        if descriptor in temporaries and not fired:  # the new bytes are durable; the rename has not run
+            fired.append(owner)
+            path.write_bytes(owned)
+            if owner != "edit":
+                _commit_file(shared, rel)
+
+    with monkeypatch.context() as m:
+        m.setattr(decision_batch, "mkstemp", recording_mkstemp)
+        m.setattr(os, "fsync", temporary_fsync_then_owner)
+        if surface in {"finish", "abandon"}:
+            with pytest.raises(decision_store.DecisionsUnavailable, match=r"moved|edited"):
+                run()
+        else:
+            run()
+
+    assert fired == [owner]
+    assert path.read_bytes() == owned  # never replaced after the owner's change
+    assert not [p for p in path.parent.iterdir() if p.name.endswith(".tmp")]  # only its own temporary is removed
+    assert decision_batch.pending(shared) is not None
+    if owner == "edit":
+        assert (shared.git("rev-parse", "HEAD").stdout, shared.git("ls-files", "-s").stdout) == (head, index)
+    else:
+        assert shared.git("show", f"HEAD:{rel}").stdout.encode("utf-8") == owned
+        assert shared.git("diff", "--cached", "--name-only").stdout == ""
+    _no_authority(picking)
+    if owner == "landing":
+        owner_head, seen = shared.git("rev-parse", "HEAD").stdout, []
+        with monkeypatch.context() as m:
+            _record_checkout_writes(m, shared, seen)
+            assert decision_recovery.finish(shared, decision_batch.pending(shared).generation).done
+        assert seen == []
+        assert shared.git("rev-parse", "HEAD").stdout == owner_head
+        assert decision_batch.pending(shared) is None
+
+
+@pytest.mark.parametrize("change", ["recreate", "symlink", "none"])
+def test_abandon_completes_only_when_every_file_holds_exactly_its_before_image(picking, monkeypatch, tmp_path, change):
+    """A successor and the decision it updates: Abandon removes the successor, then restores the other file.
+
+    During that restore's final folder fsync the owner recreates the successor (`recreate`) or swaps the folder for a
+    symlink to it (`symlink`): Abandon keeps the batch and touches nothing more. `none` is the healthy Abandon.
+    """
+    _seed(picking)
+    shared = picking.shared
+    old = make(title="Notes stay in one table")
+    assert decision_store.save(shared, old, expected_revision=None, message="decisions: old").published
+    successor = make(title="Use UTC", statement="All timestamps use UTC.")
+    update = old.model_copy(update={"title": "Notes stay in one SQLite table"})
+    generation = _interrupt_at(picking, monkeypatch, [(successor, None), (update, old.revision)])
+    folder = shared.root / PROJECT / "decisions"
+    added, updated = folder / f"{successor.id}.md", folder / f"{old.id}.md"
+    before = updated.read_bytes()
+    added.write_bytes(serialize(successor).encode("utf-8"))
+    updated.write_bytes(serialize(update).encode("utf-8"))
+    head, index = shared.git("rev-parse", "HEAD").stdout, shared.git("ls-files", "-s").stdout
+    fired: list[str] = []
+    real_fsync = decision_batch.fsync_dir
+
+    def restore_fsync_then_owner(path):
+        real_fsync(path)
+        restored = not added.exists() and updated.read_bytes() == before
+        if change != "none" and not fired and Path(path) == folder and restored:  # the last restore's folder fsync
+            fired.append(change)
+            if change == "recreate":
+                added.write_bytes(serialize(successor).encode("utf-8"))
+            else:
+                folder.rename(tmp_path / "moved")
+                folder.symlink_to(tmp_path / "moved", target_is_directory=True)
+
+    with monkeypatch.context() as m:
+        m.setattr(decision_batch, "fsync_dir", restore_fsync_then_owner)
+        if change == "none":
+            assert decision_recovery.abandon(shared, generation).done
+        else:
+            with pytest.raises(decision_store.DecisionsUnavailable, match="changed while it was put back"):
+                decision_recovery.abandon(shared, generation)
+
+    assert (shared.git("rev-parse", "HEAD").stdout, shared.git("ls-files", "-s").stdout) == (head, index)
+    if change == "none":
+        assert not added.exists()
+        assert updated.read_bytes() == before
+        assert decision_batch.pending(shared) is None
+        return
+    assert fired == [change]
+    if change == "recreate":
+        assert added.read_bytes() == serialize(successor).encode("utf-8")  # the owner's file is never removed again
+    else:
+        assert folder.is_symlink()
+        assert not (tmp_path / "moved" / added.name).exists()
+        assert (tmp_path / "moved" / updated.name).read_bytes() == before
+    assert updated.read_bytes() == before
+    assert decision_batch.pending(shared).generation == generation
     _no_authority(picking)
