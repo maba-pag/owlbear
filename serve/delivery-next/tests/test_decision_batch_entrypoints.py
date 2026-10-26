@@ -2243,3 +2243,208 @@ def test_a_healthy_lock_still_reads_and_an_error_of_its_body_is_not_retold(picki
         with pytest.raises(RuntimeError, match="not of taking the lock"):
             decision_batch.complete(shared, batch.generation)
     assert decision_batch.pending(shared).generation == batch.generation
+
+
+def _completed_list(shared: DataRepo) -> Path:
+    return decision_batch.journal_path(shared).parent / decision_batch.COMPLETED
+
+
+@pytest.mark.parametrize(
+    "listed",
+    [b"{not json", b'{"a": 1}', b'["not-a-generation"]', b"[null]", b'["ABCDEF12"]'],
+    ids=["not-json", "object", "not-hex", "null", "upper-case"],
+)
+@pytest.mark.parametrize("writer", ["save", "transaction"])
+def test_a_damaged_completed_list_with_no_journal_refuses_every_writer_before_it_changes_anything(
+    picking, monkeypatch, writer, listed
+):
+    _seed(picking)
+    shared = picking.shared
+    completed = _completed_list(shared)
+    completed.write_bytes(listed)
+    new = make(title="Use UTC", statement="All timestamps use UTC.")
+    target = shared.root / PROJECT / "changes" / "record.json"
+    git, seen = _git_state(shared), []
+    real_git = DataRepo.git
+
+    def recording_git(self, *args, **kwargs):
+        seen.append(args[0] if args else "")
+        return real_git(self, *args, **kwargs)
+
+    def step(_head: str, _fence) -> decision_transaction.Step:
+        pytest.fail("the step ran")
+
+    def write() -> None:
+        if writer == "save":
+            decision_store.save(shared, new, expected_revision=None, message="decisions: one")
+        else:
+            decision_transaction.transaction(shared, PROJECT, "changes: one", [(target, b"{}")], step, git[0])
+
+    with monkeypatch.context() as m:
+        m.setattr(DataRepo, "git", recording_git)
+        with pytest.raises(decision_store.DecisionsUnavailable, match="completed decision batches"):
+            write()
+
+    assert not {"fetch", "commit", "push", "add", "rebase"} & set(seen)
+    assert not decision_batch.journal_path(shared).exists()
+    assert not (shared.root / f"{PROJECT}/decisions/{new.id}.md").exists()
+    assert not target.exists()
+    assert completed.read_bytes() == listed
+    assert _git_state(shared) == git
+    shown = decision_recovery_routes.diagnosis(shared)
+    assert (shown["corrupt"], shown["generation"]) == (True, "")  # diagnosed, and no action offered
+    _no_authority(picking)
+
+
+@pytest.mark.parametrize("listed", [None, b"[]"], ids=["missing", "empty"])
+def test_a_missing_or_empty_completed_list_still_lets_a_save_through(picking, listed):
+    _seed(picking)
+    shared = picking.shared
+    completed = _completed_list(shared)
+    completed.unlink(missing_ok=True)
+    if listed is not None:
+        completed.write_bytes(listed)
+
+    assert decision_batch.pending(shared) is None
+    receipt = decision_store.save(shared, make(title="Use UTC", statement="UTC."), expected_revision=None, message="m")
+    assert receipt.published
+
+
+@pytest.mark.parametrize("value", [None, "not-a-generation", "ABCDEF12", "a" * 7, "a" * 65, 12345678])
+def test_a_journal_whose_generation_cannot_be_named_is_corrupt_and_offers_no_action(picking, monkeypatch, value):
+    _seed(picking)
+    shared = picking.shared
+    _interrupt(picking, monkeypatch, [make(title="Use UTC", statement="All timestamps use UTC.")])
+    _rewrite_journal(shared, lambda record: record.__setitem__("generation", value))
+    journal = decision_batch.journal_path(shared).read_bytes()
+
+    shown = decision_recovery_routes.diagnosis(shared)
+    assert (shown["interrupted"], shown["corrupt"], shown["generation"]) == (True, True, "")
+    assert "generation" in shown["diagnosis"]
+    for action in (decision_recovery.finish, decision_recovery.abandon):
+        with pytest.raises(decision_store.DecisionsUnavailable, match="generation"):
+            action(shared, "a" * 16)
+    assert decision_batch.journal_path(shared).read_bytes() == journal
+    _no_authority(picking)
+
+
+@pytest.mark.parametrize("value", ["a" * 8, "b" * 64], ids=["8", "64"])
+def test_a_journal_generation_of_8_to_64_hex_characters_is_recovered_by_it(picking, monkeypatch, value):
+    _seed(picking)
+    shared = picking.shared
+    new = make(title="Use UTC", statement="All timestamps use UTC.")
+    _interrupt(picking, monkeypatch, [new])
+    assert len(decision_batch.pending(shared).generation) == 32  # a producer's own: a UUID's hex
+    _rewrite_journal(shared, lambda record: record.__setitem__("generation", value))
+
+    shown = decision_recovery_routes.diagnosis(shared)
+    assert (shown["corrupt"], shown["generation"]) == (False, value)
+    assert decision_recovery.abandon(shared, value).done
+    assert decision_batch.pending(shared) is None
+    assert value in json.loads(_completed_list(shared).read_bytes())
+
+
+def _successor_and_update(picking, monkeypatch, surface: str) -> tuple[Path, bytes, Path, bytes, object]:
+    """A batch adding a successor and updating another file, refused or interrupted, and the call that puts it back:
+    the added file and its after image, the updated file and its before image."""
+    shared = picking.shared
+    if surface == "generic":
+        folder = shared.root / PROJECT / "changes"
+        folder.mkdir(parents=True)
+        updated, added = folder / "kept.json", folder / "added.json"
+        updated.write_bytes(b'{"n": 0}\n')
+        _commit_file(shared, updated.relative_to(shared.root).as_posix())
+        head = shared.git("rev-parse", "HEAD").stdout.strip()
+        files = [(added, b'{"new": 1}\n'), (updated, b'{"n": 1}\n')]
+
+        def step(_head: str, _fence) -> decision_transaction.Step:
+            for path, data in files:
+                path.write_bytes(data)
+            return decision_transaction.Step("the commit was refused", refused=True)
+
+        def run() -> None:
+            decision_transaction.transaction(shared, PROJECT, "changes: two", files, step, head)
+
+        return added, b'{"new": 1}\n', updated, b'{"n": 0}\n', run
+    old = make(title="Notes stay in one table")
+    assert decision_store.save(shared, old, expected_revision=None, message="decisions: old").published
+    successor = make(title="Use UTC", statement="All timestamps use UTC.")
+    update = old.model_copy(update={"title": "Notes stay in one SQLite table"})
+    folder = shared.root / PROJECT / "decisions"
+    added, updated = folder / f"{successor.id}.md", folder / f"{old.id}.md"
+    after, before = serialize(successor).encode("utf-8"), updated.read_bytes()
+    items = [(successor, None), (update, old.revision)]
+    if surface == "store":
+
+        def save() -> None:
+            with monkeypatch.context() as m:
+                m.setattr(DataRepo, "commit", lambda *_a, **_k: "git refused the commit")
+                decision_store.save_all(shared, items, message="decisions: two")
+
+        return added, after, updated, before, save
+    generation = _interrupt_at(picking, monkeypatch, items)
+    added.write_bytes(after)
+    updated.write_bytes(serialize(update).encode("utf-8"))
+
+    def abandon() -> None:
+        with pytest.raises(decision_store.DecisionsUnavailable, match="changed while it was put back"):
+            decision_recovery.abandon(shared, generation)
+
+    return added, after, updated, before, abandon
+
+
+@pytest.mark.parametrize("recreate", [True, False], ids=["owner-recreates-during-the-final-probe", "healthy"])
+@pytest.mark.parametrize("surface", ["store", "generic", "abandon"])
+def test_a_successor_recreated_during_the_final_git_probe_of_a_put_back_keeps_the_batch(
+    picking, monkeypatch, surface, recreate
+):
+    """Every file is put back and proved exactly its before image; then, during the blocking Git probe that follows
+    (the staged index for a put-back, the rebase state for Abandon), the owner recreates the removed successor with
+    its after image. The batch must stay pending with the owner's file, and no reader gets authority."""
+    _seed(picking)
+    shared = picking.shared
+    added, after, updated, before, run = _successor_and_update(picking, monkeypatch, surface)
+    git_state = _git_state(shared)
+    proved, fired = [False], []
+    real_restored, real_git, real_rebasing = decision_batch.restored, DataRepo.git, DataRepo.rebasing
+
+    def restored(*args, **kwargs):
+        proved[0] = real_restored(*args, **kwargs)
+        return proved[0]
+
+    def owner_recreates() -> None:
+        if recreate and proved[0] and not fired:
+            fired.append(True)
+            added.write_bytes(after)
+
+    def git(self, *args, **kwargs):
+        said = real_git(self, *args, **kwargs)
+        if args[:2] == ("diff", "--cached"):
+            owner_recreates()
+        return said
+
+    def rebasing(self, *args, **kwargs):
+        said = real_rebasing(self, *args, **kwargs)
+        owner_recreates()
+        return said
+
+    with monkeypatch.context() as m:
+        m.setattr(decision_batch, "restored", restored)
+        m.setattr(DataRepo, "git", git)
+        m.setattr(DataRepo, "rebasing", rebasing)
+        if surface == "abandon" and not recreate:
+            generation = decision_batch.pending(shared).generation
+            assert decision_recovery.abandon(shared, generation).done
+        else:
+            run()
+
+    assert _git_state(shared) == git_state  # nothing committed, staged or undone either way
+    assert updated.read_bytes() == before
+    if not recreate:
+        assert not added.exists()
+        assert decision_batch.pending(shared) is None
+        return
+    assert fired
+    assert added.read_bytes() == after  # the owner's file stays
+    assert decision_batch.pending(shared) is not None
+    _no_authority(picking)

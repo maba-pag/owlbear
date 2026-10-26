@@ -126,10 +126,23 @@ def settle(shared: DataRepo, images: dict[Path, tuple[bytes | None, bytes]], hea
     except OSError, _Moved:
         return False
     before = {path: text for path, (text, _) in images.items()}
-    if not decision_batch.restored(shared.root, before) or not _owner_epoch(shared, images, head):
+    if not decision_batch.restored(shared.root, before) or not _settled(shared, images, before, head):
         return False
     decision_batch.complete(shared, generation)
     return True
+
+
+def _settled(
+    shared: DataRepo, images: dict[Path, tuple[bytes | None, bytes]], before: dict[Path, bytes | None], head: str
+) -> bool:
+    """The final proof of a put-back, a file put back and then changed during a probe keeping the batch.
+
+    No rebase and a clean index, then every file exactly its before image again, read after those blocking probes, and
+    HEAD read last.
+    """
+    if not operation_idle(shared) or _staged(shared, images):
+        return False
+    return decision_batch.holds_before(shared.root, before) and head_commit(shared) == head
 
 
 def _owner_epoch(shared: DataRepo, images: dict[Path, tuple[bytes | None, bytes]], head: str) -> bool:

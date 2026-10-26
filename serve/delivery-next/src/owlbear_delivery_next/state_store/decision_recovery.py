@@ -72,12 +72,6 @@ def _idle(shared: DataRepo, batch: decision_batch.Batch) -> None:
         raise DecisionsUnavailable(msg, RECOVER)
 
 
-def _unmoved(shared: DataRepo, batch: decision_batch.Batch) -> None:
-    """Refuse unless no rebase is in flight and HEAD still names the batch's head, which is read last."""
-    _idle(shared, batch)
-    _same_head(shared, batch)
-
-
 def _fenced(shared: DataRepo, batch: decision_batch.Batch) -> None:
     """The owner's epoch, proved immediately before each file is written: idle Git, every file owned, HEAD read last.
 
@@ -97,6 +91,13 @@ def _same_head(shared: DataRepo, batch: decision_batch.Batch) -> None:
 def _all_before(root: DataRepo, batch: decision_batch.Batch) -> None:
     """Refuse unless every file of the batch is plain and exactly its before image, absent where it had none."""
     if not decision_batch.restored(root.root, {root.root / rel: before for rel, before, _ in batch.files}):
+        msg = f"a file of batch {batch.generation} changed while it was put back, so it stays interrupted; check it"
+        raise DecisionsUnavailable(msg, RECOVER)
+
+
+def _still_before(root: DataRepo, batch: decision_batch.Batch) -> None:
+    """`_all_before` read again, with no fsync, after the blocking probes that follow it."""
+    if not decision_batch.holds_before(root.root, {root.root / rel: before for rel, before, _ in batch.files}):
         msg = f"a file of batch {batch.generation} changed while it was put back, so it stays interrupted; check it"
         raise DecisionsUnavailable(msg, RECOVER)
 
@@ -227,8 +228,10 @@ def abandon(shared: DataRepo, generation: str) -> Recovery:
             _preflight(root, batch)
             for rel, before, _ in batch.files:  # proved inside each put-back, immediately before its rename or unlink
                 decision_batch.replace_file(root.root / rel, before, lambda: _fenced(root, batch), root.root)
-            _all_before(root, batch)  # every file exactly as before, then Git: HEAD is read last
-            _unmoved(root, batch)
+            _all_before(root, batch)  # every file exactly as before and durable
+            _idle(root, batch)
+            _still_before(root, batch)  # read again after the rebase probe, with no fsync; then HEAD is read last
+            _same_head(root, batch)
             decision_batch.complete(root, generation)
             notice = "abandoned: the files are as they were; Git is unchanged"
             return Recovery(generation=generation, done=True, notice=notice)

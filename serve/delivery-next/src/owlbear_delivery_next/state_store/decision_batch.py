@@ -14,6 +14,7 @@ import base64
 import binascii
 import json
 import os
+import re
 import unicodedata
 import uuid
 from contextlib import contextmanager, suppress
@@ -30,6 +31,7 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.local_system.data_repo import DataRepo
 
 JOURNAL = "owlbear-decision-batch.json"
+GENERATION = re.compile(r"[0-9a-f]{8,64}")  # as `begin` makes it (a UUID's hex) and the owner's recovery names it
 COMPLETED = "owlbear-decision-batches-completed.json"
 LOCK = "owlbear-decision-batch.lock"
 
@@ -194,14 +196,28 @@ def restored(root: Path, before: dict[Path, bytes | None]) -> bool:
         folders |= {path.parent for path, text in before.items() if text is not None and path.parent.exists()}
         for folder in folders:
             fsync_dir(folder)
-        return all(
-            _absent(root, path, anchors[path])
-            if text is None
-            else _held(path) == text and plain_in_checkout(root, path)
-            for path, text in before.items()
-        ) and still_plain(root, before)
+        return _exactly(root, before, anchors)
     except OSError:
         return False
+
+
+def holds_before(root: Path, before: dict[Path, bytes | None]) -> bool:
+    """Whether every file still holds exactly its before image, read again with no fsync (`restored` made it durable).
+
+    A completion re-reads this after its blocking Git and index probes and before its final HEAD read, so a file put
+    back and then changed again during a probe keeps the batch.
+    """
+    try:
+        return _exactly(root, before, {path: _anchor(root, path) for path, text in before.items() if text is None})
+    except OSError:
+        return False
+
+
+def _exactly(root: Path, before: dict[Path, bytes | None], anchors: dict[Path, Path]) -> bool:
+    return all(
+        _absent(root, path, anchors[path]) if text is None else _held(path) == text and plain_in_checkout(root, path)
+        for path, text in before.items()
+    ) and still_plain(root, before)
 
 
 def _anchor(root: Path, path: Path) -> Path:
@@ -332,7 +348,7 @@ def _decode(raw: bytes) -> Batch:
         ids = tuple(str(i) for i in _listed(record["ids"]))
         _paired(ids, files)
         return Batch(
-            str(record["generation"]),
+            _generation(record["generation"]),
             str(record["project"]),
             str(record["head"]),
             str(record["message"]),
@@ -352,10 +368,18 @@ def _generations(raw: bytes | None) -> set[str]:
     except ValueError as exc:
         msg = f"the list of completed decision batches cannot be read: {exc}"
         raise JournalError(msg) from exc
-    if not isinstance(listed, list) or not all(isinstance(g, str) for g in listed):
+    if not isinstance(listed, list) or not all(isinstance(g, str) and GENERATION.fullmatch(g) for g in listed):
         msg = "the list of completed decision batches is not a list of generations"
         raise JournalError(msg)
     return set(listed)
+
+
+def _generation(value: object) -> str:
+    """A batch's generation as `begin` makes it and the owner's recovery names it; anything else is damage."""
+    if not isinstance(value, str) or not GENERATION.fullmatch(value):
+        msg = "the journal's generation is not 8 to 64 lowercase hexadecimal characters"
+        raise ValueError(msg)
+    return value
 
 
 def _read(path: Path) -> bytes | None:
@@ -369,15 +393,20 @@ def _read(path: Path) -> bytes | None:
 
 
 def pending(shared: DataRepo) -> Batch | None:
-    """The batch in flight, if any; a journal whose generation completed is a stale copy and is ignored."""
+    """The batch in flight, if any; a journal whose generation completed is a stale copy and is ignored.
+
+    The completed list is read and checked first: one that cannot be read means whether a batch is in flight is
+    unknown, so it refuses even when no journal is there, before any writer changes a file.
+    """
     admin = _admin(shared)
     with _locked(shared):
         raw = _read(admin / JOURNAL)
         listed = _read(admin / COMPLETED)
+    done = _generations(listed)
     if raw is None:
         return None
     batch = _decode(raw)
-    return None if batch.generation in _generations(listed) else batch
+    return None if batch.generation in done else batch
 
 
 def begin(  # noqa: PLR0913, PLR0917 - a batch is its project, head, message, decisions and files together
@@ -414,7 +443,8 @@ def stamp(shared: DataRepo) -> tuple[bytes | None, bytes | None]:
     with _locked(shared):
         journal = _read(admin / JOURNAL)
         listed = _read(admin / COMPLETED)
-    if journal is not None and _decode(journal).generation not in _generations(listed):
+    done = _generations(listed)  # checked even with no journal: an unreadable list leaves the read unknown
+    if journal is not None and _decode(journal).generation not in done:
         msg = f"the interrupted decision batch {_decode(journal).generation} is in flight"
         raise JournalError(msg)
     return journal, listed
