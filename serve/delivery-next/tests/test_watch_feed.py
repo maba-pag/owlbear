@@ -15,7 +15,7 @@ from typing import Any, ClassVar
 import pytest
 from copilot.generated.session_events import PermissionRequestWrite, SessionEvent
 
-from owlbear_delivery_next.change_contracts.models import StepKind
+from owlbear_delivery_next.change_contracts.models import Change, StepKind
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_contracts.tools import Worktree
 from owlbear_delivery_next.change_contracts.watch_policy import Places
@@ -70,6 +70,7 @@ def place(tmp_path) -> SimpleNamespace:
     elsewhere.mkdir()
     store = Store(tmp_path / "store")
     store.db.check()
+    store.write(Lock("c1"), Change(slug="c1"))
     notes: list[str] = []
     places = Places((tmp_path / "worktrees",), (), (), tmp_path / "home", None)  # pytest's own folders are exempt
     writer = partial(watch_reports.Writer, store.db, Lock("c1"), note=notes.append)
@@ -188,17 +189,14 @@ def test_with_the_master_switch_off_there_is_no_watcher_and_nothing_is_recorded(
     st = stepped(place, start("c1"), write("c1", str(place.elsewhere / "x")), watch=False)
     assert (st.feed, rows(place), threads()) == (None, {}, [])
     store, lock = place.store, Lock("c1")
-    assert (
-        watched.watching(store, lock, "build", resolve(None, Layer(spotter=Spotter(mode="off"))), change_repo, print)
-        is None
-    )
+    off = resolve(None, Layer(spotter=Spotter(mode="off")))
+    assert watched.watching(store, lock, "build", off, change_repo, print, watched.needed(off)) is None
     unset = resolve(None, Layer())
     unset.missing.append("spotter.mode")
     with pytest.raises(SettingsUnset, match=r"spotter\.mode"):
-        watched.watching(store, lock, "build", unset, change_repo, print)
-    on = watched.watching(
-        store, lock, "plan", resolve(None, Layer(spotter=Spotter(mode="learning"))), change_repo, print
-    )
+        watched.needed(unset)
+    learning = resolve(None, Layer(spotter=Spotter(mode="learning")))
+    on = watched.watching(store, lock, "plan", learning, change_repo, print, watched.needed(learning))
     assert (on.slug, on.step, on.places.mine) == ("c1", "plan", (store.root / "changes" / "c1",))
     assert on.places.guarded[:2] == (worktree.data_root(), store.root / "changes")
     assert on.places.guarded[-2:] == (change_repo, change_repo / ".git")
@@ -287,7 +285,7 @@ def test_a_call_seen_only_in_a_permission_request_is_its_owners_or_unknown_never
 
 def test_a_cancelled_run_waits_until_its_watcher_closed_then_is_cancelled() -> None:
     release, closed = threading.Event(), threading.Event()
-    feed = SimpleNamespace(close=lambda: (release.wait(5), closed.set()))
+    feed = SimpleNamespace(close=lambda: (release.wait(5), closed.set()), spotter=None)
 
     async def work() -> str:
         return "done"
@@ -313,9 +311,8 @@ def test_a_checkout_whose_git_folder_lives_elsewhere_is_guarded_with_it(place, t
     subprocess.run(["git", "init", "-q", f"--separate-git-dir={meta}", str(checkout)], check=True)  # noqa: S603, S607
     listed = {"projects": [{"id": place.store.root.name, "path": str(checkout), "added_at": "2026-10-24"}]}
     (local_home.root() / project_home.MACHINE).write_text(json.dumps(listed))  # Git cannot name such a checkout
-    on = watched.watching(
-        place.store, Lock("c1"), "build", resolve(None, Layer(spotter=Spotter(mode="learning"))), checkout, print
-    )
+    learning = resolve(None, Layer(spotter=Spotter(mode="learning")))
+    on = watched.watching(place.store, Lock("c1"), "build", learning, checkout, print, watched.needed(learning))
     assert {checkout.resolve(), meta.resolve()} <= {p.resolve() for p in on.places.guarded}
 
 
@@ -328,3 +325,20 @@ def test_a_call_reported_before_its_launcher_was_announced_gets_its_subagent_wit
 def test_a_shell_call_seen_only_in_its_permission_request_shows_its_whole_command(place) -> None:
     stepped(place, shell("p3", read_only=False))
     assert rows(place)["p3"]["command"] == "ran make p3"
+
+
+def test_a_spotter_that_cannot_start_leaves_the_watcher_watching(place, monkeypatch) -> None:
+    from owlbear_delivery_next.improvement import spotter  # noqa: PLC0415
+
+    def broken(*_a: Any) -> None:
+        raise OSError(place.notes.append("spotter refused") or "unwritable")
+
+    monkeypatch.setattr(spotter, "Spotter", broken)
+    spot = spotter.Context(project="p", change="c1", step="build", looks=("hand-off",), sample_rate=0, verbose=False,
+                           model="m", effort="", budget=1)  # fmt: skip
+    place.watching = dataclasses.replace(place.watching, spot=spot)
+    st = stepped(place, start("c1"), write("c1", str(place.elsewhere / "x")))
+    assert st.feed is not None
+    assert st.feed.spotter is None
+    assert place.notes == ["spotter refused"]
+    assert rows(place)["c1"]["verdict"] == OUTSIDE  # the watcher still judged the call

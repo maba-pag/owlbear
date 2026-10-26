@@ -15,9 +15,10 @@ import uvicorn
 
 from owlbear_delivery_next.change_contracts.models import Change, Step, StepKind
 from owlbear_delivery_next.local_system import codebase
-from owlbear_delivery_next.machine_host import app, project, registry
+from owlbear_delivery_next.machine_host import app, project
 from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.project_host.host import Host, HostRecord
+from owlbear_delivery_next.state_store import registry
 from owlbear_delivery_next.state_store.store import Store
 
 

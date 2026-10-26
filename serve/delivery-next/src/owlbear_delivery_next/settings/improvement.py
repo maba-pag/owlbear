@@ -2,7 +2,8 @@
 
 Global, this machine or a project sets each field; none is built in. ``mode``, ``steer_share``, ``intervention_cap``,
 ``verbose`` and ``looks`` must be set, and ``sample_rate`` when ``sample`` is a look; ``verbose_until`` is optional.
-Nothing reads them yet beyond the mode, which switches W1a's feed: the looks, live delivery and the test come later.
+The mode switches W1a's feed and the Spotter's looks; ``looks``, ``sample_rate`` and ``verbose`` shape the looks in
+learning mode (``improvement.spotter``); live delivery, the steer share, the cap and the test come later.
 """
 
 from __future__ import annotations

@@ -19,7 +19,8 @@ from owlbear_delivery_next.local_system.slots import Slots
 from owlbear_delivery_next.machine_host import curation
 from owlbear_delivery_next.settings import carried, config, roles, rounds
 from owlbear_delivery_next.settings.config import GlobalLayer, Layer, SettingsUnset, resolve
-from owlbear_delivery_next.state_store import settings_carry
+from owlbear_delivery_next.settings.improvement import Spotter
+from owlbear_delivery_next.state_store import machine_settings, settings_carry
 from owlbear_delivery_next.state_store.store import StoreError, read_layer
 from owlbear_delivery_next.workflow_steps import decision_publication, decisions_gate, lookup, review, unset_settings
 
@@ -246,9 +247,21 @@ def test_the_page_shows_final_review_values_set_while_others_are_unset():
                                            "ask_owner_at": None}  # fmt: skip
 
 
+LEARNING = Spotter(mode="learning", steer_share=0, intervention_cap=1, verbose="off", looks=["hand-off"])
+
+
 @pytest.mark.usefixtures("no_base")
-def test_an_unset_spotter_mode_asks_before_a_step_records_anything(monkeypatch, tmp_path):
-    no_switch = resolve(carried.layer().model_copy(update={"spotter": None}), Layer())
+@pytest.mark.parametrize(
+    ("spot", "budget", "unset"),
+    [
+        (None, 50, r"spotter\.mode"),
+        (Spotter(mode="learning"), 50, r"spotter\.looks"),
+        (LEARNING, None, "spotter_budget"),
+    ],
+)
+def test_an_unset_spotter_setting_asks_before_a_step_records_anything(monkeypatch, tmp_path, spot, budget, unset):
+    no_switch = resolve(carried.layer().model_copy(update={"spotter": spot}), Layer())
+    monkeypatch.setattr(machine_settings, "BASE", carried.MACHINE.model_copy(update={"spotter_budget": budget}))
     recorded: list[object] = []
     monkeypatch.setattr(runner.worktree, "ensure", lambda *_a: tmp_path)
     monkeypatch.setattr(runner, "git_common_dir", lambda _repo: tmp_path / ".git")
@@ -261,6 +274,6 @@ def test_an_unset_spotter_mode_asks_before_a_step_records_anything(monkeypatch, 
         write=lambda *a: recorded.append(a),
     )
     c = change(StepKind.BUILD)
-    with pytest.raises(SettingsUnset, match=r"spotter\.mode"):
+    with pytest.raises(SettingsUnset, match=unset):
         runner._agent(store, SimpleNamespace(slug="c1"), c, tmp_path)  # noqa: SLF001
     assert (recorded, c.plan.tasks[0].spans) == ([], [])  # no open span left behind
