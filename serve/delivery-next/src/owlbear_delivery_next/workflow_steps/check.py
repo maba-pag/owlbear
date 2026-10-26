@@ -30,6 +30,7 @@ READY_WITHIN = 60.0
 GRACE = 5.0
 WITHIN = 600.0  # seconds per install or preparation command
 SHOWN = 80  # characters of a command a note quotes, so a long path never pushes out why it failed
+CAUSE = 160  # characters of its last output line; a whole note then fits a caller's 300 behind a 45-character prefix
 type Action = Literal["launch", "keep", "dispose", "settle"]
 type Pids = dict[int, float | None]
 type Found = dict[int, str]
@@ -71,7 +72,7 @@ def run(argv: list[str], cwd: Path, log: Callable[[dict[str, Any]], None], env: 
             proc.communicate(timeout=5)  # an escaped child may hold the pipe open
     if proc.returncode:
         last = next((x for x in reversed(out.decode(errors="replace").splitlines()) if x.strip()), "")
-        return f"`{cmd}` failed: {last.strip()[:200]}"
+        return f"`{cmd}` failed: {last.strip()[:CAUSE]}"
     return ""
 
 

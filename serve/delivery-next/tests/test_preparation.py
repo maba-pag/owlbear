@@ -36,6 +36,8 @@ if act == "seed":
     pathlib.Path(db).write_text(pathlib.Path(db).read_text() + "+seeded" if pathlib.Path(db).exists() else "seeded")
 if act == "fail":
     sys.exit("restore refused")
+if act == "fail-long":
+    sys.exit("restore refused: " + "x" * 300)
 """
 SETUP = """import os, pathlib, sys
 act, log = sys.argv[1], pathlib.Path(os.environ["TEST_LOG"])
@@ -349,19 +351,23 @@ def test_cleanup_runs_after_a_failed_restore_and_the_snapshot_may_be_kept(env):
     assert Path(prepare.read(store, "c1", "pc1").snapshot).is_dir()  # the owner keeps it until the next export
 
 
-def test_a_failed_command_on_a_long_path_still_says_why(env):
+LONG = "restore refused: " + "x" * 300
+
+
+@pytest.mark.parametrize(("act", "cause"), [("fail", "restore refused"), ("fail-long", LONG)])
+def test_a_failed_command_on_a_long_path_still_says_why(env, act, cause):
     repo, store, _log, tmp = env
-    pad = 290 - len(run(tmp, "fail")) - 1  # a declared command of 290 characters, wherever tmp is
+    pad = 290 - len(run(tmp, act)) - 1  # a declared command of 290 characters, wherever tmp is
     deep = tmp.joinpath(*(["d" * 100] * (pad // 101)), "e" * (pad % 101 or 1))
     deep.mkdir(parents=True)
     (deep / "tool.py").write_text(TOOL)
-    failing = option(tmp, restore=run(deep, "fail"))
+    failing = option(tmp, restore=run(deep, act))
     assert len(failing.restore) in {290, 291}
     c, s = change(repo, "pc1"), settings(failing)
     prepare._write(store, "c1", prepare.Prepared(check="pc1", option=failing))  # noqa: SLF001 - as accepted
     result = prepare.launch(store, c, s, lambda _e: None)
-    assert result.reason.endswith("failed: restore refused")
-    assert len(result.reason) < 300
+    assert result.reason.endswith(f"failed: {cause[: check.CAUSE]}")  # the note is whole, not cut by the cap
+    assert len(result.reason) <= 300
 
 
 @pytest.mark.parametrize("args", [["python", "tool.py", "fail"], ["/" + "x" * 200 + "/python", "/w/tool.py", "fail"]])
