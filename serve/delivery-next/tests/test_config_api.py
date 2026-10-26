@@ -224,6 +224,7 @@ def test_the_global_layer_is_saved_only_where_a_location_is_configured(store, tm
     assert (got["global"], got["global_location"]) == ({"format": F, "prefs": None, "prefs_imported": False,
                                                          "roles_moved": False,
                                                          "agents": {}, "widths": None,
+                                                         "preparations": None, "data": None, "design_failures": None,
                                                          "final_review": None, "pr_labels": None,
                                                          "pr_marker": None, "sessions": None, "spotter": None,
                                                          "curator_threshold": None, "machine": None,

@@ -52,13 +52,11 @@ def test_an_ordinary_save_keeps_its_other_new_facts(local):
     local.write_profile(Profile())
     stale = local.read_profile()
     local.mark_prefs_import("", "done")
-    stale = stale.model_copy(update={"runtime": "vscode"})
 
     local.write_profile(stale)
 
     prof = local.read_profile()
     assert prof.prefs_import == "done"
-    assert prof.runtime == "vscode"
 
 
 def shared_store(root: Path, tmp_path: Path, name: str) -> Store:

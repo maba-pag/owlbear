@@ -187,13 +187,31 @@ def test_a_stored_layer_from_before_the_window_runtime_loads_without_its_setting
         "widths": [1600],
         "runtimes": {"sdk": True, "window": False},
         "visible": True,
-        "agents": {"builder": {"model": "g-1", "runtime": "vscode", "visible": False, "categories": ["browser"]}},
+        "agents": {"builder": {"model": "g-1", "runtime": "window", "visible": False, "categories": ["browser"]}},
     }
     path.write_text(json.dumps(old))
 
     layer = read_layer(path, GlobalLayer)
-    assert (layer.format, layer.widths, layer.agents["builder"]) == (13, [1600], Agent(model="g-1"))
+    assert (layer.format, layer.widths, layer.agents["builder"]) == (15, [1600], Agent(model="g-1"))
     assert not {"runtimes", "visible"} & set(layer.model_dump())
+
+
+@pytest.mark.parametrize(
+    "retired",
+    [
+        {"runtimes": {"cloud": True}},
+        {"visible": "yes"},
+        {"agents": {"builder": {"runtime": "vscode"}}},
+        {"agents": {"builder": {"categories": ["teleport"]}}},
+    ],
+)
+def test_a_retired_window_setting_the_format_never_allowed_is_refused_not_dropped(tmp_path, retired):
+    path = tmp_path / "global" / "config.json"
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps({"format": 14, "widths": [1600]} | retired))
+
+    with pytest.raises(StoreError, match="cannot be migrated to format 15"):
+        read_layer(path, GlobalLayer)
 
 
 @pytest.mark.parametrize("damaged", [b"", b'{"format": 1, "agents": {"builder": {"model": "x\xff"}}}'])

@@ -192,25 +192,53 @@ def spotter_switched(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+def _retired(data: dict[str, Any], key: str, allowed: Callable[[object], bool]) -> None:
+    """Drop a retired setting; a value the format never allowed is refused, not dropped."""
+    if key in data:
+        value = data.pop(key)
+        if not allowed(value):
+            msg = f"the retired setting {key} is {value!r}, which the format never allowed"
+            raise ValueError(msg)
+
+
+def _on_off(value: object) -> bool:
+    if not isinstance(value, dict) or not set(value) <= {"sdk", "window"}:
+        return False
+    return all(type(on) is bool for on in value.values())
+
+
+def _flag(value: object) -> bool:
+    return value is None or type(value) is bool
+
+
+def _browser_only(value: object) -> bool:
+    return value is None or (isinstance(value, list) and all(category == "browser" for category in value))
+
+
 def window_runtime_dropped(data: dict[str, Any]) -> dict[str, Any]:
     """Settings format 14 to 15: the window runtime's switches and per-agent settings go (2026-10-26).
 
     Only a VS Code window read the runtimes, the visibility and the tool categories; no step did, so none applied.
+    A value the format never allowed is refused, not dropped.
     """
-    data.pop("runtimes", None)
-    data.pop("visible", None)
+    _retired(data, "runtimes", _on_off)
+    _retired(data, "visible", _flag)
     agents = data.get("agents")
     if isinstance(agents, dict):
         for agent in agents.values():
             if isinstance(agent, dict):
-                for key in ("runtime", "visible", "categories"):
-                    agent.pop(key, None)
+                _retired(agent, "runtime", lambda v: v is None or v in ("sdk", "window"))
+                _retired(agent, "visible", _flag)
+                _retired(agent, "categories", _browser_only)
     return data
 
 
 def runtime_switch_dropped(data: dict[str, Any]) -> dict[str, Any]:
-    """Profile format 4 to 5: the per-project runtime switch goes; steps run only through the SDK (2026-10-26)."""
-    data.pop("runtime", None)
+    """Profile format 4 to 5: the per-project runtime switch goes; steps run only through the SDK (2026-10-26).
+
+    A switch that names neither managed nor vscode was never valid, so it is refused, not dropped.
+    """
+    _retired(data, "runtime", lambda v: v in ("managed", "vscode"))
     return data
 
 

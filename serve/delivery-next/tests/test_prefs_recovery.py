@@ -569,9 +569,7 @@ def test_a_refused_config_during_an_ordinary_save_keeps_new_facts_for_the_retry(
     store.config_path.unlink()  # the owner deletes the config; its removal is not yet published
     refused = refuse_config_once(monkeypatch, store)
 
-    late = Profile(
-        version=2, runtime="vscode", entries={profile.POLL: confirmed("45"), profile.WINDOW: confirmed("30")}
-    )
+    late = Profile(version=2, entries={profile.POLL: confirmed("45"), profile.WINDOW: confirmed("30")})
     assert store.write_profile(late)  # the config removal is refused, so the save reports it
     assert refused
     assert store.read_profile().entries[profile.WINDOW].value == "30"  # the new shared fact is kept locally
@@ -585,7 +583,6 @@ def test_a_refused_config_during_an_ordinary_save_keeps_new_facts_for_the_retry(
     fresh, got = clone_profile(remote, tmp_path)
     assert got.prefs_import == "done"
     assert got.version == 2
-    assert got.runtime == "vscode"
     assert got.entries[profile.WINDOW].value == "30"
     assert not fresh.config_path.exists()
     assert not profile_share.unpublished(retried)
