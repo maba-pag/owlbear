@@ -38,6 +38,7 @@ SHOP, DOCS, TWIN = "a" * 16, "b" * 16, "c" * 16  # TWIN: a second clone of the s
 
 
 class Host:
+    maintenance = None
     wake = SimpleNamespace(set=lambda: None)
     repo = None
     paused = staticmethod(lambda: False)

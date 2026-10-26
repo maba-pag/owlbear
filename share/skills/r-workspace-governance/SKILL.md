@@ -59,8 +59,7 @@ manifests, and existing structure. Use `h-codebase-orientation` to discover them
 OwlBear's own source layout on consuming projects.
 
 Shared agent ecosystem assets follow `h-agent-structure`; project-local customizations live under
-the corresponding `.owlbear/agents/`, `.owlbear/skills/`, `.owlbear/instructions/`, and
-`.owlbear/prompts/` directories.
+the corresponding `.owlbear/agents/`, `.owlbear/skills/` and `.owlbear/instructions/` directories.
 
 ## Attribution
 

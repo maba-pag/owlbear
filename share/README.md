@@ -63,9 +63,9 @@ procedure; the pointer should not reproduce it.
 
 ### Prompts
 
-`share/` ships no prompts: Delivery's pages and steps replaced its chat commands. Project-local prompts live in
-`.owlbear/prompts/`. They collect the smallest input needed and route to the agent or workflow that owns the next
-decision.
+`share/` ships no prompts: Delivery's pages and steps replaced its chat commands. OwlBear's own repository keeps none
+either: the Copilot harness does not load prompt files. Its audits are skills invoked by name until they become
+Maintenance actions (`D-01M5WG5KHAXT8P99VXHKWW5EBJ`).
 
 ## Relationship Map
 
@@ -174,7 +174,6 @@ These commands are for the OwlBear checkout; consumer projects follow the [setup
 ```shell
 uv run python .owlbear/scripts/validate_agents.py
 uv run python .owlbear/scripts/validate_skills.py
-uv run python .owlbear/scripts/validate_prompts.py
 uv run pytest -q tests/test_agent_ecosystem_validation.py
 ```
 

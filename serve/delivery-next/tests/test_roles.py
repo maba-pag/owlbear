@@ -169,6 +169,7 @@ def rules(strict: str, resolution: str) -> Profile:
 )
 def test_the_project_api_serves_a_note_for_each_rule_github_does_not_require(tmp_path, strict, resolution, expected):
     class Host:
+        maintenance = None
         wake = SimpleNamespace(set=lambda: None)
         record = HostRecord(url="http://127.0.0.1:9/", token="tok", pid=1, started_at=NOW, code=CURRENT)  # noqa: S106
 

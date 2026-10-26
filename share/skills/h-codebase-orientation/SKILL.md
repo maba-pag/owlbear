@@ -6,8 +6,9 @@ user-invocable: false
 
 # Codebase Orientation
 
-Use the smallest navigation aid that can locate the relevant artifact, module, or symbol. Generated
-indexes and Semble are wayfinders, not authorities. Read the source before making a claim or edit.
+Use the smallest navigation aid that can locate the relevant artifact, module, or symbol. Package
+READMEs, search results and Semble are wayfinders, not authorities. Read the source before making a
+claim or edit.
 
 ## Establish Project Context
 
@@ -19,35 +20,19 @@ Use this order to establish context without turning local instructions into univ
 
 1. Project identity and intended use: local project instructions and root README.
 2. Package boundaries and toolchains: manifests such as `pyproject.toml` and `package.json`.
-3. Current structure and interfaces: generated indexes, then direct source reads.
+3. Current structure and interfaces: the package map and package READMEs, then search and direct
+   source reads.
 4. Shared OwlBear behavior: shared agents, skills, and instructions, never copied project notes.
 
-## Use Existing Indexes
+## Start From the Package Map
 
-When present, these committed artifacts are optional wayfinders:
+OwlBear keeps no generated code or document indexes. In OwlBear's own repository, `serve/README.md`
+maps each package to its job, and each package README names its commands, configuration and public
+interface. Other projects may have their own README map; use it when present.
 
-| Artifact | Contents | Best use |
-| --- | --- | --- |
-| `.owlbear/doc-index.md` | Documentation paths, headings, and outbound links | Find the document that owns a topic. |
-| `.owlbear/py-index.md` | Python modules, imports, classes, methods, and functions | Inspect package shape and likely interfaces. |
-| `.owlbear/ts-index.md` | TS/TSX/JS/JSX modules, imports, exports, and interfaces | Inspect frontend or script structure. |
-
-`doc-index` also has a workflow-specific role: `.owlbear/prompts/doc-audit.prompt.md` requires
-regenerating it before scanning and again during closeout. The Python and ECMAScript indexes remain
-optional, on-demand orientation aids; none of these artifacts is regenerated automatically by
-pre-commit or CI.
-
-The artifacts are advisory. Source files remain authoritative. Search indexes with `rg`; do not load
-an entire index when one path, symbol, or topic query will do.
-
-Do not regenerate indexes during ordinary orientation. A stale or missing index is a reason to use
-exact source search or another rung of the orientation ladder, not to mutate the working tree.
-Regenerate the fixed index artifacts only when index maintenance is itself part of the requested
-work, following `r-workspace-governance` for artifact ownership.
-
-```text
-uv run --project {owlbear-root} indexes {project-root}
-```
+Then locate code by search: `rg` or file search for exact text, paths and symbols; code search or
+language-server references for definitions and callers. Search for one path, symbol or topic at a
+time rather than listing whole trees.
 
 ## Find the Test Boundary
 
@@ -66,15 +51,15 @@ call. The result is orientation, not proof; the executed test or lint command is
 Stop at the first adequate option:
 
 1. **Known file or symbol:** read it directly. Use language-server references when callers matter.
-2. **Documentation topic:** search `.owlbear/doc-index.md`, then read the candidate document.
-3. **Known language or module area:** search an existing `.owlbear/py-index.md` or
-   `.owlbear/ts-index.md`, or search source directly, then read the candidate source.
+2. **Documentation topic:** search Markdown files for the topic, then read the candidate document.
+3. **Known package or module area:** read the package README, then search its source and read the
+   candidate.
 4. **Exact text, symbol, path, or exhaustive claim:** use `rg`, file search, or language-server
    references against source.
 5. **Unknown behavioral owner or analogous implementation:** use Semble once to obtain a small set of
    candidates, then read source.
 
-Do not call Semble when a known file, symbol, index result, or exact search already provides a
+Do not call Semble when a known file, symbol, README pointer, or exact search already provides a
 credible anchor. Do not repeat a Semble query after it returns a usable location.
 
 ## Semble
@@ -95,11 +80,11 @@ research workflow controls clone approval, recording, and cleanup.
 
 ## Discovery Is Not Proof
 
-1. Treat index and Semble results as candidates.
+1. Treat README pointers, search hits and Semble results as candidates.
 2. Read returned source directly before claiming behavior, ownership, or interface shape.
 3. Use `rg`, language-server references, direct reads, or focused tests for exhaustive claims: every
    caller, every implementation, absence, exact configuration use, and affected tests.
-4. Cite source or command evidence, never a generated-index entry, ranking, or savings metric.
+4. Cite source or command evidence, never a README summary, ranking, or savings metric.
 5. Stop after one or two focused searches. If ownership remains unclear, follow the caller's role
    boundary rather than broadening indefinitely.
 

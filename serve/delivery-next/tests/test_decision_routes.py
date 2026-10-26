@@ -37,6 +37,7 @@ class Host:
     wake = SimpleNamespace(set=lambda: None)
     record = HostRecord(url="http://127.0.0.1:9/", token="tok", pid=1, started_at=datetime.now(UTC), code=CURRENT)  # noqa: S106
     repo = None  # the impact report says it does not know the clone
+    maintenance = None  # no running maintenance: owns no pack sessions
 
 
 def git(cwd: Path, *args: str) -> str:
@@ -340,6 +341,29 @@ def test_a_chat_proposal_is_a_draft_unless_confirmed_and_never_replaces_a_decide
     assert with_words.json()["detail"] == [
         {"loc": ["body", "words"], "msg": "Extra inputs are not permitted", "type": "extra_forbidden"}
     ]
+
+
+def test_a_recommendation_the_owner_took_is_approved_never_without_his_confirmation(store, shared):
+    """A confirmed chat decision can be `approved`, new or replacing a decided one; unconfirmed it is refused."""
+    chat, rule = client(store, CHAT), decided()
+    seed(shared, rule)
+    head = git(shared.root, "rev-parse", "HEAD")
+    approved = {"title": "Tags", "statement": "Tags are free.", "origin": "approved"}
+
+    claimed = chat.post("/api/next/decisions/propose", json=approved)
+    assert claimed.status_code == 422
+    assert claimed.json()["detail"] == decision_actions.UNAPPROVED
+    assert git(shared.root, "rev-parse", "HEAD") == head
+
+    new = chat.post("/api/next/decisions/propose", json=approved | {"confirmed": True}).json()
+    body = approved | {"confirmed": True, "replaces": rule.id, "revision": rule.revision, "reason": "r"}
+    successor = chat.post("/api/next/decisions/propose", json=body | {"redecide": True}).json()
+
+    one, two = now(shared, new["receipts"][0]["id"]), now(shared, successor["receipts"][0]["id"])
+    assert (one.state, one.origin, one.read_back) == (State.IN_FORCE, Origin.APPROVED, today())
+    assert (two.state, two.origin, two.read_back) == (State.IN_FORCE, Origin.APPROVED, today())
+    assert now(shared, rule.id).state is State.REPLACED
+    assert "impact" in successor
 
 
 def test_promotion_makes_a_linked_global_successor_and_keeps_the_source(owner, shared):
