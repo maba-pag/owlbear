@@ -15,6 +15,7 @@ from owlbear_delivery_next.local_system import maintenance
 from owlbear_delivery_next.local_system.slots import Slots
 from owlbear_delivery_next.pack_runs import pack_job, pack_state
 from owlbear_delivery_next.project_host import session_slots
+from owlbear_delivery_next.state_store import pack_run_record
 from owlbear_delivery_next.state_store.store import Store
 
 KINDS = ["fifo", "directory", "link"]
@@ -64,7 +65,7 @@ def test_every_reader_refuses_a_record_that_is_not_a_regular_file_at_once_and_cl
     root.mkdir()
     unsafe(root, kind, tmp_path)
     fds = open_fds()
-    [opened] = bounded(lambda: pack_state.open_record(root / pack_state.FILE))
+    [opened] = bounded(lambda: pack_run_record.open_record(root / pack_state.FILE))
     assert isinstance(opened, (OSError, ValueError)), opened
     [seen] = bounded(lambda: pack_state.observed(root))
     assert isinstance(seen, (OSError, ValueError)), seen  # unreadable, never taken for no record
@@ -95,9 +96,9 @@ def test_a_fault_after_the_open_closes_the_descriptor(tmp_path, fault):
 
     with pytest.MonkeyPatch.context() as patch:
         if fault == "fstat":
-            patch.setattr(pack_state.os, "fstat", broken)
+            patch.setattr(pack_run_record.os, "fstat", broken)
         else:
-            patch.setattr(pack_state.json, "load", broken)
+            patch.setattr(pack_run_record.json, "load", broken)
         with pytest.raises(OSError, match=f"synthetic {fault} failure"):
             pack_state.observed(root)
         assert pack_state.read_version(root / pack_state.FILE) == (pack_state.blank(), "")
@@ -133,7 +134,7 @@ def test_the_pages_reader_shows_a_failed_handover_as_unread_and_lets_a_cancellat
         raise fault(msg)
 
     with pytest.MonkeyPatch.context() as patch:
-        patch.setattr(pack_state.os, "fdopen", handover)
+        patch.setattr(pack_run_record.os, "fdopen", handover)
         if fault is Cancelled:
             with pytest.raises(Cancelled):
                 pack_state.last(Store(root))

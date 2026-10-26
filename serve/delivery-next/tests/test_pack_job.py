@@ -39,11 +39,12 @@ from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.local_system.maintenance import Maintenance
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.local_system.slots import Slots
-from owlbear_delivery_next.pack_runs import pack_gates, pack_job, pack_publish, pack_rounds, pack_state, pack_updater
+from owlbear_delivery_next.pack_runs import pack_gates, pack_job, pack_publish, pack_rounds, pack_updater
 from owlbear_delivery_next.project_host import api, session_slots
 from owlbear_delivery_next.project_host.admission import STOPPING
 from owlbear_delivery_next.project_host.host import ENDING, HostRecord
 from owlbear_delivery_next.runtimes.session_result import Run
+from owlbear_delivery_next.state_store import pack_run_record
 from owlbear_delivery_next.state_store.store import Lock, Store
 
 AUTH = {"authorization": "Bearer t"}
@@ -1220,7 +1221,7 @@ def test_settling_a_publication_the_host_stopped_leaves_it_whole_and_its_copy_st
     session_slots.unloaded(owner, "p", store.root)  # the stop is held while the store cannot open
     [a] = owner.read()["sessions"]
     before = (store.root / pack_job.FILE).read_bytes()
-    assert pack_state.settle(store.root, receipted=lambda found: owner.receipted("p", found)) is False
+    assert pack_run_record.settle(store.root, receipted=lambda found: owner.receipted("p", found)) is False
     assert (store.root / pack_job.FILE).read_bytes() == before
 
     home = tmp_path / "home"
@@ -1663,15 +1664,15 @@ def test_the_maintenance_page_links_each_action_and_shows_what_is_not_built(tmp_
 
 
 class RecordDescriptors:
-    """Each descriptor ``pack_state.open_record`` hands out, and how often that module closes it.
+    """Each descriptor ``pack_run_record.open_record`` hands out, and how often that module closes it.
 
-    The module gets its own OS bindings so unrelated process-wide opens and closes cannot affect the oracle.
+    The record module gets its own OS bindings so unrelated process-wide opens and closes cannot affect the oracle.
     Only an owned descriptor's handover fails; a close outside its acquisition lifetime is a stray.
     """
 
     def __init__(self, fault: type[BaseException]) -> None:
         self.fault, self.owned, self.strays = fault, [], []
-        self.real_open, self.real_fdopen, self.real_close = pack_state.open_record, os.fdopen, os.close
+        self.real_open, self.real_fdopen, self.real_close = pack_run_record.open_record, os.fdopen, os.close
 
     def open_record(self, path: Path) -> int:
         fd = self.real_open(path)
@@ -1693,8 +1694,10 @@ class RecordDescriptors:
         self.real_close(fd)
 
     def patch(self, patch: pytest.MonkeyPatch) -> None:
-        patch.setattr(pack_state, "open_record", self.open_record)
-        patch.setattr(pack_state, "os", SimpleNamespace(**(vars(os) | {"fdopen": self.fdopen, "close": self.close})))
+        patch.setattr(pack_run_record, "open_record", self.open_record)
+        patch.setattr(
+            pack_run_record, "os", SimpleNamespace(**(vars(os) | {"fdopen": self.fdopen, "close": self.close}))
+        )
 
     def closed_once(self) -> bool:
         return len(self.owned) == 1 and self.owned[0]["closes"] == 1 and not self.strays
@@ -1722,15 +1725,15 @@ def test_the_descriptor_oracle_ignores_a_reused_number_closed_elsewhere_and_catc
     spy = RecordDescriptors(OSError)
     with pytest.MonkeyPatch.context() as patch:
         spy.patch(patch)
-        fd = pack_state.open_record(tmp_path / "record")
-        pack_state.os.close(fd)
+        fd = pack_run_record.open_record(tmp_path / "record")
+        pack_run_record.os.close(fd)
         reused = os.open(tmp_path / "record", os.O_RDONLY)
         assert reused == fd
         os.close(reused)
         assert spy.closed_once(), (spy.owned, spy.strays)
         again = os.open(tmp_path / "record", os.O_RDONLY)
         assert again == fd
-        pack_state.os.close(again)
+        pack_run_record.os.close(again)
     assert (spy.closed_once(), spy.strays) == (False, [again])
 
 

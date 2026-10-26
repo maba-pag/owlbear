@@ -20,7 +20,7 @@ from owlbear_delivery_next.machine_host.machine import UNPROVEN_PACK, Machine
 from owlbear_delivery_next.pack_runs import pack_job, pack_run, pack_state
 from owlbear_delivery_next.project_host import session_slots
 from owlbear_delivery_next.project_host.host import Host, HostRecord
-from owlbear_delivery_next.state_store import project_home, registry
+from owlbear_delivery_next.state_store import pack_run_record, project_home, registry
 from owlbear_delivery_next.state_store.store import Store
 
 REPLAY_UNCERTAIN = (
@@ -315,19 +315,19 @@ def test_a_legacy_run_whose_metadata_cannot_be_read_is_held_again_after_a_real_r
     shared, _remote = shared_repo
     entry, folder = project_with_legacy_run(tmp_path, shared, loaded=loaded)
     write_pack(folder, {})
-    monkeypatch.setattr(pack_state, "os", NoFstat(os))
+    monkeypatch.setattr(pack_run_record, "os", NoFstat(os))
     first = machines()
     first.load_all()
     assert len(held(first, entry.id)) == 1, sessions_of(first, entry.id)
     reboot_then_recover(first, held(first, entry.id)[0]["id"])
-    monkeypatch.setattr(pack_state, "os", os)
+    monkeypatch.setattr(pack_run_record, "os", os)
     first.stop_all()
     folder = live_folder(entry, folder, loaded=loaded)
 
     record = folder / pack_job.FILE
     atomic_write(record, record.read_text(encoding="utf-8"))
 
-    monkeypatch.setattr(pack_state, "os", NoFstat(os))
+    monkeypatch.setattr(pack_run_record, "os", NoFstat(os))
     replaced = machines()
     replaced.load_all()
     assert [s["state"] for s in sessions_of(replaced, entry.id)] == ["recovered", "held"]

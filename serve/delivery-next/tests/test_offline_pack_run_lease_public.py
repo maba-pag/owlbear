@@ -20,7 +20,7 @@ from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.pack_runs import pack_job, pack_run, pack_state
 from owlbear_delivery_next.project_host import session_slots
 from owlbear_delivery_next.project_host.host import Host, HostRecord
-from owlbear_delivery_next.state_store import offline_protocol, project_home, project_move, registry
+from owlbear_delivery_next.state_store import offline_protocol, pack_run_record, project_home, project_move, registry
 from owlbear_delivery_next.state_store.database import MARKER
 from owlbear_delivery_next.state_store.store import Store
 
@@ -353,7 +353,7 @@ def test_finish_resumes_a_copy_in_progress_without_settling_the_run_record(repo,
     _write_run(source, _run_record(RUN_A, STARTED_A))
 
     settled: list[object] = []
-    monkeypatch.setattr(pack_state, "settle", lambda *args, **_kwargs: settled.append(args) or False)
+    monkeypatch.setattr(pack_run_record, "settle", lambda *args, **_kwargs: settled.append(args) or False)
 
     def interrupt(*_args, **_kwargs) -> None:
         msg = "synthetic interruption after the copy began"

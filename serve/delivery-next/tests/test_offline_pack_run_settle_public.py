@@ -15,7 +15,7 @@ import pytest
 from owlbear_delivery_next.commands import cli
 from owlbear_delivery_next.local_system import local_home, maintenance
 from owlbear_delivery_next.pack_runs import pack_state
-from owlbear_delivery_next.state_store import offline_protocol, project_home, project_move
+from owlbear_delivery_next.state_store import offline_protocol, pack_run_record, project_home, project_move
 from owlbear_delivery_next.state_store.database import MARKER, StoreError
 from owlbear_delivery_next.state_store.store import Store
 
@@ -165,7 +165,7 @@ def test_failed_rewrite_of_the_run_record_refuses_finish_before_any_copy(repo, b
         msg = "injected write failure"
         raise OSError(errno.EIO, msg)
 
-    monkeypatch.setattr(pack_state, "atomic_write", fail_write)
+    monkeypatch.setattr(pack_run_record, "atomic_write", fail_write)
 
     assert _finish_refused(repo, capsys), "a failed rewrite of the run record was taken for a settled one"
     assert project_move.record(_source(repo)) is None, "a move was started before the run record was settled"
@@ -180,7 +180,7 @@ def test_settling_again_after_a_restart_changes_nothing(repo, boot, capsys):
     capsys.readouterr()
     carried_bytes = (Store.open(repo).root / pack_state.FILE).read_bytes()
 
-    assert pack_state.settle(Store.open(repo).root, receipted=lambda _digest: "") is False
+    assert pack_run_record.settle(Store.open(repo).root, receipted=lambda _digest: "") is False
     assert (Store.open(repo).root / pack_state.FILE).read_bytes() == carried_bytes
 
 

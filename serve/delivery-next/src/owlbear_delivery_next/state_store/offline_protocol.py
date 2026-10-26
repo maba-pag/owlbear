@@ -13,8 +13,7 @@ import sys
 from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.local_system.maintenance import Maintenance, MaintenanceError
-from owlbear_delivery_next.pack_runs import pack_state
-from owlbear_delivery_next.state_store import fd_tree, format_marker, project_home, project_move
+from owlbear_delivery_next.state_store import fd_tree, format_marker, pack_run_record, project_home, project_move
 from owlbear_delivery_next.state_store.database import MARKER, StoreError
 from owlbear_delivery_next.state_store.legacy_family import Gap, open_gaps
 from owlbear_delivery_next.state_store.offline_proof import OfflineProof, same_folder
@@ -253,7 +252,7 @@ def _settle_pack_run(folder: Path) -> None:
         return Maintenance.lookup_receipt(clone, digest)
 
     try:
-        pack_state.settle(folder, receipted=receipted)
+        pack_run_record.settle(folder, receipted=receipted)
     except (OSError, ValueError, MaintenanceError) as exc:
         msg = f"the design-pack run record in {folder} could not be settled: {exc}; nothing was moved"
         raise StoreError(msg) from exc
