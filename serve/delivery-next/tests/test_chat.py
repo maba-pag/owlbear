@@ -219,7 +219,16 @@ def test_a_brief_with_clicks_waits_for_a_declared_test_preparation_before_approv
     refused = c.post(f"/api/next/changes/{slug}/approve-brief", json={"version": 1})
     assert (refused.status_code, "dark" in refused.json()["detail"]) == (409, True)
     option = Preparation(id="fixtures", kind="data-only", seed="npm run seed", cleanup="npm run drop")
-    store.update_config(lambda layer: layer.model_copy(update={"preparations": [option]}))
+    assert (
+        store.save(
+            store.config_path,
+            Layer,
+            lambda layer: layer.model_copy(update={"preparations": [option]}),
+            "setup",
+            owner=True,
+        )
+        == ""
+    )
     assert c.post(f"/api/next/changes/{slug}/approve-brief", json={"version": 1}).status_code == 200
 
 
@@ -518,7 +527,8 @@ def settled(c, launch):
 
 def test_new_change_returns_at_once_and_the_page_polls_the_launch_on_the_projects_shaper(tmp_path):
     store = Store(tmp_path)
-    store.update_config(lambda _layer: Layer(agents={"shaper": Agent(model="gpt-6-luna", effort="max")}))
+    setup = Layer(agents={"shaper": Agent(model="gpt-6-luna", effort="max")})
+    assert store.save(store.config_path, Layer, lambda _layer: setup, "setup", owner=True) == ""
     opening = Opening({"state": "open", "warning": "could not remove it"})
     c = launcher(store, opening)
     started = c.post("/api/next/new-change").json()

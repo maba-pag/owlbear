@@ -98,7 +98,16 @@ def test_the_detail_page_shows_the_settings_fault_and_keeps_pause_enabled(store,
 
 def test_a_cross_layer_invalid_policy_keeps_the_detail_page_and_reports_the_fault(store):
     bad = config.Agent(max_rounds=3, max_findings=10, last_round_at=8, ask_owner_at=7)  # rounds do not hold together
-    store.update_config(lambda cur: cur.model_copy(update={"agents": {"shaper": bad}}))
+    assert (
+        store.save(
+            store.config_path,
+            config.Layer,
+            lambda cur: cur.model_copy(update={"agents": {"shaper": bad}}),
+            "setup",
+            owner=True,
+        )
+        == ""
+    )
 
     body = detail(store)
 

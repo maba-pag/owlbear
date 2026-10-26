@@ -26,7 +26,7 @@ from owlbear_delivery_next.github.provider import (
     QueueState,
 )
 from owlbear_delivery_next.settings import config, profile
-from owlbear_delivery_next.settings.config import Prefs, SettingsUnset, pref
+from owlbear_delivery_next.settings.config import Layer, Prefs, SettingsUnset, pref
 from owlbear_delivery_next.state_store.store import Store
 from owlbear_delivery_next.workflow_steps import merge, queue
 from owlbear_delivery_next.workflow_steps.engine import Ctx
@@ -56,7 +56,12 @@ def store(tmp_path: Path, monkeypatch) -> Store:
 
 
 def set_prefs(store: Store, **values) -> None:
-    store.update_config(lambda cur: cur.model_copy(update={"prefs": Prefs(**values)}))
+    """The owner's preference edit: an owner-intent save, asserted to publish and to be the effective value."""
+    notice = store.save(
+        store.config_path, Layer, lambda cur: cur.model_copy(update={"prefs": Prefs(**values)}), "owner", owner=True
+    )
+    assert notice == ""
+    assert store.read_config().prefs == Prefs(**values)
 
 
 def pr(*, merged: bool = False) -> PullRequest:

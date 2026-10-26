@@ -1228,7 +1228,13 @@ def test_a_pr_gets_the_projects_labels_once_and_the_marker_line_follows_its_swit
 
     gh.find_pull_request, gh.create_pull_request, gh.add_labels = (lambda *_a: gh.pr), create, add_labels
     cx = ctx(tmp_path, gh)
-    cx.store.update_config(lambda layer: layer.model_copy(update={"pr_labels": ["release:minor"], "pr_marker": False}))
+    labelled = {"pr_labels": ["release:minor"], "pr_marker": False}
+    assert (
+        cx.store.save(
+            cx.store.config_path, config.Layer, lambda layer: layer.model_copy(update=labelled), "setup", owner=True
+        )
+        == ""
+    )
     c = change(StepKind.PUBLISH)
     with pytest.raises(Interrupted):
         publish.pull_request(cx, c, A)
@@ -1239,7 +1245,13 @@ def test_a_pr_gets_the_projects_labels_once_and_the_marker_line_follows_its_swit
     assert said == {"labels-failed" if fails else "labels": (7, ["release:minor"])}
     publish.pull_request(cx, cx.store.read(c.slug), A)  # a runner that died right after labelling reads it back
     assert (len(added), cx.store.read(c.slug).names.labelled) == (1, 7)  # never again on this PR
-    cx.store.update_config(lambda layer: layer.model_copy(update={"pr_labels": None, "pr_marker": None}))
+    cleared = {"pr_labels": None, "pr_marker": None}
+    assert (
+        cx.store.save(
+            cx.store.config_path, config.Layer, lambda layer: layer.model_copy(update=cleared), "setup", owner=True
+        )
+        == ""
+    )
     gh.pr, c.names.labelled = None, None
     gh.create_pull_request = lambda *a: bodies.append(a[4]) or pr(head=A, draft=True)
     publish.pull_request(cx, c, A)

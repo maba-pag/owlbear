@@ -76,7 +76,16 @@ def test_the_changes_row_counts_its_outside_writes_and_its_page_lists_the_report
         ("explore", f"edit {SECRET}", [SECRET], "outside write (not judged yet)"),
     ]
     assert w["reports"][0]["verdict"] == "not recorded: 2 reports dropped"
-    store.update_config(lambda layer: layer.model_copy(update={"spotter": Spotter(mode="off")}))
+    assert (
+        store.save(
+            store.config_path,
+            Layer,
+            lambda layer: layer.model_copy(update={"spotter": Spotter(mode="off")}),
+            "setup",
+            owner=True,
+        )
+        == ""
+    )
     assert http.get("/api/next/changes/flip").json()["watcher"]["on"] is False
 
 

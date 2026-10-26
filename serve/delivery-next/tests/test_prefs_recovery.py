@@ -20,7 +20,7 @@ from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.runtimes import readiness
 from owlbear_delivery_next.settings import config, profile
-from owlbear_delivery_next.settings.config import Prefs
+from owlbear_delivery_next.settings.config import Layer, Prefs
 from owlbear_delivery_next.state_store import prefs_import, profile_share
 from owlbear_delivery_next.state_store.store import Store, StoreError
 
@@ -157,7 +157,15 @@ def test_a_pause_folds_without_an_ask_before_merge_preference_and_asks_nothing(r
 def test_an_explicit_no_still_closes_an_open_consent_question(repo, monkeypatch):
     monkeypatch.setattr(config, "BASE", None)
     store = Store.open(repo)
-    store.update_config(lambda cur: cur.model_copy(update={"prefs": Prefs(ask_before_merge=False)}), "test")
+    notice = store.save(
+        store.config_path,
+        Layer,
+        lambda cur: cur.model_copy(update={"prefs": Prefs(ask_before_merge=False)}),
+        "owner",
+        owner=True,
+    )
+    assert notice == ""
+    assert store.read_config().prefs.ask_before_merge is False  # the owner's explicit No is the effective value
     asked = Question(step=StepKind.MERGE, text="merge?", cause=loop.CONSENT)
     result = StepResult(exit=Exit.ASK, question=asked)
     change = loop.apply(Change(slug="c1", step=Step(kind=StepKind.MERGE)), result, NOW)
