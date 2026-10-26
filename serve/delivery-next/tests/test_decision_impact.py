@@ -185,7 +185,7 @@ def test_the_shown_report_names_both_rules_and_what_the_change_means(tmp_path, s
 
 def client(store: Store, repo: Path | None = None, headers=AUTH) -> TestClient:
     record = HostRecord(url="http://127.0.0.1:9/", token="tok", pid=1, started_at=datetime.now(UTC), code=CURRENT)  # noqa: S106
-    host = SimpleNamespace(wake=SimpleNamespace(set=lambda: None), repo=repo, record=record)
+    host = SimpleNamespace(wake=SimpleNamespace(set=lambda: None), repo=repo, record=record, maintenance=None)
     return TestClient(api.create_app(store, "t", host), base_url="http://127.0.0.1", headers=headers)
 
 
@@ -277,7 +277,7 @@ def test_only_the_owner_schedules_fixes_and_accepts_existing_code(tmp_path, shar
 def test_the_machine_host_reports_on_every_project_it_serves(tmp_path, shared, monkeypatch):
     """Like the pinning Changes of every loaded project (slice 5a), a Global rule's impact covers them all."""
     (local_home.root() / "data.json").write_text(json.dumps({"repository": str(shared.root)}))
-    monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo: [])
+    monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
     monkeypatch.setattr(Host, "_spawn", lambda _self, slug: pytest.fail(f"no runner starts here ({slug})"))
     old, new = pair(scope=Scope.GLOBAL, project="")
     publish(shared, old, new)

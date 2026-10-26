@@ -33,7 +33,7 @@ from owlbear_delivery_next.change_contracts.profile_record import (
     in_window,
 )
 from owlbear_delivery_next.change_flow.status import status, unloadable
-from owlbear_delivery_next.commands import setup
+from owlbear_delivery_next.commands import replay_client, setup
 from owlbear_delivery_next.design_packs import design_pack, pack_update
 from owlbear_delivery_next.design_packs.detector import DetectorError
 from owlbear_delivery_next.local_system import data_repo, local_home
@@ -41,8 +41,9 @@ from owlbear_delivery_next.pack_runs import pack_replay
 from owlbear_delivery_next.project_host import answers, host
 from owlbear_delivery_next.settings import profile, roles
 from owlbear_delivery_next.settings.config import Agent, Layer
-from owlbear_delivery_next.state_store import backlog_migrate
+from owlbear_delivery_next.state_store import backlog_migrate, prefs_import, profile_share
 from owlbear_delivery_next.state_store.backlog import Backlog, BacklogError
+from owlbear_delivery_next.state_store.config_save import Prepared
 from owlbear_delivery_next.state_store.store import Store, StoreError
 
 START = "run `owlbear start`, then add this project on its page"
@@ -85,13 +86,9 @@ def update_pack(a: argparse.Namespace, repo: Path) -> int:
         if a.golden:
             return _golden()
         if a.replay:
-            r = pack_replay.replay(Store.open(repo))
-            verdict = "advisory: too few rounds" if r.advisory else "within the margin" if r.ok else "below the margin"
-            sys.stdout.write(
-                f"calibration replay: {r.rounds} decided rounds, {r.left_out} left out; the design judge agreed with "
-                f"the owner {r.before:.0%} as recorded, {r.after:.0%} with this pack ({verdict})\n"
-            )
-            return 0 if r.ok else 1
+            ok, text = replay_client.replay(repo)
+            sys.stdout.write(text + "\n")
+            return 0 if ok else 1
         sys.stdout.write(pack_update.said(pack_update.notice(refresh=True)) + "\n")
     except (
         design_pack.PackError,
@@ -211,8 +208,14 @@ def show_profile(
         prof = profile.confirm(prof, key, value, datetime.now(UTC))
     prof = prof.model_copy(update={"runtime": runtime or prof.runtime})
     store.write_profile(prof)
+    prefs_import.run(store)
     notice = (
-        store.update_config(lambda cur: _overridden(cur, overrides), "role overrides from the CLI") if overrides else ""
+        store.update_config(
+            Prepared(profile_share.config_digest(store.config_path), lambda cur: _overridden(cur, overrides)),
+            "role overrides from the CLI",
+        )
+        if overrides
+        else ""
     )
     lines = [f"profile v{prof.version}", *([f"Notice: {notice}"] if notice else [])]
     lines += [f"  {k}: {e.state} {e.value!r} ({e.evidence})" for k, e in sorted(prof.entries.items())]
@@ -249,7 +252,11 @@ def report(store: Store, a: argparse.Namespace) -> int:
         sys.stderr.write(f"Runtime not switched: {PAUSED_NOTE}.\n")
         return 1
     else:
-        sys.stdout.write(show_profile(store, a.repo.resolve(), a.confirm, a.role, a.runtime) + "\n")
+        try:
+            sys.stdout.write(show_profile(store, a.repo.resolve(), a.confirm, a.role, a.runtime) + "\n")
+        except ValueError as exc:  # a moved preference is refused before anything is recorded
+            sys.stderr.write(f"Not recorded: {exc}.\n")
+            return 1
     return 0
 
 

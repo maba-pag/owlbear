@@ -16,7 +16,7 @@ from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_contracts.profile_record import in_window
 from owlbear_delivery_next.change_flow import loop
 from owlbear_delivery_next.local_system.processes import Termination
-from owlbear_delivery_next.runtimes import sdk_adapter, session_result, vscode_adapter
+from owlbear_delivery_next.runtimes import loop_owner, sdk_adapter, session_result, vscode_adapter
 from owlbear_delivery_next.settings import roles
 from owlbear_delivery_next.workflow_steps import disposable, ro_installs, watched
 
@@ -59,7 +59,7 @@ def granted(label: str) -> int:
     return GRANT or sys.maxsize
 
 
-class UsageUnreadError(Exception):
+class UsageUnreadError(session_result.ReturnedRunError):
     """A session whose model check could not run; its run is never processed unless the owner accepts it."""
 
     def __init__(self, run: session_result.Run, label: str = "") -> None:
@@ -100,7 +100,7 @@ def run(store: Store, cfg: sdk_adapter.Session, *, hold: bool = False) -> sessio
     if in_window(store.read_profile()):
         done = vscode_adapter.run(cfg, store.root / "steps" / f"{uuid.uuid4().hex}.json")
     else:
-        done = asyncio.run(sdk_adapter.run(cfg))
+        done = loop_owner.run(sdk_adapter.run(cfg))
     if unread(done) and not (hold and held(done)):
         raise UsageUnreadError(done, cfg.job)
     return done
@@ -382,7 +382,7 @@ def _waves(cfgs: list[sdk_adapter.Session], told: Callable[[int], None]) -> list
             break
         if size < len(cfgs):
             told(len(cfgs) - first)
-        runs += asyncio.run(_together(cfgs[first : first + size]))
+        runs += loop_owner.run(_together(cfgs[first : first + size]))
     done = Termination(confirmed=True)  # never started
     rest = [session_result.Run(c.session_id, "error", detail=NOT_RUN, termination=done) for c in cfgs[len(runs) :]]
     return runs + rest

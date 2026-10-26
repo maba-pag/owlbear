@@ -10,10 +10,8 @@ empty, and the project memory it reads is today's.
 
 from __future__ import annotations
 
-import asyncio
 import dataclasses
 import re
-import tempfile
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
@@ -24,7 +22,8 @@ from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.design_packs import calibration, design_pack
 from owlbear_delivery_next.local_system import git_files
-from owlbear_delivery_next.runtimes import sdk_adapter
+from owlbear_delivery_next.pack_runs.scratch import scratch
+from owlbear_delivery_next.runtimes import loop_owner, sdk_adapter
 from owlbear_delivery_next.settings import roles
 from owlbear_delivery_next.workflow_steps import judges, sessions
 
@@ -45,8 +44,16 @@ class ReplayError(RuntimeError):
     """A replay judge may still be running, so no further one starts."""
 
 
+def sdk_run(cfg: sdk_adapter.Session) -> Run:
+    """One judge session through the SDK; callers wrap it so its slot is owned while it runs."""
+    return loop_owner.run(sdk_adapter.run(cfg))
+
+
 def replay(
-    store: Store, candidate: Candidate | None = None, run: Callable[[sdk_adapter.Session], Run] | None = None
+    store: Store,
+    candidate: Candidate | None = None,
+    run: Callable[[sdk_adapter.Session], Run] | None = None,
+    keep: Callable[[Path], bool] | None = None,
 ) -> calibration.Replay:
     """The design judge, with *candidate* (else the installed pack) and the project's model, on each decided round.
 
@@ -63,12 +70,12 @@ def replay(
         raise design_pack.PackError(msg)
     pack = _pack(candidate)
     role, memory = roles.chosen(store.settings(), "design-review"), sessions.memory(store)
-    run = run or (lambda cfg: asyncio.run(sdk_adapter.run(cfg)))
+    run = run or sdk_run
     root, pairs, left_out = calibration.folder(store.shared, store.name).resolve(), [], 0
     if not root.is_relative_to(store.shared.root.resolve()):
         msg = f"the calibration folder leads outside the shared repository, to {root}"
         raise design_pack.PackError(msg)
-    with tempfile.TemporaryDirectory(prefix="owlbear-replay-") as tmp:
+    with scratch("owlbear-replay-", keep) as tmp:
         code, text = git_files.probe_in(Path(tmp))(["git", "init", "-q"])  # the window places its files only in a repo
         if code:
             msg = f"the replay's worktree could not be made a git repository: {text[:200] or f'exit {code}'}"

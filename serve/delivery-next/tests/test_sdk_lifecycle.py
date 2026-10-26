@@ -3,6 +3,9 @@
 import asyncio
 import os
 import signal
+import subprocess
+import sys
+import time
 from datetime import UTC, datetime
 from types import SimpleNamespace
 
@@ -14,7 +17,7 @@ from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_contracts.tools import Worktree
 from owlbear_delivery_next.change_flow import loop
 from owlbear_delivery_next.local_system import processes
-from owlbear_delivery_next.runtimes import sdk_adapter, sdk_teardown
+from owlbear_delivery_next.runtimes import loop_owner, sdk_adapter, sdk_teardown
 from owlbear_delivery_next.runtimes.session_result import to_result
 from owlbear_delivery_next.state_store.database import StoreError
 
@@ -285,6 +288,65 @@ def test_a_clean_lifecycle_confirms_without_signals(world):
     assert run.termination.confirmed
     assert world.stop_calls == 1
     assert world.signals == []
+
+
+@pytest.mark.parametrize("stage", ["list", "cancel", "disconnect", "stop"])
+def test_real_sdk_teardown_progresses_past_repeatedly_cancel_resistant_rpc(tmp_path, monkeypatch, stage, request):
+    if os.environ.get("OWLBEAR_TEST_OWNED_TEARDOWN") != stage:
+        try:
+            result = subprocess.run(  # noqa: S603 - this exact synthetic fixture, never a real SDK client
+                [
+                    sys.executable,
+                    "-m",
+                    "pytest",
+                    "-q",
+                    "-n",
+                    "0",
+                    "--tb=short",
+                    "-o",
+                    "faulthandler_timeout=3",
+                    f"--basetemp={tmp_path / 'child'}",
+                    f"{__file__}::test_real_sdk_teardown_progresses_past_repeatedly_cancel_resistant_rpc[{stage}]",
+                ],
+                env=os.environ | {"OWLBEAR_TEST_OWNED_TEARDOWN": stage},
+                capture_output=True,
+                text=True,
+                timeout=15,
+                check=False,
+            )
+        except subprocess.TimeoutExpired as error:
+            pytest.fail(f"synthetic caller did not terminate: {error.stdout!r}\n{error.stderr!r}")
+        assert result.returncode == 0, result.stdout + result.stderr
+        return
+
+    world = request.getfixturevalue("world")  # the parent must retain normal cleanup of its owned test child
+    world.child = True
+    cancellations = []
+
+    async def resistant(*_args):
+        if stage == "stop":
+            world.stop_calls += 1
+        while True:
+            try:
+                await asyncio.Event().wait()
+            except asyncio.CancelledError:
+                cancellations.append("cancel")
+
+    target = (
+        world.session.rpc.tasks if stage in {"list", "cancel"} else world.session if stage == "disconnect" else world
+    )
+    monkeypatch.setattr(target, stage, resistant)
+    monkeypatch.setattr(sdk_teardown, "STOP_CALL", 0.01)
+    monkeypatch.setattr(loop_owner, "SHUTDOWN", 0.02)
+    monkeypatch.setattr(loop_owner, "RETRY", 0.001)
+    started = time.monotonic()
+    run = loop_owner.run(sdk_adapter.run(world.cfg))
+    assert time.monotonic() - started < 1
+    assert world.stop_calls == 1
+    assert not run.termination.confirmed
+    assert len(cancellations) >= 2
+    assert any("failed" in problem or "pending" in problem for problem in run.termination.problems)
+    assert str(ROOT) in {pid for e in world.events for pid in e.get("pids", {})}
 
 
 def test_unknown_runtime_identity_cannot_be_reported_confirmed(world):

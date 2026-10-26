@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from owlbear_delivery_next.local_system import local_home
+from owlbear_delivery_next.local_system import local_home, publication_hold
 from owlbear_delivery_next.local_system.storage_io import atomic_write
 
 if TYPE_CHECKING:
@@ -117,8 +117,22 @@ class DataRepo:
         return self.root / name / MEMORY
 
     def git(self, *args: str, until: float | None = None) -> subprocess.CompletedProcess[str]:
-        """One git command in the checkout; a timeout or a missing folder is a failed command."""
-        return _git(self.root, *args, until=until)
+        """One git command in the checkout; a timeout or a missing folder is a failed command.
+
+        A push runs only as one non-forced refspec proven to land on the upstream branch the checkout reads from; one
+        that cannot be proven, or whose held automatic change no longer meets the fetched remote, is a failed command
+        that sends nothing (`publication_hold.pushing`).
+        """
+        pushing = args[:1] == ("push",)
+        run = args
+        if pushing:
+            held, run = publication_hold.pushing(self, args, until)
+            if held:
+                return subprocess.CompletedProcess(["git", *args], 1, "", held)
+        done = _git(self.root, *run, until=until)
+        if pushing and done.returncode == 0:
+            publication_hold.settled(self, until)
+        return done
 
     @contextlib.contextmanager
     def locked(self, wait: float | None = None) -> Iterator[None]:
@@ -216,6 +230,14 @@ class DataRepo:
         until = time.monotonic() + SAVE_SECONDS if until is None else until
         return self.commit(paths, message, until) or self._push(until)
 
+    def hold(self, watch: Path, requires: publication_hold.Requires, until: float | None = None) -> None:
+        """Bind the automatic change about to be written to *watch* to the remote; the caller holds ``locked``."""
+        publication_hold.hold(self, watch, requires, until)
+
+    def held(self, until: float | None = None) -> str:
+        """Why a held automatic change keeps this checkout from pushing or rebasing; nothing when it does not."""
+        return publication_hold.refusal(self, until)
+
     def commit(self, paths: Path | Sequence[Path], message: str, until: float | None = None) -> str:
         """Commit ``paths`` alone if they changed; why that failed, else nothing. The caller holds ``locked``."""
         until = time.monotonic() + SAVE_SECONDS if until is None else until
@@ -246,28 +268,71 @@ class DataRepo:
             raise DataRepoError(msg)
         return bool(probe.stdout)
 
-    def _push(self, until: float) -> str:
-        """Push; once rejected, rebase on the remote and push again."""
-        if _git(self.root, "push", "-q", until=until).returncode == 0:
+    def _push(self, until: float) -> str:  # noqa: PLR0911 - each push and the rebase between report apart
+        """Push; once rejected, rebase on the remote and push again. A held automatic change is checked first."""
+        held, run = publication_hold.pushing(self, ("push", "-q"), until)
+        if held:
+            return f"saved and committed in {self.root}, but not pushed: {held}"
+        if _git(self.root, *run, until=until).returncode == 0:
+            publication_hold.settled(self, until)
             return ""
-        if self.pull(until):
+        if pulled := self.pull(until):
+            if publication_hold.recorded(self, until):  # never pushed by hand: the remote must be checked first
+                return f"saved and committed in {self.root}, but not pushed: {pulled}"
             return f"saved and committed in {self.root}, but it could not be merged with the remote; push it by hand"
-        sent = _git(self.root, "push", "-q", until=until)
+        held, run = publication_hold.pushing(self, ("push", "-q"), until)  # the remote may have moved since the rebase
+        if held:
+            return f"saved and committed in {self.root}, but not pushed: {held}"
+        sent = _git(self.root, *run, until=until)
         if sent.returncode:
             return f"saved and committed in {self.root}, but the push failed: {sent.stderr.strip()[:200]}"
+        publication_hold.settled(self, until)
         return ""
 
     def pull(self, until: float | None = None) -> str:
         """Rebase on the remote; a failed rebase is undone, never left half done. Why it failed, else nothing."""
         until = time.monotonic() + SAVE_SECONDS if until is None else until
+        if publication_hold.recorded(self, until):
+            return self._pull_held(until)
         pulled = _git(self.root, "-c", "rebase.autoStash=false", "pull", "-q", "--rebase", until=until)
         return self._settle(pulled, "git pull failed", until)
+
+    def _pull_held(self, until: float) -> str:
+        """Fetch, check a held automatic change against that remote, then rebase on exactly the revision checked.
+
+        An owner's rebase in progress is left as it is, and nothing is rebased.
+        """
+        try:
+            if self.rebasing(until):
+                return f"not rebased on the remote: a rebase is in progress in {self.root}; finish or abort it first"
+        except DataRepoError as exc:
+            return f"not rebased on the remote: {exc}"
+        if held := publication_hold.check(self, until, fetch=True):
+            return held
+        done = _git(self.root, "-c", "rebase.autoStash=false", "rebase", "-q", "@{upstream}", until=until)
+        return self._settle(done, "git rebase failed", until)
 
     def rebase(self, until: float | None = None) -> str:
         """Rebase on the upstream as last fetched, without fetching; a failed rebase is undone. Why it failed."""
         until = time.monotonic() + SAVE_SECONDS if until is None else until
+        if held := publication_hold.check(self, until, fetch=False):
+            return held
         done = _git(self.root, "-c", "rebase.autoStash=false", "rebase", "-q", "@{upstream}", until=until)
         return self._settle(done, "git rebase failed", until)
+
+    def rebasing(self, until: float | None = None) -> bool:
+        """Whether Git has a rebase in progress in this checkout, whoever started it; never aborted here.
+
+        Raises `DataRepoError` when Git cannot name its admin directory: that is unknown, never "no rebase".
+        """
+        until = time.monotonic() + SAVE_SECONDS if until is None else until
+        probe = _git(self.root, "rev-parse", "--absolute-git-dir", until=until)
+        if probe.returncode or not probe.stdout.strip():
+            why = probe.stderr.strip()[:200] or "git named no git directory"
+            msg = f"cannot tell whether a rebase is in progress in {self.root}: {why}"
+            raise DataRepoError(msg)
+        admin = Path(probe.stdout.strip())
+        return any((admin / d).exists() for d in ("rebase-merge", "rebase-apply"))
 
     def _settle(self, done: subprocess.CompletedProcess[str], failed: str, until: float) -> str:
         if done.returncode == 0:
@@ -290,6 +355,8 @@ class DataRepo:
         parts = [f"{len(files)} file(s) not committed"] if files else []
         if unpushed:
             parts.append(f"{unpushed} commit(s) not pushed")
+        if held := publication_hold.refusal(self, until):  # a held change waits for the owner, not for a retry
+            return f"unpublished in {self.root}: {', '.join(parts) or 'nothing'}; an automatic change is held: {held}"
         return f"unpublished in {self.root}: {', '.join(parts)}; the next save retries" if parts else ""
 
     def _unpushed(self, until: float) -> tuple[int, str]:

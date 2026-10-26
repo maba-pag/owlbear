@@ -1,4 +1,4 @@
-"""The Spotter in learning mode (Improvement design §4): intake, card, looks, records, limits and the hand-off hook."""
+"""The Spotter (Improvement design §4): intake, card, looks, records with category and action, limits, the hook."""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ from owlbear_delivery_next.improvement import card, events, spotter
 from owlbear_delivery_next.improvement.events import Kept
 from owlbear_delivery_next.runtimes import chatlogs, sdk_adapter, spotter_look, step_decisions
 from owlbear_delivery_next.settings.config import Layer, SettingsUnset, resolve
-from owlbear_delivery_next.settings.improvement import Spotter
+from owlbear_delivery_next.settings.improvement import CATEGORIES, Spotter
 from owlbear_delivery_next.state_store.store import Lock, Store
 from owlbear_delivery_next.workflow_steps import watched
 
@@ -54,9 +54,13 @@ def done(cid: str, result: str, *, ok: bool = True, second: int = 0) -> SessionE
     return event("tool.execution_complete", data, second=second)
 
 
+ACTIONS = {"hand-off-fitness": "steer", "course-and-constraints": "record", "outside-state-changes": "show-owner",
+           "irreversible-harm": "stop-and-ask"}  # fmt: skip
+
+
 def ctx(**kw: Any) -> spotter.Context:
     base = spotter.Context(project="p", change="c1", step="build", looks=("hand-off",), sample_rate=0, verbose=False,
-                           model="gpt-6-luna", effort="medium", budget=50)  # fmt: skip
+                           model="gpt-6-luna", effort="medium", budget=50, actions=ACTIONS)  # fmt: skip
     return dataclasses.replace(base, **kw)
 
 
@@ -69,7 +73,7 @@ def ledger() -> dict[str, Any]:
 
 
 def judge(
-    answer: str = '{"verdict": "silent"}',
+    answer: str = '{"category": "none"}',
     *,
     wait: float = 0.0,
     seen: list | None = None,
@@ -168,8 +172,10 @@ def test_a_hand_off_starts_a_look_without_waiting_and_records_it_owner_only() ->
     assert spotter.WORK.settled(5)
     assert returned < 0.05
     [rec] = records()
-    assert (rec["look"], rec["verdict"], rec["session"], rec["mode"], rec["skipped"]) == (
-        "hand-off", "silent", "s-1", "learning", "")  # fmt: skip
+    assert (rec["look"], rec["category"], rec["action"], rec["session"], rec["skipped"]) == (
+        "hand-off", "none", "", "s-1", "")  # fmt: skip
+    assert "mode" not in rec
+    assert "verdict" not in rec
     assert (rec["prompt"], rec["credits"]) == (spotter.prompt_version(), 0.25)
     folder = spotter.root()
     assert stat.S_IMODE(folder.stat().st_mode) == 0o700
@@ -201,14 +207,14 @@ def test_a_look_past_its_time_is_skipped_and_a_wrong_answer_fails_never_silent(m
     monkeypatch.setattr(spotter, "LOOK", 0.05)
 
     async def main() -> None:
-        for answer, wait in (('{"verdict": "silent"}', 1.0), ("I think it is fine.", 0.0)):
+        for answer, wait in (('{"category": "none"}', 1.0), ("I think it is fine.", 0.0)):
             spot = spotter.Spotter(ctx(), lambda: "s-1", judge(answer, wait=wait))
             spot.handed_off("c", {})
             await asyncio.gather(*spot.tasks)
 
     asyncio.run(main())
     assert spotter.WORK.settled(5)
-    assert [(r["verdict"], r["skipped"][:4]) for r in records()] == [("", "time"), ("failed", "")]
+    assert [(r["category"], r["action"], r["skipped"][:4]) for r in records()] == [("", "", "time"), ("failed", "", "")]
 
 
 def test_looks_past_capacity_or_budget_are_recorded_skipped_and_the_ledger_settles() -> None:
@@ -229,7 +235,10 @@ def test_looks_past_capacity_or_budget_are_recorded_skipped_and_the_ledger_settl
 
 
 def test_samples_follow_the_seeded_rate_and_a_state_change_is_preliminary() -> None:
-    answer = '{"verdict": "note", "note": "Run the tests.", "evidence": ["e1"], "state_change": "pushes the branch"}'
+    answer = (
+        '{"category": "outside-state-changes", "note": "Ask first.", "evidence": ["e1"], '
+        '"state_change": "pushes the branch"}'
+    )
 
     async def main() -> int:
         seeded = random.Random(7)  # noqa: S311
@@ -247,13 +256,15 @@ def test_samples_follow_the_seeded_rate_and_a_state_change_is_preliminary() -> N
     assert spotter.WORK.settled(5)
     got = records()
     assert 0 < len(got) == expected
-    assert {(r["look"], r["probability"], r["preliminary"], r["verdict"], r["skipped"]) for r in got} == {
-        ("sample", 0.3, True, "note", "")}  # fmt: skip
+    assert {(r["look"], r["probability"], r["preliminary"], r["category"], r["action"], r["skipped"]) for r in got} == {
+        ("sample", 0.3, True, "outside-state-changes", "show-owner", "")}  # fmt: skip
 
 
-def test_live_mode_still_only_records_and_a_hand_off_is_not_looked_at_unless_chosen() -> None:
+def test_an_acting_action_is_only_recorded_and_a_hand_off_is_not_looked_at_unless_chosen() -> None:
+    answer = '{"category": "hand-off-fitness", "note": "Criterion 2 is unmet: its test fails.", "evidence": ["e4"]}'
+
     async def main() -> None:
-        live = spotter.Spotter(ctx(mode="live"), lambda: "s-1", judge())
+        live = spotter.Spotter(ctx(), lambda: "s-1", judge(answer))
         live.handed_off("c", {})
         await live.drain()
         quiet = spotter.Spotter(ctx(looks=("sample",)), lambda: "s-1", judge())
@@ -262,7 +273,8 @@ def test_live_mode_still_only_records_and_a_hand_off_is_not_looked_at_unless_cho
 
     asyncio.run(main())
     assert spotter.WORK.settled(5)
-    assert [r["mode"] for r in records()] == ["live"]
+    assert [(r["category"], r["action"], r["note"]) for r in records()] == [
+        ("hand-off-fitness", "steer", "Criterion 2 is unmet: its test fails.")]  # fmt: skip
 
 
 def test_the_submit_tool_starts_the_look_before_delivery_handles_it_and_keeps_its_outcome(tmp_path) -> None:
@@ -308,7 +320,8 @@ def test_the_runner_gives_the_look_its_settings_open_work_and_decisions(tmp_path
     assert (got.project, got.change, got.looks, got.budget, got.model, got.open_work) == (
         "proj", "c1", ("hand-off",), 50, settings.agents["spotter"].model, ("two",))  # fmt: skip
     assert got.decisions == ("## Decisions in force", "- D1: keep it")
-    unset = resolve(None, Layer(spotter=Spotter(mode="learning")))
+    assert got.actions == dict.fromkeys(CATEGORIES, "record")  # the conftest's Global layer records every one
+    unset = resolve(None, Layer(spotter=Spotter(switch="on")))
     unset.missing.append("spotter.looks")
     with pytest.raises(SettingsUnset, match=r"spotter\.looks"):
         watched.needed(unset)
@@ -328,7 +341,7 @@ def test_a_look_is_one_toolless_session_noted_in_the_chatlogs_manifest(monkeypat
 
         async def send_and_wait(self, message: str, **kw: Any) -> None:
             made["message"], made["timeout"] = message, kw["timeout"]
-            made["on_event"](said('{"verdict": "silent"}'))
+            made["on_event"](said('{"category": "none"}'))
 
         async def disconnect(self) -> None:
             made["disconnected"] = True
@@ -354,7 +367,7 @@ def test_a_look_is_one_toolless_session_noted_in_the_chatlogs_manifest(monkeypat
 
     monkeypatch.setattr(spotter_look, "CopilotClient", Client)
     monkeypatch.setattr(spotter_look, "cli_path", lambda: "/bin/false")
-    assert asyncio.run(REAL_LOOK({"step": "build"}, ctx(verbose=True))) == ('{"verdict": "silent"}', 0.2)
+    assert asyncio.run(REAL_LOOK({"step": "build"}, ctx(verbose=True))) == ('{"category": "none"}', 0.2)
     chosen = ("available_tools", "mcp_servers", "enable_config_discovery", "model", "reasoning_effort", "timeout")
     assert [made[k] for k in chosen] == [[], {}, False, "gpt-6-luna", "medium", spotter.LOOK]
     assert "session_limits" not in made  # no SDK credit cap: a look is bounded by its deadline and teardown
@@ -483,7 +496,7 @@ def test_a_held_ledger_never_stalls_the_steps_loop() -> None:
     holder.join()
     assert returned < 0.02
     assert ticks >= 15  # the loop went on while the look waited for the ledger
-    assert [r["verdict"] for r in records()] == ["silent"]
+    assert [r["category"] for r in records()] == ["none"]
 
 
 def test_a_card_that_fails_settles_its_reservation_and_is_recorded_failed(monkeypatch) -> None:
@@ -496,7 +509,7 @@ def test_a_card_that_fails_settles_its_reservation_and_is_recorded_failed(monkey
 
     asyncio.run(main())
     assert spotter.WORK.settled(5)
-    assert [(r["verdict"], r["skipped"][:17], r["credits"]) for r in records()] == [
+    assert [(r["category"], r["skipped"][:17], r["credits"]) for r in records()] == [
         ("failed", "ZeroDivisionError", 0.0)]  # fmt: skip
     assert ledger() == {"reserved": {}, "spent": 0.0}
 
@@ -713,7 +726,7 @@ def test_an_unread_usage_keeps_the_answer_and_counts_as_the_estimate(monkeypatch
         session_id = "look-3"
 
         async def send_and_wait(self, *_a: Any, **_kw: Any) -> None:
-            made["on_event"](said('{"verdict": "note", "note": "Run the tests."}'))
+            made["on_event"](said('{"category": "course-and-constraints", "note": "Run the tests."}'))
 
         async def disconnect(self) -> None:
             pass
@@ -739,7 +752,7 @@ def test_an_unread_usage_keeps_the_answer_and_counts_as_the_estimate(monkeypatch
     monkeypatch.setattr(spotter_look, "CopilotClient", Client)
     monkeypatch.setattr(spotter_look, "cli_path", lambda: "/bin/false")
     text, spent = asyncio.run(REAL_LOOK({}, ctx()))
-    assert spotter.parse(text)["verdict"] == "note"
+    assert spotter.parse(text)["category"] == "course-and-constraints"
     assert spent == spotter.ESTIMATE
 
 
@@ -772,7 +785,7 @@ def test_a_look_the_runtime_reports_as_free_costs_nothing(monkeypatch) -> None:
         rpc = SimpleNamespace(usage=SimpleNamespace(get_metrics=None))
 
         async def send_and_wait(self, *_a: Any, **_kw: Any) -> None:
-            made["on_event"](said('{"verdict": "silent"}'))
+            made["on_event"](said('{"category": "none"}'))
 
         async def disconnect(self) -> None:
             pass
@@ -798,7 +811,7 @@ def test_a_look_the_runtime_reports_as_free_costs_nothing(monkeypatch) -> None:
 
     monkeypatch.setattr(spotter_look, "CopilotClient", Client)
     monkeypatch.setattr(spotter_look, "cli_path", lambda: "/bin/false")
-    assert asyncio.run(REAL_LOOK({}, ctx())) == ('{"verdict": "silent"}', 0.0)
+    assert asyncio.run(REAL_LOOK({}, ctx())) == ('{"category": "none"}', 0.0)
 
 
 SHAPES = ["d", "a.", "a@", "x@y.", "<browser_context>", "</browser_context>", "<browser_context>x</browser_context>"]
@@ -825,20 +838,61 @@ def test_an_edit_mentioning_tests_keeps_its_change() -> None:
 
 
 MALFORMED = [
-    '{"verdict": "silent", "evidence": "e1"}',
-    '{"verdict": "note", "note": 3}',
-    '{"verdict": "note", "evidence": ["a", 2]}',
-    '{"verdict": "note", "note": null}',
-    '{"verdict": "interrupt", "note": "  "}',
+    '{"category": "none", "evidence": "e1"}',
+    '{"category": "course-and-constraints", "note": 3}',
+    '{"category": "course-and-constraints", "evidence": ["a", 2]}',
+    '{"category": "hand-off-fitness", "note": null}',
+    '{"category": "irreversible-harm", "note": "  "}',
+    '{"category": "hand-off-fitness"}',
+    '{"category": "scope-creep", "note": "n"}',
+    '{"category": null, "note": ""}',
+    '{"note": "n"}',
+    '{"verdict": "note", "note": "an answer in the shape before the categories"}',
+    '{"verdict": "silent"}',
 ]
 
 
 @pytest.mark.parametrize("answer", MALFORMED)
-def test_an_answer_with_a_known_verdict_but_malformed_fields_is_failed(answer: str) -> None:
-    assert spotter.parse(answer)["verdict"] == "failed"
-    assert (
-        spotter.parse('{"verdict": "note", "note": "n", "evidence": ["e"], "state_change": null}')["verdict"] == "note"
-    )
+def test_an_answer_without_a_known_category_or_with_malformed_fields_is_failed(answer: str) -> None:
+    assert spotter.parse(answer)["category"] == "failed"
+
+
+@pytest.mark.parametrize("category", [*CATEGORIES, "none", "insufficient-context"])
+def test_each_category_and_the_two_answers_without_a_finding_are_taken(category: str) -> None:
+    note = "" if category in {"none", "insufficient-context"} else "n"
+    answer = json.dumps({"category": category, "note": note, "evidence": ["e"], "state_change": None})
+    assert spotter.parse(f"Here it is: {answer}")["category"] == category
+
+
+@pytest.mark.parametrize(
+    ("answer", "category", "action"),
+    [
+        ('{"category": "irreversible-harm", "note": "Stop: this mails real customers."}', "irreversible-harm",
+         "stop-and-ask"),
+        ('{"category": "course-and-constraints", "note": "The same test failed six times."}',
+         "course-and-constraints", "record"),
+        ('{"category": "insufficient-context"}', "insufficient-context", ""),
+        ('{"category": "none"}', "none", ""),
+    ],
+)  # fmt: skip
+def test_a_record_keeps_the_category_and_the_action_the_settings_give_it(answer, category, action) -> None:
+    async def main() -> None:
+        spot = spotter.Spotter(ctx(), lambda: "s-1", judge(answer))
+        spot.handed_off("c", {})
+        await spot.drain()
+
+    asyncio.run(main())
+    assert spotter.WORK.settled(5)
+    assert [(r["category"], r["action"]) for r in records()] == [(category, action)]
+
+
+def test_the_prompt_names_every_category_and_asks_for_a_category_never_a_verdict() -> None:
+    text = spotter.PROMPT.read_text()
+    assert all(f"`{c}`" in text for c in CATEGORIES)
+    assert '"category": "none"' in text
+    assert "insufficient-context" in text
+    assert "verdict" not in text
+    assert not any(a in text for a in ("show-owner", "refuse-hand-off", "stop-and-ask"))  # the actions stay out
 
 
 def test_answers_the_ring_drops_are_a_gap() -> None:

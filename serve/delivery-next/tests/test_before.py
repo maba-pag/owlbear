@@ -28,6 +28,7 @@ from owlbear_delivery_next.change_contracts.visual_records import PageError
 from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.project_host import api
+from owlbear_delivery_next.settings.config import Layer
 from owlbear_delivery_next.state_store.store import Lock, Store
 from owlbear_delivery_next.workflow_steps import before, check, prepare, visual
 
@@ -114,6 +115,7 @@ def worktrees(c):
 
 
 class Host:
+    maintenance = None
     record = None
 
     def activity(self, _slug):
@@ -217,7 +219,7 @@ def test_an_install_over_time_is_stopped_with_its_whole_group(ui, tmp_path, monk
     monkeypatch.setattr(before.worktree, "installs", lambda _p, _scope: [(".", slow)])
     events = []
     shots = run(ui, tmp_path, events)
-    assert shots.findings == [f"`{shlex.join(shlex.split(slow))}` took over 2 s"]
+    assert shots.findings == [f"`{before.check.shown(shlex.split(slow))}` took over 2 s"]
     installer = int(next(iter(events[0]["pids"])))
     assert gone(installer)
     assert gone(int(child.read_text()))
@@ -228,7 +230,16 @@ def test_the_runner_records_the_before_capture_and_the_page_serves_it(ui, tmp_pa
     store = Store(tmp_path / "store")
     store.write(Lock("c1"), ui)
     none = Preparation(id="none", kind="data-only", seed="true", cleanup="true", isolation={"APP_ENV": "test"})
-    store.update_config(lambda layer: layer.model_copy(update={"preparations": [none]}))
+    assert (
+        store.save(
+            store.config_path,
+            Layer,
+            lambda layer: layer.model_copy(update={"preparations": [none]}),
+            "setup",
+            owner=True,
+        )
+        == ""
+    )
     prepare._write(store, "c1", prepare.Prepared(check=VISUAL, option=none))  # noqa: SLF001 - as the preparer chose
     runner._before(store, Lock("c1"), ui, Path(ui.names.worktree))  # noqa: SLF001
     c = store.read("c1")

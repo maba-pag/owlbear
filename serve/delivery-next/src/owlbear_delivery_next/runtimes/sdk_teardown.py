@@ -6,6 +6,8 @@ import asyncio
 import contextlib
 import signal
 import time
+from dataclasses import replace
+from functools import partial
 from typing import TYPE_CHECKING
 
 from copilot.rpc import TasksCancelRequest
@@ -17,6 +19,7 @@ if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Awaitable, Callable
 
     from copilot import CopilotClient
+    from copilot.rpc import TaskInfo
     from copilot.session import CopilotSession
 
     from owlbear_delivery_next.local_system.processes import Pids
@@ -34,6 +37,19 @@ async def call[T](aw: Awaitable[T], what: str, limit: float = CALL) -> T:
         return await asyncio.wait_for(aw, limit)
     except TimeoutError as exc:
         raise TimeoutError(f"{what} did not answer within {limit:.0f} s") from exc  # noqa: TRY003, EM102
+
+
+async def owned_call[T](st: _Step, operation: Callable[[], Awaitable[T]], what: str) -> T:
+    """Bound a teardown request independently of cancellation cooperation, retaining its pending task."""
+    from owlbear_delivery_next.runtimes.step_budget import Budget  # noqa: PLC0415 - Budget uses this module's CALL
+
+    async def requested() -> tuple[T]:
+        return (await operation(),)
+
+    answer = await Budget(STOP_CALL, time.monotonic, st).run(requested, what, STOP_CALL)
+    if answer is None:
+        raise TimeoutError(f"{what} did not answer within {STOP_CALL:g} s")  # noqa: TRY003, EM102
+    return answer[0]
 
 
 async def settle(recorded: Pids, problems: list[str], limit: float | None = None) -> Termination:
@@ -72,31 +88,41 @@ async def teardown(client: CopilotClient, session: CopilotSession | None, st: _S
     _guard(problems, "runtime PID", st.runtime, client)
     if session is not None:
         listed: dict[int, float | None] = {}
+
+        async def listing() -> list[TaskInfo]:
+            tasks = list((await session.rpc.tasks.list()).tasks)
+            for task in tasks:
+                _guard(problems, "task PID record", st.record, getattr(task, "pid", None))
+            return tasks
+
         try:
-            tasks = list((await call(session.rpc.tasks.list(), "tasks.list", STOP_CALL)).tasks)
+            tasks = await owned_call(st, listing, "tasks.list")
         except Exception as exc:  # noqa: BLE001 - any failure leaves termination unverified
             problems.append(f"tasks.list failed ({type(exc).__name__})")
             tasks = []
         for task in tasks:
             pid = getattr(task, "pid", None)
-            _guard(problems, "task PID record", st.record, pid)
             if pid:
                 listed[pid] = st.run.pids.get(pid)
             tid = getattr(task, "id", "?")
             try:
                 if str(getattr(task.status, "value", task.status)) in {"running", "idle"}:
-                    await call(session.rpc.tasks.cancel(TasksCancelRequest(id=task.id)), "tasks.cancel", STOP_CALL)
+                    await owned_call(
+                        st,
+                        partial(session.rpc.tasks.cancel, TasksCancelRequest(id=task.id)),
+                        "tasks.cancel",
+                    )
             except Exception as exc:  # noqa: BLE001 - failed cancellation remains an unverified stage
                 problems.append(f"tasks.cancel {tid} failed ({type(exc).__name__})")
         _guard(problems, "task tree record", st.record_tree)
         _guard(problems, "tasks log", st.log, event="tasks", listed=sorted(listed), problems=list(problems))
         await settle(listed, [])
         try:
-            await call(session.disconnect(), "disconnect", STOP_CALL)
+            await owned_call(st, session.disconnect, "disconnect")
         except Exception as exc:  # noqa: BLE001
             problems.append(f"disconnect failed ({type(exc).__name__})")
     try:
-        await call(client.stop(), "runtime stop", STOP_CALL)
+        await owned_call(st, client.stop, "runtime stop")
     except Exception as exc:  # noqa: BLE001 - errors and timeouts alike fall back to signals
         await force(st, f"runtime stop failed ({type(exc).__name__})", problems)
     rt = st.run.runtime_pid
@@ -104,7 +130,30 @@ async def teardown(client: CopilotClient, session: CopilotSession | None, st: _S
         problems.append("runtime PID unknown")
     elif processes.alive(rt, st.run.pids.get(rt)) is not False:
         await force(st, "runtime still present after stop", problems)
-    return await settle(dict(st.run.pids), problems)
+    pending = await _requests(st, problems)
+    await _workers(st, problems)
+    observed = await settle(dict(st.run.pids), problems)
+    return replace(observed, confirmed=False) if pending else observed
+
+
+async def _requests(st: _Step, problems: list[str]) -> bool:
+    requests = tuple(st.requests)
+    if not requests:
+        return False
+    for task in requests:
+        task.cancel()
+    _, pending = await asyncio.wait(requests, timeout=STOP_CALL)
+    if pending:
+        problems.append(f"{len(pending)} runtime request task(s) still pending")
+    return bool(pending)
+
+
+async def _workers(st: _Step, problems: list[str]) -> None:
+    end = time.monotonic() + STOP_CALL
+    while st.workers.count() and (left := end - time.monotonic()) > 0:  # noqa: ASYNC110 - no more executor work
+        await asyncio.sleep(min(0.05, left))
+    if remaining := st.workers.count():
+        problems.append(f"{remaining} synchronous tool worker(s) still running")
 
 
 async def _wait[T](task: asyncio.Future[T]) -> bool:

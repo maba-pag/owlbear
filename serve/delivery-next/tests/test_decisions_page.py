@@ -32,6 +32,7 @@ AN_ID = re.compile(r"D-[0-9A-Z]{26}")  # titles identify decisions on the page, 
 
 
 class Host:
+    maintenance = None
     wake = SimpleNamespace(set=lambda: None)
     repo = None  # the impact report then says it cannot read the clone
     record = HostRecord(url="http://127.0.0.1:9/", token="tok", pid=1, started_at=datetime.now(UTC), code=CURRENT)  # noqa: S106

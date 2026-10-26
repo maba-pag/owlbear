@@ -4,10 +4,10 @@ import { here, loaded as clones, project as current } from "/assets/ui.mjs";
 import { SOURCES, ROUNDS, LOOPS, state, drafts, show, notify, shown } from "./state.mjs";
 import {
   cell, row, table, button, numberCell, designFailures, widths, sessionsAtOnce, prLabels, prMarker, subagentsCell,
-  curatorThreshold, spotterCell,
+  curatorThreshold, spotterCell, prefRows,
   contextCell, ratesCell, editable, inactive,
 } from "./cells.mjs";
-import { pendingLine, save, rename } from "./layers.mjs";
+import { pendingLine, save, rename, reviewPrefs } from "./layers.mjs";
 import { packSection } from "./pack.mjs";
 import { machineSection } from "./machine.mjs";
 
@@ -180,13 +180,23 @@ function settingsSections() {
     <section class="panel" aria-labelledby="spotter-title">
       <p-heading size="lg"><h2 id="spotter-title">Spotter</h2></p-heading>
       <p-text>The Spotter looks at an agent's work beside it: at hand-offs, plans, state changes and a sample of
-        actions. In learning mode it only records what it would do, and Retro grades those records; live mode
-        steers, and comes only after a steered-versus-silent test. Its model, effort and context are the spotter row
-        under Agents; the budgets and enrolled chats are machine settings. So far only the mode is used: off stops
-        recording new outside writes for each Change's page; the reports already recorded stay.</p-text>
+        actions. It files each finding under one of four categories, each set to an action its category allows; so
+        far every look only records its finding with that action, and Retro grades those records. Steering,
+        refusing and stopping come with live delivery, discretionary ones only after a steered-versus-silent test.
+        Its model, effort and context are the spotter row under Agents; the budgets and enrolled chats are machine
+        settings. Off stops its looks and the recording of new outside writes for each Change's page; the reports
+        already recorded stay, and steps no longer need its other settings.</p-text>
       ${table("Spotter: it applies to the next look", ["Setting", "Value"], "spotter", [
-        row(text("Mode"), spotterCell("mode", "Mode")),
-        row(text("Steered share in live mode (%)"), spotterCell("steer_share", "Steered share")),
+        row(text("On or off"), spotterCell("switch", "On or off")),
+        row(text("Hand-off fitness: the result should not be accepted as it stands"),
+          spotterCell("hand_off_fitness", "Hand-off fitness")),
+        row(text("Course and constraints: recoverable work heading materially wrong"),
+          spotterCell("course_and_constraints", "Course and constraints")),
+        row(text("Outside-state changes: a consequential change beyond the task's files"),
+          spotterCell("outside_state_changes", "Outside-state changes")),
+        row(text("Irreversible harm, in the Spotter's own judgement; it takes precedence"),
+          spotterCell("irreversible_harm", "Irreversible harm")),
+        row(text("Steered share (%)"), spotterCell("steer_share", "Steered share")),
         row(text("Steering notes at most, per step or chat turn"), spotterCell("intervention_cap", "Notes at most")),
         row(text("Verbose"), spotterCell("verbose", "Verbose")),
         row(text("Verbose until (YYYY-MM-DD; empty: no end)"), spotterCell("verbose_until", "Verbose until")),
@@ -218,6 +228,14 @@ function settingsSections() {
           share(a.disagreed, a.decided), share(a.unsure, a.decided)].map(text))),
         { id: "agreement-table", hidden: !loaded.agreement.length })}
     </section>
+    <section class="panel" aria-labelledby="merge-title">
+      <p-heading size="lg"><h2 id="merge-title">Merge and cleanup</h2></p-heading>
+      <p-text>How OwlBear merges a pull request, cleans up its branch and waits for CI. Each setting is set in this
+        project, on this machine or globally; the project's value wins, then this machine's, then the global one. None
+        has a built-in default: a step that needs one asks you until it is set.</p-text>
+      ${table("Merge and cleanup: they apply to the next merge", ["Setting", "Value"], "prefs", prefRows())}
+      <p-text size="xs" color="contrast-medium">Seconds are whole numbers; blank inherits.</p-text>
+    </section>
     <section class="panel" aria-labelledby="pr-title">
       <p-heading size="lg"><h2 id="pr-title">Pull requests</h2></p-heading>
       <p-text>What OwlBear adds to each pull request it opens.</p-text>
@@ -244,6 +262,13 @@ function settingsSections() {
         ?? "Save project settings", save,
         { id: "save", icon: "check", busy: state.saving })}
       <p-text id="pending" size="sm" aria-live="polite">${pendingLine()}</p-text>
+      ${state.layer === "project" && state.loaded.prefs_pending
+        ? button("Confirm merge preferences reviewed", reviewPrefs, {
+            id: "review-prefs",
+            icon: "check",
+            busy: state.saving,
+          })
+        : nothing}
     </div>`;
 }
 

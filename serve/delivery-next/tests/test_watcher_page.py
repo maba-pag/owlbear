@@ -33,6 +33,7 @@ SECRET = "/Users/me/.ssh/config"  # noqa: S105 - a path, not a password
 
 
 class Host:
+    maintenance = None
     wake = type("W", (), {"set": staticmethod(lambda: None)})()
     record = HostRecord(url="http://127.0.0.1:9/", token="tok", pid=1, started_at=NOW, code=CURRENT)  # noqa: S106
 
@@ -76,7 +77,16 @@ def test_the_changes_row_counts_its_outside_writes_and_its_page_lists_the_report
         ("explore", f"edit {SECRET}", [SECRET], "outside write (not judged yet)"),
     ]
     assert w["reports"][0]["verdict"] == "not recorded: 2 reports dropped"
-    store.update_config(lambda layer: layer.model_copy(update={"spotter": Spotter(mode="off")}))
+    assert (
+        store.save(
+            store.config_path,
+            Layer,
+            lambda layer: layer.model_copy(update={"spotter": Spotter(switch="off")}),
+            "setup",
+            owner=True,
+        )
+        == ""
+    )
     assert http.get("/api/next/changes/flip").json()["watcher"]["on"] is False
 
 
@@ -97,7 +107,7 @@ def test_a_change_without_reports_counts_none(tmp_path) -> None:
     s = Store(tmp_path)
     s.write(Lock("quiet"), m.Change(slug="quiet"))
     assert api.watcher(s, "quiet") == {"on": True, "reports": [], "outside": 0, "unresolved": 0}
-    assert Layer(spotter=Spotter(mode="off")).spotter.mode == "off"
+    assert Layer(spotter=Spotter(switch="off")).spotter.switch == "off"
 
 
 @pytest.fixture

@@ -9,6 +9,7 @@ from pydantic import TypeAdapter
 from owlbear_delivery_next.change_contracts.models import Role
 from owlbear_delivery_next.change_contracts.profile_record import RoleModel
 from owlbear_delivery_next.settings.config import Agent, Layer
+from owlbear_delivery_next.settings.improvement import CATEGORIES
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -20,6 +21,16 @@ ROLES: TypeAdapter[dict[Role, RoleModel]] = TypeAdapter(dict[Role, RoleModel])
 def roles_moved(data: dict[str, Any]) -> dict[str, Any]:
     """Profile format 1 to 2: the role overrides moved to the project settings; each is checked, then dropped."""
     ROLES.validate_python(data.pop("roles", {}))
+    return data
+
+
+def prefs_import_added(data: dict[str, Any]) -> dict[str, Any]:
+    """Profile format 2 to 3: the legacy preference import marker (R15); older runtimes refuse format 3."""
+    return data
+
+
+def prefs_basis_added(data: dict[str, Any]) -> dict[str, Any]:
+    """Profile format 3 to 4: the claim's config basis (R15); a pending claim without one never fills on its own."""
     return data
 
 
@@ -150,6 +161,37 @@ def spotter_renamed(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+def prefs_added(data: dict[str, Any]) -> dict[str, Any]:
+    """Settings format 12 to 13: the five preferences, unset until a layer sets them (R15); older runtimes refuse 13."""
+    return data
+
+
+def spotter_switched(data: dict[str, Any]) -> dict[str, Any]:
+    """Settings format 13 to 14: an on/off switch and four categories' actions replace the Spotter's mode (2026-10-26).
+
+    Off stays off. Learning recorded what the Spotter would do, so it becomes on with every category's action
+    ``record``. Live becomes on with the actions left unset in that layer: a wider layer's apply, else the owner
+    chooses them (D-01M5WB09Z3ZKJVN02WGWVHGWBH). The Spotter's other settings keep their values; older runtimes
+    refuse format 14.
+
+    An unknown mode is refused: the layer cannot be migrated, and nothing guesses its switch.
+
+    Raises:
+        ValueError: The mode is none of off, learning and live.
+    """
+    spotter = data.get("spotter")
+    if isinstance(spotter, dict) and "mode" in spotter:
+        mode = spotter.pop("mode")
+        if mode is not None and (not isinstance(mode, str) or mode not in {"off", "learning", "live"}):
+            msg = f"the Spotter's mode {mode!r} is none of off, learning and live"
+            raise ValueError(msg)
+        if mode is not None:
+            spotter["switch"] = "off" if mode == "off" else "on"
+        if mode == "learning":
+            spotter |= dict.fromkeys(CATEGORIES.values(), "record")
+    return data
+
+
 def tests_added(data: dict[str, Any]) -> dict[str, Any]:
     """Change format 5 to 6: a test review's record and step (TD-373); older runtimes refuse format 6."""
     return data
@@ -174,7 +216,7 @@ CHANGE: Migrations = {
     6: waivers_added,
     7: held_records_added,
 }
-PROFILE: Migrations = {1: roles_moved}
+PROFILE: Migrations = {1: roles_moved, 2: prefs_import_added, 3: prefs_basis_added}
 CONFIG: Migrations = {
     1: seed_dropped,
     2: judge_renamed,
@@ -187,4 +229,6 @@ CONFIG: Migrations = {
     9: defaults_removed,
     10: machine_added,
     11: spotter_renamed,
+    12: prefs_added,
+    13: spotter_switched,
 }

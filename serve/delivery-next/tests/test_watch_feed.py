@@ -189,14 +189,14 @@ def test_with_the_master_switch_off_there_is_no_watcher_and_nothing_is_recorded(
     st = stepped(place, start("c1"), write("c1", str(place.elsewhere / "x")), watch=False)
     assert (st.feed, rows(place), threads()) == (None, {}, [])
     store, lock = place.store, Lock("c1")
-    off = resolve(None, Layer(spotter=Spotter(mode="off")))
+    off = resolve(None, Layer(spotter=Spotter(switch="off")))
     assert watched.watching(store, lock, "build", off, change_repo, print, watched.needed(off)) is None
     unset = resolve(None, Layer())
-    unset.missing.append("spotter.mode")
-    with pytest.raises(SettingsUnset, match=r"spotter\.mode"):
+    unset.missing.append("spotter.switch")
+    with pytest.raises(SettingsUnset, match=r"spotter\.switch"):
         watched.needed(unset)
-    learning = resolve(None, Layer(spotter=Spotter(mode="learning")))
-    on = watched.watching(store, lock, "plan", learning, change_repo, print, watched.needed(learning))
+    switched_on = resolve(None, Layer(spotter=Spotter(switch="on")))
+    on = watched.watching(store, lock, "plan", switched_on, change_repo, print, watched.needed(switched_on))
     assert (on.slug, on.step, on.places.mine) == ("c1", "plan", (store.root / "changes" / "c1",))
     assert on.places.guarded[:2] == (worktree.data_root(), store.root / "changes")
     assert on.places.guarded[-2:] == (change_repo, change_repo / ".git")
@@ -311,8 +311,8 @@ def test_a_checkout_whose_git_folder_lives_elsewhere_is_guarded_with_it(place, t
     subprocess.run(["git", "init", "-q", f"--separate-git-dir={meta}", str(checkout)], check=True)  # noqa: S603, S607
     listed = {"projects": [{"id": place.store.root.name, "path": str(checkout), "added_at": "2026-10-24"}]}
     (local_home.root() / project_home.MACHINE).write_text(json.dumps(listed))  # Git cannot name such a checkout
-    learning = resolve(None, Layer(spotter=Spotter(mode="learning")))
-    on = watched.watching(place.store, Lock("c1"), "build", learning, checkout, print, watched.needed(learning))
+    switched_on = resolve(None, Layer(spotter=Spotter(switch="on")))
+    on = watched.watching(place.store, Lock("c1"), "build", switched_on, checkout, print, watched.needed(switched_on))
     assert {checkout.resolve(), meta.resolve()} <= {p.resolve() for p in on.places.guarded}
 
 

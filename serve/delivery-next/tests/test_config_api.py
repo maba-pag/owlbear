@@ -7,19 +7,23 @@ from types import SimpleNamespace
 import pytest
 from fastapi.testclient import TestClient
 
+from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.local_system import data_repo
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.runtimes import model_choices
+from owlbear_delivery_next.settings import carried, roles
 from owlbear_delivery_next.settings.config import CONFIG_FORMAT as F
 from owlbear_delivery_next.settings.config import Layer
+from owlbear_delivery_next.state_store import profile_share, project_home, roles_move
 from owlbear_delivery_next.state_store.store import Store
 
 AUTH = {"authorization": "Bearer t"}
 
 
 class Host:
+    maintenance = None
     wake = SimpleNamespace(set=lambda: None)
     record = HostRecord(url="http://127.0.0.1:9/", token="tok", pid=1, started_at=datetime.now(UTC), code=CURRENT)  # noqa: S106
 
@@ -47,9 +51,10 @@ def test_get_shows_each_layer_the_resolved_values_their_source_and_what_is_appli
     got = client(store, headers=AUTH).get("/api/next/config").json()
 
     assert got["project"] == {
-        "format": F, "agents": {}, "runtimes": {}, "widths": None, "preparations": None, "data": None,
-        "design_failures": None, "final_review": None, "pr_labels": None, "pr_marker": None, "sessions": None,
-        "spotter": None,
+        "format": F, "prefs": None, "prefs_imported": False, "roles_moved": False, "agents": {}, "runtimes": {},
+        "widths": None,
+        "preparations": None, "data": None, "design_failures": None, "final_review": None, "pr_labels": None,
+        "pr_marker": None, "sessions": None, "spotter": None,
     }  # fmt: skip
     assert (got["global"], got["global_location"]) == (None, False)
     assert got["settings"]["agents"]["builder"]["model"] == "claude-opus-5.5"
@@ -66,7 +71,8 @@ def test_get_shows_each_layer_the_resolved_values_their_source_and_what_is_appli
         "agents.shaper.max_findings", "agents.shaper.last_round_at", "agents.shaper.ask_owner_at", "final_review",
         "agents.planner.minutes", "agents.builder.minutes", "agents.reviewer.minutes", "agents.challenger.minutes",
         "agents.design-judge.minutes", "agents.preparer.minutes", "agents.updater.minutes", "agents.picker.minutes",
-        "pr_labels", "pr_marker",
+        "pr_labels", "pr_marker", "prefs.merge_method", "prefs.delete_remote_branch", "prefs.ci_poll_seconds",
+        "prefs.ci_start_window_seconds", "prefs.ask_before_merge",
         "agents.planner.subagents", "agents.builder.subagents", "agents.reviewer.subagents",
         "agents.challenger.subagents", "agents.design-judge.subagents", "agents.preparer.subagents",
         "agents.updater.subagents", "sessions",
@@ -146,15 +152,76 @@ def test_the_spotter_learns_by_global_and_a_project_may_turn_it_off() -> None:
     from owlbear_delivery_next.settings.improvement import Spotter  # noqa: PLC0415
 
     on = config.resolve(None, config.Layer())
-    off = config.resolve(config.GlobalLayer(), config.Layer(spotter=Spotter(mode="off")))
-    assert (on.spotter.mode, on.sources["spotter.mode"], on.agents["spotter"].model, on.agents["spotter"].effort) == (
-        "learning", "default", "gpt-6-luna", "medium")  # fmt: skip
-    assert (on.agents["spotter"].context, off.spotter.mode, off.sources["spotter.mode"]) == (
+    off = config.resolve(config.GlobalLayer(), config.Layer(spotter=Spotter(switch="off")))
+    spotter = on.agents["spotter"]
+    assert (on.spotter.switch, on.sources["spotter.switch"], spotter.model, spotter.effort) == (
+        "on", "default", "gpt-6-luna", "medium")  # fmt: skip
+    assert on.spotter.hand_off_fitness == "record"
+    assert (on.agents["spotter"].context, off.spotter.switch, off.sources["spotter.switch"]) == (
         "default",
         "off",
         "project",
     )
     assert off.spotter.looks == ["hand-off"]  # the rest of the Spotter's settings still inherit, field by field
+
+
+def test_the_page_gets_each_categorys_allowed_actions_from_the_matrix(store):
+    from owlbear_delivery_next.settings.improvement import ALLOWED, CATEGORIES  # noqa: PLC0415
+
+    got = client(store, headers=AUTH).get("/api/next/config").json()["settings"]["spotter_actions"]
+    assert got == {
+        "hand_off_fitness": ["record", "show-owner", "steer", "refuse-hand-off"],
+        "course_and_constraints": ["record", "show-owner", "steer", "stop-and-resume", "stop-and-ask"],
+        "outside_state_changes": ["record", "show-owner", "stop-and-resume", "stop-and-ask"],
+        "irreversible_harm": ["record", "show-owner", "stop-and-resume", "stop-and-ask"],
+    }
+    assert got == {CATEGORIES[c]: list(a) for c, a in ALLOWED.items()}
+
+
+def test_a_category_action_saves_survives_a_reload_and_clearing_it_inherits_the_wider_value(store, tmp_path):
+    path = tmp_path / "global" / "config.json"
+    c = client(store, path, headers=AUTH)
+    got = c.get("/api/next/config").json()
+    wide = {"format": F, "spotter": {"hand_off_fitness": "steer", "course_and_constraints": "stop-and-ask"}}
+    assert c.put("/api/next/config/global", json={"rev": got["global_rev"], "layer": wide}).status_code == 200
+    got = c.get("/api/next/config").json()
+    mine = {"format": F, "spotter": {"hand_off_fitness": "refuse-hand-off"}}
+    assert c.put("/api/next/config/project", json={"rev": got["project_rev"], "layer": mine}).status_code == 200
+
+    again = client(store, path, headers=AUTH).get("/api/next/config").json()  # a reload reads the files again
+    spot, sources = again["settings"]["spotter"], again["settings"]["sources"]
+    assert (spot["hand_off_fitness"], sources["spotter.hand_off_fitness"]) == ("refuse-hand-off", "project")
+    assert (spot["course_and_constraints"], sources["spotter.course_and_constraints"]) == ("stop-and-ask", "global")
+
+    cleared = {"format": F, "spotter": {"hand_off_fitness": None}}
+    r = c.put("/api/next/config/project", json={"rev": again["project_rev"], "layer": cleared}).json()
+    assert (r["settings"]["spotter"]["hand_off_fitness"], r["settings"]["sources"]["spotter.hand_off_fitness"]) == (
+        "steer", "global")  # fmt: skip
+
+
+@pytest.mark.parametrize(
+    "spotter",
+    [
+        {"hand_off_fitness": "stop-and-ask"},
+        {"course_and_constraints": "refuse-hand-off"},
+        {"outside_state_changes": "steer"},
+        {"irreversible_harm": "refuse-hand-off"},
+        {"irreversible_harm": "steer"},
+        {"switch": "learning"},
+        {"mode": "live"},
+    ],
+)
+def test_an_action_its_category_does_not_allow_is_refused_and_the_layer_stays(store, spotter):
+    c = client(store, headers=AUTH)
+    got = c.get("/api/next/config").json()
+    kept = {"format": F, "spotter": {"hand_off_fitness": "record"}}
+    saved = c.put("/api/next/config/project", json={"rev": got["project_rev"], "layer": kept}).json()
+    before = (store.root / "config.json").read_bytes()
+    r = c.put(
+        "/api/next/config/project", json={"rev": saved["project_rev"], "layer": {"format": F, "spotter": spotter}}
+    )
+    assert r.status_code == 422
+    assert (store.root / "config.json").read_bytes() == before
 
 
 def test_the_global_layer_is_saved_only_where_a_location_is_configured(store, tmp_path):
@@ -167,7 +234,9 @@ def test_the_global_layer_is_saved_only_where_a_location_is_configured(store, tm
     path = tmp_path / "global" / "config.json"
     c = client(store, path, headers=AUTH)
     got = c.get("/api/next/config").json()
-    assert (got["global"], got["global_location"]) == ({"format": F, "agents": {}, "runtimes": {}, "widths": None,
+    assert (got["global"], got["global_location"]) == ({"format": F, "prefs": None, "prefs_imported": False,
+                                                         "roles_moved": False,
+                                                         "agents": {}, "runtimes": {}, "widths": None,
                                                          "preparations": None, "data": None, "design_failures": None,
                                                          "final_review": None, "pr_labels": None,
                                                          "pr_marker": None, "sessions": None, "spotter": None,
@@ -407,7 +476,13 @@ def test_this_machine_s_layer_refuses_project_and_global_settings_and_combinatio
 def test_this_machine_s_layer_must_fit_every_project_loaded_on_this_machine(store, tmp_path):
     """Sol: a project of this machine outside the shared repository is checked too, and named."""
     there = Store(tmp_path / "there")
-    there.update_config(lambda _l: Layer.model_validate({"format": F, "agents": {"builder": {"last_round_at": 6}}}))
+    there.save(
+        there.config_path,
+        Layer,
+        lambda _l: Layer.model_validate({"format": F, "agents": {"builder": {"last_round_at": 6}}}),
+        "owner",
+        owner=True,
+    )
     host = Host()
     host.machine = lambda: [there, store]
     c = TestClient(api.create_app(store, "t", host), base_url="http://127.0.0.1", headers=AUTH)
@@ -436,3 +511,127 @@ def test_a_project_only_in_the_shared_repository_never_meets_this_machine_s_laye
     got = c.get("/api/next/config").json()
     unfit = {"format": F, "agents": {"builder": {"ask_owner_at": 6}}}  # the other project's own 6 needs more
     assert c.put("/api/next/config/global", json={"rev": got["global_rev"], "layer": unfit}).status_code == 422
+
+
+class _Abrupt(BaseException):
+    """A stop the process cannot catch, such as a kill between the two writes."""
+
+
+def _git_project(path: Path) -> Path:
+    path.mkdir()
+    for args in (("init", "-q"), ("remote", "add", "origin", "https://github.com/acme/shop.git")):
+        subprocess.run(["git", *args], cwd=path, check=True)  # noqa: S603, S607
+    return path
+
+
+def _legacy_reviewer(cwd: Path) -> None:
+    """A format 1 profile whose reviewer role the project config has not yet taken."""
+    root = cwd / ".git" / "owlbear-delivery"
+    root.mkdir(parents=True)
+    raw = {
+        "format": 1,
+        "version": 3,
+        "confirmed_at": "2026-10-01T10:00:00Z",
+        "entries": {"rules": {"state": "unknown", "value": "", "evidence": "HTTP 403"}},
+        "roles": {"reviewer": {"model": "r-1", "effort": "max"}},
+        "runtime": "vscode",
+    }
+    (root / "profile.json").write_text(json.dumps(raw))
+
+
+def _lose_the_marker(monkeypatch, exc: type[BaseException]) -> None:
+    """Fail the first receipt-marker write: the role is applied in the config, the marker is not."""
+    real, failed = roles_move.atomic_write, []
+
+    def fails_once(target, content):
+        if target.name == profile_share.ROLES_MOVED and not failed:
+            failed.append(True)
+            raise exc(28, "No space left on device")
+        real(target, content)
+
+    monkeypatch.setattr(roles_move, "atomic_write", fails_once)
+
+
+def _store_as_opened(cwd: Path, shared: data_repo.DataRepo | None) -> Store:
+    """The store ``Store.open`` returns for *cwd*, built without running the role move."""
+    name = data_repo.folder(shared, cwd) if shared else ""
+    return Store(project_home.located(cwd), shared, name)
+
+
+def _owner_clears_after_a_lost_marker(cwd: Path, monkeypatch, exc, shared: data_repo.DataRepo | None) -> None:
+    _legacy_reviewer(cwd)
+    _lose_the_marker(monkeypatch, exc)
+    with pytest.raises(exc):
+        Store.open(cwd)  # the role is applied to the config; the receipt marker write is the one that fails
+    store = _store_as_opened(cwd, shared)
+    assert store.read_config().agents["reviewer"].model == "r-1"
+
+    c = client(store, store.global_path, headers=AUTH)
+    got = c.get("/api/next/config").json()
+    assert got["project"]["roles_moved"] is True  # the receipt went out with the role, in the one config write
+    layer = {"format": F}  # the owner clears the role: the body omits roles_moved, as the settings page does
+    saved = c.put("/api/next/config/project", json={"rev": got["project_rev"], "layer": layer})
+    assert saved.status_code == 200
+    assert not saved.json()["unpublished"]
+    cleared = store.config_path.read_bytes()
+    assert store.read_config().agents == {}
+    assert store.read_config().roles_moved is True
+
+    for opened in (Store.open(cwd), Store.open(cwd)):  # a restart, then another start: the same outcome each time
+        assert roles.chosen(opened.settings(), StepKind.REVIEW) == carried.MODELS["reviewer"]
+        assert opened.config_path.read_bytes() == cleared
+        assert (opened.root / profile_share.ROLES_MOVED).exists()
+
+
+@pytest.mark.parametrize("exc", [OSError, _Abrupt], ids=["marker-fails", "abrupt-stop"])
+def test_an_owner_clear_over_http_survives_a_lost_receipt_marker_unshared(tmp_path, monkeypatch, exc):
+    cwd = _git_project(tmp_path / "shop")
+    monkeypatch.delenv(data_repo.VIEW, raising=False)
+    _owner_clears_after_a_lost_marker(cwd, monkeypatch, exc, None)
+
+
+@pytest.mark.parametrize("exc", [OSError, _Abrupt], ids=["marker-fails", "abrupt-stop"])
+def test_an_owner_clear_over_http_survives_a_lost_receipt_marker_shared(tmp_path, monkeypatch, shared_repo, exc):
+    cwd = _git_project(tmp_path / "shop")
+    monkeypatch.setenv(data_repo.VIEW, str(shared_repo[0]))
+    _owner_clears_after_a_lost_marker(cwd, monkeypatch, exc, data_repo.DataRepo(shared_repo[0]))
+
+
+@pytest.mark.parametrize("raw", ["{not json", '{"format": 99, "entries": {}}'], ids=["damaged", "future"])
+def test_a_profile_this_build_cannot_read_is_a_repair_notice_on_settings_not_a_server_error(store, raw):
+    store.root.mkdir(parents=True)
+    (store.root / profile_share.PROFILE).write_text(raw)
+    got = client(store, headers=AUTH).get("/api/next/config")
+    assert got.status_code == 200
+    assert "profile" in got.json()["notice"]
+    assert "repair" in got.json()["notice"]
+
+
+def test_a_machine_save_with_an_unreadable_profile_applies_and_says_so_truthfully(store):
+    store.root.mkdir(parents=True)
+    (store.root / profile_share.PROFILE).write_text("{not json")
+    c = client(store, headers=AUTH)
+    got = c.get("/api/next/config").json()
+    saved = c.put(
+        "/api/next/config/machine",
+        json={
+            "rev": got["machine_rev"],
+            "layer": {"format": F, "agents": {"builder": {"effort": "high", "minutes": 50}}},
+        },
+    )
+    assert saved.status_code == 200
+    assert "profile" in saved.json()["notice"]
+    assert store.machine_path.exists()
+
+
+def test_a_project_save_with_an_unreadable_profile_is_refused_before_it_writes_anything(store):
+    store.root.mkdir(parents=True)
+    (store.root / profile_share.PROFILE).write_text("{not json")
+    c = client(store, headers=AUTH)
+    got = c.get("/api/next/config").json()
+    refused = c.put(
+        "/api/next/config/project",
+        json={"rev": got["project_rev"], "layer": {"format": F, "agents": {"builder": {"effort": "high"}}}},
+    )
+    assert refused.status_code == 409
+    assert not store.config_path.exists()

@@ -22,7 +22,16 @@ from owlbear_delivery_next.change_contracts.permissions import decide, identitie
 from owlbear_delivery_next.local_system import preload, processes
 from owlbear_delivery_next.local_system.mask import redact
 from owlbear_delivery_next.local_system.processes import Termination, verdict
-from owlbear_delivery_next.runtimes import lessons, sdk_teardown, step_decisions, step_input, subagents, watch_feed
+from owlbear_delivery_next.runtimes import (
+    lessons,
+    sdk_teardown,
+    step_budget,
+    step_decisions,
+    step_input,
+    subagents,
+    tool_workers,
+    watch_feed,
+)
 from owlbear_delivery_next.runtimes.chatlogs import around as chatlogged
 from owlbear_delivery_next.runtimes.copilot_cli import cli_path
 from owlbear_delivery_next.runtimes.instruction_scope import own as own_instructions
@@ -148,6 +157,8 @@ class _Step:
         self.skills = cfg.skills or preload.directory()  # the folder its skills load from
         self.watch = subagents.Watch(allowed=cfg.subagents)
         self.feed: watch_feed.Feed | None = None  # its watcher, for the run only
+        self.requests: set[asyncio.Task[None]] = set()
+        self.workers = tool_workers.Workers()
 
     @property
     def done(self) -> bool:
@@ -272,11 +283,11 @@ class _Step:
         return ToolResult(text_result_for_llm=text, result_type=kind)
 
     async def _helped(self, spec: tools.Spec, inv: ToolInvocation) -> ToolResult:  # off the loop: deadlines hold
-        return ToolResult(text_result_for_llm=(await asyncio.to_thread(self.gate.call, spec, inv.arguments))[0])
+        return ToolResult(text_result_for_llm=(await self.workers.call(lambda: self.gate.call(spec, inv.arguments)))[0])
 
     async def _submitted(self, spec: tools.Spec, inv: ToolInvocation) -> ToolResult:  # lints off the loop (TD-87)
         watch_feed.spotted(self.feed, lambda s: s.handed_off(inv.tool_call_id, inv.arguments))  # before Gate accepts
-        return await asyncio.to_thread(self._answered, spec, inv)
+        return await self.workers.call(lambda: self._answered(spec, inv))
 
     def _answered(self, spec: tools.Spec, inv: ToolInvocation) -> ToolResult:  # in its thread: kept if cancelled
         result = self._handle(spec, inv)
@@ -319,11 +330,8 @@ class _Step:
         with contextlib.suppress(psutil.Error, OSError, ValueError):
             self.record(*(k.pid for k in psutil.Process(self.run.runtime_pid or -1).children(recursive=True)))
 
-    async def snapshot(self, session: CopilotSession) -> None:
-        with contextlib.suppress(Exception):
-            listed = (await _call(session.rpc.tasks.list(), "tasks.list")).tasks
-            self.record(*(getattr(t, "pid", None) for t in listed))
-        self.record_tree()
+    async def snapshot(self, session: CopilotSession, budget: step_budget.Budget) -> None:
+        await step_budget.snapshot(self, session, budget, POLL)
 
     def options(self) -> dict[str, Any]:
         role = agent(self.cfg.kind, ui=self.cfg.ui, role=self.cfg.role, judging=self.cfg.judging, job=self.cfg.job)
@@ -365,26 +373,9 @@ class _Step:
         return None
 
     async def wait(self, session: CopilotSession) -> None:
-        end, reminded = time.monotonic() + (self.cfg.limit or DEADLINES.get(self.cfg.kind, 2400.0)), False
-        while not self.done:
-            left = end - time.monotonic()
-            if left <= 0:
-                self.finish("deadline", detail="step deadline")
-                break
-            with contextlib.suppress(TimeoutError):
-                await asyncio.wait_for(self.changed.wait(), min(POLL, left))
-            self.changed.clear()
-            if self.done:
-                break
-            await self.snapshot(session)
-            if self.idle and not self.done:
-                self.idle = False
-                if reminded:
-                    self.finish("no-result")
-                else:
-                    reminded = True
-                    self.log(event="reminder")
-                    await _call(session.send(step_input.reminder(role_of(self.cfg), judging=self.cfg.judging)), "send")
+        await step_budget.wait(
+            self, session, self.cfg.limit or DEADLINES.get(self.cfg.kind, 2400.0), time.monotonic, POLL
+        )
 
 
 async def _open(client: CopilotClient, st: _Step) -> CopilotSession | None:

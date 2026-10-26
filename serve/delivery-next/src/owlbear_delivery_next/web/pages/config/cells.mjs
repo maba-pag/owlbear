@@ -96,6 +96,32 @@ export function designFailures() {
   (v) => edit(key, v), { key, disabled: state.saving }), source(key, state.loaded.settings.design_failures));
 }
 
+// R15: five preferences, each set per layer and never defaulted in code; the project's value wins, then this
+// machine's, then Global's. A blank or "inherit" choice clears the layer's own value.
+export const PREFS = ["merge_method", "delete_remote_branch", "ci_poll_seconds", "ci_start_window_seconds",
+  "ask_before_merge"];
+const PREF_NAMES = { merge_method: "Merge method", delete_remote_branch: "Delete the remote branch after merging",
+  ci_poll_seconds: "CI poll interval (seconds)", ci_start_window_seconds: "CI start window (seconds)",
+  ask_before_merge: "Ask before merging" };
+const PREF_CHOICES = { merge_method: [["merge", "merge commit"], ["squash", "squash"], ["rebase", "rebase"]],
+  delete_remote_branch: [["on", "on"], ["off", "off"]], ask_before_merge: [["on", "on"], ["off", "off"]] };
+
+function prefCell(field) {
+  const key = `prefs.${field}`, below = inherited().prefs?.[field];
+  const shownBelow = typeof below === "boolean" ? (below ? "on" : "off") : (below ?? "unset");
+  const choices = PREF_CHOICES[field];
+  const control = choices
+    ? choose(PREF_NAMES[field], [[INHERIT, `inherit (${shownBelow})`], ...choices], own(key) || INHERIT,
+      (v) => edit(key, v), { key, disabled: state.saving })
+    : typed(PREF_NAMES[field], own(key), (v) => edit(key, v),
+      { key, placeholder: `inherit (${shownBelow})`, inputmode: "numeric", disabled: state.saving });
+  return cell(control, source(key, state.loaded.settings.prefs[field]));
+}
+
+export function prefRows() {
+  return PREFS.map((field) => row(cell(html`<p-text>${PREF_NAMES[field]}</p-text>`), prefCell(field)));
+}
+
 export function widths() {
   const below = inherited().widths?.join(", ");
   return cell(typed("Screenshot widths in px, comma-separated (1280 to 2400)", own("widths"),
@@ -123,18 +149,27 @@ export function curatorThreshold() {
 }
 
 // Improvement's Spotter (design §4): each setting layered field by field; a project may set its own (2026-10-25).
+// Each category's actions are the server's (``spotter_actions``): an action outside its category is refused there.
 const SPOT_CHOICES = {
-  mode: [["off", "off"], ["learning", "learning: record what it would do"], ["live", "live: steer"]],
+  switch: [["off", "off"], ["on", "on"]],
   verbose: [["off", "off"], ["on", "on: a short rationale with its evidence per look"]],
 };
+const ACTION_NAMES = { record: "record", "show-owner": "show the owner", steer: "steer: a note into the running turn",
+  "refuse-hand-off": "refuse the hand-off", "stop-and-resume": "stop, then resume with the note",
+  "stop-and-ask": "stop and ask the owner" };
+
+function spotChoices(field) {
+  const actions = state.loaded.settings.spotter_actions?.[field];
+  return actions ? actions.map((a) => [a, ACTION_NAMES[a] ?? a]) : SPOT_CHOICES[field];
+}
 
 export function spotterCell(field, label) {
   const key = `spot.${field}`, value = own(key), below = inherited().spotter?.[field];
   const words = (v) => (Array.isArray(v) ? v.join(", ") : v);
-  const looks = state.loaded.settings.spotter?.looks ?? [];
-  const needed = field === "verbose_until" ? false : field === "sample_rate" ? looks.includes("sample") : true;
-  const control = SPOT_CHOICES[field]
-    ? choose(label, [[INHERIT, `inherit (${said(below)})`], ...SPOT_CHOICES[field]], value || INHERIT,
+  const needed = (state.loaded.settings.missing ?? []).includes(`spotter.${field}`);  // the server's rule
+  const choices = spotChoices(field);
+  const control = choices
+    ? choose(label, [[INHERIT, `inherit (${said(below)})`], ...choices], value || INHERIT,
       (v) => edit(key, v), { key, disabled: state.saving })
     : typed(label, value, (v) => edit(key, v, true), { key, placeholder: `inherit (${said(words(below))})`,
       inputmode: ["looks", "verbose_until"].includes(field) ? undefined : "numeric", disabled: state.saving });
