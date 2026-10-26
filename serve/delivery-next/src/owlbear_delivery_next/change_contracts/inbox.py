@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime  # noqa: TC003 - pydantic resolves annotations at runtime
 from typing import Annotated, Literal
 
-from pydantic import Field
+from pydantic import Field, TypeAdapter, ValidationError
 
 from owlbear_delivery_next.change_contracts.decision_records import (  # noqa: TC001 - pydantic
     DecisionBaseline,
@@ -111,3 +111,16 @@ type InboxItem = Annotated[
     | WithdrawItem,
     Field(discriminator="kind"),
 ]
+_ITEM: TypeAdapter[InboxItem] = TypeAdapter(InboxItem)
+
+
+def parse_rows(rows: list[tuple[int, str]]) -> tuple[list[InboxItem], list[str]]:
+    """The queued items that validate, and the raw text of those that do not (the activity keeps them)."""
+    items: list[InboxItem] = []
+    rejected: list[str] = []
+    for _, text in rows:
+        try:
+            items.append(_ITEM.validate_json(text))
+        except ValidationError:
+            rejected.append(text)
+    return items, rejected

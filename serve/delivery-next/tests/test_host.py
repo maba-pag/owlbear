@@ -41,6 +41,7 @@ from owlbear_delivery_next.local_system.process_probe import WorktreeProcessScan
 from owlbear_delivery_next.local_system.storage_io import open_lock
 from owlbear_delivery_next.project_host import host
 from owlbear_delivery_next.project_host.host import Host, RunnerRecord
+from owlbear_delivery_next.settings.config import Layer
 from owlbear_delivery_next.state_store.database import put_record
 from owlbear_delivery_next.state_store.store import Store
 from owlbear_delivery_next.workflow_steps import check, disposable, prepare
@@ -316,7 +317,16 @@ def test_disposal_is_verified_over_recorded_pids_and_the_whole_group_without_its
 def prepared(store, check_id: str = "preview") -> None:
     """The check's declared data-only test copy, restored as the runner leaves it for the host's launch."""
     none = Preparation(id="none", kind="data-only", seed="true", cleanup="true", isolation={"APP_ENV": "test"})
-    store.update_config(lambda layer: layer.model_copy(update={"preparations": [none]}))
+    assert (
+        store.save(
+            store.config_path,
+            Layer,
+            lambda layer: layer.model_copy(update={"preparations": [none]}),
+            "setup",
+            owner=True,
+        )
+        == ""
+    )
     prepare._write(store, "c1", prepare.Prepared(check=check_id, option=none, ready=True))  # noqa: SLF001
 
 
@@ -426,7 +436,12 @@ def test_a_recipe_for_another_check_or_other_inputs_is_forgotten_and_an_agent_pr
 
 def test_a_project_without_a_preparation_option_asks_and_neither_reuses_nor_prepares(store, tmp_path, reusable):
     _fake, agents = reusable
-    store.update_config(lambda layer: layer.model_copy(update={"preparations": []}))
+    assert (
+        store.save(
+            store.config_path, Layer, lambda layer: layer.model_copy(update={"preparations": []}), "setup", owner=True
+        )
+        == ""
+    )
     step(store, tmp_path)
     after = store.read("c1")
     assert (agents, after.env, after.outcome.exit, after.outcome.cause) == (

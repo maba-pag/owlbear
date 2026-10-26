@@ -16,15 +16,15 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import TypeAdapter, ValidationError
 
-from owlbear_delivery_next.change_contracts.inbox import InboxItem
+from owlbear_delivery_next.change_contracts.inbox import InboxItem, parse_rows
 from owlbear_delivery_next.change_contracts.models import FORMAT, Change, Record
-from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_flow import answer_kinds, loop
 from owlbear_delivery_next.local_system import data_repo, local_home
 from owlbear_delivery_next.local_system.storage_io import atomic_write, open_lock
-from owlbear_delivery_next.settings import migrations, profile
-from owlbear_delivery_next.settings.config import CONFIG_FORMAT, GlobalLayer, Layer, MachineLayer, Settings, resolve
-from owlbear_delivery_next.state_store import profile_share, project_home
+from owlbear_delivery_next.settings import config as settings_config
+from owlbear_delivery_next.settings import migrations
+from owlbear_delivery_next.settings.config import GlobalLayer, Layer, MachineLayer, Settings
+from owlbear_delivery_next.state_store import config_save, profile_share, project_home, roles_move
 from owlbear_delivery_next.state_store.database import (
     STORE_FORMAT,
     Database,
@@ -34,12 +34,20 @@ from owlbear_delivery_next.state_store.database import (
     append_activity,
     put_record,
 )
+from owlbear_delivery_next.state_store.layers import (  # noqa: F401 - re-exported for callers and tests
+    _DIR_FLAGS,
+    _parse,
+    read_layer,
+    read_layer_bytes,
+    update_layer,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
     from pathlib import Path
 
     from owlbear_delivery_next.change_contracts.models import Step
+    from owlbear_delivery_next.change_contracts.profile_record import Profile
     from owlbear_delivery_next.change_flow.loop import PrState
     from owlbear_delivery_next.local_system.data_repo import DataRepo
     from owlbear_delivery_next.settings.migrations import Migrations
@@ -47,7 +55,6 @@ if TYPE_CHECKING:
 CONFIG = "config.json"  # the project's settings layer (TD-52)
 MACHINE_SETTINGS = "settings.json"  # this machine's preference layer in ~/.owlbear (TD-336)
 ACTIVITY_LIMIT = 200
-_DIR_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
 _INBOX: TypeAdapter[InboxItem] = TypeAdapter(InboxItem)
 HANDLE = re.compile(r"c\d{1,4}")  # the only handle shape the host issues
 
@@ -68,6 +75,12 @@ class SharedError(StoreError):
 
     action = "Check the shared settings repository, then try again"
     resume = "A settings save completes"
+
+
+class RoleSourceError(StoreError):
+    """The clone's old profile cannot be inspected for its role overrides: a repair may replace it, nothing else may."""
+
+    action = "Repair or replace the old profile in this clone's store, then reopen"
 
 
 class LockHeldError(RuntimeError):
@@ -103,74 +116,6 @@ def _load[T: Record](path: Path, model: type[T], current: int, forward: Migratio
     return _parse(raw, name, model, current, forward)
 
 
-def _parse[T: Record](raw: str, name: str, model: type[T], current: int, forward: Migrations) -> T:
-    try:
-        data = json.loads(raw)
-        version = int(data.get("format", 0))
-    except (AttributeError, TypeError, ValueError) as exc:
-        msg = f"state of {name} is unreadable"
-        raise StoreError(msg) from exc
-    if version > current:
-        msg = f"{name} has format {version}, newer than {current}"
-        raise FormatTooNewError(msg)
-    written = version
-    try:
-        while version < current:
-            data = forward[version](data)
-            version += 1
-            data["format"] = version
-        return model.model_validate(data)
-    except ValidationError as exc:
-        if written < current:
-            msg = f"state of {name} cannot be migrated to format {current}"
-        else:  # the current format with fields this Delivery does not know: a newer or different one wrote it
-            msg = f"state of {name} was written by a newer or different Delivery ({_first(exc)})"
-        raise StoreError(msg) from exc
-    except (KeyError, TypeError, ValueError) as exc:
-        msg = f"state of {name} cannot be migrated to format {current}"
-        raise StoreError(msg) from exc
-
-
-def _first(exc: ValidationError) -> str:
-    error = exc.errors()[0]
-    said = {"extra_forbidden": "unknown field", "missing": "missing field"}.get(error["type"], "invalid field")
-    return f"{said} {'.'.join(map(str, error['loc']))}"
-
-
-def read_layer[T: Layer](path: Path, model: type[T]) -> T:
-    """One settings layer under its format gate; an empty layer before the first save."""
-    return read_layer_bytes(path, model)[0]
-
-
-def read_layer_bytes[T: Layer](path: Path, model: type[T]) -> tuple[T, bytes]:
-    """One settings layer and the exact bytes it was parsed from; an absent file is the empty layer."""
-    try:
-        raw = path.read_bytes()
-        text = raw.decode()
-    except FileNotFoundError:
-        return model(), b""
-    except (OSError, ValueError) as exc:  # ValueError: bytes that are not UTF-8
-        msg = f"state of {path.stem} is unreadable"
-        raise StoreError(msg) from exc
-    return _parse(text, path.stem, model, CONFIG_FORMAT, migrations.CONFIG), raw
-
-
-def update_layer[T: Layer](path: Path, model: type[T], change: Callable[[T], T]) -> T:
-    """Read, change and write one layer under its own lock, so no concurrent save is lost; invalid writes nothing."""
-    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-    dir_fd = os.open(path.parent, _DIR_FLAGS)
-    try:
-        fd = open_lock(dir_fd, blocking=True, name=f".{path.name}.lock")
-    finally:
-        os.close(dir_fd)
-    try:
-        new = model.model_validate(change(read_layer(path, model)).model_dump())
-        atomic_write(path, new.model_dump_json(indent=1))
-        return new
-    finally:
-        os.close(fd)
-
-
 class Store:
     """Change records, locks, inboxes and activity logs of one clone; the records live in its database (TD-265)."""
 
@@ -178,6 +123,7 @@ class Store:
         self.root, self.shared, self.name = root, shared, name
         self.global_path = shared.global_path if shared else None
         self.db = Database(root)
+        self.deferred_roles: RoleSourceError | None = None  # a repair open keeps the source refusal for its caller
 
     @property
     def config_path(self) -> Path:
@@ -185,8 +131,13 @@ class Store:
         return self.shared.project_path(self.name) if self.shared else self.root / CONFIG
 
     @classmethod
-    def open(cls, cwd: Path) -> Store:
-        """Open or create the store for the clone containing *cwd* and gate its format."""
+    def open(cls, cwd: Path, *, repair: bool = False) -> Store:
+        """Open or create the store for the clone containing *cwd* and gate its format.
+
+        A *repair* open keeps an uninspectable old profile in ``deferred_roles`` instead of raising, so the owner's
+        profile repair can replace it; the caller raises it when the profile itself is readable. Any other refused
+        move, such as a failed settings write, always raises.
+        """
         try:
             shared = data_repo.locate()
             name = data_repo.folder(shared, cwd) if shared else ""
@@ -198,7 +149,12 @@ class Store:
             raise FormatTooNewError(msg)
         try:
             store.adopt(data_repo.identity(cwd) if shared else "")
-            profile_share.move_roles(store)
+            try:
+                roles_move.move_roles(store)
+            except RoleSourceError as exc:
+                if not repair:
+                    raise
+                store.deferred_roles = exc
             profile_share.adopt(store)
         except data_repo.DataRepoError as exc:
             raise StoreError(str(exc)) from exc
@@ -225,16 +181,24 @@ class Store:
             self.shared.publish(self.config_path, f"settings: {self.name} moved from its clone")
             local.replace(local.with_name(f"{CONFIG}.moved"))  # kept as the recovery copy
 
-    def save[T: Layer](self, path: Path, model: type[T], change: Callable[[T], T], what: str) -> str:
+    def save[T: Layer](  # noqa: PLR0913 - the layer, its change, what it is for, owner and the write hook
+        self,
+        path: Path,
+        model: type[T],
+        change: Callable[[T], T],
+        what: str,
+        *,
+        owner: bool = False,
+        on_written: Callable[[], None] | None = None,
+    ) -> str:
         """Change one settings layer and publish it; what the owner should know about the publication, else nothing."""
         if not self.shared:
-            update_layer(path, model, change)
-            return ""
+            return config_save.unshared_save(self, path, model, change, owner=owner, on_written=on_written)
         try:
             until = time.monotonic() + data_repo.SAVE_SECONDS  # the lock wait and every git command share it
-            with self.shared.locked():
-                update_layer(path, model, change)
-                return self.shared.publish(path, f"settings: {what}", until)
+            return config_save.locked_save(
+                self, path, model, change, f"settings: {what}", until, owner=owner, on_written=on_written
+            )
         except data_repo.DataRepoError as exc:
             raise SharedError(str(exc)) from exc
 
@@ -247,15 +211,22 @@ class Store:
         """This machine's preference layer in ``~/.owlbear``: local, never published (TD-336)."""
         return local_home.root() / MACHINE_SETTINGS
 
-    def update_config(self, change: Callable[[Layer], Layer], what: str = "project layer") -> str:
-        """Change and publish the project's settings layer; the publication notice, else nothing."""
-        return self.save(self.config_path, Layer, change, f"{self.name or 'the project'}: {what}")
+    def update_config(
+        self,
+        change: Callable[[Layer], Layer],
+        what: str = "project layer",
+        on_written: Callable[[], None] | None = None,
+    ) -> str:
+        """Publish the settings layer; preparing basis required for changed automatic writes, else refusal notice."""
+        return self.save(
+            self.config_path, Layer, change, f"{self.name or 'the project'}: {what}", on_written=on_written
+        )
 
     def settings(self) -> Settings:
-        """The resolved settings: the project layer over this machine's over the global one over the defaults."""
+        """The resolved settings: the project layer over this machine's over the global one; no code defaults (R15)."""
         glob = read_layer(self.global_path, GlobalLayer) if self.global_path else None
         try:
-            return resolve(glob, self.read_config(), read_layer(self.machine_path, MachineLayer))
+            return settings_config.resolve(glob, self.read_config(), read_layer(self.machine_path, MachineLayer))
         except ValidationError as exc:  # each layer is valid, their combination is not (TD-209)
             msg = f"the settings do not combine: {exc.errors()[0]['msg']}"
             raise StoreError(msg) from exc
@@ -323,12 +294,20 @@ class Store:
         """Read the confirmed project profile under its own format gate; None before confirmation."""
         return profile_share.read(self)
 
-    def write_profile(self, profile: Profile) -> str:
-        """Write the project profile atomically, published when shared (TD-147); the publication notice."""
+    def write_profile(
+        self, profile: Profile, *, replace_unreadable: bool = False, basis: profile_share.Basis | None = None
+    ) -> str:
+        """Write the project profile atomically, published when shared (TD-147); the publication notice.
+
+        *basis* is what the owner's repair confirmed the replacement against (see ``profile_share.write``).
+        """
         try:
-            return profile_share.write(self, profile)
+            return profile_share.write(self, profile, replace_unreadable=replace_unreadable, basis=basis)
         except data_repo.DataRepoError as exc:
             raise SharedError(str(exc)) from exc
+
+    mark_prefs_import = profile_share.mark  # a method: profile_share.mark takes the store first
+    retry_prefs_import = profile_share.retry
 
     def write(self, lock: Lock, change: Change) -> None:
         """Write one Change, keeping the previous record as ``prev``."""
@@ -444,14 +423,14 @@ class Store:
         before = change
         with self.db.read() as db:
             rows = db.execute("SELECT id, item FROM inbox WHERE slug = ? ORDER BY name, id", (slug,)).fetchall()
-        items, events = [], []
-        for _, text in rows:
-            try:
-                items.append(_INBOX.validate_json(text))
-            except ValidationError:  # taken all the same, and kept in the activity for the record
-                events.append({"event": "inbox-rejected", "at": now.isoformat(timespec="seconds"), "item": text[:2000]})
+        items, rejected = parse_rows(rows)  # rejected items are taken all the same, and kept in the activity
+        at = now.isoformat(timespec="seconds")
+        events = [{"event": "inbox-rejected", "at": at, "item": text[:2000]} for text in rejected]
         asked = loop.open_question(change) if loop.waiting_consent(change) else None
-        asking = profile.value(self.read_profile() or Profile(), profile.ASK) == "yes"
+        try:
+            asking = self.settings().prefs.ask_before_merge is not False  # unset asks; only an explicit no turns it off
+        except StoreError:  # unreadable or invalid settings: the owner's controls still fold; the runner reports it
+            asking = True
         change, step = loop.schedule(change, items, now, pr_state, moved=moved, asking=asking)
         if leave is not None:
             kept = leave(before, change)

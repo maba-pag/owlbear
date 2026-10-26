@@ -602,7 +602,16 @@ def test_a_judge_without_a_verified_verdict_runs_again_with_the_capture(flow):
     ],
 )
 def test_the_verdict_matrix_routes_a_design_fail_by_the_setting(flow, correct, setting, step, sent):
-    flow.store.update_config(lambda cur: cur.model_copy(update={"design_failures": setting}))
+    assert (
+        flow.store.save(
+            flow.store.config_path,
+            config.Layer,
+            lambda cur: cur.model_copy(update={"design_failures": setting}),
+            "setup",
+            owner=True,
+        )
+        == ""
+    )
     flow.review.verdict = correct
     problem = {"image": "home-1280-A.png", "problem": "cramped card", "rule": "Layout & Space", "severity": "P1"}
     flow.review.design = lambda cfg: designed(
@@ -749,7 +758,16 @@ def test_a_decision_never_passes_a_capture_of_another_head(flow):
 
 
 def test_the_capture_uses_the_widths_the_settings_name(flow):
-    flow.store.update_config(lambda cur: cur.model_copy(update={"widths": [1600]}))
+    assert (
+        flow.store.save(
+            flow.store.config_path,
+            config.Layer,
+            lambda cur: cur.model_copy(update={"widths": [1600]}),
+            "setup",
+            owner=True,
+        )
+        == ""
+    )
     runner._visual(flow.store, Lock("c1"), checking(flow.store, flow.clone), flow.clone)  # noqa: SLF001
     assert (flow.widths, flow.store.read("c1").visual.files) == ([[1600]], ["home-1600.png"])
 
@@ -758,7 +776,16 @@ def test_a_changes_before_screenshots_fix_its_widths_so_every_after_shot_has_its
     c = checking(flow.store, flow.clone)
     c.before = VisualResult(head="b", tree="t", files=["home-1280.png"], widths=[1280], at=NOW)
     flow.store.write(Lock("c1"), c)
-    flow.store.update_config(lambda cur: cur.model_copy(update={"widths": [1600]}))
+    assert (
+        flow.store.save(
+            flow.store.config_path,
+            config.Layer,
+            lambda cur: cur.model_copy(update={"widths": [1600]}),
+            "setup",
+            owner=True,
+        )
+        == ""
+    )
     runner._visual(flow.store, Lock("c1"), c, flow.clone)  # noqa: SLF001
     assert (flow.widths, flow.store.read("c1").visual.files) == ([[1280]], ["home-1280.png"])
 
@@ -832,9 +859,27 @@ def test_a_visual_accept_without_the_model_check_is_withdrawn_once_the_capture_m
     asked = flow.store.read("c1")
     q = loop.open_question(asked)
     assert (asked.visual_rounds[-1].outcome, [o.id for o in q.options]) == ("model", ["accept", "retry"])
-    flow.store.update_config(lambda cur: cur.model_copy(update={"widths": [1600]}))
+    assert (
+        flow.store.save(
+            flow.store.config_path,
+            config.Layer,
+            lambda cur: cur.model_copy(update={"widths": [1600]}),
+            "setup",
+            owner=True,
+        )
+        == ""
+    )
     assert [o.id for o in held.offered(flow.store, asked, q)] == ["retry"]  # other widths: no accept
-    flow.store.update_config(lambda cur: cur.model_copy(update={"widths": asked.visual_rounds[-1].widths}))
+    assert (
+        flow.store.save(
+            flow.store.config_path,
+            config.Layer,
+            lambda cur: cur.model_copy(update={"widths": asked.visual_rounds[-1].widths}),
+            "setup",
+            owner=True,
+        )
+        == ""
+    )
     assert [o.id for o in held.offered(flow.store, asked, q)] == ["accept", "retry"]
     commit(flow.clone, "web/app.css", "moved\n")
     assert [o.id for o in held.offered(flow.store, asked, q)] == ["retry"]

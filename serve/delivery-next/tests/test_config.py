@@ -6,11 +6,13 @@ import pytest
 from pydantic import ValidationError
 
 from owlbear_delivery_next.change_contracts.models import StepKind
-from owlbear_delivery_next.change_contracts.profile_record import RoleModel
+from owlbear_delivery_next.change_contracts.profile_record import PROFILE_FORMAT, Profile, RoleModel
 from owlbear_delivery_next.commands import cli
+from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.settings import carried, roles
 from owlbear_delivery_next.settings.config import Agent, GlobalLayer, Layer, resolve
-from owlbear_delivery_next.state_store import offline_protocol, profile_share
+from owlbear_delivery_next.state_store import layers as layers_mod
+from owlbear_delivery_next.state_store import offline_protocol, profile_share, project_home, roles_move
 from owlbear_delivery_next.state_store import store as store_mod
 from owlbear_delivery_next.state_store.store import Store, StoreError, read_layer, update_layer
 
@@ -149,10 +151,10 @@ def test_a_project_layer_round_trips_and_concurrent_saves_are_never_lost(repo, m
         return cur.model_copy(update={"widths": [1280]})
 
     monkeypatch.setattr(store_mod, "read_layer", spy)
-    first = threading.Thread(target=store.update_config, args=(slow,))
+    first = threading.Thread(target=owner_save, args=(store, slow))
     second = threading.Thread(
-        target=store.update_config,
-        args=(lambda cur: cur.model_copy(update={"agents": {"builder": Agent(effort="low")}}),),
+        target=owner_save,
+        args=(store, lambda cur: cur.model_copy(update={"agents": {"builder": Agent(effort="low")}})),
     )
     first.start()
     assert entered.wait(5)
@@ -167,11 +169,11 @@ def test_a_project_layer_round_trips_and_concurrent_saves_are_never_lost(repo, m
 
 def test_an_invalid_save_writes_nothing(repo):
     store = Store.open(repo)
-    store.update_config(lambda cur: cur.model_copy(update={"widths": [1280]}))
+    owner_save(store, lambda cur: cur.model_copy(update={"widths": [1280]}))
     saved = (store.root / "config.json").read_bytes()
     for bad in ({"widths": [999]}, {"format": 99}):
         with pytest.raises(ValidationError):
-            store.update_config(lambda cur, bad=bad: cur.model_copy(update=bad))
+            owner_save(store, lambda cur, bad=bad: cur.model_copy(update=bad))
     assert (store.root / "config.json").read_bytes() == saved
 
 
@@ -191,6 +193,11 @@ def test_an_existing_layer_that_is_empty_or_not_utf8_is_refused_not_read_as_defa
     path.write_bytes(damaged)
     with pytest.raises(StoreError, match="unreadable"):
         read_layer(path, Layer)
+
+
+def owner_save(store: Store, change) -> str:
+    """The owner's current-revision save, as the settings page makes it; automatic writes never bypass the guard."""
+    return store.save(store.config_path, Layer, change, "owner", owner=True)
 
 
 def _old_profile(root, roles_: object, fmt: object = 1) -> None:
@@ -234,13 +241,15 @@ def test_a_format_1_profile_moves_its_roles_into_the_project_config_once(repo, b
     assert roles.chosen(store.settings(), StepKind.REVIEW) == RoleModel(model="r-1", effort="max")
     assert roles.chosen(store.settings(), StepKind.PLAN) == carried.MODELS["planner"]
     prof = store.read_profile()
-    assert (prof.format, prof.version, prof.runtime, prof.entries["rules"].evidence) == (2, 3, "vscode", "HTTP 403")
+    assert (prof.format, prof.version, prof.runtime, prof.entries["rules"].evidence) == (
+        PROFILE_FORMAT, 3, "vscode", "HTTP 403"
+    )  # fmt: skip
     assert "roles" not in prof.model_dump()
     saved = (root / "config.json").read_text()
     Store.open(repo).read_profile()
     assert (root / "config.json").read_text() == saved
 
-    store.update_config(lambda _cur: Layer())  # the owner clears the overrides
+    owner_save(store, lambda _cur: Layer())  # the owner clears the overrides
     _old_profile(root, {"builder": {"model": "m-1", "effort": "low"}})  # e.g. a crash before the profile rewrite
     assert roles.chosen(Store.open(repo).settings(), StepKind.BUILD) == carried.MODELS["builder"]
 
@@ -258,58 +267,257 @@ def test_old_roles_fill_only_the_fields_an_existing_project_config_leaves_empty(
     assert roles.chosen(store.settings(), StepKind.REVIEW) == RoleModel(model="r-1", effort="max")
     assert store.read_config().widths == [1600]
 
-    store.update_config(lambda _cur: Layer())  # the owner clears everything; the old profile is still on disk
+    owner_save(store, lambda _cur: Layer())  # the owner clears everything; the old profile is still on disk
     assert roles.chosen(Store.open(repo).settings(), StepKind.REVIEW) == carried.MODELS["reviewer"]
 
 
 def test_a_move_that_another_opener_finished_meanwhile_is_not_repeated(repo, monkeypatch):
     root = repo / ".git" / "owlbear-delivery"
     _old_profile(root, {"reviewer": {"model": "r-1", "effort": "max"}})
-    real, raced = profile_share.open_lock, []
+    real, raced = roles_move.open_lock, []
 
     def other_opener_first(fd, **kw):
         if kw.get("name") == f".{profile_share.ROLES_MOVED}.lock" and not raced:
             raced.append(True)  # another process moves the roles, then the owner clears them through its page
-            profile_share.move_roles(Store(root))
-            Store(root).update_config(lambda _cur: Layer())
+            roles_move.move_roles(Store(root))
+            owner_save(Store(root), lambda _cur: Layer())
         return real(fd, **kw)
 
-    monkeypatch.setattr(profile_share, "open_lock", other_opener_first)
-    profile_share.move_roles(Store(root))
+    monkeypatch.setattr(roles_move, "open_lock", other_opener_first)
+    roles_move.move_roles(Store(root))
 
     assert raced
     assert roles.chosen(Store(root).settings(), StepKind.REVIEW) == carried.MODELS["reviewer"]
 
 
+def test_a_clone_that_read_roles_before_another_cleared_them_never_reinstates(shared_repo, tmp_path, monkeypatch):
+    root, remote = shared_repo
+    a = Store(tmp_path / "a-store", DataRepo(root), "shop-site")
+    _old_profile(a.root, {"reviewer": {"model": "r-1", "effort": "max"}})
+    second = tmp_path / "b"
+    subprocess.run(["git", "clone", "-q", str(remote), str(second)], check=True, capture_output=True)  # noqa: S603, S607
+    b = Store(tmp_path / "b-store", DataRepo(second), "shop-site")
+    _old_profile(b.root, {"reviewer": {"model": "r-1", "effort": "max"}})
+    real_digest, raced = roles_move.config_digest, []
+
+    def clone_a_first(path):
+        if not raced:  # clone B has read roles_moved as False; clone A imports, then the owner clears
+            raced.append(True)
+            roles_move.move_roles(a)
+            owner_save(a, lambda _cur: Layer())
+            assert read_layer(a.config_path, Layer).roles_moved  # the cleared basis B captures carries the receipt
+        return real_digest(path)
+
+    monkeypatch.setattr(roles_move, "config_digest", clone_a_first)
+    roles_move.move_roles(b)
+
+    assert raced
+    assert (b.root / profile_share.ROLES_MOVED).exists()
+    fresh = tmp_path / "fresh"
+    subprocess.run(["git", "clone", "-q", str(remote), str(fresh)], check=True, capture_output=True)  # noqa: S603, S607
+    shared = Store(tmp_path / "fresh-store", DataRepo(fresh), "shop-site")
+    assert read_layer(shared.config_path, Layer).roles_moved
+    assert roles.chosen(shared.settings(), StepKind.REVIEW) == carried.MODELS["reviewer"]
+
+
+def test_a_clone_on_the_same_config_that_another_cleared_never_reinstates(shared_repo, tmp_path, monkeypatch):
+    root, _remote = shared_repo
+    a = Store(tmp_path / "a-store", DataRepo(root), "shop-site")
+    b = Store(tmp_path / "b-store", DataRepo(root), "shop-site")
+    assert a.root != b.root
+    assert a.config_path == b.config_path
+    _old_profile(a.root, {"reviewer": {"model": "r-1", "effort": "max"}})
+    _old_profile(b.root, {"reviewer": {"model": "r-1", "effort": "max"}})
+    real_digest, real_update = roles_move.config_digest, Store.update_config
+    raced, cleared, seen = [], [], []
+
+    def a_imports_then_owner_clears(path):
+        if not raced:  # B has read roles_moved as False; A imports, then the owner clears the roles
+            raced.append(True)
+            roles_move.move_roles(a)
+            owner_save(a, lambda _cur: Layer())
+            cleared.append(real_digest(a.config_path))
+        return real_digest(path)
+
+    def watch_b_callback(self, prepared, what="project layer", on_written=None):
+        if self.root == b.root:  # the locked callback B's basis reaches: what it reads, not only what B stored
+            inner = prepared.change
+
+            def seen_by_callback(cur):
+                seen.append((prepared.basis, cur.roles_moved))
+                return inner(cur)
+
+            prepared.change = seen_by_callback
+        return real_update(self, prepared, what, on_written=on_written)
+
+    monkeypatch.setattr(roles_move, "config_digest", a_imports_then_owner_clears)
+    monkeypatch.setattr(Store, "update_config", watch_b_callback)
+    roles_move.move_roles(b)
+
+    assert raced
+    assert seen == [(cleared[0], True)]  # B's basis is the cleared config, and its locked callback sees the receipt
+    assert (b.root / profile_share.ROLES_MOVED).exists()
+    fresh = tmp_path / "fresh"
+    subprocess.run(["git", "clone", "-q", str(_remote), str(fresh)], check=True, capture_output=True)  # noqa: S603, S607
+    shared = Store(tmp_path / "fresh-store", DataRepo(fresh), "shop-site")
+    assert read_layer(shared.config_path, Layer).roles_moved
+    assert roles.chosen(shared.settings(), StepKind.REVIEW) == carried.MODELS["reviewer"]
+
+
 def test_a_move_whose_marker_cannot_be_written_fails_the_open(repo, monkeypatch):
     root = repo / ".git" / "owlbear-delivery"
     _old_profile(root, {"reviewer": {"model": "r-1", "effort": "max"}})
-    real = profile_share.atomic_write
+    real = roles_move.atomic_write
 
     def no_marker(target, content):
         if target.name == profile_share.ROLES_MOVED:
             raise OSError(28, "No space left on device")
         real(target, content)
 
-    monkeypatch.setattr(profile_share, "atomic_write", no_marker)
+    monkeypatch.setattr(roles_move, "atomic_write", no_marker)
     with pytest.raises(OSError, match="No space"):
-        profile_share.move_roles(Store(root))
+        roles_move.move_roles(Store(root))
 
 
 def test_a_merge_that_fails_after_replacing_the_config_fails_the_open(repo, monkeypatch):
     root = repo / ".git" / "owlbear-delivery"
     _old_profile(root, {"reviewer": {"model": "r-1", "effort": "max"}})
-    real = store_mod.atomic_write
+    real = layers_mod.atomic_write
 
     def replaced_then_failed(target, content):
         real(target, content)
         if target.name == store_mod.CONFIG:
             raise OSError(5, "Input/output error")  # e.g. the folder sync after the rename
 
-    monkeypatch.setattr(store_mod, "atomic_write", replaced_then_failed)
+    monkeypatch.setattr(layers_mod, "atomic_write", replaced_then_failed)
     with pytest.raises(OSError, match="Input/output"):
-        profile_share.move_roles(Store(root))
+        roles_move.move_roles(Store(root))
     assert not (root / profile_share.ROLES_MOVED).exists()
+
+
+@pytest.mark.parametrize(("mode", "reason"), [("held", "not moved"), ("raised", "fetch failed")])
+def test_a_refused_or_failed_role_move_write_is_visible_and_not_marked(repo, monkeypatch, mode, reason):
+    root = repo / ".git" / "owlbear-delivery"
+    _old_profile(root, {"reviewer": {"model": "r-1", "effort": "max"}})
+    real = Store.update_config
+
+    def refused(*_args, **_kwargs):
+        if mode == "raised":
+            msg = "simulated: fetch failed"
+            raise StoreError(msg)
+        return "simulated: fetch refused"
+
+    monkeypatch.setattr(Store, "update_config", refused)
+    with pytest.raises(StoreError, match=reason):
+        roles_move.move_roles(Store(root))
+    assert not (root / profile_share.ROLES_MOVED).exists()
+    assert not Store(root).config_path.exists()
+    assert (root / profile_share.PROFILE).exists()  # the source is kept for the retry
+
+    monkeypatch.setattr(Store, "update_config", real)
+    roles_move.move_roles(Store(root))
+    assert (root / profile_share.ROLES_MOVED).exists()
+    assert Store(root).read_config().agents["reviewer"].model == "r-1"
+
+
+def test_a_role_move_applied_but_unpublished_is_marked_and_opens(repo, monkeypatch):
+    root = repo / ".git" / "owlbear-delivery"
+    _old_profile(root, {"reviewer": {"model": "r-1", "effort": "max"}})
+    real = Store.update_config
+
+    def applied_then_refused(self, change, what="project layer", on_written=None):
+        real(self, change, what, on_written)
+        return "simulated: publication refused; retry in settings"
+
+    monkeypatch.setattr(Store, "update_config", applied_then_refused)
+    roles_move.move_roles(Store(root))  # applied locally: the marker caches the receipt, so the open succeeds
+    assert (root / profile_share.ROLES_MOVED).exists()
+    assert Store(root).read_config().agents["reviewer"].model == "r-1"
+
+
+def test_a_role_move_applied_before_its_marker_fails_is_visible_and_heals_on_retry(repo, monkeypatch):
+    root = repo / ".git" / "owlbear-delivery"
+    _old_profile(root, {"reviewer": {"model": "r-1", "effort": "max"}})
+    real = roles_move.atomic_write
+
+    def marker_refused(target, content):
+        if target.name == profile_share.ROLES_MOVED:
+            msg = "simulated: marker write refused"
+            raise StoreError(msg)
+        real(target, content)
+
+    monkeypatch.setattr(roles_move, "atomic_write", marker_refused)
+    with pytest.raises(StoreError, match="marker write refused"):
+        roles_move.move_roles(Store(root))
+    assert not (root / profile_share.ROLES_MOVED).exists()
+    assert (root / profile_share.PROFILE).exists()
+    assert Store(root).read_config().agents["reviewer"].model == "r-1"  # applied with its config write
+
+    monkeypatch.setattr(roles_move, "atomic_write", real)
+    roles_move.move_roles(Store(root))
+    assert (root / profile_share.ROLES_MOVED).exists()
+    assert Store(root).read_config().agents["reviewer"].model == "r-1"
+
+
+def test_an_owner_clear_right_after_the_roles_move_survives_a_fresh_reopen(repo, monkeypatch):
+    root = Store.open(repo).root
+    _old_profile(root, {"reviewer": {"model": "r-1", "effort": "max"}})
+    real = Store.update_config
+
+    def moved_then_cleared(self, change, what="project layer", on_written=None):
+        result = real(self, change, what, on_written)
+        owner_save(self, lambda _cur: Layer())  # the owner clears the overrides before anything reads the move back
+        return result
+
+    monkeypatch.setattr(Store, "update_config", moved_then_cleared)
+    store = Store.open(repo)  # the move is applied and marked under one lock; the owner then clears
+    monkeypatch.setattr(Store, "update_config", real)
+    root = store.root
+    assert (root / profile_share.ROLES_MOVED).exists()
+    cleared = (root / "config.json").read_bytes()
+
+    fresh = Store.open(repo)
+
+    assert roles.chosen(fresh.settings(), StepKind.REVIEW) == carried.MODELS["reviewer"]
+    assert (root / "config.json").read_bytes() == cleared
+    assert (root / profile_share.ROLES_MOVED).exists()
+
+
+class _Abrupt(BaseException):
+    """A stop the process cannot catch, such as a kill between the two writes."""
+
+
+@pytest.mark.parametrize("exc", [OSError, _Abrupt], ids=["marker-fails", "abrupt-stop"])
+def test_an_owner_clear_after_an_applied_role_move_survives_a_lost_marker(repo, monkeypatch, exc):
+    root = Store.open(repo).root
+    _old_profile(root, {"reviewer": {"model": "r-1", "effort": "max"}})
+    real, failed = roles_move.atomic_write, []
+
+    def marker_fails_once(target, content):
+        if target.name == profile_share.ROLES_MOVED and not failed:
+            failed.append(True)
+            raise exc(28, "No space left on device")  # the roles are applied in config.json; the marker is not
+        real(target, content)
+
+    monkeypatch.setattr(roles_move, "atomic_write", marker_fails_once)
+    with pytest.raises(exc):
+        Store.open(repo)  # the roles are applied to config.json; the marker write is the one that fails
+    store = Store(project_home.located(repo))
+    assert not (store.root / profile_share.ROLES_MOVED).exists()
+    assert store.read_config().agents["reviewer"].model == "r-1"
+
+    owner_save(store, lambda _cur: Layer())  # the owner clears the role before anything retries the move
+    cleared = store.config_path.read_bytes()
+
+    first = Store.open(repo)  # a fresh open rebuilds the marker from the receipt and must not refill the role
+    assert roles.chosen(first.settings(), StepKind.REVIEW) == carried.MODELS["reviewer"]
+    assert first.config_path.read_bytes() == cleared
+    assert (first.root / profile_share.ROLES_MOVED).exists()
+
+    fresh = Store.open(repo)  # restart: the same outcome, byte for byte
+    assert roles.chosen(fresh.settings(), StepKind.REVIEW) == carried.MODELS["reviewer"]
+    assert fresh.config_path.read_bytes() == cleared
+    assert (fresh.root / profile_share.ROLES_MOVED).exists()
 
 
 @pytest.mark.parametrize(
@@ -330,8 +538,121 @@ def test_invalid_old_roles_are_refused_and_never_copied(repo, boot, bad):
     root = repo / ".git" / "owlbear-delivery"
     _old_profile(root, bad)
     _prepare_reboot_finish(repo, boot)
+    with pytest.raises(StoreError, match=r"role overrides|cannot be migrated"):
+        Store.open(repo)
+
+    root = project_home.located(repo)
+    assert not (root / "config.json").exists()
+    assert not (root / profile_share.ROLES_MOVED).exists()
+
+
+def test_a_damaged_old_profile_is_not_marked_moved_and_its_roles_come_back_once_repaired(repo):
+    store = Store.open(repo)  # no old profile yet: nothing to move
+    own = Layer(agents={"builder": Agent(model="own")})
+    owner_save(store, lambda _cur: own)  # the owner's own settings meanwhile
+    root = store.root
+    (root / "profile.json").write_bytes(b'{"format": 1, "roles": {"reviewer": ')  # truncated mid-write
+
+    with pytest.raises(StoreError, match="could not be read"):
+        Store.open(repo)
+    assert not (root / profile_share.ROLES_MOVED).exists()
+
+    _old_profile(root, {"reviewer": {"model": "r-1", "effort": "max"}, "builder": {"model": "old", "effort": "low"}})
+    healthy = Store.open(repo)
+
+    assert healthy.read_config().agents["reviewer"].model == "r-1"
+    assert healthy.read_config().agents["builder"].model == "own"  # the owner's model is kept
+    assert (root / profile_share.ROLES_MOVED).exists()
+
+
+def test_an_old_profile_with_an_invalid_role_is_not_marked_moved_and_restores_once_repaired(repo):
+    root = Store.open(repo).root
+    _old_profile(root, {"reviewer": {"model": "r-1"}})  # no effort: the role is invalid
+    with pytest.raises(StoreError, match="role overrides are invalid"):
+        Store.open(repo)
+    root = project_home.located(repo)
+    assert not (root / profile_share.ROLES_MOVED).exists()
+    assert not (root / "config.json").exists()
+
+    _old_profile(root, {"reviewer": {"model": "r-1", "effort": "max"}})
+    healthy = Store.open(repo)
+    assert healthy.read_config().agents["reviewer"].model == "r-1"
+    assert (root / profile_share.ROLES_MOVED).exists()
+
+
+def test_an_old_profile_that_cannot_be_read_is_not_marked_moved_and_restores_once_repaired(repo):
+    root = Store.open(repo).root
+    (root / "profile.json").mkdir()  # a directory: the read fails
+    with pytest.raises(StoreError, match="could not be read"):
+        Store.open(repo)
+    root = project_home.located(repo)
+    assert not (root / profile_share.ROLES_MOVED).exists()
+    assert not (root / "config.json").exists()
+
+    (root / "profile.json").rmdir()
+    _old_profile(root, {"reviewer": {"model": "r-1", "effort": "max"}})
+    healthy = Store.open(repo)
+    assert healthy.read_config().agents["reviewer"].model == "r-1"
+    assert (root / profile_share.ROLES_MOVED).exists()
+
+
+def test_an_invalid_local_role_source_in_a_shared_project_is_refused_visibly_and_stays_retryable(shared_repo):
+    repo, _remote = shared_repo
+    legacy = Store.open(repo).root
+    _old_profile(legacy, {"reviewer": {"model": "r-1", "effort": "bogus"}})
+    with pytest.raises(StoreError) as caught:
+        Store.open(repo)
+    assert "role overrides are invalid" in str(caught.value)
+    assert "then reopen" in str(caught.value)
+
+    root = project_home.located(repo)
+    assert not (root / profile_share.ROLES_MOVED).exists()
+    assert not (root / "config.json").exists()
+
+    _old_profile(root, {"reviewer": {"model": "r-1", "effort": "max"}})
+    assert Store.open(repo).read_config().agents["reviewer"].model == "r-1"
+    assert (root / profile_share.ROLES_MOVED).exists()
+
+
+def test_a_valid_empty_old_roles_profile_counts_as_already_satisfied(repo):
+    root = Store.open(repo).root
+    _old_profile(root, {})
     store = Store.open(repo)
 
+    assert (store.root / profile_share.ROLES_MOVED).exists()
+    assert not (store.root / "config.json").exists()
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        b'{"format": 999, "roles": {"reviewer": {"model": "r-1", "effort": "max"}}}',  # a newer OwlBear wrote it
+        b'[{"format": 1, "roles": {}}]',  # not a profile object
+        b'{"roles": {"reviewer": {"model": "r-1", "effort": "max"}}}',  # no format at all
+        b'{"format": 1, "roles": {}, "runtime": "unknown"}',
+        b'{"format": 1.5, "roles": {"reviewer": {"model": "r-1", "effort": "max"}}}',
+        b'{"format": true, "roles": {"reviewer": {"model": "r-1", "effort": "max"}}}',
+    ],
+)
+def test_an_unknown_old_profile_refuses_before_any_marker_or_config_and_a_valid_one_then_imports(repo, raw):
+    legacy = Store.open(repo).root
+    (legacy / "profile.json").write_bytes(raw)
+    with pytest.raises(StoreError):
+        Store.open(repo)
+
+    root = project_home.located(repo)
+    assert not (root / profile_share.ROLES_MOVED).exists()
     assert not (root / "config.json").exists()
-    with pytest.raises(StoreError, match="cannot be migrated"):
-        store.read_profile()
+
+    _old_profile(root, {"reviewer": {"model": "r-1", "effort": "max"}})
+    assert Store.open(repo).read_config().agents["reviewer"].model == "r-1"
+    assert (root / profile_share.ROLES_MOVED).exists()
+
+
+def test_a_validated_current_format_profile_has_no_roles_to_move_and_is_marked_once(repo):
+    legacy = Store.open(repo).root
+    (legacy / "profile.json").write_text(Profile().model_dump_json())
+    store = Store.open(repo)
+
+    assert (store.root / profile_share.ROLES_MOVED).exists()
+    assert not (store.root / "config.json").exists()

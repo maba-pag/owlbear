@@ -26,7 +26,7 @@ from owlbear_delivery_next.machine_host import curation
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.runtimes.session_result import Run
-from owlbear_delivery_next.settings.config import Agent, GlobalLayer
+from owlbear_delivery_next.settings.config import Agent, GlobalLayer, Layer
 from owlbear_delivery_next.state_store import backlog_issues, machine_settings, registry
 from owlbear_delivery_next.state_store.backlog import Backlog, Entry
 from owlbear_delivery_next.state_store.store import Store, read_layer
@@ -467,7 +467,12 @@ def test_settings_show_what_each_project_sets_apart_and_ask_where_an_edit_goes(
     from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
 
     shop = Store(tmp_path / SHOP, DataRepo(shared_repo[0]), "shop-site")
-    shop.update_config(lambda layer: layer.model_copy(update={"widths": [1600]}))
+    assert (
+        shop.save(
+            shop.config_path, Layer, lambda layer: layer.model_copy(update={"widths": [1600]}), "setup", owner=True
+        )
+        == ""
+    )
     server, base = serving(machine(tmp_path, shared_repo[0])[0])
     try:
         with sync_playwright() as pw:
@@ -499,7 +504,10 @@ def test_settings_show_what_each_project_sets_apart_and_ask_where_an_edit_goes(
             unsaved_edits_keep_the_page(page, f"{base}/config?project={DOCS}", pds)
             docs = Store(tmp_path / DOCS, DataRepo(shared_repo[0]), "docs-site")
             off = {"agents": {"planner": Agent(subagents=False)}}
-            docs.update_config(lambda layer: layer.model_copy(update=off))  # another page saved first
+            assert (
+                docs.save(docs.config_path, Layer, lambda layer: layer.model_copy(update=off), "setup", owner=True)
+                == ""
+            )  # another page saved first
             page.locator(".bar").get_by_role("button", name="Save project settings").click()
             pds.modal(page).get_by_role("button", name="Save project settings").click()
             expect(page.locator("#error")).to_contain_text("changed since this page loaded them")

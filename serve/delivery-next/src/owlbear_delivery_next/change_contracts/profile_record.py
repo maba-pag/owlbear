@@ -9,7 +9,7 @@ from pydantic import Field, model_validator
 
 from owlbear_delivery_next.change_contracts.models import Context, Effort, Record
 
-PROFILE_FORMAT = 2  # format 2 moved the role overrides into the project settings (config.json)
+PROFILE_FORMAT = 4  # 2: role overrides moved to config.json; 3: preference import; 4: its basis
 type Runtime = Literal["managed", "vscode"]
 
 
@@ -60,6 +60,9 @@ class Profile(Record):
     confirmed_at: datetime | None = None
     entries: dict[str, ProfileEntry] = Field(default_factory=dict)
     runtime: Runtime = "managed"  # TD-35: managed runs agent steps through the SDK; vscode runs them in VS Code
+    prefs_import: Literal["", "pending", "done"] = ""  # R15: the one-time legacy import; "done" is permanent
+    prefs_basis: str = ""  # R15: while pending, the project config's digest at the claim ("absent" if none); else ""
+    prefs_claim: str | None = None  # R15: the nonce of the claim attempt that wrote "pending"; None on older profiles
 
 
 WINDOW_PAUSED = True  # TD-137: until the window probes pass, every agent step runs through the SDK
