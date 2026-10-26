@@ -131,8 +131,8 @@ Only with your yes does it add:
 - `~/.local/bin/owlbear`, a link to the command, and the zsh completion in `~/.owlbear/`.
 - Links to the shaping agent and its skill in `~/.copilot/agents/` and `~/.copilot/skills/`.
 - A login item that starts OwlBear paused at login.
-- In each project: the Delivery chat server and the memory server for New Change's shaping chat in
-  `.mcp.json`, and `chat.defaultToCopilotHarness` in `.vscode/settings.json`, each with its own yes.
+- In each project: the Delivery chat server and, once the shared data repository holds the project, the
+  memory server for New Change's shaping chat in `.mcp.json`, and `chat.defaultToCopilotHarness` in `.vscode/settings.json`, each with its own yes.
   Both files are listed in `.git/info/exclude`. Setup never writes a file Git tracks; for a tracked
   `.mcp.json` it prints the Delivery entry to add to your user-level MCP configuration.
 

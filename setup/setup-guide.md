@@ -107,7 +107,9 @@ disappears.
 
 Setup never writes a file Git tracks. For a tracked `.mcp.json` it prints the Delivery server entry
 to add under `"servers"` with **MCP: Open User Configuration** instead. The memory server has no such
-fallback: without it the shaping chat works on without memory.
+fallback: without it the shaping chat works on without memory. Setup offers it only once a folder in the
+shared data repository holds the project, because that folder is where the memory lives; without one it
+prints `Memory server not registered:` and the reason.
 
 ## Verify the installation
 

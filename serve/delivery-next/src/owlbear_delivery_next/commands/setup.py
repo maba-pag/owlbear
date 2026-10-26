@@ -124,6 +124,19 @@ def registered(repo: Path, home: Path | None = None) -> bool:
     return False
 
 
+def memory_missing(repo: Path) -> str | None:
+    """Why the memory server would find no store: it keeps memory only in the project's shared folder."""
+    try:
+        shared = data_repo.locate()
+        if shared and shared.claimed(data_repo.identity(repo)):
+            return None
+    except data_repo.DataRepoError as exc:
+        return str(exc)
+    if shared is None:
+        return "no shared repository is set up, so agents keep no memory; set one with `owlbear-next data PATH`"
+    return "no folder in the shared repository holds this project; run setup again to claim one"
+
+
 def consent(  # noqa: PLR0913 - the file, its merge and the owner's answer
     repo: Path, path: Path, merge: Callable[[dict[str, Any]], dict[str, Any]], question: str, ask: Ask, *, yes: bool
 ) -> str:
@@ -258,6 +271,8 @@ def run(
 def write_project_files(repo: Path, python: str, ask: Ask, say: Callable[[str], object], *, given: bool) -> None:
     """The chat server, the memory server and the harness key, each written only with its own consent.
 
+    The memory server is offered only once a shared folder holds the project: it keeps memory nowhere else.
+
     An earlier host task goes, also only with consent.
 
     Opening a window never starts Delivery (TD-281): OwlBear runs once per machine and serves the projects
@@ -274,8 +289,11 @@ def write_project_files(repo: Path, python: str, ask: Ask, say: Callable[[str], 
     if not server.startswith("written"):
         snippet = json.dumps(with_server({}, python, repo)["mcpServers"])
         say(f'Add this under "servers" in your user-level MCP configuration (MCP: Open User Configuration): {snippet}')
-    question = "Register the memory server in .mcp.json for New Change's shaper (kept out of git)?"
-    say(consent(repo, repo / ".mcp.json", lambda d: with_memory(d, python), question, ask, yes=given))
+    if why := memory_missing(repo):
+        say(f"Memory server not registered: {why}")
+    else:
+        question = "Register the memory server in .mcp.json for New Change's shaper (kept out of git)?"
+        say(consent(repo, repo / ".mcp.json", lambda d: with_memory(d, python), question, ask, yes=given))
     question = f"Set {window_files.HARNESS} in .vscode/settings.json for New Change's Copilot chat (kept out of git)?"
     settings = repo / window_files.SETTINGS  # the window reads the key only when it starts (TD-275)
     say(consent(repo, settings, lambda d: {**d, window_files.HARNESS: True}, question, ask, yes=given))
