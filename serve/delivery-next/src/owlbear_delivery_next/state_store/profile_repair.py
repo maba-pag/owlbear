@@ -71,7 +71,7 @@ class Receipt(BaseModel):
     format: Literal[1]  # the receipt's own wire version: required, so an unversioned receipt is never assumed current
     id: str = Field(pattern=r"^[0-9a-f]{32}$")
     scope: str = Field(min_length=1)  # the logical shared repository and project folder, or ``local``
-    source: str = Field(pattern=r"^[0-9a-f]{64}$")  # the digest of the old unreadable profile the owner confirmed
+    source: str = Field(pattern=r"^(absent|[0-9a-f]{64})$")  # the old unreadable clone profile's digest, or absent
     target: str = Field(pattern=r"^(absent|[0-9a-f]{64})$")  # the shared profile's digest the owner confirmed against
     profile: Profile
 
@@ -263,7 +263,8 @@ def _finish(store: Store, held: _Held) -> None:
             if profile_share.config_digest(store.root / PROFILE) != held.receipt.source:
                 msg = "the old profile changed after the replacement was published; run setup again to review it"
                 raise SourceChangedError(msg)
-            roles_move.retire_source(store)
+            if held.receipt.source != profile_share.ABSENT:  # an absent clone profile has no roles to mark
+                roles_move.retire_source(store)
         (store.root / RECEIPT).unlink(missing_ok=True)
 
 

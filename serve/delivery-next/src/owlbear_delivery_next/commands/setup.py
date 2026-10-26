@@ -17,7 +17,7 @@ from owlbear_delivery_next.runtimes import readiness, window_files
 from owlbear_delivery_next.settings import profile, roles
 from owlbear_delivery_next.state_store import prefs_import, profile_repair, profile_share, roles_move
 from owlbear_delivery_next.state_store.profile_errors import SharedSyncError, SourceChangedError
-from owlbear_delivery_next.state_store.store import Store, StoreError
+from owlbear_delivery_next.state_store.store import RoleSourceError, Store, StoreError
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -206,10 +206,10 @@ def project_folder(repo: Path, chosen: str, ask: Ask, say: Callable[[str], objec
 def _saved(store: Store, say: Callable[[str], object]) -> tuple[Profile | None, bool, str, str]:
     """The saved profile setup may replace, as ``(prev, unreadable, source, target)``.
 
-    *source* is the digest of this clone's old profile file when its role overrides cannot be inspected; *target* is
-    the digest of the shared profile it is confirmed against. Readability and that digest come from one observation of
-    the same bytes, taken now, so a stale open-time error never offers a replacement for a file that reads. A readable
-    profile is never replaced for its old roles.
+    *source* is the digest of this clone's old profile file when its role overrides cannot be inspected, or ``absent``
+    when only the shared profile is unreadable; *target* is the digest of the shared profile it is confirmed against.
+    Readability and those digests come from one observation of the same bytes, taken now, so a stale open-time error
+    never offers a replacement for a file that reads. A readable profile is never replaced for its old roles.
     """
     reason: StoreError | None = None
     try:
@@ -217,21 +217,46 @@ def _saved(store: Store, say: Callable[[str], object]) -> tuple[Profile | None, 
     except StoreError as exc:  # setup replaces a profile it cannot read; confirming saves the new one
         prev, reason = None, exc
     digest, now = roles_move.snapshot(store.root / profile_share.PROFILE)
+    # unshared: the shared profile is this same local file, so its target is the bytes just observed
+    target, target_now = roles_move.snapshot(profile_share.path(store)) if store.shared else (digest, now)
     if now is None:
         if store.deferred_roles is not None:
             msg = "the old profile can be read now; run setup again to review it"
             raise StoreError(msg)
-        return prev, reason is not None, "", ""
+        if reason is None:
+            return prev, False, "", ""
+        if store.shared and digest == profile_share.ABSENT:  # the shared profile alone is unreadable
+            return _shared_only(target, target_now, reason, say)
+        return prev, True, "", ""
     if prev is not None or not digest:  # a readable shared profile with an unreadable clone file: open refuses it
         raise now
-    # unshared: the shared profile is this same local file, so its target is the bytes just observed
-    target = profile_share.config_digest(profile_share.path(store)) if store.shared else digest
-    say(f"The saved profile cannot be read ({reason or now}); detecting a new one.")
+    if not target:  # the shared profile cannot be read to a digest: its own error is the explanation
+        raise target_now or now
+    _announce(reason or now, say)
+    return None, True, digest, target
+
+
+def _shared_only(
+    target: str, target_now: RoleSourceError | None, reason: StoreError, say: Callable[[str], object]
+) -> tuple[Profile | None, bool, str, str]:
+    """The replacement of a shared profile that is unreadable while the clone has no profile to bind."""
+    if target_now is None:  # it reads now: the new bytes were not what the owner was shown, so nothing is replaced
+        if target == profile_share.ABSENT:
+            raise reason
+        msg = "the shared profile can be read now; run setup again to review it"
+        raise StoreError(msg)
+    if not target:
+        raise target_now
+    _announce(reason, say)
+    return None, True, profile_share.ABSENT, target
+
+
+def _announce(cause: Exception, say: Callable[[str], object]) -> None:
+    say(f"The saved profile cannot be read ({cause}); detecting a new one.")
     say(
         "Confirming replacement discards the unreadable profile, including any unrecoverable legacy role "
         "overrides; declining keeps it."
     )
-    return None, True, digest, target
 
 
 def run(

@@ -802,6 +802,129 @@ def test_shared_repair_publication_refusal_is_visible_and_retires_nothing(
     assert code != 0
 
 
+def shared_only_damaged(store: Store, raw: str) -> Path:
+    """The shared profile, unreadable, with no profile in the clone: the only old bytes are the shared ones."""
+    target = profile_share.path(store)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(raw)
+    return target
+
+
+def test_shared_only_damaged_target_is_repaired_with_its_guard_and_no_source_to_retire(
+    repo: Path, shared_repo, monkeypatch, capsys
+) -> None:
+    store = shared_project(repo, shared_repo, monkeypatch)
+    shared_only_damaged(store, UNREADABLE % "done")
+    assert not (store.root / profile_share.PROFILE).exists()
+    assert setup.run(repo, [], yes=True, local_files="no") == 0
+    assert "Profile v" in capsys.readouterr().out
+    assert not (store.root / profile_repair.RECEIPT).exists()
+    assert not (store.root / profile_share.ROLES_MOVED).exists()
+    assert Store.open(repo).read_profile().prefs_import == "done"
+
+
+def test_shared_only_target_replaced_during_confirmation_keeps_the_newer_bytes(
+    repo: Path, shared_repo, monkeypatch, capsys
+) -> None:
+    store = shared_project(repo, shared_repo, monkeypatch)
+    target = shared_only_damaged(store, UNREADABLE % "")
+    newer = '{"format": 1, "roles": {"planner": {"model": "p-2", "effort": "max"}}}'
+
+    def newer_then_yes(_question: str) -> str:
+        target.write_text(newer)
+        return "y"
+
+    assert setup.run(repo, [], yes=False, local_files="no", ask=newer_then_yes) != 0
+    assert "Profile v" not in capsys.readouterr().out
+    assert target.read_text() == newer
+    assert not (store.root / profile_repair.RECEIPT).exists()
+    assert not store.config_path.exists()
+
+
+def test_shared_only_target_replaced_while_the_writer_lock_is_awaited_keeps_the_newer_bytes(
+    repo: Path, shared_repo, monkeypatch, capsys
+) -> None:
+    store = shared_project(repo, shared_repo, monkeypatch)
+    target = shared_only_damaged(store, UNREADABLE % "")
+    newer = '{"format": 1, "roles": {"planner": {"model": "p-2", "effort": "max"}}}'
+    real_writer = profile_share._writer  # noqa: SLF001 - the writer lock itself is what the probe sits in
+    armed: list[bool] = []
+
+    @contextlib.contextmanager
+    def changed_at_entry(st: Store, *, create: bool = True):
+        if armed:
+            armed.clear()
+            target.write_text(newer)  # the shared target changes while the approval waits for the writer lock
+        with real_writer(st, create=create):
+            yield
+
+    real_write = Store.write_profile
+
+    def armed_write(self: Store, prof: Profile, **kwargs: object) -> str:
+        armed.append(True)
+        try:
+            return real_write(self, prof, **kwargs)
+        finally:
+            armed.clear()
+
+    monkeypatch.setattr(profile_share, "_writer", changed_at_entry)
+    monkeypatch.setattr(Store, "write_profile", armed_write)
+    assert setup.run(repo, [], yes=True, local_files="no") != 0
+    assert "Profile v" not in capsys.readouterr().out
+    assert target.read_text() == newer
+    assert not (store.root / profile_repair.RECEIPT).exists()
+    assert not store.config_path.exists()
+
+
+def test_shared_only_repair_declined_writes_nothing(repo: Path, shared_repo, monkeypatch) -> None:
+    store = shared_project(repo, shared_repo, monkeypatch)
+    raw = UNREADABLE % ""
+    target = shared_only_damaged(store, raw)
+    monkeypatch.setattr(Store, "write_profile", lambda *_a, **_k: pytest.fail("no profile write before confirmation"))
+    assert setup.run(repo, [], yes=False, local_files="no", ask=lambda _q: "n") == 1
+    assert target.read_text() == raw
+    assert not (store.root / profile_repair.RECEIPT).exists()
+    assert not store.config_path.exists()
+
+
+def test_shared_only_target_readable_before_observation_is_not_treated_as_the_approved_bad_source(
+    repo: Path, shared_repo, monkeypatch
+) -> None:
+    store = shared_project(repo, shared_repo, monkeypatch)
+    target = shared_only_damaged(store, UNREADABLE % "")
+
+    def healed_then_unreadable(_self: Store) -> Profile:
+        target.write_text(GOOD_ROLES)  # the open-time error is stale: the shared file reads by the time it is observed
+        msg = "the saved profile cannot be read"
+        raise StoreError(msg)
+
+    monkeypatch.setattr(Store, "read_profile", healed_then_unreadable)
+    with pytest.raises(StoreError, match="can be read now"):
+        setup.run(repo, [], yes=True, local_files="no")
+    assert target.read_text() == GOOD_ROLES
+    assert not (store.root / profile_repair.RECEIPT).exists()
+    assert not store.config_path.exists()
+
+
+def test_shared_only_sync_failure_keeps_the_approved_repair_and_resumes_without_reconfirming(
+    repo: Path, shared_repo, monkeypatch, capsys
+) -> None:
+    store = shared_project(repo, shared_repo, monkeypatch)
+    raw = UNREADABLE % ""
+    target = shared_only_damaged(store, raw)
+    with monkeypatch.context() as offline:
+        offline.setattr(DataRepo, "pull", lambda *_a, **_k: "the shared repository could not be reached")
+        assert setup.run(repo, [], yes=True, local_files="no") == 1
+    receipt = json.loads((store.root / profile_repair.RECEIPT).read_text())
+    assert receipt["source"] == profile_share.ABSENT
+    assert target.read_text() == raw
+    capsys.readouterr()
+    assert setup.run(repo, [], yes=False, local_files="no", ask=lambda _q: pytest.fail("no reconfirmation")) == 0
+    assert "Profile v" in capsys.readouterr().out
+    assert not (store.root / profile_repair.RECEIPT).exists()
+    assert not (store.root / profile_share.ROLES_MOVED).exists()
+
+
 def refuse_publish(monkeypatch) -> None:
     notice = "saved, but not pushed: the shared repository refused the push"
     monkeypatch.setattr(DataRepo, "publish", lambda *_a, **_k: notice)
