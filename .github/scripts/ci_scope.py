@@ -43,7 +43,7 @@ SUITES: dict[str, tuple[str, ...]] = {
     ),
     "static": ("**",),  # `uv run lint` checks every text file, EditorConfig included
     "tooling": (
-        ".github/renovate.json",
+        "renovate.json",
         ".github/scripts/**",
         ".github/workflows/**",
         ".pre-commit-config.yaml",

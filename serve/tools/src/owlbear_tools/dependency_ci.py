@@ -284,7 +284,7 @@ def classify_dependency_change(
         path.startswith((".owlbear/scripts/diagrams/", "share/diagrams/")) for path in changed
     )
     workflows = any(path.startswith(".github/workflows/") for path in changed)
-    renovate = ".github/renovate.json" in changed
+    renovate = "renovate.json" in changed
     precommit = ".pre-commit-config.yaml" in changed
     ruff_toolchain = _ruff_toolchain_changed(changed, before_files, after_files)
 
