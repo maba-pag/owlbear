@@ -84,4 +84,4 @@ async def teardown(client: Any, session: Any, sid: str) -> None:  # noqa: ANN401
     confirmed = await _stage(graceful()) or await _stage(client.force_stop())
     if sid:
         ended = {"event": "ended", "session": sid, "ending": "finished", "provisional": not confirmed}
-        await spotter.offload(chatlogs.note, ended)
+        spotter.WORK.submit(chatlogs.note, ended)  # queued, never awaited: it ends within the process's exit grace

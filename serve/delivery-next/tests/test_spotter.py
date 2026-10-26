@@ -341,6 +341,7 @@ def test_a_look_is_one_toolless_session_noted_in_the_chatlogs_manifest(monkeypat
     assert "rationale" in made["message"]
     assert '{"step": "build"}' in made["message"]
     assert (made["disconnected"], made["stopped"]) == (True, True)
+    assert spotter.WORK.settled(5)  # the end's line is queued, not awaited
     lines = [json.loads(x) for x in (chatlogs.root() / "manifest.jsonl").read_text().splitlines()]
     assert [(x["event"], x["session"], x.get("kind")) for x in lines] == [
         ("started", "look-1", "spotter"), ("ended", "look-1", None)]  # fmt: skip
@@ -398,6 +399,7 @@ def test_a_stalled_or_failed_runtime_is_torn_down_within_its_bounds(
 
     assert asyncio.run(main()) < 1
     assert made.get("forced") is True  # the graceful stop hung
+    assert spotter.WORK.settled(5)  # the end's line is queued, not awaited
     manifest = chatlogs.root() / "manifest.jsonl"
     lines = [json.loads(x) for x in manifest.read_text().splitlines()] if manifest.exists() else []
     assert [x["provisional"] for x in lines if x["event"] == "ended"] == ends  # unconfirmed when the force failed
@@ -897,3 +899,49 @@ def test_an_unreadable_prompt_still_records_the_look_and_settles_its_reservation
     asyncio.run(main())
     assert [r["prompt"] for r in records()] == ["unreadable"]
     assert ledger() == {"reserved": {}, "spent": 0.25}
+
+
+def test_a_slow_manifest_write_never_holds_a_looks_teardown(monkeypatch) -> None:
+    import threading  # noqa: PLC0415
+    import time  # noqa: PLC0415
+
+    released = threading.Event()
+    real = chatlogs.note
+
+    def note(event: dict[str, Any]) -> None:
+        if event["event"] == "ended":
+            released.wait(5)
+        real(event)
+
+    class Session:
+        session_id = "look-5"
+        rpc = SimpleNamespace(usage=SimpleNamespace(get_metrics=None))
+
+        async def send_and_wait(self, *_a: Any, **_kw: Any) -> None:
+            pass
+
+        async def disconnect(self) -> None:
+            pass
+
+    class Client:
+        def __init__(self, **_kw: Any) -> None:
+            pass
+
+        async def start(self) -> None:
+            pass
+
+        async def create_session(self, **_kw: Any) -> Session:
+            return Session()
+
+        async def stop(self) -> None:
+            pass
+
+    monkeypatch.setattr(spotter_look, "CopilotClient", Client)
+    monkeypatch.setattr(spotter_look, "cli_path", lambda: "/bin/false")
+    monkeypatch.setattr(spotter_look.chatlogs, "note", note)
+    began = time.monotonic()
+    asyncio.run(REAL_LOOK({}, ctx()))
+    took = time.monotonic() - began
+    released.set()
+    assert spotter.WORK.settled(5)
+    assert took < 1
