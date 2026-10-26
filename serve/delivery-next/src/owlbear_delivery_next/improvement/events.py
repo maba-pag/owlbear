@@ -14,7 +14,7 @@ import re
 from collections import deque
 from typing import Any
 
-from owlbear_delivery_next.local_system.mask import redact
+from owlbear_delivery_next.local_system.mask import redact, secret_key
 
 ACTIONS, CALLS = 120, 200  # actions kept; calls awaiting their completion
 TEXT, SAID, ARGS, RESULT = 6000, 1500, 1500, 4000  # characters kept of a request, a message, arguments, a result
@@ -89,12 +89,28 @@ def omitted(length: int) -> str:
     return f"[{length} characters, too long to clean: omitted]"
 
 
+def _scrubbed(value: Any) -> Any:  # noqa: ANN401 - JSON values
+    """*value* with every string cleaned and every credential-named field's value masked, before it is encoded."""
+    if isinstance(value, str):
+        return clean(value)
+    if isinstance(value, list):
+        return [_scrubbed(v) for v in value]
+    if isinstance(value, dict):
+        return {k: "***" if secret_key(str(k)) and not isinstance(v, dict | list) else _scrubbed(v)
+                for k, v in value.items()}  # fmt: skip
+    return value
+
+
 def kept_text(value: object, n: int) -> str:
     """*value* cleaned whole, then clipped to *n*: a credential is never cut from what names it or quotes it.
 
-    A text over ``RAW`` is omitted: a cut could split a quoted or labelled credential, and no cut is known to be safe.
+    Structured values are cleaned field by field before they are encoded, so no escaped quote hides a credential. A
+    text over ``RAW`` is omitted: a cut could split a quoted or labelled credential, and no cut is known to be safe.
     """
-    s = no_browser(_text(value))
+    if not isinstance(value, str):
+        size = len(_text(value))
+        return omitted(size) if size > RAW else clip(_text(_scrubbed(json.loads(_text(value)))), n)
+    s = no_browser(value)
     return omitted(len(s)) if len(s) > RAW else clip(clean(s), n)
 
 

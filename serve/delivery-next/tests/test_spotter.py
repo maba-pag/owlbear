@@ -686,3 +686,28 @@ def test_the_process_exits_within_the_grace_though_spotter_work_is_still_queued(
     )
     ended = time.monotonic()
     assert ended - float(proc.stdout.strip()) < spotter.GRACE + 1.5
+
+
+def test_structured_arguments_and_decisions_are_cleaned_before_they_are_encoded_or_clipped() -> None:
+    secret = "Q1w2 E3r4 secret"  # noqa: S105 - a synthetic credential
+    nested = {"command": "curl -d '{\"pass" + 'word": "' + secret + "\"}' x", "api_token": "plain-value-123"}
+    kept = Kept()
+    kept.add(started("c1", "bash", nested))
+    args = kept.snapshot()["actions"][0]["args"]
+    assert "Q1w2" not in args
+    assert "plain-value-123" not in args
+    decisions = ["x" * 9000 + " pass" + 'word="' + secret + '" ' + "y" * 2978]  # the clip's tail starts at its quote
+    assert "Q1w2" not in json.dumps(card.build(Kept().snapshot(), {}, {"decisions": decisions}))
+
+
+def test_a_hand_off_skipped_for_capacity_keeps_the_events_seen_as_its_cutoff() -> None:
+    async def main() -> None:
+        spot = spotter.Spotter(ctx(), lambda: "s-1", judge(wait=0.1))
+        for ev in (asked("Build it."), said("Plan."), said("Done.")):
+            spot.seen(ev)
+        for i in range(3):
+            spot.handed_off(f"c{i}", {})
+        await spot.drain()
+
+    asyncio.run(main())
+    assert sorted((r["skipped"][:8], r["cutoff"]) for r in records()) == [("", 3), ("", 3), ("capacity", 3)]

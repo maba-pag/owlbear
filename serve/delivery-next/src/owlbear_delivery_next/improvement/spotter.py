@@ -324,6 +324,7 @@ class Spotter:
             if look == "sample":  # a burst of samples is one count, not a write each
                 self.crowded += 1
             else:
+                moment = {**moment, "cutoff": self.kept.n}
                 skipped = self._record(look, probability, moment, skipped="capacity: looks already running")
                 self._track(offload(store, self.folder, skipped, None))
             return

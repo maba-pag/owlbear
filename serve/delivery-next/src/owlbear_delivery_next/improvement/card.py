@@ -15,7 +15,7 @@ import re
 from datetime import datetime
 from typing import Any
 
-from owlbear_delivery_next.improvement.events import clean, clip
+from owlbear_delivery_next.improvement.events import clean, clip, kept_text
 
 BOUND = 30000  # characters of the whole card
 KEEP_RECENT, KEEP_OPEN, KEEP_DECISIONS, KEEP_TASK = 5, 12, 1000, 500  # what ``bounded`` cuts down to, at least
@@ -121,7 +121,7 @@ def build(snapshot: dict[str, Any], moment: dict[str, Any], context: dict[str, A
             "minutes_waiting_in_last_30": _waited(actions, now),
         },
         "open_work": context.get("open_work", []),
-        "decisions": clip("\n".join(context.get("decisions", [])), 6000),
+        "decisions": kept_text("\n".join(context.get("decisions", [])), 6000),
         "gaps": _gaps(snapshot, context),
     }
     return bounded(_cleaned(card))

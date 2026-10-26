@@ -16,6 +16,12 @@ _ASSIGN = re.compile(
 )
 _BLOB = re.compile(r"(?P<s>[=:]\s*)(?P<q>[\"']?)(?!//)[A-Za-z0-9+/_-]{32,}={0,2}")
 _BEARER = re.compile(r"(?i)\bbearer\s+(?!\*\*\*)\S+")
+_SECRET_KEY = re.compile(rf"(?i){_NAME}")
+
+
+def secret_key(name: str) -> bool:
+    """Whether a field named *name* holds a credential, as an assignment's key does."""
+    return bool(_SECRET_KEY.search(name))
 
 
 def _header(m: re.Match[str]) -> str:
