@@ -404,11 +404,14 @@ class Pds:
     @classmethod
     def answer(cls, page, button: str) -> None:
         """Click *button* in the newest open ``p-modal``, then wait until its dialog has closed: while it fades out the
-        page behind it is inert, so a fill or a pick there would be lost without an error."""
+        page behind it is inert, so a fill or a pick there would be lost without an error. A locator, unlike a handle,
+        also ends the wait when the answer opens another page."""
+        from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
         modal = cls.modal(page)
-        answered = modal.element_handle()
+        modal.evaluate("m => m.setAttribute('data-test-answered', '')")
         modal.get_by_role("button", name=button).click()
-        page.wait_for_function("m => !m.isConnected || !m.shadowRoot?.querySelector('dialog')?.open", arg=answered)
+        expect(page.locator("p-modal[data-test-answered]").get_by_role("dialog")).to_have_count(0)
 
     @staticmethod
     def select(scope, label: str):
