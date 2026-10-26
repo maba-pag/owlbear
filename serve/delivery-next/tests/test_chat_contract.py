@@ -1,4 +1,4 @@
-"""Chat contract 1 (D-01M5Q5GKHX7BJTXPEW2MHGS9E0): a chat's server keeps its tools while OwlBear updates beneath it."""
+"""Chat contracts (D-01M5Q5GKHX7BJTXPEW2MHGS9E0): a chat's server keeps its tools while OwlBear updates beneath it."""
 
 import asyncio
 import fcntl
@@ -29,6 +29,7 @@ from owlbear_delivery_next.state_store.store import Store
 FIXTURES = Path(__file__).parent / "fixtures"
 WORDING = {"description", "examples", "title"}  # what a tool says to the model; its shape is the contract
 AUTH = {"authorization": "Bearer " + "t"}  # the token of record()
+SERVES = {"supported": sorted(chat_contract.SUPPORTED)}  # what a current host answers
 ROUTES = [  # what chat_client calls, under a project and (the decisions) under /owlbear
     ("post", "/briefs"), ("post", "/briefs/visual"), ("post", "/briefs/challenge"), ("get", "/changes"),
     ("get", "/chat/brief/{slug}"), ("get", "/chat/challenge/{slug}"), ("post", "/changes/{slug}/answers"),
@@ -139,7 +140,7 @@ def test_a_chat_works_whatever_code_its_host_runs_and_never_opens_the_state(monk
     monkeypatch.setattr(chat_client, "_pause", lambda _s: None)
     row = {"handle": "c1", "slug": "c1-shop"}
     chat, host = hosted(monkeypatch, {
-        "GET /chat/contract": {"supported": [1]}, "GET /changes": [row], "GET /chat/brief/c1-shop": {"version": 2},
+        "GET /chat/contract": SERVES, "GET /changes": [row], "GET /chat/brief/c1-shop": {"version": 2},
         "POST /briefs/challenge": {"slug": "c1-shop", "attempt": 1}, "GET /chat/challenge/c1-shop": {"running": False},
         "GET /decisions": {"available": True, "decisions": []}, "POST /decisions/lookup": {"decisions": []},
         "POST /changes/c1-shop/answers": (409, {"detail": "question q1 is not open"}),
@@ -166,10 +167,10 @@ def test_a_chat_writes_nothing_to_a_host_older_than_its_contract_and_asks_again_
     assert chat.write("/decisions/propose", {}) == {
         "saved": False, "error": chat_client.OLDER_HOST, "decisions_page": chat.page()
     }  # fmt: skip
-    host.answers = {"GET /chat/contract": {"supported": [2]}}  # a host that serves contract 1 no more
-    refused = chat_contract.UNSUPPORTED.format(sent=1, served="2")
+    host.answers = {"GET /chat/contract": {"supported": [1]}}  # a host older than this chat's contract
+    refused = chat_contract.UNSUPPORTED.format(sent=chat_contract.CHAT, served="1")
     assert chat.call("POST", "/briefs", {}) == (chat_client.STALE, {"error": refused})
-    host.answers = {"GET /chat/contract": {"supported": [1, 2]}}
+    host.answers = {"GET /chat/contract": {"supported": sorted(chat_contract.SUPPORTED)}}
     assert chat.call("POST", "/briefs", {}) == (200, {})
     monkeypatch.setattr(chat, "record", lambda: rec.model_copy(update={"pid": 8}))  # the host restarted
     chat.call("POST", "/briefs", {})
@@ -181,7 +182,7 @@ def test_a_chat_writes_nothing_to_a_host_older_than_its_contract_and_asks_again_
 def test_a_challenge_is_read_through_a_host_handover_and_never_asked_for_again(monkeypatch):
     monkeypatch.setattr(chat_client, "_pause", lambda _s: None)
     answers = iter([(200, {"running": True}), (503, {"error": "down"}), (200, {"running": False, "verdict": "ok"})])
-    asked = {"GET /chat/contract": {"supported": [1]}, "POST /briefs/challenge": {"slug": "c1-shop", "attempt": 2}}
+    asked = {"GET /chat/contract": SERVES, "POST /briefs/challenge": {"slug": "c1-shop", "attempt": 2}}
     chat, host = hosted(monkeypatch, asked, record())
     reads = host.__call__
 
@@ -253,11 +254,11 @@ class Answer(io.BytesIO):
 
 
 def test_every_write_whose_answer_was_lost_tells_the_chat_it_may_be_done(monkeypatch):
-    chat, _ = hosted(monkeypatch, {"GET /chat/contract": {"supported": [1]}, "GET /changes": [{"handle": "c1",
+    chat, _ = hosted(monkeypatch, {"GET /chat/contract": SERVES, "GET /changes": [{"handle": "c1",
                      "slug": "c1-shop"}]}, record())  # fmt: skip
     lost = (chat_client.LOST, {"error": chat_client.UNKNOWN})
     chat.send = lambda _r, m, url, _b, _t: lost if m == "POST" else (200, [{"handle": "c1", "slug": "c1-shop"}] if
-               url.endswith("/changes") else {"supported": [1]})  # fmt: skip
+               url.endswith("/changes") else SERVES)  # fmt: skip
     said = [chat.save_brief({}), chat.challenge_brief("c1", 1, []), chat.write("/decisions/propose", {}),
             chat.answer_question("c1.q1", "o1", "", {"kind": "event"})]  # fmt: skip
     assert [(s.get("saved", s.get("requested", s.get("answered"))), s["error"]) for s in said] == [
@@ -281,7 +282,7 @@ def test_a_host_that_does_not_answer_its_contract_yet_is_asked_again_and_a_chall
     monkeypatch.setattr(chat_client, "_pause", lambda _s: None)
     chat, host = hosted(monkeypatch, {"GET /chat/contract": (503, {"error": "starting"})}, record())
     assert chat.call("GET", "/changes") == (503, {"error": "starting"})
-    host.answers["GET /chat/contract"] = {"supported": [1]}
+    host.answers["GET /chat/contract"] = SERVES
     assert chat.call("GET", "/changes") == (200, {})
     host.answers["POST /briefs/challenge"] = {"slug": "c1-shop", "attempt": 1}
     host.answers["GET /chat/challenge/c1-shop"] = (409, {"detail": "refused"})
@@ -303,7 +304,7 @@ def http(monkeypatch):
     m.stop_all()
 
 
-@pytest.mark.parametrize("sent", ["0", "2", "x", "", "01", "²", "1" * 5000])
+@pytest.mark.parametrize("sent", ["0", "3", "x", "", "01", "²", "1" * 5000])
 def test_a_host_refuses_a_contract_it_does_not_serve_before_any_route_runs(tmp_path, http, shared_repo, monkeypatch,
                                                                            sent):  # fmt: skip
     monkeypatch.setenv("OWLBEAR_DATA", str(shared_repo[0]))
@@ -325,7 +326,7 @@ def test_a_host_refuses_a_contract_it_does_not_serve_before_any_route_runs(tmp_p
     after = subprocess.run(["git", "-C", str(shared_repo[0]), "rev-parse", "HEAD"],  # noqa: S603, S607
                            capture_output=True, text=True, check=True).stdout  # fmt: skip
     assert after == head
-    assert http.get("/api/next/chat/contract", headers={chat_contract.HEADER: "1"}).json() == {"supported": [1]}
+    assert http.get("/api/next/chat/contract", headers={chat_contract.HEADER: "1"}).json() == {"supported": [1, 2]}
 
 
 def test_a_host_reply_without_what_a_chat_reads_breaks_the_contract(chat_replied):
@@ -343,7 +344,7 @@ def test_a_host_reply_without_what_a_chat_reads_breaks_the_contract(chat_replied
 
 def test_a_brief_the_host_could_not_give_is_told_not_left_out(monkeypatch):
     chat, _ = hosted(monkeypatch, {
-        "GET /chat/contract": {"supported": [1]}, "GET /changes": [{"handle": "c1", "slug": "c1-shop"}],
+        "GET /chat/contract": SERVES, "GET /changes": [{"handle": "c1", "slug": "c1-shop"}],
         "GET /chat/brief/c1-shop": (503, {"error": "handing over"}),
     }, record())  # fmt: skip
     status = chat.show_status("c1")

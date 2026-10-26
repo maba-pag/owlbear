@@ -55,8 +55,8 @@ class DecisionDraft(Args):
     question: str = bounded(300, "What was decided, as a question", "Which greeting wording?")
     answer: str = bounded(500, "The choice", "'Hello, Ada!' with the first name only")
     origin: Literal["decided", "approved", "autonomous"] = Field(
-        description="decided: the owner chose it; approved: it came with something the owner approved without "
-        "being asked; autonomous: the shaping agent chose it",
+        description="decided: the owner chose it; approved: he took your recommendation as shown, or it came with "
+        "something he approved without being asked; autonomous: the shaping agent chose it",
         examples=["decided"],
     )
     reason: str = Field(

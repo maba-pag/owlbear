@@ -86,7 +86,8 @@ question shows the decision's record (its statement and origin) and what changed
   free text stays open.
 
 A chosen variant or direction is `decided`. "Take your recommendation": state your choice and why,
-record what the option showed as `approved` and any detail you add when recording as `autonomous`
+record what the option showed as `approved` (`record_decision` takes `origin="approved"`) and any
+detail you add when recording as `autonomous`
 with its `reason`. "Show me more options": ask again with options across directions, each with
 benefits, costs, risks and its own percentage that it is a good choice (they need not add up), and again
 "take your recommendation (…)" naming it. "Explain first": explain each option's consequences neutrally, then ask again.
