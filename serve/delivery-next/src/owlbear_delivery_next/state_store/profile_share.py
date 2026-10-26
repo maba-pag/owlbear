@@ -57,8 +57,7 @@ def path(store: Store) -> Path:
 def write(store: Store, prof: Profile, *, replace_unreadable: bool = False) -> str:
     """Write the profile; in the shared folder also commit and push it: what the owner should know, else nothing.
 
-    An ordinary save refuses a saved profile it cannot read. Only the explicit setup repair (*replace_unreadable*)
-    replaces one, and it keeps the saved profile's legacy import guard when that guard is valid.
+    An ordinary save refuses an unreadable saved profile; only the explicit repair (*replace_unreadable*) replaces it.
     """
     with _writer(store):
         current = _current_for_write(store, replace_unreadable=replace_unreadable)
@@ -329,10 +328,11 @@ def _current_for_write(store: Store, *, replace_unreadable: bool) -> Profile | N
 
     if not replace_unreadable:
         return _read_unlocked(store)
-    try:  # a shared target that is absent keeps the clone's own legacy guard, when it is valid
-        return _read_unlocked(store) or (_unreadable_guard(store.root / PROFILE) if store.shared else None)
+    try:  # an absent shared target keeps the clone's own valid legacy guard, a malformed one refuses
+        current = _read_unlocked(store)
     except StoreError:
         return _unreadable_guard(path(store))
+    return current or (_unreadable_guard(store.root / PROFILE) if store.shared else None)
 
 
 def _unreadable_guard(source: Path) -> Profile | None:

@@ -471,6 +471,128 @@ def test_declined_repair_of_an_unreadable_profile_leaves_every_file_unchanged(
     assert not store.config_path.exists()
 
 
+def shared_project(repo: Path, shared_repo, monkeypatch) -> Store:
+    """The project *repo* in a shared repository (OWLBEAR_DATA), its clone's local folder created."""
+    data, _remote = shared_repo
+    monkeypatch.setenv("OWLBEAR_DATA", str(data))
+    monkeypatch.setattr(readiness, "check", lambda *_a: [])
+    monkeypatch.setattr(setup.profile, "detect", lambda *_a: Profile(version=1))
+    store = Store.open(repo)
+    assert store.shared is not None
+    store.root.mkdir(parents=True, exist_ok=True)
+    return store
+
+
+def test_shared_repair_declined_keeps_the_local_source_and_the_absent_target(
+    repo: Path, shared_repo, monkeypatch, capsys
+) -> None:
+    store = shared_project(repo, shared_repo, monkeypatch)
+    monkeypatch.setattr(Store, "write_profile", lambda *_a, **_k: pytest.fail("no profile write before confirmation"))
+    raw = '{"format": 1, "models": {}}'
+    (store.root / profile_share.PROFILE).write_text(raw)
+    assert not profile_share.path(store).exists()
+    assert setup.run(repo, [], yes=False, local_files="no", ask=lambda _q: "n") == 1
+    out = capsys.readouterr().out
+    assert "cannot be read" in out
+    assert "discards the unreadable profile" in out
+    assert (store.root / profile_share.PROFILE).read_text() == raw
+    assert not profile_share.path(store).exists()
+    assert not store.config_path.exists()
+
+
+def test_shared_repair_confirmed_keeps_a_valid_pending_guard_and_starts_fresh(
+    repo: Path, shared_repo, monkeypatch, capsys
+) -> None:
+    store = shared_project(repo, shared_repo, monkeypatch)
+    (store.root / profile_share.PROFILE).write_text(UNREADABLE % "pending")
+    with pytest.raises(StoreError, match="review the Merge and cleanup preferences"):
+        setup.run(repo, [], yes=True, local_files="no")
+    assert "discards the unreadable profile" in capsys.readouterr().out
+    assert Store.open(repo).read_profile().prefs_import == "pending"
+    assert not store.config_path.exists()
+    assert (store.root / profile_share.PROFILE).exists()
+
+
+BAD_EFFORT = '{"format": 1, "roles": {"reviewer": {"model": "r-1", "effort": "bogus"}}}'
+
+
+def test_shared_repair_names_the_local_source_whose_roles_cannot_be_read(
+    repo: Path, shared_repo, monkeypatch, capsys
+) -> None:
+    store = shared_project(repo, shared_repo, monkeypatch)
+    (store.root / profile_share.PROFILE).write_text(BAD_EFFORT)
+    assert setup.run(repo, [], yes=False, local_files="no", ask=lambda _q: "n") == 1
+    out = capsys.readouterr().out
+    assert "cannot be read" in out
+    assert str(store.root / profile_share.PROFILE) in out
+    assert (store.root / profile_share.PROFILE).read_text() == BAD_EFFORT
+    assert not profile_share.path(store).exists()
+    assert not store.config_path.exists()
+
+
+def test_shared_repair_refuses_when_the_local_source_changed_while_the_owner_answered(
+    repo: Path, shared_repo, monkeypatch, capsys
+) -> None:
+    store = shared_project(repo, shared_repo, monkeypatch)
+    source = store.root / profile_share.PROFILE
+    source.write_text(BAD_EFFORT)
+    newer = '{"format": 1, "roles": {"planner": {"model": "p-2", "effort": "bogus"}}}'
+
+    def changed_then_yes(_question: str) -> str:
+        source.write_text(newer)
+        return "y"
+
+    assert setup.run(repo, [], yes=False, local_files="no", ask=changed_then_yes) == 1
+    assert "changed while you answered; nothing was saved" in capsys.readouterr().out
+    assert source.read_text() == newer
+    assert not profile_share.path(store).exists()
+    assert not store.config_path.exists()
+
+
+def test_shared_repair_write_failure_keeps_the_source_and_retries_after_repair(
+    repo: Path, shared_repo, monkeypatch
+) -> None:
+    store = shared_project(repo, shared_repo, monkeypatch)
+    source = store.root / profile_share.PROFILE
+    raw = '{"format": 1, "models": {}}'
+    source.write_text(raw)
+    real_write = Store.write_profile
+    failing = [True]
+
+    def refused_write(self, *args, **kwargs):
+        if failing[0]:
+            msg = "fetch failed"
+            raise StoreError(msg)
+        return real_write(self, *args, **kwargs)
+
+    monkeypatch.setattr(Store, "write_profile", refused_write)
+    with pytest.raises(StoreError, match="fetch failed"):
+        setup.run(repo, [], yes=True, local_files="no")
+    assert source.read_text() == raw
+    assert not profile_share.path(store).exists()
+    assert not store.config_path.exists()
+    assert not (store.root / profile_share.ROLES_MOVED).exists()
+    failing[0] = False
+    assert setup.run(repo, [], yes=True, local_files="no") == 0
+    assert Store.open(repo).read_profile().confirmed_at is not None
+    assert (store.root / profile_share.ROLES_MOVED).exists()
+
+
+def test_shared_repair_refuses_a_malformed_guard_and_keeps_the_source_bytes(
+    repo: Path, shared_repo, monkeypatch
+) -> None:
+    store = shared_project(repo, shared_repo, monkeypatch)
+    source = store.root / profile_share.PROFILE
+    raw = UNREADABLE % "bogus"
+    source.write_text(raw)
+    with pytest.raises(StoreError):
+        setup.run(repo, [], yes=True, local_files="no")
+    assert source.read_text() == raw
+    assert not profile_share.path(store).exists()
+    assert not store.config_path.exists()
+    assert not (store.root / profile_share.ROLES_MOVED).exists()
+
+
 # Finding 6: a legacy claim is won only by its own published nonce, never by an equal absent basis
 
 

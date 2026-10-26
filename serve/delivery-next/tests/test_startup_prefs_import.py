@@ -1,5 +1,7 @@
 """A host start carries the one-time legacy preference import and retries its refused completion (R15, review)."""
 
+import contextlib
+import inspect
 import subprocess
 from pathlib import Path
 
@@ -46,29 +48,63 @@ def test_a_host_start_carries_an_upgraded_projects_legacy_preference_once(shared
 
 
 @pytest.mark.usefixtures("no_network")
-@pytest.mark.parametrize(
-    "failure",
-    [DataRepoError("the shared lock is held by another clone"), OSError(28, "No space left on device")],
-)
-def test_a_carry_that_cannot_lock_or_write_is_a_failed_check_and_the_next_start_carries(
-    shared_repo, tmp_path, monkeypatch, failure
+def test_a_carry_whose_shared_lock_cannot_be_taken_is_a_failed_check_and_the_next_start_carries(
+    shared_repo, tmp_path, monkeypatch
 ):
-    root, _remote = shared_repo
+    root, remote = shared_repo
     store = Store(tmp_path / "store", DataRepo(root), "shop-site")
     store.write_profile(Profile(entries={profile.POLL: confirmed("45")}))
-    real = prefs_import.run
+    real_locked, blocked = DataRepo.locked, [True]
+    monkeypatch.setattr(profile, "detect", lambda *_a: Profile(entries={profile.POLL: confirmed("45")}))
 
-    def cannot_carry(_store):
-        raise failure
+    @contextlib.contextmanager
+    def busy_for_the_carry(self, wait=None):
+        if blocked[0] and any(f.filename.endswith("/state_store/prefs_import.py") for f in inspect.stack()):
+            msg = "the shared lock is held by another clone"
+            raise DataRepoError(msg)
+        with real_locked(self, wait):
+            yield
 
-    monkeypatch.setattr(prefs_import, "run", cannot_carry)
+    monkeypatch.setattr(DataRepo, "locked", busy_for_the_carry)
     failed = [c for c in readiness.ready(store, root, carry=True) if not c.ok]  # no exception escapes the start
     assert [c.name for c in failed] == ["legacy preferences"]
+    assert "held by another clone" in failed[0].detail
     assert store.read_config().prefs is None  # nothing is filled while the import is unconfirmed
+    assert store.read_profile().prefs_import == ""  # no claim or completion was recorded
 
-    monkeypatch.setattr(prefs_import, "run", real)
+    blocked[0] = False
     assert not [c for c in readiness.ready(store, root, carry=True) if not c.ok]
     assert store.read_config().prefs.ci_poll_seconds == 45
+    _, got = clone_profile(remote, tmp_path)
+    assert got.prefs_import == "done"
+
+
+@pytest.mark.usefixtures("no_network")
+def test_a_carry_whose_local_flag_cannot_be_written_is_a_failed_check_and_the_next_start_publishes_done(
+    shared_repo, tmp_path, monkeypatch
+):
+    root, remote = shared_repo
+    store = Store(tmp_path / "store", DataRepo(root), "shop-site")
+    store.write_profile(Profile(entries={profile.POLL: confirmed("45")}))
+    real_touch, blocked = Path.touch, [True]
+
+    def no_space_for_flag(self, *args, **kwargs):
+        if blocked[0] and self.name == profile_share.UNPUBLISHED:
+            raise OSError(28, "No space left on device")
+        return real_touch(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "touch", no_space_for_flag)
+    failed = [c for c in readiness.ready(store, root, carry=True) if not c.ok]  # no exception escapes the start
+    assert [c.name for c in failed] == ["legacy preferences"]
+    assert "No space left" in failed[0].detail
+    _, before = clone_profile(remote, tmp_path / "before")
+    assert before.prefs_import != "done"  # the completion never reached the shared profile
+
+    blocked[0] = False
+    assert not [c for c in readiness.ready(store, root, carry=True) if not c.ok]
+    assert store.read_config().prefs.ci_poll_seconds == 45
+    _, got = clone_profile(remote, tmp_path / "after")
+    assert got.prefs_import == "done"
 
 
 @pytest.mark.usefixtures("no_network")

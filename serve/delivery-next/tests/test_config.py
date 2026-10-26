@@ -283,12 +283,14 @@ def test_a_clone_that_read_roles_before_another_cleared_them_never_reinstates(sh
             raced.append(True)
             roles_move.move_roles(a)
             owner_save(a, lambda _cur: Layer())
+            assert read_layer(a.config_path, Layer).roles_moved  # the cleared basis B captures carries the receipt
         return real_digest(path)
 
     monkeypatch.setattr(roles_move, "config_digest", clone_a_first)
     roles_move.move_roles(b)
 
     assert raced
+    assert (b.root / profile_share.ROLES_MOVED).exists()
     fresh = tmp_path / "fresh"
     subprocess.run(["git", "clone", "-q", str(remote), str(fresh)], check=True, capture_output=True)  # noqa: S603, S607
     shared = Store(tmp_path / "fresh-store", DataRepo(fresh), "shop-site")
