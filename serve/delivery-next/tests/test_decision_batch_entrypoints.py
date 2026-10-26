@@ -915,6 +915,98 @@ def _commit_file(shared: DataRepo, rel: str) -> None:
     shared.git("commit", "-qm", f"owner commits {rel}")
 
 
+def _interrupted_before_folder(picking, monkeypatch, project: str) -> tuple[Decision, str]:
+    """A save journalled and then stopped before its decision folder was made: no file of it is on disk."""
+
+    def interrupted(*_args, **_kwargs):
+        msg = "interrupted before the folder was created"
+        raise RuntimeError(msg)
+
+    new = make(project=project, title="Use UTC", statement="All timestamps use UTC.")
+    with monkeypatch.context() as m:
+        m.setattr(storage_io, "make_dirs", interrupted)
+        with pytest.raises(RuntimeError, match="interrupted"):
+            decision_store.save(picking.shared, new, expected_revision=None, message="decisions: before the folder")
+    return new, decision_batch.pending(picking.shared).generation
+
+
+def _record_checkout_writes(m: pytest.MonkeyPatch, shared: DataRepo, seen: list[str]) -> None:
+    """Record each write of a checkout file (not the journal in the Git folder) and each Git commit or push."""
+    real_replace, real_git = decision_batch.replace_file, DataRepo.git
+    admin = shared.root / ".git"
+
+    def recording_replace(path, data):
+        if admin not in Path(path).parents:
+            seen.append("replace")
+        real_replace(path, data)
+
+    def recording_git(self, *args, **kwargs):
+        if args and args[0] in {"commit", "push"}:
+            seen.append(args[0])
+        return real_git(self, *args, **kwargs)
+
+    m.setattr(decision_batch, "replace_file", recording_replace)
+    m.setattr(DataRepo, "git", recording_git)
+
+
+@pytest.mark.parametrize("image", ["third", "after", "none"])
+@pytest.mark.parametrize("parent", ["missing", "existing"])
+def test_an_owner_commit_while_finish_makes_the_folder_is_never_overwritten(picking, monkeypatch, parent, image):
+    """The owner writes and commits the file during the folder's final fsync, after Finish's first epoch check.
+
+    `third`: an image of the owner's own stays as committed. `after`: the owner landed the batch exactly; the next
+    Finish completes it from that commit without a commit of its own. `none`: the healthy Finish publishes.
+    """
+    _seed(picking)
+    shared = picking.shared
+    project = "new-site" if parent == "missing" else PROJECT
+    new, generation = _interrupted_before_folder(picking, monkeypatch, project)
+    rel = f"{project}/decisions/{new.id}.md"
+    folder = shared.root / project / "decisions"
+    assert folder.exists() == (parent == "existing")
+    owned = {"third": b"the owner's own third image\n", "after": serialize(new).encode("utf-8")}.get(image)
+    seen: list[str] = []
+    real_fsync = storage_io.fsync_dir
+
+    def final_fsync_then_owner_commits(path):
+        real_fsync(path)
+        if owned is not None and not seen and Path(path) == folder.parent:  # make_dirs' last fsync, both cases
+            seen.append("owner")
+            (shared.root / rel).write_bytes(owned)
+            _commit_file(shared, rel)
+
+    with monkeypatch.context() as m:
+        m.setattr(storage_io, "fsync_dir", final_fsync_then_owner_commits)
+        _record_checkout_writes(m, shared, seen)
+        if owned is None:
+            assert decision_recovery.finish(shared, generation).done
+        else:  # the owner's file holds neither image for the batch's head now, or HEAD moved: either refuses
+            with pytest.raises(decision_store.DecisionsUnavailable, match=r"moved|edited"):
+                decision_recovery.finish(shared, generation)
+
+    if owned is None:
+        assert "replace" in seen
+        assert decision_batch.pending(shared) is None
+        return
+    assert seen == ["owner", "commit"]  # the owner's own commit only: no write, commit or push by Finish after it
+    owner_head = shared.git("rev-parse", "HEAD").stdout
+    assert shared.git("log", "-1", "--format=%s").stdout.strip() == f"owner commits {rel}"
+    assert (shared.root / rel).read_bytes() == owned
+    assert shared.git("show", f"HEAD:{rel}").stdout.encode("utf-8") == owned
+    assert shared.git("diff", "--cached", "--name-only").stdout == ""
+    assert decision_batch.pending(shared).generation == generation
+    _no_authority(picking)
+    if image == "after":  # the owner's exact landing completes from its commit, offline and without a new commit
+        seen.clear()
+        with monkeypatch.context() as m:
+            _record_checkout_writes(m, shared, seen)
+            assert decision_recovery.finish(shared, generation).done
+        assert seen == []
+        assert shared.git("rev-parse", "HEAD").stdout == owner_head
+        assert (shared.root / rel).read_bytes() == owned
+        assert decision_batch.pending(shared) is None
+
+
 def _two_files(picking, monkeypatch, surface: str) -> tuple[list[str], list[bytes], object]:
     """Two files of one batch written as their after images, and the call that puts them back."""
     shared = picking.shared

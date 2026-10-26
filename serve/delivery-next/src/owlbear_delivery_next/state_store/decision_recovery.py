@@ -144,8 +144,9 @@ def finish(shared: DataRepo, generation: str) -> Recovery:
                 raise DecisionsUnavailable(msg, RECOVER)
             _preflight(root, batch)
             for rel, _, after in batch.files:
-                _fenced(root, batch)  # after the remote proof, immediately before this file's folder and write
+                _fenced(root, batch)  # after the remote proof, before this file's folder is made
                 storage_io.make_dirs((root.root / rel).parent)
+                _fenced(root, batch)  # again after the folder's I/O, immediately before this file's write
                 decision_batch.replace_file(root.root / rel, after)
             _validate(root, batch)
             paths = [root.root / rel for rel, _, _ in batch.files]
