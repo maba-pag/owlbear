@@ -3368,6 +3368,8 @@ The one sanitiser of command and argument text Delivery shows or persists (now l
 
 ### Interfaces
 
+- `def _secret(key: str) -> bool`
+- `def _assignments(text: str) -> str`
 - `def _header(m: re.Match[str]) -> str`
 - `def redact(text: str) -> str`
 
@@ -5547,7 +5549,7 @@ What one worker session produced, and its mapping to the loop's step result (D4 
 
 ## serve/delivery-next/src/owlbear_delivery_next/runtimes/spotter_look.py
 
-One Spotter look (Improvement design §4): a tool-less SDK session on the spotter role, its credits capped.
+One Spotter look (Improvement design §4): a tool-less SDK session on the spotter role, with no SDK credit cap.
 
 ### Imports
 
