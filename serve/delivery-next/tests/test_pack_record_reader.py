@@ -115,3 +115,29 @@ def test_a_loaded_project_whose_record_is_not_a_regular_file_holds_its_pack_work
     session_slots.interrupted(job, "p")
     assert [s["state"] for s in job.maintenance.read()["sessions"]] == ["held"]
     assert job.maintenance.slots.take("other", "probe", 1, 1) == 0
+
+
+class Cancelled(BaseException):
+    """Stands in for a cancellation: never an ordinary read failure."""
+
+
+@pytest.mark.parametrize("fault", [OSError, ValueError, Cancelled])
+def test_the_pages_reader_shows_a_failed_handover_as_unread_and_lets_a_cancellation_through(tmp_path, fault):
+    root = tmp_path / "store"
+    root.mkdir()
+    (root / pack_state.FILE).write_text(json.dumps(pack_job._blank() | {"started_at": "2026-10-15T10:00:00+00:00"}))  # noqa: SLF001
+    fds = open_fds()
+
+    def handover(*_args: object, **_kwargs: object) -> None:
+        msg = "synthetic handover failure"
+        raise fault(msg)
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(pack_state.os, "fdopen", handover)
+        if fault is Cancelled:
+            with pytest.raises(Cancelled):
+                pack_state.last(Store(root))
+        else:
+            assert pack_state.last(Store(root)) is None
+    assert open_fds() == fds
+    assert pack_state.last(Store(root))["started_at"] == "2026-10-15T10:00:00+00:00"  # control: it reads again

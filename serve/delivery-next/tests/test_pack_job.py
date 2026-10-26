@@ -1656,6 +1656,32 @@ def test_the_maintenance_page_links_each_action_and_shows_what_is_not_built(tmp_
                     "ended_at": "2026-10-15T10:05:00+00:00", "reason": "golden pages differ"}  # fmt: skip
 
 
+@pytest.mark.parametrize("fault", [OSError, ValueError])
+def test_a_record_whose_descriptor_cannot_be_read_as_text_shows_as_unread_on_the_maintenance_page(tmp_path, fault):
+    """Review on 6dde: a failed handover of the opened record is shown like any unreadable record, never a 500."""
+    store = Store(tmp_path)
+    c = TestClient(api.create_app(store, "t", Host()), base_url="http://127.0.0.1", headers=AUTH)
+    (store.root / pack_job.FILE).write_text(json.dumps(pack_job._blank() | {"started_at": "2026-10-15T10:00:00+00:00"}))  # noqa: SLF001
+    closed: list[int] = []
+    real_close = pack_state.os.close
+
+    def handover(*_args: object, **_kwargs: object) -> None:
+        msg = "synthetic handover failure"
+        raise fault(msg)
+
+    def close(fd: int) -> None:
+        closed.append(fd)
+        real_close(fd)
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(pack_state.os, "fdopen", handover)
+        patch.setattr(pack_state.os, "close", close)
+        got = c.get("/api/next/maintenance")
+    assert got.status_code == 200, got.text
+    assert {a["name"]: a for a in got.json()}["Design pack update"]["last"] is None
+    assert len(closed) == len(set(closed)) == 1  # the record's descriptor, closed exactly once
+
+
 def test_maintenance_sums_each_role_s_subagents_once_per_step(tmp_path):
     store = Store(tmp_path)
     c = TestClient(api.create_app(store, "t", Host()), base_url="http://127.0.0.1", headers=AUTH)

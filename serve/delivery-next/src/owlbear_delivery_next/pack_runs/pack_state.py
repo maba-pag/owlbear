@@ -285,6 +285,9 @@ def last(store: Store) -> dict[str, Any] | None:
         return None
     try:
         source = os.fdopen(fd, encoding="utf-8")
+    except OSError, ValueError:
+        os.close(fd)
+        return None  # a record whose descriptor cannot be read as text is shown as unread, like any other
     except BaseException:
         os.close(fd)
         raise
