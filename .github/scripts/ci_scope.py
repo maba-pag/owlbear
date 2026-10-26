@@ -25,8 +25,6 @@ SUITES: dict[str, tuple[str, ...]] = {
         "serve/*/src/**",
         "serve/*/tests/**",
         "tests/**",
-        "setup/**",
-        "seed/**",
     ),
     "python-browser": (
         ".github/workflows/python-browser.yml",
@@ -74,7 +72,6 @@ SUITES: dict[str, tuple[str, ...]] = {
         ".github/scripts/check_uv_version.py",
         ".pre-commit-config.yaml",
         ".mcp.json",
-        "seed/.vscode/mcp.json",
         "serve/*-mcp/**",
         "share/agents/**",
         "share/instructions/**",

@@ -131,17 +131,14 @@ Only with your yes does it add:
 - `~/.local/bin/owlbear`, a link to the command, and the zsh completion in `~/.owlbear/`.
 - Links to the shaping agent and its skill in `~/.copilot/agents/` and `~/.copilot/skills/`.
 - A login item that starts OwlBear paused at login.
-- In each project: the Delivery chat server in `.mcp.json` and `chat.defaultToCopilotHarness` in
-  `.vscode/settings.json`. Both are listed in `.git/info/exclude`. Setup never writes a file Git
-  tracks; for a tracked `.mcp.json` it prints the entry to add to your user-level MCP configuration.
+- In each project: the Delivery chat server and the memory server for New Change's shaping chat in
+  `.mcp.json`, and `chat.defaultToCopilotHarness` in `.vscode/settings.json`, each with its own yes.
+  Both files are listed in `.git/info/exclude`. Setup never writes a file Git tracks; for a tracked
+  `.mcp.json` it prints the Delivery entry to add to your user-level MCP configuration.
 
 To undo it, run `owlbear uninstall`: it removes the links, the completion and the login item, and
 keeps the runtime and your projects. **Remove project** on the page stops OwlBear serving a project.
 See [Uninstalling](setup/operating-owlbear.md#uninstalling) for removing everything.
-
-OwlBear's own agents, skills and tool servers can also be loaded into a project's VS Code
-workspace for your own chats; that is an optional, separate setup that asks first and hides its
-files from Git, in [the setup guide](setup/setup-guide.md#optional-agent-workspace).
 
 ## Status and expectations
 

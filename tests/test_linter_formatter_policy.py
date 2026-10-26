@@ -18,7 +18,6 @@ from owlbear_tools import quality
 
 _ROOT = Path(__file__).resolve().parents[1]
 _JSONC_LINE_COMMENT = re.compile(r"(?m)^\s*//.*$")
-_SEED_ONLY_CLI2_IGNORES = frozenset({".owlbear/hooks"})
 _P01_SHARED_EXCLUDED_PATHS = (
     "package.egg-info/PKG-INFO",
     ".owlbear/delivery/packages/package.whl",
@@ -105,20 +104,9 @@ _X04_FORMATTERS = {
 }
 
 
-def _normalize_pattern(pattern: str, *, cli2: bool) -> str:
-    normalized = pattern.strip()
-    if cli2:
-        normalized = normalized.removesuffix("/**")
-    normalized = normalized.removesuffix("/")
+def _normalize_pattern(pattern: str) -> str:
+    normalized = pattern.strip().removesuffix("/**").removesuffix("/")
     return normalized.removeprefix("**/")
-
-
-def _read_bare_ignores(path: Path) -> set[str]:
-    return {
-        _normalize_pattern(line, cli2=False)
-        for line in path.read_text(encoding="utf-8").splitlines()
-        if line.strip() and not line.lstrip().startswith("#")
-    }
 
 
 def _read_cli2_ignores(path: Path) -> set[str]:
@@ -127,7 +115,7 @@ def _read_cli2_ignores(path: Path) -> set[str]:
     ignores = payload.get("ignores")
     assert isinstance(ignores, list)
     assert all(isinstance(ignore, str) for ignore in ignores)
-    return {_normalize_pattern(ignore, cli2=True) for ignore in ignores}
+    return {_normalize_pattern(ignore) for ignore in ignores}
 
 
 def _read_yaml_mapping(path: Path) -> dict[str, object]:
@@ -193,35 +181,27 @@ def test_every_hook_the_lint_runner_calls_runs_in_the_manual_stage(monkeypatch: 
         assert all("manual" in hook.get("stages", default_stages) for hook in matches), name
 
 
-def test_markdownlint_ignore_authorities_share_normalized_policy() -> None:
-    root_cli2 = _read_cli2_ignores(_ROOT / ".markdownlint-cli2.jsonc")
-    seed_bare = _read_bare_ignores(_ROOT / "seed/.markdownlintignore")
-    seed_cli2 = _read_cli2_ignores(_ROOT / "seed/.markdownlint-cli2.jsonc")
-
+def test_markdownlint_ignores_live_in_the_cli2_config_only() -> None:
     assert not (_ROOT / ".markdownlintignore").exists()  # markdownlint-cli2 does not read it
-    assert seed_bare == root_cli2
-    assert seed_cli2 | _SEED_ONLY_CLI2_IGNORES == root_cli2 | _SEED_ONLY_CLI2_IGNORES
 
 
 def test_markdownlint_inline_html_allows_only_agent_sections() -> None:
-    for path in (_ROOT / ".markdownlint.json", _ROOT / "seed/.markdownlint.json"):
-        config = json.loads(path.read_text(encoding="utf-8"))
-        assert isinstance(config, dict)
-        assert config.get("MD033") == {"allowed_elements": _M04_ALLOWED_ELEMENTS}
+    config = json.loads((_ROOT / ".markdownlint.json").read_text(encoding="utf-8"))
+    assert isinstance(config, dict)
+    assert config.get("MD033") == {"allowed_elements": _M04_ALLOWED_ELEMENTS}
 
     assert "<strong>" not in (_ROOT / "setup/sharing-guide.md").read_text(encoding="utf-8")
 
 
 def test_markdownlint_rule_authorities_and_source_suppression_remain_explicit() -> None:
     expected_front_matter_title = r"^\s*(?:title|name|description)\s*[:=]"
-    for path in (_ROOT / ".markdownlint.json", _ROOT / "seed/.markdownlint.json"):
-        config = json.loads(path.read_text(encoding="utf-8"))
-        assert isinstance(config, dict)
-        assert config.get("MD013") is False
-        assert config.get("MD024") == {"siblings_only": True}
-        assert config.get("MD029") == {"style": "ordered"}
-        assert config.get("MD041") == {"front_matter_title": expected_front_matter_title}
-        assert config.get("MD060") == {"style": "compact"}
+    config = json.loads((_ROOT / ".markdownlint.json").read_text(encoding="utf-8"))
+    assert isinstance(config, dict)
+    assert config.get("MD013") is False
+    assert config.get("MD024") == {"siblings_only": True}
+    assert config.get("MD029") == {"style": "ordered"}
+    assert config.get("MD041") == {"front_matter_title": expected_front_matter_title}
+    assert config.get("MD060") == {"style": "compact"}
 
     source_lines = (_ROOT / ".owlbear/sources/overview.md").read_text(encoding="utf-8").splitlines()
     assert source_lines[0] == "<!-- markdownlint-disable MD060 -->"
@@ -229,13 +209,9 @@ def test_markdownlint_rule_authorities_and_source_suppression_remain_explicit() 
 
 def test_delivery_packages_remain_excluded_from_markdown_consumers() -> None:
     root_cli2 = _read_cli2_ignores(_ROOT / ".markdownlint-cli2.jsonc")
-    seed_bare = _read_bare_ignores(_ROOT / "seed/.markdownlintignore")
-    seed_cli2 = _read_cli2_ignores(_ROOT / "seed/.markdownlint-cli2.jsonc")
     category = ".owlbear/delivery/packages"
 
     assert category in root_cli2
-    assert category in seed_bare
-    assert category in seed_cli2
 
     config = _read_yaml_mapping(_ROOT / ".pre-commit-config.yaml")
     precommit_exclude = _read_precommit_exclude(config)
@@ -244,13 +220,9 @@ def test_delivery_packages_remain_excluded_from_markdown_consumers() -> None:
 
 def test_delivery_runtime_remains_excluded_from_markdown_consumers() -> None:
     root_cli2 = _read_cli2_ignores(_ROOT / ".markdownlint-cli2.jsonc")
-    seed_bare = _read_bare_ignores(_ROOT / "seed/.markdownlintignore")
-    seed_cli2 = _read_cli2_ignores(_ROOT / "seed/.markdownlint-cli2.jsonc")
     category = ".owlbear/delivery/runtime"
 
     assert category in root_cli2
-    assert category in seed_bare
-    assert category in seed_cli2
 
     config = _read_yaml_mapping(_ROOT / ".pre-commit-config.yaml")
     precommit_exclude = _read_precommit_exclude(config)
@@ -259,14 +231,10 @@ def test_delivery_runtime_remains_excluded_from_markdown_consumers() -> None:
 
 def test_broad_worktree_ignore_covers_delivery_worktrees() -> None:
     root_cli2 = _read_cli2_ignores(_ROOT / ".markdownlint-cli2.jsonc")
-    seed_bare = _read_bare_ignores(_ROOT / "seed/.markdownlintignore")
-    seed_cli2 = _read_cli2_ignores(_ROOT / "seed/.markdownlint-cli2.jsonc")
     scoped_category = ".owlbear/delivery/worktrees"
 
     assert "worktrees" in root_cli2
-    assert "worktrees" in seed_bare
-    assert "worktrees" in seed_cli2
-    assert scoped_category not in root_cli2 | seed_bare | seed_cli2
+    assert scoped_category not in root_cli2
 
     config = _read_yaml_mapping(_ROOT / ".pre-commit-config.yaml")
     precommit_exclude = _read_precommit_exclude(config)
@@ -275,13 +243,9 @@ def test_broad_worktree_ignore_covers_delivery_worktrees() -> None:
 
 def test_generated_indexes_remain_excluded_from_markdown_consumers() -> None:
     root_cli2 = _read_cli2_ignores(_ROOT / ".markdownlint-cli2.jsonc")
-    seed_bare = _read_bare_ignores(_ROOT / "seed/.markdownlintignore")
-    seed_cli2 = _read_cli2_ignores(_ROOT / "seed/.markdownlint-cli2.jsonc")
 
     for path in _M09_GENERATED_INDEX_MARKDOWN_PATHS:
         assert path in root_cli2
-        assert path in seed_bare
-        assert path in seed_cli2
 
     config = _read_yaml_mapping(_ROOT / ".pre-commit-config.yaml")
     precommit_exclude = _read_precommit_exclude(config)
@@ -290,12 +254,8 @@ def test_generated_indexes_remain_excluded_from_markdown_consumers() -> None:
 
 def test_memory_store_remains_excluded_from_markdown_consumers() -> None:
     root_cli2 = _read_cli2_ignores(_ROOT / ".markdownlint-cli2.jsonc")
-    seed_bare = _read_bare_ignores(_ROOT / "seed/.markdownlintignore")
-    seed_cli2 = _read_cli2_ignores(_ROOT / "seed/.markdownlint-cli2.jsonc")
 
     assert ".owlbear/memory" in root_cli2
-    assert ".owlbear/memory" in seed_bare
-    assert ".owlbear/memory" in seed_cli2
 
     config = _read_yaml_mapping(_ROOT / ".pre-commit-config.yaml")
     precommit_exclude = _read_precommit_exclude(config)
@@ -304,12 +264,8 @@ def test_memory_store_remains_excluded_from_markdown_consumers() -> None:
 
 def test_research_archive_remains_excluded_from_markdown_consumers() -> None:
     root_cli2 = _read_cli2_ignores(_ROOT / ".markdownlint-cli2.jsonc")
-    seed_bare = _read_bare_ignores(_ROOT / "seed/.markdownlintignore")
-    seed_cli2 = _read_cli2_ignores(_ROOT / "seed/.markdownlint-cli2.jsonc")
 
     assert ".owlbear/research" in root_cli2
-    assert ".owlbear/research" in seed_bare
-    assert ".owlbear/research" in seed_cli2
 
     config = _read_yaml_mapping(_ROOT / ".pre-commit-config.yaml")
     precommit_exclude = _read_precommit_exclude(config)
@@ -318,12 +274,8 @@ def test_research_archive_remains_excluded_from_markdown_consumers() -> None:
 
 def test_sources_document_is_included_in_markdown_consumers() -> None:
     root_cli2 = _read_cli2_ignores(_ROOT / ".markdownlint-cli2.jsonc")
-    seed_bare = _read_bare_ignores(_ROOT / "seed/.markdownlintignore")
-    seed_cli2 = _read_cli2_ignores(_ROOT / "seed/.markdownlint-cli2.jsonc")
 
     assert ".owlbear/sources" not in root_cli2
-    assert ".owlbear/sources" not in seed_bare
-    assert ".owlbear/sources" not in seed_cli2
 
     config = _read_yaml_mapping(_ROOT / ".pre-commit-config.yaml")
     precommit_exclude = _read_precommit_exclude(config)
@@ -530,11 +482,7 @@ def test_scripts_run_outside_the_pinned_python_keep_python_312_syntax() -> None:
         for workflow in (_ROOT / ".github" / "workflows").glob("*.yml")
         for match in re.findall(r"python3 (?:\.\./)*([\w./-]+\.py)", workflow.read_text(encoding="utf-8"))
     }
-    hooks = {
-        path.relative_to(_ROOT).as_posix()
-        for pattern in (".owlbear/hooks/*.py", "seed/.owlbear/hooks/*.py")
-        for path in _ROOT.glob(pattern)
-    }
+    hooks = {path.relative_to(_ROOT).as_posix() for path in _ROOT.glob(".owlbear/hooks/*.py")}
     assert workflow_scripts
     assert hooks
 

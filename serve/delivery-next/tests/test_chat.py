@@ -636,8 +636,9 @@ def test_yes_confirms_only_the_profile_and_local_files_need_their_own_consent(
     asked = []
     assert setup.run(repo, [], yes=True, ask=lambda q: asked.append(q) or "") == 0
     assert [p.exists() for p in written] == [False] * 2
-    assert len(asked) == 2  # the two local files were asked, never assumed; no folder-open task
-    assert "chat.defaultToCopilotHarness" in asked[1]
+    assert len(asked) == 3  # the three local writes were asked, never assumed; no folder-open task
+    assert "memory server" in asked[1]
+    assert "chat.defaultToCopilotHarness" in asked[2]
     assert "run `owlbear install` and let it link the shaper" in capsys.readouterr().out  # TD-335: never copied
     asked.clear()
     assert setup.run(repo, [], yes=True, local_files="no", ask=lambda q: asked.append(q) or "y") == 0
@@ -647,6 +648,8 @@ def test_yes_confirms_only_the_profile_and_local_files_need_their_own_consent(
     assert not (home / ".copilot").exists()
     assert not (repo / ".vscode" / "tasks.json").exists()  # TD-281: opening a window never starts Delivery
     assert json.loads(written[1].read_text()) == {"chat.defaultToCopilotHarness": True}  # TD-275: read at window start
+    memory = json.loads(written[0].read_text())["mcpServers"]["owlbear-memory"]
+    assert memory["args"] == ["-m", "owlbear_delivery_next", "serve", "memory"]  # no path: it reads its folder
 
 
 def test_setup_replaces_a_saved_profile_it_cannot_read(repo, tmp_path_factory, monkeypatch, capsys):

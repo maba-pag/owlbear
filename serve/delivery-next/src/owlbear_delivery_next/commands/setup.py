@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
 from owlbear_delivery_next.design_packs import design_pack
-from owlbear_delivery_next.local_system import data_repo, git_files, local_home, text_files
+from owlbear_delivery_next.local_system import data_repo, git_files, local_home, preload, text_files
 from owlbear_delivery_next.runtimes import readiness, window_files
 from owlbear_delivery_next.settings import profile, roles
 from owlbear_delivery_next.state_store.store import Store, StoreError
@@ -82,6 +82,12 @@ def with_server(data: dict[str, Any], python: str, repo: Path) -> dict[str, Any]
         "tools": ["*"],
     }
     return {**data, "mcpServers": {**data.get("mcpServers", {}), SERVER: server}}
+
+
+def with_memory(data: dict[str, Any], python: str) -> dict[str, Any]:
+    """.mcp.json with the memory server the shaper names; it finds the project's memory from its working folder."""
+    server = {"type": "stdio", "command": python, "args": ["-m", "owlbear_delivery_next", "serve", "memory"]}
+    return {**data, "mcpServers": {**data.get("mcpServers", {}), preload.MEMORY: server}}
 
 
 def user_mcp(home: Path) -> Path:
@@ -250,7 +256,9 @@ def run(
 
 
 def write_project_files(repo: Path, python: str, ask: Ask, say: Callable[[str], object], *, given: bool) -> None:
-    """The chat server and the harness key, each written only with its own consent; an earlier host task goes.
+    """The chat server, the memory server and the harness key, each written only with its own consent.
+
+    An earlier host task goes, also only with consent.
 
     Opening a window never starts Delivery (TD-281): OwlBear runs once per machine and serves the projects
     added on its page.
@@ -266,6 +274,8 @@ def write_project_files(repo: Path, python: str, ask: Ask, say: Callable[[str], 
     if not server.startswith("written"):
         snippet = json.dumps(with_server({}, python, repo)["mcpServers"])
         say(f'Add this under "servers" in your user-level MCP configuration (MCP: Open User Configuration): {snippet}')
+    question = "Register the memory server in .mcp.json for New Change's shaper (kept out of git)?"
+    say(consent(repo, repo / ".mcp.json", lambda d: with_memory(d, python), question, ask, yes=given))
     question = f"Set {window_files.HARNESS} in .vscode/settings.json for New Change's Copilot chat (kept out of git)?"
     settings = repo / window_files.SETTINGS  # the window reads the key only when it starts (TD-275)
     say(consent(repo, settings, lambda d: {**d, window_files.HARNESS: True}, question, ask, yes=given))
