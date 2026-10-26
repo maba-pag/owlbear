@@ -826,7 +826,7 @@ def test_a_look_the_runtime_reports_as_free_costs_nothing(monkeypatch) -> None:
 
 
 SHAPES = ["d", "a.", "--key ", "https://", "<browser_context>", "</browser_context>", '{"k": ', "key_", "--key-",
-          "password.", "a@", "x="]  # fmt: skip
+          "password.", "a@", "x=", "a=b&", '"a=', "Cookie: "]  # fmt: skip
 
 
 @pytest.mark.parametrize("unit", SHAPES)
@@ -854,3 +854,15 @@ def test_cookie_fields_are_credentials_and_an_edit_mentioning_tests_keeps_its_ch
 def test_a_long_key_still_has_its_value_masked() -> None:
     long_key = "MY_" + "VERY_" * 30 + "PASSWORD"
     assert "hunter2" not in events.clean(f"export {long_key}=hunter2")
+
+
+def test_raw_cookie_headers_and_long_credential_keys_are_masked_through_a_tool_result() -> None:
+    long_key = "MY_PASSWORD_" + "A" * 65
+    output = f"HTTP/1.1 200\nSet-Cookie: sessionid=spotter_canary_7d2a; HttpOnly\nexport {long_key}=hunter2\nauthor=bob"
+    kept = Kept()
+    kept.add(started("c1", "bash", {"command": "curl -i x"}))
+    kept.add(done("c1", output))
+    text = json.dumps(card.build(kept.snapshot(), {"at": "2026-10-26T10:01:00+00:00"}, {}))
+    assert "spotter_canary" not in text
+    assert "hunter2" not in text
+    assert "author=bob" in text  # a key that only starts like a credential's name keeps its value
