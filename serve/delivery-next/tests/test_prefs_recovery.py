@@ -97,7 +97,7 @@ def test_an_explicit_review_before_the_first_import_settles_it_so_a_deleted_conf
 
 def paused_after_claim(local: Store, monkeypatch, pause) -> Store:
     """An importer over the same root that runs *pause* once, after it read its own claim and before it fills."""
-    winner = Store(local.root)
+    winner = Store(local.root, local.shared, local.name)
     fill = winner.update_config
 
     def paused(change, what="project layer", on_written=None):
@@ -1850,6 +1850,53 @@ def test_an_ordinary_save_keeps_the_published_claim_id_and_basis(shared_repo, tm
     _, got = clone_as(remote, tmp_path, "fresh")
     assert (got.prefs_import, got.prefs_basis, got.prefs_claim) == ("pending", "absent", claim)
     assert got.entries[profile.POLL].value == "30"
+
+
+def test_a_shared_winner_paused_after_its_fresh_claim_is_not_refilled_after_settlement_and_owner_delete(
+    shared_repo, tmp_path, monkeypatch
+):
+    root, remote = shared_repo
+    winner_store = Store(tmp_path / "a-store", DataRepo(root), "shop-site")
+    settler = Store(tmp_path / "b-store", DataRepo(root), "shop-site")
+    winner_store.write_profile(Profile(entries={profile.POLL: confirmed("45")}))
+    assert winner_store.shared is not None
+    assert settler.shared is not None
+    assert winner_store.config_path == settler.config_path
+    assert winner_store.root != settler.root
+    claimed: list[str] = []
+
+    def settle_and_delete() -> None:
+        read = winner_store.read_profile()  # the winner read its own fresh claim before it paused
+        assert (read.prefs_import, read.prefs_basis) == ("pending", "absent")
+        claimed.append(read.prefs_claim)
+        settler.mark_prefs_import("pending", "done")  # Settings completes the import on another private root
+        settler.config_path.unlink(missing_ok=True)  # the owner deletes the shared project config
+
+    prefs_import.run(paused_after_claim(winner_store, monkeypatch, settle_and_delete))
+
+    assert not winner_store.config_path.exists()  # the stale fill never publishes the deleted config
+    fresh, got = clone_as(remote, tmp_path, "fresh")
+    assert got.prefs_import == "done"
+    assert got.prefs_claim == claimed[0]
+    assert not fresh.config_path.exists()
+
+
+def test_a_shared_claim_replaced_while_paused_is_not_filled_by_the_stale_winner(shared_repo, tmp_path, monkeypatch):
+    root, remote = shared_repo
+    winner_store = Store(tmp_path / "a-store", DataRepo(root), "shop-site")
+    other = Store(tmp_path / "b-store", DataRepo(root), "shop-site")
+    winner_store.write_profile(Profile(entries={profile.POLL: confirmed("45")}))
+
+    def newer_claim() -> None:
+        other.mark_prefs_import("pending", "pending", profile_share.ABSENT, "newer")  # the only path that moves it
+        other.config_path.unlink(missing_ok=True)
+
+    prefs_import.run(paused_after_claim(winner_store, monkeypatch, newer_claim))
+
+    assert not winner_store.config_path.exists()
+    fresh, got = clone_as(remote, tmp_path, "fresh")
+    assert (got.prefs_import, got.prefs_claim) == ("pending", "newer")  # the newer claim is left to its own importer
+    assert not fresh.config_path.exists()
 
 
 def test_a_published_fresh_claim_fills_once_and_marks_done(shared_repo, tmp_path):
