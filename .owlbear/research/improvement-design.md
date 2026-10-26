@@ -109,6 +109,8 @@ All settings have no code default; an unset one is an error on the Settings page
 - **steer share:** in live mode, the share of whole Changes and chats whose notes are sent; the rest record only
   (the test below);
 - **intervention cap:** at most this many steering notes per step or chat turn;
+- **interrupt:** steer or stop, what a live `interrupt` verdict does (D-01M5W4DEP9WABMSXN3HEKH30HR); every other note
+  steers;
 - **verbose:** a bounded rationale with its evidence per look, scoped to the machine, a project or a Change, with an
   expiry. Retro may switch it on within a credit cap and for a named reason, shown on the page; never live mode;
 - **looks:** which looks are on, and the sample rate;
@@ -159,9 +161,18 @@ every mode: correct is not enough; the value must clearly exceed the risk of pul
 - **Delivery hand-off:** an accepted `submit_result` is final (the SDK skips another model round), so the Spotter
   judges the submission before acceptance. When it steers, the tool answers with a non-success note that does not
   count as an invalid submission; the next submission is validated again.
-- **Other Delivery notes:** sent into the session with an explicit `enqueue`, never taken to have stopped an action.
+- **Other Delivery notes:** steer: sent into the running turn (D-01M5W4DEP9WABMSXN3HEKH30HR, replacing TD-55's stop
+  and retry). Only an `interrupt` verdict follows the `interrupt` setting: steer like a note, or stop (abort the turn,
+  then resume it with the note). The Spotter decides what warrants an interrupt by its own judgement, given broad
+  categories of harm that cannot be undone, each with at most a rough example, never a closed list or a confidence
+  threshold; Retro grades its calls (D-01M5W6NGXW27VW024E1B29W3GA). Aborting and resuming a turn is not built yet.
+- **Outside writes:** W1a's reports stay on the Change, leaving out Delivery's own state, temporary files and tool
+  caches; the state-change look sees every outside write, those included. Live, its notes on them stay record-only
+  until Retro shows that class is worth it, but an interrupt follows its setting at once
+  (D-01M5W68MMV8JCVKNKH4VJQ9V14, D-01M5W7C4R6M99MVWHR8X1GMCBT).
 - **Chats:** a `Stop` hook (shipped in the seed and wired by the install, inert unless live) asks the machine host for the note tied to
   that chat's turn, waits a bounded time, takes it only once, drops expired notes and honours `stop_hook_active`.
+  Whether a running chat turn can take a steer before its end is open.
 
 ### The steered-versus-silent test
 A test starts only once Retro's grades of the learning-mode records are high enough for the looks it would steer

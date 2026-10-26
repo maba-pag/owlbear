@@ -223,7 +223,12 @@ rules, cases and thresholds are content the Spotter follows.
 The owner's choices of 2026-10-25 and 2026-10-26 are recorded: the Spotter in shadow at hand-offs graded by Retro
 (D-01M5VXXFBX7B91HMQMWE57XRNB), the names (D-01M5VXXFC06CSNK0ANS14E1WX2), built complete before item 10
 (D-01M5VXXFC0G5Y5HMAS82GTMYRH), machine values read from `state_store` (D-01M5VXXFC28ZFHV7HVDTKFHPVF) and no credential
-masking in the Spotter's own cards and records (D-01M5VXXFBSWVZ0DZ68G1QG4CYG).
+masking in the Spotter's own cards and records (D-01M5VXXFBSWVZ0DZ68G1QG4CYG); a look sets no SDK credit cap
+(D-01M5W0HKR9RBAF3G4H8BTZS8E0). The cleanup of the old watcher decisions started the same day, one question at a
+time: live, every note steers and only an `interrupt` follows a steer-or-stop setting (D-01M5W4DEP9WABMSXN3HEKH30HR,
+replacing TD-55); interrupts are the Spotter's own judgement within broad categories (D-01M5W6NGXW27VW024E1B29W3GA);
+outside writes are reported and judged by the Spotter (D-01M5W68MMV8JCVKNKH4VJQ9V14, replacing TD-365), which sees
+every one (D-01M5W7C4R6M99MVWHR8X1GMCBT).
 
 **Built (2026-10-26).** Slices 1 to 4 and the Delivery part of slice 6 (#659, #660, #662, #663, #668): in learning
 mode, a Delivery step's hand-offs, and a sample of its actions if chosen, get a look whose verdict is recorded on this
