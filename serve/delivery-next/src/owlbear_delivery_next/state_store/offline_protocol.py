@@ -12,6 +12,8 @@ import subprocess
 import sys
 from typing import TYPE_CHECKING
 
+from owlbear_delivery_next.local_system.maintenance import Maintenance, MaintenanceError
+from owlbear_delivery_next.pack_runs import pack_state
 from owlbear_delivery_next.state_store import fd_tree, format_marker, project_home, project_move
 from owlbear_delivery_next.state_store.database import MARKER, StoreError
 from owlbear_delivery_next.state_store.legacy_family import Gap, open_gaps
@@ -230,7 +232,31 @@ def finish_clone(cwd: Path, gaps: Callable[[], tuple[Gap, ...]] = open_gaps) -> 
     """Finish after reboot: prove the preparation, then run the whole-store move; return the project's home."""
     folder = project_home.clone_dir(cwd)
     proof = finish(folder, gaps)
+    _settle_pack_run(folder)
     return project_home.migrated(cwd, proof)
+
+
+def _settle_pack_run(folder: Path) -> None:
+    """Carry a legacy design-pack run's generation into its record before the store is copied; no move record yet.
+
+    The receipt is looked up by the clone's own id with the static ledger read, so an unreadable or unknown ledger
+    refuses here, before any copy or authority change.
+    """
+    if project_move.record(folder) is not None:  # a move in progress already carries its own identity
+        return
+    clone = project_home.clone_id(folder)
+
+    def receipted(digest: str) -> str:
+        if clone is None:
+            msg = f"{folder} has no clone id to read its design-pack receipt by: nothing was moved"
+            raise StoreError(msg)
+        return Maintenance.lookup_receipt(clone, digest)
+
+    try:
+        pack_state.settle(folder, receipted=receipted)
+    except (OSError, ValueError, MaintenanceError) as exc:
+        msg = f"the design-pack run record in {folder} could not be settled: {exc}; nothing was moved"
+        raise StoreError(msg) from exc
 
 
 def _unfenced(found: tuple[Gap, ...]) -> str:
