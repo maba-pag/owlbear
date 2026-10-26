@@ -16,7 +16,6 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass
-from pathlib import PurePosixPath
 from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.local_system.storage_io import atomic_write
@@ -65,10 +64,10 @@ def _path(repo: DataRepo, until: float | None) -> Path:
 
 def _safe(rel: object) -> bool:
     """Whether *rel* names a file inside the checkout, outside its Git folder, the way a record writes it."""
-    if not isinstance(rel, str) or not rel or "\\" in rel:
+    if not isinstance(rel, str) or any(c == "\\" or ord(c) < 0x20 for c in rel):  # noqa: PLR2004 - control chars
         return False
-    parts = PurePosixPath(rel).parts
-    return not rel.startswith("/") and parts[0] != ".git" and all(p not in ("", ".", "..") for p in parts)
+    parts = rel.split("/")  # split as written: a normalizing parser would drop empty and "." parts
+    return parts[0] != ".git" and all(p not in ("", ".", "..") for p in parts)
 
 
 def _malformed(data: object) -> str:
@@ -167,17 +166,23 @@ def hold(repo: DataRepo, watch: Path, requires: Requires, until: float | None) -
 def _lapsed(repo: DataRepo, held: Mapping[str, object], until: float | None) -> bool:
     """Whether the checkout no longer holds any change of the watched file that the remote lacks.
 
-    Only the checkout's own history and copies prove it: no commit the remote lacks changes the file, and its index and
-    working copy are the committed one. Equal bytes on the remote prove nothing: a commit holding the change could still
-    be pushed or replayed after the remote changed the file again.
+    Only the checkout's own history and copies prove it: no commit the remote lacks changes the file, in the full
+    history with every side of a merge, and its index and working copy are the committed one. Equal bytes on the remote
+    prove nothing, and neither does a merge or revert that undoes the change: a rebase replays each commit, so the
+    change could still be pushed after the remote changed the file again.
     """
     watch = str(held["watch"])
-    if _run(repo, until, "log", "--format=%h", f"{UPSTREAM}..HEAD", "--", watch).strip():
+    if _changes(repo, watch, until):
         return False
     staged = repo.git("diff", "--cached", "--quiet", "HEAD", "--", watch, until=until)
     if staged.returncode not in (0, 1):
         raise _UnknownError(staged.stderr.strip()[:200] or "git could not compare the index")
     return staged.returncode == 0 and _blob(repo, watch, until) == _blob_at(repo, "HEAD", watch, until)
+
+
+def _changes(repo: DataRepo, watch: str, until: float | None) -> list[str]:
+    """The commits the remote lacks that change *watch*, merges included; history simplification hides none."""
+    return _run(repo, until, "log", "--full-history", "--format=%h", f"{UPSTREAM}..HEAD", "--", watch).split()
 
 
 def _unmet(repo: DataRepo, held: Mapping[str, object], until: float | None) -> str:
@@ -214,7 +219,7 @@ def check(repo: DataRepo, until: float | None, *, fetch: bool) -> str:
             path.unlink(missing_ok=True)
             return ""
         why = _unmet(repo, held, until)
-        ahead = _run(repo, until, "log", "--format=%h", f"{UPSTREAM}..HEAD", "--", str(held["watch"])).split()
+        ahead = _changes(repo, str(held["watch"]), until)
     except _UnknownError as exc:
         return f"nothing was pushed or rebased in {repo.root}: a held automatic change cannot be checked: {exc}"
     if why != held["refused"]:

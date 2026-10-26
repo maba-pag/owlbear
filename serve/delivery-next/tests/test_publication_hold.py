@@ -428,6 +428,11 @@ def mutate(record: dict, case: str) -> bytes:
         "watch escapes": ("watch", "../outside/config.json"),
         "watch absolute": ("watch", "/etc/config.json"),
         "watch in git": ("watch", ".git/config"),
+        "watch dot": ("watch", "."),
+        "watch nul": ("watch", f"{PROJECT}/config.json\x00x"),
+        "watch doubled slash": ("watch", f"{PROJECT}//config.json"),
+        "watch leading dot": ("watch", f"./{PROJECT}/config.json"),
+        "file nul": ("file", f"{PROJECT}/profile.json\x00"),
         "file null": ("file", None),
         "base shape": ("base", "not-a-blob"),
         "base number": ("base", 0),
@@ -455,6 +460,11 @@ def mutate(record: dict, case: str) -> bytes:
         "watch escapes",
         "watch absolute",
         "watch in git",
+        "watch dot",
+        "watch nul",
+        "watch doubled slash",
+        "watch leading dot",
+        "file nul",
         "file null",
         "base shape",
         "base number",
@@ -490,3 +500,49 @@ def test_a_malformed_held_record_stays_held_with_its_bytes_and_never_lapses(held
     assert remote_head(remote) == before
     assert not remote_has_config(remote)
     assert git(root, "merge-base", "--is-ancestor", head, "HEAD") == ""
+
+
+def publish_memory(store: Store, name: str) -> str:
+    memory = store.shared.memory_path(PROJECT) / name
+    memory.parent.mkdir(parents=True, exist_ok=True)
+    memory.write_text(f"{name}\n")
+    with store.shared.locked():
+        return store.shared.publish(memory, f"memory: {name}")
+
+
+def test_an_owner_merge_that_keeps_the_remote_deletion_does_not_hide_the_unpushed_fill(held, tmp_path, monkeypatch):
+    winner, remote = held
+    root, config = winner.shared.root, f"{PROJECT}/config.json"
+    git(root, "merge", "-q", "--no-ff", "--no-commit", "@{upstream}")  # the owner merges the remote by hand
+    git(root, "rm", "-q", "--", config)  # and keeps its deletion
+    git(root, "commit", "-q", "-m", "owner: merge the remote, keeping its deletion")
+    assert git(root, "log", "--format=%h", "@{upstream}..HEAD", "--", config) == ""  # simplified history hides it
+    assert git(root, "log", "--full-history", "--format=%h", "@{upstream}..HEAD", "--", config)
+    other = checkout(remote, tmp_path, "other")
+    real, advanced = data_repo._git, []  # noqa: SLF001 - the publisher's own Git calls are the boundary
+
+    def spy(cwd, *args, until=None):
+        if not advanced and cwd == root and args[:1] == ("push",):
+            advanced.append(True)
+            unrelated_advance(other)  # the remote moves: a rejected push would rebase, flattening the merge
+        return real(cwd, *args, until=until)
+
+    monkeypatch.setattr(data_repo, "_git", spy)
+    assert "is held because" in publish_memory(winner, "first.md")
+    monkeypatch.setattr(data_repo, "_git", real)
+    if not advanced:
+        unrelated_advance(other)  # held before any push: the remote still moves on independently
+    assert "is held because" in publish_memory(winner, "later.md")
+    assert not remote_has_config(remote)
+    assert remote_marker(remote) == "done"
+    assert git(root, "rev-list", "--merges", "--count", "@{upstream}..HEAD") == "1"  # the owner's merge is kept
+
+
+def test_an_unpushed_revert_of_the_fill_stays_held_because_a_replay_could_delete_a_remote_config(held):
+    winner, remote = held
+    root, before = winner.shared.root, remote_head(remote)
+    git(root, "revert", "--no-edit", "HEAD")  # the fill and its revert both stay in unpushed history
+
+    assert "is held because" in publish_memory(winner, "after-revert.md")
+    assert remote_head(remote) == before
+    assert git(root, "rev-list", "--count", "@{upstream}..HEAD") == "3"  # fill, revert and memory: all kept
