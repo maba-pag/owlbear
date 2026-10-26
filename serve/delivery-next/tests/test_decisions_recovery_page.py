@@ -243,3 +243,34 @@ def test_a_corrupt_journal_is_diagnosed_and_offers_no_action(picking, tmp_path, 
         expect(page.get_by_role("button", name="Finish batch")).to_have_count(0)
         expect(page.get_by_role("button", name="Abandon batch")).to_have_count(0)
     assert journal.read_text() == "{not json"
+
+
+def test_a_recovery_request_refused_by_validation_never_echoes_what_was_sent(picking, tmp_path):
+    _, generation = _interrupt(picking)
+    client = TestClient(
+        api.create_app(_store(picking, tmp_path), "tok", Host()),
+        base_url="http://127.0.0.1",
+        headers={"authorization": "Bearer tok"},
+    )
+    secret = "SENTINEL-" + "x" * 400  # over the reason's 300 characters
+
+    for action in ("finish", "abandon"):
+        refused = client.post(
+            f"/api/next/decisions/recovery/{action}",
+            json={"generation": generation, "confirmed": True, "reason": secret},
+        )
+        assert refused.status_code == 422
+        assert "SENTINEL" not in refused.text  # neither the value nor any input field
+        (problem,) = refused.json()["detail"]
+        assert set(problem) == {"loc", "msg", "type"}
+        assert problem["loc"] == ["body", "reason"]
+
+    bad = client.post("/api/next/decisions/recovery/finish", json={"generation": "SENTINEL-not-hex", "confirmed": True})
+    assert bad.status_code == 422
+    assert "SENTINEL" not in bad.text
+    unconfirmed = client.post("/api/next/decisions/recovery/finish", json={"generation": generation})
+    assert unconfirmed.json()["detail"] == "recovery needs the owner's explicit confirmation"  # the owner's own fields
+    assert decision_batch.pending(picking.shared).generation == generation
+    assert client.post(
+        "/api/next/decisions/recovery/abandon", json={"generation": generation, "confirmed": True, "reason": "ok"}
+    ).json()["done"]

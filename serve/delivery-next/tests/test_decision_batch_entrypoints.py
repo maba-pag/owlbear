@@ -23,6 +23,7 @@ from owlbear_decisions.storage import serialize
 from owlbear_delivery_next.change_contracts import pick_tools
 from owlbear_delivery_next.local_system import storage_io
 from owlbear_delivery_next.local_system.data_repo import DataRepo, DataRepoError
+from owlbear_delivery_next.project_host import decision_recovery_routes
 from owlbear_delivery_next.state_store import (
     decision_batch,
     decision_recovery,
@@ -2178,3 +2179,67 @@ def test_a_default_writer_or_a_link_above_the_root_keeps_its_symlink_semantics(t
 
     assert path.exists() == (writer != "remove") == plain.exists()
     assert all(not p.name.endswith(".tmp") for p in tmp_path.rglob("*"))
+
+
+@pytest.mark.parametrize("lock", ["symlink", "no-permission", "folder"])
+def test_a_batch_lock_that_cannot_be_taken_is_an_actionable_refusal_and_changes_nothing(
+    picking, monkeypatch, tmp_path, lock
+):
+    """The interrupted batch's lock is a link to a foreign file, a file nobody may open, or a folder. Every reader
+    refuses with the lock named instead of failing: the diagnosis shows it, the store refuses, a lookup gives no
+    answer and runs no picker, and the journal, HEAD, index and the foreign file are as they were."""
+    _seed(picking)
+    shared = picking.shared
+    _interrupt(picking, monkeypatch, [make(title="Use UTC", statement="All timestamps use UTC.")])
+    path = decision_batch.journal_path(shared).parent / decision_batch.LOCK
+    journal = decision_batch.journal_path(shared).read_bytes()
+    foreign = tmp_path / "foreign.lock"
+    foreign.write_bytes(b"foreign\n")
+    path.unlink()
+    if lock == "symlink":
+        path.symlink_to(foreign)
+    elif lock == "folder":
+        path.mkdir()
+    else:
+        path.write_bytes(b"")
+        path.chmod(0)
+    git = _git_state(shared)
+    try:
+        shown = decision_recovery_routes.diagnosis(shared)
+        with pytest.raises(decision_batch.JournalError, match="batch lock"):
+            decision_batch.stamp(shared)
+        with pytest.raises(decision_store.DecisionsUnavailable, match="batch lock") as refused:
+            decision_store.load(shared, PROJECT)
+        _no_authority(picking)
+    finally:
+        if lock == "no-permission":
+            path.chmod(0o600)
+
+    assert (shown["interrupted"], shown["corrupt"], shown["generation"]) == (True, True, "")
+    assert "batch lock" in shown["diagnosis"]
+    assert str(path) in shown["diagnosis"]
+    assert refused.value.action == decision_store.RECOVER
+    assert decision_batch.journal_path(shared).read_bytes() == journal
+    assert foreign.read_bytes() == b"foreign\n"
+    assert _git_state(shared) == git
+
+
+def test_a_healthy_lock_still_reads_and_an_error_of_its_body_is_not_retold(picking, monkeypatch):
+    _seed(picking)
+    shared = picking.shared
+    _interrupt(picking, monkeypatch, [make(title="Use UTC", statement="All timestamps use UTC.")])
+    batch = decision_batch.pending(shared)
+    assert batch is not None
+    with pytest.raises(decision_batch.JournalError, match="in flight"):  # the healthy stamp sees the batch
+        decision_batch.stamp(shared)
+    assert decision_recovery_routes.diagnosis(shared)["generation"] == batch.generation
+
+    def failing(*_args, **_kwargs):
+        msg = "an error of the body, not of taking the lock"
+        raise RuntimeError(msg)
+
+    with monkeypatch.context() as m:
+        m.setattr(decision_batch, "replace_file", failing)
+        with pytest.raises(RuntimeError, match="not of taking the lock"):
+            decision_batch.complete(shared, batch.generation)
+    assert decision_batch.pending(shared).generation == batch.generation

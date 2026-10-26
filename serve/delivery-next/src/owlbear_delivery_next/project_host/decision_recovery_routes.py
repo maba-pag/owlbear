@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Annotated, Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field, StringConstraints
 
+from owlbear_delivery_next.project_host import impact_routes
 from owlbear_delivery_next.state_store import decision_batch, decision_recovery, decision_store
 
 if TYPE_CHECKING:
@@ -62,8 +63,11 @@ def _run(action: Callable[[], Any], body: RecoveryBody) -> dict[str, Any]:
 
 
 def router(shared: Shared, owner: list[Any]) -> APIRouter:
-    """Mounted by the decision routes; the owner-only dependency is the caller's."""
-    routes = APIRouter()
+    """Mounted by the decision routes; the owner-only dependency is the caller's.
+
+    Its own route class keeps a 422 from echoing what was sent (TD-449): including a router keeps its routes' class.
+    """
+    routes = APIRouter(route_class=impact_routes.Quiet)
 
     @routes.get("/decisions/recovery", dependencies=owner)
     def status() -> dict[str, Any]:

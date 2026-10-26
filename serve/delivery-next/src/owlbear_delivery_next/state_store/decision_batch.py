@@ -64,11 +64,22 @@ def _locked(shared: DataRepo) -> Iterator[None]:
     """Hold the batch lock while the journal and the completed list are read or changed together.
 
     Every transition and every stamp capture takes it, so a reader never pairs a journal and a list from different
-    moments: the pair it reads is one that existed.
+    moments: the pair it reads is one that existed. A lock that cannot be taken (a link, not a regular file, no
+    permission) is a `JournalError` naming it, so whether a batch is in flight stays unknown, never "none"; only taking
+    the lock is translated, never an error of the body it guards.
     """
-    dir_fd = os.open(_admin(shared), os.O_RDONLY | os.O_DIRECTORY)
+    admin = _admin(shared)
     try:
-        lock_fd = open_lock(dir_fd, blocking=True, name=LOCK)
+        dir_fd = os.open(admin, os.O_RDONLY | os.O_DIRECTORY)
+    except OSError as exc:
+        msg = f"the git folder {admin} cannot be opened for the batch lock: {exc}"
+        raise JournalError(msg) from exc
+    try:
+        try:
+            lock_fd = open_lock(dir_fd, blocking=True, name=LOCK)
+        except (OSError, ValueError) as exc:
+            msg = f"the batch lock {admin / LOCK} cannot be taken ({exc}); make it a plain file the owner can open"
+            raise JournalError(msg) from exc
         try:
             yield
         finally:
