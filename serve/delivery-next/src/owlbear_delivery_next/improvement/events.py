@@ -48,7 +48,7 @@ def as_dict(ev: Any) -> dict[str, Any]:  # noqa: ANN401 - an SDK event object or
 
 
 CUT = " [...] "
-MARGIN = 4096  # characters cleaned beyond what a clip keeps, so no credential is cut from its label
+RAW, GUARD = 262144, 512  # characters cleaned whole; above, the start of the kept tail that may be a cut-off value
 EMAIL = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
 PROTECT = re.compile(r"(?:/(?:Users|private|var|tmp|Library|home)/[^\s\"'`:;,)\]}]+)|\b[0-9a-f]{40}\b")
 
@@ -85,8 +85,17 @@ def clean(text: str) -> str:
 
 
 def kept_text(value: object, n: int) -> str:
-    """*value* cleaned, then clipped to *n*: cleaned whole near what the clip keeps, never cut before it is cleaned."""
-    return clip(clean(clip(_text(value), n + 2 * MARGIN)), n)
+    """*value* cleaned whole, then clipped to *n*: a credential is never cut from the label that names it.
+
+    A text over ``RAW`` keeps its first half and a tail; the tail's start may be a value whose label was cut off, so
+    ``GUARD`` characters and the rest of that word are dropped, never kept unnamed.
+    """
+    s = no_browser(_text(value))
+    if len(s) > RAW:
+        tail = s[-(RAW // 2) :]
+        cut = re.search(r"\s", tail[GUARD:])
+        s = s[: RAW // 2] + CUT + (tail[GUARD + cut.start() :] if cut else "")
+    return clip(clean(s), n)
 
 
 def result_text(data: dict[str, Any]) -> str:

@@ -18,18 +18,21 @@ delivery, so such records do not count toward going live.
 from __future__ import annotations
 
 import asyncio
+import atexit
 import contextlib
 import fcntl
 import gzip
 import hashlib
 import json
 import os
+import queue
 import random
 import re
 import tempfile
+import threading
 import time
 import uuid
-from concurrent.futures import Future, ThreadPoolExecutor
+from concurrent.futures import Future
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -45,7 +48,7 @@ if TYPE_CHECKING:
 PROMPT = Path(__file__).with_name("spotter_prompt.md")
 RUNNING, ESTIMATE = 2, 0.5  # looks at once per step; credits a look reserves, and its SDK credit limit
 LOOK, TEARDOWN, DRAIN = 90.0, 5.0, 5.0  # seconds a look's answer, each teardown stage and the step's end may take
-LOCK = 5.0  # seconds a file lock is waited for
+LOCK, GRACE = 5.0, 1.0  # seconds a file lock is waited for; and the Spotter's writes at the process's exit
 VERDICTS = frozenset({"silent", "note", "interrupt", "insufficient-context"})
 
 
@@ -128,24 +131,22 @@ def _locked(path: Path, seconds: float = LOCK) -> Iterator[None]:
         os.close(fd)
 
 
-def _append(name: str, line: dict[str, Any]) -> None:
-    """One line appended to the day's file *name* under the records' lock; a failure never reaches the step."""
-    with contextlib.suppress(OSError, TimeoutError):
-        folder = root()
-        with _locked(folder / "records.lock"):
-            fd = os.open(folder / f"{name}-{_today()}.jsonl", os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
-            with os.fdopen(fd, "a") as out:
-                out.write(json.dumps(line) + "\n")
+def _append(folder: Path, name: str, line: dict[str, Any]) -> None:
+    """One line appended to the day's file *name* in *folder* under its lock; a failure never reaches the step."""
+    with contextlib.suppress(OSError, TimeoutError), _locked(folder / "records.lock"):
+        fd = os.open(folder / f"{name}-{_today()}.jsonl", os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
+        with os.fdopen(fd, "a") as out:
+            out.write(json.dumps(line) + "\n")
 
 
-def store(record: Record, card_: dict[str, Any] | None) -> None:
-    """Keep *record*'s card and append the record to the day's records; a failure never reaches the step."""
+def store(folder: Path, record: Record, card_: dict[str, Any] | None) -> None:
+    """Keep *record*'s card and append the record to the day's records in *folder*; a failure never reaches the step."""
     with contextlib.suppress(OSError):
         if card_ is not None:
-            fd = os.open(root() / "cards" / f"{record.id}.json.gz", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            fd = os.open(folder / "cards" / f"{record.id}.json.gz", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
             with os.fdopen(fd, "wb") as raw, gzip.open(raw, "wt") as out:
                 json.dump(card_, out)
-    _append("records", asdict(record))
+    _append(folder, "records", asdict(record))
 
 
 class LedgerError(Exception):
@@ -181,7 +182,7 @@ def _put(path: Path, ledger: dict[str, Any]) -> None:
         raise
 
 
-def reserve(budget: int, estimate: float = ESTIMATE) -> Token | None:
+def reserve(folder: Path, budget: int, estimate: float = ESTIMATE) -> Token | None:
     """Reserve *estimate* credits of today's Spotter budget across processes; None when it would pass the budget.
 
     A reservation its process never settles (it was killed) stays counted for its day: the budget errs on the safe side.
@@ -191,7 +192,6 @@ def reserve(budget: int, estimate: float = ESTIMATE) -> Token | None:
     """
     day, rid = _today(), uuid.uuid4().hex[:12]
     try:
-        folder = root()
         with _locked(folder / "ledger.lock"):
             path = folder / f"ledger-{day}.json"
             ledger = _ledger(path)
@@ -204,17 +204,15 @@ def reserve(budget: int, estimate: float = ESTIMATE) -> Token | None:
     return day, rid
 
 
-def settle(token: Token, actual: float) -> None:
-    """End the reservation *token* on its own day's ledger and book what the look cost; never raises."""
+def settle(folder: Path, token: Token, actual: float) -> None:
+    """End the reservation *token* on its own day's ledger in *folder* and book what the look cost; never raises."""
     day, rid = token
-    with contextlib.suppress(OSError, TimeoutError, LedgerError):
-        folder = root()
-        with _locked(folder / "ledger.lock"):
-            path = folder / f"ledger-{day}.json"
-            ledger = _ledger(path)
-            if ledger["reserved"].pop(rid, None) is not None:
-                ledger["spent"] += actual
-                _put(path, ledger)
+    with contextlib.suppress(OSError, TimeoutError, LedgerError), _locked(folder / "ledger.lock"):
+        path = folder / f"ledger-{day}.json"
+        ledger = _ledger(path)
+        if ledger["reserved"].pop(rid, None) is not None:
+            ledger["spent"] += actual
+            _put(path, ledger)
 
 
 def prompt_version() -> str:
@@ -266,6 +264,7 @@ class Spotter:
     def __init__(self, ctx: Context, session: Callable[[], str], judge: Judge,
                  rng: random.Random | None = None) -> None:  # fmt: skip
         self.ctx, self.session, self.kept, self.judge = ctx, session, Kept(), judge
+        self.folder = root()  # where every write of this session goes, whatever changes later
         self.rng = rng or random.Random()  # noqa: S311 - sampling, not secrecy
         self.tasks: set[asyncio.Future[Any]] = set()
         self.running = 0  # looks admitted and not ended
@@ -296,7 +295,7 @@ class Spotter:
         """How Delivery answered the hand-off *call_id* (accepted, rejected or failed), kept beside its look."""
         line = {"at": datetime.now(UTC).isoformat(timespec="seconds"), "session": self.session(), "call": call_id,
                 "outcome": outcome, "change": self.ctx.change, "step": self.ctx.step}  # fmt: skip
-        self._track(offload(_append, "outcomes", line))
+        self._track(offload(_append, self.folder, "outcomes", line))
 
     def _track(self, task: asyncio.Future[Any]) -> asyncio.Future[Any]:
         self.tasks.add(task)
@@ -317,7 +316,7 @@ class Spotter:
                 self.crowded += 1
             else:
                 skipped = self._record(look, probability, moment, skipped="capacity: looks already running")
-                self._track(offload(store, skipped, None))
+                self._track(offload(store, self.folder, skipped, None))
             return
         snapshot = self.kept.snapshot()
         moment = {**moment, "cutoff": snapshot["n"]}
@@ -332,7 +331,7 @@ class Spotter:
     async def _run(self, look: str, probability: float, snapshot: dict[str, Any], moment: dict[str, Any]) -> None:
         ctx, started, the_card, spent = self.ctx, time.monotonic(), None, 0.0
         record = self._record(look, probability, moment, skipped="the step ended before the look began")
-        reserving = WORK.submit(reserve, ctx.budget)  # owned from here: ``_finished`` settles what it reserved
+        reserving = WORK.submit(reserve, self.folder, ctx.budget)  # owned from here: its end starts ``_finished``
         try:
             if await asyncio.shield(asyncio.wrap_future(reserving)) is None:
                 record.skipped = "budget: today's Spotter budget is spent"
@@ -357,7 +356,12 @@ class Spotter:
             record.verdict, record.skipped = "failed", f"{type(exc).__name__}: {exc}"[:300]
         finally:
             record.prompt, record.seconds = prompt_version(), round(time.monotonic() - started, 1)
-            finishing = WORK.submit(_finished, reserving, record, the_card, spent)  # goes on if the step is stopped
+            finishing: Future[None] = Future()
+            reserving.add_done_callback(
+                lambda r: WORK.submit(_finished, self.folder, r, record, the_card, spent).add_done_callback(
+                    lambda _: finishing.set_result(None)
+                )
+            )  # once the reservation ends, never before: what it reserved is always settled, even if the step stops
             await asyncio.wait({asyncio.wrap_future(finishing)})
 
     async def drain(self) -> None:
@@ -366,7 +370,7 @@ class Spotter:
             why = f"capacity: {self.crowded} sampled looks skipped, looks already running"
             skipped = self._record("sample", self.ctx.sample_rate / 100, {"kind": "samples"}, skipped=why)
             self.crowded = 0
-            self._track(offload(store, skipped, None))
+            self._track(offload(store, self.folder, skipped, None))
         if not self.tasks:
             return
         _, pending = await asyncio.wait(set(self.tasks), timeout=DRAIN)
@@ -376,18 +380,60 @@ class Spotter:
             await asyncio.wait(pending, timeout=3 * TEARDOWN)  # its two teardown stages, then its record
 
 
-def _finished(reserving: Future[Token | None], record: Record, the_card: dict[str, Any] | None, spent: float) -> None:
-    """On the Spotter's threads: adopt what was reserved, store the record and settle the spend once."""
-    try:
-        token = reserving.result(timeout=LOCK + 1)
-    except Exception:  # noqa: BLE001 - its error is the record's already, or the reservation never ended
-        token = None
+def _finished(
+    folder: Path, reserving: Future[Token | None], record: Record, the_card: dict[str, Any] | None, spent: float
+) -> None:
+    """On the Spotter's threads, once *reserving* ended: adopt what it reserved, store the record, settle once."""
+    token = reserving.result() if not reserving.cancelled() and reserving.exception() is None else None
     if token is None and record.skipped.startswith("the step ended before"):
         record.skipped = "the step ended before the look began; nothing was reserved"
     record.credits = spent if token else 0.0
-    store(record, the_card)
+    store(folder, record, the_card)
     if token is not None:
-        settle(token, spent)  # an unknown spend counts as the estimate, the look's credit limit
+        settle(folder, token, spent)  # an unknown spend counts as the estimate, the look's credit limit
 
 
-WORK = ThreadPoolExecutor(max_workers=2, thread_name_prefix="spotter")  # first in, first out: a reservation runs first
+class Worker:
+    """The Spotter's own daemon threads, first in, first out: the process waits at most ``GRACE`` for them at exit.
+
+    What a killed write loses errs on the safe side: a ledger is replaced whole, and an unsettled reservation stays
+    counted for its day.
+    """
+
+    def __init__(self, threads: int) -> None:
+        self.jobs: queue.Queue[tuple[Future[Any], Callable[..., Any], tuple[Any, ...]]] = queue.Queue()
+        self.threads, self.started, self.lock = threads, False, threading.Lock()
+
+    def submit[T](self, work: Callable[..., T], *args: Any) -> Future[T]:  # noqa: ANN401 - the work's arguments
+        """Queue *work*; its future."""
+        with self.lock:
+            if not self.started:
+                for i in range(self.threads):
+                    threading.Thread(target=self._serve, name=f"spotter-{i}", daemon=True).start()
+                self.started = True
+        done: Future[T] = Future()
+        self.jobs.put((done, work, args))
+        return done
+
+    def _serve(self) -> None:
+        while True:
+            done, work, args = self.jobs.get()
+            try:
+                if done.set_running_or_notify_cancel():
+                    try:
+                        done.set_result(work(*args))
+                    except BaseException as exc:  # noqa: BLE001 - the future carries it
+                        done.set_exception(exc)
+            finally:
+                self.jobs.task_done()
+
+    def settled(self, seconds: float) -> bool:
+        """Wait at most *seconds* until every queued job ended; whether they did."""
+        until = time.monotonic() + seconds
+        while self.jobs.unfinished_tasks and time.monotonic() < until:
+            time.sleep(0.01)
+        return not self.jobs.unfinished_tasks
+
+
+WORK = Worker(2)
+atexit.register(WORK.settled, GRACE)

@@ -477,9 +477,9 @@ def test_a_card_that_fails_settles_its_reservation_and_is_recorded_failed(monkey
 
 def test_a_reservation_settles_on_its_own_day_and_an_unreadable_ledger_skips(monkeypatch) -> None:
     monkeypatch.setattr(spotter, "_today", lambda: "2026-10-26")
-    token = spotter.reserve(10)
+    token = spotter.reserve(spotter.root(), 10)
     monkeypatch.setattr(spotter, "_today", lambda: "2026-10-27")
-    spotter.settle(token, 0.2)
+    spotter.settle(spotter.root(), token, 0.2)
     assert json.loads((spotter.root() / "ledger-2026-10-26.json").read_text()) == {"reserved": {}, "spent": 0.2}
     assert not (spotter.root() / "ledger-2026-10-27.json").exists()
     (spotter.root() / "ledger-2026-10-27.json").write_text('{"reserved": ')
@@ -583,7 +583,7 @@ def test_a_look_cancelled_twice_while_reserving_still_settles_and_records(monkey
     import time  # noqa: PLC0415
 
     real = spotter.reserve
-    monkeypatch.setattr(spotter, "reserve", lambda budget: (time.sleep(0.2), real(budget))[1])
+    monkeypatch.setattr(spotter, "reserve", lambda *a: (time.sleep(0.2), real(*a))[1])
 
     async def main() -> None:
         spot = spotter.Spotter(ctx(), lambda: "s-1", judge())
@@ -595,7 +595,7 @@ def test_a_look_cancelled_twice_while_reserving_still_settles_and_records(monkey
         await asyncio.wait({task})
 
     asyncio.run(main())
-    spotter.WORK.submit(lambda: None).result(5)
+    assert spotter.WORK.settled(5)
     for _ in range(100):  # the finishing work goes on after the step's loop
         if records():
             break
@@ -622,7 +622,7 @@ def test_the_steps_loop_ends_without_waiting_for_the_spotters_writes(monkeypatch
     asyncio.run(main())  # leftovers are cancelled by asyncio.run itself
     took = time.monotonic() - began
     written.wait(5)
-    spotter.WORK.submit(lambda: None).result(5)
+    assert spotter.WORK.settled(5)
     assert took < 0.3
 
 
@@ -639,3 +639,48 @@ def test_a_burst_of_samples_while_looks_run_is_counted_once_not_queued() -> None
     assert asyncio.run(main()) == 2
     got = records()
     assert sorted(r["skipped"][:30] for r in got) == ["", "", "capacity: 298 sampled looks sk"]
+
+
+def test_a_huge_text_drops_its_tails_unnamed_start_and_still_cleans_what_follows() -> None:
+    secret, label, total = "Q1w2E3r4" * 8, "pass" + "word=", 300000
+    start = total - events.RAW // 2  # where the kept tail begins: the label is cut off just before its value
+    head = ("a " * start)[: start - len(label)] + label
+    body = secret + " token=" + "z" * 100000 + " end "
+    text = head + body + "b" * (total - len(head) - len(body))
+    assert text.index(secret) == start
+    kept = events.kept_text(text, events.RESULT)
+    assert "Q1w2E3r4" not in kept
+    assert "zzzzzzzzzz" not in kept
+
+
+def test_a_spotter_writes_where_it_started_whatever_changes_later(monkeypatch, tmp_path) -> None:
+    async def main() -> spotter.Spotter:
+        spot = spotter.Spotter(ctx(), lambda: "s-1", judge())
+        from owlbear_delivery_next.local_system import local_home  # noqa: PLC0415
+
+        monkeypatch.setattr(local_home, "root", lambda: tmp_path / "elsewhere")
+        spot.handed_off("c", {})
+        await spot.drain()
+        return spot
+
+    started_in = asyncio.run(main()).folder
+    assert (started_in / f"records-{spotter._today()}.jsonl").exists()  # noqa: SLF001
+    assert not (tmp_path / "elsewhere").exists()
+
+
+def test_the_process_exits_within_the_grace_though_spotter_work_is_still_queued(tmp_path) -> None:
+    import subprocess  # noqa: PLC0415
+    import sys  # noqa: PLC0415
+    import time  # noqa: PLC0415
+
+    script = (
+        "import time\n"
+        "from owlbear_delivery_next.improvement import spotter\n"
+        "spotter.WORK.submit(time.sleep, 30)\n"
+        "print(time.monotonic(), flush=True)\n"
+    )
+    proc = subprocess.run(  # noqa: S603 - this interpreter and a fixed script
+        [sys.executable, "-c", script], capture_output=True, text=True, timeout=20, cwd=tmp_path, check=True
+    )
+    ended = time.monotonic()
+    assert ended - float(proc.stdout.strip()) < spotter.GRACE + 1.5

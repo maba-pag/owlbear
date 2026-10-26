@@ -143,6 +143,15 @@ def _no_shared_settings(tmp_path_factory, monkeypatch):
     monkeypatch.setattr(spotter_look, "judged", _silent_look)  # nor a real Spotter look
 
 
+@pytest.fixture(autouse=True)
+def _spotter_writes_end(_no_shared_settings):
+    """Every Spotter write a test queued ends before the test's home and patches go."""
+    yield
+    from owlbear_delivery_next.improvement import spotter  # noqa: PLC0415
+
+    assert spotter.WORK.settled(10), "Spotter writes still running after the test"
+
+
 async def _silent_look(_card: dict, _ctx: object) -> tuple[str, float]:
     return '{"verdict": "silent", "note": "", "evidence": [], "state_change": null}', 0.0
 
