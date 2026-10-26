@@ -19,3 +19,4 @@ Research cites its sources itself.
 | bytedance/deer-flow | <https://github.com/bytedance/deer-flow> | MIT | Angle-bracket rejection in skill descriptions | `.owlbear/scripts/skills_ref/validator.py` |
 | bytedance/deer-flow | <https://github.com/bytedance/deer-flow> | MIT | AST-based import boundary test | `tests/test_package_boundary.py` |
 | bytedance/deer-flow | <https://github.com/bytedance/deer-flow> | MIT | Memory facts with a confidence floor and a fixed category set | `serve/memory/src/owlbear_memory/models.py` |
+| PinchTab `internal/idpi/content.go` | <https://github.com/pinchtab/pinchtab/blob/main/internal/idpi/content.go> | MIT | Untrusted-content wrapping with sentinel tags and an advisory preamble | `serve/knowledge/src/owlbear_knowledge/content_safety.py` |
