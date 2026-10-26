@@ -275,7 +275,10 @@ class _Step:
 
     async def _submitted(self, spec: tools.Spec, inv: ToolInvocation) -> ToolResult:  # lints off the loop (TD-87)
         watch_feed.spotted(self.feed, lambda s: s.handed_off(inv.tool_call_id, inv.arguments))  # before Gate accepts
-        result = await asyncio.to_thread(self._handle, spec, inv)
+        return await asyncio.to_thread(self._answered, spec, inv)
+
+    def _answered(self, spec: tools.Spec, inv: ToolInvocation) -> ToolResult:  # in its thread: kept if cancelled
+        result = self._handle(spec, inv)
         watch_feed.spotted(self.feed, lambda s: s.answered(inv.tool_call_id, str(result.result_type)))
         return result
 

@@ -245,7 +245,9 @@ def _well_formed(said: dict[str, Any]) -> bool:
     """Whether every field the answer gives has its type: texts, or a list of texts for the evidence."""
     texts = all(said.get(k) is None or isinstance(said[k], str) for k in ("note", "state_change", "rationale"))
     evidence = said.get("evidence")
-    return texts and (evidence is None or (isinstance(evidence, list) and all(isinstance(e, str) for e in evidence)))
+    noted = said["verdict"] not in {"note", "interrupt"} or bool(str(said.get("note") or "").strip())  # one to send
+    listed = evidence is None or (isinstance(evidence, list) and all(isinstance(e, str) for e in evidence))
+    return texts and noted and listed
 
 
 async def through(task: asyncio.Future[Any]) -> None:
@@ -309,10 +311,13 @@ class Spotter:
             )
 
     def answered(self, call_id: str, outcome: str) -> None:
-        """How Delivery answered the hand-off *call_id* (accepted, rejected or failed), kept beside its look."""
+        """How Delivery answered the hand-off *call_id* (accepted, rejected or failed), kept beside its look.
+
+        Called from the thread that handled it; the write goes to the Spotter's threads, so nothing cancels it.
+        """
         line = {"at": datetime.now(UTC).isoformat(timespec="seconds"), "session": self.session(), "call": call_id,
                 "outcome": outcome, "change": self.ctx.change, "step": self.ctx.step}  # fmt: skip
-        self._track(offload(_append, self.folder, "outcomes", line))
+        WORK.submit(_append, self.folder, "outcomes", line)
 
     def _track(self, task: asyncio.Future[Any]) -> asyncio.Future[Any]:
         self.tasks.add(task)

@@ -272,6 +272,7 @@ def test_the_submit_tool_starts_the_look_before_delivery_handles_it_and_keeps_it
     assert order == ["look call-3 {'summary': 's'}", "handled"]
     [rec] = records()
     assert (rec["call"], rec["look"], rec["cutoff"]) == ("call-3", "hand-off", 0)
+    assert spotter.WORK.settled(5)
     outcomes = spotter.root() / f"outcomes-{spotter._today()}.jsonl"  # noqa: SLF001
     [outcome] = [json.loads(x) for x in outcomes.read_text().splitlines()]
     assert (outcome["call"], outcome["outcome"]) == ("call-3", "failure")
@@ -796,8 +797,16 @@ def test_an_edit_mentioning_tests_keeps_its_change() -> None:
     assert (edit["why"], "@pytest.mark.skip" in edit["output"]) == ("edit", True)
 
 
-@pytest.mark.parametrize("answer", ['{"verdict": "silent", "evidence": "e1"}', '{"verdict": "note", "note": 3}',
-                                    '{"verdict": "note", "evidence": ["a", 2]}'])  # fmt: skip
+MALFORMED = [
+    '{"verdict": "silent", "evidence": "e1"}',
+    '{"verdict": "note", "note": 3}',
+    '{"verdict": "note", "evidence": ["a", 2]}',
+    '{"verdict": "note", "note": null}',
+    '{"verdict": "interrupt", "note": "  "}',
+]
+
+
+@pytest.mark.parametrize("answer", MALFORMED)
 def test_an_answer_with_a_known_verdict_but_malformed_fields_is_failed(answer: str) -> None:
     assert spotter.parse(answer)["verdict"] == "failed"
     assert (
@@ -850,3 +859,28 @@ def test_no_look_starts_once_the_drain_began_and_a_slow_write_never_holds_the_en
     assert took < 0.5  # the write goes on; the step's end does not wait for it
     assert spotter.WORK.settled(5)
     assert [r["call"] for r in records()] == ["c1"]
+
+
+def test_a_cancelled_submit_handler_still_keeps_delivery_s_answer(tmp_path) -> None:
+    import time  # noqa: PLC0415
+
+    async def main() -> None:
+        cfg = sdk_adapter.Session(
+            StepKind.BUILD, tmp_path, "s1", "m", resume=False, policy=Policy(tmp_path),
+            observe=lambda: Worktree("a", "a"), checks=(), subagents=True, model="gpt-6-luna",
+        )  # fmt: skip
+        st = sdk_adapter._Step(cfg, asyncio.get_running_loop())  # noqa: SLF001
+        st.gate.call = lambda _spec, _args: (time.sleep(0.3), ("accepted", True))[1]
+        st.feed = SimpleNamespace(spotter=spotter.Spotter(ctx(looks=()), lambda: "s1", judge()),
+                                  watching=SimpleNamespace(slug="c1"))  # fmt: skip
+        (tool,) = [t for t in st.tools() if t.name == cfg.submit.name]
+        handling = asyncio.ensure_future(tool.handler(ToolInvocation(tool_call_id="call-9", arguments={})))
+        await asyncio.sleep(0.05)
+        handling.cancel()  # the step ends while Delivery still checks the hand-off
+        await asyncio.wait({handling})
+        await asyncio.sleep(0.5)
+
+    asyncio.run(main())
+    assert spotter.WORK.settled(5)
+    outcomes = spotter.root() / f"outcomes-{spotter._today()}.jsonl"  # noqa: SLF001
+    assert [json.loads(x)["outcome"] for x in outcomes.read_text().splitlines()] == ["success"]
