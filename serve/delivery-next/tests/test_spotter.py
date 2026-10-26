@@ -884,3 +884,16 @@ def test_a_cancelled_submit_handler_still_keeps_delivery_s_answer(tmp_path) -> N
     assert spotter.WORK.settled(5)
     outcomes = spotter.root() / f"outcomes-{spotter._today()}.jsonl"  # noqa: SLF001
     assert [json.loads(x)["outcome"] for x in outcomes.read_text().splitlines()] == ["success"]
+
+
+def test_an_unreadable_prompt_still_records_the_look_and_settles_its_reservation(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr(spotter, "PROMPT", tmp_path / "missing.md")
+
+    async def main() -> None:
+        spot = spotter.Spotter(ctx(), lambda: "s-1", judge())
+        spot.handed_off("c", {})
+        await spot.drain()
+
+    asyncio.run(main())
+    assert [r["prompt"] for r in records()] == ["unreadable"]
+    assert ledger() == {"reserved": {}, "spent": 0.25}

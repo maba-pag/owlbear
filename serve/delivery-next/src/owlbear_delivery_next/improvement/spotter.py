@@ -225,8 +225,11 @@ def settle(folder: Path, token: Token, actual: float) -> None:
 
 
 def prompt_version() -> str:
-    """The prompt's version: the start of its content's hash."""
-    return hashlib.sha256(PROMPT.read_bytes()).hexdigest()[:12]
+    """The prompt's version: the start of its content's hash; "unreadable" if it cannot be read, never an error."""
+    try:
+        return hashlib.sha256(PROMPT.read_bytes()).hexdigest()[:12]
+    except OSError:
+        return "unreadable"
 
 
 def parse(text: str) -> dict[str, Any]:
