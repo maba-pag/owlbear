@@ -63,6 +63,12 @@ def test_the_current_settlement_read_set_covers_its_receipt_schema_reader_and_ho
     assert required <= dict(legacy_family.CURRENT_MODULES).keys()
 
 
+def test_the_registry_move_changes_only_the_current_read_set() -> None:
+    assert "state_store/registry.py" in legacy_family.CURRENT_FILES
+    assert "machine_host/registry.py" not in legacy_family.CURRENT_FILES
+    assert "machine_host/registry.py" in legacy_family.FILES
+
+
 @pytest.mark.parametrize(
     ("rel", "old", "new"),
     [
