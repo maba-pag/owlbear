@@ -1,13 +1,14 @@
 # Improvement: Design
 
 > **Owning task:** the plan's item 9 (formerly "the watcher"), redesigned with the owner on 2026-10-25
-> **Date:** 2026-10-25
+> **Date:** 2026-10-25 (approved); status 2026-10-26
 > **Question:** How do agents get better from their own work: fewer common mistakes, wrong tool arguments,
 > rabbit holes and local optimums that miss the real intent, without being steered off course?
 > **Status:** the owner's choices of 2026-10-25, after a pilot, a hindsight review of 83 real moments and Sol's
 > challenges (§3); built complete, for Delivery steps and chats, before item 10 (the owner's choice, same day). They replace the live coach of this design's first version and the per-call outside-write watcher
 > of [the earlier draft](delivery-next-watcher-design.md). Catching malicious calls is out of scope for now. Built so
-> far: W1a's feed (#640), phase 1a (#652) and the Primer (#653).
+> far: W1a's feed (#640), phase 1a (#652), the Primer (#653), and slices 1 to 4 and 6's Delivery part (#659 to #668,
+> §8).
 
 ## Names
 
@@ -20,7 +21,8 @@
 | **Retro** | The after-task analysis: reads whole tasks with hindsight, grades the Spotter, proposes lessons and fixes (§5) |
 | **Retro chatlogs** | The kept logs of finished agent conversations (Delivery steps, enrolled chats) that Retro reads (§5) |
 
-"Watcher" was the working name; the role and setting called `watcher` are renamed when the Spotter is built.
+"Watcher" was the working name; the role and setting called `watcher` became `spotter` and the Spotter's settings
+(#662).
 
 The evidence came from two investigations:
 - prior art on live critics, monitors and cross-run learning, cited in §1;
@@ -134,11 +136,14 @@ carries on as without a Spotter.
 
 As built for Delivery steps (#668): the hand-off look starts at the submit call, before Delivery may accept it, over a
 frozen snapshot of a bounded intake of the step's own agent (subagents left out; a resumed session's transcript seeds
-it); at most two looks run at once per step, each capped at 0.5 credits by the SDK and reserved against the day's
-budget in a locked ledger; a look gets 90 seconds, and the step's end waits at most 5 seconds before stopping the rest,
-all recorded as skipped. Nothing a look does delays or changes the step: its files and model call run beside it. Each
-record keeps its call and event cutoff, and how Delivery answered the hand-off (accepted, rejected, failed) is kept
-beside it in `outcomes-<date>.jsonl`. A record naming a state change is marked preliminary until the conflict check
+it); at most two looks run at once per step, each reserving 0.5 credits of the day's budget in a locked ledger and
+settling its spend after (an unknown spend counts as 0.5; a look sets no SDK credit cap, since the runtime's minimum is
+30, D-01M5W0HKR9RBAF3G4H8BTZS8E0); a look gets 90 seconds. A look never blocks or changes the step's work or its
+acceptance: its files and model call run beside it. Only the session's end waits, bounded: at most 5 seconds for running
+looks, then they are stopped, with up to 15 seconds more for their teardown and records; stopped looks are recorded as
+skipped. Each record keeps its call and event cutoff, and Delivery's answer to the hand-off is kept beside it in
+`outcomes-<date>.jsonl` as the SDK's result type (`success`, `rejected` when the session had ended, `failure` for a
+submission Delivery refused). A record naming a state change is marked preliminary until the conflict check
 comes with live delivery. The card holds credentials as the agent saw them; only browser context and email addresses
 are stripped (the owner, 2026-10-26: a look sends the model what the agent's session already sent it, and the records
 are temporary and owner-only; D-01M5VXXFBSWVZ0DZ68G1QG4CYG).
@@ -225,7 +230,7 @@ Each slice is a pull request, with Sol on its plan and its code:
 8. the Improvement page;
 9. live delivery and the test machinery.
 
-Then item 10.
+Then item 16 (the amendment design session, TD-422), then item 10.
 
 ## 8. Built work
 
@@ -239,7 +244,8 @@ Then item 10.
   end, enrolled-chat discovery and pruning.
 - The Spotter's core (#668): the intake (`improvement/events.py`), the card (`improvement/card.py`), the looks and
   their records, budget ledger and lifecycle (`improvement/spotter.py`, `runtimes/spotter_look.py`) and the prompt
-  (`improvement/spotter_prompt.md`); `improvement` is a layer between `state_store` and `runtimes`. The machine
+  (`improvement/spotter_prompt.md`); `improvement` is a layer between `state_store` and `runtimes`. A live test
+(2026-10-26) found that the runtime refuses a session credit cap under 30; a look now sets none. The machine
   registry and machine settings moved to `state_store` so a step reads its budget (D-01M5VXXFC28ZFHV7HVDTKFHPVF).
   No look has run against a live runtime yet.
 - The pilot's harness and data stay in `.owlbear/scratch/watcher-replay/` (not committed).
