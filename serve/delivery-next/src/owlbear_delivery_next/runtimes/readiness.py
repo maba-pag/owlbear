@@ -14,10 +14,12 @@ import truststore
 
 from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.design_packs import pack_update
+from owlbear_delivery_next.local_system import data_repo
 from owlbear_delivery_next.local_system.git_files import probe_in
 from owlbear_delivery_next.runtimes import copilot_cli
 from owlbear_delivery_next.settings import profile
-from owlbear_delivery_next.state_store import profile_share
+from owlbear_delivery_next.state_store import prefs_import, profile_share
+from owlbear_delivery_next.state_store.database import StoreError
 
 if TYPE_CHECKING:
     from owlbear_delivery_next.local_system.git_files import Probe
@@ -161,9 +163,50 @@ def readiness(host: str, probe: Probe, network: str | None, copilot: str | None)
     return [*out, _signing(probe)]
 
 
-def ready(store: Store, repo: Path) -> list[Check]:
-    """The readiness check at a host start, after a shared profile's facts were detected in this clone (TD-147)."""
-    return check(repo, profile_share.checked(store, repo))
+def ready(store: Store, repo: Path, *, carry: bool = False) -> list[Check]:
+    """The readiness check at a host start, after a shared profile's facts were detected in this clone (TD-147).
+
+    With *carry* (a host start) the legacy preference import runs after that detection and its failure is a check.
+    A detection that cannot publish is a failed check too, and the legacy import waits for a detection that succeeded.
+    """
+    try:
+        prof = profile_share.checked(store, repo)
+    except StoreError as exc:
+        fix = "Restore the shared profile repository's write access, then restart Delivery"
+        failed = Check("profile detection", ok=False, detail=str(exc)[:200], fix=fix)
+        return [failed, *_host_checks(store, repo)]
+    carried = _carried(store) if carry else []
+    return [*carried, *check(repo, prof)]
+
+
+def _host_checks(store: Store, repo: Path) -> list[Check]:
+    """The host checks after a failed detection: the known profile's host, else none while the profile is unreadable.
+
+    A missing profile is a fresh clone, whose checks use the default host; an unreadable one has no host to check, so
+    its host-specific checks wait for the next start rather than run against a public host by default.
+    """
+    try:
+        prof = store.read_profile()
+    except StoreError:
+        return []
+    return check(repo, prof)
+
+
+def _carried(store: Store) -> list[Check]:
+    """The one-time legacy preference import at a host start: a review or unpublished step is reported, not hidden.
+
+    A lock that cannot be taken or a local flag that cannot be written is reported the same way and tried again at the
+    next start; the import's state is left as it is.
+    """
+    try:
+        prefs_import.run(store)
+    except StoreError as exc:
+        fix = "review the Merge and cleanup preferences on the Settings page, or fix the repository and restart"
+        return [Check("legacy preferences", ok=False, detail=str(exc), fix=fix)]
+    except (data_repo.DataRepoError, OSError) as exc:
+        fix = "Restore the shared profile repository's access and local write access, then restart Delivery"
+        return [Check("legacy preferences", ok=False, detail=str(exc)[:200], fix=fix)]
+    return []
 
 
 def check(repo: Path, prof: Profile | None) -> list[Check]:

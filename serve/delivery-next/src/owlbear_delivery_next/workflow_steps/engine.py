@@ -24,6 +24,7 @@ from owlbear_delivery_next.change_flow.loop import StepResult
 from owlbear_delivery_next.git.remote_git import RemoteGitError, RemoteGitFailed, RemoteGitTimeout, run_remote_git
 from owlbear_delivery_next.github.provider import FailureCode, ProviderError
 from owlbear_delivery_next.settings import profile
+from owlbear_delivery_next.settings.config import pref
 from owlbear_delivery_next.workflow_steps import conversation
 
 if TYPE_CHECKING:
@@ -57,7 +58,7 @@ class Ctx:
 
     def poll(self) -> datetime:
         """When a pending condition is observed again."""
-        return self.now + timedelta(seconds=int(profile.value(self.profile, profile.POLL, "20")))
+        return self.now + timedelta(seconds=pref(self.store.settings(), "ci_poll_seconds"))
 
     def log(self, slug: str, event: str, **fields: object) -> None:
         """Append one activity event."""

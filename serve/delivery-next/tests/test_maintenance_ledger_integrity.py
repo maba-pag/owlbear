@@ -146,7 +146,7 @@ def test_the_machine_lists_and_recovers_a_session_whose_caller_a_reboot_ended(mo
     """The machine's own page API: held and recoverable after a reboot, owned and running on the same boot."""
     running_lease(psutil.boot_time() - (100 if rebooted else 0))
     monkeypatch.setattr(processes, "alive", uninspectable)  # the former caller's PID is now an uninspectable process
-    monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo: [])
+    monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
     monkeypatch.setattr(Host, "_spawn", lambda _self, slug: pytest.fail(f"no runner starts in these tests ({slug})"))
     now = datetime.now(UTC)
     machine = Machine(HostRecord(url="http://127.0.0.1:9/", token="t", pid=1, started_at=now, code=codebase.CURRENT))  # noqa: S106

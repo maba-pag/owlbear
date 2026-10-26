@@ -96,6 +96,32 @@ export function designFailures() {
   (v) => edit(key, v), { key, disabled: state.saving }), source(key, state.loaded.settings.design_failures));
 }
 
+// R15: five preferences, each set per layer and never defaulted in code; the project's value wins, then this
+// machine's, then Global's. A blank or "inherit" choice clears the layer's own value.
+export const PREFS = ["merge_method", "delete_remote_branch", "ci_poll_seconds", "ci_start_window_seconds",
+  "ask_before_merge"];
+const PREF_NAMES = { merge_method: "Merge method", delete_remote_branch: "Delete the remote branch after merging",
+  ci_poll_seconds: "CI poll interval (seconds)", ci_start_window_seconds: "CI start window (seconds)",
+  ask_before_merge: "Ask before merging" };
+const PREF_CHOICES = { merge_method: [["merge", "merge commit"], ["squash", "squash"], ["rebase", "rebase"]],
+  delete_remote_branch: [["on", "on"], ["off", "off"]], ask_before_merge: [["on", "on"], ["off", "off"]] };
+
+function prefCell(field) {
+  const key = `prefs.${field}`, below = inherited().prefs?.[field];
+  const shownBelow = typeof below === "boolean" ? (below ? "on" : "off") : (below ?? "unset");
+  const choices = PREF_CHOICES[field];
+  const control = choices
+    ? choose(PREF_NAMES[field], [[INHERIT, `inherit (${shownBelow})`], ...choices], own(key) || INHERIT,
+      (v) => edit(key, v), { key, disabled: state.saving })
+    : typed(PREF_NAMES[field], own(key), (v) => edit(key, v),
+      { key, placeholder: `inherit (${shownBelow})`, inputmode: "numeric", disabled: state.saving });
+  return cell(control, source(key, state.loaded.settings.prefs[field]));
+}
+
+export function prefRows() {
+  return PREFS.map((field) => row(cell(html`<p-text>${PREF_NAMES[field]}</p-text>`), prefCell(field)));
+}
+
 export function widths() {
   const below = inherited().widths?.join(", ");
   return cell(typed("Screenshot widths in px, comma-separated (1280 to 2400)", own("widths"),

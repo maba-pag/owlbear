@@ -177,6 +177,15 @@ def summary(store: Store, slug: str, act: Activity, now: datetime) -> dict[str, 
     return out
 
 
+def display_prefs(store: Store) -> tuple[dict[str, bool | None], str | None]:
+    """The merge and branch preferences the page shows, None where unset; an unreadable layer is a reported fault."""
+    try:
+        prefs = store.settings().prefs
+    except StoreError as exc:
+        return {"asks_merge": None, "deletes_branch": None}, str(exc)
+    return {"asks_merge": prefs.ask_before_merge, "deletes_branch": prefs.delete_remote_branch}, None
+
+
 def watcher(store: Store, slug: str) -> dict[str, Any]:
     """The Change's watcher list: its newest reports, their counts and whether the Spotter watches (None: unknown)."""
     try:
@@ -330,7 +339,7 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
     @router.get("/changes/{slug}")
     def detail(slug: str) -> dict[str, Any]:
         c = read(slug)
-        o, prof = c.outcome, store.read_profile() or Profile()
+        o = c.outcome
         events = store.events(slug)
         merge = offer(c, events)
         q = loop.open_question(c) if not merge else None
@@ -339,6 +348,7 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
         waiting = o and o.exit == Exit.PENDING and o.waiting == Waiting.PERSON_CHECK and o.who == "you"
         checks = [person_check(c, p, inputs=evidence.check_inputs(c, p, check.fingerprints(c, p)), waiting=bool(
             waiting and c.step.task == p.id)) for p in c.checks]  # fmt: skip
+        prefs, fault = display_prefs(store)
         return (
             summary_of(slug)
             | {
@@ -371,8 +381,9 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
                 "checks": checks,
                 "pr": c.names.pr,
                 "target": c.names.target,
-                "asks_merge": profile.value(prof, profile.ASK) == "yes",
-                "deletes_branch": profile.value(prof, profile.DELETE) == "yes",
+                "asks_merge": prefs["asks_merge"],  # None while unset: the page asks the owner
+                "deletes_branch": prefs["deletes_branch"],
+                "settings_fault": fault,  # set while a layer is unreadable: the page says so, nothing is assumed
                 "paused": c.intent.paused_at is not None,
                 "finished": c.finished_at is not None,
                 "merge": merge,

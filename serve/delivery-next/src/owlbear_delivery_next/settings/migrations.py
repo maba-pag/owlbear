@@ -23,6 +23,16 @@ def roles_moved(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+def prefs_import_added(data: dict[str, Any]) -> dict[str, Any]:
+    """Profile format 2 to 3: the legacy preference import marker (R15); older runtimes refuse format 3."""
+    return data
+
+
+def prefs_basis_added(data: dict[str, Any]) -> dict[str, Any]:
+    """Profile format 3 to 4: the claim's config basis (R15); a pending claim without one never fills on its own."""
+    return data
+
+
 def with_roles(layer: Layer, found: dict[Role, RoleModel]) -> Layer:
     """The layer with old role overrides filling only the model and effort fields it leaves empty."""
     agents = dict(layer.agents)
@@ -150,6 +160,11 @@ def spotter_renamed(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+def prefs_added(data: dict[str, Any]) -> dict[str, Any]:
+    """Settings format 12 to 13: the five preferences, unset until a layer sets them (R15); older runtimes refuse 13."""
+    return data
+
+
 def tests_added(data: dict[str, Any]) -> dict[str, Any]:
     """Change format 5 to 6: a test review's record and step (TD-373); older runtimes refuse format 6."""
     return data
@@ -174,7 +189,7 @@ CHANGE: Migrations = {
     6: waivers_added,
     7: held_records_added,
 }
-PROFILE: Migrations = {1: roles_moved}
+PROFILE: Migrations = {1: roles_moved, 2: prefs_import_added, 3: prefs_basis_added}
 CONFIG: Migrations = {
     1: seed_dropped,
     2: judge_renamed,
@@ -187,4 +202,5 @@ CONFIG: Migrations = {
     9: defaults_removed,
     10: machine_added,
     11: spotter_renamed,
+    12: prefs_added,
 }
