@@ -1799,30 +1799,63 @@ def test_a_folder_swapped_while_a_transaction_step_writes_never_writes_the_forei
     _no_authority(picking)
 
 
-@pytest.fixture
-def closed_writer_descriptors(monkeypatch):
-    """Every descriptor opened by the instrumented writer is closed, including on refusal or I/O failure."""
-    opened, closed = [], []
-    real_open, real_close = os.open, os.close
+class WriterDescriptors:
+    """Track only the caller thread's writer acquisitions; forward fault hooks to the real OS module."""
 
-    def recording_open(*args, **kwargs):
-        descriptor = real_open(*args, **kwargs)
-        opened.append(descriptor)
+    def __init__(self) -> None:
+        self.caller = threading.current_thread()
+        self.opened, self.active, self.closed, self.strays = [], set(), [], []
+
+    def __getattr__(self, name):
+        return getattr(os, name)
+
+    def open(self, *args, **kwargs):
+        descriptor = os.open(*args, **kwargs)
+        if threading.current_thread() is self.caller:
+            self.opened.append(descriptor)
+            self.active.add(descriptor)
         return descriptor
 
-    def recording_close(descriptor):
-        real_close(descriptor)
-        closed.append(descriptor)
+    def close(self, descriptor) -> None:
+        caller = threading.current_thread() is self.caller
+        if caller and descriptor not in self.active:
+            self.strays.append(descriptor)
+        os.close(descriptor)
+        if caller and descriptor in self.active:
+            self.active.remove(descriptor)
+            self.closed.append(descriptor)
 
-    monkeypatch.setattr(os, "open", recording_open)
-    monkeypatch.setattr(os, "close", recording_close)
-    yield
-    assert opened
-    assert sorted(opened) == sorted(closed)
-    for descriptor in set(opened):
-        with pytest.raises(OSError, match=os.strerror(errno.EBADF)) as refused:
-            os.fstat(descriptor)
-        assert refused.value.errno == errno.EBADF
+    def all_closed(self) -> bool:
+        return bool(self.opened) and not self.active and not self.strays and len(self.opened) == len(self.closed)
+
+
+@pytest.fixture
+def closed_writer_descriptors(monkeypatch):
+    """Every descriptor acquired by these writers on this thread is closed, on success or failure."""
+    descriptors = WriterDescriptors()
+    monkeypatch.setattr(storage, "os", descriptors)
+    monkeypatch.setattr(decision_batch, "os", descriptors)
+    yield descriptors
+    assert descriptors.all_closed()
+
+
+def test_the_writer_descriptor_oracle_detects_a_real_leak_and_a_stray_close():
+    descriptors = WriterDescriptors()
+    descriptor = descriptors.open(os.devnull, os.O_RDONLY)
+    try:
+        assert not descriptors.all_closed()
+        assert descriptors.active == {descriptor}
+    finally:
+        descriptors.close(descriptor)
+    assert descriptors.all_closed()
+
+    unrelated = os.open(os.devnull, os.O_RDONLY)
+    try:
+        assert descriptors.all_closed()  # a reused number is not another writer acquisition
+    finally:
+        descriptors.close(unrelated)
+    assert descriptors.strays == [unrelated]
+    assert not descriptors.all_closed()
 
 
 def _write_with(writer: str, tmp_path: Path, fence, root: Path | None = None, layer: Path | None = None) -> Path:
@@ -1852,6 +1885,30 @@ def test_an_unfenced_write_lands_with_no_temporary_left(tmp_path, writer):
     assert path.is_file()
     assert path.stat().st_mode & 0o777 == 0o600  # as the temporary file has always been made
     assert [p.name for p in path.parent.iterdir()] == [path.name]
+
+
+@pytest.mark.parametrize("writer", ["batch", "decisions"])
+@pytest.mark.usefixtures("closed_writer_descriptors")
+def test_unrelated_thread_descriptors_do_not_belong_to_the_writer(tmp_path, writer):
+    acquired, release = threading.Event(), threading.Event()
+
+    def unrelated_readers() -> None:
+        with contextlib.ExitStack() as stack:
+            for binding in (os, storage.os, decision_batch.os):
+                stack.enter_context(binding.fdopen(binding.open(os.devnull, os.O_RDONLY), "rb"))
+            acquired.set()
+            release.wait(5)
+
+    reader = threading.Thread(target=unrelated_readers)
+    reader.start()
+    try:
+        assert acquired.wait(5)
+        path = _write_with(writer, tmp_path, None)
+    finally:
+        release.set()
+        reader.join(5)
+    assert not reader.is_alive()
+    assert path.is_file()
 
 
 @pytest.mark.parametrize("sync_fails", [False, True], ids=["synced", "sync-failed"])
