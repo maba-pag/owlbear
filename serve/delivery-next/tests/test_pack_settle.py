@@ -319,22 +319,19 @@ def test_a_run_rewritten_in_place_while_restoration_reads_it_is_held_not_taken_f
 
 
 @pytest.mark.parametrize("reader", ["observed", "read_version"])
-def test_every_reader_refuses_a_run_rewritten_in_place_while_it_read_it_and_closes_its_descriptor(
-    tmp_path, reader, steady_descriptors
-):
+def test_every_reader_refuses_a_run_rewritten_in_place_while_it_read_it_and_closes_its_descriptor(tmp_path, reader):
     root = store(tmp_path, "clone", SDK_FAILED)
-    with steady_descriptors():
-        fds = {p.name for p in Path("/dev/fd").iterdir()}
-        patch = rewritten_in_place_while_read(root, {"state": "running"})
-        try:
-            if reader == "observed":
-                with pytest.raises(ValueError, match="changed while it was read"):
-                    pack_state.observed(root)
-            else:
-                assert pack_state.read_version(root / pack_state.FILE) == (pack_state.blank(), "")
-        finally:
-            patch.undo()
-        assert {p.name for p in Path("/dev/fd").iterdir()} == fds
+    fds = {p.name for p in Path("/dev/fd").iterdir()}
+    patch = rewritten_in_place_while_read(root, {"state": "running"})
+    try:
+        if reader == "observed":
+            with pytest.raises(ValueError, match="changed while it was read"):
+                pack_state.observed(root)
+        else:
+            assert pack_state.read_version(root / pack_state.FILE) == (pack_state.blank(), "")
+    finally:
+        patch.undo()
+    assert {p.name for p in Path("/dev/fd").iterdir()} == fds
     kept, version = pack_state.observed(root)  # control: read again unchanged, it is the new run, whole
     assert (kept["state"], version != "") == ("running", True)
 

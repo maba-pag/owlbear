@@ -91,7 +91,7 @@ def test_cancelled_running_tool_retains_ownership_and_cannot_confirm_teardown(tm
         monkeypatch.setattr(step, "runtime", lambda _client: None)
         monkeypatch.setattr(processes, "alive", lambda *_args: False)
         monkeypatch.setattr(processes, "kill", lambda *_args: pytest.fail("no real signals in a synthetic test"))
-        monkeypatch.setattr(sdk_teardown, "STOP_CALL", 0.001)
+        monkeypatch.setattr(sdk_teardown, "STOP_CALL", 1.0)  # a prompt stop; 10 ms forced signals on a loaded runner
         monkeypatch.setattr(sdk_teardown, "SETTLE", 0.001)
         task = asyncio.create_task(step.workers.call(operation))
         try:

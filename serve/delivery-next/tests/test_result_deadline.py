@@ -395,7 +395,7 @@ def test_cleanup_confirms_no_owned_request_remains_before_releasing_termination(
         monkeypatch.setattr(step, "runtime", lambda _client: None)
         monkeypatch.setattr(processes, "alive", lambda *_args: False)
         monkeypatch.setattr(processes, "kill", lambda *_args: pytest.fail("no real signals in a synthetic test"))
-        monkeypatch.setattr(sdk_teardown, "STOP_CALL", 0.01)
+        monkeypatch.setattr(sdk_teardown, "STOP_CALL", 1.0)  # a prompt stop; 10 ms forced signals on a loaded runner
         monkeypatch.setattr(sdk_teardown, "SETTLE", 0.01)
         try:
             result = await sdk_teardown.teardown(Client(), None, step)

@@ -1,5 +1,6 @@
 """The offline receipt lookup reads the ledger as a host does, without a host: nothing restored, inspected or saved."""
 
+import gc
 import json
 import os
 import threading
@@ -23,6 +24,12 @@ def receipted_ledger() -> None:
 
 def open_fds() -> set[str]:
     return {p.name for p in Path("/dev/fd").iterdir()}
+
+
+def settled_fds() -> set[str]:
+    """The open descriptors once an earlier test's garbage has closed its own, so only the lookup can change them."""
+    gc.collect()
+    return open_fds()
 
 
 def test_the_lookup_finds_a_known_receipt_and_nothing_for_another_version_without_a_host(monkeypatch):
@@ -70,23 +77,20 @@ def no_host(patch: pytest.MonkeyPatch) -> None:
     ],
     ids=["no-sessions", "no-imported", "future-format", "unknown-field", "damaged"],
 )
-def test_a_ledger_that_cannot_be_read_whole_is_refused_not_taken_for_empty(monkeypatch, body, steady_descriptors):
+def test_a_ledger_that_cannot_be_read_whole_is_refused_not_taken_for_empty(monkeypatch, body):
     path = ledger_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(body)
-    with steady_descriptors():
-        fds = open_fds()
-        with monkeypatch.context() as patch:
-            no_host(patch)
-            with pytest.raises(maintenance.MaintenanceError, match="could not be read"):
-                maintenance.Maintenance.lookup_receipt("p", "d0")
-        assert (path.read_text(), open_fds()) == (body, fds)
+    fds = settled_fds()
+    with monkeypatch.context() as patch:
+        no_host(patch)
+        with pytest.raises(maintenance.MaintenanceError, match="could not be read"):
+            maintenance.Maintenance.lookup_receipt("p", "d0")
+    assert (path.read_text(), open_fds()) == (body, fds)
 
 
 @pytest.mark.parametrize("kind", ["fifo", "directory", "link"])
-def test_a_ledger_that_is_not_a_regular_file_is_refused_at_once_and_its_descriptor_closed(
-    monkeypatch, tmp_path, kind, steady_descriptors
-):
+def test_a_ledger_that_is_not_a_regular_file_is_refused_at_once_and_its_descriptor_closed(monkeypatch, tmp_path, kind):
     path = ledger_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     if kind == "fifo":
@@ -97,6 +101,7 @@ def test_a_ledger_that_is_not_a_regular_file_is_refused_at_once_and_its_descript
         whole = tmp_path / "elsewhere.json"
         whole.write_text(json.dumps({"format": 1, "sessions": [], "imported": ["p:receipt:d0:G0"]}))
         path.symlink_to(whole)
+    fds = settled_fds()
     outcome: list[BaseException] = []
 
     def look() -> None:
@@ -105,16 +110,14 @@ def test_a_ledger_that_is_not_a_regular_file_is_refused_at_once_and_its_descript
         except BaseException as exc:  # noqa: BLE001 - handed to the test's own assertion
             outcome.append(exc)
 
-    with steady_descriptors():
-        fds = open_fds()
-        with monkeypatch.context() as patch:
-            no_host(patch)
-            reader = threading.Thread(target=look, daemon=True)
-            reader.start()
-            reader.join(5)
-        assert not reader.is_alive(), "the lookup waited on the ledger"
-        assert [type(e) for e in outcome] == [maintenance.MaintenanceError]
-        assert open_fds() == fds
+    with monkeypatch.context() as patch:
+        no_host(patch)
+        reader = threading.Thread(target=look, daemon=True)
+        reader.start()
+        reader.join(5)
+    assert not reader.is_alive(), "the lookup waited on the ledger"
+    assert [type(e) for e in outcome] == [maintenance.MaintenanceError]
+    assert open_fds() == fds
 
 
 def test_a_host_still_finds_the_same_receipt_through_its_own_ledger():
