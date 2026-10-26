@@ -231,9 +231,9 @@ user-invocable: {true|false}
 
 ### Naming Grammar
 
-- **Agent names** are **role nouns** or role compounds (memory-curator, test-curator, knowledge-ingestor).
+- **Agent names** are **role nouns** or role compounds (knowledge-ingestor, knowledge-enricher).
 - **Skill names** are **domain-action compounds** — use verbs/actions, not plural nouns. E.g., `test-curation` not `test-curations`, `decision-routing` not `decision-requests`, `task-decomposition` not `task-workflow`.
-- The `w-` prefix replaces the word "workflow" — don't use both (e.g., `w-test-curation` not `w-test-curation-workflow`).
+- The `w-` prefix replaces the word "workflow" — don't use both (e.g., `w-knowledge-enrichment` not `w-knowledge-enrichment-workflow`).
 
 ### Workflow Skill Structure
 
@@ -259,8 +259,6 @@ Commit per `r-workspace-governance` → Commit Discipline.
 ```
 
 **Step 0 applies to:** Workflows that consume an engine-started job or immutable candidate.
-
-**No Step 0:** w-test-curation (suite-scoped review, not archive-scoped).
 
 **Workflow skills must NOT contain:**
 

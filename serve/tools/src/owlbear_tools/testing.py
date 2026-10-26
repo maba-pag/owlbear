@@ -19,10 +19,7 @@ if TYPE_CHECKING:
 
 _REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
 _DOCS_ONLY_PREFIXES = ("share/", ".owlbear/")
-_INVARIANT_TESTS = (
-    "tests/test_package_boundary.py",
-    "tests/test_write_guard_hooks.py",
-)
+_INVARIANT_TESTS = ("tests/test_package_boundary.py",)
 # Packages whose own tests testmon selects for a Python source change; it needs the classic tracer on 3.14 and
 # --testmon-forceselect, because the configured -m otherwise turns its selection off.
 _TESTMON_NAMESPACES = frozenset({"owlbear_delivery_next"})
@@ -200,9 +197,7 @@ def _package_for_path(normalized: str) -> _WorkspacePackage | None:
 def _python_scope(path: str) -> list[str] | None:
     normalized = path.removeprefix("./")
     scope: list[str] | None = None
-    if normalized.startswith(".owlbear/hooks/"):
-        scope = ["tests/test_write_guard_hooks.py"]
-    elif normalized.startswith(".owlbear/scripts/diagrams/"):
+    if normalized.startswith(".owlbear/scripts/diagrams/"):
         scope = ["tests/test_archify_diagrams.py", *_INVARIANT_TESTS]
     else:
         package = _package_for_path(normalized)

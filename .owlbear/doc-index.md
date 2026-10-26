@@ -831,14 +831,6 @@
 ### Outbound links
 - [Browser-to-Knowledge vertical test](../tests/test_browser_knowledge_vertical.py)
 
-## share/agents/memory-curator.agent.md
-- ### `Channel A`
-- ### `Channel B`
-
-## share/agents/test-curator.agent.md
-- ### `Channel A`
-- ### `Channel B`
-
 ## share/instructions/agent-ecosystem.instructions.md
 
 ## share/instructions/doc-standards.instructions.md
@@ -1124,23 +1116,6 @@
 - ## `Batch Size Guidance`
 - ## `Known Pitfalls`
 
-## share/skills/w-mem-curation/SKILL.md
-- # `Memory Curation`
-- ## `Architecture`
-- ## `Revision-bound mutations`
-- ## `State Machine`
-- ## `Step 0 — Setup`
-- ## `Confidence and the threshold`
-- ## `Step 1 — Gather Candidates`
-- ## `Step 2 — Classify Signal`
-- ## `Step 3 — Assign Scope`
-- ## `Step 4 — Act On MCP Entries`
-- ## `Step 5 — Retired File Store`
-- ## `Step 6 — Batch Commit MCP Memory`
-- ## `Step 7 — Return Channel A Signal`
-- ## `Verification Checklist`
-- ## `Known Pitfalls`
-
 ## share/skills/w-research/SKILL.md
 - # `Research`
 - ## `Step 1 — Frame The Question`
@@ -1150,19 +1125,6 @@
 - ## `Step 5 — Analyze And Compare`
 - ## `Step 6 — Preserve Durable Findings When Useful`
 - ## `Step 7 — Return Evidence To The Caller`
-
-## share/skills/w-test-curation/SKILL.md
-- # `Test Curation`
-- ## `Scope And Ownership`
-- ## `Step 1 - Bind The Scope`
-- ## `Step 2 - Discover Current Tests`
-- ## `Step 3 - Apply Durable Test Admission`
-- ## `Step 4 - Change The Smallest Set`
-- ## `Step 5 - Verify The Result`
-- ## `Step 6 - Report And Commit`
-- ## `Output Template`
-- ## `Known Pitfalls`
-- ## `Companion Skills`
 
 ## store/README.md
 - # `Store`
