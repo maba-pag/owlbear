@@ -6,7 +6,7 @@
 > rabbit holes and local optimums that miss the real intent, without being steered off course?
 > **Status:** the owner's choices of 2026-10-25, after a pilot, a hindsight review of 83 real moments and Sol's
 > challenges (§3); built complete, for Delivery steps and chats, before item 10 (the owner's choice, same day). They replace the live coach of this design's first version and the per-call outside-write watcher
-> of [the earlier draft](delivery-next-watcher-design.md). Catching malicious calls is out of scope for now. Built so
+> of [the earlier draft](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-next-watcher-design.md). Catching malicious calls is out of scope for now. Built so
 > far: W1a's feed (#640), phase 1a (#652), the Primer (#653), and slices 1 to 4 and 6's Delivery part (#659 to #668,
 > §8).
 

@@ -201,8 +201,8 @@ def test_markdownlint_rule_authorities_and_source_suppression_remain_explicit() 
     assert config.get("MD041") == {"front_matter_title": expected_front_matter_title}
     assert config.get("MD060") == {"style": "compact"}
 
-    source_lines = (_ROOT / ".owlbear/sources/overview.md").read_text(encoding="utf-8").splitlines()
-    assert source_lines[0] == "<!-- markdownlint-disable MD060 -->"
+    sources = (_ROOT / _M09_SOURCES_MARKDOWN_PATH).read_text(encoding="utf-8")
+    assert "markdownlint-disable" not in sources
 
 
 def test_delivery_packages_remain_excluded_from_markdown_consumers() -> None:
@@ -267,6 +267,26 @@ def test_sources_document_is_included_in_markdown_consumers() -> None:
     config = _read_yaml_mapping(_ROOT / ".pre-commit-config.yaml")
     precommit_exclude = _read_precommit_exclude(config)
     assert precommit_exclude.search(_M09_SOURCES_MARKDOWN_PATH) is None
+
+
+def test_sources_attribution_rows_are_well_formed() -> None:
+    lines = (_ROOT / _M09_SOURCES_MARKDOWN_PATH).read_text(encoding="utf-8").splitlines()
+    table = [line for line in lines if line.startswith("|")]
+    assert table[:2] == ["| Source | URL | Licence | What | Where Used |", "| --- | --- | --- | --- | --- |"]
+    rows = table[2:]
+    assert rows
+
+    for row in rows:
+        cells = [cell.strip() for cell in row.strip("|").split(" | ")]
+        assert len(cells) == 5, row
+        source, url, licence, what, where = cells
+        assert source, row
+        assert licence, row
+        assert what, row
+        assert re.fullmatch(r"<https://[^\s<>]+>", url), row
+        paths = re.findall(r"`([^`]+)`", where)
+        assert paths, row
+        assert all((_ROOT / path).exists() for path in paths), row
 
 
 def test_precommit_exclusion_taxonomy() -> None:
