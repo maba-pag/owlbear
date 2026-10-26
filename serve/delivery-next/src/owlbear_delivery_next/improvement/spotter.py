@@ -236,9 +236,16 @@ def parse(text: str) -> dict[str, Any]:
         said = json.loads(hit.group(0)) if hit else {}
     except json.JSONDecodeError:
         said = {}
-    if not isinstance(said, dict) or said.get("verdict") not in VERDICTS:
+    if not isinstance(said, dict) or said.get("verdict") not in VERDICTS or not _well_formed(said):
         return {"verdict": "failed", "note": clip(text or "", 300)}
     return said
+
+
+def _well_formed(said: dict[str, Any]) -> bool:
+    """Whether every field the answer gives has its type: texts, or a list of texts for the evidence."""
+    texts = all(said.get(k) is None or isinstance(said[k], str) for k in ("note", "state_change", "rationale"))
+    evidence = said.get("evidence")
+    return texts and (evidence is None or (isinstance(evidence, list) and all(isinstance(e, str) for e in evidence)))
 
 
 async def through(task: asyncio.Future[Any]) -> None:

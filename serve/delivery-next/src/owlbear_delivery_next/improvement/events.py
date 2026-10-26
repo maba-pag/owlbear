@@ -9,6 +9,7 @@ frozen copy: a result that completes after it is not in it.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import re
 from collections import deque
@@ -116,7 +117,13 @@ def kept_text(value: object, n: int) -> str:
     if not isinstance(value, str):
         size = len(_text(value))
         return omitted(size) if size > RAW else clip(_text(_scrubbed(json.loads(_text(value)))), n)
-    return omitted(len(value)) if len(value) > RAW else clip(clean(value), n)
+    if len(value) > RAW:
+        return omitted(len(value))
+    if value.lstrip()[:1] in {"{", "["}:  # a JSON object or array in text: its fields are cleaned before it is encoded
+        with contextlib.suppress(ValueError):
+            if isinstance(decoded := json.loads(value), dict | list):
+                return clip(_text(_scrubbed(decoded)), n)
+    return clip(clean(value), n)
 
 
 def result_text(data: dict[str, Any]) -> Any:  # noqa: ANN401 - a text, or a structured error as given

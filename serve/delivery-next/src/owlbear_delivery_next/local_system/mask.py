@@ -11,7 +11,9 @@ _HEADER_NAME = re.compile(rf"(?i){_NAME}|cookie|session")
 _USERINFO = re.compile(r"(?i)\b(?P<scheme>[a-z][a-z0-9+.-]{0,31}://)[^/\s@]+@")  # a bounded scheme: linear time
 _GITHUB = re.compile(r"\b(?:gh[pousr]_|github_pat_)\w+")
 _KEY = re.compile(r"(?<![\w.-])(?P<k>[\w.-]++)(?P<kq>[\"']?)(?P<s>\s*[=:]\s*)")  # each word scanned once: linear
-_VALUE = re.compile(r"\"[^\"]*\"|'[^']*'|[^\s\"']+")
+_VALUE = re.compile(  # a quoted value runs past escaped quotes; one never closed is masked to the line's end
+    r"\"(?:[^\"\\]|\\.)*\"|'(?:[^'\\]|\\.)*'|[\"'][^\r\n]*|[^\s\"']+"
+)
 _NAMED = re.compile(rf"(?i)(?=({_NAME}))")  # every start of a credential's name, overlapping ones too
 _COOKIE = re.compile(r"(?i)\b(?P<h>(?:set-)?cookie)(?P<s>[\"']?\s*:\s*)[^\r\n]+")
 _BLOB = re.compile(r"(?P<s>[=:]\s*)(?P<q>[\"']?)(?!//)[A-Za-z0-9+/_-]{32,}={0,2}")

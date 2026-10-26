@@ -826,7 +826,7 @@ def test_a_look_the_runtime_reports_as_free_costs_nothing(monkeypatch) -> None:
 
 
 SHAPES = ["d", "a.", "--key ", "https://", "<browser_context>", "</browser_context>", '{"k": ', "key_", "--key-",
-          "password.", "a@", "x=", "a=b&", '"a=', "Cookie: "]  # fmt: skip
+          "password.", "a@", "x=", "a=b&", '"a=', "Cookie: ", 'password="', 'password="\\"', "[{"]  # fmt: skip
 
 
 @pytest.mark.parametrize("unit", SHAPES)
@@ -866,3 +866,23 @@ def test_raw_cookie_headers_and_long_credential_keys_are_masked_through_a_tool_r
     assert "spotter_canary" not in text
     assert "hunter2" not in text
     assert "author=bob" in text  # a key that only starts like a credential's name keeps its value
+
+
+def test_json_tool_output_and_escaped_quotes_never_carry_a_credential_through() -> None:
+    kept = Kept()
+    kept.add(started("c1", "bash", {"command": "cat config.json"}))
+    kept.add(done("c1", '{"credentials": ["private canary value"], "name": "demo"}'))
+    kept.add(started("c2", "bash", {"command": "cat secret.json"}))
+    kept.add(done("c2", 'noise {"pass' + 'word": "prefix\\"private canary suffix"} and "pass' + 'word": "open canary'))
+    text = json.dumps(card.build(kept.snapshot(), {"at": "2026-10-26T10:01:00+00:00"}, {}))
+    assert "canary" not in text
+    assert "demo" in text
+
+
+@pytest.mark.parametrize("answer", ['{"verdict": "silent", "evidence": "e1"}', '{"verdict": "note", "note": 3}',
+                                    '{"verdict": "note", "evidence": ["a", 2]}'])  # fmt: skip
+def test_an_answer_with_a_known_verdict_but_malformed_fields_is_failed(answer: str) -> None:
+    assert spotter.parse(answer)["verdict"] == "failed"
+    assert (
+        spotter.parse('{"verdict": "note", "note": "n", "evidence": ["e"], "state_change": null}')["verdict"] == "note"
+    )
