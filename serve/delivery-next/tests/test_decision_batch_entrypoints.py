@@ -3771,6 +3771,13 @@ elif when == "git":  # the rebase probe after every file is put back and proved,
     after(DataRepo, "rebasing", lambda: to_pipe() if armed else None)
 elif when == "put-back":  # the commit is refused, so the save puts its files back, reading each first
     DataRepo.commit = lambda *_args, **_kwargs: (to_pipe(), "git refused the commit")[1]
+elif when == "make-dirs":  # past the save's fence and preflight: its folder's fsync, before `write` reads the file
+    real_batch = decision_store.write_batch
+    def armed_batch(*args, **kwargs):
+        armed.append(True)
+        return real_batch(*args, **kwargs)
+    decision_store.write_batch = armed_batch
+    after(storage_io, "fsync_dir", lambda: to_pipe() if armed else None)
 elif when == "after-replace":  # the temporary is renamed into place; then its folder is moved and a pipe takes its name
     real_replace = Path.replace
     def replace_then_swap(self, dest):
@@ -3970,3 +3977,27 @@ def test_an_atomic_write_still_removes_its_temporary_when_the_rename_is_refused(
         storage_io.atomic_write(target, "new contents")
     assert target.read_text() == "old contents"
     assert [p.name for p in tmp_path.iterdir()] == ["record.json"]
+
+
+def test_a_decision_file_swapped_for_a_pipe_as_its_folder_is_synced_is_refused_and_never_waited_on(
+    picking, shared_repo
+):
+    """A save passes its fence and preflight; while `make_dirs` syncs the decision's folder, the owner swaps the file
+    for a pipe. The standalone writer's read of the current file refuses it at once: the save is not saved, its batch
+    stays interrupted, and the pipe, Git and the remote stay as they were."""
+    _seed(picking)
+    shared, remote = picking.shared, shared_repo[1]
+    items, first, _ = _update_and_successor(picking)
+    spec = {"root": str(shared.root), "target": str(first), "action": "save", "when": "make-dirs", "project": PROJECT}
+    spec["id"] = items[0][0].id
+    git, published = _git_state(shared), _remote_main(remote)
+
+    said = _bounded(spec)
+
+    assert said["outcome"] != "hung", said
+    assert said["fired"]
+    assert (said["outcome"], said["said"]) == ("returned", [False])
+    assert stat.S_ISFIFO(os.lstat(first).st_mode)  # the pipe is left as it is, never read, written or replaced
+    assert decision_batch.pending(shared) is not None
+    assert _git_state(shared) == git
+    assert _remote_main(remote) == published

@@ -112,12 +112,16 @@ def parse(text: str) -> Decision:
 
 
 def read(path: Path) -> Decision:
-    """Read one decision file; its name must be `<id>.md`."""
+    """Read one decision file; its name must be `<id>.md`.
+
+    The file is opened without following a link and without waiting on a pipe, and must be a regular file
+    (`_regular_text`): a link, a pipe or a folder at its name is refused as unreadable, never read through or waited on.
+    """
     if path.is_symlink():
         msg = "symlinks are not decision files"
         raise DecisionFileError(msg)
     try:
-        text = path.read_text(encoding="utf-8")
+        text = _regular_text(path)
     except (OSError, UnicodeDecodeError) as exc:
         msg = f"unreadable: {type(exc).__name__}"
         raise DecisionFileError(msg) from exc
@@ -126,6 +130,33 @@ def read(path: Path) -> Decision:
         msg = f"file name must be {decision.id}.md"
         raise DecisionFileError(msg, ("id",))
     return decision
+
+
+class NotRegularFileError(OSError):
+    """A decision file's name holds something other than a regular file: a pipe, a folder or a device."""
+
+
+def _regular_text(path: Path) -> str:
+    """*path*'s text, decoded as `Path.read_text(encoding="utf-8")` does, from a regular file only.
+
+    It is opened without following a link (`OSError`) and without waiting on a pipe; any other kind of file raises
+    `NotRegularFileError`. The descriptor is closed on every path.
+    """
+    descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
+    try:
+        _require_regular(descriptor, path)
+        source = os.fdopen(descriptor, encoding="utf-8")
+    except BaseException:
+        os.close(descriptor)
+        raise
+    with source:
+        return source.read()
+
+
+def _require_regular(descriptor: int, path: Path) -> None:
+    if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+        msg = f"{path.name} is not a regular file"
+        raise NotRegularFileError(msg)
 
 
 def kind(path: Path) -> int | None:
