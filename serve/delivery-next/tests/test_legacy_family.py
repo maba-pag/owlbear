@@ -96,8 +96,13 @@ def test_the_current_settlement_read_set_covers_its_receipt_schema_reader_and_ho
             '    return Path.home() / ".owlbear"',
             '    return Path.home() / ".another-ledger"',
         ),
+        (
+            "machine_host/project.py",
+            "            if self.store and self.host is host and not host.stopped.is_set():",
+            "            if self.store:",
+        ),
     ],
-    ids=["settle", "receipt-lookup", "strict-reader", "record-schema", "pid-schema", "ledger-home"],
+    ids=["settle", "receipt-lookup", "strict-reader", "record-schema", "pid-schema", "ledger-home", "stopped-host"],
 )
 def test_a_current_settlement_dependency_change_is_an_unknown_build(
     current_binding: Binding, rel: str, old: str, new: str

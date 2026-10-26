@@ -7,7 +7,6 @@ These tests pause the publisher between the write and the chmod, stop the projec
 import json
 import subprocess
 import threading
-import time
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -102,7 +101,7 @@ def test_a_healthy_project_publishes_its_discovery_file_on_load_and_removes_it_o
 def test_a_stop_during_a_publish_paused_after_the_write_leaves_no_discovery_file_and_no_thread_error(
     machine, repo, monkeypatch, thread_errors
 ):
-    written, resume = threading.Event(), threading.Event()
+    written, resume, stop_attempted = threading.Event(), threading.Event(), threading.Event()
     real_write = project.atomic_write
     pauses: list[str] = []
 
@@ -111,31 +110,42 @@ def test_a_stop_during_a_publish_paused_after_the_write_leaves_no_discovery_file
         if threading.current_thread().name.startswith("readiness-"):  # the publish under test, not load's own write
             pauses.append(path.name)
             written.set()
-            resume.wait(WAIT)
+            assert resume.wait(WAIT), "the test never released the paused publisher"
 
     ready_go = threading.Event()
     monkeypatch.setattr(project, "atomic_write", paused_write)
     p = _loaded(machine, repo, monkeypatch, ready_go)
     assert not written.is_set()
-
-    ready_go.set()
-    assert written.wait(WAIT), "the readiness publish never reached the pause after its write"
-    assert pauses == ["host.json"]
-
     stopper = threading.Thread(target=p.stop, kwargs={"drain": 0}, daemon=True)
-    stopper.start()
-    assert p.host is not None
-    deadline = time.monotonic() + WAIT
-    while not p.host.stopped.is_set() and time.monotonic() < deadline:
-        time.sleep(0.01)
-    assert p.host.stopped.is_set(), "stop never closed the host"
-    assert stopper.is_alive(), "the removal must wait for the publish holding the lock"
+    publish_lock = p.publish_lock
 
-    resume.set()
-    stopper.join(WAIT)
-    for t in [t for t in threading.enumerate() if t.name == f"readiness-{p.entry.id}"]:
-        t.join(WAIT)
-        assert not t.is_alive()
+    class ObservedLock:
+        def __enter__(self):
+            if threading.current_thread() is stopper:
+                stop_attempted.set()
+            return publish_lock.__enter__()
+
+        def __exit__(self, *args):
+            return publish_lock.__exit__(*args)
+
+    monkeypatch.setattr(p, "publish_lock", ObservedLock())
+    try:
+        ready_go.set()
+        assert written.wait(WAIT), "the readiness publish never reached the pause after its write"
+        assert pauses == ["host.json"]
+        stopper.start()
+        assert stop_attempted.wait(WAIT), "stop never attempted the publication mutex"
+        assert p.host is not None
+        assert p.host.stopped.is_set()
+        assert stopper.is_alive(), "the removal must wait for the publish holding the lock"
+    finally:
+        resume.set()
+        if stopper.ident is not None:
+            stopper.join(WAIT)
+        ready_threads = [t for t in threading.enumerate() if t.name == f"readiness-{p.entry.id}"]
+        for thread in ready_threads:
+            thread.join(WAIT)
+    assert not any(thread.is_alive() for thread in ready_threads)
     assert not stopper.is_alive()
     assert thread_errors == []
     assert not _host_json(p).exists()
