@@ -219,7 +219,7 @@ def test_an_install_over_time_is_stopped_with_its_whole_group(ui, tmp_path, monk
     monkeypatch.setattr(before.worktree, "installs", lambda _p, _scope: [(".", slow)])
     events = []
     shots = run(ui, tmp_path, events)
-    assert shots.findings == [f"`{shlex.join(shlex.split(slow))}` took over 2 s"]
+    assert shots.findings == [f"`{before.check.shown(shlex.split(slow))}` took over 2 s"]
     installer = int(next(iter(events[0]["pids"])))
     assert gone(installer)
     assert gone(int(child.read_text()))

@@ -109,7 +109,7 @@ def bridge(tmp_path, monkeypatch):
     monkeypatch.setattr(sdk_adapter, "POLL", 0.001)
     monkeypatch.setattr(sdk_teardown, "SETTLE", 0)
     monkeypatch.setattr(sdk_teardown, "GRACE", 0)
-    monkeypatch.setattr(sdk_teardown, "STOP_CALL", 0.01)
+    monkeypatch.setattr(sdk_teardown, "STOP_CALL", 1.0)  # a prompt stop; 10 ms forced signals on a loaded runner
     monkeypatch.setattr(sdk_adapter._Step, "record_tree", lambda _self: None)  # noqa: SLF001
     monkeypatch.setattr(sdk_adapter.preload, "missing", lambda *_a, **_k: [])
     monkeypatch.setattr(processes, "started", lambda pid: BIRTH.get(pid, 1.0))

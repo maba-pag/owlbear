@@ -114,10 +114,13 @@ IMPROVEMENT_MACHINE = {  # tests only: settings added after the carry start unse
 def complete_layer():
     """The carried values plus test values for what came later: the Spotter's settings and the retro roles."""
     from owlbear_delivery_next.settings import carried  # noqa: PLC0415
-    from owlbear_delivery_next.settings.improvement import Spotter  # noqa: PLC0415
+    from owlbear_delivery_next.settings.improvement import CATEGORIES, Spotter  # noqa: PLC0415
 
     base = carried.layer()
-    spotter = Spotter(mode="learning", steer_share=0, intervention_cap=1, verbose="off", looks=["hand-off"])
+    spotter = Spotter(
+        switch="on", steer_share=0, intervention_cap=1, verbose="off", looks=["hand-off"],
+        **dict.fromkeys(CATEGORIES.values(), "record"),
+    )  # fmt: skip
     agents = base.agents | {
         role: base.agents["curator"].model_copy(update={"model": "gpt-6.1-sol", "effort": "medium"})
         for role in ("retro", "retro-review")
@@ -162,7 +165,7 @@ def _spotter_writes_end(_no_shared_settings):
 
 
 async def _silent_look(_card: dict, _ctx: object) -> tuple[str, float]:
-    return '{"verdict": "silent", "note": "", "evidence": [], "state_change": null}', 0.0
+    return '{"category": "none", "note": "", "evidence": [], "state_change": null}', 0.0
 
 
 def _no_runtime(**_kw: object) -> None:

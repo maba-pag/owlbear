@@ -218,7 +218,7 @@ def test_a_judge_runs_as_its_labels_role_in_both_runtimes(label, role, monkeypat
     monkeypatch.setattr(sessions, "isolated", isolated)
     store, settings = (
         SimpleNamespace(read_profile=lambda: None),
-        resolve(None, Layer(spotter=Spotter(mode="off"))),
+        resolve(None, Layer(spotter=Spotter(switch="off"))),
     )  # no database
     with pytest.raises(_Made):
         sessions.judges(store, SimpleNamespace(slug="c1"), None, Path(), lambda _at: [(label, _session(label))],

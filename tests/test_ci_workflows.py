@@ -305,7 +305,8 @@ def test_python_browser_tests_run_alone_with_chromium() -> None:
         ci_scope.SUITES["python-browser"]
     )
     assert "uv sync --locked --package owlbear-browser-mcp --group dev" in runs
-    assert "uv run --no-sync playwright install --with-deps chromium" in runs
+    assert "uv run --no-sync playwright install chromium" in runs
+    assert "--with-deps" not in runs  # apt on the runner stalls; the image has what headless Chromium needs
     assert "pytest serve/browser serve/browser-mcp -m browser" in runs
 
 
@@ -317,8 +318,27 @@ def test_delivery_next_browser_tests_run_in_their_own_job_with_chromium() -> Non
     fingerprint = next(s["run"] for s in job["steps"] if s.get("id") == "fingerprint")
     assert "serve/delivery-next serve/decisions serve/memory" in fingerprint
     assert "uv sync --locked --package owlbear-delivery-next --group dev" in runs
-    assert "uv run --no-sync playwright install --with-deps chromium" in runs
+    assert "uv run --no-sync playwright install chromium" in runs
+    assert "--with-deps" not in runs  # apt on the runner stalls; the image has what headless Chromium needs
     assert "pytest serve/delivery-next -m browser" in runs
+
+
+@pytest.mark.parametrize(
+    ("workflow", "job", "step"),
+    [
+        ("python.yml", "tests", "Run test shard"),
+        ("python-browser.yml", "browser", "Run browser-marked tests"),
+        ("python-browser.yml", "delivery-next-browser", "Run browser-marked tests"),
+    ],
+)
+def test_tests_run_with_bare_repositories_named_explicitly_as_in_agent_shells(workflow, job, step) -> None:
+    env = next(s for s in _jobs(workflow)[job]["steps"] if s.get("name") == step)["env"]
+
+    assert {k: str(v) for k, v in env.items() if k.startswith("GIT_CONFIG_")} == {
+        "GIT_CONFIG_COUNT": "1",
+        "GIT_CONFIG_KEY_0": "safe.bareRepository",
+        "GIT_CONFIG_VALUE_0": "explicit",
+    }
 
 
 def test_static_runs_the_workspace_lint_on_every_change() -> None:
