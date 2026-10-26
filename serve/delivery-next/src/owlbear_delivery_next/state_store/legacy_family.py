@@ -76,7 +76,7 @@ IMPORTS = (
     ("state_store/project_home.py", "c79464a6139fe571efd600903aa848dc67c9673f016d12c093d7d6b94b74a681"),
     ("state_store/store.py", "a3da565feeee931b40d4907f17c46372c000e573e1add938ae3679d175e75de4"),
 )
-CURRENT_FAMILY_AGGREGATE = "f81ae57cb2a3843dfbc4f10f961b20fa5c792bfed708723d4925bf0bf434f9fd"
+CURRENT_FAMILY_AGGREGATE = "e48d0f7a679aa7f36b4c9a8054554b045cc8bc65d86b9c952f586b8defd5c5ba"
 CURRENT_FUNCTIONS = (
     ("commands/chat_client.py:Chat.call", "0fc1fdb166ea555741a2aa7796a99a4eb7b71c572ad37fba1ae0a9e37171b584"),
     ("commands/chat_client.py:workspace", "d3a3e15a15d6554c1a3d9167d3b259d8890a0321c85af2df2115deaed14f13e9"),
@@ -100,7 +100,7 @@ CURRENT_FUNCTIONS = (
     ("machine_host/registry.py:register", "fa6d5044b93bb08ddc2352afd7b6ab30274c9a95a00c27113721c9a62bbc954f"),
     ("machine_host/registry.py:replaced", "5d48cb39f6ea67966760e0de397f920fd7d6ebf07f403f377fec1e56b0245231"),
     ("machine_host/selfcheck.py:_project", "57e2069ae90e55f732e86763c059f285e89636a3080e6370a0d7fb1bdd4248b0"),
-    ("project_host/host.py:running_at", "5d995a0df3ec0892b8e76c19f91b265cbec48abcc8ec44fdb4f0cd192a3476a0"),
+    ("project_host/host.py:running_at", "cc129de6cc691f64d6624765bcfa54fbf82b1e29531f65c8ff16ebf7f7370d00"),
     ("state_store/project_home.py:clone_dir", "db1b925c614a629f720496a9473f955f44d686c0e8903da656e27288435f3c5d"),
     ("state_store/project_home.py:clone_id", "2a12145869bb15d50f90e34e18ad2ec65b57b0d96c0597797af3f3750e86fbf8"),
     ("state_store/project_home.py:current", "ef3d2fde67eab7e4f3599ac2ef8858033fe320d4c44c4702a11cd1e612a5e13b"),
@@ -124,9 +124,9 @@ CURRENT_IMPORTS = (
     ("machine_host/project.py", "abf0c82a93a364fed92c0e98f6c91a8d4fb407f37894181720eabeafa17a9353"),
     ("machine_host/registry.py", "9b665c270866f57d7056583906a29a7a0762e1aa0bc6613d70d07f614d305b76"),
     ("machine_host/selfcheck.py", "2aa2fa0c3f7e09a66cecd16cb5e0d101cd4a819bbbab976d42be1d6647fc354b"),
-    ("project_host/host.py", "413bb149cd766ddbfc5adc411131394906d752d7e6fa5d8439659d6f8273fdc0"),
+    ("project_host/host.py", "85b64468f9280421471aa535a39b9ae196e7af672b4896b93e08ac4e0e0f0c8d"),
     ("state_store/project_home.py", "259e40135b59fa645a77dd1b90b242505e3a864542c2e123850a98e9aeda0b78"),
-    ("state_store/store.py", "a3da565feeee931b40d4907f17c46372c000e573e1add938ae3679d175e75de4"),
+    ("state_store/store.py", "df2cea9222c0d873feda15e06169e77256ac374712daa9457910c5bba4260776"),
 )
 CONSTANTS = (
     ("state_store/database.py", "STORE_FORMAT", 7),

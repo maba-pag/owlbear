@@ -77,7 +77,7 @@ def _durable_id(folder: Path, folder_fd: int) -> str | None:
     """
     path = folder / project_move.CLONE_ID
     try:
-        fd = os.open(project_move.CLONE_ID, fd_tree.FILE_FLAGS, dir_fd=folder_fd)
+        fd = os.open(project_move.CLONE_ID, fd_tree.FILE_FLAGS | os.O_NONBLOCK, dir_fd=folder_fd)
     except FileNotFoundError:
         return None
     except OSError as exc:

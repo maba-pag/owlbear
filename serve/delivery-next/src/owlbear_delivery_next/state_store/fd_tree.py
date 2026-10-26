@@ -116,7 +116,7 @@ def keep_entry(dfd: int, name: str) -> str:
 def read_at(dfd: int, name: str) -> str | None:
     """The text of regular file *name* under *dfd*, or None when it is absent; a link or other entry is an OSError."""
     try:
-        fd = os.open(name, FILE_FLAGS, dir_fd=dfd)
+        fd = os.open(name, FILE_FLAGS | os.O_NONBLOCK, dir_fd=dfd)
     except FileNotFoundError:
         return None
     try:
