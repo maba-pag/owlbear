@@ -187,9 +187,7 @@ def _identity(
     maintenance: Maintenance, key: str, record: dict[str, object], version: str
 ) -> tuple[str, datetime | None]:
     """A legacy record's generation: the one an older host's rewrite of this file version was given, else its own."""
-    if version not in {"", "absent"} and (got := maintenance.receipted(key, pack_state.digest(version))):
-        return got, None
-    return pack_state.generation(record, version)
+    return pack_state.resolved(record, version, lambda found: maintenance.receipted(key, found))
 
 
 def _hold(  # noqa: PLR0913 - one run's identity and what its hold records with it

@@ -14,6 +14,7 @@ from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.local_system.storage_io import atomic_write
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from pathlib import Path
 
     from owlbear_delivery_next.design_packs import pack_git
@@ -185,6 +186,18 @@ def digest(version: str) -> str:
     return hashlib.sha256(version.encode()).hexdigest()
 
 
+def resolved(record: dict[str, Any], version: str, receipted: Callable[[str], str]) -> tuple[str, datetime | None]:
+    """A legacy record's generation as every reader takes it, the receipt for its very version first.
+
+    That is the run a rewrite of this very file version was receipted to, else the record's own: carried, proven or
+    fingerprinted. *receipted* answers from the machine's ledger for a version's digest, empty when it holds no
+    receipt, and raises when the ledger cannot be read: an unread receipt is never taken for none.
+    """
+    if version not in {"", "absent"} and (got := receipted(digest(version))):
+        return got, None
+    return generation(record, version)
+
+
 def interrupted(record: dict[str, Any], version: str) -> dict[str, str]:
     """A run an older host left running, as its record names it, with its generation taken before it is rewritten.
 
@@ -211,14 +224,17 @@ def ended(record: dict[str, Any], state: str, reason: str) -> None:
     record["context"] = None
 
 
-def settle(root: Path) -> bool:
+def settle(root: Path, *, receipted: Callable[[str], str]) -> bool:
     """Carry a legacy record's generation into the record itself, before its store is copied; whether it wrote.
 
     A copy is another file, so a fingerprint would name another run: the generation carried in the record names the
-    one this host saw. A running record without a workspace is ended as the Job's own rewrite ends it, still uncertain;
-    an uncertain failed one keeps every field. Nothing is held, recovered or released here, and a record already
-    carrying its generation, a modern one or any other is left as it is. Raises OSError or ValueError when the record
-    cannot be read or written: an unreadable record is never taken for a settled one.
+    one this host saw, resolved as every reader resolves it (see ``resolved``), so a rewrite an earlier host receipted
+    keeps the run it was receipted to. A running record without a workspace is ended as the Job's own rewrite ends it,
+    still uncertain; an uncertain failed one keeps every field. A run stopped while it was being published is left as
+    it is: no session runs then, its run and start prove it, and the Job's own startup puts its publication back to
+    the owner with its context whole. Nothing is held, recovered or released here, and a record already carrying its
+    generation, a modern one or any other is left as it is. Raises OSError or ValueError when the record cannot be read
+    or written, and whatever *receipted* raises: an unreadable record or ledger is never taken for a settled one.
     """
     got = observed(root)
     if got is None:
@@ -226,13 +242,12 @@ def settle(root: Path) -> bool:
     record, version = got
     if "workspace" in record or carried(record):
         return False
-    if record["state"] == "running":
-        interrupted(record, version)  # carries the run's generation, taken before this rewrite
-        ended(record, "failed", HOST_STOPPED)
-    elif legacy_uncertain(record):
-        record[REWRITTEN] = generation(record, version)[0]
-    else:
+    publishing = record["state"] == "running" and bool((record.get("context") or {}).get("publication"))
+    if publishing or not (record["state"] == "running" or legacy_uncertain(record)):
         return False
+    record[REWRITTEN] = resolved(record, version, receipted)[0]
+    if record["state"] == "running":
+        ended(record, "failed", HOST_STOPPED)  # as the Job's own rewrite ends it, carrying the generation it saw
     atomic_write(root / FILE, json.dumps(record, indent=1) + "\n")
     return True
 

@@ -13,6 +13,7 @@ import pytest
 
 from owlbear_delivery_next.local_system import maintenance
 from owlbear_delivery_next.local_system.slots import Slots
+from owlbear_delivery_next.local_system.storage_io import atomic_write
 from owlbear_delivery_next.pack_runs import pack_job, pack_state
 from owlbear_delivery_next.project_host import session_slots
 
@@ -62,18 +63,25 @@ def leases(owner: maintenance.Maintenance) -> list[tuple[str, str]]:
     return [(s["id"], s["state"]) for s in owner.read()["sessions"]]
 
 
+def settle(root: Path, owner: maintenance.Maintenance | None = None) -> bool:
+    """Settle *root* as the move would: against *owner*'s ledger for project ``p``, or as a folder no machine knows."""
+    if owner is None:
+        return pack_state.settle(root, receipted=lambda _digest: "")
+    return pack_state.settle(root, receipted=lambda found: owner.receipted("p", found))
+
+
 @pytest.mark.parametrize("identity", IDENTITIES.values(), ids=IDENTITIES.keys())
 def test_settling_a_running_record_carries_its_generation_and_a_second_settle_writes_nothing(tmp_path, identity):
     root = store(tmp_path, "clone", {"state": "running", **identity})
     before = pack_state.generation(*pack_state.observed(root))[0]
-    assert pack_state.settle(root) is True
+    assert settle(root) is True
     record = pack_state.read_only(root)
     assert (record["state"], record["reason"], record[pack_state.REWRITTEN]) == (
         "failed", pack_state.HOST_STOPPED, before,
     )  # fmt: skip
     assert (pack_state.legacy_uncertain(record), pack_state.generation(*pack_state.observed(root))[0]) == (True, before)
     settled = (root / pack_state.FILE).read_bytes()
-    assert pack_state.settle(root) is False
+    assert settle(root) is False
     assert (root / pack_state.FILE).read_bytes() == settled
 
 
@@ -81,7 +89,7 @@ def test_an_uncertain_failure_is_stamped_and_definitive_modern_idle_or_absent_re
     root = store(tmp_path, "uncertain", SDK_FAILED)
     before = pack_state.generation(*pack_state.observed(root))[0]
     kept = pack_state.read_only(root)
-    assert pack_state.settle(root) is True
+    assert settle(root) is True
     assert pack_state.read_only(root) == kept | {pack_state.REWRITTEN: before}  # every other field as it was
     for name, record in {
         "definitive": {"state": "failed", "reason": "candidate: RuntimeError: the download failed"},
@@ -90,8 +98,8 @@ def test_an_uncertain_failure_is_stamped_and_definitive_modern_idle_or_absent_re
     }.items():
         root = store(tmp_path, name, record)
         unchanged = (root / pack_state.FILE).read_bytes()
-        assert (pack_state.settle(root), (root / pack_state.FILE).read_bytes()) == (False, unchanged)
-    assert pack_state.settle(store(tmp_path, "absent")) is False
+        assert (settle(root), (root / pack_state.FILE).read_bytes()) == (False, unchanged)
+    assert settle(store(tmp_path, "absent")) is False
 
 
 def test_a_failed_stamp_leaves_the_record_whole_and_a_retry_carries_the_same_generation(tmp_path):
@@ -105,9 +113,9 @@ def test_a_failed_stamp_leaves_the_record_whole_and_a_retry_carries_the_same_gen
     with pytest.MonkeyPatch.context() as patch:
         patch.setattr(pack_state, "atomic_write", full)
         with pytest.raises(OSError, match="disk full"):
-            pack_state.settle(root)
+            settle(root)
     assert (root / pack_state.FILE).read_bytes() == original
-    assert pack_state.settle(root) is True
+    assert settle(root) is True
     assert pack_state.read_only(root)[pack_state.REWRITTEN] == before
 
 
@@ -115,7 +123,7 @@ def test_an_unreadable_record_is_refused_not_taken_for_settled(tmp_path):
     root = store(tmp_path, "clone")
     (root / pack_state.FILE).write_text("{")
     with pytest.raises(ValueError):  # noqa: PT011 - the reader's own refusal of a damaged record
-        pack_state.settle(root)
+        settle(root)
     assert (root / pack_state.FILE).read_text() == "{"
 
 
@@ -127,7 +135,7 @@ def held_then_copied(tmp_path: Path, record: dict, *, recovered: bool) -> tuple[
     [(a, _state)] = leases(first)
     if recovered:
         ledger(boot=20.0).recover(a, rebooted=True)
-    assert pack_state.settle(source) is True
+    assert settle(source, first) is True
     return source, copied(source, tmp_path), a
 
 
@@ -182,7 +190,7 @@ def test_a_proven_run_written_again_by_its_producer_after_settling_is_still_its_
     first = ledger()
     import_at(first, source)
     [(a, _state)] = leases(first)
-    pack_state.settle(source)
+    settle(source, first)
     continued = SDK_FAILED | {"run": "main-run", "started_at": STARTED}  # main's own later write: no carried field
     (source / pack_state.FILE).write_text(json.dumps(pack_job._blank() | continued) + "\n")  # noqa: SLF001
     owner = ledger()
@@ -214,3 +222,54 @@ def test_the_carried_generation_counts_only_on_an_uncertain_failed_legacy_record
         {"reason": "update: PackError: the updater ended with error: no result"},
     ):
         assert pack_state.generation(stamped | other, "v1")[0] != "observed:a"
+
+
+def receipted_rewrite(tmp_path: Path, *, recovered: bool) -> tuple[Path, str, str]:
+    """8dfa's state: A held for a running record with no identity, then its Job's rewrite and that rewrite's receipt.
+
+    The rewrite carries no generation, as 8dfa wrote it; the ledger's receipt maps its file version to A's.
+    """
+    root = store(tmp_path, "clone", {"state": "running"})
+    owner = ledger()
+    import_at(owner, root)
+    [(a, _state)] = leases(owner)
+    g0 = pack_state.generation(*pack_state.observed(root))[0]
+    record, _version = pack_state.observed(root)
+    pack_state.ended(record, "failed", pack_state.HOST_STOPPED)
+    version = pack_state.version_of(atomic_write(root / pack_state.FILE, json.dumps(record, indent=1) + "\n"))
+    owner.receipt("p", pack_state.digest(version), g0)
+    if recovered:
+        ledger(boot=20.0).recover(a, rebooted=True)
+    return root, a, g0
+
+
+@pytest.mark.parametrize("recovered", [False, True], ids=["held", "recovered"])
+def test_settling_a_receipted_rewrite_carries_the_receipted_run_so_neither_a_reread_nor_a_copy_holds_it_again(
+    tmp_path, recovered
+):
+    """Review on 7679: settling resolves the generation as restoration does, the receipt for this very version first."""
+    root, a, g0 = receipted_rewrite(tmp_path, recovered=recovered)
+    state = "recovered" if recovered else "held"
+    assert settle(root, ledger(boot=20.0)) is True
+    assert pack_state.read_only(root)[pack_state.REWRITTEN] == g0
+    for at in (root, copied(root, tmp_path)):  # read again where it is, then from its byte copy
+        for _ in range(2):
+            again = ledger(boot=20.0)
+            import_at(again, at)
+            assert leases(again) == [(a, state)]
+    later = tmp_path / "home"
+    (later / pack_state.FILE).unlink()
+    (later / pack_state.FILE).write_text(json.dumps(pack_job._blank() | {"state": "running"}) + "\n")  # noqa: SLF001
+    owner = ledger(boot=20.0)
+    import_at(owner, later)
+    assert [s for _, s in leases(owner)] == [state, "held"]
+
+
+def test_settling_against_a_ledger_that_cannot_be_read_fails_closed_and_changes_nothing(tmp_path):
+    root, _a, _g0 = receipted_rewrite(tmp_path, recovered=False)
+    before = (root / pack_state.FILE).read_bytes()
+    owner = ledger()
+    owner.path.write_text('{"format": 1}')  # its sessions and receipts are missing: not an empty ledger
+    with pytest.raises(maintenance.MaintenanceError):
+        settle(root, owner)
+    assert (root / pack_state.FILE).read_bytes() == before

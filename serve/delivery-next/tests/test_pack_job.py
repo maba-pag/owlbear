@@ -39,8 +39,8 @@ from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.local_system.maintenance import Maintenance
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.local_system.slots import Slots
-from owlbear_delivery_next.pack_runs import pack_gates, pack_job, pack_publish, pack_rounds, pack_updater
-from owlbear_delivery_next.project_host import api
+from owlbear_delivery_next.pack_runs import pack_gates, pack_job, pack_publish, pack_rounds, pack_state, pack_updater
+from owlbear_delivery_next.project_host import api, session_slots
 from owlbear_delivery_next.project_host.admission import STOPPING
 from owlbear_delivery_next.project_host.host import ENDING, HostRecord
 from owlbear_delivery_next.runtimes.session_result import Run
@@ -1193,6 +1193,46 @@ def test_a_host_stop_during_publication_waits_for_the_owner_instead_of_failing(t
     fakes.github.checks = ["success"]
     assert answered(again, "retry")["state"] == "passed"
     assert fakes.github.calls == ["create", "merge", "delete"]  # the open pull request was found again
+
+
+def test_settling_a_publication_the_host_stopped_leaves_it_whole_and_its_copy_still_waits_for_the_owners_retry(
+    tmp_path, checkout, clone, monkeypatch
+):
+    """Review on 7679: no session runs while a run is published, and the Job's own startup returns it to the owner.
+
+    So settling leaves the record as main wrote it, context and publication whole; a byte copy of the store asks the
+    owner again, keeps the one lease the stop was held under, and retries only when he answers.
+    """
+    fakes = Fakes(clone)
+    store = Store(tmp_path / "store")
+    job = pack_job.Job(store, fakes.live(checkout))
+    fakes.github.checks = ["failure"]
+    assert run(job)["state"] == "waiting"
+    kept = json.loads((store.root / pack_job.FILE).read_text())
+    kept["state"], kept["questions"] = "running", []  # as if main's host stopped while CI ran
+    del kept["workspace"]  # main's record: no per-run workspace
+    (store.root / pack_job.FILE).write_text(json.dumps(kept))
+    publication = kept["context"]["publication"]
+    owner = Maintenance(Slots(lambda: 2), boot=lambda: 10.0, observe=lambda *_args: False)
+    monkeypatch.setattr(session_slots.project_home, "current", lambda repo: repo)
+    session_slots.unloaded(owner, "p", store.root)  # the stop is held while the store cannot open
+    [a] = owner.read()["sessions"]
+    before = (store.root / pack_job.FILE).read_bytes()
+    assert pack_state.settle(store.root, receipted=lambda found: owner.receipted("p", found)) is False
+    assert (store.root / pack_job.FILE).read_bytes() == before
+
+    home = tmp_path / "home"
+    shutil.copytree(store.root, home)  # the offline move's byte copy: every file a new one
+    again = pack_job.Job(Store(home), fakes.live(checkout))
+    (q,) = again.read()["questions"]
+    assert (again.read()["state"], q["kind"]) == ("waiting", "publish")
+    assert json.loads((home / pack_job.FILE).read_text())["context"]["publication"] == publication  # root, body too
+    session_slots.unloaded(owner, "p", home)
+    assert [(s["id"], s["state"]) for s in owner.read()["sessions"]] == [(a["id"], "held")]
+    assert fakes.github.calls == ["create"]  # nothing was retried without the owner
+    fakes.github.checks = ["success"]
+    assert answered(again, "retry")["state"] == "passed"
+    assert fakes.github.calls == ["create", "merge", "delete"]
 
 
 def test_a_retry_after_update_branch_goes_on_and_a_lost_create_answer_still_gets_its_labels(tmp_path, checkout, clone):
