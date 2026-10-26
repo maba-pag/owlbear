@@ -96,6 +96,8 @@ TIMED_OUT = "timed out"
 
 
 def git(cwd, *args):
+    if (cwd / "HEAD").is_file():  # a bare repository: safe.bareRepository=explicit wants it named
+        args = ("--git-dir=.", *args)
     done = subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True)  # noqa: S603, S607
     return done.stdout.strip()
 
