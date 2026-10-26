@@ -527,6 +527,14 @@
 - [README.md](../README.md)
 - [knowledge-mcp README](../serve/knowledge-mcp/README.md)
 
+## serve/knowledge/prompts/kb-enrich.prompt.md
+- ## `Execution Contract`
+- ## `Worker loop`
+
+## serve/knowledge/prompts/kb-ingest.prompt.md
+- ## `Interaction Protocol`
+- ## `What this does`
+
 ## serve/knowledge/src/owlbear_knowledge/protocols/ARCHITECTURE.md
 - # `Knowledge Module — Protocol Architecture`
 - ## `Overview`
@@ -816,7 +824,6 @@
 - [Agents](../share/README.md#agents)
 - [Skills](../share/README.md#skills)
 - [Instructions](../share/README.md#instructions)
-- [Prompts](../share/README.md#prompts)
 - [Effective instruction stack](../share/README.md#effective-instruction-stack)
 - [WIRING.md](../share/WIRING.md)
 - [Validation](../share/README.md#validation)
@@ -878,73 +885,6 @@
 ## share/instructions/python.instructions.md
 
 ## share/instructions/research-docs.instructions.md
-
-## share/prompts/arch-audit.prompt.md
-- # `Architecture Module Quality Audit`
-- ## `Step 1 - Load the standard first`
-- ## `Step 2 - Discover and define audit units`
-- ## `Step 3 - Evaluate with full vocabulary`
-- ## `Step 4 - Output format`
-- ## `Step 5 - Optional follow-up tasks`
-
-## share/prompts/architecture-review.prompt.md
-- # `Architecture Review`
-- ## `Step 1 - Load Context`
-- ## `Step 2 - Explore Friction`
-- ## `Step 3 - Present Candidates`
-- ## `Step 4 - Explore the Selected Design`
-
-## share/prompts/frontend-audit.prompt.md
-- # `Frontend Audit`
-- ## `Interaction Protocol`
-- ## `Step 1 - Load standards and discover context`
-- ## `Step 2 - Plan and scope`
-- ## `Step 3 - Execute audit`
-- ## `Step 4 - Present and close`
-- ## `Guardrails`
-
-## share/prompts/kb-enrich.prompt.md
-- ## `Execution Contract`
-- ## `Worker loop`
-
-## share/prompts/kb-ingest.prompt.md
-- ## `Interaction Protocol`
-- ## `What this does`
-
-## share/prompts/legacy-audit.prompt.md
-- # `Legacy Audit`
-- ## `Interaction Protocol`
-- ## `Step 1 - Load authority and scope`
-- ## `Step 2 - Execute scan checks`
-- ## `Step 3 - Produce ranked cleanup report`
-- ## `Step 4 - Guardrails and closeout`
-- ## `Guardrails`
-
-## share/prompts/memory-audit.prompt.md
-- # `Memory Review`
-- ## `Interaction Protocol`
-- ## `0. Tool Bootstrap`
-- ## `1. Authority And Boundaries`
-- ## `2. Session Preflight`
-- ## `3. Review Workflow`
-- ### `3.1 Batch Base Read`
-- ### `3.2 Initial Save/Drop Cases`
-- ### `3.3 Keep Test`
-- ### `3.4 Context Escalation`
-- ### `3.5 Mandatory Adversarial Lane`
-- ### `3.6 Forced Batch Ranking And Scarcity`
-- ### `3.7 Exceptional-State Handoff`
-- ## `4. Review Card`
-- ## `5. Actions`
-- ### `Approve`
-- ### `Edit Before Approval`
-- ### `Reject Or Retire`
-- ### `Skip`
-- ## `6. Continuation And Batch Review Helper`
-- ## `7. Tool Failure Rules`
-
-## share/prompts/test-curation.prompt.md
-- ## `Execution Contract`
 
 ## share/skills/h-agent-structure/SKILL.md
 - # `Agent Ecosystem Structure`

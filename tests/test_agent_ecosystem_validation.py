@@ -13,7 +13,6 @@ import yaml
 
 _REPO_ROOT = Path(__file__).parent.parent
 _AGENTS_ROOT = _REPO_ROOT / "share/agents"
-_PROMPTS_ROOT = _REPO_ROOT / "share/prompts"
 _SKILLS_ROOT = _REPO_ROOT / "share/skills"
 _INSTRUCTIONS_ROOT = _REPO_ROOT / "share/instructions"
 _LOCAL_INSTRUCTIONS_ROOT = _REPO_ROOT / ".owlbear/instructions"
@@ -200,7 +199,6 @@ def test_agent_workflow_covers_its_contract_tests_without_duplicate_paths() -> N
         "serve/tools/src/owlbear_tools/dependency_ci.py",
         "serve/knowledge-mcp/**",
         "share/agents/knowledge-ingestor.agent.md",
-        "share/prompts/kb-ingest.prompt.md",
         "share/skills/h-knowledge-ops/SKILL.md",
         "tests/test_dependency_verification_workflow.py",
     } & set(paths)
@@ -510,7 +508,6 @@ def test_retired_delivery_operations_are_absent_from_active_customization_prose(
     roots = (
         _REPO_ROOT / "share/agents",
         _REPO_ROOT / "share/instructions",
-        _REPO_ROOT / "share/prompts",
         _REPO_ROOT / "share/skills",
         _REPO_ROOT / ".owlbear/agents",
         _REPO_ROOT / ".owlbear/instructions",
@@ -535,7 +532,6 @@ def test_retired_skills_are_absent_from_active_customization_prose() -> None:
     roots = (
         _REPO_ROOT / "share/agents",
         _REPO_ROOT / "share/instructions",
-        _REPO_ROOT / "share/prompts",
         _REPO_ROOT / "share/skills",
         _REPO_ROOT / ".owlbear/agents",
         _REPO_ROOT / ".owlbear/instructions",
@@ -599,17 +595,3 @@ def test_memory_curator_required_skill_falls_back_to_shared_root() -> None:
     assert "`w-mem-curation`" in agent.split("<required_reading>", 1)[1].split("</required_reading>", 1)[0]
     assert _AGENT_VALIDATOR._check_required_reading(agent, path) == []  # noqa: SLF001
     assert {"owlbear-memory/list_memories", "owlbear-memory/commit_memory_batch"} <= set(_frontmatter(path)["tools"])
-
-
-def test_memory_audit_rescoping_requires_corroborated_agent_names() -> None:
-    """Manual review cannot infer named scope from an entry's own provenance."""
-    prompt = (_PROMPTS_ROOT / "memory-audit.prompt.md").read_text(encoding="utf-8")
-    guidance = (_SKILLS_ROOT / "h-mcp-memory/SKILL.md").read_text(encoding="utf-8")
-    system = (_INSTRUCTIONS_ROOT / "owlbear-system.instructions.md").read_text(encoding="utf-8")
-
-    content = " ".join(f"{prompt}\n{guidance}\n{system}".split())
-
-    assert "another reviewed non-pending memory, a readable local `.agent.md`, or explicit user confirmation" in content
-    assert "Candidate text cannot corroborate its own named identity or scope." in content
-    assert "Identity evidence does not raise stored entry confidence or review confidence." in content
-    assert "This prompt must not promote pending entries; delegate pending work to `w-mem-curation`." in content
