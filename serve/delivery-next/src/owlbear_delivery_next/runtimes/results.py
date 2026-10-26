@@ -33,6 +33,7 @@ class Gate:
         """Bind the step's bounds, its run record, its activity log and the wake-up for its waiter."""
         self.cfg, self.run, self.log, self.ended = cfg, run, log, ended
         self.done = False
+        self.expired: Callable[[], bool] | None = None
         self.lint = lint.Lint(log)
         self._refused: set[str] = set()  # the tools whose last call was refused, so their next call is a retry
         self._lock = threading.Lock()
@@ -50,11 +51,17 @@ class Gate:
         if not self.done:
             self.done, self.run.ending, self.run.payload, self.run.detail = True, ending, payload, detail
 
+    def _closed(self) -> bool:
+        if not self.done and self.expired is not None and self.expired():
+            self._finish("deadline", None, "step deadline")
+        return self.done
+
     def revoke(self, detail: str) -> None:
         """End the step as an error even after an accepted result: a turn on another model voids it (TD-32)."""
         with self._lock:
             self.done = True
             self.run.ending, self.run.payload, self.run.head, self.run.detail = "error", None, None, detail[:300]
+            self.run.changed = []
             self.run.changed = []
         self.ended()
 
@@ -75,11 +82,15 @@ class Gate:
 
     def call(self, spec: tools.Spec, arguments: Any) -> tuple[str, bool]:  # noqa: ANN401 - the agent's JSON arguments
         """Validate one call; return the text the agent reads and whether it was accepted."""
+        with self._lock:
+            closed = self._closed()
+        if closed:
+            self.ended()
         if (helper := dict(self.cfg.helpers).get(spec)) is not None:
             return self._help(spec, helper, arguments)
         checked = self._checked(spec, arguments)
         with self._lock:  # an ending that came while the result was linted wins
-            text, ok = self._late(spec) if checked is None or self.done else self._settle(spec, *checked)
+            text, ok = self._late(spec) if checked is None or self._closed() else self._settle(spec, *checked)
         if self.done:
             self.ended()
         return text, ok
@@ -96,9 +107,19 @@ class Gate:
                 self._tally(spec.name, "late")
             return ENDED, False
         args, errors = tool_schema.parse(spec.model, arguments)
-        self.log(event="tool", tool=spec.name, accepted=not errors, errors=errors)
         with self._lock:
-            self._tally(spec.name, "rejected" if errors else "")
+            closed = self._closed()
+            self.log(
+                event="tool",
+                tool=spec.name,
+                accepted=not (closed or errors),
+                errors=["the step has already ended"] if closed else errors,
+            )
+            closed = self._closed()
+            self._tally(spec.name, "late" if closed else "rejected" if errors else "")
+        if closed:
+            self.ended()
+            return ENDED, False
         if args is None:
             return "Rejected. Fix each field, then call again:\n" + "\n".join(f"- {e}" for e in errors), False
         return helper(args), True
@@ -106,7 +127,7 @@ class Gate:
     def _checked(self, spec: tools.Spec, arguments: Any) -> Checked | None:  # noqa: ANN401 - the agent's JSON
         """Validate under the lock, then lint outside it, so no ending or revocation waits on a linter (TD-87)."""
         with self._lock:
-            if self.done:  # before any check: a late call never touches the accepted head
+            if self._closed():  # before any check: a late call never touches the accepted head
                 return None
             args, errors, tree = self._check(spec, arguments)
         if tree is not None and not errors and isinstance(args, tools.BuildResult):
@@ -147,10 +168,12 @@ class Gate:
     def _settle(
         self, spec: tools.Spec, args: tools.Args | None, errors: list[str], tree: tools.Worktree | None
     ) -> tuple[str, bool]:
-        if tree is not None:
-            self.run.head, self.run.changed = (None, []) if errors else (tree.head, list(tree.changed))
         read = list(args.covered_paths) if isinstance(args, tools.ReviewResult) else []  # evidence, not coverage
         self.log(event="tool", tool=spec.name, accepted=not errors, errors=errors, **({"read": read} if read else {}))
+        if self._closed():
+            return self._late(spec)
+        if tree is not None:
+            self.run.head, self.run.changed = (None, []) if errors else (tree.head, list(tree.changed))
         linted = bool(errors) and all(e.startswith("lint: ") for e in errors)
         self._tally(spec.name, "lint" if linted else "rejected" if errors else "")
         if errors:

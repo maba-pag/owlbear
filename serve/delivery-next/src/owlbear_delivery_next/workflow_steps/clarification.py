@@ -10,7 +10,6 @@ again; it is never taken for a pass. Its spend counts like any session's.
 
 from __future__ import annotations
 
-import asyncio
 import tempfile
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -23,7 +22,7 @@ from owlbear_delivery_next.change_contracts.failures import cause_key
 from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit
 from owlbear_delivery_next.change_flow import answer_kinds, loop
 from owlbear_delivery_next.change_flow.loop import StepResult
-from owlbear_delivery_next.runtimes import sdk_adapter, step_decisions
+from owlbear_delivery_next.runtimes import loop_owner, sdk_adapter, step_decisions
 from owlbear_delivery_next.workflow_steps import pick, sessions
 
 if TYPE_CHECKING:
@@ -125,4 +124,4 @@ def _session(store: Store, lock: Lock, c: Change, said: str) -> Run:
     with tempfile.TemporaryDirectory(prefix="owlbear-clarify-") as folder:
         journal = sdk_adapter.Journal(lambda e: store.log(lock, c.slug, e))
         cfg = pick.config(settings, Path(folder), session, said, journal, submit=pick_tools.CLARIFY, job=LABEL)
-        return asyncio.run(sdk_adapter.run(cfg))
+        return loop_owner.run(sdk_adapter.run(cfg))
