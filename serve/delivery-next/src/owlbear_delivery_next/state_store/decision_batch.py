@@ -147,14 +147,41 @@ def owned(root: Path, images: dict[Path, tuple[bytes | None, bytes | None]]) -> 
 def restored(root: Path, before: dict[Path, bytes | None]) -> bool:
     """Whether every file is plain under *root* and holds exactly its before image (absent for none), once durable.
 
-    The folders are fsynced first and the files read after, so a file changed during that fsync is seen.
+    The folders are fsynced first and the files read after, so a file changed during that fsync is seen. A file that
+    had no before image may lie under folders that never existed (`_absent`); one that had must be a plain file.
     """
     try:
         for folder in {path.parent for path in before if path.parent.exists()}:
             fsync_dir(folder)
-        return all(plain_in_checkout(root, path) and _held(path) == text for path, text in before.items())
+        return all(
+            _absent(root, path) if text is None else plain_in_checkout(root, path) and _held(path) == text
+            for path, text in before.items()
+        )
     except OSError:
         return False
+
+
+def _absent(root: Path, path: Path) -> bool:
+    """Whether *path* and every missing folder above it are absent, below a plain folder of the checkout *root*.
+
+    That folder, the one holding the first missing name, is fsynced and the name read again after it, so the absence is
+    durable. Only a name that is not there counts as absent: any other error (no permission, a file where a folder
+    belongs) raises, and a symlink or a non-folder on the way refuses. Nothing is created to prove it.
+    """
+    first = path
+    while first.parent != root and not _exists(first.parent):
+        first = first.parent
+    fsync_dir(first.parent)
+    return plain_in_checkout(root, first) and not _exists(first)
+
+
+def _exists(path: Path) -> bool:
+    """Whether *path* names anything, a symlink included; only a missing name is False, other errors raise."""
+    try:
+        os.lstat(path)
+    except FileNotFoundError:
+        return False
+    return True
 
 
 def _encode(batch: Batch) -> bytes:

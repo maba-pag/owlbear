@@ -17,6 +17,7 @@ import pytest
 
 from owlbear_decisions import Decision, DecisionError, Link, LinkType, Origin, Scope, State, new_id, write
 from owlbear_decisions.storage import serialize
+from owlbear_delivery_next.change_contracts import pick_tools
 from owlbear_delivery_next.local_system import storage_io
 from owlbear_delivery_next.local_system.data_repo import DataRepo, DataRepoError
 from owlbear_delivery_next.state_store import (
@@ -1297,3 +1298,97 @@ def test_abandon_completes_only_when_every_file_holds_exactly_its_before_image(p
     assert updated.read_bytes() == before
     assert decision_batch.pending(shared).generation == generation
     _no_authority(picking)
+
+
+def test_abandoning_a_save_stopped_before_its_first_folder_completes_and_unblocks_authority(picking, monkeypatch):
+    """The save journalled a file under folders that never existed and stopped in make_dirs' first fsync."""
+    _seed(picking)
+    shared = picking.shared
+    new = make(project="new-site", title="Use UTC", statement="All timestamps use UTC.")
+
+    def stopped_in_the_first_fsync(_path):
+        msg = "interrupted in make_dirs' first fsync"
+        raise RuntimeError(msg)
+
+    with monkeypatch.context() as m:
+        m.setattr(storage_io, "fsync_dir", stopped_in_the_first_fsync)
+        with pytest.raises(RuntimeError, match="first fsync"):
+            decision_store.save(shared, new, expected_revision=None, message="decisions: before any folder")
+    generation = decision_batch.pending(shared).generation
+    assert not (shared.root / "new-site").exists()
+    head, index = shared.git("rev-parse", "HEAD").stdout, shared.git("ls-files", "-s").stdout
+    names = sorted(p.name for p in shared.root.iterdir())
+
+    assert decision_recovery.abandon(shared, generation).done
+
+    assert decision_batch.pending(shared) is None
+    assert not (shared.root / "new-site").exists()  # nothing is made to prove that nothing was there
+    assert sorted(p.name for p in shared.root.iterdir()) == names
+    assert (shared.git("rev-parse", "HEAD").stdout, shared.git("ls-files", "-s").stdout) == (head, index)
+    assert decision_store.load(shared, PROJECT).snapshot is not None
+    picking.picks.clear()
+    picking.picks.append(pick_tools.PickResult(picked=[]))
+    pickers = len(picking.pickers())
+    answer, done = lookup.chat(shared, PROJECT, "Which timestamps apply?", picking.store.settings)
+    assert answer == {"decisions": []}
+    assert done is not None
+    assert len(picking.pickers()) == pickers + 1  # authority is readable again, so the picker runs
+
+
+def _shape(case: str, site: Path, path: Path, outside: Path) -> None:
+    """Lay out the folders above *path* for *case*; `never-existed` leaves them all missing."""
+    if case in {"existing-folder", "recreated", "recreated-symlink"}:
+        path.parent.mkdir(parents=True)
+    if case == "symlink-prefix":
+        site.symlink_to(outside, target_is_directory=True)
+    elif case == "file-prefix":
+        site.write_text("a file where a folder belongs\n")
+    elif case == "no-permission":
+        site.mkdir()
+        site.chmod(0)
+    elif case == "recreated":
+        path.write_text("the owner's file\n")
+    elif case == "recreated-symlink":
+        path.symlink_to(outside / "missing.md")
+
+
+@pytest.mark.parametrize(
+    ("case", "absent"),
+    [
+        ("never-existed", True),
+        ("existing-folder", True),
+        ("symlink-prefix", False),
+        ("file-prefix", False),
+        ("no-permission", False),
+        ("recreated", False),
+        ("recreated-symlink", False),
+    ],
+)
+def test_a_before_absent_file_is_proved_absent_only_under_plain_existing_folders(tmp_path, monkeypatch, case, absent):
+    root = tmp_path / "checkout"
+    (root / ".git").mkdir(parents=True)
+    site = root / "new-site"
+    path = site / "decisions" / "a1.md"
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    synced: list[Path] = []
+    real_fsync = decision_batch.fsync_dir
+
+    def recording_fsync(folder):
+        synced.append(Path(folder))
+        real_fsync(folder)
+
+    _shape(case, site, path, outside)
+    monkeypatch.setattr(decision_batch, "fsync_dir", recording_fsync)
+    try:
+        assert decision_batch.restored(root, {path: None}) is absent
+    finally:
+        if case == "no-permission":
+            site.chmod(0o755)
+
+    assert sorted(p.name for p in outside.iterdir()) == []  # nothing is made behind a link
+    if case == "never-existed":
+        assert not site.exists()  # nothing is made to prove the absence
+        assert root in synced  # the folder holding the first missing name is made durable
+    if case == "existing-folder":
+        assert path.parent in synced
