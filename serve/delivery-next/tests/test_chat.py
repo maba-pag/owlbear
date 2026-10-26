@@ -646,6 +646,9 @@ def test_yes_confirms_only_the_profile_and_local_files_need_their_own_consent(
     assert (asked, [p.exists() for p in written]) == ([], [False] * 2)
     assert setup.run(repo, [], yes=True, local_files="yes", ask=pytest.fail) == 0
     assert [p.exists() for p in written] == [True] * 2
+    server = json.loads(written[0].read_text())["mcpServers"][setup.SERVER]
+    assert server["args"] == ["-m", "owlbear_delivery_next", "mcp"]  # no path: it serves the folder it starts in
+    assert setup.registered(repo)
     assert not (home / ".copilot").exists()
     assert not (repo / ".vscode" / "tasks.json").exists()  # TD-281: opening a window never starts Delivery
     assert json.loads(written[1].read_text()) == {"chat.defaultToCopilotHarness": True}  # TD-275: read at window start
