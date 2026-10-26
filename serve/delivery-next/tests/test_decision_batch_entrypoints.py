@@ -2900,3 +2900,52 @@ def test_a_finish_committed_here_whose_push_fails_says_so(picking, shared_repo, 
     assert "push failed" in done.notice
     assert _remote_main(remote) == published
     assert decision_batch.pending(shared) is None
+
+
+def test_an_owner_commit_made_while_the_push_is_refused_is_never_rebased(picking, shared_repo, monkeypatch):
+    """Another clone publishes first, so the batch commit B's exact push is refused; while that push runs the owner
+    commits C on B. Nothing is rebased: C keeps its own id, HEAD, index and bytes, the remote holds only the other
+    clone's commit, and the batch stays interrupted."""
+    _seed(picking)
+    shared, remote = picking.shared, shared_repo[1]
+    items, _, _ = _update_and_successor(picking)
+    other = shared.root.parent / "other"
+    subprocess.run(["git", "clone", "-q", str(remote), str(other)], check=True)  # noqa: S603, S607
+    owner, rebased, pushes = [], [], []
+    real_git, real_rebase = DataRepo.git, DataRepo.rebase
+
+    def push_refused_while_the_owner_commits(self, *args, **kwargs):
+        if args[:1] == ("push",) and not pushes:
+            pushes.append(args)
+            (other / "unrelated.txt").write_text("another clone\n")
+            for step in (
+                ["add", "-A"],
+                ["-c", "user.name=t", "-c", "user.email=t@e", "commit", "-qm", "o"],
+                ["push", "-q"],
+            ):
+                subprocess.run(["git", *step], cwd=other, check=True)  # noqa: S603, S607
+            owner.append((real_git(self, "rev-parse", "HEAD").stdout.strip(), _owner_unrelated_commit(self)))
+        return real_git(self, *args, **kwargs)
+
+    def recording_rebase(self, until=None):
+        rebased.append(1)
+        return real_rebase(self, until)
+
+    with monkeypatch.context() as m:
+        m.setattr(DataRepo, "git", push_refused_while_the_owner_commits)
+        m.setattr(DataRepo, "rebase", recording_rebase)
+        receipts = decision_store.save_all(shared, items, message="decisions: two")
+
+    ((batch_commit, owner_commit),) = owner
+    other_head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=other, check=True, capture_output=True, text=True)  # noqa: S607
+    assert pushes[0][-1] == f"{batch_commit}:refs/heads/main"  # B's exact push was the one refused
+    assert rebased == []  # nothing was replayed
+    assert not any(r.saved for r in receipts)
+    assert "nothing is rebased" in receipts[0].notice
+    assert shared.git("rev-parse", "HEAD").stdout.strip() == owner_commit  # C keeps its own id
+    assert shared.git("rev-parse", "HEAD~1").stdout.strip() == batch_commit
+    assert shared.git("status", "--porcelain").stdout == ""
+    assert (shared.root / "owner.txt").read_text() == "the owner's own work\n"
+    assert _remote_main(remote) == other_head.stdout.strip()
+    assert decision_batch.pending(shared) is not None
+    _no_authority(picking)

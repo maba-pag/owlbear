@@ -216,7 +216,7 @@ def publish(shared: DataRepo, paths: list[Path], message: str, until: float, hea
         return Sent()
     if refused := _rejected(shared, rels, pushed, until, own=bool(made)):
         return refused
-    return _rebase_push(shared, head, until, (rows, paths, rels, made))
+    return _rebase_push(shared, head, until, (rows, paths, rels, made, now))
 
 
 type Rows = dict[str, bytes] | None  # the batch's after images by path, or None outside a journalled batch
@@ -340,22 +340,38 @@ def _rejected(shared: DataRepo, rels: set[str], why: str, until: float, *, own: 
     return None
 
 
-def _rebase_push(shared: DataRepo, head: str, until: float, batch: tuple[Rows, list[Path], set[str], str]) -> Sent:
+def _not_rebased(shared: DataRepo, where: str, head: str, sent: str | None, until: float) -> Sent | None:
+    """Why nothing is rebased; then an owner's commit made meanwhile is never replayed or rewritten.
+
+    The batch's *head* must be on the remote, or a rebase would rewrite it; and HEAD, read after that remote probe and
+    immediately before the rebase, must still be *sent*, the commit whose push was refused.
+    """
+    if not _on_remote(shared, head, until):
+        notice = f"{where}, but {head[:12]} is not on the remote, so it is not rebased; the owner resolves it"
+        return Sent(notice=notice, ambiguous=True)
+    if sent is None or _rev(shared, "HEAD", until) != sent:
+        notice = f"{where}, but HEAD moved past the commit whose push was refused, so nothing is rebased; check it"
+        return Sent(notice=notice, ambiguous=True)
+    return None
+
+
+def _rebase_push(
+    shared: DataRepo, head: str, until: float, batch: tuple[Rows, list[Path], set[str], str, str | None]
+) -> Sent:
     """Rebase on the remote and push again; a rebase that would rewrite *head*, the batch's proof, is refused.
 
-    The rebased commit must be provably this save's own: its one commit replayed directly on the remote's branch and
-    changing only the batch's files, or, for a save that committed nothing, the remote's branch itself. It is checked to
-    hold the batch, and that very commit is what is pushed. An owner's commit made after the rebase is never pushed.
+    HEAD must still be the commit whose push was refused, read after the remote probes and immediately before the
+    rebase: an owner's commit made meanwhile is never replayed or rewritten. Afterwards the rebased commit must be
+    provably this save's own: its one commit replayed directly on the remote's branch and changing only the batch's
+    files, or, for a save that committed nothing, the remote's branch itself. It is checked to hold the batch, and
+    that very commit is what is pushed. An owner's commit made after the rebase is never pushed.
     """
     where = f"saved and committed in {shared.root}"
-    if not _on_remote(shared, head, until):  # a rebase would rewrite the batch's head: refused, the batch stays
-        return Sent(
-            notice=f"{where}, but {head[:12]} is not on the remote, so it is not rebased; the owner resolves it",
-            ambiguous=True,
-        )
+    rows, paths, rels, made, sent = batch
+    if refused := _not_rebased(shared, where, head, sent, until):
+        return refused
     if failed := shared.rebase(until):
         return _rebase_failed(shared, where, failed, until)
-    rows, paths, rels, made = batch
     rebased, upstream = _rev(shared, "HEAD", until), _rev(shared, UPSTREAM, until)
     own = _ours(shared, upstream, rels, until) if made and upstream else ""
     if rebased is None or rebased not in {own or upstream, upstream}:  # upstream itself: nothing of ours left to send
