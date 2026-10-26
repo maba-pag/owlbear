@@ -47,7 +47,7 @@ def clock(monkeypatch):
     return fake
 
 
-def configured(root):
+def configured(root, limit=0.05):
     return sdk_adapter.Session(
         kind=StepKind.BUILD,
         worktree=root,
@@ -58,7 +58,7 @@ def configured(root):
         observe=lambda: tools.Worktree("a" * 40, "b" * 40),
         checks=(),
         model="synthetic-model",
-        limit=0.05,
+        limit=limit,
     )
 
 
@@ -79,6 +79,25 @@ def test_a_real_valid_result_during_snapshot_is_accepted_only_before_the_cutoff(
         assert [accepted for _, accepted in replies] == [not late]
         assert step.run.ending == ("deadline" if late else "result")
         assert isinstance(step.run.payload, tools.BuildResult) is (not late)
+
+    asyncio.run(scenario())
+
+
+def test_a_one_second_session_rejects_a_valid_snapshot_result_arriving_at_two_seconds(tmp_path, clock):
+    async def scenario():
+        cfg = configured(tmp_path, limit=1.0)
+        step = STEP(cfg, asyncio.get_running_loop())
+        replies = []
+
+        async def listing():
+            clock.now += 2.0
+            replies.append(step.gate.call(cfg.submit, PAYLOAD.model_dump()))
+            return SimpleNamespace(tasks=[])
+
+        await asyncio.wait_for(step.wait(Session(listing)), 1)
+        assert [accepted for _, accepted in replies] == [False]
+        assert step.run.ending == "deadline"
+        assert step.run.payload is None
 
     asyncio.run(scenario())
 
