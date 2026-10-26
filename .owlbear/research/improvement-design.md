@@ -183,7 +183,9 @@ course.
   the turn, then resumes it with the note, or waits for the owner. Aborting and resuming a turn is not built yet.
 - **Asking the owner:** a stop-and-ask, or a repeated unresolved finding, asks him to allow it (a brief amendment his
   answer approves), run again with the reason, or replan the task with the whole plan in view
-  (D-01M5WB8V8ZRGZWWVS9K2CV209E).
+  (D-01M5WB8V8ZRGZWWVS9K2CV209E). Amendments come with item 16, after Improvement: until then "allow it" keeps the
+  step paused, as item 14's runner gate does for a brief change, while running again and replanning work from the
+  start.
 - **Outside writes:** W1a's reports stay on the Change, leaving out Delivery's own state, temporary files and tool
   caches; the state-change look sees every outside write, those included. Its findings on them stay record-only until
   Retro shows that class is worth it, but irreversible harm acts per its category at once
