@@ -86,6 +86,10 @@ jobs:
         if: steps.reuse.outputs.cache-hit != 'true'
         env:
           CI_SHARD_INDEX: ${{ matrix.shard }}
+          # Agent shells set safe.bareRepository=explicit; a test relying on finding a bare repository fails here too.
+          GIT_CONFIG_COUNT: 1
+          GIT_CONFIG_KEY_0: safe.bareRepository
+          GIT_CONFIG_VALUE_0: explicit
         run: |
           plugin_dir="$RUNNER_TEMP/ci-plugins"
           mkdir -p "$plugin_dir"
