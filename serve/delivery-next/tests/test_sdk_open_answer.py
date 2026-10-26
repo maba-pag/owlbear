@@ -109,3 +109,17 @@ def test_a_refused_first_send_is_never_acknowledged_as_delivered(tmp_path, monke
         _open(tmp_path, _Session(order, refuse=True), order, monkeypatch)
 
     assert [step[0] for step in order] == ["send"]
+
+
+def test_the_sources_outside_the_worktree_are_off_before_the_first_message(tmp_path, monkeypatch):
+    order = []
+
+    async def scoped(_session, worktree):
+        order.append(("scoped", worktree))
+        return ["home-copilot"]
+
+    monkeypatch.setattr(sdk_adapter, "own_instructions", scoped)
+    _open(tmp_path, _Session(order), order, monkeypatch)
+
+    assert [step[0] for step in order] == ["scoped", "send", "delivered"]
+    assert order[0][1] == tmp_path
