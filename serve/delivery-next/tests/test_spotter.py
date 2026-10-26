@@ -68,18 +68,10 @@ def ledger() -> dict[str, Any]:
     return json.loads((spotter.root() / f"ledger-{spotter._today()}.json").read_text())  # noqa: SLF001
 
 
-def judge(
-    answer: str = '{"verdict": "silent"}',
-    *,
-    wait: float = 0.0,
-    seen: list | None = None,
-    entered: asyncio.Event | None = None,
-) -> spotter.Judge:
+def judge(answer: str = '{"verdict": "silent"}', *, wait: float = 0.0, seen: list | None = None) -> spotter.Judge:
     async def look(the_card: dict[str, Any], _ctx: spotter.Context) -> tuple[str, float]:
         if seen is not None:
             seen.append(the_card)
-        if entered is not None:  # the look's model call has begun: its reservation and card are done
-            entered.set()
         await asyncio.sleep(wait)
         return answer, 0.25
 
@@ -182,8 +174,14 @@ def test_a_look_still_running_at_the_steps_end_is_recorded_skipped(monkeypatch) 
     monkeypatch.setattr(spotter, "DRAIN", 0.05)
 
     async def main() -> None:
-        entered = asyncio.Event()
-        spot = spotter.Spotter(ctx(), lambda: "s-1", judge(wait=5, entered=entered))
+        entered, never = asyncio.Event(), asyncio.Event()
+
+        async def pending_until_cancelled(_card: dict[str, Any], _ctx: spotter.Context) -> tuple[str, float]:
+            entered.set()  # the look's model call has begun: its reservation and card are done
+            await never.wait()  # never set: only the step's end, cancelling the look, ends it
+            return '{"verdict": "silent"}', 0.25
+
+        spot = spotter.Spotter(ctx(), lambda: "s-1", pending_until_cancelled)
         spot.handed_off("call-1", {})
         await asyncio.wait_for(entered.wait(), timeout=30)  # running when the step ends, not merely queued
         await spot.drain()
