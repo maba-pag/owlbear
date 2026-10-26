@@ -60,7 +60,7 @@ Renovate's pull requests come back now that the old engine is gone (owner, 2026-
 | Memory: the residuals of #238, #244 and #249; a chat's memory in its project's folder of `owlbear-data` (TD-72) | — | #548, #553 |
 | Decisions as confirmed intent (item 14): inherited decisions, saving at confirmation, the picker and lookups, answers classed by their relayer, the migration and the switch to `owlbear-data` (TD-466) | [decisions as confirmed intent](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/decision-intent-build.md) | #556 to #565, #570, #571 |
 | The workspace-era installer retired: Delivery's chat server path-free in the root `.mcp.json`, `share/prompts`, `setup/init.py` and `seed/`; `owlbear setup` offers the memory server for the shaper (`D-01M5TYMBBBHQRN172N977ND3VS`) | — | #665 to #667 |
-| No generated indexes, Archify diagrams or prompt files: agents find code by search and package READMEs, doc-audit and agent-audit are skills invoked by name (`D-01M5WA09V20PP0K0HV920FT3Q8`, `D-01M5WA09TYBTV36TBRZY1RWSY8`) | — | PR_NUMBER |
+| No generated indexes, Archify diagrams or prompt files: agents find code by search and package READMEs, doc-audit and agent-audit are skills invoked by name (`D-01M5WA09V20PP0K0HV920FT3Q8`, `D-01M5WA09TYBTV36TBRZY1RWSY8`) | — | #689 |
 
 ## 2. The Plan
 
