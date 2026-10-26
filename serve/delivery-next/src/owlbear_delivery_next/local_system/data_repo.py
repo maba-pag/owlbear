@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from owlbear_delivery_next.local_system import local_home
+from owlbear_delivery_next.local_system import batch_journal, local_home
 from owlbear_delivery_next.local_system.storage_io import atomic_write
 
 if TYPE_CHECKING:
@@ -265,11 +265,9 @@ class DataRepo:
         An interrupted batch may have left an incomplete commit in this checkout; another clone, holding no journal,
         would read it as settled decisions. Only the batch's own publisher and the owner's finish or abandon move it.
         """
-        from owlbear_delivery_next.state_store import decision_batch  # noqa: PLC0415 - the journal is the store's
-
         try:
-            batch = decision_batch.pending(self)
-        except decision_batch.JournalError as exc:
+            batch = batch_journal.pending(self)
+        except batch_journal.JournalError as exc:
             return f"the decision batch journal cannot be read ({str(exc)[:200]}); repair it in Decisions"
         if batch is None:
             return ""
