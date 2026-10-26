@@ -406,8 +406,30 @@ def _open(cwd: Path, proof: OfflineProof | None) -> Path:
     return target
 
 
+def _switched_source_at(folder_fd: int) -> None:
+    """Refuse a switched source whose marker is not the fence or a readable older format; nothing is written."""
+    try:
+        text = fd_tree.read_at(folder_fd, MARKER)
+    except OSError as exc:
+        msg = "the switched source's format marker is unreadable: nothing was changed"
+        raise StoreError(msg) from exc
+    value = text.strip() if text is not None else ""
+    if not value.isdigit():
+        msg = "the switched source has no readable format marker: nothing was changed"
+        raise StoreError(msg)
+    found = int(value)
+    if found == int(project_move.FENCE) or 1 <= found <= STORE_FORMAT:
+        return
+    if found > STORE_FORMAT:
+        msg = f"switched source format {found} is newer than {STORE_FORMAT}: nothing was changed"
+        raise FormatTooNewError(msg)
+    msg = f"switched source format {found} is not a known format: nothing was changed"
+    raise StoreError(msg)
+
+
 def _open_switched(folder_fd: int, target: Path, rec: dict, previous: int) -> None:
     """Admit the switched target by identity, keeping the source fenced; the source is never read or moved again."""
+    _switched_source_at(folder_fd)  # before the receipt is trusted, the source marker must be ours or known
     _switched_to(target, rec)
     held = _fence(folder_fd)  # the old path stays locked for as long as this process runs
     try:

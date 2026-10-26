@@ -120,6 +120,28 @@ def test_a_corrupt_switched_receipt_is_refused_by_registration_adoption_selfchec
 
 
 @pytest.mark.usefixtures("current_binding")
+@pytest.mark.parametrize(
+    "marker",
+    [pytest.param("1000\n", id="future-1000"), pytest.param(None, id="missing"), pytest.param("x9\n", id="malformed")],
+)
+def test_a_valid_switched_receipt_with_an_unknown_source_marker_is_refused_and_nothing_is_written(repo, boot, marker):
+    target = _finished_move(repo, boot)
+    source = _source(repo)
+    assert (source / MARKER).read_text() == f"{project_move.FENCE}\n"
+    if marker is None:
+        (source / MARKER).unlink()
+    else:
+        (source / MARKER).write_text(marker)
+    source_before, target_before = _snapshot(source), _snapshot(target)
+
+    with pytest.raises(StoreError):
+        Store.open(repo)
+
+    assert _snapshot(source) == source_before, "a refused open rewrote the switched source"
+    assert _snapshot(target) == target_before, "a refused open changed the active store"
+
+
+@pytest.mark.usefixtures("current_binding")
 @pytest.mark.parametrize("corrupt", CORRUPTIONS)
 def test_a_corrupt_switched_receipt_blocks_a_fresh_registration_without_a_new_move(repo, boot, corrupt):
     target = _finished_move(repo, boot)

@@ -263,10 +263,8 @@ def _owned(pfd: int, stage_name: str, rec: dict, *, complete: bool) -> None:
     sfd = _open_at(pfd, stage_name)
     try:
         names = set(os.listdir(sfd))  # noqa: PTH208 - listed by descriptor, not by path
-        if rec["stage_id"] is None:  # made but not yet recorded: only an empty folder can be ours
-            if names:
-                raise _unrecorded(stage)
-            return
+        if rec["stage_id"] is None:  # made but its identity was never recorded: never adopted, even when empty
+            raise _unrecorded(stage)
         if _ident(os.fstat(sfd)) != rec["stage_id"] or not _staged_ok(sfd, names, rec, complete=complete):
             raise _unrecorded(stage)
         if not all(_entry_ok(sfd, n, d) for n, d in rec["copied"].items()):

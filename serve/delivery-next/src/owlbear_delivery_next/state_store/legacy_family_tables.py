@@ -21,6 +21,7 @@ CURRENT_MODULES = (
     ("commands/runner.py", "886ad4fbb520a99b41511d4977d7bd17d5f282eb3dd4c65b03c132e69b59fc4a"),
     ("commands/setup.py", "0273f7a84e6583e2f51e9d831ca63380801b234648ff967d7eec18b8c503bde1"),
     ("commands/step_mcp.py", "94c3177cc5927009b80d25e2a9825f377749e2b543d1eb519b87b380ba7ee5bb"),
+    ("local_system/storage_io.py", "2cb5617c08597762aedf374a6139c0eada4a38ae9de898abdcfd2df3c5251f74"),
     ("machine_host/app.py", "f2a92a135cba196a18e8b21ecc7bb7d14748585c90fce2b4614853cfc9259938"),
     ("machine_host/command.py", "47df14591c557c39773616cbeedca135d8ac02affeeeb4d1843cd17cb9c68606"),
     ("machine_host/install.py", "3e161bd1a9cce9ed3cd2a8eb1a9945f0cc53c78a801f2dfa893207707e206321"),
@@ -34,7 +35,7 @@ CURRENT_MODULES = (
     ("state_store/offline_proof.py", "5a4fb1b44ab554ba5e1174da3ae195882284180371011e46da85f4472c344688"),
     ("state_store/offline_protocol.py", "5142f7302a0e813785c5dd7944496b31c483b3969fc6440cb53defa721208946"),
     ("state_store/switched_authority.py", "15843f18dd3f41f041144dc5d3bfbbe38a2b390450dffb72cff3a0c35ff32624"),
-    ("state_store/project_home.py", "a70d9cda4286ac46a3848e5aeadca67b558784d4e2e7acbd2254a99e43e71f37"),
-    ("state_store/project_move.py", "ce0dbdeb5fb27c2a2feb7ae0da8a0b151d8f0bb9aab6a55ef94577d99dabc81d"),
+    ("state_store/project_home.py", "c407b34a7d6addeeb80a98ede867195ed6edaeb8a1b6399fea836707258ca98c"),
+    ("state_store/project_move.py", "7a05dc5b908b9ede72eb6e82cdfbdc1b021dd8e398ce4a9ab44817c0ee78ee20"),
     ("state_store/store.py", "c93ae35c9fb506201ebb4ba6010c4be04fd6a8fb9f9ccb3cc1522fbc5e821561"),
 )

@@ -63,6 +63,18 @@ def test_a_current_function_change_is_an_unknown_build(current_binding: Binding)
     assert "current family modules differ from the candidate: state_store/project_home.py" in reasons[0]
 
 
+def test_a_current_lock_guard_change_is_an_unknown_build(current_binding: Binding) -> None:
+    _edit(
+        current_binding.package,
+        "local_system/storage_io.py",
+        'name: str = ".storage.lock")',
+        'name: str = ".storage.lock2")',
+    )
+    reasons = _reasons(current_binding)
+    assert len(reasons) == 1
+    assert "current family modules differ from the candidate: local_system/storage_io.py" in reasons[0]
+
+
 def test_a_current_constant_change_is_an_unknown_build(current_binding: Binding) -> None:
     _edit(current_binding.package, "state_store/database.py", "STORE_FORMAT = 7", "STORE_FORMAT = 8")
     reasons = _reasons(current_binding)

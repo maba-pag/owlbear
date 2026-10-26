@@ -470,6 +470,36 @@ def test_a_quarantined_entry_refusal_leaves_a_started_move_record_unchanged(clon
 WAL_FILES = ("delivery.db", "delivery.db-wal", "delivery.db-shm")
 
 
+def test_an_empty_stage_made_before_its_identity_was_recorded_is_never_adopted(clone, monkeypatch):
+    repo, folder = clone
+    target = project_home.home(SOURCE_ID)
+    stage = target.parent / project_move._stage_name(target)  # noqa: SLF001
+    real = project_move._save  # noqa: SLF001
+
+    def save(folder_arg, folder_fd, rec):
+        if rec["stage_id"] is not None and rec["proof"] is None:  # the stage_id record itself: crash before it lands
+            msg = "simulated crash"
+            raise CrashError(msg)
+        real(folder_arg, folder_fd, rec)
+
+    monkeypatch.setattr(project_move, "_save", save)
+    with pytest.raises(CrashError):
+        move(repo, monkeypatch)
+    before = stage.stat()
+    assert stage.is_dir()
+    assert not any(stage.iterdir())
+    heal(monkeypatch)
+
+    with pytest.raises(StoreError):
+        move(repo, monkeypatch)
+    after = stage.stat()
+    assert (after.st_ino, after.st_dev) == (before.st_ino, before.st_dev), "the unrecorded stage was replaced"
+    assert not any(stage.iterdir())
+    retired = target.parent / ".retired"
+    assert not retired.exists() or not any(retired.iterdir()), "the unrecorded stage was moved aside"
+    assert (folder / "changes" / "c1" / "runner.log").read_text() == "ran\n"
+
+
 def freeze_wal_store(folder, tmp_path):
     """Leave *folder* with an uncheckpointed WAL store and no open connection, as a crashed writer would."""
     writer = sqlite3.connect(folder / "delivery.db", isolation_level=None)
