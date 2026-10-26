@@ -283,7 +283,7 @@ def test_only_the_owner_schedules_fixes_and_accepts_existing_code(tmp_path, shar
 def test_the_machine_host_reports_on_every_project_it_serves(tmp_path, shared, monkeypatch):
     """Like the pinning Changes of every loaded project (slice 5a), a Global rule's impact covers them all."""
     (local_home.root() / "data.json").write_text(json.dumps({"repository": str(shared.root)}))
-    monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo: [])
+    monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
     monkeypatch.setattr(Host, "_spawn", lambda _self, slug: pytest.fail(f"no runner starts here ({slug})"))
     old, new = pair(scope=Scope.GLOBAL, project="")
     publish(shared, old, new)

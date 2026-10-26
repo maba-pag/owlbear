@@ -25,11 +25,13 @@ from owlbear_delivery_next.project_host import memory_routes
 from owlbear_delivery_next.runtimes import model_choices
 from owlbear_delivery_next.runtimes.catalogue import CATALOGUE
 from owlbear_delivery_next.settings.config import GlobalLayer, Layer, MachineLayer, resolve
+from owlbear_delivery_next.state_store import prefs_import, profile_share
 from owlbear_delivery_next.state_store.store import StoreError, read_layer_bytes, update_layer
 
 if TYPE_CHECKING:
     from pathlib import Path
 
+    from owlbear_delivery_next.change_contracts.profile_record import Profile
     from owlbear_delivery_next.project_host.host import Host
     from owlbear_delivery_next.settings.config import Settings
     from owlbear_delivery_next.state_store.store import Store
@@ -61,6 +63,11 @@ APPLIED = [
     "agents.picker.minutes",
     "pr_labels",
     "pr_marker",
+    "prefs.merge_method",
+    "prefs.delete_remote_branch",
+    "prefs.ci_poll_seconds",
+    "prefs.ci_start_window_seconds",
+    "prefs.ask_before_merge",
     *(f"agents.{role}.subagents" for role in ("planner", "builder", "reviewer", "challenger", "design-judge")),
     "agents.preparer.subagents",
     "agents.updater.subagents",  # TD-376; the shaper's chat runs in VS Code, not as a step
@@ -70,10 +77,14 @@ STARTING = 5.0  # seconds a folder rename waits for a runner launch or the host'
 
 
 class Save(BaseModel):
-    """One layer as the page edited it, and the revision of the layer it started from."""
+    """One layer as the page edited it, and the revision of the layer it started from.
+
+    ``prefs_reviewed`` is set only when the owner edited or cleared a Merge and cleanup preference on the page.
+    """
 
     rev: str
     layer: dict[str, Any]
+    prefs_reviewed: bool = False
 
 
 class Folder(BaseModel):
@@ -108,6 +119,13 @@ def _state(store: Store, notice: str = "") -> dict[str, Any]:
             f"The challenge-round values of the global layer and this machine do not fit together on their own "
             f"({alone[0]}); a project without its own values stops until you fix them there"
         )
+    try:
+        prof = store.read_profile()
+    except StoreError as exc:  # a profile this build cannot read is shown as its repair notice, never a 500
+        prof = None
+        notice = notice or f"{exc}; repair or replace the profile file, or update OwlBear if it is newer, then reload"
+    if not notice and prof is not None and prof.prefs_import == "pending":
+        notice = PREFS_REVIEW
     return {
         "project": project.model_dump(mode="json"),
         "project_rev": hashlib.sha256(project_raw).hexdigest(),
@@ -118,6 +136,7 @@ def _state(store: Store, notice: str = "") -> dict[str, Any]:
         "global_location": global_path is not None,
         "folder": store.name or None,
         "notice": notice or (store.shared.pending() if store.shared else ""),
+        "prefs_pending": prof is not None and prof.prefs_import == "pending",
         "settings": settings.page(),
         "inherited": {  # what a blank field in each layer resolves to: the layers below it only; None where unset
             "project": below.page(),
@@ -211,11 +230,12 @@ def _layers(stores: list[Store]) -> list[Layer]:
 
 
 def _save[T: Layer](  # noqa: PLR0913, PLR0917 - the host names this machine's projects for its layer
-    store: Store, path: Path, model: type[T], body: Save, what: str, host: Host
+    store: Store, path: Path, model: type[T], body: Save, what: str, host: Host, *, reviewed: bool = False
 ) -> str:
     """Validate the edited layer, write it if its file is still at ``body.rev``, publish it; return the notice.
 
-    This machine's layer is written in place and never published (TD-336).
+    This machine's layer is written in place and never published (TD-336). A reviewed legacy import latches
+    ``prefs_imported`` in the same write, and the latch is never lowered by a page that still holds the old value.
     """
     try:
         new = model.model_validate(body.layer)
@@ -225,16 +245,18 @@ def _save[T: Layer](  # noqa: PLR0913, PLR0917 - the host names this machine's p
     except StoreError as exc:
         raise HTTPException(409, str(exc)) from exc
 
-    def change(_current: T) -> T:
+    def change(current: T) -> T:
         if _rev(path) != body.rev:
             raise HTTPException(409, "the settings changed since this page loaded them")
-        return new
+        return new.model_copy(
+            update={"prefs_imported": current.prefs_imported or reviewed, "roles_moved": current.roles_moved}
+        )
 
     try:
         if isinstance(new, MachineLayer):
             update_layer(path, model, change)
             return ""
-        return store.save(path, model, change, what)
+        return store.save(path, model, change, what, owner=True)
     except StoreError as exc:
         raise HTTPException(409, str(exc)) from exc
     except OSError as exc:
@@ -283,6 +305,55 @@ def _rename(store: Store, host: Host, name: str) -> str:
     return notice
 
 
+PREFS_REVIEW = (
+    "the legacy preference import is pending: edit or clear the Merge and cleanup preferences below to review and "
+    "finish it"
+)
+
+
+def _retry_only(store: Store, body: Save) -> bool:
+    """A Settings save with no edit and no review while a refused completion waits, and the owner's config is absent."""
+    if store.config_path.exists() or body.prefs_reviewed or not profile_share.unpublished(store):
+        return False
+    try:
+        return Layer.model_validate(body.layer) == Layer()
+    except ValidationError:
+        return False
+
+
+def _project_notice(store: Store, host: Host, body: Save) -> str:
+    """Save the project layer from Settings; a retry with no edit only publishes the owner's removal."""
+    if not _retry_only(store, body):
+        what = f"{store.name or 'the project'}: from the settings page"
+        return _save(store, store.config_path, Layer, body, what, host, reviewed=body.prefs_reviewed)
+    if _rev(store.config_path) != body.rev:
+        raise HTTPException(409, "the settings changed since this page loaded them")
+    return ""
+
+
+def _intent_readable(store: Store) -> Profile | None:
+    """The profile a project save must read before it writes; an unreadable one refuses the save (409)."""
+    try:
+        return store.read_profile()
+    except StoreError as exc:
+        raise HTTPException(409, str(exc)) from exc
+
+
+def _settle_prefs_import(store: Store, *, reviewed: bool) -> None:
+    """Mark a pending legacy import reviewed through Settings, then publish a completion that failed earlier."""
+    prof = _intent_readable(store)
+    if prof is None:
+        return
+    if reviewed and prof.prefs_import in ("", "pending"):  # an explicit review also closes an unclaimed import
+        _, notice, _ = store.mark_prefs_import(prof.prefs_import, "done")
+        if notice:
+            raise HTTPException(503, f"the legacy preference import was not completed: {notice}")
+    try:
+        prefs_import.republish(store)
+    except StoreError as exc:
+        raise HTTPException(503, str(exc)) from exc
+
+
 def router(store: Store, host: Host) -> APIRouter:
     """The settings routes; the caller adds the token check."""
     routes, offered = APIRouter(), model_choices.Offered()
@@ -297,8 +368,11 @@ def router(store: Store, host: Host) -> APIRouter:
 
     @routes.put("/config/project")
     def put_project(body: Save) -> dict[str, Any]:
-        what = f"{store.name or 'the project'}: from the settings page"
-        return _state(store, _save(store, store.config_path, Layer, body, what, host))
+        _intent_readable(store)  # refused before the write: the import intent it must settle is unknown
+        notice = _project_notice(store, host, body)
+        if not notice:  # a publication notice leaves the import pending for a retry
+            _settle_prefs_import(store, reviewed=body.prefs_reviewed)
+        return _state(store, notice) | {"unpublished": notice}  # the page keeps its review intent until this is empty
 
     @routes.put("/config/global")
     def put_global(body: Save) -> dict[str, Any]:

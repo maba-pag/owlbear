@@ -74,7 +74,7 @@ from owlbear_delivery_next.project_host import host as scheduler
 from owlbear_delivery_next.runtimes import session_result
 from owlbear_delivery_next.runtimes.readiness import Check as SetupCheck
 from owlbear_delivery_next.runtimes.session_result import Run
-from owlbear_delivery_next.settings import profile
+from owlbear_delivery_next.settings import config, profile
 from owlbear_delivery_next.state_store.store import Lock, SharedError, Store
 from owlbear_delivery_next.workflow_steps import (
     check,
@@ -192,7 +192,10 @@ def prof(**extra):
     return profile.confirm(p, profile.RULES, "none", NOW)
 
 
-ASKING = {profile.ASK: ProfileEntry(state="known", value="yes")}
+def set_prefs(monkeypatch, **values):
+    """Override owner preferences on the test layer; the profile no longer carries them."""
+    base = config.BASE
+    monkeypatch.setattr(config, "BASE", base.model_copy(update={"prefs": base.prefs.model_copy(update=values)}))
 
 
 def ctx(tmp_path, gh, p=None, repo=None):
@@ -236,6 +239,7 @@ class RetiringGh(FakeGh):
 def test_cleanup_keeps_advanced_remote_work_and_the_owner_can_finish_without_deleting_it(
     clone,
     tmp_path,
+    monkeypatch,
     move_again,
     mode,
 ):
@@ -245,7 +249,8 @@ def test_cleanup_keeps_advanced_remote_work_and_the_owner_can_finish_without_del
     moved = git(clone, "rev-parse", "HEAD")
     git(clone, "push", "-q", "origin", "HEAD:refs/heads/owlbear/c1")
     gh = RetiringGh(pr(head=A, merged=True, state="closed", merge_commit_sha=A), remote)
-    p = prof(**{profile.DELETE: ProfileEntry(state="known", value="yes")})
+    set_prefs(monkeypatch, delete_remote_branch=True)
+    p = prof()
     cx, c = ctx(tmp_path, gh, p, repo=clone), change(StepKind.CLEANUP)
     c.step.mode = mode
     cx.store.write(cx.lock, c)
@@ -276,12 +281,15 @@ def test_cleanup_keeps_advanced_remote_work_and_the_owner_can_finish_without_del
     assert gh.deleted == []
 
 
-def test_a_retirement_pause_holds_cleanup_across_restart_and_remote_disappearance_until_resume(clone, tmp_path):
+def test_a_retirement_pause_holds_cleanup_across_restart_and_remote_disappearance_until_resume(
+    clone, tmp_path, monkeypatch
+):
     remote = tmp_path / "origin.git"
     git(clone, "commit", "-q", "--allow-empty", "-m", "new unmerged work")
     git(clone, "push", "-q", "origin", "HEAD:refs/heads/owlbear/c1")
     gh = RetiringGh(pr(head=A, merged=True, state="closed", merge_commit_sha=A), remote)
-    p = prof(**{profile.DELETE: ProfileEntry(state="known", value="yes")})
+    set_prefs(monkeypatch, delete_remote_branch=True)
+    p = prof()
     cx, c = ctx(tmp_path, gh, p, repo=clone), change(StepKind.CLEANUP)
     cx.store.write(cx.lock, c)
     c, result = cleanup.run(cx, c)
@@ -347,11 +355,12 @@ def test_a_paused_cleanup_decision_is_hidden_in_the_changes_api_until_resume(tmp
     assert loop.next_step(c, NOW + timedelta(seconds=1)) is not None
 
 
-def test_cleanup_still_automatically_retires_the_exact_merged_head(clone, tmp_path):
+def test_cleanup_still_automatically_retires_the_exact_merged_head(clone, tmp_path, monkeypatch):
     remote = tmp_path / "origin.git"
     git(clone, "push", "-q", "origin", "HEAD:refs/heads/owlbear/c1")
     gh = RetiringGh(pr(head=A, merged=True, state="closed", merge_commit_sha=A), remote)
-    p = prof(**{profile.DELETE: ProfileEntry(state="known", value="yes")})
+    set_prefs(monkeypatch, delete_remote_branch=True)
+    p = prof()
 
     cx, c = ctx(tmp_path, gh, p, repo=clone), change(StepKind.CLEANUP)
     cx.store.write(cx.lock, c)
@@ -370,11 +379,12 @@ def test_consent_holds_only_for_the_exact_head():
     assert merge_offer.consent(A, B) == "void"
 
 
-def test_a_head_change_voids_consent_shows_the_delta_and_asks_again(tmp_path, clone):
+def test_a_head_change_voids_consent_shows_the_delta_and_asks_again(tmp_path, clone, monkeypatch):
     gh = FakeGh(pr(head=A))
     c = change(worktree=str(clone))
     c.consent = MergeConsent(head=B, at=NOW)  # given while B waited for it
-    cx = ctx(tmp_path, gh, prof(**ASKING))
+    set_prefs(monkeypatch, ask_before_merge=True)
+    cx = ctx(tmp_path, gh, prof())
     _, result = merge.run(cx, c)
     offer = cx.events("c1", "merge-offer")[-1]
     assert (result.exit, result.cause) == (Exit.ASK, loop.CONSENT)
@@ -393,11 +403,12 @@ def test_a_locally_integrated_but_unpublished_head_goes_back_to_publish_and_neve
     assert gh.merges == []
 
 
-def test_a_pr_head_someone_else_pushed_goes_back_to_publish_without_reading_it_locally(tmp_path, clone):
+def test_a_pr_head_someone_else_pushed_goes_back_to_publish_without_reading_it_locally(tmp_path, clone, monkeypatch):
     gh = FakeGh(pr(head="f" * 40))  # an owner commit on the PR branch, never fetched into the worktree (live G2)
     final = Review(commit=A, inputs=Inputs(), verdict="pass", tree=git(clone, "rev-parse", "HEAD^{tree}"))
     c = loop.fold(change(worktree=str(clone), reviews=[final]), [ConsentItem(at=NOW, head=A)], NOW)
-    _, result = merge.run(ctx(tmp_path, gh, prof(**ASKING)), c)
+    set_prefs(monkeypatch, ask_before_merge=True)
+    _, result = merge.run(ctx(tmp_path, gh, prof()), c)
     cause = failures.cause_key(ErrorKind.GATE, StepKind.MERGE, "review")
     assert (result.exit, result.back_to, result.cause) == (Exit.BACK, StepKind.PUBLISH, cause)
     assert gh.merges == []
@@ -1220,7 +1231,13 @@ def test_a_pr_gets_the_projects_labels_once_and_the_marker_line_follows_its_swit
 
     gh.find_pull_request, gh.create_pull_request, gh.add_labels = (lambda *_a: gh.pr), create, add_labels
     cx = ctx(tmp_path, gh)
-    cx.store.update_config(lambda layer: layer.model_copy(update={"pr_labels": ["release:minor"], "pr_marker": False}))
+    labelled = {"pr_labels": ["release:minor"], "pr_marker": False}
+    assert (
+        cx.store.save(
+            cx.store.config_path, config.Layer, lambda layer: layer.model_copy(update=labelled), "setup", owner=True
+        )
+        == ""
+    )
     c = change(StepKind.PUBLISH)
     with pytest.raises(Interrupted):
         publish.pull_request(cx, c, A)
@@ -1231,7 +1248,13 @@ def test_a_pr_gets_the_projects_labels_once_and_the_marker_line_follows_its_swit
     assert said == {"labels-failed" if fails else "labels": (7, ["release:minor"])}
     publish.pull_request(cx, cx.store.read(c.slug), A)  # a runner that died right after labelling reads it back
     assert (len(added), cx.store.read(c.slug).names.labelled) == (1, 7)  # never again on this PR
-    cx.store.update_config(lambda layer: layer.model_copy(update={"pr_labels": None, "pr_marker": None}))
+    cleared = {"pr_labels": None, "pr_marker": None}
+    assert (
+        cx.store.save(
+            cx.store.config_path, config.Layer, lambda layer: layer.model_copy(update=cleared), "setup", owner=True
+        )
+        == ""
+    )
     gh.pr, c.names.labelled = None, None
     gh.create_pull_request = lambda *a: bodies.append(a[4]) or pr(head=A, draft=True)
     publish.pull_request(cx, c, A)
@@ -1412,12 +1435,13 @@ def merged(gh, sha=B):
     gh.after = gh.pr.model_copy(update={"state": "closed", "merged": True, "merge_commit_sha": sha})
 
 
-def test_without_ask_before_merge_a_gated_head_merges_without_consent(tmp_path, clone):
+def test_without_ask_before_merge_a_gated_head_merges_without_consent(tmp_path, clone, monkeypatch):
     gh = FakeGh(pr(head=A))
     merged(gh)
     _, result = merge.run(ctx(tmp_path, gh), change(worktree=str(clone)))
-    assert (result.exit, len(gh.merges), profile.value(prof(), profile.ASK, "no")) == (Exit.DONE, 1, "no")
-    asked = ctx(tmp_path, FakeGh(pr(head=A)), prof(**ASKING))
+    assert (result.exit, len(gh.merges)) == (Exit.DONE, 1)
+    set_prefs(monkeypatch, ask_before_merge=True)
+    asked = ctx(tmp_path, FakeGh(pr(head=A)), prof())
     _, result = merge.run(asked, change(worktree=str(clone)))
     assert (result.exit, result.cause) == (Exit.ASK, loop.CONSENT)
 
@@ -2505,7 +2529,7 @@ def test_the_profile_keeps_only_the_merge_methods_the_pull_request_rule_allows(c
         state="known", evidence="rules pull_request", allowed_methods=(MergeMethod.MERGE,)
     )
     found = profile.detect(clone, gh, None)
-    assert (profile.value(found, profile.METHODS), profile.value(found, profile.METHOD)) == ("merge", "merge")
+    assert (profile.value(found, profile.METHODS), profile.value(found, profile.METHOD)) == ("merge", "")
 
 
 @pytest.mark.parametrize(
@@ -2843,3 +2867,132 @@ def test_the_queue_read_takes_the_group_commit_and_the_latest_events():
     assert gh_queue._state(pull | {"timelineItems": {"nodes": nodes[:2]}}).removed_last is True  # noqa: SLF001
     building = pull | {"mergeQueueEntry": queued | {"headCommit": None, "state": "QUEUED"}}
     assert gh_queue._state(building).entry.group_sha is None  # noqa: SLF001 - no group is built yet
+
+
+# Owner-control RED (item 2): an unset merge method withdraws the queued PR before the owner is asked.
+
+
+def merge_method_unset(_cx, _c, _pull, _rules):
+    raise config.SettingsUnset(["merge_method"])
+
+
+def queued_unset_case(tmp_path):
+    gh = QueueGh(pr(head=A))
+    gh.state = QueueState(merged=False, open=True, head_sha=A, entry=entry(), added=ADDED)
+    c = change(worktree=str(tmp_path))
+    c.queue = QueueClaim(head=A, at=NOW, queued_at=NOW, settled=True)
+    cx = ctx(tmp_path, gh, qprof())
+    cx.store.root.mkdir(exist_ok=True)
+    return gh, c, cx
+
+
+def test_an_unset_merge_method_withdraws_the_queued_pr_before_the_owner_is_asked(tmp_path):
+    gh, c, cx = queued_unset_case(tmp_path)
+    with pytest.raises(config.SettingsUnset):
+        queue.run(cx, c, pr(head=A), QUEUED, merge_method_unset)
+    assert (gh.dequeued, gh.state.entry) == ([7], None)
+
+
+def test_an_unknown_withdrawal_keeps_the_barrier_and_asks_nothing(tmp_path):
+    gh, c, cx = queued_unset_case(tmp_path)
+    gh.dequeue_fails = True
+    c, result = queue.run(cx, c, pr(head=A), QUEUED, merge_method_unset)
+    assert (result.exit, result.waiting, c.queue is not None, gh.state.entry is not None) == (
+        Exit.PENDING,
+        Waiting.GITHUB,
+        True,
+        True,
+    )
+
+
+@pytest.fixture
+def both_prefs_unset(tmp_path, monkeypatch):
+    """A real Store with a queued merge, no settings layer, and the synthetic queue provider through the runner."""
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setattr(config, "BASE", None)
+    for args in (
+        ["init", "-q"],
+        ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "i"],
+    ):
+        subprocess.run(["git", *args], cwd=tmp_path, check=True, capture_output=True)  # noqa: S603, S607
+    store = Store.open(tmp_path)
+    remote = tmp_path / "remote.git"
+    for args in (
+        ["init", "-q", "--bare", str(remote)],
+        ["remote", "add", "origin", str(remote)],
+        ["push", "-q", "origin", "HEAD:refs/heads/main"],
+    ):
+        subprocess.run(["git", *args], cwd=tmp_path, check=True, capture_output=True)  # noqa: S603, S607
+    head = git(tmp_path, "rev-parse", "HEAD")
+    gh = QueueGh(pr(head=head))
+    gh.state = QueueState(merged=False, open=True, head_sha=head, entry=entry(), added=ADDED)
+    monkeypatch.setattr(runner.profile, "provider", lambda *_a: gh)
+    monkeypatch.setattr(runner, "_agent", lambda *_a, **_k: pytest.fail("paid work must not start"))
+    store.write_profile(qprof())
+    c = Change(
+        slug="c1",
+        brief=Brief(version=1),
+        plan=Plan(tasks=[Task(id="t1", title="one", scope=["src"], checks=["npm test"])]),
+        step=Step(kind=StepKind.MERGE),
+        names=Names(target="main", worktree=str(tmp_path), pr=7),
+        reviews=[Review(commit=head, tree=worktree.tree(tmp_path, head), inputs=Inputs(), verdict="pass")],
+        queue=QueueClaim(head=head, at=NOW, queued_at=NOW, settled=True),
+    )
+    with store.lock("c1") as lock:
+        store.write(lock, c)
+    return store, gh
+
+
+def run_merge_step(store, capsys):
+    with store.lock("c1") as lock:
+        runner._step(store, lock, store.read("c1"), Step(kind=StepKind.MERGE), store.root)  # noqa: SLF001
+    return json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+
+
+@pytest.mark.parametrize("uncertainty", ["provider_error", "still_queued"])
+def test_an_uncertain_withdrawal_with_both_prefs_unset_stays_pending_and_asks_nothing(
+    both_prefs_unset, capsys, uncertainty
+):
+    store, gh = both_prefs_unset
+    if uncertainty == "provider_error":
+        gh.dequeue_fails = True
+    else:
+        gh.dequeue = lambda pull: gh.dequeued.append(pull.number)  # the call returns, GitHub still shows the entry
+    event = run_merge_step(store, capsys)
+    assert (event["exit"], store.read("c1").queue is not None, gh.state.entry is not None) == (
+        "pending",
+        True,
+        True,
+    ), event["reason"]
+    assert store.read("c1").stop is None
+
+
+@pytest.mark.parametrize("uncertainty", ["provider_error", "still_queued"])
+def test_a_later_confirmed_removal_then_asks_the_owner_for_the_unset_setting(both_prefs_unset, capsys, uncertainty):
+    store, gh = both_prefs_unset
+    if uncertainty == "provider_error":
+        gh.dequeue_fails = True
+    else:
+        gh.dequeue = lambda pull: gh.dequeued.append(pull.number)
+    run_merge_step(store, capsys)
+    gh.__dict__.pop("dequeue", None)  # the next pass reaches GitHub normally and reads back the removal
+    gh.dequeue_fails = False
+    with store.lock("c1") as lock:
+        runner._step(store, lock, store.read("c1"), Step(kind=StepKind.MERGE), store.root)  # noqa: SLF001
+    after = store.read("c1")
+    assert (after.queue, gh.state.entry) == (None, None)
+    assert len(after.questions) == 1
+    assert "merge_method" in after.questions[0].text
+    assert after.questions[0].answer is None
+
+
+def test_a_dequeue_not_read_back_as_removed_keeps_the_barrier_and_asks_nothing(tmp_path):
+    gh, c, cx = queued_unset_case(tmp_path)
+    gh.dequeue = lambda pull: gh.dequeued.append(pull.number)  # the call returns, GitHub still shows the entry
+    c, result = queue.run(cx, c, pr(head=A), QUEUED, merge_method_unset)
+    assert (result.exit, result.waiting, c.queue is not None, gh.state.entry is not None) == (
+        Exit.PENDING,
+        Waiting.GITHUB,
+        True,
+        True,
+    )

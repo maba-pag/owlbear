@@ -20,6 +20,7 @@ from owlbear_delivery_next.project_host import host as host_module
 from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.settings.config import Layer
 from owlbear_delivery_next.state_store import change_record, decision_batch, decision_sync, profile_share
+from owlbear_delivery_next.state_store.config_save import Prepared
 from owlbear_delivery_next.state_store.database import put_record
 from owlbear_delivery_next.state_store.project_home import STORE_DIR
 from owlbear_delivery_next.state_store.store import Store, StoreError
@@ -181,13 +182,15 @@ def test_an_unchanged_save_pushes_what_an_earlier_save_could_not(shared, repo) -
 def test_old_role_overrides_reach_the_shared_layer_without_replacing_its_values(shared, repo) -> None:
     root, _ = shared
     store = Store.open(repo)
-    store.update_config(lambda cur: cur.model_copy(update={"widths": [1440]}))
+    saved = client(store).put("/api/next/config/project", json={"rev": EMPTY, "layer": {"widths": [1440]}})
+    assert saved.json()["notice"] == ""
     old = store.root / "profile.json"
     old.write_text(json.dumps({"format": 1, "roles": {"builder": {"model": "m-old", "effort": "low"}}}))
 
-    layer = json.loads((root / "shop-site" / "config.json").read_text())
     assert Store.open(repo).settings().agents["builder"].model == "m-old"
-    assert json.loads((root / "shop-site" / "config.json").read_text())["widths"] == layer["widths"] == [1440]
+    shared_layer = json.loads((root / "shop-site" / "config.json").read_text())
+    assert shared_layer["widths"] == [1440]
+    assert shared_layer["agents"]["builder"]["model"] == "m-old"
 
 
 def test_the_profile_lives_in_the_shared_folder_and_a_clones_own_moves_there_once(shared, repo) -> None:
@@ -573,7 +576,8 @@ def test_without_an_answer_setup_names_the_folder_flag_and_stops(shared, repo, c
 def test_renaming_moves_the_whole_folder_commits_pushes_and_is_used_from_then_on(shared, repo) -> None:
     root, remote = shared
     store = Store.open(repo)
-    store.update_config(lambda cur: cur.model_copy(update={"widths": [1440]}))
+    setup_basis = profile_share.config_digest(store.config_path)
+    assert store.update_config(Prepared(setup_basis, lambda cur: cur.model_copy(update={"widths": [1440]}))) == ""
     memory = sessions.memory(store)
     (memory / "kept.md").write_text("kept\n")
     git(root, "add", "shop-site/memory/kept.md")

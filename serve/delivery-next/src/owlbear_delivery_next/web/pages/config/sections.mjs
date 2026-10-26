@@ -4,10 +4,10 @@ import { here, loaded as clones, project as current } from "/assets/ui.mjs";
 import { SOURCES, ROUNDS, LOOPS, state, drafts, show, notify, shown } from "./state.mjs";
 import {
   cell, row, table, button, numberCell, designFailures, widths, sessionsAtOnce, prLabels, prMarker, subagentsCell,
-  curatorThreshold, spotterCell,
+  curatorThreshold, spotterCell, prefRows,
   contextCell, ratesCell, editable, inactive,
 } from "./cells.mjs";
-import { pendingLine, save, rename } from "./layers.mjs";
+import { pendingLine, save, rename, reviewPrefs } from "./layers.mjs";
 import { packSection } from "./pack.mjs";
 import { machineSection } from "./machine.mjs";
 
@@ -218,6 +218,14 @@ function settingsSections() {
           share(a.disagreed, a.decided), share(a.unsure, a.decided)].map(text))),
         { id: "agreement-table", hidden: !loaded.agreement.length })}
     </section>
+    <section class="panel" aria-labelledby="merge-title">
+      <p-heading size="lg"><h2 id="merge-title">Merge and cleanup</h2></p-heading>
+      <p-text>How OwlBear merges a pull request, cleans up its branch and waits for CI. Each setting is set in this
+        project, on this machine or globally; the project's value wins, then this machine's, then the global one. None
+        has a built-in default: a step that needs one asks you until it is set.</p-text>
+      ${table("Merge and cleanup: they apply to the next merge", ["Setting", "Value"], "prefs", prefRows())}
+      <p-text size="xs" color="contrast-medium">Seconds are whole numbers; blank inherits.</p-text>
+    </section>
     <section class="panel" aria-labelledby="pr-title">
       <p-heading size="lg"><h2 id="pr-title">Pull requests</h2></p-heading>
       <p-text>What OwlBear adds to each pull request it opens.</p-text>
@@ -244,6 +252,13 @@ function settingsSections() {
         ?? "Save project settings", save,
         { id: "save", icon: "check", busy: state.saving })}
       <p-text id="pending" size="sm" aria-live="polite">${pendingLine()}</p-text>
+      ${state.layer === "project" && state.loaded.prefs_pending
+        ? button("Confirm merge preferences reviewed", reviewPrefs, {
+            id: "review-prefs",
+            icon: "check",
+            busy: state.saving,
+          })
+        : nothing}
     </div>`;
 }
 

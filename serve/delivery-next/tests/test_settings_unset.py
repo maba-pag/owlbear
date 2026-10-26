@@ -11,18 +11,28 @@ from pydantic import ValidationError
 
 from owlbear_delivery_next.change_contracts.inbox import AnswerItem
 from owlbear_delivery_next.change_contracts.models import Brief, Change, Criterion, Plan, Step, StepKind, Task
+from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
 from owlbear_delivery_next.change_contracts.round_records import RoundLoop
 from owlbear_delivery_next.change_flow import loop
 from owlbear_delivery_next.commands import runner
+from owlbear_delivery_next.github.provider import Check
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.local_system.slots import Slots
 from owlbear_delivery_next.machine_host import curation
-from owlbear_delivery_next.settings import carried, config, roles, rounds
-from owlbear_delivery_next.settings.config import GlobalLayer, Layer, SettingsUnset, resolve
+from owlbear_delivery_next.settings import carried, config, profile, roles, rounds
+from owlbear_delivery_next.settings.config import GlobalLayer, Layer, Prefs, SettingsUnset, resolve
 from owlbear_delivery_next.settings.improvement import Spotter
 from owlbear_delivery_next.state_store import machine_settings, settings_carry
 from owlbear_delivery_next.state_store.store import StoreError, read_layer
-from owlbear_delivery_next.workflow_steps import decision_publication, decisions_gate, lookup, review, unset_settings
+from owlbear_delivery_next.workflow_steps import (
+    cleanup,
+    decision_publication,
+    decisions_gate,
+    engine,
+    lookup,
+    review,
+    unset_settings,
+)
 
 
 @pytest.fixture
@@ -115,10 +125,11 @@ def test_todays_built_in_values_are_carried_into_global_once_keeping_what_it_set
 def test_a_carried_global_resolves_every_setting(shared_repo):
     shared = DataRepo(shared_repo[0])
     settings_carry.carry(shared)  # no Global file yet: today's values in full
+    prefs = {f"prefs.{key}" for key in config.Prefs.model_fields}  # owner-set, never carried (no code defaults)
     later = {f"spotter.{k}" for k in ("steer_share", "intervention_cap", "verbose", "looks")}  # added after the carry
     later |= {f"agents.{r}.{f}" for r in ("retro", "retro-review") for f in ("model", "effort", "context", "minutes",
                                                                              "subagents")}  # fmt: skip
-    assert set(resolve(read_layer(shared.global_path, GlobalLayer), Layer()).missing) == later
+    assert set(resolve(read_layer(shared.global_path, GlobalLayer), Layer()).missing) == prefs | later
 
 
 @pytest.mark.usefixtures("no_base")
@@ -277,3 +288,50 @@ def test_an_unset_spotter_setting_asks_before_a_step_records_anything(monkeypatc
     with pytest.raises(SettingsUnset, match=unset):
         runner._agent(store, SimpleNamespace(slug="c1"), c, tmp_path)  # noqa: SLF001
     assert (recorded, c.plan.tasks[0].spans) == ([], [])  # no open span left behind
+
+
+def _target_ctx(settings, checks: tuple[Check, ...]) -> tuple[engine.Ctx, SimpleNamespace]:
+    declared = ProfileEntry(state="known", value="ci", evidence=f"{profile.CONFIRMED}; owner")
+    gh = SimpleNamespace(observe_commit_checks=lambda _repo, _sha: checks)
+    store = SimpleNamespace(settings=lambda: settings)
+    ctx = engine.Ctx(store=store, lock=None, repo=Path(), profile=Profile(entries={profile.DECLARED: declared}),
+                     gh=gh, now=datetime.now(UTC))  # fmt: skip
+    return ctx, SimpleNamespace(merged=True, merge_commit_sha="abc123")
+
+
+@pytest.mark.usefixtures("no_base")
+def test_a_running_check_never_needs_the_start_window_while_a_missing_check_still_asks_for_it():
+    poll_only = resolve(None, Layer(prefs=Prefs(ci_poll_seconds=60)))
+    running = (Check(name="ci", status="in_progress"),)
+    ctx, pr = _target_ctx(poll_only, running)
+    _, result = cleanup.target_check(ctx, change(StepKind.REVIEW), pr)
+    assert result is not None  # still waiting on the running check, with no owner question
+
+    ctx, pr = _target_ctx(poll_only, ())
+    with pytest.raises(SettingsUnset, match="ci_start_window_seconds"):
+        cleanup.target_check(ctx, change(StepKind.REVIEW), pr)
+
+    windowed = resolve(None, Layer(prefs=Prefs(ci_poll_seconds=60, ci_start_window_seconds=600)))
+    ctx, pr = _target_ctx(windowed, ())
+    _, result = cleanup.target_check(ctx, change(StepKind.REVIEW), pr)
+    assert result is not None  # a set window keeps the missing check waiting
+
+
+PREF_KEYS = ("merge_method", "delete_remote_branch", "ci_poll_seconds", "ci_start_window_seconds", "ask_before_merge")
+
+
+@pytest.mark.parametrize("key", PREF_KEYS)
+def test_an_unset_preference_refuses_the_step_and_asks_the_owner_never_a_code_default(key, monkeypatch):
+    monkeypatch.setattr(config, "BASE", None)  # the test-only base layer would fill it in
+    empty = resolve(None, Layer())
+    assert f"prefs.{key}" in empty.missing
+    with pytest.raises(SettingsUnset) as refused:
+        config.pref(empty, key)
+    assert refused.value.keys == [f"prefs.{key}"]
+
+    asked = change(StepKind.REVIEW)
+    written: list[Change] = []
+    store = SimpleNamespace(read=lambda _slug: written[-1] if written else asked, write=lambda _l, c: written.append(c))
+    unset_settings.asked(store, SimpleNamespace(slug="c1"), refused.value)
+    (question,) = written[-1].questions
+    assert f"prefs.{key}" in question.text

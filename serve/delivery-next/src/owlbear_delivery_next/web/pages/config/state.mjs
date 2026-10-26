@@ -38,6 +38,8 @@ export const state = {
   machineDraft: null, machineSaving: false,  // the machine's settings as edited, before they are saved
   machineText: null,  // a list setting's text as typed, until a save
   machineWrites: 0,  // counts machine saves, so a read that started before one never shows older values
+  // Owner edited or cleared a project Merge and cleanup preference; kept until a save publishes.
+  prefsReview: false,
 };
 export const drafts = { project: {}, machine: {}, global: {} };
 // arrived: models read while a setting held the focus, applied once it leaves; an object since a module cannot

@@ -15,6 +15,7 @@ from owlbear_delivery_next.github import merge_offer
 from owlbear_delivery_next.github.merge_offer import Block
 from owlbear_delivery_next.github.provider import MergeMethod, MergeRequest, MergeStatus, Refusal
 from owlbear_delivery_next.settings import profile
+from owlbear_delivery_next.settings.config import pref
 from owlbear_delivery_next.workflow_steps import check, engine, follow, publish, queue, visual
 
 if TYPE_CHECKING:
@@ -60,7 +61,7 @@ def offer(ctx: Ctx, c: Change, pr: PullRequest, state: CiState) -> StepResult:
     """Ask for consent to merge the PR's exact head; a consent for another head is void and the delta is shown."""
     old = c.consent.head if c.consent else None
     delta = ctx.gh.compare(ctx.repository, old, pr.head_sha) if old else ""
-    method = profile.value(ctx.profile, profile.METHOD)
+    method = pref(ctx.store.settings(), "merge_method")
     fields = {"pr": pr.number, "url": pr.url, "head": pr.head_sha, "checks": checks(state), "method": method}
     ctx.log(c.slug, "merge-offer", **fields, void=old, delta=delta)
     text = f"approve merging {pr.head_sha[:7]}" + (f", changed since {old[:7]} ({delta})" if old else "")
@@ -140,7 +141,7 @@ def gate(  # noqa: C901, PLR0911 - one exit per condition
         ci=state,
         rules=rules,
         rules_confirmed=profile.known(ctx.profile, profile.RULES),
-        method=MergeMethod(profile.value(ctx.profile, profile.METHOD, "merge")),
+        method=pref(ctx.store.settings(), "merge_method"),
         methods=tuple(MergeMethod(m.strip()) for m in profile.names(ctx.profile, profile.METHODS)),
         can_push=profile.value(ctx.profile, profile.PUSH) == "yes",
     )
@@ -152,7 +153,7 @@ def gate(  # noqa: C901, PLR0911 - one exit per condition
     c = visual.decide(c, ui, ctx.now)
     if not visual_ok(c, pr.head_sha, ui):
         return c, visual.held(c, pr.head_sha, ui)
-    asking = profile.value(ctx.profile, profile.ASK) == "yes"
+    asking = pref(ctx.store.settings(), "ask_before_merge")
     if asking and merge_offer.consent(c.consent.head if c.consent else None, pr.head_sha) != "valid":
         return c, offer(ctx, c, pr, state)
     return c, None
@@ -166,7 +167,7 @@ def _readback(ctx: Ctx, c: Change, req: MergeRequest, result: MergeResult) -> St
             if held := engine.landed(ctx, c, pr):
                 return held
             sha = pr.merge_commit_sha or result.sha or ""
-            method = profile.value(ctx.profile, profile.METHOD)
+            method = req.method  # the method sent, not the preference as it reads now
             ctx.log(c.slug, "merged", pr=number, head=head, sha=sha, method=method)
             return StepResult(exit=Exit.DONE, reason=f"merged PR #{number} as {sha[:7]} ({method})")
         case "not-applied":  # confirmed absence: the next attempt sends the merge again
@@ -179,7 +180,7 @@ def _readback(ctx: Ctx, c: Change, req: MergeRequest, result: MergeResult) -> St
 
 def submit(ctx: Ctx, c: Change, pr: PullRequest) -> StepResult:
     """Send the merge with ``sha`` = the gated head and the profile's method, then read the PR back."""
-    method = MergeMethod(profile.value(ctx.profile, profile.METHOD))
+    method = pref(ctx.store.settings(), "merge_method")
     req = MergeRequest(repository=ctx.repository, number=pr.number, expected_head_sha=pr.head_sha, method=method)
     result = ctx.gh.request_merge(req)
     ctx.log(c.slug, "merge-request", pr=pr.number, head=pr.head_sha, status=result.status, message=result.message)

@@ -297,7 +297,7 @@ def clone(path: Path) -> Path:
 
 @pytest.fixture
 def http(monkeypatch):
-    monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo: [])
+    monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
     monkeypatch.setattr(Host, "_spawn", lambda _self, slug: pytest.fail(f"no runner starts in these tests ({slug})"))
     m = Machine(record())
     yield TestClient(app.create(m), base_url="http://127.0.0.1", headers=AUTH)

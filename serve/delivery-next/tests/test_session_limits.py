@@ -22,6 +22,7 @@ from owlbear_delivery_next.project_host import session_slots
 from owlbear_delivery_next.project_host.host import Host, RunnerRecord
 from owlbear_delivery_next.runtimes import sdk_adapter
 from owlbear_delivery_next.runtimes.session_result import Run
+from owlbear_delivery_next.settings.config import Layer
 from owlbear_delivery_next.state_store.store import Store
 from owlbear_delivery_next.workflow_steps import sessions
 
@@ -90,7 +91,10 @@ def store(tmp_path):
 
 def test_a_change_waits_for_its_projects_slot_without_launching_and_owner_input_still_folds(store, tmp_path):
     fake = Fake(store, tmp_path, Slots(lambda: 4))
-    store.update_config(lambda cur: cur.model_copy(update={"sessions": 1}))
+    assert (
+        store.save(store.config_path, Layer, lambda cur: cur.model_copy(update={"sessions": 1}), "setup", owner=True)
+        == ""
+    )
     fake.ready("c1")
     fake.ready("c2")
     assert fake.host.tick(NOW) == ["c1"]
@@ -107,7 +111,10 @@ def test_a_change_waits_for_its_projects_slot_without_launching_and_owner_input_
 
 def test_waiters_of_one_project_keep_their_order_while_the_host_confirms_ended_runners(store, tmp_path):
     fake = Fake(store, tmp_path, Slots(lambda: 4))
-    store.update_config(lambda cur: cur.model_copy(update={"sessions": 1}))
+    assert (
+        store.save(store.config_path, Layer, lambda cur: cur.model_copy(update={"sessions": 1}), "setup", owner=True)
+        == ""
+    )
     for slug in ("c1", "c2", "c3"):
         fake.ready(slug)
     assert fake.host.tick(NOW) == ["c1"]
@@ -176,7 +183,10 @@ def test_a_step_without_an_agent_reserves_nothing_and_a_visual_check_asks_for_th
     fake.host.wants["m1"] = 0
     assert fake.host.slots.take("q", "q1", 1, 1) == 1  # the machine is full
     assert session_slots.reserve(fake.host, "m1") == 0  # a merge still runs
-    store.update_config(lambda cur: cur.model_copy(update={"sessions": 3}))
+    assert (
+        store.save(store.config_path, Layer, lambda cur: cur.model_copy(update={"sessions": 3}), "setup", owner=True)
+        == ""
+    )
     fake.host.slots = Slots(lambda: 4)
     fake.host.wants["v1"] = session_slots.ALL
     assert session_slots.reserve(fake.host, "v1") == 3
