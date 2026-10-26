@@ -1,0 +1,1501 @@
+{
+  "replies": {
+    "GET /changes": ["[].handle", "[].slug"],
+    "GET /chat/challenge/{slug}": ["running"],
+    "GET /chat/contract": ["supported"],
+    "GET /decisions": [
+      "available",
+      "decisions[].id",
+      "decisions[].title",
+      "decisions[].statement",
+      "decisions[].scope",
+      "decisions[].origin",
+      "decisions[].state",
+      "decisions[].conflict",
+      "decisions[].read_back",
+      "decisions[].revision"
+    ],
+    "POST /briefs/challenge": ["slug", "attempt", "paused"]
+  },
+  "routes": {
+    "GET /changes": {
+      "body": null,
+      "parameters": []
+    },
+    "GET /chat/brief/{slug}": {
+      "body": null,
+      "parameters": [
+        {
+          "in": "path",
+          "name": "slug",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ]
+    },
+    "GET /chat/challenge/{slug}": {
+      "body": null,
+      "parameters": [
+        {
+          "in": "path",
+          "name": "slug",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "in": "query",
+          "name": "version",
+          "required": true,
+          "schema": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        {
+          "in": "query",
+          "name": "attempt",
+          "required": true,
+          "schema": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        }
+      ]
+    },
+    "GET /chat/contract": {
+      "body": null,
+      "parameters": []
+    },
+    "GET /decisions": {
+      "body": null,
+      "parameters": [
+        {
+          "in": "query",
+          "name": "where",
+          "required": false,
+          "schema": {
+            "default": "all",
+            "enum": ["project", "global", "all", "owlbear"],
+            "type": "string"
+          }
+        },
+        {
+          "in": "query",
+          "name": "text",
+          "required": false,
+          "schema": {
+            "default": "",
+            "maxLength": 200,
+            "type": "string"
+          }
+        },
+        {
+          "in": "query",
+          "name": "topic",
+          "required": false,
+          "schema": {
+            "default": "",
+            "maxLength": 80,
+            "type": "string"
+          }
+        },
+        {
+          "in": "query",
+          "name": "origin",
+          "required": false,
+          "schema": {
+            "default": "",
+            "maxLength": 16,
+            "type": "string"
+          }
+        },
+        {
+          "in": "query",
+          "name": "state",
+          "required": false,
+          "schema": {
+            "default": "",
+            "maxLength": 16,
+            "type": "string"
+          }
+        },
+        {
+          "in": "query",
+          "name": "read_back",
+          "required": false,
+          "schema": {
+            "default": "",
+            "enum": ["", "none", "pending", "done"],
+            "type": "string"
+          }
+        },
+        {
+          "in": "query",
+          "name": "retired",
+          "required": false,
+          "schema": {
+            "default": false,
+            "type": "boolean"
+          }
+        }
+      ]
+    },
+    "POST /briefs": {
+      "body": {
+        "additionalProperties": false,
+        "properties": {
+          "change": {
+            "default": "",
+            "pattern": "^(c\\d{1,4})?$",
+            "type": "string"
+          },
+          "criteria": {
+            "items": {
+              "maxLength": 500,
+              "minLength": 10,
+              "type": "string"
+            },
+            "maxItems": 10,
+            "minItems": 1,
+            "type": "array"
+          },
+          "decisions": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "answer": {
+                  "maxLength": 500,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "origin": {
+                  "enum": ["decided", "approved", "autonomous"],
+                  "type": "string"
+                },
+                "question": {
+                  "maxLength": 300,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "reason": {
+                  "default": "",
+                  "maxLength": 500,
+                  "type": "string"
+                },
+                "scope": {
+                  "default": "change",
+                  "enum": ["change", "project"],
+                  "type": "string"
+                }
+              },
+              "required": ["question", "answer", "origin"],
+              "type": "object"
+            },
+            "maxItems": 30,
+            "type": "array"
+          },
+          "non_goals": {
+            "items": {
+              "maxLength": 300,
+              "minLength": 3,
+              "type": "string"
+            },
+            "maxItems": 10,
+            "type": "array"
+          },
+          "outcome": {
+            "maxLength": 2000,
+            "minLength": 20,
+            "type": "string"
+          },
+          "person_checks": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "expect": {
+                  "maxLength": 300,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "name": {
+                  "pattern": "^[a-z0-9][a-z0-9-]{0,39}$",
+                  "type": "string"
+                },
+                "owner": {
+                  "default": false,
+                  "type": "boolean"
+                },
+                "steps": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "maxItems": 10,
+                  "minItems": 1,
+                  "type": "array"
+                },
+                "visual": {
+                  "default": false,
+                  "type": "boolean"
+                }
+              },
+              "required": ["name", "steps", "expect"],
+              "type": "object"
+            },
+            "maxItems": 5,
+            "type": "array"
+          },
+          "scope": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 20,
+            "minItems": 1,
+            "type": "array"
+          },
+          "specified": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 10,
+            "type": "array"
+          },
+          "steps": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "do": {
+                  "enum": ["click", "type"],
+                  "type": "string"
+                },
+                "state": {
+                  "pattern": "^[a-z0-9][a-z0-9-]{0,39}$",
+                  "type": "string"
+                },
+                "target": {
+                  "maxLength": 120,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "text": {
+                  "default": "",
+                  "maxLength": 300,
+                  "type": "string"
+                }
+              },
+              "required": ["state", "do", "target"],
+              "type": "object"
+            },
+            "maxItems": 30,
+            "type": "array"
+          },
+          "title": {
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          },
+          "ui": {
+            "default": false,
+            "type": "boolean"
+          },
+          "visual": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "expect": {
+                  "maxLength": 300,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "name": {
+                  "pattern": "^[a-z0-9][a-z0-9-]{0,39}$",
+                  "type": "string"
+                },
+                "owner": {
+                  "default": false,
+                  "type": "boolean"
+                },
+                "path": {
+                  "pattern": "^/\\S{0,199}$",
+                  "type": "string"
+                }
+              },
+              "required": ["name", "path", "expect"],
+              "type": "object"
+            },
+            "maxItems": 6,
+            "type": "array"
+          }
+        },
+        "required": ["title", "outcome", "criteria", "scope"],
+        "type": "object"
+      },
+      "parameters": []
+    },
+    "POST /briefs/challenge": {
+      "body": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "change": {
+                  "maxLength": 20,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "rejected": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "finding": {
+                        "maxLength": 10,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "reason": {
+                        "maxLength": 1000,
+                        "minLength": 1,
+                        "type": "string"
+                      }
+                    },
+                    "required": ["finding", "reason"],
+                    "type": "object"
+                  },
+                  "maxItems": 20,
+                  "type": "array"
+                },
+                "retry_pick": {
+                  "default": false,
+                  "type": "boolean"
+                },
+                "version": {
+                  "minimum": 1.0,
+                  "type": "integer"
+                }
+              },
+              "required": ["change", "version"],
+              "type": "object"
+            }
+          }
+        },
+        "required": true
+      },
+      "parameters": []
+    },
+    "POST /briefs/visual": {
+      "body": {
+        "additionalProperties": false,
+        "properties": {
+          "change": {
+            "pattern": "^c\\d{1,4}$",
+            "type": "string"
+          },
+          "states": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "expect": {
+                  "maxLength": 300,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "name": {
+                  "pattern": "^[a-z0-9][a-z0-9-]{0,39}$",
+                  "type": "string"
+                },
+                "owner": {
+                  "default": false,
+                  "type": "boolean"
+                },
+                "path": {
+                  "pattern": "^/\\S{0,199}$",
+                  "type": "string"
+                }
+              },
+              "required": ["name", "path", "expect"],
+              "type": "object"
+            },
+            "maxItems": 6,
+            "type": "array"
+          },
+          "steps": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "do": {
+                  "enum": ["click", "type"],
+                  "type": "string"
+                },
+                "state": {
+                  "pattern": "^[a-z0-9][a-z0-9-]{0,39}$",
+                  "type": "string"
+                },
+                "target": {
+                  "maxLength": 120,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "text": {
+                  "default": "",
+                  "maxLength": 300,
+                  "type": "string"
+                }
+              },
+              "required": ["state", "do", "target"],
+              "type": "object"
+            },
+            "maxItems": 30,
+            "type": "array"
+          },
+          "ui": {
+            "type": "boolean"
+          }
+        },
+        "required": ["change", "ui"],
+        "type": "object"
+      },
+      "parameters": []
+    },
+    "POST /changes/{slug}/answers": {
+      "body": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "additionalProperties": false,
+              "properties": {
+                "attempt": {
+                  "anyOf": [
+                    {
+                      "minimum": 1.0,
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "channel": {
+                  "default": "status-view",
+                  "enum": ["status-view", "chat"],
+                  "type": "string"
+                },
+                "confirmed": {
+                  "default": false,
+                  "type": "boolean"
+                },
+                "findings": {
+                  "items": {
+                    "maxLength": 40,
+                    "type": "string"
+                  },
+                  "maxItems": 60,
+                  "type": "array"
+                },
+                "head": {
+                  "default": "",
+                  "maxLength": 40,
+                  "type": "string"
+                },
+                "kind": {
+                  "anyOf": [
+                    {
+                      "enum": ["event", "clarification", "brief_change"],
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "option": {
+                  "anyOf": [
+                    {
+                      "maxLength": 64,
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "pack": {
+                  "default": "",
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                "question": {
+                  "maxLength": 16,
+                  "type": "string"
+                },
+                "round": {
+                  "anyOf": [
+                    {
+                      "minimum": 1.0,
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "statement": {
+                  "default": "",
+                  "maxLength": 240,
+                  "type": "string"
+                },
+                "tasks": {
+                  "items": {
+                    "maxLength": 16,
+                    "type": "string"
+                  },
+                  "maxItems": 200,
+                  "type": "array"
+                },
+                "text": {
+                  "default": "",
+                  "maxLength": 2000,
+                  "type": "string"
+                }
+              },
+              "required": ["question"],
+              "type": "object"
+            }
+          }
+        },
+        "required": true
+      },
+      "parameters": [
+        {
+          "in": "path",
+          "name": "slug",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ]
+    },
+    "POST /decisions/lookup": {
+      "body": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "additionalProperties": false,
+              "properties": {
+                "question": {
+                  "maxLength": 1000,
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": ["question"],
+              "type": "object"
+            }
+          }
+        },
+        "required": true
+      },
+      "parameters": []
+    },
+    "POST /decisions/propose": {
+      "body": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "additionalProperties": false,
+              "properties": {
+                "confirmed": {
+                  "default": false,
+                  "type": "boolean"
+                },
+                "effect": {
+                  "enum": ["", "forbids", "wording"],
+                  "type": "string"
+                },
+                "origin": {
+                  "default": "decided",
+                  "enum": ["decided", "approved"],
+                  "type": "string"
+                },
+                "rationale": {
+                  "default": "",
+                  "maxLength": 4000,
+                  "type": "string"
+                },
+                "reason": {
+                  "default": "",
+                  "maxLength": 4000,
+                  "type": "string"
+                },
+                "redecide": {
+                  "default": false,
+                  "type": "boolean"
+                },
+                "replaces": {
+                  "default": "",
+                  "pattern": "^D-[0-7][0-9A-HJKMNP-TV-Z]{25}$|^$",
+                  "type": "string"
+                },
+                "revision": {
+                  "default": "",
+                  "pattern": "^([0-9a-f]{64})?$",
+                  "type": "string"
+                },
+                "scope": {
+                  "default": "here",
+                  "enum": ["here", "global"],
+                  "type": "string"
+                },
+                "statement": {
+                  "maxLength": 240,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "title": {
+                  "maxLength": 200,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "topic": {
+                  "default": "",
+                  "maxLength": 80,
+                  "type": "string"
+                }
+              },
+              "required": ["title", "statement"],
+              "type": "object"
+            }
+          }
+        },
+        "required": true
+      },
+      "parameters": [
+        {
+          "in": "query",
+          "name": "where",
+          "required": false,
+          "schema": {
+            "default": "all",
+            "enum": ["project", "global", "all", "owlbear"],
+            "type": "string"
+          }
+        }
+      ]
+    },
+    "POST /decisions/{decision_id}/correct-origin": {
+      "body": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "additionalProperties": false,
+              "properties": {
+                "confirmed": {
+                  "default": false,
+                  "type": "boolean"
+                },
+                "origin": {
+                  "enum": ["approved", "autonomous"],
+                  "type": "string"
+                },
+                "reason": {
+                  "default": "",
+                  "maxLength": 4000,
+                  "type": "string"
+                },
+                "revision": {
+                  "pattern": "^[0-9a-f]{64}$",
+                  "type": "string"
+                }
+              },
+              "required": ["revision", "origin"],
+              "type": "object"
+            }
+          }
+        },
+        "required": true
+      },
+      "parameters": [
+        {
+          "in": "path",
+          "name": "decision_id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "in": "query",
+          "name": "where",
+          "required": false,
+          "schema": {
+            "default": "all",
+            "enum": ["project", "global", "all", "owlbear"],
+            "type": "string"
+          }
+        }
+      ]
+    },
+    "POST /decisions/{decision_id}/queue-read-back": {
+      "body": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "enum": ["safety", "blocked", "uncertain", "improvement"],
+                  "type": "string"
+                },
+                "revision": {
+                  "pattern": "^[0-9a-f]{64}$",
+                  "type": "string"
+                },
+                "why": {
+                  "maxLength": 600,
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": ["why", "kind", "revision"],
+              "type": "object"
+            }
+          }
+        },
+        "required": true
+      },
+      "parameters": [
+        {
+          "in": "path",
+          "name": "decision_id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "in": "query",
+          "name": "where",
+          "required": false,
+          "schema": {
+            "default": "all",
+            "enum": ["project", "global", "all", "owlbear"],
+            "type": "string"
+          }
+        }
+      ]
+    },
+    "POST /decisions/{decision_id}/read-back": {
+      "body": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "additionalProperties": false,
+              "properties": {
+                "confirmed": {
+                  "default": false,
+                  "type": "boolean"
+                },
+                "revision": {
+                  "pattern": "^[0-9a-f]{64}$",
+                  "type": "string"
+                }
+              },
+              "required": ["revision"],
+              "type": "object"
+            }
+          }
+        },
+        "required": true
+      },
+      "parameters": [
+        {
+          "in": "path",
+          "name": "decision_id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "in": "query",
+          "name": "where",
+          "required": false,
+          "schema": {
+            "default": "all",
+            "enum": ["project", "global", "all", "owlbear"],
+            "type": "string"
+          }
+        }
+      ]
+    },
+    "POST /decisions/{decision_id}/retire": {
+      "body": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "additionalProperties": false,
+              "properties": {
+                "confirmed": {
+                  "default": false,
+                  "type": "boolean"
+                },
+                "reason": {
+                  "default": "",
+                  "maxLength": 4000,
+                  "type": "string"
+                },
+                "redecide": {
+                  "default": false,
+                  "type": "boolean"
+                },
+                "revision": {
+                  "pattern": "^[0-9a-f]{64}$",
+                  "type": "string"
+                }
+              },
+              "required": ["revision"],
+              "type": "object"
+            }
+          }
+        },
+        "required": true
+      },
+      "parameters": [
+        {
+          "in": "path",
+          "name": "decision_id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "in": "query",
+          "name": "where",
+          "required": false,
+          "schema": {
+            "default": "all",
+            "enum": ["project", "global", "all", "owlbear"],
+            "type": "string"
+          }
+        }
+      ]
+    }
+  },
+  "tools": {
+    "answer_question": {
+      "input": {
+        "properties": {
+          "confirmed": {
+            "default": false,
+            "type": "boolean"
+          },
+          "kind": {
+            "enum": ["event", "clarification", "brief_change"],
+            "type": "string"
+          },
+          "option": {
+            "default": "",
+            "type": "string"
+          },
+          "question": {
+            "type": "string"
+          },
+          "statement": {
+            "default": "",
+            "maxLength": 240,
+            "type": "string"
+          },
+          "text": {
+            "default": "",
+            "maxLength": 2000,
+            "type": "string"
+          }
+        },
+        "required": ["question", "kind"],
+        "type": "object"
+      },
+      "output": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    "challenge_brief": {
+      "input": {
+        "$defs": {
+          "Rejection": {
+            "additionalProperties": false,
+            "properties": {
+              "finding": {
+                "maxLength": 10,
+                "minLength": 1,
+                "type": "string"
+              },
+              "reason": {
+                "maxLength": 1000,
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": ["finding", "reason"],
+            "type": "object"
+          }
+        },
+        "properties": {
+          "change": {
+            "type": "string"
+          },
+          "rejected": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/$defs/Rejection"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "retry_pick": {
+            "default": false,
+            "type": "boolean"
+          },
+          "version": {
+            "type": "integer"
+          }
+        },
+        "required": ["change", "version"],
+        "type": "object"
+      },
+      "output": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    "correct_decision_origin": {
+      "input": {
+        "properties": {
+          "confirmed": {
+            "default": false,
+            "type": "boolean"
+          },
+          "decision": {
+            "type": "string"
+          },
+          "origin": {
+            "enum": ["approved", "autonomous"],
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 4000,
+            "type": "string"
+          },
+          "revision": {
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": ["decision", "revision", "origin", "reason"],
+        "type": "object"
+      },
+      "output": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    "find_decisions": {
+      "input": {
+        "properties": {
+          "include_retired": {
+            "default": false,
+            "type": "boolean"
+          },
+          "text": {
+            "default": "",
+            "maxLength": 200,
+            "type": "string"
+          },
+          "where": {
+            "default": "all",
+            "enum": ["project", "global", "all", "owlbear"],
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "output": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    "lookup_decisions": {
+      "input": {
+        "properties": {
+          "question": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": ["question"],
+        "type": "object"
+      },
+      "output": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    "queue_read_back": {
+      "input": {
+        "properties": {
+          "decision": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": ["safety", "blocked", "uncertain", "improvement"],
+            "type": "string"
+          },
+          "revision": {
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "why": {
+            "maxLength": 600,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": ["decision", "revision", "why", "kind"],
+        "type": "object"
+      },
+      "output": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    "read_back_decision": {
+      "input": {
+        "properties": {
+          "confirmed": {
+            "default": false,
+            "type": "boolean"
+          },
+          "decision": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "string"
+          }
+        },
+        "required": ["decision", "revision"],
+        "type": "object"
+      },
+      "output": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    "record_decision": {
+      "input": {
+        "$defs": {
+          "Replacement": {
+            "additionalProperties": false,
+            "properties": {
+              "decision": {
+                "type": "string"
+              },
+              "effect": {
+                "default": "",
+                "enum": ["", "forbids", "wording"],
+                "type": "string"
+              },
+              "redecide": {
+                "default": false,
+                "type": "boolean"
+              },
+              "revision": {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              }
+            },
+            "required": ["decision", "revision"],
+            "type": "object"
+          }
+        },
+        "properties": {
+          "confirmed": {
+            "default": false,
+            "type": "boolean"
+          },
+          "origin": {
+            "default": "decided",
+            "enum": ["decided", "approved"],
+            "type": "string"
+          },
+          "rationale": {
+            "default": "",
+            "maxLength": 4000,
+            "type": "string"
+          },
+          "replaces": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Replacement"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "scope": {
+            "default": "here",
+            "enum": ["here", "global"],
+            "type": "string"
+          },
+          "statement": {
+            "maxLength": 240,
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 200,
+            "type": "string"
+          },
+          "topic": {
+            "default": "",
+            "maxLength": 80,
+            "type": "string"
+          }
+        },
+        "required": ["title", "statement"],
+        "type": "object"
+      },
+      "output": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    "retire_decision": {
+      "input": {
+        "properties": {
+          "confirmed": {
+            "default": false,
+            "type": "boolean"
+          },
+          "decision": {
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 4000,
+            "minLength": 1,
+            "type": "string"
+          },
+          "redecide": {
+            "default": false,
+            "type": "boolean"
+          },
+          "revision": {
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": ["decision", "revision", "reason"],
+        "type": "object"
+      },
+      "output": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    "save_brief": {
+      "input": {
+        "$defs": {
+          "DecisionDraft": {
+            "additionalProperties": false,
+            "properties": {
+              "answer": {
+                "maxLength": 500,
+                "minLength": 1,
+                "type": "string"
+              },
+              "origin": {
+                "enum": ["decided", "approved", "autonomous"],
+                "type": "string"
+              },
+              "question": {
+                "maxLength": 300,
+                "minLength": 1,
+                "type": "string"
+              },
+              "reason": {
+                "default": "",
+                "maxLength": 500,
+                "type": "string"
+              },
+              "scope": {
+                "default": "change",
+                "enum": ["change", "project"],
+                "type": "string"
+              }
+            },
+            "required": ["question", "answer", "origin"],
+            "type": "object"
+          },
+          "PersonCheckDraft": {
+            "additionalProperties": false,
+            "properties": {
+              "expect": {
+                "maxLength": 300,
+                "minLength": 1,
+                "type": "string"
+              },
+              "name": {
+                "pattern": "^[a-z0-9][a-z0-9-]{0,39}$",
+                "type": "string"
+              },
+              "owner": {
+                "default": false,
+                "type": "boolean"
+              },
+              "steps": {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 10,
+                "minItems": 1,
+                "type": "array"
+              },
+              "visual": {
+                "default": false,
+                "type": "boolean"
+              }
+            },
+            "required": ["name", "steps", "expect"],
+            "type": "object"
+          }
+        },
+        "properties": {
+          "change": {
+            "default": "",
+            "type": "string"
+          },
+          "criteria": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "decisions": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/$defs/DecisionDraft"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "non_goals": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "outcome": {
+            "default": "",
+            "type": "string"
+          },
+          "person_checks": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/$defs/PersonCheckDraft"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "scope": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "specified": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "title": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "output": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    "save_visual_check": {
+      "input": {
+        "$defs": {
+          "VisualStateDraft": {
+            "additionalProperties": false,
+            "properties": {
+              "expect": {
+                "maxLength": 300,
+                "minLength": 1,
+                "type": "string"
+              },
+              "name": {
+                "pattern": "^[a-z0-9][a-z0-9-]{0,39}$",
+                "type": "string"
+              },
+              "owner": {
+                "default": false,
+                "type": "boolean"
+              },
+              "path": {
+                "pattern": "^/\\S{0,199}$",
+                "type": "string"
+              }
+            },
+            "required": ["name", "path", "expect"],
+            "type": "object"
+          },
+          "VisualStepDraft": {
+            "additionalProperties": false,
+            "properties": {
+              "do": {
+                "enum": ["click", "type"],
+                "type": "string"
+              },
+              "state": {
+                "pattern": "^[a-z0-9][a-z0-9-]{0,39}$",
+                "type": "string"
+              },
+              "target": {
+                "maxLength": 120,
+                "minLength": 1,
+                "type": "string"
+              },
+              "text": {
+                "default": "",
+                "maxLength": 300,
+                "type": "string"
+              }
+            },
+            "required": ["state", "do", "target"],
+            "type": "object"
+          }
+        },
+        "properties": {
+          "change": {
+            "type": "string"
+          },
+          "states": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/$defs/VisualStateDraft"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "steps": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/$defs/VisualStepDraft"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "ui": {
+            "type": "boolean"
+          }
+        },
+        "required": ["change", "ui"],
+        "type": "object"
+      },
+      "output": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    "show_status": {
+      "input": {
+        "properties": {
+          "change": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "output": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    }
+  }
+}

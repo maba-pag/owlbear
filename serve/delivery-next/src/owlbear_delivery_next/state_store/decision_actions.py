@@ -9,7 +9,8 @@ owner's. Each action names the revision the owner (or chat) read: a stale one is
 A transition's files (a successor and what it retires, a kept decision and its withdrawn rivals) are saved together or
 not at all. Every supersession says why: replace, withdraw, promote, keep and activating or proposing a draft that
 replaces one need a reason, recorded in the successor's (or withdrawn decision's) rationale. The owner's words are
-never stored (TD-449): what he confirmed is `decided` and its `read_back` is the day he confirmed it. A commit message
+never stored (TD-449): what he confirmed is `decided`, or `approved` when he took a chat's recommendation as shown,
+and its `read_back` is the day he confirmed it. A commit message
 names the action and the decisions' ids only, never text a person typed. An origin is corrected in `decision_origin`.
 """
 
@@ -44,6 +45,8 @@ NOT_CONFIRMED = (
     "a read-back records only the owner's confirmation of the statement as it stands; a different intent is a "
     f"replacement he confirms, on {PAGE} or in a chat with record_decision"
 )
+UNAPPROVED = "only the owner approves a decision: approved needs his choice in this chat, passed as confirmed=true"
+OWNERS = (Origin.DECIDED, Origin.APPROVED)  # what the owner's confirmation records
 
 
 class Refused(Exception):  # noqa: N818 - says what happened
@@ -186,13 +189,15 @@ def _new(old: Decision | None, **fields: object) -> Decision:
 def replace(  # noqa: PLR0913 - the owner's successor and the revision he read
     shared: DataRepo | None, project: str, decision_id: str, revision: str, *,
     title: str, statement: str, rationale: str, reason: str, redecided: bool, effect: Effect = "",
-    scope: Scope | None = None, by: str = OWNER, topic: str = "",
+    scope: Scope | None = None, by: str = OWNER, topic: str = "", origin: Origin = Origin.DECIDED,
 ) -> list[Receipt]:  # fmt: skip
     """The owner's successor, in force and `decided`, confirmed today, keeping the old one's other links.
 
     *by*: where he confirmed it, on the page or in a chat (TD-450); *scope*: the layer a chat named for it; *topic*:
-    the successor's, else the old one's.
+    the successor's, else the old one's; *origin*: `approved` when he took a chat's recommendation as shown.
     """
+    if origin not in OWNERS:
+        raise Refused(UNAPPROVED, 422)
     why = _reason(reason, "replacing a decision")
     view = decision_store.load(shared, project)
     old = _entry(view, decision_id).decision
@@ -200,13 +205,13 @@ def replace(  # noqa: PLR0913 - the owner's successor and the revision he read
         return stale
     _in_force(old, "replaced")
     _scoped(old, scope)
-    authorise(old, owner=True, redecided=redecided)  # his successor is decided: no second() needed
+    authorise(old, owner=True, redecided=redecided)  # his successor is confirmed: no second() needed
     kept = tuple(link for link in old.links if link.type not in LINEAGE)  # exception_to, refines, depends on, related
     new = _new(
         old, title=title.strip() or old.title, topic=topic.strip() or old.topic, statement=statement,
         rationale=_marked(_because(rationale or decision_wording.explanation(old), CHANGED, why), effect),
         scope=old.scope, project=old.project,
-        change=old.change, origin=Origin.DECIDED, actor=by, source=PAGE if by == OWNER else by, read_back=_today(),
+        change=old.change, origin=origin, actor=by, source=PAGE if by == OWNER else by, read_back=_today(),
         state=State.IN_FORCE, links=(Link(type=LinkType.REPLACES, target=old.id), *kept),
     )  # fmt: skip
     return _retire(shared, new, old, f"decisions: replace {old.id} with {new.id}")
@@ -419,20 +424,23 @@ def queue_read_back(  # noqa: PLR0913 - why, how urgent, and the revision the ca
 def propose(  # noqa: PLR0913 - the proposal's fields
     shared: DataRepo | None, project: str, *, title: str, topic: str, statement: str, rationale: str,
     confirmed: bool, replaces: str, reason: str = "", scope: Scope = Scope.PROJECT, revision: str = "",
-    redecided: bool = False, effect: Effect = "",
+    redecided: bool = False, effect: Effect = "", origin: Origin = Origin.DECIDED,
 ) -> list[Receipt]:  # fmt: skip
     """A chat's decision for *project* (or Global): in force at once when the owner confirmed it, else a draft.
 
-    Confirmed, it is his: `decided`, read back today, and a replacement retires what it replaces with it, as
-    `replace` does on the page (TD-450). An agent's own choice stays an `autonomous` draft he activates (TD-451).
+    Confirmed, it is his: `decided`, or `approved` (*origin*) when he took the chat's recommendation as shown, read
+    back today, and a replacement retires what it replaces with it, as `replace` does on the page (TD-450). An agent's
+    own choice stays an `autonomous` draft he activates (TD-451); it never claims `approved` without his confirmation.
     """
     if not project:
         msg = "decisions are proposed for a project; this host serves none"
         raise Refused(msg, 422)
+    if origin not in OWNERS or (origin is Origin.APPROVED and not confirmed):
+        raise Refused(UNAPPROVED, 422)
     if confirmed and replaces:
         return replace(
             shared, project, replaces, revision, title=title, statement=statement, rationale=rationale,
-            reason=reason, redecided=redecided, effect=effect, scope=scope, by=CHAT, topic=topic,
+            reason=reason, redecided=redecided, effect=effect, scope=scope, by=CHAT, topic=topic, origin=origin,
         )  # fmt: skip
     links: tuple[Link, ...] = ()
     layer = {"scope": scope, "project": "" if scope is Scope.GLOBAL else project}
@@ -451,7 +459,7 @@ def propose(  # noqa: PLR0913 - the proposal's fields
         layer = {"scope": old.scope, "project": old.project, "change": old.change}  # as a confirmed one keeps it
     made = _new(
         None, title=title, topic=topic, statement=statement, rationale=rationale, **layer,
-        origin=Origin.DECIDED if confirmed else Origin.AUTONOMOUS,
+        origin=origin if confirmed else Origin.AUTONOMOUS,
         actor=CHAT, source=CHAT, read_back=_today() if confirmed else "none",
         state=State.IN_FORCE if confirmed else State.DRAFT, links=links,
     )  # fmt: skip

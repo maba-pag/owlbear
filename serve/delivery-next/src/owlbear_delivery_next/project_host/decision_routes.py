@@ -158,8 +158,8 @@ class LookupBody(BaseModel):
 class ProposalBody(BaseModel):
     """A chat's decision: in force at once when the owner confirmed it (``confirmed``), else a draft he activates.
 
-    ``scope``: the view's own folder or Global. A replacement names the ``revision`` of what it replaces as read,
-    whether the owner re-decided a `decided` one (``redecide``) and his ``effect`` mark (TD-428).
+    ``origin``: `approved` when he took its recommendation as shown, only ``confirmed``. ``scope``: its folder or
+    Global. A replacement names the ``revision`` it read, the owner's re-decision (``redecide``), ``effect`` (TD-428).
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -169,6 +169,7 @@ class ProposalBody(BaseModel):
     statement: Statement
     rationale: Text = ""
     confirmed: bool = False
+    origin: Literal["decided", "approved"] = "decided"
     scope: Literal["here", "global"] = "here"
     replaces: Annotated[str, StringConstraints(pattern=f"{ID_PATTERN}|^$")] = ""
     revision: Annotated[str, StringConstraints(pattern=r"^([0-9a-f]{64})?$")] = ""
@@ -461,9 +462,9 @@ def _shared_routes(routes: APIRouter, shared: Shared, at: At, places: Places) ->
     def propose(body: ProposalBody, project: In) -> dict[str, Any]:
         scope = Scope.GLOBAL if body.scope == "global" else Scope.PROJECT
         out = _receipts(lambda: decision_actions.propose(
-            shared(), at(project), title=body.title, topic=body.topic, statement=body.statement,
-            rationale=body.rationale, confirmed=body.confirmed, replaces=body.replaces, reason=body.reason,
-            scope=scope, revision=body.revision, redecided=body.redecide, effect=body.effect,
+            shared(), at(project), title=body.title, topic=body.topic, statement=body.statement, reason=body.reason,
+            rationale=body.rationale, confirmed=body.confirmed, replaces=body.replaces, scope=scope,
+            revision=body.revision, redecided=body.redecide, effect=body.effect, origin=Origin(body.origin),
         ))  # fmt: skip
         if body.confirmed and body.replaces and out["saved"] and body.effect != "wording":
             out["impact"] = _impact(shared(), at(project), out["receipts"][0]["id"], places)
