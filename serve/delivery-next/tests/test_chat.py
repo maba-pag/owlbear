@@ -659,6 +659,21 @@ def test_yes_confirms_only_the_profile_and_local_files_need_their_own_consent(
     assert json.loads(written[1].read_text()) == {"chat.defaultToCopilotHarness": True}  # TD-275: read at window start
 
 
+def test_setup_in_a_shared_repo_replaces_an_unreadable_root_profile_the_owner_confirms(
+    shared_repo, tmp_path_factory, monkeypatch, capsys
+):
+    root, _remote = shared_repo
+    monkeypatch.setenv("HOME", str(tmp_path_factory.mktemp("home")))
+    monkeypatch.setattr(readiness, "check", lambda *_a: [])
+    monkeypatch.setattr(setup.profile, "detect", lambda *_a: Profile(version=1))
+    store = Store.open(root)
+    store.root.mkdir(parents=True, exist_ok=True)
+    (store.root / "profile.json").write_text('{"format": 1, "models": {}}')
+    assert setup.run(root, [], yes=True, local_files="no") == 0
+    assert "cannot be read" in capsys.readouterr().out
+    assert store.read_profile().confirmed_at is not None
+
+
 def test_setup_replaces_a_saved_profile_it_cannot_read(repo, tmp_path_factory, monkeypatch, capsys):
     monkeypatch.setenv("HOME", str(tmp_path_factory.mktemp("home")))
     monkeypatch.setattr(readiness, "check", lambda *_a: [])

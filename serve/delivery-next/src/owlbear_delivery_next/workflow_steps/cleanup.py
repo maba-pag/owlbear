@@ -304,6 +304,11 @@ def fix_change(ctx: Ctx, c: Change, check: str, sha: str, url: str) -> None:
     ctx.log(c.slug, "fix-drafted", key=key, fix=out["slug"], change=out["change"], url=url)
 
 
+def _start_window(ctx: Ctx) -> timedelta:
+    """The start window of a check that never started; read only when a missing check needs it."""
+    return timedelta(seconds=pref(ctx.store.settings(), "ci_start_window_seconds"))
+
+
 def target_check(ctx: Ctx, c: Change, pr: PullRequest | None) -> tuple[Change, StepResult | None]:
     """Watch the required and declared checks on the merge commit; a failure, however late, drafts a fix Change.
 
@@ -321,12 +326,12 @@ def target_check(ctx: Ctx, c: Change, pr: PullRequest | None) -> tuple[Change, S
     if state.running or state.missing:
         if c.missing is None or c.missing.head != sha:
             c.missing = Episode(head=sha, since=ctx.now)
-        window = timedelta(seconds=pref(ctx.store.settings(), "ci_start_window_seconds"))
         elapsed = ctx.now - c.missing.since
-        if state.running or elapsed < window:
+        if state.running or elapsed < _start_window(ctx):
             if state.running:
                 reason = f"{len(state.running)} of {state.expected} checks running on {target}"
             else:
+                window = _start_window(ctx)
                 reason = f"waiting up to {window.seconds // 60} min for {', '.join(state.missing)} to start on {target}"
             wake = ctx.now + max(ctx.poll() - ctx.now, min(elapsed / 2, budgets.PAUSE_CAP))
             return c, engine.pending(Waiting.CI, reason, wake)

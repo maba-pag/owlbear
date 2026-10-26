@@ -329,8 +329,8 @@ def _current_for_write(store: Store, *, replace_unreadable: bool) -> Profile | N
 
     if not replace_unreadable:
         return _read_unlocked(store)
-    try:
-        return _read_unlocked(store)
+    try:  # a shared target that is absent keeps the clone's own legacy guard, when it is valid
+        return _read_unlocked(store) or (_unreadable_guard(store.root / PROFILE) if store.shared else None)
     except StoreError:
         return _unreadable_guard(path(store))
 

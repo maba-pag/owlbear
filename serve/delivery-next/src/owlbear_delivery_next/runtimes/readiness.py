@@ -14,6 +14,7 @@ import truststore
 
 from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.design_packs import pack_update
+from owlbear_delivery_next.local_system import data_repo
 from owlbear_delivery_next.local_system.git_files import probe_in
 from owlbear_delivery_next.runtimes import copilot_cli
 from owlbear_delivery_next.settings import profile
@@ -192,12 +193,19 @@ def _host_checks(store: Store, repo: Path) -> list[Check]:
 
 
 def _carried(store: Store) -> list[Check]:
-    """The one-time legacy preference import at a host start: a review or unpublished step is reported, not hidden."""
+    """The one-time legacy preference import at a host start: a review or unpublished step is reported, not hidden.
+
+    A lock that cannot be taken or a local flag that cannot be written is reported the same way and tried again at the
+    next start; the import's state is left as it is.
+    """
     try:
         prefs_import.run(store)
     except StoreError as exc:
         fix = "review the Merge and cleanup preferences on the Settings page, or fix the repository and restart"
         return [Check("legacy preferences", ok=False, detail=str(exc), fix=fix)]
+    except (data_repo.DataRepoError, OSError) as exc:
+        fix = "Restore the shared profile repository's access and local write access, then restart Delivery"
+        return [Check("legacy preferences", ok=False, detail=str(exc)[:200], fix=fix)]
     return []
 
 

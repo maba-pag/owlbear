@@ -76,6 +76,12 @@ class SharedError(StoreError):
     resume = "A settings save completes"
 
 
+class RoleSourceError(StoreError):
+    """The clone's old profile cannot be inspected for its role overrides: a repair may replace it, nothing else may."""
+
+    action = "Repair or replace the old profile in this clone's store, then reopen"
+
+
 class LockHeldError(RuntimeError):
     """Another process holds the Change's writer lock."""
 
@@ -116,7 +122,7 @@ class Store:
         self.root, self.shared, self.name = root, shared, name
         self.global_path = shared.global_path if shared else None
         self.db = Database(root)
-        self.deferred_roles: StoreError | None = None  # a repair open keeps the role refusal for its caller
+        self.deferred_roles: RoleSourceError | None = None  # a repair open keeps the source refusal for its caller
 
     @property
     def config_path(self) -> Path:
@@ -127,8 +133,9 @@ class Store:
     def open(cls, cwd: Path, *, repair: bool = False) -> Store:
         """Open or create the store for the clone containing *cwd* and gate its format.
 
-        A *repair* open keeps a refused role move in ``deferred_roles`` instead of raising, so the owner's profile
-        repair can replace an unreadable profile; the caller raises it when the profile itself is readable.
+        A *repair* open keeps an uninspectable old profile in ``deferred_roles`` instead of raising, so the owner's
+        profile repair can replace it; the caller raises it when the profile itself is readable. Any other refused
+        move, such as a failed settings write, always raises.
         """
         try:
             shared = data_repo.locate()
@@ -143,7 +150,7 @@ class Store:
             store.adopt(data_repo.identity(cwd) if shared else "")
             try:
                 roles_move.move_roles(store)
-            except StoreError as exc:
+            except RoleSourceError as exc:
                 if not repair:
                     raise
                 store.deferred_roles = exc

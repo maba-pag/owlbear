@@ -56,13 +56,15 @@ def move_roles(store: Store) -> None:
             return
         from owlbear_delivery_next.state_store.config_save import Prepared  # noqa: PLC0415 (import cycle)
 
+        def change(cur: Layer) -> Layer:
+            if cur.roles_moved:  # another clone's move or clear landed after this read: never refill it
+                return cur
+            return migrations.with_roles(cur, found).model_copy(update={"roles_moved": True})
+
         # The receipt and the roles are one config write; the marker only caches the receipt, so its failure
         # after that write leaves the move applied. A write or refusal failure raises here, never a silent return.
         notice = store.update_config(
-            Prepared(
-                config_digest(store.config_path),
-                lambda cur: migrations.with_roles(cur, found).model_copy(update={"roles_moved": True}),
-            ),
+            Prepared(config_digest(store.config_path), change),
             "role overrides from the old profile",
             on_written=lambda: atomic_write(marker, text),
         )
@@ -80,6 +82,7 @@ def _old_roles(old: Path) -> dict[Role, RoleModel]:
     receipt or config write: the move stays retryable and the store cannot open with its roles silently lost.
     """
     from owlbear_delivery_next.state_store.store import (  # noqa: PLC0415 - the store imports this module
+        RoleSourceError,
         StoreError,
         _parse,
     )
@@ -92,16 +95,28 @@ def _old_roles(old: Path) -> dict[Role, RoleModel]:
         msg = (
             f"the old profile could not be read to move its role overrides: {exc}; repair or replace {old}, then reopen"
         )
-        raise StoreError(msg) from exc
+        raise RoleSourceError(msg) from exc
     roles: dict[Role, RoleModel] = {}
     if version == 1:
         try:
             roles = migrations.ROLES.validate_python(data.get("roles", {}))
         except ValueError as exc:  # pydantic's ValidationError is a ValueError
             msg = f"the old profile's role overrides are invalid: {exc}; repair {old}, then reopen"
-            raise StoreError(msg) from exc
-    _parse(raw, PROFILE, Profile, PROFILE_FORMAT, migrations.PROFILE)  # the whole profile must be this build's
+            raise RoleSourceError(msg) from exc
+    try:
+        _parse(raw, PROFILE, Profile, PROFILE_FORMAT, migrations.PROFILE)  # the whole profile must be this build's
+    except StoreError as exc:
+        raise RoleSourceError(str(exc)) from exc
     return roles
+
+
+def retire_source(store: Store) -> None:
+    """Mark an uninspectable old profile as handled once an owner's confirmed replacement is published.
+
+    Its role overrides were discarded by that confirmation, so later opens do not inspect it again. The file stays.
+    """
+    text = "the old profile was replaced by a confirmed profile; its roles were not moved\n"
+    atomic_write(store.root / ROLES_MOVED, text)
 
 
 def _format_of(data: object) -> int:

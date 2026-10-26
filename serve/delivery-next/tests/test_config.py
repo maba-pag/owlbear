@@ -7,6 +7,7 @@ from pydantic import ValidationError
 
 from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.change_contracts.profile_record import PROFILE_FORMAT, Profile, RoleModel
+from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.settings import carried, roles
 from owlbear_delivery_next.settings.config import Agent, GlobalLayer, Layer, resolve
 from owlbear_delivery_next.state_store import layers as layers_mod
@@ -265,6 +266,34 @@ def test_a_move_that_another_opener_finished_meanwhile_is_not_repeated(repo, mon
 
     assert raced
     assert roles.chosen(Store(root).settings(), StepKind.REVIEW) == carried.MODELS["reviewer"]
+
+
+def test_a_clone_that_read_roles_before_another_cleared_them_never_reinstates(shared_repo, tmp_path, monkeypatch):
+    root, remote = shared_repo
+    a = Store(tmp_path / "a-store", DataRepo(root), "shop-site")
+    _old_profile(a.root, {"reviewer": {"model": "r-1", "effort": "max"}})
+    second = tmp_path / "b"
+    subprocess.run(["git", "clone", "-q", str(remote), str(second)], check=True, capture_output=True)  # noqa: S603, S607
+    b = Store(tmp_path / "b-store", DataRepo(second), "shop-site")
+    _old_profile(b.root, {"reviewer": {"model": "r-1", "effort": "max"}})
+    real_digest, raced = roles_move.config_digest, []
+
+    def clone_a_first(path):
+        if not raced:  # clone B has read roles_moved as False; clone A imports, then the owner clears
+            raced.append(True)
+            roles_move.move_roles(a)
+            owner_save(a, lambda _cur: Layer())
+        return real_digest(path)
+
+    monkeypatch.setattr(roles_move, "config_digest", clone_a_first)
+    roles_move.move_roles(b)
+
+    assert raced
+    fresh = tmp_path / "fresh"
+    subprocess.run(["git", "clone", "-q", str(remote), str(fresh)], check=True, capture_output=True)  # noqa: S603, S607
+    shared = Store(tmp_path / "fresh-store", DataRepo(fresh), "shop-site")
+    assert read_layer(shared.config_path, Layer).roles_moved
+    assert roles.chosen(shared.settings(), StepKind.REVIEW) == carried.MODELS["reviewer"]
 
 
 def test_a_move_whose_marker_cannot_be_written_fails_the_open(repo, monkeypatch):

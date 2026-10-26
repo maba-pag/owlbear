@@ -46,6 +46,32 @@ def test_a_host_start_carries_an_upgraded_projects_legacy_preference_once(shared
 
 
 @pytest.mark.usefixtures("no_network")
+@pytest.mark.parametrize(
+    "failure",
+    [DataRepoError("the shared lock is held by another clone"), OSError(28, "No space left on device")],
+)
+def test_a_carry_that_cannot_lock_or_write_is_a_failed_check_and_the_next_start_carries(
+    shared_repo, tmp_path, monkeypatch, failure
+):
+    root, _remote = shared_repo
+    store = Store(tmp_path / "store", DataRepo(root), "shop-site")
+    store.write_profile(Profile(entries={profile.POLL: confirmed("45")}))
+    real = prefs_import.run
+
+    def cannot_carry(_store):
+        raise failure
+
+    monkeypatch.setattr(prefs_import, "run", cannot_carry)
+    failed = [c for c in readiness.ready(store, root, carry=True) if not c.ok]  # no exception escapes the start
+    assert [c.name for c in failed] == ["legacy preferences"]
+    assert store.read_config().prefs is None  # nothing is filled while the import is unconfirmed
+
+    monkeypatch.setattr(prefs_import, "run", real)
+    assert not [c for c in readiness.ready(store, root, carry=True) if not c.ok]
+    assert store.read_config().prefs.ci_poll_seconds == 45
+
+
+@pytest.mark.usefixtures("no_network")
 def test_a_refused_completion_is_reported_at_start_and_published_by_the_next_start(shared_repo, tmp_path, monkeypatch):
     root, remote = shared_repo
     store = Store(tmp_path / "store", DataRepo(root), "shop-site")

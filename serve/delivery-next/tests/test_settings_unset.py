@@ -11,17 +11,27 @@ from pydantic import ValidationError
 
 from owlbear_delivery_next.change_contracts.inbox import AnswerItem
 from owlbear_delivery_next.change_contracts.models import Brief, Change, Criterion, Plan, Step, StepKind, Task
+from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
 from owlbear_delivery_next.change_contracts.round_records import RoundLoop
 from owlbear_delivery_next.change_flow import loop
 from owlbear_delivery_next.commands import runner
+from owlbear_delivery_next.github.provider import Check
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.local_system.slots import Slots
 from owlbear_delivery_next.machine_host import curation
-from owlbear_delivery_next.settings import carried, config, roles, rounds
-from owlbear_delivery_next.settings.config import GlobalLayer, Layer, SettingsUnset, resolve
+from owlbear_delivery_next.settings import carried, config, profile, roles, rounds
+from owlbear_delivery_next.settings.config import GlobalLayer, Layer, Prefs, SettingsUnset, resolve
 from owlbear_delivery_next.state_store import settings_carry
 from owlbear_delivery_next.state_store.store import StoreError, read_layer
-from owlbear_delivery_next.workflow_steps import decision_publication, decisions_gate, lookup, review, unset_settings
+from owlbear_delivery_next.workflow_steps import (
+    cleanup,
+    decision_publication,
+    decisions_gate,
+    engine,
+    lookup,
+    review,
+    unset_settings,
+)
 
 
 @pytest.fixture
@@ -265,6 +275,33 @@ def test_an_unset_spotter_mode_asks_before_a_step_records_anything(monkeypatch, 
     with pytest.raises(SettingsUnset, match=r"spotter\.mode"):
         runner._agent(store, SimpleNamespace(slug="c1"), c, tmp_path)  # noqa: SLF001
     assert (recorded, c.plan.tasks[0].spans) == ([], [])  # no open span left behind
+
+
+def _target_ctx(settings, checks: tuple[Check, ...]) -> tuple[engine.Ctx, SimpleNamespace]:
+    declared = ProfileEntry(state="known", value="ci", evidence=f"{profile.CONFIRMED}; owner")
+    gh = SimpleNamespace(observe_commit_checks=lambda _repo, _sha: checks)
+    store = SimpleNamespace(settings=lambda: settings)
+    ctx = engine.Ctx(store=store, lock=None, repo=Path(), profile=Profile(entries={profile.DECLARED: declared}),
+                     gh=gh, now=datetime.now(UTC))  # fmt: skip
+    return ctx, SimpleNamespace(merged=True, merge_commit_sha="abc123")
+
+
+@pytest.mark.usefixtures("no_base")
+def test_a_running_check_never_needs_the_start_window_while_a_missing_check_still_asks_for_it():
+    poll_only = resolve(None, Layer(prefs=Prefs(ci_poll_seconds=60)))
+    running = (Check(name="ci", status="in_progress"),)
+    ctx, pr = _target_ctx(poll_only, running)
+    _, result = cleanup.target_check(ctx, change(StepKind.REVIEW), pr)
+    assert result is not None  # still waiting on the running check, with no owner question
+
+    ctx, pr = _target_ctx(poll_only, ())
+    with pytest.raises(SettingsUnset, match="ci_start_window_seconds"):
+        cleanup.target_check(ctx, change(StepKind.REVIEW), pr)
+
+    windowed = resolve(None, Layer(prefs=Prefs(ci_poll_seconds=60, ci_start_window_seconds=600)))
+    ctx, pr = _target_ctx(windowed, ())
+    _, result = cleanup.target_check(ctx, change(StepKind.REVIEW), pr)
+    assert result is not None  # a set window keeps the missing check waiting
 
 
 PREF_KEYS = ("merge_method", "delete_remote_branch", "ci_poll_seconds", "ci_start_window_seconds", "ask_before_merge")
