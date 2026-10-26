@@ -23,7 +23,7 @@ from owlbear_delivery_next.local_system.storage_io import atomic_write, open_loc
 from owlbear_delivery_next.settings import config as settings_config
 from owlbear_delivery_next.settings import migrations
 from owlbear_delivery_next.settings.config import CONFIG_FORMAT, GlobalLayer, Layer, MachineLayer, Settings
-from owlbear_delivery_next.state_store import profile_share, project_home
+from owlbear_delivery_next.state_store import config_save, profile_share, project_home
 from owlbear_delivery_next.state_store.database import (
     STORE_FORMAT,
     Database,
@@ -234,9 +234,7 @@ class Store:
             return ""
         try:
             until = time.monotonic() + data_repo.SAVE_SECONDS  # the lock wait and every git command share it
-            with self.shared.locked():
-                update_layer(path, model, change)
-                return profile_share.publish_layer(self, path, f"settings: {what}", until, owner=owner)
+            return config_save.locked_save(self, path, model, change, f"settings: {what}", until, owner=owner)
         except data_repo.DataRepoError as exc:
             raise SharedError(str(exc)) from exc
 

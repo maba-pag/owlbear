@@ -22,6 +22,15 @@ from owlbear_delivery_next.github.provider import ProviderError
 from owlbear_delivery_next.local_system.data_repo import DataRepoError
 from owlbear_delivery_next.local_system.storage_io import atomic_write, open_lock
 from owlbear_delivery_next.settings import migrations, profile
+from owlbear_delivery_next.state_store.pending_intents import (
+    pending_file as _pending_file,
+)
+from owlbear_delivery_next.state_store.pending_intents import (
+    pending_intents,
+)
+from owlbear_delivery_next.state_store.pending_intents import (
+    shared_pending as _shared_pending,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -37,7 +46,6 @@ DETECTED = "profile.detected"  # a new marker forces the old unbound observation
 ROLES_MOVED = "roles-moved"  # marks that a format-1 profile's role overrides were merged into the settings
 UNPUBLISHED = "prefs-import.unpublished"  # the legacy import is done here but its completion was not published yet
 ABSENT = "absent"
-CONFIG_PENDING = "config.pending"  # the digest of a project config change that has not reached the shared repository
 CONFIG_WAITING = "the project settings change is not published yet; the legacy preference import completes after it"
 
 
@@ -68,42 +76,33 @@ def _publish_locked(store: Store, prof: Profile, message: str) -> str:
     """
     done = prof.prefs_import == "done"
     if done:
+        _unpublished(store, failed=True)  # the retry flag is durable before DONE is staged; if it cannot be, nothing is
         notice = publish_config_unlocked(store)
         if notice or _shared_pending(store):
             _stage(store, prof)
-            _unpublished(store, failed=True)
             return notice or CONFIG_WAITING
-    try:
-        notice = _publish(store, store.shared, prof, message)
-    except DataRepoError:
-        if done:
-            _unpublished(store, failed=True)
-        raise
+    notice = _publish(store, store.shared, prof, message)
     if done:
-        _unpublished(store, failed=bool(notice))
+        _unpublished(store, failed=bool(notice))  # a raised publication leaves the flag set, as a refused one does
     return notice
 
 
-def _pending_file(store: Store) -> Path:
-    return store.shared.root / store.name / CONFIG_PENDING
-
-
-def _shared_pending(store: Store) -> str:
-    """The digest of a project config change that has not reached the shared repository, by any clone; else ``""``."""
-    if not store.shared:
-        return ""
-    try:
-        return _pending_file(store).read_text().strip()
-    except FileNotFoundError:
-        return ""
+def _digest(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
 
 
 def config_digest(config: Path) -> str:
     """The digest of the project config's bytes, or ``absent``."""
     try:
-        return hashlib.sha256(config.read_bytes()).hexdigest()
+        return _digest(config.read_bytes())
     except FileNotFoundError:
         return ABSENT
+
+
+def held_by_pending(store: Store, data: bytes) -> bool:
+    """Whether an automatic config write of *data* would replace another clone's different pending intent."""
+    digest = _digest(data)
+    return any(pending != digest for pending in pending_intents(store))
 
 
 def publish_config_unlocked(store: Store) -> str:
@@ -111,9 +110,17 @@ def publish_config_unlocked(store: Store) -> str:
 
     Every completed import publishes it first, whichever clone writes the marker. A DONE never reaches the shared
     profile while another clone's config change is unpublished: the shared pending record decides, not one clone's flag.
+    A different config than the pending intent waits unpublished, so a stale local value or removal never goes out.
     """
     if not store.shared:
         return ""
+    try:
+        intents = pending_intents(store)
+    except DataRepoError:
+        return CONFIG_WAITING  # the shared record cannot be read, so the config is not published
+    current = config_digest(store.config_path)
+    if any(pending != current for pending in intents):
+        return CONFIG_WAITING
     try:
         notice = store.shared.publish(
             store.config_path,
@@ -474,9 +481,13 @@ def move_roles(store: Store) -> None:
             return  # read_profile reports the damaged profile
         if found:
             try:
-                store.update_config(
-                    lambda cur: migrations.with_roles(cur, found), "role overrides from the old profile"
-                )
+                if (
+                    store.update_config(
+                        lambda cur: migrations.with_roles(cur, found), "role overrides from the old profile"
+                    )
+                    == CONFIG_WAITING
+                ):
+                    return  # held behind another clone's pending owner intent: nothing was written, the move waits
             except SharedError:
                 raise  # the old roles move later; never mark a move that did not happen
             except StoreError:
