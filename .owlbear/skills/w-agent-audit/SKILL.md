@@ -29,8 +29,9 @@ Select broad mode for the whole ecosystem, a directory, an artifact class, or an
 Select deep mode for one named artifact or path. When the invocation supplies no request, ask one
 concise question for the whole ecosystem, a scope, or a specific target before scanning.
 
-Memory curation belongs to `/memory-audit`. Mention a memory handoff only when direct evidence shows
-that stored guidance conflicts with the audited definition; do not inventory memories speculatively.
+Memory curation belongs to Delivery's memory curator (**Curate now** on the Maintenance page).
+Mention a memory handoff only when direct evidence shows that stored guidance conflicts with the
+audited definition; do not inventory memories speculatively.
 
 ## Setup, Authority, And Evidence
 

@@ -15,7 +15,6 @@ import pytest
 _REPO_ROOT = Path(__file__).parent.parent
 _DENY_SRC_CASES = [
     ("dev", _REPO_ROOT / ".owlbear" / "hooks" / "deny-src-writes.py"),
-    ("seed", _REPO_ROOT / "seed" / ".owlbear" / "hooks" / "deny-src-writes.py"),
 ]
 
 

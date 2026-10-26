@@ -135,6 +135,23 @@ Which CI suites a pull request touches; the one source of the path lists the sui
 - `def tokened() -> bool`
 - `def main(argv: list[str]) -> None`
 
+## .github/scripts/decisions_view_hash.py
+
+Check that generated decisions views are unedited: the sha256 on each last line matches everything above it.
+
+### Imports
+
+- `__future__`
+- `hashlib`
+- `pathlib`
+- `re`
+- `sys`
+
+### Interfaces
+
+- `def problem(data: bytes) -> str`
+- `def main(paths: list[str]) -> int`
+
 ## .github/scripts/release.py
 
 Versions from merges (self-update design section 8; TD-302, TD-306, TD-315): tag labelled merges to main.
@@ -363,7 +380,7 @@ Validate OwlBear agent files against conventions.
 ### Interfaces
 
 - `def _frontmatter_data(fm_lines: list[str]) -> dict[str, object]`
-- `def _read_mcp_config(path: Path) -> tuple[frozenset[str], list[str]]`
+- `def _read_mcp_config(path: Path, key: str = 'servers') -> tuple[frozenset[str], list[str]]`
 - `def _configured_mcp_servers() -> tuple[frozenset[str], list[str]]`
 - `def _validate_mcp_configuration() -> tuple[frozenset[str], list[str]]`
 - `async def _read_live_mcp_tool_registries() -> dict[str, frozenset[str]]`
@@ -562,40 +579,6 @@ skills_ref.validator — validate skill metadata against the Agent Skills Spec.
 
 - `def _validate_naming_convention(value: str, label: str) -> list[str]`
 - `def validate_metadata(metadata: dict, skill_dir: Path) -> list[str]`
-
-## seed/.owlbear/hooks/deny-src-writes.py
-
-deny-src-writes.py — PreToolUse hook for test-only roles.
-
-### Imports
-
-- `__future__`
-- `json`
-- `pathlib`
-- `re`
-- `sys`
-
-### Interfaces
-
-- `def _extract_paths(tool_input: object) -> list[str]`
-- `def _is_allowed_path(path: str) -> bool`
-- `def _normalize(path: str) -> str | None`
-- `def main() -> None`
-
-## seed/.owlbear/scripts/test-root.py
-
-Discover the test root (cwd + toolchain) for a given test file path.
-
-### Imports
-
-- `__future__`
-- `json`
-- `pathlib`
-- `sys`
-
-### Interfaces
-
-- `def find_test_root(test_path: str) -> dict[str, str]`
 
 ## serve/browser/src/owlbear_browser/__init__.py
 
@@ -832,6 +815,238 @@ OwlBear MCP browser server — browser-control tools with domain allowlist.
 - `async def read_text(ctx: Context) -> str`
 - `async def snapshot(ctx: Context) -> str`
 
+## serve/decisions/src/owlbear_decisions/__init__.py
+
+owlbear-decisions package exports.
+
+### Imports
+
+- `__future__`
+- `owlbear_decisions.errors`
+- `owlbear_decisions.models`
+- `owlbear_decisions.readbacks`
+- `owlbear_decisions.snapshot`
+- `owlbear_decisions.storage`
+- `owlbear_decisions.validate`
+
+## serve/decisions/src/owlbear_decisions/errors.py
+
+Domain exception types for decision files.
+
+### Imports
+
+- `__future__`
+
+### Interfaces
+
+- `class DecisionError(Exception)`
+- `class DecisionFileError(DecisionError, ValueError)`
+  - `def __init__(self, message: str, locations: tuple[str, ...] = ()) -> None`
+- `class ConcurrencyError(DecisionError)`
+- `class ImmutableError(DecisionError)`
+
+## serve/decisions/src/owlbear_decisions/models.py
+
+Pydantic models for decisions: one record per lasting decision of OwlBear, a project or a Change.
+
+### Imports
+
+- `__future__`
+- `datetime`
+- `enum`
+- `hashlib`
+- `json`
+- `pydantic`
+- `secrets`
+- `typing`
+
+### Interfaces
+
+- `class Origin(enum.StrEnum)`
+- `class Scope(enum.StrEnum)`
+- `class State(enum.StrEnum)`
+- `class LinkType(enum.StrEnum)`
+- `class ReadBackKind(enum.StrEnum)`
+- `class _Frozen(BaseModel)`
+- `class Link(_Frozen)`
+- `class Decision(_Frozen)`
+  - `def _drop_retired(cls, data: object) -> object`
+  - `def _strip(cls, value: str) -> str`
+  - `def _read_back_date(cls, value: object) -> object`
+  - `def _aware(cls, value: datetime) -> datetime`
+  - `def _scope_fields(self) -> Decision`
+  - `def _read_back_reason(self) -> Decision`
+  - `def content(self) -> dict[str, object]`
+  - `def revision(self) -> str`
+  - `def rule_revision(self) -> str`
+- `def _digest(content: dict[str, object]) -> str`
+- `def new_id(at: datetime | None = None, seed: str | None = None) -> str`
+
+## serve/decisions/src/owlbear_decisions/readbacks.py
+
+The read-back queue (TD-427, §8): what waits for the owner, most urgent first, then oldest first.
+
+### Imports
+
+- `__future__`
+- `dataclasses`
+- `owlbear_decisions.models`
+- `typing`
+
+### Interfaces
+
+- `class Queued`
+- `def queued(decision: Decision) -> Queued | None`
+- `def queue(decisions: Iterable[Decision], last: Collection[str] = ()) -> list[Queued]`
+
+## serve/decisions/src/owlbear_decisions/snapshot.py
+
+What one project sees of a data repository: the Global layer, its own layers and every finding over them.
+
+### Imports
+
+- `__future__`
+- `dataclasses`
+- `owlbear_decisions.models`
+- `owlbear_decisions.storage`
+- `owlbear_decisions.validate`
+- `typing`
+
+### Interfaces
+
+- `class Read`
+- `def read_repo(root: Path, project: str) -> Read`
+- `def _unreadable(layer: Layer, path: Path, exc: OSError) -> tuple[Layer, Finding]`
+- `def _foreign(child: Path) -> tuple[list[Layer], list[Entry], list[tuple[Layer, Finding]], list[tuple[Layer, Finding]]]`
+- `class Snapshot`
+  - `def complete(self) -> bool`
+  - `def get(self, decision_id: str) -> Entry | None`
+  - `def findings_for(self, decision_id: str) -> list[Finding]`
+  - `def active(self, decision_id: str) -> bool`
+- `def snapshot(root: Path, project: str) -> Snapshot`
+
+## serve/decisions/src/owlbear_decisions/storage.py
+
+Decision files: `<folder>/decisions/<id>.md`, YAML front matter plus the rationale as Markdown body.
+
+### Imports
+
+- `__future__`
+- `contextlib`
+- `dataclasses`
+- `fcntl`
+- `io`
+- `os`
+- `owlbear_decisions.errors`
+- `owlbear_decisions.models`
+- `pathlib`
+- `pydantic`
+- `re`
+- `ruamel.yaml`
+- `ruamel.yaml.error`
+- `stat`
+- `tempfile`
+- `threading`
+- `typing`
+
+### Interfaces
+
+- `def _yaml() -> YAML`
+- `class FileError`
+- `class Loaded`
+- `def decision_path(decision: Decision, folder: Path) -> Path`
+- `def serialize(decision: Decision) -> str`
+- `def _schema_error(error: ValidationError) -> DecisionFileError`
+- `def parse(text: str) -> Decision`
+- `def read(path: Path) -> Decision`
+- `def kind(path: Path) -> int | None`
+- `def is_folder(path: Path) -> bool`
+- `def load_folder(folder: Path) -> Loaded`
+- `def _locked(directory: Path) -> Iterator[None]`
+- `def check_write(current: Decision | None, decision: Decision, expected_revision: str | None) -> None`
+- `def _replace(path: Path, text: str) -> None`
+- `def write(decision: Decision, folder: Path, expected_revision: str | None = None) -> str`
+
+## serve/decisions/src/owlbear_decisions/validate.py
+
+Validate the decisions of a data repository: the Global layer at its root, each project in its folder.
+
+### Imports
+
+- `__future__`
+- `argparse`
+- `collections`
+- `dataclasses`
+- `owlbear_decisions.models`
+- `owlbear_decisions.storage`
+- `pathlib`
+- `stat`
+- `sys`
+- `typing`
+
+### Interfaces
+
+- `class Finding`
+- `class Layer`
+- `class Entry`
+- `def layers(global_folder: Path | None, project_folders: Iterable[Path]) -> list[Layer]`
+- `def change_folders(project: Path) -> list[Path]`
+- `def project_folders(root: Path) -> list[Path]`
+- `def holds_decisions(child: Path) -> bool`
+- `def _placement(entry: Entry) -> str`
+- `def _single(entry: Entry) -> list[tuple[str, str]]`
+- `def _visible(source: Entry, target: Entry, link: LinkType) -> bool`
+- `def _same_or_narrower(source: Decision, target: Decision) -> bool`
+- `def _wider(source: Decision, target: Decision) -> bool`
+- `def _succeeds(entry: Entry, target: str, link: LinkType, by_id: dict[str, Entry]) -> bool`
+- `def _links(entry: Entry, by_id: dict[str, Entry]) -> list[Finding]`
+- `def _successors(entries: list[Entry], by_id: dict[str, Entry]) -> list[Finding]`
+- `def _duplicates(entries: list[Entry]) -> list[Finding]`
+- `def check(entries: list[Entry]) -> list[Finding]`
+- `def read_layers(found: Iterable[Layer]) -> tuple[list[Entry], list[tuple[Layer, Finding]]]`
+- `def collect(found: Iterable[Layer]) -> tuple[list[Entry], list[Finding]]`
+- `def validate(global_folder: Path | None, project_folders: Iterable[Path]) -> list[Finding]`
+- `def _is_link_type(location: str) -> bool`
+- `def validate_repo(root: Path) -> list[Finding]`
+- `def main(argv: Sequence[str] | None = None) -> int`
+
+## serve/decisions/src/owlbear_decisions/view.py
+
+Generate OwlBear's read-only decisions view: the Global and one project's decisions, rules apart from history.
+
+### Imports
+
+- `__future__`
+- `argparse`
+- `collections`
+- `difflib`
+- `hashlib`
+- `owlbear_decisions.models`
+- `owlbear_decisions.snapshot`
+- `pathlib`
+- `re`
+- `subprocess`
+- `sys`
+- `typing`
+
+### Interfaces
+
+- `def _line(text: str) -> str`
+- `def _scope(d: Decision) -> str`
+- `def _names(seen: Snapshot) -> dict[str, str]`
+- `def _name(names: dict[str, str], decision_id: str) -> str`
+- `def _rule(entry: Entry, seen: Snapshot, names: dict[str, str]) -> list[str]`
+- `def _rank(entry: Entry) -> tuple[int, str, str]`
+- `def _rules(seen: Snapshot, names: dict[str, str]) -> list[str]`
+- `def _history(seen: Snapshot, names: dict[str, str]) -> list[str]`
+- `def _findings(seen: Snapshot) -> list[str]`
+- `def render(seen: Snapshot, commit: str) -> str`
+- `def hash_problem(text: str) -> str`
+- `def _comparable(text: str) -> list[str]`
+- `def _head(root: Path) -> str`
+- `def check(path: Path, fresh: str) -> list[str]`
+- `def main(argv: Sequence[str] | None = None) -> int`
+
 ## serve/delivery-next/src/owlbear_delivery_next/__init__.py
 
 OwlBear Delivery-next: one step loop per Change, its state store and status line.
@@ -865,6 +1080,39 @@ A worker's proposed change to approved brief wording (TD-179 rules 3-6), its exa
 - `class _Strict(BaseModel)`
 - `class AmendedCriterion(_Strict)`
 - `class Amendment(_Strict)`
+
+## serve/delivery-next/src/owlbear_delivery_next/change_contracts/chat_contract.py
+
+The chat contract (D-01M5Q5GKHX7BJTXPEW2MHGS9E0): what a chat's owlbear-delivery server may send a host.
+
+### Imports
+
+- `__future__`
+- `datetime`
+- `owlbear_delivery_next.local_system`
+- `pydantic`
+
+### Interfaces
+
+- `def refusal(sent: str) -> dict[str, object]`
+- `def served(sent: str | None) -> bool`
+- `class HostFound(BaseModel)`
+
+## serve/delivery-next/src/owlbear_delivery_next/change_contracts/check_hint.py
+
+The planner's hint for a check written with its package directory in front: name the command alone.
+
+### Imports
+
+- `__future__`
+- `pathlib`
+- `re`
+- `typing`
+
+### Interfaces
+
+- `def _place(directory: str) -> str`
+- `def alone(check: str, packages: Sequence[tuple[str, str]]) -> str`
 
 ## serve/delivery-next/src/owlbear_delivery_next/change_contracts/curation_records.py
 
@@ -910,6 +1158,54 @@ A test review's results (TD-339, TD-390): each reviewer's verdicts on its share,
   - `def _measured(self) -> Self`
 - `def check(args: TestCurationResult, tree: tools.Worktree) -> list[str]`
 - `def _at(said: str, commit: str) -> bool`
+
+## serve/delivery-next/src/owlbear_delivery_next/change_contracts/decision_records.py
+
+A Change's decisions: those shaped into its brief, those Delivery recorded, and the baseline pinned at approval.
+
+### Imports
+
+- `__future__`
+- `datetime`
+- `pydantic`
+- `typing`
+
+### Interfaces
+
+- `class _Strict(BaseModel)`
+- `class BriefDecision(_Strict)`
+- `class Decision(_Strict)`
+  - `def _drop_words(cls, data: object) -> object`
+- `class PickedDecision(_Strict)`
+- `class Pick(_Strict)`
+- `class Published(_Strict)`
+- `class Said(BaseModel)`
+- `class DecisionBaseline(BaseModel)`
+
+## serve/delivery-next/src/owlbear_delivery_next/change_contracts/decision_wording.py
+
+An archived rule's exact binding, framed independently of free-text reasons and later action notes.
+
+### Imports
+
+- `__future__`
+- `json`
+- `owlbear_decisions`
+- `owlbear_decisions.models`
+- `typing`
+
+### Interfaces
+
+- `class WordingError(DecisionError, ValueError)`
+- `def _error(decision: Decision, detail: str) -> WordingError`
+- `def _managed(decision: Decision) -> bool`
+- `def short(text: str) -> str`
+- `def rationale(text: str, note: str, *, force: bool = False) -> str`
+- `def whole(decision: Decision) -> str`
+- `def explanation(decision: Decision) -> str`
+- `def framed(decision: Decision, *, promoting: bool = False) -> str`
+- `def _unframed_terminal(decision: Decision) -> bool`
+- `def problem(decision: Decision) -> str`
 
 ## serve/delivery-next/src/owlbear_delivery_next/change_contracts/dispute_tools.py
 
@@ -974,6 +1270,22 @@ Failure identity: cause keys, error classes and the normalised signature budgets
 - `def kind_of(cause: str | None) -> str`
 - `def cause_key(kind: ErrorKind, step: StepKind, subject: str | Iterable[str] = '') -> str`
 
+## serve/delivery-next/src/owlbear_delivery_next/change_contracts/held_records.py
+
+The durable record of a held agent result (RUN-04): the Change keeps it when the held file cannot be written.
+
+### Imports
+
+- `datetime`
+- `pydantic`
+- `typing`
+
+### Interfaces
+
+- `class HeldRun(BaseModel)`
+- `class PendingChild(BaseModel)`
+- `class HeldRecord(BaseModel)`
+
 ## serve/delivery-next/src/owlbear_delivery_next/change_contracts/inbox.py
 
 Inbox items: the owner's and Delivery's inputs to one Change, one discriminated union.
@@ -982,6 +1294,7 @@ Inbox items: the owner's and Delivery's inputs to one Change, one discriminated 
 
 - `__future__`
 - `datetime`
+- `owlbear_delivery_next.change_contracts.decision_records`
 - `owlbear_delivery_next.change_contracts.models`
 - `pydantic`
 - `typing`
@@ -998,6 +1311,22 @@ Inbox items: the owner's and Delivery's inputs to one Change, one discriminated 
 - `class IntentItem(_Item)`
 - `class PullItem(_Item)`
 - `class RestartItem(_Item)`
+
+## serve/delivery-next/src/owlbear_delivery_next/change_contracts/memory_curation_tools.py
+
+The memory curator's one Delivery tool (item 5 slice 4, TD-292, TD-400): its report on each entry it judged.
+
+### Imports
+
+- `__future__`
+- `owlbear_delivery_next.change_contracts`
+- `pydantic`
+- `typing`
+
+### Interfaces
+
+- `class Judged(tools.Args)`
+- `class MemoryCurationResult(tools.Args)`
 
 ## serve/delivery-next/src/owlbear_delivery_next/change_contracts/merge_records.py
 
@@ -1028,9 +1357,12 @@ Delivery-next state records for one Change (D3 §3.1 to §3.3).
 - `enum`
 - `owlbear_delivery_next.change_contracts.amendment_records`
 - `owlbear_delivery_next.change_contracts.curation_records`
+- `owlbear_delivery_next.change_contracts.decision_records`
+- `owlbear_delivery_next.change_contracts.held_records`
 - `owlbear_delivery_next.change_contracts.merge_records`
 - `owlbear_delivery_next.change_contracts.round_records`
 - `owlbear_delivery_next.change_contracts.spend`
+- `owlbear_delivery_next.change_contracts.tool_use`
 - `owlbear_delivery_next.change_contracts.visual_records`
 - `pydantic`
 - `typing`
@@ -1045,12 +1377,10 @@ Delivery-next state records for one Change (D3 §3.1 to §3.3).
 - `class Criterion(Record)`
 - `class VisualStep(Record)`
 - `class VisualState(Record)`
-- `class BriefDecision(Record)`
 - `class Brief(Record)`
 - `class Intent(Record)`
 - `class Inputs(Record)`
 - `class PersonCheck(Record)`
-- `class Decision(Record)`
 - `class Option(Record)`
 - `class Answer(Record)`
 - `class Question(Record)`
@@ -1132,6 +1462,23 @@ Permission decisions for one step's worker session and their reasons (D4 §3.6, 
 - `def _file(policy: Policy, req: Request) -> str | None`
 - `def _outside(policy: Policy, req: Request) -> str | None`
 - `def view(r: Any) -> Request`
+
+## serve/delivery-next/src/owlbear_delivery_next/change_contracts/pick_tools.py
+
+The decision picker's one tool (TD-459): the ids it picks from the list, each with an optional note.
+
+### Imports
+
+- `__future__`
+- `owlbear_delivery_next.change_contracts`
+- `pydantic`
+
+### Interfaces
+
+- `class PickedId(tools.Args)`
+- `class PickResult(tools.Args)`
+- `class ClarificationResult(tools.Args)`
+- `class Question(tools.Args)`
 
 ## serve/delivery-next/src/owlbear_delivery_next/change_contracts/preparation.py
 
@@ -1252,7 +1599,28 @@ A worker tool's JSON schema and its argument parsing, whose errors name the fiel
 - `def _inline(node: object, defs: dict[str, Any]) -> object`
 - `def schema(spec: Spec) -> dict[str, Any]`
 - `def _loc(loc: Sequence[int | str]) -> str`
+- `def _model(annotation: object) -> type[BaseModel] | None`
+- `def _field(model: type[BaseModel], loc: Sequence[int | str]) -> tuple[tuple[str, str], FieldInfo | None, int]`
+- `def _declaring(model: type[BaseModel], name: str) -> str`
+- `def _example(info: FieldInfo | None, depth: int) -> str`
+- `def _error(model: type[BaseModel], err: ErrorDetails) -> str`
 - `def parse(model: type[T], arguments: object) -> tuple[T | None, list[str]]`
+
+## serve/delivery-next/src/owlbear_delivery_next/change_contracts/tool_use.py
+
+How agents' calls of each Delivery tool went (C-28 T8), kept on the Change as the activity log drops old events.
+
+### Imports
+
+- `__future__`
+- `pydantic`
+- `typing`
+
+### Interfaces
+
+- `class ToolTally(BaseModel)`
+- `class ToolUse(BaseModel)`
+  - `def plus(self, counts: Mapping[str, Mapping[str, int]]) -> ToolUse`
 
 ## serve/delivery-next/src/owlbear_delivery_next/change_contracts/tools.py
 
@@ -1262,6 +1630,7 @@ Worker tools: one fixed schema each, and validators whose errors name the field 
 
 - `__future__`
 - `dataclasses`
+- `owlbear_delivery_next.change_contracts`
 - `pathlib`
 - `pydantic`
 - `re`
@@ -1290,7 +1659,7 @@ Worker tools: one fixed schema each, and validators whose errors name the field 
 - `class PlanResult(Args)`
 - `def relative(path: str) -> bool`
 - `def within(path: str, scope: Sequence[str]) -> bool`
-- `def check_plan(plan: PlanResult, tree: Worktree, checks: Sequence[str], scope: Sequence[str] = ()) -> list[str]`
+- `def check_plan(plan: PlanResult, tree: Worktree, checks: Sequence[str], scope: Sequence[str] = (), packages: Pairs = ()) -> list[str]`
 - `class Spec`
 - `def asks(role: str, *, judging: bool = False) -> bool`
 - `def results(role: str, *, ui: bool = False, judging: bool = False) -> list[str]`
@@ -1302,7 +1671,7 @@ Worker tools: one fixed schema each, and validators whose errors name the field 
 - `def check_question(question: AskQuestion) -> list[str]`
 - `def check_review(review: ReviewResult, tree: Worktree, *, visual: bool = False) -> list[str]`
 - `def check_recipe(recipe: CheckRecipe, tree: Worktree, root: Path, setup: Sequence[str] = ()) -> list[str]`
-- `def check_result(args: Args, tree: Worktree, checks: Sequence[str], root: Path, scope: Sequence[str] = (), item: ItemRef | None = None, *, visual: bool = False) -> list[str]`
+- `def check_result(args: Args, tree: Worktree, checks: Sequence[str], root: Path, scope: Sequence[str] = (), item: ItemRef | None = None, *, visual: bool = False, packages: Pairs = ()) -> list[str]`
 
 ## serve/delivery-next/src/owlbear_delivery_next/change_contracts/visual_records.py
 
@@ -1331,9 +1700,64 @@ The visual review's records (TD-74, TD-78, TD-79).
 - `class VisualResult(_Strict)`
   - `def identity(self) -> str`
 
+## serve/delivery-next/src/owlbear_delivery_next/change_contracts/watch_policy.py
+
+The watcher's report-only policy (W1a; design §3.2, TD-46, TD-50, TD-365): what one tool call may write outside.
+
+### Imports
+
+- `__future__`
+- `dataclasses`
+- `os`
+- `pathlib`
+- `typing`
+
+### Interfaces
+
+- `class Asked`
+- `class Call`
+- `class Outcome`
+  - `def inside(self) -> bool`
+  - `def verdict(self) -> str`
+- `class Places`
+  - `def resolved(self) -> Places`
+- `def exempt(home: Path, env: Mapping[str, str]) -> tuple[Path, ...]`
+- `def judge(call: Call, own: Path, places: Places) -> Outcome`
+- `def reported(path: Path, own: Path, places: Places) -> bool`
+- `def canonical(text: str, cwd: Path, places: Places) -> Path`
+- `def _real(path: Path) -> Path`
+- `def _written(call: Call) -> Iterator[str]`
+- `def _shell(call: Call) -> bool`
+- `def _read_only(call: Call) -> bool`
+
 ## serve/delivery-next/src/owlbear_delivery_next/change_flow/__init__.py
 
 How a Change moves: its steps, budgets, rounds and status.
+
+## serve/delivery-next/src/owlbear_delivery_next/change_flow/answer_kinds.py
+
+An answer to a worker's question that changes the approved brief (TD-461; decision-intent-build §2, slice 5).
+
+### Imports
+
+- `__future__`
+- `datetime`
+- `owlbear_decisions`
+- `owlbear_delivery_next.change_contracts.failures`
+- `owlbear_delivery_next.change_contracts.inbox`
+- `owlbear_delivery_next.change_contracts.models`
+- `typing`
+
+### Interfaces
+
+- `def logged(c: Change, items: Iterable[InboxItem], now: datetime) -> list[dict[str, Any]]`
+- `def delivered_next(c: Change) -> Question | None`
+- `def decision_id(c: Change, q: Question) -> str`
+- `def unchecked(c: Change, q: Question) -> bool`
+- `def first_unchecked(c: Change) -> Question | None`
+- `def question(c: Change, q: Question, why: str = '') -> Question`
+- `def owned(q: Question) -> bool`
+- `def decided(c: Change, q: Question, target: str, at: datetime) -> None`
 
 ## serve/delivery-next/src/owlbear_delivery_next/change_flow/brief_rounds.py
 
@@ -1345,6 +1769,7 @@ The shaper's brief challenge (TD-221, TD-249, TD-208): rounds on the brief versi
 - `owlbear_delivery_next.change_contracts.failures`
 - `owlbear_delivery_next.change_contracts.models`
 - `owlbear_delivery_next.change_contracts.round_records`
+- `owlbear_delivery_next.change_flow`
 - `owlbear_delivery_next.change_flow.moves`
 - `typing`
 
@@ -1368,6 +1793,7 @@ The shaper's brief challenge (TD-221, TD-249, TD-208): rounds on the brief versi
 - `def _then(lp: RoundLoop) -> Then`
 - `def _mode(c: Change, mode: str | None) -> None`
 - `def _wait(c: Change, reason: str, now: datetime) -> None`
+- `def idle(c: Change, now: datetime) -> None`
 - `def _ended(c: Change, version: int, ended: Ended, now: datetime) -> None`
 - `def counted(c: Change, found: list[str], upheld: Mapping[str, tuple[bool, str]], now: datetime) -> None`
 - `def proceed(c: Change, now: datetime) -> None`
@@ -1401,9 +1827,12 @@ The owner chat's brief tool: one fixed draft schema and the checks its schema ca
 - `class VisualStateDraft(Args)`
 - `class VisualStepDraft(Args)`
 - `class DecisionDraft(Args)`
+  - `def _not_blank(cls, value: str) -> str`
+- `class Replacement(Args)`
 - `class VisualDraft(Args)`
 - `class BriefDraft(Args)`
 - `def _steps(brief: BriefDraft) -> list[str]`
+- `def question_key(question: str) -> str`
 - `def check_brief(brief: BriefDraft) -> list[str]`
 
 ## serve/delivery-next/src/owlbear_delivery_next/change_flow/budgets.py
@@ -1464,6 +1893,45 @@ A test review's moves (TD-373, TD-390): its reviewers' end, the curator's unchan
 - `def stop(c: Change, why: str, cause: str | None, now: datetime) -> None`
 - `def fixed(c: Change, before: Step, now: datetime) -> None`
 
+## serve/delivery-next/src/owlbear_delivery_next/change_flow/decision_baseline.py
+
+The owner's answer to a decisions question: continue on the decisions now in force, or pause (TD-419 slice 4).
+
+### Imports
+
+- `__future__`
+- `typing`
+
+### Interfaces
+
+- `def owned(q: Question) -> bool`
+- `def approved(c: Change, baseline: DecisionBaseline | None, unpinned_at: datetime | None = None) -> None`
+- `def decided(c: Change, target: str) -> None`
+
+## serve/delivery-next/src/owlbear_delivery_next/change_flow/delivery_target.py
+
+Proof of a Change's delivery, and the owner's disposition when its PR merged elsewhere.
+
+### Imports
+
+- `__future__`
+- `owlbear_delivery_next.change_contracts.models`
+- `owlbear_delivery_next.change_flow.moves`
+- `typing`
+
+### Interfaces
+
+- `def mismatch(c: Change, pr: PullRequest, repository: str) -> str`
+- `def delivered(c: Change, pr: PullRequest | None, repository: str) -> bool`
+- `def stop(c: Change, why: str, now: datetime) -> Stop`
+- `def question(c: Change, why: str) -> Question`
+- `def halt(c: Change, why: str, now: datetime) -> None`
+- `def held(c: Change) -> bool`
+- `def _owned_question(c: Change) -> Question | None`
+- `def waiting(c: Change) -> bool`
+- `def accounted(c: Change, result: StepResult, now: datetime) -> Change`
+- `def route(c: Change, observed: PrState | None, now: datetime) -> bool`
+
 ## serve/delivery-next/src/owlbear_delivery_next/change_flow/disputes.py
 
 A worker's reasoned rejection of review findings (TD-124, TD-193, TD-208): judged by the next round, else the owner.
@@ -1501,7 +1969,7 @@ A worker's reasoned rejection of review findings (TD-124, TD-193, TD-208): judge
 - `def _rechecks(given: list[tools.Recheck], wanted: tuple[str, ...]) -> list[str]`
 - `def _named(findings: list[tools.Finding], tasks: tuple[str, ...]) -> list[str]`
 - `def _reconsidered(given: list[dispute_tools.Reconsidered], wanted: tuple[str, ...]) -> list[str]`
-- `def processed(c: Change, task: Task | None, session: str, payload: object, result: StepResult) -> StepResult`
+- `def processed(c: Change, task: Task | None, session: str, payload: object, result: StepResult, changed: Sequence[str] = ()) -> StepResult`
 - `def mark(c: Change, task: Task, key: str, state: FindingState, **fields: str) -> None`
 - `def _record(c: Change, task: Task | None, payload: object, result: StepResult) -> None`
 - `def _settle(c: Change, task: Task | None, payload: object, result: StepResult) -> StepResult`
@@ -1576,12 +2044,33 @@ Step moves: where a Change goes next, the questions it asks and the tasks it ope
 
 - `def go(c: Change, kind: StepKind, task: str | None = None, mode: str | None = None) -> None`
 - `def enter(c: Change, kind: StepKind, task: str | None = None) -> None`
+- `def resume(c: Change) -> None`
 - `def subject_of(c: Change, task: Task) -> str`
 - `def loop_of(c: Change, task: Task | None) -> RoundLoop | None`
 - `def open_task(c: Change) -> Task | None`
 - `def ask(c: Change, question: Question, now: datetime) -> None`
 - `def resolved(c: Change, task_id: str | None) -> set[str]`
 - `def fix_task(c: Change, r: StepResult, fixes: str | None = None) -> str | None`
+
+## serve/delivery-next/src/owlbear_delivery_next/change_flow/picks.py
+
+The decisions a brief version's work follows, as its picker chose them (TD-459): owed, picked or failed.
+
+### Imports
+
+- `__future__`
+- `owlbear_delivery_next.change_contracts.decision_records`
+- `owlbear_delivery_next.change_contracts.models`
+- `typing`
+
+### Interfaces
+
+- `def current(c: Change) -> Pick | None`
+- `def owed(c: Change) -> bool`
+- `def owe(c: Change) -> None`
+- `def retry(c: Change, version: int) -> str`
+- `def unready(c: Change) -> str`
+- `def shown(c: Change) -> dict[str, Any] | None`
 
 ## serve/delivery-next/src/owlbear_delivery_next/change_flow/plan_rounds.py
 
@@ -1704,7 +2193,7 @@ Repair chances of the findings loop (TD-123, TD-175): which session repairs, and
 - `def _producer(c: Change, fixes: str | None) -> Task | None`
 - `def lineage(c: Change, fixes: str | None, origin: str) -> dict[str, str | None]`
 - `def session(change: Change, task: Task | None) -> str`
-- `def bind(change: Change, task: Task | None, session: str, payload: object, result: StepResult) -> None`
+- `def bind(change: Change, task: Task | None, session: str, payload: object, result: StepResult, changed: Sequence[str] = ()) -> None`
 - `def fallback(task: Task | None) -> str`
 
 ## serve/delivery-next/src/owlbear_delivery_next/change_flow/round_flow.py
@@ -1785,7 +2274,8 @@ The one status line, next action and next actor of a Change (D3 §3.4).
 - `def _tool_at(c: Change, tool: dict[str, Any] | None) -> datetime | None`
 - `def silent(c: Change, activity: Activity, now: datetime, tool: dict[str, Any] | None = None) -> timedelta | None`
 - `def _episode(c: Change, now: datetime) -> tuple[str, bool]`
-- `def card(c: Change, activity: Activity, events: list[dict[str, Any]], now: datetime, tool: dict[str, Any] | None = None) -> dict[str, Any]`
+- `def card(c: Change, activity: Activity, events: list[dict[str, Any]], now: datetime, tool: dict[str, Any] | None = None, *, pending: Callable[[], str] | None = None) -> dict[str, Any]`
+- `def unpublished(c: Change, pending: Callable[[], str] | None = None) -> list[str]`
 - `def _left(events: list[dict[str, Any]], since: datetime | None) -> str`
 - `def passes(c: Change, now: datetime) -> bool`
 - `def status(c: Change, activity: Activity, now: datetime, tool: dict[str, Any] | None = None) -> Status`
@@ -1830,6 +2320,53 @@ The Change worktree under the user data root, its packages' install commands and
 
 Process entries: the dispatcher and the commands it starts.
 
+## serve/delivery-next/src/owlbear_delivery_next/commands/chat_client.py
+
+The chat tools' client of the running host, one per workspace (D4 §3.1), under chat contract 1.
+
+### Imports
+
+- `__future__`
+- `http.client`
+- `json`
+- `owlbear_delivery_next.change_contracts`
+- `owlbear_delivery_next.local_system`
+- `owlbear_delivery_next.project_host`
+- `owlbear_delivery_next.state_store`
+- `owlbear_delivery_next.state_store.store`
+- `time`
+- `typing`
+- `urllib.error`
+- `urllib.parse`
+- `urllib.request`
+
+### Interfaces
+
+- `def done(code: int) -> bool | None`
+- `class Chat`
+  - `def __init__(self, repo: Path, home: Path) -> None`
+  - `def record(self) -> chat_contract.HostFound | None`
+  - `def down(self) -> str`
+  - `def call(self, method: str, path: str, body: object = None, timeout: float = 15.0) -> tuple[int, Any]`
+  - `def send(self, rec: chat_contract.HostFound, method: str, url: str, body: object, timeout: float) -> tuple[int, Any]`
+  - `def contract(self, rec: chat_contract.HostFound) -> tuple[int, str] | None`
+  - `def save_brief(self, fields: dict[str, Any], path: str = '/briefs') -> dict[str, Any]`
+  - `def show_status(self, change: str = '') -> dict[str, Any]`
+  - `def challenge_brief(self, change: str, version: int, rejected: list[dict[str, str]], *, retry_pick: bool = False) -> dict[str, Any]`
+  - `def answer_question(self, question: str, option: str, text: str, said: dict[str, Any]) -> dict[str, Any]`
+  - `def page(self) -> str | None`
+  - `def find_decisions(self, text: str, where: str, *, include_retired: bool) -> dict[str, Any]`
+  - `def lookup_decisions(self, question: str) -> dict[str, Any]`
+  - `def write(self, path: str, body: dict[str, Any]) -> dict[str, Any]`
+- `class OwlBear(Chat)`
+  - `def __init__(self, repo: Path) -> None`
+  - `def record(self) -> chat_contract.HostFound | None`
+  - `def save_brief(self, *_args: object, **_kwargs: object) -> dict[str, Any]`
+- `class Closed`
+  - `def __init__(self, repo: Path) -> None`
+  - `def __getattr__(self, _name: str) -> Callable[..., dict[str, Any]]`
+- `def workspace(repo: Path) -> Chat | Closed`
+
 ## serve/delivery-next/src/owlbear_delivery_next/commands/cli.py
 
 Project commands, which `owlbear` runs too: ``setup``, ``status``; ``seed``, ``answer``, ``show`` for dev.
@@ -1855,6 +2392,7 @@ Project commands, which `owlbear` runs too: ``setup``, ``status``; ``seed``, ``a
 - `owlbear_delivery_next.state_store.backlog`
 - `owlbear_delivery_next.state_store.store`
 - `pathlib`
+- `pydantic`
 - `subprocess`
 - `sys`
 
@@ -1867,6 +2405,7 @@ Project commands, which `owlbear` runs too: ``setup``, ``status``; ``seed``, ``a
 - `def _golden() -> int`
 - `def describe(change: Change) -> str`
 - `def seed(store: Store, a: argparse.Namespace) -> None`
+- `def answer(store: Store, a: argparse.Namespace) -> int`
 - `def show_status(store: Store, now: datetime) -> str`
 - `def show_profile(store: Store, repo: Path, confirms: list[tuple[str, str]], overrides: list[tuple[Role, RoleModel]] | None = None, runtime: Runtime | None = None) -> str`
 - `def add_backlog(store: Store, a: argparse.Namespace) -> int`
@@ -1889,47 +2428,55 @@ The one entry of every Delivery process (TD-173): it reads the command, then imp
 
 - `def main(argv: list[str] | None = None) -> int`
 
+## serve/delivery-next/src/owlbear_delivery_next/commands/mcp_launch.py
+
+OwlBear's other chat servers, run from the installed version (D-01M5Q5GKHX7BJTXPEW2MHGS9E0, "move all").
+
+### Imports
+
+- `__future__`
+- `importlib.util`
+- `runpy`
+- `sys`
+
+### Interfaces
+
+- `def main(argv: list[str]) -> int`
+
 ## serve/delivery-next/src/owlbear_delivery_next/commands/mcp_server.py
 
-Chat tools: a client of the running host, with a read-only status fallback when it is down (D4 §3.1, §3.3).
+Chat tools over MCP: each tool asks this workspace's client (``chat_client``) of the running host.
 
 ### Imports
 
 - `__future__`
 - `argparse`
-- `datetime`
-- `json`
 - `mcp.server`
 - `mcp.types`
 - `owlbear_delivery_next.change_contracts`
 - `owlbear_delivery_next.change_flow`
-- `owlbear_delivery_next.local_system`
+- `owlbear_delivery_next.commands.chat_client`
 - `owlbear_delivery_next.project_host`
-- `owlbear_delivery_next.state_store.store`
 - `pathlib`
 - `pydantic`
-- `time`
 - `typing`
-- `urllib.error`
-- `urllib.request`
+- `urllib.parse`
 
 ### Interfaces
 
-- `def updated(rec: host.HostRecord | None) -> bool`
-- `class Chat`
-  - `def __init__(self, repo: Path) -> None`
-  - `def call(self, method: str, path: str, body: object = None) -> tuple[int, Any]`
-  - `def save_brief(self, fields: dict[str, Any], path: str = '/briefs') -> dict[str, Any]`
-  - `def show_status(self, change: str = '') -> dict[str, Any]`
-  - `def brief(self, slug: str) -> dict[str, Any] | None`
-  - `def challenge_brief(self, change: str, version: int, rejected: list[dict[str, str]]) -> dict[str, Any]`
-  - `def answer_question(self, question: str, option: str, text: str) -> dict[str, Any]`
 - `def _d(name: str, model: type[tools.Args] = brief_tools.BriefDraft) -> Any`
 - `def save_brief(*, title: Annotated[str, _d('title')] = '', outcome: Annotated[str, _d('outcome')] = '', criteria: Annotated[list[str] | None, _d('criteria')] = None, scope: Annotated[list[str] | None, _d('scope')] = None, non_goals: Annotated[list[str] | None, _d('non_goals')] = None, decisions: Annotated[list[brief_tools.DecisionDraft] | None, _d('decisions')] = None, person_checks: Annotated[list[brief_tools.PersonCheckDraft] | None, _d('person_checks')] = None, specified: Annotated[list[str] | None, _d('specified')] = None, change: Annotated[str, _d('change')] = '') -> dict[str, Any]`
 - `def save_visual_check(change: Annotated[str, _d('change', brief_tools.VisualDraft)], ui: Annotated[bool, _d('ui', brief_tools.VisualDraft)], states: Annotated[list[brief_tools.VisualStateDraft] | None, _d('states', brief_tools.VisualDraft)] = None, steps: Annotated[list[brief_tools.VisualStepDraft] | None, _d('steps', brief_tools.VisualDraft)] = None) -> dict[str, Any]`
-- `def challenge_brief(change: Annotated[str, Field(description='Handle of the Change', examples=['c1'])], version: Annotated[int, Field(description='The brief version you saved and ask to be challenged', examples=[2])], rejected: Annotated[list[tools.Rejection] | None, Field(description='Findings of the previous round you do not take, by ID, with your evidence; the next challenger judges each')] = None) -> dict[str, Any]`
+- `def challenge_brief(change: Annotated[str, Field(description='Handle of the Change', examples=['c1'])], version: Annotated[int, Field(description='The brief version you saved and ask to be challenged', examples=[2])], rejected: Annotated[list[tools.Rejection] | None, Field(description='Findings of the previous round you do not take, by ID, with your evidence; the next challenger judges each')] = None, *, retry_pick: Annotated[bool, Field(description="True only to pick the version's decisions again after the pick failed or the decisions changed; it uses no challenge round and needs no new version")] = False) -> dict[str, Any]`
 - `def show_status(change: Annotated[str, Field(description='Handle of one Change; empty for all', examples=['c1'])] = '') -> dict[str, Any]`
-- `def answer_question(question: Annotated[str, Field(description='Question id from show_status', examples=['c1.q2'])], option: Annotated[str, Field(description='Chosen option id, if any', examples=['o1'])] = '', text: Annotated[str, Field(description="The owner's answer in words", max_length=2000)] = '') -> dict[str, Any]`
+- `def answer_question(question: Annotated[str, Field(description='Question id from show_status', examples=['c1.q2'])], kind: Annotated[Literal['event', 'clarification', 'brief_change'], Field(description=answers.KIND)], option: Annotated[str, Field(description='Chosen option id, if any', examples=['o1'])] = '', text: Annotated[str, Field(description="The owner's answer in words", max_length=2000)] = '', statement: Annotated[str, Field(description=answers.STATEMENT, max_length=240)] = '', *, confirmed: Annotated[bool, Field(description=answers.CONFIRMED)] = False) -> dict[str, Any]`
+- `def find_decisions(*, text: Annotated[str, Field(description='Words the title or statement holds; empty for all', max_length=200)] = '', where: Annotated[Literal['project', 'global', 'all', 'owlbear'], Field(description="This workspace's own decisions (OwlBear's in OwlBear's workspace), Global ones, both, or OwlBear's own with Global")] = 'all', include_retired: Annotated[bool, Field(description='Also replaced, withdrawn and spent decisions')] = False) -> dict[str, Any]`
+- `def lookup_decisions(question: Annotated[str, ASKED]) -> dict[str, Any]`
+- `def record_decision(*, title: Annotated[str, Field(description='Short name of the decision', max_length=200)], statement: Annotated[str, Field(description='The rule in force, at most two lines', max_length=240)], rationale: Annotated[str, Field(description='Why; leave unknown reasons out. Required when it replaces one: why the rule changes', max_length=4000)] = '', topic: Annotated[str, Field(description='Topic it belongs to, if any', max_length=80)] = '', scope: Annotated[Literal['here', 'global'], Field(description="here: this project (OwlBear's own in OwlBear's workspace); global: every project")] = 'here', confirmed: Annotated[bool, Field(description='True only when the owner confirmed this statement in this chat after you read it back to him; it is then his decision, in force at once. False: your own choice, a draft he activates. Never pass his words.')] = False, replaces: Annotated[brief_tools.Replacement | None, Field(description='The decision it replaces, if any')] = None) -> dict[str, Any]`
+- `def retire_decision(*, decision: Annotated[str, Field(description='Decision id from find_decisions')], revision: Annotated[str, Field(description='Its revision from find_decisions', pattern='^[0-9a-f]{64}$')], reason: Annotated[str, Field(description='Why it no longer applies', min_length=1, max_length=4000)], redecide: Annotated[bool, Field(description='True only when it is decided and the owner re-decided it')] = False, confirmed: Annotated[bool, Field(description='True only when the owner confirmed retiring it in this chat after you read it back')] = False) -> dict[str, Any]`
+- `def read_back_decision(*, decision: Annotated[str, Field(description='Decision id from find_decisions')], revision: Annotated[str, Field(description='Its revision from find_decisions')], confirmed: Annotated[bool, Field(description='True only when the owner confirmed the statement as it stands after you read it back to him. A different intent is no read-back: record it as a replacement with record_decision. Never pass his words.')] = False) -> dict[str, Any]`
+- `def correct_decision_origin(*, decision: Annotated[str, Field(description='Decision id from find_decisions')], revision: Annotated[str, Field(description='Its revision from find_decisions', pattern='^[0-9a-f]{64}$')], origin: Annotated[Literal['approved', 'autonomous'], Field(description="approved: an agent's proposal he accepted; autonomous: an agent's own choice")], reason: Annotated[str, Field(description='Why, in your words, never his: what he stated about where it came from', max_length=4000)], confirmed: Annotated[bool, Field(description='True only when the owner confirmed this correction in this chat after you read it back')] = False) -> dict[str, Any]`
+- `def queue_read_back(decision: Annotated[str, Field(description='Decision id from find_decisions')], revision: Annotated[str, Field(description='The revision find_decisions showed for it', pattern='^[0-9a-f]{64}$')], why: Annotated[str, Field(description='What makes it worth asking again: the ambiguity, new evidence, conflict or changed consequences, in one or two sentences', min_length=1, max_length=600)], kind: Annotated[Literal['safety', 'blocked', 'uncertain', 'improvement'], Field(description='How urgent: safety (imminent safety or irreversible effects), blocked (work waits on it), uncertain (consequential uncertainty), improvement (can wait)')]) -> dict[str, Any]`
 - `def main(argv: list[str] | None = None) -> None`
 
 ## serve/delivery-next/src/owlbear_delivery_next/commands/runner.py
@@ -1957,6 +2504,7 @@ Process entry for one Change and one step: ``python -m owlbear_delivery_next run
 - `owlbear_delivery_next.project_host`
 - `owlbear_delivery_next.runtimes`
 - `owlbear_delivery_next.settings`
+- `owlbear_delivery_next.settings.config`
 - `owlbear_delivery_next.state_store`
 - `owlbear_delivery_next.state_store.store`
 - `owlbear_delivery_next.workflow_steps`
@@ -1967,10 +2515,10 @@ Process entry for one Change and one step: ``python -m owlbear_delivery_next run
 ### Interfaces
 
 - `def _shape(_ctx: engine.Ctx, c: Change) -> tuple[Change, loop.StepResult]`
-- `def _previous(store: Store, slug: str, session: str | None) -> dict[int, float | None]`
 - `def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None`
-- `def _kept(store: Store, lock: Lock, change: Change, path: Path, config: Callable[[Path], sdk_adapter.Session]) -> session_result.Run`
+- `def _helpers(change: Change, at: Path, asked: lookup.Asked) -> tuple[tuple[tools.Spec, Callable[[tools.Args], str]], ...]`
 - `def _planning(store: Store, lock: Lock, slug: str, path: Path) -> dict[str, list[str]]`
+- `def _captured(change: Change, path: Path, head: str, out: Path, widths: list[int]) -> tuple[list[Any], list[Any]]`
 - `def _visual(store: Store, lock: Lock, change: Change, repo: Path) -> None`
 - `def _before(store: Store, lock: Lock, change: Change, repo: Path) -> None`
 - `def _ready(prof: Profile, path: Path, now: datetime) -> Result | None`
@@ -1978,7 +2526,7 @@ Process entry for one Change and one step: ``python -m owlbear_delivery_next run
 - `def _reused(store: Store, lock: Lock, change: Change) -> bool`
 - `def main(argv: list[str] | None = None) -> int`
 - `def _step(store: Store, lock: Lock, change: Change, step: Step | None, repo: Path) -> None`
-- `def _gate_unread(store: Store, lock: Lock, exc: UsageUnreadError) -> None`
+- `def _run(store: Store, lock: Lock, change: Change, step: Step | None, repo: Path) -> None`
 - `def _unshelved(exc: worktree.ShelveError) -> Result`
 
 ## serve/delivery-next/src/owlbear_delivery_next/commands/setup.py
@@ -2009,6 +2557,7 @@ Setup: profile confirmation and consented untracked local writes, after readines
 - `def without_task(data: dict[str, Any]) -> dict[str, Any]`
 - `def has_task(path: Path) -> bool`
 - `def with_server(data: dict[str, Any], python: str, repo: Path) -> dict[str, Any]`
+- `def with_memory(data: dict[str, Any], python: str) -> dict[str, Any]`
 - `def user_mcp(home: Path) -> Path`
 - `def _loose_json(text: str) -> object`
 - `def _serves(servers: object, repo: Path) -> bool`
@@ -2033,6 +2582,7 @@ The C+ step's MCP relay (TD-36): the window's harness runs it; it forwards the s
 - `mcp`
 - `mcp.server.lowlevel`
 - `mcp.server.stdio`
+- `owlbear_delivery_next.change_contracts`
 - `pathlib`
 - `typing`
 - `urllib.error`
@@ -2040,7 +2590,7 @@ The C+ step's MCP relay (TD-36): the window's harness runs it; it forwards the s
 
 ### Interfaces
 
-- `def forward(inbox: Path, method: str, path: str, body: object = None) -> dict[str, Any] | None`
+- `def forward(inbox: Path, method: str, path: str, body: object = None, timeout: float = TIMEOUT) -> dict[str, Any] | None`
 - `def relay(inbox: Path) -> Server`
 - `def main(argv: list[str] | None = None) -> None`
 
@@ -2189,6 +2739,7 @@ A design pack update's commit (TD-101, step 3c): one commit on its own branch, f
 - `def _quiet(run: Git, cwd: Path, args: list[str]) -> str`
 - `def commit(src: Source, files: dict[str, str | None], message: str, at: Path, run: Git = git) -> str`
 - `def remote_head(src: Source, branch: str, run: Git = git) -> str`
+- `def _origin_head(run: Git, root: Path, branch: str) -> str`
 - `def push(src: Source, made: str, branch: str, run: Git = git) -> None`
 - `def _holds(run: Git, root: Path, made: str, there: str) -> bool`
 
@@ -2297,6 +2848,7 @@ GitHub contract, the ``gh`` provider and the merge decision.
 - `owlbear_delivery_next.github.gh_queue`
 - `owlbear_delivery_next.github.provider`
 - `pydantic`
+- `re`
 - `subprocess`
 - `urllib.parse`
 
@@ -2317,7 +2869,8 @@ GitHub contract, the ``gh`` provider and the merge decision.
   - `def compare(self, repository: str, base: str, head: str) -> str`
   - `def request_merge(self, request: MergeRequest) -> MergeResult`
   - `def _merged(payload: Json, message: str | None) -> MergeResult`
-  - `def delete_branch(self, repository: str, branch: str) -> None`
+  - `def delete_branch(self, repository: str, branch: str, expected_head: str) -> BranchDelete`
+  - `def _branch_head(self, repository: str, ref: str) -> tuple[str, str | None]`
 
 ## serve/delivery-next/src/owlbear_delivery_next/github/gh_checks.py
 
@@ -2462,6 +3015,8 @@ Transport-free GitHub contract: pull requests, checks, rules, comments and merge
 - `class FailureCode(StrEnum)`
 - `class ProviderError(RuntimeError)`
   - `def __init__(self, code: FailureCode, operation: str, detail: str, *, retry_safe: bool) -> None`
+- `class BranchState(StrEnum)`
+- `class BranchDelete`
 - `def bounded(message: str | None) -> str | None`
 - `class MergeMethod(StrEnum)`
 - `class Repository(_Model)`
@@ -2504,7 +3059,7 @@ Transport-free GitHub contract: pull requests, checks, rules, comments and merge
   - `def job_log(self, repository: str, job_id: int, lines: int = 40) -> str`
   - `def compare(self, repository: str, base: str, head: str) -> str`
   - `def request_merge(self, request: MergeRequest) -> MergeResult`
-  - `def delete_branch(self, repository: str, branch: str) -> None`
+  - `def delete_branch(self, repository: str, branch: str, expected_head: str) -> BranchDelete`
   - `def update_branch(self, repository: str, number: int, expected_head: str) -> bool`
   - `def read_queue(self, repository: str, number: int) -> QueueState`
   - `def enqueue(self, pr: PullRequest, expected_head: str) -> EnqueueResult`
@@ -2564,6 +3119,7 @@ Delivery's settings in the shared data repository (TD-57, TD-59, TD-64, TD-98, T
   - `def global_path(self) -> Path`
   - `def project_path(self, name: str) -> Path`
   - `def memory_path(self, name: str) -> Path`
+  - `def git(self, *args: str, until: float | None = None) -> subprocess.CompletedProcess[str]`
   - `def locked(self, wait: float | None = None) -> Iterator[None]`
   - `def _exclude(self, admin: Path) -> None`
   - `def claim(self, name: str, identity: str) -> bool`
@@ -2571,11 +3127,17 @@ Delivery's settings in the shared data repository (TD-57, TD-59, TD-64, TD-98, T
   - `def refusal(self, name: str, identity: str) -> str`
   - `def rename(self, old: str, new: str, until: float | None = None) -> str`
   - `def publish(self, paths: Path | Sequence[Path], message: str, until: float | None = None) -> str`
+  - `def commit(self, paths: Path | Sequence[Path], message: str, until: float | None = None) -> str`
   - `def _tracked(self, rel: str, until: float) -> bool`
   - `def _push(self, until: float) -> str`
+  - `def pull(self, until: float | None = None) -> str`
+  - `def rebase(self, until: float | None = None) -> str`
+  - `def _settle(self, done: subprocess.CompletedProcess[str], failed: str, until: float) -> str`
   - `def pending(self) -> str`
+  - `def _unpushed(self, until: float) -> tuple[int, str]`
 - `def locate() -> DataRepo | None`
 - `def point(root: Path) -> DataRepo`
+- `def remote_identity(url: str) -> str`
 - `def identity(repo: Path) -> str`
 - `def project_name(repo: Path) -> str`
 - `def folder(shared: DataRepo, repo: Path) -> str`
@@ -2711,6 +3273,7 @@ What each worker role starts with: its tools (TD-69), the project's memory (TD-7
 - `def agent_file(role: str) -> tuple[dict[str, Any], str]`
 - `def tools(role: str) -> list[str]`
 - `def memory(store: Path | None) -> dict[str, Any] | None`
+- `def global_memory(store: Path) -> Path`
 - `def directory() -> Path`
 - `def text(name: str, folder: Path | None = None) -> str`
 - `def _named(name: str, folder: Path | None = None) -> bool`
@@ -2927,10 +3490,12 @@ The machine host's HTTP surface (TD-242): pages, machine routes and each project
 - `contextlib`
 - `fastapi`
 - `fastapi.responses`
+- `owlbear_delivery_next.change_contracts`
 - `owlbear_delivery_next.local_system`
 - `owlbear_delivery_next.machine_host`
 - `owlbear_delivery_next.machine_host.machine`
 - `owlbear_delivery_next.project_host`
+- `owlbear_delivery_next.state_store`
 - `pathlib`
 - `pydantic`
 - `re`
@@ -2943,13 +3508,17 @@ The machine host's HTTP surface (TD-242): pages, machine routes and each project
 
 - `class RegisterBody(api.Body)`
 - `class SettingsBody(api.Body)`
+- `class CurateBody(api.Body)`
 - `def _local(host: str) -> bool`
 - `class Dispatcher`
   - `def __init__(self, app: ASGIApp, machine: Machine, expected: bytes) -> None`
   - `async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None`
 - `def create(machine: Machine, ended: Callable[[], None] = lambda: None) -> ASGIApp`
 - `def _routes(machine: Machine) -> APIRouter`
+- `def _shared() -> data_repo.DataRepo | None`
+- `def _places(machine: Machine) -> list[decision_impact.Place]`
 - `def _machine_routes(routes: APIRouter, machine: Machine) -> None`
+- `def _curation_routes(routes: APIRouter, machine: Machine) -> None`
 - `def machine_values(machine: Machine) -> dict[str, Any]`
 - `def _update_routes(routes: APIRouter, machine: Machine) -> None`
 
@@ -3032,6 +3601,7 @@ What the ``owlbear`` command does to the machine host: start, stop, status, logs
 ### Interfaces
 
 - `def plist_path() -> Path`
+- `def saved_env() -> dict[str, str] | None`
 - `def argv(*, run: bool = False) -> list[str]`
 - `def start(say: Say, *, paused: bool = False) -> int`
 - `def _identified() -> HostRecord | None`
@@ -3043,6 +3613,63 @@ What the ``owlbear`` command does to the machine host: start, stop, status, logs
 - `def logs(say: Say, lines: int) -> int`
 - `def autostarts() -> str`
 - `def autostart(say: Say, *, on: bool) -> int`
+
+## serve/delivery-next/src/owlbear_delivery_next/machine_host/curation.py
+
+Automatic memory curation (item 5 slice 4; TD-292, TD-400): one curator session per memory folder.
+
+### Imports
+
+- `__future__`
+- `asyncio`
+- `contextlib`
+- `datetime`
+- `owlbear_delivery_next.change_contracts`
+- `owlbear_delivery_next.change_contracts.memory_curation_tools`
+- `owlbear_delivery_next.change_contracts.models`
+- `owlbear_delivery_next.change_contracts.permissions`
+- `owlbear_delivery_next.local_system`
+- `owlbear_delivery_next.local_system.storage_io`
+- `owlbear_delivery_next.machine_host`
+- `owlbear_delivery_next.runtimes`
+- `owlbear_delivery_next.settings`
+- `owlbear_delivery_next.settings.config`
+- `owlbear_delivery_next.workflow_steps`
+- `owlbear_memory`
+- `pathlib`
+- `pydantic`
+- `tempfile`
+- `threading`
+- `typing`
+- `uuid`
+
+### Interfaces
+
+- `class FolderRun(Record)`
+- `class Runs(Record)`
+- `def message(folder: str) -> str`
+- `def folders(root: Path) -> list[str]`
+- `def _run(cfg: sdk_adapter.Session) -> Run`
+- `class Curation`
+  - `def __init__(self, slots: Slots, shared: Callable[[], data_repo.DataRepo | None] = data_repo.locate, run: Callable[[sdk_adapter.Session], Run] = _run, fenced: Callable[[], str] = str, paused: Callable[[], bool] = lambda: False, admission: Callable[[], AbstractContextManager[object]] = nullcontext) -> None`
+  - `def path(self) -> Path`
+  - `def load(self) -> Runs`
+  - `def _write(self, runs: Runs) -> None`
+  - `def _save(self, folder: str, run: FolderRun) -> None`
+  - `def read(self) -> dict[str, Any]`
+  - `def _pids(self, event: dict[str, Any]) -> None`
+  - `def lingering(self) -> bool`
+  - `def working(self) -> list[str]`
+  - `def due(self, folder: str) -> bool`
+  - `def allowed(self, trigger: Trigger) -> bool`
+  - `def _refusal(self, trigger: Trigger) -> str`
+  - `def nudge(self, wanted: list[str] | None, trigger: Trigger) -> list[str]`
+  - `def start(self, folder: str, asked: Asked = 'manual') -> list[str]`
+  - `def _work(self) -> None`
+  - `def _one(self, folder: str, started: datetime) -> bool`
+  - `def _session(self, shared: data_repo.DataRepo, folder: str, started: datetime, key: str) -> FolderRun`
+- `def _pending(store: Path) -> list[Any]`
+- `def _unset(settings: Settings) -> str`
 
 ## serve/delivery-next/src/owlbear_delivery_next/machine_host/environment.py
 
@@ -3121,6 +3748,9 @@ The handover between two versions' hosts (self-update build §5.2, §5.4, §5.5;
 - `def _link(link: Path, target: Path) -> str`
 - `def install(say: Say, ask: Callable[[str], bool], app: App) -> int`
 - `def uninstall(say: Say) -> int`
+- `def _fails(command: list[str]) -> str | None`
+- `def _tools(say: Say) -> int`
+- `def _login_item(say: Say) -> int`
 - `def doctor(say: Say, dropped: list[str]) -> int`
 
 ## serve/delivery-next/src/owlbear_delivery_next/machine_host/machine.py
@@ -3133,10 +3763,11 @@ The machine host's state (TD-242): its record, the projects it serves and whethe
 - `contextlib`
 - `datetime`
 - `owlbear_delivery_next.change_flow.status`
+- `owlbear_delivery_next.local_system`
 - `owlbear_delivery_next.local_system.slots`
 - `owlbear_delivery_next.machine_host`
+- `owlbear_delivery_next.machine_host.curation`
 - `owlbear_delivery_next.machine_host.project`
-- `owlbear_delivery_next.machine_host.registry`
 - `owlbear_delivery_next.project_host.host`
 - `owlbear_delivery_next.state_store`
 - `owlbear_delivery_next.state_store.store`
@@ -3153,7 +3784,10 @@ The machine host's state (TD-242): its record, the projects it serves and whethe
 - `def recorded(repo: Path) -> dict[str, int]`
 - `class Machine`
   - `def __init__(self, record: HostRecord, *, paused: bool = True) -> None`
+  - `def _curation_fence(self) -> str`
   - `def _sessions(self) -> int`
+  - `def carry(self) -> None`
+  - `def _pending(self, why: str) -> None`
   - `def say(self, text: str) -> None`
   - `def _load(self, entry: registry.Project) -> Project`
   - `def sharing(self, p: Project) -> list[Host]`
@@ -3174,10 +3808,38 @@ The machine host's state (TD-242): its record, the projects it serves and whethe
   - `def fenced(self) -> None`
   - `def unfence(self) -> None`
   - `def idle_stop(self) -> bool`
+  - `def curation_loop(self) -> None`
   - `def idle_loop(self) -> None`
   - `def waiting(self) -> int`
   - `def closing(self) -> None`
   - `def stop_all(self) -> None`
+- `def _moving() -> registry.Settings`
+- `def _switched(say: Callable[[str], None]) -> str`
+- `def _move(shared: data_repo.DataRepo, say: Callable[[str], None]) -> str`
+- `def _pending(why: str) -> None`
+- `def _written(digest: str) -> None`
+
+## serve/delivery-next/src/owlbear_delivery_next/machine_host/machine_settings.py
+
+The machine settings in force (D-01M5MZKEPPVMFC9HK795MMG91B): this machine's own value, else Global's, else unset.
+
+### Imports
+
+- `__future__`
+- `owlbear_delivery_next.change_contracts.models`
+- `owlbear_delivery_next.local_system`
+- `owlbear_delivery_next.machine_host`
+- `owlbear_delivery_next.settings.config`
+- `owlbear_delivery_next.state_store.store`
+- `pydantic`
+- `typing`
+
+### Interfaces
+
+- `class Resolved(Record)`
+- `def resolve(local: MachineValues, glob: MachineValues | None, notice: str = '') -> Resolved`
+- `def shared_values(shared: DataRepo | None) -> tuple[MachineValues | None, str]`
+- `def current(local: registry.Settings | None = None) -> Resolved`
 
 ## serve/delivery-next/src/owlbear_delivery_next/machine_host/project.py
 
@@ -3236,6 +3898,7 @@ The machine's registered projects (TD-242): ``~/.owlbear/machine.json``, written
 - `owlbear_delivery_next.change_contracts.models`
 - `owlbear_delivery_next.local_system`
 - `owlbear_delivery_next.local_system.storage_io`
+- `owlbear_delivery_next.settings.config`
 - `owlbear_delivery_next.state_store`
 - `owlbear_delivery_next.state_store.database`
 - `pathlib`
@@ -3248,7 +3911,8 @@ The machine's registered projects (TD-242): ``~/.owlbear/machine.json``, written
 
 - `class RegistryError(Exception)`
 - `class Project(Record)`
-- `class Settings(Record)`
+- `class Settings(MachineValues)`
+  - `def _one_switch(cls, data: Any) -> Any`
 - `class Machine(Record)`
 - `def _home() -> Path`
 - `def locked() -> Iterator[None]`
@@ -3311,6 +3975,7 @@ The machine host's process (TD-242): one per machine, serving every registered p
 - `owlbear_delivery_next.project_host.api`
 - `owlbear_delivery_next.project_host.host`
 - `secrets`
+- `signal`
 - `socket`
 - `subprocess`
 - `sys`
@@ -3570,9 +4235,9 @@ A design pack update's way into ``main`` (step 3c, TD-325, TD-368): commit, bran
 ### Imports
 
 - `__future__`
-- `contextlib`
 - `owlbear_delivery_next.design_packs`
 - `owlbear_delivery_next.github.provider`
+- `owlbear_delivery_next.settings.config`
 - `pathlib`
 - `pydantic`
 - `typing`
@@ -3582,11 +4247,11 @@ A design pack update's way into ``main`` (step 3c, TD-325, TD-368): commit, bran
 - `class Held(Exception)`
 - `class Publication(BaseModel)`
 - `def publish(job: Job, pub: Publication, files: dict[str, str | None], title: str) -> str`
-- `def _done(job: Job, gh: Provider, pub: Publication, merged: str) -> str`
+- `def _done(job: Job, gh: Provider, pub: Publication, merged: str, head: str) -> str`
 - `def preflight(gh: Provider, repository: str) -> str`
 - `def _held(job: Job, name: str, work: Callable[[], T], said: Callable[[T], str]) -> T`
 - `def _opened(job: Job, gh: Provider, pub: Publication, title: str, body: str) -> PullRequest`
-- `def _merged(job: Job, gh: Provider, pub: Publication) -> str`
+- `def _merged(job: Job, gh: Provider, pub: Publication) -> tuple[str, str]`
 - `def _green(job: Job, gh: Provider, pr: PullRequest, required: tuple[str, ...]) -> bool`
 - `def _moved(job: Job, gh: Provider, pr: PullRequest) -> None`
 
@@ -3780,17 +4445,27 @@ Admission of a launch the owner starts (a shaping chat, a design pack update) ag
 
 ## serve/delivery-next/src/owlbear_delivery_next/project_host/answers.py
 
-Why the host refuses an answer's selection: a visual round's decision (TD-79) or a final retry's tasks (TD-217).
+The Changes page's and the chat's answer to an open question, and why the host refuses one.
 
 ### Imports
 
 - `__future__`
+- `datetime`
+- `fastapi`
+- `owlbear_decisions.models`
+- `owlbear_delivery_next.change_contracts.inbox`
+- `owlbear_delivery_next.change_contracts.models`
 - `owlbear_delivery_next.change_flow`
 - `owlbear_delivery_next.workflow_steps`
+- `pydantic`
 - `typing`
 
 ### Interfaces
 
+- `class AnswerBody(BaseModel)`
+- `def router(store: Store, read: Callable[[str], Change], put: Callable[[str, InboxItem], dict[str, str]]) -> APIRouter`
+- `def _checked(store: Store, c: Change, q: Question, body: AnswerBody) -> tuple[int, str] | None`
+- `def classed(q: Question, body: AnswerBody) -> str`
 - `def refused(c: Change, q: Question, body: AnswerBody) -> tuple[int, str] | None`
 - `def _visual(c: Change, body: AnswerBody) -> tuple[int, str] | None`
 
@@ -3821,6 +4496,8 @@ Status-view HTTP API of the host app: Changes, answers, check results and brief 
 - `owlbear_delivery_next.runtimes.vscode_adapter`
 - `owlbear_delivery_next.runtimes.window_files`
 - `owlbear_delivery_next.settings`
+- `owlbear_delivery_next.settings.config`
+- `owlbear_delivery_next.state_store`
 - `owlbear_delivery_next.state_store.briefs`
 - `owlbear_delivery_next.state_store.store`
 - `owlbear_delivery_next.workflow_steps`
@@ -3835,7 +4512,6 @@ Status-view HTTP API of the host app: Changes, answers, check results and brief 
 ### Interfaces
 
 - `class Body(BaseModel)`
-- `class AnswerBody(Body)`
 - `class CheckBody(Body)`
 - `class ConsentBody(Body)`
 - `class IntentBody(Body)`
@@ -3845,6 +4521,7 @@ Status-view HTTP API of the host app: Changes, answers, check results and brief 
 - `def person_check(c: Change, p: PersonCheck, *, inputs: Inputs, waiting: bool) -> dict[str, Any]`
 - `def offer(c: Change, events: list[dict[str, Any]]) -> dict[str, Any] | None`
 - `def summary(store: Store, slug: str, act: Activity, now: datetime) -> dict[str, Any]`
+- `def watcher(store: Store, slug: str) -> dict[str, Any]`
 - `def new_chat(repo: Path, shaper: Effective, prompt: str = START_PROMPT, start: Callable[[Path, Effective, str], tuple[Outcome, str]] = open_chat) -> dict[str, str]`
 - `def create_app(store: Store, token: str, host: Host, *, launch: Callable[[Path, Effective, str], dict[str, str]] = new_chat, which: Callable[[str], str | None] = shutil.which, pack: pack_job.Job | None = None) -> FastAPI`
 
@@ -3890,7 +4567,9 @@ The shaping chat's request for a brief challenge (TD-249): the version, with the
 - `owlbear_delivery_next.change_contracts.round_records`
 - `owlbear_delivery_next.change_flow`
 - `owlbear_delivery_next.settings`
+- `owlbear_delivery_next.settings.config`
 - `owlbear_delivery_next.state_store.store`
+- `owlbear_delivery_next.workflow_steps`
 - `pydantic`
 - `typing`
 
@@ -3899,8 +4578,28 @@ The shaping chat's request for a brief challenge (TD-249): the version, with the
 - `class ChallengeBody(BaseModel)`
 - `class ApproveBody(BaseModel)`
 - `def slug_of(store: Store, handle: str) -> str | None`
-- `def refused(store: Store, c: Change, body: ApproveBody) -> str`
-- `def router(store: Store, read: Callable[[str], Change], put: Callable[[str, InboxItem], dict[str, str]], wake: Callable[[], None], held: Callable[[], bool] = lambda: False) -> APIRouter`
+- `def refused(store: Store, c: Change, body: ApproveBody, view: DataView | None) -> str`
+- `def approved(store: Store, lock: Lock, body: ApproveBody) -> str`
+- `def asked(store: Store, c: Change, body: ChallengeBody) -> str`
+- `def router(store: Store, read: Callable[[str], Change], wake: Callable[[], None], held: Callable[[], bool] = lambda: False) -> APIRouter`
+
+## serve/delivery-next/src/owlbear_delivery_next/project_host/chat_routes.py
+
+The chat's own reads (chat contract 1): a Change's brief as the shaping chat saved it, and a challenge's progress.
+
+### Imports
+
+- `__future__`
+- `fastapi`
+- `owlbear_delivery_next.change_contracts`
+- `owlbear_delivery_next.change_flow`
+- `typing`
+
+### Interfaces
+
+- `def brief(change: Change) -> dict[str, Any]`
+- `def contract() -> dict[str, list[int]]`
+- `def router(read: Callable[[str], Change]) -> APIRouter`
 
 ## serve/delivery-next/src/owlbear_delivery_next/project_host/config_routes.py
 
@@ -3916,6 +4615,7 @@ The settings page's API (§3.13 item 5, TD-52): read the layers and the resolved
 - `owlbear_delivery_next.design_packs`
 - `owlbear_delivery_next.local_system`
 - `owlbear_delivery_next.local_system.data_repo`
+- `owlbear_delivery_next.project_host`
 - `owlbear_delivery_next.runtimes`
 - `owlbear_delivery_next.runtimes.catalogue`
 - `owlbear_delivery_next.settings.config`
@@ -3958,6 +4658,62 @@ The test review's Maintenance routes (TD-370, TD-371): what its dialog offers, a
 
 - `class StartBody(BaseModel)`
 - `def router(store: Store, host: Host) -> APIRouter`
+
+## serve/delivery-next/src/owlbear_delivery_next/project_host/decision_routes.py
+
+The Decisions page's API (TD-419 slice 5a): the project's and Global decisions, one entry, and the owner's actions.
+
+### Imports
+
+- `__future__`
+- `dataclasses`
+- `fastapi`
+- `owlbear_decisions`
+- `owlbear_decisions.models`
+- `owlbear_delivery_next.change_contracts`
+- `owlbear_delivery_next.project_host`
+- `owlbear_delivery_next.state_store`
+- `owlbear_delivery_next.state_store.decision_actions`
+- `owlbear_delivery_next.state_store.store`
+- `owlbear_delivery_next.workflow_steps`
+- `pydantic`
+- `typing`
+
+### Interfaces
+
+- `class Shown(BaseModel)`
+- `class Redecide(Shown)`
+- `class WithdrawBody(Redecide)`
+- `class RetireBody(WithdrawBody)`
+- `class Promotion(Shown)`
+- `class SuccessorBody(Redecide)`
+- `class ReplaceBody(SuccessorBody)`
+- `class ActivateBody(Redecide)`
+- `class KeepBody(BaseModel)`
+- `class ReadBackBody(Shown)`
+- `class CorrectBody(ReadBackBody)`
+- `class QueueBody(BaseModel)`
+- `class LookupBody(BaseModel)`
+- `class ProposalBody(BaseModel)`
+- `def owner(request: Request) -> None`
+- `def _row(view: DataView, entry: Entry) -> dict[str, Any]`
+- `def _linked(view: DataView, entry: Entry) -> tuple[list[dict[str, str]], list[dict[str, str]]]`
+- `def _history(shared: DataRepo | None, entry: Entry) -> list[dict[str, str]]`
+- `def _action(subject: str) -> str`
+- `def _shown(d: dict[str, Any], where: Where, state: str, read_back: ReadBack, *, retired: bool) -> bool`
+- `def _within(d: dict[str, Any], where: Where) -> bool`
+- `def _receipts(work: Callable[[], list[Receipt]]) -> dict[str, Any]`
+- `def _view(shared: DataRepo | None, project: str) -> DataView`
+- `def _queue(store: Store | None, view: DataView, where: Where) -> list[dict[str, Any]]`
+- `def scoped(where: Where = 'all') -> str`
+- `def project(store: Store, repo: Callable[[], Path] | None = None) -> APIRouter`
+- `def router(shared: Shared, folder: Callable[[], str], places: Places, store: Store | None = None) -> APIRouter`
+- `def _lookup_route(routes: APIRouter, shared: Shared, folder: Callable[[], str], store: Store | None) -> None`
+- `def _confirmed(body: SuccessorBody) -> None`
+- `def _owner_routes(routes: APIRouter, shared: Shared, at: At, mine: list[Any]) -> None`
+- `def _ignore_route(routes: APIRouter, store: Store, at: At, mine: list[Any]) -> None`
+- `def _impact(shared: DataRepo | None, folder: str, decision_id: str, places: Places) -> dict[str, Any]`
+- `def _shared_routes(routes: APIRouter, shared: Shared, at: At, places: Places) -> None`
 
 ## serve/delivery-next/src/owlbear_delivery_next/project_host/environment.py
 
@@ -4018,7 +4774,7 @@ Delivery host: one per clone; scheduler, runner launcher, termination scan and c
 - `class HostRecord(Record)`
 - `class RunnerRecord(Record)`
 - `def running(store: Store) -> HostRecord | None`
-- `def running_at(root: Path) -> HostRecord | None`
+- `def running_at(root: Path, model: type[R] = HostRecord) -> R | None`
 - `def stale(record: HostRecord | None) -> bool`
 - `def offline(c: Change, now: datetime) -> bool`
 - `def activity(store: Store, slug: str, host: HostRecord | None, *, paused: bool = False, waiting: str = '') -> Activity`
@@ -4051,6 +4807,33 @@ Delivery host: one per clone; scheduler, runner launcher, termination scan and c
   - `def _spawn(self, slug: str) -> RunnerRecord`
   - `def run(self) -> None`
 
+## serve/delivery-next/src/owlbear_delivery_next/project_host/impact_routes.py
+
+A change of mind's impact on the Decisions page (TD-428, slice 5b part 2): the report, fixes and kept code.
+
+### Imports
+
+- `__future__`
+- `dataclasses`
+- `fastapi`
+- `fastapi.exceptions`
+- `fastapi.routing`
+- `owlbear_decisions.models`
+- `owlbear_delivery_next.state_store`
+- `owlbear_delivery_next.state_store.backlog`
+- `owlbear_delivery_next.state_store.decision_actions`
+- `pydantic`
+- `typing`
+
+### Interfaces
+
+- `class Quiet(APIRoute)`
+  - `def get_route_handler(self) -> Callable[[Request], Awaitable[Response]]`
+- `class ScheduleBody(BaseModel)`
+- `class AcceptBody(ScheduleBody)`
+- `def _answer(work: Callable[[], T]) -> T`
+- `def router(shared: Callable[[], DataRepo | None], places: Callable[[], Sequence[Place]], mine: list[Any]) -> APIRouter`
+
 ## serve/delivery-next/src/owlbear_delivery_next/project_host/launches.py
 
 New Change launches: the shaping chat opens on a background thread, one at a time per project (TD-83).
@@ -4081,6 +4864,7 @@ The Memory page's API (TD-85): the project's agent memory in its shared-reposito
 ### Imports
 
 - `__future__`
+- `datetime`
 - `fastapi`
 - `owlbear_delivery_next.local_system`
 - `owlbear_memory`
@@ -4099,7 +4883,10 @@ The Memory page's API (TD-85): the project's agent memory in its shared-reposito
 - `def folder_of(store: Store, where: Where) -> Path`
 - `def _refused(exc: Exception) -> HTTPException`
 - `def _act(store: Store, entry_id: str, what: str, do: Callable[[MemoryEngine], MemoryEntry], where: Where = 'project') -> dict[str, Any]`
-- `def _globalize(store: Store, entry_id: str, shown: str) -> dict[str, Any]`
+- `def _move(store: Store, entry_id: str, shown: str, *, back: bool) -> dict[str, Any]`
+- `def _later(entry: MemoryEntry) -> str`
+- `def _relocate(path: Path, moved: Path, folders: tuple[Path, Path], entries: tuple[MemoryEntry, MemoryEntry], *, back: bool) -> None`
+- `def reorigin(shared: data_repo.DataRepo, old: str, new: str, until: float) -> str`
 - `def _purge(store: Store, days: int, where: Where) -> dict[str, Any]`
 - `def router(store: Store) -> APIRouter`
 
@@ -4180,6 +4967,7 @@ A project host's share of the machine's session slots (TD-336, TD-105).
 - `__future__`
 - `contextlib`
 - `dataclasses`
+- `owlbear_delivery_next.change_contracts.failures`
 - `owlbear_delivery_next.change_contracts.models`
 - `owlbear_delivery_next.design_packs`
 - `owlbear_delivery_next.local_system.slots`
@@ -4210,23 +4998,22 @@ The runtimes a step's session runs in, and what it is sent.
 
 ## serve/delivery-next/src/owlbear_delivery_next/runtimes/ahp.py
 
-Agent Host Protocol 0.10.0 client over the editor's local socket; stdlib only (TD-34, TD-36).
+Agent Host Protocol 0.10.0 client over the editor's local socket (TD-34, TD-36).
 
 ### Imports
 
 - `__future__`
-- `base64`
 - `contextlib`
-- `hashlib`
 - `itertools`
 - `json`
-- `os`
 - `pathlib`
 - `queue`
 - `socket`
-- `struct`
 - `threading`
 - `typing`
+- `urllib.parse`
+- `websockets.exceptions`
+- `websockets.sync.client`
 
 ### Interfaces
 
@@ -4236,15 +5023,14 @@ Agent Host Protocol 0.10.0 client over the editor's local socket; stdlib only (T
   - `def next_event(self, timeout: float) -> Json | None`
 - `def endpoint(entries: Path = ENTRIES) -> Json | None`
 - `class HostError(RuntimeError)`
+- `def _ended(exc: BaseException) -> str`
 - `class Connection`
   - `def __init__(self, path: str, token: str, client_id: str) -> None`
   - `def close(self) -> None`
   - `def reopen(self, github_token: str) -> Connection`
-  - `def _exact(self, n: int) -> bytes`
-  - `def _frame(self) -> Json`
   - `def _read(self) -> None`
   - `def _send(self, obj: Json) -> None`
-  - `def _frame_out(self, op: int, data: bytes) -> None`
+  - `def _stall(self) -> None`
   - `def request(self, method: str, params: Json, timeout: float = 60) -> Json`
   - `def dispatch(self, channel: str, action: Json) -> None`
   - `def next_event(self, timeout: float) -> Json | None`
@@ -4286,6 +5072,61 @@ What each runtime offers beyond the shared baseline (runtime research P15 to P19
 - `def _key(name: str) -> str`
 - `def runtime_of(names: set[str]) -> str | None`
 
+## serve/delivery-next/src/owlbear_delivery_next/runtimes/chatlogs.py
+
+Retro chatlogs (Improvement design §5): the evidence Retro reads, kept on this machine so it survives.
+
+### Imports
+
+- `__future__`
+- `asyncio`
+- `contextlib`
+- `datetime`
+- `errno`
+- `fcntl`
+- `gzip`
+- `json`
+- `os`
+- `owlbear_delivery_next.local_system`
+- `pathlib`
+- `re`
+- `shutil`
+- `stat`
+- `sys`
+- `tempfile`
+- `threading`
+- `time`
+- `typing`
+- `yaml`
+
+### Interfaces
+
+- `class Stopped(Exception)`
+- `def root() -> Path`
+- `def state() -> Path`
+- `def _private(folder: Path) -> Path`
+- `def _now() -> str`
+- `def _locked(path: Path) -> Iterator[None]`
+- `def note(event: dict[str, Any]) -> None`
+- `def owner(kind: str, role: str, job: str, worktree: Path) -> dict[str, str]`
+- `def sessions() -> set[str]`
+- `def _copy(src: BinaryIO, target: Path, limit: int | None, stop: threading.Event, until: float) -> int`
+- `def _go_on(stop: threading.Event, until: float, *, over: bool) -> None`
+- `def _named(log: Path, stop: threading.Event, until: float) -> list[str]`
+- `def _results(line: str) -> list[str]`
+- `def _output(path: str, target: Path, room: int, stop: threading.Event, until: float) -> tuple[str, int]`
+- `def capture(session: str, *, provisional: bool, records: Path | None = None, stop: threading.Event | None = None, seconds: float = CAPTURE) -> dict[str, Any]`
+- `def _outputs(log: Path, stage: Path, live: Path, before: dict[str, Any], stop: threading.Event, until: float) -> list[dict[str, Any]]`
+- `def _recover(folder: Path, session: str) -> None`
+- `def _switch(folder: Path, session: str, said: dict[str, Any], stage: Path | None) -> None`
+- `def _write(path: Path, data: dict[str, Any]) -> None`
+- `def kept(session: str, ending: str, *, provisional: bool, stop: threading.Event | None = None) -> None`
+- `async def around(cfg: Any, step: Awaitable[Run], current: Callable[[], str] | None = None) -> Run`
+- `def enrolled(cwd: str, folders: Iterable[str]) -> bool`
+- `def _cwd(folder: Path) -> str`
+- `def finished_chats(folders: list[str], now: datetime, records: Path | None = None) -> Iterator[str]`
+- `def prune(now: datetime, judged: dict[str, datetime], pinned: set[str]) -> list[str]`
+
 ## serve/delivery-next/src/owlbear_delivery_next/runtimes/copilot_cli.py
 
 The installed Copilot CLI that every SDK session and model list runs.
@@ -4294,11 +5135,38 @@ The installed Copilot CLI that every SDK session and model list runs.
 
 - `__future__`
 - `os`
+- `pathlib`
 - `shutil`
 
 ### Interfaces
 
 - `def cli_path() -> str`
+- `def find(path: str) -> str | None`
+- `def missing() -> str`
+
+## serve/delivery-next/src/owlbear_delivery_next/runtimes/host_record.py
+
+The agent host's own record of a window step's session: ``~/.copilot/session-state/<id>/events.jsonl``.
+
+### Imports
+
+- `__future__`
+- `dataclasses`
+- `datetime`
+- `json`
+- `pathlib`
+- `types`
+- `typing`
+
+### Interfaces
+
+- `class Record`
+- `def _events(path: Path) -> list[Event]`
+- `def _started(events: list[Event], folder: Path, since: datetime) -> bool`
+- `def _selected(events: list[Event], agent: str) -> list[str] | None`
+- `def _subagent(data: dict[str, Any]) -> SimpleNamespace`
+- `def read(folder: Path, since: datetime, agent: str, state: Path = STATE) -> Record`
+- `def unexpected(given: list[str], allowed: list[str]) -> list[str]`
 
 ## serve/delivery-next/src/owlbear_delivery_next/runtimes/leftovers.py
 
@@ -4323,6 +5191,30 @@ Processes a VS Code step left working in its worktree: what the agent's shells s
 - `def _since(pid: int, since: datetime) -> bool`
 - `def scan(root: Path, since: datetime) -> list[int]`
 - `def settle(root: Path, since: datetime, find: Callable[[Path, datetime], list[int]] = scan, wait: Callable[[float], None] = time.sleep) -> Termination`
+
+## serve/delivery-next/src/owlbear_delivery_next/runtimes/lessons.py
+
+Pre-flight lessons: what a newly created step conversation is told from memory first (TD-70, TD-241).
+
+### Imports
+
+- `__future__`
+- `dataclasses`
+- `json`
+- `owlbear_delivery_next.local_system`
+- `owlbear_memory`
+- `typing`
+
+### Interfaces
+
+- `class Exposure`
+  - `def selected(self) -> dict[str, Any]`
+- `def recalls(role: str) -> bool`
+- `def opening(role: str, memory: Path | None, message: str, log: Callable[..., None]) -> tuple[str, Exposure | None]`
+- `def shown(exposure: Exposure | None, session: str, log: Callable[..., None], *, confirmed: bool = True) -> None`
+- `def block(role: str, memory: Path) -> tuple[str, Exposure]`
+- `def line(candidate: selection.Candidate) -> str`
+- `def _ref(candidate: selection.Candidate) -> dict[str, str]`
 
 ## serve/delivery-next/src/owlbear_delivery_next/runtimes/missing.py
 
@@ -4389,7 +5281,7 @@ Readiness: the facts a clone needs before Delivery can run and publish, each ok 
 - `owlbear_delivery_next.change_contracts.profile_record`
 - `owlbear_delivery_next.design_packs`
 - `owlbear_delivery_next.local_system.git_files`
-- `owlbear_delivery_next.runtimes.copilot_cli`
+- `owlbear_delivery_next.runtimes`
 - `owlbear_delivery_next.settings`
 - `owlbear_delivery_next.state_store`
 - `pathlib`
@@ -4444,6 +5336,7 @@ One step's result tools, shared by every runtime: validate each call and accept 
   - `def _checked(self, spec: tools.Spec, arguments: Any) -> Checked | None`
   - `def _check(self, spec: tools.Spec, arguments: Any) -> Checked`
   - `def _late(self, spec: tools.Spec) -> tuple[str, bool]`
+  - `def _tally(self, name: str, outcome: str) -> None`
   - `def _settle(self, spec: tools.Spec, args: tools.Args | None, errors: list[str], tree: tools.Worktree | None) -> tuple[str, bool]`
   - `def _order(self, spec: tools.Spec) -> list[str]`
   - `def _check_result(self, args: tools.Args) -> tuple[list[str], tools.Worktree | None]`
@@ -4470,6 +5363,7 @@ One bounded worker session on the installed Copilot CLI; it ends at a result-too
 - `owlbear_delivery_next.local_system.mask`
 - `owlbear_delivery_next.local_system.processes`
 - `owlbear_delivery_next.runtimes`
+- `owlbear_delivery_next.runtimes.chatlogs`
 - `owlbear_delivery_next.runtimes.copilot_cli`
 - `owlbear_delivery_next.runtimes.results`
 - `owlbear_delivery_next.runtimes.sdk_teardown`
@@ -4485,7 +5379,6 @@ One bounded worker session on the installed Copilot CLI; it ends at a result-too
 - `def agent(kind: StepKind, *, ui: bool = False, role: str = '', judging: bool = False, job: str = '') -> dict[str, Any]`
 - `def role_of(cfg: Session) -> str`
 - `class Journal`
-- `def summary(tool: str, arguments: Any) -> str`
 - `class Session`
 - `def sent(events: Iterable[Any], message: str) -> bool`
 - `class _Step`
@@ -4516,9 +5409,9 @@ One bounded worker session on the installed Copilot CLI; it ends at a result-too
   - `async def wait(self, session: CopilotSession) -> None`
 - `async def _efforts(client: CopilotClient, model: str) -> bool`
 - `async def _open(client: CopilotClient, st: _Step) -> CopilotSession | None`
-- `def _memory(store: Path | None) -> dict[str, Any]`
 - `def _refused(cfg: Session) -> str`
 - `async def run(cfg: Session) -> Run`
+- `async def _run(st: _Step) -> Run`
 - `async def _proven(st: _Step, session: Any) -> None`
 
 ## serve/delivery-next/src/owlbear_delivery_next/runtimes/sdk_teardown.py
@@ -4541,8 +5434,13 @@ Bounded SDK calls and session teardown: tasks cancelled, session disconnected, r
 
 - `async def call(aw: Awaitable[T], what: str, limit: float = CALL) -> T`
 - `async def settle(recorded: Pids, problems: list[str], limit: float | None = None) -> Termination`
-- `async def force(st: _Step, why: str) -> None`
+- `def _guard(problems: list[str], what: str, stage: Callable[..., object], /, *args: object, **kwargs: object) -> None`
+- `async def force(st: _Step, why: str, problems: list[str]) -> None`
 - `async def teardown(client: CopilotClient, session: CopilotSession | None, st: _Step) -> Termination`
+- `async def _wait(task: asyncio.Future[T]) -> bool`
+- `def _failure(task: asyncio.Future[T]) -> str`
+- `async def _protected(client: CopilotClient, st: _Step) -> tuple[Termination, bool]`
+- `async def managed(st: _Step) -> AsyncIterator[None]`
 
 ## serve/delivery-next/src/owlbear_delivery_next/runtimes/sdk_usage.py
 
@@ -4591,6 +5489,46 @@ What one worker session produced, and its mapping to the loop's step result (D4 
 - `def to_result(run: Run, kind: StepKind, now: datetime, enclosing: StepKind | None = None) -> StepResult`
 - `def _exit(run: Run, kind: StepKind, now: datetime, enclosing: StepKind) -> StepResult`
 
+## serve/delivery-next/src/owlbear_delivery_next/runtimes/step_answers.py
+
+The owner's answers as a worker reads them: resumed into its session, or listed in a fresh one (TD-461).
+
+### Imports
+
+- `__future__`
+- `owlbear_delivery_next.change_flow`
+- `typing`
+
+### Interfaces
+
+- `def _one(text: str, limit: int = 400) -> str`
+- `def answer_text(question: Question) -> str`
+- `def answered(change: Change, *, challenged: bool = False, own: str = '') -> list[str]`
+- `def answer(question: Question) -> str`
+
+## serve/delivery-next/src/owlbear_delivery_next/runtimes/step_decisions.py
+
+The "Decisions in force" section of a step's input (TD-452, TD-456, TD-457): the Change's pinned set, whole.
+
+### Imports
+
+- `__future__`
+- `contextlib`
+- `owlbear_delivery_next.state_store.decision_archive`
+- `typing`
+
+### Interfaces
+
+- `def shaped(decisions: Sequence[BriefDecision]) -> list[str]`
+- `def entry(decision: Decision, *, replaced: bool = False) -> str`
+- `def section(pinned: Sequence[Decision], replaced: Collection[str] = ()) -> list[str]`
+- `def own(lines: list[str] | None, recorded: Sequence[ChangeDecision]) -> list[str] | None`
+- `def _titled(d: ChangeDecision) -> str`
+- `def complete(others: Sequence[Decision]) -> list[str]`
+- `def using(lines: list[str] | None, others: list[str] | None = None) -> Iterator[None]`
+- `def held(*, complete: bool = False) -> list[str]`
+- `def resumed(message: str) -> str`
+
 ## serve/delivery-next/src/owlbear_delivery_next/runtimes/step_inbox.py
 
 The C+ step's result channel in the runner: a loopback receiver that the step's MCP relay finds through an inbox.
@@ -4633,6 +5571,7 @@ Bounded context for agent steps; brief and answer text enter as quoted data (D4 
 - `owlbear_delivery_next.change_contracts.models`
 - `owlbear_delivery_next.change_contracts.preparation`
 - `owlbear_delivery_next.change_flow`
+- `owlbear_delivery_next.runtimes`
 - `shlex`
 - `typing`
 
@@ -4642,9 +5581,8 @@ Bounded context for agent steps; brief and answer text enter as quoted data (D4 
 - `def _cut(text: str, limit: int = LIMIT) -> str`
 - `def _quote(text: str, limit: int = LIMIT) -> str`
 - `def _one(text: str, limit: int = 400) -> str`
-- `def answer_text(question: Question) -> str`
-- `def _brief(change: Change, *, challenged: bool = False, own: str = '') -> list[str]`
-- `def brief(change: Change) -> list[str]`
+- `def _brief(change: Change, *, challenged: bool = False, own: str = '', complete: bool = False) -> list[str]`
+- `def brief(change: Change, *, complete: bool = False) -> list[str]`
 - `def page_errors(errors: tuple[Sequence[PageError], Sequence[PageError]]) -> list[str]`
 - `def detector(scans: Sequence[DetectorScan], limit: int = 60) -> list[str]`
 - `def _prepare(worktree: Path, installs: Sequence[tuple[str, str]]) -> list[str]`
@@ -4657,11 +5595,11 @@ Bounded context for agent steps; brief and answer text enter as quoted data (D4 
 - `def visual(change: Change, shots: Sequence[tuple[str, int, str]], errors: tuple[Sequence[PageError], Sequence[PageError]] = ((), ()), scans: Sequence[DetectorScan] = ()) -> str`
 - `def _flat(text: str) -> str`
 - `def _packages(profile: Profile) -> list[str]`
+- `def _alone(profile: Profile) -> str`
 - `def _others(others: Mapping[str, Sequence[str]]) -> list[str]`
 - `def plan(change: Change, profile: Profile, worktree: Path, others: Mapping[str, Sequence[str]]) -> str`
 - `def plan_challenge(change: Change, candidate: Plan, profile: Profile, worktree: Path, others: Mapping[str, Sequence[str]]) -> str`
 - `def brief_challenge(change: Change, worktree: Path) -> str`
-- `def answer(question: Question) -> str`
 - `class Parts(NamedTuple)`
 - `def session(change: Change, profile: Profile, path: Path, others: Mapping[str, Sequence[str]], preparing: Preparing | None = None) -> Parts`
 
@@ -4699,6 +5637,8 @@ Run one agent session as a C+ VS Code step (TD-35 "all in VS Code"), with the sa
 - `dataclasses`
 - `datetime`
 - `os`
+- `owlbear_delivery_next.change_contracts`
+- `owlbear_delivery_next.local_system.mask`
 - `owlbear_delivery_next.local_system.processes`
 - `owlbear_delivery_next.runtimes`
 - `owlbear_delivery_next.runtimes.results`
@@ -4711,6 +5651,7 @@ Run one agent session as a C+ VS Code step (TD-35 "all in VS Code"), with the sa
 - `subprocess`
 - `threading`
 - `time`
+- `types`
 - `typing`
 - `uuid`
 
@@ -4727,13 +5668,19 @@ Run one agent session as a C+ VS Code step (TD-35 "all in VS Code"), with the sa
   - `def log(self, **event: Any) -> None`
   - `def pin(self, folder: Path, model: str) -> None`
   - `def deny(self, call: ToolCall) -> bool`
+  - `def approve(self, call: ToolCall) -> bool`
+  - `def _judged(self, call: ToolCall) -> tuple[permissions.Request, str | None]`
   - `def drive(self, conn: ahp.Transport) -> Outcome`
   - `def step(self, inbox: Path) -> Outcome`
 - `def _ending(out: Outcome, gate: Gate) -> None`
+- `def _recorded(driver: _Driver, out: Outcome, inbox: Path, record: host_record.Record) -> None`
+- `def _start(watch: subagents.Watch, gate: Gate, data: SimpleNamespace) -> None`
+- `def _no_credits(watch: subagents.Watch) -> None`
 - `def _usage(out: Outcome, model: str | None) -> dict[str, Any]`
 - `def _proven(result: Run, out: Outcome, model: str | None) -> None`
 - `def _termination(out: Outcome, scanned: Termination, *, started: bool) -> Termination`
 - `def run(cfg: Session, inbox: Path, env: Env | None = None) -> Run`
+- `def _kept(session: str, record: host_record.Record | None, result: Run) -> None`
 - `def open_chat(folder: Path, role: Effective, prompt: str, env: Env | None = None) -> tuple[Outcome, str]`
 
 ## serve/delivery-next/src/owlbear_delivery_next/runtimes/vscode_contract.py
@@ -4774,6 +5721,7 @@ Route C+ (TD-36): a step started by ``code chat`` in its folder's Copilot-harnes
 - `dataclasses`
 - `json`
 - `owlbear_delivery_next.runtimes.ahp`
+- `owlbear_delivery_next.runtimes.subagents`
 - `owlbear_delivery_next.runtimes.vscode_contract`
 - `owlbear_delivery_next.runtimes.window_files`
 - `time`
@@ -4785,7 +5733,7 @@ Route C+ (TD-36): a step started by ``code chat`` in its folder's Copilot-harnes
 
 - `def _action_in(ev: Json | None, chat: str) -> Json`
 - `def _ended(out: Outcome, action: Json) -> None`
-- `def _command(tool_input: object) -> str`
+- `def shell_command(tool_input: object) -> str`
 - `def _asks(active: Json, action: Json, boot: str) -> list[tuple[str, object]]`
 - `class _Bound`
 - `class Step`
@@ -4813,11 +5761,49 @@ Route C+ (TD-36): a step started by ``code chat`` in its folder's Copilot-harnes
   - `def _adopt(out: Outcome, action: Json, pending: list[str]) -> bool`
   - `def _steer(self, chat: str, agent: Json | None, control: Control) -> list[str]`
   - `def _observe(self, out: Outcome, chat: str, action: Json) -> None`
+  - `def _subagent(self, out: Outcome, call_id: str, name: str) -> None`
   - `def _confirm(self, chat: str, action: Json, *, allowed: bool) -> None`
+
+## serve/delivery-next/src/owlbear_delivery_next/runtimes/watch_feed.py
+
+The watcher's SDK feed (W1a; design §3.1, §3.5, §3.6 slices 2 and 3): every tool call of a session, report-only.
+
+### Imports
+
+- `__future__`
+- `asyncio`
+- `dataclasses`
+- `datetime`
+- `owlbear_delivery_next.change_contracts`
+- `owlbear_delivery_next.change_contracts.permissions`
+- `owlbear_delivery_next.local_system.mask`
+- `owlbear_delivery_next.state_store`
+- `sys`
+- `typing`
+
+### Interfaces
+
+- `def summary(tool: str, arguments: Any) -> str`
+- `class Watching`
+- `class _Seen`
+- `class Feed`
+  - `def __init__(self, watching: Watching, own: Path, session: Callable[[], str], agents: Watch) -> None`
+  - `def seen(self, kind: str, ev: Any) -> None`
+  - `def close(self) -> None`
+  - `def _observed(self, kind: str, ev: Any) -> tuple[tuple[str, str], _Seen]`
+  - `def _launched(self, ev: Any) -> None`
+  - `def _judged(self, key: tuple[str, str], seen: _Seen) -> None`
+  - `def _agent(self, seen: _Seen) -> str`
+  - `def _named(self, launcher: str) -> str`
+- `def asked(request: Any) -> watch_policy.Asked`
+- `def _command(request: Any) -> str`
+- `async def around(feed: Feed | None, work: Awaitable[T]) -> T`
+- `async def _closed(feed: Feed) -> bool`
+- `def opened(watching: Watching | None, own: Path, session: Callable[[], str], agents: Watch) -> Feed | None`
 
 ## serve/delivery-next/src/owlbear_delivery_next/runtimes/window_files.py
 
-Files a C+ step needs in its worktree: the window's model pin, the step's MCP relay and its agent (TD-36).
+Files a C+ step needs in its worktree: the window's pins, the step's MCP relay, its agent and hooks off (TD-36).
 
 ### Imports
 
@@ -4827,6 +5813,7 @@ Files a C+ step needs in its worktree: the window's model pin, the step's MCP re
 - `json`
 - `owlbear_delivery_next.change_contracts`
 - `owlbear_delivery_next.local_system`
+- `owlbear_delivery_next.runtimes.subagents`
 - `re`
 - `sys`
 - `typing`
@@ -4836,8 +5823,11 @@ Files a C+ step needs in its worktree: the window's model pin, the step's MCP re
 - `def tools_note(role: str, *, ui: bool = False, judging: bool = False) -> str`
 - `class SettingsError(ValueError)`
 - `def _opening(text: str) -> int | None`
+- `def _strict(data: dict[str, Any], rel: str) -> str`
+- `def _plain_json(text: str) -> str`
 - `def _with_settings(old: str | None, model: str) -> str`
 - `def settings(model: str) -> Render`
+- `def hooks_off(old: str | None) -> str`
 - `def write_window_settings(folder: Path, model: str) -> None`
 - `class Added`
 - `def add_harness(folder: Path) -> Added | None`
@@ -4845,7 +5835,8 @@ Files a C+ step needs in its worktree: the window's model pin, the step's MCP re
 - `def mcp(inbox: Path, memory: Path | None = None) -> Render`
 - `def agent_name(role: str) -> str`
 - `def agent_path(role: str) -> str`
-- `def agent(role: str, inbox: Path, memory: Path | None = None, *, ui: bool = False, judging: bool = False, job: str = '') -> Render`
+- `def agent_tools(role: str, inbox: Path, memory: Path | None = None, *, ui: bool = False, judging: bool = False, subagents: bool = False) -> list[str]`
+- `def agent(role: str, inbox: Path, memory: Path | None = None, *, ui: bool = False, judging: bool = False, job: str = '', subagents: bool = False) -> Render`
 - `def names(inbox: Path) -> tuple[str, str]`
 - `def skill_path(name: str) -> str`
 - `def skills(role: str, *, ui: bool = False, job: str = '') -> list[tuple[str, Render]]`
@@ -4859,6 +5850,24 @@ Files a C+ step needs in its worktree: the window's model pin, the step's MCP re
 
 Delivery's settings: layers, roles, round values and the project profile.
 
+## serve/delivery-next/src/owlbear_delivery_next/settings/carried.py
+
+Today's built-in settings, written into the Global layer once (the owner, 2026-10-23).
+
+### Imports
+
+- `__future__`
+- `owlbear_delivery_next.change_contracts.profile_record`
+- `owlbear_delivery_next.change_contracts.round_records`
+- `owlbear_delivery_next.settings.config`
+- `owlbear_delivery_next.settings.improvement`
+- `typing`
+
+### Interfaces
+
+- `def layer() -> GlobalLayer`
+- `def filled(glob: GlobalLayer) -> GlobalLayer`
+
 ## serve/delivery-next/src/owlbear_delivery_next/settings/config.py
 
 Delivery's settings (§3.13, R3, TD-52): global with per-project overrides, resolved field by field.
@@ -4871,7 +5880,8 @@ Delivery's settings (§3.13, R3, TD-52): global with per-project overrides, reso
 - `owlbear_delivery_next.change_contracts.profile_record`
 - `owlbear_delivery_next.change_contracts.round_records`
 - `owlbear_delivery_next.change_contracts.visual_records`
-- `owlbear_delivery_next.settings.roles`
+- `owlbear_delivery_next.settings`
+- `owlbear_delivery_next.settings.improvement`
 - `pydantic`
 - `typing`
 
@@ -4888,15 +5898,41 @@ Delivery's settings (§3.13, R3, TD-52): global with per-project overrides, reso
   - `def _distinct(cls, v: list[Preparation] | None) -> list[Preparation] | None`
 - `class WideLayer(Layer)`
   - `def _project_only(cls, v: object) -> object`
-  - `def _marker(cls, v: bool | None) -> bool | None`
+- `class MachineValues(Record)`
+  - `def _folders(cls, v: list[str] | None) -> list[str] | None`
 - `class GlobalLayer(WideLayer)`
 - `class MachineLayer(WideLayer)`
 - `class Effective(Record)`
   - `def _rounds(self) -> Effective`
+- `def used(role: Role) -> tuple[str, ...]`
+- `class SettingsUnset(Exception)`
+  - `def __init__(self, keys: list[str]) -> None`
 - `class Settings(Record)`
-- `def _defaults() -> GlobalLayer`
+  - `def need(self, *keys: str) -> None`
+  - `def agent(self, role: Role) -> Effective`
+  - `def page(self) -> dict[str, Any]`
 - `def _pick(key: str, sources: dict[str, Source], *values: tuple[Source, object]) -> object`
 - `def resolve(glob: GlobalLayer | None, project: Layer, machine: MachineLayer | None = None) -> Settings`
+
+## serve/delivery-next/src/owlbear_delivery_next/settings/improvement.py
+
+Improvement's layered settings (design §4, the owner's choices of 2026-10-25): the Spotter's.
+
+### Imports
+
+- `__future__`
+- `datetime`
+- `owlbear_delivery_next.change_contracts.models`
+- `pydantic`
+- `typing`
+
+### Interfaces
+
+- `class Spotter(Record)`
+  - `def _looks(cls, v: list[str] | None) -> list[str] | None`
+  - `def _until(cls, v: str | None) -> str | None`
+  - `def verbose_on(self, today: date) -> bool`
+- `def resolve(pick: Callable[..., Any], layers: list[tuple[str, Any]]) -> tuple[Spotter, list[str]]`
 
 ## serve/delivery-next/src/owlbear_delivery_next/settings/migrations.py
 
@@ -4927,8 +5963,13 @@ Forward migrations of stored records, keyed by the format they upgrade from.
 - `def subagents_added(data: dict[str, Any]) -> dict[str, Any]`
 - `def sessions_added(data: dict[str, Any]) -> dict[str, Any]`
 - `def test_roles_added(data: dict[str, Any]) -> dict[str, Any]`
+- `def watcher_added(data: dict[str, Any]) -> dict[str, Any]`
+- `def defaults_removed(data: dict[str, Any]) -> dict[str, Any]`
+- `def machine_added(data: dict[str, Any]) -> dict[str, Any]`
+- `def spotter_renamed(data: dict[str, Any]) -> dict[str, Any]`
 - `def tests_added(data: dict[str, Any]) -> dict[str, Any]`
 - `def waivers_added(data: dict[str, Any]) -> dict[str, Any]`
+- `def held_records_added(data: dict[str, Any]) -> dict[str, Any]`
 
 ## serve/delivery-next/src/owlbear_delivery_next/settings/profile.py
 
@@ -4958,6 +5999,14 @@ Detect, confirm and re-read the project profile: GitHub facts, CI, rules and mer
 - `def _python(repo: Path, d: str) -> tuple[ProfileEntry, ProfileEntry]`
 - `def package_entries(repo: Path) -> dict[str, ProfileEntry]`
 - `def _entry(state: str, value: str, evidence: str) -> ProfileEntry`
+- `def _absent(key: str) -> ProfileEntry`
+- `def local_key(key: str) -> bool`
+- `def shared_entries(entries: dict[str, ProfileEntry]) -> dict[str, ProfileEntry]`
+- `def _detected(key: str) -> bool`
+- `def fingerprint(entry: ProfileEntry) -> str`
+- `def is_confirmed(entry: ProfileEntry) -> bool`
+- `def holds(confirmed: ProfileEntry, observed: ProfileEntry) -> bool`
+- `def unbound(prof: Profile) -> bool`
 - `class Workflow`
 - `def _events(on: object) -> frozenset[str] | None`
 - `def _jobs(jobs: object) -> tuple[str, ...] | None`
@@ -5016,6 +6065,7 @@ Challenge loops (TD-208): a subject's loop, with the policy it pins from the set
 ### Interfaces
 
 - `def policy(settings: Settings, subject: str, role: Role = 'builder') -> RoundPolicy`
+- `def pinned(c: Change, subject: str, settings: Settings, role: Role = 'builder') -> RoundPolicy`
 - `def loop(c: Change, subject: str, settings: Settings, role: Role = 'builder') -> RoundLoop`
 
 ## serve/delivery-next/src/owlbear_delivery_next/state_store/__init__.py
@@ -5059,8 +6109,10 @@ Improvement backlog (TD-84, TD-103): what the owner, the watcher, the assistant,
   - `def entries(self) -> list[Entry]`
   - `def add(self, title: str, text: str = '', source: Source = 'owner', evidence: Iterable[str] = ()) -> tuple[Entry, bool]`
   - `def update(self, entry_id: str, fields: dict[str, Any]) -> Entry`
+  - `def revise(self, entry_id: str, change: Callable[[Entry, str], dict[str, Any]]) -> Entry`
   - `def take(self, ids: list[str], launch: str) -> list[Entry]`
   - `def put(self, entry: Entry, made: Callable[[str], None] = lambda _number: None) -> Entry`
+  - `def _room(self, entries: list[Entry]) -> None`
   - `def _save(self, *entries: Entry) -> None`
   - `def _remember(self, issue: Json) -> Json`
   - `def _overlaid(self, listed: list[Json]) -> list[Json]`
@@ -5143,11 +6195,13 @@ Brief drafts: validate and write a new Change, or a new version of a shaping one
 
 - `__future__`
 - `datetime`
+- `owlbear_decisions`
 - `owlbear_delivery_next.change_contracts`
 - `owlbear_delivery_next.change_contracts.models`
 - `owlbear_delivery_next.change_contracts.profile_record`
 - `owlbear_delivery_next.change_flow`
 - `owlbear_delivery_next.settings`
+- `owlbear_delivery_next.state_store`
 - `owlbear_delivery_next.state_store.store`
 - `re`
 - `typing`
@@ -5155,12 +6209,15 @@ Brief drafts: validate and write a new Change, or a new version of a shaping one
 ### Interfaces
 
 - `def drafted(old: Change | None, d: brief_tools.BriefDraft, slug: str, handle: str, prof: Profile) -> Change`
+- `def _decisions(c: Change, d: brief_tools.BriefDraft) -> list[BriefDecision]`
+- `def _identity(prev: BriefDecision | None, said: tuple[str, str], accepted: dict[str, BriefDecision], now: datetime) -> tuple[str, str]`
+- `def _said(d: BriefDecision) -> tuple[str, str]`
 - `def new_slug(title: str, taken: list[str]) -> str`
-- `def _handles(store: Store) -> dict[str, str]`
-- `def next_number(store: Store, handles: dict[str, str] | None = None) -> int`
 - `def _visual_of(c: Change) -> dict[str, Any]`
 - `def _kept(store: Store, body: object) -> object`
 - `def save_brief(store: Store, body: object) -> tuple[int, dict[str, Any]]`
+- `def _revise(store: Store, draft: brief_tools.BriefDraft) -> tuple[int, dict[str, Any]]`
+- `def _create(store: Store, draft: brief_tools.BriefDraft) -> tuple[int, dict[str, Any]]`
 - `def save_visual(store: Store, body: object) -> tuple[int, dict[str, Any]]`
 
 ## serve/delivery-next/src/owlbear_delivery_next/state_store/change_record.py
@@ -5173,11 +6230,12 @@ A finished Change's record in the project's shared folder (TD-148): brief, decis
 - `json`
 - `owlbear_delivery_next.local_system.data_repo`
 - `owlbear_delivery_next.local_system.storage_io`
+- `owlbear_delivery_next.state_store`
 - `typing`
 
 ### Interfaces
 
-- `def save(store: Store, c: Change, pr: PullRequest | None, now: datetime) -> str`
+- `def save(store: Store, c: Change, pr: PullRequest | None, now: datetime, *, observed: PullRequest | None = None) -> str`
 
 ## serve/delivery-next/src/owlbear_delivery_next/state_store/database.py
 
@@ -5194,6 +6252,7 @@ The project's Delivery database (TD-265): ``delivery.db`` in the store, beside t
 - `sqlite3`
 - `subprocess`
 - `threading`
+- `time`
 - `typing`
 
 ### Interfaces
@@ -5201,6 +6260,7 @@ The project's Delivery database (TD-265): ``delivery.db`` in the store, beside t
 - `class StoreError(Exception)`
   - `def stop(self, now: datetime) -> Stop`
 - `class FormatTooNewError(StoreError)`
+- `class BusyError(StoreError)`
 - `class NotImportedError(StoreError)`
 - `class LateWriteError(StoreError)`
 - `def _fsync(path: Path) -> None`
@@ -5213,10 +6273,11 @@ The project's Delivery database (TD-265): ``delivery.db`` in the store, beside t
   - `def check(self) -> None`
   - `def fenced(self) -> Iterator[None]`
   - `def _shared(self) -> Iterator[None]`
-  - `def _lock(self, *, shared: bool) -> int`
+  - `def _shared_until(self, until: float) -> Iterator[None]`
+  - `def _lock(self, *, shared: bool, blocking: bool = True) -> int`
   - `def _connection(self) -> sqlite3.Connection`
   - `def read(self) -> Iterator[sqlite3.Connection]`
-  - `def write(self) -> Iterator[sqlite3.Connection]`
+  - `def write(self, wait: float | None = None) -> Iterator[sqlite3.Connection]`
   - `def import_files(self) -> None`
   - `def _build(self, fill: Callable[[sqlite3.Connection], None] | None) -> None`
   - `def _wal(self) -> None`
@@ -5224,10 +6285,340 @@ The project's Delivery database (TD-265): ``delivery.db`` in the store, beside t
   - `def file(self, slug: str, name: str) -> Path`
   - `def _retire(self, connection: sqlite3.Connection) -> None`
   - `def ingest(self, slug: str, folder: Path) -> None`
+- `def _watched(connection: sqlite3.Connection) -> None`
 - `def _text(path: Path) -> str`
 - `def _fill_change(connection: sqlite3.Connection, folder: Path) -> list[tuple[str, str]]`
 - `def put_record(connection: sqlite3.Connection, slug: str, text: str) -> None`
 - `def append_activity(connection: sqlite3.Connection, slug: str, line: str, keep: int | None = None) -> None`
+
+## serve/delivery-next/src/owlbear_delivery_next/state_store/decision_actions.py
+
+The owner's actions on decisions and a chat's proposals (TD-419 slice 5a); every write is a `decision_store.save`.
+
+### Imports
+
+- `__future__`
+- `datetime`
+- `owlbear_decisions`
+- `owlbear_decisions.validate`
+- `owlbear_delivery_next.change_contracts`
+- `owlbear_delivery_next.state_store`
+- `owlbear_delivery_next.state_store.decision_store`
+- `typing`
+
+### Interfaces
+
+- `class Refused(Exception)`
+  - `def __init__(self, reason: str, status: int = 409) -> None`
+- `def _now() -> datetime`
+- `def _today() -> str`
+- `def _reason(reason: str, action: str) -> str`
+- `def _because(rationale: str, label: str, reason: str) -> str`
+- `def _marked(rationale: str, effect: Effect) -> str`
+- `def _entry(view: DataView, decision_id: str) -> Entry`
+- `def _stale(view: DataView, decision: Decision, revision: str) -> list[Receipt]`
+- `def every(shared: DataRepo | None) -> dict[str, Decision]`
+- `def reversals(by_id: Mapping[str, Decision], decision: Decision) -> int`
+- `def authorise(old: Decision, *, owner: bool, redecided: bool = False) -> None`
+- `def second(by_id: Mapping[str, Decision], old: Decision, *, decided: bool, owner: bool) -> None`
+- `def redecision(shared: DataRepo | None, view: DataView, draft: Decision) -> bool`
+- `def _in_force(decision: Decision, action: str) -> None`
+- `def _scoped(old: Decision, scope: Scope | None) -> None`
+- `def _retire(shared: DataRepo | None, new: Decision, old: Decision, message: str) -> list[Receipt]`
+- `def _new(old: Decision | None, **fields: object) -> Decision`
+- `def replace(shared: DataRepo | None, project: str, decision_id: str, revision: str, *, title: str, statement: str, rationale: str, reason: str, redecided: bool, effect: Effect = '', scope: Scope | None = None, by: str = OWNER, topic: str = '') -> list[Receipt]`
+- `def withdraw(shared: DataRepo | None, project: str, decision_id: str, revision: str, *, reason: str, redecided: bool) -> list[Receipt]`
+- `def activate(shared: DataRepo | None, project: str, decision_id: str, revision: str, *, reason: str = '', redecided: bool, effect: Effect = '') -> list[Receipt]`
+- `def promote(shared: DataRepo | None, project: str, decision_id: str, revision: str, *, reason: str) -> list[Receipt]`
+- `def exception(shared: DataRepo | None, project: str, decision_id: str, revision: str, *, title: str, statement: str, rationale: str) -> list[Receipt]`
+- `def rivals(view: DataView, kept: Decision, shared: DataRepo | None = None) -> list[Decision]`
+- `def keep(shared: DataRepo | None, project: str, decision_id: str, revisions: Mapping[str, str], *, reason: str) -> list[Receipt]`
+- `def read_back(shared: DataRepo | None, project: str, decision_id: str, revision: str, *, confirmed: bool, by: str) -> list[Receipt]`
+- `def _reason_key(reason: str) -> str`
+- `def _same(one: str, other: str) -> bool`
+- `def _settled_reasons(decision: Decision) -> tuple[str, ...]`
+- `def queue_read_back(shared: DataRepo | None, project: str, decision_id: str, *, why: str, kind: ReadBackKind, revision: str) -> list[Receipt]`
+- `def propose(shared: DataRepo | None, project: str, *, title: str, topic: str, statement: str, rationale: str, confirmed: bool, replaces: str, reason: str = '', scope: Scope = Scope.PROJECT, revision: str = '', redecided: bool = False, effect: Effect = '') -> list[Receipt]`
+
+## serve/delivery-next/src/owlbear_delivery_next/state_store/decision_archive.py
+
+A finished Change's decisions as decision files beside its record (TD-419 slice 2, TD-148).
+
+### Imports
+
+- `__future__`
+- `owlbear_decisions`
+- `owlbear_decisions.models`
+- `owlbear_decisions.snapshot`
+- `owlbear_decisions.validate`
+- `owlbear_delivery_next.change_contracts`
+- `owlbear_delivery_next.change_contracts.decision_wording`
+- `owlbear_delivery_next.local_system.data_repo`
+- `owlbear_delivery_next.state_store`
+- `pydantic`
+- `typing`
+
+### Interfaces
+
+- `def archive(root: Path, project: str, c: Change, stem: str, outcome: str) -> tuple[list[Path], list[str]]`
+- `def lasting(project: str, c: Change, stem: str, *, root: Path | None = None) -> list[Decision]`
+- `def _planned(root: Path, project: str, c: Change, stem: str, outcome: str) -> tuple[list[Placed], list[str]]`
+- `def _as_decision(fields: dict[str, Any], legacy: dict[str, Decision]) -> Decision`
+- `def _invalid_history(project: str, c: Change, stem: str) -> list[dict[str, Any]]`
+- `def _history(root: Path | None, project: str, c: Change, stem: str) -> tuple[Change, dict[str, Decision]]`
+- `def _without(c: Change, omitted: dict[str, str | None]) -> Change`
+- `def _graph(root: Path, project: str, c: Change, planned: list[Placed]) -> list[str]`
+- `def _approved(c: Change) -> list[tuple[BriefDecision, datetime | None]]`
+- `def _brief(project: str, c: Change, stem: str, outcome: str) -> list[dict[str, Any]]`
+- `def _changed(project: str, c: Change, stem: str, outcome: str) -> list[dict[str, Any]]`
+- `def _placed(project: str, stem: str, *, lasting: bool, kept: bool) -> dict[str, Any]`
+- `def _said(text: str, origin: str, at: datetime, note: str) -> dict[str, Any]`
+- `def _short(text: str) -> str`
+
+## serve/delivery-next/src/owlbear_delivery_next/state_store/decision_fixes.py
+
+Fixes for a change of mind (TD-428; decision system §9, slice 5b part 2): grouped backlog entries, kept code.
+
+### Imports
+
+- `__future__`
+- `dataclasses`
+- `datetime`
+- `owlbear_decisions`
+- `owlbear_decisions.models`
+- `owlbear_delivery_next.state_store`
+- `owlbear_delivery_next.state_store.backlog`
+- `owlbear_delivery_next.state_store.decision_actions`
+- `owlbear_delivery_next.state_store.decision_impact`
+- `re`
+- `typing`
+
+### Interfaces
+
+- `class Part`
+- `def _current(report: Report, revision: str) -> Decision`
+- `def _short(text: str, limit: int) -> str`
+- `def _area(path: str) -> str`
+- `def areas(paths: Sequence[str]) -> list[tuple[str, list[str]]]`
+- `def _item(change: dict[str, str]) -> str`
+- `def _key(item: str) -> str`
+- `def checklist(text: str) -> list[Line]`
+- `def _render(head: str, lines: Sequence[Line]) -> str`
+- `def _head(report: Report, new: Decision, impact: Impact, area: str) -> str`
+- `def _title(new: Decision, project: str, area: str, part: int, parts: int) -> str`
+- `def _existing(entries: Iterable[Entry], new: Decision, project: str) -> dict[str, list[Entry]]`
+- `def _route(impact: Impact, have: Sequence[str]) -> list[tuple[str, list[str]]]`
+- `def _checklists(held: Sequence[Entry], items: Sequence[str], known: set[str], room: int) -> list[list[Line]]`
+- `def _plan(report: Report, new: Decision, impact: Impact, mine: dict[str, list[Entry]]) -> list[Part]`
+- `def _merge(part: Part, evidence: Sequence[str]) -> Callable[[Entry, str], dict[str, Any]]`
+- `def _put(backlog: Backlog, part: Part, evidence: list[str]) -> dict[str, Any]`
+- `def schedule(shared: DataRepo, report: Report, revision: str, clock: Callable[[], datetime] | None = None) -> list[dict[str, Any]]`
+- `def _covered(item: str, files: frozenset[str]) -> bool`
+- `def _verify(files: frozenset[str] | None, changes: set[str], project: str, said: tuple[str, str]) -> Callable[[Entry, str], dict[str, Any]]`
+- `def verified(backlog: Backlog, slug: str, clone: str | None, files: frozenset[str] | None, pr: str = '') -> list[Entry]`
+- `def _mine(entry: Entry, changes: set[str], project: str) -> bool`
+- `def accept(shared: DataRepo, report: Report, project: str, revision: str, reason: str) -> Receipt`
+
+## serve/delivery-next/src/owlbear_delivery_next/state_store/decision_impact.py
+
+The impact of a change of mind with built effect (TD-428; decision system §9, slice 5b part 2).
+
+### Imports
+
+- `__future__`
+- `dataclasses`
+- `json`
+- `owlbear_decisions`
+- `owlbear_delivery_next.state_store`
+- `owlbear_delivery_next.state_store.decision_actions`
+- `owlbear_delivery_next.state_store.decision_archive`
+- `owlbear_delivery_next.state_store.store`
+- `pathlib`
+- `typing`
+
+### Interfaces
+
+- `class Place`
+- `class Impact`
+- `class Report`
+- `def _listed(record: dict[str, Any]) -> list[Any] | None`
+- `def pinning(store: Store, decision_id: str) -> list[dict[str, Any]]`
+- `def built(root: Path, project: str, old: Decision) -> tuple[list[dict[str, str]], list[str]]`
+- `def applied(store: Store | None, decision_id: str) -> list[dict[str, str]]`
+- `def classify(changes: Sequence[dict[str, str]], unreadable: str = '') -> tuple[Status, str]`
+- `def _impact(root: Path, place: Place, old: Decision, accepted: dict[str, str]) -> Impact`
+- `def _reached(root: Path, old: Decision, places: Sequence[Place]) -> list[Place]`
+- `def effect(new: Decision | None) -> str`
+- `def _accepted(decisions: Iterable[Decision], new: Decision | None) -> dict[str, str]`
+- `def report(shared: DataRepo | None, folder: str, decision_id: str, places: Sequence[Place]) -> Report`
+- `def due(report: Report) -> list[Impact]`
+- `def is_test(path: str) -> bool`
+- `def _rule(d: Decision) -> dict[str, Any]`
+- `def _project(i: Impact) -> dict[str, Any]`
+- `def shown(report: Report) -> dict[str, Any]`
+
+## serve/delivery-next/src/owlbear_delivery_next/state_store/decision_index.py
+
+A search index over the decisions (TD-424): one SQLite file in OwlBear's folder, rebuilt from the files.
+
+### Imports
+
+- `__future__`
+- `contextlib`
+- `dataclasses`
+- `fcntl`
+- `hashlib`
+- `os`
+- `owlbear_decisions`
+- `owlbear_delivery_next.local_system`
+- `owlbear_delivery_next.state_store`
+- `owlbear_delivery_next.state_store.database`
+- `re`
+- `sqlite3`
+- `time`
+- `typing`
+
+### Interfaces
+
+- `def _fts5() -> bool`
+- `class Hit`
+- `class IndexBusy(StoreError)`
+- `class _Unusable(Exception)`
+- `def path() -> Path`
+- `def search(text: str, project: str, *, include_retired: bool = False, limit: int = 20, view: DataView | None = None) -> list[Hit]`
+- `def _code(exc: sqlite3.Error) -> int`
+- `def _search(file: Path, view: DataView, words: list[str], *, include_retired: bool, limit: int) -> list[Hit]`
+- `def _identity(file: Path) -> tuple[int, int, int] | None`
+- `def _locked(file: Path) -> Iterator[None]`
+- `def _rebuild(file: Path, seen: tuple[int, int, int] | None) -> None`
+- `def _connect(file: Path) -> sqlite3.Connection`
+- `def _open(file: Path) -> sqlite3.Connection`
+- `def _initialise(file: Path) -> None`
+- `def _format(connection: sqlite3.Connection) -> int`
+- `def _create(connection: sqlite3.Connection) -> None`
+- `def _discard(file: Path) -> None`
+- `def _digest(view: DataView) -> str`
+- `def _fresh(connection: sqlite3.Connection, context: str, view: DataView) -> None`
+- `def _query(connection: sqlite3.Connection, context: str, words: list[str], *, include_retired: bool, limit: int) -> list[Hit]`
+
+## serve/delivery-next/src/owlbear_delivery_next/state_store/decision_origin.py
+
+The owner's origin correction: a decision he never decided is marked as what it was (2026-10-23).
+
+### Imports
+
+- `__future__`
+- `owlbear_decisions`
+- `owlbear_delivery_next.change_contracts`
+- `owlbear_delivery_next.state_store`
+- `owlbear_delivery_next.state_store.decision_actions`
+- `typing`
+
+### Interfaces
+
+- `def correct_origin(shared: DataRepo | None, project: str, decision_id: str, revision: str, *, origin: Origin, reason: str, confirmed: bool, by: str) -> list[Receipt]`
+- `def _changed_a_rule(decision: Decision) -> bool`
+
+## serve/delivery-next/src/owlbear_delivery_next/state_store/decision_store.py
+
+Decisions in the shared data repository (TD-424, TD-419 slice 3): load, save with a receipt, refresh.
+
+### Imports
+
+- `__future__`
+- `dataclasses`
+- `owlbear_decisions`
+- `owlbear_decisions.snapshot`
+- `owlbear_decisions.storage`
+- `owlbear_decisions.validate`
+- `owlbear_delivery_next.local_system.data_repo`
+- `owlbear_delivery_next.state_store`
+- `owlbear_delivery_next.state_store.database`
+- `stat`
+- `time`
+- `typing`
+
+### Interfaces
+
+- `class DecisionsUnavailable(StoreError)`
+  - `def __init__(self, reason: str, action: str = REPAIR) -> None`
+- `class DataView`
+- `class Receipt`
+- `def _checkout(shared: DataRepo | None) -> DataRepo`
+- `def _head(shared: DataRepo) -> str`
+- `def _project(shared: DataRepo, project: str) -> None`
+- `def _files(shared: DataRepo, project: str) -> Snapshot`
+- `def _usable(seen: Snapshot, project: str) -> Snapshot`
+- `def file_snapshot(shared: DataRepo | None, project: str) -> Snapshot`
+- `def _view(shared: DataRepo, project: str) -> DataView`
+- `def load(shared: DataRepo | None, project: str) -> DataView`
+- `def refresh(shared: DataRepo | None) -> str`
+- `def _layer(root: Path, decision: Decision) -> Path`
+- `def _join(*parts: str) -> str`
+- `def save(shared: DataRepo | None, decision: Decision, *, expected_revision: str | None, message: str) -> Receipt`
+- `def save_all(shared: DataRepo | None, items: Sequence[tuple[Decision, str | None]], *, message: str) -> list[Receipt]`
+- `def _save_all(shared: DataRepo, items: list[Placed], message: str) -> list[Receipt]`
+- `def _refusals(items: list[Placed]) -> dict[str, str]`
+- `def write_batch(items: Sequence[Placed]) -> dict[str, str]`
+- `def _content(path: Path) -> bytes | None`
+- `def _put_back(path: Path, text: bytes | None) -> None`
+- `def _unstage(shared: DataRepo, before: dict[Path, bytes | None], until: float) -> None`
+- `def _refused(shared: DataRepo, decisions: list[Decision], refused: dict[str, str], behind: str) -> list[Receipt]`
+- `def _reconcile(shared: DataRepo, decisions: list[Decision], said: list[str], until: float) -> DataView`
+- `def whole(shared: DataRepo) -> tuple[dict[str, Entry], list[Finding]]`
+- `def _competitors(found: tuple[dict[str, Entry], list[Finding]], written: Decision) -> list[Entry]`
+- `def _flag(entry: Entry) -> Path | None`
+- `def _receipt(shared: DataRepo, view: DataView, decision: Decision, said: str, until: float) -> Receipt`
+- `def _why(seen: Snapshot, decision_id: str, *, ours: bool, unresolved: bool, conflict: bool) -> str`
+
+## serve/delivery-next/src/owlbear_delivery_next/state_store/decision_sync.py
+
+Publishing decision files without letting Git combine two versions of one (TD-424, TD-419 slice 3).
+
+### Imports
+
+- `__future__`
+- `dataclasses`
+- `owlbear_decisions`
+- `owlbear_decisions.storage`
+- `pathlib`
+- `typing`
+
+### Interfaces
+
+- `class Sent`
+- `def _decision_file(rel: str) -> bool`
+- `def _rev(shared: DataRepo, ref: str, until: float) -> str`
+- `def _changed(shared: DataRepo, base: str, tip: str, until: float) -> set[str] | None`
+- `def _diverged(shared: DataRepo, until: float) -> tuple[set[str], set[str]] | None`
+- `def _merge_base(shared: DataRepo, until: float) -> str`
+- `def rebase(shared: DataRepo, until: float) -> str`
+- `def catch_up(shared: DataRepo, until: float) -> str`
+- `def publish(shared: DataRepo, paths: list[Path], message: str, until: float) -> Sent`
+- `def _ours(shared: DataRepo, before: str, rels: set[str], until: float) -> str`
+- `def _rejected(shared: DataRepo, rels: set[str], commits: tuple[str, str], why: str, until: float) -> Sent`
+- `def _take_back(shared: DataRepo, commits: tuple[str, str], stale: set[str], rels: set[str], until: float) -> Sent`
+- `def revision_at(shared: DataRepo, ref: str, rel: str, until: float) -> str`
+- `def last_commit(shared: DataRepo, rel: str, until: float) -> str`
+
+## serve/delivery-next/src/owlbear_delivery_next/state_store/identities.py
+
+Atomic Change identity allocation shared by shaping and setup-before-publication flows.
+
+### Imports
+
+- `__future__`
+- `owlbear_delivery_next.state_store.database`
+- `owlbear_delivery_next.state_store.store`
+- `typing`
+
+### Interfaces
+
+- `def handles(store: Store) -> dict[str, str]`
+- `def _claim(store: Store, db: sqlite3.Connection) -> tuple[int, list[str]]`
+- `def reserve(store: Store, name: Callable[[int, list[str]], str]) -> tuple[int, str]`
+- `def publish_new(store: Store, make: Callable[[int, list[str]], Change]) -> Change`
+- `def publish_reserved(store: Store, lock: Lock, change: Change) -> None`
 
 ## serve/delivery-next/src/owlbear_delivery_next/state_store/profile_share.py
 
@@ -5236,8 +6627,10 @@ The confirmed project profile: kept in the project's shared folder, re-checked o
 ### Imports
 
 - `__future__`
+- `contextlib`
 - `json`
 - `os`
+- `owlbear_delivery_next.change_contracts.profile_record`
 - `owlbear_delivery_next.design_packs.detector`
 - `owlbear_delivery_next.github.provider`
 - `owlbear_delivery_next.local_system.data_repo`
@@ -5248,10 +6641,21 @@ The confirmed project profile: kept in the project's shared folder, re-checked o
 ### Interfaces
 
 - `def path(store: Store) -> Path`
-- `def write(store: Store, text: str) -> str`
+- `def write(store: Store, prof: Profile) -> str`
+- `def _writer(store: Store, *, create: bool = True) -> Iterator[None]`
+- `def read(store: Store) -> Profile | None`
+- `def _read_unlocked(store: Store) -> Profile | None`
+- `def _present(source: Path) -> bool`
+- `def merged(store: Store, prof: Profile) -> Profile`
+- `def _shared_part(prof: Profile) -> Profile`
+- `def _local_part(prof: Profile) -> dict[str, ProfileEntry]`
+- `def _keep_local(store: Store, prof: Profile) -> None`
+- `def _read(source: Path) -> Profile`
+- `def _local(store: Store) -> dict[str, ProfileEntry]`
+- `def _publish(store: Store, shared: DataRepo | None, prof: Profile, message: str) -> str`
 - `def adopt(store: Store) -> None`
 - `def checked(store: Store, repo: Path) -> Profile | None`
-- `def _replaced(store: Store, shared: DataRepo, old: Profile, new: Profile) -> bool`
+- `def _replaced(store: Store, old: Profile, new: Profile) -> Profile | None`
 - `def move_roles(store: Store) -> None`
 
 ## serve/delivery-next/src/owlbear_delivery_next/state_store/project_home.py
@@ -5262,14 +6666,15 @@ Where a project's live Delivery state lives (TD-334): ``~/.owlbear/projects/<id>
 
 - `__future__`
 - `errno`
+- `json`
 - `os`
 - `owlbear_delivery_next.local_system`
 - `owlbear_delivery_next.local_system.git_files`
 - `owlbear_delivery_next.local_system.storage_io`
 - `owlbear_delivery_next.state_store.database`
+- `pathlib`
 - `secrets`
 - `shutil`
-- `typing`
 
 ### Interfaces
 
@@ -5277,11 +6682,74 @@ Where a project's live Delivery state lives (TD-334): ``~/.owlbear/projects/<id>
 - `def clone_id(folder: Path) -> str | None`
 - `def ensure_id(folder: Path) -> str`
 - `def home(pid: str) -> Path`
+- `def checkout(pid: str) -> Path | None`
+- `def registered(pid: str) -> bool | None`
 - `def _left(folder: Path) -> list[Path]`
 - `def current(cwd: Path) -> Path | None`
 - `def _sync(path: Path) -> None`
 - `def _move(path: Path, to: Path) -> None`
 - `def located(cwd: Path) -> Path`
+
+## serve/delivery-next/src/owlbear_delivery_next/state_store/read_backs.py
+
+The read-back queue as this host keeps it (TD-427, §8): what waits, and the owner's "ignore for now".
+
+### Imports
+
+- `__future__`
+- `json`
+- `owlbear_decisions`
+- `owlbear_delivery_next.state_store`
+- `owlbear_delivery_next.state_store.decision_actions`
+- `typing`
+
+### Interfaces
+
+- `def _parsed(row: tuple[str] | None) -> dict[str, dict[str, str]]`
+- `def marks(store: Store | None) -> dict[str, dict[str, str]]`
+- `def _mark(store: Store, mark: str, decision_id: str, value: str) -> None`
+- `def waiting(store: Store | None, view: DataView) -> list[Queued]`
+- `def item(q: Queued, ignored: dict[str, str]) -> dict[str, Any]`
+- `def ask(store: Store, project: str, decision_id: str, *, why: str, kind: str, revision: str) -> list[Receipt]`
+- `def answer(store: Store, project: str, decision_id: str, revision: str, *, confirmed: bool, by: str) -> list[Receipt]`
+- `def ignore(store: Store, project: str, decision_id: str, revision: str) -> dict[str, Any]`
+
+## serve/delivery-next/src/owlbear_delivery_next/state_store/settings_carry.py
+
+The one-time carry of today's built-in settings into the shared repository's Global layer (2026-10-23).
+
+### Imports
+
+- `__future__`
+- `hashlib`
+- `json`
+- `owlbear_delivery_next.local_system`
+- `owlbear_delivery_next.settings.carried`
+- `owlbear_delivery_next.settings.config`
+- `owlbear_delivery_next.state_store.store`
+- `time`
+- `typing`
+
+### Interfaces
+
+- `def _ignore(_digest: str) -> None`
+- `def due(shared: DataRepo) -> bool`
+- `def carry(shared: DataRepo, keep: Keep = _ignore) -> str`
+- `def move(shared: DataRepo, local: MachineValues, keep: Keep = _ignore) -> str`
+- `def sync(shared: DataRepo, written: Sequence[str]) -> str`
+- `def _own(shared: DataRepo, rel: str, written: Sequence[str], until: float) -> bool`
+- `def _blob(shared: DataRepo, spec: str, until: float) -> bytes`
+- `def _checked(shared: DataRepo, until: float, *args: str) -> str`
+- `def _dirty(shared: DataRepo, until: float) -> bool`
+- `def _ran(shared: DataRepo, ref: str, message: str, until: float) -> bool`
+- `def _digest(path: Path) -> str`
+- `def _digest_of(raw: bytes) -> str`
+- `def _format(text: str) -> int | None`
+- `def _unfilled(shared: DataRepo) -> bool`
+- `def _unpublished(shared: DataRepo) -> bool`
+- `def _committed(shared: DataRepo) -> int | None`
+- `def _done(shared: DataRepo, until: float) -> bool`
+- `def _moved(shared: DataRepo, until: float) -> bool`
 
 ## serve/delivery-next/src/owlbear_delivery_next/state_store/store.py
 
@@ -5361,6 +6829,44 @@ Delivery-next state store in ``~/.owlbear/projects/<id>/``, one folder per proje
   - `def now(self, slug: str) -> dict[str, Any] | None`
   - `def write_now(self, lock: Lock, slug: str, data: dict[str, Any]) -> None`
 
+## serve/delivery-next/src/owlbear_delivery_next/state_store/watch_reports.py
+
+The watcher's reports (W1a, design §3.6): one row per observed call that may write outside its session's folder.
+
+### Imports
+
+- `__future__`
+- `dataclasses`
+- `datetime`
+- `json`
+- `owlbear_delivery_next.state_store.database`
+- `queue`
+- `sqlite3`
+- `threading`
+- `time`
+- `typing`
+
+### Interfaces
+
+- `class Report`
+- `def put(slug: str, report: Report) -> Operation`
+- `def drop(slug: str, session: str, call_id: str) -> Operation`
+- `def reports(db: Database, slug: str, limit: int = SHOWN) -> list[dict[str, Any]]`
+- `def counts(db: Database, slug: str) -> dict[str, int]`
+- `class Writer`
+  - `def __init__(self, db: Database, lock: Lock, *, note: Callable[[str], None], size: int = SIZE) -> None`
+  - `def put(self, operation: Operation) -> None`
+  - `def late(self) -> None`
+  - `def lost(self, error: str) -> None`
+  - `def close(self, summary: Callable[[str], Report], deadline: float = DRAIN) -> None`
+  - `def _said(self, undrained: int) -> str`
+  - `def _drained(self, until: float) -> bool`
+  - `def _work(self) -> None`
+  - `def _attempt(self, operation: Operation) -> bool`
+  - `def _left(self) -> float`
+  - `def _write(self, operation: Operation) -> None`
+- `def summary_row(session: str, step: str, said: str) -> Report`
+
 ## serve/delivery-next/src/owlbear_delivery_next/workflow_steps/__init__.py
 
 The engine's part of each step, and the sessions it runs.
@@ -5376,13 +6882,17 @@ The fresh read-only challenge of a worker's proposed amendment, run after the st
 - `owlbear_delivery_next.change_contracts.models`
 - `owlbear_delivery_next.change_contracts.permissions`
 - `owlbear_delivery_next.change_flow`
+- `owlbear_delivery_next.local_system.git_files`
 - `owlbear_delivery_next.runtimes`
 - `owlbear_delivery_next.workflow_steps`
 - `typing`
 
 ### Interfaces
 
-- `def challenge(store: Store, lock: Lock, change: Change, path: Path, run: Run, *, result: StepResult) -> StepResult`
+- `def proposed(change: Change, run: Run, result: StepResult) -> str | None`
+- `def challenge(post: Store | held_writes.Deferred, lock: Lock, change: Change, path: Path, made: str, *, route: StepResult, settings: Settings | None = None) -> None`
+- `def resumed(store: Store, lock: Lock, change: Change, repo: Path) -> bool`
+- `def _settled(store: Store, lock: Lock, change: Change, path: Path, settings: Settings | None) -> None`
 
 ## serve/delivery-next/src/owlbear_delivery_next/workflow_steps/before.py
 
@@ -5505,6 +7015,38 @@ Person-only check environments: the host launches the Builder's recipe, verifies
 - `def failed(reason: str) -> loop.StepResult`
 - `def settle(c: Change, now: datetime, paths: Mapping[str, str]) -> Change`
 
+## serve/delivery-next/src/owlbear_delivery_next/workflow_steps/clarification.py
+
+The check of a clarification against the approved brief (TD-461; decision-intent-build §2, slice 5).
+
+### Imports
+
+- `__future__`
+- `asyncio`
+- `datetime`
+- `owlbear_delivery_next.change_contracts`
+- `owlbear_delivery_next.change_contracts.decision_records`
+- `owlbear_delivery_next.change_contracts.failures`
+- `owlbear_delivery_next.change_contracts.models`
+- `owlbear_delivery_next.change_flow`
+- `owlbear_delivery_next.change_flow.loop`
+- `owlbear_delivery_next.runtimes`
+- `owlbear_delivery_next.workflow_steps`
+- `pathlib`
+- `tempfile`
+- `typing`
+- `uuid`
+
+### Interfaces
+
+- `def _one(text: str) -> str`
+- `def due(c: Change) -> Question | None`
+- `def message(c: Change, q: Question) -> str`
+- `def _statement(q: Question) -> str`
+- `def checked(store: Store, lock: Lock, c: Change) -> Change | None`
+- `def judged(done: Run) -> tuple[pick_tools.ClarificationResult | None, str]`
+- `def _session(store: Store, lock: Lock, c: Change, said: str) -> Run`
+
 ## serve/delivery-next/src/owlbear_delivery_next/workflow_steps/cleanup.py
 
 Cleanup: preserve unmerged commits and uncommitted files, verify both, then remove the worktree (D3, D4 §3.2).
@@ -5517,15 +7059,21 @@ Cleanup: preserve unmerged commits and uncommitted files, verify both, then remo
 - `hashlib`
 - `io`
 - `json`
+- `os`
+- `owlbear_delivery_next.change_contracts`
 - `owlbear_delivery_next.change_contracts.models`
 - `owlbear_delivery_next.change_flow`
 - `owlbear_delivery_next.change_flow.loop`
 - `owlbear_delivery_next.git.remote_git`
 - `owlbear_delivery_next.github.provider`
+- `owlbear_delivery_next.local_system.data_repo`
 - `owlbear_delivery_next.settings`
 - `owlbear_delivery_next.state_store`
+- `owlbear_delivery_next.state_store.backlog`
+- `owlbear_delivery_next.state_store.database`
 - `owlbear_delivery_next.workflow_steps`
 - `pathlib`
+- `stat`
 - `subprocess`
 - `tarfile`
 - `typing`
@@ -5535,17 +7083,29 @@ Cleanup: preserve unmerged commits and uncommitted files, verify both, then remo
 - `class PreservationError(Exception)`
 - `class Inventory`
 - `def _bytes(path: Path, *args: str) -> bytes`
-- `def _ignored(path: Path, name: str) -> list[str]`
+- `def _present(path: Path) -> bool`
+- `def _kind(full: Path) -> str`
+- `def _linked(path: Path, branch: str) -> None`
+- `def _ignored(path: Path, rel: str) -> list[str]`
 - `def inventory(path: Path, branch: str, keep: Sequence[str]) -> Inventory`
 - `def large(path: Path, inv: Inventory) -> bool`
 - `def _digest(data: bytes) -> str`
-- `def _parts(path: Path, dirty: Sequence[str], ignored: Sequence[str] = ()) -> tuple[dict[str, bytes], dict[str, str]]`
+- `def _regular(name: str, data: bytes, mode: int = 420) -> tarfile.TarInfo`
+- `def _parent(directory: int, name: str) -> int | None`
+- `def _worktree_member(path: Path, rel: str) -> tuple[tarfile.TarInfo, bytes] | None`
+- `def _parts(path: Path, dirty: Sequence[str], ignored: Sequence[str] = ()) -> tuple[list[tuple[tarfile.TarInfo, bytes]], dict[str, str]]`
 - `def _oid(algorithm: str, data: bytes) -> str`
 - `def preserve(path: Path, branch: str, inv: Inventory, dest: Path, stem: str) -> list[Path]`
 - `def _keep(ctx: Ctx, path: Path, c: Change, pr: PullRequest | None) -> list[str]`
 - `def fix_change(ctx: Ctx, c: Change, check: str, sha: str, url: str) -> None`
 - `def target_check(ctx: Ctx, c: Change, pr: PullRequest | None) -> tuple[Change, StepResult | None]`
+- `def _retire_branch(ctx: Ctx, c: Change, pr: PullRequest | None) -> StepResult | None`
+- `def _delivery(ctx: Ctx, c: Change, pr: PullRequest | None) -> tuple[Change, PullRequest | None, StepResult | None]`
 - `def run(ctx: Ctx, c: Change) -> tuple[Change, StepResult]`
+- `def merged_files(repo: Path, target: str, sha: str) -> frozenset[str]`
+- `def fixes(ctx: Ctx, c: Change, pr: PullRequest | None) -> None`
+- `def _workspace(ctx: Ctx, c: Change, path: Path, pr: PullRequest | None) -> tuple[list[Path], bool, StepResult | None]`
+- `def _stopped(ctx: Ctx, path: Path, reason: str) -> StepResult`
 - `def _retire(ctx: Ctx, c: Change, path: Path, inv: Inventory) -> tuple[list[Path], StepResult | None]`
 
 ## serve/delivery-next/src/owlbear_delivery_next/workflow_steps/conversation.py
@@ -5607,6 +7167,7 @@ A test review (C-26): its start from the Maintenance page, then the TESTS step's
 - `owlbear_delivery_next.local_system.git_files`
 - `owlbear_delivery_next.runtimes`
 - `owlbear_delivery_next.settings`
+- `owlbear_delivery_next.state_store`
 - `owlbear_delivery_next.state_store.briefs`
 - `owlbear_delivery_next.state_store.store`
 - `owlbear_delivery_next.workflow_steps`
@@ -5705,6 +7266,98 @@ The visual review's routing and the owner's decision (TD-78, TD-79; design skill
 - `def waived(c: Change, head: str, tree_id: str, widths: Sequence[int]) -> tuple[Change, StepResult] | None`
 - `def repair(c: Change, title: str, found: Sequence[str]) -> StepResult`
 - `def decided(c: Change, head: str, tree_id: str) -> tuple[Change, StepResult] | None`
+
+## serve/delivery-next/src/owlbear_delivery_next/workflow_steps/decision_publication.py
+
+A brief's project decisions published by its approval (TD-453; decision-intent-build §5, slice 3).
+
+### Imports
+
+- `__future__`
+- `datetime`
+- `owlbear_decisions`
+- `owlbear_delivery_next.change_contracts.decision_records`
+- `owlbear_delivery_next.change_contracts.failures`
+- `owlbear_delivery_next.change_contracts.models`
+- `owlbear_delivery_next.change_flow`
+- `owlbear_delivery_next.change_flow.loop`
+- `owlbear_delivery_next.state_store`
+- `owlbear_delivery_next.workflow_steps`
+- `typing`
+
+### Interfaces
+
+- `def approve(store: Store, lock: Lock, c: Change, approval: BriefApproval) -> str`
+- `def resume(store: Store, lock: Lock, c: Change, now: datetime) -> Change | None`
+- `def _items(store: Store, c: Change) -> list[Item]`
+- `def _published(store: Store, c: Change, items: list[Item]) -> tuple[Change, str]`
+- `def _item(root: Path, c: Change, d: Decision) -> Item | None`
+- `def _retired(c: Change, d: Decision) -> str`
+- `def _failed(r: Receipt) -> str`
+- `def _record(d: Decision, r: Receipt | None, at: datetime) -> Published`
+- `def _pinned(baseline: DecisionBaseline | None, saved: list[Decision]) -> DecisionBaseline | None`
+
+## serve/delivery-next/src/owlbear_delivery_next/workflow_steps/decisions_gate.py
+
+The runner's decision gate at each step boundary (TD-419 slice 4, TD-456): the rules a step works by, or why not.
+
+### Imports
+
+- `__future__`
+- `contextlib`
+- `dataclasses`
+- `datetime`
+- `hashlib`
+- `owlbear_decisions`
+- `owlbear_delivery_next.change_contracts.decision_records`
+- `owlbear_delivery_next.change_contracts.decision_wording`
+- `owlbear_delivery_next.change_contracts.failures`
+- `owlbear_delivery_next.change_contracts.models`
+- `owlbear_delivery_next.change_flow`
+- `owlbear_delivery_next.change_flow.decision_baseline`
+- `owlbear_delivery_next.change_flow.loop`
+- `owlbear_delivery_next.runtimes`
+- `owlbear_delivery_next.state_store`
+- `owlbear_delivery_next.state_store.decision_archive`
+- `owlbear_delivery_next.workflow_steps`
+- `typing`
+
+### Interfaces
+
+- `class Gate`
+- `def stem(c: Change) -> str`
+- `def reaches(d: Decision, c: Change) -> bool`
+- `def in_force(seen: Snapshot, c: Change) -> list[Decision]`
+- `def _attached(d: Decision, c: Change) -> bool`
+- `def _picked(c: Change) -> set[str] | None`
+- `def _said(d: Decision) -> Said`
+- `def baseline(view: DataView, c: Change, now: datetime) -> DecisionBaseline`
+- `def loaded(store: Store) -> DataView | None`
+- `def pinned(store: Store, c: Change, now: datetime, view: DataView | None) -> tuple[DecisionBaseline | None, bool]`
+- `def _quoted(text: str) -> str`
+- `def differences(seen: Snapshot, pinned_at: DecisionBaseline, now: DecisionBaseline) -> list[str]`
+- `def unpinned(now: DecisionBaseline) -> list[str]`
+- `def _faulty(seen: Snapshot, c: Change, keys: Iterable[str]) -> list[str]`
+- `def _stopped(kind: ErrorKind, reason: str, action: str, resume: str, now: datetime) -> StepResult`
+- `def _faults(seen: Snapshot, c: Change, keys: Iterable[str], now: datetime) -> Gate | None`
+- `def _asked(c: Change, now: DecisionBaseline, head: str, lines: list[str], shown: Sequence[str] = ()) -> Gate`
+- `def waiting(store: Store, view: DataView, c: Change) -> list[Queued]`
+- `def _waiting_lines(store: Store, view: DataView, c: Change) -> list[str]`
+- `def checkpoint(store: Store, c: Change) -> dict[str, Any] | None`
+- `def _sections(found: Sequence[Decision], c: Change, keys: Iterable[str]) -> tuple[list[str], list[str]]`
+- `def context(seen: Snapshot, c: Change) -> tuple[list[str], list[str]]`
+- `def shaping(store: Store, c: Change) -> tuple[list[str], list[str]]`
+- `def check_step(store: Store, c: Change, now: datetime, lock: Lock | None = None) -> Gate`
+- `def _refresh(store: Store) -> str`
+- `def _faulty_wording(view: DataView, c: Change) -> list[str]`
+- `def _wording_faults(view: DataView, c: Change, now: datetime) -> Gate | None`
+- `def unworded(view: DataView | None, c: Change) -> str`
+- `def wording_stop(store: Store, c: Change, now: datetime) -> StepResult | None`
+- `def _judged(view: DataView, c: Change, now: datetime, store: Store, lock: Lock | None) -> Gate`
+- `def _later(seen: Snapshot, c: Change) -> list[Decision]`
+- `def _reassessed(store: Store, lock: Lock, view: DataView, c: Change, later: list[Decision]) -> tuple[Change, StepResult | None]`
+- `def launch(store: Store, c: Change, now: datetime) -> tuple[Change, bool]`
+- `def gated(store: Store, lock: Lock, c: Change, step: Step | None) -> Iterator[Change | None]`
 
 ## serve/delivery-next/src/owlbear_delivery_next/workflow_steps/design.py
 
@@ -5823,6 +7476,7 @@ Engine steps' shared context and exits: Git in the worktree, GitHub through the 
 - `def classify(exc: Exception) -> ErrorKind`
 - `def run(step: Step, ctx: Ctx, c: Change) -> tuple[Change, StepResult]`
 - `def unsupported(c: Change, now: datetime) -> StepResult`
+- `def landed(ctx: Ctx, c: Change, pr: PullRequest) -> StepResult | None`
 - `def pr_state(gh: Provider, repository: str, c: Change, offered: str | None = None) -> Seen`
 - `def observe(store: Store, repo: Path, slug: str) -> Seen`
 
@@ -5874,14 +7528,18 @@ TD-56: a session result TD-54 kept unprocessed, and the owner's "accept" of it.
 ### Imports
 
 - `__future__`
+- `dataclasses`
 - `datetime`
 - `owlbear_delivery_next.change_contracts`
 - `owlbear_delivery_next.change_contracts.failures`
+- `owlbear_delivery_next.change_contracts.held_records`
 - `owlbear_delivery_next.change_contracts.models`
 - `owlbear_delivery_next.change_flow`
 - `owlbear_delivery_next.local_system.processes`
 - `owlbear_delivery_next.local_system.storage_io`
+- `owlbear_delivery_next.runtimes`
 - `owlbear_delivery_next.runtimes.session_result`
+- `owlbear_delivery_next.state_store.store`
 - `owlbear_delivery_next.workflow_steps`
 - `pathlib`
 - `pydantic`
@@ -5890,19 +7548,61 @@ TD-56: a session result TD-54 kept unprocessed, and the owner's "accept" of it.
 
 ### Interfaces
 
-- `class HeldRun(BaseModel)`
-- `class Held(BaseModel)`
+- `class Held(HeldRecord)`
 - `def _path(store: Store, slug: str) -> Path`
-- `def _dump(run: Run) -> HeldRun`
-- `def _load(data: HeldRun) -> Run`
-- `def keep(store: Store, lock: Lock, change: Change, run: Run, head: str) -> None`
+- `def dump_run(run: Run) -> HeldRun`
+- `def load_run(data: HeldRun) -> Run`
+- `def _unloaded(data: HeldRun) -> Run`
+- `def _current(payload: dict[str, Any] | None) -> tuple[object, list[str]]`
+- `def hold(store: Store, lock: Lock, change: Change, run: Run, head: str, label: dict[str, Any]) -> Held`
+- `def _span_closed(change: Change, head: str) -> None`
 - `def _accepted(change: Change, question: str) -> bool`
 - `def head(path: Path) -> str | None`
-- `def _read(store: Store, slug: str) -> Held | None`
+- `def _file(store: Store, slug: str) -> Held | None`
+- `def read(store: Store, slug: str) -> Held | None`
 - `def _matches(held: Held, change: Change) -> bool`
 - `def offered(store: Store, change: Change, question: Question) -> list[Option]`
 - `def _visual_holds(store: Store, change: Change, kept: VisualRound, where: Path) -> bool`
 - `def take(store: Store, lock: Lock, change: Change) -> Run | None`
+- `def _retire(store: Store, lock: Lock, change: Change, held: str) -> None`
+- `def drop(store: Store, lock: Lock, slug: str, held: str) -> None`
+- `def forget(change: Change, held: str) -> None`
+- `def gen(held: HeldRecord) -> str`
+- `def uncounted(store: Store, change: Change) -> Held | None`
+- `def accounted(data: HeldRun) -> Run`
+- `def restored(data: HeldRun) -> Run`
+- `def _with_usage(run: Run, data: HeldRun) -> Run`
+- `def consume(store: Store, lock: Lock, slug: str) -> None`
+- `def settled(store: Store, lock: Lock, change: Change) -> bool`
+- `def kept_session(store: Store, lock: Lock, change: Change, path: Path, config: Callable[[Path], sdk_adapter.Session]) -> Run`
+- `def gate_unread(store: Store, lock: Lock, exc: sessions.UsageUnreadError) -> None`
+- `def counted_hold(store: Store, lock: Lock, pending: Held) -> None`
+- `def _fits(change: Change, pending: Held) -> bool`
+- `def _gated(change: Change, pending: Held) -> Change`
+
+## serve/delivery-next/src/owlbear_delivery_next/workflow_steps/held_writes.py
+
+An accepted hold's writes (RUN-04): kept in memory until its receipted result, or its checkpoint, is durable.
+
+### Imports
+
+- `__future__`
+- `owlbear_delivery_next.workflow_steps`
+- `typing`
+
+### Interfaces
+
+- `class Deferred`
+  - `def __init__(self, store: Store, slug: str) -> None`
+  - `def __getattr__(self, name: str) -> Any`
+  - `def read(self, slug: str) -> Change`
+  - `def write(self, lock: Lock, change: Change) -> None`
+  - `def log(self, lock: Lock, slug: str, event: dict[str, Any]) -> None`
+  - `def flush(self) -> None`
+  - `def checkpoint(self, lock: Lock, change: Change) -> Store`
+- `def checkpoint(post: Store | Deferred, lock: Lock, change: Change) -> Store`
+- `def receipted(store: Store, change: Change, *, accepted: bool) -> Change`
+- `def write_result(store: Store, lock: Lock, change: Change, accepted: Run | None, final: Change, post: Store | Deferred) -> None`
 
 ## serve/delivery-next/src/owlbear_delivery_next/workflow_steps/judges.py
 
@@ -5950,6 +7650,55 @@ The visual review's two judges (TD-74, TD-78; design skill research §3.5 slice 
 - `def _worst(verdicts: Iterable[str]) -> Verdict`
 - `def recorded(c: Change, head: str, tree: str, widths: Sequence[int], *, runs: tuple[Sequence[Run], Sequence[Run]], scans: Sequence[DetectorScan], images: Sequence[Image], settings: Settings, now: datetime, inputs: Sequence[DesignInput] = ()) -> VisualRound`
 
+## serve/delivery-next/src/owlbear_delivery_next/workflow_steps/lookup.py
+
+The decision lookup (TD-456, TD-459): a worker's or a lead chat's question, answered by the picker.
+
+### Imports
+
+- `__future__`
+- `asyncio`
+- `datetime`
+- `json`
+- `owlbear_decisions`
+- `owlbear_delivery_next.change_contracts`
+- `owlbear_delivery_next.change_contracts.decision_records`
+- `owlbear_delivery_next.change_contracts.decision_wording`
+- `owlbear_delivery_next.local_system`
+- `owlbear_delivery_next.runtimes`
+- `owlbear_delivery_next.settings`
+- `owlbear_delivery_next.settings.config`
+- `owlbear_delivery_next.state_store`
+- `owlbear_delivery_next.state_store.decision_archive`
+- `owlbear_delivery_next.state_store.store`
+- `owlbear_delivery_next.workflow_steps`
+- `pathlib`
+- `tempfile`
+- `threading`
+- `typing`
+- `uuid`
+
+### Interfaces
+
+- `def worker(store: Store, lock: Lock, c: Change, question: str) -> tuple[dict[str, Any], Run | None]`
+- `def _own(c: Change, project: str, found: list[Decision]) -> list[Decision]`
+- `def chat(shared: DataRepo | None, project: str, question: str, settings: Callable[[], Settings] | None) -> tuple[dict[str, Any], Run | None]`
+- `class Chats`
+  - `def __init__(self) -> None`
+  - `def __call__(self, shared: DataRepo | None, project: str, question: str, settings: Callable[[], Settings] | None) -> dict[str, Any]`
+- `def machine(shared: DataRepo) -> Settings`
+- `def _unresolved(seen: Snapshot, found: list[Decision]) -> dict[str, Any] | None`
+- `def answered(done: Run, found: list[Decision]) -> dict[str, Any]`
+- `def _row(d: Decision, note: str) -> dict[str, str]`
+- `def _ran(settings: Settings, prefix: str, said: str, journal: sdk_adapter.Journal) -> Run`
+- `def _one(text: str) -> str`
+- `class Asked`
+  - `def __init__(self, store: Store, lock: Lock, current: Callable[[], Change]) -> None`
+  - `def __call__(self, args: tools.Args) -> str`
+  - `def _answer(self, question: str) -> dict[str, Any]`
+  - `def helper(self) -> tuple[tools.Spec, Callable[[tools.Args], str]]`
+  - `def settled(self, step: Callable[[], T]) -> T`
+
 ## serve/delivery-next/src/owlbear_delivery_next/workflow_steps/merge.py
 
 Merge: an automatic gate at the exact PR head, re-checked under a per-target lock, then a guarded merge (TD-15).
@@ -5993,10 +7742,13 @@ Paths shared between Changes: recorded as information when planning; asked about
 - `__future__`
 - `datetime`
 - `fnmatch`
+- `hashlib`
 - `itertools`
+- `json`
 - `owlbear_delivery_next.change_contracts`
 - `owlbear_delivery_next.change_contracts.failures`
 - `owlbear_delivery_next.change_contracts.models`
+- `owlbear_delivery_next.change_flow.loop`
 - `owlbear_delivery_next.change_flow.worktree`
 - `owlbear_delivery_next.state_store.store`
 - `owlbear_delivery_next.workflow_steps`
@@ -6007,17 +7759,109 @@ Paths shared between Changes: recorded as information when planning; asked about
 ### Interfaces
 
 - `class Neighbour(NamedTuple)`
+- `class _Merge(NamedTuple)`
 - `def neighbours(store: Store, slug: str, now: datetime) -> list[Neighbour]`
 - `def generated(repo: Path) -> list[str]`
 - `def incidental(path: str, patterns: Iterable[str] = ()) -> bool`
 - `def _deeper(a: str, b: str) -> str`
 - `def found(plan: Plan, others: Mapping[str, Iterable[str]], patterns: Iterable[str] = ()) -> list[Overlap]`
 - `def record(c: Change, result: StepResult, others: Mapping[str, Iterable[str]], repo: Path) -> None`
-- `def _quiet(path: Path, *args: str) -> str | None`
-- `def _sides(path: Path, since: str | None) -> tuple[str, str] | None`
+- `def _quiet(path: Path, *args: str, missing: bool = False) -> str | None`
+- `def _merges(path: Path, since: str | None) -> list[_Merge]`
 - `def collided(path: Path, since: str | None, *, resolved: bool) -> list[str]`
-- `def collision(c: Change, paths: Iterable[str], near: Iterable[Neighbour], said: str = '', patterns: Iterable[str] = ()) -> StepResult | None`
+- `def _collision_paths(path: Path, sides: tuple[str, str] | None, *, resolved: bool) -> list[str]`
+- `def _hits(paths: Iterable[str], near: Iterable[Neighbour], patterns: Iterable[str]) -> list[tuple[Neighbour, list[str]]]`
+- `def _cause(c: Change, hits: list[tuple[Neighbour, list[str]]], merge: tuple[str, str] | None) -> str`
+- `def collision(c: Change, paths: Iterable[str], near: Iterable[Neighbour], said: str = '', patterns: Iterable[str] = (), *, merge: tuple[str, str] | None = None, pending_paths: Iterable[str] | None = None) -> StepResult | None`
+- `def integrates(c: Change) -> bool`
+- `def _unverified(reason: str) -> StepResult`
+- `def starting(c: Change, task: Task | None) -> StepResult | None`
 - `def integrated(store: Store, c: Change, path: Path, session: tuple[str | None, str], result: StepResult) -> StepResult`
+
+## serve/delivery-next/src/owlbear_delivery_next/workflow_steps/pending_child.py
+
+A paid child session of a durable parent step (RUN-04): its run is kept until its verdict and spend commit together.
+
+### Imports
+
+- `__future__`
+- `dataclasses`
+- `datetime`
+- `json`
+- `owlbear_delivery_next.change_contracts.held_records`
+- `owlbear_delivery_next.change_contracts.models`
+- `owlbear_delivery_next.change_contracts.round_records`
+- `owlbear_delivery_next.change_flow`
+- `owlbear_delivery_next.local_system.storage_io`
+- `owlbear_delivery_next.runtimes`
+- `owlbear_delivery_next.state_store.store`
+- `owlbear_delivery_next.workflow_steps`
+- `pydantic`
+- `typing`
+
+### Interfaces
+
+- `def awaited(label: str, parent: str, route: loop.StepResult, change: Change) -> PendingChild`
+- `def route_of(pending: PendingChild) -> loop.StepResult`
+- `def child(store: Store, lock: Lock, change: Change, parent: tuple[str, str], start: Start) -> Judged`
+- `def _unread(store: Store, lock: Lock, change: Change, evidence: PendingChild, *, gate: bool = True) -> Change`
+- `def _reloaded(data: HeldRun) -> Run`
+- `def _kept(store: Store, lock: Lock, change: Change, pending: PendingChild) -> None`
+- `def _capture_or_report(store: Store, slug: str, record: PendingChild, exc: Exception) -> None`
+- `def _capture(store: Store, slug: str, pending: PendingChild) -> Path`
+- `def recovered(store: Store, lock: Lock, change: Change) -> Change`
+- `def _gates(change: Change, captured: PendingChild) -> bool`
+- `def _awaits(pending: PendingChild | None, captured: PendingChild) -> bool`
+- `def judgeable(verdict: loop.StepResult) -> bool`
+- `def booked(change: Change, run: Run, fields: dict[str, object]) -> dict[str, object] | None`
+- `def candidate(change: Change, pending: PendingChild) -> Amendment | None`
+- `def fits(change: Change) -> bool`
+- `def retired(store: Store, lock: Lock, change: Change) -> Change`
+- `def _left_verdict(change: Change, data: HeldRun, made: Amendment) -> None`
+
+## serve/delivery-next/src/owlbear_delivery_next/workflow_steps/pick.py
+
+The decision pick (TD-459): one SDK session on the complete list picks the rules a brief version's work follows.
+
+### Imports
+
+- `__future__`
+- `asyncio`
+- `dataclasses`
+- `datetime`
+- `hashlib`
+- `owlbear_decisions`
+- `owlbear_delivery_next.change_contracts`
+- `owlbear_delivery_next.change_contracts.decision_records`
+- `owlbear_delivery_next.change_contracts.models`
+- `owlbear_delivery_next.change_contracts.permissions`
+- `owlbear_delivery_next.change_flow`
+- `owlbear_delivery_next.runtimes`
+- `owlbear_delivery_next.settings`
+- `owlbear_delivery_next.state_store`
+- `owlbear_delivery_next.state_store.decision_archive`
+- `owlbear_delivery_next.workflow_steps`
+- `pathlib`
+- `tempfile`
+- `typing`
+- `uuid`
+
+### Interfaces
+
+- `def listed(seen: Snapshot, c: Change) -> list[Decision]`
+- `def moved(seen: Snapshot, c: Change) -> list[str]`
+- `def digest(found: list[Decision], changed: list[str]) -> str`
+- `def corrections(root: Path, project: str) -> str`
+- `def _one(text: str) -> str`
+- `def message(c: Change | None, found: list[Decision], log: str, instruction: str = INSTRUCTION, question: str = '') -> str`
+- `def _work(c: Change) -> list[str]`
+- `def run(store: Store, lock: Lock, c: Change) -> Change`
+- `def reassessed(store: Store, lock: Lock, c: Change, found: list[Decision], root: Path) -> tuple[list[Decision], str]`
+- `def _session(store: Store, lock: Lock, c: Change, said: str, p: Pick | DecisionBaseline) -> Run`
+- `def config(settings: Settings, at: Path, session: str, said: str, journal: sdk_adapter.Journal, limit: float | None = None, *, submit: tools.Spec = pick_tools.SUBMIT, job: str = LABEL) -> sdk_adapter.Session`
+- `def _new_id(c: Change) -> str`
+- `def judged(done: Run, found: list[Decision], base: Pick) -> Pick`
+- `def unapproved(store: Store, c: Change, view: DataView | None) -> str`
 
 ## serve/delivery-next/src/owlbear_delivery_next/workflow_steps/plan_round.py
 
@@ -6043,8 +7887,8 @@ The plan challenge's sessions (TD-190, TD-208): a round, a rejections-only check
 ### Interfaces
 
 - `def scopes(store: Store, slug: str) -> dict[str, list[str]]`
-- `def planned(store: Store, lock: Lock, change: Change, path: Path, payload: object, result: Result, profile: Profile, others: Mapping[str, Sequence[str]]) -> Result`
-- `def challenge(store: Store, lock: Lock, change: Change, path: Path, profile: Profile, others: Mapping[str, Sequence[str]]) -> Result`
+- `def planned(store: Store | held_writes.Deferred, lock: Lock, change: Change, path: Path, payload: object, result: Result, profile: Profile, others: Mapping[str, Sequence[str]], events: list[dict[str, object]]) -> Result`
+- `def challenge(store: Store, lock: Lock, change: Change, path: Path, profile: Profile, others: Mapping[str, Sequence[str]], events: list[dict[str, object]]) -> Result`
 - `def judged(change: Change, verdict: Result, payload: object) -> Result`
 - `def continued(store: Store, lock: Lock, change: Change, repo: Path) -> bool`
 - `def _reconsider(store: Store, lock: Lock, change: Change, path: Path) -> bool`
@@ -6260,6 +8104,7 @@ Merging through a GitHub merge queue (TD-226): enqueue once, follow, handle remo
 - `owlbear_delivery_next.change_contracts.failures`
 - `owlbear_delivery_next.change_contracts.merge_records`
 - `owlbear_delivery_next.change_contracts.models`
+- `owlbear_delivery_next.change_flow`
 - `owlbear_delivery_next.change_flow.loop`
 - `owlbear_delivery_next.github.provider`
 - `owlbear_delivery_next.settings`
@@ -6283,6 +8128,7 @@ Merging through a GitHub merge queue (TD-226): enqueue once, follow, handle remo
 - `def run(ctx: Ctx, c: Change, pr: PullRequest, rules: Rules, gate: Gate) -> tuple[Change, StepResult]`
 - `def leaving(before: Change, after: Change) -> bool`
 - `def _resolved(before: Change, after: Change) -> bool`
+- `def _terminal_leave(before: Change, after: Change, pr: PullRequest, repository: str) -> Change | None`
 - `def barrier(store: Store, repo: Path) -> Leave`
 
 ## serve/delivery-next/src/owlbear_delivery_next/workflow_steps/reconsider.py
@@ -6365,6 +8211,7 @@ Engine part of the review step: record the verdict with its inputs; findings bec
 - `owlbear_delivery_next.change_contracts.round_records`
 - `owlbear_delivery_next.change_flow`
 - `owlbear_delivery_next.change_flow.moves`
+- `owlbear_delivery_next.runtimes`
 - `owlbear_delivery_next.settings`
 - `owlbear_delivery_next.workflow_steps`
 - `subprocess`
@@ -6467,22 +8314,45 @@ One runner's agent sessions: run them in the profile's runtime, log their usage,
   - `def __init__(self, run: session_result.Run, label: str = '') -> None`
 - `def out(text: str) -> None`
 - `def memory(store: Store) -> Path | None`
+- `def previous(store: Store, slug: str, session: str | None) -> dict[int, float | None]`
 - `def run(store: Store, cfg: sdk_adapter.Session, *, hold: bool = False) -> session_result.Run`
 - `def held(done: session_result.Run) -> bool`
 - `def log_held(store: Store, lock: Lock, labels: list[str], runs: list[session_result.Run]) -> None`
 - `def unread(done: session_result.Run) -> bool`
 - `def logged(store: Store, lock: Lock, change: Change, done: session_result.Run, fields: dict[str, object]) -> None`
+- `def announce(store: Store, lock: Lock, slug: str, step: dict[str, object]) -> None`
+- `def announce_all(store: Store, lock: Lock, slug: str, steps: list[dict[str, object]]) -> None`
+- `def deferrable(done: session_result.Run) -> bool`
+- `def account(change: Change, done: session_result.Run, fields: dict[str, object]) -> dict[str, object]`
 - `def reviewer(store: Store, lock: Lock, change: Change, source: Path, made: Callable[[Path], sdk_adapter.Session], label: str) -> Result`
-- `def review_run(store: Store, lock: Lock, change: Change, source: Path, made: Callable[[Path], sdk_adapter.Session], label: str, *, submit: tools.Spec = tools.REVIEW) -> tuple[Result, session_result.Run]`
-- `def judges(store: Store, lock: Lock, change: Change, source: Path, made: Callable[[Path], list[tuple[str, sdk_adapter.Session]]], settings: Settings | None = None, *, hold: bool = False) -> list[tuple[Result, session_result.Run]]`
-- `def isolated(store: Store, lock: Lock, change: Change, source: Path, make: Callable[[Path], list[sdk_adapter.Session]], go: Callable[[list[sdk_adapter.Session]], list[session_result.Run]], *, each: bool = False) -> list[session_result.Run]`
+- `def review_run(store: Store, lock: Lock, change: Change, source: Path, made: Callable[[Path], sdk_adapter.Session], label: str, *, submit: tools.Spec = tools.REVIEW, settings: Settings | None = None, keep: Keep | None = None) -> tuple[Result, session_result.Run]`
+- `def judges(store: Store, lock: Lock, change: Change, source: Path, made: Callable[[Path], list[tuple[str, sdk_adapter.Session]]], settings: Settings | None = None, *, hold: bool = False, keep: Keep | None = None) -> list[tuple[Result, session_result.Run]]`
+- `def isolated(store: Store, lock: Lock, change: Change, source: Path, make: Callable[[Path], list[sdk_adapter.Session]], go: Callable[[list[sdk_adapter.Session]], list[session_result.Run]], *, each: bool = False, keep: Keep | None = None) -> list[session_result.Run]`
 - `def _noted(cfgs: list[sdk_adapter.Session], note: str) -> list[sdk_adapter.Session]`
 - `def _refused(store: Store, lock: Lock, change: Change, why: str, cfgs: list[sdk_adapter.Session]) -> list[session_result.Run]`
-- `def _within(store: Store, lock: Lock, change: Change, copy: disposable.Copy, cfgs: list[sdk_adapter.Session], go: Callable[[list[sdk_adapter.Session]], list[session_result.Run]]) -> list[session_result.Run]`
-- `def _closed(store: Store, lock: Lock, change: Change, copy: disposable.Copy, runs: list[session_result.Run]) -> None`
+- `def _within(store: Store, lock: Lock, change: Change, copy: disposable.Copy, cfgs: list[sdk_adapter.Session], go: Callable[[list[sdk_adapter.Session]], list[session_result.Run]], *, keep: Keep | None = None) -> list[session_result.Run]`
+- `def _closed(store: Store, lock: Lock, change: Change, copy: disposable.Copy, runs: list[session_result.Run], keep: Keep | None) -> None`
 - `def _at() -> str`
 - `def _waves(cfgs: list[sdk_adapter.Session], told: Callable[[int], None]) -> list[session_result.Run]`
 - `async def _together(cfgs: list[sdk_adapter.Session]) -> list[session_result.Run]`
+
+## serve/delivery-next/src/owlbear_delivery_next/workflow_steps/unset_settings.py
+
+A step that meets an unset setting asks the owner to fill it in (the owner, 2026-10-23: code ships no defaults).
+
+### Imports
+
+- `__future__`
+- `datetime`
+- `owlbear_delivery_next.change_contracts.failures`
+- `owlbear_delivery_next.change_contracts.models`
+- `owlbear_delivery_next.change_flow`
+- `owlbear_delivery_next.workflow_steps`
+- `typing`
+
+### Interfaces
+
+- `def asked(store: Store, lock: Lock, exc: SettingsUnset) -> None`
 
 ## serve/delivery-next/src/owlbear_delivery_next/workflow_steps/visual.py
 
@@ -6493,6 +8363,7 @@ Visual check: render the brief's page states in headless Chromium and judge the 
 - `__future__`
 - `dataclasses`
 - `hashlib`
+- `owlbear_decisions`
 - `owlbear_delivery_next.change_contracts.failures`
 - `owlbear_delivery_next.change_contracts.models`
 - `owlbear_delivery_next.change_contracts.visual_records`
@@ -6523,6 +8394,30 @@ Visual check: render the brief's page states in headless Chromium and judge the 
 - `def missing_browser(reason: str) -> StepResult`
 - `def broken(reason: str) -> StepResult`
 - `def judged(c: Change, head: str, tree_id: str, shots: Sequence[Shot], *, verdict: tools.ReviewResult | None, now: datetime, scans: Sequence[DetectorScan] = (), kept: VisualRound | None = None) -> tuple[Change, StepResult]`
+
+## serve/delivery-next/src/owlbear_delivery_next/workflow_steps/watched.py
+
+The watcher of a Change-owned session (W1a): on by the master switch, with the places its reports are judged by.
+
+### Imports
+
+- `__future__`
+- `contextlib`
+- `functools`
+- `os`
+- `owlbear_delivery_next.change_contracts`
+- `owlbear_delivery_next.change_flow`
+- `owlbear_delivery_next.local_system`
+- `owlbear_delivery_next.local_system.git_files`
+- `owlbear_delivery_next.runtimes`
+- `owlbear_delivery_next.state_store`
+- `pathlib`
+- `subprocess`
+- `typing`
+
+### Interfaces
+
+- `def watching(store: Store, lock: Lock, step: str, settings: Settings, at: Path, note: Callable[[str], None]) -> watch_feed.Watching | None`
 
 ## serve/knowledge/src/owlbear_knowledge/__init__.py
 
@@ -7502,6 +9397,7 @@ owlbear-memory package exports.
 ### Imports
 
 - `__future__`
+- `owlbear_memory`
 - `owlbear_memory.engine`
 - `owlbear_memory.errors`
 - `owlbear_memory.models`
@@ -7575,7 +9471,7 @@ Memory engine with state transitions, OCC, and stat-signature caching.
   - `def _validate_assessment_task_id(task_id: str) -> None`
   - `def _existing_assessment_result(entry: MemoryEntry, *, task_id: str, expected_revision: str) -> AssessmentResult | None`
   - `def _write_assessment(self, original: MemoryEntry, updated: MemoryEntry, receipt: AssessmentReceipt, *, write_timestamp: str | None = None) -> AssessmentResult`
-  - `def save(self, *, title: str, content: str, categories: list[MemoryCategory], confidence: float, source_agent: str, scope_agents: list[str]) -> MemoryEntry`
+  - `def save(self, *, title: str, content: str, categories: list[MemoryCategory], confidence: float, source_agent: str, scope_agents: list[str], recommended: Where | None = None) -> MemoryEntry`
   - `def _validate_revision(self, entry: MemoryEntry, *, expected_updated_at: str | None, expected_revision: str | None) -> None`
   - `def _validate_occ(self, entry: MemoryEntry, expected_updated_at: str) -> None`
   - `def _eligible_deleted(self, min_age_days: int) -> tuple[list[MemoryEntry], list[MemoryEntry]]`
@@ -7648,6 +9544,35 @@ Pydantic data models for memory entries.
   - `def _validate_id_uuid_v4(cls, value: str) -> str`
   - `def _validate_iso_datetime(cls, value: str | None) -> str | None`
 - `class AssessmentResult(BaseModel)`
+
+## serve/memory/src/owlbear_memory/selection.py
+
+Which memories an agent is given: recall's eligibility and the pre-flight selection (TD-70, TD-241).
+
+### Imports
+
+- `__future__`
+- `dataclasses`
+- `datetime`
+- `os`
+- `owlbear_memory.engine`
+- `owlbear_memory.models`
+- `stat`
+- `typing`
+
+### Interfaces
+
+- `def eligible(entry: MemoryEntry, agent: str | None) -> bool`
+- `class Read`
+  - `def complete(self) -> bool`
+- `def stored(folder: Path) -> Read`
+- `def readable(project: Iterable[MemoryEntry], shared: Iterable[MemoryEntry]) -> list[tuple[MemoryEntry, Where]]`
+- `class Candidate`
+- `class Skipped`
+- `class Selection`
+- `def _updated(entry: MemoryEntry) -> float`
+- `def ranked(entries: Iterable[tuple[MemoryEntry, Where]], agent: str) -> list[Candidate]`
+- `def select(entries: Iterable[tuple[MemoryEntry, Where]], agent: str, *, cost: Callable[[Candidate], int], room: int, cap: int = CAP) -> Selection`
 
 ## serve/memory/src/owlbear_memory/storage.py
 
@@ -7734,7 +9659,9 @@ Git helpers for memory-mcp batch commit operations.
 
 - `__future__`
 - `argparse`
+- `contextlib`
 - `dataclasses`
+- `fcntl`
 - `os`
 - `owlbear_memory`
 - `owlbear_memory.errors`
@@ -7743,6 +9670,7 @@ Git helpers for memory-mcp batch commit operations.
 - `stat`
 - `subprocess`
 - `sys`
+- `time`
 - `typing`
 
 ### Interfaces
@@ -7772,6 +9700,9 @@ Git helpers for memory-mcp batch commit operations.
 - `def _verify_committed_change_set(repo_dir: Path, previous_head: str | None, new_head: str, intended_paths: set[str], entries: dict[str, tuple[MemoryEntry, bytes]]) -> None`
 - `def _commit_batch_locked(memory_dir: Path, repo_dir: Path, *, session_type: str) -> BatchCommitResult`
 - `def commit_batch(memory_dir: Path, *, session_type: str) -> BatchCommitResult`
+- `def repo_locked(root: Path, wait: float = 30.0) -> Iterator[None]`
+- `def _known(repo_dir: Path, rel: str) -> bool`
+- `def commit_move(paths: Sequence[Path], message: str) -> str`
 - `def main(argv: Sequence[str] | None = None) -> int`
 
 ## serve/memory-mcp/src/owlbear_memory_mcp/server.py
@@ -7788,6 +9719,7 @@ OwlBear MCP memory server for markdown-frontmatter memory operations.
 - `mcp.types`
 - `os`
 - `owlbear_memory`
+- `owlbear_memory_mcp.store`
 - `owlbear_memory_mcp.tools`
 - `pathlib`
 - `pydantic`
@@ -7799,17 +9731,41 @@ OwlBear MCP memory server for markdown-frontmatter memory operations.
 - `def memory_dir() -> Path`
 - `def global_dir() -> Path | None`
 - `async def app_lifespan(_server: MCPServer) -> AsyncGenerator[AppContext]`
-- `async def save_memory(ctx: Context, *, title: _Title, content: _Content, categories: _Categories, confidence: _Confidence, source_agent: _Agent) -> dict[str, Any]`
-- `async def list_memories(ctx: Context, *, states: list[MemoryState] | None = None, categories: Annotated[list[MemoryCategory] | None, Field(min_length=1)] = None, scope_agents: list[str] | None = None) -> list[dict[str, Any]]`
+- `async def save_memory(ctx: Context, *, title: _Title, content: _Content, categories: _Categories, confidence: _Confidence, source_agent: _Agent, where: _Where) -> dict[str, Any]`
+- `async def list_memories(ctx: Context, *, states: list[MemoryState] | None = None, categories: Annotated[list[MemoryCategory] | None, Field(min_length=1)] = None, scope_agents: list[str] | None = None, folder: _Folder = None) -> list[dict[str, Any]]`
 - `async def recall_memory(ctx: Context, *, agent: _RecallAgent = None, categories: list[MemoryCategory] | None = None, limit: _Limit | None = None) -> str`
-- `async def read_memory(ctx: Context, *, entry_id: str) -> dict[str, Any]`
-- `async def curate_memory(ctx: Context, *, entry_id: str, revision: _Revision, title: _Title | None = None, content: _Content | None = None, categories: list[MemoryCategory] | None = None, confidence: _Confidence | None = None, scope_agents: list[str] | None = None) -> dict[str, Any]`
-- `async def commit_memory_batch(ctx: Context, *, session_type: _BatchSession) -> dict[str, Any]`
-- `async def delete_memory(ctx: Context, *, entry_id: str, revision: _Revision) -> dict[str, Any]`
+- `async def read_memory(ctx: Context, *, entry_id: str, folder: _Folder = None) -> dict[str, Any]`
+- `async def curate_memory(ctx: Context, *, entry_id: str, revision: _Revision, title: _Title | None = None, content: _Content | None = None, categories: list[MemoryCategory] | None = None, confidence: _Confidence | None = None, scope_agents: list[str] | None = None, folder: _Folder = None) -> dict[str, Any]`
+- `async def commit_memory_batch(ctx: Context, *, session_type: _BatchSession, folder: _Folder = None) -> dict[str, Any]`
+- `async def delete_memory(ctx: Context, *, entry_id: str, revision: _Revision, folder: _Folder = None) -> dict[str, Any]`
+- `async def make_global(ctx: Context, *, entry_id: str, revision: _Revision, folder: _Folder = None) -> dict[str, Any]`
+- `async def curation_threshold(ctx: Context) -> dict[str, Any]`
 - `async def rename_agent_memories(ctx: Context, *, old_name: _Agent, new_name: _Agent) -> dict[str, int]`
 - `async def delete_agent_memories(ctx: Context, *, agent: _Agent) -> dict[str, int]`
 - `async def approve_memory(ctx: Context, *, entry_id: str, revision: _Revision) -> dict[str, Any]`
 - `async def assess_memories(ctx: Context, *, assessments: Annotated[list[AssessmentItem], Field(min_length=1)], task_id: AssessmentTaskId) -> dict[str, Any]`
+
+## serve/memory-mcp/src/owlbear_memory_mcp/store.py
+
+Where a chat's memory server keeps entries when Delivery names no folder (TD-57, TD-72, TD-291).
+
+### Imports
+
+- `__future__`
+- `json`
+- `os`
+- `pathlib`
+- `re`
+- `subprocess`
+
+### Interfaces
+
+- `class StoreError(RuntimeError)`
+- `def _git(cwd: Path, *args: str) -> str`
+- `def shared_root() -> Path | None`
+- `def identity(workspace: Path) -> str`
+- `def _held(claim: Path) -> str`
+- `def shared_stores(workspace: Path) -> tuple[Path, Path] | None`
 
 ## serve/memory-mcp/src/owlbear_memory_mcp/tools.py
 
@@ -7818,13 +9774,16 @@ MCP tool implementations for markdown-backed memory entries.
 ### Imports
 
 - `__future__`
+- `json`
 - `logging`
 - `mcp.server.mcpserver.exceptions`
 - `owlbear_memory`
 - `owlbear_memory_mcp.git`
 - `pathlib`
 - `pydantic`
+- `re`
 - `subprocess`
+- `types`
 - `typing`
 
 ### Interfaces
@@ -7835,6 +9794,8 @@ MCP tool implementations for markdown-backed memory entries.
 - `def _engine_from_ctx(ctx: Context) -> MemoryEngine`
 - `def _global_engine(ctx: Context) -> MemoryEngine | None`
 - `def _readable(ctx: Context) -> list[MemoryEntry]`
+- `def _shared_root(ctx: Context) -> Path | None`
+- `def _in_folder(ctx: Context, folder: str | None) -> Context`
 - `def _memory_dir_from_ctx(ctx: Context) -> Path`
 - `def _validate_scope(agents: list[str]) -> None`
 - `def _recognized_agent_names(entries: list[MemoryEntry]) -> list[str]`
@@ -7845,6 +9806,7 @@ MCP tool implementations for markdown-backed memory entries.
 - `def _coerce_categories(categories: list[MemoryCategory | str] | None) -> list[MemoryCategory] | None`
 - `def _coerce_states(states: list[MemoryState | str] | None) -> list[MemoryState] | None`
 - `def _validate_limit(limit: int | None) -> int | None`
+- `def _challenges(entry: MemoryEntry) -> dict[str, object]`
 - `def _entry_to_dict(entry: MemoryEntry) -> dict[str, object]`
 - `def _load_entry_or_raise(engine: MemoryEngine, entry_id: str) -> MemoryEntry`
 - `def _stale_revision_error(exc: ConcurrencyError) -> ToolError`
@@ -7852,20 +9814,22 @@ MCP tool implementations for markdown-backed memory entries.
 - `def _state_rank_for_list(state: MemoryState) -> int`
 - `def _teaching_validation_message(exc: ValidationError) -> str`
 - `def _with_hint(data: dict[str, Any], hint: str) -> dict[str, Any]`
-- `async def save_memory(ctx: Context, *, title: str, content: str, categories: list[MemoryCategory | str], confidence: float, source_agent: str) -> dict[str, Any]`
-- `async def commit_memory_batch(ctx: Context, *, session_type: str) -> dict[str, Any]`
-- `async def list_memories(ctx: Context, *, states: list[MemoryState | str] | None = None, categories: list[MemoryCategory | str] | None = None, scope_agents: list[str] | None = None) -> list[dict[str, Any]]`
-- `async def read_memory(ctx: Context, *, entry_id: str) -> dict[str, Any]`
+- `async def save_memory(ctx: Context, *, title: str, content: str, categories: list[MemoryCategory | str], confidence: float, source_agent: str, where: Where) -> dict[str, Any]`
+- `async def commit_memory_batch(ctx: Context, *, session_type: str, folder: str | None = None) -> dict[str, Any]`
+- `async def list_memories(ctx: Context, *, states: list[MemoryState | str] | None = None, categories: list[MemoryCategory | str] | None = None, scope_agents: list[str] | None = None, folder: str | None = None) -> list[dict[str, Any]]`
+- `async def read_memory(ctx: Context, *, entry_id: str, folder: str | None = None) -> dict[str, Any]`
 - `async def recall_memory(ctx: Context, *, agent: str | int | None, categories: list[MemoryCategory | str] | None = None, limit: int | None = None) -> str`
 - `async def _update_entry(ctx: Context, *, current: MemoryEntry, revision: str, title: str | None = None, content: str | None = None, categories: list[MemoryCategory | str] | None = None, confidence: float | None = None, scope_agents: list[str] | None = None) -> dict[str, Any]`
 - `async def _delete_entry(ctx: Context, *, entry_id: str, revision: str) -> dict[str, Any]`
-- `async def curate_memory(ctx: Context, *, entry_id: str, revision: str, title: str | None = None, content: str | None = None, categories: list[MemoryCategory | str] | None = None, confidence: float | None = None, scope_agents: list[str] | None = None) -> dict[str, Any]`
-- `async def delete_memory(ctx: Context, *, entry_id: str, revision: str) -> dict[str, Any]`
+- `async def curate_memory(ctx: Context, *, entry_id: str, revision: str, title: str | None = None, content: str | None = None, categories: list[MemoryCategory | str] | None = None, confidence: float | None = None, scope_agents: list[str] | None = None, folder: str | None = None) -> dict[str, Any]`
+- `async def delete_memory(ctx: Context, *, entry_id: str, revision: str, folder: str | None = None) -> dict[str, Any]`
 - `async def rename_agent_memories(ctx: Context, *, old_name: str, new_name: str) -> dict[str, int]`
 - `async def delete_agent_memories(ctx: Context, *, agent: str) -> dict[str, int]`
 - `async def _approve_entry(ctx: Context, *, entry_id: str, revision: str) -> dict[str, Any]`
 - `async def approve_memory(ctx: Context, *, entry_id: str, revision: str) -> dict[str, Any]`
 - `async def assess_memories(ctx: Context, *, assessments: list[AssessmentItem], task_id: str) -> dict[str, list[dict[str, object]]]`
+- `async def make_global(ctx: Context, *, entry_id: str, revision: str, folder: str | None = None) -> dict[str, Any]`
+- `async def curation_threshold(ctx: Context) -> dict[str, Any]`
 
 ## serve/tools/src/owlbear_tools/__init__.py
 
@@ -8081,25 +10045,20 @@ Regenerate all OwlBear navigation indexes concurrently.
 
 ## serve/tools/src/owlbear_tools/project.py
 
-Project setup and diagnostic commands.
+Project setup commands.
 
 ### Imports
 
 - `__future__`
-- `argparse`
 - `owlbear_tools.commands`
-- `pathlib`
-- `shutil`
 - `subprocess`
 - `sys`
 
 ### Interfaces
 
-- `def _run(command: list[str], *, cwd: Path | None = None) -> int`
+- `def _run(command: list[str]) -> int`
 - `def _finish(exit_code: int) -> None`
 - `def hooks_install() -> None`
-- `def setup_project() -> None`
-- `def doctor() -> None`
 
 ## serve/tools/src/owlbear_tools/py_index.py
 
@@ -8145,7 +10104,10 @@ Workspace lint, formatting, and quality commands.
 
 - `def _precommit_hook(hook: str, *, staged: bool) -> int`
 - `def _run_precommit_fix_hook(name: str, *, staged: bool, fix_mode: FixMode) -> int`
+- `def _precommit_config() -> tuple[object, list[dict[str, object]]]`
 - `def _precommit_excludes(hook: str) -> tuple[re.Pattern[str], ...]`
+- `def _precommit_hook_names() -> tuple[str, ...]`
+- `def _unclaimed_hooks() -> tuple[str, ...]`
 - `def _check_text_files(name: str, *, staged: bool) -> int`
 - `def _run_biome(*, staged: bool, fix_mode: FixMode, format_only: bool = False) -> int`
 - `def _run_leaf(name: str, *, staged: bool, fix_mode: FixMode) -> int`
@@ -8407,143 +10369,3 @@ HTML content extraction for the shared web-content package.
 - `def _extract_markdown(html: str, url: str | None = None) -> str`
 - `def extract(html: str) -> str`
 - `def extract_content(html: str, url: str | None = None) -> str`
-
-## setup/init.py
-
-OwlBear workspace initialiser — setup/init.py.
-
-### Imports
-
-- `__future__`
-- `collections`
-- `contextlib`
-- `difflib`
-- `hashlib`
-- `importlib.util`
-- `json`
-- `os`
-- `pathlib`
-- `re`
-- `shlex`
-- `shutil`
-- `subprocess`
-- `sys`
-- `tempfile`
-- `typing`
-- `warnings`
-
-### Interfaces
-
-- `def _load_workspace_git() -> ModuleType`
-- `def _strip_jsonc_comments(text: str) -> str`
-- `def _merge_settings(owlbear: dict, existing: dict) -> dict`
-- `def _settings_claims(seed: dict, existing: dict) -> dict`
-- `def _replace_placeholders(content: str, replacements: dict[str, str]) -> str`
-- `def _build_replacements(owlbear_dir: Path, target_dir: Path) -> dict[str, str]`
-- `def _is_mergeable_settings_key(key: str) -> bool`
-- `def _sha256_bytes(value: bytes) -> str`
-- `def _json_value_digest(value: object) -> str`
-- `def _new_install_manifest() -> dict[str, object]`
-- `def _load_install_manifest(path: Path) -> tuple[dict[str, object] | None, bytes | None]`
-- `def _write_install_manifest(path: Path, manifest: dict[str, object]) -> None`
-- `def _ensure_parent_dirs(path: Path, target_dir: Path, manifest: dict[str, object]) -> None`
-- `def _merge_manifest_record(manifest: dict[str, object], relative: str, record: dict[str, object]) -> None`
-- `def _merge_claims(old: dict, new: dict) -> dict`
-- `def _write_settings(src: Path, dest: Path, replacements: dict[str, str], *, manifest: dict[str, object] | None = None) -> None`
-- `def _write_mcp(src: Path, dest: Path, replacements: dict[str, str], *, manifest: dict[str, object] | None = None) -> None`
-- `def _write_seed_file(src: Path, dest: Path, replacements: dict[str, str]) -> None`
-- `def _render_seed_file(src: Path, replacements: dict[str, str]) -> bytes`
-- `def _record_seed_install(manifest: dict[str, object], relative: str, dest: Path, *, created: bool) -> None`
-- `class UninstallResult`
-  - `def __init__(self, *, completed: bool, actions: tuple[str, ...]) -> None`
-  - `def __bool__(self) -> bool`
-- `class UninstallError(RuntimeError)`
-  - `def __init__(self, message: str, actions: tuple[str, ...]) -> None`
-- `class _UninstallOptions`
-  - `def __init__(self, target_dir: Path, *, target_root: Path, dry_run: bool = False, manifest: dict[str, object] | None = None) -> None`
-- `def _safe_uninstall_destination(path: Path, options: _UninstallOptions) -> bool`
-- `def _remove_created_parent_dirs(path: Path, options: _UninstallOptions) -> None`
-- `def _record_uninstall_action(options: _UninstallOptions, action: str, path: Path) -> None`
-- `def _manifest_record(manifest: dict[str, object] | None, relative: str) -> dict | None`
-- `def _manifest_file_is_unchanged(dest: Path, record: dict) -> bool`
-- `def _read_json_mapping(path: Path, description: str) -> dict | None`
-- `def _remove_manifest_file(dest: Path, record: dict | None, options: _UninstallOptions) -> None`
-- `def _remove_settings_key_claims(current: dict, claims: dict) -> bool`
-- `def _remove_settings_nested_claims(current: dict, claims: dict) -> bool`
-- `def _remove_settings_claims(current: dict, claims: dict) -> bool`
-- `def _json_text_with_newline(value: dict, original: str) -> str`
-- `def _write_uninstalled_json(path: Path, value: dict, options: _UninstallOptions, *, remove_when_empty: bool, original: str) -> None`
-- `def _remove_settings_seed_values(dest: Path, record: dict | None, options: _UninstallOptions) -> None`
-- `def _remove_mcp_seed_servers(dest: Path, record: dict | None, options: _UninstallOptions) -> None`
-- `def _remove_mcp_claimed_servers(current_servers: dict, claims: dict) -> bool`
-- `def _remove_created_gitignore(dest: Path, record: dict, options: _UninstallOptions) -> bool`
-- `def _recorded_gitignore_update(current: str, record: dict) -> str | None`
-- `def _write_gitignore_update(dest: Path, updated: str, record: dict, options: _UninstallOptions) -> None`
-- `def _remove_managed_gitignore(dest: Path, record: dict | None, options: _UninstallOptions) -> None`
-- `def _confirm_uninstall(target_dir: Path) -> bool`
-- `def config_drift(target_dir: Path, owlbear_dir: Path) -> dict[str, str]`
-- `def _hook_files_match(src: Path, dest: Path) -> bool`
-- `def _is_interactive_session() -> bool`
-- `class _CopilotProfileTarget`
-  - `def __init__(self, user_data_root: Path, settings_path: Path, profile_id: str | None, *, associated: bool) -> None`
-- `def _unique_paths(paths: list[Path]) -> list[Path]`
-- `def _vscode_app_from_command(command: str) -> Path | None`
-- `def _user_data_roots_for_vscode_app(app_path: Path) -> list[Path]`
-- `def _user_data_paths_from_tokens(tokens: list[str]) -> list[Path]`
-- `def _running_macos_vscode_user_data_roots() -> list[Path]`
-- `def _macos_vscode_user_data_roots() -> list[Path]`
-- `def _workspace_profile_association(user_data_root: Path, target_dir: Path) -> tuple[bool, str | None] | None`
-- `def _make_copilot_profile_target(user_data_root: Path, profile_id: str | None, *, associated: bool) -> _CopilotProfileTarget`
-- `def _find_associated_copilot_profile(roots: list[Path], target_dir: Path) -> _CopilotProfileTarget | None`
-- `def _select_default_copilot_profile(roots: list[Path], target_dir: Path) -> _CopilotProfileTarget`
-- `def _profile_display_path(path: Path) -> str`
-- `def _profile_display_name(target: _CopilotProfileTarget) -> str`
-- `def _profile_json_indent(raw: str | None) -> int | str`
-- `def _update_copilot_reasoning_settings(path: Path) -> tuple[object, bool, str | None]`
-- `def _write_copilot_profile_atomically(path: Path, data: object, *, original_text: str | None) -> None`
-- `def _confirm_copilot_profile_update(target: _CopilotProfileTarget) -> bool`
-- `def _print_profile_association_help(target_dir: Path) -> None`
-- `def _configure_copilot_profile(target_dir: Path, *, interactive: bool) -> None`
-- `def _should_replace_hook_file(dest: Path, *, src: Path, replace_hooks: bool, interactive: bool) -> bool`
-- `def _hook_diff(src: Path, dest: Path) -> str`
-- `def create_mcp_config(target_dir: Path, owlbear_dir: Path) -> None`
-- `class _PlannedFile(NamedTuple)`
-- `class _InstallPlan(NamedTuple)`
-- `def _planned_action(src: Path, relative: str, dest: Path, replacements: dict[str, str], *, refresh_configs: bool) -> str | None`
-- `def _plan_seed_files(seed_dir: Path, target_dir: Path, replacements: dict[str, str], *, refresh_configs: bool) -> list[_PlannedFile]`
-- `def _missing_directories(paths: list[Path], target_dir: Path) -> list[str]`
-- `def _created_paths(manifest: dict[str, object]) -> tuple[set[str], set[str]]`
-- `def _exclude_lines_for(target_dir: Path, prefix: str, directories: set[str], files: set[str]) -> list[str]`
-- `def _build_install_plan(seed_dir: Path, target_dir: Path, replacements: dict[str, str], manifest: dict[str, object], *, refresh_configs: bool) -> _InstallPlan`
-- `def _hook_label(*, replace_hooks: bool, interactive: bool) -> str`
-- `def _inventory_lines(target_dir: Path, plan: _InstallPlan, *, replace_hooks: bool, interactive: bool) -> list[str]`
-- `def _confirm_install(target_dir: Path, *, yes: bool, dry_run: bool, interactive: bool) -> bool`
-- `def _install_seed_files(files: list[_PlannedFile], target_dir: Path, replacements: dict[str, str], manifest: dict[str, object], *, replace_hooks: bool, interactive: bool) -> None`
-- `def _hide_from_git(target_dir: Path, manifest: dict[str, object]) -> None`
-- `def init(target_dir: Path, owlbear_dir: Path, *, replace_hooks: bool = False, refresh_configs: bool = False, interactive: bool | None = None, yes: bool = False, dry_run: bool = False) -> bool`
-- `def _has_owlbear_surface(target_dir: Path) -> bool`
-- `def _remove_install_manifest(path: Path, original: bytes | None, options: _UninstallOptions) -> None`
-- `def _remove_seed_surfaces(seed_dir: Path, options: _UninstallOptions) -> None`
-- `def _remove_git_exclude(options: _UninstallOptions) -> None`
-- `def uninstall(target_dir: Path, owlbear_dir: Path, *, confirm: bool | None = None, dry_run: bool = False) -> UninstallResult`
-
-## setup/workspace_git.py
-
-Hide the OwlBear agent workspace from Git through the repository's local exclude file.
-
-### Imports
-
-- `__future__`
-- `pathlib`
-- `subprocess`
-
-### Interfaces
-
-- `def _git(target_dir: Path, *arguments: str) -> subprocess.CompletedProcess[str] | None`
-- `def locate(target_dir: Path) -> tuple[Path, str] | None`
-- `def tracked_paths(target_dir: Path, relatives: list[str]) -> set[str]`
-- `def exclude_lines(prefix: str, created_dirs: set[str], created_files: set[str]) -> list[str]`
-- `def _runtime_line(prefix: str, pattern: str) -> str`
-- `def _split_block(text: str) -> tuple[str, list[str] | None, str]`
-- `def write_block(exclude_path: Path, lines: list[str]) -> None`
-- `def remove_block(exclude_path: Path, recorded: list[str], *, dry_run: bool) -> str | None`

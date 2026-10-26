@@ -71,9 +71,7 @@ KNOWN_STANDALONE_TOOLS: frozenset[str] = frozenset({"newWorkspace", "selection",
 _BANNED_TOOL_NAMES: frozenset[str] = frozenset({"todos", "todo", "manage_todo_list", "resolveMemoryFileUri"})
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
-_MCP_CONFIG_PATHS = (_REPO_ROOT / "seed/.vscode/mcp.json", _REPO_ROOT / ".vscode/mcp.json")
-_ROOT_MCP_CONFIG = _REPO_ROOT / ".mcp.json"  # the Copilot runtime's format; VS Code reads it too
-_CANONICAL_MCP_CONFIG = _MCP_CONFIG_PATHS[0]
+_MCP_CONFIG = _REPO_ROOT / ".mcp.json"  # the Copilot runtime's format; VS Code reads it too
 _AGENT_ROOTS = (_REPO_ROOT / "share" / "agents", _REPO_ROOT / ".owlbear" / "agents")
 _INSTRUCTION_ROOTS = (_REPO_ROOT / "share" / "instructions", _REPO_ROOT / ".owlbear" / "instructions")
 _SKILL_ROOTS = (_REPO_ROOT / "share" / "skills", _REPO_ROOT / ".owlbear" / "skills")
@@ -135,36 +133,25 @@ def _read_mcp_config(path: Path, key: str = "servers") -> tuple[frozenset[str], 
 
 
 def _configured_mcp_servers() -> tuple[frozenset[str], list[str]]:
-    """Read canonical and active MCP server names, checking their key sets; the active ones span both files."""
-    canonical, errors = _read_mcp_config(_CANONICAL_MCP_CONFIG)
-    files = [(p, k) for p, k in ((_MCP_CONFIG_PATHS[1], "servers"), (_ROOT_MCP_CONFIG, "mcpServers")) if p.is_file()]
-    if files:
-        read = [_read_mcp_config(path, key) for path, key in files]
-        active = frozenset().union(*(names for names, _ in read))
-        active_errors = [error for _, found in read for error in found]
-        errors.extend(active_errors)
-        if not active_errors and (
-            active - canonical - _WORKSPACE_MCP_SERVERS or canonical - active - _EXTERNAL_MCP_SERVERS
-        ):
-            errors.append(
-                f"{' and '.join(str(p) for p, _ in files)}: MCP server names differ from {_CANONICAL_MCP_CONFIG} "
-                f"beyond external servers: expected={sorted(canonical)}, actual={sorted(active)}"
-            )
-    return canonical, errors
+    """Read the root file's MCP server names, without Delivery's chat server, which has no tool registry here."""
+    names, errors = _read_mcp_config(_MCP_CONFIG, "mcpServers")
+    return names - _WORKSPACE_MCP_SERVERS, errors
 
 
 def _validate_mcp_configuration() -> tuple[frozenset[str], list[str]]:
-    """Validate MCP configuration keys against enumerable and external servers."""
+    """Validate MCP configuration keys: every local server configured, nothing beyond them and external ones.
+
+    External servers count as known for grants even where no file configures them.
+    """
     configured, errors = _configured_mcp_servers()
-    if configured:
-        expected = frozenset({*_MCP_SERVER_MODULES, *_EXTERNAL_MCP_SERVERS})
-        missing = sorted(expected - configured)
-        unexpected = sorted(configured - expected)
+    if not errors:
+        missing = sorted(frozenset(_MCP_SERVER_MODULES) - configured)
+        unexpected = sorted(configured - _DEFAULT_MCP_SERVERS)
         if missing:
-            errors.append(f"{_CANONICAL_MCP_CONFIG}: MCP servers are missing: {missing}")
+            errors.append(f"{_MCP_CONFIG}: MCP servers are missing: {missing}")
         if unexpected:
-            errors.append(f"{_CANONICAL_MCP_CONFIG}: MCP servers have no validator registry: {unexpected}")
-    return configured, errors
+            errors.append(f"{_MCP_CONFIG}: MCP servers have no validator registry: {unexpected}")
+    return configured | _EXTERNAL_MCP_SERVERS, errors
 
 
 async def _read_live_mcp_tool_registries() -> dict[str, frozenset[str]]:

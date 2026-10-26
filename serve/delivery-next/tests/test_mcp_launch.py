@@ -161,13 +161,14 @@ def test_the_real_memory_server_answers_over_stdio_with_protocol_only_output(tmp
 
 @pytest.mark.timeout(60)
 def test_the_workspace_starts_each_server_exactly_as_configured_from_the_installed_version(tmp_path):
-    """``.mcp.json`` (agent host, Copilot CLI) names the launcher through ``$HOME``, which only a shell expands."""
+    """``.mcp.json`` names the runtime's python through ``${HOME}``, which every client expands, and no repository."""
     configured = json.loads((Path(__file__).parents[3] / ".mcp.json").read_text())["mcpServers"]
     version = installed("v1.0", probe=False)
     alias(version)
-    started = 'exec "$HOME/.owlbear/runtime/.venv/bin/python" -m owlbear_delivery_next serve '
-    assert {n: configured[f"owlbear-{n}"]["args"] for n in mcp_launch.SERVERS} == {
-        n: ["-c", started + n] for n in mcp_launch.SERVERS
-    }
+    python = "${HOME}/.owlbear/runtime/.venv/bin/python"
+    assert {name: (entry["command"], entry["args"]) for name, entry in configured.items()} == {
+        **{f"owlbear-{n}": (python, ["-m", "owlbear_delivery_next", "serve", n]) for n in mcp_launch.SERVERS},
+        "owlbear-delivery": (python, ["-m", "owlbear_delivery_next", "mcp"]),
+    }  # the chat server takes its repository from the folder the client starts it in
     memory = configured["owlbear-memory"]
-    answered([memory["command"], *memory["args"]], tmp_path, held=version)
+    answered([os.path.expandvars(part) for part in (memory["command"], *memory["args"])], tmp_path, held=version)
