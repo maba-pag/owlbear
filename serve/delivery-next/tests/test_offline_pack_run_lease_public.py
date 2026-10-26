@@ -32,6 +32,7 @@ RUN_B = "run-b"
 STARTED_B = "2026-02-01T00:00:00+00:00"
 ENDED_B = "2026-02-01T01:00:00+00:00"
 TOO_NEW = "99\n"
+SENTINEL = "retained-sentinel.txt"
 
 
 @pytest.fixture(autouse=True)
@@ -134,6 +135,37 @@ def _store(repo: Path) -> Path:
     return root
 
 
+def lease_record(lease_id: str) -> dict:
+    """One lease as the ledger file holds it; no manager runs, so no sweep or save can change the bytes checked."""
+    ledger = json.loads((local_home.root() / maintenance.FILE).read_bytes())
+    [lease] = [s for s in ledger["sessions"] if s["id"] == lease_id]
+    return lease
+
+
+def workspaces_of(machine: Machine, project_id: str) -> dict[str, str]:
+    return {s["id"]: s["workspace"] for s in machine.maintenance.read()["sessions"] if s["project"] == project_id}
+
+
+def _keep_workspace(lease_id: str) -> tuple[str, Path, bytes]:
+    """A held run's ledger workspace before the move: its folder exists and holds a sentinel the move must not touch."""
+    recorded = lease_record(lease_id)["workspace"]
+    workspace = Path(recorded)
+    assert workspace.is_dir(), "the held run's workspace is absent before the move"
+    sentinel = workspace / SENTINEL
+    sentinel.write_text("kept\n")
+    return recorded, sentinel, sentinel.read_bytes()
+
+
+def _assert_workspace_kept(lease_id: str, kept: tuple[str, Path, bytes], target: Path) -> None:
+    """The lease still names its original workspace, which is not rebound into the target root, and that
+    workspace's original sentinel is unchanged. A copy of the folder in the target is not a failure."""
+    recorded, sentinel, content = kept
+    assert lease_record(lease_id)["workspace"] == recorded
+    assert not Path(recorded).is_relative_to(target), "the lease was rebound to a copy in the target root"
+    assert Path(recorded).is_dir(), "the held run's workspace was removed"
+    assert sentinel.read_bytes() == content, "the workspace sentinel changed"
+
+
 def _hold_a(machines, repo: Path, *, recovered: bool, identified: bool = True) -> tuple[str, str]:
     """The legacy run A held by the real loader while its store will not open, then recovered when asked."""
     entry = registry.register(repo)
@@ -171,11 +203,13 @@ def _prepared(repo: Path, boot: dict) -> None:
 
 def _move_held_a(  # noqa: PLR0913
     machines, repo: Path, boot: dict, capsys, *, recovered: bool, identified: bool
-) -> tuple[str, str, dict]:
-    """Hold A, then run the public Prepare and Finish; return the project id, A's id and the carried run record."""
+) -> tuple[str, str, dict, tuple[str, Path, bytes], bytes]:
+    """Hold A, then run the public Prepare and Finish; return the project id, A's id, the carried run record, A's
+    kept workspace and the source run record as Finish settled it (its bytes are stable from here on)."""
     project_id, a_id = _hold_a(machines, repo, recovered=recovered, identified=identified)
     source = project_home.clone_dir(repo)
     source_inode = (source / pack_state.FILE).stat().st_ino
+    kept = _keep_workspace(a_id)
     head = head_of(repo)
     _prepared(repo, boot)
     ledger = local_home.root() / maintenance.FILE
@@ -184,6 +218,7 @@ def _move_held_a(  # noqa: PLR0913
     assert cli.main(["--repo", str(repo), "finish"]) == 0
     capsys.readouterr()
     assert ledger.read_bytes() == ledger_before
+    settled = (source / pack_state.FILE).read_bytes()
 
     target = _store(repo)
     assert target != source
@@ -191,7 +226,8 @@ def _move_held_a(  # noqa: PLR0913
     assert carried_path.stat().st_ino != source_inode
     assert (source / pack_state.FILE).is_file(), "the source run record was lost"
     assert head_of(repo) == head
-    return project_id, a_id, json.loads(carried_path.read_text())
+    _assert_workspace_kept(a_id, kept, target)
+    return project_id, a_id, json.loads(carried_path.read_text()), kept, settled
 
 
 @pytest.mark.usefixtures("current_binding")
@@ -200,7 +236,9 @@ def _move_held_a(  # noqa: PLR0913
 def test_a_held_or_recovered_run_moves_into_a_new_root_and_two_fresh_managers_find_exactly_one_lease(  # noqa: PLR0913, PLR0917
     repo, boot, machines, recovered, identified, capsys
 ):
-    project_id, a_id, carried = _move_held_a(machines, repo, boot, capsys, recovered=recovered, identified=identified)
+    project_id, a_id, carried, kept, settled = _move_held_a(
+        machines, repo, boot, capsys, recovered=recovered, identified=identified
+    )
     if identified:
         assert carried[pack_state.REWRITTEN] == f"{RUN_A}:{STARTED_A}"
     else:
@@ -210,6 +248,9 @@ def test_a_held_or_recovered_run_moves_into_a_new_root_and_two_fresh_managers_fi
         again = machines()
         again.load_all()
         assert sessions_of(again, project_id) == [(a_id, _state(recovered=recovered))]
+        assert workspaces_of(again, project_id) == {a_id: kept[0]}
+        _assert_workspace_kept(a_id, kept, _store(repo))
+        assert (project_home.clone_dir(repo) / pack_state.FILE).read_bytes() == settled
         again.stop_all()
 
 
@@ -220,7 +261,7 @@ def test_meta_without_the_settle_hook_the_unidentified_run_is_carried_unstamped(
     """Meta-negative control, not acceptance: the settle hook is replaced by an in-memory no-op. The carried record
     then has no generation, which is the omission the unidentified acceptance case above must catch."""
     monkeypatch.setattr(offline_protocol, "_settle_pack_run", lambda _folder: None)
-    _, _, carried = _move_held_a(machines, repo, boot, capsys, recovered=False, identified=False)
+    _, _, carried, _, _ = _move_held_a(machines, repo, boot, capsys, recovered=False, identified=False)
     assert pack_state.REWRITTEN not in carried
 
 
@@ -258,18 +299,28 @@ def test_a_receipt_fault_during_the_legacy_adoption_keeps_one_lease_through_the_
     repo, boot, machines, recovered, saved, capsys, monkeypatch
 ):
     project_id, a_id = _hold_a(machines, repo, recovered=recovered, identified=False)
+    source = project_home.clone_dir(repo)
+    kept = _keep_workspace(a_id)
     adopter = machines()
-    _adopt_under_receipt_fault(adopter, project_home.clone_dir(repo), project_id, saved=saved, monkeypatch=monkeypatch)
+    _adopt_under_receipt_fault(adopter, source, project_id, saved=saved, monkeypatch=monkeypatch)
     adopter.stop_all()
     _prepared(repo, boot)
+    ledger = local_home.root() / maintenance.FILE
+    ledger_before = ledger.read_bytes()
 
     assert cli.main(["--repo", str(repo), "finish"]) == 0
     capsys.readouterr()
+    assert ledger.read_bytes() == ledger_before
+    settled = (source / pack_state.FILE).read_bytes()
+    _assert_workspace_kept(a_id, kept, _store(repo))
 
     for _ in range(2):
         again = machines()
         again.load_all()
         assert sessions_of(again, project_id) == [(a_id, _state(recovered=recovered))]
+        assert workspaces_of(again, project_id) == {a_id: kept[0]}
+        _assert_workspace_kept(a_id, kept, _store(repo))
+        assert (source / pack_state.FILE).read_bytes() == settled
         again.stop_all()
 
 
