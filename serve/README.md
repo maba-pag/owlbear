@@ -36,8 +36,9 @@ VS Code agents  -> MCP packages    -> core packages
 Tools
 ```
 
-The package guides are the next level of detail. The project README covers the current checkout and
-the consumer README covers installing OwlBear on a Mac. The [setup guide](../setup/setup-guide.md) owns exact
+The package guides are the next level of detail. The [project README](../README.md) introduces
+OwlBear and installing it on a Mac, and the [contributing guide](../CONTRIBUTING.md) covers the
+development checkout and its checks. The [setup guide](../setup/setup-guide.md) owns exact
 installation commands and [Operating OwlBear](../setup/operating-owlbear.md) owns daily operation
 and recovery.
 

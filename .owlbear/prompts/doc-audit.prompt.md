@@ -29,7 +29,7 @@ Pre-audit gate (must complete before any scan):
 
 Scan:
 
-- `README.md`, `README-consumer.md`, `SECURITY.md`
+- `README.md`, `CONTRIBUTING.md`, `SECURITY.md`
 - `serve/*/README.md`
 - `share/README.md`
 - `setup/setup-guide.md`, `setup/operating-owlbear.md`, `setup/sharing-guide.md`
