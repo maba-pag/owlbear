@@ -25,7 +25,15 @@ class HeldByPendingError(Exception):
 
 
 def locked_save[T: Layer](  # noqa: PLR0913, PLR0917
-    store: Store, path: Path, model: type[T], change: Callable[[T], T], message: str, until: float, *, owner: bool
+    store: Store,
+    path: Path,
+    model: type[T],
+    change: Callable[[T], T],
+    message: str,
+    until: float,
+    *,
+    owner: bool,
+    on_written: Callable[[], None] | None = None,
 ) -> str:
     """Change and publish one settings layer under the shared lock; a held automatic config change writes nothing."""
     from owlbear_delivery_next.state_store.store import update_layer  # noqa: PLC0415 - the store imports this module
@@ -34,20 +42,28 @@ def locked_save[T: Layer](  # noqa: PLR0913, PLR0917
         change = _automatic(store, change)
     with store.shared.locked():
         try:
-            update_layer(path, model, change)
+            update_layer(path, model, change, on_written)
         except HeldByPendingError as exc:
             return str(exc)
         return profile_share.publish_layer(store, path, message, until, owner=owner)
 
 
-def unshared_save[T: Layer](store: Store, path: Path, model: type[T], change: Callable[[T], T], *, owner: bool) -> str:
+def unshared_save[T: Layer](  # noqa: PLR0913 - the store, the layer, its change, owner and the write hook
+    store: Store,
+    path: Path,
+    model: type[T],
+    change: Callable[[T], T],
+    *,
+    owner: bool,
+    on_written: Callable[[], None] | None = None,
+) -> str:
     """Change one settings layer of an unshared clone, with the same automatic guard and no publication."""
     from owlbear_delivery_next.state_store.store import update_layer  # noqa: PLC0415 - the store imports this module
 
     if path == store.config_path and not owner:
         change = _automatic(store, change)
     try:
-        update_layer(path, model, change)
+        update_layer(path, model, change, on_written)
     except HeldByPendingError as exc:
         return str(exc)
     return ""

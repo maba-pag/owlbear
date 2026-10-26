@@ -22,7 +22,7 @@ from owlbear_delivery_next.local_system import data_repo, local_home
 from owlbear_delivery_next.local_system.storage_io import atomic_write, open_lock
 from owlbear_delivery_next.settings import config as settings_config
 from owlbear_delivery_next.settings import migrations
-from owlbear_delivery_next.settings.config import CONFIG_FORMAT, GlobalLayer, Layer, MachineLayer, Settings
+from owlbear_delivery_next.settings.config import GlobalLayer, Layer, MachineLayer, Settings
 from owlbear_delivery_next.state_store import config_save, profile_share, project_home
 from owlbear_delivery_next.state_store.database import (
     STORE_FORMAT,
@@ -32,6 +32,13 @@ from owlbear_delivery_next.state_store.database import (
     StoreError,
     append_activity,
     put_record,
+)
+from owlbear_delivery_next.state_store.layers import (  # noqa: F401 - re-exported for callers and tests
+    _DIR_FLAGS,
+    _parse,
+    read_layer,
+    read_layer_bytes,
+    update_layer,
 )
 
 if TYPE_CHECKING:
@@ -47,7 +54,6 @@ if TYPE_CHECKING:
 CONFIG = "config.json"  # the project's settings layer (TD-52)
 MACHINE_SETTINGS = "settings.json"  # this machine's preference layer in ~/.owlbear (TD-336)
 ACTIVITY_LIMIT = 200
-_DIR_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
 _INBOX: TypeAdapter[InboxItem] = TypeAdapter(InboxItem)
 HANDLE = re.compile(r"c\d{1,4}")  # the only handle shape the host issues
 
@@ -101,74 +107,6 @@ def _load[T: Record](path: Path, model: type[T], current: int, forward: Migratio
         msg = f"state of {name} is unreadable"
         raise StoreError(msg) from exc
     return _parse(raw, name, model, current, forward)
-
-
-def _parse[T: Record](raw: str, name: str, model: type[T], current: int, forward: Migrations) -> T:
-    try:
-        data = json.loads(raw)
-        version = int(data.get("format", 0))
-    except (AttributeError, TypeError, ValueError) as exc:
-        msg = f"state of {name} is unreadable"
-        raise StoreError(msg) from exc
-    if version > current:
-        msg = f"{name} has format {version}, newer than {current}"
-        raise FormatTooNewError(msg)
-    written = version
-    try:
-        while version < current:
-            data = forward[version](data)
-            version += 1
-            data["format"] = version
-        return model.model_validate(data)
-    except ValidationError as exc:
-        if written < current:
-            msg = f"state of {name} cannot be migrated to format {current}"
-        else:  # the current format with fields this Delivery does not know: a newer or different one wrote it
-            msg = f"state of {name} was written by a newer or different Delivery ({_first(exc)})"
-        raise StoreError(msg) from exc
-    except (KeyError, TypeError, ValueError) as exc:
-        msg = f"state of {name} cannot be migrated to format {current}"
-        raise StoreError(msg) from exc
-
-
-def _first(exc: ValidationError) -> str:
-    error = exc.errors()[0]
-    said = {"extra_forbidden": "unknown field", "missing": "missing field"}.get(error["type"], "invalid field")
-    return f"{said} {'.'.join(map(str, error['loc']))}"
-
-
-def read_layer[T: Layer](path: Path, model: type[T]) -> T:
-    """One settings layer under its format gate; an empty layer before the first save."""
-    return read_layer_bytes(path, model)[0]
-
-
-def read_layer_bytes[T: Layer](path: Path, model: type[T]) -> tuple[T, bytes]:
-    """One settings layer and the exact bytes it was parsed from; an absent file is the empty layer."""
-    try:
-        raw = path.read_bytes()
-        text = raw.decode()
-    except FileNotFoundError:
-        return model(), b""
-    except (OSError, ValueError) as exc:  # ValueError: bytes that are not UTF-8
-        msg = f"state of {path.stem} is unreadable"
-        raise StoreError(msg) from exc
-    return _parse(text, path.stem, model, CONFIG_FORMAT, migrations.CONFIG), raw
-
-
-def update_layer[T: Layer](path: Path, model: type[T], change: Callable[[T], T]) -> T:
-    """Read, change and write one layer under its own lock, so no concurrent save is lost; invalid writes nothing."""
-    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-    dir_fd = os.open(path.parent, _DIR_FLAGS)
-    try:
-        fd = open_lock(dir_fd, blocking=True, name=f".{path.name}.lock")
-    finally:
-        os.close(dir_fd)
-    try:
-        new = model.model_validate(change(read_layer(path, model)).model_dump())
-        atomic_write(path, new.model_dump_json(indent=1))
-        return new
-    finally:
-        os.close(fd)
 
 
 class Store:
@@ -225,15 +163,24 @@ class Store:
             self.shared.publish(self.config_path, f"settings: {self.name} moved from its clone")
             local.replace(local.with_name(f"{CONFIG}.moved"))  # kept as the recovery copy
 
-    def save[T: Layer](
-        self, path: Path, model: type[T], change: Callable[[T], T], what: str, *, owner: bool = False
+    def save[T: Layer](  # noqa: PLR0913 - the layer, its change, what it is for, owner and the write hook
+        self,
+        path: Path,
+        model: type[T],
+        change: Callable[[T], T],
+        what: str,
+        *,
+        owner: bool = False,
+        on_written: Callable[[], None] | None = None,
     ) -> str:
         """Change one settings layer and publish it; what the owner should know about the publication, else nothing."""
         if not self.shared:
-            return config_save.unshared_save(self, path, model, change, owner=owner)
+            return config_save.unshared_save(self, path, model, change, owner=owner, on_written=on_written)
         try:
             until = time.monotonic() + data_repo.SAVE_SECONDS  # the lock wait and every git command share it
-            return config_save.locked_save(self, path, model, change, f"settings: {what}", until, owner=owner)
+            return config_save.locked_save(
+                self, path, model, change, f"settings: {what}", until, owner=owner, on_written=on_written
+            )
         except data_repo.DataRepoError as exc:
             raise SharedError(str(exc)) from exc
 
@@ -246,9 +193,16 @@ class Store:
         """This machine's preference layer in ``~/.owlbear``: local, never published (TD-336)."""
         return local_home.root() / MACHINE_SETTINGS
 
-    def update_config(self, change: Callable[[Layer], Layer], what: str = "project layer") -> str:
+    def update_config(
+        self,
+        change: Callable[[Layer], Layer],
+        what: str = "project layer",
+        on_written: Callable[[], None] | None = None,
+    ) -> str:
         """Change and publish the settings layer; changed automatic writes need a prepared basis, else a notice."""
-        return self.save(self.config_path, Layer, change, f"{self.name or 'the project'}: {what}")
+        return self.save(
+            self.config_path, Layer, change, f"{self.name or 'the project'}: {what}", on_written=on_written
+        )
 
     def settings(self) -> Settings:
         """The resolved settings: the project layer over this machine's over the global one; no code defaults (R15)."""

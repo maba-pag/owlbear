@@ -9,6 +9,7 @@ from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.change_contracts.profile_record import PROFILE_FORMAT, RoleModel
 from owlbear_delivery_next.settings import carried, roles
 from owlbear_delivery_next.settings.config import Agent, GlobalLayer, Layer, resolve
+from owlbear_delivery_next.state_store import layers as layers_mod
 from owlbear_delivery_next.state_store import profile_share
 from owlbear_delivery_next.state_store import store as store_mod
 from owlbear_delivery_next.state_store.store import Store, StoreError, read_layer, update_layer
@@ -284,14 +285,14 @@ def test_a_move_whose_marker_cannot_be_written_fails_the_open(repo, monkeypatch)
 def test_a_merge_that_fails_after_replacing_the_config_fails_the_open(repo, monkeypatch):
     root = repo / ".git" / "owlbear-delivery"
     _old_profile(root, {"reviewer": {"model": "r-1", "effort": "max"}})
-    real = store_mod.atomic_write
+    real = layers_mod.atomic_write
 
     def replaced_then_failed(target, content):
         real(target, content)
         if target.name == store_mod.CONFIG:
             raise OSError(5, "Input/output error")  # e.g. the folder sync after the rename
 
-    monkeypatch.setattr(store_mod, "atomic_write", replaced_then_failed)
+    monkeypatch.setattr(layers_mod, "atomic_write", replaced_then_failed)
     with pytest.raises(OSError, match="Input/output"):
         profile_share.move_roles(Store(root))
     assert not (root / profile_share.ROLES_MOVED).exists()
@@ -303,12 +304,12 @@ def test_a_role_move_that_was_not_applied_is_not_marked_and_runs_again(repo, mon
     _old_profile(root, {"reviewer": {"model": "r-1", "effort": "max"}})
     real = Store.update_config
 
-    def refused(self, change, what="project layer"):
+    def refused(self, change, what="project layer", on_written=None):
         if mode == "raised":
             msg = "simulated: fetch failed"
             raise StoreError(msg)
         if mode == "applied-unpublished":
-            real(self, change, what)
+            real(self, change, what, on_written)
             return "simulated: publication refused; retry in settings"
         return "simulated: fetch refused"
 
@@ -322,6 +323,30 @@ def test_a_role_move_that_was_not_applied_is_not_marked_and_runs_again(repo, mon
     profile_share.move_roles(Store(root))
     assert (root / profile_share.ROLES_MOVED).exists()
     assert Store(root).read_config().agents["reviewer"].model == "r-1"
+
+
+def test_an_owner_clear_right_after_the_roles_move_survives_a_fresh_reopen(repo, monkeypatch):
+    root = repo / ".git" / "owlbear-delivery"
+    _old_profile(root, {"reviewer": {"model": "r-1", "effort": "max"}})
+    real = Store.update_config
+
+    def moved_then_cleared(self, change, what="project layer", on_written=None):
+        result = real(self, change, what, on_written)
+        owner_save(self, lambda _cur: Layer())  # the owner clears the overrides before anything reads the move back
+        return result
+
+    monkeypatch.setattr(Store, "update_config", moved_then_cleared)
+    store = Store.open(repo)  # the move is applied and marked under one lock; the owner then clears
+    monkeypatch.setattr(Store, "update_config", real)
+    root = store.root
+    assert (root / profile_share.ROLES_MOVED).exists()
+    cleared = (root / "config.json").read_bytes()
+
+    fresh = Store.open(repo)
+
+    assert roles.chosen(fresh.settings(), StepKind.REVIEW) == carried.MODELS["reviewer"]
+    assert (root / "config.json").read_bytes() == cleared
+    assert (root / profile_share.ROLES_MOVED).exists()
 
 
 @pytest.mark.parametrize(

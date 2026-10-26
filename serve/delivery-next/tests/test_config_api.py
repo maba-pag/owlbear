@@ -409,7 +409,13 @@ def test_this_machine_s_layer_refuses_project_and_global_settings_and_combinatio
 def test_this_machine_s_layer_must_fit_every_project_loaded_on_this_machine(store, tmp_path):
     """Sol: a project of this machine outside the shared repository is checked too, and named."""
     there = Store(tmp_path / "there")
-    there.update_config(lambda _l: Layer.model_validate({"format": F, "agents": {"builder": {"last_round_at": 6}}}))
+    there.save(
+        there.config_path,
+        Layer,
+        lambda _l: Layer.model_validate({"format": F, "agents": {"builder": {"last_round_at": 6}}}),
+        "owner",
+        owner=True,
+    )
     host = Host()
     host.machine = lambda: [there, store]
     c = TestClient(api.create_app(store, "t", host), base_url="http://127.0.0.1", headers=AUTH)

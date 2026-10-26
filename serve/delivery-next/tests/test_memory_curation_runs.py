@@ -15,7 +15,7 @@ from owlbear_delivery_next.machine_host import curation, registry
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.settings import config
 from owlbear_delivery_next.settings.config import GlobalLayer
-from owlbear_delivery_next.state_store import settings_carry, store
+from owlbear_delivery_next.state_store import layers, settings_carry
 from owlbear_delivery_next.state_store.store import update_layer
 
 
@@ -308,8 +308,8 @@ def curator(root: Path, **changes) -> None:
 def test_the_curator_helper_writes_global_only_through_the_atomic_layer_writer(root, monkeypatch) -> None:
     settings_carry.carry(DataRepo(root))
     written = []
-    real = store.atomic_write
-    monkeypatch.setattr(store, "atomic_write", lambda path, text: (written.append(path), real(path, text)))
+    real = layers.atomic_write
+    monkeypatch.setattr(layers, "atomic_write", lambda path, text: (written.append(path), real(path, text)))
     curator(root, model="model-z")
     assert written == [DataRepo(root).global_path]
 

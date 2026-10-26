@@ -479,22 +479,22 @@ def move_roles(store: Store) -> None:
             found = migrations.ROLES.validate_python(data.get("roles", {})) if int(data.get("format", 0)) == 1 else {}
         except AttributeError, OSError, TypeError, ValueError:
             return  # read_profile reports the damaged profile
-        if found:
-            try:
-                from owlbear_delivery_next.state_store.config_save import Prepared  # noqa: PLC0415 (import cycle)
+        text = "the format-1 profile's role overrides are merged into config.json\n"
+        if not found:
+            atomic_write(marker, text)
+            return
+        try:
+            from owlbear_delivery_next.state_store.config_save import Prepared  # noqa: PLC0415 (import cycle)
 
-                # Whether the roles were applied is read from the layer below, never from the notice.
-                store.update_config(
-                    Prepared(config_digest(store.config_path), lambda cur: migrations.with_roles(cur, found)),
-                    "role overrides from the old profile",
-                )
-            except SharedError:
-                raise  # the old roles move later; never mark a move that did not happen
-            except StoreError:
-                return  # refused before writing; read_config reports the damaged settings
-            layer = store.read_config()
-            if migrations.with_roles(layer, found) != layer:
-                return  # not applied: the move runs again on the next open
-        atomic_write(marker, "the format-1 profile's role overrides are merged into config.json\n")
+            # The marker is written under the settings lock right after the layer write; a refusal never reaches it.
+            store.update_config(
+                Prepared(config_digest(store.config_path), lambda cur: migrations.with_roles(cur, found)),
+                "role overrides from the old profile",
+                on_written=lambda: atomic_write(marker, text),
+            )
+        except SharedError:
+            raise  # the old roles move later; never mark a move that did not happen
+        except StoreError:
+            return  # refused before writing; read_config reports the damaged settings
     finally:
         os.close(fd)
