@@ -102,7 +102,6 @@ def test_init_writes_settings_without_hook_locations_and_with_local_hints(
         ".owlbear/instructions": True,
     }
     assert data["chat.promptFilesLocations"] == {
-        f"{owlbear_rel_path}/share/prompts": True,
         ".owlbear/prompts": True,
     }
     assert data["github.copilot.chat.additionalReadAccessPaths"] == [
@@ -171,7 +170,6 @@ def test_init_creates_project_surfaces_without_runtime_selection_artifacts(
         "chat.agentFilesLocations": _REPO_ROOT / "share/agents",
         "chat.agentSkillsLocations": _REPO_ROOT / "share/skills",
         "chat.instructionsFilesLocations": _REPO_ROOT / "share/instructions",
-        "chat.promptFilesLocations": _REPO_ROOT / "share/prompts",
     }
     for setting, source in shared_locations.items():
         configured = {

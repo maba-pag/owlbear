@@ -79,7 +79,6 @@ SUITES: dict[str, tuple[str, ...]] = {
         "serve/*-mcp/**",
         "share/agents/**",
         "share/instructions/**",
-        "share/prompts/**",
         "share/skills/**",
         "tests/test_agent_ecosystem_validation.py",
         "tests/test_write_guard_hooks.py",

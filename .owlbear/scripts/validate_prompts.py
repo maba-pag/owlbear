@@ -2,7 +2,7 @@
 
 Usage:
     python .owlbear/scripts/validate_prompts.py [<prompt_file> ...]
-    # No args = discover prompts in share/prompts/ and .owlbear/prompts/
+    # No args = discover prompts in .owlbear/prompts/
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ from pathlib import Path
 import yaml
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
-_PROMPT_ROOTS = (_REPO_ROOT / "share" / "prompts", _REPO_ROOT / ".owlbear" / "prompts")
+_PROMPT_ROOTS = (_REPO_ROOT / ".owlbear" / "prompts",)
 _AGENT_ROOTS = (_REPO_ROOT / "share" / "agents", _REPO_ROOT / ".owlbear" / "agents")
 _SKILL_ROOTS = (_REPO_ROOT / "share" / "skills", _REPO_ROOT / ".owlbear" / "skills")
 _BUILTIN_AGENTS = frozenset({"agent", "Explore", "General Purpose"})

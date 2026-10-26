@@ -211,8 +211,8 @@ installed into consumer projects.
 
 OwlBear uses two different update models:
 
-- **Shared live surfaces:** `share/agents/`, `share/skills/`, `share/instructions/`, and
-  `share/prompts/` stay in the OwlBear runtime and are read live by VS Code.
+- **Shared live surfaces:** `share/agents/`, `share/skills/` and `share/instructions/` stay in the OwlBear
+  runtime and are read live by VS Code.
 - **Copied runtime surfaces:** files under `seed/` are copied into your project by `init.py`; this
   includes `.owlbear/hooks/` and project-local editor/runtime configuration.
 

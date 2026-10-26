@@ -20,8 +20,7 @@
   "chat.notifyWindowOnConfirmation": "always",
   "chat.notifyWindowOnResponseReceived": "always",
   "chat.promptFilesLocations": {
-    ".owlbear/prompts": true,
-    "{{owlbear_rel_path}}/share/prompts": true
+    ".owlbear/prompts": true
   },
   "chat.subagents.allowInvocationsFromSubagents": true,
   "chat.tools.compressOutput.enabled": true,

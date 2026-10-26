@@ -66,7 +66,6 @@ decisions TD-41..43, TD-150 and TD-156 in [the decisions](../.owlbear/decisions.
 | `share/agents/` | Agent definitions (`.agent.md`) |
 | `share/skills/` | Agent skills (`SKILL.md` — `w-`, `r-`, `h-` prefixed) |
 | `share/instructions/` | Instruction stubs (`.instructions.md` — pointers to skills) |
-| `share/prompts/` | Prompt files (`.prompt.md` — user-facing one-shot commands) |
 | `.owlbear/` | Project ops data: Delivery authority, research, sources, scratch, scripts, hooks |
 | `store/` | Reference-only knowledge corpus manifest and placeholder directories |
 | `seed/` | Template files copied to new projects by `setup/init.py` |
