@@ -2949,3 +2949,50 @@ def test_an_owner_commit_made_while_the_push_is_refused_is_never_rebased(picking
     assert _remote_main(remote) == other_head.stdout.strip()
     assert decision_batch.pending(shared) is not None
     _no_authority(picking)
+
+
+@pytest.mark.parametrize("owner", ["unrelated-file", "the-batch-files"])
+def test_an_owner_commit_before_publication_is_never_adopted_as_the_batch_base(
+    picking, shared_repo, monkeypatch, owner
+):
+    """After the batch's last write and before its publication reads HEAD, the owner commits: an unrelated file, or
+    the batch's own files as written. HEAD then holds every after image or sits on top of them, but it is not the
+    batch's journalled head, so nothing is staged, committed or pushed and the batch stays interrupted."""
+    _seed(picking)
+    shared, remote = picking.shared, shared_repo[1]
+    items, _, _ = _update_and_successor(picking)
+    published, made, committed = _remote_main(remote), [], []
+    real_ready, real_commit = decision_sync._ready, DataRepo.commit  # noqa: SLF001
+
+    def owner_commits_then_ready(repo, until):
+        if not made:
+            if owner == "unrelated-file":
+                made.append(_owner_unrelated_commit(repo))
+            else:
+                repo.git("add", "-A", "--", PROJECT)
+                repo.git("commit", "-qm", "the owner commits the batch's files")
+                made.append(repo.git("rev-parse", "HEAD").stdout.strip())
+        return real_ready(repo, until)
+
+    def recording_commit(self, *args, **kwargs):
+        committed.append(args)
+        return real_commit(self, *args, **kwargs)
+
+    with monkeypatch.context() as m:
+        m.setattr(decision_sync, "_ready", owner_commits_then_ready)
+        m.setattr(DataRepo, "commit", recording_commit)
+        receipts = decision_store.save_all(shared, items, message="decisions: two")
+
+    assert not any(r.saved for r in receipts)
+    assert "moved past the batch's head" in receipts[0].notice
+    assert committed == []  # nothing staged or committed by the publisher
+    assert _remote_main(remote) == published  # nothing pushed, the owner's commit included
+    assert shared.git("rev-parse", "HEAD").stdout.strip() == made[0]  # the owner's commit stays, as made
+    assert shared.git("diff", "--cached", "--name-only").stdout == ""  # the index is the owner's
+    if owner == "unrelated-file":  # the batch's files stay written, uncommitted
+        changed = shared.git("status", "--porcelain").stdout
+        assert all(f"{d.id}.md" in changed for d, _ in items)
+    else:
+        assert shared.git("status", "--porcelain").stdout == ""
+    assert decision_batch.pending(shared) is not None
+    _no_authority(picking)

@@ -201,7 +201,7 @@ def publish(shared: DataRepo, paths: list[Path], message: str, until: float, hea
     before, busy = _ready(shared, until)
     rels = {p.relative_to(shared.root).as_posix() for p in paths}
     # nothing is committed unless HEAD is read, never while a rebase is active or unknown, nor before the batch is whole
-    rows, refused = (None, busy) if busy is not None else _journalled(shared, rels)
+    rows, refused = (None, busy) if busy is not None else _journalled(shared, rels, before)
     if refused is not None:
         return refused
     failed = shared.commit(paths, message, until)
@@ -242,15 +242,20 @@ def _failed(
     return Sent(notice=f"{notice} is pushed; check it", ambiguous=True)
 
 
-def _journalled(shared: DataRepo, rels: set[str]) -> tuple[Rows, Sent | None]:
+def _journalled(shared: DataRepo, rels: set[str], before: str) -> tuple[Rows, Sent | None]:
     """The pending batch's after images, once every one of them is in its file; else why nothing is committed.
 
     Outside a batch there is nothing journalled to hold. A path the journal does not name is never committed for it.
+    Within one, *before*, HEAD as `_ready` read it, must still be the batch's journalled head: a commit the owner made
+    since, even one holding every after image, is never adopted as this batch's base or pushed with it.
     """
     batch = decision_batch.pending(shared)  # a journal that cannot be read raises: unknown is never "no batch"
     if batch is None:
         return None, None
     rows = {rel: after for rel, _, after in batch.files}
+    if before != batch.head:
+        notice = f"HEAD moved past the batch's head {batch.head[:12]}, so nothing was committed or pushed; check it"
+        return rows, Sent(notice=notice, ambiguous=True)
     if not rels <= rows.keys():
         notice = "a file to commit is not in the batch's journal, so nothing was committed"
         return rows, Sent(notice=notice, ambiguous=True)
