@@ -13,6 +13,8 @@ GITHUB = "https://github.com/maba-pag/owlbear.git"
 
 
 def git(cwd: Path, *args: str) -> str:
+    if (cwd / "HEAD").is_file():  # a bare repository: safe.bareRepository=explicit wants it named
+        args = ("--git-dir=.", *args)
     return subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True).stdout.strip()  # noqa: S603, S607
 
 
@@ -45,7 +47,7 @@ def installed(tmp_path, commit):
 
 def assert_no_tracking_ref(bare):
     absent = subprocess.run(
-        ["git", "rev-parse", "--verify", "--quiet", "refs/remotes/origin/main"],  # noqa: S607
+        ["git", "--git-dir=.", "rev-parse", "--verify", "--quiet", "refs/remotes/origin/main"],  # noqa: S607
         cwd=bare,
         capture_output=True,
         check=False,

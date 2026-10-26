@@ -63,6 +63,8 @@ def test_a_major_and_its_dot_zero_on_different_commits_are_neither_taken_and_sai
 
 
 def git(cwd: Path, *args: str) -> str:
+    if (cwd / "HEAD").is_file():  # a bare repository: safe.bareRepository=explicit wants it named
+        args = ("--git-dir=.", *args)
     who = ["-c", "user.name=t", "-c", "user.email=t@example.com"]
     done = subprocess.run(["git", *who, *args], cwd=cwd, check=True, capture_output=True, text=True)  # noqa: S603, S607
     return done.stdout.strip()
