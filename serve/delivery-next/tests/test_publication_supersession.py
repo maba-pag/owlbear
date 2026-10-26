@@ -320,7 +320,7 @@ def test_an_unknown_shared_pending_lookup_holds_the_automatic_change(shared_repo
 
 
 @pytest.mark.usefixtures("no_network")
-def test_a_failed_shared_lookup_holds_the_automatic_change_without_a_local_copy(
+def test_a_failed_shared_lookup_holds_the_automatic_change(
     shared_repo, tmp_path, refusing, config_publishes, monkeypatch
 ):
     root, remote = shared_repo
@@ -328,7 +328,6 @@ def test_a_failed_shared_lookup_holds_the_automatic_change_without_a_local_copy(
     refusing[0] = "notice"
     assert a.save(a.config_path, Layer, widths(1600), "owner edit", owner=True)
     b = clone(remote, tmp_path / "b", "b")
-    pending_file(b).unlink()
     real = DataRepo.git
 
     def git(self, *args, until=None):

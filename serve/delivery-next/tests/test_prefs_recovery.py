@@ -1999,6 +1999,67 @@ def test_a_shared_claim_replaced_while_paused_is_not_filled_by_the_stale_winner(
     assert not fresh.config_path.exists()
 
 
+def owner_publishes_then_deletes_config(store: Store) -> None:
+    """The owner saves the project config, publishes it, then deletes it and publishes the deletion."""
+    store.config_path.write_text(Layer().model_dump_json(indent=1))
+    store.shared.publish(store.config_path, "settings: shop-site: project layer")
+    store.config_path.unlink()
+    store.shared.publish(store.config_path, "settings: shop-site: project layer removed")
+
+
+def test_a_winner_paused_on_its_own_checkout_is_not_restored_after_another_checkout_completes_and_deletes(
+    shared_repo, tmp_path, monkeypatch
+):
+    root, remote = shared_repo
+    Store(tmp_path / "seed-store", DataRepo(root), "shop-site").write_profile(
+        Profile(entries={profile.POLL: confirmed("45")})
+    )
+    winner, _ = clone_as(remote, tmp_path, "winner-checkout")
+    settler, _ = clone_as(remote, tmp_path, "settler-checkout")
+    assert winner.shared is not None
+    assert settler.shared is not None
+
+    def complete_and_delete_on_the_other_checkout() -> None:
+        assert winner.read_profile().prefs_import == "pending"  # the winner read its own claim before it paused
+        assert settler.shared.pull() == ""  # the other checkout sees the claim only after a pull
+        assert settler.read_profile().prefs_import == "pending"
+        settler.mark_prefs_import("pending", "done")  # Settings completes the import
+        owner_publishes_then_deletes_config(settler)
+
+    prefs_import.run(paused_after_claim(winner, monkeypatch, complete_and_delete_on_the_other_checkout))
+
+    assert not winner.config_path.exists()  # the stale fill is not published over the owner's deletion
+    fresh, got = clone_as(remote, tmp_path, "fresh-checkout")
+    assert got.prefs_import == "done"
+    assert not fresh.config_path.exists()
+    assert fresh.read_config().prefs is None
+
+
+def test_a_winner_paused_on_its_own_checkout_still_fills_after_an_unrelated_remote_advance(
+    shared_repo, tmp_path, monkeypatch
+):
+    root, remote = shared_repo
+    Store(tmp_path / "seed-store", DataRepo(root), "shop-site").write_profile(
+        Profile(entries={profile.POLL: confirmed("45")})
+    )
+    winner, _ = clone_as(remote, tmp_path, "winner-checkout")
+    other, _ = clone_as(remote, tmp_path, "other-checkout")
+    assert other.shared is not None
+
+    def unrelated_advance() -> None:
+        notes = other.shared.root / "unrelated" / "notes.md"
+        notes.parent.mkdir(parents=True, exist_ok=True)
+        notes.write_text("an unrelated change\n")
+        other.shared.publish(notes, "unrelated: notes")
+
+    prefs_import.run(paused_after_claim(winner, monkeypatch, unrelated_advance))
+
+    assert winner.read_config().prefs.ci_poll_seconds == 45
+    fresh, got = clone_as(remote, tmp_path, "fresh-checkout")
+    assert got.prefs_import == "done"
+    assert fresh.read_config().prefs.ci_poll_seconds == 45
+
+
 def test_a_published_fresh_claim_fills_once_and_marks_done(shared_repo, tmp_path):
     root, remote = shared_repo
     store = Store(tmp_path / "store", DataRepo(root), "shop-site")

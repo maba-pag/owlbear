@@ -38,9 +38,15 @@ def locked_save[T: Layer](  # noqa: PLR0913, PLR0917
     """Change and publish one settings layer under the shared lock; a held automatic config change writes nothing."""
     from owlbear_delivery_next.state_store.store import update_layer  # noqa: PLC0415 - the store imports this module
 
-    if path == store.config_path and not owner:
+    automatic = path == store.config_path and not owner
+    if automatic:
         change = _automatic(store, change)
     with store.shared.locked():
+        if automatic:
+            # a fetch alone leaves this checkout's claim and config stale: the guards must read the remote's state
+            pulled = store.shared.pull()
+            if pulled:
+                return pulled
         try:
             update_layer(path, model, change, on_written)
         except HeldByPendingError as exc:
