@@ -147,32 +147,45 @@ def owned(root: Path, images: dict[Path, tuple[bytes | None, bytes | None]]) -> 
 def restored(root: Path, before: dict[Path, bytes | None]) -> bool:
     """Whether every file is plain under *root* and holds exactly its before image (absent for none), once durable.
 
-    The folders are fsynced first and the files read after, so a file changed during that fsync is seen. A file that
-    had no before image may lie under folders that never existed (`_absent`); one that had must be a plain file.
+    Two phases, so no fsync can hide a change to a row already read. First every folder the proof rests on is fsynced:
+    each file's own folder, or for a file that had no before image, the nearest existing folder above its first missing
+    name (`_anchor`). Then the whole batch is read again with no fsync: every anchor must be the one fsynced, each file
+    exactly its before image or absent, and each folder chain plain up to *root*, checked after the read it guards.
     """
     try:
-        for folder in {path.parent for path in before if path.parent.exists()}:
+        anchors = {path: _anchor(root, path) for path, text in before.items() if text is None}
+        folders = {first.parent for first in anchors.values()}
+        folders |= {path.parent for path, text in before.items() if text is not None and path.parent.exists()}
+        for folder in folders:
             fsync_dir(folder)
         return all(
-            _absent(root, path) if text is None else plain_in_checkout(root, path) and _held(path) == text
+            _absent(root, path, anchors[path])
+            if text is None
+            else _held(path) == text and plain_in_checkout(root, path)
             for path, text in before.items()
         )
     except OSError:
         return False
 
 
-def _absent(root: Path, path: Path) -> bool:
-    """Whether *path* and every missing folder above it are absent, below a plain folder of the checkout *root*.
+def _anchor(root: Path, path: Path) -> Path:
+    """*path*'s first missing name from the top, or *path* itself when its folder exists; its folder exists.
 
-    That folder, the one holding the first missing name, is fsynced and the name read again after it, so the absence is
-    durable. Only a name that is not there counts as absent: any other error (no permission, a file where a folder
-    belongs) raises, and a symlink or a non-folder on the way refuses. Nothing is created to prove it.
+    Only a missing name walks further up: any other error (no permission, a file where a folder belongs) raises.
     """
     first = path
     while first.parent != root and not _exists(first.parent):
         first = first.parent
-    fsync_dir(first.parent)
-    return plain_in_checkout(root, first) and not _exists(first)
+    return first
+
+
+def _absent(root: Path, path: Path, first: Path) -> bool:
+    """Whether *path* is still absent from the same first missing name, below plain folders read after that name.
+
+    The folder chain is checked after the last read of the name, so a folder swapped for a link during it refuses.
+    Nothing is created to prove it.
+    """
+    return _anchor(root, path) == first and not _exists(first) and plain_in_checkout(root, first)
 
 
 def _exists(path: Path) -> bool:

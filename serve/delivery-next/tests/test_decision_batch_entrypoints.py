@@ -1392,3 +1392,145 @@ def test_a_before_absent_file_is_proved_absent_only_under_plain_existing_folders
         assert root in synced  # the folder holding the first missing name is made durable
     if case == "existing-folder":
         assert path.parent in synced
+
+
+def _abandon_outcome(shared: DataRepo, generation: str) -> tuple[bool, str]:
+    """Whether Abandon completed, else its refusal, which must be the final proof's."""
+    try:
+        return decision_recovery.abandon(shared, generation).done, ""
+    except decision_store.DecisionsUnavailable as exc:
+        assert "changed while it was put back" in str(exc)  # noqa: PT017 - the refusal is part of the outcome
+        return False, str(exc)
+
+
+def _within_restored(m: pytest.MonkeyPatch) -> list[bool]:
+    """A flag that is set only while Abandon's final `restored` proof runs."""
+    inside = [False]
+    real_restored = decision_batch.restored
+
+    def flagged(root, before):
+        inside[0] = True
+        try:
+            return real_restored(root, before)
+        finally:
+            inside[0] = False
+
+    m.setattr(decision_batch, "restored", flagged)
+    return inside
+
+
+@pytest.mark.parametrize("call", [1, 2, 3])
+@pytest.mark.parametrize("order", ["predecessor-first", "successor-first"])
+def test_an_owner_rewrite_during_any_fsync_of_the_final_proof_keeps_the_batch(picking, monkeypatch, order, call):
+    """During the *call*-th fsync of Abandon's final proof, the owner writes the updated file's after image back.
+
+    No fsync may follow a row's read, in either row order: a rewrite at any fsync refuses, and a *call* past the last
+    fsync never fires and Abandon completes.
+    """
+    _seed(picking)
+    shared = picking.shared
+    old = make(title="Notes stay in one table")
+    assert decision_store.save(shared, old, expected_revision=None, message="decisions: old").published
+    update = old.model_copy(update={"title": "Notes stay in one SQLite table"})
+    successor = make(title="Use UTC", statement="All timestamps use UTC.")
+    items = [(update, old.revision), (successor, None)]
+    generation = _interrupt_at(picking, monkeypatch, items if order == "predecessor-first" else items[::-1])
+    folder = shared.root / PROJECT / "decisions"
+    added, updated = folder / f"{successor.id}.md", folder / f"{old.id}.md"
+    before, rewritten = updated.read_bytes(), serialize(update).encode("utf-8")
+    added.write_bytes(serialize(successor).encode("utf-8"))
+    updated.write_bytes(rewritten)
+    head, index = shared.git("rev-parse", "HEAD").stdout, shared.git("ls-files", "-s").stdout
+    calls, fired = [0], []
+    real_fsync = decision_batch.fsync_dir
+
+    with monkeypatch.context() as m:
+        inside = _within_restored(m)
+
+        def fsync_then_owner_rewrites(path):
+            real_fsync(path)
+            if inside[0]:
+                calls[0] += 1
+                if calls[0] == call:
+                    fired.append(call)
+                    updated.write_bytes(rewritten)
+
+        m.setattr(decision_batch, "fsync_dir", fsync_then_owner_rewrites)
+        done, refusal = _abandon_outcome(shared, generation)
+
+    assert (shared.git("rev-parse", "HEAD").stdout, shared.git("ls-files", "-s").stdout) == (head, index)
+    assert not added.exists()
+    assert fired or call > 1  # the proof fsyncs at least once
+    assert done == (not fired), refusal  # any rewrite at an fsync refuses; none fired, Abandon completes
+    if not fired:
+        assert updated.read_bytes() == before
+        assert decision_batch.pending(shared) is None
+        return
+    assert updated.read_bytes() == rewritten  # the owner's bytes stay
+    assert decision_batch.pending(shared).generation == generation
+    _no_authority(picking)
+
+
+@pytest.mark.parametrize("call", [1, 2, 3, 4, 5])
+def test_a_folder_swapped_for_a_link_during_the_final_absence_read_keeps_the_batch(
+    picking, monkeypatch, tmp_path, call
+):
+    """The project folder exists; its `decisions` folder never did. During the *call*-th lstat of that missing name in
+    Abandon's final proof, the owner swaps the project folder for a link to a foreign folder that lacks it too.
+
+    Every swap refuses, the last one included, since the folder chain is checked after the read; a *call* past the
+    last lstat never fires and Abandon completes.
+    """
+    _seed(picking)
+    shared = picking.shared
+    site = shared.root / "new-site"
+    site.mkdir()
+    (site / "notes.txt").write_text("the owner's notes\n")
+    foreign = tmp_path / "foreign"
+    foreign.mkdir()
+    (foreign / "marker.txt").write_text("foreign\n")
+    new = make(project="new-site", title="Use UTC", statement="All timestamps use UTC.")
+
+    def stopped_in_the_first_fsync(_path):
+        msg = "interrupted in make_dirs' first fsync"
+        raise RuntimeError(msg)
+
+    with monkeypatch.context() as m:
+        m.setattr(storage_io, "fsync_dir", stopped_in_the_first_fsync)
+        with pytest.raises(RuntimeError, match="first fsync"):
+            decision_store.save(shared, new, expected_revision=None, message="decisions: before its folder")
+    generation = decision_batch.pending(shared).generation
+    target = os.fspath(site / "decisions")
+    head, index = shared.git("rev-parse", "HEAD").stdout, shared.git("ls-files", "-s").stdout
+    calls, fired = [0], []
+    real_lstat = os.lstat
+
+    with monkeypatch.context() as m:
+        inside = _within_restored(m)
+
+        def lstat_then_owner_swaps(path, *args, **kwargs):
+            try:
+                return real_lstat(path, *args, **kwargs)
+            finally:
+                if inside[0] and not fired and os.fspath(path) == target:
+                    calls[0] += 1
+                    if calls[0] == call:
+                        fired.append(call)
+                        site.rename(tmp_path / "moved")
+                        site.symlink_to(foreign, target_is_directory=True)
+
+        m.setattr(os, "lstat", lstat_then_owner_swaps)
+        done, refusal = _abandon_outcome(shared, generation)
+
+    assert (shared.git("rev-parse", "HEAD").stdout, shared.git("ls-files", "-s").stdout) == (head, index)
+    assert sorted(p.name for p in foreign.iterdir()) == ["marker.txt"]  # nothing is made in the foreign folder
+    assert fired or call > 1  # the proof reads the missing name at least once
+    assert done == (not fired), refusal  # any swap refuses, at the last read too; none fired, Abandon completes
+    if not fired:
+        assert not site.is_symlink()
+        assert decision_batch.pending(shared) is None
+        return
+    assert site.is_symlink()
+    assert (tmp_path / "moved" / "notes.txt").read_text() == "the owner's notes\n"
+    assert decision_batch.pending(shared).generation == generation
+    _no_authority(picking)
