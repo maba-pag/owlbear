@@ -24,9 +24,10 @@ def receipted_ledger() -> None:
 
 
 class LookupDescriptors:
-    """Only descriptors acquired by the lookup count, with each fdopen transfer tracked by its native file."""
+    """Only the lookup thread's acquisitions count; each fdopen transfer is tracked by its native file."""
 
     def __init__(self) -> None:
+        self.reader = threading.current_thread()
         self.opened, self.active, self.closed, self.files, self.strays = [], set(), [], [], []
         self.real_open, self.real_close, self.real_fdopen = os.open, os.close, os.fdopen
         self.real_lock = maintenance.open_lock
@@ -38,11 +39,15 @@ class LookupDescriptors:
         return self.owned(self.real_lock(*args, **kwargs))
 
     def owned(self, fd: int) -> int:
-        self.opened.append(fd)
-        self.active.add(fd)
+        if threading.current_thread() is self.reader:
+            self.opened.append(fd)
+            self.active.add(fd)
         return fd
 
     def close(self, fd: int) -> None:
+        if threading.current_thread() is not self.reader:
+            self.real_close(fd)
+            return
         if fd in self.active:
             self.active.remove(fd)
             self.closed.append(fd)
@@ -52,6 +57,8 @@ class LookupDescriptors:
 
     def fdopen(self, fd: int, *args, **kwargs):
         source = self.real_fdopen(fd, *args, **kwargs)
+        if threading.current_thread() is not self.reader:
+            return source
         assert fd in self.active
         self.active.remove(fd)
         self.files.append(source)
@@ -168,6 +175,7 @@ def test_a_ledger_that_is_not_a_regular_file_is_refused_at_once_and_its_descript
         descriptors.patch(patch)
         no_host(patch)
         reader = threading.Thread(target=look, daemon=True)
+        descriptors.reader = reader
         reader.start()
         reader.join(5)
     assert not reader.is_alive(), "the lookup waited on the ledger"
@@ -232,6 +240,38 @@ def test_an_unrelated_descriptor_closed_during_lookup_does_not_change_its_owners
     assert closed == [fd]
     assert descriptors.all_closed()
     assert path.read_text() == "{"
+
+
+def test_another_threads_maintenance_descriptor_is_not_owned_by_this_lookup(tmp_path, monkeypatch):
+    path = ledger_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("{")
+    other = tmp_path / "other-reader"
+    other.write_text("another reader")
+    acquired, release, descriptors = threading.Event(), threading.Event(), LookupDescriptors()
+
+    def other_reader():
+        fd = maintenance.os.open(other, os.O_RDONLY)
+        try:
+            acquired.set()
+            assert release.wait(5)
+        finally:
+            maintenance.os.close(fd)
+
+    with monkeypatch.context() as patch:
+        descriptors.patch(patch)
+        no_host(patch)
+        reader = threading.Thread(target=other_reader, daemon=True)
+        reader.start()
+        try:
+            assert acquired.wait(5)
+            with pytest.raises(maintenance.MaintenanceError, match="could not be read"):
+                maintenance.Maintenance.lookup_receipt("p", "d0")
+            assert descriptors.all_closed()
+        finally:
+            release.set()
+            reader.join(5)
+        assert not reader.is_alive()
 
 
 def test_a_host_still_finds_the_same_receipt_through_its_own_ledger():
