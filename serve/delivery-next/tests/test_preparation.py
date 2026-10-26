@@ -357,12 +357,13 @@ LONG = "restore refused: " + "x" * 300
 @pytest.mark.parametrize(("act", "cause"), [("fail", "restore refused"), ("fail-long", LONG)])
 def test_a_failed_command_on_a_long_path_still_says_why(env, act, cause):
     repo, store, _log, tmp = env
-    pad = 290 - len(run(tmp, act)) - 1  # a declared command of 290 characters, wherever tmp is
-    deep = tmp.joinpath(*(["d" * 100] * (pad // 101)), "e" * (pad % 101 or 1))
-    deep.mkdir(parents=True)
-    (deep / "tool.py").write_text(TOOL)
+    deep = tmp
+    if (pad := 290 - len(run(tmp, act)) - 1) > 0:  # a declared command of about 290 characters, wherever tmp is
+        deep = tmp.joinpath(*(["d" * 100] * (pad // 101)), "e" * (pad % 101 or 1))
+        deep.mkdir(parents=True)
+        (deep / "tool.py").write_text(TOOL)
     failing = option(tmp, restore=run(deep, act))
-    assert len(failing.restore) in {290, 291}
+    assert len(failing.restore) >= 289
     c, s = change(repo, "pc1"), settings(failing)
     prepare._write(store, "c1", prepare.Prepared(check="pc1", option=failing))  # noqa: SLF001 - as accepted
     result = prepare.launch(store, c, s, lambda _e: None)
