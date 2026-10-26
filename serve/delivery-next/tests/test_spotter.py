@@ -68,10 +68,18 @@ def ledger() -> dict[str, Any]:
     return json.loads((spotter.root() / f"ledger-{spotter._today()}.json").read_text())  # noqa: SLF001
 
 
-def judge(answer: str = '{"verdict": "silent"}', *, wait: float = 0.0, seen: list | None = None) -> spotter.Judge:
+def judge(
+    answer: str = '{"verdict": "silent"}',
+    *,
+    wait: float = 0.0,
+    seen: list | None = None,
+    reached: asyncio.Event | None = None,
+) -> spotter.Judge:
     async def look(the_card: dict[str, Any], _ctx: spotter.Context) -> tuple[str, float]:
         if seen is not None:
             seen.append(the_card)
+        if reached is not None:
+            reached.set()
         await asyncio.sleep(wait)
         return answer, 0.25
 
@@ -156,7 +164,9 @@ def test_a_hand_off_starts_a_look_without_waiting_and_records_it_owner_only() ->
         await spot.drain()
         return returned
 
-    assert asyncio.run(main()) < 0.05
+    returned = asyncio.run(main())
+    assert spotter.WORK.settled(5)
+    assert returned < 0.05
     [rec] = records()
     assert (rec["look"], rec["verdict"], rec["session"], rec["mode"], rec["skipped"]) == (
         "hand-off", "silent", "s-1", "learning", "")  # fmt: skip
@@ -188,6 +198,7 @@ def test_a_look_still_running_at_the_steps_end_is_recorded_skipped(monkeypatch) 
         assert not spot.tasks
 
     asyncio.run(main())
+    assert spotter.WORK.settled(5)
     assert [(r["skipped"], r["credits"]) for r in records()] == [("the step ended while the look ran", 0.5)]
     assert ledger() == {"reserved": {}, "spent": 0.5}  # an unknown spend counts as the estimate
 
@@ -202,6 +213,7 @@ def test_a_look_past_its_time_is_skipped_and_a_wrong_answer_fails_never_silent(m
             await asyncio.gather(*spot.tasks)
 
     asyncio.run(main())
+    assert spotter.WORK.settled(5)
     assert [(r["verdict"], r["skipped"][:4]) for r in records()] == [("", "time"), ("failed", "")]
 
 
@@ -217,6 +229,7 @@ def test_looks_past_capacity_or_budget_are_recorded_skipped_and_the_ledger_settl
         await spot.drain()
 
     asyncio.run(main())
+    assert spotter.WORK.settled(5)
     assert sorted(r["skipped"].split(":")[0] for r in records()) == ["", "", "", "budget", "capacity"]
     assert ledger() == {"reserved": {}, "spent": 0.75}
 
@@ -237,6 +250,7 @@ def test_samples_follow_the_seeded_rate_and_a_state_change_is_preliminary() -> N
         return sum(rng.random() * 100 < 30 for _ in range(20))
 
     expected = asyncio.run(main())
+    assert spotter.WORK.settled(5)
     got = records()
     assert 0 < len(got) == expected
     assert {(r["look"], r["probability"], r["preliminary"], r["verdict"], r["skipped"]) for r in got} == {
@@ -245,13 +259,15 @@ def test_samples_follow_the_seeded_rate_and_a_state_change_is_preliminary() -> N
 
 def test_live_mode_still_only_records_and_a_hand_off_is_not_looked_at_unless_chosen() -> None:
     async def main() -> None:
-        spotter.Spotter(ctx(mode="live"), lambda: "s-1", judge()).handed_off("c", {})
-        await asyncio.sleep(0.05)
+        live = spotter.Spotter(ctx(mode="live"), lambda: "s-1", judge())
+        live.handed_off("c", {})
+        await live.drain()
         quiet = spotter.Spotter(ctx(looks=("sample",)), lambda: "s-1", judge())
         quiet.handed_off("c", {})
         assert not quiet.tasks
 
     asyncio.run(main())
+    assert spotter.WORK.settled(5)
     assert [r["mode"] for r in records()] == ["live"]
 
 
@@ -278,10 +294,10 @@ def test_the_submit_tool_starts_the_look_before_delivery_handles_it_and_keeps_it
         return result
 
     assert asyncio.run(main()).result_type == "failure"
+    assert spotter.WORK.settled(5)
     assert order == ["look call-3 {'summary': 's'}", "handled"]
     [rec] = records()
     assert (rec["call"], rec["look"], rec["cutoff"]) == ("call-3", "hand-off", 0)
-    assert spotter.WORK.settled(5)
     outcomes = spotter.root() / f"outcomes-{spotter._today()}.jsonl"  # noqa: SLF001
     [outcome] = [json.loads(x) for x in outcomes.read_text().splitlines()]
     assert (outcome["call"], outcome["outcome"]) == ("call-3", "failure")
@@ -469,6 +485,7 @@ def test_a_held_ledger_never_stalls_the_steps_loop() -> None:
         return returned, ticks
 
     returned, ticks = asyncio.run(main())
+    assert spotter.WORK.settled(5)
     holder.join()
     assert returned < 0.02
     assert ticks >= 15  # the loop went on while the look waited for the ledger
@@ -484,6 +501,7 @@ def test_a_card_that_fails_settles_its_reservation_and_is_recorded_failed(monkey
         await spot.drain()
 
     asyncio.run(main())
+    assert spotter.WORK.settled(5)
     assert [(r["verdict"], r["skipped"][:17], r["credits"]) for r in records()] == [
         ("failed", "ZeroDivisionError", 0.0)]  # fmt: skip
     assert ledger() == {"reserved": {}, "spent": 0.0}
@@ -504,6 +522,7 @@ def test_a_reservation_settles_on_its_own_day_and_an_unreadable_ledger_skips(mon
         await spot.drain()
 
     asyncio.run(main())
+    assert spotter.WORK.settled(5)
     assert [r["skipped"][:26] for r in records()] == ["budget: the ledger failed:"]
 
 
@@ -641,6 +660,7 @@ def test_a_burst_of_samples_while_looks_run_is_counted_once_not_queued() -> None
         return most
 
     assert asyncio.run(main()) == 2
+    assert spotter.WORK.settled(5)
     got = records()
     assert sorted(r["skipped"][:30] for r in got) == ["", "", "capacity: 298 sampled looks sk"]
 
@@ -656,6 +676,7 @@ def test_a_spotter_writes_where_it_started_whatever_changes_later(monkeypatch, t
         return spot
 
     started_in = asyncio.run(main()).folder
+    assert spotter.WORK.settled(5)
     assert (started_in / f"records-{spotter._today()}.jsonl").exists()  # noqa: SLF001
     assert not (tmp_path / "elsewhere").exists()
 
@@ -907,6 +928,7 @@ def test_an_unreadable_prompt_still_records_the_look_and_settles_its_reservation
         await spot.drain()
 
     asyncio.run(main())
+    assert spotter.WORK.settled(5)
     assert [r["prompt"] for r in records()] == ["unreadable"]
     assert ledger() == {"reserved": {}, "spent": 0.25}
 
