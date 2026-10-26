@@ -230,10 +230,6 @@ class DataRepo:
         """Bind the automatic change about to be written to *watch* to the remote; the caller holds ``locked``."""
         publication_hold.hold(self, watch, requires, until)
 
-    def filled(self, watch: Path, until: float | None = None) -> None:
-        """Note what the held automatic change wrote to *watch*; the caller holds ``locked``."""
-        publication_hold.filled(self, watch, until)
-
     def held(self, until: float | None = None) -> str:
         """Why a held automatic change keeps this checkout from pushing or rebasing; nothing when it does not."""
         return publication_hold.refusal(self, until)

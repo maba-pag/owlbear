@@ -6,14 +6,17 @@ checkout records in its own Git folder what the remote must hold: the changed fi
 up with, and the fields another file must keep. While that record stands, nothing in the checkout is pushed or rebased
 before the freshly fetched remote is checked against it, so a push, which Git accepts only as a fast-forward, lands on
 the very revision that was checked. A remote that no longer meets the record holds the checkout: nothing is pushed or
-rebased, the refusal is kept in the record and reported, and nothing in Git is undone. The record lapses once the remote
-has the change or the checkout no longer does.
+rebased, the refusal is kept in the record and reported, and nothing in Git is undone. The record lapses only once the
+checkout itself holds no change of the file the remote lacks: no unpushed commit touches it and its copies are the
+committed one. A record that cannot be read or is malformed is kept as it is and holds.
 """
 
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
+from pathlib import PurePosixPath
 from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.local_system.storage_io import atomic_write
@@ -28,6 +31,8 @@ RECORD = "owlbear-held-publication.json"
 ABSENT = "absent"
 UPSTREAM = "@{upstream}"
 _KEYS = ("watch", "base", "file", "fields", "what")
+_RECORD_KEYS = frozenset((*_KEYS, "refused"))
+_BLOB = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
 
 
 @dataclass(frozen=True)
@@ -58,16 +63,45 @@ def _path(repo: DataRepo, until: float | None) -> Path:
     return repo.root / named  # relative to the checkout, unless Git named it absolute
 
 
+def _safe(rel: object) -> bool:
+    """Whether *rel* names a file inside the checkout, outside its Git folder, the way a record writes it."""
+    if not isinstance(rel, str) or not rel or "\\" in rel:
+        return False
+    parts = PurePosixPath(rel).parts
+    return not rel.startswith("/") and parts[0] != ".git" and all(p not in ("", ".", "..") for p in parts)
+
+
+def _malformed(data: object) -> str:
+    """What makes *data* no record this module writes; nothing when it is one."""
+    if not isinstance(data, dict) or set(data) != _RECORD_KEYS:
+        return f"its keys are not exactly {', '.join(sorted(_RECORD_KEYS))}"
+    if not (_safe(data["watch"]) and _safe(data["file"])):
+        return "a file it names is not a plain path inside the checkout"
+    if not isinstance(data["base"], str) or not (data["base"] == ABSENT or _BLOB.fullmatch(data["base"])):
+        return "its base is not a Git blob or absent"
+    fields = data["fields"]
+    if (
+        not isinstance(fields, dict)
+        or not fields
+        or not all(isinstance(k, str) and (v is None or isinstance(v, str)) for k, v in fields.items())
+    ):
+        return "its fields are not a non-empty map of text"
+    if not (isinstance(data["what"], str) and data["what"] and isinstance(data["refused"], str)):
+        return "its description or refusal is not text"
+    return ""
+
+
 def _load(path: Path) -> dict[str, object] | None:
+    """The record as written; a record that cannot be read or is malformed stays, byte for byte, and holds."""
     try:
-        data = json.loads(path.read_text())
+        data = json.loads(path.read_bytes())
     except FileNotFoundError:
         return None
     except (OSError, ValueError) as exc:
         msg = f"the held publication record {path} cannot be read ({exc}); check it before removing it"
         raise _UnknownError(msg) from exc
-    if not isinstance(data, dict) or any(key not in data for key in (*_KEYS, "filled", "refused")):
-        msg = f"the held publication record {path} is incomplete; check it before removing it"
+    if why := _malformed(data):
+        msg = f"the held publication record {path} is malformed: {why}; check it before removing it"
         raise _UnknownError(msg)
     return data
 
@@ -123,35 +157,27 @@ def hold(repo: DataRepo, watch: Path, requires: Requires, until: float | None) -
         msg = f"the automatic change was not written: {exc}"
         raise DataRepoError(msg) from exc
     if held is None:
-        atomic_write(path, json.dumps({**want, "filled": "", "refused": ""}))
+        atomic_write(path, json.dumps({**want, "refused": ""}))
     elif {key: held[key] for key in _KEYS} != want:
         why = held["refused"] or "it is not pushed yet"
         msg = f"an earlier automatic change of {held['watch']} in {repo.root} is still held: {why}"
         raise DataRepoError(msg)
 
 
-def filled(repo: DataRepo, watch: Path, until: float | None) -> None:
-    """Note the blob the held change wrote to *watch*: once the remote has that blob, the change is published."""
-    from owlbear_delivery_next.local_system.data_repo import DataRepoError  # noqa: PLC0415 - it imports this module
-
-    try:
-        path = _path(repo, until)
-        held = _load(path)
-        if held is not None and held["watch"] == _rel(repo, watch):
-            atomic_write(path, json.dumps({**held, "filled": _blob(repo, _rel(repo, watch), until)}))
-    except _UnknownError as exc:
-        msg = f"the automatic change was written, but not noted as held: {exc}"
-        raise DataRepoError(msg) from exc
-
-
 def _lapsed(repo: DataRepo, held: Mapping[str, object], until: float | None) -> bool:
-    """Whether the remote has the held change, or the checkout no longer has any change of its file the remote lacks."""
+    """Whether the checkout no longer holds any change of the watched file that the remote lacks.
+
+    Only the checkout's own history and copies prove it: no commit the remote lacks changes the file, and its index and
+    working copy are the committed one. Equal bytes on the remote prove nothing: a commit holding the change could still
+    be pushed or replayed after the remote changed the file again.
+    """
     watch = str(held["watch"])
-    remote = _blob_at(repo, UPSTREAM, watch, until)
-    if remote == held["filled"]:
-        return True
-    ahead = _run(repo, until, "log", "--format=%h", f"{UPSTREAM}..HEAD", "--", watch).strip()
-    return not ahead and _blob(repo, watch, until) == remote
+    if _run(repo, until, "log", "--format=%h", f"{UPSTREAM}..HEAD", "--", watch).strip():
+        return False
+    staged = repo.git("diff", "--cached", "--quiet", "HEAD", "--", watch, until=until)
+    if staged.returncode not in (0, 1):
+        raise _UnknownError(staged.stderr.strip()[:200] or "git could not compare the index")
+    return staged.returncode == 0 and _blob(repo, watch, until) == _blob_at(repo, "HEAD", watch, until)
 
 
 def _unmet(repo: DataRepo, held: Mapping[str, object], until: float | None) -> str:

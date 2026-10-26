@@ -341,3 +341,152 @@ def test_a_remote_profile_that_is_not_utf8_holds_the_fill_with_a_notice(three, m
     assert not pending_file(winner).exists()
     with winner.shared.locked():
         assert "unreadable" in winner.shared.pull()
+
+
+def test_identical_bytes_from_another_lineage_never_retire_the_hold_of_an_unpushed_fill(three, monkeypatch):
+    winner, settler, remote = three
+    steps: list[str] = []
+    real = data_repo._git  # noqa: SLF001 - the publisher's own Git calls are the boundary
+
+    def copy_the_fill_then_complete() -> None:
+        exact = winner.config_path.read_bytes()  # the fill is written here, about to be committed, not pushed
+        assert settler.shared.pull() == ""
+        settler.config_path.write_text(Layer().model_dump_json(indent=1))
+        assert settler.shared.publish(settler.config_path, "owner: initial config") == ""
+        settler.config_path.write_bytes(exact)  # the same bytes, by a separate commit of another lineage
+        assert settler.shared.publish(settler.config_path, "owner: preferred config") == ""
+        settler.mark_prefs_import("pending", "done")
+
+    def delete() -> None:
+        settler.config_path.unlink()
+        assert settler.shared.publish(settler.config_path, "owner: config removed") == ""
+        steps.append("deleted")
+
+    def spy(cwd, *args, until=None):
+        if armed and cwd == winner.shared.root:
+            if not steps and args[:1] == ("commit",):
+                steps.append("copied")
+                copy_the_fill_then_complete()
+            elif steps == ["copied"] and args[:1] == ("push",):
+                delete()  # only reachable when the hold was retired before the first push
+        return real(cwd, *args, until=until)
+
+    armed, fill = [], winner.update_config
+
+    def once(change, what="project layer", on_written=None):
+        armed.append(True)
+        try:
+            return fill(change, what, on_written)
+        finally:
+            armed.clear()
+
+    monkeypatch.setattr(data_repo, "_git", spy)
+    monkeypatch.setattr(winner, "update_config", once)
+    with pytest.raises(StoreError, match="is held because"):
+        prefs_import.run(winner)
+    assert steps == ["copied"]  # refused at the check: the first push never ran
+    assert publication_hold.recorded(winner.shared, None)
+
+    monkeypatch.setattr(data_repo, "_git", real)
+    delete()  # the owner's deletion happens all the same, after the refusal
+    assert not remote_has_config(remote)
+    with pytest.raises(StoreError, match="is held because"):
+        prefs_import.run(winner)  # the retry is held: the fill is still unpushed here
+    memory = winner.shared.memory_path(PROJECT) / "later.md"
+    memory.parent.mkdir(parents=True, exist_ok=True)
+    memory.write_text("a later unrelated publication\n")
+    with winner.shared.locked():
+        assert "is held because" in winner.shared.publish(memory, "memory: later")
+    assert not remote_has_config(remote)
+    assert remote_marker(remote) == "done"
+
+
+def test_a_hold_that_never_wrote_lapses_with_the_next_healthy_publication(three):
+    winner, _, remote = three
+    root = winner.shared.root
+    requires = publication_hold.Requires(profile_share.path(winner), {"prefs_import": "pending"}, "a claim")
+    with winner.shared.locked():
+        winner.shared.hold(winner.config_path, requires)  # recorded, then nothing was written
+    notes = root / "unrelated" / "notes.md"
+    notes.parent.mkdir(parents=True, exist_ok=True)
+    notes.write_text("a healthy change\n")
+    with winner.shared.locked():
+        assert winner.shared.publish(notes, "unrelated: notes") == ""
+    assert not publication_hold.recorded(winner.shared, None)
+    assert remote_head(remote) == git(root, "rev-parse", "HEAD")
+
+
+def mutate(record: dict, case: str) -> bytes:
+    import json  # noqa: PLC0415
+
+    if case == "not json":
+        return b"{ not json"
+    changed = dict(record)
+    edits = {
+        "watch null": ("watch", None),
+        "watch number": ("watch", 7),
+        "watch escapes": ("watch", "../outside/config.json"),
+        "watch absolute": ("watch", "/etc/config.json"),
+        "watch in git": ("watch", ".git/config"),
+        "file null": ("file", None),
+        "base shape": ("base", "not-a-blob"),
+        "base number": ("base", 0),
+        "fields list": ("fields", ["prefs_import"]),
+        "field number": ("fields", {"prefs_import": 1}),
+        "fields empty": ("fields", {}),
+        "what null": ("what", None),
+        "refused null": ("refused", None),
+    }
+    if case == "missing key":
+        del changed["base"]
+    elif case == "extra key":
+        changed["filled"] = "anything"
+    else:
+        key, value = edits[case]
+        changed[key] = value
+    return json.dumps(changed).encode()
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        "watch null",
+        "watch number",
+        "watch escapes",
+        "watch absolute",
+        "watch in git",
+        "file null",
+        "base shape",
+        "base number",
+        "fields list",
+        "field number",
+        "fields empty",
+        "what null",
+        "refused null",
+        "missing key",
+        "extra key",
+        "not json",
+    ],
+)
+def test_a_malformed_held_record_stays_held_with_its_bytes_and_never_lapses(held, case):
+    import json  # noqa: PLC0415
+
+    winner, remote = held
+    root, before = winner.shared.root, remote_head(remote)
+    record = root / git(root, "rev-parse", "--git-path", publication_hold.RECORD)
+    raw = mutate(json.loads(record.read_bytes()), case)
+    record.write_bytes(raw)
+    head = git(root, "rev-parse", "HEAD")
+
+    with winner.shared.locked():
+        assert "held publication record" in winner.shared.pull()
+        memory = winner.shared.memory_path(PROJECT) / "note.md"
+        memory.parent.mkdir(parents=True, exist_ok=True)
+        memory.write_text("a memory\n")
+        assert "held publication record" in winner.shared.publish(memory, "memory: note")
+    assert "held publication record" in winner.shared.held()
+
+    assert record.read_bytes() == raw
+    assert remote_head(remote) == before
+    assert not remote_has_config(remote)
+    assert git(root, "merge-base", "--is-ancestor", head, "HEAD") == ""

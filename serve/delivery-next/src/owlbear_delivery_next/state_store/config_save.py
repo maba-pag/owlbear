@@ -48,8 +48,6 @@ def locked_save[T: Layer](  # noqa: PLR0913, PLR0917
     with store.shared.locked():
         if automatic and (behind := _caught_up(store, until)):
             return behind
-        if requires:
-            on_written = _noting(store, path, on_written, until)
         try:
             update_layer(path, model, change, on_written)
         except HeldByPendingError as exc:
@@ -69,17 +67,6 @@ def _caught_up(store: Store, until: float) -> str:
     except DataRepoError as exc:
         return str(exc)
     return store.shared.pull(until)
-
-
-def _noting(store: Store, path: Path, on_written: Callable[[], None] | None, until: float) -> Callable[[], None]:
-    """The write hook that first notes in the held record what the automatic change wrote."""
-
-    def written() -> None:
-        store.shared.filled(path, until)
-        if on_written:
-            on_written()
-
-    return written
 
 
 def unshared_save[T: Layer](  # noqa: PLR0913 - the store, the layer, its change, owner and the write hook
