@@ -34,6 +34,6 @@ CURRENT_MODULES = (
     ("state_store/offline_proof.py", "6df2428ecf1ca7260a7b8e7620fd01b3ebbda49ff019272f8828e4a6e06c03a0"),
     ("state_store/offline_protocol.py", "271a25b8c9b5c3cacd999726300b18d188b5f89e15139bd0e73e90019137a0a6"),
     ("state_store/project_home.py", "62d8979444f3d08e541f98e65542cefe47b2dc1e73aea315648279ff36e73246"),
-    ("state_store/project_move.py", "ee8680fe6690bab12eb04ee090eba35f852da8ea1b16cdba6ee94d3e81d5c056"),
+    ("state_store/project_move.py", "728486a956b1434a73e44a114edc229d4151eaf0ee8521915b02430d3d84f4b0"),
     ("state_store/store.py", "c93ae35c9fb506201ebb4ba6010c4be04fd6a8fb9f9ccb3cc1522fbc5e821561"),
 )

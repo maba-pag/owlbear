@@ -230,6 +230,18 @@ def _published(pfd: int, target: Path, tfd: int, rec: dict) -> None:
         raise _not_published(target)
 
 
+def _sync_published(pfd: int, target: Path, tfd: int) -> None:
+    """Make the published copy durable through *tfd* before a switch; on failure nothing is switched."""
+    try:
+        for child in os.listdir(tfd):
+            fd_tree.sync(tfd, child)
+        os.fsync(tfd)
+        fd_tree.sync_names(pfd, target, local_home.root())
+    except OSError as exc:
+        msg = f"{target} was not made durable ({exc.strerror}): nothing was switched; check the disk, then start again"
+        raise StoreError(msg) from exc
+
+
 def _staged_ok(sfd: int, names: set[str], rec: dict, *, complete: bool) -> bool:
     """Whether the staged entries are the ones the record proves: the proof, and the copies it lists."""
     if MOVE_PROOF in names and not _proof_ok(sfd, rec):
@@ -305,11 +317,7 @@ def _copy_each(folder: Path, folder_fd: int, sfd: int, rec: dict) -> None:
 
 
 def _move(folder: Path, folder_fd: int, target: Path, pfd: int) -> None:
-    """Copy the clone's store beside *target*, verify it, rename it into place in one step, then retire the source.
-
-    Raises:
-        StoreError: The target or staging folder exists, or the source changed; nothing unowned is overwritten.
-    """
+    """Copy the clone's store beside *target*, verify it, rename it into place, then keep the source untouched."""
     if _stat_at(pfd, target.name):
         raise _both(folder, target)
     stage_name = _stage_name(target)
@@ -327,13 +335,22 @@ def _move(folder: Path, folder_fd: int, target: Path, pfd: int) -> None:
     }
     _save(folder, folder_fd, rec)  # the record exists before anything is made beside the source
     os.mkdir(stage_name, 0o700, dir_fd=pfd)
+    _stage_and_publish(folder, folder_fd, target, pfd, rec)
+
+
+def _stage_and_publish(folder: Path, folder_fd: int, target: Path, pfd: int, rec: dict) -> None:
+    """Record the proof nonce before its file exists, copy the source into the stage, then publish it at *target*."""
+    stage_name = _stage_name(target)
     sfd = _open_at(pfd, stage_name)
     try:
-        rec["stage_id"] = _ident(os.fstat(sfd))
-        _save(folder, folder_fd, rec)
-        rec["proof"] = secrets.token_hex(16)
-        fd_tree.create_verified_at(sfd, MOVE_PROOF, f"{rec['proof']}\n")
-        _save(folder, folder_fd, rec)
+        if rec["stage_id"] is None:
+            rec["stage_id"] = _ident(os.fstat(sfd))
+            _save(folder, folder_fd, rec)  # recorded before any proof or copy can exist in the stage
+        if rec["proof"] is None:
+            rec["proof"] = secrets.token_hex(16)
+            _save(folder, folder_fd, rec)  # the nonce is recorded before its file can exist
+        if _stat_at(sfd, MOVE_PROOF) is None:
+            fd_tree.create_verified_at(sfd, MOVE_PROOF, f"{rec['proof']}\n")
         _copy_each(folder, folder_fd, sfd, rec)
     finally:
         os.close(sfd)
@@ -344,18 +361,20 @@ def _move(folder: Path, folder_fd: int, target: Path, pfd: int) -> None:
             "stop the other OwlBear process, then start again"
         )
         raise StoreError(msg)
+    _publish(folder, folder_fd, target, pfd, rec)
+
+
+def _publish(folder: Path, folder_fd: int, target: Path, pfd: int, rec: dict) -> None:
+    """Rename the verified stage to *target*, sync it durably, then record the switch (a failure keeps copying)."""
     if _stat_at(pfd, target.name):
         raise _both(folder, target)
-    os.rename(stage_name, target.name, src_dir_fd=pfd, dst_dir_fd=pfd)  # the copy becomes the store in one step
+    os.rename(_stage_name(target), target.name, src_dir_fd=pfd, dst_dir_fd=pfd)  # the copy becomes the store at once
     fd_tree.sync(pfd, target.name)
-    fd_tree.sync_names(pfd, target, local_home.root())  # durable in its parent and above before the switch
     tfd = _open_at(pfd, target.name)  # held until the switch is recorded: the published copy cannot swap under it
     try:
+        _sync_published(pfd, target, tfd)  # a retry re-syncs before any switch, so a failure stays uncommitted
         if not same_folder(target, tfd):  # the path moved under the pinned parent: refuse before the switch
-            msg = (
-                f"{target} no longer names the published store: nothing was removed; "
-                "check the folders, then start again"
-            )
+            msg = f"{target} no longer names the published store: nothing was removed; check, then retry"
             raise StoreError(msg)
         if not _source_unchanged(folder_fd, rec):  # a write after the copy: the switch is refused, nothing is lost
             msg = (
@@ -367,6 +386,17 @@ def _move(folder: Path, folder_fd: int, target: Path, pfd: int) -> None:
         _save(folder, folder_fd, rec)  # the target is the authority from here; the source is kept, never removed
     finally:
         os.close(tfd)
+
+
+def _holds_only_issued_proof(pfd: int, stage_name: str, rec: dict) -> bool:
+    """Whether the staging folder holds nothing but the proof this move issued: no copy has begun, so it can resume."""
+    if rec["stage_id"] is None or rec["proof"] is None or rec["copied"] or rec["pending"] is not None:
+        return False
+    sfd = _open_at(pfd, stage_name)
+    try:
+        return set(os.listdir(sfd)) <= {MOVE_PROOF}  # noqa: PTH208 - listed by descriptor, not by path
+    finally:
+        os.close(sfd)
 
 
 def _resume(folder: Path, folder_fd: int, target: Path, pfd: int, rec: dict) -> bool:
@@ -396,7 +426,7 @@ def _resume(folder: Path, folder_fd: int, target: Path, pfd: int, rec: dict) -> 
             tfd = _open_at(pfd, target.name)  # only the copy this move published may stand in for the store
             try:
                 _published(pfd, target, tfd, rec)
-                fd_tree.sync_names(pfd, target, local_home.root())  # a resumed move syncs before any switch
+                _sync_published(pfd, target, tfd)  # a resumed move re-syncs the copy before any switch
                 rec["phase"] = SWITCHED
                 _save(folder, folder_fd, rec)
             finally:
@@ -406,6 +436,10 @@ def _resume(folder: Path, folder_fd: int, target: Path, pfd: int, rec: dict) -> 
         raise _not_published(target)
     _owned(pfd, stage_name, rec, complete=False)
     _pending_ours(folder_fd, pfd, stage_name, rec)
+    # Nothing copied yet: the issued nonce is reused, not replaced.
+    if _stat_at(pfd, stage_name) is not None and _holds_only_issued_proof(pfd, stage_name, rec):
+        _stage_and_publish(folder, folder_fd, target, pfd, rec)
+        return False
     if _stat_at(pfd, stage_name) is not None:
         fd_tree.keep_entry(pfd, stage_name)  # kept, synced, never reused; the source is still whole
     return True
