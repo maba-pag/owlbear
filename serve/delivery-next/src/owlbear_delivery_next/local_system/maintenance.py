@@ -198,6 +198,12 @@ class Maintenance:
             return next((s[len(prefix) :] for s in ledger.imported if s.startswith(prefix)), "")
 
     @staticmethod
+    def lease(project: str, slot: str) -> Lease | None:
+        """The lease *slot* names in *project*, in any state, read without a host; None when the ledger holds none."""
+        with Maintenance._locked() as ledger:
+            return next((s for s in ledger.sessions if s.project == project and s.slot == slot), None)
+
+    @staticmethod
     def receipt_note(key: str, digest: str, generation: str) -> str:
         """The ledger entry that says record version *digest* is the rewrite of run *generation*."""
         return f"{key}:receipt:{digest}:{generation}"

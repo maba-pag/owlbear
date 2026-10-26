@@ -52,25 +52,25 @@ reverting them.
 | Temporary output, debug files, and one-off scripts | `.owlbear/scratch/{task-id}-{description}.{ext}` | Untracked; delete before task closure. |
 | Approved external repository clones | `.owlbear/scratch/research/{repo-name}/` | Inspect only; delete before task closure. |
 | Durable research findings | `owlbear-data/<folder>/research/{slug}.md` (OwlBear's folder: `owlbear`); OwlBear's record, plan and unbuilt build designs: `.owlbear/research/` | Tracked; include the task reference; never committed into another project (TD-227, TD-347, TD-395). |
-| External source attribution | `.owlbear/sources/overview.md` | Tracked; use the Attribution schema below. |
-| Generated navigation indexes | `.owlbear/doc-index.md`, `.owlbear/py-index.md`, `.owlbear/ts-index.md` | Regenerate with `uv run --project {owlbear-root} indexes {project-root}`. |
+| External source attribution | `.owlbear/sources/overview.md` | Tracked; only sources whose material still ships; use the Attribution schema below. |
 
 Project-owned source, test, documentation, and benchmark locations come from the local project map,
 manifests, and existing structure. Use `h-codebase-orientation` to discover them; do not impose
 OwlBear's own source layout on consuming projects.
 
 Shared agent ecosystem assets follow `h-agent-structure`; project-local customizations live under
-the corresponding `.owlbear/agents/`, `.owlbear/skills/`, `.owlbear/instructions/`, and
-`.owlbear/prompts/` directories.
+the corresponding `.owlbear/agents/`, `.owlbear/skills/` and `.owlbear/instructions/` directories.
 
 ## Attribution
 
-External code and patterns must be logged in `.owlbear/sources/overview.md`:
+External code, text and patterns that OwlBear adopts get a row in `.owlbear/sources/overview.md` when the
+adopting change lands; the row leaves with the asset. Sources only read for research are cited in the research
+document, not here.
 
 | Column | Description |
 | --- | --- |
 | Source | Project or article name |
-| URL | Link to the repository, article, or documentation |
-| What | Pattern, code snippet, architecture idea, or other material used |
-| Where Used | File path or module where it was applied |
-| Date | Date adopted |
+| URL | Link to the repository, article, or documentation, written `<https://…>` |
+| Licence | The upstream licence, or the notice that governs the material |
+| What | Pattern, code, text, or other material adopted |
+| Where Used | Backticked repository paths of the files that carry it |

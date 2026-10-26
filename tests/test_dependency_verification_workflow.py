@@ -122,15 +122,12 @@ def test_dependency_workflow_runs_without_dependency_label_gate() -> None:
         ".pre-commit-config.yaml",
         ".python-version",
         ".nvmrc",
-        ".owlbear/scripts/diagrams/**",
-        "share/diagrams/**",
         "biome.json",
         "package.json",
         "package-lock.json",
         "pyproject.toml",
         "serve/*/pyproject.toml",
         "serve/tools/src/owlbear_tools/dependency_ci.py",
-        "tests/test_archify_diagrams.py",
         "tests/test_dependency_verification_workflow.py",
         "uv.lock",
     }
@@ -185,31 +182,10 @@ def test_dependency_proofs_install_committed_state_and_run_behavior_checks() -> 
     assert "Check Node runtime declaration" in text
     node_setup = next(step for step in verify["steps"] if step.get("name") == "Setup Node.js")
     assert node_setup["with"]["node-version-file"] == ".nvmrc"
-    for surface in ("shared_node_runtime", "root_node", "diagrams"):
+    for surface in ("shared_node_runtime", "root_node"):
         assert f"steps.scope.outputs.{surface} == 'true'" in node_setup["if"]
-    archify_steps = [
-        step for step in verify["steps"] if step.get("name") == "Verify pinned Archify release and static render"
-    ]
-    assert len(archify_steps) == 1
-    archify_step = archify_steps[0]
-    assert "steps.scope.outputs.diagrams == 'true'" in archify_step["if"]
-    assert "steps.scope.outputs.shared_node_runtime == 'true'" in archify_step["if"]
-    assert archify_step["timeout-minutes"] == 10
-    assert archify_step["shell"] == "bash"
-    archify_run = archify_step["run"]
-    assert "--check" not in archify_run
-    assert '"$RUNNER_TEMP/archify-diagrams.tsv"' in archify_run
-    assert 'test -s "$RUNNER_TEMP/archify-diagrams.tsv"' in archify_run
-    assert 'manifest_sources = {diagram["source"] for diagram in manifest["diagrams"]}' in archify_run
-    assert 'Path("share/diagrams").rglob("*.architecture.json")' in archify_run
-    assert "Archify manifest source coverage mismatch" in archify_run
-    assert "while IFS=$'\\t' read -r source artifact; do" in archify_run
-    assert 'done < "$RUNNER_TEMP/archify-diagrams.tsv"' in archify_run
-    assert "python3 .owlbear/scripts/diagrams/render.py" in archify_run
-    assert "--offline" in archify_run
-    assert 'if cmp --silent "$output" "$artifact"; then' in archify_run
-    assert "Archify artifact is stale" in archify_run
-    assert "Regenerate with:" in archify_run
+    assert "diagrams" not in node_setup["if"]
+    assert "Archify" not in text
 
 
 def test_dependency_workflow_proves_lock_regeneration_without_python_suite() -> None:
@@ -356,25 +332,6 @@ def test_ruff_toolchain_proof_rejects_installed_version_drift(
         ruff_toolchain_module.check_ruff_toolchain(ROOT, ruff_executable=str(_fake_ruff(tmp_path, "0.16.1")))
 
 
-def test_renovate_archify_match_spans_version_and_digest() -> None:
-    config = json.loads((ROOT / "renovate.json").read_text(encoding="utf-8"))
-    managers = config["customManagers"]
-    archify = next(manager for manager in managers if manager.get("depNameTemplate") == "tt-a1i/archify")
-    patterns = archify["matchStrings"]
-    assert "matchStringsStrategy" not in archify
-    assert len(patterns) == 1
-
-    lock = (ROOT / ".owlbear/scripts/diagrams/archify.lock.json").read_text(encoding="utf-8")
-    assert "(?<currentValue>v[\\d.]+)" in patterns[0]
-    assert "(?<currentDigest>[a-f0-9]{64})" in patterns[0]
-    replacement_span = lock[lock.index('"version"') : lock.index('"sha256"') + len('"sha256"')]
-    lock_document = json.loads(lock)
-    assert re.fullmatch(r"v\d+\.\d+\.\d+", lock_document["version"])
-    assert f'"version": "{lock_document["version"]}"' in replacement_span
-    assert '"sha256"' in replacement_span
-    assert lock_document["sha256"] in lock
-
-
 @pytest.mark.parametrize(
     ("path", "surface"),
     [
@@ -385,12 +342,6 @@ def test_renovate_archify_match_spans_version_and_digest() -> None:
         (".nvmrc", "shared_node_runtime"),
         ("package.json", "root_node"),
         ("package-lock.json", "root_node"),
-        (".owlbear/scripts/diagrams/archify.lock.json", "diagrams"),
-        (".owlbear/scripts/diagrams/sync.py", "diagrams"),
-        (".owlbear/scripts/diagrams/render.py", "diagrams"),
-        ("share/diagrams/manifest.json", "diagrams"),
-        ("share/diagrams/mcp-topology.architecture.json", "diagrams"),
-        ("share/diagrams/mcp-topology.svg", "diagrams"),
         (".pre-commit-config.yaml", "precommit"),
         (".github/workflows/python.yml", "workflows"),
         ("renovate.json", "renovate"),
@@ -694,7 +645,7 @@ def test_renovate_policy_keeps_maturity_and_lockfile_controls() -> None:
         rule.get("minimumReleaseAge") == "72 hours" and rule.get("matchUpdateTypes") == ["major"]
         for rule in renovate["packageRules"]
     )
-    assert all("Renovate CLI" not in manager.get("description", "") for manager in renovate["customManagers"])
+    assert all("Renovate CLI" not in manager.get("description", "") for manager in renovate.get("customManagers", []))
 
 
 def test_renovate_updates_the_lint_toolchain_in_one_pull_request() -> None:

@@ -249,9 +249,10 @@ def test_a_run_keeps_its_processes_on_file_while_it_runs_and_a_restart_holds_the
     job.maintenance.path.unlink()  # synthetic pre-ledger installation, after every new-format lease ended
     slots = Slots(lambda: 1, closed=True)
     restarted = curation.Curation(slots, shared=lambda: DataRepo(root))
-    assert (slots.counts(curation.SLOT)[2], restarted.working()) == (1, [curation.LINGERING])
+    # the snapshot's PIDs and the running row each hold: nothing proves the PIDs are that row's session
+    assert (slots.counts(curation.SLOT)[2], restarted.working()) == (2, [curation.LINGERING])
     alive[0] = False
-    assert (restarted.working(), slots.counts(curation.SLOT)[2]) == ([curation.LINGERING], 1)
+    assert (restarted.working(), slots.counts(curation.SLOT)[2]) == ([curation.LINGERING], 2)
 
 
 def test_pids_left_after_an_earlier_empty_import_are_held_before_they_can_be_cleared(root, monkeypatch) -> None:
@@ -674,10 +675,12 @@ def survived_run(root, monkeypatch, pid: int = 4242, birth: float | None = 1.0) 
 
 
 def recovered_by_reboot(job: curation.Curation) -> None:
-    [session] = job.maintenance.read()["sessions"]
+    """The owner reboots and recovers every session still held; with one held, that one."""
     booted = job.maintenance.boot
     job.maintenance.boot = lambda: booted() + 1  # the computer rebooted since the run was left
-    job.maintenance.recover(session["id"], rebooted=True)
+    for session in job.maintenance.read()["sessions"]:
+        if session["state"] == "held":
+            job.maintenance.recover(session["id"], rebooted=True)
 
 
 def without_ended_at(job: curation.Curation) -> None:
@@ -1137,12 +1140,13 @@ def test_main_refusals_after_its_session_keep_its_one_hold_and_only_a_later_sess
     t0 = datetime.now(UTC) - timedelta(hours=3)
     main_session_row(t0, {4242: None})
     first = curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root), run=never_runs(calls))
-    [a] = ledger_on_disk()["sessions"]
+    a, r = ledger_on_disk()["sessions"]  # the snapshot's PIDs and the failure's row, each its own hold
+    assert (bool(a["generation"]), r["generation"]) == (True, "")
     for n in range(1, 4):
         main_refusal(t0 + timedelta(minutes=n), {4242: None})
         again = curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root), run=never_runs(calls))
         assert ([s["id"] for s in ledger_on_disk()["sessions"]], again.left_key, again.left) == (
-            [a["id"]], a["slot"], {4242: None},
+            [a["id"], r["id"]], a["slot"], {4242: None},
         )  # fmt: skip
         assert again.working() == [curation.LINGERING]
     recovered_by_reboot(first)
@@ -1150,16 +1154,18 @@ def test_main_refusals_after_its_session_keep_its_one_hold_and_only_a_later_sess
         main_refusal(t0 + timedelta(minutes=n), {4242: None})
         after = curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root), run=never_runs(calls))
         assert (after.maintenance.pending("curation"), [s["state"] for s in ledger_on_disk()["sessions"]]) == (
-            False, ["recovered"],
+            False, ["recovered", "recovered"],
         )  # fmt: skip
     main_session_row(t0 + timedelta(hours=1), {4242: None})  # main's later session failed: same PID, birth unknown
     later = curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root), run=never_runs(calls))
-    assert ([s["state"] for s in ledger_on_disk()["sessions"]], later.left_key != a["slot"]) == (
-        ["recovered", "held"], True,
+    assert ([s["state"] for s in ledger_on_disk()["sessions"]], later.left_key not in {a["slot"], r["slot"]}) == (
+        ["recovered", "recovered", "held", "held"], True,
     )  # fmt: skip
-    main_refusal(t0 + timedelta(hours=2), {4242: None})  # its own refusals keep that one hold too
+    main_refusal(t0 + timedelta(hours=2), {4242: None})  # its own refusals keep those holds as they are
     curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root), run=never_runs(calls))
-    assert ([s["state"] for s in ledger_on_disk()["sessions"]], calls) == (["recovered", "held"], [])
+    assert ([s["state"] for s in ledger_on_disk()["sessions"]], calls) == (
+        ["recovered", "recovered", "held", "held"], [],
+    )  # fmt: skip
 
 
 @pytest.mark.parametrize(
@@ -1173,15 +1179,15 @@ def test_a_row_ending_as_it_starts_without_a_known_refusal_reason_is_held_anew(r
     PIDs kept, and a new start runs nothing."""
     t0 = datetime.now(UTC) - timedelta(hours=2)
     main_session_row(t0, {4242: None})
-    first = curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root))  # imports A
-    [a] = ledger_on_disk()["sessions"]
+    first = curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root))  # imports A: its PIDs and its row
+    a, _row = ledger_on_disk()["sessions"]
     recovered_by_reboot(first)
     assert first.working() == []
     main_refusal(t0 + timedelta(hours=1), {4242: None}, reason)  # main's later row: same PID, birth unknown
     calls: list[str] = []
     rebuilt = curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root), run=never_runs(calls))
     assert ([s["state"] for s in ledger_on_disk()["sessions"]], rebuilt.left_key != a["slot"], rebuilt.left) == (
-        ["recovered", "held"], True, {4242: None},
+        ["recovered", "recovered", "held", "held"], True, {4242: None},
     )  # fmt: skip
     assert rebuilt.load().left_key == rebuilt.left_key
     rebuilt.start("shop")
@@ -1200,7 +1206,7 @@ def test_a_row_in_a_state_no_producer_writes_is_never_taken_for_a_known_snapshot
            "skipped": {}, "seen": {}}  # fmt: skip
     path.write_text(json.dumps({"folders": {"shop": row}, "left": {"4242": None}}))
     curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root))
-    assert [s["state"] for s in ledger_on_disk()["sessions"]] == ["held", "held"]
+    assert [s["state"] for s in ledger_on_disk()["sessions"]] == ["held", "held", "held", "held"]
 
 
 @pytest.mark.parametrize("a_state", ["recovered", "held"])
@@ -1214,8 +1220,8 @@ def test_a_later_main_failure_row_reusing_an_imported_runs_pid_is_its_own_hold_a
     """
     t0 = datetime.now(UTC) - timedelta(hours=2)
     main_session_row(t0, {4242: None})
-    first = curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root))  # imports A
-    [a] = ledger_on_disk()["sessions"]
+    first = curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root))  # imports A: its PIDs and its row
+    a, r = ledger_on_disk()["sessions"]
     if a_state == "recovered":
         recovered_by_reboot(first)
         assert (first.working(), first.load().left) == ([], {})  # A's snapshot is cleared as history
@@ -1224,45 +1230,48 @@ def test_a_later_main_failure_row_reusing_an_imported_runs_pid_is_its_own_hold_a
     rebuilt = curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root), run=never_runs(calls))
     sessions = {s["slot"]: s for s in ledger_on_disk()["sessions"]}
     b = rebuilt.left_key
-    assert (len(sessions), b != a["slot"], sessions[b]["state"], sessions[a["slot"]]["state"]) == (
-        2, True, "held", a_state,
+    assert (len(sessions), b not in {a["slot"], r["slot"]}, sessions[b]["state"], sessions[a["slot"]]["state"]) == (
+        4, True, "held", a_state,
     )  # fmt: skip
     assert (rebuilt.load().left_key, rebuilt.left) == (b, {4242: None})
     if a_state == "held":
         rebooted(rebuilt)
-        rebuilt.maintenance.recover(a["id"], rebooted=True)  # the owner recovers A only
+        for own in (a, r):  # the owner recovers A only: its PIDs and its row
+            rebuilt.maintenance.recover(own["id"], rebooted=True)
     assert rebuilt.working() == [curation.LINGERING]
     rebuilt.start("shop")
     drained(rebuilt)
     assert (calls, rebuilt.load().folders["shop"].reason, rebuilt.load().left) == ([], curation.LEFT, {4242: None})
     restarted = curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root), run=never_runs(calls))
     assert (len(ledger_on_disk()["sessions"]), restarted.left_key, restarted.maintenance.pending("curation")) == (
-        2, b, True,
+        4, b, True,
     )  # fmt: skip
-    rebooted(restarted)
-    restarted.maintenance.recover(sessions[b]["id"], rebooted=True)
+    recovered_by_reboot(restarted)  # B's own: its PIDs and its row
     assert (restarted.working(), restarted.load().left, calls) == ([], {}, [])
 
 
-def test_an_unchanged_main_snapshot_keeps_its_one_lease_across_a_lost_write_and_after_its_recovery(root) -> None:
-    """Control: main's running row and PIDs, read again after a lost write or once recovered, are one generation."""
+def test_an_unchanged_main_snapshot_keeps_its_leases_across_a_lost_write_and_after_its_recovery(root) -> None:
+    """Control: main's running row and PIDs, read again after a lost write or once recovered, keep their own leases.
+
+    Nothing proves the PIDs are the running row's session, so each holds; the same observation never adds a third.
+    """
     t0 = datetime.now(UTC) - timedelta(hours=1)
     main_session_row(t0, {4242: None}, running=True)  # main stopped mid-run
     with pytest.MonkeyPatch.context() as patch:
         patch.setattr(curation.Curation, "_write", lost_write)
         with pytest.raises(OSError, match="synthetic runs write failure"):
             curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root))
-    [lease] = ledger_on_disk()["sessions"]  # durable before the runs record could be written
+    snapshot, row = ledger_on_disk()["sessions"]  # both durable before the runs record could be written
+    ids = [snapshot["id"], row["id"]]
     retry = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root))
-    assert ([s["id"] for s in ledger_on_disk()["sessions"]], retry.left_key) == ([lease["id"]], lease["slot"])
-    assert retry.load().folders["shop"].key == lease["slot"]  # the running row is that same generation
+    assert ([s["id"] for s in ledger_on_disk()["sessions"]], retry.left_key) == (ids, snapshot["slot"])
+    assert retry.load().folders["shop"].key == row["slot"]  # the running row is its own lease again
     recovered_by_reboot(retry)
     main_session_row(t0, {4242: None}, running=True)  # the identical observation, written again without our keys
     again = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root))
-    assert (again.maintenance.pending("curation"), len(ledger_on_disk()["sessions"]), again.left_key) == (
-        False, 1, lease["slot"],
-    )  # fmt: skip
-    assert (again.load().folders["shop"].key, again.working(), again.load().left) == (lease["slot"], [], {})
+    assert (again.maintenance.pending("curation"), [s["id"] for s in ledger_on_disk()["sessions"]]) == (False, ids)
+    assert (again.left_key, again.load().folders["shop"].key) == (snapshot["slot"], row["slot"])
+    assert (again.working(), again.load().left) == ([], {})
 
 
 def test_an_adopted_unknown_row_keeps_its_one_lease_through_a_lost_key_write_its_recovery_and_a_restart(root) -> None:
@@ -1478,19 +1487,25 @@ def snapshot_receipt_from_8ad(*, recovered: bool) -> maintenance.Lease:
 
 
 @pytest.mark.parametrize("recovered", [False, True], ids=["held", "recovered"])
-def test_an_8ad_snapshot_receipt_covers_its_own_row_with_no_second_hold_and_no_resurrection(root, recovered) -> None:
-    """Review on b4: the snapshot lease saw this very row at its import, so the row is its own, whatever its state."""
+def test_an_8ad_snapshot_receipt_keeps_its_lease_and_a_row_it_only_saw_is_held_once_alone(root, recovered) -> None:
+    """Review 4376886156: a row the snapshot lease saw is no proof that it is the session behind those PIDs.
+
+    The snapshot keeps its one lease, held or recovered; the row gets its own hold once, never again on a restart.
+    """
     lease = snapshot_receipt_from_8ad(recovered=recovered)
     calls: list[str] = []
     for _ in range(2):
         again = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root), run=never_runs(calls))
-        assert ([s["id"] for s in ledger_sessions()], again.load().folders["shop"].key) == ([lease.id], lease.slot)
-        assert again.maintenance.pending("curation") is not recovered
+        snapshot, row = ledger_sessions()
+        kept = "recovered" if recovered else "held"
+        assert (snapshot["id"], snapshot["state"], row["state"]) == (lease.id, kept, "held")
+        assert (again.load().folders["shop"].key, again.left_key) == (row["slot"], lease.slot)
+        assert again.maintenance.pending("curation") is True
     main_session_row(datetime(2026, 10, 25, 2, 0, tzinfo=UTC), {4242: None})  # main's later session, same PID
     later = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root), run=never_runs(calls))
     states = [s["state"] for s in ledger_sessions()]
-    assert (states, later.load().folders["shop"].key != lease.slot) == (
-        ["recovered" if recovered else "held", "held"], True,
+    assert (states, later.load().folders["shop"].key not in {lease.slot, row["slot"]}) == (
+        ["recovered" if recovered else "held", "held", "held", "held"], True,
     )  # fmt: skip
     later.start("shop")
     drained(later)
@@ -1597,3 +1612,117 @@ def test_a_dateless_queued_row_never_started_holds_nothing(root, state) -> None:
     for _ in range(2):
         job = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root))
         assert (ledger_sessions(), job.working()) == ([], [])
+
+
+def main_rows(rows: dict[str, tuple[datetime, str]], pids: dict[int, float | None]) -> None:
+    """main's record after sessions in several folders, each failing with *reason*, and the PIDs its journal kept."""
+    folders = {
+        name: {"state": "failed", "started_at": at.isoformat(), "ended_at": (at + timedelta(seconds=30)).isoformat(),
+               "summary": "", "reason": reason, "entries": [], "skipped": {}, "seen": {}}
+        for name, (at, reason) in rows.items()
+    }  # fmt: skip
+    path = local_home.root() / curation.STATE
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"folders": folders, "left": {str(p): b for p, b in pids.items()}}))
+
+
+@pytest.mark.parametrize("b_pids", [{4242: None}, {}], ids=["b-with-pids", "both-unknown"])
+def test_two_uncertain_sessions_each_keep_a_slot_so_another_project_gets_none(root, b_pids) -> None:
+    """Review 4376886156: main's failure A before any PID, then B in another folder, failing with or without PIDs.
+
+    Neither row is proved to be the session behind the PIDs, nor each other's: each holds its own slot. At two slots
+    another project gets none, and recovering A leaves B's holds. A restart adds no further hold.
+    """
+    t0 = datetime.now(UTC) - timedelta(hours=1)
+    main_rows({"owlbear": (t0, GENERIC), "shop": (t0 + timedelta(minutes=5), GENERIC)}, b_pids)
+    slots = Slots(lambda: 2)
+    calls: list[str] = []
+    job = curation.Curation(slots, shared=lambda: DataRepo(root), run=never_runs(calls))
+    held_slots = 3 if b_pids else 2  # with PIDs on file, their snapshot holds too
+    a_slot = job.load().folders["owlbear"].key
+    assert (slots.counts(curation.SLOT)[2], slots.take("other", "probe", 1, 1)) == (held_slots, 0)
+    again = curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root), run=never_runs(calls))
+    assert (len(ledger_sessions()), again.load().folders["owlbear"].key) == (held_slots, a_slot)
+    a = next(s for s in ledger_sessions() if s["slot"] == a_slot)
+    rebooted(again)
+    again.maintenance.recover(a["id"], rebooted=True)  # the owner recovers A only
+    left = held_slots - 1
+    assert ([s["state"] for s in ledger_sessions()].count("held"), again.slots.take("other", "probe", 1, 1)) == (
+        left, 1 if left < 2 else 0,
+    )  # fmt: skip
+    again.start("shop")
+    drained(again)
+    assert calls == []
+
+
+def rows_keyed_to_their_snapshot_as_1a174_left(*, recovered: bool) -> maintenance.Lease:
+    """1a174's constructor on main's A (failure before any PID) and B (failure with PIDs): one snapshot lease S that
+    recorded both rows and marked them, and both rows' cached keys naming S. Built through the ledger API it used."""
+    t0 = datetime(2026, 10, 25, 1, 0, tzinfo=UTC)
+    main_rows({"owlbear": (t0, GENERIC), "shop": (t0 + timedelta(minutes=5), GENERIC)}, {4242: None})
+    path = local_home.root() / curation.STATE
+    runs = curation.Runs.model_validate_json(path.read_text())
+    ledger = maintenance.Maintenance(Slots(lambda: 2))
+    snapshot, seen = curation_snapshots.observed(runs), curation_snapshots.sessions(runs)
+    rows = {curation_snapshots.window(n, r) for n, r in runs.folders.items()}
+    lease = ledger.adopt_uncertain(
+        f"{path}#left", curation.SLOT, "curation", workspace="", generation=snapshot, pids=runs.left,
+        covers=curation_snapshots.same_snapshot(curation.SLOT, snapshot, seen), observed=tuple(sorted({*seen, *rows})),
+        marks=tuple(f"{path}#{curation_snapshots.window(n, r)}" for n, r in runs.folders.items()),
+    )  # fmt: skip
+    runs.left_key = lease.slot
+    runs.folders = {n: r.model_copy(update={"key": lease.slot}) for n, r in runs.folders.items()}
+    path.write_text(runs.model_dump_json(indent=2))
+    if recovered:
+        booted = ledger.boot
+        ledger.boot = lambda: booted() + 1
+        ledger.recover(lease.id, rebooted=True)
+    return lease
+
+
+@pytest.mark.parametrize("recovered", [False, True], ids=["snapshot-held", "snapshot-recovered"])
+def test_rows_an_earlier_build_keyed_to_their_snapshot_are_judged_again_and_each_held(root, recovered) -> None:
+    """Review on 31d: a cached key naming a snapshot's lease owns no row, so each row gets its own hold.
+
+    At two slots another project gets none and no session starts; restarts keep the same leases and keys.
+    """
+    s = rows_keyed_to_their_snapshot_as_1a174_left(recovered=recovered)
+    calls: list[str] = []
+    slots = Slots(lambda: 2)
+    job = curation.Curation(slots, shared=lambda: DataRepo(root), run=never_runs(calls))
+    keys = {n: job.load().folders[n].key for n in ("owlbear", "shop")}
+    sessions = {x["slot"]: x for x in ledger_sessions()}
+    assert (sessions[s.slot]["state"], s.slot in keys.values(), len(set(keys.values()))) == (
+        "recovered" if recovered else "held", False, 2,
+    )  # fmt: skip
+    assert [sessions[k]["state"] for k in keys.values()] == ["held", "held"]
+    assert (slots.counts(curation.SLOT)[2], slots.take("other", "probe", 1, 1)) == (2 if recovered else 3, 0)
+    for _ in range(2):
+        again = curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root), run=never_runs(calls))
+        assert ({n: again.load().folders[n].key for n in keys}, len(ledger_sessions())) == (keys, 3)
+    again.start("shop")
+    drained(again)
+    assert (calls, again.load().folders["shop"].reason) == ([], curation.LEFT)
+
+
+def test_a_true_admission_key_and_a_rows_own_import_key_stay_as_they_are() -> None:
+    """Control: only a key that proves its row stays: this host's admission, even one whose lease never began, or
+    the row's own import; a snapshot's lease or another row's lease does not."""
+    t0 = datetime(2026, 10, 25, 1, 0, tzinfo=UTC)
+    row = curation.FolderRun(state="failed", started_at=t0, ended_at=t0 + timedelta(seconds=30), reason=GENERIC)
+    own = maintenance.Lease(
+        id="a" * 32, project=curation.SLOT, slot="curate:shop:1", kind="curation", workspace="/tmp/w",  # noqa: S108
+        started_at=t0, boot=1.0, owner_pid=1, owner_created=None,
+    )  # fmt: skip
+    window = curation_snapshots.window("shop", row)
+    imported = own.model_copy(update={"slot": "pack:legacy-r", "workspace": "", "observed": [window]})
+    snapshot = imported.model_copy(update={"slot": "pack:legacy-s", "generation": "g"})
+    keyed = lambda key: row.model_copy(update={"key": key})  # noqa: E731
+    owns = curation_snapshots.owns_row
+    assert owns(curation.SLOT, own, "shop", keyed("curate:shop:1")) is True
+    assert owns(curation.SLOT, None, "shop", keyed("curate:shop:2")) is True  # admitted, never began: no session
+    assert owns(curation.SLOT, imported, "shop", keyed("pack:legacy-r")) is True
+    assert owns(curation.SLOT, snapshot, "shop", keyed("pack:legacy-s")) is False
+    assert owns(curation.SLOT, None, "shop", keyed("pack:legacy-x")) is False
+    other = imported.model_copy(update={"observed": [curation_snapshots.window("owlbear", row)]})
+    assert owns(curation.SLOT, other, "shop", keyed("pack:legacy-r")) is False

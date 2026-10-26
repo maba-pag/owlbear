@@ -100,11 +100,11 @@ def test_the_test_review_starts_from_the_chosen_packages_once_confirmed(tmp_path
             page.get_by_role("button", name="Review tests").click()
             expect(page.get_by_role("dialog", name="Review the tests?")).to_be_visible()
             expect(pds.modal(page)).to_contain_text("which your Start approves")
-            pds.modal(page).get_by_role("button", name="Cancel").click()
+            pds.answer(page, "Cancel")
             expect(page.get_by_role("dialog")).to_be_hidden()
             assert store.slugs() == []  # declined: nothing starts
             page.get_by_role("button", name="Review tests").click()
-            pds.modal(page).get_by_role("button", name="Start the test review").click()
+            pds.answer(page, "Start the test review")
             expect(page.locator("#status")).to_contain_text("Started test review c1")
             expect(tests).to_contain_text("Test review c1 has not finished")
             c = store.read(store.slugs()[0])

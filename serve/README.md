@@ -18,7 +18,7 @@ owns it. Start with the job, then open the package guide for commands and config
 | Fetch authenticated web content | [Browser MCP](browser-mcp/README.md) | Allowlisted browser actions and Markdown accessibility snapshots |
 | Extend browser acquisition | [Browser core](browser/README.md) | Playwright-backed page acquisition and content extraction |
 | Convert HTML to Markdown | [Web content](web-content/README.md) | Shared HTML extraction and Markdown normalization for Browser and Knowledge |
-| Maintain indexes and workspace tooling | [Tools](tools/README.md) | Documentation, Python, and TypeScript indexes plus repository utilities |
+| Run workspace commands and tooling | [Tools](tools/README.md) | Quality checks, test routing, dependency synchronization and repository utilities |
 
 ## How the packages fit
 

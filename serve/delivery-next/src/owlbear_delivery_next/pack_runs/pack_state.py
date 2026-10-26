@@ -85,7 +85,9 @@ def read_fd(fd: int) -> tuple[dict[str, Any], str]:
     """The run *fd* holds and that file's version, both from the one open descriptor, which this always closes.
 
     The version is the file's identity and metadata as opened, so a replacement made after the open is not mixed
-    into what was read. Raises OSError or ValueError when the record cannot be read as a run.
+    into what was read; a rewrite of that same file while it is read changes its metadata, so the run read is refused
+    rather than paired with the version before it. Raises OSError or ValueError when the record cannot be read as a
+    run.
     """
     try:
         source = os.fdopen(fd, encoding="utf-8")
@@ -95,6 +97,9 @@ def read_fd(fd: int) -> tuple[dict[str, Any], str]:
     with source as f:
         st = os.fstat(f.fileno())
         kept = json.load(f)
+        if version_of(os.fstat(f.fileno())) != version_of(st):
+            msg = f"{FILE} changed while it was read"
+            raise ValueError(msg)
     if not isinstance(kept, dict):
         msg = f"{FILE} is not a run"
         raise ValueError(msg)  # noqa: TRY004 - callers treat a damaged record as a ValueError
@@ -209,6 +214,16 @@ def generation(record: dict[str, Any], version: str) -> tuple[str, datetime | No
 def digest(version: str) -> str:
     """A file version as a stable key for a rewrite's receipt."""
     return hashlib.sha256(version.encode()).hexdigest()
+
+
+def holds(seen: tuple[dict[str, Any], str], record: dict[str, Any], version: str) -> bool:
+    """Whether *seen*, the run file as ``read_version`` read it whole and stable, is *record* at *version*.
+
+    A writer's own version can describe another run's bytes, written over the published file before the writer read
+    its descriptor, so only this read's agreement on both proves the version is the rewrite's. "absent" and ""
+    (unreadable) match only themselves: a record the Job found absent or unreadable says nothing of a run read now.
+    """
+    return seen[1] == version and seen[0] == json.loads(json.dumps(record))
 
 
 def resolved(record: dict[str, Any], version: str, receipted: Callable[[str], str]) -> tuple[str, datetime | None]:
