@@ -76,11 +76,11 @@ IMPORTS = (
     ("state_store/project_home.py", "c79464a6139fe571efd600903aa848dc67c9673f016d12c093d7d6b94b74a681"),
     ("state_store/store.py", "a3da565feeee931b40d4907f17c46372c000e573e1add938ae3679d175e75de4"),
 )
-CURRENT_FAMILY_AGGREGATE = "389da99b49a8275bbf81d5e27e25213825bcbfb6cfdb55e531b0e9c7577b54d8"
+CURRENT_FAMILY_AGGREGATE = "b0ed35d660a7ef72610e80ffae98501ffba89b4b9c1a62139ebc489aff49edd3"
 CURRENT_FUNCTIONS = (
     ("commands/chat_client.py:Chat.call", "0fc1fdb166ea555741a2aa7796a99a4eb7b71c572ad37fba1ae0a9e37171b584"),
     ("commands/chat_client.py:workspace", "d3a3e15a15d6554c1a3d9167d3b259d8890a0321c85af2df2115deaed14f13e9"),
-    ("commands/cli.py:main", "f014d2af341740043a776d5d525e85f6edefbb1b2f1cafa3efb97249cd020990"),
+    ("commands/cli.py:main", "98d90bccd9964f7529bb8f883b55a8694ee12ff58ea17d3fe8a5c878aab1734b"),
     ("commands/cli.py:update_pack", "a143193a43570b38ec6fbefe5c41e8c477eb3b3c2a988c75f60bfd518bc5f8b2"),
     ("commands/dispatch.py:main", "8c4117358586bafde31333d442b1c03a1c628b77941bbe9e1f6e95f71a577729"),
     ("commands/mcp_server.py:main", "8240f789d2bf0edce4e41a622998ce99ed379ca72c4dae8a4c18c0ce59cca6d2"),
