@@ -112,6 +112,7 @@ def _serves(servers: object, repo: Path, *, own: bool) -> bool:
     """Whether one of *servers* is Delivery's chat server for *repo*; one naming no folder serves only its own."""
 
     def serves(args: list[object]) -> bool:
+        args = [p for a in args for p in (a.split("=", 1) if isinstance(a, str) and a.startswith("--repo=") else [a])]
         named = args[args.index("--repo") + 1 : args.index("--repo") + 2] if "--repo" in args else []
         return named == [str(repo)] or (own and "--repo" not in args)
 
