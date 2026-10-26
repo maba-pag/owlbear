@@ -6,12 +6,11 @@ import contextlib
 import fcntl
 import os
 import re
+import secrets
 import stat
 import threading
 from dataclasses import dataclass, field
 from io import StringIO
-from pathlib import Path
-from tempfile import mkstemp
 from typing import TYPE_CHECKING
 
 from pydantic import ValidationError
@@ -23,6 +22,7 @@ from owlbear_decisions.models import Decision, State
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
+    from pathlib import Path
 
 DECISIONS_DIR = "decisions"
 _FENCE = "---\n"
@@ -197,24 +197,61 @@ def check_write(current: Decision | None, decision: Decision, expected_revision:
         raise ImmutableError(msg)
 
 
-def _replace(path: Path, text: str, fence: Callable[[], None] | None = None) -> None:
-    descriptor, temporary = mkstemp(dir=path.parent, prefix=".", suffix=".tmp")
+def own_temporary(folder: int, data: bytes) -> tuple[str, tuple[int, int]]:
+    """Create a new temporary file in the folder open as *folder*, holding *data* durably; its name and identity.
+
+    The file is made exclusively, never through a link, mode 0600, and named relative to *folder*, so a cleanup reaches
+    this very file even when the folder's path is moved meanwhile. The identity is its device and inode.
+    """
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC
+    while True:
+        name = f".{secrets.token_hex(8)}.tmp"
+        try:
+            descriptor = os.open(name, flags, 0o600, dir_fd=folder)
+        except FileExistsError:
+            continue
+        break
+    found = os.fstat(descriptor)
+    identity = (found.st_dev, found.st_ino)
     try:
-        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
-            handle.write(text)
+        with os.fdopen(descriptor, "wb") as handle:
+            handle.write(data)
             handle.flush()
             os.fsync(handle.fileno())
-        if fence is not None:  # last, once the new bytes are durable: the caller's proof that the file is its to change
-            fence()
-        Path(temporary).replace(path)
     except BaseException:
-        Path(temporary).unlink(missing_ok=True)
+        discard_temporary(folder, name, identity)
         raise
-    directory = os.open(path.parent, os.O_RDONLY)
+    return name, identity
+
+
+def discard_temporary(folder: int, name: str, identity: tuple[int, int]) -> None:
+    """Remove the temporary file *name* in *folder*, only while it is still the one `own_temporary` made.
+
+    A name now holding another file (someone else's) is left as it is, and a missing one needs nothing; any other error
+    is raised, since whether the file is gone is then unknown.
+    """
     try:
-        os.fsync(directory)
+        found = os.stat(name, dir_fd=folder, follow_symlinks=False)
+    except FileNotFoundError:
+        return
+    if (found.st_dev, found.st_ino) == identity:
+        os.unlink(name, dir_fd=folder)
+
+
+def _replace(path: Path, text: str, fence: Callable[[], None] | None = None) -> None:
+    folder = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        name, identity = own_temporary(folder, text.encode("utf-8"))
+        try:
+            if fence is not None:  # last, once the new bytes are durable: the caller's proof the file is its to change
+                fence()
+            os.replace(name, path.name, src_dir_fd=folder, dst_dir_fd=folder)
+        except BaseException:
+            discard_temporary(folder, name, identity)
+            raise
+        os.fsync(folder)
     finally:
-        os.close(directory)
+        os.close(folder)
 
 
 def write(
@@ -224,7 +261,8 @@ def write(
 
     `expected_revision=None` creates a new file and refuses an existing one; otherwise the file's
     current revision must equal it. An in-force decision's statement never changes. *fence*, when given, runs after
-    the new bytes are durable and immediately before the rename; when it raises, only the temporary file is removed.
+    the new bytes are durable and immediately before the rename; when it raises, only this write's own temporary file is
+    removed, through the folder it was made in.
     """
     path = decision_path(decision, folder)
     path.parent.mkdir(parents=True, exist_ok=True)

@@ -1120,6 +1120,48 @@ def test_an_owner_commit_during_the_put_back_stops_it_and_keeps_every_owner_file
     _no_authority(picking)
 
 
+def _after_temporary_fsync_in(m: pytest.MonkeyPatch, folder: Path, action) -> None:
+    """Run *action* once, right after the fsync of the first temporary file (`*.tmp`) any writer made in *folder*."""
+    real_fsync, done = os.fsync, [False]
+
+    def fsync_then_act(descriptor):
+        real_fsync(descriptor)
+        if done[0] or not folder.is_dir():
+            return
+        found = os.fstat(descriptor)
+        temporaries = [p for p in folder.iterdir() if p.name.endswith(".tmp")]
+        if any(os.path.samestat(found, p.stat(follow_symlinks=False)) for p in temporaries):
+            done[0] = True
+            action()
+
+    m.setattr(os, "fsync", fsync_then_act)
+
+
+def _after_temporary_fsync(m: pytest.MonkeyPatch, module, folder: Path, action) -> None:
+    """Run *action* once, right after the fsync of a temporary file *module*'s writer makes in *folder*.
+
+    Only that writer's own temporary in that folder counts: the journal's, in the Git folder, does not.
+    """
+    real_own, real_fsync = module.own_temporary, os.fsync
+    inside, done = [False], [False]
+
+    def own(folder_fd, data):
+        inside[0] = os.path.samestat(os.fstat(folder_fd), folder.stat())
+        try:
+            return real_own(folder_fd, data)
+        finally:
+            inside[0] = False
+
+    def fsync_then_act(descriptor):
+        real_fsync(descriptor)
+        if inside[0] and not done[0]:
+            done[0] = True
+            action()
+
+    m.setattr(module, "own_temporary", own)
+    m.setattr(os, "fsync", fsync_then_act)
+
+
 def _interrupt_at(picking, monkeypatch, items: list[tuple[Decision, str | None]]) -> str:
     """Save *items* at their expected revisions as one batch, stopped before its first write; its generation."""
 
@@ -1194,27 +1236,16 @@ def test_an_owner_change_while_the_temporary_file_syncs_is_never_overwritten(pic
     rel = path.relative_to(shared.root).as_posix()
     owned = after if owner == "landing" else b"the owner's own third image\n"
     head, index = shared.git("rev-parse", "HEAD").stdout, shared.git("ls-files", "-s").stdout
-    temporaries: list[int] = []
     fired: list[str] = []
-    real_mkstemp, real_fsync = decision_batch.mkstemp, os.fsync
 
-    def recording_mkstemp(*args, **kwargs):
-        descriptor, name = real_mkstemp(*args, **kwargs)
-        if Path(name).parent == path.parent:  # the destination's own temporary, not the journal's in the Git folder
-            temporaries.append(descriptor)
-        return descriptor, name
-
-    def temporary_fsync_then_owner(descriptor):
-        real_fsync(descriptor)
-        if descriptor in temporaries and not fired:  # the new bytes are durable; the rename has not run
-            fired.append(owner)
-            path.write_bytes(owned)
-            if owner != "edit":
-                _commit_file(shared, rel)
+    def owner_changes_the_file() -> None:  # the new bytes are durable; the rename has not run
+        fired.append(owner)
+        path.write_bytes(owned)
+        if owner != "edit":
+            _commit_file(shared, rel)
 
     with monkeypatch.context() as m:
-        m.setattr(decision_batch, "mkstemp", recording_mkstemp)
-        m.setattr(os, "fsync", temporary_fsync_then_owner)
+        _after_temporary_fsync(m, decision_batch, path.parent, owner_changes_the_file)
         if surface in {"finish", "abandon"}:
             with pytest.raises(decision_store.DecisionsUnavailable, match=r"moved|edited"):
                 run()
@@ -1645,9 +1676,9 @@ def _own_files(folder: Path, read) -> dict[str, bytes]:
 
 def _swap_while_saving(m: pytest.MonkeyPatch, moment: str, target: Path, swap) -> None:
     """Call *swap* once: after the save's planning read of *target*, or after its temporary file's fsync."""
-    real_read, real_fsync, real_mkstemp = Path.read_bytes, os.fsync, storage.mkstemp
+    real_read = Path.read_bytes
     real_journal = decision_store._journal  # noqa: SLF001
-    inside, temporaries = [False], []
+    inside = [False]
 
     def journal(*args, **kwargs):
         inside[0] = True
@@ -1662,21 +1693,10 @@ def _swap_while_saving(m: pytest.MonkeyPatch, moment: str, target: Path, swap) -
             swap()
         return data
 
-    def recording_mkstemp(*args, **kwargs):
-        descriptor, name = real_mkstemp(*args, **kwargs)
-        if Path(name).parent == target.parent:
-            temporaries.append(descriptor)
-        return descriptor, name
-
-    def temporary_fsync(descriptor):
-        real_fsync(descriptor)
-        if moment == "temporary-fsync" and descriptor in temporaries:
-            swap()
-
     m.setattr(decision_store, "_journal", journal)
     m.setattr(Path, "read_bytes", planning_read)
-    m.setattr(storage, "mkstemp", recording_mkstemp)
-    m.setattr(os, "fsync", temporary_fsync)
+    if moment == "temporary-fsync":
+        _after_temporary_fsync_in(m, target.parent, swap)
 
 
 @pytest.mark.parametrize("moment", ["planning-read", "temporary-fsync", "none"])
@@ -1726,7 +1746,7 @@ def test_a_folder_swapped_while_a_save_plans_or_writes_never_writes_the_foreign_
     expected = {"planning-read": "changed while the batch was planned", "temporary-fsync": "changed during the write"}
     assert expected[moment] in refusal, refusal  # the fence of that moment refused, not a failure of something else
     assert _tree(foreign, Path.read_bytes) == fired["tree"]  # the foreign file holds its before bytes, nothing more
-    assert _own_files(moved, Path.read_bytes) == fired["tree"]
+    assert _tree(moved, Path.read_bytes) == fired["tree"]  # the owner's files, and none of this write's temporary left
     assert fired["tree"][target.name] == before
     assert _git_state(shared) == fired["git"]
     _no_authority(picking)
@@ -1743,34 +1763,91 @@ def test_a_folder_swapped_while_a_transaction_step_writes_never_writes_the_forei
     _commit_file(shared, target.relative_to(shared.root).as_posix())
     head = shared.git("rev-parse", "HEAD").stdout.strip()
     moved, foreign = tmp_path / "moved", tmp_path / "foreign"
-    real_fsync, real_mkstemp, temporaries, fired = os.fsync, decision_batch.mkstemp, [], {}
+    fired = {}
 
-    def recording_mkstemp(*args, **kwargs):
-        descriptor, name = real_mkstemp(*args, **kwargs)
-        if Path(name).parent == folder:
-            temporaries.append(descriptor)
-        return descriptor, name
-
-    def temporary_fsync_then_swap(descriptor):
-        real_fsync(descriptor)
-        if descriptor in temporaries and not fired:
-            folder.rename(moved)
-            shutil.copytree(moved, foreign, ignore=shutil.ignore_patterns("*.tmp"))
-            folder.symlink_to(foreign, target_is_directory=True)
-            fired.update(tree=_own_files(moved, Path.read_bytes), git=_git_state(shared))
+    def swap() -> None:
+        folder.rename(moved)
+        shutil.copytree(moved, foreign, ignore=shutil.ignore_patterns("*.tmp"))
+        folder.symlink_to(foreign, target_is_directory=True)
+        fired.update(tree=_own_files(moved, Path.read_bytes), git=_git_state(shared))
 
     def step(_head: str, fence) -> decision_transaction.Step:
         decision_batch.replace_file(target, b'{"n": 1}\n', fence)
         return decision_transaction.Step("written")
 
     with monkeypatch.context() as m:
-        m.setattr(decision_batch, "mkstemp", recording_mkstemp)
-        m.setattr(os, "fsync", temporary_fsync_then_swap)
+        _after_temporary_fsync_in(m, folder, swap)
         with pytest.raises(decision_store.DecisionsUnavailable, match="changed during the write"):
             decision_transaction.transaction(shared, PROJECT, "changes: one", [(target, b'{"n": 1}\n')], step, head)
 
     assert _tree(foreign, Path.read_bytes) == fired["tree"] == {"record.json": b'{"n": 0}\n'}
-    assert _own_files(moved, Path.read_bytes) == fired["tree"]
+    assert _tree(moved, Path.read_bytes) == fired["tree"]  # the owner's files, and none of this write's temporary left
     assert _git_state(shared) == fired["git"]
     assert decision_batch.pending(shared) is not None
     _no_authority(picking)
+
+
+def _write_with(writer: str, tmp_path: Path, fence) -> Path:
+    """Write one new file through *writer* with *fence*; its path."""
+    decision = make(title="Use UTC", statement="All timestamps use UTC.")
+    layer = tmp_path / "layer"
+    path = storage.decision_path(decision, layer)
+    path.parent.mkdir(parents=True)
+    if writer == "batch":
+        decision_batch.replace_file(path, b"the new bytes\n", fence)
+    else:
+        storage.write(decision, layer, None, fence=fence)
+    return path
+
+
+@pytest.mark.parametrize("writer", ["batch", "decisions"])
+def test_an_unfenced_write_lands_with_no_temporary_left(tmp_path, writer):
+    path = _write_with(writer, tmp_path, None)
+
+    assert path.is_file()
+    assert path.stat().st_mode & 0o777 == 0o600  # as the temporary file has always been made
+    assert [p.name for p in path.parent.iterdir()] == [path.name]
+
+
+@pytest.mark.parametrize("case", ["own", "replaced-name", "unknown"])
+@pytest.mark.parametrize("writer", ["batch", "decisions"])
+def test_a_refused_write_removes_only_its_own_temporary(tmp_path, monkeypatch, writer, case):
+    """`own`: the refused write's temporary is removed. `replaced-name`: someone else's file now holds that name and is
+    left as it is. `unknown`: whether the temporary is still its own cannot be read, so the error is raised.
+    """
+    folder = tmp_path / "layer" / "decisions"
+    owner = b"someone else's file\n"
+    seen: list[str] = []
+    real_stat = os.stat
+
+    def unreadable(path, *args, **kwargs):
+        if kwargs.get("dir_fd") is not None and str(path).endswith(".tmp"):
+            raise PermissionError(13, "the folder cannot be read", str(path))
+        return real_stat(path, *args, **kwargs)
+
+    def refusing_fence() -> None:
+        (temporary,) = [p for p in folder.iterdir() if p.name.endswith(".tmp")]
+        seen.append(temporary.name)
+        if case == "replaced-name":
+            other = folder / "other"
+            other.write_bytes(owner)
+            other.replace(temporary)  # the same name, now another file
+        if case == "unknown":
+            scope[0].setattr(os, "stat", unreadable)
+        msg = "the fence refused"
+        raise RuntimeError(msg)
+
+    error = PermissionError if case == "unknown" else RuntimeError
+    scope: list[pytest.MonkeyPatch] = []
+    with monkeypatch.context() as m:
+        scope.append(m)
+        with pytest.raises(error):
+            _write_with(writer, tmp_path, refusing_fence)
+
+    left = {p.name: p.read_bytes() for p in folder.iterdir()}
+    if case == "own":
+        assert left == {}  # neither the destination nor the temporary
+    elif case == "replaced-name":
+        assert left == {seen[0]: owner}
+    else:
+        assert list(left) == seen  # not removed while it is unknown whose it is
