@@ -48,7 +48,7 @@ def as_dict(ev: Any) -> dict[str, Any]:  # noqa: ANN401 - an SDK event object or
 
 
 CUT = " [...] "
-RAW, GUARD = 262144, 512  # characters cleaned whole; above, the start of the kept tail that may be a cut-off value
+RAW = 262144  # characters cleaned whole; a longer text is omitted, as no cut of it is known to be safe
 EMAIL = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
 PROTECT = re.compile(r"(?:/(?:Users|private|var|tmp|Library|home)/[^\s\"'`:;,)\]}]+)|\b[0-9a-f]{40}\b")
 
@@ -84,18 +84,18 @@ def clean(text: str) -> str:
     return EMAIL.sub("<email>", re.sub(r"\x00(\d+)\x00", lambda m: kept[int(m.group(1))], redact(text)))
 
 
-def kept_text(value: object, n: int) -> str:
-    """*value* cleaned whole, then clipped to *n*: a credential is never cut from the label that names it.
+def omitted(length: int) -> str:
+    """What stands for a text too long to clean."""
+    return f"[{length} characters, too long to clean: omitted]"
 
-    A text over ``RAW`` keeps its first half and a tail; the tail's start may be a value whose label was cut off, so
-    ``GUARD`` characters and the rest of that word are dropped, never kept unnamed.
+
+def kept_text(value: object, n: int) -> str:
+    """*value* cleaned whole, then clipped to *n*: a credential is never cut from what names it or quotes it.
+
+    A text over ``RAW`` is omitted: a cut could split a quoted or labelled credential, and no cut is known to be safe.
     """
     s = no_browser(_text(value))
-    if len(s) > RAW:
-        tail = s[-(RAW // 2) :]
-        cut = re.search(r"\s", tail[GUARD:])
-        s = s[: RAW // 2] + CUT + (tail[GUARD + cut.start() :] if cut else "")
-    return clip(clean(s), n)
+    return omitted(len(s)) if len(s) > RAW else clip(clean(s), n)
 
 
 def result_text(data: dict[str, Any]) -> str:
@@ -120,7 +120,7 @@ class Kept:
         self.said: deque[dict[str, Any]] = deque(maxlen=12)
         self.actions: deque[dict[str, Any]] = deque(maxlen=ACTIONS)
         self.calls: dict[str, dict[str, Any]] = {}
-        self.dropped = {"actions": 0, "requests": 0, "messages": 0}  # what the rings no longer hold
+        self.dropped = {"actions": 0, "requests": 0, "messages": 0, "texts too long to clean": 0}  # what is not held
         self.n = 0  # events seen
 
     def add(self, ev: Any) -> bool:  # noqa: ANN401 - an SDK event object or a logged event
@@ -131,23 +131,23 @@ class Kept:
         if not main_agent(d):
             return False
         if kind == "user.message":
-            text = kept_text(str(data.get("content") or ""), TEXT)
+            text = self._kept(str(data.get("content") or ""), TEXT)
             if not self.task:
                 self.task, self.task_n = text, self.n
             self._ring(self.requests, {"n": self.n, "at": at, "text": text}, "requests")
             self.first_reply = None
         elif kind == "assistant.message" and str(data.get("content") or "").strip():
-            message = {"n": self.n, "at": at, "text": kept_text(str(data["content"]), SAID)}
+            message = {"n": self.n, "at": at, "text": self._kept(str(data["content"]), SAID)}
             self.first_reply = self.first_reply or message
             self._ring(self.said, message, "messages")
         elif kind == "tool.execution_start":
             call = {"n": self.n, "at": at, "tool": str(data.get("toolName") or ""), "id": str(data.get("toolCallId")),
-                    "args": kept_text(data.get("arguments"), ARGS)}  # fmt: skip
+                    "args": self._kept(data.get("arguments"), ARGS)}  # fmt: skip
             self._push(call)
             if len(self.calls) < CALLS:
                 self.calls[call["id"]] = call
         elif kind == "tool.execution_complete" and (call := self.calls.pop(str(data.get("toolCallId")), None)):
-            call |= {"done_at": at, "ok": data.get("success"), "result": kept_text(result_text(data), RESULT)}
+            call |= {"done_at": at, "ok": data.get("success"), "result": self._kept(result_text(data), RESULT)}
             if call["tool"] in QUESTIONS and not self._stopped(call):
                 self.answers.append(
                     {"at": at, "question": clip(call["args"], 400), "answer": clip(call["result"], 400)}
@@ -162,6 +162,12 @@ class Kept:
         return "cancelled the request" in call.get("result", "") and any(
             a.get("kind") == "stop" for a in list(self.actions)[-3:]
         )
+
+    def _kept(self, value: object, n: int) -> str:
+        text = kept_text(value, n)
+        if text.endswith("too long to clean: omitted]") and text.startswith("["):
+            self.dropped["texts too long to clean"] += 1
+        return text
 
     def _push(self, action: dict[str, Any]) -> None:
         self._ring(self.actions, action, "actions")

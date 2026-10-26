@@ -83,8 +83,13 @@ class Feed:
         self.calls: dict[tuple[str, str], _Seen] = {}
         self.launched: dict[str, str] = {}  # launcher call id to the subagent it started, as this feed saw it
         self.open = True
+        self.spotter: spotter.Spotter | None = None
+        if watching.spot is not None:
+            try:
+                self.spotter = spotter.Spotter(watching.spot, session, spotter_look.judged)
+            except Exception as exc:  # noqa: BLE001 - without its Spotter the watcher still watches
+                sys.stderr.write(f"spotter {watching.slug}: not started ({type(exc).__name__}: {exc})\n")
         self.writer = watching.writer()
-        self.spotter = spotter.Spotter(watching.spot, session, spotter_look.judged) if watching.spot else None
 
     def seen(self, kind: str, ev: Any) -> None:  # noqa: ANN401 - an SDK session event
         """Observe one event; a start or a permission request updates its call's report; the Spotter takes it in."""

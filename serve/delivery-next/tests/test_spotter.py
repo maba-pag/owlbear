@@ -641,16 +641,18 @@ def test_a_burst_of_samples_while_looks_run_is_counted_once_not_queued() -> None
     assert sorted(r["skipped"][:30] for r in got) == ["", "", "capacity: 298 sampled looks sk"]
 
 
-def test_a_huge_text_drops_its_tails_unnamed_start_and_still_cleans_what_follows() -> None:
-    secret, label, total = "Q1w2E3r4" * 8, "pass" + "word=", 300000
-    start = total - events.RAW // 2  # where the kept tail begins: the label is cut off just before its value
-    head = ("a " * start)[: start - len(label)] + label
-    body = secret + " token=" + "z" * 100000 + " end "
-    text = head + body + "b" * (total - len(head) - len(body))
-    assert text.index(secret) == start
-    kept = events.kept_text(text, events.RESULT)
-    assert "Q1w2E3r4" not in kept
-    assert "zzzzzzzzzz" not in kept
+@pytest.mark.parametrize("at", ["head", "tail"])
+def test_a_text_too_long_to_clean_is_omitted_and_counted_whatever_it_quotes(at: str) -> None:
+    quoted = "pass" + 'word="Q1w2 E3r4 ' + "secret words " * 20 + '"'
+    filler = "a " * (events.RAW // 2)
+    text = filler + quoted + filler if at == "head" else filler + filler + quoted
+    kept = Kept()
+    kept.add(asked(text))
+    snapshot = kept.snapshot()
+    assert snapshot["task"] == events.omitted(len(text))
+    assert snapshot["dropped"]["texts too long to clean"] == 1
+    assert "Q1w2" not in json.dumps(snapshot)
+    assert "1 earlier texts too long to clean" in card.build(snapshot, {}, {})["gaps"][-1]
 
 
 def test_a_spotter_writes_where_it_started_whatever_changes_later(monkeypatch, tmp_path) -> None:

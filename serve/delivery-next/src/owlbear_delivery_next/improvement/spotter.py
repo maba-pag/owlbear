@@ -101,12 +101,21 @@ class Record:
     skipped: str = ""
 
 
-def root() -> Path:
-    """Where the Spotter's records, cards and ledger are kept on this machine."""
-    folder = local_home.root() / "spotter"
+def place() -> Path:
+    """Where the Spotter's records, cards and ledger are kept on this machine; nothing is created."""
+    return local_home.root() / "spotter"
+
+
+def ready(folder: Path) -> Path:
+    """*folder*, created owner-only with its cards' folder if needed."""
     folder.mkdir(parents=True, exist_ok=True, mode=0o700)
     (folder / "cards").mkdir(exist_ok=True, mode=0o700)
     return folder
+
+
+def root() -> Path:
+    """The Spotter's folder, created if needed."""
+    return ready(place())
 
 
 def _today() -> str:
@@ -133,7 +142,7 @@ def _locked(path: Path, seconds: float = LOCK) -> Iterator[None]:
 
 def _append(folder: Path, name: str, line: dict[str, Any]) -> None:
     """One line appended to the day's file *name* in *folder* under its lock; a failure never reaches the step."""
-    with contextlib.suppress(OSError, TimeoutError), _locked(folder / "records.lock"):
+    with contextlib.suppress(OSError, TimeoutError), _locked(ready(folder) / "records.lock"):
         fd = os.open(folder / f"{name}-{_today()}.jsonl", os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
         with os.fdopen(fd, "a") as out:
             out.write(json.dumps(line) + "\n")
@@ -143,7 +152,7 @@ def store(folder: Path, record: Record, card_: dict[str, Any] | None) -> None:
     """Keep *record*'s card and append the record to the day's records in *folder*; a failure never reaches the step."""
     with contextlib.suppress(OSError):
         if card_ is not None:
-            fd = os.open(folder / "cards" / f"{record.id}.json.gz", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            fd = os.open(ready(folder) / "cards" / f"{record.id}.json.gz", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
             with os.fdopen(fd, "wb") as raw, gzip.open(raw, "wt") as out:
                 json.dump(card_, out)
     _append(folder, "records", asdict(record))
@@ -192,7 +201,7 @@ def reserve(folder: Path, budget: int, estimate: float = ESTIMATE) -> Token | No
     """
     day, rid = _today(), uuid.uuid4().hex[:12]
     try:
-        with _locked(folder / "ledger.lock"):
+        with _locked(ready(folder) / "ledger.lock"):
             path = folder / f"ledger-{day}.json"
             ledger = _ledger(path)
             if sum(ledger["reserved"].values()) + ledger["spent"] + estimate > budget:
@@ -264,7 +273,7 @@ class Spotter:
     def __init__(self, ctx: Context, session: Callable[[], str], judge: Judge,
                  rng: random.Random | None = None) -> None:  # fmt: skip
         self.ctx, self.session, self.kept, self.judge = ctx, session, Kept(), judge
-        self.folder = root()  # where every write of this session goes, whatever changes later
+        self.folder = place()  # where every write of this session goes, whatever changes later; made when written
         self.rng = rng or random.Random()  # noqa: S311 - sampling, not secrecy
         self.tasks: set[asyncio.Future[Any]] = set()
         self.running = 0  # looks admitted and not ended

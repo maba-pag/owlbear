@@ -329,3 +329,20 @@ def test_a_call_reported_before_its_launcher_was_announced_gets_its_subagent_wit
 def test_a_shell_call_seen_only_in_its_permission_request_shows_its_whole_command(place) -> None:
     stepped(place, shell("p3", read_only=False))
     assert rows(place)["p3"]["command"] == "ran make p3"
+
+
+def test_a_spotter_that_cannot_start_leaves_the_watcher_watching(place, monkeypatch) -> None:
+    from owlbear_delivery_next.improvement import spotter  # noqa: PLC0415
+
+    def broken(*_a: Any) -> None:
+        raise OSError(place.notes.append("spotter refused") or "unwritable")
+
+    monkeypatch.setattr(spotter, "Spotter", broken)
+    spot = spotter.Context(project="p", change="c1", step="build", looks=("hand-off",), sample_rate=0, verbose=False,
+                           model="m", effort="", budget=1)  # fmt: skip
+    place.watching = dataclasses.replace(place.watching, spot=spot)
+    st = stepped(place, start("c1"), write("c1", str(place.elsewhere / "x")))
+    assert st.feed is not None
+    assert st.feed.spotter is None
+    assert place.notes == ["spotter refused"]
+    assert rows(place)["c1"]["verdict"] == OUTSIDE  # the watcher still judged the call
