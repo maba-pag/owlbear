@@ -221,11 +221,11 @@ async def around[T](feed: Feed | None, work: Awaitable[T]) -> T:
 
 
 async def _closed(feed: Feed) -> bool:
-    """Close *feed* in a thread after its Spotter's looks end (briefly), whatever cancels the caller; whether it was."""
+    """Close *feed* in a thread after its Spotter's looks end (bounded), whatever cancels the caller; whether it was."""
     cancelled = False
     if feed.spotter is not None:
         try:
-            await feed.spotter.drain()
+            await spotter.through(asyncio.ensure_future(feed.spotter.drain()))
         except asyncio.CancelledError:
             cancelled = True
     closing = asyncio.ensure_future(asyncio.to_thread(feed.close))
@@ -236,6 +236,15 @@ async def _closed(feed: Feed) -> bool:
             cancelled = True
     closing.result()
     return cancelled
+
+
+def spotted(feed: Feed | None, act: Callable[[spotter.Spotter], None]) -> None:
+    """Tell the session's Spotter, if any: a hand-off, its outcome or a resumed history; never ends the step."""
+    if feed is not None and feed.spotter is not None:
+        try:
+            act(feed.spotter)
+        except Exception as exc:  # noqa: BLE001 - a look never ends the step
+            sys.stderr.write(f"spotter {feed.watching.slug}: {type(exc).__name__}: {exc}\n")
 
 
 def opened(watching: Watching | None, own: Path, session: Callable[[], str], agents: Watch) -> Feed | None:

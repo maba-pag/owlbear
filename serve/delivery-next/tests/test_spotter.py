@@ -14,9 +14,12 @@ from typing import Any
 
 import pytest
 from copilot.generated.session_events import SessionEvent
+from copilot.tools import ToolInvocation
 
-from owlbear_delivery_next.change_contracts.models import Change, Plan, Task
-from owlbear_delivery_next.improvement import card, spotter
+from owlbear_delivery_next.change_contracts.models import Change, Plan, StepKind, Task
+from owlbear_delivery_next.change_contracts.permissions import Policy
+from owlbear_delivery_next.change_contracts.tools import Worktree
+from owlbear_delivery_next.improvement import card, events, spotter
 from owlbear_delivery_next.improvement.events import Kept
 from owlbear_delivery_next.runtimes import chatlogs, sdk_adapter, step_decisions
 from owlbear_delivery_next.settings.config import Layer, SettingsUnset, resolve
@@ -59,6 +62,10 @@ def ctx(**kw: Any) -> spotter.Context:
 
 def records() -> list[dict[str, Any]]:
     return [json.loads(x) for f in sorted(spotter.root().glob("records-*.jsonl")) for x in f.read_text().splitlines()]
+
+
+def ledger() -> dict[str, Any]:
+    return json.loads((spotter.root() / f"ledger-{spotter._today()}.json").read_text())  # noqa: SLF001
 
 
 def judge(answer: str = '{"verdict": "silent"}', *, wait: float = 0.0, seen: list | None = None) -> spotter.Judge:
@@ -172,7 +179,8 @@ def test_a_look_still_running_at_the_steps_end_is_recorded_skipped(monkeypatch) 
         assert not spot.tasks
 
     asyncio.run(main())
-    assert [r["skipped"] for r in records()] == ["the step ended while the look ran"]
+    assert [(r["skipped"], r["credits"]) for r in records()] == [("the step ended while the look ran", 0.5)]
+    assert ledger() == {"reserved": {}, "spent": 0.5}  # an unknown spend counts as the look's credit limit
 
 
 def test_a_look_past_its_time_is_skipped_and_a_wrong_answer_fails_never_silent(monkeypatch) -> None:
@@ -200,9 +208,8 @@ def test_looks_past_capacity_or_budget_are_recorded_skipped_and_the_ledger_settl
         await spot.drain()
 
     asyncio.run(main())
-    assert [r["skipped"].split(":")[0] for r in records()] == ["capacity", "", "", "", "budget"]
-    ledger = json.loads((spotter.root() / f"ledger-{spotter._today()}.json").read_text())  # noqa: SLF001
-    assert ledger == {"reserved": 0.0, "spent": 0.75}
+    assert sorted(r["skipped"].split(":")[0] for r in records()) == ["", "", "", "budget", "capacity"]
+    assert ledger() == {"reserved": {}, "spent": 0.75}
 
 
 def test_samples_follow_the_seeded_rate_and_a_state_change_is_preliminary() -> None:
@@ -238,13 +245,35 @@ def test_live_mode_still_only_records_and_a_hand_off_is_not_looked_at_unless_cho
     assert [r["mode"] for r in records()] == ["live"]
 
 
-def test_the_submit_call_starts_the_look_before_delivery_handles_it() -> None:
+def test_the_submit_tool_starts_the_look_before_delivery_handles_it_and_keeps_its_outcome(tmp_path) -> None:
     order: list[str] = []
-    feed = SimpleNamespace(spotter=SimpleNamespace(handed_off=lambda cid, args: order.append(f"look {cid} {args}")))
-    st = SimpleNamespace(feed=feed, _handle=lambda *_: order.append("handled") or "result")
-    inv = SimpleNamespace(tool_call_id="call-3", arguments={"summary": "s"})
-    assert asyncio.run(sdk_adapter._Step._submitted(st, None, inv)) == "result"  # noqa: SLF001
+
+    class Seen(spotter.Spotter):
+        def handed_off(self, call_id: str, arguments: Any) -> None:
+            order.append(f"look {call_id} {arguments}")
+            super().handed_off(call_id, arguments)
+
+    async def main() -> Any:
+        cfg = sdk_adapter.Session(
+            StepKind.BUILD, tmp_path, "s1", "m", resume=False, policy=Policy(tmp_path),
+            observe=lambda: Worktree("a", "a"), checks=(), subagents=True, model="gpt-6-luna",
+        )  # fmt: skip
+        st = sdk_adapter._Step(cfg, asyncio.get_running_loop())  # noqa: SLF001
+        st.gate.call = lambda _spec, _args: (order.append("handled"), ("rejected: criteria unmet", False))[1]
+        st.feed = SimpleNamespace(spotter=Seen(ctx(), lambda: "s1", judge()), watching=SimpleNamespace(slug="c1"))
+        (tool,) = [t for t in st.tools() if t.name == cfg.submit.name]
+        inv = ToolInvocation(session_id="s1", tool_call_id="call-3", tool_name=tool.name, arguments={"summary": "s"})
+        result = await tool.handler(inv)
+        await st.feed.spotter.drain()
+        return result
+
+    assert asyncio.run(main()).result_type == "failure"
     assert order == ["look call-3 {'summary': 's'}", "handled"]
+    [rec] = records()
+    assert (rec["call"], rec["look"], rec["cutoff"]) == ("call-3", "hand-off", 0)
+    outcomes = spotter.root() / f"outcomes-{spotter._today()}.jsonl"  # noqa: SLF001
+    [outcome] = [json.loads(x) for x in outcomes.read_text().splitlines()]
+    assert (outcome["call"], outcome["outcome"]) == ("call-3", "failure")
 
 
 def test_the_runner_gives_the_look_its_settings_open_work_and_decisions(tmp_path, monkeypatch) -> None:
@@ -317,3 +346,200 @@ def test_a_look_is_one_toolless_session_noted_in_the_chatlogs_manifest(monkeypat
     lines = [json.loads(x) for x in (chatlogs.root() / "manifest.jsonl").read_text().splitlines()]
     assert [(x["event"], x["session"], x.get("kind")) for x in lines] == [
         ("started", "look-1", "spotter"), ("ended", "look-1", None)]  # fmt: skip
+
+
+class Stalled:
+    """A runtime whose session and stop never answer; ``force_stop`` ends it."""
+
+    def __init__(self, made: dict[str, Any], *, start_fails: bool = False) -> None:
+        self.made, self.start_fails = made, start_fails
+
+    async def start(self) -> None:
+        if self.start_fails:
+            raise RuntimeError(self.made.setdefault("why", "protocol mismatch"))
+
+    async def create_session(self, **_kw: Any) -> Any:
+        return SimpleNamespace(session_id="look-2", send_and_wait=self.hang, disconnect=self.hang)
+
+    async def hang(self, *_a: Any, **_kw: Any) -> None:
+        await asyncio.sleep(30)
+
+    async def stop(self) -> None:
+        self.made["stop"] = True
+        await asyncio.sleep(30)
+
+    async def force_stop(self) -> None:
+        self.made["forced"] = True
+
+
+@pytest.mark.parametrize("start_fails", [False, True])
+def test_a_stalled_or_failed_runtime_is_torn_down_within_its_bounds(monkeypatch, start_fails) -> None:
+    import copilot  # noqa: PLC0415
+
+    from owlbear_delivery_next.runtimes import copilot_cli  # noqa: PLC0415
+
+    made: dict[str, Any] = {}
+    monkeypatch.setattr(copilot, "CopilotClient", lambda **_kw: Stalled(made, start_fails=start_fails))
+    monkeypatch.setattr(copilot_cli, "cli_path", lambda: "/bin/false")
+    monkeypatch.setattr(spotter, "TEARDOWN", 0.05)
+
+    async def main() -> float:
+        loop = asyncio.get_running_loop()
+        began = loop.time()
+        look = asyncio.ensure_future(REAL_LOOK({}, ctx()))
+        await asyncio.sleep(0.05)
+        for _ in range(2):  # cancelled twice while it tears down
+            look.cancel()
+            await asyncio.sleep(0.01)
+        await asyncio.wait({look})
+        return loop.time() - began
+
+    assert asyncio.run(main()) < 1
+    assert made.get("forced") is True  # the graceful stop hung
+
+
+def test_a_drain_ends_within_its_bound_even_when_a_look_resists(monkeypatch) -> None:
+    monkeypatch.setattr(spotter, "DRAIN", 0.05)
+    monkeypatch.setattr(spotter, "TEARDOWN", 0.05)
+
+    async def stubborn(_card: dict[str, Any], _ctx: spotter.Context) -> tuple[str, float]:
+        try:
+            await asyncio.sleep(30)
+        except asyncio.CancelledError:
+            await asyncio.sleep(30)  # its cleanup hangs
+        return "", 0.0
+
+    async def main() -> float:
+        spot = spotter.Spotter(ctx(), lambda: "s-1", stubborn)
+        spot.handed_off("c", {})
+        await asyncio.sleep(0.05)
+        loop = asyncio.get_running_loop()
+        began = loop.time()
+        await spot.drain()
+        took = loop.time() - began
+        for task in spot.tasks:
+            task.cancel()
+        return took
+
+    assert asyncio.run(main()) < 0.5
+
+
+def test_a_held_ledger_never_stalls_the_steps_loop() -> None:
+    import threading  # noqa: PLC0415
+
+    held, release = threading.Event(), threading.Event()
+
+    def hold() -> None:
+        with spotter._locked(spotter.root() / "ledger.lock"):  # noqa: SLF001 - another process's long write
+            held.set()
+            release.wait(5)
+
+    holder = threading.Thread(target=hold)
+    holder.start()
+    held.wait(5)
+
+    async def main() -> tuple[float, int]:
+        spot = spotter.Spotter(ctx(), lambda: "s-1", judge())
+        loop = asyncio.get_running_loop()
+        began = loop.time()
+        spot.handed_off("c", {})
+        returned, ticks = loop.time() - began, 0
+        while loop.time() - began < 0.3:
+            await asyncio.sleep(0.01)
+            ticks += 1
+        release.set()
+        await spot.drain()
+        return returned, ticks
+
+    returned, ticks = asyncio.run(main())
+    holder.join()
+    assert returned < 0.02
+    assert ticks >= 15  # the loop went on while the look waited for the ledger
+    assert [r["verdict"] for r in records()] == ["silent"]
+
+
+def test_a_card_that_fails_settles_its_reservation_and_is_recorded_failed(monkeypatch) -> None:
+    monkeypatch.setattr(card, "build", lambda *_a: 1 / 0)
+
+    async def main() -> None:
+        spot = spotter.Spotter(ctx(), lambda: "s-1", judge())
+        spot.handed_off("c", {})
+        await spot.drain()
+
+    asyncio.run(main())
+    assert [(r["verdict"], r["skipped"][:17], r["credits"]) for r in records()] == [
+        ("failed", "ZeroDivisionError", 0.0)]  # fmt: skip
+    assert ledger() == {"reserved": {}, "spent": 0.0}
+
+
+def test_a_reservation_settles_on_its_own_day_and_an_unreadable_ledger_skips(monkeypatch) -> None:
+    monkeypatch.setattr(spotter, "_today", lambda: "2026-10-26")
+    token = spotter.reserve(10)
+    monkeypatch.setattr(spotter, "_today", lambda: "2026-10-27")
+    spotter.settle(token, 0.2)
+    assert json.loads((spotter.root() / "ledger-2026-10-26.json").read_text()) == {"reserved": {}, "spent": 0.2}
+    assert not (spotter.root() / "ledger-2026-10-27.json").exists()
+    (spotter.root() / "ledger-2026-10-27.json").write_text('{"reserved": ')
+
+    async def main() -> None:
+        spot = spotter.Spotter(ctx(), lambda: "s-1", judge())
+        spot.handed_off("c", {})
+        await spot.drain()
+
+    asyncio.run(main())
+    assert [r["skipped"][:26] for r in records()] == ["budget: the ledger failed:"]
+
+
+def test_no_rule_spares_a_credential_inside_a_path_and_cut_browser_context_is_dropped() -> None:
+    token = "ghp_" + "a" * 36
+    assert token not in card.clean(f"cat /tmp/{token}/x")
+    assert "/Users/x/" + "b" * 40 + "/f.py" in card.clean("see: /Users/x/" + "b" * 40 + "/f.py")
+    assert events.no_browser("secret page</browser_context> after") == events.OMITTED + " after"
+    assert events.no_browser("before <browser_context>secret page") == "before " + events.OMITTED
+    kept = Kept()
+    kept.add(asked("x" * 2000 + "<browser_context>" + "secret " * 1500 + "</browser_context> the task"))
+    assert "secret" not in json.dumps(kept.snapshot())
+
+
+def test_the_card_keeps_its_bound_whatever_its_shape() -> None:
+    kept = Kept()
+    kept.add(asked("Build it."))
+    many = [f"t{i}: " + "word " * 60 for i in range(200)]
+    built = card.build(kept.snapshot(), {"at": "2026-10-26T10:01:00+00:00", "kind": "hand-off", "result": "r" * 9000},
+                       {"open_work": many, "decisions": ["d" * 40000]})  # fmt: skip
+    assert len(json.dumps(built, ensure_ascii=False)) <= card.BOUND
+    assert built["open_work"][-1] == f"and {200 - card.KEEP_OPEN + 1} more unfinished tasks"
+
+
+def test_the_task_and_plan_anchors_survive_the_rings_and_what_they_drop_is_a_gap() -> None:
+    kept = Kept()
+    kept.add(asked("The task."))
+    for i in range(1, 6):
+        kept.add(asked(f"Request {i}."))
+    kept.add(said("PLAN: first this, then that."))
+    for i in range(13):
+        kept.add(said(f"Progress {i}."))
+    built = card.build(kept.snapshot(), {"at": "2026-10-26T10:01:00+00:00"}, {})
+    assert built["intent"]["task"] == "The task."
+    assert built["intent"]["later_requests"] == [f"Request {i}." for i in range(2, 6)]
+    assert [(p["role"], p["text"]) for p in built["plan"]] == [
+        ("first reply to the latest request", "PLAN: first this, then that."),
+        ("latest message", "Progress 12."),
+    ]
+    assert "dropped from the intake: 2 earlier requests, 2 earlier messages" in built["gaps"]
+
+
+def test_a_resumed_session_gets_its_history_without_looks_and_subagent_completions_are_never_sampled() -> None:
+    async def main() -> spotter.Spotter:
+        spot = spotter.Spotter(ctx(looks=("sample",), sample_rate=100), lambda: "s-1", judge())
+        spot.history([asked("The original task."), said("My plan."), started("h1", "bash", {"command": "ls"}),
+                      done("h1", "ok")])  # fmt: skip
+        spot.seen(asked("Continue."))
+        spot.seen(started("p1", "bash", {"command": "ls"}, parentToolCallId="task-1"))
+        spot.seen(event("tool.execution_complete", {"toolCallId": "p1", "success": True, "parentToolCallId": "task-1",
+                                                    "result": {"content": "ok"}}))  # fmt: skip
+        assert not spot.tasks
+        return spot
+
+    snapshot = asyncio.run(main()).kept.snapshot()
+    assert (snapshot["task"], [a["id"] for a in snapshot["actions"]]) == ("The original task.", ["h1"])

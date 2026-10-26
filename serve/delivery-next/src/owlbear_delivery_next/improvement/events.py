@@ -10,6 +10,7 @@ frozen copy: a result that completes after it is not in it.
 from __future__ import annotations
 
 import json
+import re
 from collections import deque
 from typing import Any
 
@@ -17,6 +18,25 @@ ACTIONS, CALLS = 120, 200  # actions kept; calls awaiting their completion
 TEXT, SAID, ARGS, RESULT = 6000, 1500, 1500, 4000  # characters kept of a request, a message, arguments, a result
 QUESTIONS = frozenset({"ask_user", "askQuestions"})
 STOPS = frozenset({"abort", "session.abort", "session.shutdown"})
+OPEN, CLOSE = "<browser_context>", "</browser_context>"
+BROWSER = re.compile(rf"{OPEN}.*?{CLOSE}", re.DOTALL)
+OMITTED = "[browser context omitted]"
+
+
+def no_browser(text: str) -> str:
+    """*text* without the browser context VS Code attaches, a region cut in two included."""
+    text = BROWSER.sub(OMITTED, text)
+    if CLOSE in text:  # its opening was cut off: everything up to it was browser context
+        text = OMITTED + text.rsplit(CLOSE, 1)[1]
+    if OPEN in text:  # its end was cut off
+        text = text.split(OPEN, 1)[0] + OMITTED
+    return text
+
+
+def main_agent(d: dict[str, Any]) -> bool:
+    """Whether the event is the session's own agent's, not a subagent's."""
+    data = d.get("data")
+    return isinstance(data, dict) and not d.get("agentId") and not data.get("parentToolCallId")
 
 
 def as_dict(ev: Any) -> dict[str, Any]:  # noqa: ANN401 - an SDK event object or a logged event
@@ -46,28 +66,33 @@ class Kept:
     """One session's bounded intake."""
 
     def __init__(self) -> None:
-        self.task = ""  # the first requester message: a step's task, criteria and scope
+        self.task, self.task_n = "", 0  # the first requester message: a step's task, criteria and scope
+        self.first_reply: dict[str, Any] | None = None  # the agent's first message after the latest request: its plan
         self.requests: deque[dict[str, Any]] = deque(maxlen=4)
         self.answers: deque[dict[str, Any]] = deque(maxlen=3)
         self.said: deque[dict[str, Any]] = deque(maxlen=12)
         self.actions: deque[dict[str, Any]] = deque(maxlen=ACTIONS)
         self.calls: dict[str, dict[str, Any]] = {}
-        self.dropped = 0  # actions the ring no longer holds
+        self.dropped = {"actions": 0, "requests": 0, "messages": 0}  # what the rings no longer hold
         self.n = 0  # events seen
 
-    def add(self, ev: Any) -> None:  # noqa: ANN401 - an SDK event object or a logged event
-        """Take in one event of the main agent; a subagent's is left out."""
+    def add(self, ev: Any) -> bool:  # noqa: ANN401 - an SDK event object or a logged event
+        """Take in one event of the main agent (a subagent's is left out); whether it completed a main-agent call."""
         d = as_dict(ev)
         self.n += 1
         kind, data, at = d.get("type"), d.get("data") or {}, str(d.get("timestamp") or "")
-        if not isinstance(data, dict) or d.get("agentId") or data.get("parentToolCallId"):
-            return  # a subagent's own events
+        if not main_agent(d):
+            return False
         if kind == "user.message":
-            text = clip(data.get("content") or "", TEXT)
-            self.task = self.task or text
-            self.requests.append({"n": self.n, "at": at, "text": text})
+            text = clip(no_browser(str(data.get("content") or "")), TEXT)
+            if not self.task:
+                self.task, self.task_n = text, self.n
+            self._ring(self.requests, {"n": self.n, "at": at, "text": text}, "requests")
+            self.first_reply = None
         elif kind == "assistant.message" and str(data.get("content") or "").strip():
-            self.said.append({"n": self.n, "at": at, "text": clip(data["content"], SAID)})
+            message = {"n": self.n, "at": at, "text": clip(no_browser(str(data["content"])), SAID)}
+            self.first_reply = self.first_reply or message
+            self._ring(self.said, message, "messages")
         elif kind == "tool.execution_start":
             call = {"n": self.n, "at": at, "tool": str(data.get("toolName") or ""), "id": str(data.get("toolCallId")),
                     "args": clip(data.get("arguments"), ARGS)}  # fmt: skip
@@ -75,13 +100,15 @@ class Kept:
             if len(self.calls) < CALLS:
                 self.calls[call["id"]] = call
         elif kind == "tool.execution_complete" and (call := self.calls.pop(str(data.get("toolCallId")), None)):
-            call |= {"done_at": at, "ok": data.get("success"), "result": clip(result_text(data), RESULT)}
+            call |= {"done_at": at, "ok": data.get("success"), "result": clip(no_browser(result_text(data)), RESULT)}
             if call["tool"] in QUESTIONS and not self._stopped(call):
                 self.answers.append(
                     {"at": at, "question": clip(call["args"], 400), "answer": clip(call["result"], 400)}
                 )
+            return True
         elif kind in STOPS or kind == "session.compaction_complete":
             self._push({"n": self.n, "at": at, "kind": "stop" if kind in STOPS else "compaction"})
+        return False
 
     def _stopped(self, call: dict[str, Any]) -> bool:
         """Whether a question's result was written by a stop, not answered (the pilot's b6f1f8)."""
@@ -90,13 +117,17 @@ class Kept:
         )
 
     def _push(self, action: dict[str, Any]) -> None:
-        if len(self.actions) == self.actions.maxlen:
-            self.dropped += 1
-        self.actions.append(action)
+        self._ring(self.actions, action, "actions")
+
+    def _ring(self, ring: deque[dict[str, Any]], item: dict[str, Any], what: str) -> None:
+        if len(ring) == ring.maxlen:
+            self.dropped[what] += 1
+        ring.append(item)
 
     def snapshot(self) -> dict[str, Any]:
         """A frozen copy at this moment; calls still open have no result in it."""
         return json.loads(json.dumps({
-            "task": self.task, "requests": list(self.requests), "answers": list(self.answers),
-            "said": list(self.said), "actions": list(self.actions), "dropped": self.dropped, "n": self.n,
+            "task": self.task, "task_n": self.task_n, "first_reply": self.first_reply, "requests": list(self.requests),
+            "answers": list(self.answers), "said": list(self.said), "actions": list(self.actions),
+            "dropped": self.dropped, "n": self.n,
         }, default=str))  # fmt: skip

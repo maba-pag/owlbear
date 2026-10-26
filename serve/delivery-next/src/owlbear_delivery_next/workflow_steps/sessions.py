@@ -219,7 +219,7 @@ def judges(  # noqa: PLR0913, PLR0917 - the round's settings snapshot
     own decision (TD-94).
     """
     settings = settings or store.settings()
-    settings.need("spotter.mode")  # each judge is watched: an unset mode asks before any judge starts
+    watched.needed(settings)  # each judge is watched: an unset Spotter setting asks before any judge starts
     labels: list[str] = []
 
     def fresh(at: Path) -> list[sdk_adapter.Session]:

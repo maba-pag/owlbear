@@ -28,6 +28,7 @@ from owlbear_delivery_next.machine_host import machine_settings
 from owlbear_delivery_next.runtimes import step_decisions, watch_feed
 from owlbear_delivery_next.settings.config import SettingsUnset
 from owlbear_delivery_next.state_store import project_home, watch_reports
+from owlbear_delivery_next.state_store.database import StoreError
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -47,8 +48,7 @@ def watching(  # noqa: PLR0913, PLR0917 - the session's Change, step, settings a
         SettingsUnset: No layer sets the Spotter's mode, or, when it is on, another of its settings, its role or the
             machine's Spotter budget.
     """
-    settings.need("spotter.mode")
-    if settings.spotter.mode == "off":
+    if needed(settings) is None:
         return None
     store.db.check()  # the writer's bounded writes need the database open
     home, changes = Path.home(), store.root / "changes"
@@ -65,17 +65,35 @@ def watching(  # noqa: PLR0913, PLR0917 - the session's Change, step, settings a
     return watch_feed.Watching(lock.slug, step, places, writer, spot(store, lock, step, settings))
 
 
+def needed(settings: Settings) -> int | None:
+    """Check every setting a watched session needs before a step records anything; the Spotter's budget, or None off.
+
+    Raises:
+        SettingsUnset: The Spotter's mode is unset or, when it is on, another of its settings, its role or the
+            machine's Spotter budget.
+    """
+    settings.need("spotter.mode")
+    if settings.spotter.mode == "off":
+        return None
+    settings.need("spotter", "agents.spotter")
+    if (budget := machine_settings.current().spotter_budget) is None:
+        raise SettingsUnset(["spotter_budget"])
+    return budget
+
+
 def spot(store: Store, lock: Lock, step: str, settings: Settings) -> spotter.Context:
     """What the Spotter's looks at a session of *lock*'s Change get; its mode is on.
 
     Raises:
         SettingsUnset: A Spotter setting, its role or the machine's Spotter budget is unset.
     """
-    settings.need("spotter", "agents.spotter")
-    budget = machine_settings.current().spotter_budget
-    if budget is None:
-        raise SettingsUnset(["spotter_budget"])
-    s, role, change = settings.spotter, settings.agent("spotter"), store.read(lock.slug)
+    budget = needed(settings) or 0
+    s, role, gaps = settings.spotter, settings.agent("spotter"), []
+    try:
+        change = store.read(lock.slug)
+    except StoreError as exc:  # a look never stops a step: it goes without the plan
+        change, gaps = None, [f"the Change's plan could not be read ({exc})"]
+    plan = change.plan if change is not None else None
     return spotter.Context(
         project=store.root.name,
         change=lock.slug,
@@ -88,6 +106,7 @@ def spot(store: Store, lock: Lock, step: str, settings: Settings) -> spotter.Con
         budget=budget,
         context=role.context or "",
         mode=s.mode or "learning",
-        open_work=tuple(t.title for t in change.plan.tasks if not t.done) if change.plan else (),
+        open_work=tuple(t.title for t in plan.tasks if not t.done) if plan else (),
         decisions=tuple(line for line in step_decisions.held() if line.strip()),
+        gaps=tuple(gaps),
     )

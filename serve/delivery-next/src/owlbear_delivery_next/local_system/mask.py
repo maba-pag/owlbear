@@ -27,12 +27,15 @@ def _header(m: re.Match[str]) -> str:
     return f"{m['flag']}{q}{value}{q}"
 
 
-def redact(text: str) -> str:
-    """Mask credentials: auth headers of any scheme, URL userinfo, GitHub tokens, secret assignments and blobs."""
+def redact(text: str, *, blobs: bool = True) -> str:
+    """Mask credentials: auth headers of any scheme, URL userinfo, GitHub tokens, secret assignments and blobs.
+
+    Without *blobs*, a long value after ``=`` or ``:`` is kept unless another rule names it a credential.
+    """
     text = _AUTH_HEADER.sub(r"\g<h>: ***", text)
     text = _HEADER.sub(_header, text)
     text = _USERINFO.sub(r"\g<scheme>***@", text)
     text = _GITHUB.sub("***", text)
     text = _ASSIGN.sub(r"\g<k>\g<kq>\g<s>***", text)
-    text = _BLOB.sub(r"\g<s>\g<q>***", text)
+    text = _BLOB.sub(r"\g<s>\g<q>***", text) if blobs else text
     return _BEARER.sub("Bearer ***", text)

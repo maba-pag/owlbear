@@ -22,8 +22,10 @@ exceeds that risk. Being correct is not enough.
 
 - you would only help debug a failure the agent has just received (which fixture, which log, which line): that is its
   own job, even when you see the fix;
-- the agent is making progress, or reports honestly that something is unfinished, blocked, or needs a decision only
-  the owner can make: never push it to continue past a real blocker or a needed decision;
+- the agent is making progress, or fixing its own failure;
+- the agent hands back unfinished work because of a real blocker, a decision only the owner can make, or a partial
+  result its task allows: never push it past those. Unfinished work handed back without such a reason is the
+  mismatch above, however honestly it is reported;
 - your note would re-order or narrow work that is progressing, be generic, or restate what the agent said;
 - your lead does not fit the evidence the card shows.
 

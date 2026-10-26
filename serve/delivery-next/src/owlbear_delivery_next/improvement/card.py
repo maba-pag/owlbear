@@ -15,14 +15,13 @@ import re
 from datetime import datetime
 from typing import Any
 
-from owlbear_delivery_next.improvement.events import clip
+from owlbear_delivery_next.improvement.events import clip, no_browser
 from owlbear_delivery_next.local_system.mask import redact
 
 BOUND = 30000  # characters of the whole card
-KEEP_RECENT, KEEP_DECISIONS, KEEP_TASK = 5, 1000, 500  # what ``bounded`` cuts down to, at least
+KEEP_RECENT, KEEP_OPEN, KEEP_DECISIONS, KEEP_TASK = 5, 12, 1000, 500  # what ``bounded`` cuts down to, at least
 EACH, EVIDENCE = 4000, 16000  # characters of one piece of evidence, and of all
 EMAIL = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
-BROWSER = re.compile(r"<browser_context>.*?</browser_context>", re.DOTALL)
 TEST = re.compile(r"\b(pytest|npm (run )?test|vitest|jest|uv run test|go test|cargo test|node --test)\b")
 WAITS = frozenset({"read_bash", "read_agent"})
 WAIT = re.compile(r"\bsleep\s+\d|--watch\b|gh pr checks|gh run (watch|view)")
@@ -37,7 +36,8 @@ PROTECT = re.compile(r"(?:/(?:Users|private|var|tmp|Library|home)/[^\s\"'`:;,)\]
 def clean(text: str) -> str:
     """*text* without credentials, emails or browser context.
 
-    File paths and commit ids are no secrets, so they are shielded from the long-value rule (as the pilot's cards were).
+    Every credential rule applies everywhere; only the long-value rule spares file paths and commit ids, which are no
+    secrets (as the pilot's cards were).
     """
     kept: list[str] = []
 
@@ -45,8 +45,8 @@ def clean(text: str) -> str:
         kept.append(m.group(0))
         return f"\x00{len(kept) - 1}\x00"
 
-    text = redact(PROTECT.sub(hold, BROWSER.sub("[browser context omitted]", text)))
-    return EMAIL.sub("<email>", re.sub(r"\x00(\d+)\x00", lambda m: kept[int(m.group(1))], text))
+    text = PROTECT.sub(hold, redact(no_browser(text.replace("\x00", "")), blobs=False))
+    return EMAIL.sub("<email>", re.sub(r"\x00(\d+)\x00", lambda m: kept[int(m.group(1))], redact(text)))
 
 
 def _time(at: str) -> datetime | None:
@@ -106,13 +106,17 @@ def _evidence(actions: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return out
 
 
-def _plan(said: list[dict[str, Any]], requests: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    last = requests[-1]["n"] if requests else 0
-    first = next((s for s in said if s["n"] > last), None)
+def _plan(first: dict[str, Any] | None, said: list[dict[str, Any]]) -> list[dict[str, Any]]:
     plan = [{"role": "first reply to the latest request", **first}] if first else []
-    if said and said[-1] is not first:
+    if said and (first is None or said[-1]["n"] != first["n"]):
         plan.append({"role": "latest message", **said[-1]})
     return [{k: v for k, v in p.items() if k != "n"} for p in plan]
+
+
+def _gaps(snapshot: dict[str, Any], context: dict[str, Any]) -> list[str]:
+    dropped = snapshot.get("dropped") or {}
+    lost = [f"{n} earlier {what}" for what, n in dropped.items() if n] if isinstance(dropped, dict) else []
+    return [*GAPS, *([f"dropped from the intake: {', '.join(lost)}"] if lost else []), *context.get("gaps", [])]
 
 
 def build(snapshot: dict[str, Any], moment: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
@@ -124,10 +128,10 @@ def build(snapshot: dict[str, Any], moment: dict[str, Any], context: dict[str, A
         "step": context.get("step", ""),
         "intent": {
             "task": snapshot.get("task", ""),
-            "later_requests": [r["text"] for r in requests[1:]],
+            "later_requests": [r["text"] for r in requests if r["n"] != snapshot.get("task_n")],
             "answers": snapshot.get("answers", []),
         },
-        "plan": _plan(snapshot.get("said", []), requests),
+        "plan": _plan(snapshot.get("first_reply"), snapshot.get("said", [])),
         "moment": moment,
         "recent": [_brief(a) for a in actions[-15:]],
         "evidence": _evidence(actions),
@@ -139,7 +143,7 @@ def build(snapshot: dict[str, Any], moment: dict[str, Any], context: dict[str, A
         },
         "open_work": context.get("open_work", []),
         "decisions": clip("\n".join(context.get("decisions", [])), 6000),
-        "gaps": [*GAPS, *([f"{snapshot['dropped']} earlier actions were dropped"] if snapshot.get("dropped") else [])],
+        "gaps": _gaps(snapshot, context),
     }
     return bounded(_cleaned(card))
 
@@ -155,17 +159,53 @@ def _cleaned(value: Any) -> Any:  # noqa: ANN401 - the card's JSON values
     return value
 
 
+def _size(card: dict[str, Any]) -> int:
+    return len(json.dumps(card, ensure_ascii=False))
+
+
+def _cut(card: dict[str, Any]) -> bool:
+    """One cut of *card*, the least needed first; False when nothing is left to cut this way."""
+    intent = card["intent"]
+    if card["evidence"]:
+        card["evidence"].pop()
+    elif len(card["recent"]) > KEEP_RECENT:
+        card["recent"].pop(0)
+    elif len(card["open_work"]) > KEEP_OPEN:
+        more = len(card["open_work"]) - KEEP_OPEN + 1
+        card["open_work"] = [*card["open_work"][: KEEP_OPEN - 1], f"and {more} more unfinished tasks"]
+    elif intent["answers"]:
+        intent["answers"].pop(0)
+    elif len(intent["later_requests"]) > 1:
+        intent["later_requests"].pop(0)
+    elif len(card["decisions"]) > KEEP_DECISIONS:
+        card["decisions"] = clip(card["decisions"], len(card["decisions"]) // 2)
+    elif len(intent["task"]) > KEEP_TASK:
+        intent["task"] = clip(intent["task"], max(KEEP_TASK, len(intent["task"]) // 2))
+    else:
+        return False
+    return True
+
+
 def bounded(card: dict[str, Any]) -> dict[str, Any]:
-    """*card* within ``BOUND``: evidence goes first, then recent actions, then the decisions' text is cut."""
-    while len(json.dumps(card, ensure_ascii=False)) > BOUND:
-        if card["evidence"]:
-            card["evidence"].pop()
-        elif len(card["recent"]) > KEEP_RECENT:
-            card["recent"].pop(0)
-        elif len(card["decisions"]) > KEEP_DECISIONS:
-            card["decisions"] = clip(card["decisions"], len(card["decisions"]) // 2)
-        else:
-            card["intent"]["task"] = clip(card["intent"]["task"], len(card["intent"]["task"]) // 2)
-            if len(card["intent"]["task"]) < KEEP_TASK:
-                break
+    """*card* within ``BOUND``: whole parts go first, the least needed first; then every text is shortened."""
+    while _size(card) > BOUND and _cut(card):
+        pass
+    cap = 2000
+    while _size(card) > BOUND - 200 and cap >= 50:  # noqa: PLR2004 - room for the gap below; shorter says nothing
+        card, cap = _capped(card, cap), cap // 2
+    if _size(card) > BOUND:  # only a card of absurd shape: the moment alone, and why
+        return {"step": card.get("step", ""), "moment": {"at": card["moment"].get("at"), "kind": card["moment"].get(
+            "kind")}, "gaps": ["the card could not be kept within its bound"]}  # fmt: skip
+    if cap < 2000:  # noqa: PLR2004
+        card["gaps"].append(f"texts were shortened to {cap * 2} characters to fit the card's bound")
     return card
+
+
+def _capped(value: Any, cap: int) -> Any:  # noqa: ANN401 - the card's JSON values
+    if isinstance(value, str):
+        return clip(value, cap)
+    if isinstance(value, list):
+        return [_capped(v, cap) for v in value]
+    if isinstance(value, dict):
+        return {k: _capped(v, cap) for k, v in value.items()}
+    return value
