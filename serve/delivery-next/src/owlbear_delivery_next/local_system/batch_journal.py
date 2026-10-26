@@ -13,6 +13,7 @@ import json
 import os
 import re
 import stat
+import time
 import unicodedata
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -31,10 +32,15 @@ GENERATION = re.compile(r"[0-9a-f]{8,64}")  # as `begin` makes it (a UUID's hex)
 COMMIT = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")  # a full SHA-1 or SHA-256 commit id, as `rev-parse` names HEAD
 COMPLETED = "owlbear-decision-batches-completed.json"
 LOCK = "owlbear-decision-batch.lock"
+LOCK_POLL = 0.05  # seconds between tries of a held batch lock, within a caller's deadline
 
 
 class JournalError(ValueError):
     """The journal or its list of completed batches cannot be read, so whether a batch is in flight is unknown."""
+
+
+class JournalBusyError(JournalError):
+    """Another writer held the batch lock until the caller's deadline: whether a batch is in flight is unknown yet."""
 
 
 @dataclass(frozen=True)
@@ -49,9 +55,9 @@ class Batch:
     files: tuple[tuple[str, bytes | None, bytes], ...]
 
 
-def admin(shared: DataRepo) -> Path:
-    """The checkout's Git folder, where the journal lies and Git never tracks it."""
-    found = shared.git("rev-parse", "--absolute-git-dir")
+def admin(shared: DataRepo, until: float | None = None) -> Path:
+    """The checkout's Git folder, where the journal lies and Git never tracks it; Git is asked within *until*."""
+    found = shared.git("rev-parse", "--absolute-git-dir", until=until)
     folder = found.stdout.strip()
     if found.returncode or not Path(folder).is_absolute():  # an empty answer is no folder: never the working directory
         msg = f"the git folder of {shared.root} cannot be found: {found.stderr.strip()[:200] or 'Git named none'}"
@@ -60,15 +66,16 @@ def admin(shared: DataRepo) -> Path:
 
 
 @contextmanager
-def locked(shared: DataRepo) -> Iterator[None]:
+def locked(shared: DataRepo, until: float | None = None) -> Iterator[None]:
     """Hold the batch lock while the journal and the completed list are read or changed together.
 
     Every transition and every stamp capture takes it, so a reader never pairs a journal and a list from different
     moments: the pair it reads is one that existed. A lock that cannot be taken (a link, not a regular file, no
     permission) is a `JournalError` naming it, so whether a batch is in flight stays unknown, never "none"; only taking
-    the lock is translated, never an error of the body it guards.
+    the lock is translated, never an error of the body it guards. With *until* (monotonic), the caller's own deadline,
+    a lock another writer still holds then is `JournalBusyError`; without one it is waited for, as before.
     """
-    folder = admin(shared)
+    folder = admin(shared, until)
     try:
         dir_fd = os.open(folder, os.O_RDONLY | os.O_DIRECTORY)
     except OSError as exc:
@@ -76,7 +83,10 @@ def locked(shared: DataRepo) -> Iterator[None]:
         raise JournalError(msg) from exc
     try:
         try:
-            lock_fd = open_lock(dir_fd, blocking=True, name=LOCK)
+            lock_fd = _take(dir_fd, until)
+        except BlockingIOError:
+            msg = f"another save still holds the batch lock, so try again ({folder / LOCK})"
+            raise JournalBusyError(msg) from None
         except (OSError, ValueError) as exc:
             msg = f"the batch lock {folder / LOCK} cannot be taken ({exc}); make it a plain file the owner can open"
             raise JournalError(msg) from exc
@@ -86,6 +96,19 @@ def locked(shared: DataRepo) -> Iterator[None]:
             os.close(lock_fd)
     finally:
         os.close(dir_fd)
+
+
+def _take(dir_fd: int, until: float | None) -> int:
+    """The batch lock, waited for without end, or tried until *until*; `BlockingIOError` when still held then."""
+    if until is None:
+        return open_lock(dir_fd, blocking=True, name=LOCK)
+    while True:
+        try:
+            return open_lock(dir_fd, blocking=False, name=LOCK)
+        except BlockingIOError:
+            if (left := until - time.monotonic()) <= 0:
+                raise
+            time.sleep(min(LOCK_POLL, left))
 
 
 def _data(value: str | None) -> bytes | None:
@@ -243,14 +266,15 @@ def read(path: Path) -> bytes | None:
         os.close(descriptor)
 
 
-def pending(shared: DataRepo) -> Batch | None:
+def pending(shared: DataRepo, until: float | None = None) -> Batch | None:
     """The batch in flight, if any; a journal whose generation completed is a stale copy and is ignored.
 
     The completed list is read and checked first: one that cannot be read means whether a batch is in flight is
-    unknown, so it refuses even when no journal is there, before any writer changes a file.
+    unknown, so it refuses even when no journal is there, before any writer changes a file. With *until*, Git and the
+    lock are asked within the caller's own deadline (`locked`).
     """
-    folder = admin(shared)
-    with locked(shared):
+    folder = admin(shared, until)
+    with locked(shared, until):
         raw = read(folder / JOURNAL)
         listed = read(folder / COMPLETED)
     done = generations(listed)

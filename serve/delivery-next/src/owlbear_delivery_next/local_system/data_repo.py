@@ -311,7 +311,7 @@ class DataRepo:
         Nothing while a decision batch is unsettled; then a held automatic change is checked, and every push runs as
         the one non-forced refspec proven to land on the upstream (`publication_hold.pushing`).
         """
-        if held := self._decision_batch_held():
+        if held := self._decision_batch_held(until):
             return f"saved and committed in {self.root}, but not pushed: {held}"
         held, run = publication_hold.pushing(self, ("push", "-q"), until)
         if held:
@@ -332,14 +332,16 @@ class DataRepo:
         publication_hold.settled(self, until)
         return ""
 
-    def _decision_batch_held(self) -> str:
+    def _decision_batch_held(self, until: float) -> str:
         """Why nothing may be pushed or rebased here: a decision batch is interrupted, or its journal cannot be read.
 
         An interrupted batch may have left an incomplete commit in this checkout; another clone, holding no journal,
         would read it as settled decisions. Only the batch's own publisher and the owner's finish or abandon move it.
         """
         try:
-            batch = batch_journal.pending(self)
+            batch = batch_journal.pending(self, until)  # within the caller's deadline: a lock held past it is not free
+        except batch_journal.JournalBusyError as exc:
+            return f"whether a decision batch is interrupted is not known yet: {exc}"
         except batch_journal.JournalError as exc:
             return f"the decision batch journal cannot be read ({str(exc)[:200]}); repair it in Decisions"
         if batch is None:
@@ -349,11 +351,11 @@ class DataRepo:
     def pull(self, until: float | None = None) -> str:
         """Rebase on the remote; a failed rebase is undone, never left half done. Why it failed, else nothing.
 
-        Nothing is rebased while a decision batch is unsettled (`_decision_batch_held`).
+        Nothing is rebased while a decision batch is unsettled (`_decision_batch_held`), checked within the deadline.
         """
-        if held := self._decision_batch_held():
-            return f"not rebased on the remote: {held}"
         until = time.monotonic() + SAVE_SECONDS if until is None else until
+        if held := self._decision_batch_held(until):
+            return f"not rebased on the remote: {held}"
         if publication_hold.recorded(self, until):
             return self._pull_held(until)
         pulled = _git(self.root, "-c", "rebase.autoStash=false", "pull", "-q", "--rebase", until=until)

@@ -13,9 +13,12 @@ import os
 import shutil
 import stat
 import subprocess
+import sys
+import threading
 import time
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
+from types import SimpleNamespace
 
 import pytest
 from fastapi import FastAPI
@@ -24,7 +27,7 @@ from fastapi.testclient import TestClient
 from owlbear_decisions import Decision, DecisionError, Link, LinkType, Origin, Scope, State, new_id, storage, write
 from owlbear_decisions.storage import serialize
 from owlbear_delivery_next.change_contracts import pick_tools
-from owlbear_delivery_next.local_system import data_repo, storage_io
+from owlbear_delivery_next.local_system import batch_journal, data_repo, storage_io
 from owlbear_delivery_next.local_system.data_repo import DataRepo, DataRepoError
 from owlbear_delivery_next.project_host import decision_recovery_routes
 from owlbear_delivery_next.state_store import (
@@ -3400,3 +3403,96 @@ def test_an_owner_commit_made_as_a_save_publishes_is_never_completed_on_or_pushe
     assert all(r.saved for r in receipts)  # the batch and its flags landed; only the next round stopped
     assert "HEAD moved past this save's commit" in receipts[0].notice
     assert decision_batch.pending(shared) is None
+
+
+# Another process takes the batch lock, says so, and lets it go only when told to, then says that too.
+HOLDER = """
+import fcntl, os, sys
+fd = os.open(sys.argv[1], os.O_RDWR | os.O_CREAT, 0o600)
+fcntl.flock(fd, fcntl.LOCK_EX)
+print("held", flush=True)
+sys.stdin.readline()
+fcntl.flock(fd, fcntl.LOCK_UN)
+print("released", flush=True)
+sys.stdin.readline()
+"""
+SAFETY_SECONDS = 5  # releases a lock code with no deadline would wait on forever, so the old code fails, never hangs
+
+
+class _Holder:
+    def __init__(self, lock: Path) -> None:
+        self.process = subprocess.Popen(  # noqa: S603 - this interpreter and a fixed script
+            [sys.executable, "-c", HOLDER, str(lock)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True
+        )
+        assert self.process.stdout.readline().strip() == "held"  # the lock is taken before the call under test
+        self.released = threading.Event()
+        self._once = threading.Lock()
+
+    def release(self) -> None:
+        with self._once:
+            if not self.released.is_set():
+                self.process.stdin.write("\n")
+                self.process.stdin.flush()
+                assert self.process.stdout.readline().strip() == "released"
+                self.released.set()
+
+    def stop(self) -> None:
+        self.process.kill()
+        self.process.wait(timeout=10)
+
+
+@pytest.mark.parametrize("case", ["held-past-the-deadline", "released-within-the-deadline"])
+@pytest.mark.parametrize("op", ["push", "pull"])
+def test_an_ordinary_push_or_pull_reads_the_batch_journal_within_its_own_deadline(
+    picking, shared_repo, monkeypatch, op, case
+):
+    """Another process holds the batch lock. An ordinary push or pull asks Git for its folder and waits for the lock
+    only within its own deadline: when the lock is still held then, it neither pushes, fetches nor rebases and says
+    why; when the lock comes free within it, the push or pull goes on as before."""
+    _seed(picking)
+    shared, remote = picking.shared, shared_repo[1]
+    (shared.root / "settings-note.txt").write_text("a setting\n")
+    shared.git("add", "settings-note.txt")
+    shared.git("commit", "-qm", "settings: a note")
+    published, calls = _remote_main(remote), []
+    real_git = data_repo._git  # noqa: SLF001
+
+    def recording_git(cwd, *args, until=None):
+        calls.append((args, until))
+        return real_git(cwd, *args, until=until)
+
+    holder = _Holder(decision_batch.journal_path(shared).parent / decision_batch.LOCK)
+    safety = threading.Timer(SAFETY_SECONDS, holder.release)
+    safety.start()
+    waiting = SimpleNamespace(monotonic=time.monotonic, sleep=lambda _seconds: holder.release())
+
+    try:
+        with monkeypatch.context() as m:
+            m.setattr(data_repo, "_git", recording_git)
+            if case == "released-within-the-deadline":  # the lock comes free while the call waits for it
+                m.setattr(batch_journal, "time", waiting, raising=False)
+            until = time.monotonic() + (0.2 if case == "held-past-the-deadline" else SAFETY_SECONDS * 2)
+            started = time.monotonic()
+            said = shared._push(until) if op == "push" else shared.pull(until)  # noqa: SLF001
+            took = time.monotonic() - started
+    finally:
+        safety.cancel()
+        holder.stop()
+
+    probes = [u for args, u in calls if args[:2] == ("rev-parse", "--absolute-git-dir")]
+    assert probes
+    assert all(u == until for u in probes)  # every journal probe runs within this call's own deadline
+    if case == "released-within-the-deadline":
+        assert holder.released.is_set()
+        assert said == ""
+        if op == "push":
+            assert _remote_main(remote) == shared.git("rev-parse", "HEAD").stdout.strip()
+        return
+    assert not holder.released.is_set()  # the call returned before the safety release
+    assert took < SAFETY_SECONDS
+    assert "is not known yet" in said
+    assert "another save still holds the batch lock, so try again" in said
+    remote_work = {"push", "pull", "fetch", "rebase", "ls-remote"}
+    assert not [args for args, _ in calls if remote_work & set(args)]  # nothing after the deadline reaches the remote
+    assert _remote_main(remote) == published
+    assert shared.git("log", "-1", "--format=%s").stdout.strip() == "settings: a note"
