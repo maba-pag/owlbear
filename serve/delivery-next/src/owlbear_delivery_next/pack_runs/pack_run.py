@@ -92,7 +92,7 @@ def begin(  # noqa: PLR0913 - the job, the candidate, its checkout and the evide
     job: Job, c: pack_candidate.Candidate, src: pack_git.Source, *, diff: str, golden: str, why: str
 ) -> str | None:
     """Lay out the updater's repository, pin the loop's values and run; the ending's words, or None while waiting."""
-    at = job.store.root / UPDATER
+    at = job.workspace
     shutil.rmtree(at, ignore_errors=True)  # never resumed from an earlier run
     at.mkdir(parents=True)
     package = job.live.package.resolve()
@@ -135,7 +135,7 @@ def _unchanged(package: Path, ctx: Context) -> None:
 
 
 def _edits(job: Job, ctx: Context) -> dict[str, bytes | None]:
-    return pack_gates.edits(job.store.root / UPDATER, ctx.baseline)
+    return pack_gates.edits(job.workspace, ctx.baseline)
 
 
 def advance(job: Job, c: pack_candidate.Candidate, ctx: Context, lp: RoundLoop) -> str | None:
@@ -172,7 +172,7 @@ def _update(job: Job, c: pack_candidate.Candidate, ctx: Context, lp: RoundLoop) 
     Raises:
         Stopped: The golden pages differ from the candidate's expectations.
     """
-    at, live, store = job.store.root / UPDATER, job.live, job.store
+    at, live, store = job.workspace, job.live, job.store
     if ctx.undo:  # what the owner had undone, restored before the updater adjusts the rest
         pack_gates.restore(at, ctx.undo, live.package.resolve(), c)
         if any(p.startswith("upstream/") for p in ctx.undo):
@@ -226,7 +226,8 @@ def _replay(job: Job, c: pack_candidate.Candidate, ctx: Context) -> Action:
     """The calibration replay when the skills changed since the last one (TD-177); then what the session led to."""
     identity = design_pack.identity(c.manifest, c.skills)
     if identity != ctx.judged:
-        ctx.replayed, ctx.judged = job.do("replay", lambda: _replayed(job.live.replay(job.store, c))), identity
+        replayed = job.do("replay", lambda: _replayed(job.live.replay(job.store, c, keep=job.keeps)))
+        ctx.replayed, ctx.judged = replayed, identity
     return ctx.after
 
 
@@ -243,7 +244,7 @@ def _challenge(job: Job, c: pack_candidate.Candidate, ctx: Context, lp: RoundLoo
 
     A full round judges each file the updater changed (TD-194); one it is unsure about goes to the owner first.
     """
-    at, keys = job.store.root / UPDATER, tuple(f.id for f in pack_rounds.pending(lp))
+    at, keys = job.workspace, tuple(f.id for f in pack_rounds.pending(lp))
     edits = _edits(job, ctx)
     changed = None if recheck else pack_gates.diffs(c, at, job.live.package.resolve(), edits)
     text = pack_candidate.message(
@@ -257,7 +258,7 @@ def _challenge(job: Job, c: pack_candidate.Candidate, ctx: Context, lp: RoundLoo
     def challenge() -> tuple[list[str], dict[str, tuple[bool, str]], list[pack_tools.Change]]:
         run = pack_candidate.challenge(
             job.store, c, job.live.clone, text, job.live.challenge, rechecks=keys, cap=cap, submit=submit,
-            changed=tuple(changed or ()),
+            changed=tuple(changed or ()), keep=job.keeps,
         )  # fmt: skip
         return _verdict(run)
 
@@ -300,7 +301,7 @@ def _verdict(run: Run) -> tuple[list[str], dict[str, tuple[bool, str]], list[pac
 
 def _asked(job: Job, c: pack_candidate.Candidate, ctx: Context, lp: RoundLoop) -> tuple[list[dict[str, Any]], str]:
     """The owner's open questions and the stage they hold: scope, evidence, unsure changes, then the rounds'."""
-    at, run = job.store.root / UPDATER, job.state["run"]
+    at, run = job.workspace, job.state["run"]
     if bad := pack_updater.outside(at, ctx.start, c.pins["skills"]):
         return [pack_gates.scope(run, bad)], "update"
     edits = _edits(job, ctx)
@@ -352,7 +353,7 @@ def _reconsider(job: Job, c: pack_candidate.Candidate, lp: RoundLoop) -> Action:
     def reconsider() -> dict[str, tuple[str, str]]:
         run = pack_candidate.challenge(
             job.store, c, job.live.clone, text, job.live.challenge, rechecks=keys, submit=dispute_tools.SUBMIT,
-            label=pack_candidate.AGAIN,
+            label=pack_candidate.AGAIN, keep=job.keeps,
         )  # fmt: skip
         p = run.payload
         if not (run.termination and run.termination.confirmed):
@@ -376,7 +377,7 @@ def _activate(job: Job, c: pack_candidate.Candidate, ctx: Context, lp: RoundLoop
     Its changed evidence must be what the owner accepted; a code change waits for his approval first (TD-414). The
     run waits for the owner (None) when publication stops; trying again goes on from where it got.
     """
-    package, at = job.live.package.resolve(), job.store.root / UPDATER
+    package, at = job.live.package.resolve(), job.workspace
     edits = _edits(job, ctx)
     expected = ctx.accepted or (lp.head if lp.ended == "clean" else "")
     if not expected or pack_gates.identity(c, edits) != expected:

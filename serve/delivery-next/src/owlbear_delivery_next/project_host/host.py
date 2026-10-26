@@ -26,7 +26,7 @@ from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, Recor
 from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_flow import delivery_target, loop
 from owlbear_delivery_next.change_flow.status import Activity, passes
-from owlbear_delivery_next.local_system import codebase, data_repo, processes
+from owlbear_delivery_next.local_system import codebase, data_repo, maintenance, processes
 from owlbear_delivery_next.local_system.process_probe import ProcessTableWorktreeProbe, WorktreeProcessScanError
 from owlbear_delivery_next.local_system.slots import Slots
 from owlbear_delivery_next.local_system.storage_io import atomic_write
@@ -163,6 +163,7 @@ class Host:
         self.merged: Callable[[], None] = lambda: None  # a Change's pull request merged: the machine may curate memory
         self.passing: set[str] = set()  # Changes whose next step runs while paused (TD-287, TD-303)
         self.slots, self.wants, self.grants = Slots(lambda: session_slots.ALL), dict[str, int](), dict[str, int]()
+        self.maintenance: maintenance.Maintenance | None = None
         self.waiting, self.asked = set[str](), set[str]()  # Changes waiting for a session slot (TD-336)
         self.wake, self.stopped, self.launching = threading.Event(), threading.Event(), threading.Lock()
         self.pr_states: dict[str, PrState] = {}

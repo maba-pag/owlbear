@@ -57,7 +57,7 @@ def tools() -> dict[str, object]:
 
 def routes() -> dict[str, object]:
     """The parameters and bodies the host's routes take from a chat."""
-    spec = api.create_app(Store(Path("unused")), "t", SimpleNamespace()).openapi()
+    spec = api.create_app(Store(Path("unused")), "t", SimpleNamespace(maintenance=None)).openapi()
     defs = spec["components"]["schemas"]
     ops = {f"{m.upper()} {r}": spec["paths"][f"/api/next{r}"][m] for m, r in ROUTES}
     out = {k: shape({"parameters": op.get("parameters", []), "body": op.get("requestBody")}, defs)

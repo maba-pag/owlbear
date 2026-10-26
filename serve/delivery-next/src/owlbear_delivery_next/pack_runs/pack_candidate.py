@@ -12,7 +12,6 @@ import json
 import re
 import subprocess
 import tarfile
-import tempfile
 import uuid
 from dataclasses import dataclass, field, replace
 from pathlib import Path
@@ -24,6 +23,7 @@ from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_contracts.round_records import MAX_FINDINGS
 from owlbear_delivery_next.design_packs import design_pack, pack_update
 from owlbear_delivery_next.local_system import git_files, preload
+from owlbear_delivery_next.pack_runs.scratch import scratch
 from owlbear_delivery_next.runtimes import sdk_adapter, step_input
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.settings import roles
@@ -235,10 +235,11 @@ def challenge(  # noqa: PLR0913 - the candidate, its upstream, the message, the 
     submit: tools.Spec = tools.REVIEW,
     label: str = LABEL,
     changed: tuple[str, ...] = (),
+    keep: Callable[[Path], bool] | None = None,
 ) -> Run:
     """One fresh read-only challenger session over the candidate; *rechecks* are the findings it judges again."""
     role = roles.chosen(store.settings(), label)
-    with tempfile.TemporaryDirectory(prefix="owlbear-pack-") as tmp:
+    with scratch("owlbear-pack-", keep) as tmp:
         at = Path(tmp)
         code, said = git_files.probe_in(at)(["git", "init", "-q"])  # the window places its files only in a repository
         if code:

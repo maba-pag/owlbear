@@ -97,6 +97,11 @@ class Slots:
                 del self.held[k]
             self.held |= {(project, key): n for key, n in held.items() if n}
 
+    def restore_one(self, project: str, key: str, count: int) -> None:
+        """Restore one maintenance lease without pruning this project's ordinary runner reservations."""
+        with self.lock:
+            self.held[project, key] = max(count, self.held.get((project, key), 0))
+
     def leave(self, project: str) -> None:
         """Forget a stopped project's waits and its host, so the next turn goes to a project that can take it."""
         with self.lock:
