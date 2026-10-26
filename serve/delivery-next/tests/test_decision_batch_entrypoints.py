@@ -3927,3 +3927,46 @@ def test_an_atomic_write_returns_the_identity_of_the_file_it_wrote(tmp_path):
     assert (written.st_ino, written.st_dev) == (target.stat().st_ino, target.stat().st_dev)
     assert written.st_ino != old  # a new file, renamed over the old one
     assert [p.name for p in tmp_path.iterdir()] == ["record.json"]  # no temporary left
+
+
+def test_an_atomic_write_does_not_clean_a_foreign_temporary_after_its_rename(tmp_path, monkeypatch):
+    folder, moved, foreign = tmp_path / "folder", tmp_path / "moved", tmp_path / "foreign"
+    folder.mkdir()
+    foreign.mkdir()
+    target, planted, real_replace = folder / "record.json", [], Path.replace
+
+    def replace_then_link(source, destination):
+        result = real_replace(source, destination)
+        if Path(destination) == target:
+            folder.rename(moved)
+            other = foreign / source.name
+            other.write_text("foreign contents")
+            planted.append(other)
+            folder.symlink_to(foreign, target_is_directory=True)
+        return result
+
+    monkeypatch.setattr(Path, "replace", replace_then_link)
+    with pytest.raises(OSError, match=r"Errno"):
+        storage_io.atomic_write(target, "new contents")
+    assert len(planted) == 1
+    assert planted[0].read_text() == "foreign contents"
+    assert folder.is_symlink()
+    assert (moved / "record.json").read_text() == "new contents"
+    assert [p.name for p in moved.iterdir()] == ["record.json"]
+
+
+def test_an_atomic_write_still_removes_its_temporary_when_the_rename_is_refused(tmp_path, monkeypatch):
+    target, real_replace = tmp_path / "record.json", Path.replace
+    target.write_text("old contents")
+
+    def refuse(source, destination):
+        if Path(destination) == target:
+            msg = "simulated rename refusal"
+            raise OSError(msg)
+        return real_replace(source, destination)
+
+    monkeypatch.setattr(Path, "replace", refuse)
+    with pytest.raises(OSError, match="rename refusal"):
+        storage_io.atomic_write(target, "new contents")
+    assert target.read_text() == "old contents"
+    assert [p.name for p in tmp_path.iterdir()] == ["record.json"]

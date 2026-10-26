@@ -38,20 +38,24 @@ def atomic_write(target: Path, content: str) -> os.stat_result:
     replacement of *target* by another writer cannot be mistaken for this write.
 
     Raises:
-        OSError: Any I/O failure; the temp file is cleaned up before raising.
+        OSError: Any I/O failure; an unrenamed temporary is cleaned up before raising. After a successful rename,
+            its old name is no longer owned by this call and is never unlinked.
     """
     fd, tmp_path = tempfile.mkstemp(dir=target.parent, prefix=".tmp-", suffix=".tmp")
+    renamed = False
     try:
         with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as fh:
             fh.write(content)
             fh.flush()
             os.fsync(fh.fileno())
             Path(tmp_path).replace(target)
+            renamed = True
             written = os.fstat(fh.fileno())
         fsync_dir(target.parent)  # POSIX: so the rename survives a power loss; a pipe or link there raises, never waits
     except Exception:
-        with contextlib.suppress(OSError):
-            Path(tmp_path).unlink()
+        if not renamed:
+            with contextlib.suppress(OSError):
+                Path(tmp_path).unlink()
         raise
     return written
 
