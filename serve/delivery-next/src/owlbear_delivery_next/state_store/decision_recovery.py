@@ -62,6 +62,7 @@ def _written(root: DataRepo, batch: decision_batch.Batch) -> None:
                 "is changed; resolve it by hand"
             )
             raise DecisionsUnavailable(msg, RECOVER)
+    _still_plain(root, batch)
 
 
 def _idle(shared: DataRepo, batch: decision_batch.Batch) -> None:
@@ -126,6 +127,14 @@ def _preflight(root: DataRepo, batch: decision_batch.Batch) -> None:
         if current not in (before, after):
             msg = f"{rel} was edited since batch {batch.generation} began, so nothing is changed; resolve it by hand"
             raise DecisionsUnavailable(msg, RECOVER)
+    _still_plain(root, batch)
+
+
+def _still_plain(root: DataRepo, batch: decision_batch.Batch) -> None:
+    """Refuse unless every path still lies under plain folders, checked after all the reads it guards."""
+    if not decision_batch.still_plain(root.root, [root.root / rel for rel, _, _ in batch.files]):
+        msg = f"a folder of batch {batch.generation} changed while it was read, so nothing is changed; check it"
+        raise DecisionsUnavailable(msg, RECOVER)
 
 
 def finish(shared: DataRepo, generation: str) -> Recovery:

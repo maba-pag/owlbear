@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING
 from owlbear_delivery_next.local_system.storage_io import fsync_dir, open_lock
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator, Sequence
+    from collections.abc import Callable, Iterable, Iterator, Sequence
 
     from owlbear_delivery_next.local_system.data_repo import DataRepo
 
@@ -137,11 +137,26 @@ def plain_in_checkout(root: Path, path: Path) -> bool:
 def owned(root: Path, images: dict[Path, tuple[bytes | None, bytes | None]]) -> bool:
     """Whether every file is plain and holds its before or after image; an owner's other content is never overwritten.
 
-    A symlink or a path outside *root* is refused before anything is read, so a matching referent is never followed.
+    A symlink or a path outside *root* is refused before anything is read, so a matching referent is never followed,
+    and every path is checked again after all reads (`still_plain`), so a folder swapped for a link meanwhile refuses.
     """
     if not all(plain_in_checkout(root, path) for path in images):
         return False
-    return all(_held(path) in (before, after) for path, (before, after) in images.items())
+    try:
+        held = all(_held(path) in (before, after) for path, (before, after) in images.items())
+        return held and still_plain(root, images)
+    except OSError:
+        return False
+
+
+def still_plain(root: Path, paths: Iterable[Path]) -> bool:
+    """Whether every path still lies under plain folders of *root*, checked after the reads it guards.
+
+    A proof reads bytes through a path's folders; checked only before, a folder swapped for a link during the read
+    would lend it a foreign file's bytes. A path under folders that never existed counts up to its first missing name
+    (`_anchor`); any error other than a missing name raises.
+    """
+    return all(plain_in_checkout(root, _anchor(root, path)) for path in paths)
 
 
 def restored(root: Path, before: dict[Path, bytes | None]) -> bool:
@@ -163,7 +178,7 @@ def restored(root: Path, before: dict[Path, bytes | None]) -> bool:
             if text is None
             else _held(path) == text and plain_in_checkout(root, path)
             for path, text in before.items()
-        )
+        ) and still_plain(root, before)
     except OSError:
         return False
 

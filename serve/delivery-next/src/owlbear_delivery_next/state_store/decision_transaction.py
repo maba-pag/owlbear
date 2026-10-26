@@ -132,6 +132,8 @@ def landed(shared: DataRepo, head: str, rows: Sequence[tuple[str, bytes | None, 
         return False
     if not all(in_head(shared, rel, after, commit) and worktree_holds(shared, rel, after) for rel, _, after in rows):
         return False
+    if not decision_batch.still_plain(shared.root, [shared.root / rel for rel, _, _ in rows]):  # after every read
+        return False
     return operation_idle(shared) and head_commit(shared) == commit
 
 
@@ -158,7 +160,10 @@ def in_head(shared: DataRepo, rel: str, after: bytes, commit: str) -> bool:
 def worktree_holds(shared: DataRepo, rel: str, after: bytes) -> bool:
     """Whether *rel* is a plain file under plain folders of the checkout, holding exactly the after image.
 
-    The folders are checked before the file is read, so a linked project or `decisions` folder is never followed.
+    The folders are checked before the file is read, so a linked project or `decisions` folder is never followed, and
+    again after it, so one swapped for a link during the read cannot lend a foreign file's bytes.
     """
     path = shared.root / rel
-    return decision_batch.plain_in_checkout(shared.root, path) and path.is_file() and path.read_bytes() == after
+    if not (decision_batch.plain_in_checkout(shared.root, path) and path.is_file()):
+        return False
+    return path.read_bytes() == after and decision_batch.still_plain(shared.root, [path])

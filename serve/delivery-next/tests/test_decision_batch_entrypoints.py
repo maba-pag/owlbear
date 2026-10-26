@@ -9,6 +9,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+import shutil
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
@@ -1534,3 +1535,104 @@ def test_a_folder_swapped_for_a_link_during_the_final_absence_read_keeps_the_bat
     assert (tmp_path / "moved" / "notes.txt").read_text() == "the owner's notes\n"
     assert decision_batch.pending(shared).generation == generation
     _no_authority(picking)
+
+
+def _read_swap_surface(picking, monkeypatch, surface: str) -> tuple[Path, object, tuple[object, str]]:
+    """The file a proof reads, the public call that runs the proof, and the function whose reads are counted."""
+    shared = picking.shared
+    new = make(title="Use UTC", statement="All timestamps use UTC.")
+    target = shared.root / f"{PROJECT}/decisions/{new.id}.md"
+    if surface == "generic-put-back":
+        target = shared.root / PROJECT / "changes" / "record.json"
+        target.parent.mkdir(parents=True)
+        head = shared.git("rev-parse", "HEAD").stdout.strip()
+
+        def step(_head: str) -> decision_transaction.Step:
+            target.write_bytes(b'{"n": 1}\n')
+            return decision_transaction.Step("the commit was refused", refused=True)
+
+        def run() -> None:
+            decision_transaction.transaction(shared, PROJECT, "changes: one", [(target, b'{"n": 1}\n')], step, head)
+
+        return target, run, (decision_transaction, "settle")
+    if surface in {"store-put-back", "store-landed"}:
+
+        def save() -> None:
+            with monkeypatch.context() as m:
+                if surface == "store-put-back":
+                    m.setattr(DataRepo, "commit", lambda *_a, **_k: "git refused the commit")
+                decision_store.save(shared, new, expected_revision=None, message="decisions: one")
+
+        scope = (decision_transaction, "settle" if surface == "store-put-back" else "landed")
+        return target, save, scope
+    if surface == "finish-committed":
+        generation = _committed_but_unproved(picking, monkeypatch, new)
+        return target, lambda: decision_recovery.finish(shared, generation), (decision_recovery, "finish")
+    _interrupt(picking, monkeypatch, [new])
+    write(new, shared.root / PROJECT)
+    generation = decision_batch.pending(shared).generation
+    return target, lambda: decision_recovery.abandon(shared, generation), (decision_recovery, "abandon")
+
+
+def _tree(folder: Path, read) -> dict[str, bytes]:
+    return {p.name: read(p) for p in sorted(folder.iterdir())}
+
+
+@pytest.mark.parametrize("call", [1, 2, 3])
+@pytest.mark.parametrize(
+    "surface", ["store-put-back", "generic-put-back", "abandon", "store-landed", "finish-committed"]
+)
+def test_a_folder_swapped_for_a_link_while_a_proof_reads_a_file_is_never_trusted(
+    picking, monkeypatch, tmp_path, surface, call
+):
+    """During the *call*-th read of the file in a proof, after its first path checks, the owner moves the folder aside
+    and links it to a foreign copy holding the same bytes. The proof must refuse: the foreign files are never removed
+    or written, the owner's files stay where the owner moved them, Git is as the owner left it, the batch stays pending
+    and no reader gets authority. A *call* past the proof's last read never fires and the surface completes.
+    """
+    _seed(picking)
+    shared = picking.shared
+    target, run, (module, name) = _read_swap_surface(picking, monkeypatch, surface)
+    folder, moved, foreign = target.parent, tmp_path / "moved", tmp_path / "foreign"
+    real_read, real_scope = Path.read_bytes, getattr(module, name)
+    inside, calls, fired = [False], [0], {}
+
+    def scoped(*args, **kwargs):
+        inside[0] = True
+        try:
+            return real_scope(*args, **kwargs)
+        finally:
+            inside[0] = False
+
+    def read_then_owner_swaps(path: Path) -> bytes:
+        data = real_read(path)
+        if inside[0] and not fired and path == target:
+            calls[0] += 1
+            if calls[0] == call:
+                folder.rename(moved)
+                shutil.copytree(moved, foreign)  # the same bytes, so only the folder chain can tell them apart
+                folder.symlink_to(foreign, target_is_directory=True)
+                fired.update(tree=_tree(moved, real_read), git=_git_state(shared))
+        return data
+
+    with monkeypatch.context() as m:
+        m.setattr(module, name, scoped)
+        m.setattr(Path, "read_bytes", read_then_owner_swaps)
+        try:
+            run()
+        except decision_store.DecisionsUnavailable:
+            assert fired  # a refusal is only ever this swap's
+    assert fired or call > 1  # every proof reads the file at least once
+    if not fired:
+        assert decision_batch.pending(shared) is None
+        return
+    assert _tree(foreign, Path.read_bytes) == fired["tree"]  # nothing removed or written behind the link
+    assert _tree(moved, Path.read_bytes) == fired["tree"]  # the owner's files stay where the owner put them
+    assert folder.is_symlink()
+    assert _git_state(shared) == fired["git"]
+    assert decision_batch.pending(shared) is not None
+    _no_authority(picking)
+
+
+def _git_state(shared: DataRepo) -> tuple[str, str]:
+    return shared.git("rev-parse", "HEAD").stdout, shared.git("ls-files", "-s").stdout
