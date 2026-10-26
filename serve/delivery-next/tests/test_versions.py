@@ -13,11 +13,11 @@ from types import SimpleNamespace
 import pytest
 
 from owlbear_delivery_next.local_system import codebase, local_home
-from owlbear_delivery_next.machine_host import registry, selfcheck, versions
+from owlbear_delivery_next.machine_host import selfcheck, versions
 from owlbear_delivery_next.machine_host.versions import Choice
 from owlbear_delivery_next.project_host import pages
 from owlbear_delivery_next.settings.config import CONFIG_FORMAT
-from owlbear_delivery_next.state_store import project_home
+from owlbear_delivery_next.state_store import project_home, registry
 from owlbear_delivery_next.state_store.database import STORE_FORMAT
 
 

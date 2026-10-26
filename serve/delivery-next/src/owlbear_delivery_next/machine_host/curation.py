@@ -28,10 +28,10 @@ from owlbear_delivery_next.change_contracts.models import Record, StepKind
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.local_system import data_repo, local_home, processes
 from owlbear_delivery_next.local_system.storage_io import atomic_write
-from owlbear_delivery_next.machine_host import machine_settings, registry
 from owlbear_delivery_next.runtimes import sdk_adapter
 from owlbear_delivery_next.settings import roles
 from owlbear_delivery_next.settings.config import Settings, SettingsUnset
+from owlbear_delivery_next.state_store import machine_settings, registry
 from owlbear_delivery_next.workflow_steps import lookup
 
 if TYPE_CHECKING:

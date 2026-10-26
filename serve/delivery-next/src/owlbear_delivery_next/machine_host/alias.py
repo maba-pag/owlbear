@@ -17,7 +17,8 @@ import sys
 from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.local_system import local_home
-from owlbear_delivery_next.machine_host import registry, versions
+from owlbear_delivery_next.machine_host import versions
+from owlbear_delivery_next.state_store import registry
 
 if TYPE_CHECKING:
     from pathlib import Path
