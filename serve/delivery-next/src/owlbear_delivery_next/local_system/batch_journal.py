@@ -40,7 +40,10 @@ class JournalError(ValueError):
 
 
 class JournalBusyError(JournalError):
-    """Another writer held the batch lock until the caller's deadline: whether a batch is in flight is unknown yet."""
+    """By the caller's deadline whether a batch is in flight is not known.
+
+    Another writer still held the batch lock, or the deadline passed before the journal could be asked.
+    """
 
 
 @dataclass(frozen=True)
@@ -56,9 +59,15 @@ class Batch:
 
 
 def admin(shared: DataRepo, until: float | None = None) -> Path:
-    """The checkout's Git folder, where the journal lies and Git never tracks it; Git is asked within *until*."""
+    """The checkout's Git folder, where the journal lies and Git never tracks it; Git is asked within *until*.
+
+    Once *until* has passed, Git is not asked: that is `JournalBusyError`, not known yet, never a damaged checkout.
+    """
     found = shared.git("rev-parse", "--absolute-git-dir", until=until)
     folder = found.stdout.strip()
+    if found.returncode and until is not None and time.monotonic() >= until:
+        msg = f"this save's deadline passed before the git folder of {shared.root} was found, so try again"
+        raise JournalBusyError(msg)
     if found.returncode or not Path(folder).is_absolute():  # an empty answer is no folder: never the working directory
         msg = f"the git folder of {shared.root} cannot be found: {found.stderr.strip()[:200] or 'Git named none'}"
         raise JournalError(msg)
@@ -99,16 +108,19 @@ def locked(shared: DataRepo, until: float | None = None) -> Iterator[None]:
 
 
 def _take(dir_fd: int, until: float | None) -> int:
-    """The batch lock, waited for without end, or tried until *until*; `BlockingIOError` when still held then."""
+    """The batch lock, waited for without end, or tried only while *until* is ahead; `BlockingIOError` after it.
+
+    The clock is read before every try, also the first and the one after a wait: a lock that comes free only once the
+    deadline passed is never taken as within it.
+    """
     if until is None:
         return open_lock(dir_fd, blocking=True, name=LOCK)
-    while True:
+    while (left := until - time.monotonic()) > 0:
         try:
             return open_lock(dir_fd, blocking=False, name=LOCK)
         except BlockingIOError:
-            if (left := until - time.monotonic()) <= 0:
-                raise
             time.sleep(min(LOCK_POLL, left))
+    raise BlockingIOError
 
 
 def _data(value: str | None) -> bytes | None:

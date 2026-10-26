@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from owlbear_delivery_next.local_system import batch_journal, local_home, publication_hold
+from owlbear_delivery_next.local_system import batch_journal, git_run, local_home, publication_hold
 from owlbear_delivery_next.local_system.storage_io import atomic_write
 
 if TYPE_CHECKING:
@@ -95,23 +95,8 @@ def _move_old(path: Path) -> None:
 
 
 def _git(cwd: Path, *args: str, until: float | None = None) -> subprocess.CompletedProcess[str]:
-    """One git command, ended by ``until`` (monotonic) at the latest; a timeout is a failed command. Never prompts."""
-    quiet = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
-    seconds = GIT_SECONDS if until is None else max(0.5, min(GIT_SECONDS, until - time.monotonic()))
-    try:
-        return subprocess.run(  # noqa: S603
-            ["git", *args],  # noqa: S607
-            cwd=cwd,
-            env=quiet,
-            stdin=subprocess.DEVNULL,
-            capture_output=True,
-            text=True,
-            timeout=seconds,
-            check=False,
-        )
-    except (OSError, subprocess.TimeoutExpired) as exc:
-        # Exit 1 can mean no match or a difference; failure to run Git cannot answer either probe.
-        return subprocess.CompletedProcess(["git", *args], 128, "", str(exc))
+    """One git command, ended by ``until`` (monotonic) at the latest; never started once it passed (`git_run.run`)."""
+    return git_run.run(cwd, *args, until=until, cap=GIT_SECONDS)
 
 
 def _top(root: Path) -> Path | None:

@@ -3441,37 +3441,62 @@ class _Holder:
         self.process.wait(timeout=10)
 
 
-@pytest.mark.parametrize("case", ["held-past-the-deadline", "released-within-the-deadline"])
+DEADLINE_CASES = ["held-past-the-deadline", "released-within-the-deadline", "freed-only-after-it", "expired-before"]
+
+
+@pytest.mark.parametrize("case", DEADLINE_CASES)
 @pytest.mark.parametrize("op", ["push", "pull"])
-def test_an_ordinary_push_or_pull_reads_the_batch_journal_within_its_own_deadline(
+def test_an_ordinary_push_or_pull_reads_the_batch_journal_within_its_own_deadline(  # noqa: PLR0915 - one matrix
     picking, shared_repo, monkeypatch, op, case
 ):
     """Another process holds the batch lock. An ordinary push or pull asks Git for its folder and waits for the lock
-    only within its own deadline: when the lock is still held then, it neither pushes, fetches nor rebases and says
-    why; when the lock comes free within it, the push or pull goes on as before."""
+    only within its own deadline: when the lock is still held then, or comes free only after it, or the deadline
+    passed before the call, it neither pushes, fetches nor rebases and says why; a deadline already passed starts no
+    Git at all. When the lock comes free within it, the push or pull goes on as before."""
     _seed(picking)
     shared, remote = picking.shared, shared_repo[1]
     (shared.root / "settings-note.txt").write_text("a setting\n")
     shared.git("add", "settings-note.txt")
     shared.git("commit", "-qm", "settings: a note")
-    published, calls = _remote_main(remote), []
-    real_git = data_repo._git  # noqa: SLF001
+    published, calls, launched, tries = _remote_main(remote), [], [], []
+    real_git, real_run, real_open_lock = data_repo._git, subprocess.run, batch_journal.open_lock  # noqa: SLF001
 
     def recording_git(cwd, *args, until=None):
         calls.append((args, until))
         return real_git(cwd, *args, until=until)
 
+    def recording_run(*args, **kwargs):
+        launched.append(kwargs["timeout"])
+        return real_run(*args, **kwargs)
+
+    def counted_try(*args, **kwargs):
+        tries.append(kwargs["blocking"])
+        return real_open_lock(*args, **kwargs)
+
     holder = _Holder(decision_batch.journal_path(shared).parent / decision_batch.LOCK)
     safety = threading.Timer(SAFETY_SECONDS, holder.release)
     safety.start()
-    waiting = SimpleNamespace(monotonic=time.monotonic, sleep=lambda _seconds: holder.release())
+    until = time.monotonic() + (-1 if case == "expired-before" else SAFETY_SECONDS * 2)
+    clock = [time.monotonic()]
 
+    def past_it(_seconds: float) -> None:
+        clock[0] = until + 1  # the wait ends after the deadline; the lock is let go only then, if at all
+        if case == "freed-only-after-it":
+            holder.release()
+
+    after = SimpleNamespace(monotonic=lambda: clock[0], sleep=past_it)
+    waits = {
+        "released-within-the-deadline": SimpleNamespace(monotonic=time.monotonic, sleep=lambda _s: holder.release()),
+        "held-past-the-deadline": after,
+        "freed-only-after-it": after,
+    }
     try:
         with monkeypatch.context() as m:
             m.setattr(data_repo, "_git", recording_git)
-            if case == "released-within-the-deadline":  # the lock comes free while the call waits for it
-                m.setattr(batch_journal, "time", waiting, raising=False)
-            until = time.monotonic() + (0.2 if case == "held-past-the-deadline" else SAFETY_SECONDS * 2)
+            m.setattr(subprocess, "run", recording_run)  # every Git process the call starts
+            m.setattr(batch_journal, "open_lock", counted_try)
+            if case in waits:
+                m.setattr(batch_journal, "time", waits[case], raising=False)
             started = time.monotonic()
             said = shared._push(until) if op == "push" else shared.pull(until)  # noqa: SLF001
             took = time.monotonic() - started
@@ -3482,17 +3507,47 @@ def test_an_ordinary_push_or_pull_reads_the_batch_journal_within_its_own_deadlin
     probes = [u for args, u in calls if args[:2] == ("rev-parse", "--absolute-git-dir")]
     assert probes
     assert all(u == until for u in probes)  # every journal probe runs within this call's own deadline
+    assert all(0 < t <= data_repo.GIT_SECONDS for t in launched)
     if case == "released-within-the-deadline":
         assert holder.released.is_set()
         assert said == ""
         if op == "push":
             assert _remote_main(remote) == shared.git("rev-parse", "HEAD").stdout.strip()
         return
-    assert not holder.released.is_set()  # the call returned before the safety release
-    assert took < SAFETY_SECONDS
+    assert took < SAFETY_SECONDS  # the call returned before the safety release
     assert "is not known yet" in said
-    assert "another save still holds the batch lock, so try again" in said
+    if case == "expired-before":
+        assert launched == []  # no Git is started once the deadline has passed
+        assert tries == []
+        assert "deadline passed before the git folder" in said
+    else:
+        assert "another save still holds the batch lock, so try again" in said
+        assert holder.released.is_set() == (case == "freed-only-after-it")
+        assert tries == [False]  # one try while it was held; none once the deadline had passed
     remote_work = {"push", "pull", "fetch", "rebase", "ls-remote"}
     assert not [args for args, _ in calls if remote_work & set(args)]  # nothing after the deadline reaches the remote
     assert _remote_main(remote) == published
     assert shared.git("log", "-1", "--format=%s").stdout.strip() == "settings: a note"
+
+
+def test_git_is_given_only_what_is_left_of_its_deadline(tmp_path, monkeypatch):
+    """A Git command with a deadline gets only the time left, however short, and none once it passed; one without a
+    deadline gets the usual cap."""
+    seen, real_run = [], subprocess.run
+
+    def recording_run(*args, **kwargs):
+        seen.append(kwargs["timeout"])
+        return real_run(*args, **kwargs)
+
+    with monkeypatch.context() as m:
+        m.setattr(subprocess, "run", recording_run)
+        deadline = time.monotonic() + 0.2
+        data_repo._git(tmp_path, "--version", until=deadline)  # noqa: SLF001
+        data_repo._git(tmp_path, "--version")  # noqa: SLF001
+        expired = data_repo._git(tmp_path, "--version", until=time.monotonic() - 0.001)  # noqa: SLF001
+
+    assert len(seen) == 2  # the expired command never started
+    assert 0 < seen[0] <= 0.2  # less than half a second left: that, and no floor
+    assert seen[1] == data_repo.GIT_SECONDS
+    assert (expired.returncode, expired.stdout) == (128, "")
+    assert "deadline passed" in expired.stderr
