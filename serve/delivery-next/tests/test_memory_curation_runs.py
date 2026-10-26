@@ -1491,3 +1491,35 @@ def test_an_8ad_snapshot_receipt_covers_its_own_row_with_no_second_hold_and_no_r
     later.start("shop")
     drained(later)
     assert calls == []
+
+
+GENERIC = "RuntimeError: synthetic SDK failure"
+
+
+@pytest.mark.parametrize("recovered", [False, True], ids=["held", "recovered"])
+def test_a_later_failure_stamped_with_the_same_start_after_a_clock_rollback_is_held_anew(root, recovered) -> None:
+    """Review on d520: a row's mark names its lease only while that lease records the row's own evidence.
+
+    main's failure before its first PID is held as A. After the clock went back, main's later failure starts at the
+    same moment but ends at another, with no key and no PIDs: it is another run, held as B, and nothing starts.
+    """
+    t0 = datetime.now(UTC) - timedelta(hours=2)
+    main_row(GENERIC, t0, t0 + timedelta(seconds=30))
+    first = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root))
+    [a] = ledger_sessions()
+    if recovered:
+        rebooted(first)
+        first.maintenance.recover(a["id"], rebooted=True)
+    main_row(GENERIC, t0, t0 + timedelta(seconds=60))  # the same start, its own end
+    calls: list[str] = []
+    for _ in range(2):
+        later = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root), run=never_runs(calls))
+        sessions = ledger_sessions()
+        assert [s["state"] for s in sessions] == ["recovered" if recovered else "held", "held"]
+        assert later.load().folders["shop"].key == sessions[1]["slot"] != a["slot"]
+    later.start("shop")
+    drained(later)
+    assert (calls, later.load().folders["shop"].reason) == ([], curation.LEFT)
+    main_row(GENERIC, t0, t0 + timedelta(seconds=30))  # A's own row again, its key lost: still A, nothing new
+    again = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root), run=never_runs(calls))
+    assert (len(ledger_sessions()), again.load().folders["shop"].key) == (2, a["slot"])

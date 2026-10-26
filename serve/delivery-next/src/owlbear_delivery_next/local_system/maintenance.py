@@ -247,7 +247,8 @@ class Maintenance:
         replaces that rule for a caller that keys its own history. *pids* are the processes a new lease records, and
         *observed* the producer evidence it saw, for such a caller's later comparison.
         A *keyed* import also marks *source* with the lease it created, in the same save, so a retry finds that very
-        lease again instead of matching by window. Each of *marks* is another source a new lease accounts for, marked
+        lease again instead of matching by window; a mark alone proves nothing, so the lease it names is reused only
+        while *covers*, when given, still accepts it. Each of *marks* is another source a new lease accounts for, marked
         in that same save, so its keyed import finds this lease after a lost write. Each of *notes*, such as a
         rewrite's receipt, is recorded in the one save that holds or finds the lease, so neither is ever without it.
         """
@@ -262,10 +263,10 @@ class Maintenance:
         with self._locked() as ledger:
             missing = [n for n in dict.fromkeys(notes) if n not in ledger.imported]
             found = None
-            if keyed:
+            if keyed:  # a lease a mark names, and only while what *covers* proves still holds for it
                 prefix = f"{source}:slot:"
-                marked = next((s[len(prefix) :] for s in ledger.imported if s.startswith(prefix)), "")
-                found = next((s for s in ledger.sessions if marked and s.slot == marked), None)
+                marked = {s[len(prefix) :] for s in ledger.imported if s.startswith(prefix)}
+                found = next((s for s in ledger.sessions if s.slot in marked and (covers is None or covers(s))), None)
             known = [s for s in ledger.sessions if same(s)] if found is None else [found]
             if known:
                 if missing:

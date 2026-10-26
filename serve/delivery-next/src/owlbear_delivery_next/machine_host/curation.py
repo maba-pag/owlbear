@@ -124,32 +124,32 @@ class Curation:
         if runs.left_key and not self.maintenance.records(SLOT, "curation", runs.left_key, runs.left):
             runs.left_key = ""  # the lease it names does not record these PIDs, so the key proves nothing
         # Every uncertain row on file predates this import, as does the snapshot, so one lease may account for them all:
-        # its recovery needs a reboot after the import, which ends all their processes.
-        behind = tuple(
-            self._row(n, r)
-            for n, r in runs.folders.items()
-            if legacy_uncertain(r) or (r.state == "running" and not r.key)
-        )
+        # its recovery needs a reboot after the import, which ends all their processes. Each is marked with its own
+        # evidence, which that lease records, so a mark is reused only for the very row it was made for.
+        behind = {n: r for n, r in runs.folders.items() if legacy_uncertain(r) or (r.state == "running" and not r.key)}
         if runs.left and not runs.left_key:
             # A snapshot no lease of ours names is a producer's own observation. Its PIDs and session evidence are
             # what that producer wrote: a lease that saw these PIDs and every session row still on file covers it in
             # any state, though refusals since overwrote some; a later session's row is held anew. The rows behind it
             # are associated with its lease in the same save.
             snapshot, seen = curation_snapshots.observed(runs), curation_snapshots.sessions(runs)
+            rows = {curation_snapshots.window(n, r) for n, r in behind.items()}
             lease = self.maintenance.adopt_uncertain(
                 f"{self.path()}#left", SLOT, "curation", workspace="", generation=snapshot, pids=runs.left,
-                covers=curation_snapshots.same_snapshot(SLOT, snapshot, seen), observed=seen, marks=behind,
+                covers=curation_snapshots.same_snapshot(SLOT, snapshot, seen), observed=tuple(sorted({*seen, *rows})),
+                marks=tuple(self._row(n, r) for n, r in behind.items()),
             )  # fmt: skip
             runs.left_key = lease.slot
-        for name, r in runs.folders.items():
+        for name, r in behind.items():
             # A row's own mark finds its lease after a lost key write, in any state, so a recovered one stays so, as
-            # does the snapshot lease that saw this very row at its import. Each row is judged before it is rewritten
-            # below, so the rewrite never erases what an older host held.
-            if legacy_uncertain(r) or (r.state == "running" and not r.key):
-                lease = self.maintenance.adopt_uncertain(
-                    self._row(name, r), SLOT, "curation", workspace="", covers=_row_lease(name, r), keyed=True
-                )
-                runs.folders[name] = r.model_copy(update={"key": lease.slot})
+            # does the snapshot lease that saw this very row at its import; a mark counts only while that lease
+            # records this row's evidence. Each row is judged before it is rewritten below, so the rewrite never
+            # erases what an older host held.
+            lease = self.maintenance.adopt_uncertain(
+                self._row(name, r), SLOT, "curation", workspace="", covers=_row_lease(name, r), keyed=True,
+                observed=(curation_snapshots.window(name, r),),
+            )  # fmt: skip
+            runs.folders[name] = r.model_copy(update={"key": lease.slot})
         for name, r in runs.folders.items():
             if r.state not in {"waiting", "running"}:
                 continue
@@ -165,8 +165,8 @@ class Curation:
         return local_home.root() / STATE
 
     def _row(self, folder: str, run: FolderRun) -> str:
-        """The ledger source of one row's generation: its folder and the start its producer stamped."""
-        return f"{self.path()}#{folder}:{run.started_at}"
+        """The ledger source of one row's generation: its folder and the times its producer stamped, as one window."""
+        return f"{self.path()}#{curation_snapshots.window(folder, run)}"
 
     def load(self) -> Runs:
         """Every folder's last run; none when the file is missing or unreadable."""
