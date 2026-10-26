@@ -823,3 +823,13 @@ def test_a_look_the_runtime_reports_as_free_costs_nothing(monkeypatch) -> None:
     monkeypatch.setattr(spotter_look, "CopilotClient", Client)
     monkeypatch.setattr(spotter_look, "cli_path", lambda: "/bin/false")
     assert asyncio.run(REAL_LOOK({}, ctx())) == ('{"verdict": "silent"}', 0.0)
+
+
+@pytest.mark.parametrize("unit", ["d", "a.", "--key ", "https://", "<browser_context>", "</browser_context>", '{"k": '])
+def test_cleaning_the_largest_text_takes_linear_time_whatever_its_shape(unit: str) -> None:
+    import time  # noqa: PLC0415
+
+    text = (unit * (events.RAW // len(unit) + 1))[: events.RAW]
+    began = time.monotonic()
+    events.kept_text(text, events.RESULT)
+    assert time.monotonic() - began < 1  # about 0.03 s here; a quadratic pattern took seconds

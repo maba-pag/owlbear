@@ -8,7 +8,7 @@ _NAME = r"(?:token|secret|passw(?:or)?d|pwd|key|auth|credentials?)"
 _AUTH_HEADER = re.compile(r"(?i)\b(?P<h>(?:proxy-)?authorization)\s*:\s*(?:[\w.~+/-]+\s+)?[^\s\"']+")
 _HEADER = re.compile(r"(?P<flag>(?:(?<!\S)-H|--header)(?:\s+|=))(?:(?P<q>[\"'])(?P<qv>.*?)(?P=q)|(?P<v>\S+))")
 _HEADER_NAME = re.compile(rf"(?i){_NAME}|cookie|session")
-_USERINFO = re.compile(r"(?i)\b(?P<scheme>[a-z][a-z0-9+.-]*://)[^/\s@]+@")
+_USERINFO = re.compile(r"(?i)\b(?P<scheme>[a-z][a-z0-9+.-]{0,31}://)[^/\s@]+@")  # a bounded scheme: linear time
 _GITHUB = re.compile(r"\b(?:gh[pousr]_|github_pat_)\w+")
 _ASSIGN = re.compile(
     rf"(?i)(?<![\w.-])(?P<k>[\w.-]*{_NAME}(?:_\w*)?)(?P<kq>[\"']?)(?P<s>\s*[=:]\s*)"

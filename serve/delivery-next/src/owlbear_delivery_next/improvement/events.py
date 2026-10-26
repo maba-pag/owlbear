@@ -21,13 +21,16 @@ TEXT, SAID, ARGS, RESULT = 6000, 1500, 1500, 4000  # characters kept of a reques
 QUESTIONS = frozenset({"ask_user", "askQuestions"})
 STOPS = frozenset({"abort", "session.abort", "session.shutdown"})
 OPEN, CLOSE = "<browser_context>", "</browser_context>"
-BROWSER = re.compile(rf"{OPEN}.*?{CLOSE}", re.DOTALL)
 OMITTED = "[browser context omitted]"
 
 
 def no_browser(text: str) -> str:
-    """*text* without the browser context VS Code attaches, a region cut in two included."""
-    text = BROWSER.sub(OMITTED, text)
+    """*text* without the browser context VS Code attaches, a region cut in two included; in linear time."""
+    kept, at = [], 0
+    while (start := text.find(OPEN, at)) != -1 and (end := text.find(CLOSE, start + len(OPEN))) != -1:
+        kept.append(text[at:start] + OMITTED)
+        at = end + len(CLOSE)
+    text = "".join(kept) + text[at:]
     if CLOSE in text:  # its opening was cut off: everything up to it was browser context
         text = OMITTED + text.rsplit(CLOSE, 1)[1]
     if OPEN in text:  # its end was cut off
@@ -48,8 +51,8 @@ def as_dict(ev: Any) -> dict[str, Any]:  # noqa: ANN401 - an SDK event object or
 
 
 CUT = " [...] "
-RAW = 262144  # characters cleaned whole; a longer text is omitted, as no cut of it is known to be safe
-EMAIL = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
+RAW = 65536  # characters cleaned whole, on the step's loop; a longer text is omitted: no cut of it is known safe
+EMAIL = re.compile(r"(?<![\w.+-])[\w.+-]+@[\w-]+\.[\w.-]+")  # tried only where a word starts: linear
 FLAG = re.compile(rf"(?i)(?<!\S)(?P<f>--?[\w-]*{SECRET_NAME}[\w-]*)(?P<s>\s+)(?P<v>\"[^\"]*\"|'[^']*'|[^\s-]\S*)")
 PROTECT = re.compile(r"(?:/(?:Users|private|var|tmp|Library|home)/[^\s\"'`:;,)\]}]+)|\b[0-9a-f]{40}\b")
 
