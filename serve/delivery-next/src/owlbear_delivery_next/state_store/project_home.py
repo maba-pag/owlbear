@@ -55,7 +55,7 @@ def _clone_id_at(folder: Path, folder_fd: int) -> str | None:
     try:
         text = fd_tree.read_at(folder_fd, project_move.CLONE_ID)
     except OSError as exc:
-        msg = f"{folder / project_move.CLONE_ID} is unreadable"
+        msg = f"{folder / project_move.CLONE_ID} is unreadable: {exc}; nothing was changed"
         raise StoreError(msg) from exc
     if text and not text.endswith("\n"):  # the id is written with its newline last, so this one was cut short
         msg = f"{folder / project_move.CLONE_ID} is incomplete: its write was cut short; nothing was changed"
@@ -82,11 +82,11 @@ def _durable_id(folder: Path, folder_fd: int) -> str | None:
     except FileNotFoundError:
         return None
     except OSError as exc:
-        msg = f"{path} is unreadable"
+        msg = f"{path} is unreadable: {exc}; nothing was changed"
         raise StoreError(msg) from exc
     try:
         if not stat.S_ISREG(os.fstat(fd).st_mode):
-            msg = f"{path} is unreadable"
+            msg = f"{path} is unreadable: it is not a regular file; nothing was changed"
             raise StoreError(msg)
         held = fd_tree.ident(os.fstat(fd))
         try:
@@ -180,6 +180,13 @@ def registered(pid: str) -> bool | None:
     return any(isinstance(p, dict) and p.get("id") == pid for p in projects)
 
 
+def _switched_to(target: Path, rec: dict) -> None:
+    """Refuse a SWITCHED receipt that names a store other than *target*, the one the project's id lays out."""
+    if rec["target"] != str(target):
+        msg = f"{target.parent} switched to {rec['target']}, not {target}: nothing was changed; check the receipt"
+        raise StoreError(msg)
+
+
 def current(cwd: Path) -> Path | None:
     """The project's store as it lies now, without moving or creating anything; None for a clone with none.
 
@@ -194,6 +201,7 @@ def current(cwd: Path) -> Path | None:
         return None
     target = home(pid)
     if rec and rec["phase"] == project_move.SWITCHED:
+        _switched_to(target, rec)
         project_move.named_switched(target, rec)
     return target
 
@@ -400,6 +408,7 @@ def _open(cwd: Path, proof: OfflineProof | None) -> Path:
 
 def _open_switched(folder_fd: int, target: Path, rec: dict, previous: int) -> None:
     """Admit the switched target by identity, keeping the source fenced; the source is never read or moved again."""
+    _switched_to(target, rec)
     held = _fence(folder_fd)  # the old path stays locked for as long as this process runs
     try:
         pfd = project_move.pin_parent(target)

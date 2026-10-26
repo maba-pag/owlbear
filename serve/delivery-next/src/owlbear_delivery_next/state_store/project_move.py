@@ -89,7 +89,7 @@ def record_at(folder: Path, folder_fd: int) -> dict | None:
         text = fd_tree.read_at(folder_fd, MOVE_RECORD)
         found = None if text is None else json.loads(text)
     except (OSError, ValueError) as exc:
-        msg = f"{folder / MOVE_RECORD} is unreadable: nothing was moved; check it, then start again"
+        msg = f"{folder / MOVE_RECORD} is unreadable ({exc}): nothing was moved; check it, then start again"
         raise StoreError(msg) from exc
     if found is None:
         return None
@@ -449,7 +449,7 @@ def named_switched(target: Path, rec: dict) -> None:
     """Refuse unless *target* still names the folder the switch recorded, read without creating anything.
 
     Raises:
-        StoreError: The target is missing, is not a folder, or is another folder.
+        StoreError: The receipt names another store, or the target is missing, is not a folder, or is another folder.
     """
     try:
         st = os.lstat(target)
