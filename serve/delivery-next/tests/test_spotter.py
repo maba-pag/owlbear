@@ -338,7 +338,7 @@ def test_a_look_is_one_toolless_session_noted_in_the_chatlogs_manifest(monkeypat
     assert asyncio.run(REAL_LOOK({"step": "build"}, ctx(verbose=True))) == ('{"verdict": "silent"}', 0.2)
     chosen = ("available_tools", "mcp_servers", "enable_config_discovery", "model", "reasoning_effort", "timeout")
     assert [made[k] for k in chosen] == [[], {}, False, "gpt-6-luna", "medium", spotter.LOOK]
-    assert "session_limits" not in made  # a look sets no SDK credit cap; its cost is the turn, LOOK and the ledger
+    assert "session_limits" not in made  # no SDK credit cap: a look is bounded by its deadline and teardown
     assert "rationale" in made["message"]
     assert '{"step": "build"}' in made["message"]
     assert (made["disconnected"], made["stopped"]) == (True, True)
