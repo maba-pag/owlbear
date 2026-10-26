@@ -3054,7 +3054,7 @@ def _second_remote(shared: DataRepo, tmp_path: Path) -> Path:
     _git_in(tmp_path, "init", "-q", "--bare", "-b", "main", str(elsewhere))
     shared.git("remote", "add", "elsewhere", str(elsewhere))
     shared.git("branch", "-q", "side")
-    shared.git("push", "-q", "-u", "elsewhere", "side")
+    _git_in(shared.root, "push", "-q", "-u", "elsewhere", "side")  # the owner's setup, as the owner runs it
     return elsewhere
 
 
