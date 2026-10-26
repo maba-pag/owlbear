@@ -23,7 +23,7 @@ from owlbear_delivery_next.local_system.storage_io import atomic_write, open_loc
 from owlbear_delivery_next.settings import config as settings_config
 from owlbear_delivery_next.settings import migrations
 from owlbear_delivery_next.settings.config import GlobalLayer, Layer, MachineLayer, Settings
-from owlbear_delivery_next.state_store import config_save, profile_share, project_home
+from owlbear_delivery_next.state_store import config_save, profile_share, project_home, roles_move
 from owlbear_delivery_next.state_store.database import (
     STORE_FORMAT,
     Database,
@@ -136,7 +136,7 @@ class Store:
             raise FormatTooNewError(msg)
         try:
             store.adopt(data_repo.identity(cwd) if shared else "")
-            profile_share.move_roles(store)
+            roles_move.move_roles(store)
             profile_share.adopt(store)
         except data_repo.DataRepoError as exc:
             raise StoreError(str(exc)) from exc
@@ -199,7 +199,7 @@ class Store:
         what: str = "project layer",
         on_written: Callable[[], None] | None = None,
     ) -> str:
-        """Change and publish the settings layer; changed automatic writes need a prepared basis, else a notice."""
+        """Publish the settings layer; preparing basis required for changed automatic writes, else refusal notice."""
         return self.save(
             self.config_path, Layer, change, f"{self.name or 'the project'}: {what}", on_written=on_written
         )

@@ -106,6 +106,7 @@ class Layer(Record):
     format: int = CONFIG_FORMAT
     prefs: Prefs | None = None  # R15: layered per field, project over machine over global; never a code default
     prefs_imported: bool = False  # R15: the legacy import filled this project layer; a retry never fills again
+    roles_moved: bool = False  # the old profile's roles were merged in the same write; kept by every later write
     agents: dict[Role, Agent] = Field(default_factory=dict)
     runtimes: dict[RuntimeName, bool] = Field(default_factory=dict)  # a runtime switched off or on
     widths: list[int] | None = None

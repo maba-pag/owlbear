@@ -243,7 +243,9 @@ def _save[T: Layer](  # noqa: PLR0913, PLR0917 - the host names this machine's p
     def change(current: T) -> T:
         if _rev(path) != body.rev:
             raise HTTPException(409, "the settings changed since this page loaded them")
-        return new.model_copy(update={"prefs_imported": current.prefs_imported or reviewed})
+        return new.model_copy(
+            update={"prefs_imported": current.prefs_imported or reviewed, "roles_moved": current.roles_moved}
+        )
 
     try:
         if isinstance(new, MachineLayer):

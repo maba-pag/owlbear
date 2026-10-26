@@ -13,7 +13,7 @@ from owlbear_delivery_next.change_contracts.profile_record import PROFILE_FORMAT
 from owlbear_delivery_next.commands import cli
 from owlbear_delivery_next.github.provider import MergeMethod
 from owlbear_delivery_next.local_system.data_repo import DataRepo
-from owlbear_delivery_next.settings import config, migrations, profile
+from owlbear_delivery_next.settings import config, migrations, profile, roles
 from owlbear_delivery_next.settings.config import CONFIG_FORMAT, Layer, Prefs
 from owlbear_delivery_next.state_store import prefs_import, profile_share
 from owlbear_delivery_next.state_store.store import (
@@ -390,6 +390,19 @@ def test_a_moved_preference_cannot_be_confirmed_on_the_command_line(tmp_path, mo
         cli.show_profile(store, tmp_path, [(profile.POLL, "99")])
     with pytest.raises(ValueError, match="Settings page"):
         profile.confirm(Profile(), profile.WINDOW, "30", datetime.now(UTC))
+
+
+def test_a_command_line_role_override_publishes_and_a_fresh_clone_reads_it(shared_repo, tmp_path, monkeypatch):
+    root, remote = shared_repo
+    monkeypatch.setattr(cli.profile, "detect", lambda _r, _g, prev: prev or Profile())
+    monkeypatch.setattr(cli.profile, "provider", lambda *_a: SimpleNamespace())
+    store = Store(tmp_path / "store", DataRepo(root), "shop-site")
+    out = cli.show_profile(store, tmp_path, [], [roles.parse("builder=m-cli:low")])
+    assert "Notice:" not in out
+    clone = tmp_path / "fresh"
+    subprocess.run(["git", "clone", "-q", str(remote), str(clone)], check=True, capture_output=True)  # noqa: S603, S607
+    fresh = Store(tmp_path / "fresh-store", DataRepo(clone), "shop-site")
+    assert fresh.read_config().agents["builder"].model == "m-cli"
 
 
 def test_the_profile_command_refuses_a_moved_preference_cleanly_and_records_nothing(tmp_path, monkeypatch, capsys):

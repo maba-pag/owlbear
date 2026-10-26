@@ -47,7 +47,8 @@ def test_get_shows_each_layer_the_resolved_values_their_source_and_what_is_appli
     got = client(store, headers=AUTH).get("/api/next/config").json()
 
     assert got["project"] == {
-        "format": F, "prefs": None, "prefs_imported": False, "agents": {}, "runtimes": {}, "widths": None,
+        "format": F, "prefs": None, "prefs_imported": False, "roles_moved": False, "agents": {}, "runtimes": {},
+        "widths": None,
         "preparations": None, "data": None, "design_failures": None, "final_review": None, "pr_labels": None,
         "pr_marker": None, "sessions": None, "spotter": None,
     }  # fmt: skip
@@ -169,6 +170,7 @@ def test_the_global_layer_is_saved_only_where_a_location_is_configured(store, tm
     c = client(store, path, headers=AUTH)
     got = c.get("/api/next/config").json()
     assert (got["global"], got["global_location"]) == ({"format": F, "prefs": None, "prefs_imported": False,
+                                                         "roles_moved": False,
                                                          "agents": {}, "runtimes": {}, "widths": None,
                                                          "preparations": None, "data": None, "design_failures": None,
                                                          "final_review": None, "pr_labels": None,

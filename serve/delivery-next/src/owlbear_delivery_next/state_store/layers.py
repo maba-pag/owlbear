@@ -89,7 +89,10 @@ def update_layer[T: Layer](
     finally:
         os.close(dir_fd)
     try:
-        new = model.model_validate(change(read_layer(path, model)).model_dump())
+        current = read_layer(path, model)
+        new = model.model_validate(change(current).model_dump())
+        if current.roles_moved and not new.roles_moved:  # the receipt is never lost to a later write
+            new = new.model_copy(update={"roles_moved": True})
         atomic_write(path, new.model_dump_json(indent=1))
         if on_written:
             on_written()
