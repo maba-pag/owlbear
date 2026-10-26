@@ -6,6 +6,7 @@ import contextlib
 import math
 import os
 import shutil
+import stat
 import tempfile
 import uuid
 from datetime import UTC, datetime
@@ -125,8 +126,10 @@ class Maintenance:
         """This machine's ledger file."""
         return local_home.root() / FILE
 
+    @staticmethod
     @contextlib.contextmanager
-    def _locked(self) -> Iterator[Ledger]:
+    def _locked() -> Iterator[Ledger]:
+        """The machine's ledger under its maintenance lock, read whole; it needs no instance, so it restores nothing."""
         root = local_home.root()
         root.mkdir(mode=0o700, parents=True, exist_ok=True)
         directory = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
@@ -136,16 +139,7 @@ class Maintenance:
             os.close(directory)
         try:
             try:
-                try:
-                    fd = os.open(self.path, os.O_RDONLY | os.O_NOFOLLOW)
-                except FileNotFoundError:
-                    ledger = Ledger()
-                else:
-                    with os.fdopen(fd, encoding="utf-8") as source:
-                        ledger = Ledger.model_validate_json(source.read())
-                    if missing := set(Ledger.model_fields) - ledger.model_fields_set:
-                        msg = f"its fields {', '.join(sorted(missing))} are missing"  # always written, so never empty
-                        raise ValueError(msg)
+                ledger = _read(root / FILE)
             except (OSError, ValueError) as exc:
                 msg = f"maintenance ownership could not be read: {exc}"
                 raise MaintenanceError(msg) from exc
@@ -190,8 +184,17 @@ class Maintenance:
 
     def receipted(self, key: str, digest: str) -> str:
         """The generation an older host gave the record version *digest*, when it rewrote that record; else empty."""
+        return self.lookup_receipt(key, digest)
+
+    @staticmethod
+    def lookup_receipt(key: str, digest: str) -> str:
+        """``receipted`` without a Maintenance: no restore, boot or process check, no slot, nothing saved.
+
+        For an offline caller, such as the store move, which has no host: the same locked, whole read, so an
+        unreadable ledger raises MaintenanceError and only a missing one holds no receipt.
+        """
         prefix = f"{key}:receipt:{digest}:"
-        with self._locked() as ledger:
+        with Maintenance._locked() as ledger:
             return next((s[len(prefix) :] for s in ledger.imported if s.startswith(prefix)), "")
 
     @staticmethod
@@ -244,7 +247,8 @@ class Maintenance:
         replaces that rule for a caller that keys its own history. *pids* are the processes a new lease records, and
         *observed* the producer evidence it saw, for such a caller's later comparison.
         A *keyed* import also marks *source* with the lease it created, in the same save, so a retry finds that very
-        lease again instead of matching by window. Each of *marks* is another source a new lease accounts for, marked
+        lease again instead of matching by window; a mark alone proves nothing, so the lease it names is reused only
+        while *covers*, when given, still accepts it. Each of *marks* is another source a new lease accounts for, marked
         in that same save, so its keyed import finds this lease after a lost write. Each of *notes*, such as a
         rewrite's receipt, is recorded in the one save that holds or finds the lease, so neither is ever without it.
         """
@@ -259,10 +263,10 @@ class Maintenance:
         with self._locked() as ledger:
             missing = [n for n in dict.fromkeys(notes) if n not in ledger.imported]
             found = None
-            if keyed:
+            if keyed:  # a lease a mark names, and only while what *covers* proves still holds for it
                 prefix = f"{source}:slot:"
-                marked = next((s[len(prefix) :] for s in ledger.imported if s.startswith(prefix)), "")
-                found = next((s for s in ledger.sessions if marked and s.slot == marked), None)
+                marked = {s[len(prefix) :] for s in ledger.imported if s.startswith(prefix)}
+                found = next((s for s in ledger.sessions if s.slot in marked and (covers is None or covers(s))), None)
             known = [s for s in ledger.sessions if same(s)] if found is None else [found]
             if known:
                 if missing:
@@ -441,6 +445,31 @@ class Maintenance:
             self._save(ledger)
         self.slots.give(lease.project, lease.slot)
         return self.read()
+
+
+def _read(path: Path) -> Ledger:
+    """The ledger file read whole: a regular file only, opened without following a link or waiting on a pipe.
+
+    Only a missing file is the empty ledger. Any other kind of file, a damaged one or one without every field it is
+    always written with raises; the descriptor is closed on every path.
+    """
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except FileNotFoundError:
+        return Ledger()
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            raise ValueError(f"{path} is not a regular file")  # noqa: TRY003, TRY301, EM102
+        source = os.fdopen(fd, encoding="utf-8")
+    except BaseException:
+        os.close(fd)
+        raise
+    with source:
+        ledger = Ledger.model_validate_json(source.read())
+    if missing := set(Ledger.model_fields) - ledger.model_fields_set:
+        msg = f"its fields {', '.join(sorted(missing))} are missing"  # always written, so never empty
+        raise ValueError(msg)
+    return ledger
 
 
 def recorded(lease: Lease, pids: dict[int, float | None], boot: float) -> bool:

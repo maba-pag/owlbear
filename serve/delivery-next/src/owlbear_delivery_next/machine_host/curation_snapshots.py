@@ -59,20 +59,17 @@ def window(name: str, run: FolderRun) -> str:
 
 
 def recorded_row(project: str, name: str, run: FolderRun) -> Callable[[maintenance.Lease], bool]:
-    """Whether a snapshot's lease saw this very row on file when it was imported, whatever its state since.
+    """Whether an import's lease recorded this very row when it was taken, whatever its state since.
 
-    The row predates that import, so the lease's recovery after a later reboot ends its session too. A later row has
-    its own times, which no earlier import saw.
+    A snapshot's lease records every row on file at its import, and a row's own lease records that row. The row
+    predates the import, so the lease's recovery after a later reboot ends its session too. A later row has its own
+    times, which no earlier import recorded, even when it starts at the same moment.
     """
     seen = window(name, run)
 
     def covers(lease: maintenance.Lease) -> bool:
         return (
-            lease.project == project
-            and lease.kind == "curation"
-            and lease.workspace == ""
-            and bool(lease.generation)
-            and seen in lease.observed
+            lease.project == project and lease.kind == "curation" and lease.workspace == "" and seen in lease.observed
         )
 
     return covers

@@ -589,8 +589,9 @@ def unkeyed_2bf_row(job: curation.Curation, started: datetime) -> None:
     )
 
 
-def test_a_2bf_unkeyed_unknown_curation_run_is_correlated_with_its_held_generation_without_a_second_lease(root) -> None:
-    """The 2bf producer began its lease inside the run's own window and wrote no FolderRun.key."""
+def test_an_unkeyed_unknown_row_is_never_taken_for_a_lease_merely_because_it_began_within_its_times(root) -> None:
+    """Review on 4e95: a time window is no identity. An unkeyed unknown row, even one an earlier build of this host
+    wrote while its own lease began inside it, is held under its own lease once, and its start runs nothing."""
     first = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root))
     t0 = datetime(2026, 10, 25, 0, 0, 10, tzinfo=UTC)
     unkeyed_2bf_row(first, t0)
@@ -598,16 +599,19 @@ def test_a_2bf_unkeyed_unknown_curation_run_is_correlated_with_its_held_generati
         curation.SLOT, "curate:shop:2bf0000000000000", "curation", "", now=t0 + timedelta(seconds=1)
     )
     first.maintenance.failed(lease, RuntimeError("synthetic unconfirmed runtime"))
-    slots = Slots(lambda: 1, closed=True)
-    restarted = curation.Curation(slots, shared=lambda: DataRepo(root), run=lambda _cfg: pytest.fail("it ran"))
-    assert restarted.load().folders["shop"].key == "curate:shop:2bf0000000000000"
+    for _ in range(2):
+        restarted = curation.Curation(
+            Slots(lambda: 1, closed=True), shared=lambda: DataRepo(root), run=lambda _cfg: pytest.fail("it ran")
+        )
+        sessions = restarted.maintenance.read()["sessions"]
+        own = restarted.load().folders["shop"].key
+        assert ([s["state"] for s in sessions], own != "curate:shop:2bf0000000000000") == (["held", "held"], True)
     restarted.start("shop")
     drained(restarted)
-    sessions = restarted.maintenance.read()["sessions"]
-    assert (len(sessions), sessions[0]["id"] == lease, slots.counts(curation.SLOT)[2]) == (1, True, 1)
+    assert restarted.load().folders["shop"].reason == curation.LEFT
 
 
-def test_a_2bf_unkeyed_recovered_curation_generation_stays_recovered_across_restarts(root) -> None:
+def test_an_unkeyed_unknown_row_is_held_anew_once_after_the_lease_within_its_times_was_recovered(root) -> None:
     first = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root))
     t0 = datetime(2026, 10, 25, 0, 0, 10, tzinfo=UTC)
     unkeyed_2bf_row(first, t0)
@@ -621,7 +625,7 @@ def test_a_2bf_unkeyed_recovered_curation_generation_stays_recovered_across_rest
     for _ in range(2):
         again = curation.Curation(Slots(lambda: 1, closed=True), shared=lambda: DataRepo(root))
         sessions = again.maintenance.read()["sessions"]
-        assert (len(sessions), sessions[0]["state"], again.maintenance.pending("curation")) == (1, "recovered", False)
+        assert ([s["state"] for s in sessions], again.maintenance.pending("curation")) == (["recovered", "held"], True)
 
 
 @pytest.mark.parametrize("unrelated", ["recovered", "held"])
@@ -1491,3 +1495,105 @@ def test_an_8ad_snapshot_receipt_covers_its_own_row_with_no_second_hold_and_no_r
     later.start("shop")
     drained(later)
     assert calls == []
+
+
+GENERIC = "RuntimeError: synthetic SDK failure"
+
+
+@pytest.mark.parametrize("recovered", [False, True], ids=["held", "recovered"])
+def test_a_later_failure_stamped_with_the_same_start_after_a_clock_rollback_is_held_anew(root, recovered) -> None:
+    """Review on d520: a row's mark names its lease only while that lease records the row's own evidence.
+
+    main's failure before its first PID is held as A. After the clock went back, main's later failure starts at the
+    same moment but ends at another, with no key and no PIDs: it is another run, held as B, and nothing starts.
+    """
+    t0 = datetime.now(UTC) - timedelta(hours=2)
+    main_row(GENERIC, t0, t0 + timedelta(seconds=30))
+    first = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root))
+    [a] = ledger_sessions()
+    if recovered:
+        rebooted(first)
+        first.maintenance.recover(a["id"], rebooted=True)
+    main_row(GENERIC, t0, t0 + timedelta(seconds=60))  # the same start, its own end
+    calls: list[str] = []
+    for _ in range(2):
+        later = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root), run=never_runs(calls))
+        sessions = ledger_sessions()
+        assert [s["state"] for s in sessions] == ["recovered" if recovered else "held", "held"]
+        assert later.load().folders["shop"].key == sessions[1]["slot"] != a["slot"]
+    later.start("shop")
+    drained(later)
+    assert (calls, later.load().folders["shop"].reason) == ([], curation.LEFT)
+    main_row(GENERIC, t0, t0 + timedelta(seconds=30))  # A's own row again, its key lost: still A, nothing new
+    again = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root), run=never_runs(calls))
+    assert (len(ledger_sessions()), again.load().folders["shop"].key) == (2, a["slot"])
+
+
+def owned_failure_before_any_pid(root: Path, *, lost: bool) -> tuple[dict, curation.FolderRun]:
+    """This host's own run whose SDK call raises before any PID: its lease A held, its rows naming A's key.
+
+    With *lost*, the failure's own row never reached the file: the running row written before the SDK remains.
+    """
+
+    def raises(_cfg) -> Run:
+        msg = "synthetic SDK failure before the first PID"
+        raise RuntimeError(msg)
+
+    job = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root), run=raises)
+    job.start("shop")
+    drained(job)
+    [a] = ledger_sessions()
+    row = job.load().folders["shop"]
+    failure = "RuntimeError: synthetic SDK failure before the first PID"
+    assert (a["state"], row.key, row.reason) == ("held", a["slot"], failure)
+    if lost:
+        job._save("shop", curation.FolderRun(state="running", started_at=row.started_at, key=row.key))  # noqa: SLF001
+    return a, row
+
+
+@pytest.mark.parametrize("recovered", [False, True], ids=["held", "recovered"])
+@pytest.mark.parametrize("lost", [False, True], ids=["final-row", "lost-final-row"])
+def test_mains_later_failure_starting_when_an_owned_run_started_is_held_anew_and_the_owned_run_keeps_one_lease(
+    root, recovered, lost
+) -> None:
+    """Review on 4e95: this host's run is found by its admission key, never by its row's times.
+
+    After a clock rollback main's later failure starts at the same moment with another end, no key and no PIDs: it
+    is another run, held as B, and nothing starts. The owned run keeps its one lease, held or recovered, whether its
+    failure's row or only its running row reached the file.
+    """
+    a, row = owned_failure_before_any_pid(root, lost=lost)
+    calls: list[str] = []
+    state = "recovered" if recovered else "held"
+    for _ in range(2):  # restarts with the owned run's own rows: no second lease
+        again = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root), run=never_runs(calls))
+        assert [(s["id"], s["state"]) for s in ledger_sessions()] == [(a["id"], "held")]
+        assert again.load().folders["shop"].key == a["slot"]
+    if recovered:
+        rebooted(again)
+        again.maintenance.recover(a["id"], rebooted=True)
+        after = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root), run=never_runs(calls))
+        assert (after.maintenance.pending("curation"), len(ledger_sessions())) == (False, 1)
+    main_row(GENERIC, row.started_at, row.started_at + timedelta(seconds=60))  # main's B: same start, its own end
+    for _ in range(2):
+        later = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root), run=never_runs(calls))
+        sessions = ledger_sessions()
+        assert (sessions[0]["id"], sessions[0]["state"]) == (a["id"], state)
+        assert ([s["state"] for s in sessions[1:]], later.load().folders["shop"].key) == (["held"], sessions[1]["slot"])
+    later.start("shop")
+    drained(later)
+    assert (calls, later.load().folders["shop"].reason) == ([], curation.LEFT)
+
+
+@pytest.mark.parametrize("state", ["waiting", "failed"])
+def test_a_dateless_queued_row_never_started_holds_nothing(root, state) -> None:
+    """Control: a queued row with no times, or the one a restart ended from it, started no session."""
+    path = local_home.root() / curation.STATE
+    path.parent.mkdir(parents=True, exist_ok=True)
+    reason = "" if state == "waiting" else curation.INTERRUPTED
+    row = {"state": state, "started_at": None, "ended_at": None, "summary": "", "reason": reason, "entries": [],
+           "skipped": {}, "seen": {}}  # fmt: skip
+    path.write_text(json.dumps({"folders": {"shop": row}, "left": {}}))
+    for _ in range(2):
+        job = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root))
+        assert (ledger_sessions(), job.working()) == ([], [])
