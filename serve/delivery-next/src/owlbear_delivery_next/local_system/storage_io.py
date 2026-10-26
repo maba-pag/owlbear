@@ -59,3 +59,30 @@ def atomic_write(target: Path, content: str) -> os.stat_result:
             Path(tmp_path).unlink()
         raise
     return written
+
+
+def fsync_dir(folder: Path) -> None:
+    """Make the entries of *folder* durable: a rename or unlink in it survives power loss only after this."""
+    dir_fd = os.open(str(folder), os.O_RDONLY)
+    try:
+        os.fsync(dir_fd)
+    finally:
+        os.close(dir_fd)
+
+
+def make_dirs(folder: Path) -> None:
+    """Create *folder* and its missing ancestors, fsyncing each new folder's parent so the new entry is durable.
+
+    The deepest existing ancestor's parent link is re-synced before anything is created: an interrupted earlier call
+    may have made that folder without confirming its entry.
+    """
+    missing: list[Path] = []
+    for candidate in (folder, *folder.parents):
+        if candidate.exists():
+            if candidate.parent != candidate:
+                fsync_dir(candidate.parent)
+            break
+        missing.append(candidate)
+    for created in reversed(missing):
+        created.mkdir()
+        fsync_dir(created.parent)

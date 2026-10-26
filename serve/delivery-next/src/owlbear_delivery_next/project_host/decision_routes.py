@@ -21,7 +21,7 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 from owlbear_decisions import Origin, ReadBackKind, Scope, State
 from owlbear_decisions.models import ID_PATTERN
 from owlbear_delivery_next.change_contracts import decision_wording
-from owlbear_delivery_next.project_host import impact_routes
+from owlbear_delivery_next.project_host import decision_recovery_routes, impact_routes
 from owlbear_delivery_next.state_store import (
     decision_actions,
     decision_impact,
@@ -308,6 +308,7 @@ def router(shared: Shared, folder: Callable[[], str], places: Places, store: Sto
         return scope or folder()
 
     routes.include_router(impact_routes.router(shared, places, mine))
+    routes.include_router(decision_recovery_routes.router(shared, mine))  # before /decisions/{decision_id}
 
     @routes.get("/decisions")
     def listed(  # noqa: PLR0913 - the page's filters

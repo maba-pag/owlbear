@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING
+from pathlib import Path
 
 import pytest
 
@@ -17,12 +18,17 @@ from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_flow import brief_tools
 from owlbear_delivery_next.github.provider import PullRequest
 from owlbear_delivery_next.local_system.data_repo import DataRepo
-from owlbear_delivery_next.state_store import briefs, change_record, decision_archive
+from owlbear_delivery_next.state_store import (
+    briefs,
+    change_record,
+    decision_archive,
+    decision_batch,
+    decision_recovery,
+    decision_store,
+    decision_sync,
+)
 from owlbear_delivery_next.state_store.store import Lock
 from owlbear_delivery_next.state_store.store import Store as LocalStore
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 AT = datetime(2026, 10, 15, 9, tzinfo=UTC)
 STEM = "20261015-090000-notes"
@@ -141,27 +147,34 @@ def test_each_ending_gives_its_states(store, shared_repo, ending) -> None:
     assert validate_repo(root) == []
 
 
-def test_a_rerun_after_a_crash_before_publishing_publishes_the_same_files_once(store, shared_repo, monkeypatch) -> None:
+def test_a_crash_before_publishing_stays_interrupted_until_the_owner_finishes_it_once(
+    store, shared_repo, monkeypatch
+) -> None:
     root, remote = shared_repo
     c = finished()
 
-    def crash(*_a: object, **_k: object) -> str:
+    real_publish = decision_sync.publish
+
+    def crash(*_a: object, **_k: object):
         msg = "power cut"
         raise OSError(msg)
 
-    publish = DataRepo.publish
-    monkeypatch.setattr(DataRepo, "publish", crash)
+    monkeypatch.setattr(decision_sync, "publish", crash)
     assert "power cut" in change_record.save(store, c, MERGED, AT)
     written = {p: p.read_text() for p in (root / "shop-site").rglob("decisions/*.md")}
     assert len(written) == 3
     assert git(root, "status", "--porcelain")  # written, never committed
-    monkeypatch.setattr(DataRepo, "publish", publish)
+    monkeypatch.setattr(decision_sync, "publish", real_publish)
 
-    assert change_record.save(store, c, MERGED, AT) == ""
+    # an unknown publication is not retried
+    assert "interrupted decision batch" in change_record.save(store, c, MERGED, AT)
+    assert {p: p.read_text() for p in (root / "shop-site").rglob("decisions/*.md")} == written
+    batch = decision_batch.pending(store.shared)
+    assert decision_recovery.finish(store.shared, batch.generation).done
     assert {p: p.read_text() for p in (root / "shop-site").rglob("decisions/*.md")} == written
     assert git(root, "status", "--porcelain") == ""
     count = git(remote, "rev-list", "--count", "main")
-    assert change_record.save(store, c, MERGED, AT) == ""  # a third run changes nothing at all
+    assert change_record.save(store, c, MERGED, AT) == ""  # a further run changes nothing at all
     assert (git(remote, "rev-list", "--count", "main"), len(archived(root))) == (count, 3)
 
 
@@ -281,19 +294,24 @@ def test_an_autonomous_choices_reason_is_its_rationale_when_published_and_archiv
     assert why in read(root / "shop-site" / "decisions" / f"{shaped[1].id}.md").rationale
 
 
-def test_one_decision_that_cannot_be_written_keeps_all_out_and_the_record_still_publishes(store, shared_repo) -> None:
+def test_one_decision_that_cannot_be_written_keeps_all_out_and_the_record_is_unchanged(store, shared_repo) -> None:
     root, _ = shared_repo
     c = finished()
     assert change_record.save(store, c, None, AT) == ""  # abandoned: withdrawn, and the lasting rule a draft
     before = {p: p.read_text() for p in root.rglob("decisions/*.md")}
+    record = root / "shop-site" / "changes" / f"{STEM}.json"
+    record_before, head_before = record.read_bytes(), git(root, "rev-parse", "HEAD")
 
     notice = change_record.save(store, c, MERGED, AT)
 
-    assert notice.startswith("no decision of notes was archived"), notice
+    assert notice.startswith("the record of notes was not saved; no decision of notes was archived"), notice
     assert "cannot go from withdrawn to spent" in notice
     assert {p: p.read_text() for p in root.rglob("decisions/*.md")} == before  # not even the allowed draft move
     assert archived(root)[WHERE][2] is State.DRAFT
-    assert json.loads((root / "shop-site" / "changes" / f"{STEM}.json").read_text())["outcome"] == "merged"
+    assert (
+        record.read_bytes() == record_before
+    )  # the abandoned record stays exactly as it was, not republished as merged
+    assert git(root, "rev-parse", "HEAD") == head_before
     assert git(root, "status", "--porcelain") == ""
 
 
@@ -301,13 +319,16 @@ def test_an_invalid_decision_is_a_notice_and_nothing_is_archived(store, shared_r
     root, _ = shared_repo
     c = finished()
     c.decisions.append(Decision(id="D-NOTANID", text="A malformed id", origin="decided", at=AT))
+    head_before = git(root, "rev-parse", "HEAD")
     notice = change_record.save(store, c, MERGED, AT)
     assert c.decisions[1].id in notice
     assert list(root.rglob("decisions/*.md")) == []
-    assert (root / "shop-site" / "changes" / f"{STEM}.json").exists()
+    assert not (root / "shop-site" / "changes" / f"{STEM}.json").exists()  # no record without its decisions
+    assert git(root, "rev-parse", "HEAD") == head_before
+    assert git(root, "status", "--porcelain") == ""
 
 
-def test_a_decision_that_would_break_the_repositorys_rules_keeps_all_out_and_the_record_publishes(
+def test_a_decision_that_would_break_the_repositorys_rules_keeps_all_out_and_the_record_is_not_written(
     store, shared_repo
 ) -> None:
     root, _ = shared_repo
@@ -319,16 +340,46 @@ def test_a_decision_that_would_break_the_repositorys_rules_keeps_all_out_and_the
         write(d, root / "shop-site")
     git(root, "add", "-A")
     git(root, "commit", "-qm", "replaced in another Change")
+    rivals = {p: p.read_text() for p in root.rglob("decisions/*.md")}
+    head_before = git(root, "rev-parse", "HEAD")
     c = finished()
     decisions = c.brief.approved[0].decisions
     decisions[1] = lasting = decisions[1].model_copy(update={"replaces": old.id})  # a second in-force successor
 
     notice = change_record.save(store, c, MERGED, AT)
 
-    assert notice.startswith("no decision of notes was archived"), notice
+    assert notice.startswith("the record of notes was not saved; no decision of notes was archived"), notice
     assert f"decision {lasting.id}, {old.id} of notes: two-successors" in notice
-    assert sorted(p.stem for p in root.rglob("decisions/*.md")) == sorted([old.id, later.id])
-    assert (root / "shop-site" / "changes" / f"{STEM}.json").exists()
+    assert {p: p.read_text() for p in root.rglob("decisions/*.md")} == rivals  # rival rules untouched
+    assert not (root / "shop-site" / "changes" / f"{STEM}.json").exists()
+    assert git(root, "rev-parse", "HEAD") == head_before
+    assert git(root, "status", "--porcelain") == ""
+
+
+def test_a_refused_planning_creates_no_journal_and_publishes_no_record(store, shared_repo, monkeypatch) -> None:
+    root, _ = shared_repo
+    said = {"title": "Notes", "statement": "Notes live in SQLite.", "scope": Scope.PROJECT, "project": "shop-site",
+            "origin": Origin.AUTONOMOUS, "actor": "shaper", "created_at": AT}  # fmt: skip
+    old = Rule(id=new_id(AT), state=State.REPLACED, **said)
+    later = Rule(id=new_id(AT), state=State.IN_FORCE, links=(Link(type=LinkType.REPLACES, target=old.id),), **said)
+    for d in (old, later):
+        write(d, root / "shop-site")
+    git(root, "add", "-A")
+    git(root, "commit", "-qm", "replaced in another Change")
+    head_before = git(root, "rev-parse", "HEAD")
+    c = finished()
+    decisions = c.brief.approved[0].decisions
+    decisions[1] = lasting = decisions[1].model_copy(update={"replaces": old.id})  # a second in-force successor
+    begun = []
+    monkeypatch.setattr(decision_batch, "begin", lambda *args, **_: begun.append(args))
+
+    notice = change_record.save(store, c, MERGED, AT)
+
+    assert notice.startswith("the record of notes was not saved; no decision of notes was archived"), notice
+    assert f"decision {lasting.id}, {old.id} of notes: two-successors" in notice
+    assert begun == []  # no journal is created before the refusal
+    assert not (root / "shop-site" / "changes" / f"{STEM}.json").exists()
+    assert git(root, "rev-parse", "HEAD") == head_before
     assert git(root, "status", "--porcelain") == ""
 
 
@@ -348,24 +399,293 @@ def test_a_project_answer_narrowed_to_the_change_is_withdrawn_and_its_successor_
     assert validate_repo(root) == []
 
 
-def test_a_write_failing_midway_puts_every_file_back_and_the_record_still_publishes(store, shared_repo, monkeypatch):
+def test_a_write_failing_midway_puts_every_file_back_and_the_record_is_refused(store, shared_repo, monkeypatch):
     root, _ = shared_repo
     replaced, real = [], storage._replace
 
-    def full(path: Path, text: str) -> None:
+    def full(path: Path, text: str, *fence) -> None:
         if replaced:
             msg = "disk full"
             raise OSError(msg)
         replaced.append(path)
-        real(path, text)
+        real(path, text, *fence)
 
     monkeypatch.setattr(storage, "_replace", full)
 
     notice = change_record.save(store, finished(), MERGED, AT)
 
-    assert notice.startswith("no decision of notes was archived"), notice
+    assert notice.startswith("the record of notes was not saved; no decision of notes was archived"), notice
     assert "disk full" in notice
     assert len(replaced) == 1  # one file was in place before the second failed
     assert list(root.rglob("decisions/*.md")) == []
-    assert json.loads((root / "shop-site" / "changes" / f"{STEM}.json").read_text())["outcome"] == "merged"
+    assert not (root / "shop-site" / "changes" / f"{STEM}.json").exists()  # F2: no record commit without its archive
     assert git(root, "status", "--porcelain") == ""
+
+
+def test_a_publish_lost_after_the_record_and_archive_are_written_is_never_partial_authority(
+    store, shared_repo, monkeypatch
+) -> None:
+    root, _ = shared_repo
+
+    def lost(*_a: object, **_k: object) -> str:
+        msg = "power cut"
+        raise OSError(msg)
+
+    monkeypatch.setattr(decision_sync, "publish", lost)
+    assert "power cut" in change_record.save(store, finished(), MERGED, AT)
+
+    assert len(archived(root)) == 3  # the files are on disk, unpublished
+    assert decision_batch.pending(store.shared) is not None
+    with pytest.raises(decision_store.DecisionsUnavailable, match="interrupted decision batch"):
+        decision_store.load(store.shared, "shop-site")
+
+
+def test_a_known_refusal_puts_the_record_and_its_decisions_back(store, shared_repo, monkeypatch) -> None:
+    root, _ = shared_repo
+    monkeypatch.setattr(
+        decision_sync,
+        "publish",
+        lambda *_a, **_k: decision_sync.Sent(notice="saved, but not committed: refused", uncommitted=True),
+    )
+
+    notice = change_record.save(store, finished(), MERGED, AT)
+
+    assert "refused" in notice
+    assert archived(root) == {}
+    assert not (root / "shop-site" / "changes" / f"{STEM}.json").exists()
+    assert decision_batch.pending(store.shared) is None
+    assert decision_store.load(store.shared, "shop-site").snapshot is not None
+    assert git(root, "status", "--porcelain") == ""
+
+
+def test_a_raw_archive_is_refused_while_a_batch_is_interrupted(store) -> None:
+    root = store.shared.root
+    generation = decision_batch.begin(
+        store.shared,
+        "shop-site",
+        decision_store._head(store.shared),  # noqa: SLF001
+        "decisions: left",
+        ["D-LEFT"],
+        [("shop-site/decisions/D-LEFT.md", None, b"left\n")],  # the smallest valid batch: one new file, by its id
+    )
+
+    with pytest.raises(decision_store.DecisionsUnavailable, match="interrupted decision batch"):
+        decision_archive.archive(root, "shop-site", finished(), STEM, "merged")
+    assert archived(root) == {}
+    assert decision_batch.pending(store.shared).generation == generation
+
+
+def test_a_crash_after_the_first_archived_file_leaves_readers_blocked(store, monkeypatch) -> None:
+    root = store.shared.root
+    real_write = decision_store.write
+    calls: list[int] = []
+
+    def first_then_crash(*args, **kwargs):
+        calls.append(1)
+        if len(calls) > 1:
+            msg = "power cut after the first file"
+            raise RuntimeError(msg)
+        real_write(*args, **kwargs)
+
+    monkeypatch.setattr(decision_store, "write", first_then_crash)
+    with pytest.raises(RuntimeError, match="power cut"):
+        decision_archive.archive(root, "shop-site", finished(), STEM, "merged")
+
+    assert len(archived(root)) == 1  # the prefix reached disk
+    assert decision_batch.pending(store.shared) is not None
+    with pytest.raises(decision_store.DecisionsUnavailable, match="interrupted decision batch"):
+        decision_store.load(store.shared, "shop-site")
+
+
+def test_an_archive_is_published_while_its_batch_is_still_pending(store, monkeypatch) -> None:
+    root = store.shared.root
+    pending_at_publish: list[bool] = []
+
+    def lost_publish(_repo, _paths, _message, _until, _head):
+        pending_at_publish.append(decision_batch.pending(store.shared) is not None)
+        msg = "publish lost after the files were written"
+        raise RuntimeError(msg)
+
+    monkeypatch.setattr(decision_sync, "publish", lost_publish)
+    with pytest.raises(RuntimeError, match="publish lost"):
+        decision_archive.archive(root, "shop-site", finished(), STEM, "merged")
+
+    assert pending_at_publish == [True]
+    assert decision_batch.pending(store.shared) is not None
+    with pytest.raises(decision_store.DecisionsUnavailable, match="interrupted decision batch"):
+        decision_store.load(store.shared, "shop-site")
+
+
+OWNER_WIP = b"the owner's edit, not yet committed\n"
+
+
+def _published_once(root: Path, store: Store, c: Change, *, record: bool) -> Path:
+    """Publish *c* once through the record or the archive, then give it one more decision: the next publication plans
+    every earlier decision unchanged and only the new one changed. The path of an unchanged project decision."""
+    if record:
+        assert change_record.save(store, c, MERGED, AT) == ""
+    else:
+        assert decision_archive.archive(root, "shop-site", c, STEM, "merged")[0]
+    at = AT + timedelta(hours=2)
+    c.decisions.append(Decision(id=new_id(AT), text="Notes keep their order", origin="decided", at=at, paths=["a.css"]))
+    return root / "shop-site" / "decisions" / f"{c.brief.approved[0].decisions[1].id}.md"
+
+
+def _spy_archive(
+    monkeypatch, root: Path, unchanged: Path, *, owner_edit: bool
+) -> tuple[list[set[str]], list[set[str]]]:
+    """Record each journal's files and each `write_plan` result; with *owner_edit*, the owner edits *unchanged* during
+    the fsync of a changed file's temporary, so a commit of every planned path would publish that edit."""
+    journals: list[set[str]] = []
+    written: list[set[str]] = []
+    real_begin, real_plan, real_fsync = decision_batch.begin, decision_archive.write_plan, os.fsync
+    changes = root / "shop-site" / "changes" / STEM / "decisions"
+
+    def begin(*args):
+        journals.append({rel for rel, _, _ in args[-1]})  # the journal's files, its last argument
+        return real_begin(*args)
+
+    def write_plan(*args, **kwargs):
+        files, left = real_plan(*args, **kwargs)
+        written.append({p.relative_to(root).as_posix() for p in files})
+        return files, left
+
+    def fsync_then_owner_edits(descriptor):
+        real_fsync(descriptor)
+        if not owner_edit or not changes.is_dir() or unchanged.read_bytes() == OWNER_WIP:
+            return
+        found = os.fstat(descriptor)
+        if any(os.path.samestat(found, p.stat()) for p in changes.iterdir() if p.name.endswith(".tmp")):
+            unchanged.write_bytes(OWNER_WIP)
+
+    monkeypatch.setattr(decision_batch, "begin", begin)
+    monkeypatch.setattr(decision_archive, "write_plan", write_plan)
+    monkeypatch.setattr(os, "fsync", fsync_then_owner_edits)
+    return journals, written
+
+
+def _committed(root: Path) -> set[str]:
+    return set(git(root, "show", "--name-only", "--format=", "HEAD").split())
+
+
+@pytest.mark.parametrize("owner_edit", [True, False], ids=["owner-edits-the-unchanged-file", "healthy"])
+def test_a_record_publishes_only_the_decision_files_it_journalled(store, shared_repo, monkeypatch, owner_edit) -> None:
+    root, _ = shared_repo
+    c = finished()
+    unchanged = _published_once(root, store, c, record=True)
+    published = unchanged.read_bytes()
+
+    with monkeypatch.context() as m:
+        journals, written = _spy_archive(m, root, unchanged, owner_edit=owner_edit)
+        assert change_record.save(store, c, MERGED, AT) == ""
+
+    (journal,) = journals
+    record = f"shop-site/{decision_archive.CHANGES}/{STEM}.json"
+    assert unchanged.relative_to(root).as_posix() not in journal  # planned unchanged, so never journalled
+    assert _committed(root) == journal  # the commit holds exactly the journalled files
+    assert written == [journal - {record}]  # and the files write_plan returns are the journal's, no more
+    assert decision_batch.pending(store.shared) is None
+    rel = unchanged.relative_to(root).as_posix()
+    shown = subprocess.run(["git", "show", f"HEAD:{rel}"], cwd=root, check=True, capture_output=True)  # noqa: S603, S607
+    assert shown.stdout == published  # HEAD still holds the published bytes
+    if owner_edit:
+        assert unchanged.read_bytes() == OWNER_WIP  # the owner's edit stays theirs, unpublished
+        assert git(root, "status", "--porcelain").split() == ["M", unchanged.relative_to(root).as_posix()]
+    else:
+        assert git(root, "status", "--porcelain") == ""
+
+
+@pytest.mark.parametrize("owner_edit", [True, False], ids=["owner-edits-the-unchanged-file", "healthy"])
+def test_an_archive_publishes_only_the_decision_files_it_journalled(store, shared_repo, monkeypatch, owner_edit):
+    root, _ = shared_repo
+    c = finished()
+    unchanged = _published_once(root, store, c, record=False)
+
+    with monkeypatch.context() as m:
+        journals, written = _spy_archive(m, root, unchanged, owner_edit=owner_edit)
+        files, left = decision_archive.archive(root, "shop-site", c, STEM, "merged")
+
+    (journal,) = journals
+    assert unchanged.relative_to(root).as_posix() not in journal
+    assert _committed(root) == journal
+    assert {p.relative_to(root).as_posix() for p in files} == journal
+    assert written[-1] == journal
+    assert not left
+    assert decision_batch.pending(store.shared) is None
+    assert (unchanged.read_bytes() == OWNER_WIP) == owner_edit
+
+
+def test_an_archive_with_nothing_to_change_journals_and_publishes_nothing(shared_repo, monkeypatch) -> None:
+    root, _ = shared_repo
+    c = finished()
+    assert decision_archive.archive(root, "shop-site", c, STEM, "merged")[0]  # every file written and published once
+    head = git(root, "rev-parse", "HEAD")
+
+    with monkeypatch.context() as m:
+        journals, written = _spy_archive(m, root, root / "unused", owner_edit=False)
+        files, left = decision_archive.archive(root, "shop-site", c, STEM, "merged")
+
+    assert (files, left, journals, written) == ([], [], [], [set()])
+    assert git(root, "rev-parse", "HEAD") == head
+    assert git(root, "status", "--porcelain") == ""
+
+
+@pytest.mark.parametrize("owner", [True, False], ids=["owner-changes-a-file-as-it-is-staged", "healthy"])
+@pytest.mark.parametrize("producer", ["record", "archive"])
+def test_a_record_or_archive_commit_that_does_not_hold_the_batch_is_never_pushed(
+    store, shared_repo, monkeypatch, producer, owner
+):
+    """Just before Git stages the batch, the owner writes a third image into its first file: the commit then holds it
+    instead of the journalled image, so it stays local and unpushed and the batch stays interrupted."""
+    root, remote = shared_repo
+
+    def remote_main() -> str:
+        return git(root, "--git-dir", str(remote), "rev-parse", "main")
+
+    published, fired = remote_main(), []
+    third = b"the owner's own third image\n"
+    real_commit = DataRepo.commit
+
+    def commit(self, paths, message, until=None):
+        if owner and not fired:
+            fired.append(next(iter(paths)))
+            fired[0].write_bytes(third)
+        return real_commit(self, paths, message, until)
+
+    with monkeypatch.context() as m:
+        m.setattr(DataRepo, "commit", commit)
+        if producer == "record":
+            said = change_record.save(store, finished(), MERGED, AT)
+        else:
+            said = "; ".join(decision_archive.archive(root, "shop-site", finished(), STEM, "merged")[1])
+
+    if not owner:
+        assert said == ""
+        assert remote_main() != published
+        assert decision_batch.pending(store.shared) is None
+        return
+    assert "not pushed" in said
+    assert remote_main() == published  # nothing pushed
+    assert fired[0].read_bytes() == third  # the owner's bytes are kept
+    assert decision_batch.pending(store.shared) is not None
+
+
+def test_a_journal_failure_inside_a_record_save_is_a_notice_and_keeps_the_journal(store, shared_repo, monkeypatch):
+    """The batch lock fails as the record's batch completes, after the guard passed: the save returns a notice for
+    its caller to log, never raises, and the journal is left as it was."""
+    root, _ = shared_repo
+    real_complete = decision_batch.complete
+
+    def complete(repo, generation):
+        lock = decision_batch.journal_path(store.shared).parent / decision_batch.LOCK
+        lock.unlink(missing_ok=True)
+        lock.symlink_to(root.parent / "elsewhere.lock")
+        return real_complete(repo, generation)
+
+    with monkeypatch.context() as m:
+        m.setattr(decision_batch, "complete", complete)
+        said = change_record.save(store, finished(), MERGED, AT)
+
+    assert said.startswith("the record of notes was not saved")
+    assert "batch lock" in said
+    assert decision_batch.journal_path(store.shared).exists()

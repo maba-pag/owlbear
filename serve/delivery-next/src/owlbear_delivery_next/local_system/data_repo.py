@@ -22,11 +22,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from owlbear_delivery_next.local_system import local_home, publication_hold
+from owlbear_delivery_next.local_system import batch_journal, local_home, publication_hold
 from owlbear_delivery_next.local_system.storage_io import atomic_write
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Sequence
+    from typing import Self
 
 CONFIG, CLAIM, MEMORY = "config.json", "repository", "memory"
 POINTER, OLD_POINTER = local_home.POINTER, local_home.OLD_POINTER
@@ -43,6 +44,27 @@ _log = logging.getLogger(__name__)
 
 class DataRepoError(ValueError):
     """The pointer names no usable repository, or a project folder belongs to another repository."""
+
+
+class Committed(str):
+    """What `DataRepo.commit` says: why it failed, else nothing, as before; and the commit it made, "" when none.
+
+    It is the notice string every caller already reads, so they need nothing new; a publication also reads `commit`
+    to tell its own commit from one the owner made meanwhile, never by a moved HEAD alone. `unnamed` says Git made a
+    commit whose id its own answer did not name: then no commit is known to be this call's.
+    """
+
+    __slots__ = ("commit", "unnamed")
+
+    def __new__(cls, notice: str, commit: str = "", *, unnamed: bool = False) -> Self:  # noqa: D102 - the class says it
+        made = super().__new__(cls, notice)
+        made.commit, made.unnamed = commit, unnamed
+        return made
+
+
+# The first line `git commit` prints names the commit it made, in full with `core.abbrev=no`: "[branch id] subject",
+# "[branch (root-commit) id] ..." or "[detached HEAD id] ...". A branch name holds no space, so the first " id]" is it.
+_MADE = re.compile(r"\[[^\n]*? ([0-9a-f]{40}|[0-9a-f]{64})\](?: |$)")
 
 
 def _held(path: Path) -> str:
@@ -238,27 +260,42 @@ class DataRepo:
         """Why a held automatic change keeps this checkout from pushing or rebasing; nothing when it does not."""
         return publication_hold.refusal(self, until)
 
-    def commit(self, paths: Path | Sequence[Path], message: str, until: float | None = None) -> str:
-        """Commit ``paths`` alone if they changed; why that failed, else nothing. The caller holds ``locked``."""
+    def commit(self, paths: Path | Sequence[Path], message: str, until: float | None = None) -> Committed:
+        """Commit ``paths`` alone if they changed; why that failed, else nothing. The caller holds ``locked``.
+
+        The answer also names the commit made (`Committed.commit`), "" when none: the id `git commit` itself printed for
+        the commit it made, never HEAD read afterwards, which an owner's commit or amend may already have moved. Hooks
+        print to stderr, so stdout's first line is Git's own; when it names no full id of an existing commit, the
+        commit made is `unnamed`. Hooks and signing run as configured: only the printed id's length is set.
+        """
         until = time.monotonic() + SAVE_SECONDS if until is None else until
         rels = [p.relative_to(self.root).as_posix() for p in ([paths] if isinstance(paths, Path) else paths)]
+        why, rels = self._stage(rels, until)
+        if why or not rels:
+            return Committed(why)  # failed, or nothing changed: no commit was made
+        made = _git(self.root, "-c", "core.abbrev=no", "commit", "-m", message, "--", *rels, until=until)
+        if made.returncode:
+            return Committed(f"saved, but not committed: {made.stderr.strip()[:200]}")
+        named = _MADE.match(made.stdout.partition("\n")[0])
+        oid = named.group(1) if named else ""
+        known = _git(self.root, "rev-parse", "--verify", "-q", f"{oid}^{{commit}}", until=until) if oid else None
+        return Committed("", oid) if known and known.stdout.strip() == oid else Committed("", unnamed=True)
+
+    def _stage(self, rels: list[str], until: float) -> tuple[str, list[str]]:
+        """Stage those of *rels* that exist or are tracked; why that failed, and those to commit, none if unchanged."""
         try:
             rels = [r for r in rels if (self.root / r).exists() or self._tracked(r, until)]
         except DataRepoError as exc:
-            return f"saved, but not committed: {exc}"
+            return f"saved, but not committed: {exc}", []
         if not rels:
-            return ""  # removed before it was ever committed: nothing to commit
+            return "", []  # removed before it was ever committed: nothing to commit
         if (added := _git(self.root, "add", "--", *rels, until=until)).returncode:
-            return f"saved, but not committed: {added.stderr.strip()[:200]}"
+            return f"saved, but not committed: {added.stderr.strip()[:200]}", []
         staged = _git(self.root, "diff", "--cached", "--quiet", "--", *rels, until=until)
         if staged.returncode not in (0, 1):
-            return f"saved, but not committed: {staged.stderr.strip()[:200] or 'git could not read staged changes'}"
-        if (
-            staged.returncode == 1
-            and (made := _git(self.root, "commit", "-q", "-m", message, "--", *rels, until=until)).returncode
-        ):
-            return f"saved, but not committed: {made.stderr.strip()[:200]}"
-        return ""
+            why = staged.stderr.strip()[:200] or "git could not read staged changes"
+            return f"saved, but not committed: {why}", []
+        return "", rels if staged.returncode == 1 else []
 
     def _tracked(self, rel: str, until: float) -> bool:
         """Whether the index holds ``rel``; a failed probe cannot establish absence."""
@@ -269,7 +306,13 @@ class DataRepo:
         return bool(probe.stdout)
 
     def _push(self, until: float) -> str:  # noqa: PLR0911 - each push and the rebase between report apart
-        """Push; once rejected, rebase on the remote and push again. A held automatic change is checked first."""
+        """Push; once rejected, rebase on the remote and push again.
+
+        Nothing while a decision batch is unsettled; then a held automatic change is checked, and every push runs as
+        the one non-forced refspec proven to land on the upstream (`publication_hold.pushing`).
+        """
+        if held := self._decision_batch_held():
+            return f"saved and committed in {self.root}, but not pushed: {held}"
         held, run = publication_hold.pushing(self, ("push", "-q"), until)
         if held:
             return f"saved and committed in {self.root}, but not pushed: {held}"
@@ -289,8 +332,27 @@ class DataRepo:
         publication_hold.settled(self, until)
         return ""
 
+    def _decision_batch_held(self) -> str:
+        """Why nothing may be pushed or rebased here: a decision batch is interrupted, or its journal cannot be read.
+
+        An interrupted batch may have left an incomplete commit in this checkout; another clone, holding no journal,
+        would read it as settled decisions. Only the batch's own publisher and the owner's finish or abandon move it.
+        """
+        try:
+            batch = batch_journal.pending(self)
+        except batch_journal.JournalError as exc:
+            return f"the decision batch journal cannot be read ({str(exc)[:200]}); repair it in Decisions"
+        if batch is None:
+            return ""
+        return f"the decision batch {batch.generation} is interrupted; finish or abandon it in Decisions first"
+
     def pull(self, until: float | None = None) -> str:
-        """Rebase on the remote; a failed rebase is undone, never left half done. Why it failed, else nothing."""
+        """Rebase on the remote; a failed rebase is undone, never left half done. Why it failed, else nothing.
+
+        Nothing is rebased while a decision batch is unsettled (`_decision_batch_held`).
+        """
+        if held := self._decision_batch_held():
+            return f"not rebased on the remote: {held}"
         until = time.monotonic() + SAVE_SECONDS if until is None else until
         if publication_hold.recorded(self, until):
             return self._pull_held(until)
@@ -313,7 +375,7 @@ class DataRepo:
         return self._settle(done, "git rebase failed", until)
 
     def rebase(self, until: float | None = None) -> str:
-        """Rebase on the upstream as last fetched, without fetching; a failed rebase is undone. Why it failed."""
+        """Rebase on the upstream as last fetched, without fetching. A failed rebase is never aborted. Why it failed."""
         until = time.monotonic() + SAVE_SECONDS if until is None else until
         if held := publication_hold.check(self, until, fetch=False):
             return held
@@ -335,12 +397,17 @@ class DataRepo:
         return any((admin / d).exists() for d in ("rebase-merge", "rebase-apply"))
 
     def _settle(self, done: subprocess.CompletedProcess[str], failed: str, until: float) -> str:
+        """Report a failed rebase and leave it exactly as Git stopped it: no abort, no index or worktree change."""
         if done.returncode == 0:
             return ""
-        admin = Path(_git(self.root, "rev-parse", "--absolute-git-dir", until=until).stdout.strip() or self.root)
-        if any((admin / d).exists() for d in ("rebase-merge", "rebase-apply")):
-            _git(self.root, "rebase", "--abort", until=until + PENDING_SECONDS)
-        return done.stderr.strip()[:200] or failed
+        why = done.stderr.strip()[:200] or failed
+        try:
+            rebasing = self.rebasing(until)
+        except DataRepoError as exc:
+            return f"{why}; {exc}, so it was left as it is for the owner to check"
+        if rebasing:
+            return f"{why}; a rebase is in progress in {self.root} and was left as it is for the owner to resolve"
+        return why
 
     def pending(self) -> str:
         """What in the shared checkout is not yet committed or pushed, as a notice; nothing when all is published."""

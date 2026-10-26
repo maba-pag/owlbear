@@ -21,7 +21,13 @@ from owlbear_delivery_next.machine_host import app, project
 from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import Host, HostRecord
-from owlbear_delivery_next.state_store import decision_fixes, decision_impact, decision_store, decision_sync
+from owlbear_delivery_next.state_store import (
+    decision_batch,
+    decision_fixes,
+    decision_impact,
+    decision_store,
+    decision_sync,
+)
 from owlbear_delivery_next.state_store.backlog import Backlog
 from owlbear_delivery_next.state_store.decision_actions import Refused
 from owlbear_delivery_next.state_store.decision_impact import ACCEPTED, Impact, Place, Report
@@ -367,9 +373,9 @@ def test_keeping_existing_code_is_taken_back_when_the_rule_changed_between_catch
         decision_fixes.accept(shared, report, PROJECT, new.revision, "Old notes stay.")
 
     pushed = git(peer, "rev-parse", "HEAD")
-    assert not [e for e in decision_store.whole(shared)[0].values() if e.decision.source == ACCEPTED]
     assert git(shared.root, "ls-remote", "origin", "HEAD").split()[0] == pushed  # nothing published
-    assert git(shared.root, "rev-parse", "HEAD") == pushed  # the acceptance commit taken back, then rebased
+    assert decision_batch.pending(shared) is not None  # interrupted: the acceptance is kept, not undone in Git
+    assert git(shared.root, "rev-parse", "HEAD") != pushed  # the local acceptance commit is preserved
     assert git(shared.root, "status", "--porcelain") == ""
 
 

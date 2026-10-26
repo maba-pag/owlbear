@@ -21,6 +21,7 @@ export const state = {
   pending: "",  // the action whose request is under way
   impact: null,  // { id, address, report | error | busy, scheduled } of the opened decision's impact (TD-428)
   effect: "",  // the owner's mark on a draft that replaces one, sent when he activates it
+  recovery: { status: null, error: "", notice: "", pending: "" },  // the interrupted batch, read apart from the list
 };
 // where: project | global | all | owlbear; state: "" (in force and drafts), a state, or "all" (retired included)
 export const filter = { where: "all", topic: "", origin: "", state: "", read_back: "", text: "" };
