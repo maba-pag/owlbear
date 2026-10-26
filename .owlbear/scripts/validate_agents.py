@@ -144,7 +144,7 @@ def _validate_mcp_configuration() -> tuple[frozenset[str], list[str]]:
     External servers count as known for grants even where no file configures them.
     """
     configured, errors = _configured_mcp_servers()
-    if configured:
+    if not errors:
         missing = sorted(frozenset(_MCP_SERVER_MODULES) - configured)
         unexpected = sorted(configured - _DEFAULT_MCP_SERVERS)
         if missing:

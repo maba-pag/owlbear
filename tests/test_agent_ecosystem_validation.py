@@ -280,6 +280,8 @@ def test_agent_validator_reads_mcp_servers_from_the_root_file(tmp_path: Path, mo
     assert "markitdown" in configured  # external: its grants stay known though no file configures it
     root.write_text('{"mcpServers": {"owlbear-memory": {}}}', encoding="utf-8")
     assert any("MCP servers are missing" in error for error in validate()[1])
+    root.write_text('{"mcpServers": {"owlbear-delivery": {}}}', encoding="utf-8")
+    assert any("MCP servers are missing" in error for error in validate()[1])
     root.write_text('{"servers": {"owlbear-memory": {}}}', encoding="utf-8")
     assert validate()[1] == [f"{root}: MCP configuration needs a mcpServers object"]
 
