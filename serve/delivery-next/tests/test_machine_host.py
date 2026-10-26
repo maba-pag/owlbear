@@ -526,7 +526,9 @@ def test_the_machine_s_settings_are_saved_against_the_revision_the_page_read(htt
     assert (read["settings"]["channel"], read["resolved"]["channel"], read["resolved"]["sources"]["channel"]) == (
         None, "minor", "default"
     )  # fmt: skip
-    assert (saved.json()["settings"], registry.load().settings.channel) == (chosen, "major")
+    unset = dict.fromkeys(("spotter_budget", "retro_budget", "retro_verbose_cap", "retro_after_change",
+                           "retro_when_idle", "enrolled_chats"))  # Improvement's: none chosen here  # fmt: skip
+    assert (saved.json()["settings"], registry.load().settings.channel) == (chosen | unset, "major")
     assert saved.json()["resolved"]["sources"]["channel"] == "machine"
     assert (stale.status_code, "changed since" in stale.json()["detail"], wrong.status_code) == (409, True, 422)
     inherit = http.put("/api/next/machine/settings", json={"rev": saved.json()["settings_rev"],

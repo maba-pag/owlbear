@@ -21,14 +21,15 @@ from owlbear_delivery_next.runtimes.results import Gate
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.settings import roles
 from owlbear_delivery_next.settings.config import Layer, resolve
+from owlbear_delivery_next.settings.improvement import Spotter
 from owlbear_delivery_next.workflow_steps import sessions
 
 AGENTS = (
     "builder", "planner", "reviewer", "challenger", "design-judge", "preparer", "updater", "test-reviewer",
     "test-curator", "picker", "curator",
 )  # fmt: skip
-PENDING: set[str] = {"watcher"}  # every worker role has its own agent file (TD-106); the watcher's comes
-# with its model judge (item 9)
+PENDING: set[str] = {"spotter", "retro", "retro-review"}  # every worker role has its own agent file (TD-106);
+# Improvement's come with their slices (item 9)
 CHAT = "shaper"  # the owner's chat agent, checked with the chat (TD-93), not a worker role
 SDK_TOOLS = {  # the SDK runtime's built-in tools (tools.list, runtime research P24)
     *("bash", "read_bash", "list_bash", "stop_bash", "view", "create", "edit", "glob", "grep", "web_fetch"),
@@ -215,7 +216,10 @@ def test_a_judge_runs_as_its_labels_role_in_both_runtimes(label, role, monkeypat
         raise _Made
 
     monkeypatch.setattr(sessions, "isolated", isolated)
-    store, settings = SimpleNamespace(read_profile=lambda: None), resolve(None, Layer(watcher=False))  # no database
+    store, settings = (
+        SimpleNamespace(read_profile=lambda: None),
+        resolve(None, Layer(spotter=Spotter(mode="off"))),
+    )  # no database
     with pytest.raises(_Made):
         sessions.judges(store, SimpleNamespace(slug="c1"), None, Path(), lambda _at: [(label, _session(label))],
                         settings)  # fmt: skip
