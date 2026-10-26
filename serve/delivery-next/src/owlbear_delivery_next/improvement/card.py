@@ -172,11 +172,11 @@ def bounded(card: dict[str, Any]) -> dict[str, Any]:
     cap = 2000
     while _size(card) > BOUND - 200 and cap >= 50:  # noqa: PLR2004 - room for the gap below; shorter says nothing
         card, cap = _capped(card, cap), cap // 2
+    if cap < 2000:  # noqa: PLR2004
+        card["gaps"].append(f"texts were shortened to {cap * 2} characters to fit the card's bound")
     if _size(card) > BOUND:  # only a card of absurd shape: the moment alone, and why
         return {"step": card.get("step", ""), "moment": {"at": card["moment"].get("at"), "kind": card["moment"].get(
             "kind")}, "gaps": ["the card could not be kept within its bound"]}  # fmt: skip
-    if cap < 2000:  # noqa: PLR2004
-        card["gaps"].append(f"texts were shortened to {cap * 2} characters to fit the card's bound")
     return card
 
 

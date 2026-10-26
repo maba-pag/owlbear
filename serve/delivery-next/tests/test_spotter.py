@@ -202,9 +202,9 @@ def test_looks_past_capacity_or_budget_are_recorded_skipped_and_the_ledger_settl
         spot = spotter.Spotter(ctx(budget=1), lambda: "s-1", judge(wait=0.1))
         for i in range(3):  # two run; the third finds no room
             spot.handed_off(f"c{i}", {})
-        await spot.drain()
+        await asyncio.wait(set(spot.tasks))
         spot.handed_off("c3", {})  # 0.5 spent and 0.5 reserved: within the budget
-        await spot.drain()
+        await asyncio.wait(set(spot.tasks))
         spot.handed_off("c4", {})  # now 0.75 spent: another estimate passes the budget
         await spot.drain()
 
@@ -812,3 +812,41 @@ def test_answers_the_ring_drops_are_a_gap() -> None:
         kept.add(done(f"q{i}", f"answer {i}"))
     built = card.build(kept.snapshot(), {"at": "2026-10-26T10:01:00+00:00"}, {})
     assert any("2 earlier answers" in g for g in built["gaps"])
+
+
+def test_an_unterminated_browser_context_crossing_the_size_cut_is_still_dropped() -> None:
+    text = "a" * (events.RAW // 2 - 5) + "<browser_context>" + "secret " * 20000
+    assert "secret" not in events.kept_text(text, events.RESULT)
+
+
+def test_the_card_stays_within_its_bound_at_the_shortening_edge() -> None:
+    snapshot = Kept().snapshot()
+    for k in range(1180, 1290, 3):  # gaps the cuts never trim, around the bound
+        built = card.build(snapshot, {"at": "2026-10-26T10:01:00+00:00"}, {"gaps": ["g" * 20] * k})
+        assert len(json.dumps(built, ensure_ascii=False)) <= card.BOUND, k
+
+
+def test_no_look_starts_once_the_drain_began_and_a_slow_write_never_holds_the_end(monkeypatch) -> None:
+    import time  # noqa: PLC0415
+
+    monkeypatch.setattr(spotter, "LOCK", 0.05)
+    real = spotter.store
+    monkeypatch.setattr(spotter, "store", lambda *a: (time.sleep(0.6), real(*a)))
+
+    async def main() -> tuple[float, int]:
+        spot = spotter.Spotter(ctx(), lambda: "s-1", judge(wait=0.05))
+        spot.handed_off("c1", {})
+        loop = asyncio.get_running_loop()
+        began = loop.time()
+        draining = asyncio.ensure_future(spot.drain())
+        await asyncio.sleep(0)
+        spot.handed_off("c2", {})  # a late hand-off after the drain began
+        late = len(spot.tasks)
+        await draining
+        return loop.time() - began, late
+
+    took, late = asyncio.run(main())
+    assert late == 1
+    assert took < 0.5  # the write goes on; the step's end does not wait for it
+    assert spotter.WORK.settled(5)
+    assert [r["call"] for r in records()] == ["c1"]

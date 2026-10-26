@@ -49,7 +49,7 @@ def as_dict(ev: Any) -> dict[str, Any]:  # noqa: ANN401 - an SDK event object or
 
 
 CUT = " [...] "
-RAW = 65536  # characters of one text cleaned at most, on the step's loop; a longer one is clipped to this first
+RAW = 65536  # characters of one text searched for emails at most, on the step's loop; a longer one is clipped first
 EMAIL = re.compile(r"(?<![\w.+-])[\w.+-]+@[\w-]+\.[\w.-]+")  # tried only where a word starts: linear
 
 
@@ -78,8 +78,8 @@ def clean(text: str) -> str:
 
 
 def kept_text(value: object, n: int) -> str:
-    """*value* cleaned, then clipped to *n*: browser context cut in two is still dropped whole."""
-    return clip(clean(clip(_text(value), RAW)), n)
+    """*value* cleaned, then clipped to *n*: browser context is dropped from the whole text before any cut."""
+    return clip(EMAIL.sub("<email>", clip(no_browser(_text(value)), RAW)), n)
 
 
 def result_text(data: dict[str, Any]) -> Any:  # noqa: ANN401 - a text, or a structured error as given

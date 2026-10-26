@@ -285,6 +285,7 @@ class Spotter:
         self.tasks: set[asyncio.Future[Any]] = set()
         self.running = 0  # looks admitted and not ended
         self.crowded = 0  # sampled looks skipped for capacity, recorded once at the end
+        self.closing = False  # the step ended: no look starts any more
 
     def seen(self, ev: Any) -> None:  # noqa: ANN401 - an SDK event, on the step's loop
         """Take one event in; a completed action of the session's own agent may be sampled for a look."""
@@ -327,6 +328,8 @@ class Spotter:
 
     def _look(self, look: str, probability: float, moment: dict[str, Any]) -> None:
         """Freeze the intake now; everything else runs in a task, its file work on the Spotter's own threads."""
+        if self.closing:
+            return
         if self.running >= RUNNING:
             if look == "sample":  # a burst of samples is one count, not a write each
                 self.crowded += 1
@@ -379,10 +382,11 @@ class Spotter:
                     lambda _: finishing.set_result(None)
                 )
             )  # once the reservation ends, never before: what it reserved is always settled, even if the step stops
-            await asyncio.wait({asyncio.wrap_future(finishing)})
+            await asyncio.wait({asyncio.wrap_future(finishing)}, timeout=2 * LOCK)  # it goes on if this wait ends
 
     async def drain(self) -> None:
-        """At the step's end: wait briefly for running looks, then stop the rest; bounded, recorded either way."""
+        """At the step's end: no look starts any more; wait briefly for running ones, then stop the rest; bounded."""
+        self.closing = True
         if self.crowded:
             why = f"capacity: {self.crowded} sampled looks skipped, looks already running"
             skipped = self._record("sample", self.ctx.sample_rate / 100, {"kind": "samples"}, skipped=why)
