@@ -253,16 +253,50 @@ def test_a_stale_automatic_payload_cannot_replace_a_newer_owner_value(
     assert profile_share.config_digest(b.config_path) != basis
 
     config_publishes.clear()
-    stale = config_save.based_on(b, basis, widths(1300))
+    stale = config_save.Prepared(basis, widths(1300))
     assert b.save(b.config_path, Layer, stale, "automatic", owner=False) == config_save.STALE
     assert config_publishes == []
     assert b"1700" in remote_bytes(remote, SHARED_CONFIG)
     assert b"1300" not in remote_bytes(remote, SHARED_CONFIG)
     assert b"1700" in b.config_path.read_bytes()
 
-    current = config_save.based_on(b, profile_share.config_digest(b.config_path), widths(1800))
+    current = config_save.Prepared(profile_share.config_digest(b.config_path), widths(1800))
     assert b.save(b.config_path, Layer, current, "automatic", owner=False) == ""  # the current basis still publishes
     assert b"1800" in remote_bytes(remote, SHARED_CONFIG)
+
+
+@pytest.mark.usefixtures("no_network")
+@pytest.mark.parametrize("kind", ["widths", "null", "in-place"])
+def test_an_unprepared_cached_automatic_change_cannot_resurrect_an_old_config(
+    shared_repo, tmp_path, refusing, config_publishes, kind
+):
+    root, remote = shared_repo
+    a = Store(tmp_path / "a-store", DataRepo(root), "shop-site")
+    refusing[0] = "notice"
+    assert a.save(a.config_path, Layer, widths(1600), "owner edit", owner=True)  # pending, not published
+    b = clone(remote, tmp_path / "b", "b")
+
+    def in_place(cur):
+        cur.widths = [1300]
+        return cur
+
+    cached = {
+        "widths": widths(1300),
+        "null": lambda cur: cur.model_copy(update={"widths": None}),
+        "in-place": in_place,
+    }[kind]
+    assert b.update_config(cached, "automatic") == CONFIG_WAITING  # held behind A's pending owner value
+
+    refusing[0] = None
+    assert a.save(a.config_path, Layer, widths(1700), "owner new value", owner=True) == ""
+    assert b.shared.pull() == ""
+    readiness.ready(b, tmp_path / "b-store", carry=True)  # B's healthy startup reads the newer config
+    config_publishes.clear()
+    assert b.update_config(cached, "automatic") == config_save.STALE  # the unprepared old payload is refused
+    assert config_publishes == []
+    assert b"1700" in remote_bytes(remote, SHARED_CONFIG)
+    assert b"1300" not in remote_bytes(remote, SHARED_CONFIG)
+    assert b"1700" in b.config_path.read_bytes()
 
 
 @pytest.mark.usefixtures("no_network")

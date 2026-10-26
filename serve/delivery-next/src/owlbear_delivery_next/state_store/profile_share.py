@@ -481,9 +481,12 @@ def move_roles(store: Store) -> None:
             return  # read_profile reports the damaged profile
         if found:
             try:
+                from owlbear_delivery_next.state_store.config_save import Prepared  # noqa: PLC0415 (import cycle)
+
                 if (
                     store.update_config(
-                        lambda cur: migrations.with_roles(cur, found), "role overrides from the old profile"
+                        Prepared(config_digest(store.config_path), lambda cur: migrations.with_roles(cur, found)),
+                        "role overrides from the old profile",
                     )
                     == CONFIG_WAITING
                 ):

@@ -114,7 +114,13 @@ def test_a_raised_config_refusal_keeps_the_shared_evidence_so_a_fresh_start_cann
     monkeypatch.setattr(DataRepo, "publish", raise_config)
     if action == "edit":
         with pytest.raises(SharedError):
-            store.update_config(lambda cur: cur.model_copy(update={"widths": [1600]}))
+            store.save(
+                store.config_path,
+                config.Layer,
+                lambda cur: cur.model_copy(update={"widths": [1600]}),
+                "edit",
+                owner=True,
+            )
     else:
         store.config_path.unlink()
         with pytest.raises(StoreError):

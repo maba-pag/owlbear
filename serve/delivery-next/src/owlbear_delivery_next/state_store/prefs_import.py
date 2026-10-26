@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.settings.prefs_import import plan
 from owlbear_delivery_next.state_store import profile_share
+from owlbear_delivery_next.state_store.config_save import Prepared
 
 if TYPE_CHECKING:
     from owlbear_delivery_next.change_contracts.profile_record import Profile
@@ -37,7 +38,7 @@ def _fill(store: Store, prof: Profile, basis: str, *, resumed: bool) -> None:
             raise StoreError(REVIEW)  # raised before any write: a deleted or changed config is not recreated
         return plan(cur, prof)
 
-    notice = store.update_config(change, "legacy preferences carried")
+    notice = store.update_config(Prepared(basis, change), "legacy preferences carried")
     if notice:
         msg = f"the legacy preferences were not published: {notice}"
         raise StoreError(msg)
