@@ -1294,3 +1294,100 @@ def test_an_adopted_unknown_row_keeps_its_one_lease_through_a_lost_key_write_its
     later.start("shop")
     drained(later)
     assert calls == []
+
+
+def main_row(reason: str, started: datetime, ended: datetime | None, state: str = "failed") -> None:
+    """One row main's producer left with no PIDs on file, written afresh as it cannot read a keyed record."""
+    row = {"state": state, "started_at": started.isoformat(), "ended_at": ended.isoformat() if ended else None,
+           "summary": "", "reason": reason, "entries": [], "skipped": {}, "seen": {}}  # fmt: skip
+    path = local_home.root() / curation.STATE
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"folders": {"shop": row}, "left": {}}))
+
+
+def ledger_sessions() -> list[dict]:
+    path = local_home.root() / maintenance.FILE
+    return json.loads(path.read_text())["sessions"] if path.exists() else []
+
+
+def test_main_generic_failure_before_its_first_pid_is_held_by_its_row_through_a_lost_key_write_and_recovery(
+    root,
+) -> None:
+    """Review 4373677385: main entered the SDK, which raised before any PID was recorded; nothing proves it ended.
+
+    The row's lease and its association are one save, so a lost key write is repaired; after the owner's recovery the
+    same row resurrects nothing, and a genuinely new row without PIDs is held again.
+    """
+    t0 = datetime.now(UTC) - timedelta(hours=2)
+    main_session_row(t0, {})  # main's ``_work`` row: RuntimeError, dated, no key, no PIDs
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(curation.Curation, "_write", lost_write)
+        with pytest.raises(OSError, match="synthetic runs write failure"):
+            curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root))
+    [b] = ledger_sessions()
+    calls: list[str] = []
+    retry = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root), run=never_runs(calls))
+    assert ([s["id"] for s in ledger_sessions()], b["state"], retry.load().folders["shop"].key) == (
+        [b["id"]], "held", b["slot"],
+    )  # fmt: skip
+    assert (retry.working(), retry.left) == ([curation.LINGERING], {})
+    retry.start("shop")
+    drained(retry)
+    assert (calls, retry.load().folders["shop"].reason) == ([], curation.LEFT)
+    rebooted(retry)
+    retry.maintenance.recover(b["id"], rebooted=True)
+    main_session_row(t0, {})  # the same row, its key lost again
+    again = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root), run=never_runs(calls))
+    assert (again.maintenance.pending("curation"), [s["id"] for s in ledger_sessions()]) == (False, [b["id"]])
+    assert again.load().folders["shop"].key == b["slot"]
+    main_session_row(t0 + timedelta(hours=1), {})  # main's later session failed the same way
+    later = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root), run=never_runs(calls))
+    assert ([s["state"] for s in ledger_sessions()], later.working(), calls) == (
+        ["recovered", "held"], [curation.LINGERING], [],
+    )  # fmt: skip
+
+
+UNSET_MODEL = "settings unset: agents.curator.model; fill them in on the Settings page"
+
+
+@pytest.mark.parametrize(
+    ("reason", "after", "state"),
+    [
+        (curation.LEFT, 0, "failed"),
+        (curation.NO_SHARED, 0, "failed"),
+        ("OwlBear is updating; try again in a minute", 0, "failed"),
+        ("stopping", 0, "waiting"),
+        (UNSET_MODEL, 0, "failed"),
+        (UNSET_MODEL, 2, "failed"),  # found again by the session's own check, before the SDK
+        ("agents.curator.subagents is unset", 0, "failed"),
+        (curation.INTERRUPTED, 5, "failed"),  # a waiting row a restart ended: no session started
+    ],
+)
+def test_a_known_refusal_main_writes_before_any_session_holds_nothing(root, reason, after, state) -> None:
+    t0 = datetime.now(UTC) - timedelta(hours=1)
+    main_row(reason, t0, t0 + timedelta(seconds=after), state)
+    job = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root))
+    assert (ledger_sessions(), job.working(), job.maintenance.pending("curation")) == ([], [], False)
+
+
+@pytest.mark.parametrize(
+    ("reason", "start", "end", "state"),
+    [
+        ("RuntimeError: synthetic SDK failure", 0, 0, "failed"),  # one clock value for its start and end
+        ("RuntimeError: synthetic SDK failure", 3600, 3630, "failed"),  # dated in the future
+        (curation.INTERRUPTED, 0, None, "failed"),  # a running row a restart ended
+        (UNSET_MODEL, 10, 0, "failed"),  # ends before it starts: no shape main writes
+        (curation.LEFT, 0, 5, "failed"),  # a fixed refusal that took time: no shape main writes
+        ("", 0, 30, "failed"),
+        ("", 0, 0, "paused"),
+    ],
+)
+def test_a_dated_failure_no_known_shape_explains_is_held_fail_closed(root, reason, start, end, state) -> None:
+    t0 = datetime.now(UTC) - timedelta(minutes=30)
+    main_row(reason, t0 + timedelta(seconds=start), None if end is None else t0 + timedelta(seconds=end), state)
+    calls: list[str] = []
+    job = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root), run=never_runs(calls))
+    assert ([s["state"] for s in ledger_sessions()], job.working()) == (["held"], [curation.LINGERING])
+    job.start("shop")
+    drained(job)
+    assert calls == []

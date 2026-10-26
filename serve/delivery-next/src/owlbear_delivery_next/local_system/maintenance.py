@@ -106,9 +106,13 @@ class Maintenance:
     ) -> None:
         self.slots, self.boot, self.observe = slots, boot or psutil.boot_time, observe or processes.alive
         with self._locked() as ledger:
-            changed = False
+            changed, booted = False, self.boot()
             for lease in ledger.sessions:
-                if lease.state == "running" and self.observe(lease.owner_pid, lease.owner_created) is False:
+                # A later boot proves its caller ended, never its session: held, for the owner's reboot recovery.
+                if lease.state == "running" and booted > lease.boot:
+                    lease.state, lease.reason = "held", "the computer restarted while this session's caller ran"
+                    changed = True
+                elif lease.state == "running" and self.observe(lease.owner_pid, lease.owner_created) is False:
                     lease.state, lease.reason = "held", "the maintenance caller ended without a termination result"
                     changed = True
                 if lease.state in HELD:
@@ -139,6 +143,9 @@ class Maintenance:
                 else:
                     with os.fdopen(fd, encoding="utf-8") as source:
                         ledger = Ledger.model_validate_json(source.read())
+                    if missing := set(Ledger.model_fields) - ledger.model_fields_set:
+                        msg = f"its fields {', '.join(sorted(missing))} are missing"  # always written, so never empty
+                        raise ValueError(msg)
             except (OSError, ValueError) as exc:
                 msg = f"maintenance ownership could not be read: {exc}"
                 raise MaintenanceError(msg) from exc

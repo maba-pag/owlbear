@@ -123,16 +123,22 @@ class Curation:
         self.maintenance = ownership or maintenance.Maintenance(slots)
         if runs.left_key and not self.maintenance.records(SLOT, "curation", runs.left_key, runs.left):
             runs.left_key = ""  # the lease it names does not record these PIDs, so the key proves nothing
-        running = tuple(self._row(n, r) for n, r in runs.folders.items() if r.state == "running" and not r.key)
+        # Every uncertain row on file predates this import, as does the snapshot, so one lease may account for them all:
+        # its recovery needs a reboot after the import, which ends all their processes.
+        behind = tuple(
+            self._row(n, r)
+            for n, r in runs.folders.items()
+            if legacy_uncertain(r) or (r.state == "running" and not r.key)
+        )
         if runs.left and not runs.left_key:
             # A snapshot no lease of ours names is a producer's own observation. Its PIDs and session evidence are
             # what that producer wrote: a lease that saw these PIDs and every session row still on file covers it in
-            # any state, though refusals since overwrote some; a later session's row is held anew. A running row is
-            # the session behind it, associated with its lease in the same save.
+            # any state, though refusals since overwrote some; a later session's row is held anew. The rows behind it
+            # are associated with its lease in the same save.
             snapshot, seen = curation_snapshots.observed(runs), curation_snapshots.sessions(runs)
             lease = self.maintenance.adopt_uncertain(
                 f"{self.path()}#left", SLOT, "curation", workspace="", generation=snapshot, pids=runs.left,
-                covers=curation_snapshots.same_snapshot(SLOT, snapshot, seen), observed=seen, marks=running,
+                covers=curation_snapshots.same_snapshot(SLOT, snapshot, seen), observed=seen, marks=behind,
             )  # fmt: skip
             runs.left_key = lease.slot
         for name, r in runs.folders.items():
@@ -421,8 +427,23 @@ def _pending(store: Path) -> list[Any]:
 
 
 def legacy_uncertain(run: FolderRun) -> bool:
-    """A failed run whose termination an older host left unknown, and which the ledger has never recorded."""
-    return run.state == "failed" and UNKNOWN in run.reason and not run.key
+    """A dated failed row no ledger key accounts for, whose session may have entered the SDK without termination proof.
+
+    Only a known shape proves otherwise: a refusal main writes before any session, a run whose SDK returned with its
+    termination judged (``ended …`` without UNKNOWN; PIDs it still watched are the snapshot's), or a waiting row a
+    restart ended, which started no session. A generic failure, which may be raised inside the SDK before any PID is
+    recorded, and every other reason count as uncertain, as does a state no producer writes. A waiting row is a copy of
+    an earlier row, whose own evidence it no longer shows.
+    """
+    if run.key or run.started_at is None or curation_snapshots.refused(run):
+        return False
+    if run.state not in curation_snapshots.STATES:
+        return True
+    if run.state != "failed":
+        return False  # never, done, waiting, and running, which the caller takes on its own
+    if run.reason == INTERRUPTED:
+        return run.ended_at is None  # a running row a restart ended; a waiting one started no session
+    return not run.reason.startswith("ended ") or UNKNOWN in run.reason
 
 
 def _same_run(folder: str, run: FolderRun) -> Callable[[maintenance.Lease], bool]:

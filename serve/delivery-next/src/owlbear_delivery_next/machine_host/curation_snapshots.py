@@ -26,7 +26,10 @@ REFUSALS = frozenset({  # the fixed reasons main's ``_one`` writes when it refus
     "this automatic trigger is off in the machine settings; it waits until it is turned on",
     "stopping",
     "OwlBear stops once nothing runs: no memory curation starts",
+    "OwlBear is updating; try again in a minute",
 })  # fmt: skip
+SUBAGENTS_UNSET = "agents.curator.subagents is unset"  # main's ``_unset`` reasons, before any session and SDK call
+UNSET = ("settings unset: ", "; fill them in on the Settings page")
 
 
 def observed(runs: Runs) -> str:
@@ -37,15 +40,15 @@ def observed(runs: Runs) -> str:
 def sessions(runs: Runs) -> tuple[str, ...]:
     """The producer's session evidence on file: each row's folder and times, never this host's keys or reasons.
 
-    Only a refusal the producer is known to write before any session is left out: a failed row, or its waiting copy,
-    with one of its fixed reasons and no time between start and end. It may overwrite a session's row, which takes
-    evidence away and adds none. Every other dated row counts, a generic failure even when the clock gave its start and
-    end one value, and a row in a state the producer never writes is never taken for the snapshot's own.
+    Only a refusal main is known to write before any session is left out (see ``refused``). It may overwrite a
+    session's row, which takes evidence away and adds none. Every other dated row counts, a generic failure even when
+    the clock gave its start and end one value, and a row in a state the producer never writes is never taken for the
+    snapshot's own.
     """
     found = (
         f"{name}|{r.state if r.state not in STATES else ''}|{_at(r.started_at)}|{_at(r.ended_at)}"
         for name, r in runs.folders.items()
-        if r.state not in STATES or ((r.started_at or r.ended_at) and not _refusal(r))
+        if r.state not in STATES or ((r.started_at or r.ended_at) and not refused(r))
     )
     return tuple(sorted(found))
 
@@ -65,13 +68,18 @@ def same_snapshot(project: str, snapshot: str, seen: tuple[str, ...]) -> Callabl
     return covers
 
 
-def _refusal(run: FolderRun) -> bool:
-    return (
-        run.state in {"failed", "waiting"}
-        and run.reason in REFUSALS
-        and run.started_at is not None
-        and run.ended_at == run.started_at
-    )
+def refused(run: FolderRun) -> bool:
+    """Whether a failed row, or its waiting copy, is a refusal main writes only before any session and SDK call.
+
+    A fixed refusal ends as it starts; an unset setting may also be found in the session's own check, later. Equal
+    times alone prove nothing: a generic failure gets them when the clock gives one value.
+    """
+    if run.state not in {"failed", "waiting"} or run.started_at is None or run.ended_at is None:
+        return False
+    if run.reason in REFUSALS:
+        return run.ended_at == run.started_at
+    unset = run.reason == SUBAGENTS_UNSET or (run.reason.startswith(UNSET[0]) and run.reason.endswith(UNSET[1]))
+    return unset and run.ended_at >= run.started_at
 
 
 def _at(when: datetime | None) -> str:
