@@ -70,8 +70,8 @@ def lost_ack(monkeypatch) -> list[bool]:
     """Publishing lands in Git and on the remote, but the acknowledgement is lost while the switch holds True."""
     real, lost = decision_sync.publish, [True]
 
-    def publish(shared, paths, message, until, head):
-        sent = real(shared, paths, message, until, head)
+    def publish(shared, paths, message, until, head, *cont):
+        sent = real(shared, paths, message, until, head, *cont)
         return decision_sync.Sent(notice="acknowledgement lost", ambiguous=True) if lost[0] else sent
 
     monkeypatch.setattr(decision_sync, "publish", publish)

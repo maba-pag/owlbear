@@ -120,8 +120,8 @@ def lost_ack(monkeypatch) -> list[bool]:
     """Publishing lands in Git and on the remote, but the acknowledgement is lost while the switch holds True."""
     real, lost = decision_sync.publish, [True]
 
-    def publish(shared, paths, message, until, head):
-        sent = real(shared, paths, message, until, head)
+    def publish(shared, paths, message, until, head, *cont):
+        sent = real(shared, paths, message, until, head, *cont)
         return decision_sync.Sent(notice="acknowledgement lost", ambiguous=True) if lost[0] else sent
 
     monkeypatch.setattr(decision_sync, "publish", publish)
@@ -133,11 +133,11 @@ def lost_before_commit(monkeypatch) -> list[list[Path]]:
     """The first publish is lost before its commit, leaving the batch journalled; later publishes are real."""
     real, calls = decision_sync.publish, []
 
-    def publish(shared, paths, message, until, head):
+    def publish(shared, paths, message, until, head, *cont):
         if not calls:
             calls.append(paths)
             return decision_sync.Sent(notice="acknowledgement lost before the commit", ambiguous=True)
-        return real(shared, paths, message, until, head)
+        return real(shared, paths, message, until, head, *cont)
 
     monkeypatch.setattr(decision_sync, "publish", publish)
     return calls
@@ -379,8 +379,8 @@ def test_an_owner_edit_during_a_retained_recovery_publish_cannot_complete(shared
 
     real_publish = decision_sync.publish
 
-    def publish_then_edit(shared_repo_, paths, message, until, head_):
-        sent = real_publish(shared_repo_, paths, message, until, head_)
+    def publish_then_edit(shared_repo_, paths, message, until, head_, *cont):
+        sent = real_publish(shared_repo_, paths, message, until, head_, *cont)
         paths[0].write_bytes(b"owner edit during recovery\n")  # the owner edits while the recovery's publish returns
         return sent
 
@@ -486,10 +486,10 @@ def test_an_interrupted_committed_batch_is_not_pushed_by_a_new_writer_and_the_ow
     real_publish, origin = decision_sync.publish, git(root, "remote", "get-url", "origin")
     gone = tmp_path / "gone"
 
-    def publish_without_push(shared_, paths, message, until, head):
+    def publish_without_push(shared_, paths, message, until, head, *cont):
         git(root, "remote", "set-url", "origin", str(gone))  # the commit lands; its push cannot reach the remote
         try:
-            real_publish(shared_, paths, message, until, head)
+            real_publish(shared_, paths, message, until, head, *cont)
         finally:
             git(root, "remote", "set-url", "origin", origin)
         return decision_sync.Sent(notice="acknowledgement lost after the commit", ambiguous=True)
@@ -529,9 +529,9 @@ def test_a_flag_batch_that_lands_nothing_but_looks_sent_halts_the_next_round_bef
     save(shared, first, expected_revision=None, message="decisions: first")
     real_publish = decision_sync.publish
 
-    def sent_but_nothing_lands(shared_, paths, message, until, head):
+    def sent_but_nothing_lands(shared_, paths, message, until, head, *cont):
         if not message.startswith("decisions: conflict on"):
-            return real_publish(shared_, paths, message, until, head)
+            return real_publish(shared_, paths, message, until, head, *cont)
         advance_remote(tmp_path, remote, "elsewhere.txt")  # the remote moves before the loop's next round
         log.append("flag-returned")
         return decision_sync.Sent()  # success-looking, with no commit and HEAD unmoved

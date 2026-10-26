@@ -10,14 +10,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import TYPE_CHECKING, NamedTuple
+from typing import TYPE_CHECKING
 
 from owlbear_decisions import DecisionFileError
 from owlbear_decisions.storage import DECISIONS_DIR, parse
 from owlbear_delivery_next.local_system.data_repo import Committed, DataRepoError
 from owlbear_delivery_next.state_store import decision_batch
+from owlbear_delivery_next.state_store.decision_target import Continuation, Target, push_commit, target
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from owlbear_delivery_next.local_system.data_repo import DataRepo
 
 UPSTREAM = "@{upstream}"
@@ -38,6 +41,7 @@ class Sent:
     # The commit HEAD must be for the batch to land: the one this publication proved and sent, or kept local when the
     # push failed; "" when none is known. Completion proves that very commit, never a later one at HEAD.
     commit: str = ""
+    goal: Target | None = None  # the target *commit* went to: a continuation goes only there, never re-read
 
 
 def _decision_file(rel: str) -> bool:
@@ -76,40 +80,15 @@ def _on_remote(shared: DataRepo, head: str, until: float, tracking: str = UPSTRE
     return not shared.git("merge-base", "--is-ancestor", head, tracking, until=until).returncode
 
 
-class Target(NamedTuple):
-    """Where a publication goes: the local branch, its remote and remote branch, and that branch's fetched copy.
-
-    Read once, when the publication starts, and carried with it: a branch checked out later never retargets it.
-    """
-
-    branch: str
-    remote: str
-    ref: str
-    tracking: str
-
-
-def target(shared: DataRepo, until: float) -> Target | None:
-    """The checked-out branch and the remote branch it follows; None when it follows none, or HEAD is detached."""
-    branch = shared.git("symbolic-ref", "-q", "HEAD", until=until)
-    name = branch.stdout.strip()
-    if branch.returncode or not name:
-        return None
-    fields = "%(upstream:remotename)%00%(upstream:remoteref)%00%(upstream)"
-    said = shared.git("for-each-ref", f"--format={fields}", name, until=until)
-    remote, ref, tracking = ([*said.stdout.strip().split("\0"), "", ""])[:3]
-    if said.returncode or not remote or not ref.startswith("refs/heads/") or not tracking.startswith("refs/remotes/"):
-        return None
-    return Target(name, remote, ref, tracking)
-
-
-def proved(shared: DataRepo, head: str, until: float) -> bool:
+def proved(shared: DataRepo, head: str, until: float, cont: Continuation | None = None) -> bool:
     """Whether *head* is on the remote, pushing *head* itself first when it is HEAD's ancestor and the remote lacks it.
 
     Only *head*'s own commit is sent (`push_commit`), never HEAD: a commit made after it, a batch's or an owner's,
     is not published by proving the head it grew from. It goes to the remote branch the checkout followed when this
-    began, read once. The push is never forced: a remote that moved on refuses it and nothing is proved.
+    began, read once, or, for a continuation (*cont*), to the one its publication went to, never read again. The push
+    is never forced: a remote that moved on refuses it and nothing is proved.
     """
-    goal = target(shared, until)
+    goal = cont.goal if cont else target(shared, until)
     tracking = goal.tracking if goal else UPSTREAM
     if shared.git("fetch", "-q", until=until).returncode:
         return False
@@ -123,28 +102,22 @@ def proved(shared: DataRepo, head: str, until: float) -> bool:
     return _on_remote(shared, head, until, tracking)
 
 
-def push_commit(shared: DataRepo, commit: str, goal: Target | None, until: float) -> str:
-    """Push exactly *commit* to *goal*'s remote branch, never forced; why not, else nothing.
+def rebase(shared: DataRepo, until: float, guard: Callable[[], str] | None = None) -> str:
+    """Rebase on the fetched remote unless both sides changed one decision file; why it did not, else nothing.
 
-    The commit is named by its id and the destination by the remote and branch read when the publication began, so
-    neither HEAD nor the branch checked out by the time the push runs changes what is sent or where.
+    *guard*, a continuation's, runs after every probe and immediately before the rebase: what it refuses, nothing
+    is rebased.
     """
-    if goal is None:
-        return "the checkout's branch follows no remote branch, so nothing was pushed"
-    sent = shared.git("push", "-q", goal.remote, f"{commit}:{goal.ref}", until=until)
-    return sent.stderr.strip()[:200] or "git push failed" if sent.returncode else ""
-
-
-def rebase(shared: DataRepo, until: float) -> str:
-    """Rebase on the fetched remote unless both sides changed one decision file; why it did not, else nothing."""
     if (sides := _diverged(shared, until)) is None:
         return "Git cannot compare the checkout with its remote"
     if both := sides[0] & sides[1]:
         return f"{', '.join(sorted(both))} changed here and on the remote; the owner resolves it"
+    if guard is not None and (why := guard()):
+        return why
     return shared.rebase(until)
 
 
-def catch_up(shared: DataRepo, until: float) -> str:
+def catch_up(shared: DataRepo, until: float, guard: Callable[[], str] | None = None) -> str:
     """Fetch, and when the checkout is behind its remote and clean, rebase on it; why it did not, else nothing."""
     fetched = shared.git("fetch", "-q", until=until)
     if fetched.returncode:
@@ -157,7 +130,7 @@ def catch_up(shared: DataRepo, until: float) -> str:
     status = shared.git("status", "--porcelain", "--untracked-files=no", until=until)
     if status.returncode or status.stdout.strip():
         return "the checkout has uncommitted files"
-    return rebase(shared, until)
+    return rebase(shared, until, guard)
 
 
 def _ahead(shared: DataRepo, until: float) -> bool:
@@ -166,21 +139,22 @@ def _ahead(shared: DataRepo, until: float) -> bool:
     return not behind.returncode and behind.stdout.strip() != "0"
 
 
-def behind_unproved(shared: DataRepo, head: str, until: float) -> bool:
+def behind_unproved(shared: DataRepo, head: str, until: float, cont: Continuation | None = None) -> bool:
     """Whether *head* is not on the remote and the remote is ahead, so only a rebase could put a batch on it."""
-    return not proved(shared, head, until) and _ahead(shared, until)
+    return not proved(shared, head, until, cont) and _ahead(shared, until)
 
 
-def prepare(shared: DataRepo, until: float, own: str = "") -> tuple[str, str]:
+def prepare(shared: DataRepo, until: float, cont: Continuation | None = None) -> tuple[str, str]:
     """Catch up, then prove HEAD on the remote, before any batch is journalled; every writer runs this first.
 
     Returns the head to journal and a notice about the catch-up. The head is "" when HEAD is not known, or when the
     remote moved on again before HEAD could be proved; nothing may be written then. When the remote is unreachable
     and not known to be ahead, the head is returned unproved: its commit then stays unpublished, as before.
 
-    *own*, for a continuation of a publication, is the commit it landed: HEAD must then still be that commit, or one
-    already on the remote, before the catch-up and when HEAD is read, so an owner's commit made since is never
-    rebased, pushed or built on; nothing is written then either.
+    *cont*, for a continuation of a publication, is the commit it landed and the target it went to: before the
+    catch-up, immediately before its rebase and when HEAD is read, the checkout must still follow that target and
+    HEAD be that commit or one already on its remote branch. An owner's commit, or a branch checked out since, even at
+    the same commit, is then never rebased, pushed to or built on; nothing is written, and nothing is undone.
     """
     try:
         if shared.rebasing(until):
@@ -190,23 +164,33 @@ def prepare(shared: DataRepo, until: float, own: str = "") -> tuple[str, str]:
             )
     except DataRepoError as exc:  # unknown is not "no rebase": nothing is written
         return "", f"{exc}, so nothing was written"
-    notice = ""
+    notice, guard = "", (lambda: _stray(shared, cont, until)[1]) if cont else None
     for _ in range(PREPARE_TRIES):
-        if stray := _stray(shared, own, _rev(shared, "HEAD", until) if own else "", until):
+        if guard and (stray := guard()):
             return "", stray
-        notice = catch_up(shared, until)
-        if (head := _rev(shared, "HEAD", until)) is None or (stray := _stray(shared, own, head, until)):
-            return "", stray if head else "HEAD is not known, so nothing was written"
-        if not behind_unproved(shared, head, until):
+        notice = catch_up(shared, until, guard)
+        head, stray = _stray(shared, cont, until) if cont else (_rev(shared, "HEAD", until), "")
+        if head is None or stray:
+            return "", stray or "HEAD is not known, so nothing was written"
+        if not behind_unproved(shared, head, until, cont):
             return head, (f"not checked against the remote: {notice}" if notice else "")
     return "", "the remote moved on again before HEAD was proved, so nothing was written; save again"
 
 
-def _stray(shared: DataRepo, own: str, head: str | None, until: float) -> str:
-    """Why nothing more is written: *head* is neither *own* nor on the remote as last fetched, or unknown; else ""."""
-    if not own or (head and (head == own or _on_remote(shared, head, until))):
-        return ""
-    return f"HEAD moved past this save's commit {own[:12]} to one not its own, so nothing more was written; check it"
+def _stray(shared: DataRepo, cont: Continuation, until: float) -> tuple[str | None, str]:
+    """HEAD, read after the target, and why a continuation goes no further; "" when it may go on.
+
+    It goes no further when the checkout left its target, or HEAD is neither its commit nor on that target's remote
+    branch as last fetched, or is unknown.
+    """
+    if target(shared, until) != cont.goal:
+        notice = f"the checkout left the branch {cont.own[:12]} was published from, so nothing more was written"
+        return None, f"{notice}; check it"
+    head, tracking = _rev(shared, "HEAD", until), cont.goal.tracking if cont.goal else UPSTREAM
+    if head and (head == cont.own or _on_remote(shared, head, until, tracking)):
+        return head, ""
+    notice = f"HEAD moved past this save's commit {cont.own[:12]} to one not its own, so nothing more was written"
+    return head, f"{notice}; check it"
 
 
 def _ready(shared: DataRepo, until: float) -> tuple[str, Sent | None]:
@@ -225,7 +209,9 @@ def _ready(shared: DataRepo, until: float) -> tuple[str, Sent | None]:
     return head, None
 
 
-def publish(shared: DataRepo, paths: list[Path], message: str, until: float, head: str) -> Sent:
+def publish(  # noqa: PLR0913, PLR0917 - a flag round's publication also carries its save's continuation
+    shared: DataRepo, paths: list[Path], message: str, until: float, head: str, cont: Continuation | None = None
+) -> Sent:
     """Commit *paths* alone and push; a rejected push never rebases over a remote change of a decision file here.
 
     *head* is the batch's journalled head, proved on the remote by `prepare` before anything was written. A rebase
@@ -237,8 +223,12 @@ def publish(shared: DataRepo, paths: list[Path], message: str, until: float, hea
     own: every file the journal names must hold its after image before the commit, and the commit pushed, the one
     made or the one a rebase made of it, must hold every after image too, checked on that pinned commit before its
     push. Otherwise the commit, if made, stays local and unpushed and the batch stays interrupted; nothing is undone.
+    A continuation's publication (*cont*) goes only to its save's target: a checkout following another is refused.
     """
     goal = target(shared, until)  # where this goes, read with its proof: a later checkout never retargets it
+    if cont is not None and goal != cont.goal:
+        notice = "the checkout left the branch this save was published from, so nothing more is committed; check it"
+        return Sent(notice=notice, ambiguous=True)
     before, busy = _ready(shared, until)
     rels = {p.relative_to(shared.root).as_posix() for p in paths}
     # nothing is committed unless HEAD is read, never while a rebase is active or unknown, nor before the batch is whole
@@ -254,15 +244,16 @@ def publish(shared: DataRepo, paths: list[Path], message: str, until: float, hea
         return stop
     pushed = push_commit(shared, now, goal, until) if now else "HEAD is not known"  # `_unproved` refused that
     if not pushed:
-        return Sent(commit=now)
+        return Sent(commit=now, goal=goal)
     if refused := _rejected(shared, rels, pushed, until, own=bool(made)):
-        return _bound(refused, now)
+        return _bound(refused, now, goal)
     return _rebase_push(shared, head, until, (rows, paths, rels, made, now, goal))
 
 
-def _bound(sent: Sent, commit: str | None) -> Sent:
-    """*sent*, naming *commit* as the one HEAD must be for the batch to land, unless it is a refusal of the batch."""
-    return sent if sent.stale or sent.ambiguous or sent.uncommitted or not commit else replace(sent, commit=commit)
+def _bound(sent: Sent, commit: str | None, goal: Target | None) -> Sent:
+    """*sent*, naming *commit* and its *goal* as what the batch lands on, unless it is a refusal of the batch."""
+    good = not (sent.stale or sent.ambiguous or sent.uncommitted) and commit
+    return replace(sent, commit=commit, goal=goal) if good else sent
 
 
 type Rows = dict[str, bytes] | None  # the batch's after images by path, or None outside a journalled batch
@@ -437,7 +428,7 @@ def _rebase_push(
     if refused := _not_rebased(shared, where, head, (sent, goal), until):
         return refused
     if failed := shared.rebase(until):
-        return _bound(_rebase_failed(shared, where, failed, until), sent)  # never aborted: HEAD must still be *sent*
+        return _bound(_rebase_failed(shared, where, failed, until), sent, goal)  # never aborted: HEAD must be *sent*
     rebased, upstream = _rev(shared, "HEAD", until), _rev(shared, goal.tracking, until) if goal else None
     own = _ours(shared, upstream, rels, until) if made and upstream else ""
     if rebased is None or rebased not in {own or upstream, upstream}:  # upstream itself: nothing of ours left to send
@@ -446,8 +437,8 @@ def _rebase_push(
     if unproved := _unproved(shared, rebased, rows, paths, until):
         return unproved
     if failed := push_commit(shared, rebased, goal, until):
-        return Sent(notice=f"{where}, but the push failed: {failed}", commit=rebased)
-    return Sent(commit=rebased)
+        return Sent(notice=f"{where}, but the push failed: {failed}", commit=rebased, goal=goal)
+    return Sent(commit=rebased, goal=goal)
 
 
 def revision_at(shared: DataRepo, ref: str, rel: str, until: float) -> str:

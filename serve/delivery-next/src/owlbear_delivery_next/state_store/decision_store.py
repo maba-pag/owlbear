@@ -17,7 +17,7 @@ import time
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
-from owlbear_decisions import DecisionError, LinkType, Scope, check_write, decision_path, read, snapshot, write
+from owlbear_decisions import DecisionError, Scope, check_write, decision_path, read, snapshot, write
 from owlbear_decisions.snapshot import CONFLICT
 from owlbear_decisions.storage import kind, serialize
 from owlbear_decisions.validate import collect, layers, project_folders
@@ -25,6 +25,7 @@ from owlbear_delivery_next.local_system import storage_io
 from owlbear_delivery_next.local_system.data_repo import SAVE_SECONDS, DataRepoError
 from owlbear_delivery_next.state_store import decision_batch, decision_sync, decision_transaction
 from owlbear_delivery_next.state_store.database import StoreError
+from owlbear_delivery_next.state_store.decision_competitors import competitors
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -41,7 +42,6 @@ REPAIR = "Repair the shared data repository's checkout so Git can read it"
 READ = "Make the decision folders and files in the shared data repository readable and valid"
 RECOVER = "Finish or abandon the interrupted decision batch by its generation (owner's explicit choice)"
 ROUNDS = 3  # flag-and-publish rounds before a conflict is reported unresolved
-SUCCEEDS = (LinkType.REPLACES, LinkType.PROMOTED_FROM)  # the links that make a successor (TD-426)
 
 
 class DecisionsUnavailable(StoreError):  # noqa: N818 - the design's name for it
@@ -306,7 +306,7 @@ def _journal(shared: DataRepo, items: list[Placed], message: str, head: str, beh
     decision_batch.complete(shared, generation)
     held = [decision_sync.revision_at(shared, "HEAD", p.relative_to(shared.root).as_posix(), until) for p in paths]
     said = [sent.notice]
-    view = _reconcile(shared, decisions, said, until, sent.commit)
+    view = _reconcile(shared, decisions, said, until, decision_sync.Continuation(sent.commit, sent.goal))
     if view is None:  # saved and published; only the conflict flags are interrupted
         return [Receipt(d.id, saved=True, commit=_head(shared), notice=_join(*said)[:300]) for d in decisions]
     return [
@@ -390,12 +390,14 @@ def _refused(shared: DataRepo, decisions: list[Decision], refused: dict[str, str
     ]
 
 
-def _reconcile(shared: DataRepo, decisions: list[Decision], said: list[str], until: float, own: str) -> DataView | None:
+def _reconcile(
+    shared: DataRepo, decisions: list[Decision], said: list[str], until: float, own: decision_sync.Continuation
+) -> DataView | None:
     """Flag competing successors and publish the flags, reloading until none is left unflagged (ROUNDS at most).
 
     The flags are one journaled batch: a refused flag commit puts them back, and an unknown one stops the loop as
     interrupted. Nothing is flagged unless `decision_sync.prepare` proved HEAD on the remote first, and every round
-    goes on only from *own*, the commit the save landed, or the flag commit the round before landed.
+    goes on only from *own*, the commit the save landed and its target, or the flag commit the round before landed.
     """
     project, landed = next((d.project for d in decisions if d.project), ""), [own]
     for _ in range(ROUNDS):
@@ -405,7 +407,7 @@ def _reconcile(shared: DataRepo, decisions: list[Decision], said: list[str], unt
             said.append(behind)
             return None
         found = whole(shared)
-        competing = {e.decision.id: e for d in decisions for e in _competitors(found, d)}
+        competing = {e.decision.id: e for d in decisions for e in competitors(found, d)}
         if not competing:
             return _view(shared, project)
         entries = [e for _, e in sorted(competing.items())]
@@ -416,9 +418,9 @@ def _reconcile(shared: DataRepo, decisions: list[Decision], said: list[str], unt
             if not flagged:
                 return decision_transaction.Step("", refused=True)
             ids = ", ".join(sorted(p.stem for p in flagged))
-            sent = decision_sync.publish(shared, flagged, f"decisions: conflict on {ids}", until, head)
+            sent = decision_sync.publish(shared, flagged, f"decisions: conflict on {ids}", until, head, landed[-1])
             unknown = sent.ambiguous or sent.stale
-            landed.append(sent.commit or head)  # the next round goes on only from the flag commit, or this head
+            landed.append(landed[-1]._replace(own=sent.commit or head))  # on only from the flag commit, or this head
             return decision_transaction.Step(sent.notice, unknown=unknown, refused=sent.uncommitted)
 
         notice = decision_transaction.transaction(shared, project, "decisions: conflict flags", files, flag, head)
@@ -436,14 +438,6 @@ def whole(shared: DataRepo) -> tuple[dict[str, Entry], list[Finding]]:
         msg = f"the decisions in {shared.root} cannot be read: {exc}"
         raise DecisionsUnavailable(msg, READ) from exc
     return {e.decision.id: e for e in entries}, findings
-
-
-def _competitors(found: tuple[dict[str, Entry], list[Finding]], written: Decision) -> list[Entry]:
-    """The unflagged in-force successors competing with *written*, or with it for what it replaces or promotes."""
-    by_id, findings = found
-    touched = {written.id, *(link.target for link in written.links if link.type in SUCCEEDS)}
-    ids = {f.involves[0] for f in findings if f.rule == CONFLICT and touched.intersection(f.involves[1:])}
-    return [e for i in sorted(ids) if (e := by_id.get(i)) is not None and not e.decision.conflict]
 
 
 def _flag(entry: Entry, fence: Callable[[], None], root: Path) -> Path | None:
@@ -470,7 +464,7 @@ def _receipt(shared: DataRepo, view: DataView, decision: Decision, said: str, un
     committed = ours and decision_sync.revision_at(shared, "HEAD", rel, until) == held
     published = committed and decision_sync.revision_at(shared, decision_sync.UPSTREAM, rel, until) == held
     found = view.snapshot.findings_for(decision.id)
-    unresolved = bool(_competitors(whole(shared), decision))  # still unflagged after every round
+    unresolved = bool(competitors(whole(shared), decision))  # still unflagged after every round
     conflict = not ours or unresolved or entry.decision.conflict or any(f.rule == CONFLICT for f in found)
     return Receipt(
         decision.id,

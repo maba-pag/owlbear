@@ -3575,3 +3575,98 @@ def test_a_busy_batch_lock_waits_only_for_the_budget_left_after_its_acquisition_
         batch_journal._take(7, deadline)  # noqa: SLF001 - the actual acquisition loop is the boundary
     assert attempts == [7]
     assert waits == ([] if cost >= deadline else [pytest.approx(deadline - cost)])
+
+
+def _during_the_continuation_fetch(m: pytest.MonkeyPatch, act, ran: list) -> None:
+    """*act* runs once, in the first fetch after the save's own push, the continuation's catch-up fetch, before Git
+    fetches; every Git command is listed in *ran*."""
+    real_git, pushed = data_repo._git, []  # noqa: SLF001
+
+    def git(cwd, *args, until=None):
+        if args[:1] == ("fetch",) and pushed == [True]:
+            pushed.append(True)
+            act()
+        said = real_git(cwd, *args, until=until)
+        ran.append(args)
+        if args[:1] == ("push",) and not said.returncode and not pushed:
+            pushed.append(True)
+        return said
+
+    m.setattr(data_repo, "_git", git)
+
+
+def _another_clone_moves_the_remote_on(remote: Path, other: Path) -> str:
+    _git_in(other.parent, "clone", "-q", str(remote), str(other))
+    (other / "elsewhere.txt").write_text("another clone\n")
+    _git_in(other, "add", "-A")
+    _git_in(other, "-c", "user.name=t", "-c", "user.email=t@e", "commit", "-qm", "another clone's commit")
+    _git_in(other, "push", "-q")
+    return _git_in(other, "rev-parse", "HEAD")
+
+
+@pytest.mark.parametrize("case", ["owner-commits-as-the-remote-moves", "owner-switches-branch-at-the-same-commit"])
+def test_a_save_continuation_neither_rebases_an_owner_commit_nor_follows_a_branch_switch(
+    picking, shared_repo, monkeypatch, tmp_path, case
+):
+    """The save's commit B is published and landed; its continuation fetches before flagging. Meanwhile the owner
+    commits C while another clone moves the remote on, or checks out another branch at B itself that follows another
+    remote still behind B. C is never rebased and that other remote never receives B: the continuation stops, B stays
+    published, and the owner's commit, branch, index and files stay as the owner left them."""
+    _seed(picking)
+    shared, remote = picking.shared, shared_repo[1]
+    items, _, _ = _update_and_successor(picking)
+    elsewhere = _second_remote(shared, tmp_path)  # its `side` at H0, the head B will grow from
+    behind = _git_in(tmp_path, "--git-dir", str(elsewhere), "rev-parse", "side")
+    ran, owner, other = [], [], tmp_path / "other"
+
+    def owner_acts() -> None:
+        batch = shared.git("rev-parse", "HEAD").stdout.strip()
+        assert _remote_main(remote) == batch  # B is already published when the continuation fetches
+        if case == "owner-commits-as-the-remote-moves":
+            owner.append(_another_clone_moves_the_remote_on(remote, other))
+            owner.append(_owner_unrelated_commit(shared))
+        else:
+            _git_in(shared.root, "branch", "-q", "-f", "side", batch)  # the other branch, now at B itself
+            _git_in(shared.root, "checkout", "-q", "side")
+        owner.append(batch)
+
+    with monkeypatch.context() as m:
+        _during_the_continuation_fetch(m, owner_acts, ran)
+        receipts = decision_store.save_all(shared, items, message="decisions: two")
+
+    assert owner, "the continuation's fetch was never reached"
+    batch = owner[-1]
+    assert shared.git("rev-parse", f"{batch}~1").stdout.strip() == behind  # `side` was left at B's own parent
+    assert all(r.saved for r in receipts)  # B was published and landed; only the continuation stopped
+    assert _git_in(tmp_path, "--git-dir", str(elsewhere), "rev-parse", "side") == behind  # never fast-forwarded to B
+    assert not [args for args in ran if "rebase" in args]
+    assert shared.git("status", "--porcelain").stdout == ""
+    assert decision_batch.pending(shared) is None
+    if case == "owner-commits-as-the-remote-moves":
+        assert "HEAD moved past this save's commit" in receipts[0].notice
+        assert shared.git("rev-parse", "HEAD").stdout.strip() == owner[1]  # C itself, never rebased into C'
+        assert shared.git("rev-parse", "HEAD~1").stdout.strip() == batch
+        assert _remote_main(remote) == owner[0]  # the other clone's commit, on top of B; C is never sent
+        return
+    assert "left the branch" in receipts[0].notice
+    assert shared.git("symbolic-ref", "HEAD").stdout.strip() == "refs/heads/side"
+    assert shared.git("rev-parse", "HEAD").stdout.strip() == batch
+    assert _remote_main(remote) == batch  # B went where its publication began
+
+
+def test_a_save_continuation_still_catches_up_with_a_remote_that_moved_on(picking, shared_repo, monkeypatch, tmp_path):
+    """Only another clone moves the remote on during the continuation's fetch: it catches up as before."""
+    _seed(picking)
+    shared, remote = picking.shared, shared_repo[1]
+    items, _, _ = _update_and_successor(picking)
+    ran, moved = [], []
+
+    with monkeypatch.context() as m:
+        _during_the_continuation_fetch(
+            m, lambda: moved.append(_another_clone_moves_the_remote_on(remote, tmp_path / "other")), ran
+        )
+        receipts = decision_store.save_all(shared, items, message="decisions: two")
+
+    assert all(r.published for r in receipts)
+    assert shared.git("rev-parse", "HEAD").stdout.strip() == moved[0] == _remote_main(remote)
+    assert decision_batch.pending(shared) is None

@@ -501,7 +501,7 @@ def test_an_archive_is_published_while_its_batch_is_still_pending(store, monkeyp
     root = store.shared.root
     pending_at_publish: list[bool] = []
 
-    def lost_publish(_repo, _paths, _message, _until, _head):
+    def lost_publish(_repo, _paths, _message, _until, _head, *_cont):
         pending_at_publish.append(decision_batch.pending(store.shared) is not None)
         msg = "publish lost after the files were written"
         raise RuntimeError(msg)

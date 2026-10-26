@@ -282,8 +282,8 @@ def test_a_lost_publish_after_the_record_keeps_its_batch_interrupted(shared, rep
     )  # fmt: skip
     real_publish = decision_sync.publish
 
-    def lost_after_commit(shared_, paths, message, until, head):
-        real_publish(shared_, paths, message, until, head)
+    def lost_after_commit(shared_, paths, message, until, head, *cont):
+        real_publish(shared_, paths, message, until, head, *cont)
         return decision_sync.Sent(ambiguous=True, notice="the publication of the record is unknown")
 
     monkeypatch.setattr(decision_sync, "publish", lost_after_commit)
