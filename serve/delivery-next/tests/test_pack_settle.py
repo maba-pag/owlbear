@@ -361,7 +361,8 @@ def test_a_run_written_over_the_constructors_rewrite_before_its_version_is_read_
     """Review 4377585375: the rewrite's version is receipted to A only when the file holds A's rewrite at that version.
 
     B overwrites the file in place between the rename and the writer's own stat: the version the writer got is B's.
-    No receipt maps it to A, so a later stable read of B is held under its own lease, A as it was.
+    No receipt maps it to A; B is held under its own lease as A's rewrite is restored, and a later stable read of B
+    finds that same lease, A as it was.
     """
     root = store(tmp_path, "store", {"state": "running"})  # A: no run id, no start
     patch = overwritten_after_publish({"state": "running", "stage": "update"})  # B: also unidentified
@@ -372,15 +373,22 @@ def test_a_run_written_over_the_constructors_rewrite_before_its_version_is_read_
     first = ledger()
     job.maintenance = first
     session_slots.interrupted(job, "p")
-    [(a, _state)] = leases(first)
-    assert first.receipted("p", pack_state.digest(job.version)) == ""  # the version is B's: never A's
+    a = next(s["id"] for s in ledger_sessions(first) if s["generation"] == job.interrupted["generation"])
+    assert ([s for i, s in leases(first) if i != a], first.receipted("p", pack_state.digest(job.version))) == (
+        ["held"],
+        "",
+    )  # B held at once; the version is B's, never receipted to A
     if recovered:
         ledger(boot=20.0).recover(a, rebooted=True)
     owner = ledger(boot=20.0)
-    import_at(owner, root)  # B, read whole and stable
+    import_at(owner, root)  # B, read whole and stable: the lease it already has
     assert dict(leases(owner))[a] == ("recovered" if recovered else "held")
     assert [s for i, s in leases(owner) if i != a] == ["held"]
     assert owner.slots.take("other", "probe", 1, 2) == (1 if recovered else 0)
+
+
+def ledger_sessions(owner: maintenance.Maintenance) -> list[dict]:
+    return json.loads(owner.path.read_text())["sessions"]
 
 
 def test_the_constructors_own_rewrite_is_still_receipted_to_its_run_and_read_again_as_it(tmp_path):

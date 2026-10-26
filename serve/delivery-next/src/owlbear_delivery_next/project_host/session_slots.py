@@ -174,9 +174,12 @@ def interrupted(job: Job, key: str) -> None:
         if run["workspace"] and maintenance.owns(run["workspace"]):
             return  # the ledger already holds this run's own lease; importing it again would hold it twice
         notes: tuple[str, ...] = ()
-        if not run["workspace"] and pack_state.holds(job.store.root, job.state, job.version):  # its own rewrite only
+        own = bool(run["workspace"]) or pack_state.holds(job.store.root, job.state, job.version)
+        if own and not run["workspace"]:  # the file holds its own rewrite at that version: receipted to its run
             notes = (maintenance.receipt_note(key, pack_state.digest(job.version), run["generation"]),)
         _hold(maintenance, key, run["workspace"] or str(legacy), run["generation"], notes=notes)  # one save, both
+        if not own:  # another run was written over the rewrite: what the file holds now is held as it is, unreceipted
+            restore(maintenance, key, job.store.root)
     elif job.version == "":
         maintenance.adopt_uncertain(f"{key}:unreadable", key, "pack", workspace=str(legacy))
     elif "workspace" not in job.state and (legacy.is_dir() or pack_job.legacy_uncertain(job.state)):
@@ -232,6 +235,14 @@ def unloaded(maintenance: Maintenance, key: str, repo: Path) -> None:
         return
     if root is None:
         return
+    restore(maintenance, key, root)
+
+
+def restore(maintenance: Maintenance, key: str, root: Path) -> None:
+    """Hold the uncertain pack work the run file in *root* records now, read whole and stable; never write it.
+
+    A record that cannot be read is held too: unreadable ownership is never taken for none (TD-242).
+    """
     legacy = root / pack_run.UPDATER
     try:
         got = pack_job.observed(root)
