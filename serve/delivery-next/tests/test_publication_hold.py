@@ -1164,3 +1164,66 @@ def test_an_owned_decision_push_to_an_unchanged_address_with_spaces_lands(three,
     assert decision_sync.push_commit(winner.shared, made, goal, until) == ""
 
     assert remote_head(spaced) == made
+
+
+def an_owned_decision(picking) -> object:
+    from datetime import UTC, datetime  # noqa: PLC0415
+
+    from owlbear_decisions import Decision, Origin, Scope, State, new_id  # noqa: PLC0415
+
+    return Decision(
+        id=new_id(), title="Notes live in SQLite", statement="Notes live in one SQLite table.", scope=Scope.PROJECT,
+        project=picking.PROJECT, origin=Origin.AUTONOMOUS, actor="shaper", state=State.IN_FORCE,
+        created_at=datetime(2026, 10, 26, tzinfo=UTC),
+    )  # fmt: skip
+
+
+@pytest.mark.parametrize("push", ["initial", "rebased-retry"])
+def test_a_repoint_during_the_shared_checkouts_own_push_probes_sends_nothing_to_the_other_repository(
+    picking, shared_repo, tmp_path, monkeypatch, push
+):
+    """The owned push checked its captured remote's addresses, then the shared checkout's own probes run (the held
+    publication record's lookup first); origin is pointed at repository B during that lookup. The push still goes
+    nowhere: its captured addresses are checked again at the push itself, after those probes."""
+    from owlbear_delivery_next.state_store import decision_store  # noqa: PLC0415
+
+    shared, remote = picking.shared, shared_repo[1]
+    root = shared.root
+    fork = tmp_path / "fork-b.git"
+    git(tmp_path, "clone", "-q", "--bare", str(remote), str(fork))
+    other = tmp_path / "other"
+    pushes, fired, owner, real = [], [], [], DataRepo.git
+
+    def repoint() -> None:
+        fired.append(True)
+        git(root, "remote", "set-url", "origin", str(fork))
+        git(root, "config", "remote.origin.pushurl", str(fork))
+        owner.append(owner_state(root))
+
+    def spy(self, *args, **kwargs):
+        if self.root == root and args[:1] == ("push",) and len(args) == 4:
+            pushes.append(args)
+            if push == "rebased-retry" and len(pushes) == 1:  # another clone moves A on: this first push is refused
+                git(tmp_path, "clone", "-q", str(remote), str(other))
+                (other / "unrelated.txt").write_text("another clone\n")
+                git(other, "add", "-A")
+                git(other, "-c", "user.name=t", "-c", "user.email=t@e", "commit", "-qm", "other")
+                git(other, "push", "-q")
+        armed = pushes and (push == "initial" or len(pushes) == 2)
+        if armed and not fired and args[:2] == ("rev-parse", "--git-path") and args[2] == publication_hold.RECORD:
+            repoint()  # during the lower absent-hold probe, after the push's own address check passed
+        return real(self, *args, **kwargs)
+
+    monkeypatch.setattr(DataRepo, "git", spy)
+    fork_refs, before = remote_refs(fork), remote_head(remote)
+    receipts = decision_store.save_all(shared, [(an_owned_decision(picking), None)], message="decisions: one")
+
+    assert fired == [True]
+    assert remote_refs(fork) == fork_refs  # repository B never got the commit
+    assert len(pushes) == (1 if push == "initial" else 2)
+    assert not any(r.published for r in receipts)
+    if push == "initial":
+        assert remote_head(remote) == before  # nor did A: nothing was sent anywhere
+    else:
+        assert remote_head(remote) == git(other, "rev-parse", "HEAD")  # only the other clone's commit
+    assert owner_state(root) == owner[0]  # nothing moved after the actor's repoint

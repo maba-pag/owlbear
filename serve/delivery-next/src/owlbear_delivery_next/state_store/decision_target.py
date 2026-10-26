@@ -93,12 +93,15 @@ def push_commit(shared: DataRepo, commit: str, goal: Target | None, until: float
 
     The commit is named by its id and the destination by the remote and branch read when the publication began, so
     neither HEAD nor the branch checked out by the time the push runs changes what is sent or where. The remote's
-    addresses are read again right before the push and must still be those it had then; only the moment between that
-    last read and Git starting the push is left, as for any check made before a command runs.
+    addresses must still be those it had then: checked first, and again as the push's guard, after the shared
+    checkout's own probes and immediately before Git starts the push, so a repoint during those probes sends nothing.
+    Only the moment between that last read and Git starting is left, as for any check made before a command runs.
     """
     if goal is None:
         return "the checkout's branch follows no remote branch, so nothing was pushed"
     if why := moved(shared, goal, until):
         return why
-    sent = shared.git("push", "-q", goal.remote, f"{commit}:{goal.ref}", until=until)
+    sent = shared.git(
+        "push", "-q", goal.remote, f"{commit}:{goal.ref}", until=until, guard=lambda: moved(shared, goal, until)
+    )
     return sent.stderr.strip()[:200] or "git push failed" if sent.returncode else ""

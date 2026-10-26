@@ -123,17 +123,23 @@ class DataRepo:
         """A project's agent memory, beside its layer (TD-72); memory curation commits it."""
         return self.root / name / MEMORY
 
-    def git(self, *args: str, until: float | None = None) -> subprocess.CompletedProcess[str]:
+    def git(
+        self, *args: str, until: float | None = None, guard: Callable[[], str] | None = None
+    ) -> subprocess.CompletedProcess[str]:
         """One git command in the checkout; a timeout or a missing folder is a failed command.
 
         A push runs only as one checked, non-forced refspec. Plain and held pushes must land on the checked upstream;
         with nothing held, an explicit push may name its caller's captured destination. An unproved destination or
-        a held change that no longer meets the fetched remote sends nothing (`publication_hold.pushing`).
+        a held change that no longer meets the fetched remote sends nothing (`publication_hold.pushing`). A push's
+        *guard*, an owned caller's final check, runs after those probes and immediately before Git starts the push:
+        what it refuses, nothing is sent.
         """
         pushing = args[:1] == ("push",)
         run = args
         if pushing:
             held, run = publication_hold.pushing(self, args, until)
+            if not held and guard is not None:
+                held = guard()
             if held:
                 return subprocess.CompletedProcess(["git", *args], 1, "", held)
         done = _git(self.root, *run, until=until)

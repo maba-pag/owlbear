@@ -91,8 +91,10 @@ class OwnerMove:
         self.index: bytes | None = None
         self.worktree: dict[str, bytes] = {}
 
-    def __call__(self, shared: DataRepo, *args: str, until: float | None = None) -> subprocess.CompletedProcess[str]:
-        said = self.real(shared, *args, until=until)
+    def __call__(
+        self, shared: DataRepo, *args: str, until: float | None = None, **kwargs
+    ) -> subprocess.CompletedProcess[str]:
+        said = self.real(shared, *args, until=until, **kwargs)  # a push's guard goes on to the real wrapper
         if args[:2] == ("merge-base", "--is-ancestor") and not said.returncode and self._landing(shared, args):
             self.window = True
             if self.armed and self.moved is None:
@@ -131,8 +133,8 @@ class OwnerMove:
 def owner_move(tmp_path, monkeypatch) -> Iterator[OwnerMove]:
     move = OwnerMove(tmp_path)
 
-    def git(shared: DataRepo, *args: str, until: float | None = None) -> subprocess.CompletedProcess[str]:
-        return move(shared, *args, until=until)
+    def git(shared: DataRepo, *args: str, until: float | None = None, **kwargs) -> subprocess.CompletedProcess[str]:
+        return move(shared, *args, until=until, **kwargs)
 
     with monkeypatch.context() as patched:
         patched.setattr(DataRepo, "git", git)
