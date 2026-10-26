@@ -47,7 +47,6 @@ playwright-report/
 
 # IDE and editor
 .vscode/*
-!.vscode/mcp.json
 !.vscode/settings.json
 .github/skills/pds-knowledge-*
 

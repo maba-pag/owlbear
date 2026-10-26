@@ -193,7 +193,6 @@ def test_agent_workflow_covers_its_contract_tests_without_duplicate_paths() -> N
         ".owlbear/instructions/**",
         "serve/*-mcp/**",
         "seed/.vscode/mcp.json",
-        ".vscode/mcp.json",
         "share/instructions/**",
     } <= set(paths)
     assert not {
@@ -264,7 +263,7 @@ def test_agent_validator_checks_mcp_configuration_keys(tmp_path: Path, monkeypat
     config = tmp_path / "mcp.json"
     config.write_text('{"servers": {"owlbear-browser": {}, "ddgs": {}}}', encoding="utf-8")
     monkeypatch.setattr(_AGENT_VALIDATOR, "_CANONICAL_MCP_CONFIG", config)
-    monkeypatch.setattr(_AGENT_VALIDATOR, "_MCP_CONFIG_PATHS", (config, config))
+    monkeypatch.setattr(_AGENT_VALIDATOR, "_ROOT_MCP_CONFIG", tmp_path / "absent.json")
 
     _configured, errors = _AGENT_VALIDATOR._validate_mcp_configuration()  # noqa: SLF001
 
@@ -272,15 +271,15 @@ def test_agent_validator_checks_mcp_configuration_keys(tmp_path: Path, monkeypat
     assert any("MCP servers have no validator registry: ['ddgs']" in error for error in errors)
 
 
-def test_agent_validator_reads_active_mcp_servers_from_both_workspace_files(
+def test_agent_validator_reads_active_mcp_servers_from_the_root_file(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    seed, vscode, root = tmp_path / "seed.json", tmp_path / "vscode.json", tmp_path / "root.json"
+    seed, root = tmp_path / "seed.json", tmp_path / "root.json"
     seed.write_text('{"servers": {"owlbear-browser": {}, "owlbear-memory": {}}}', encoding="utf-8")
-    vscode.write_text('{"servers": {"owlbear-delivery": {}, "owlbear-browser": {}}}', encoding="utf-8")
-    root.write_text('{"mcpServers": {"owlbear-memory": {}}}', encoding="utf-8")
+    root.write_text(
+        '{"mcpServers": {"owlbear-delivery": {}, "owlbear-browser": {}, "owlbear-memory": {}}}', encoding="utf-8"
+    )
     monkeypatch.setattr(_AGENT_VALIDATOR, "_CANONICAL_MCP_CONFIG", seed)
-    monkeypatch.setattr(_AGENT_VALIDATOR, "_MCP_CONFIG_PATHS", (seed, vscode))
     monkeypatch.setattr(_AGENT_VALIDATOR, "_ROOT_MCP_CONFIG", root)
     errors = lambda: _AGENT_VALIDATOR._configured_mcp_servers()[1]  # noqa: E731, SLF001
 

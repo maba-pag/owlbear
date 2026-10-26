@@ -74,7 +74,6 @@ SUITES: dict[str, tuple[str, ...]] = {
         ".github/scripts/check_uv_version.py",
         ".pre-commit-config.yaml",
         ".mcp.json",
-        ".vscode/mcp.json",
         "seed/.vscode/mcp.json",
         "serve/*-mcp/**",
         "share/agents/**",
