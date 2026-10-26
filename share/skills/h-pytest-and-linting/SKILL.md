@@ -91,7 +91,10 @@ Read `.owlbear/scratch/pytest-output.txt` then delete it.
 
 ## General Gotchas
 
-- **Stale cache in retry cycles.** `.pytest_cache` can return cached results from prior runs, causing incorrect totals. In retries, clear first: `rm -rf .pytest_cache` or add `-p no:cacheprovider`.
+- **`.pytest_cache` holds run state, not results.** It stores the last failures, the collected node ids and the
+  `--stepwise` position; pytest never replays an outcome from it. It changes which tests run only under `--lf`,
+  `--ff`, `--nf` or `--sw`, given directly or through `addopts`. If a retry selects too few tests, check those
+  flags; `-p no:cacheprovider` ignores the cache for one run.
 
 - **ruff `# noqa` placement.** On multiline signatures, `# noqa: C901` must go on the `def` line, not continuation lines.
 

@@ -311,7 +311,7 @@ correct but hard to read.
   - `autonomous`: Sol's alternative put the rate change on a line under the switch. It was not chosen because
     it would leave only the context cell with an extra line.
 - **Default tier.** `decided` (2026-10-13): every role starts on the default tier. The watcher recommends the
-  long tier from early compactions ([watcher design §3.4a](delivery-next-watcher-design.md)).
+  long tier from early compactions ([watcher design §3.4a](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-next-watcher-design.md)).
 - **Replay.** Verdicts record the tier, and the calibration replay compares only rounds judged on the same model,
   effort and tier.
 
