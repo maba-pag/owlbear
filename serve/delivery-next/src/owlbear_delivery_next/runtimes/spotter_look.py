@@ -1,8 +1,10 @@
-"""One Spotter look (Improvement design §4): a tool-less SDK session on the spotter role, its credits capped.
+"""One Spotter look (Improvement design §4): a tool-less SDK session on the spotter role, with no SDK credit cap.
 
 It runs in an empty folder without the project's or the user's configuration, noted in the chatlogs manifest so it is
-never taken for a chat. Its teardown takes at most ``spotter.TEARDOWN`` per stage, whatever cancels it meanwhile: the
-session and runtime stop gracefully, or the runtime is forced to; an end it could not confirm is noted provisional.
+never taken for a chat. Its cost is bounded by that one turn, ``spotter.LOOK`` and the day's budget ledger, which
+reserves ``spotter.ESTIMATE`` for it and counts an unknown spend as that. Its teardown takes at most
+``spotter.TEARDOWN`` per stage, whatever cancels it meanwhile: the session and runtime stop gracefully, or the runtime
+is forced to; an end it could not confirm is noted provisional.
 """
 
 from __future__ import annotations
@@ -47,7 +49,6 @@ async def judged(the_card: dict[str, Any], ctx: spotter.Context) -> tuple[str, f
                 context_tier="long_context" if ctx.context == "long" else None, available_tools=[], mcp_servers={},
                 enable_config_discovery=False, included_builtin_skills=[], enable_file_hooks=False,
                 skip_custom_instructions=True, working_directory=empty, on_event=heard,
-                session_limits={"max_ai_credits": spotter.ESTIMATE},
                 on_permission_request=lambda *_: PermissionDecisionReject(feedback="a look has no tools"),
             )  # fmt: skip
             sid = getattr(session, "session_id", "") or ""
@@ -55,7 +56,7 @@ async def judged(the_card: dict[str, Any], ctx: spotter.Context) -> tuple[str, f
                        "worktree": empty}  # fmt: skip
             await spotter.offload(chatlogs.note, started)
             await session.send_and_wait(message, timeout=spotter.LOOK)
-            with contextlib.suppress(Exception):  # an unread usage keeps the answer and counts as the cap
+            with contextlib.suppress(Exception):  # an unread usage keeps the answer and counts as the estimate
                 nano = getattr(await session.rpc.usage.get_metrics(), "total_nano_aiu", None)
     finally:
         await spotter.through(asyncio.ensure_future(teardown(client, session, sid)))

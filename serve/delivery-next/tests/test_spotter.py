@@ -181,7 +181,7 @@ def test_a_look_still_running_at_the_steps_end_is_recorded_skipped(monkeypatch) 
 
     asyncio.run(main())
     assert [(r["skipped"], r["credits"]) for r in records()] == [("the step ended while the look ran", 0.5)]
-    assert ledger() == {"reserved": {}, "spent": 0.5}  # an unknown spend counts as the look's credit limit
+    assert ledger() == {"reserved": {}, "spent": 0.5}  # an unknown spend counts as the estimate
 
 
 def test_a_look_past_its_time_is_skipped_and_a_wrong_answer_fails_never_silent(monkeypatch) -> None:
@@ -338,6 +338,7 @@ def test_a_look_is_one_toolless_session_noted_in_the_chatlogs_manifest(monkeypat
     assert asyncio.run(REAL_LOOK({"step": "build"}, ctx(verbose=True))) == ('{"verdict": "silent"}', 0.2)
     chosen = ("available_tools", "mcp_servers", "enable_config_discovery", "model", "reasoning_effort", "timeout")
     assert [made[k] for k in chosen] == [[], {}, False, "gpt-6-luna", "medium", spotter.LOOK]
+    assert "session_limits" not in made  # a look sets no SDK credit cap; its cost is the turn, LOOK and the ledger
     assert "rationale" in made["message"]
     assert '{"step": "build"}' in made["message"]
     assert (made["disconnected"], made["stopped"]) == (True, True)
@@ -681,7 +682,7 @@ def test_a_hand_off_skipped_for_capacity_keeps_the_events_seen_as_its_cutoff() -
     assert sorted((r["skipped"][:8], r["cutoff"]) for r in records()) == [("", 3), ("", 3), ("capacity", 3)]
 
 
-def test_an_unread_usage_keeps_the_answer_and_counts_at_the_cap(monkeypatch) -> None:
+def test_an_unread_usage_keeps_the_answer_and_counts_as_the_estimate(monkeypatch) -> None:
     made: dict[str, Any] = {}
 
     class Session:
