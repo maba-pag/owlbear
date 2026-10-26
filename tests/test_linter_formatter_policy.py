@@ -488,10 +488,8 @@ def test_scripts_run_outside_the_pinned_python_keep_python_312_syntax() -> None:
         for workflow in (_ROOT / ".github" / "workflows").glob("*.yml")
         for match in re.findall(r"python3 (?:\.\./)*([\w./-]+\.py)", workflow.read_text(encoding="utf-8"))
     }
-    hooks = {path.relative_to(_ROOT).as_posix() for path in _ROOT.glob(".owlbear/hooks/*.py")}
     assert workflow_scripts
-    assert hooks
 
-    for relative in sorted(workflow_scripts | hooks):
+    for relative in sorted(workflow_scripts):
         source = (_ROOT / relative).read_text(encoding="utf-8")
         ast.parse(source, filename=relative, feature_version=(3, 12))

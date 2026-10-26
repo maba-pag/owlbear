@@ -61,7 +61,6 @@ SUITES: dict[str, tuple[str, ...]] = {
     ),
     "agent-ecosystem": (
         ".github/workflows/agent-ecosystem.yml",
-        ".owlbear/hooks/**",
         ".owlbear/agents/**",
         ".owlbear/instructions/**",
         ".owlbear/prompts/**",
@@ -77,7 +76,6 @@ SUITES: dict[str, tuple[str, ...]] = {
         "share/instructions/**",
         "share/skills/**",
         "tests/test_agent_ecosystem_validation.py",
-        "tests/test_write_guard_hooks.py",
         "serve/knowledge/**",
         "tests/test_knowledge_ops_contract.py",
     ),

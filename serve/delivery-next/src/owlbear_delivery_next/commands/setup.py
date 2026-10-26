@@ -85,12 +85,18 @@ def has_task(path: Path) -> bool:
     return isinstance(data, dict) and any(isinstance(t, dict) and t.get("label") == TASK for t in data.get("tasks", []))
 
 
-def with_server(data: dict[str, Any], python: str, repo: Path) -> dict[str, Any]:
-    """.mcp.json with the chat server entry."""
+def portable(python: str) -> str:
+    """*python* as ``${HOME}/...`` when it lies under the home folder: every client expands it."""
+    path, home = Path(python), Path.home()
+    return f"${{HOME}}/{path.relative_to(home).as_posix()}" if path.is_relative_to(home) else python
+
+
+def with_server(data: dict[str, Any], python: str, repo: Path | None = None) -> dict[str, Any]:
+    """.mcp.json with the chat server entry; it serves the folder it starts in unless *repo* names one."""
     server = {
         "type": "stdio",
         "command": python,
-        "args": ["-m", "owlbear_delivery_next", "mcp", "--repo", str(repo)],
+        "args": ["-m", "owlbear_delivery_next", "mcp", *(["--repo", str(repo)] if repo else [])],
         "tools": ["*"],
     }
     return {**data, "mcpServers": {**data.get("mcpServers", {}), SERVER: server}}
@@ -114,24 +120,29 @@ def _loose_json(text: str) -> object:
     return json.loads(re.sub(r",(\s*[}\]])", r"\1", text))
 
 
-def _serves(servers: object, repo: Path) -> bool:
-    """Whether one of *servers* is Delivery's chat server for *repo*."""
+def _serves(servers: object, repo: Path, *, own: bool) -> bool:
+    """Whether one of *servers* is Delivery's chat server for *repo*; one naming no folder serves only its own."""
+
+    def serves(args: list[object]) -> bool:
+        named = args[args.index("--repo") + 1 : args.index("--repo") + 2] if "--repo" in args else []
+        return named == [str(repo)] or (own and "--repo" not in args)
+
     entries = servers.values() if isinstance(servers, dict) else []
     return any(
         isinstance(e, dict) and isinstance(args := e.get("args"), list)
-        and "owlbear_delivery_next" in args and "mcp" in args and str(repo) in args
+        and "owlbear_delivery_next" in args and "mcp" in args and serves(args)
         for e in entries
     )  # fmt: skip
 
 
 def registered(repo: Path, home: Path | None = None) -> bool:
     """Whether the chat server of *repo* is registered: in its ``.mcp.json`` or the user's MCP configuration."""
-    for path, key in ((repo / ".mcp.json", "mcpServers"), (user_mcp(home or Path.home()), "servers")):
+    for path, key, own in ((repo / ".mcp.json", "mcpServers", True), (user_mcp(home or Path.home()), "servers", False)):
         try:
             data = _loose_json(path.read_text())
         except OSError, ValueError:
             continue
-        if isinstance(data, dict) and _serves(data.get(key), repo):
+        if isinstance(data, dict) and _serves(data.get(key), repo, own=own):
             return True
     return False
 
@@ -390,7 +401,8 @@ def write_project_files(repo: Path, python: str, ask: Ask, say: Callable[[str], 
         say(consent(repo, tasks, without_task, question, ask, yes=given).replace("written", "rewritten", 1))
     say("Delivery runs in OwlBear: run `owlbear start`, then add this project on its page.")
     question = "Register the Delivery chat server in .mcp.json (kept out of git)?"
-    server = consent(repo, repo / ".mcp.json", lambda d: with_server(d, python, repo), question, ask, yes=given)
+    local = portable(python)  # each client starts a project server in its repository
+    server = consent(repo, repo / ".mcp.json", lambda d: with_server(d, local), question, ask, yes=given)
     say(server)
     if not server.startswith("written"):
         snippet = json.dumps(with_server({}, python, repo)["mcpServers"])
@@ -399,7 +411,7 @@ def write_project_files(repo: Path, python: str, ask: Ask, say: Callable[[str], 
         say(f"Memory server not registered: {why}")
     else:
         question = "Register the memory server in .mcp.json for New Change's shaper (kept out of git)?"
-        say(consent(repo, repo / ".mcp.json", lambda d: with_memory(d, python), question, ask, yes=given))
+        say(consent(repo, repo / ".mcp.json", lambda d: with_memory(d, local), question, ask, yes=given))
     question = f"Set {window_files.HARNESS} in .vscode/settings.json for New Change's Copilot chat (kept out of git)?"
     settings = repo / window_files.SETTINGS  # the window reads the key only when it starts (TD-275)
     say(consent(repo, settings, lambda d: {**d, window_files.HARNESS: True}, question, ask, yes=given))

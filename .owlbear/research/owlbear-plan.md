@@ -171,7 +171,8 @@ The removal follows the self-update (TD-394) and the ledger's batches 1 to 5 (th
 `main` sync batch is gone, TD-203) with the tag first; its precondition for batch 2 (the new Changes page reachable)
 holds. It rewrites the documentation v1.0 needs (TD-393). The old engine's issues #225 and #400 and pull requests #405
 and #412 closed with it; Renovate's pull requests come back after it. Batch 5 also retired the
-four seeded hooks only the old agents registered; `deny-src-writes.py` stays for the test curator. The old live state
+four seeded hooks only the old agents registered; `deny-src-writes.py` and the `.owlbear/hooks/` wiring went with the
+shared `test-curator` and `memory-curator` agents, which Delivery's own curators replaced. The old live state
 (`.owlbear/delivery/`, `.owlbear/controller/`) stays on disk until D5's endpoint, two consumer Changes merged on the
 new engine (item 10).
 
