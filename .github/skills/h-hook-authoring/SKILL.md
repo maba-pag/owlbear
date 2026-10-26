@@ -60,8 +60,8 @@ an actual affected file from an edit request that contains no supported path.
 - Agent hook contracts are checked by `.owlbear/scripts/validate_agents.py`.
 - Behavioral guarantees belong in focused tests beside the existing hook tests, such as
   `tests/test_write_guard_hooks.py`.
-- A portable consumer hook also needs its corresponding `seed/.owlbear/hooks/` copy and setup
-  coverage. A developer-only hook does not gain consumer wiring implicitly.
+- OwlBear installs no hooks into consumer projects; a Delivery step's guards belong in its step
+  configuration, not in a hook script.
 - Keep hook authoring guidance here; do not copy the same contract into every agent or into
   `.github/copilot-instructions.md`.
 

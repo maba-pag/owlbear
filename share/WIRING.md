@@ -59,21 +59,15 @@ shared map.
 | --- | --- | --- |
 | `/challenge-plan-sol` | Current agent directed by the `.github/skills` skill | Dispatches a fresh unnamed read-only subagent with `GPT-6.1 Sol (copilot)`; caller reconciles evidence and owns the recommendation |
 | `/challenge-implementation-sol` | Current agent directed by the `.github/skills` skill | Dispatches a fresh unnamed read-only subagent with `GPT-6.1 Sol (copilot)`; caller reconciles findings and owns the verdict |
-| `test-curation` | `prompt` -> test-curator | Agent required-reading loads `w-test-curation` |
-| `kb-ingest` | `prompt` -> knowledge-ingestor | Agent required-reading loads `h-knowledge-ops` |
-| `kb-enrich` | `prompt` -> knowledge-enricher | Agent required-reading loads `w-knowledge-enrichment` and `h-knowledge-ops` |
-| `architecture-review` | Current agent directed by prompt | Loads module-design, orientation, visual-output, and idea-refinement skills |
-| `arch-audit` | Current agent directed by prompt | Loads `h-module-design` |
-| `frontend-audit` | Current agent directed by prompt | Loads frontend design and conventions; loads frontend proof guidance only for that toolchain |
-| `memory-audit` | Current agent directed by prompt | Loads memory structure and MCP memory before review; pending inspection uses preflight metadata and hands curation to `memory-curator` |
-| `legacy-audit` | Current agent directed by prompt | Loads `h-codebase-orientation`; uses its prompt-defined read-only audit procedure |
 
 Project-local prompts are outside the portable inventory. They may select built-in agents or load
 project-local skills in addition to the shared surface.
 
 The new Delivery engine's Changes page (New Change, the shaping chat) replaces the retired
 `ideate`, `design`, `continue-change`, `finalize-change`, `inspect-change`, `address-pr-feedback`,
-`resolve-target-conflict`, `repair-delivery` and `resolve-delivery-attention` prompts.
+`resolve-target-conflict`, `repair-delivery` and `resolve-delivery-attention` prompts. Its Maintenance
+page and memory curator replaced `test-curation` and `memory-audit`; the audit prompts were retired, and
+`kb-ingest` and `kb-enrich` wait, unloaded, in `serve/knowledge/prompts/`.
 
 ## Conditional Skill Loading
 

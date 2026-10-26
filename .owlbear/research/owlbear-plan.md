@@ -59,6 +59,7 @@ Renovate's pull requests come back now that the old engine is gone (owner, 2026-
 | The decision system (item 14) except the migration: files and validator, Change decisions archived, store with receipts, step context and runner gate, Decisions tab and chat tools, generated view, read-back queue, impact report, fix entries ticked by merged Changes | [decision system](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/decision-system-build.md) | #538 to #547, #550 |
 | Memory: the residuals of #238, #244 and #249; a chat's memory in its project's folder of `owlbear-data` (TD-72) | — | #548, #553 |
 | Decisions as confirmed intent (item 14): inherited decisions, saving at confirmation, the picker and lookups, answers classed by their relayer, the migration and the switch to `owlbear-data` (TD-466) | [decisions as confirmed intent](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/decision-intent-build.md) | #556 to #565, #570, #571 |
+| The workspace-era installer retired: Delivery's chat server path-free in the root `.mcp.json`, `share/prompts`, `setup/init.py` and `seed/`; `owlbear setup` offers the memory server for the shaper (`D-01M5TYMBBBHQRN172N977ND3VS`) | — | #665 to #667 |
 
 ## 2. The Plan
 
@@ -102,9 +103,6 @@ names, not positions: the table lists the items in their order.
   they are not detected (§3.7 there).
 - An organisation with the merge queue for OwlBear's `main`, once someone else contributes or Delivery builds
   OwlBear (TD-326).
-- Delivery's chat server in `.mcp.json`: the Copilot runtime's format allows no `${userHome}` or `${workspaceFolder}`,
-  so it stays in `.vscode/mcp.json` until an `owlbear mcp` command (repository = working folder) ships in a release;
-  then its entry becomes `owlbear mcp` with no paths.
 - The "align" fixes of §4 that belong to no item above: small, each its own pull request.
 
 **What depends on what** (open work only; solid: needed first, dashed: decided order without a technical need):

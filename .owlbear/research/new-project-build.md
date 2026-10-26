@@ -1,6 +1,8 @@
 # New Project From Zero Build Design
 
-> **Owning task:** item 15 of [the plan](owlbear-plan.md); owner decisions TD-421, TD-431..TD-433, TD-420
+> **Owning task:** item 15 of [the plan](owlbear-plan.md); owner decisions TD-421, TD-431..TD-433, TD-420; TD-420,
+> TD-421 and TD-431/TD-432 since replaced by `D-01M5TYMBBBHQRN172N977ND3VS`, `D-01M5TYMBBAFTPN27RQKFVCEN6A`
+> and `D-01M5TYR46VTW65B5JH1KM1M089`: no agent workspace
 > **Date:** 2026-10-20
 > **Question:** How does the owner create a new project, from an idea without a repository to one Delivery can use?
 > **Status:** design answered by the owner on 2026-10-20; not built, not placed in the order. Made from the
@@ -26,7 +28,6 @@ One dialog in steps, each with a default, ending in an exact preview of files an
 | CI and branch protection (TD-431) | Ticked and recommended: a minimal workflow with `push` and `pull_request` triggers and one job named `CI`; protection requires it, pull requests only, merge commits, no force push or deletion, no required approvals. Unavailable protection shows unticked with the reason |
 | Labels | Inherit the Global list (C-16); creating missing labels is a separate tick |
 | Delivery's chat tools | Ticked, with consent (TD-321), kept out of Git |
-| Agent workspace (TD-432) | Ticked; asks and hides its files from Git (TD-420) |
 
 ## 3. The run
 
@@ -44,12 +45,12 @@ restart an unfinished job shows with Retry.
    direct push), wait a bounded time for `CI` on that exact commit, apply and read back the branch rules, save the
    merge method `merge` explicitly (profile detection prefers squash). A refused option asks again; never a silent
    weakening or a public repository.
-5. **Configure and register:** labels if ticked, project settings, chat tools and agent workspace if ticked, then
+5. **Configure and register:** labels if ticked, project settings, chat tools with consent, then
    register the project.
 
 Local only (GitHub unticked) still completes the chosen local setup and is marked not ready for Delivery, with a later
 publish path. Setup reuses the parts of `owlbear setup --repo` (consent, server entry, project files) behind the
-dialog's answers; `setup/init.py` first gets TD-420.
+dialog's answers.
 
 **Account routing:** the project's GitHub account (TD-402's setting, pulled forward from item 10) routes setup and
 every later GitHub write through a per-command `GH_TOKEN` from `gh auth token --user <login>`, never by switching `gh`

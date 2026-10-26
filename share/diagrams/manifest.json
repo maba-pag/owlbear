@@ -5,8 +5,7 @@
       "source": "share/diagrams/mcp-topology.architecture.json",
       "artifact": "share/diagrams/mcp-topology.svg",
       "describes": [
-        "seed/.vscode/mcp.json",
-        "setup/init.py",
+        ".mcp.json",
         "serve/*-mcp/src/**",
         "serve/knowledge/src/**",
         "serve/memory/src/**",

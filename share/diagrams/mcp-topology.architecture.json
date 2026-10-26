@@ -4,7 +4,7 @@
   "meta": {
     "title": "OwlBear MCP Topology",
     "output": "share/diagrams/mcp-topology.html",
-    "subtitle": "Four seeded stdio servers; configuration and implementations remain authoritative.",
+    "subtitle": "OwlBear's stdio tool servers; configuration and implementations remain authoritative.",
     "quality_profile": "showcase",
     "viewBox": [1110, 680]
   },

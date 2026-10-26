@@ -94,6 +94,7 @@ def test_the_ci_gate_calls_each_touched_suite_and_passes_only_when_all_of_them_p
         (["README.md"], ["static"]),
         (["serve/delivery-next/src/owlbear_delivery_next/api.py"], ["python", "python-browser", "static", "security"]),
         ([".nvmrc"], ["static", "tooling"]),
+        (["renovate.json"], ["static", "tooling"]),
         (["uv.lock"], ["python", "python-browser", "static", "tooling"]),
         ([".github/workflows/ci.yml"], list(ci_scope.SUITES)),
         ([".github/scripts/ci_scope.py"], list(ci_scope.SUITES)),

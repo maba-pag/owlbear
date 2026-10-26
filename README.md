@@ -106,7 +106,6 @@ checkout and the next decision visible.
 | --- | --- |
 | `serve/` | Runtime packages and the [package map](serve/README.md) |
 | `share/` | Agents, skills, instructions, prompts, and their [loading model](share/README.md) |
-| `seed/` | Files copied into a project by the optional agent workspace setup, `setup/init.py`; see [What setup creates](setup/operating-owlbear.md#what-setup-creates) for why this tree has no README |
 | `setup/` | Installation in the [setup guide](setup/setup-guide.md), daily operation in [Operating OwlBear](setup/operating-owlbear.md), and teams in the [sharing guide](setup/sharing-guide.md) |
 | `.owlbear/` | Tracked project authority plus host-local runtime state in the [.owlbear guide](.owlbear/README.md) |
 | `tests/` | Workspace regression and integration tests described in the [test guide](tests/README.md) |
