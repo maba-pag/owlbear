@@ -1,20 +1,15 @@
-"""Project setup and diagnostic commands."""
+"""Project setup commands."""
 
 from __future__ import annotations
 
-import argparse
-import shutil
 import subprocess
 import sys
-from pathlib import Path
 
 from owlbear_tools.commands import command_footer
 
-_REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
 
-
-def _run(command: list[str], *, cwd: Path | None = None) -> int:
-    return subprocess.run(command, cwd=cwd, check=False).returncode  # noqa: S603
+def _run(command: list[str]) -> int:
+    return subprocess.run(command, check=False).returncode  # noqa: S603
 
 
 def _finish(exit_code: int) -> None:
@@ -27,48 +22,3 @@ def hooks_install() -> None:
     install = _run(["pre-commit", "install"])
     environments = _run(["pre-commit", "install-hooks"]) if install == 0 else install
     _finish(environments)
-
-
-def setup_project() -> None:
-    """Run the repository initializer for a target project."""
-    parser = argparse.ArgumentParser(prog="setup-project")
-    parser.add_argument("path", nargs="?", type=Path, default=Path.cwd())
-    parser.add_argument("--replace-hooks", action="store_true")
-    parser.add_argument("--yes", action="store_true", help="consent to writing the agent workspace without asking")
-    parser.add_argument("--dry-run", action="store_true", help="list what setup would write and write nothing")
-    args = parser.parse_args()
-    target = args.path.expanduser().resolve()
-    command = [sys.executable, str(_REPOSITORY_ROOT / "setup/init.py")]
-    for flag, given in (("--replace-hooks", args.replace_hooks), ("--yes", args.yes), ("--dry-run", args.dry_run)):
-        if given:
-            command.append(flag)
-    _finish(_run(command, cwd=target))
-
-
-def doctor() -> None:
-    """Check the shallow prerequisites and tracked project policy."""
-    parser = argparse.ArgumentParser(prog="doctor")
-    parser.add_argument("path", nargs="?", type=Path, default=Path.cwd())
-    args = parser.parse_args()
-    root = args.path.expanduser().resolve()
-    failures: list[str] = []
-    warnings: list[str] = []
-
-    for executable in ("git", "uv"):
-        if shutil.which(executable):
-            print(f"PASS  {executable} is available")  # noqa: T201
-        else:
-            failures.append(f"{executable} is not available")
-    relative = Path(".vscode/mcp.json")
-    if (root / relative).is_file():
-        print(f"PASS  {relative}")  # noqa: T201
-    else:
-        failures.append(f"missing {relative}")
-    if (root / "package-lock.json").is_file() and shutil.which("npm") is None:
-        warnings.append("npm is unavailable for this Node project")
-
-    for warning in warnings:
-        print(f"WARN  {warning}")  # noqa: T201
-    for failure in failures:
-        print(f"FAIL  {failure}")  # noqa: T201
-    _finish(1 if failures else 0)

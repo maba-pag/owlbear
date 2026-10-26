@@ -366,6 +366,29 @@ def test_a_taken_folder_name_is_asked_for_at_setup_and_kept_for_the_repository(s
     assert setup.project_folder(repo, "", lambda _q: pytest.fail("asked again"), said.append)
 
 
+@pytest.mark.usefixtures("shared")  # its machine pointer names the shared repository
+def test_setup_offers_the_memory_server_only_once_a_shared_folder_holds_the_project(repo, monkeypatch) -> None:
+    said: list[str] = []
+
+    def write() -> None:
+        setup.write_project_files(repo, "python", lambda _q: "", said.append, given=True)
+
+    mcp = repo / ".mcp.json"
+    monkeypatch.setenv(data_repo.VIEW, "")
+    write()
+    assert any("Memory server not registered: no shared repository" in s for s in said)
+    assert "owlbear-memory" not in json.loads(mcp.read_text())["mcpServers"]  # it would start with no store
+    monkeypatch.delenv(data_repo.VIEW)
+    write()
+    assert any("Memory server not registered: no folder in the shared repository" in s for s in said)
+    assert setup.project_folder(repo, "", lambda _q: pytest.fail("asked"), said.append)
+    said.clear()
+    write()
+    assert not any("Memory server not registered" in s for s in said)
+    memory = json.loads(mcp.read_text())["mcpServers"]["owlbear-memory"]
+    assert memory["args"] == ["-m", "owlbear_delivery_next", "serve", "memory"]  # no path: it reads its folder
+
+
 def test_without_an_answer_setup_names_the_folder_flag_and_stops(shared, repo, capsys) -> None:
     root, _ = shared
     claimed_by_another(root)

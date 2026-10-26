@@ -1,23 +1,9 @@
 # yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
-# Quiet, project-tuned reviews (TD-411); this file overrides the CodeRabbit UI settings.
+# Inherits the organisation's CodeRabbit settings; only owlbear's specifics live here (D-01M5TN7BEVN9YWFEYCHH9GJZG0).
 ---
-early_access: false
+inheritance: true
 reviews:
-  profile: quiet
-  high_level_summary: false
-  high_level_summary_in_walkthrough: true
-  changed_files_summary: false
-  sequence_diagrams: false
-  estimate_code_review_effort: false
-  suggested_labels: false
   auto_apply_labels: false  # PR labels cut releases
-  suggested_reviewers: false
-  in_progress_fortune: false
-  auto_review:
-    # About one free review an hour: only the label starts one, once, for any author (TD-412, TD-413).
-    enabled: false
-    labels: ["coderabbit"]
-    auto_incremental_review: false
   path_filters:
     - "!serve/delivery-next/src/owlbear_delivery_next/web/vendor/**"
     - "!serve/delivery-next/src/owlbear_delivery_next/web/pds/**"
@@ -26,25 +12,8 @@ reviews:
       instructions: >-
         Plan and build designs. Flag only contradictions with other
         documents or the code, broken links and stale references. No wording or style comments.
-  pre_merge_checks:
-    docstrings:
-      mode: "off"
-  finishing_touches:
-    unit_tests:
-      enabled: false
-    simplify:
-      enabled: true
-  tools:
-    languagetool:
-      enabled: false
-chat:
-  art: false
-  auto_reply: false
 knowledge_base:
   code_guidelines:
     filePatterns:
       - files: ".github/instructions/code-review.instructions.md"
         applyTo: "**"
-issue_enrichment:
-  auto_enrich:
-    enabled: true

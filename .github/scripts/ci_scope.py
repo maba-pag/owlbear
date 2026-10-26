@@ -25,8 +25,6 @@ SUITES: dict[str, tuple[str, ...]] = {
         "serve/*/src/**",
         "serve/*/tests/**",
         "tests/**",
-        "setup/**",
-        "seed/**",
     ),
     "python-browser": (
         ".github/workflows/python-browser.yml",
@@ -43,7 +41,7 @@ SUITES: dict[str, tuple[str, ...]] = {
     ),
     "static": ("**",),  # `uv run lint` checks every text file, EditorConfig included
     "tooling": (
-        ".github/renovate.json",
+        "renovate.json",
         ".github/scripts/**",
         ".github/workflows/**",
         ".pre-commit-config.yaml",
@@ -74,12 +72,9 @@ SUITES: dict[str, tuple[str, ...]] = {
         ".github/scripts/check_uv_version.py",
         ".pre-commit-config.yaml",
         ".mcp.json",
-        ".vscode/mcp.json",
-        "seed/.vscode/mcp.json",
         "serve/*-mcp/**",
         "share/agents/**",
         "share/instructions/**",
-        "share/prompts/**",
         "share/skills/**",
         "tests/test_agent_ecosystem_validation.py",
         "tests/test_write_guard_hooks.py",

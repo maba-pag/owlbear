@@ -36,7 +36,6 @@ _EXCLUDED_PATHS = [
     ".owlbear/cache",
     ".owlbear/controller",
     ".owlbear/delivery-migrations",
-    "seed/.github",
     "store",
     "tests",
     "megalinter-reports",

@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
 from owlbear_delivery_next.design_packs import design_pack
-from owlbear_delivery_next.local_system import data_repo, git_files, local_home, text_files
+from owlbear_delivery_next.local_system import data_repo, git_files, local_home, preload, text_files
 from owlbear_delivery_next.runtimes import readiness, window_files
 from owlbear_delivery_next.settings import profile, roles
 from owlbear_delivery_next.state_store import prefs_import, profile_repair, profile_share, roles_move
@@ -96,6 +96,12 @@ def with_server(data: dict[str, Any], python: str, repo: Path) -> dict[str, Any]
     return {**data, "mcpServers": {**data.get("mcpServers", {}), SERVER: server}}
 
 
+def with_memory(data: dict[str, Any], python: str) -> dict[str, Any]:
+    """.mcp.json with the memory server the shaper names; it finds the project's memory from its working folder."""
+    server = {"type": "stdio", "command": python, "args": ["-m", "owlbear_delivery_next", "serve", "memory"]}
+    return {**data, "mcpServers": {**data.get("mcpServers", {}), preload.MEMORY: server}}
+
+
 def user_mcp(home: Path) -> Path:
     """The user's VS Code MCP configuration."""
     base = home / ("Library/Application Support" if sys.platform == "darwin" else ".config")
@@ -128,6 +134,19 @@ def registered(repo: Path, home: Path | None = None) -> bool:
         if isinstance(data, dict) and _serves(data.get(key), repo):
             return True
     return False
+
+
+def memory_missing(repo: Path) -> str | None:
+    """Why the memory server would find no store: it keeps memory only in the project's shared folder."""
+    try:
+        shared = data_repo.locate()
+        if shared and shared.claimed(data_repo.identity(repo)):
+            return None
+    except data_repo.DataRepoError as exc:
+        return str(exc)
+    if shared is None:
+        return "no shared repository is set up, so agents keep no memory; set one with `owlbear-next data PATH`"
+    return "no folder in the shared repository holds this project; run setup again to claim one"
 
 
 def consent(  # noqa: PLR0913 - the file, its merge and the owner's answer
@@ -356,7 +375,11 @@ def _settle(store: Store, prof: Profile, say: Callable[[str], object], project_f
 
 
 def write_project_files(repo: Path, python: str, ask: Ask, say: Callable[[str], object], *, given: bool) -> None:
-    """The chat server and the harness key, each written only with its own consent; an earlier host task goes.
+    """The chat server, the memory server and the harness key, each written only with its own consent.
+
+    The memory server is offered only once a shared folder holds the project: it keeps memory nowhere else.
+
+    An earlier host task goes, also only with consent.
 
     Opening a window never starts Delivery (TD-281): OwlBear runs once per machine and serves the projects
     added on its page.
@@ -372,6 +395,11 @@ def write_project_files(repo: Path, python: str, ask: Ask, say: Callable[[str], 
     if not server.startswith("written"):
         snippet = json.dumps(with_server({}, python, repo)["mcpServers"])
         say(f'Add this under "servers" in your user-level MCP configuration (MCP: Open User Configuration): {snippet}')
+    if why := memory_missing(repo):
+        say(f"Memory server not registered: {why}")
+    else:
+        question = "Register the memory server in .mcp.json for New Change's shaper (kept out of git)?"
+        say(consent(repo, repo / ".mcp.json", lambda d: with_memory(d, python), question, ask, yes=given))
     question = f"Set {window_files.HARNESS} in .vscode/settings.json for New Change's Copilot chat (kept out of git)?"
     settings = repo / window_files.SETTINGS  # the window reads the key only when it starts (TD-275)
     say(consent(repo, settings, lambda d: {**d, window_files.HARNESS: True}, question, ask, yes=given))

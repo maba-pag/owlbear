@@ -116,7 +116,7 @@ def test_dependency_workflow_runs_without_dependency_label_gate() -> None:
 
     assert set(workflow["on"]) == {"workflow_call", "workflow_dispatch"}
     assert set(ci_scope.SUITES["tooling"]) == {
-        ".github/renovate.json",
+        "renovate.json",
         ".github/scripts/**",
         ".github/workflows/**",
         ".pre-commit-config.yaml",
@@ -357,7 +357,7 @@ def test_ruff_toolchain_proof_rejects_installed_version_drift(
 
 
 def test_renovate_archify_match_spans_version_and_digest() -> None:
-    config = json.loads((ROOT / ".github/renovate.json").read_text(encoding="utf-8"))
+    config = json.loads((ROOT / "renovate.json").read_text(encoding="utf-8"))
     managers = config["customManagers"]
     archify = next(manager for manager in managers if manager.get("depNameTemplate") == "tt-a1i/archify")
     patterns = archify["matchStrings"]
@@ -393,7 +393,7 @@ def test_renovate_archify_match_spans_version_and_digest() -> None:
         ("share/diagrams/mcp-topology.svg", "diagrams"),
         (".pre-commit-config.yaml", "precommit"),
         (".github/workflows/python.yml", "workflows"),
-        (".github/renovate.json", "renovate"),
+        ("renovate.json", "renovate"),
     ],
 )
 def test_classifier_maps_every_dependency_surface(path: str, surface: str) -> None:
@@ -678,7 +678,7 @@ def test_uv_workspace_lock_regeneration_tracks_member_changes() -> None:
 
 
 def test_renovate_policy_keeps_maturity_and_lockfile_controls() -> None:
-    renovate = json.loads((ROOT / ".github/renovate.json").read_text(encoding="utf-8"))
+    renovate = json.loads((ROOT / "renovate.json").read_text(encoding="utf-8"))
 
     assert "dependencies" in renovate["labels"]
     assert renovate["extends"][0] == "config:best-practices"  # it brings security:minimumReleaseAgeNpm
@@ -699,7 +699,7 @@ def test_renovate_policy_keeps_maturity_and_lockfile_controls() -> None:
 
 def test_renovate_updates_the_lint_toolchain_in_one_pull_request() -> None:
     """Ruff's pin and every hook move together, majors in their own Sunday PR, so the Ruff parity holds (TD-409)."""
-    renovate = json.loads((ROOT / ".github/renovate.json").read_text(encoding="utf-8"))
+    renovate = json.loads((ROOT / "renovate.json").read_text(encoding="utf-8"))
     rules = renovate["packageRules"]
     lint = [rule for rule in rules if rule.get("groupName") == "lint toolchain"]
     weekly = [rule.get("groupName") for rule in rules].index("{{datasource}} minor/patch updates")

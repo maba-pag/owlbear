@@ -96,15 +96,20 @@ owlbear setup --repo ~/work/my-project
 
 Setup checks readiness and stops at the first problem with a `Next:` line naming the fix. Then it
 shows the detected project profile, asks for anything unknown and asks you to confirm it. Last, it
-asks before each of two local writes: the Delivery chat server in `.mcp.json`, and
+asks before each of three local writes: the Delivery chat server in `.mcp.json`, the memory server
+New Change's shaping chat recalls and saves memory with, also in `.mcp.json`, and
 `chat.defaultToCopilotHarness` in `.vscode/settings.json`.
 
-**Expected result:** `Profile vN confirmed and saved`, then
-`written: <project>/.mcp.json (kept out of git by .git/info/exclude)` and the same line for the
-settings file. Reload the project's VS Code window; the **Setup required** note disappears.
+**Expected result:** `Profile vN confirmed and saved`, then one
+`written: <project>/.mcp.json (kept out of git by .git/info/exclude)` line per server and the same
+line for the settings file. Reload the project's VS Code window; the **Setup required** note
+disappears.
 
-Setup never writes a file Git tracks. For a tracked `.mcp.json` it prints the server entry to add
-under `"servers"` with **MCP: Open User Configuration** instead.
+Setup never writes a file Git tracks. For a tracked `.mcp.json` it prints the Delivery server entry
+to add under `"servers"` with **MCP: Open User Configuration** instead. The memory server has no such
+fallback: without it the shaping chat works on without memory. Setup offers it only once a folder in the
+shared data repository holds the project, because that folder is where the memory lives; without one it
+prints `Memory server not registered:` and the reason.
 
 ## Verify the installation
 
@@ -139,207 +144,6 @@ See [Delivery Workflow](operating-owlbear.md#delivery-workflow) for daily operat
 
 ---
 
-## Optional agent workspace
-
-OwlBear's shared agents, skills, instructions and prompts, and its Memory, Knowledge and Browser
-tool servers, can be loaded into a project's VS Code workspace for your own Copilot chats. Delivery
-does not need this. `setup/init.py` writes it into the project only after you agree, and hides the
-files it creates from Git, so nothing shows as new.
-
-Run setup through the runtime alias `~/.owlbear/runtime`. Setup writes its paths through that alias
-rather than the version folder behind it, so OwlBear's self-updates keep them valid.
-
-### 1. Open a terminal in the project root
-
-```shell
-cd ~/work/my-project
-```
-
-**Expected result:** `pwd` prints your project directory; OwlBear is installed in
-`~/.owlbear/runtime` by the [Quick Start](#quick-start).
-
-### 2. Run setup from the project root
-
-```shell
-uv run --project ~/.owlbear/runtime python ~/.owlbear/runtime/setup/init.py
-```
-
-Setup first lists every path it would create, merge into or replace, and the lines it would add to
-the repository's local exclude file, then asks
-`Write the OwlBear agent workspace into <project>? [y/N]`. Add `--dry-run` to see the list without
-writing anything, or `--yes` to agree without the question; a non-interactive run without `--yes`
-writes nothing and exits with status 1. After you agree, interactive setup may still ask about
-differing hook files and user-local Copilot profile settings.
-
-**Expected result:** setup creates or merges `.vscode/settings.json` and `.vscode/mcp.json` and
-copies the project-local hooks and runtime templates. It lists the paths it created in one
-OwlBear block of the repository's local exclude file (`git rev-parse --git-path info/exclude`), so
-`git status` shows nothing new; it does not edit the project's `.gitignore`. A file Git already
-tracks, such as a committed `.vscode/settings.json`, cannot be hidden: the list marks it
-`tracked: your change will show as modified`. Outside a Git repository setup hides nothing and
-says so.
-The complete inventory is in
-[What Setup Creates](operating-owlbear.md#what-setup-creates).
-
-### 3. Open the project in VS Code
-
-```shell
-code .
-```
-
-**Expected result:** VS Code opens the project directory, not the OwlBear checkout. The shared
-agents, skills, instructions, and prompts are loaded through `~/.owlbear/runtime`.
-
-### 4. Confirm it loaded
-
-1. Open Copilot Chat and run **Chat: Open Customizations**.
-2. Confirm that OwlBear agents, skills, instructions, and prompts are listed.
-3. Run **MCP: List Servers** and confirm these four servers show `running`:
-   `owlbear-knowledge`, `owlbear-memory`, `owlbear-browser`, and `markitdown`.
-
-**Expected result:** the four seeded MCP server processes are running and the shared OwlBear
-customization roots appear in Chat Customizations. Browser capability readiness is a separate
-check below because it also depends on the selected browser and its allowlist.
-
-If a customization root is missing, inspect `.vscode/settings.json` and compare its relative
-OwlBear path with the location of `~/.owlbear/runtime`. If a server is missing, inspect `.vscode/mcp.json`,
-run `uv sync --locked --all-packages --all-extras --all-groups` in `~/.owlbear/runtime`, and rerun
-setup from the project root.
-
-Chromium is optional. Install it when you select Browser MCP Chromium mode; the default managed Edge
-mode needs stable Microsoft Edge.
-
-### Browser readiness
-
-Check MCP startup, browser capability, and Knowledge ingestion separately. A running MCP process
-does not prove that the selected browser launched, that a target is authenticated, or that a
-Browser-to-Knowledge round is ready.
-
-1. **MCP process startup:** Run **MCP: List Servers** and confirm `owlbear-browser` and
-   `owlbear-knowledge` show `running`.
-
-   **Expected result:** both stdio processes are available; this confirms startup only.
-2. **Browser readiness:** An unset `BROWSER_MODE` selects managed Edge and its fixed OwlBear
-   profile. Confirm stable Microsoft Edge is installed before starting the Browser MCP. For
-   Chromium mode, install Chromium for the OwlBear runtime from
-   the consumer project root:
-
-    ```shell
-    uv run --project ~/.owlbear/runtime playwright install chromium
-    ```
-
-   This download is not required for managed Edge mode. To select Chromium explicitly, set
-   `BROWSER_MODE` to `chromium` in the local `owlbear-browser` server environment; an
-   invalid mode is reported as `invalid-mode` rather than silently falling back to another browser.
-   `PLAYWRIGHT_USER_DATA_DIR` only affects Chromium and should be an absolute path; managed Edge
-   always uses `~/.owlbear/edge-profile` and ignores that override.
-
-   Check `BROWSER_ALLOWED_DOMAINS` in the `owlbear-browser` entry of `.vscode/mcp.json`. The fresh
-   seed uses `"*"` for local testing across public sites; use exact hostnames for normal or
-   production use.
-
-   Restart the `owlbear-browser` MCP server and call `browser_status`; it reports `not-launched`
-   before any browser action. The first `acquire` or `navigate` call against an allowed URL launches
-   the selected visible browser; complete the organization's login flow manually if needed.
-
-    **Expected result:** `acquire` on an allowed URL returns rendered content or a structured
-    acquisition result. `browser_status` reports `ready` while an OwlBear-owned window remains open;
-    closing a shared page while another owned window remains open keeps it `ready`, and the next
-    action reopens that page. It reports `not-launched` before first use or after the last owned
-    window closes, and `unavailable` with a startup reason when launch fails. Readiness does not prove
-    sign-in or authenticated access. Exact-host entries explicitly
-   permit private, loopback, and link-local DNS results for that hostname; wildcard mode does not.
-   Reserved and unspecified addresses are always rejected. The current SSRF preflight does not
-   fully prevent DNS rebinding or an allowlisted server redirecting to a private address; these
-   are accepted limits, so keep the allowlist narrow. See the
-   [Browser MCP guide](../serve/browser-mcp/README.md) for the full policy.
-3. **Managed SSO readiness:** The default is a visible managed Edge session using the
-   fixed `~/.owlbear/edge-profile`; `PLAYWRIGHT_USER_DATA_DIR` and `SSO_EXTENSION_PATH` do not
-   configure managed Edge. Call an allowed `navigate` or `acquire` action to launch the browser,
-   then verify one permitted target site with the organization's normal login flow. Chromium mode
-   uses a separate profile and can load only an explicitly configured extension directory. A ready
-   browser or loaded extension is not proof of tenant authentication, MFA, Conditional Access, or
-   device compliance. Do not collect cookies or tokens, weaken enterprise policy, or claim SSO
-   support from MCP startup.
-4. **Knowledge ingestion readiness:** Register an approved browser source with
-   `register_knowledge_source` as `kind: "url_list"` and `fetch_method: "browser"`. Call
-   `list_knowledge_sources` to get its `source_id` and registered `urls`; acquire each URL and
-   submit the captures together in one bound `knowledge_ingest` call for that source. Call
-   `list_knowledge_sources` again to check its health.
-
-   **Expected result:** a fully successful round reports `ok`. See the
-   [Knowledge operations guide](../share/skills/h-knowledge-ops/SKILL.md) for the source and
-   capture contract, including other health outcomes.
-
-See the [Browser-to-Knowledge vertical test](../tests/test_browser_knowledge_vertical.py) for the
-exercised end-to-end workflow.
-
-### Copilot profile settings
-
-When setup runs interactively, it inspects VS Code's workspace profile association for the
-consumer project directory that `setup/init.py` is initializing before changing any Copilot profile
-data:
-
-1. If a profile is associated with the project, setup shows the target and asks for confirmation.
-2. If no profile is associated, setup explains that it will offer the default profile and asks for
-  confirmation.
-3. After confirmation, setup updates only the following model entries in that profile's
-  `chatLanguageModels.json` file:
-
-  | Model | Reasoning effort |
-  | --- | --- |
-  | `gpt-6-luna` | `max` |
-  | `gpt-6-sol` | `high` |
-  | `claude-opus-5.5` | `medium` |
-
-The file is written atomically, unrelated profile entries are preserved, and a missing file or
-Copilot entry is created minimally. Malformed profile JSON is left unchanged with a warning. To
-target a named profile instead of the default fallback, open
-the project in VS Code, run `Profiles: Switch Profile`, and rerun `setup/init.py`. Setup does not
-take a profile-selection command-line argument. Noninteractive setup skips this user-local profile
-mutation.
-
-### Managed Mac browser pilot
-
-Run this pilot on the managed Mac before relying on SharePoint or Confluence access. Keep the two
-approved target URLs local; do not put URLs, hostnames, page content, credentials, or session files in
-the repository or in a Change's brief, answers, or status.
-
-1. Install stable Microsoft Edge and start the `owlbear-browser` MCP server. Leave
-  `BROWSER_MODE` and `PLAYWRIGHT_USER_DATA_DIR` unset for the managed default. Configure
-  `BROWSER_ALLOWED_DOMAINS` locally for only the two approved target hosts.
-
-  **Expected result:** before any browser action, `browser_status` reports `managed-edge`,
-  `per-user-owned`, `not-launched`, null startup reason, and unavailable visible authentication.
-  Stop if the mode is invalid; do not switch to Chromium or the operator's daily Edge profile.
-2. Call `acquire` with one locally supplied, operator-approved SharePoint URL. The first action
-  launches the visible Edge window with the fixed OwlBear profile. Complete first-use sign-in, site
-  trust, consent, or MFA directly in that window; no interactive MCP tool participates.
-  Do not send credentials or session material through an OwlBear request or result.
-
-  **Expected result:** the Edge window is live and the operator confirms authenticated SharePoint
-  content. Browser readiness alone does not count as authentication.
-3. Repeat the action with one locally supplied, operator-approved Confluence URL and confirm its
-  authenticated content in the owned Edge window.
-
-  **Expected result:** the operator confirms authenticated Confluence content in the same owned
-  session; record no page content, URL, or hostname.
-4. Close the last OwlBear-owned Edge window and call `browser_status`, then call `acquire` for one
-  approved target. Closing only the shared page while another owned window remains open keeps status
-  `ready`; the next `acquire` reopens that page without relaunching the browser.
-
-  **Expected result:** status reports `not-launched` after the last owned window closes; the next
-  `acquire` relaunches the fixed profile and the operator confirms the target remains authenticated.
-5. Restart the `owlbear-browser` MCP server, repeat an allowed action for each target, and confirm
-  that the fixed profile retains session availability. Stop the server normally afterward.
-
-  **Expected result:** both targets remain authenticated after restart, no `--no-sandbox` or
-  unsupported-flag warning appears, and only OwlBear-owned browser resources close. Record only each
-  target class (`SharePoint` or `Confluence`) and `pass` or `fail`; include no URL, hostname, page
-  content, credential, or session data.
-
----
-
 ## Troubleshooting
 
 | Symptom | Likely cause | Resolution |
@@ -353,12 +157,7 @@ the repository or in a Change's brief, answers, or status.
 | `owlbear install` says `not done, no terminal to answer` | It ran without a terminal, for example from an agent; nothing was linked or added | Run `owlbear install` yourself in a terminal |
 | The Copilot runtime in VS Code 1.143 offers only Auto (and HydraFusion) | More than one GitHub account is signed in to VS Code, and the runtime uses the first one, which has no Copilot; the agent host's log says `Found 0 models` | Sign the other GitHub accounts out of VS Code (Accounts menu), then run **Restart Local Agent Host**; `gh` keeps its accounts |
 | `not written: ... is tracked` from setup | The file is tracked in Git | Add the printed server entry with **MCP: Open User Configuration** |
-| Agents not appearing in picker (agent workspace) | Wrong path in `chat.agentFilesLocations` | Run **Chat: Open Customizations**; verify the path relative to project root matches owlbear location |
-| Skills not auto-loading | `chat.agentSkillsLocations` missing or path wrong | Check `.vscode/settings.json`; re-run `init.py` if the key is absent |
-| Instructions ignored | `chat.instructionsFilesLocations` missing | Check `.vscode/settings.json`; verify `*.instructions.md` files exist in the registered directory |
-| MCP server fails to start | Missing dependency or `uv` not on PATH | Run `uv --version` to confirm installation; check MCP server logs in VS Code Output panel |
-| Hook file not refreshed on rerun | Existing local `.owlbear/hooks/` file differs from seed | Re-run `init.py --replace-hooks` to overwrite, or choose `replace` when prompted interactively |
-| Agent name conflict | Same-name agent in both owlbear and project locations | Give project agents unique names; see [Adding local agents](operating-owlbear.md#adding-local-agents) |
+| MCP server fails to start | Its command, `~/.owlbear/runtime/.venv/bin/python`, is missing or lacks a package | Read the server's output (**MCP: List Servers** → the server → **Show Output**); check that interpreter exists, and for a missing module run `uv sync --locked --all-packages --all-extras --all-groups` in `~/.owlbear/runtime` |
 
 For deeper debugging, use **"Show Chat Debug View"** (Chat view ellipsis `…` menu) to inspect
 raw LLM request/response payloads.
