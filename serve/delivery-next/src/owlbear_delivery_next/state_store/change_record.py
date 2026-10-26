@@ -86,12 +86,12 @@ def save(
             writes = decision_archive.batch_files(planned)
 
             def publish(head: str, fence: Callable[[], None]) -> decision_transaction.Step:
-                files, left = decision_archive.write_plan(planned, [], c.slug, fence)
+                files, left = decision_archive.write_plan(planned, [], c.slug, fence, store.shared.root)
                 if left:  # a decision refused: the record commits with none of the batch
                     return decision_transaction.Step(
                         f"the record of {c.slug} was not saved; " + "; ".join(left), refused=True
                     )
-                decision_batch.replace_file(path, text.encode("utf-8"), fence)
+                decision_batch.replace_file(path, text.encode("utf-8"), fence, store.shared.root)
                 sent = decision_sync.publish(
                     store.shared, [path, *files], message, time.monotonic() + SAVE_SECONDS, head
                 )

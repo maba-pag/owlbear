@@ -280,7 +280,7 @@ def _journal(shared: DataRepo, items: list[Placed], message: str, head: str, beh
     decision_transaction.planned(shared, paths)  # the plan's reads, checked plain again before the journal
     generation, rows = _begin(shared, items, before, message, head)
     try:
-        refused = write_batch(items, decision_transaction.write_fence(shared, images, head))
+        refused = write_batch(items, decision_transaction.write_fence(shared, images, head), shared.root)
     except OSError:
         decision_transaction.settle(shared, images, head, generation)  # kept interrupted unless HEAD is proved
         raise
@@ -336,7 +336,9 @@ def _refusals(items: list[Placed]) -> dict[str, str]:
     return found
 
 
-def write_batch(items: Sequence[Placed], fence: Callable[[], None] | None = None) -> dict[str, str]:
+def write_batch(
+    items: Sequence[Placed], fence: Callable[[], None] | None = None, root: Path | None = None
+) -> dict[str, str]:
     """Write in order and stop at the first refused file; the caller settles the written files once HEAD is proved.
 
     *fence*, the batch's proof, runs before each file's folder is made and again inside its write, immediately before
@@ -347,7 +349,7 @@ def write_batch(items: Sequence[Placed], fence: Callable[[], None] | None = None
             if fence is not None:
                 fence()
             storage_io.make_dirs(decision_path(decision, folder).parent)  # ancestors are durable before the write
-            write(decision, folder, expected, fence=fence)
+            write(decision, folder, expected, fence=fence, root=root)
         except DecisionError as exc:
             return {decision.id: str(exc)}
     return {}
@@ -360,9 +362,11 @@ def _content(path: Path) -> bytes | None:
         return None
 
 
-def _put_back(path: Path, text: bytes | None, fence: Callable[[], None] | None = None) -> None:
+def _put_back(
+    path: Path, text: bytes | None, fence: Callable[[], None] | None = None, root: Path | None = None
+) -> None:
     if _content(path) != text:
-        decision_batch.replace_file(path, text, fence)
+        decision_batch.replace_file(path, text, fence, root)
 
 
 def _unsaved(shared: DataRepo, decisions: list[Decision], notice: str) -> list[Receipt]:
@@ -403,7 +407,7 @@ def _reconcile(shared: DataRepo, decisions: list[Decision], said: list[str], unt
         files = [(e.path, serialize(e.decision.model_copy(update={"conflict": True})).encode("utf-8")) for e in entries]
 
         def flag(head: str, fence: Callable[[], None], entries: list[Entry] = entries) -> decision_transaction.Step:
-            flagged = [path for e in entries if (path := _flag(e, fence))]
+            flagged = [path for e in entries if (path := _flag(e, fence, shared.root))]
             if not flagged:
                 return decision_transaction.Step("", refused=True)
             ids = ", ".join(sorted(p.stem for p in flagged))
@@ -436,14 +440,14 @@ def _competitors(found: tuple[dict[str, Entry], list[Finding]], written: Decisio
     return [e for i in sorted(ids) if (e := by_id.get(i)) is not None and not e.decision.conflict]
 
 
-def _flag(entry: Entry, fence: Callable[[], None]) -> Path | None:
+def _flag(entry: Entry, fence: Callable[[], None], root: Path) -> Path | None:
     """Mark *entry* `conflict`, in its state and at the revision just read; None when its file has moved on.
 
     The flag batch's *fence* runs immediately before the rename, so a file whose folder or owner moved is never written.
     """
     try:
         flagged = entry.decision.model_copy(update={"conflict": True})
-        write(flagged, entry.layer.folder, entry.decision.revision, fence=fence)
+        write(flagged, entry.layer.folder, entry.decision.revision, fence=fence, root=root)
     except DecisionError:
         return None
     return entry.path

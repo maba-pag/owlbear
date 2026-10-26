@@ -163,7 +163,7 @@ def finish(shared: DataRepo, generation: str) -> Recovery:
                 _fenced(root, batch)  # after the remote proof, before this file's folder is made
                 storage_io.make_dirs((root.root / rel).parent)
                 # proved again after the folder and the new bytes are durable, immediately before the rename
-                decision_batch.replace_file(root.root / rel, after, lambda: _fenced(root, batch))
+                decision_batch.replace_file(root.root / rel, after, lambda: _fenced(root, batch), root.root)
             _validate(root, batch)
             paths = [root.root / rel for rel, _, _ in batch.files]
             sent = decision_sync.publish(root, paths, batch.message, time.monotonic() + SAVE_SECONDS, batch.head)
@@ -226,7 +226,7 @@ def abandon(shared: DataRepo, generation: str) -> Recovery:
             _at_head(root, batch)
             _preflight(root, batch)
             for rel, before, _ in batch.files:  # proved inside each put-back, immediately before its rename or unlink
-                decision_batch.replace_file(root.root / rel, before, lambda: _fenced(root, batch))
+                decision_batch.replace_file(root.root / rel, before, lambda: _fenced(root, batch), root.root)
             _all_before(root, batch)  # every file exactly as before, then Git: HEAD is read last
             _unmoved(root, batch)
             decision_batch.complete(root, generation)

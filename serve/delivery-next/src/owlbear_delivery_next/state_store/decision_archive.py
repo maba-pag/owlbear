@@ -57,16 +57,21 @@ def batch_files(planned: list[Placed]) -> list[tuple[Path, bytes]]:
 
 
 def write_plan(
-    planned: list[Placed], problems: list[str], slug: str, fence: Callable[[], None] | None = None
+    planned: list[Placed],
+    problems: list[str],
+    slug: str,
+    fence: Callable[[], None] | None = None,
+    root: Path | None = None,
 ) -> tuple[list[Path], list[str]]:
     """Write the planned decisions unless *problems* keep them all out; the files to publish, and what kept them out.
 
-    *fence* is the transaction's proof each write runs before its folder is made and immediately before its rename.
+    *fence* is the transaction's proof each write runs before its folder is made and immediately before its rename;
+    *root*, the checkout, bounds the folders each rename checks are still plain (`decision_store.write_batch`).
     """
     if not problems:
         try:
             writes = [(d, layer, rev) for d, layer, rev in planned if rev != d.revision]
-            refused = decision_store.write_batch(writes, fence)
+            refused = decision_store.write_batch(writes, fence, root)
         except OSError as exc:
             refused = {"files": f"cannot be written: {exc}"}
         problems = [f"decision {key} of {slug}: {' '.join(why.split())}"[:240] for key, why in refused.items()]
@@ -96,7 +101,7 @@ def archive(root: Path, project: str, c: Change, stem: str, outcome: str) -> tup
         done: dict[str, tuple[list[Path], list[str]]] = {}
 
         def step(head: str, fence: Callable[[], None]) -> decision_transaction.Step:
-            written, left = write_plan(planned, problems, c.slug, fence)
+            written, left = write_plan(planned, problems, c.slug, fence, root)
             done["result"] = (written, left)
             if not written:
                 return decision_transaction.Step("", refused=True)

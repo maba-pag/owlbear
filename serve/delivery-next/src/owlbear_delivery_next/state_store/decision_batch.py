@@ -82,16 +82,19 @@ def journal_path(shared: DataRepo) -> Path:
     return _admin(shared) / JOURNAL
 
 
-def replace_file(path: Path, data: bytes | None, fence: Callable[[], None] | None = None) -> None:
+def replace_file(
+    path: Path, data: bytes | None, fence: Callable[[], None] | None = None, root: Path | None = None
+) -> None:
     """Make *path* hold *data* atomically, or no file at all when *data* is None; the rename or unlink is fsynced.
 
     *fence*, when given, runs last before the rename or unlink, after the new bytes are durable in their temporary
     file: a slow fsync cannot outlast the caller's proof that the file is still its to change. The folder is held open
     before *fence* runs; the rename or unlink and its fsync are made in that folder, and only while *path*'s folder
-    still leads to it (`bound`), so a folder moved aside or linked away during *fence* changes nothing. The temporary
-    file is made, checked and renamed held open throughout (`own_temporary`, `install`); it is removed only while its
-    name still holds it, and *path* is then left as it is. A folder that does not exist holds no file to remove, and
-    none is made to find out.
+    still leads to it and, with *root* (the checkout), every folder up to *root* is still a plain folder (`bound`), so
+    a folder moved aside or linked away during *fence*, at any level, changes nothing. The temporary file is made,
+    checked and renamed held open throughout (`own_temporary`, `install`); it is removed only while its name still
+    holds it, and *path* is then left as it is. A folder that does not exist holds no file to remove, and none is made
+    to find out.
     """
     if data is None:
         try:
@@ -101,7 +104,7 @@ def replace_file(path: Path, data: bytes | None, fence: Callable[[], None] | Non
         try:
             if fence is not None:
                 fence()
-            bound(folder, path.parent)
+            bound(folder, path.parent, root)
             with suppress(FileNotFoundError):
                 os.unlink(path.name, dir_fd=folder)
             os.fsync(folder)
@@ -113,7 +116,7 @@ def replace_file(path: Path, data: bytes | None, fence: Callable[[], None] | Non
         with own_temporary(folder, data) as temporary:
             if fence is not None:
                 fence()
-            install(temporary, path.name, path.parent)
+            install(temporary, path.name, path.parent, root)
     finally:
         os.close(folder)
 

@@ -1792,19 +1792,22 @@ def test_a_folder_swapped_while_a_transaction_step_writes_never_writes_the_forei
     _no_authority(picking)
 
 
-def _write_with(writer: str, tmp_path: Path, fence) -> Path:
-    """Write one new file through *writer* with *fence*, or remove an existing one (`remove`); its path."""
+def _write_with(writer: str, tmp_path: Path, fence, root: Path | None = None, layer: Path | None = None) -> Path:
+    """Write one new file through *writer* with *fence*, or remove an existing one (`remove`); its path.
+
+    *root*, when given, is the trusted folder the writers check every folder up to.
+    """
     decision = make(title="Use UTC", statement="All timestamps use UTC.")
-    layer = tmp_path / "layer"
+    layer = layer or tmp_path / "layer"
     path = storage.decision_path(decision, layer)
     path.parent.mkdir(parents=True)
     if writer == "remove":
         path.write_bytes(b"the old bytes\n")
-        decision_batch.replace_file(path, None, fence)
+        decision_batch.replace_file(path, None, fence, root)
     elif writer == "batch":
-        decision_batch.replace_file(path, b"the new bytes\n", fence)
+        decision_batch.replace_file(path, b"the new bytes\n", fence, root)
     else:
-        storage.write(decision, layer, None, fence=fence)
+        storage.write(decision, layer, None, fence=fence, root=root)
     return path
 
 
@@ -2078,3 +2081,100 @@ def test_a_folder_swapped_during_the_fences_head_probe_never_loses_a_file_to_a_r
     assert _git_state(shared) == fired["git"]
     assert decision_batch.pending(shared) is not None
     _no_authority(picking)
+
+
+@pytest.mark.parametrize("swap", [True, False], ids=["project-linked-back-during-head-probe", "healthy"])
+@pytest.mark.parametrize("surface", ["abandon", "store-put-back", "generic-put-back"])
+def test_a_project_folder_linked_back_to_itself_during_the_fences_head_probe_changes_nothing(
+    picking, monkeypatch, tmp_path, surface, swap
+):
+    """While a removal's fence reads HEAD, the owner moves the project folder aside and links its name back to it. The
+    file's own folder is still the one held open, but a folder above it is now a link: the removal must change
+    nothing. The owner's moved project keeps every byte, Git is as at the swap, the batch stays pending and no reader
+    gets authority. Without the swap it completes.
+    """
+    _seed(picking)
+    shared = picking.shared
+    target, run, _ = _read_swap_surface(picking, monkeypatch, surface)
+    project, moved = shared.root / PROJECT, tmp_path / "moved-project"
+    real_replace, real_git = decision_batch.replace_file, DataRepo.git
+    removing, fired = [False], {}
+
+    def scoped_replace(path, data, *fence):
+        removing[0] = data is None and path == target
+        try:
+            return real_replace(path, data, *fence)
+        finally:
+            removing[0] = False
+
+    def head_probe_then_owner_links_back(self, *args, **kwargs):
+        said = real_git(self, *args, **kwargs)
+        if swap and removing[0] and not fired and args[:2] == ("rev-parse", "--verify"):
+            project.rename(moved)
+            project.symlink_to(moved, target_is_directory=True)  # back to the owner's own project, same folders below
+            fired.update(tree=_files_below(moved), git=_git_state(shared))
+        return said
+
+    with monkeypatch.context() as m:
+        m.setattr(decision_batch, "replace_file", scoped_replace)
+        m.setattr(DataRepo, "git", head_probe_then_owner_links_back)
+        refused = ""
+        try:
+            run()
+        except decision_store.DecisionsUnavailable as exc:
+            refused = str(exc)
+
+    assert bool(refused) <= bool(fired), refused  # a refusal is only ever this swap's
+    if not swap:
+        assert not target.exists()
+        assert decision_batch.pending(shared) is None
+        return
+    assert fired
+    assert target.relative_to(project).as_posix() in fired["tree"]  # the file the removal was for, in the moved project
+    assert _files_below(moved) == fired["tree"]  # the owner's moved project keeps every byte
+    assert _git_state(shared) == fired["git"]
+    assert decision_batch.pending(shared) is not None
+    _no_authority(picking)
+
+
+def _files_below(folder: Path) -> dict[str, bytes]:
+    return {p.relative_to(folder).as_posix(): p.read_bytes() for p in sorted(folder.rglob("*")) if p.is_file()}
+
+
+@pytest.mark.parametrize("writer", ["batch", "decisions", "remove"])
+def test_a_higher_folder_linked_back_to_itself_during_the_fence_refuses_within_the_root(tmp_path, writer):
+    """The trusted root holds `layer/decisions`; during the fence the owner moves `layer` aside and links its name back
+    to it. `decisions` is still the folder held open, but `layer` is a link now: nothing is renamed or removed.
+    """
+    root = tmp_path / "checkout"
+    layer, moved = root / "layer", tmp_path / "moved-layer"
+    held: dict[str, bytes] = {}
+
+    def fence_then_owner_links_back() -> None:
+        held.update({k: v for k, v in _files_below(layer).items() if not k.endswith(".tmp")})
+        layer.rename(moved)
+        layer.symlink_to(moved, target_is_directory=True)
+
+    with pytest.raises(storage.FolderMovedError):
+        _write_with(writer, tmp_path, fence_then_owner_links_back, root, layer)
+
+    assert _files_below(moved) == held  # nothing renamed, removed or left behind in the owner's moved folder
+
+
+@pytest.mark.parametrize("writer", ["batch", "decisions", "remove"])
+def test_a_default_writer_or_a_link_above_the_root_keeps_its_symlink_semantics(tmp_path, writer):
+    """Without a root, a writer follows its folder's path through a linked folder as it always has; with one, a link
+    above the root, such as an operating system's folder alias, is never checked.
+    """
+    real, alias = tmp_path / "real", tmp_path / "alias"
+    (real / "checkout").mkdir(parents=True)
+    alias.symlink_to(real, target_is_directory=True)
+    root = alias / "checkout"
+    (tmp_path / "linked-real").mkdir()
+    (tmp_path / "linked").symlink_to(tmp_path / "linked-real", target_is_directory=True)
+
+    path = _write_with(writer, tmp_path, None, root, root / "layer")
+    plain = _write_with(writer, tmp_path / "linked", None, None, tmp_path / "linked" / "layer")
+
+    assert path.exists() == (writer != "remove") == plain.exists()
+    assert all(not p.name.endswith(".tmp") for p in tmp_path.rglob("*"))

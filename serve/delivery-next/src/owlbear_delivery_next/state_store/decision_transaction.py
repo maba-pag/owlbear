@@ -122,7 +122,7 @@ def settle(shared: DataRepo, images: dict[Path, tuple[bytes | None, bytes]], hea
 
     try:
         for path, (text, _) in images.items():
-            store._put_back(path, text, fence)  # noqa: SLF001 - same package; store helpers stay private to it
+            store._put_back(path, text, fence, shared.root)  # noqa: SLF001 - same package; store helpers stay private
     except OSError, _Moved:
         return False
     before = {path: text for path, (text, _) in images.items()}

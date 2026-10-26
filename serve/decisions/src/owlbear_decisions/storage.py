@@ -261,18 +261,19 @@ def own_temporary(folder: int, data: bytes) -> Iterator[Temporary]:
         os.close(descriptor)
 
 
-def install(temporary: Temporary, target: str, path: Path | None = None) -> None:
+def install(temporary: Temporary, target: str, path: Path | None = None, root: Path | None = None) -> None:
     """Rename *temporary* to *target* in its own folder once its name is proved to hold it still; fsync the folder.
 
     The folder fsynced is the one the rename changed, held open since the file was made, never one reached again by
     path. A name that now holds another file raises `TemporaryReplacedError`; when *path*, the folder's own path, no
-    longer leads to that folder, `bound` raises; either way nothing is moved.
+    longer leads to that folder, or a folder between it and *root* is no plain folder, `bound` raises; either way
+    nothing is moved.
     """
     if not temporary.holds_name():
         msg = f"the temporary file {temporary.name} was replaced, so nothing is written"
         raise TemporaryReplacedError(msg)
     if path is not None:
-        bound(temporary.folder, path)
+        bound(temporary.folder, path, root)
     os.replace(temporary.name, target, src_dir_fd=temporary.folder, dst_dir_fd=temporary.folder)
     os.fsync(temporary.folder)
 
@@ -281,41 +282,63 @@ class FolderMovedError(OSError):
     """A folder's path no longer leads to the folder held open for a write, so nothing is changed in either."""
 
 
-def bound(folder: int, path: Path) -> None:
+def bound(folder: int, path: Path, root: Path | None = None) -> None:
     """Raise `FolderMovedError` unless *path* itself, not followed through a link, is the folder open as *folder*.
 
     A folder moved aside, or a link put in its place, refuses: the write would otherwise change a file the folder's
-    path no longer names. A missing *path* refuses too; any other error reading it is raised as it is.
+    path no longer names. With *root*, the trusted folder *path* lies in, every folder between them is checked too,
+    after *path*, each a plain folder and no link: a link higher up, even one back to the same folder, refuses. *root*
+    itself and what lies above it are not checked. A missing *path* or folder refuses; any other error is raised.
     """
-    try:
-        found = os.lstat(path)
-    except FileNotFoundError:
-        found = None
-    if found is None or not stat.S_ISDIR(found.st_mode) or not os.path.samestat(found, os.fstat(folder)):
+    if not _plain_folder(path) or not os.path.samestat(os.lstat(path), os.fstat(folder)):
         msg = f"the folder {path} was moved or replaced while it was written, so nothing is changed"
         raise FolderMovedError(msg)
+    if root is None:
+        return
+    for ancestor in path.parents:
+        if ancestor == root:
+            return
+        if not _plain_folder(ancestor):
+            msg = f"the folder {ancestor} above {path} was moved or linked while it was written, so nothing is changed"
+            raise FolderMovedError(msg)
+    msg = f"the folder {path} does not lie in {root}, so nothing is changed"
+    raise FolderMovedError(msg)
 
 
-def _replace(path: Path, text: str, fence: Callable[[], None] | None = None) -> None:
+def _plain_folder(path: Path) -> bool:
+    """Whether *path* names a folder itself, not a link to one; a missing name is not, other errors raise."""
+    try:
+        return stat.S_ISDIR(os.lstat(path).st_mode)
+    except FileNotFoundError:
+        return False
+
+
+def _replace(path: Path, text: str, fence: Callable[[], None] | None = None, root: Path | None = None) -> None:
     folder = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
     try:
         with own_temporary(folder, text.encode("utf-8")) as temporary:
             if fence is not None:  # last, once the new bytes are durable: the caller's proof the file is its to change
                 fence()
-            install(temporary, path.name, path.parent)
+            install(temporary, path.name, path.parent, root)
     finally:
         os.close(folder)
 
 
 def write(
-    decision: Decision, folder: Path, expected_revision: str | None = None, *, fence: Callable[[], None] | None = None
+    decision: Decision,
+    folder: Path,
+    expected_revision: str | None = None,
+    *,
+    fence: Callable[[], None] | None = None,
+    root: Path | None = None,
 ) -> str:
     """Write `decision` atomically into the layer `folder` and return its revision.
 
     `expected_revision=None` creates a new file and refuses an existing one; otherwise the file's
     current revision must equal it. An in-force decision's statement never changes. *fence*, when given, runs after
     the new bytes are durable and immediately before the rename; when it raises, only this write's own temporary file is
-    removed, through the folder it was made in.
+    removed, through the folder it was made in. *root*, when given, is the trusted folder the file lies in: every folder
+    between them must still be a plain folder at the rename (`bound`).
     """
     path = decision_path(decision, folder)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -329,5 +352,5 @@ def write(
     with _locked(path.parent):
         current = read(path) if path.exists() else None
         check_write(current, decision, expected_revision)
-        _replace(path, text, fence)
+        _replace(path, text, fence, root)
     return decision.revision
