@@ -87,6 +87,3 @@ store/audit/
 
 # --- OwlBear managed paths ---
 # OwlBear-specific rules live in .owlbear/.gitignore.
-
-# Atomic generated diagram candidates
-/share/diagrams/.*.svg.*

@@ -22,9 +22,6 @@ _P01_SHARED_EXCLUDED_PATHS = (
     "package.egg-info/PKG-INFO",
     ".owlbear/delivery/packages/package.whl",
     ".owlbear/delivery/runtime/frontier.json",
-    ".owlbear/doc-index.md",
-    ".owlbear/py-index.md",
-    ".owlbear/ts-index.md",
     ".owlbear/memory/entry.md",
     ".owlbear/research/notes.md",
     "store/audit/history.db",
@@ -77,11 +74,6 @@ _M04_ALLOWED_ELEMENTS = [
 _M09_PACKAGE_MARKDOWN_PATH = ".owlbear/delivery/packages/website-to-knowledge-vertical/design.md"
 _M09_RUNTIME_MARKDOWN_PATH = ".owlbear/delivery/runtime/changes/current.md"
 _M09_WORKTREE_MARKDOWN_PATH = ".owlbear/delivery/worktrees/change.md"
-_M09_GENERATED_INDEX_MARKDOWN_PATHS = (
-    ".owlbear/doc-index.md",
-    ".owlbear/py-index.md",
-    ".owlbear/ts-index.md",
-)
 _M09_MEMORY_MARKDOWN_PATHS = (
     ".owlbear/memory/4c207941-f94b-4abd-a6e3-67b73ed1020a.md",
     ".owlbear/memory/45d05ede-bf24-4f64-9810-87a88e46084a.md",
@@ -245,17 +237,6 @@ def test_broad_worktree_ignore_covers_delivery_worktrees() -> None:
     config = _read_yaml_mapping(_ROOT / ".pre-commit-config.yaml")
     precommit_exclude = _read_precommit_exclude(config)
     assert precommit_exclude.search(_M09_WORKTREE_MARKDOWN_PATH) is not None
-
-
-def test_generated_indexes_remain_excluded_from_markdown_consumers() -> None:
-    root_cli2 = _read_cli2_ignores(_ROOT / ".markdownlint-cli2.jsonc")
-
-    for path in _M09_GENERATED_INDEX_MARKDOWN_PATHS:
-        assert path in root_cli2
-
-    config = _read_yaml_mapping(_ROOT / ".pre-commit-config.yaml")
-    precommit_exclude = _read_precommit_exclude(config)
-    assert all(precommit_exclude.search(path) is not None for path in _M09_GENERATED_INDEX_MARKDOWN_PATHS)
 
 
 def test_memory_store_remains_excluded_from_markdown_consumers() -> None:

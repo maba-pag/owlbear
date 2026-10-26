@@ -1,7 +1,9 @@
 ---
 name: w-agent-audit
 description: "Workflow: Read-only broad and deep audits of agent authority, loading, structure, and signal quality"
-user-invocable: false
+argument-hint: "Optional: 'all', a scope, or one agent, skill, instruction, or prompt"
+user-invocable: true
+disable-model-invocation: true
 ---
 
 # Agent Ecosystem Audit
@@ -12,11 +14,16 @@ time without contradiction or unnecessary context.
 
 ## Boundary
 
-This workflow is report-only. The launcher selects VS Code's built-in `agent` mode and omits edit
-tools. Terminal access exists only for read-only inspection and validators: record `git status
---short` before the first command and confirm it is unchanged at close. Do not run generators,
-formatters, fixes, tests with snapshot updates, or any mutating command. Approved changes become an
-implementation package for a normal editing turn.
+This workflow is report-only. The owner invokes it by name in a normal chat; text supplied with the
+invocation is the audit request. The chat keeps its own tools, so read-only is a rule you follow,
+not one a tool list or hook enforces: do not edit, create, rename or delete files. Terminal access
+exists only for read-only inspection and validators: record `git status --short` before the first
+command and confirm it is unchanged at close. Do not run generators, formatters, fixes, tests with
+snapshot updates, or any mutating command. Approved changes become an implementation package for a
+normal editing turn.
+
+The audit is limited to trusted local use and is not a security boundary: do not claim it proves
+the workspace unchanged, and do not report the absence of a hard write-denial hook as a defect.
 
 Two modes share this workflow:
 

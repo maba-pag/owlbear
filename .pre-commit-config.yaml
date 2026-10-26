@@ -18,7 +18,6 @@ exclude: |
     [^/]*\.egg-info/
     |\.owlbear/(
       delivery/(packages|runtime)/
-      |(doc|py|ts)-index\.md$
       |(legacy|memory|research|target)/
     )
     |store/(audit|knowledge)/.*\.db$

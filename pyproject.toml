@@ -56,7 +56,6 @@ src = [
 
 # CI runs these scripts with the runner's python3, not the workspace Python.
 [tool.ruff.per-file-target-version]
-".owlbear/scripts/diagrams/*.py" = "py312"
 ".github/scripts/*.py" = "py312"
 "serve/tools/src/owlbear_tools/dependency_ci.py" = "py312"
 
@@ -76,10 +75,6 @@ ignore = [
 ]
 ".owlbear/scripts/*.py" = [
   "INP001", # .owlbear/scripts/ is not a package — direct-run files are expected here
-  "T201",   # print() is intentional in CLI scripts
-]
-".owlbear/scripts/diagrams/*.py" = [
-  "INP001", # .owlbear/scripts/diagrams/ is not a package — direct-run files are expected here
   "T201",   # print() is intentional in CLI scripts
 ]
 ".github/scripts/*.py" = [

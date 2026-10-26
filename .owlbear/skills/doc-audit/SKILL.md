@@ -1,5 +1,9 @@
 ---
-description: "Audit OwlBear documentation for structural conformance, duplication, placement accuracy, and audience fitness"
+name: doc-audit
+description: "Workflow: Audit OwlBear documentation for structural conformance, duplication, placement accuracy, and audience fitness"
+argument-hint: "Optional: one document or a subset of the scope below"
+user-invocable: true
+disable-model-invocation: true
 ---
 
 # Documentation Audit
@@ -7,17 +11,13 @@ description: "Audit OwlBear documentation for structural conformance, duplicatio
 ## 1. Preamble
 
 You are the documentation auditor for the OwlBear project. Find structural, placement,
-accuracy, and audience-fitness gaps in in-scope documentation and report evidence clearly.
+accuracy, and audience-fitness gaps in in-scope documentation and report evidence clearly. The owner
+invokes this skill by name; text supplied with the invocation narrows the scope.
 
-## 2. Setup — Doc-Index Regeneration
+## 2. Setup
 
-Before scanning any file, run:
-
-```shell
-uv run doc-index
-```
-
-If the command exits non-zero, stop and report the error.
+Find documents, headings and links with plain search (`rg`, file search); OwlBear keeps no generated
+document index. Read each document before reporting on it.
 
 Pre-audit gate (must complete before any scan):
 
@@ -38,7 +38,8 @@ Scan:
 - `store/README.md`
 - `tests/README.md`
 
-Do not edit agent-executable files during this prompt loop.
+Do not edit agent-executable files (agents, skills, instructions, scripts, workflows, source)
+during this audit. Edit only in-scope documentation, and only for a finding the owner approved.
 
 ## 4. Finding Loop Contract
 
@@ -92,32 +93,10 @@ Batch workflow:
 2. Resolve all approved entries in the same pass.
 3. Re-scan affected files and report any remaining TODO marker entries.
 
-## 6. Diagram Ownership
-
-Diagram ownership is fully assigned to this audit flow.
-
-- The auditor has full responsibility for diagram verification and remediation planning.
-- Ownership includes deciding whether a diagram needs a follow-up task.
-- If ownership is ambiguous, stop and request clarification instead of guessing.
-
-## 7. Describes-Based Diagram Verification
-
-Use doc-index `describes` metadata to verify diagram coverage.
-
-- Match changed files against `describes` globs.
-- If a match exists, verify the corresponding diagram is still accurate.
-- If no match exists, treat the check as not applicable unless the changed file or local
-  documentation establishes that a diagram is expected; do not report a gap solely because no
-  diagram matches.
-
-This manifest-based verification must explicitly reference the diagram manifest entry, its linked
-Archify source JSON, generated SVG artifact, and the source file(s) it describes.
-
-## 8. Verification and Closeout
+## 6. Verification and Closeout
 
 After the queue is complete:
 
 1. Verify link integrity for changed docs.
-2. Re-run `uv run doc-index`.
-3. Summarize findings by severity and dimension.
-4. Ask whether to run from the top again.
+2. Summarize findings by severity and dimension.
+3. Ask whether to run from the top again.

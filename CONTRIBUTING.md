@@ -22,9 +22,8 @@ that the release workflow sets on merges labelled `release:minor` or `release:ma
 
 Requirements: macOS, Python 3.14.8 (3.14 series only), [uv](https://docs.astral.sh/uv/), VS Code with
 GitHub Copilot, [GitHub CLI](https://cli.github.com/), the GitHub Copilot CLI (`brew install --cask copilot-cli`),
-and Git. JSON linting and diagram rendering also need the Node version pinned in `.nvmrc`. Install
-the Copilot CLI with Homebrew rather than `npm install -g`, whose copy is hidden when the Node version
-changes.
+and Git. JSON linting also needs the Node version pinned in `.nvmrc`. Install the Copilot CLI with
+Homebrew rather than `npm install -g`, whose copy is hidden when the Node version changes.
 
 ```shell
 git clone https://github.com/maba-pag/owlbear.git
@@ -37,7 +36,7 @@ uv run dep-sync
 manifests.
 
 Open this checkout directly in VS Code. Its repository settings already load the shared
-`share/` and project-local `.owlbear/` agent, skill, instruction, and prompt roots; do not run
+`share/` and project-local `.owlbear/` agent, skill, and instruction roots; do not run
 consumer setup against the OwlBear checkout itself. The machine's running OwlBear lives in
 `~/.owlbear/runtime`, separate from this checkout.
 
@@ -52,7 +51,7 @@ uv run lint --no-fix
 
 | You are changing... | Start with |
 | --- | --- |
-| Agents, skills, instructions, or prompts | [Shared ecosystem guide](share/README.md) |
+| Agents, skills, or instructions | [Shared ecosystem guide](share/README.md) |
 | A runtime package or MCP server | [Package map](serve/README.md) |
 | Consumer installation and verification | [Setup guide](setup/setup-guide.md) |
 | Consumer operation, updates, or uninstall | [Operating OwlBear](setup/operating-owlbear.md) |
@@ -66,7 +65,7 @@ checks. The guide for each surface owns its exact commands and validation.
 | Path | Purpose |
 | --- | --- |
 | `serve/` | Runtime packages and the [package map](serve/README.md) |
-| `share/` | Agents, skills, instructions, prompts, and their [loading model](share/README.md) |
+| `share/` | Agents, skills, instructions, and their [loading model](share/README.md) |
 | `setup/` | Installation in the [setup guide](setup/setup-guide.md), daily operation in [Operating OwlBear](setup/operating-owlbear.md), and teams in the [sharing guide](setup/sharing-guide.md) |
 | `.owlbear/` | Tracked project authority plus host-local runtime state in the [.owlbear guide](.owlbear/README.md) |
 | `tests/` | Workspace regression and integration tests described in the [test guide](tests/README.md) |
