@@ -16,7 +16,7 @@
 | --- | --- |
 | **Improvement** | The group, and its page |
 | **Primer** | The lessons every new agent session gets before it starts (§2) |
-| **Spotter** | The live agent beside a working agent; in learning mode it records what it would do, live it steers (§4) |
+| **Spotter** | The live agent beside a working agent; each finding gets its category's configured action, from recording it to steering or stopping (§4) |
 | **Spotter cases** | The Spotter's graded example cases: its prompt examples and its regression test (§4) |
 | **Retro** | The after-task analysis: reads whole tasks with hindsight, grades the Spotter, proposes lessons and fixes (§5) |
 | **Retro chatlogs** | The kept logs of finished agent conversations (Delivery steps, enrolled chats) that Retro reads (§5) |
@@ -116,12 +116,13 @@ All settings have no code default; an unset one is an error on the Settings page
   turn), refuse the hand-off, stop and resume with the note, or stop and ask the owner. What warrants irreversible
   harm is the Spotter's own judgement within broad categories, never a closed list or a confidence threshold
   (D-01M5W6NGXW27VW024E1B29W3GA). A repeated unresolved finding becomes a question to the owner, never a loop;
-- **steer share:** the share of whole Changes and chats whose steering acts; the rest record only (the test below);
-  Spotter hand-off refusals take part in it;
+- **steer share:** the share of whole Changes and chats whose discretionary actions (steer, refuse the hand-off, stop
+  and resume) act; in the rest those findings are recorded instead (the test below). Irreversible-harm actions act in
+  every Change and chat, outside the share;
 - **intervention cap:** at most this many steering notes per step or chat turn; irreversible-harm actions and hand-off
   refusals are never capped (D-01M5W9S636SC6C6JC4EQAM24NN was folded into the category decision);
 - **verbose:** a bounded rationale with its evidence per look, scoped to the machine, a project or a Change, with an
-  expiry. Retro may switch it on within a credit cap and for a named reason, shown on the page; never live mode;
+  expiry. Retro may switch it on within a credit cap and for a named reason, shown on the page; never an action;
 - **looks:** which looks are on, and the sample rate;
 - **budgets:** credits per day for the Spotter and for Retro; beyond it, a look or run is skipped and recorded;
 - **enrolled chats:** the workspaces or chats the Spotter and Retro may read. Unset reads none. Spotter, Retro and
@@ -133,7 +134,9 @@ Roles: `spotter` (the `watcher` role renamed, with a settings migration), `retro
 A look is one tool-less session on the spotter role over a **card** (the intent with the requester's latest messages
 and answers, the applicable decisions from the picker's conflict check, the agent's plan, the moment itself, the
 recent actions with their evidence, the open work; each with an event cutoff). It returns a **record**: kind,
-sampling probability, verdict (silent, note, interrupt), the note, the evidence references and a short rationale.
+sampling probability, the finding's category (none when silent), the note, the evidence references and a short
+rationale; the configured action follows from the category. #668's records carry the earlier verdict (silent, note,
+interrupt) instead, until the settings slice brings the categories.
 Records are kept on this machine in a daily store (`~/.owlbear/spotter/records-<date>.jsonl`), each with its session,
 its Change and step or its chat and turn, and its look, so Retro can join them after a restart.
 Active Spotter cases are its prompt examples. A look takes no session slot of its own: the agent it looks at holds
@@ -162,8 +165,9 @@ are temporary and owner-only; D-01M5VXXFBSWVZ0DZ68G1QG4CYG).
 Findings from sampled and state-change looks stay record-only until Retro shows their class is worth it, whatever
 their category's action; irreversible harm is the exception and acts per its category at once, also before the
 steered-versus-silent test, which is about discretionary steering (D-01M5WB09Z3ZKJVN02WGWVHGWBH,
-D-01M5W68MMV8JCVKNKH4VJQ9V14). A stop after the fact only halts what follows; it cannot undo what happened. The line from §3 holds in
-every mode: correct is not enough; the value must clearly exceed the risk of pulling the agent off course.
+D-01M5W68MMV8JCVKNKH4VJQ9V14). A stop after the fact only halts what follows; it cannot undo what happened. The line
+from §3 holds for every action: correct is not enough; the value must clearly exceed the risk of pulling the agent off
+course.
 
 ### Where
 - **Delivery steps:** from the SDK adapter's event stream (W1a's feed). Steps run only through the SDK: window steps
@@ -184,14 +188,16 @@ every mode: correct is not enough; the value must clearly exceed the risk of pul
   caches; the state-change look sees every outside write, those included. Its findings on them stay record-only until
   Retro shows that class is worth it, but irreversible harm acts per its category at once
   (D-01M5W68MMV8JCVKNKH4VJQ9V14, D-01M5W7C4R6M99MVWHR8X1GMCBT).
-- **Chats:** a `Stop` hook (shipped in the seed and wired by the install, inert unless live) asks the machine host for the note tied to
+- **Chats:** a `Stop` hook (shipped in the seed and wired by the install, inert while no category's action steers)
+  asks the machine host for the note tied to
   that chat's turn, waits a bounded time, takes it only once, drops expired notes and honours `stop_hook_active`.
   Whether a running chat turn can take a steer before its end is open.
 
 ### The steered-versus-silent test
-A test starts only once Retro's grades of the learning-mode records are high enough for the looks it would steer
-(a threshold set before it starts). Live mode is then promoted only by a test randomised per whole Change (all its steps) and whole chat, the assignment kept
-across restarts. The primary outcome is declared in advance: the task completed without material rework or a broken
+A test starts only once Retro's grades of the record-only findings are high enough for the looks it would steer (a
+threshold set before it starts). Discretionary actions (steer, refuse the hand-off, stop and resume) act beyond the
+steer share only once a test, randomised per whole Change (all its steps) and whole chat with the assignment kept
+across restarts, shows them worth it. Irreversible-harm actions are not part of the test: they act in both arms. The primary outcome is declared in advance: the task completed without material rework or a broken
 constraint; credits, time and owner effort beside it. Model, prompt and case versions are frozen during a test;
 outcomes are graded blind to the arm where possible; delivery failures are recorded; the promotion threshold is set
 before it starts.
@@ -256,11 +262,11 @@ always shows (D-01M5W9AEB412SNWYM2CS27H68M).
 
 Each slice is a pull request, with Sol on its plan and its code:
 1. this design: built (#659, #660);
-2. settings and roles: built (#662);
+2. settings and roles: built (#662); the on/off switch and the four category actions replacing `mode` next;
 3. Retro chatlogs: built (#663);
 4. the card builder: built with 6's Delivery part (#668);
 5. Spotter records and cases: records built (#668); cases next;
-6. the Spotter's looks in learning mode, for Delivery and chats: Delivery built (#668); the chats follower next;
+6. the Spotter's looks, recording only, for Delivery and chats: Delivery built (#668); the chats follower next;
 7. Retro;
 8. the Improvement page;
 9. live delivery and the test machinery.
