@@ -1020,16 +1020,19 @@ def readable_private_repaired(repo: Path, shared_repo, monkeypatch, before_snaps
     """
     store = shared_project(repo, shared_repo, monkeypatch)
     private, marker = store.root / profile_share.PROFILE, store.root / profile_share.ROLES_MOVED
-    private.write_text(PRIVATE_READABLE)
-    Store.open(repo)
-    assert marker.exists()
-    config_before, marker_before = store.config_path.read_bytes(), marker.read_bytes()
+    # The damaged target is committed and pushed first, so it exists while the ordinary open imports the roles.
     target = shared_only_damaged(store, UNREADABLE % "")
-    # The damaged target is the remote's current state, so the clone is clean and the pull is a no-op.
     subprocess.run(["git", "-C", str(target.parent), "add", "--", target.name], check=True)  # noqa: S603, S607
     subprocess.run(["git", "-C", str(target.parent), "commit", "-q", "-m", "damaged target"], check=True)  # noqa: S603, S607
     subprocess.run(["git", "-C", str(target.parent), "push", "-q", "origin", "HEAD"], check=True)  # noqa: S603, S607
+    private.write_text(PRIVATE_READABLE)
+    assert private.read_bytes() == PRIVATE_READABLE.encode()
+    Store.open(repo)
+    assert private.read_bytes() == PRIVATE_READABLE.encode()
+    assert marker.exists()
+    config_before, marker_before = store.config_path.read_bytes(), marker.read_bytes()
     armed: list[bool] = []
+    hits: list[Path] = []
     real_write, real_snapshot = Store.write_profile, roles_move.snapshot
 
     def armed_write(self: Store, prof: Profile, **kwargs: object) -> str:
@@ -1041,29 +1044,37 @@ def readable_private_repaired(repo: Path, shared_repo, monkeypatch, before_snaps
     def observed(old: Path):
         if armed and old == private:
             armed.clear()
+            hits.append(old)
             before_snapshot(private)
         return real_snapshot(old)
 
     monkeypatch.setattr(Store, "write_profile", armed_write)
     monkeypatch.setattr(roles_move, "snapshot", observed)
-    return store, private, marker, config_before, marker_before
+    return store, private, marker, config_before, marker_before, hits
 
 
-def roles_state(raw: bytes) -> dict:
-    """The config without the preference fields an ordinary publication sets: the roles and the moved flag must stay."""
-    config = json.loads(raw)
-    config.pop("prefs", None)
-    config.pop("prefs_imported", None)
-    return config
+PUBLISHED_PREFS = {
+    "merge_method": None,
+    "delete_remote_branch": None,
+    "ci_poll_seconds": None,
+    "ci_start_window_seconds": None,
+    "ask_before_merge": None,
+}
 
 
 def test_readable_private_repair_keeps_its_config_marker_and_source_bytes(repo: Path, shared_repo, monkeypatch) -> None:
-    store, private, marker, config_before, marker_before = readable_private_repaired(
+    store, private, marker, config_before, marker_before, hits = readable_private_repaired(
         repo, shared_repo, monkeypatch, lambda _p: None
     )
     assert setup.run(repo, [], yes=True, local_files="no") == 0
-    assert not private.exists()  # the existing move into the shared repository, not a retirement
-    assert roles_state(store.config_path.read_bytes()) == roles_state(config_before)
+    assert len(hits) == 1
+    assert private.read_bytes() == PRIVATE_READABLE.encode()
+    before, after = json.loads(config_before), json.loads(store.config_path.read_bytes())
+    assert after.pop("prefs_imported") is True
+    assert after.pop("prefs") == PUBLISHED_PREFS
+    assert before.pop("prefs_imported") is False
+    assert before.pop("prefs") is None
+    assert after == before
     assert marker.read_bytes() == marker_before
     assert not (store.root / profile_repair.RECEIPT).exists()
     assert "prefs_import" in profile_share.path(store).read_text()
@@ -1076,10 +1087,11 @@ OTHER_READABLE = '{"format": 1, "roles": {"planner": {"model": "p-2", "effort": 
 def test_old_source_replaced_before_final_observation_is_never_retired(
     repo: Path, shared_repo, monkeypatch, capsys, raw: str
 ) -> None:
-    store, private, marker, config_before, marker_before = readable_private_repaired(
+    store, private, marker, config_before, marker_before, hits = readable_private_repaired(
         repo, shared_repo, monkeypatch, lambda p: p.write_text(raw)
     )
     assert setup.run(repo, [], yes=True, local_files="no") != 0
+    assert len(hits) == 1
     assert "run setup again to review it" in capsys.readouterr().out
     assert private.read_text() == raw
     assert store.config_path.read_bytes() == config_before
@@ -1101,13 +1113,14 @@ def test_old_source_unreadable_at_final_observation_keeps_the_approved_repair(
 
         monkeypatch.setattr(Path, "read_bytes", denied)
 
-    store, private, marker, config_before, marker_before = readable_private_repaired(
+    store, private, marker, config_before, marker_before, hits = readable_private_repaired(
         repo, shared_repo, monkeypatch, deny_next_private_read
     )
     assert setup.run(repo, [], yes=True, local_files="no") != 0
+    assert len(hits) == 1
     assert "could not read the old profile" in capsys.readouterr().out
-    assert not private.exists()  # the existing move into the shared repository, not a retirement
-    assert roles_state(store.config_path.read_bytes()) == roles_state(config_before)
+    assert store.config_path.read_bytes() == config_before
+    assert private.read_bytes() == PRIVATE_READABLE.encode()
     assert marker.read_bytes() == marker_before
     assert (store.root / profile_repair.RECEIPT).exists()
 
