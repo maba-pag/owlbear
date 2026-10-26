@@ -14,8 +14,8 @@ import pytest
 
 from owlbear_delivery_next.commands import cli
 from owlbear_delivery_next.machine_host import registry, selfcheck
-from owlbear_delivery_next.state_store import offline_protocol, project_home, project_move
-from owlbear_delivery_next.state_store.database import MARKER, StoreError
+from owlbear_delivery_next.state_store import fd_tree, offline_protocol, project_home, project_move
+from owlbear_delivery_next.state_store.database import MARKER, FormatTooNewError, StoreError
 from owlbear_delivery_next.state_store.store import Store
 
 BEFORE = "AAAAAAAA-0000-4000-8000-000000000001"
@@ -182,9 +182,26 @@ def test_a_prepared_prior_6_is_admitted_by_every_consumer(repo, boot, capsys):
 
 
 @pytest.mark.usefixtures("current_binding")
-def test_a_markerless_source_is_still_admitted_with_prior_0(repo, boot, capsys):
-    (_source(repo) / MARKER).unlink()
-    target = _switched_store(repo, boot, capsys)
-    assert Store.open(repo).root == target
-    assert (target / MARKER).read_text().strip() == "7"
-    registry.canonical(repo)
+def test_a_target_marker_from_a_newer_store_is_refused_as_an_upgrade_and_nothing_is_written(
+    repo, boot, capsys, monkeypatch
+):
+    _prepared(repo, boot)
+    real_sync, planted = fd_tree.sync, []
+
+    def sync(dfd, entry):
+        real_sync(dfd, entry)
+        if entry == project_home.clone_id(_source(repo)) and not planted:  # the copy is published with a newer marker
+            planted.append(entry)
+            (project_home.home(entry) / MARKER).write_text("99\n")
+
+    monkeypatch.setattr(fd_tree, "sync", sync)
+    before = {name: (_source(repo) / name).read_bytes() for name in (MARKER, project_move.PREPARED)}
+    boot["id"] = AFTER
+    with pytest.raises(FormatTooNewError):
+        offline_protocol.finish_clone(repo, gaps=lambda: ())
+    capsys.readouterr()
+    assert planted, "the newer marker was never planted"
+    assert project_home.home(planted[0]).joinpath(MARKER).read_text() == "99\n"
+    assert {name: (_source(repo) / name).read_bytes() for name in before} == before
+    with pytest.raises(FormatTooNewError):
+        Store.open(repo)

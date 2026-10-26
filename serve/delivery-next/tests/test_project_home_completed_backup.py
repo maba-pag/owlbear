@@ -143,7 +143,9 @@ def test_a_replaced_target_refuses_and_keeps_the_source_and_receipt(clone, monke
 def test_a_replaced_target_with_the_same_identity_refuses_and_keeps_the_impostor(clone, monkeypatch):
     """A freed folder can come back with the same device and inode (Linux reuses them); identity alone is not proof."""
     repo, folder = clone
+    # project_move holds its own alias of fd_tree.ident; project_switch and switched_authority call the module.
     monkeypatch.setattr(project_move, "_ident", lambda _st: [0, 0])
+    monkeypatch.setattr(fd_tree, "ident", lambda _st: [0, 0])
     move(repo, monkeypatch)
     target = project_home.located(repo)
     before = receipt_bytes(folder)

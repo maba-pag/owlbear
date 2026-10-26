@@ -5,17 +5,23 @@ or with STORE_FORMAT; a marker that is present is kept only when it is a support
 """
 
 from owlbear_delivery_next.state_store import fd_tree
-from owlbear_delivery_next.state_store.database import MARKER, STORE_FORMAT, StoreError
+from owlbear_delivery_next.state_store.database import MARKER, STORE_FORMAT, FormatTooNewError, StoreError
 
 
 def supported_format(text: object) -> int:
-    """A format marker this runtime opens: an ASCII integer from 1 through STORE_FORMAT; anything else is refused."""
+    """A format marker this runtime opens: an ASCII integer from 1 through STORE_FORMAT; anything else is refused.
+
+    A newer format raises FormatTooNewError, so the stop tells the owner to upgrade rather than to restore.
+    """
     digits = text.strip() if isinstance(text, str) else ""
     if not (digits.isascii() and digits.isdigit()):
         msg = f"format marker {text!r} is not a supported store format: refusing it; nothing was changed"
         raise StoreError(msg)
     value = int(digits)
-    if not 1 <= value <= STORE_FORMAT:
+    if value > STORE_FORMAT:
+        msg = f"store format {value} is newer than {STORE_FORMAT}"
+        raise FormatTooNewError(msg)
+    if value < 1:
         msg = f"format {value} is not a supported store format (1 to {STORE_FORMAT}): refusing it"
         raise StoreError(msg)
     return value
