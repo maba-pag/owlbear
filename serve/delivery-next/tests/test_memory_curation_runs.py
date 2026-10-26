@@ -1113,6 +1113,65 @@ def lost_write(*_args: object) -> None:
     raise OSError(msg)
 
 
+def main_refusal(at: datetime, pids: dict[int, float | None]) -> None:
+    """What main's ``_one`` leaves when it refuses before any session, as while its PIDs may run: the folder's row
+    failed with its reason, ending as it starts; ``left`` kept as it was. It cannot read a keyed record, so the file is
+    written afresh."""
+    row = {"state": "failed", "started_at": at.isoformat(), "ended_at": at.isoformat(), "summary": "",
+           "reason": curation.LEFT, "entries": [], "skipped": {}, "seen": {}}  # fmt: skip
+    path = local_home.root() / curation.STATE
+    path.write_text(json.dumps({"folders": {"shop": row}, "left": {str(p): b for p, b in pids.items()}}))
+
+
+def test_main_refusals_after_its_session_keep_its_one_hold_and_only_a_later_session_is_held_anew(root) -> None:
+    """Review turn 26: a refusal before any session is no new session, so repeated ones never grow the holds.
+
+    After the owner's recovery the same refusals resurrect nothing; a later generic failure with the same PID and an
+    unknown birth has its own window, so it is held anew.
+    """
+    calls: list[str] = []
+    t0 = datetime.now(UTC) - timedelta(hours=3)
+    main_session_row(t0, {4242: None})
+    first = curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root), run=never_runs(calls))
+    [a] = ledger_on_disk()["sessions"]
+    for n in range(1, 4):
+        main_refusal(t0 + timedelta(minutes=n), {4242: None})
+        again = curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root), run=never_runs(calls))
+        assert ([s["id"] for s in ledger_on_disk()["sessions"]], again.left_key, again.left) == (
+            [a["id"]], a["slot"], {4242: None},
+        )  # fmt: skip
+        assert again.working() == [curation.LINGERING]
+    recovered_by_reboot(first)
+    for n in range(4, 6):
+        main_refusal(t0 + timedelta(minutes=n), {4242: None})
+        after = curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root), run=never_runs(calls))
+        assert (after.maintenance.pending("curation"), [s["state"] for s in ledger_on_disk()["sessions"]]) == (
+            False, ["recovered"],
+        )  # fmt: skip
+    main_session_row(t0 + timedelta(hours=1), {4242: None})  # main's later session failed: same PID, birth unknown
+    later = curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root), run=never_runs(calls))
+    assert ([s["state"] for s in ledger_on_disk()["sessions"]], later.left_key != a["slot"]) == (
+        ["recovered", "held"], True,
+    )  # fmt: skip
+    main_refusal(t0 + timedelta(hours=2), {4242: None})  # its own refusals keep that one hold too
+    curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root), run=never_runs(calls))
+    assert ([s["state"] for s in ledger_on_disk()["sessions"]], calls) == (["recovered", "held"], [])
+
+
+def test_a_row_in_a_state_no_producer_writes_is_never_taken_for_a_known_snapshot(root) -> None:
+    """Fail closed: a dated row in an unknown state is evidence, so it is held anew rather than read as a refusal."""
+    t0 = datetime.now(UTC) - timedelta(hours=1)
+    main_session_row(t0, {4242: None})
+    curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root))
+    path = local_home.root() / curation.STATE
+    at = (t0 + timedelta(minutes=1)).isoformat()
+    row = {"state": "paused", "started_at": at, "ended_at": at, "summary": "", "reason": "", "entries": [],
+           "skipped": {}, "seen": {}}  # fmt: skip
+    path.write_text(json.dumps({"folders": {"shop": row}, "left": {"4242": None}}))
+    curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root))
+    assert [s["state"] for s in ledger_on_disk()["sessions"]] == ["held", "held"]
+
+
 @pytest.mark.parametrize("a_state", ["recovered", "held"])
 def test_a_later_main_failure_row_reusing_an_imported_runs_pid_is_its_own_hold_and_starts_nothing(
     root, a_state

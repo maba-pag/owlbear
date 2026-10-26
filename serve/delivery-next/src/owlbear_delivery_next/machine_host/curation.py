@@ -11,8 +11,6 @@ paused" on (the owner, 2026-10-22). An entry a run left pending starts no other 
 from __future__ import annotations
 
 import asyncio
-import hashlib
-import json
 import threading
 import uuid
 from contextlib import AbstractContextManager, nullcontext
@@ -28,7 +26,7 @@ from owlbear_delivery_next.change_contracts.models import Record, StepKind
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.local_system import data_repo, local_home, maintenance
 from owlbear_delivery_next.local_system.storage_io import atomic_write
-from owlbear_delivery_next.machine_host import machine_settings, registry
+from owlbear_delivery_next.machine_host import curation_snapshots, machine_settings, registry
 from owlbear_delivery_next.runtimes import maintained, sdk_adapter
 from owlbear_delivery_next.settings import roles
 from owlbear_delivery_next.settings.config import Settings, SettingsUnset
@@ -127,12 +125,14 @@ class Curation:
             runs.left_key = ""  # the lease it names does not record these PIDs, so the key proves nothing
         running = tuple(self._row(n, r) for n, r in runs.folders.items() if r.state == "running" and not r.key)
         if runs.left and not runs.left_key:
-            # A snapshot no lease of ours names is a producer's own observation, its generation what that producer
-            # wrote: read again unchanged, it keeps its lease in any state; a later session's row makes it another,
-            # held anew. A running row is the session behind it, associated with its lease in the same save.
+            # A snapshot no lease of ours names is a producer's own observation. Its PIDs and session evidence are
+            # what that producer wrote: a lease that saw these PIDs and every session row still on file covers it in
+            # any state, though refusals since overwrote some; a later session's row is held anew. A running row is
+            # the session behind it, associated with its lease in the same save.
+            snapshot, seen = curation_snapshots.observed(runs), curation_snapshots.sessions(runs)
             lease = self.maintenance.adopt_uncertain(
-                f"{self.path()}#left", SLOT, "curation", workspace="", generation=observed(runs), pids=runs.left,
-                marks=running,
+                f"{self.path()}#left", SLOT, "curation", workspace="", generation=snapshot, pids=runs.left,
+                covers=curation_snapshots.same_snapshot(SLOT, snapshot, seen), observed=seen, marks=running,
             )  # fmt: skip
             runs.left_key = lease.slot
         for name, r in runs.folders.items():
@@ -423,23 +423,6 @@ def _pending(store: Path) -> list[Any]:
 def legacy_uncertain(run: FolderRun) -> bool:
     """A failed run whose termination an older host left unknown, and which the ledger has never recorded."""
     return run.state == "failed" and UNKNOWN in run.reason and not run.key
-
-
-def observed(runs: Runs) -> str:
-    """The producer generation of a snapshot: its PIDs and every row's times, never this host's keys, states or reasons.
-
-    A producer's later session writes a row with its own times, so the same PIDs under them are another generation.
-    A row this host rewrote as interrupted, or keyed, keeps its times, so the unchanged observation keeps its own.
-    """
-    rows = sorted(
-        (name, _at(r.started_at), _at(r.ended_at)) for name, r in runs.folders.items() if r.started_at or r.ended_at
-    )
-    left = sorted(runs.left.items())  # each PID once, so births are never compared
-    return hashlib.sha256(json.dumps({"left": left, "rows": rows}).encode()).hexdigest()
-
-
-def _at(when: datetime | None) -> str:
-    return when.isoformat() if when else ""
 
 
 def _same_run(folder: str, run: FolderRun) -> Callable[[maintenance.Lease], bool]:

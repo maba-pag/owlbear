@@ -55,6 +55,7 @@ class Lease(Record):
     kind: Kind
     workspace: str
     generation: str = ""  # the imported run's proven identity; empty when none was proven
+    observed: list[str] = Field(default_factory=list)  # the producer's session evidence the import saw; maybe none
     started_at: datetime
     boot: float = Field(gt=0, allow_inf_nan=False)
     owner_pid: int = Field(gt=0)
@@ -219,12 +220,14 @@ class Maintenance:
         pids: processes.Pids | None = None,
         keyed: bool = False,
         marks: tuple[str, ...] = (),
+        observed: tuple[str, ...] = (),
     ) -> Lease:
         """Import an older host's uncertain work once per proven generation.
 
         A proven generation is covered by its lease in any state, so a recovered one is never resurrected. An unproven
         one (empty *generation*) is covered only by a held lease, so a later unknown run gets its own hold. *covers*
-        replaces that rule for a caller that keys its own history. *pids* are the processes a new lease records.
+        replaces that rule for a caller that keys its own history. *pids* are the processes a new lease records, and
+        *observed* the producer evidence it saw, for such a caller's later comparison.
         A *keyed* import also marks *source* with the lease it created, in the same save, so a retry finds that very
         lease again instead of matching by window. Each of *marks* is another source a new lease accounts for, marked
         in that same save, so its keyed import finds this lease after a lost write.
@@ -262,6 +265,7 @@ class Maintenance:
                 state="held",
                 reason="legacy maintenance stopped without complete termination proof",
                 pids=dict(pids or {}),
+                observed=list(observed),
             )
             ledger.sessions.append(lease)
             if source not in ledger.imported:
