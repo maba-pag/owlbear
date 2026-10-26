@@ -101,6 +101,6 @@ def save(
             notice = decision_transaction.transaction(
                 store.shared, store.name, message, [(path, text.encode("utf-8")), *writes], publish, head
             )
-    except (DataRepoError, OSError, DecisionsUnavailable) as exc:
+    except (DataRepoError, OSError, DecisionsUnavailable, decision_batch.JournalError) as exc:
         return f"the record of {c.slug} was not saved: {exc}"[:300]
     return "; ".join(filter(None, [behind, notice]))[:1000]

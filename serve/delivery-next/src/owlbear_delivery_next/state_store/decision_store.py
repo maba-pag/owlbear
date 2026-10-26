@@ -255,6 +255,8 @@ def save_all(shared: DataRepo | None, items: Sequence[tuple[Decision, str | None
             return _save_all(shared, [(d, _layer(shared.root, d), expected) for d, expected in items], message)
     except DataRepoError as exc:
         raise DecisionsUnavailable(str(exc)) from exc
+    except decision_batch.JournalError as exc:  # the journal or its lock failed during the save: the batch is unknown
+        raise DecisionsUnavailable(str(exc)[:600], RECOVER) from exc
     except OSError as exc:
         msg = f"{', '.join(d.id for d, _ in items)} could not be written in {shared.root}: {exc}"
         raise DecisionsUnavailable(msg, READ) from exc

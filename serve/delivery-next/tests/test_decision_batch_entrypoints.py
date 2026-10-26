@@ -17,6 +17,8 @@ from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 
 import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 from owlbear_decisions import Decision, DecisionError, Link, LinkType, Origin, Scope, State, new_id, storage, write
 from owlbear_decisions.storage import serialize
@@ -2448,3 +2450,198 @@ def test_a_successor_recreated_during_the_final_git_probe_of_a_put_back_keeps_th
     assert added.read_bytes() == after  # the owner's file stays
     assert decision_batch.pending(shared) is not None
     _no_authority(picking)
+
+
+THIRD = b"the owner's own third image\n"
+
+
+def _remote_main(remote: Path) -> str:
+    said = subprocess.run(  # noqa: S603 - a fixed git command on the test's own bare repository
+        ["git", "--git-dir", str(remote), "rev-parse", "main"],  # noqa: S607
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return said.stdout.strip()
+
+
+def _update_and_successor(picking) -> tuple[list[tuple[Decision, str | None]], Path, bytes]:
+    """A save updating a published decision (first) and adding a successor; the updated file and its before image."""
+    shared = picking.shared
+    old = make(title="Notes stay in one table")
+    assert decision_store.save(shared, old, expected_revision=None, message="decisions: old").published
+    update = old.model_copy(update={"title": "Notes stay in one SQLite table"})
+    successor = make(title="Use UTC", statement="All timestamps use UTC.")
+    path = shared.root / PROJECT / "decisions" / f"{old.id}.md"
+    return [(update, old.revision), (successor, None)], path, path.read_bytes()
+
+
+@pytest.mark.parametrize("owner", [True, False], ids=["first-file-back-to-before", "healthy"])
+def test_a_batch_whose_earlier_file_is_put_back_before_the_commit_is_never_committed(
+    picking, shared_repo, monkeypatch, owner
+):
+    """While the later file is written, the owner puts the earlier one back to its before image: the fence allows
+    either image, but nothing incomplete may be committed or pushed, so the batch stays interrupted."""
+    _seed(picking)
+    shared, remote = picking.shared, shared_repo[1]
+    items, first, before = _update_and_successor(picking)
+    local, published = shared.git("rev-parse", "HEAD").stdout, _remote_main(remote)
+    real_write, calls = decision_store.write, []
+
+    def second_write_after_the_owner(decision, folder, expected=None, **kwargs):
+        calls.append(decision.id)
+        if owner and len(calls) == 2:
+            first.write_bytes(before)
+        return real_write(decision, folder, expected, **kwargs)
+
+    with monkeypatch.context() as m:
+        m.setattr(decision_store, "write", second_write_after_the_owner)
+        receipts = decision_store.save_all(shared, items, message="decisions: two")
+
+    if not owner:
+        assert all(r.published for r in receipts)
+        assert _remote_main(remote) != published
+        assert decision_batch.pending(shared) is None
+        return
+    assert not any(r.saved for r in receipts)
+    assert "journalled image" in receipts[0].notice
+    assert (shared.git("rev-parse", "HEAD").stdout, _remote_main(remote)) == (local, published)  # nothing committed
+    assert first.read_bytes() == before
+    assert decision_batch.pending(shared) is not None
+    _no_authority(picking)
+
+
+def _owner_changes_the_first_path_before_the_commit(m: pytest.MonkeyPatch, fired: list[Path]) -> None:
+    """Just before Git stages and commits, the owner writes a third image into the first file to be committed."""
+    real_commit = DataRepo.commit
+
+    def commit(self, paths, message, until=None):
+        first = [paths] if isinstance(paths, Path) else list(paths)
+        if not fired:
+            fired.append(first[0])
+            first[0].write_bytes(THIRD)
+        return real_commit(self, paths, message, until)
+
+    m.setattr(DataRepo, "commit", commit)
+
+
+@pytest.mark.parametrize("owner", [True, False], ids=["owner-changes-a-file-as-it-is-staged", "healthy"])
+@pytest.mark.parametrize("surface", ["store", "finish"])
+def test_a_commit_that_does_not_hold_the_batch_is_never_pushed(picking, shared_repo, monkeypatch, surface, owner):
+    """The owner changes a file between the check of the worktree and Git staging it, so the commit holds a third
+    image. That commit stays local and unpushed, the owner's bytes stay, and the batch stays interrupted."""
+    _seed(picking)
+    shared, remote = picking.shared, shared_repo[1]
+    items, _, _ = _update_and_successor(picking)
+    if surface == "finish":
+        generation = _interrupt_at(picking, monkeypatch, items)
+    published, fired = _remote_main(remote), []
+
+    with monkeypatch.context() as m:
+        if owner:
+            _owner_changes_the_first_path_before_the_commit(m, fired)
+        if surface == "store":
+            receipts = decision_store.save_all(shared, items, message="decisions: two")
+            done = all(r.published for r in receipts)
+        else:
+            done = decision_recovery.finish(shared, generation).done
+
+    if not owner:
+        assert done
+        assert _remote_main(remote) != published
+        assert decision_batch.pending(shared) is None
+        return
+    assert not done
+    assert _remote_main(remote) == published  # nothing pushed
+    assert shared.git("show", f"HEAD:{fired[0].relative_to(shared.root).as_posix()}").stdout.encode() == THIRD
+    assert fired[0].read_bytes() == THIRD  # the owner's bytes, committed locally, are kept
+    assert decision_batch.pending(shared) is not None
+    _no_authority(picking)
+
+
+def test_a_commit_rebased_into_one_that_does_not_hold_the_batch_is_never_pushed(picking, shared_repo, monkeypatch):
+    """The first push is refused, the commit is rebased on the remote, and the owner then commits a third image over
+    it. The rebased head is checked before its push: nothing of it is pushed and the batch stays interrupted."""
+    _seed(picking)
+    shared, remote = picking.shared, shared_repo[1]
+    items, first, _ = _update_and_successor(picking)
+    other = shared.root.parent / "other"
+    subprocess.run(["git", "clone", "-q", str(remote), str(other)], check=True)  # noqa: S603, S607
+    real_push, real_rebase, pushes = DataRepo.git, DataRepo.rebase, []
+
+    def first_push_refused(self, *args, **kwargs):
+        if args[:1] == ("push",) and not pushes:
+            pushes.append(1)  # another clone publishes first, so this push is refused
+            (other / "unrelated.txt").write_text("another clone\n")
+            for step in (["add", "-A"], ["-c", "user.name=t", "-c", "user.email=t@e", "commit", "-qm", "other"]):
+                subprocess.run(["git", *step], cwd=other, check=True)  # noqa: S603, S607
+            subprocess.run(["git", "push", "-q"], cwd=other, check=True)  # noqa: S607
+        return real_push(self, *args, **kwargs)
+
+    def rebase_then_owner_commits(self, until=None):
+        said = real_rebase(self, until)
+        first.write_bytes(THIRD)
+        self.git("commit", "-qam", "the owner's own commit")
+        return said
+
+    with monkeypatch.context() as m:
+        m.setattr(DataRepo, "git", first_push_refused)
+        m.setattr(DataRepo, "rebase", rebase_then_owner_commits)
+        receipts = decision_store.save_all(shared, items, message="decisions: two")
+    published = _remote_main(remote)
+
+    assert pushes
+    assert not any(r.saved for r in receipts)
+    assert "not pushed" in receipts[0].notice
+    other_head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=other, check=True, capture_output=True, text=True)  # noqa: S607
+    assert published == other_head.stdout.strip()  # the remote holds only the other clone's commit
+    assert first.read_bytes() == THIRD
+    assert decision_batch.pending(shared) is not None
+    _no_authority(picking)
+
+
+def _lock_breaks_at_completion(m: pytest.MonkeyPatch, shared: DataRepo) -> None:
+    """The batch lock becomes a link just before the batch would complete, so taking it fails for real."""
+    real_complete = decision_batch.complete
+
+    def complete(repo, generation):
+        lock = decision_batch.journal_path(shared).parent / decision_batch.LOCK
+        lock.unlink(missing_ok=True)
+        lock.symlink_to(shared.root.parent / "elsewhere.lock")
+        return real_complete(repo, generation)
+
+    m.setattr(decision_batch, "complete", complete)
+
+
+def test_a_lock_failing_at_completion_is_a_recovery_refusal_not_a_server_error(picking, monkeypatch):
+    _seed(picking)
+    shared = picking.shared
+    items, _, _ = _update_and_successor(picking)
+    generation = _interrupt_at(picking, monkeypatch, items)
+    app = FastAPI()
+    app.include_router(decision_recovery_routes.router(lambda: shared, []))
+    client = TestClient(app)
+
+    with monkeypatch.context() as m:
+        _lock_breaks_at_completion(m, shared)
+        said = client.post("/decisions/recovery/abandon", json={"generation": generation, "confirmed": True})
+
+    assert said.status_code == 409
+    assert "batch lock" in said.json()["detail"]
+    assert decision_store.RECOVER in said.json()["detail"]
+    assert json.loads(decision_batch.journal_path(shared).read_bytes())["generation"] == generation  # left as it was
+
+
+def test_a_lock_failing_when_a_published_save_completes_is_a_recovery_refusal(picking, shared_repo, monkeypatch):
+    _seed(picking)
+    shared = picking.shared
+    new = make(title="Use UTC", statement="All timestamps use UTC.")
+
+    with monkeypatch.context() as m:
+        _lock_breaks_at_completion(m, shared)
+        with pytest.raises(decision_store.DecisionsUnavailable, match="batch lock") as refused:
+            decision_store.save(shared, new, expected_revision=None, message="decisions: one")
+
+    assert refused.value.action == decision_store.RECOVER
+    assert json.loads(decision_batch.journal_path(shared).read_bytes())["ids"] == [new.id]  # still journalled
+    assert _remote_main(shared_repo[1]) == shared.git("rev-parse", "HEAD").stdout.strip()  # published, not completed

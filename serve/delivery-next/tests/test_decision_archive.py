@@ -628,3 +628,64 @@ def test_an_archive_with_nothing_to_change_journals_and_publishes_nothing(shared
     assert (files, left, journals, written) == ([], [], [], [set()])
     assert git(root, "rev-parse", "HEAD") == head
     assert git(root, "status", "--porcelain") == ""
+
+
+@pytest.mark.parametrize("owner", [True, False], ids=["owner-changes-a-file-as-it-is-staged", "healthy"])
+@pytest.mark.parametrize("producer", ["record", "archive"])
+def test_a_record_or_archive_commit_that_does_not_hold_the_batch_is_never_pushed(
+    store, shared_repo, monkeypatch, producer, owner
+):
+    """Just before Git stages the batch, the owner writes a third image into its first file: the commit then holds it
+    instead of the journalled image, so it stays local and unpushed and the batch stays interrupted."""
+    root, remote = shared_repo
+
+    def remote_main() -> str:
+        return git(root, "--git-dir", str(remote), "rev-parse", "main")
+
+    published, fired = remote_main(), []
+    third = b"the owner's own third image\n"
+    real_commit = DataRepo.commit
+
+    def commit(self, paths, message, until=None):
+        if owner and not fired:
+            fired.append(next(iter(paths)))
+            fired[0].write_bytes(third)
+        return real_commit(self, paths, message, until)
+
+    with monkeypatch.context() as m:
+        m.setattr(DataRepo, "commit", commit)
+        if producer == "record":
+            said = change_record.save(store, finished(), MERGED, AT)
+        else:
+            said = "; ".join(decision_archive.archive(root, "shop-site", finished(), STEM, "merged")[1])
+
+    if not owner:
+        assert said == ""
+        assert remote_main() != published
+        assert decision_batch.pending(store.shared) is None
+        return
+    assert "not pushed" in said
+    assert remote_main() == published  # nothing pushed
+    assert fired[0].read_bytes() == third  # the owner's bytes are kept
+    assert decision_batch.pending(store.shared) is not None
+
+
+def test_a_journal_failure_inside_a_record_save_is_a_notice_and_keeps_the_journal(store, shared_repo, monkeypatch):
+    """The batch lock fails as the record's batch completes, after the guard passed: the save returns a notice for
+    its caller to log, never raises, and the journal is left as it was."""
+    root, _ = shared_repo
+    real_complete = decision_batch.complete
+
+    def complete(repo, generation):
+        lock = decision_batch.journal_path(store.shared).parent / decision_batch.LOCK
+        lock.unlink(missing_ok=True)
+        lock.symlink_to(root.parent / "elsewhere.lock")
+        return real_complete(repo, generation)
+
+    with monkeypatch.context() as m:
+        m.setattr(decision_batch, "complete", complete)
+        said = change_record.save(store, finished(), MERGED, AT)
+
+    assert said.startswith("the record of notes was not saved")
+    assert "batch lock" in said
+    assert decision_batch.journal_path(store.shared).exists()

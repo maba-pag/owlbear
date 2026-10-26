@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 from owlbear_decisions import DecisionFileError
 from owlbear_decisions.storage import DECISIONS_DIR, parse
 from owlbear_delivery_next.local_system.data_repo import DataRepoError
+from owlbear_delivery_next.state_store import decision_batch
 
 if TYPE_CHECKING:
     from owlbear_delivery_next.local_system.data_repo import DataRepo
@@ -172,35 +173,101 @@ def publish(shared: DataRepo, paths: list[Path], message: str, until: float, hea
     *head* is the batch's journalled head, proved on the remote by `prepare` before anything was written. A rebase
     refuses to run unless it is on the remote, so a rebase never rewrites a commit the batch's proof depends on. A
     failed commit is known only when HEAD did not move; when it moved, the commit is accepted only if it is provably
-    this call's own and holds the files as they are, so a lost commit is never guessed from a moved head.
+    this call's own and holds the batch, so a lost commit is never guessed from a moved head.
+
+    Within a journalled batch nothing incomplete reaches the remote, which other clones read with no journal of their
+    own: every file the journal names must hold its after image before the commit, and the commit pushed, the one
+    made or the one a rebase made of it, must hold every after image too, checked on that pinned commit before its
+    push. Otherwise the commit, if made, stays local and unpushed and the batch stays interrupted; nothing is undone.
     """
     before, busy = _ready(shared, until)
-    if busy is not None:  # nothing is committed unless HEAD is read, and never while a rebase is active or unknown
-        return busy
     rels = {p.relative_to(shared.root).as_posix() for p in paths}
+    # nothing is committed unless HEAD is read, never while a rebase is active or unknown, nor before the batch is whole
+    rows, refused = (None, busy) if busy is not None else _journalled(shared, rels)
+    if refused is not None:
+        return refused
     failed = shared.commit(paths, message, until)
     now = _rev(shared, "HEAD", until)
-    if failed and now is not None and now == before:
-        return Sent(notice=failed, uncommitted=True)
     made = _ours(shared, before, rels, until)
-    if failed and not (made and _in_head(shared, paths, until)):
-        return Sent(notice=failed, ambiguous=True)
+    if stop := _failed(shared, (failed, before, now, made), rows, paths, until) or _unproved(
+        shared, now, rows, paths, until
+    ):
+        return stop
     pushed = shared.git("push", "-q", until=until)
     if pushed.returncode == 0:
         return Sent()
     if refused := _rejected(shared, rels, pushed.stderr, until, own=bool(made)):
         return refused
-    return _rebase_push(shared, head, until)
+    return _rebase_push(shared, head, until, (rows, paths))
 
 
-def _in_head(shared: DataRepo, paths: list[Path], until: float) -> bool:
-    """Whether HEAD holds each of *paths* exactly as the worktree does, a file missing from both included."""
-    for path in paths:
-        said = shared.git("show", f"HEAD:{path.relative_to(shared.root).as_posix()}", until=until)
-        held = None if said.returncode else said.stdout.encode("utf-8")
-        if held != (path.read_bytes() if path.exists() else None):
+type Rows = dict[str, bytes] | None  # the batch's after images by path, or None outside a journalled batch
+
+
+def _failed(
+    shared: DataRepo, commit: tuple[str, str, str | None, str], rows: Rows, paths: list[Path], until: float
+) -> Sent | None:
+    """A failed commit: known only when HEAD did not move, else accepted only when provably ours and whole."""
+    failed, before, now, made = commit
+    if not failed:
+        return None
+    if now is not None and now == before:
+        return Sent(notice=failed, uncommitted=True)
+    return None if made and _holds(shared, made, rows, paths, until) else Sent(notice=failed, ambiguous=True)
+
+
+def _journalled(shared: DataRepo, rels: set[str]) -> tuple[Rows, Sent | None]:
+    """The pending batch's after images, once every one of them is in its file; else why nothing is committed.
+
+    Outside a batch there is nothing journalled to hold. A path the journal does not name is never committed for it.
+    """
+    batch = decision_batch.pending(shared)  # a journal that cannot be read raises: unknown is never "no batch"
+    if batch is None:
+        return None, None
+    rows = {rel: after for rel, _, after in batch.files}
+    if not rels <= rows.keys():
+        notice = "a file to commit is not in the batch's journal, so nothing was committed"
+        return rows, Sent(notice=notice, ambiguous=True)
+    root = shared.root
+    held = all(
+        decision_batch.plain_in_checkout(root, root / rel) and _bytes(root / rel) == data for rel, data in rows.items()
+    )
+    if held and decision_batch.still_plain(root, [root / rel for rel in rows]):
+        return rows, None
+    notice = "not every file of the batch holds its journalled image, so nothing was committed or pushed"
+    return rows, Sent(notice=notice, ambiguous=True)
+
+
+def _bytes(path: Path) -> bytes | None:
+    try:
+        return path.read_bytes()
+    except FileNotFoundError:
+        return None
+
+
+def _holds(shared: DataRepo, commit: str, rows: Rows, paths: list[Path], until: float) -> bool:
+    """Whether *commit* holds every after image of the batch; outside a batch, each of *paths* as the worktree does."""
+    by_path = {p.relative_to(shared.root).as_posix(): _bytes(p) for p in paths}
+    expected = by_path if rows is None else dict(rows)
+    for rel, data in expected.items():
+        said = shared.git("show", f"{commit}:{rel}", until=until)
+        if (None if said.returncode else said.stdout.encode("utf-8")) != data:
             return False
     return True
+
+
+def _unproved(shared: DataRepo, commit: str | None, rows: Rows, paths: list[Path], until: float) -> Sent | None:
+    """Why *commit* is not pushed: it does not hold the batch, or HEAD moved from it; else nothing.
+
+    HEAD is read last, immediately before the push, so the commit pushed is the one checked.
+    """
+    where = f"saved and committed in {shared.root}"
+    if commit is None or not _holds(shared, commit, rows, paths, until):
+        notice = f"{where}, but the commit does not hold the batch as journalled, so it is not pushed; check it"
+        return Sent(notice=notice, ambiguous=True)
+    if _rev(shared, "HEAD", until) != commit:
+        return Sent(notice=f"{where}, but HEAD moved before the push, so it is not pushed; check it", ambiguous=True)
+    return None
 
 
 def _ours(shared: DataRepo, before: str, rels: set[str], until: float) -> str:
@@ -246,8 +313,11 @@ def _rejected(shared: DataRepo, rels: set[str], why: str, until: float, *, own: 
     return None
 
 
-def _rebase_push(shared: DataRepo, head: str, until: float) -> Sent:
-    """Rebase on the remote and push again; a rebase that would rewrite *head*, the batch's proof, is refused."""
+def _rebase_push(shared: DataRepo, head: str, until: float, batch: tuple[Rows, list[Path]]) -> Sent:
+    """Rebase on the remote and push again; a rebase that would rewrite *head*, the batch's proof, is refused.
+
+    The rebased commit is checked to hold the batch before it is pushed, as the commit it replaced was.
+    """
     where = f"saved and committed in {shared.root}"
     if not _on_remote(shared, head, until):  # a rebase would rewrite the batch's head: refused, the batch stays
         return Sent(
@@ -256,6 +326,9 @@ def _rebase_push(shared: DataRepo, head: str, until: float) -> Sent:
         )
     if failed := shared.rebase(until):
         return _rebase_failed(shared, where, failed, until)
+    rows, paths = batch
+    if unproved := _unproved(shared, _rev(shared, "HEAD", until), rows, paths, until):
+        return unproved
     sent = shared.git("push", "-q", until=until)
     if sent.returncode:
         return Sent(notice=f"{where}, but the push failed: {sent.stderr.strip()[:200]}")

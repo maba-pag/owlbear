@@ -59,6 +59,8 @@ def _run(action: Callable[[], Any], body: RecoveryBody) -> dict[str, Any]:
         out = action()
     except decision_store.DecisionsUnavailable as exc:
         raise HTTPException(409, f"{exc} ({exc.action})") from exc
+    except decision_batch.JournalError as exc:  # the journal or its lock failed once the batch was read
+        raise HTTPException(409, f"{str(exc)[:600]} ({decision_store.RECOVER})") from exc
     return {"done": out.done, "notice": out.notice, "generation": out.generation}
 
 
