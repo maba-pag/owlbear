@@ -119,6 +119,8 @@ def _take(dir_fd: int, until: float | None) -> int:
         try:
             return open_lock(dir_fd, blocking=False, name=LOCK)
         except BlockingIOError:
+            if (left := until - time.monotonic()) <= 0:
+                raise
             time.sleep(min(LOCK_POLL, left))
     raise BlockingIOError
 

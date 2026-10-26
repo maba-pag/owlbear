@@ -3551,3 +3551,27 @@ def test_git_is_given_only_what_is_left_of_its_deadline(tmp_path, monkeypatch):
     assert seen[1] == data_repo.GIT_SECONDS
     assert (expired.returncode, expired.stdout) == (128, "")
     assert "deadline passed" in expired.stderr
+
+
+@pytest.mark.parametrize("cost", [0.01, 0.03], ids=["partly-used-by-acquisition", "expired-during-acquisition"])
+def test_a_busy_batch_lock_waits_only_for_the_budget_left_after_its_acquisition_attempt(monkeypatch, cost):
+    clock, attempts, waits, deadline = {"now": 0.0}, [], [], 0.02
+
+    def busy(fd, *, blocking, name):
+        assert (fd, blocking, name) == (7, False, batch_journal.LOCK)
+        attempts.append(fd)
+        clock["now"] += cost
+        raise BlockingIOError
+
+    def wait(seconds):
+        assert clock["now"] < deadline
+        assert 0 < seconds <= deadline - clock["now"]
+        waits.append(seconds)
+        clock["now"] += seconds
+
+    monkeypatch.setattr(batch_journal, "open_lock", busy)
+    monkeypatch.setattr(batch_journal, "time", SimpleNamespace(monotonic=lambda: clock["now"], sleep=wait))
+    with pytest.raises(BlockingIOError):
+        batch_journal._take(7, deadline)  # noqa: SLF001 - the actual acquisition loop is the boundary
+    assert attempts == [7]
+    assert waits == ([] if cost >= deadline else [pytest.approx(deadline - cost)])
