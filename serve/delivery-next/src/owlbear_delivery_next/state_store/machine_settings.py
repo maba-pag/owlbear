@@ -13,8 +13,8 @@ from pydantic import Field
 
 from owlbear_delivery_next.change_contracts.models import Record
 from owlbear_delivery_next.local_system import data_repo
-from owlbear_delivery_next.machine_host import registry
 from owlbear_delivery_next.settings.config import GlobalLayer, MachineValues
+from owlbear_delivery_next.state_store import registry
 from owlbear_delivery_next.state_store.store import StoreError, read_layer
 
 if TYPE_CHECKING:

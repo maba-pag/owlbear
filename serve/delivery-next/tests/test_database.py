@@ -14,10 +14,9 @@ import pytest
 
 from owlbear_delivery_next.change_contracts.inbox import BriefApproval, IntentItem
 from owlbear_delivery_next.change_contracts.models import Brief, Change
-from owlbear_delivery_next.machine_host import registry
 from owlbear_delivery_next.machine_host.project import ImportWaitingError, Project
 from owlbear_delivery_next.project_host import config_routes
-from owlbear_delivery_next.state_store import database
+from owlbear_delivery_next.state_store import database, registry
 from owlbear_delivery_next.state_store.database import STORE_FORMAT, LateWriteError, NotImportedError, StoreError
 from owlbear_delivery_next.state_store.store import Store
 

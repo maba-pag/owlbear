@@ -27,10 +27,11 @@ import uvicorn
 
 from owlbear_delivery_next.local_system import codebase, local_home
 from owlbear_delivery_next.local_system.storage_io import atomic_write, open_lock
-from owlbear_delivery_next.machine_host import alias, app, environment, handover, registry, versions
+from owlbear_delivery_next.machine_host import alias, app, environment, handover, versions
 from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.project_host.api import link
 from owlbear_delivery_next.project_host.host import HostRecord, running_at
+from owlbear_delivery_next.state_store import registry
 
 if TYPE_CHECKING:
     from pathlib import Path

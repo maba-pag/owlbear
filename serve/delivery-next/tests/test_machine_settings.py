@@ -12,12 +12,12 @@ import pytest
 from owlbear_delivery_next.local_system import data_repo
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.local_system.slots import Slots
-from owlbear_delivery_next.machine_host import curation, machine_settings, registry, versions
+from owlbear_delivery_next.machine_host import curation, versions
 from owlbear_delivery_next.machine_host.auto_update import Auto
 from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.settings import carried
 from owlbear_delivery_next.settings.config import GlobalLayer, MachineValues
-from owlbear_delivery_next.state_store import settings_carry
+from owlbear_delivery_next.state_store import machine_settings, registry, settings_carry
 from owlbear_delivery_next.state_store.store import read_layer
 
 LEGACY = registry.Settings(
