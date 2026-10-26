@@ -340,7 +340,7 @@ class DataRepo:
         return f"the decision batch {batch.generation} is interrupted; finish or abandon it in Decisions first"
 
     def pull(self, until: float | None = None) -> str:
-        """Rebase on the remote; a failed rebase is undone, never left half done. Why it failed, else nothing.
+        """Rebase on the remote; a failed rebase is left as Git stopped it for the owner. Why it failed, else nothing.
 
         Nothing is rebased while a decision batch is unsettled (`_decision_batch_held`), checked within the deadline.
         """

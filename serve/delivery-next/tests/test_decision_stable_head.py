@@ -1,9 +1,8 @@
-"""A batch's proof reads one HEAD SHA for ancestry and every blob, and refuses when HEAD moves while it collects proof.
+"""Stable-HEAD landing proofs and authority reads, including an ordinary pull that stops in a conflicting rebase.
 
-Each test drives the public save and Finish paths over a disposable remote and clone under tmp_path. The only injected
-fault is an owner HEAD move to an unrelated commit with HEAD's exact tree. It is made at the production Git boundary,
-right after the landing proof's successful ancestry command and before its blob reads. Every Git mutation targets a
-path under tmp_path.
+The public save, Finish and read paths use disposable remotes and clones under tmp_path. Injected races move the owner's
+HEAD or start a rebase marker during collection and blocking probes; failed rebase probes remain unknown. Every Git
+mutation targets a path under tmp_path.
 """
 
 from __future__ import annotations
@@ -14,9 +13,15 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from owlbear_decisions import Decision, Origin, Scope, State, new_id
-from owlbear_delivery_next.local_system.data_repo import DataRepo
-from owlbear_delivery_next.state_store import decision_batch, decision_recovery, decision_sync, decision_transaction
+from owlbear_decisions import Decision, Link, LinkType, Origin, Scope, State, new_id, snapshot, write
+from owlbear_delivery_next.local_system.data_repo import DataRepo, DataRepoError
+from owlbear_delivery_next.state_store import (
+    decision_batch,
+    decision_recovery,
+    decision_store,
+    decision_sync,
+    decision_transaction,
+)
 from owlbear_delivery_next.state_store.decision_store import DecisionsUnavailable, save
 
 if TYPE_CHECKING:
@@ -280,3 +285,167 @@ def test_a_stable_head_finish_completes_a_committed_batch(shared_repo, tmp_path,
     assert git(root, "rev-parse", "HEAD") == head
     assert git(remote, "rev-parse", "main") == head
     assert len(lost_ack["calls"]) == 1
+
+
+READERS = [decision_store.load, decision_store.file_snapshot]
+
+
+def checkout_state(shared: DataRepo) -> tuple:
+    """HEAD, index, rebase metadata and files, none of which an ordinary reader may change."""
+    admin = shared.root / git(shared.root, "rev-parse", "--absolute-git-dir")
+    rebases = {name: tree_bytes(admin / name) for name in ("rebase-merge", "rebase-apply") if (admin / name).exists()}
+    return git(shared.root, "rev-parse", "HEAD"), (admin / "index").read_bytes(), rebases, tree_bytes(shared.root)
+
+
+@pytest.fixture
+def readable(shared_repo) -> DataRepo:
+    shared = DataRepo(shared_repo[0])
+    assert save(shared, make(), expected_revision=None, message="decisions: seed").published
+    return shared
+
+
+@pytest.fixture
+def conflicting_replacement(readable, shared_repo, tmp_path) -> tuple[DataRepo, Decision, Decision]:
+    shared, remote = readable, shared_repo[1]
+    old = decision_store.load(shared, PROJECT).snapshot.entries[0].decision
+    second = inside_tmp(tmp_path / "second", tmp_path)
+    git(tmp_path, "clone", "-q", str(remote), str(second))
+    for key, value in (("user.name", "t"), ("user.email", "t@example.com")):
+        git(second, "config", key, value)
+    successor = make().model_copy(
+        update={"statement": "Notes live in PostgreSQL.", "links": (Link(type=LinkType.REPLACES, target=old.id),)}
+    )
+    write(old.model_copy(update={"state": State.REPLACED}), shared.root / PROJECT, old.revision)
+    write(successor, shared.root / PROJECT, None)
+    git(shared.root, "add", "--", f"{PROJECT}/decisions")
+    git(shared.root, "commit", "-q", "-m", "decisions: complete replacement")
+    seen = snapshot(shared.root, PROJECT)
+    assert seen.complete
+    assert not seen.findings
+    assert seen.active(successor.id)
+    assert not seen.active(old.id)
+    write(
+        old.model_copy(update={"rationale": "The remote owner edited the predecessor."}), second / PROJECT, old.revision
+    )
+    git(second, "add", "--", f"{PROJECT}/decisions")
+    git(second, "commit", "-q", "-m", "decisions: edit predecessor")
+    git(second, "push", "-q")
+    return shared, old, successor
+
+
+@pytest.mark.parametrize("reader", READERS, ids=["load", "file_only"])
+def test_a_conflicting_ordinary_pull_makes_both_readers_unavailable_without_changing_git(
+    conflicting_replacement, reader
+) -> None:
+    shared, old, successor = conflicting_replacement
+    assert "rebase is in progress" in shared.pull()
+    assert shared.rebasing()
+    assert decision_batch.pending(shared) is None
+    assert not decision_batch.journal_path(shared).exists()
+    assert f"{PROJECT}/decisions/{old.id}.md" in git(shared.root, "ls-files", "--unmerged")
+    partial = snapshot(shared.root, PROJECT)
+    assert partial.complete
+    assert not partial.findings
+    assert partial.active(old.id)
+    assert partial.active(successor.id)  # usable files, but only half the replacement landed
+    before = checkout_state(shared)
+
+    with pytest.raises(DecisionsUnavailable, match="rebase") as raised:
+        reader(shared, PROJECT)
+
+    assert raised.value.action == decision_store.REPAIR
+    assert checkout_state(shared) == before
+
+
+@pytest.mark.parametrize("reader", READERS, ids=["load", "file_only"])
+@pytest.mark.parametrize("project", ["", PROJECT], ids=["global", "project"])
+def test_both_readers_keep_healthy_authority(readable, reader, project) -> None:
+    seen = reader(readable, project)
+    if isinstance(seen, decision_store.DataView):
+        assert seen.commit == git(readable.root, "rev-parse", "HEAD")
+        seen = seen.snapshot
+    assert seen.complete
+    assert not seen.findings
+    assert len(seen.entries) == bool(project)
+    assert all(seen.active(entry.decision.id) for entry in seen.entries)
+
+
+@pytest.mark.parametrize("reader", READERS, ids=["load", "file_only"])
+@pytest.mark.parametrize("project", ["", PROJECT], ids=["global", "project"])
+@pytest.mark.parametrize(
+    "transition",
+    [("rebase-merge", "before"), ("rebase-apply", "before"), ("rebase-merge", "during"), ("rebase-apply", "during")],
+)
+def test_an_active_rebase_before_or_during_collection_refuses_both_readers(
+    readable, monkeypatch, reader, project, transition
+) -> None:
+    shared = readable
+    marker, when = transition
+    path = shared.root / git(shared.root, "rev-parse", "--git-path", marker)
+    real = decision_store.snapshot
+    held = []
+
+    def started() -> None:
+        path.mkdir()
+        held.append(checkout_state(shared))
+
+    def collect(root, project):
+        seen = real(root, project)
+        started()
+        return seen
+
+    if when == "before":
+        started()
+    else:
+        monkeypatch.setattr(decision_store, "snapshot", collect)
+
+    with pytest.raises(DecisionsUnavailable, match="rebase"):
+        reader(shared, project)
+
+    assert len(held) == 1
+    assert checkout_state(shared) == held[0]  # HEAD is unchanged even when the marker began during collection
+
+
+@pytest.mark.parametrize("reader", READERS, ids=["load", "file_only"])
+@pytest.mark.parametrize("when", [1, 2], ids=["before", "after_collection"])
+def test_an_unknown_rebase_at_either_probe_refuses_both_readers(readable, monkeypatch, reader, when) -> None:
+    real, calls = DataRepo.rebasing, []
+
+    def rebasing(shared, *args, **kwargs):
+        calls.append(shared.root)
+        if len(calls) == when:
+            msg = "cannot tell whether a rebase is in progress"
+            raise DataRepoError(msg)
+        return real(shared, *args, **kwargs)
+
+    monkeypatch.setattr(DataRepo, "rebasing", rebasing)
+    before = checkout_state(readable)
+    with pytest.raises(DecisionsUnavailable) as raised:
+        reader(readable, PROJECT)
+    assert raised.value.action == (decision_store.REPAIR if when == 1 else decision_store.READ)
+    assert len(calls) == when
+    assert checkout_state(readable) == before
+
+
+@pytest.mark.parametrize("reader", READERS, ids=["load", "file_only"])
+@pytest.mark.parametrize(("probe", "change"), [("journal", "head"), ("rebase", "head"), ("journal", "rebase")])
+def test_terminal_checks_follow_the_blocking_probes(readable, monkeypatch, reader, probe, change) -> None:
+    target, name = (decision_store, "_stamp") if probe == "journal" else (DataRepo, "rebasing")
+    real, calls, moved = getattr(target, name), [], []
+
+    def checked(shared, *args, **kwargs):
+        result = real(shared, *args, **kwargs)
+        calls.append(shared.root)
+        if len(calls) == 2:
+            if change == "head":
+                owner_commit(shared.root, f"owner moved HEAD during the {probe} probe\n")
+            else:
+                (shared.root / git(shared.root, "rev-parse", "--git-path", "rebase-merge")).mkdir()
+            moved.append(checkout_state(shared))
+        return result
+
+    monkeypatch.setattr(target, name, checked)
+    with pytest.raises(DecisionsUnavailable, match="changed while they were read"):
+        reader(readable, PROJECT)
+    assert len(moved) == 1
+    assert checkout_state(readable) == moved[0]
