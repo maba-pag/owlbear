@@ -831,3 +831,39 @@ def test_a_role_move_is_held_when_the_config_came_and_went_on_the_remote_meanwhi
     assert "an automatic change is held" in a.shared.pending()
     assert "is held because" in publish_memory(a, "later.md")
     assert not remote_has_config(remote)
+
+
+def test_the_automatic_publications_after_a_retired_hold_never_force_over_another_checkout(three, monkeypatch):
+    winner, settler, remote = three
+    git(winner.shared.root, "config", "remote.origin.push", FORCED)
+    before = config_bytes(winner)
+    real, pushes, owner_head = data_repo._git, [], []  # noqa: SLF001 - the publisher's own Git calls are the boundary
+
+    def spy(cwd, *args, until=None):
+        if armed and cwd == winner.shared.root and args[:1] == ("push",):
+            pushes.append(args)
+            if len(pushes) == 1:  # the fill landed; this is the run's next automatic push
+                assert remote_has_config(remote)  # the checked fill was published, so its hold retired
+                assert not publication_hold.recorded(winner.shared, None)
+                complete_and_delete(settler)
+                owner_head.append(git(settler.shared.root, "rev-parse", "HEAD"))
+        return real(cwd, *args, until=until)
+
+    armed, fill = [], winner.update_config
+
+    def after_the_fill(change, what="project layer", on_written=None):
+        done = fill(change, what, on_written)
+        armed.append(True)
+        return done
+
+    monkeypatch.setattr(winner, "update_config", after_the_fill)
+    monkeypatch.setattr(data_repo, "_git", spy)
+    prefs_import.run(winner)  # its rejected non-forced push rebases onto the other checkout's state: a safe resync
+
+    assert owner_head  # the other checkout's completion and deletion really landed in between
+    assert git(remote, "--git-dir=.", "merge-base", "--is-ancestor", owner_head[0], "main") == ""  # not overwritten
+    assert remote_marker(remote) == "done"
+    assert not remote_has_config(remote)  # the owner's deletion stands
+    assert config_bytes(winner) == before
+    assert pushes
+    assert all(args[-1] == "HEAD:refs/heads/main" and "+" not in " ".join(args) for args in pushes)

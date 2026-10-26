@@ -1,16 +1,17 @@
 """An automatic change bound to the shared remote's state until the remote has it (R15, FND-01).
 
 Some automatic changes stand only while the shared remote still holds what they were prepared against: the legacy
-preference import fills the project config only under its own pending claim, and the role move only over the config
-it read. Before such a change is written, its checkout records in its own Git folder what the remote must hold: the
+preference import fills the project config only under its own pending claim, and the role move only over the config it
+read. Before such a change is written, its checkout records in its own Git folder what the remote must hold: the
 upstream commit it just caught up with, after which no remote commit may change the file (one that changed and changed
-back still did), that file's blob, and, when named, the fields another file must keep. While that record stands,
-nothing in the checkout is pushed or rebased before the freshly fetched remote is checked against it, and a push runs
-only as one non-forced refspec to that same upstream branch, so Git accepts it only as a fast-forward of the very
-revision that was checked. A remote that no longer meets the record holds the checkout: nothing is pushed or rebased,
-the refusal is kept in the record and reported, and nothing in Git is undone. The record lapses only once the checkout
-itself holds no change of the file the remote lacks: no unpushed commit touches it and its copies are the committed
-one. A record that cannot be read or is malformed is kept as it is and holds.
+back still did), that file's blob, and, when named, the fields another file must keep. While that record stands, nothing
+in the checkout is pushed or rebased before the freshly fetched remote is checked against it, and a push runs only as
+one non-forced refspec to that same upstream branch, so Git accepts it only as a fast-forward of the very revision that
+was checked. Every push of the checkout runs so, held or not: an automatic publication that follows a retired record
+never falls back to a configured forced push. A remote that no longer meets the record holds the checkout: nothing is
+pushed or rebased, the refusal is kept in the record and reported, and nothing in Git is undone. The record lapses only
+once the checkout itself holds no change of the file the remote lacks: no unpushed commit touches it and its copies are
+the committed one. A record that cannot be read or is malformed is kept as it is and holds.
 """
 
 from __future__ import annotations
@@ -289,10 +290,22 @@ def check(repo: DataRepo, until: float | None, *, fetch: bool) -> str:
 def pushing(repo: DataRepo, push: Sequence[str], until: float | None) -> tuple[str, tuple[str, ...]]:
     """Why the git *push* may not run, after fetching and checking as `check` does; else the push to run.
 
-    While a change is held, the push must also be proven to land on the upstream branch the record was checked on,
-    and a plain push runs as that one non-forced refspec. With nothing held, the push runs as it is.
+    Every push of the shared checkout, whether a change is held or not, must be proven to land on the upstream branch
+    it reads and rebases from, and a plain push runs as that one non-forced refspec: a configured forced or matching
+    push never overwrites another checkout's work, and a held change's checks still apply once its record retires.
     """
     return _checked(repo, until, fetch=True, push=tuple(push))
+
+
+def _bound(repo: DataRepo, push: tuple[str, ...], until: float | None) -> tuple[str, tuple[str, ...]]:
+    """The push to run with no change held: refused, never redirected, when it cannot be proven to land upstream."""
+    if not push:
+        return "", push
+    try:
+        why, run = _target(repo, push, until)
+    except _UnknownError as exc:
+        why, run = f"its destination cannot be told: {exc}", ()
+    return (f"nothing was pushed from {repo.root}: this push {why}", ()) if why else ("", run)
 
 
 def _checked(repo: DataRepo, until: float | None, *, fetch: bool, push: tuple[str, ...]) -> tuple[str, tuple[str, ...]]:
@@ -300,12 +313,12 @@ def _checked(repo: DataRepo, until: float | None, *, fetch: bool, push: tuple[st
         path = _path(repo, until)
         held = _load(path)
         if held is None:
-            return "", push
+            return _bound(repo, push, until)
         if fetch:
             _run(repo, until, "fetch", "-q")
         if _lapsed(repo, held, until):
             path.unlink(missing_ok=True)
-            return "", push
+            return _bound(repo, push, until)
         why = _unmet(repo, held, until)
         ahead = _changes(repo, str(held["watch"]), until)
         elsewhere, run = _target(repo, push, until) if push and not why else ("", push)
