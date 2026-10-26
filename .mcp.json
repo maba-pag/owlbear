@@ -4,6 +4,7 @@
       "type": "stdio",
       "command": "${HOME}/.owlbear/runtime/.venv/bin/python",
       "args": ["-m", "owlbear_delivery_next", "serve", "browser"],
+      "env": { "BROWSER_ALLOWED_DOMAINS": "*" },
       "tools": ["*"]
     },
     "owlbear-delivery": {
