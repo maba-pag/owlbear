@@ -5,26 +5,17 @@ import contextlib
 import dataclasses
 import json
 import os
-import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 from owlbear_memory import MemoryEntry, MemoryState, selection, storage
 
-from owlbear_delivery_next.change_contracts import tools
-from owlbear_delivery_next.change_contracts.models import Brief, Change, Names, Plan, Step, StepKind, Task
+from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_contracts.tools import Worktree
-from owlbear_delivery_next.change_flow import repairs
-from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.local_system import preload
-from owlbear_delivery_next.local_system.processes import Termination
-from owlbear_delivery_next.runtimes import host_record, lessons, sdk_adapter, sdk_usage, step_input, vscode_adapter
-from owlbear_delivery_next.runtimes.session_result import Run
-from owlbear_delivery_next.runtimes.vscode_contract import Outcome
-from owlbear_delivery_next.state_store.store import Lock, Store
-from owlbear_delivery_next.workflow_steps import session_choice
+from owlbear_delivery_next.runtimes import lessons, sdk_adapter, sdk_usage, step_input
 
 PRODUCING = ("builder", "planner", "preparer", "updater", "test-curator")
 RECALLING = (*PRODUCING, "reviewer", "challenger", "design-judge", "test-reviewer")
@@ -357,136 +348,3 @@ def test_a_resumed_sdk_session_gets_no_lessons_again(memory: Path, monkeypatch) 
         assert client.created == []
         assert lessons.HEADING not in client.sends[0]
         assert client.sends[0].endswith(sent)
-
-
-# --- every window chat is new: a step's start and a repair chance's fallback ---
-
-
-def git(cwd: Path, *args: str) -> str:
-    done = subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True)  # noqa: S603, S607
-    return done.stdout.strip()
-
-
-@pytest.fixture
-def clone(tmp_path: Path, monkeypatch) -> Path:
-    (tmp_path / "gitconfig").write_text("")
-    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(tmp_path / "gitconfig"))
-    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
-    for who in ("AUTHOR", "COMMITTER"):
-        monkeypatch.setenv(f"GIT_{who}_NAME", "t")
-        monkeypatch.setenv(f"GIT_{who}_EMAIL", "t@t")
-    work = tmp_path / "work"
-    work.mkdir()
-    git(work, "init", "-q", "-b", "owlbear/c1")
-    (work / "a.txt").write_text("a\n")
-    git(work, "add", "-A")
-    git(work, "commit", "-qm", "base")
-    monkeypatch.setattr(runner.worktree, "ensure", lambda *_a: work)
-    return work
-
-
-@pytest.fixture
-def window(tmp_path: Path, clone: Path, memory: Path, monkeypatch) -> SimpleNamespace:
-    """Runs every step session in a VS Code window whose host records each new chat's first prompt.
-
-    ``starts`` False: the host never starts the prompt's turn; ``reachable`` False: no editor answers.
-    """
-    seen = SimpleNamespace(prompts=[], sessions=[], starts=True, reachable=True)
-
-    class Chat:
-        def __init__(self, _conn: object, spec: object, _approve: object, **_hooks: object) -> None:
-            seen.prompts.append(spec.prompt)
-            self.announced: dict[str, str] = {}
-
-        def run(self, control: object, *, limit: float) -> Outcome:  # noqa: ARG002
-            if not seen.starts:
-                return Outcome("error", "the host refused the turn")
-            control.started.set()
-            return Outcome("complete")
-
-    def connect(_folder: Path) -> SimpleNamespace:
-        if not seen.reachable:
-            raise ConnectionRefusedError
-        return SimpleNamespace()
-
-    env = vscode_adapter.Env(
-        connect=connect,
-        settle=lambda *_a: Termination(confirmed=True),
-        reminder="Call submit_result.",
-        record=lambda *_a: host_record.Record(found=False, why="no host record"),
-    )
-
-    def run(_store: Store, cfg: sdk_adapter.Session, **_kw: object) -> Run:
-        seen.sessions.append(cfg.session_id)
-        vscode_adapter.run(dataclasses.replace(cfg, model="gpt-6-luna"), tmp_path / "steps" / "1.json", env)
-        done = Run(
-            cfg.session_id,
-            "result",
-            tools.BuildResult(summary="Fixed b.", checks=[]),
-            head=git(clone, "rev-parse", "HEAD"),
-        )
-        done.termination, done.usage = Termination(confirmed=True), {"models": {}}
-        return done
-
-    monkeypatch.setattr(vscode_adapter, "Step", Chat)
-    monkeypatch.setattr(session_choice, "in_window", lambda _profile: True)
-    monkeypatch.setattr(runner.sessions, "run", run)
-    monkeypatch.setattr(runner.sessions, "memory", lambda _store: memory)
-    keep(memory, entry(1))
-    (tmp_path / "steps").mkdir()
-    return seen
-
-
-def stepped(tmp_path: Path, clone: Path, *tasks: Task, at: str) -> Store:
-    store = Store(tmp_path / "store")
-    c = Change(
-        slug="c1", brief=Brief(version=1), plan=Plan(tasks=list(tasks)), names=Names(branch="owlbear/c1", target="main")
-    )
-    c.step = Step(kind=StepKind.BUILD, task=at)
-    store.write(Lock("c1"), c)
-    runner._step(store, Lock("c1"), c, c.step, clone)  # noqa: SLF001
-    return store
-
-
-def exposures(store: Store) -> list[dict]:
-    return [e for e in store.events("c1") if e.get("event", "").startswith("lessons")]
-
-
-def test_a_window_step_starts_its_chat_with_the_lessons(tmp_path: Path, clone: Path, window: SimpleNamespace) -> None:
-    store = stepped(tmp_path, clone, Task(id="t1", title="one"), at="t1")
-    assert len(window.prompts) == 1
-    assert window.prompts[0].startswith(f"{lessons.HEADING}\n{lessons.FRAME}")
-    assert "## Task t1: one" in window.prompts[0]
-    ref = [{"id": entry(1).id, "revision": entry(1).revision}]
-    logged = [{k: v for k, v in e.items() if k != "at"} for e in exposures(store)]
-    sent = exposed(window.sessions[0], entry(1).id, event="lessons-sent")  # the host never acknowledges the start
-    assert logged == [selected(status="shown", lessons=ref), sent]
-
-
-@pytest.mark.parametrize("failure", ["starts", "reachable"])
-def test_a_window_whose_turn_never_starts_logs_no_exposure(
-    tmp_path: Path, clone: Path, window: SimpleNamespace, failure: str
-) -> None:
-    setattr(window, failure, False)
-    store = stepped(tmp_path, clone, Task(id="t1", title="one"), at="t1")
-    expected = ["lessons-selected"] if failure == "starts" else []  # no editor: no prompt was even made
-    assert [e["event"] for e in exposures(store)] == expected
-
-
-def test_a_window_repair_falls_back_to_a_fresh_chat_that_gets_the_lessons(
-    tmp_path: Path, clone: Path, window: SimpleNamespace
-) -> None:
-    store = stepped(
-        tmp_path,
-        clone,
-        Task(id="t1", title="one", built_by="s-build", earlier="Added b.", done=True),
-        Task(id="f1", title="fix", origin="review", fixes="t1", resume="s-build", earlier="Added b."),
-        at="f1",
-    )
-    fell = [e for e in store.events("c1") if e.get("event") == "repair-fallback"]
-    assert [e["session"] for e in fell] == ["s-build"]
-    assert len(window.prompts) == 1
-    assert window.prompts[0].startswith(lessons.HEADING)
-    assert window.prompts[0].endswith(repairs.EARLIER.format("Added b."))
-    assert [e["event"] for e in exposures(store)] == ["lessons-selected", "lessons-sent"]
-    assert exposures(store)[1]["session"] == fell[0]["fresh"]

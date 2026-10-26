@@ -10,8 +10,7 @@ for a call under no parent (the step's own agent, as the model check counts it),
 
 Watched: every Change-owned session, each in its own folder: the runner's steps, the brief and plan rounds,
 reconsideration, the amendment challenge, the visual and design judges and a test review's shares. Not watched: the
-decision picker and lookups (read-only, no Change worktree), memory curation and design-pack runs (machine sessions),
-and window steps until they reopen (slice 8).
+decision picker and lookups (read-only, no Change worktree), memory curation and design-pack runs (machine sessions).
 """
 
 from __future__ import annotations

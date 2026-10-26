@@ -192,6 +192,28 @@ def spotter_switched(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+def window_runtime_dropped(data: dict[str, Any]) -> dict[str, Any]:
+    """Settings format 14 to 15: the window runtime's switches and per-agent settings go (2026-10-26).
+
+    Only a VS Code window read the runtimes, the visibility and the tool categories; no step did, so none applied.
+    """
+    data.pop("runtimes", None)
+    data.pop("visible", None)
+    agents = data.get("agents")
+    if isinstance(agents, dict):
+        for agent in agents.values():
+            if isinstance(agent, dict):
+                for key in ("runtime", "visible", "categories"):
+                    agent.pop(key, None)
+    return data
+
+
+def runtime_switch_dropped(data: dict[str, Any]) -> dict[str, Any]:
+    """Profile format 4 to 5: the per-project runtime switch goes; steps run only through the SDK (2026-10-26)."""
+    data.pop("runtime", None)
+    return data
+
+
 def tests_added(data: dict[str, Any]) -> dict[str, Any]:
     """Change format 5 to 6: a test review's record and step (TD-373); older runtimes refuse format 6."""
     return data
@@ -216,7 +238,7 @@ CHANGE: Migrations = {
     6: waivers_added,
     7: held_records_added,
 }
-PROFILE: Migrations = {1: roles_moved, 2: prefs_import_added, 3: prefs_basis_added}
+PROFILE: Migrations = {1: roles_moved, 2: prefs_import_added, 3: prefs_basis_added, 4: runtime_switch_dropped}
 CONFIG: Migrations = {
     1: seed_dropped,
     2: judge_renamed,
@@ -231,4 +253,5 @@ CONFIG: Migrations = {
     11: spotter_renamed,
     12: prefs_added,
     13: spotter_switched,
+    14: window_runtime_dropped,
 }

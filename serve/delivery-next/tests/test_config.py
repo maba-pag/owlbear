@@ -25,33 +25,29 @@ def repo(tmp_path):
 
 
 def test_each_field_comes_from_the_project_else_the_global_layer_else_the_default():
-    glob = GlobalLayer(visible=True, agents={"builder": Agent(model="g-1", effort="high")}, widths=[1280, 1920])
-    proj = Layer(agents={"builder": Agent(effort="low")}, runtimes={"window": False})
+    glob = GlobalLayer(agents={"builder": Agent(model="g-1", effort="high")}, widths=[1280, 1920])
+    proj = Layer(agents={"builder": Agent(effort="low")})
     eff = resolve(glob, proj)
 
     b = eff.agents["builder"]
-    assert (b.model, b.effort, b.runtime, b.visible, b.categories, b.context) == (
-        "g-1", "low", "sdk", False, [], "default"
-    )  # fmt: skip
-    assert (eff.visible, eff.widths, eff.runtimes) == (True, [1280, 1920], {"sdk": True, "window": False})
+    assert (b.model, b.effort, b.context) == ("g-1", "low", "default")
+    assert eff.widths == [1280, 1920]
     assert eff.agents["reviewer"].model == carried.MODELS["reviewer"].model
     assert eff.sources["agents.builder.model"] == "global"
     assert eff.sources["agents.builder.effort"] == "project"
     assert eff.sources["agents.reviewer.model"] == "default"
-    assert eff.sources["runtimes.window"] == "project"
     assert resolve(None, Layer()).widths == [1280, 1920, 2400]
 
 
 def test_an_empty_list_clears_false_disables_and_only_none_inherits():
-    glob = GlobalLayer(
-        agents={"reviewer": Agent(categories=["browser"], context="long", visible=True)}, runtimes={"window": False}
-    )
-    proj = Layer(agents={"reviewer": Agent(categories=[], context="default", visible=False)})
-    r = resolve(glob, proj).agents["reviewer"]
+    glob = GlobalLayer(agents={"reviewer": Agent(context="long")}, pr_labels=["owlbear"], pr_marker=True)
+    proj = Layer(agents={"reviewer": Agent(context="default")}, pr_labels=[], pr_marker=False)
+    eff = resolve(glob, proj)
 
-    assert (r.categories, r.context, r.visible) == ([], "default", False)
-    assert resolve(glob, Layer()).agents["reviewer"].categories == ["browser"]
-    assert resolve(glob, Layer()).runtimes["window"] is False
+    assert (eff.agents["reviewer"].context, eff.pr_labels, eff.pr_marker) == ("default", [], False)
+    inherited = resolve(glob, Layer())
+    assert (inherited.agents["reviewer"].context, inherited.pr_labels) == ("long", ["owlbear"])
+    assert inherited.pr_marker is True
 
 
 @pytest.mark.parametrize(
@@ -176,11 +172,28 @@ def test_an_invalid_save_writes_nothing(repo):
 def test_the_global_layer_is_read_and_saved_where_the_caller_says(tmp_path):
     path = tmp_path / "global" / "config.json"
     assert read_layer(path, GlobalLayer) == GlobalLayer()
-    update_layer(path, GlobalLayer, lambda cur: cur.model_copy(update={"visible": True}))
-    assert read_layer(path, GlobalLayer).visible is True
+    update_layer(path, GlobalLayer, lambda cur: cur.model_copy(update={"pr_marker": False}))
+    assert read_layer(path, GlobalLayer).pr_marker is False
     path.write_text(json.dumps({"format": 99}))
     with pytest.raises(StoreError, match="newer"):
         read_layer(path, GlobalLayer)
+
+
+def test_a_stored_layer_from_before_the_window_runtime_loads_without_its_settings(tmp_path):
+    path = tmp_path / "global" / "config.json"
+    path.parent.mkdir(parents=True)
+    old = {
+        "format": 12,
+        "widths": [1600],
+        "runtimes": {"sdk": True, "window": False},
+        "visible": True,
+        "agents": {"builder": {"model": "g-1", "runtime": "vscode", "visible": False, "categories": ["browser"]}},
+    }
+    path.write_text(json.dumps(old))
+
+    layer = read_layer(path, GlobalLayer)
+    assert (layer.format, layer.widths, layer.agents["builder"]) == (13, [1600], Agent(model="g-1"))
+    assert not {"runtimes", "visible"} & set(layer.model_dump())
 
 
 @pytest.mark.parametrize("damaged", [b"", b'{"format": 1, "agents": {"builder": {"model": "x\xff"}}}'])
@@ -221,10 +234,9 @@ def test_a_format_1_profile_moves_its_roles_into_the_project_config_once(repo, f
     assert roles.chosen(store.settings(), StepKind.REVIEW) == RoleModel(model="r-1", effort="max")
     assert roles.chosen(store.settings(), StepKind.PLAN) == carried.MODELS["planner"]
     prof = store.read_profile()
-    assert (prof.format, prof.version, prof.runtime, prof.entries["rules"].evidence) == (
-        PROFILE_FORMAT, 3, "vscode", "HTTP 403"
-    )  # fmt: skip
+    assert (prof.format, prof.version, prof.entries["rules"].evidence) == (PROFILE_FORMAT, 3, "HTTP 403")
     assert "roles" not in prof.model_dump()
+    assert "runtime" not in prof.model_dump()  # the per-project runtime switch goes (format 5)
     saved = (root / "config.json").read_text()
     Store.open(repo).read_profile()
     assert (root / "config.json").read_text() == saved

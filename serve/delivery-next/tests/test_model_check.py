@@ -8,10 +8,9 @@ from types import SimpleNamespace
 from owlbear_delivery_next.change_contracts.models import Exit, StepKind
 from owlbear_delivery_next.change_contracts.spend import ModelSpend, Spend
 from owlbear_delivery_next.local_system.processes import Termination
-from owlbear_delivery_next.runtimes import sdk_adapter, sdk_usage, subagents, vscode_adapter
+from owlbear_delivery_next.runtimes import sdk_adapter, sdk_usage, subagents
 from owlbear_delivery_next.runtimes.results import Gate
 from owlbear_delivery_next.runtimes.session_result import Run, to_result
-from owlbear_delivery_next.runtimes.vscode_contract import Outcome
 from owlbear_delivery_next.workflow_steps import sessions
 
 NOW = datetime(2026, 10, 15, 2, tzinfo=UTC)
@@ -104,21 +103,6 @@ def test_only_a_judges_verdict_is_held_for_its_round_and_any_other_unproven_endi
     verdict = Run("v", ending="result", payload=object(), usage_unread="x", termination=done)
     asked = Run("a", ending="ask", payload=object(), usage_unread="x", termination=done)
     assert (sessions.held(verdict), sessions.held(asked)) == (True, False)
-
-
-def test_a_window_result_needs_a_usage_report_naming_the_steps_model() -> None:
-    run = Run("w", ending="result", runtime="window")
-    vscode_adapter._proven(run, Outcome("complete", tokens={}), MODEL)  # noqa: SLF001
-    assert (run.model_check, run.usage_unread) == (
-        "unknown",
-        "no usage report of the window named the step's model gpt-6-luna",
-    )
-    run = Run("w", ending="result", runtime="window")
-    vscode_adapter._proven(run, Outcome("complete", tokens={MODEL: 120}), MODEL)  # noqa: SLF001
-    assert (run.model_check, run.usage_unread) == ("verified", "")
-    wrong = Run("w", ending="error", runtime="window", model_check="mismatch")
-    vscode_adapter._proven(wrong, Outcome("wrong-model", tokens={"gpt-6-sol": 9}), MODEL)  # noqa: SLF001
-    assert (wrong.model_check, wrong.usage_unread) == ("mismatch", "")
 
 
 def test_unread_credits_make_the_total_a_lower_bound_until_the_session_reports_them() -> None:

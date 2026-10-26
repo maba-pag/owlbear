@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from owlbear_delivery_next.change_contracts import permissions, profile_record, tools
+from owlbear_delivery_next.change_contracts import permissions, tools
 from owlbear_delivery_next.change_contracts.inbox import AnswerItem, IntentItem
 from owlbear_delivery_next.change_contracts.models import (
     Brief,
@@ -27,7 +27,7 @@ from owlbear_delivery_next.change_flow import brief_rounds, budgets, loop, plan_
 from owlbear_delivery_next.change_flow.loop import StepResult
 from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.local_system.processes import Termination
-from owlbear_delivery_next.runtimes import missing, sdk_adapter, step_input, window_files
+from owlbear_delivery_next.runtimes import missing, sdk_adapter, step_input
 from owlbear_delivery_next.runtimes.session_result import Run, to_result
 from owlbear_delivery_next.workflow_steps import brief_round, conversation, plan_round
 
@@ -131,29 +131,22 @@ def test_a_temporary_failure_retries_at_once_then_after_growing_pauses() -> None
     assert error in c.questions[-1].text  # the owner sees the real error, not the stable reason
 
 
-def test_a_tool_of_another_runtime_asks_since_delivery_does_not_rerun_there_yet(monkeypatch) -> None:
-    monkeypatch.setattr(profile_record, "WINDOW_PAUSED", False)
-    r = to_result(run(report("browser", "no browser tool in this session")), K.BUILD, NOW)
-    assert (r.exit, r.cause) == (Exit.ASK, "project-env:build:tool-browser")
-    assert "only in the window runtime; this step ran in the sdk runtime" in r.question.text
-    assert options(r) == [("switched", "retry"), ("replan", K.PLAN), ("pause", "pause")]
+@pytest.mark.parametrize("tool", ["browser", "openBrowserPage", "open_browser_page", "get_errors", "get_task_output"])
+def test_a_window_only_tool_asks_the_owner_by_name_and_no_other_runtime_runs_the_step(tool) -> None:
+    r = to_result(run(report(tool, "unknown tool")), K.BUILD, NOW)
+    assert (r.exit, r.cause, r.operational) == (Exit.ASK, f"project-env:build:tool-{missing.slug(tool)}", True)
+    assert r.question.text == (
+        f"{tool} exists only in a VS Code window; Delivery steps run only through the SDK. "
+        f"The step needs {tool} for run the integration tests: unknown tool"
+    )
+    assert options(r) == [("replan", K.PLAN), ("pause", "pause")]  # no switch to another runtime
+
+
+def test_a_window_only_tool_changes_the_plan_or_the_brief_only_where_they_can_change() -> None:
     plan = to_result(run(report("openBrowserPage", "unknown tool")), K.PLAN, NOW)
-    assert options(plan)[1] == ("revise", K.SHAPE)
+    assert options(plan) == [("revise", K.SHAPE), ("pause", "pause")]
     brief = to_result(run(report("open_browser_page", "unknown tool")), K.REVIEW, NOW, K.SHAPE)
-    assert options(brief) == [("switched", "retry"), ("pause", "pause")]  # the brief changes only in chat
-    task = to_result(run(report("get_task_output", "unknown tool")), K.BUILD, NOW)
-    assert (task.exit, task.cause) == (Exit.ASK, "project-env:build:tool-get-task-output")
-
-
-def test_a_window_tool_offers_no_switch_while_window_steps_are_paused() -> None:
-    r = to_result(run(report("browser", "no browser tool in this session")), K.BUILD, NOW)
-    assert (r.exit, r.cause) == (Exit.ASK, "project-env:build:tool-browser")
-    assert profile_record.PAUSED_NOTE in r.question.text
-    assert options(r) == [("replan", K.PLAN), ("pause", "pause")]
-    brief = to_result(run(report("open_browser_page", "unknown tool")), K.REVIEW, NOW, K.SHAPE)
-    assert options(brief) == [("pause", "pause")]
-    there = to_result(run(report("get_errors", "the tool failed"), runtime="window"), K.BUILD, NOW)
-    assert there.exit == Exit.BACK  # the window runtime has it; it is still missing, so nowhere fits
+    assert options(brief) == [("pause", "pause")]  # the brief changes only in chat
 
 
 @pytest.mark.parametrize(
@@ -274,8 +267,7 @@ def test_denials_record_the_programs_they_name() -> None:
     assert st.run.denied == {}  # a later allowed use of the program supersedes its denial
 
 
-def test_a_conversation_task_missing_a_tool_asks_instead_of_replanning(monkeypatch) -> None:
-    monkeypatch.setattr(profile_record, "WINDOW_PAUSED", False)
+def test_a_conversation_task_missing_a_tool_asks_instead_of_replanning() -> None:
     ref = ItemRef(id="t1", kind="thread", version="v", task="pr-t1-v", url="https://x/pull/7#r1")
     task = Task(id="pr-t1-v", title="answer", item=ref, detail="boecht: add a docker test\n\nhttps://x/pull/7#r1")
     p = report("matlab", "matlab: license server unknown")
@@ -283,8 +275,8 @@ def test_a_conversation_task_missing_a_tool_asks_instead_of_replanning(monkeypat
     assert (asked.exit, [o.next for o in asked.question.options]) == (Exit.ASK, [K.BUILD, K.BUILD, "pause"])
     assert "needs matlab" in asked.question.text
     other = report("browser", "no browser tool in this session")
-    switch = conversation.disputed(task, other, to_result(run(other), K.BUILD, NOW))
-    assert options(switch) == [("switched", "retry"), ("decline", K.BUILD), ("pause", "pause")]
+    window = conversation.disputed(task, other, to_result(run(other), K.BUILD, NOW))
+    assert options(window) == [("decline", K.BUILD), ("pause", "pause")]
 
 
 @pytest.fixture
@@ -331,7 +323,6 @@ def test_a_failed_shelve_asks_the_owner_before_any_planner_runs(tmp_path) -> Non
     loop.apply(change(K.PLAN), asked, NOW)
 
 
-def test_prompts_and_window_note_name_the_report() -> None:
+def test_prompts_name_the_report() -> None:
     assert "report_missing_tool" in step_input.FINISH
     assert "report_missing_tool" in step_input.reminder("builder")
-    assert "report_missing_tool" in window_files.tools_note("builder")

@@ -28,7 +28,7 @@ from owlbear_delivery_next.runtimes import session_result
 from owlbear_delivery_next.runtimes.results import Gate
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.state_store.store import Lock, Store
-from owlbear_delivery_next.workflow_steps import plan_round, session_choice
+from owlbear_delivery_next.workflow_steps import plan_round
 
 NOW = datetime(2026, 10, 16, 3, tzinfo=UTC)
 K = StepKind
@@ -239,24 +239,6 @@ def test_a_missing_producer_falls_back_to_a_fresh_session_without_charging_a_bud
     assert [e["session"] for e in fell] == ["s-build"]
     assert task(after, "f1").built_by == fell[0]["fresh"] != "s-build"
     assert session_result.missing_cause(K.BUILD) not in after.budgets.causes
-
-
-def test_the_window_gives_a_repair_chance_to_a_fresh_session_and_records_the_fallback(tmp_path, clone, monkeypatch):
-    store, c = repairing(tmp_path)
-    seen = []
-
-    def window(_store, cfg, **_kw):
-        seen.append(cfg)
-        return built_run(cfg, git(clone, "rev-parse", "HEAD"))
-
-    monkeypatch.setattr(session_choice, "in_window", lambda _profile: True)  # the window cannot resume a chat
-    monkeypatch.setattr(runner.sessions, "run", window)
-    runner._step(store, Lock("c1"), c, c.step, clone)  # noqa: SLF001
-    fell = [e for e in store.events("c1") if e.get("event") == "repair-fallback"]
-    assert [e["session"] for e in fell] == ["s-build"]
-    assert (seen[0].session_id, seen[0].resume) == (fell[0]["fresh"], False)
-    assert seen[0].message.endswith(repairs.EARLIER.format("Added b."))
-    assert task(store.read("c1"), "f1").built_by == fell[0]["fresh"]
 
 
 def test_an_answered_repair_session_keeps_its_free_fallback(tmp_path, clone, monkeypatch):

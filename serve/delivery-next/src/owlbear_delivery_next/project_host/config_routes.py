@@ -23,7 +23,6 @@ from owlbear_delivery_next.local_system import data_repo
 from owlbear_delivery_next.local_system.data_repo import DataRepoError
 from owlbear_delivery_next.project_host import memory_routes
 from owlbear_delivery_next.runtimes import model_choices
-from owlbear_delivery_next.runtimes.catalogue import CATALOGUE
 from owlbear_delivery_next.settings.config import GlobalLayer, Layer, MachineLayer, resolve
 from owlbear_delivery_next.state_store import prefs_import, profile_share
 from owlbear_delivery_next.state_store.store import StoreError, read_layer_bytes, update_layer
@@ -144,7 +143,6 @@ def _state(store: Store, notice: str = "") -> dict[str, Any]:
             "global": resolve(None, Layer()).page(),
         },
         "applied": APPLIED,
-        "catalogue": CATALOGUE,
         "agreement": _agreement(store),
         "design_pack": pack_update.said(pack_update.notice(refresh=False)),  # never online; setup refreshes it
     }

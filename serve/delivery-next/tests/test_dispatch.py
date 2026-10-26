@@ -22,7 +22,6 @@ def started(*args: str) -> subprocess.CompletedProcess[str]:
         (["run", "--help"], "usage: python -m owlbear_delivery_next run"),
         (["mcp", "--help"], "usage: python -m owlbear_delivery_next mcp"),
         (["serve", "--help"], "usage: python -m owlbear_delivery_next serve"),
-        (["step-mcp", "--help"], "usage: python -m owlbear_delivery_next step-mcp"),
     ],
 )
 def test_each_process_starts_through_the_dispatcher(args, prog) -> None:

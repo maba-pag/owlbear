@@ -1,16 +1,15 @@
 """Pre-flight lessons: what a newly created step conversation is told from memory first (TD-70, TD-241).
 
 Delivery reads the project's memory folder and the shared repository's Global memory itself, never through the
-memory server, and selects with the memory package's policy (``owlbear_memory.selection``). Each conversation it
-creates gets them once, ahead of its first message: a fresh SDK session or its replacement, and every window chat,
-a repair's fallback included; a resumed SDK session gets nothing. Delivering them is the role's startup recall; when
-the read fails or nothing fits, the message says so and the agent recalls with its own tool. A role without the
-recall tool, or a step without memory, gets nothing. The step's activity logs the selection when it is made, with
-every eligible lesson left out and why, then what the conversation was given. An SDK session's is
-``lessons-shown``, confirmed: its first message was sent and acknowledged. A window chat's is ``lessons-sent``,
-unconfirmed: Delivery dispatched the turn's start but the host does not acknowledge it, so window exposure stays
-unconfirmed until window steps reopen, and measurement counts only ``lessons-shown``. A read that skipped
-unreadable entries is incomplete: the agent recalls itself, as after a failed read.
+memory server, and selects with the memory package's policy (``owlbear_memory.selection``). Each SDK conversation it
+creates gets them once, ahead of its first message: a fresh session or its replacement, a repair's fallback included;
+a resumed session gets nothing. Delivering them is the role's startup recall; when the read fails or nothing fits, the
+message says so and the agent recalls with its own tool. A role without the recall tool, or a step without memory,
+gets nothing. The step's activity logs the selection when it is made, with every eligible lesson left out and why,
+then what the conversation was given. A session's exposure is ``lessons-shown``, confirmed: its first message was sent
+and acknowledged. Earlier builds logged window chats as ``lessons-sent``, unconfirmed; that historical record is still
+valid, and measurement counts only ``lessons-shown``. A read that skipped unreadable entries is incomplete: the agent
+recalls itself, as after a failed read.
 """
 
 from __future__ import annotations
@@ -81,7 +80,8 @@ def opening(role: str, memory: Path | None, message: str, log: Callable[..., Non
 def shown(exposure: Exposure | None, session: str, log: Callable[..., None], *, confirmed: bool = True) -> None:
     """Log what the conversation *session* was given: ``lessons-shown`` once its first message was acknowledged.
 
-    Unconfirmed, ``lessons-sent``: the message was dispatched without an acknowledgement, as a window turn's start.
+    Unconfirmed, ``lessons-sent``: the message was dispatched without an acknowledgement; earlier builds logged window
+    chats that way.
     """
     if exposure is not None:
         log(

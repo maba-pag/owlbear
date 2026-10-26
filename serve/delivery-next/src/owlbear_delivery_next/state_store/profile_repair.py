@@ -13,13 +13,14 @@ import json
 import os
 import stat
 import uuid
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from owlbear_delivery_next.change_contracts.profile_record import PROFILE_FORMAT, Profile
 from owlbear_delivery_next.local_system import data_repo
 from owlbear_delivery_next.local_system.storage_io import atomic_write, open_lock
+from owlbear_delivery_next.settings import migrations
 from owlbear_delivery_next.state_store import profile_share, roles_move
 from owlbear_delivery_next.state_store.profile_errors import (
     Basis,
@@ -137,14 +138,31 @@ def _read(store: Store) -> Receipt | None:
     if len(raw) > RECEIPT_LIMIT:
         msg = f"the pending profile repair is too large to be a receipt: {receipt}; remove it, then run setup again"
         raise StoreError(msg)
+    return _receipt(raw, receipt)
+
+
+def _receipt(raw: bytes, receipt: Path) -> Receipt:
+    """The receipt as written: its profile migrates forward like a saved profile, then the receipt is checked."""
+    from owlbear_delivery_next.state_store.store import StoreError  # noqa: PLC0415 - the store imports this module
+
     try:
-        return Receipt.model_validate_json(raw)
-    except ValidationError as exc:
+        data = json.loads(raw)
+        if isinstance(data, dict) and isinstance(data.get("profile"), dict):
+            data["profile"] = _embedded(data["profile"])
+        return Receipt.model_validate(data)
+    except (ValueError, StoreError) as exc:  # a ValidationError is a ValueError; a refused profile is a StoreError
         msg = (
             f"the pending profile repair is malformed or from another version: {receipt}; "
             "remove it to confirm the replacement again"
         )
         raise StoreError(msg) from exc
+
+
+def _embedded(raw: dict[str, Any]) -> Profile:
+    """The profile a receipt embeds, read as a saved profile is: migrated forward; newer or malformed is refused."""
+    from owlbear_delivery_next.state_store.store import _parse  # noqa: PLC0415 - circular at import time
+
+    return _parse(json.dumps(raw), "the embedded profile", Profile, PROFILE_FORMAT, migrations.PROFILE)
 
 
 @dataclasses.dataclass

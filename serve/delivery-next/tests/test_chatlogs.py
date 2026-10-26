@@ -13,7 +13,7 @@ from types import SimpleNamespace
 import pytest
 
 from owlbear_delivery_next.local_system.processes import Termination
-from owlbear_delivery_next.runtimes import chatlogs, host_record, vscode_adapter
+from owlbear_delivery_next.runtimes import chatlogs
 from owlbear_delivery_next.runtimes.session_result import Run
 
 
@@ -218,19 +218,6 @@ def test_a_switch_an_exit_interrupted_is_recovered_before_the_next_capture(tmp_p
     assert json.loads((folder / "s13" / "sidecar.json").read_text())["copied_at"] >= first["copied_at"]
 
 
-def test_a_window_step_interrupted_gets_its_ending_line(monkeypatch):
-    class Boom(SimpleNamespace):
-        def step(self, _inbox):
-            raise KeyboardInterrupt
-
-    monkeypatch.setattr(vscode_adapter, "_Driver", lambda *_a: Boom())
-    cfg = SimpleNamespace(session_id="w1", kind=SimpleNamespace(value="build"), role="builder", job="", worktree="/w",
-                          model=None)  # fmt: skip
-    with pytest.raises(KeyboardInterrupt):
-        vscode_adapter.run(cfg, Path("/inbox"), SimpleNamespace())
-    assert [(e["event"], e.get("ending")) for e in _manifest()] == [("started", None), ("ended", "interrupted")]
-
-
 def test_a_session_without_a_record_is_said_missing(tmp_path):
     said = chatlogs.capture("nowhere", provisional=False, records=tmp_path)
     assert (said["missing"], (chatlogs.root() / "chatlogs" / "nowhere" / "sidecar.json").exists()) == (True, True)
@@ -304,28 +291,6 @@ def test_a_failing_capture_never_fails_the_step(monkeypatch, capsys):
     chatlogs.kept("s5", "finished", provisional=False)
     assert "s5 not captured (OSError: [Errno 28] disk full)" in capsys.readouterr().err
     assert _manifest()[-1]["session"] == "s5"
-
-
-def test_a_window_step_maps_its_session_to_the_host_s_record(monkeypatch):
-    taken = []
-    monkeypatch.setattr(chatlogs, "capture", lambda s, *, provisional, **_k: taken.append((s, provisional)))
-    found = host_record.Record(found=True, tools=[], session="host-7")
-    vscode_adapter._kept("step-1", found, _run())  # noqa: SLF001
-    unmatched = host_record.Record(found=False, why="2 host records match the step")
-    vscode_adapter._kept("step-2", unmatched, _run())  # noqa: SLF001
-    events = _manifest()
-    assert (taken, events[0], events[2]["why"]) == (
-        [("host-7", False)], events[0] | {"event": "mapped", "session": "step-1", "record": "host-7"},
-        "2 host records match the step")  # fmt: skip
-
-
-def test_the_host_record_names_its_own_session(tmp_path):
-    start = datetime.now(UTC) - timedelta(seconds=1)
-    began = {"context": {"cwd": str(tmp_path)}, "startTime": datetime.now(UTC).isoformat()}
-    events = [{"type": "session.start", "data": began},
-              {"type": "subagent.selected", "data": {"agentName": "owlbear-builder", "tools": ["edit"]}}]  # fmt: skip
-    records = _records(tmp_path, "host-9", events)
-    assert host_record.read(tmp_path, start, "owlbear-builder", records).session == "host-9"
 
 
 def test_only_chats_in_an_enrolled_folder_are_read(tmp_path):

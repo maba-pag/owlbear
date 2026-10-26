@@ -1,7 +1,7 @@
 """The missing-tool report's five cases (TD-36), in order.
 
-A guard denial, owner setup, a temporary failure, another runtime, nowhere. Delivery never grants a tool and never
-reruns a step in another runtime yet (item 7).
+A guard denial, owner setup, a temporary failure, a tool only a VS Code window has, nowhere. Delivery never grants a
+tool, and a window-only tool is asked of the owner, naming it, never run elsewhere (D-01M5WG7TB1292KJ05CH0R11WE0).
 """
 
 from __future__ import annotations
@@ -9,11 +9,9 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
-from owlbear_delivery_next.change_contracts import profile_record
 from owlbear_delivery_next.change_contracts.failures import ENVIRONMENT, cause_key, transient
 from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, Option, Question, StepKind
 from owlbear_delivery_next.change_flow.loop import StepResult
-from owlbear_delivery_next.runtimes.catalogue import runtime_of
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -33,6 +31,24 @@ _ABSENT = (
     r"Executable doesn't exist at \S*{n}",
     r"(?:Cannot connect to|Is) the {n} daemon",
 )
+# The categories and tools only a VS Code window offers (runtime research P15 to P19). Delivery steps run only through
+# the SDK (D-01M5WG8RGCBKADW6XPGP0E2FAP), so a step that needs one is asked of the owner.
+WINDOW_ONLY = (
+    "browser", "problems", "tasks",
+    "openBrowserPage", "readPage", "screenshotPage", "navigatePage", "clickElement", "typeInPage", "hoverElement",
+    "dragElement", "handleDialog", "runPlaywrightCode", "get_errors", "runTask", "getTaskOutput", "createAndRunTask",
+)  # fmt: skip
+
+
+def _key(name: str) -> str:
+    """One spelling for a tool name: ``open_browser_page`` and ``openBrowserPage`` are the same tool."""
+    return re.sub(r"[^a-z0-9]", "", name.lower())
+
+
+def window_only(found: set[str]) -> bool:
+    """Whether one of *found* is a tool, or a category of tools, that only a VS Code window has."""
+    keys = {_key(n) for n in found}
+    return any(_key(name) in keys for name in WINDOW_ONLY)
 
 
 def names(tool: str) -> set[str]:
@@ -89,18 +105,9 @@ def classify(run: Run, p: MissingTool, enclosing: StepKind, now: datetime) -> St
             wake_at=now,
             operational=True,
         )
-    if (where := runtime_of(names(tool))) and where != run.runtime:
-        text = (
-            f"{tool} exists only in the {where} runtime; this step ran in the {run.runtime} runtime, and Delivery "
-            f"does not rerun steps there yet. Switch the project's runtime, or go on without it. The step needs {said}"
-        )
-        options = [Option(id="switched", label="Switched the runtime, run the step again", next="retry")]
-        if where == "window" and profile_record.WINDOW_PAUSED:
-            text, options = (
-                f"{tool} exists only in the window runtime: {profile_record.PAUSED_NOTE}. The step needs {said}",
-                [],
-            )
-        options += [*_without(enclosing, tool), PAUSE]
+    if window_only(names(tool)):
+        text = f"{tool} exists only in a VS Code window; Delivery steps run only through the SDK. The step needs {said}"
+        options = [*_without(enclosing, tool), PAUSE]
         return _ask(enclosing, text[:1500], cause_key(ErrorKind.PROJECT_ENV, enclosing, subject), options)
     return _nowhere(tool, said, enclosing, subject)
 
