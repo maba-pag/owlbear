@@ -178,7 +178,7 @@ def test_one_backlog_for_both_clones_triaged_by_project_and_a_change_started_in_
             expect(options).to_have_text(["shop-site (/s)", "docs-site", "shop-site (/s2)"])
             pds.pick(page.locator("#choose"), "Shape the Change in", DOCS)
             page.get_by_role("button", name="Continue").click()
-            pds.modal(page).get_by_role("button", name="Open the chat").click()
+            pds.answer(page, "Open the chat")
             expect(page.locator("#started")).to_contain_text("A chat opened in VS Code")
             assert (len(launches[DOCS].prompts), launches[SHOP].prompts) == (1, [])
             assert "Both sites" in launches[DOCS].prompts[0]
@@ -205,11 +205,11 @@ def moves_back_only_where_it_came_from(page, pds, entries) -> None:
     common = entries.filter(has_text="Sign every commit")
     expect(common.get_by_role("button", name="Move back to docs-site")).to_have_count(0)  # no origin recorded
     pinned.get_by_role("button", name="Move back to docs-site").click()
-    pds.modal(page).get_by_role("button", name="Move back").click()
+    pds.answer(page, "Move back")
     expect(page.locator("#status")).to_contain_text('Moved "Pin the runtime" back to docs-site')
     expect(pinned.locator(".place")).to_have_text("docs-site")
     pinned.get_by_role("button", name="Make global").click()
-    pds.modal(page).get_by_role("button", name="Make global").click()
+    pds.answer(page, "Make global")
     expect(pinned.locator(".place")).to_have_text("Global")
 
 
@@ -259,7 +259,7 @@ def test_memory_shows_each_folder_once_beside_global_and_makes_an_entry_global(
             common.get_by_role("button", name="Approve").click()
             expect(page.locator("#status")).to_contain_text('Approved "Sign every commit"')
             entries.filter(has_text="Pin the runtime").get_by_role("button", name="Make global").click()
-            pds.modal(page).get_by_role("button", name="Make global").click()
+            pds.answer(page, "Make global")
             expect(page.locator("#status")).to_contain_text('Made "Pin the runtime" global')
             moves_back_only_where_it_came_from(page, pds, entries)
             page.goto(f"{base}/memory")
@@ -310,11 +310,11 @@ def machine_settings_are_saved_and_a_stale_save_is_refused(page, pds, shared: Da
     registry.configure(other.model_copy(update={"update_when_idle": False}), registry.revision(other))
     save.click()
     expect(pds.modal(page)).to_contain_text("Versions this machine takes: inherited → Major versions only")  # TD-396
-    pds.modal(page).get_by_role("button", name="Save machine settings").click()
+    pds.answer(page, "Save machine settings")
     expect(page.locator("#error")).to_contain_text("changed since this page loaded them")
     expect(pds.select(page, "Versions this machine takes")).to_have_js_property("value", "major")
     save.click()
-    pds.modal(page).get_by_role("button", name="Save machine settings").click()
+    pds.answer(page, "Save machine settings")
     expect(page.locator("#status")).to_have_text("Saved this machine's settings.")
     expected = registry.Settings(
         channel="major",
@@ -341,7 +341,7 @@ def improvement_s_machine_settings_are_typed_and_saved(page, pds) -> None:
     expect(chats).to_have_value("/w, /p")
     page.get_by_role("region", name="This machine").get_by_role("button", name="Save machine settings").click()
     with page.expect_response(lambda r: r.request.method == "PUT"):  # the status says Saved from before already
-        pds.modal(page).get_by_role("button", name="Save machine settings").click()
+        pds.answer(page, "Save machine settings")
     expect(page.locator("#status")).to_have_text("Saved this machine's settings.")
     mine = registry.load().settings
     folders = ["/w", "/p"]
@@ -374,7 +374,7 @@ def a_read_begun_during_a_save_never_undoes_it(page, pds) -> None:
     page.evaluate("document.dispatchEvent(new Event('owlbear-machine'))")  # a refresh begun before the save
     while not answered:
         page.wait_for_timeout(50)
-    pds.modal(page).get_by_role("button", name="Save machine settings").click()
+    pds.answer(page, "Save machine settings")
     while not held:
         page.wait_for_timeout(50)
     with page.expect_response(lambda r: r.request.method == "PUT"):  # the status already says Saved from before
@@ -396,7 +396,7 @@ def every_machine_s_settings_are_saved_with_the_global_layer(page, pds, shared: 
     expect(machine).to_contain_text("in use: Major versions only (v1, v2 …), from this machine")
     pds.pick(page, "Versions this machine takes", "inherit")  # this machine follows Global's again
     machine.get_by_role("button", name="Save machine settings").click()
-    pds.modal(page).get_by_role("button", name="Save machine settings").click()
+    pds.answer(page, "Save machine settings")
     expect(machine).to_contain_text("in use: Every minor version (v0.1, v0.2 …), from built-in default")
     pds.pick(page, "Layer", "global")
     expect(page.locator("#machine-global")).to_be_visible()
@@ -404,7 +404,7 @@ def every_machine_s_settings_are_saved_with_the_global_layer(page, pds, shared: 
     page.get_by_label("Every machine: Agent sessions at once on this machine, across its projects").fill("5")
     page.locator(".bar").get_by_role("button", name="Save global defaults").click()
     expect(pds.modal(page)).to_contain_text("machine channel: inherited → major")
-    pds.modal(page).get_by_role("button", name="Save global defaults").click()
+    pds.answer(page, "Save global defaults")
     expect(page.locator("#status")).to_have_text("Saved the global settings. They apply to the next session.")
     glob = read_layer(shared.global_path, GlobalLayer).machine
     assert (glob.channel, glob.sessions, glob.update_when_idle) == ("major", 5, None)
@@ -438,14 +438,14 @@ def a_role_s_subagents_are_switched_off_and_saved(page, store: Store, pds) -> No
     pds.pick(page, "Built-in subagents, reviewer", "false")
     expect(page.locator("#pending")).to_contain_text("reviewer subagents: inherited → false")
     page.locator(".bar").get_by_role("button", name="Save project settings").click()
-    pds.modal(page).get_by_role("button", name="Save project settings").click()
+    pds.answer(page, "Save project settings")
     expect(page.locator("#pending")).to_have_text("No unsaved edits.")
     assert store.read_config().agents["reviewer"].subagents is False
     pds.pick(page, "Layer", "machine")  # TD-336: this machine's own preferences, kept local
     page.get_by_label("Minutes per session, builder").fill("55")
     page.locator(".bar").get_by_role("button", name="Save this machine's preferences").click()
     expect(pds.modal(page)).to_contain_text("These apply to every project on this machine")
-    pds.modal(page).get_by_role("button", name="Save this machine's preferences").click()
+    pds.answer(page, "Save this machine's preferences")
     expect(page.locator("#status")).to_have_text("Saved this machine's settings. They apply to the next session.")
     assert store.settings().sources["agents.builder.minutes"] == "machine"
     across = page.locator("#across-table p-table-row")
@@ -555,7 +555,7 @@ def test_with_no_machine_setting_set_anywhere_the_page_names_each_and_a_pending_
             expect(page.locator("#unset")).to_contain_text("machine.sessions")
             pds.pick(page, "Versions this machine takes", "minor")  # this machine's own: no longer unset
             region.get_by_role("button", name="Save machine settings").click()
-            pds.modal(page).get_by_role("button", name="Save machine settings").click()
+            pds.answer(page, "Save machine settings")
             expect(region).to_contain_text("in use: Every minor version (v0.1, v0.2 …), from this machine")
             expect(region.get_by_text("unset: set it here or for every machine")).to_have_count(11)
             browser.close()
@@ -584,9 +584,10 @@ def test_maintenance_curates_a_memory_folder_now_and_shows_its_report(tmp_path: 
             expect(folders).to_have_count(1)
             expect(folders.first).to_contain_text("Never curated.")
             folders.first.get_by_role("button", name="Curate shop-site now").click()
-            pds.modal(page).get_by_role("button", name="Curate now").click()
+            pds.answer(page, "Curate now")
             expect(page.locator("#status")).to_contain_text("Curating shop-site")
-            expect(folders.first).to_contain_text("1 promoted, nothing left for you")
+            # a run still going when the page reads it shows its report on the page's next look, 5 s later
+            expect(folders.first).to_contain_text("1 promoted, nothing left for you", timeout=15_000)
             browser.close()
     finally:
         server.should_exit = True

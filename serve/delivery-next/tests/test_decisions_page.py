@@ -176,7 +176,7 @@ def test_a_confirmed_write_still_in_flight_keeps_the_scope_it_was_confirmed_in(s
         card.get_by_role("button", name="Record an exception").click()
         page.get_by_label("New rule").fill("Pages may use a build step here.")
         card.get_by_role("button", name="Record the exception").click()
-        pds.modal(page).get_by_role("button", name="Record the exception").click()
+        pds.answer(page, "Record the exception")
         in_flight = held_once(page, held)
         posted_to = in_flight.request.url
         pds.pick(page, "Show", "owlbear")
