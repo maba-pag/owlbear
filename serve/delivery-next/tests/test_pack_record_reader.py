@@ -59,18 +59,21 @@ def bounded(call) -> list[object]:
 
 
 @pytest.mark.parametrize("kind", KINDS)
-def test_every_reader_refuses_a_record_that_is_not_a_regular_file_at_once_and_closes_it(tmp_path, kind):
+def test_every_reader_refuses_a_record_that_is_not_a_regular_file_at_once_and_closes_it(
+    tmp_path, kind, steady_descriptors
+):
     root = tmp_path / "store"
     root.mkdir()
     unsafe(root, kind, tmp_path)
-    fds = open_fds()
-    [opened] = bounded(lambda: pack_state.open_record(root / pack_state.FILE))
-    assert isinstance(opened, (OSError, ValueError)), opened
-    [seen] = bounded(lambda: pack_state.observed(root))
-    assert isinstance(seen, (OSError, ValueError)), seen  # unreadable, never taken for no record
-    assert bounded(lambda: pack_state.read_version(root / pack_state.FILE)) == [(pack_state.blank(), "")]
-    assert bounded(lambda: pack_state.last(Store(root))) == [None]
-    assert open_fds() == fds
+    with steady_descriptors():
+        fds = open_fds()
+        [opened] = bounded(lambda: pack_state.open_record(root / pack_state.FILE))
+        assert isinstance(opened, (OSError, ValueError)), opened
+        [seen] = bounded(lambda: pack_state.observed(root))
+        assert isinstance(seen, (OSError, ValueError)), seen  # unreadable, never taken for no record
+        assert bounded(lambda: pack_state.read_version(root / pack_state.FILE)) == [(pack_state.blank(), "")]
+        assert bounded(lambda: pack_state.last(Store(root))) == [None]
+        assert open_fds() == fds
 
 
 def test_a_regular_record_still_reads_and_a_missing_one_is_absent(tmp_path):
@@ -83,25 +86,26 @@ def test_a_regular_record_still_reads_and_a_missing_one_is_absent(tmp_path):
 
 
 @pytest.mark.parametrize("fault", ["fstat", "read"])
-def test_a_fault_after_the_open_closes_the_descriptor(tmp_path, fault):
+def test_a_fault_after_the_open_closes_the_descriptor(tmp_path, fault, steady_descriptors):
     root = tmp_path / "store"
     root.mkdir()
     regular(root)
-    fds = open_fds()
 
     def broken(*_args: object, **_kwargs: object) -> None:
         msg = f"synthetic {fault} failure"
         raise OSError(msg)
 
-    with pytest.MonkeyPatch.context() as patch:
-        if fault == "fstat":
-            patch.setattr(pack_state.os, "fstat", broken)
-        else:
-            patch.setattr(pack_state.json, "load", broken)
-        with pytest.raises(OSError, match=f"synthetic {fault} failure"):
-            pack_state.observed(root)
-        assert pack_state.read_version(root / pack_state.FILE) == (pack_state.blank(), "")
-    assert open_fds() == fds
+    with steady_descriptors():
+        fds = open_fds()
+        with pytest.MonkeyPatch.context() as patch:
+            if fault == "fstat":
+                patch.setattr(pack_state.os, "fstat", broken)
+            else:
+                patch.setattr(pack_state.json, "load", broken)
+            with pytest.raises(OSError, match=f"synthetic {fault} failure"):
+                pack_state.observed(root)
+            assert pack_state.read_version(root / pack_state.FILE) == (pack_state.blank(), "")
+        assert open_fds() == fds
 
 
 @pytest.mark.parametrize("kind", KINDS)
@@ -122,22 +126,25 @@ class Cancelled(BaseException):
 
 
 @pytest.mark.parametrize("fault", [OSError, ValueError, Cancelled])
-def test_the_pages_reader_shows_a_failed_handover_as_unread_and_lets_a_cancellation_through(tmp_path, fault):
+def test_the_pages_reader_shows_a_failed_handover_as_unread_and_lets_a_cancellation_through(
+    tmp_path, fault, steady_descriptors
+):
     root = tmp_path / "store"
     root.mkdir()
     (root / pack_state.FILE).write_text(json.dumps(pack_job._blank() | {"started_at": "2026-10-15T10:00:00+00:00"}))  # noqa: SLF001
-    fds = open_fds()
 
     def handover(*_args: object, **_kwargs: object) -> None:
         msg = "synthetic handover failure"
         raise fault(msg)
 
-    with pytest.MonkeyPatch.context() as patch:
-        patch.setattr(pack_state.os, "fdopen", handover)
-        if fault is Cancelled:
-            with pytest.raises(Cancelled):
-                pack_state.last(Store(root))
-        else:
-            assert pack_state.last(Store(root)) is None
-    assert open_fds() == fds
+    with steady_descriptors():
+        fds = open_fds()
+        with pytest.MonkeyPatch.context() as patch:
+            patch.setattr(pack_state.os, "fdopen", handover)
+            if fault is Cancelled:
+                with pytest.raises(Cancelled):
+                    pack_state.last(Store(root))
+            else:
+                assert pack_state.last(Store(root)) is None
+        assert open_fds() == fds
     assert pack_state.last(Store(root))["started_at"] == "2026-10-15T10:00:00+00:00"  # control: it reads again

@@ -1,9 +1,11 @@
+import contextlib
+import gc
 import json
 import os
 import re
 import subprocess
 import sys
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -62,6 +64,29 @@ def chat_replied() -> Callable[[str, str, object], None]:
 def machine_home() -> Path:
     """This machine's real home, for a test that reads what is installed there and never writes."""
     return MACHINE_HOME
+
+
+@pytest.fixture
+def steady_descriptors() -> Callable[[], contextlib.AbstractContextManager[None]]:
+    """A window for comparing the descriptors open before and after it.
+
+    Garbage a finished test left in a reference cycle, such as an unclosed SQLite connection, keeps its descriptor
+    until the collector frees it. So the window first collects that garbage, and pauses the collector inside, so it
+    cannot close such a descriptor in the middle and make the comparison differ.
+    """
+
+    @contextlib.contextmanager
+    def window() -> Iterator[None]:
+        gc.collect()
+        enabled = gc.isenabled()
+        gc.disable()
+        try:
+            yield
+        finally:
+            if enabled:
+                gc.enable()
+
+    return window
 
 
 @pytest.fixture
