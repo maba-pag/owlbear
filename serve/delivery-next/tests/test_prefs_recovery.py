@@ -1013,6 +1013,105 @@ def test_shared_damaged_target_repair_declined_with_readable_private_writes_noth
     assert "r-2" in store.config_path.read_text()
 
 
+def readable_private_repaired(repo: Path, shared_repo, monkeypatch, before_snapshot):
+    """A readable private profile, imported by the ordinary open, then a confirmed shared repair.
+
+    *before_snapshot* runs once the repair has published, right before its final observation of the old profile.
+    """
+    store = shared_project(repo, shared_repo, monkeypatch)
+    private, marker = store.root / profile_share.PROFILE, store.root / profile_share.ROLES_MOVED
+    private.write_text(PRIVATE_READABLE)
+    Store.open(repo)
+    assert marker.exists()
+    config_before, marker_before = store.config_path.read_bytes(), marker.read_bytes()
+    target = shared_only_damaged(store, UNREADABLE % "")
+    # The damaged target is the remote's current state, so the clone is clean and the pull is a no-op.
+    subprocess.run(["git", "-C", str(target.parent), "add", "--", target.name], check=True)  # noqa: S603, S607
+    subprocess.run(["git", "-C", str(target.parent), "commit", "-q", "-m", "damaged target"], check=True)  # noqa: S603, S607
+    subprocess.run(["git", "-C", str(target.parent), "push", "-q", "origin", "HEAD"], check=True)  # noqa: S603, S607
+    armed: list[bool] = []
+    real_write, real_snapshot = Store.write_profile, roles_move.snapshot
+
+    def armed_write(self: Store, prof: Profile, **kwargs: object) -> str:
+        try:
+            return real_write(self, prof, **kwargs)
+        finally:
+            armed.append(True)
+
+    def observed(old: Path):
+        if armed and old == private:
+            armed.clear()
+            before_snapshot(private)
+        return real_snapshot(old)
+
+    monkeypatch.setattr(Store, "write_profile", armed_write)
+    monkeypatch.setattr(roles_move, "snapshot", observed)
+    return store, private, marker, config_before, marker_before
+
+
+def roles_state(raw: bytes) -> dict:
+    """The config without the preference fields an ordinary publication sets: the roles and the moved flag must stay."""
+    config = json.loads(raw)
+    config.pop("prefs", None)
+    config.pop("prefs_imported", None)
+    return config
+
+
+def test_readable_private_repair_keeps_its_config_marker_and_source_bytes(repo: Path, shared_repo, monkeypatch) -> None:
+    store, private, marker, config_before, marker_before = readable_private_repaired(
+        repo, shared_repo, monkeypatch, lambda _p: None
+    )
+    assert setup.run(repo, [], yes=True, local_files="no") == 0
+    assert not private.exists()  # the existing move into the shared repository, not a retirement
+    assert roles_state(store.config_path.read_bytes()) == roles_state(config_before)
+    assert marker.read_bytes() == marker_before
+    assert not (store.root / profile_repair.RECEIPT).exists()
+    assert "prefs_import" in profile_share.path(store).read_text()
+
+
+OTHER_READABLE = '{"format": 1, "roles": {"planner": {"model": "p-2", "effort": "max"}}}'
+
+
+@pytest.mark.parametrize("raw", [OTHER_READABLE, UNREADABLE % ""], ids=["readable-other", "unreadable"])
+def test_old_source_replaced_before_final_observation_is_never_retired(
+    repo: Path, shared_repo, monkeypatch, capsys, raw: str
+) -> None:
+    store, private, marker, config_before, marker_before = readable_private_repaired(
+        repo, shared_repo, monkeypatch, lambda p: p.write_text(raw)
+    )
+    assert setup.run(repo, [], yes=True, local_files="no") != 0
+    assert "run setup again to review it" in capsys.readouterr().out
+    assert private.read_text() == raw
+    assert store.config_path.read_bytes() == config_before
+    assert marker.read_bytes() == marker_before
+    assert (store.root / profile_repair.RECEIPT).exists()
+
+
+def test_old_source_unreadable_at_final_observation_keeps_the_approved_repair(
+    repo: Path, shared_repo, monkeypatch, capsys
+) -> None:
+    real_read = Path.read_bytes
+
+    def deny_next_private_read(private: Path) -> None:
+        def denied(self: Path) -> bytes:
+            if self != private:
+                return real_read(self)
+            monkeypatch.setattr(Path, "read_bytes", real_read)
+            raise PermissionError(13, "Permission denied", str(self))
+
+        monkeypatch.setattr(Path, "read_bytes", denied)
+
+    store, private, marker, config_before, marker_before = readable_private_repaired(
+        repo, shared_repo, monkeypatch, deny_next_private_read
+    )
+    assert setup.run(repo, [], yes=True, local_files="no") != 0
+    assert "could not read the old profile" in capsys.readouterr().out
+    assert not private.exists()  # the existing move into the shared repository, not a retirement
+    assert roles_state(store.config_path.read_bytes()) == roles_state(config_before)
+    assert marker.read_bytes() == marker_before
+    assert (store.root / profile_repair.RECEIPT).exists()
+
+
 def test_bad_local_overlay_never_replaces_a_readable_shared_profile(repo: Path, shared_repo, monkeypatch) -> None:
     store = shared_project(repo, shared_repo, monkeypatch)
     (store.root / profile_share.PROFILE).write_text(PRIVATE_READABLE)

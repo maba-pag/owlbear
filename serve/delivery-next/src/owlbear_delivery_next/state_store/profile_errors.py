@@ -25,6 +25,10 @@ class SharedSyncError(RuntimeError):
         super().__init__(f"the shared profile could not be synced: {why}; nothing was saved. {tail}".rstrip())
 
 
+class OldProfileUnreadableError(RuntimeError):
+    """The old profile could not be read to finish a published repair: the approved repair is kept for a retry."""
+
+
 @dataclass(frozen=True)
 class Basis:
     """What the owner confirmed a replacement against: the old profile's digest, the shared profile's digest."""

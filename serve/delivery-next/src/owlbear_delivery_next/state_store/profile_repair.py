@@ -23,6 +23,7 @@ from owlbear_delivery_next.local_system.storage_io import atomic_write, open_loc
 from owlbear_delivery_next.state_store import profile_share, roles_move
 from owlbear_delivery_next.state_store.profile_errors import (
     Basis,
+    OldProfileUnreadableError,
     SharedSyncError,
     SourceChangedError,
     TargetChangedError,
@@ -260,12 +261,24 @@ def _finish(store: Store, held: _Held) -> None:
     with profile_share._writer(store):  # noqa: SLF001 - the same writer lock the publication held
         _assert_held(store, held)  # a replaced receipt is not this publication's: its old source stays untouched
         if store.shared:
-            if profile_share.config_digest(store.root / PROFILE) != held.receipt.source:
-                msg = "the old profile changed after the replacement was published; run setup again to review it"
-                raise SourceChangedError(msg)
-            if held.receipt.source != profile_share.ABSENT and roles_move.snapshot(store.root / PROFILE)[1] is not None:
-                roles_move.retire_source(store)  # only an uninspectable old profile; a readable one keeps its roles
+            _retire_old(store, held)
         (store.root / RECEIPT).unlink(missing_ok=True)
+
+
+def _retire_old(store: Store, held: _Held) -> None:
+    """Retire an uninspectable old profile from one observation of its bytes: the digest and the role eligibility."""
+    digest, unreadable = roles_move.snapshot(store.root / PROFILE)
+    if digest == "":
+        msg = (
+            f"could not read the old profile {store.root / PROFILE} to finish the repair; "
+            "the approved repair is kept; run setup again"
+        )
+        raise OldProfileUnreadableError(msg)
+    if digest != held.receipt.source:
+        msg = "the old profile changed after the replacement was published; run setup again to review it"
+        raise SourceChangedError(msg)
+    if held.receipt.source != profile_share.ABSENT and unreadable is not None:
+        roles_move.retire_source(store)  # only an uninspectable old profile; a readable one keeps its roles
 
 
 def _drop(store: Store, held: _Held) -> None:
