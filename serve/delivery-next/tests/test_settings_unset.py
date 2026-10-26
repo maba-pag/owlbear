@@ -47,7 +47,7 @@ def test_a_setting_no_layer_sets_is_unset_and_listed_never_filled_from_code():
     assert {"agents.builder.model", "agents.spotter.effort", "sessions", "spotter.switch"} <= set(empty.missing)
     assert {"spotter.hand_off_fitness", "spotter.irreversible_harm"} <= set(empty.missing)
     assert {"agents.retro.model", "agents.retro-review.minutes", "spotter.looks"} <= set(empty.missing)
-    inactive = {"runtimes.sdk", "visible", "agents.builder.runtime", "agents.spotter.minutes", "spotter.sample_rate"}
+    inactive = {"agents.spotter.minutes", "spotter.sample_rate"}
     inactive |= {"spotter.verbose_until"}
     inactive |= {"agents.picker.max_rounds"}
     assert not inactive & set(empty.missing)  # nothing reads them, and the page edits none of them
@@ -147,7 +147,7 @@ def test_a_role_needs_only_the_fields_its_work_reads():
     picker = carried.layer().agents["picker"].model_dump(include=set(fields))
     with pytest.raises(SettingsUnset, match=r"agents\.picker\.minutes"):  # a picker session has a time limit
         resolve(GlobalLayer(agents={"picker": config.Agent.model_validate(picker)}), Layer()).agent("picker")
-    assert set(config.used("builder")) == set(config.Effective.model_fields) - {"runtime", "visible", "categories"}
+    assert set(config.used("builder")) == set(config.Effective.model_fields)
 
 
 def test_the_decision_gate_asking_for_an_unset_setting_asks_the_owner(monkeypatch, tmp_path):

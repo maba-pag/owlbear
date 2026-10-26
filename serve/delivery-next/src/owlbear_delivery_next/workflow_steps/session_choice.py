@@ -6,7 +6,6 @@ import uuid
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from owlbear_delivery_next.change_contracts.profile_record import in_window
 from owlbear_delivery_next.change_flow import answer_kinds, budgets, repairs
 from owlbear_delivery_next.runtimes import session_result
 from owlbear_delivery_next.workflow_steps import held
@@ -27,8 +26,7 @@ def opening(
 ) -> tuple[Question | None, session_result.Run | None, str, bool]:
     """The answer to deliver, the held result processed in place of a session (TD-56), the repair, and resume.
 
-    The step's session is set: the one the answer goes to, the repair chance's (TD-123), the held run's, or new. The
-    window cannot resume a chat, so there a repair chance falls back to a fresh session at once (TD-175).
+    The step's session is set: the one the answer goes to, the repair chance's (TD-123), the held run's, or new.
     """
     s = change.step
     answer = answer_kinds.delivered_next(change)
@@ -39,9 +37,6 @@ def opening(
     resume = bool(answer and s.session) or bool(repair)
     if repair:
         s.session = repair
-        if in_window(store.read_profile()):
-            replaced(store, lock, change, repair)
-            resume = False
     elif not resume:
         s.session = accepted.session_id if accepted else new_id(change)
     return answer, accepted, repair, resume

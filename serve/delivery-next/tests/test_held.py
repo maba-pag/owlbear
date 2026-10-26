@@ -183,6 +183,20 @@ def test_a_build_held_before_changed_paths_left_the_schema_is_still_accepted(gat
     assert [e["event"] for e in store.events("c1") if e.get("event", "").startswith("held-")] == ["held-accepted"]
 
 
+def test_a_hold_that_still_names_the_window_runtime_loads_and_is_processed(gated, clone, monkeypatch):
+    store, c = gated
+    c = answer(store, c, "accept")
+    path = store.root / "changes" / "c1" / "held.json"
+    hold = json.loads(path.read_text())
+    hold["run"]["runtime"] = "window"  # written before the window runtime was retired (D-01M5WG8RGCBKADW6XPGP0E2FAP)
+    path.write_text(json.dumps(hold))
+    monkeypatch.setattr(runner.sdk_adapter, "run", lambda _cfg: pytest.fail("an accepted hold starts no session"))
+    runner._step(store, Lock("c1"), c, c.step, clone)  # noqa: SLF001
+    done = store.read("c1")
+    assert (done.step.kind, done.outcome.exit) == (K.REVIEW, Exit.DONE)
+    assert [e["event"] for e in store.events("c1") if e.get("event", "").startswith("held-")] == ["held-accepted"]
+
+
 def test_a_damaged_hold_is_never_processed(gated):
     store, c = gated
     c = answer(store, c, "accept")
@@ -270,7 +284,6 @@ def test_an_unread_judge_is_logged_with_its_label_so_its_subagents_count_for_its
         return run
 
     monkeypatch.setattr(sessions.sdk_adapter, "run", unread)
-    monkeypatch.setattr(sessions, "in_window", lambda _profile: False)
     cfg = runner.sdk_adapter.Session(
         kind=K.REVIEW, worktree=clone, session_id="", message="challenge the brief", resume=False,
         policy=Policy(clone), observe=tools.Worktree, checks=(),

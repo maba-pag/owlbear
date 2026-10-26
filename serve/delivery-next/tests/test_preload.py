@@ -1,9 +1,7 @@
-"""Item 6: each worker role's mandatory skills load before its first turn, in both runtimes; a missing one refuses
-the step."""
+"""Item 6: each worker role's mandatory skills load before its first turn; a missing one refuses the step."""
 
 import asyncio
 import json
-import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -15,32 +13,9 @@ from owlbear_delivery_next.change_contracts.tools import Worktree
 from owlbear_delivery_next.design_packs import design_pack
 from owlbear_delivery_next.local_system import preload
 from owlbear_delivery_next.local_system.processes import Termination
-from owlbear_delivery_next.runtimes import chatlogs, sdk_adapter, vscode_adapter
-from owlbear_delivery_next.runtimes import window_files as wf
+from owlbear_delivery_next.runtimes import chatlogs, sdk_adapter
 
 ROLES = ("builder", "planner", "reviewer")
-
-
-def git(cwd: Path, *args: str) -> str:
-    done = subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True)  # noqa: S603, S607
-    return done.stdout.strip()
-
-
-@pytest.fixture
-def repo(tmp_path: Path, monkeypatch) -> Path:
-    (tmp_path / "gitconfig").write_text("")
-    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(tmp_path / "gitconfig"))
-    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
-    for who in ("AUTHOR", "COMMITTER"):
-        monkeypatch.setenv(f"GIT_{who}_NAME", "t")
-        monkeypatch.setenv(f"GIT_{who}_EMAIL", "t@t")
-    path = tmp_path / "wt"
-    path.mkdir()
-    git(path, "init", "-q", "-b", "main")
-    (path / "README.md").write_text("x\n")
-    git(path, "add", "-A")
-    git(path, "commit", "-qm", "init")
-    return path
 
 
 @pytest.fixture
@@ -178,26 +153,3 @@ def test_a_preload_counts_through_a_linked_install(tmp_path, monkeypatch) -> Non
         st.on_event(loaded(name, root=real))  # the runtime reports the canonical path
     st.on_event(event("assistant.turn_start"))
     assert not st.done
-
-
-def test_the_window_agent_names_its_skills_and_they_are_placed_out_of_every_commit(repo) -> None:
-    text = wf.agent("reviewer", Path("/i.json"))(None)
-    assert "\nskills: [owlbear-acceptance-criteria, owlbear-module-design, owlbear-review-judgment]\n---\n" in text
-    placed = [wf.place(repo, rel, render) for rel, render in wf.skills("reviewer")]
-    for name in preload.REQUIRED["reviewer"]:
-        assert (repo / wf.skill_path(name)).read_text() == preload.text(name)
-    assert git(repo, "status", "--porcelain") == ""
-    assert wf.restore(repo, placed) == []
-    assert not (repo / ".github").exists()
-
-
-@pytest.mark.usefixtures("gap")
-def test_a_window_step_whose_skills_are_missing_ends_before_any_window(repo, tmp_path) -> None:
-    env = vscode_adapter.Env(
-        connect=lambda _p: pytest.fail("no window may open"),
-        settle=lambda *_: Termination(confirmed=True),
-    )
-    run = vscode_adapter.run(session(worktree=repo), tmp_path / "steps" / "s1.json", env)
-    assert run.ending == "error"
-    assert "Delivery's worker skills are missing: owlbear-module-design, owlbear-acceptance-criteria" in run.detail
-    assert git(repo, "status", "--porcelain", "--ignored") == ""

@@ -26,7 +26,7 @@ from owlbear_delivery_next.change_flow import loop, status
 from owlbear_delivery_next.change_flow.loop import StepResult, apply
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.settings import migrations
-from owlbear_delivery_next.state_store import offline_protocol, project_home, project_move
+from owlbear_delivery_next.state_store import offline_protocol, profile_share, project_home, project_move
 from owlbear_delivery_next.state_store import store as store_mod
 from owlbear_delivery_next.state_store.store import FormatTooNewError, LockHeldError, Store, StoreError
 
@@ -197,6 +197,37 @@ def test_profile_has_its_own_format_gate(store, monkeypatch):
     monkeypatch.setattr(store_mod.profile_share, "PROFILE_FORMAT", PROFILE_FORMAT - 1)
     with pytest.raises(FormatTooNewError):
         store.read_profile()
+
+
+NON_INTEGER_FORMATS = [4.5, 3.5, 4.0, True, "4", "abc"]  # "abc" is malformed today: the same refusal
+
+
+@pytest.mark.parametrize("fmt", NON_INTEGER_FORMATS)
+def test_a_saved_profile_whose_format_is_not_an_integer_is_unreadable_and_kept(store, fmt):
+    store.write_profile(Profile(version=2, entries={"rules": ProfileEntry(state="unknown", evidence="HTTP 403")}))
+    path = profile_share.path(store)
+    path.write_text(json.dumps(json.loads(path.read_text()) | {"format": fmt}))
+    before = path.read_bytes()
+    with pytest.raises(StoreError, match="state of profile is unreadable"):
+        store.read_profile()
+    assert path.read_bytes() == before
+
+
+def test_a_saved_format_4_profile_migrates_to_the_current_format(store):
+    store.write_profile(Profile(version=2, entries={"rules": ProfileEntry(state="unknown", evidence="HTTP 403")}))
+    path = profile_share.path(store)
+    path.write_text(json.dumps(json.loads(path.read_text()) | {"format": 4, "runtime": "vscode"}))
+    migrated = store.read_profile()
+    assert (migrated.format, migrated.entries["rules"].state) == (PROFILE_FORMAT, "unknown")
+    assert "runtime" not in migrated.model_dump()
+
+
+@pytest.mark.parametrize("fmt", NON_INTEGER_FORMATS)
+def test_a_change_record_whose_format_is_not_an_integer_is_unreadable(store, fmt):
+    save(store, Change(slug="c1"))
+    overwrite(store, "c1", json.dumps(json.loads(record(store, "c1")) | {"format": fmt}))
+    with pytest.raises(StoreError, match="state of c1 is unreadable"):
+        store.read("c1")
 
 
 def test_change_records_migrate_forward_or_refuse(store, monkeypatch):

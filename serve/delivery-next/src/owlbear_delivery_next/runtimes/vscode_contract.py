@@ -1,19 +1,15 @@
-"""What a VS Code step is given and what it returns (TD-36, TD-48): the spec, the levers, the outcome and the hooks.
+"""What the owner's shaping chat gets from its VS Code window and returns to its caller (TD-36, TD-83).
 
-The driver in ``vscode_step`` runs the step; this module holds only the data it shares with its callers.
+The driver in ``vscode_step`` opens the chat; this module holds only the data it shares with its callers.
 """
 
 from __future__ import annotations
 
-import queue
 import subprocess
-import threading
 import time
 import uuid
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Literal
-
-from owlbear_delivery_next.runtimes.window_files import write_window_settings
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -23,26 +19,17 @@ if TYPE_CHECKING:
 
 type End = Literal[
     "complete",
-    "cancelled",
     "error",
-    "timeout",
-    "stopped",
-    "closed",
     "unbound",
-    "wrong-model",
-    "subagent",
-    "config-refused",
     "settings-refused",
-    "cancel-unconfirmed",
+    "busy",
+    "model-unavailable",
+    "config-refused",
+    "no-agent",
     "bootstrap-stuck",
     "bootstrap-model",
     "bootstrap-unexpected",
-    "model-unavailable",
-    "no-agent",
-    "folder-busy",
-    "busy",
-    "user-turn",
-    "steering-unrun",
+    "cancel-unconfirmed",
     "started",
     "unstarted",
 ]
@@ -50,7 +37,7 @@ type End = Literal[
 
 @dataclass(frozen=True)
 class StepSpec:
-    """One VS Code step: where, which agent, which model and effort, what to do, and the session config."""
+    """One chat's window: where, which agent, which model and effort, what to send, and the session config."""
 
     folder: Path
     agent: Path | None  # the agent file; the host lists only agents in ``folder``'s or ~/.copilot/agents (live)
@@ -60,10 +47,7 @@ class StepSpec:
     config: Json = field(default_factory=dict)  # e.g. autoApprove or sandboxEnabled; the user's choice (TD-29)
     context: str = "default"  # the context tier; "long" picks the model's largest size
     nonce: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
-    reminder: str = ""  # sent once as a new turn when the real turn completes before Delivery stops it
     picker: str = "agent"  # the mode ``code chat -m`` opens; the shaping chat keeps its agent for typed messages
-    attachments: tuple[Json, ...] = ()  # sent with the prompt's turn only, e.g. screenshots (C7)
-    subagents: bool = False  # the role may start built-in subagents (TD-374); any other start ends the step
 
     @property
     def marker(self) -> str:
@@ -83,40 +67,16 @@ class StepSpec:
         return tuple(dict.fromkeys((self.agent.absolute().as_uri(), self.agent.resolve().as_uri())))
 
 
-@dataclass(frozen=True)
-class ToolCall:
-    """One tool call that waits for Delivery's confirmation."""
-
-    name: str
-    input: str
-    client: str | None
-
-
-@dataclass
-class Control:
-    """The watcher's levers while a step runs: stop it, or steer it."""
-
-    stop: threading.Event = field(default_factory=threading.Event)
-    steering: queue.Queue[str] = field(default_factory=queue.Queue)
-    started: threading.Event = field(default_factory=threading.Event)  # set once Delivery's first turn started
-    settled: threading.Event = field(default_factory=threading.Event)  # set once Delivery holds the step's result
-
-
 @dataclass
 class Outcome:
-    """How the step ended and what it touched; the result itself arrives through the Delivery MCP server."""
+    """How the chat's opening ended and what it touched; the chat itself is left to the owner."""
 
     end: End
     detail: str = ""
     session: str | None = None
     chat: str | None = None
     turns: list[str] = field(default_factory=list)
-    tools: dict[str, str] = field(default_factory=dict)  # tool call id -> tool name, in call order
-    denied: list[str] = field(default_factory=list)
-    usage: Json | None = None
-    tokens: dict[str, int] = field(default_factory=dict)  # billed model -> input plus output tokens of Delivery's turns
     cancel_confirmed: bool | None = None  # set when Delivery cancelled a turn: did the host confirm it?
-    subagents: dict[str, str] = field(default_factory=dict)  # the starting call id -> the subagent it announced
 
 
 def launch_code_chat(args: list[str], cwd: Path) -> None:
@@ -126,9 +86,9 @@ def launch_code_chat(args: list[str], cwd: Path) -> None:
 
 @dataclass(frozen=True)
 class Hooks:
-    """The step's contact with the machine; tests replace them."""
+    """The chat's contact with the machine; tests replace them."""
 
+    settings: Callable[[Path, str], None]  # pins the folder's settings before the window opens
     launch: Callable[[list[str], Path], None] = launch_code_chat
     clock: Callable[[], float] = time.monotonic
-    settings: Callable[[Path, str], None] = write_window_settings
     reconnect: Callable[[], Transport] | None = None  # a new, signed-in connection to the same host

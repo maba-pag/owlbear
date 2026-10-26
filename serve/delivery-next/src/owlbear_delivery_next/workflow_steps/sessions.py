@@ -13,10 +13,9 @@ from typing import TYPE_CHECKING
 from owlbear_delivery_next.change_contracts import tools
 from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, StepKind, Stop
 from owlbear_delivery_next.change_contracts.permissions import Policy
-from owlbear_delivery_next.change_contracts.profile_record import in_window
 from owlbear_delivery_next.change_flow import loop
 from owlbear_delivery_next.local_system.processes import Termination
-from owlbear_delivery_next.runtimes import loop_owner, sdk_adapter, session_result, vscode_adapter
+from owlbear_delivery_next.runtimes import loop_owner, sdk_adapter, session_result
 from owlbear_delivery_next.settings import roles
 from owlbear_delivery_next.workflow_steps import disposable, ro_installs, watched
 
@@ -90,17 +89,14 @@ def previous(store: Store, slug: str, session: str | None) -> dict[int, float | 
     return {int(p): c for found in pids for p, c in found.items()}
 
 
-def run(store: Store, cfg: sdk_adapter.Session, *, hold: bool = False) -> session_result.Run:
-    """Run one agent session where the profile's runtime says (TD-35), screenshots included (C7).
+def run(_store: Store, cfg: sdk_adapter.Session, *, hold: bool = False) -> session_result.Run:
+    """Run one agent session through the SDK, screenshots included (C7).
 
-    Either runtime's unknown model stops the Change for the owner (TD-94), unless the caller *holds* the run to
-    decide it with others, as a visual round does.
+    The unknown model stops the Change for the owner (TD-94), unless the caller *holds* the run to decide it with
+    others, as a visual round does. The store is not used here; the pack runs inject this function with it.
     """
     granted(cfg.job or str(cfg.kind))
-    if in_window(store.read_profile()):
-        done = vscode_adapter.run(cfg, store.root / "steps" / f"{uuid.uuid4().hex}.json")
-    else:
-        done = loop_owner.run(sdk_adapter.run(cfg))
+    done = loop_owner.run(sdk_adapter.run(cfg))
     if unread(done) and not (hold and held(done)):
         raise UsageUnreadError(done, cfg.job)
     return done
@@ -211,12 +207,11 @@ def judges(  # noqa: PLR0913, PLR0917 - the round's settings snapshot
     hold: bool = False,
     keep: Keep | None = None,
 ) -> list[tuple[Result, session_result.Run]]:
-    """Fresh read-only judges in the read-only worktree of *source*: together on the SDK, in turn in the window.
+    """Fresh read-only judges in the read-only worktree of *source*, together.
 
-    *made* builds the judges' sessions in that worktree, which the window resets before each judge. *settings* is the
-    round's snapshot, so what is recorded is what ran. A judge left running stops the Change ahead of another's unread
-    usage; otherwise an unread run is gated and nothing is processed (TD-54), unless *hold* keeps it for the round's
-    own decision (TD-94).
+    *made* builds the judges' sessions in that worktree. *settings* is the round's snapshot, so what is recorded is what
+    ran. A judge left running stops the Change ahead of another's unread usage; otherwise an unread run is gated and
+    nothing is processed (TD-54), unless *hold* keeps it for the round's own decision (TD-94).
     """
     settings = settings or store.settings()
     budget = watched.needed(settings)  # each judge is watched: an unset Spotter setting asks before any judge starts
@@ -246,8 +241,7 @@ def judges(  # noqa: PLR0913, PLR0917 - the round's settings snapshot
             return [run(store, cfgs[0], hold=hold)]
         return _waves(cfgs, lambda left: store.log(lock, change.slug, {"event": "wave", "at": _at(), "left": left}))
 
-    window = in_window(store.read_profile())
-    runs = isolated(store, lock, change, source, fresh, ran, each=window, keep=keep)
+    runs = isolated(store, lock, change, source, fresh, ran, keep=keep)
     judged = []
     for label, done in zip(labels, runs, strict=True):  # state writes one at a time, under the lock
         verdict = session_result.to_result(done, StepKind.REVIEW, datetime.now(UTC), change.step.kind)
@@ -270,29 +264,19 @@ def isolated(  # noqa: PLR0913, PLR0917 - the sessions are made for, and run in,
     make: Callable[[Path], list[sdk_adapter.Session]],
     go: Callable[[list[sdk_adapter.Session]], list[session_result.Run]],
     *,
-    each: bool = False,
     keep: Keep | None = None,
 ) -> list[session_result.Run]:
     """Run read-only sessions in the Change's read-only worktree at *source*'s HEAD; refs they change void their runs.
 
-    It stays for the next session, its window with it. When Delivery may not reset it, or its last sessions'
-    processes are not confirmed gone, no session runs: every run is refused. *each* prepares it before each session,
-    else once for them all. *keep* takes each run once its checks pass, before the cleanup after it.
+    It stays for the next session. When Delivery may not reset it, or its last sessions' processes are not confirmed
+    gone, no session runs: every run is refused. *keep* takes each run once its checks pass, before the cleanup after
+    it.
     """
     copy = disposable.prepare(source, store, change.slug)
     if isinstance(copy, str):
         return _refused(store, lock, change, copy, make(source))
     note = ro_installs.ready(store, lock, change, copy.path)
-    cfgs = make(copy.path)
-    runs = _within(store, lock, change, copy, _noted(cfgs[:1] if each else cfgs, note), go, keep=keep)
-    for cfg in cfgs[1:] if each else []:
-        again = disposable.prepare(source, store, change.slug)
-        if isinstance(again, str):
-            runs += _refused(store, lock, change, again, [cfg])
-        else:
-            note = ro_installs.ready(store, lock, change, again.path)
-            runs += _within(store, lock, change, again, _noted([cfg], note), go, keep=keep)
-    return runs
+    return _within(store, lock, change, copy, _noted(make(copy.path), note), go, keep=keep)
 
 
 def _noted(cfgs: list[sdk_adapter.Session], note: str) -> list[sdk_adapter.Session]:

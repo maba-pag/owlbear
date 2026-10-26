@@ -123,7 +123,7 @@ def test_each_old_mode_migrates_in_every_layer_and_keeps_the_other_values(tmp_pa
 @pytest.mark.parametrize("model", [GlobalLayer, MachineLayer, Layer])
 def test_an_unknown_mode_is_refused_never_guessed_into_a_switch(tmp_path, mode, model):
     path = _written(tmp_path, {"spotter": {"mode": mode, "looks": ["plan"]}}, model.__name__, 13)
-    with pytest.raises(StoreError, match="cannot be migrated to format 14"):
+    with pytest.raises(StoreError, match=f"cannot be migrated to format {config.CONFIG_FORMAT}"):
         read_layer(path, model)
 
 

@@ -1,5 +1,5 @@
-"""Read-only sessions run in the Change's one read-only worktree, reset to the judged commit before each session (each
-judge in the window, each SDK judge batch); refs they create or move void them."""
+"""Read-only sessions run in the Change's one read-only worktree, reset to the judged commit before each session or
+judge batch; refs they create or move void them."""
 
 import argparse
 import subprocess
@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from owlbear_delivery_next.change_contracts import profile_record, tools
+from owlbear_delivery_next.change_contracts import tools
 from owlbear_delivery_next.change_contracts.models import (
     Brief,
     Change,
@@ -21,7 +21,6 @@ from owlbear_delivery_next.change_contracts.models import (
     Task,
 )
 from owlbear_delivery_next.change_contracts.permissions import Policy
-from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_flow import loop, worktree
 from owlbear_delivery_next.commands import cli, runner
 from owlbear_delivery_next.local_system.git_files import git_common_dir
@@ -98,7 +97,7 @@ def test_a_review_runs_in_the_change_s_read_only_worktree_at_its_head_which_stay
     assert (cfg.policy.root, cfg.policy.write) == (at, False)
     assert (str(at) in cfg.message, str(change_repo) in cfg.message) == (True, False)
     assert (observed.head, observed.base) == (head, base)  # the same commits the Change worktree reports
-    assert at.is_dir()  # its VS Code window stays valid
+    assert at.is_dir()  # the worktree stays on disk for the next session
     assert f"worktree {at}\nHEAD {head}\ndetached" in git(change_repo, "worktree", "list", "--porcelain")
     assert disposable.live(store.root / "changes" / "c1") is None
     assert store.read("c1").outcome.exit == Exit.DONE
@@ -405,27 +404,6 @@ def test_a_change_name_never_holds_a_dot(tmp_path):
         cli.seed(store, a)
     assert (store.slugs(), store.read_profile(), (store.root / "changes" / "c1.ro").exists()) == ([], None, False)
     assert briefs.new_slug("Release v1.2 notes", []) == "release-v1-2-notes"
-
-
-def test_each_window_judge_finds_the_read_only_worktree_reset(tmp_path, change_repo, monkeypatch):
-    monkeypatch.setattr(profile_record, "WINDOW_PAUSED", False)
-    store, seen = Store(tmp_path / "store"), []
-    change = Change(slug="c1", brief=Brief(version=1), step=Step(kind=K.CHECK))
-    store.write(Lock("c1"), change)
-    store.write_profile(Profile(runtime="vscode"))
-
-    def window(cfg, _inbox):
-        seen.append((cfg.message, git(cfg.worktree, "status", "--porcelain", "--ignored")))
-        (cfg.worktree / "a.txt").write_text("the first judge's edit\n")
-        (cfg.worktree / "new.txt").write_text("x\n")
-        payload = tools.ReviewResult(verdict="pass")
-        return Run(cfg.session_id, "result", payload, head="h", termination=Termination(confirmed=True))
-
-    monkeypatch.setattr(sessions.vscode_adapter, "run", window)
-    made = lambda at: [("visual-review", judge(at, "first")), ("design-review", judge(at, "second"))]  # noqa: E731
-    ran = sessions.judges(store, Lock("c1"), change, change_repo, made)
-    assert seen == [("first", ""), ("second", "")]
-    assert [r.exit for r, _ in ran] == [Exit.DONE, Exit.DONE]
 
 
 def test_a_review_that_moves_a_ref_with_its_usage_unread_is_retried_for_the_violation(store, change_repo, monkeypatch):

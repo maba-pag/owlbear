@@ -309,22 +309,3 @@ export function editable(role, field) {
   }
   return cell(control, note, source(`agents.${key}`, state.loaded.settings.agents[role][field]));
 }
-
-// A setting Delivery does not apply yet: its control, disabled, with where its value comes from.
-export function inactive(label, value, key) {
-  let control;
-  if (value === null || value === undefined) {
-    control = typed(label, "", () => {}, { disabled: true });
-  } else if (typeof value === "boolean") {
-    control = tick(label, value);
-  } else if (key.endsWith(".runtime")) {
-    control = choose(label, state.loaded.catalogue.runtimes.map((r) => [r.runtime, r.runtime]), value, () => {},
-      { disabled: true });
-  } else if (key.endsWith(".categories")) {
-    const names = Object.keys(state.loaded.catalogue.categories);
-    control = html`<div>${names.map((name) => tick(name, value.includes(name), false))}</div>`;
-  } else {
-    control = typed(label, shown(value), () => {}, { disabled: true });
-  }
-  return cell(control, source(key, undefined, false));
-}

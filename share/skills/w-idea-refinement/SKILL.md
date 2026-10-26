@@ -143,8 +143,8 @@ the relevant branch.
 
 ## Read-Back
 
-Ask, read back and record the user's choices in the format of "Asking the Owner" in OwlBear's
-[`.github/copilot-instructions.md`](../../../.github/copilot-instructions.md): one decision per question, its
+Ask, read back and record the user's choices in the format of the
+[shaping skill's Read-Back](../../../serve/delivery-next/src/owlbear_delivery_next/skills/owlbear-change-shaping/SKILL.md#read-back): one decision per question, its
 variants and other directions, the closing options, readings of free text, and one closing check of everything you
 record. List your own consequential choices in that check too, each with a one-line consequence. The closing check
 is the one exception to Core Method rules 2 and 3: it may batch up to eight questions per `askQuestions` round and

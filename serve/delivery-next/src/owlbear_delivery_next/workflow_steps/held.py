@@ -71,7 +71,6 @@ def dump_run(run: Run) -> HeldRun:
         payload={"model": type(p).__name__, "args": p.model_dump(mode="json")} if p else None,
         denials=run.denials,
         denied=run.denied,
-        runtime=run.runtime,
         quota=run.quota,
         quota_reset=run.quota_reset,
         usage=run.usage,
@@ -109,7 +108,6 @@ def _unloaded(data: HeldRun) -> Run:
         changed=list(data.changed),
         denials=list(data.denials),
         denied=dict(data.denied),
-        runtime=data.runtime,
         usage={"error": "held"},  # counted when the gate logged the session
         termination=Termination(confirmed=True),
         quota=data.quota,

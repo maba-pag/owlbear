@@ -50,14 +50,13 @@ def layer() -> GlobalLayer:
     rounds = RoundPolicy(max_rounds=3, max_findings=10, last_round_at=4, ask_owner_at=7).model_dump()
     agents = {
         role: Agent(
-            model=rm.model, effort=rm.effort, context=rm.context, runtime="sdk", visible=False, categories=[],
-            minutes=MINUTES[role], subagents=True, **rounds,
+            model=rm.model, effort=rm.effort, context=rm.context, minutes=MINUTES[role], subagents=True, **rounds,
         )
         for role, rm in MODELS.items()
     }  # fmt: skip
     return GlobalLayer(
-        agents=agents, runtimes={"sdk": True, "window": True}, widths=[1280, 1920, 2400], design_failures="ask",
-        pr_labels=[], pr_marker=True, sessions=2, spotter=Spotter(switch="on"), visible=False, curator_threshold=95,
+        agents=agents, widths=[1280, 1920, 2400], design_failures="ask", pr_labels=[], pr_marker=True, sessions=2,
+        spotter=Spotter(switch="on"), curator_threshold=95,
     )  # fmt: skip
 
 
@@ -73,5 +72,4 @@ def filled(glob: GlobalLayer) -> GlobalLayer:
         for role in base.agents
     }  # fmt: skip
     top = base.model_dump(exclude={"agents"}) | glob.model_dump(exclude={"agents", "format"}, exclude_none=True)
-    top["runtimes"] = base.runtimes | glob.runtimes
     return GlobalLayer.model_validate(top | {"agents": {r: a.model_dump() for r, a in agents.items()}})

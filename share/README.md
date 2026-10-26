@@ -98,9 +98,8 @@ No shared agent delegates to a subagent or declares hooks. Tool allowlists and m
 
 ### Repository skills
 
-`.github/skills/` holds this repository's own skills: `challenge-plan-sol` and `challenge-implementation-sol`
-dispatch a fresh read-only subagent and leave the verdict to the caller; `session-review` reviews another local chat.
-They are not shared with consuming projects.
+`.github/skills/` holds this repository's own skill: `session-review` reviews another local chat. It is not shared
+with consuming projects.
 
 ## Effective Instruction Stack
 

@@ -192,6 +192,56 @@ def spotter_switched(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+def _retired(data: dict[str, Any], key: str, allowed: Callable[[object], bool]) -> None:
+    """Drop a retired setting; a value the format never allowed is refused, not dropped."""
+    if key in data:
+        value = data.pop(key)
+        if not allowed(value):
+            msg = f"the retired setting {key} is {value!r}, which the format never allowed"
+            raise ValueError(msg)
+
+
+def _on_off(value: object) -> bool:
+    if not isinstance(value, dict) or not set(value) <= {"sdk", "window"}:
+        return False
+    return all(type(on) is bool for on in value.values())
+
+
+def _flag(value: object) -> bool:
+    return value is None or type(value) is bool
+
+
+def _browser_only(value: object) -> bool:
+    return value is None or (isinstance(value, list) and all(category == "browser" for category in value))
+
+
+def window_runtime_dropped(data: dict[str, Any]) -> dict[str, Any]:
+    """Settings format 14 to 15: the window runtime's switches and per-agent settings go (2026-10-26).
+
+    Only a VS Code window read the runtimes, the visibility and the tool categories; no step did, so none applied.
+    A value the format never allowed is refused, not dropped.
+    """
+    _retired(data, "runtimes", _on_off)
+    _retired(data, "visible", _flag)
+    agents = data.get("agents")
+    if isinstance(agents, dict):
+        for agent in agents.values():
+            if isinstance(agent, dict):
+                _retired(agent, "runtime", lambda v: v is None or v in ("sdk", "window"))
+                _retired(agent, "visible", _flag)
+                _retired(agent, "categories", _browser_only)
+    return data
+
+
+def runtime_switch_dropped(data: dict[str, Any]) -> dict[str, Any]:
+    """Profile format 4 to 5: the per-project runtime switch goes; steps run only through the SDK (2026-10-26).
+
+    A switch that names neither managed nor vscode was never valid, so it is refused, not dropped.
+    """
+    _retired(data, "runtime", lambda v: v in ("managed", "vscode"))
+    return data
+
+
 def tests_added(data: dict[str, Any]) -> dict[str, Any]:
     """Change format 5 to 6: a test review's record and step (TD-373); older runtimes refuse format 6."""
     return data
@@ -216,7 +266,7 @@ CHANGE: Migrations = {
     6: waivers_added,
     7: held_records_added,
 }
-PROFILE: Migrations = {1: roles_moved, 2: prefs_import_added, 3: prefs_basis_added}
+PROFILE: Migrations = {1: roles_moved, 2: prefs_import_added, 3: prefs_basis_added, 4: runtime_switch_dropped}
 CONFIG: Migrations = {
     1: seed_dropped,
     2: judge_renamed,
@@ -231,4 +281,5 @@ CONFIG: Migrations = {
     11: spotter_renamed,
     12: prefs_added,
     13: spotter_switched,
+    14: window_runtime_dropped,
 }

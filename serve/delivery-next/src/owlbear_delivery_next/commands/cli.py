@@ -25,12 +25,9 @@ from owlbear_delivery_next.change_contracts.models import (
     Task,
 )
 from owlbear_delivery_next.change_contracts.profile_record import (
-    PAUSED_NOTE,
     Profile,
     ProfileEntry,
     RoleModel,
-    Runtime,
-    in_window,
 )
 from owlbear_delivery_next.change_flow.status import status, unloadable
 from owlbear_delivery_next.commands import replay_client, setup
@@ -156,7 +153,7 @@ def seed(store: Store, a: argparse.Namespace) -> None:
         step=Step(kind=StepKind.BUILD, task="t1"),
         names=Names(branch=f"owlbear/{a.change}", target=a.target),
     )
-    store.write_profile(Profile(version=old.version + 1, confirmed_at=now, entries=entries, runtime=old.runtime))
+    store.write_profile(Profile(version=old.version + 1, confirmed_at=now, entries=entries))
     with store.lock(a.change) as lock:
         store.write(lock, change)
 
@@ -206,13 +203,11 @@ def show_profile(
     repo: Path,
     confirms: list[tuple[str, str]],
     overrides: list[tuple[Role, RoleModel]] | None = None,
-    runtime: Runtime | None = None,
 ) -> str:
-    """Detect the profile, apply the owner's confirmations and runtime, and role overrides to the project settings."""
+    """Detect the profile, apply the owner's confirmations and role overrides to the project settings."""
     prof = profile.detect(repo, profile.provider(store.read_profile() or Profile(), repo), store.read_profile())
     for key, value in confirms:
         prof = profile.confirm(prof, key, value, datetime.now(UTC))
-    prof = prof.model_copy(update={"runtime": runtime or prof.runtime})
     store.write_profile(prof)
     prefs_import.run(store)
     notice = (
@@ -225,8 +220,7 @@ def show_profile(
     )
     lines = [f"profile v{prof.version}", *([f"Notice: {notice}"] if notice else [])]
     lines += [f"  {k}: {e.state} {e.value!r} ({e.evidence})" for k, e in sorted(prof.entries.items())]
-    paused = f" ({PAUSED_NOTE})" if prof.runtime == "vscode" and not in_window(prof) else ""
-    return "\n".join([*lines, roles.table(store.settings()), f"Runtime: {prof.runtime}{paused}"])
+    return "\n".join([*lines, roles.table(store.settings())])
 
 
 def add_backlog(store: Store, a: argparse.Namespace) -> int:
@@ -254,12 +248,9 @@ def report(store: Store, a: argparse.Namespace) -> int:
         return add_backlog(store, a)
     if a.command == "status":
         sys.stdout.write(show_status(store, datetime.now(UTC)) + "\n")
-    elif a.runtime == "vscode" and not in_window(Profile(runtime="vscode")):
-        sys.stderr.write(f"Runtime not switched: {PAUSED_NOTE}.\n")
-        return 1
     else:
         try:
-            sys.stdout.write(show_profile(store, a.repo.resolve(), a.confirm, a.role, a.runtime) + "\n")
+            sys.stdout.write(show_profile(store, a.repo.resolve(), a.confirm, a.role) + "\n")
         except ValueError as exc:  # a moved preference is refused before anything is recorded
             sys.stderr.write(f"Not recorded: {exc}.\n")
             return 1
@@ -320,9 +311,6 @@ def main(argv: list[str] | None = None) -> int:  # noqa: PLR0911, PLR0915 - one 
     p = sub.add_parser("profile", help="detect the project profile; --confirm KEY=VALUE records the owner's answer")
     p.add_argument("--confirm", action="append", default=[], type=lambda v: tuple(v.split("=", 1)))
     p.add_argument("--role", action="append", default=[], type=_role, help="ROLE=MODEL:EFFORT model override")
-    p.add_argument(
-        "--runtime", choices=("managed", "vscode"), help="where agent steps run from the next one on (TD-35)"
-    )
     s = sub.add_parser("seed", help="seed a pre-approved one-task Change and a minimal profile")
     s.add_argument("change")
     s.add_argument("--title", required=True)

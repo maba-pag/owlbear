@@ -135,8 +135,8 @@ A look is one tool-less session on the spotter role over a **card** (the intent 
 and answers, the applicable decisions from the picker's conflict check, the agent's plan, the moment itself, the
 recent actions with their evidence, the open work; each with an event cutoff). It returns a **record**: kind,
 sampling probability, the finding's category (none when silent), the note, the evidence references and a short
-rationale; the configured action follows from the category. #668's records carry the earlier verdict (silent, note,
-interrupt) instead, until the settings slice brings the categories.
+rationale; the configured action follows from the category. Records written before #697 carry the earlier verdict
+(silent, note, interrupt) instead.
 Records are kept on this machine in a daily store (`~/.owlbear/spotter/records-<date>.jsonl`), each with its session,
 its Change and step or its chat and turn, and its look, so Retro can join them after a restart.
 Active Spotter cases are its prompt examples. A look takes no session slot of its own: the agent it looks at holds
@@ -171,7 +171,7 @@ course.
 
 ### Where
 - **Delivery steps:** from the SDK adapter's event stream (W1a's feed). Steps run only through the SDK: window steps
-  are retired (D-01M5WG8RGCBKADW6XPGP0E2FAP; their code's removal is #694), and every runtime used must be readable,
+  are retired (D-01M5WG8RGCBKADW6XPGP0E2FAP; their code is removed, #698), and every runtime used must be readable,
   steerable and stoppable by the Spotter (D-01M5W9YB6VHT7RW53M3133WD3C).
 - **Chats:** a follower in the machine host tails each enrolled chat's `events.jsonl`.
 
@@ -264,7 +264,7 @@ always shows (D-01M5W9AEB412SNWYM2CS27H68M).
 
 Each slice is a pull request, with Sol on its plan and its code:
 1. this design: built (#659, #660);
-2. settings and roles: built (#662); the on/off switch and the four category actions replacing `mode` next;
+2. settings and roles: built (#662); the on/off switch and the four category actions replacing `mode` (#697);
 3. Retro chatlogs: built (#663);
 4. the card builder: built with 6's Delivery part (#668);
 5. Spotter records and cases: records built (#668); cases next;

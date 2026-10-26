@@ -4,7 +4,7 @@ A layer leaves a field at ``None`` to inherit it: project, else this machine, el
 (the owner, 2026-10-23): a field no layer sets is unset, listed in ``Settings.missing``, shown as an error on the
 Settings page, and a step that needs it refuses (``SettingsUnset``). Any other value overrides, including ``[]`` and
 ``False``. Only model, effort and context are applied today (TD-27); the other
-fields are stored for the config page and stay inactive until routing, visibility and capture use them (TD-50).
+fields are stored for the config page and stay inactive until their features use them (TD-50).
 """
 
 from __future__ import annotations
@@ -24,16 +24,14 @@ from owlbear_delivery_next.github.provider import MergeMethod  # noqa: TC001 - p
 from owlbear_delivery_next.settings import improvement
 from owlbear_delivery_next.settings.improvement import Spotter
 
-CONFIG_FORMAT = 14  # 3 renamed the designer to design-judge (TD-169); 4 minutes; 5 PR labels; 6 subagents; 7 sessions;
+CONFIG_FORMAT = 15  # 3 renamed the designer to design-judge (TD-169); 4 minutes; 5 PR labels; 6 subagents; 7 sessions;
 # 8 the test reviewer and curator roles; 9 the watcher's role and switch; 10 no code defaults; 11 Global's machine part;
 # 12 the watcher became the Spotter (role and settings), with the retro roles (2026-10-25);
 # 13 the five unset-by-default preferences and their one-time import marker;
-# 14 the Spotter's on/off switch and its four categories' actions replace its mode (2026-10-26)
+# 14 the Spotter's on/off switch and its four categories' actions replace its mode (2026-10-26);
+# 15 no window runtime settings: its switches, visibility and tool categories go (2026-10-26)
 CARRIED_FORMAT = 10  # a Global layer below it has not had the built-in values carried in (``settings_carry.carry``)
 ROLES: tuple[Role, ...] = get_args(Role.__value__)
-RUNTIMES: tuple[str, ...] = ("sdk", "window")
-type RuntimeName = Literal["sdk", "window"]
-type Category = Literal["browser"]
 type Source = Literal["default", "global", "machine", "project", "builder"]
 type Channel = Literal["minor", "major"]  # every minor version, or major versions only (TD-300)
 type Curate = Literal["off", "on", "paused"]  # an automatic curation trigger: off, on, or on even while paused
@@ -50,9 +48,6 @@ class Agent(Record):
     model: str | None = None
     effort: Effort | None = None
     context: Context | None = None
-    runtime: RuntimeName | None = None
-    visible: bool | None = None  # the agent "needs visibility" (TD-35)
-    categories: list[Category] | None = None  # extra tool categories beyond the baseline (R5)
     max_rounds: int | None = None  # TD-209: the challenge loops of this role's work
     max_findings: int | None = None
     last_round_at: int | None = None
@@ -109,7 +104,6 @@ class Layer(Record):
     prefs_imported: bool = False  # R15: the legacy import filled this project layer; a retry never fills again
     roles_moved: bool = False  # the old profile's roles were merged in the same write; kept by every later write
     agents: dict[Role, Agent] = Field(default_factory=dict)
-    runtimes: dict[RuntimeName, bool] = Field(default_factory=dict)  # a runtime switched off or on
     widths: list[int] | None = None
     preparations: list[Preparation] | None = None  # TD-96: the project's test-copy options, owner-declared
     data: DataPermissions | None = None  # TD-96: the owner's standing permissions for those test copies
@@ -191,9 +185,8 @@ class MachineValues(Record):
 
 
 class GlobalLayer(WideLayer):
-    """The global settings; the visibility switch and the curator's threshold are global only (TD-35, TD-400)."""
+    """The global settings; the curator's threshold is global only (TD-400)."""
 
-    visible: bool | None = None
     curator_threshold: int | None = Field(default=None, ge=50, le=100)  # percent: the curator decides alone at or above
     machine: MachineValues | None = None  # every machine's settings, each machine may set its own
     machine_moved: bool | None = None  # a machine's settings were moved in once (2026-10-23); no machine copies again
@@ -209,9 +202,6 @@ class Effective(Record):
     model: str | None
     effort: Effort | None
     context: Context | None
-    runtime: RuntimeName | None
-    visible: bool | None
-    categories: list[Category] | None
     max_rounds: int | None
     max_findings: int | None
     last_round_at: int | None
@@ -232,7 +222,7 @@ UNTIMED: tuple[Role, ...] = ("shaper", "spotter")  # the shaping chat has no ses
 
 
 def used(role: Role) -> tuple[str, ...]:
-    """The fields *role*'s work reads and needs set; runtime, visibility and categories are inactive (TD-50)."""
+    """The fields *role*'s work reads and needs set."""
     timed = () if role in UNTIMED else ("minutes", "subagents")
     return ("model", "effort", "context", *timed, *(tuple(RoundPolicy.model_fields) if role in LOOPED else ()))
 
@@ -250,13 +240,11 @@ class Settings(Record):
 
     ``agents`` holds the roles whose every used field (``used``) is set; ``roles`` holds every role's values, ``None``
     where unset, for the Settings page. A general field no layer sets is ``None``. ``missing`` lists every unset key a
-    step reads; inactive settings (runtimes, visibility, tool categories) may stay unset.
+    step reads.
     """
 
-    visible: bool | None
     agents: dict[Role, Effective]
     roles: dict[Role, dict[str, Any]]
-    runtimes: dict[RuntimeName, bool]
     widths: list[int] | None
     preparations: list[Preparation] = Field(default_factory=list)
     data: DataPermissions = Field(default_factory=DataPermissions)
@@ -328,18 +316,14 @@ def resolve(glob: GlobalLayer | None, project: Layer, machine: MachineLayer | No
     }  # fmt: skip
     every = {r: Effective.model_validate(v) for r, v in roles.items()}  # set round values hold together, used or not
     agents = {r: e for r, e in every.items() if all(roles[r][n] is not None for n in used(r))}
-    runtimes = {
-        name: bool(on) for name in RUNTIMES
-        if (on := _pick(f"runtimes.{name}", sources, *((s, layer.runtimes.get(name)) for s, layer in layers)))
-        is not None
-    }  # fmt: skip
     general = {
         key: _pick(key, sources, *((s, getattr(layer, key)) for s, layer in layers))
         for key in ("widths", "design_failures", "pr_labels", "pr_marker", "sessions")
     }
     spotter, unset = improvement.resolve(lambda key, *values: _pick(key, sources, *values), layers)
-    for key in ("visible", "curator_threshold"):  # global only (TD-35, TD-400)
-        general[key] = _pick(key, sources, *((s, getattr(layer, key, None)) for s, layer in wide if s != "machine"))
+    general["curator_threshold"] = _pick(  # global only (TD-400)
+        "curator_threshold", sources, *((s, layer.curator_threshold) for s, layer in wide if s != "machine")
+    )
     prep = _pick("preparations", sources, ("project", project.preparations), ("default", []))
     data = _pick("data", sources, ("project", project.data), ("default", DataPermissions()))
     final = {
@@ -356,7 +340,7 @@ def resolve(glob: GlobalLayer | None, project: Layer, machine: MachineLayer | No
         for key in PREF_KEYS
     }
     missing = [f"agents.{r}.{n}" for r, v in roles.items() for n in used(r) if v[n] is None]
-    missing += [k for k, v in general.items() if v is None and k != "visible"]
+    missing += [k for k, v in general.items() if v is None]
     missing += [f"prefs.{k}" for k, v in prefs.items() if v is None]
     missing += [f"final_review.{n}" for n, v in final.items() if v is None]
     missing += unset
@@ -366,7 +350,6 @@ def resolve(glob: GlobalLayer | None, project: Layer, machine: MachineLayer | No
         spotter=spotter,
         agents=agents,
         roles=roles,
-        runtimes=runtimes,
         preparations=prep,
         data=data,
         final_review=RoundPolicy.model_validate(final) if None not in final.values() else None,

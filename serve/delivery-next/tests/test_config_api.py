@@ -51,8 +51,7 @@ def test_get_shows_each_layer_the_resolved_values_their_source_and_what_is_appli
     got = client(store, headers=AUTH).get("/api/next/config").json()
 
     assert got["project"] == {
-        "format": F, "prefs": None, "prefs_imported": False, "roles_moved": False, "agents": {}, "runtimes": {},
-        "widths": None,
+        "format": F, "prefs": None, "prefs_imported": False, "roles_moved": False, "agents": {}, "widths": None,
         "preparations": None, "data": None, "design_failures": None, "final_review": None, "pr_labels": None,
         "pr_marker": None, "sessions": None, "spotter": None,
     }  # fmt: skip
@@ -78,18 +77,6 @@ def test_get_shows_each_layer_the_resolved_values_their_source_and_what_is_appli
         "agents.updater.subagents", "sessions",
     ]  # fmt: skip
     assert len(got["project_rev"]) == 64
-
-
-def test_get_describes_each_runtime_and_where_a_tool_category_lives(store):
-    got = client(store, headers=AUTH).get("/api/next/config").json()
-    rows = {r["runtime"]: r for r in got["catalogue"]["runtimes"]}
-
-    assert set(rows) == {"sdk", "window"}
-    assert rows["sdk"]["outside_writes"].startswith("nothing")  # TD-320: no guard stops them
-    assert rows["window"]["live_view"] == "yes"
-    browser = got["catalogue"]["categories"]["browser"]
-    assert browser["runtime"] == "window"
-    assert {"openBrowserPage", "screenshotPage"} <= set(browser["tools"])
 
 
 def test_a_project_save_needs_the_revision_it_was_based_on(store):
@@ -227,7 +214,7 @@ def test_an_action_its_category_does_not_allow_is_refused_and_the_layer_stays(st
 def test_the_global_layer_is_saved_only_where_a_location_is_configured(store, tmp_path):
     c = client(store, headers=AUTH)
     rev = c.get("/api/next/config").json()["global_rev"]
-    r = c.put("/api/next/config/global", json={"rev": rev, "layer": {"format": F, "visible": True}})
+    r = c.put("/api/next/config/global", json={"rev": rev, "layer": {"format": F, "pr_marker": False}})
     assert r.status_code == 409
     assert "location" in r.json()["detail"]
 
@@ -236,23 +223,22 @@ def test_the_global_layer_is_saved_only_where_a_location_is_configured(store, tm
     got = c.get("/api/next/config").json()
     assert (got["global"], got["global_location"]) == ({"format": F, "prefs": None, "prefs_imported": False,
                                                          "roles_moved": False,
-                                                         "agents": {}, "runtimes": {}, "widths": None,
+                                                         "agents": {}, "widths": None,
                                                          "preparations": None, "data": None, "design_failures": None,
                                                          "final_review": None, "pr_labels": None,
                                                          "pr_marker": None, "sessions": None, "spotter": None,
-                                                         "visible": None,
                                                          "curator_threshold": None, "machine": None,
                                                          "machine_moved": None},
                                                         True)  # fmt: skip
     data = c.put("/api/next/config/global", json={"rev": got["global_rev"], "layer": {"format": F, "data": {}}})
     assert data.status_code == 422  # test preparation is a project setting (TD-96)
-    layer = {"format": F, "visible": True, "agents": {"builder": {"model": "g-1", "effort": "high"}}}
+    layer = {"format": F, "pr_marker": False, "agents": {"builder": {"model": "g-1", "effort": "high"}}}
     r = c.put("/api/next/config/global", json={"rev": got["global_rev"], "layer": layer})
     assert r.status_code == 200
-    assert json.loads(path.read_text())["visible"] is True
+    assert json.loads(path.read_text())["pr_marker"] is False
     s = r.json()["settings"]
-    assert (s["visible"], s["agents"]["builder"]["model"], s["sources"]["agents.builder.model"]) == (
-        True, "g-1", "global"
+    assert (s["pr_marker"], s["agents"]["builder"]["model"], s["sources"]["agents.builder.model"]) == (
+        False, "g-1", "global"
     )  # fmt: skip
 
 
@@ -261,7 +247,7 @@ def test_a_save_landing_while_get_reads_cannot_be_overwritten_by_that_page(store
     first = c.get("/api/next/config").json()
     a = first["project"] | {"agents": {"builder": {"effort": "low"}}}
     c.put("/api/next/config/project", json={"rev": first["project_rev"], "layer": a})
-    newer = {"format": F, "agents": {"builder": {"effort": "high"}}, "runtimes": {}, "widths": None}
+    newer = {"format": F, "agents": {"builder": {"effort": "high"}}, "widths": None}
     path, real_text, real_bytes = store.root / "config.json", Path.read_text, Path.read_bytes
     landed = []
 
@@ -298,11 +284,11 @@ def test_a_stale_or_invalid_global_save_changes_nothing(store, tmp_path):
     path = tmp_path / "global" / "config.json"
     c = client(store, path, headers=AUTH)
     rev = c.get("/api/next/config").json()["global_rev"]
-    ok = c.put("/api/next/config/global", json={"rev": rev, "layer": {"format": F, "visible": True}})
+    ok = c.put("/api/next/config/global", json={"rev": rev, "layer": {"format": F, "pr_marker": True}})
     assert ok.status_code == 200
     before = path.read_bytes()
 
-    stale = c.put("/api/next/config/global", json={"rev": rev, "layer": {"format": F, "visible": False}})
+    stale = c.put("/api/next/config/global", json={"rev": rev, "layer": {"format": F, "pr_marker": False}})
     bad = c.put("/api/next/config/global", json={"rev": ok.json()["global_rev"], "layer": {"widths": [100]}})
 
     assert (stale.status_code, bad.status_code) == (409, 422)
