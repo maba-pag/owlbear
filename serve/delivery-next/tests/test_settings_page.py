@@ -116,7 +116,7 @@ def test_a_model_choice_brings_its_efforts_and_an_effort_it_lacks_blocks_the_sav
         minutes.fill("60")
         page.get_by_role("button", name="Save project settings").click()
         expect(pds.modal(page)).to_contain_text("These apply to this project only")  # TD-396
-        pds.modal(page).get_by_role("button", name="Save project settings").click()
+        pds.answer(page, "Save project settings")
         expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
     agents = store.read_config().agents
     assert (agents["builder"].model, agents["reviewer"].model, agents["reviewer"].effort) == (
@@ -159,7 +159,7 @@ def test_each_layer_keeps_its_own_drafts_and_a_save_sends_only_the_shown_layer(s
         expect(at_once).to_have_attribute("placeholder", "inherit (2)")
         at_once.fill("3")
         page.get_by_role("button", name="Save project settings").click()
-        pds.modal(page).get_by_role("button", name="Save project settings").click()
+        pds.answer(page, "Save project settings")
         expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
         a_list_keeps_its_text_as_typed_and_counts_only_new_items(page, looks)
         pds.pick(page, "Layer", "global")
@@ -198,11 +198,11 @@ def test_a_save_refused_by_a_newer_save_keeps_the_edits_and_the_next_save_lands(
         page.get_by_label("Minutes per session, reviewer").fill("25")
         save = page.get_by_role("region", name="Save settings").get_by_role("button", name="Save project settings")
         save.click()
-        pds.modal(page).get_by_role("button", name="Save project settings").click()
+        pds.answer(page, "Save project settings")
         expect(page.locator("#error")).to_contain_text("kept your unsaved edits; check them and save again.")
         expect(page.get_by_label("Minutes per session, reviewer")).to_have_value("25")
         save.click()  # the answered confirmation may still be fading out with its own button of this name
-        pds.modal(page).get_by_role("button", name="Save project settings").click()
+        pds.answer(page, "Save project settings")
         expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
     saved = json.loads(store.config_path.read_text())
     assert (saved["widths"], saved["agents"]["reviewer"]["minutes"]) == ([1600], 25)
@@ -292,7 +292,7 @@ def test_models_arriving_during_a_save_apply_once_it_ends(store, monkeypatch, pd
             page.goto(f"{base}/config#token=tok")
             page.get_by_label("Minutes per session, builder").fill("50")
             page.get_by_role("button", name="Save project settings").click()
-            pds.modal(page).get_by_role("button", name="Save project settings").click()
+            pds.answer(page, "Save project settings")
             expect(page.locator("#status")).to_have_text(
                 "Saved this project's settings. They apply to the next session.", timeout=10_000
             )
@@ -326,7 +326,7 @@ def test_with_no_layer_setting_anything_the_page_names_every_unset_value_and_a_s
         pds.pick(page, "Effort for spotter", "medium")
         pds.pick(page, "Model for reviewer", "claude-opus-5.5")  # its effort unset: listed, never blocking the save
         page.get_by_role("button", name="Save project settings").click()
-        pds.modal(page).get_by_role("button", name="Save project settings").click()
+        pds.answer(page, "Save project settings")
         expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
         expect(page.locator("#unset")).not_to_contain_text("sessions,")
         expect(page.locator("#unset")).not_to_contain_text("agents.spotter.")

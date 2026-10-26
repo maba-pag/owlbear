@@ -1,7 +1,9 @@
 ---
-description: "Research document guardrails — load the source-grounded research workflow"
+description: "Planning and build-design documents — keep claims grounded in their sources"
 applyTo: ".owlbear/research/*.md"
 ---
 
-When creating or editing `.owlbear/research/*.md`, read the `w-research` skill.
-Use its research document template, source-grounding rules, follow-up handling, and verification checklist.
+`.owlbear/research/` holds the plan and the build designs of work not yet built; research itself goes to
+owlbear-data (`r-workspace-governance`). When editing these documents, ground each claim in a source you read: code,
+a test, a decision or an external page, linked or named so a reader can check it. For new research, read the
+`w-research` skill.
