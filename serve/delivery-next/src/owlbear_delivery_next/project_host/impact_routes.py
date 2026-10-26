@@ -75,6 +75,16 @@ def _answer[T](work: Callable[[], T]) -> T:
         raise HTTPException(exc.status, exc.text) from exc
 
 
+def after_change(
+    shared: DataRepo | None, folder: str, decision_id: str, places: Callable[[], Sequence[Place]]
+) -> dict[str, Any]:
+    """A replacement's impact report as the page shows it (TD-428), or why it cannot be made."""
+    try:
+        return decision_impact.shown(decision_impact.report(shared, folder, decision_id, places()))
+    except (Refused, decision_store.DecisionsUnavailable) as exc:
+        return {"error": str(exc)}
+
+
 def router(shared: Callable[[], DataRepo | None], places: Callable[[], Sequence[Place]], mine: list[Any]) -> APIRouter:
     """The impact routes over *places*; *mine* refuses a chat's call to the owner's actions."""
     routes = APIRouter(route_class=Quiet)
