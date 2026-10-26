@@ -44,7 +44,7 @@ applyTo: "**"
 - **Runtime.** Python 3.14 only (the patch version is pinned in `.python-version`) with `uv` (never
   bare `pip`). VS Code/Copilot custom agents, MCP tools, and Delivery's machine host with its pages.
 - **Distribution and safety.** Clone = install (`owlbear install`); OwlBear updates itself from
-  version tags; `setup/init.py` adds the optional agent workspace. Git history and audit logs
+  version tags; `owlbear setup` registers a project's chat tools. Git history and audit logs
   provide review and recovery.
 - **Delivery.** A Change runs shape → plan → build → review → publish → merge → cleanup, with
   independent reviews and challenge rounds in its loops. The engine owns readiness, retries and

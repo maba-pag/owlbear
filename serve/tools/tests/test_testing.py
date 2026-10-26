@@ -86,7 +86,7 @@ def test_a_delivery_next_change_testmon_cannot_see_runs_the_whole_package(paths:
     ("paths", "coverage"),
     [
         ((_LOOP,), True),
-        ((_LOOP, "setup/init.py"), False),
+        ((_LOOP, "scripts/new_tool.py"), False),
         (("serve/delivery-next/src/owlbear_delivery_next/gone.py",), False),
     ],
     ids=["coverage", "unknown-path", "deleted-source"],
@@ -151,8 +151,8 @@ def test_memory_source_routes_confirmation_cycle() -> None:
     assert "tests/test_confirmation_cycle.py" in scope
 
 
-def test_setup_source_falls_back_to_full_python_suite() -> None:
-    scope = testing_module._python_scope("setup/init.py")  # noqa: SLF001
+def test_an_unrouted_python_source_falls_back_to_full_python_suite() -> None:
+    scope = testing_module._python_scope("scripts/new_tool.py")  # noqa: SLF001
 
     assert scope is None
 

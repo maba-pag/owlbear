@@ -54,10 +54,9 @@ src = [
   "serve/tools/src",
 ]
 
-# Hooks run under each consumer project's own Python; CI runs these scripts with the runner's python3.
+# Hooks run under the machine's python3 and CI runs these scripts with the runner's, not the workspace Python.
 [tool.ruff.per-file-target-version]
 ".owlbear/hooks/*.py" = "py312"
-"seed/.owlbear/hooks/*.py" = "py312"
 ".owlbear/scripts/diagrams/*.py" = "py312"
 ".github/scripts/*.py" = "py312"
 "serve/tools/src/owlbear_tools/dependency_ci.py" = "py312"
@@ -79,12 +78,6 @@ ignore = [
   "PLR0912", # guard scripts branch by path rule category
   "T201",   # print() is the stdout I/O contract for VS Code hook scripts
 ]
-"seed/.owlbear/hooks/*.py" = [
-  "C901",   # hook scripts have inherently complex path-extraction logic
-  "INP001", # seed/.owlbear/hooks/ is not a package — direct-run scripts are expected here
-  "PLR0912", # guard scripts branch by path rule category
-  "T201",   # print() is the stdout I/O contract for VS Code hook scripts
-]
 "serve/browser/src/owlbear_browser/_errors.py" = [
   "N818",   # AuthenticationRequired is an established public API name
 ]
@@ -102,10 +95,6 @@ ignore = [
 ]
 ".github/skills/session-review/tests/test_extract_transcript.py" = [
   "S101", # assert-based checks are intentional in the skill's extractor tests
-]
-"seed/.owlbear/scripts/*.py" = [
-  "INP001", # seed/.owlbear/scripts/ is not a package — direct-run files are expected here
-  "T201",   # print() is intentional in CLI scripts
 ]
 ".owlbear/scratch/*.py" = [
   "ANN401", # Any is appropriate for spike scripts interfacing with browser objects

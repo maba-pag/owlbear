@@ -249,20 +249,6 @@ COMMANDS = (
         topic_only=True,
     ),
     Command(
-        "setup-project",
-        "uv run setup-project [OPTIONS] [PATH]",
-        "Initialize an OwlBear project.",
-        "Setup",
-        topic_only=True,
-    ),
-    Command(
-        "doctor",
-        "uv run doctor [PATH]",
-        "Check an OwlBear project without changing it.",
-        "Setup",
-        topic_only=True,
-    ),
-    Command(
         "dep-status",
         "uv run dep-status [OPTIONS]",
         "Report local dependency environment agreement without changing files.",
