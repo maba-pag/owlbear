@@ -1,5 +1,6 @@
 """The offline receipt lookup reads the ledger as a host does, without a host: nothing restored, inspected or saved."""
 
+import gc
 import json
 import os
 import threading
@@ -23,6 +24,12 @@ def receipted_ledger() -> None:
 
 def open_fds() -> set[str]:
     return {p.name for p in Path("/dev/fd").iterdir()}
+
+
+def settled_fds() -> set[str]:
+    """The open descriptors once an earlier test's garbage has closed its own, so only the lookup can change them."""
+    gc.collect()
+    return open_fds()
 
 
 def test_the_lookup_finds_a_known_receipt_and_nothing_for_another_version_without_a_host(monkeypatch):
@@ -74,7 +81,7 @@ def test_a_ledger_that_cannot_be_read_whole_is_refused_not_taken_for_empty(monke
     path = ledger_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(body)
-    fds = open_fds()
+    fds = settled_fds()
     with monkeypatch.context() as patch:
         no_host(patch)
         with pytest.raises(maintenance.MaintenanceError, match="could not be read"):
@@ -94,7 +101,7 @@ def test_a_ledger_that_is_not_a_regular_file_is_refused_at_once_and_its_descript
         whole = tmp_path / "elsewhere.json"
         whole.write_text(json.dumps({"format": 1, "sessions": [], "imported": ["p:receipt:d0:G0"]}))
         path.symlink_to(whole)
-    fds = open_fds()
+    fds = settled_fds()
     outcome: list[BaseException] = []
 
     def look() -> None:
