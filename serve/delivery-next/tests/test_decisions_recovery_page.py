@@ -275,3 +275,66 @@ def test_a_recovery_request_refused_by_validation_never_echoes_what_was_sent(pic
     assert client.post(
         "/api/next/decisions/recovery/abandon", json={"generation": generation, "confirmed": True, "reason": "ok"}
     ).json()["done"]
+
+
+# Each Recovery and list read is sent at once and answered by the host then, but handed to the page only when the test
+# releases it, in the order it chooses; a held read waits for no clock. `__release(i, true)` answers it as an error.
+HOLD_READS = """() => {
+  window.__held = [];
+  const real = window.fetch.bind(window);
+  window.__unhold = () => { window.fetch = real; };
+  window.fetch = (url, init = {}) => {
+    const u = String(url);
+    const kind = u.endsWith("/decisions/recovery") ? "recovery" : /\\/decisions\\?/.test(u) ? "list" : "";
+    if (!kind) return real(url, init);
+    const answer = real(url, { ...init, signal: undefined });
+    return new Promise((resolve, reject) => window.__held.push({ kind, answer, resolve, reject }));
+  };
+  window.__release = (i, failed = false) => {
+    const held = window.__held[i];
+    if (!failed) return held.answer.then(held.resolve, held.reject).then(() => true);
+    const body = JSON.stringify({ detail: "the recovery read failed" });
+    held.resolve(new Response(body, { status: 503, headers: { "Content-Type": "application/json" } }));
+    return true;
+  };
+}"""
+REFRESH = "() => document.dispatchEvent(new Event('visibilitychange'))"  # the page's own refresh, as on returning
+
+
+@pytest.mark.browser
+@pytest.mark.parametrize("older", ["no-batch", "error"])
+def test_an_older_recovery_read_answered_last_never_hides_a_newer_interruption(picking, tmp_path, pds, older):
+    """Two refreshes overlap: the older one read Recovery before the batch was interrupted, the newer one after. The
+    newer answer arrives first and the older one, no batch or an error, arrives after it but before the newer list
+    renders: it is discarded, so the page shows the interruption with its Finish and Abandon."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    old = _seed(picking)
+    with decisions_page(_store(picking, tmp_path), pds) as page:
+        page.wait_for_load_state("networkidle")
+        expect(page.locator("#recovery")).to_have_count(0)
+        page.evaluate(HOLD_READS)
+        page.evaluate(REFRESH)  # the older refresh
+        page.wait_for_function("window.__held.length === 1")
+        page.evaluate("window.__held[0].answer.then(() => true)")  # the host answered it: no batch yet
+        _crash(picking, old, "after-first")
+        generation = decision_batch.pending(picking.shared).generation
+        page.evaluate(REFRESH)  # the newer refresh
+        page.wait_for_function("window.__held.length === 2 && window.__held[1].kind === 'recovery'")
+        page.evaluate("window.__release(1)")  # the newer Recovery read: the interruption
+        page.wait_for_function("window.__held.length === 3 && window.__held[2].kind === 'list'")
+        page.evaluate(f"window.__release(0, {'true' if older == 'error' else 'false'})")  # the older one, last
+        page.wait_for_function("window.__held.length === 4 && window.__held[3].kind === 'list'")
+        page.evaluate("window.__release(2)")  # the newer list renders
+        expect(page.locator(".recovery-generation")).to_have_text(generation)
+        expect(page.locator("#unavailable")).to_be_visible()
+        expect(page.get_by_role("button", name="Finish batch")).to_be_visible()
+        expect(page.locator("#recovery-error")).to_have_count(0)
+        page.evaluate("window.__release(3)")  # the older list, discarded as before
+        page.evaluate("window.__unhold()")
+        page.get_by_role("button", name="Finish batch").click()
+        with page.expect_request(lambda r: "/decisions/recovery/finish" in r.url) as sent:
+            pds.modal(page).get_by_role("button", name="Finish").click()
+        assert sent.value.post_data_json["generation"] == generation  # the owner's intent names the shown batch
+        expect(page.locator("#recovery-notice")).to_contain_text(f"Finished batch {generation}")
+    assert decision_batch.pending(picking.shared) is None

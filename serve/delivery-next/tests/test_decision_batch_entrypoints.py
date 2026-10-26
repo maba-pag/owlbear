@@ -3123,7 +3123,7 @@ def test_a_publication_goes_where_it_began_whatever_branch_is_checked_out_later(
         assert shared.git("rev-parse", "HEAD").stdout.strip() == side
         assert _remote_main(remote) == batch  # the commit proved, sent where the publication began
         assert not any(r.saved for r in receipts)  # the owner's checkout no longer holds the batch: held for Finish
-        assert "not landed in Git" in receipts[0].notice
+        assert f"published as {batch[:12]}, but HEAD moved past it" in receipts[0].notice
         assert decision_batch.pending(shared) is not None
         return
     assert rebased == []
@@ -3276,4 +3276,127 @@ def test_hook_output_never_names_the_commit_a_save_made(picking, shared_repo):
 
     assert all(r.published for r in receipts)
     assert _remote_main(remote) == shared.git("rev-parse", "HEAD").stdout.strip() != head
+    assert decision_batch.pending(shared) is None
+
+
+def _unrelated_commit_of_the_after_images(shared: DataRepo, files) -> str:
+    """The batch's after images written and committed with no parent: same tree, unrelated to the journalled head."""
+    for rel, _, after in files:
+        (shared.root / rel).write_bytes(after)
+    shared.git("add", "-A")
+    tree = shared.git("write-tree").stdout.strip()
+    orphan = shared.git("commit-tree", tree, "-m", "the owner's unrelated commit").stdout.strip()
+    shared.git("reset", "-q", "--soft", orphan)  # in the test's throwaway clone: HEAD is the unrelated commit
+    return orphan
+
+
+@pytest.mark.parametrize(
+    "value", ["HEAD", "refs/heads/main", "abc1234", "A" * 40, 1234567, None],
+    ids=["HEAD", "ref", "short", "upper-case", "number", "null"],
+)  # fmt: skip
+def test_a_journal_whose_head_is_no_full_commit_id_is_corrupt_and_finishes_nothing(
+    picking, shared_repo, monkeypatch, value
+):
+    """A journal naming its head as a ref, a short or upper-case id, a number or nothing is damage: a Finish on an
+    unrelated owner commit with the batch's very tree completes nothing, and neither Abandon, a save nor a reader
+    goes on as if the batch were known."""
+    _seed(picking)
+    shared, remote = picking.shared, shared_repo[1]
+    items, _, _ = _update_and_successor(picking)
+    generation = _interrupt_at(picking, monkeypatch, items)
+    files = decision_batch.pending(shared).files
+    _rewrite_journal(shared, lambda record: record.__setitem__("head", value))
+    orphan = _unrelated_commit_of_the_after_images(shared, files)
+    journal, published = decision_batch.journal_path(shared).read_bytes(), _remote_main(remote)
+
+    for action in (decision_recovery.finish, decision_recovery.abandon):  # the generation the owner was shown
+        with pytest.raises(decision_store.DecisionsUnavailable, match="head"):
+            action(shared, generation)
+    with pytest.raises(decision_batch.JournalError, match="head"):
+        decision_batch.pending(shared)
+    shown = decision_recovery_routes.diagnosis(shared)
+    assert (shown["interrupted"], shown["corrupt"], shown["generation"]) == (True, True, "")
+    with pytest.raises(decision_store.DecisionsUnavailable):
+        decision_store.save(shared, make(title="Use UTC"), expected_revision=None, message="decisions: one")
+    assert decision_batch.journal_path(shared).read_bytes() == journal
+    assert shared.git("rev-parse", "HEAD").stdout.strip() == orphan
+    assert _remote_main(remote) == published
+    _no_authority(picking)
+
+
+@pytest.mark.parametrize("length", [40, 64])
+def test_a_journal_head_of_a_full_commit_id_is_read(picking, monkeypatch, length):
+    """A producer journals HEAD as `rev-parse` names it, 40 hexadecimal characters, or 64 in a SHA-256 repository."""
+    _seed(picking)
+    shared = picking.shared
+    _interrupt(picking, monkeypatch, [make(title="Use UTC", statement="All timestamps use UTC.")])
+    head = decision_batch.pending(shared).head
+    assert len(head) == 40  # a producer's own
+    value = head if length == 40 else "c" * 64
+    _rewrite_journal(shared, lambda record: record.__setitem__("head", value))
+
+    assert decision_batch.pending(shared).head == value
+    assert decision_recovery_routes.diagnosis(shared)["corrupt"] is False
+
+
+def _owner_commits_after_push(m: pytest.MonkeyPatch, at: int, pushes: list[str], made: list[str]) -> None:
+    """After Git pushes the *at*-th commit of this save, the owner commits an unrelated file; every push is listed."""
+    real_git = data_repo._git  # noqa: SLF001
+
+    def push_then_owner_commits(cwd, *args, **kwargs):
+        said = real_git(cwd, *args, **kwargs)
+        if args[:1] == ("push",):
+            pushes.append(args[-1])
+            if len(pushes) == at and not said.returncode:
+                (cwd / "owner.txt").write_text("the owner's own work\n")
+                real_git(cwd, "add", "owner.txt")
+                real_git(cwd, "commit", "-qm", "the owner's own commit")
+                made.append(real_git(cwd, "rev-parse", "HEAD").stdout.strip())
+        return said
+
+    m.setattr(data_repo, "_git", push_then_owner_commits)
+
+
+@pytest.mark.parametrize("case", ["after-the-batch-push", "after-the-flag-push", "healthy-flags"])
+def test_an_owner_commit_made_as_a_save_publishes_is_never_completed_on_or_pushed_later(
+    picking, shared_repo, monkeypatch, case
+):
+    """The batch's commit B is pushed, then the owner commits C on it: B is reported published but the batch is not
+    completed on C, and no later round proves, rebases or pushes C. When the owner commits after the conflict flags'
+    commit F is pushed instead, the next round stops there and C stays local. Without the owner's commit, the batch
+    and its flags publish as before."""
+    _seed(picking)
+    shared, remote = picking.shared, shared_repo[1]
+    old = make()
+    assert decision_store.save(shared, old, expected_revision=None, message="decisions: old").published
+    a, b = replacing(old, title="Notes in A"), replacing(old, title="Notes in B")
+    assert decision_store.save(shared, a, expected_revision=None, message="decisions: a").published
+    pushes, made = [], []
+
+    with monkeypatch.context() as m:
+        if case != "healthy-flags":
+            _owner_commits_after_push(m, 1 if case == "after-the-batch-push" else 2, pushes, made)
+        receipts = decision_store.save_all(shared, [(b, None)], message="decisions: b")
+
+    head = shared.git("rev-parse", "HEAD").stdout.strip()
+    if case == "healthy-flags":
+        assert all(r.published for r in receipts)
+        assert _remote_main(remote) == head
+        assert shared.git("log", "-1", "--format=%s").stdout.startswith("decisions: conflict on")
+        assert decision_batch.pending(shared) is None
+        return
+    owner = made[0]
+    assert head == owner  # the owner's commit stays, as made, and is never sent
+    assert len(pushes) == (1 if case == "after-the-batch-push" else 2)
+    assert _remote_main(remote) == shared.git("rev-parse", "HEAD~1").stdout.strip() != owner
+    assert shared.git("status", "--porcelain").stdout == ""
+    if case == "after-the-batch-push":
+        assert not any(r.saved for r in receipts)
+        assert f"published as {_remote_main(remote)[:12]}, but HEAD moved past it" in receipts[0].notice
+        assert decision_batch.pending(shared) is not None
+        _no_authority(picking)
+        return
+    assert shared.git("log", "-1", "--format=%s", "HEAD~1").stdout.startswith("decisions: conflict on")
+    assert all(r.saved for r in receipts)  # the batch and its flags landed; only the next round stopped
+    assert "HEAD moved past this save's commit" in receipts[0].notice
     assert decision_batch.pending(shared) is None

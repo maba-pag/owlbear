@@ -229,11 +229,11 @@ def _rebase_state_fault(scoped, root: Path, state: str, seen: dict[str, str]) ->
     real_in_head = decision_transaction.in_head
     real_rebasing = DataRepo.rebasing
 
-    def landed_from_store_or_finish(shared, head, rows):
+    def landed_from_store_or_finish(shared, head, rows, *commit):
         caller = sys._getframe(1).f_globals.get("__name__", "")  # noqa: SLF001
         armed[0] = caller.endswith(("decision_store", "decision_recovery"))
         try:
-            return real_landed(shared, head, rows)
+            return real_landed(shared, head, rows, *commit)
         finally:
             armed[0] = unknown[0] = False
 
@@ -308,12 +308,12 @@ def _terminal_head_switch(scoped, seen: dict[str, str]) -> None:
     real_landed = decision_transaction.landed
     real_rebasing = DataRepo.rebasing
 
-    def landed_from_store_or_finish(shared, head, rows):
+    def landed_from_store_or_finish(shared, head, rows, *commit):
         caller = sys._getframe(1).f_globals.get("__name__", "")  # noqa: SLF001
         armed[0] = caller.endswith(("decision_store", "decision_recovery"))
         probes[0] = 0
         try:
-            return real_landed(shared, head, rows)
+            return real_landed(shared, head, rows, *commit)
         finally:
             armed[0] = False
 

@@ -8,7 +8,7 @@ stale: the commit stays in Git unpublished and the save is reported stale. Nothi
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, NamedTuple
 
@@ -35,6 +35,9 @@ class Sent:
     notice: str = ""
     uncommitted: bool = False  # the commit failed and `HEAD` did not move: nothing of the batch is in Git
     ambiguous: bool = False  # the outcome cannot be proven from here: the batch stays interrupted until owner recovery
+    # The commit HEAD must be for the batch to land: the one this publication proved and sent, or kept local when the
+    # push failed; "" when none is known. Completion proves that very commit, never a later one at HEAD.
+    commit: str = ""
 
 
 def _decision_file(rel: str) -> bool:
@@ -168,12 +171,16 @@ def behind_unproved(shared: DataRepo, head: str, until: float) -> bool:
     return not proved(shared, head, until) and _ahead(shared, until)
 
 
-def prepare(shared: DataRepo, until: float) -> tuple[str, str]:
+def prepare(shared: DataRepo, until: float, own: str = "") -> tuple[str, str]:
     """Catch up, then prove HEAD on the remote, before any batch is journalled; every writer runs this first.
 
     Returns the head to journal and a notice about the catch-up. The head is "" when HEAD is not known, or when the
     remote moved on again before HEAD could be proved; nothing may be written then. When the remote is unreachable
     and not known to be ahead, the head is returned unproved: its commit then stays unpublished, as before.
+
+    *own*, for a continuation of a publication, is the commit it landed: HEAD must then still be that commit, or one
+    already on the remote, before the catch-up and when HEAD is read, so an owner's commit made since is never
+    rebased, pushed or built on; nothing is written then either.
     """
     try:
         if shared.rebasing(until):
@@ -185,12 +192,21 @@ def prepare(shared: DataRepo, until: float) -> tuple[str, str]:
         return "", f"{exc}, so nothing was written"
     notice = ""
     for _ in range(PREPARE_TRIES):
+        if stray := _stray(shared, own, _rev(shared, "HEAD", until) if own else "", until):
+            return "", stray
         notice = catch_up(shared, until)
-        if (head := _rev(shared, "HEAD", until)) is None:
-            return "", "HEAD is not known, so nothing was written"
+        if (head := _rev(shared, "HEAD", until)) is None or (stray := _stray(shared, own, head, until)):
+            return "", stray if head else "HEAD is not known, so nothing was written"
         if not behind_unproved(shared, head, until):
             return head, (f"not checked against the remote: {notice}" if notice else "")
     return "", "the remote moved on again before HEAD was proved, so nothing was written; save again"
+
+
+def _stray(shared: DataRepo, own: str, head: str | None, until: float) -> str:
+    """Why nothing more is written: *head* is neither *own* nor on the remote as last fetched, or unknown; else ""."""
+    if not own or (head and (head == own or _on_remote(shared, head, until))):
+        return ""
+    return f"HEAD moved past this save's commit {own[:12]} to one not its own, so nothing more was written; check it"
 
 
 def _ready(shared: DataRepo, until: float) -> tuple[str, Sent | None]:
@@ -238,10 +254,15 @@ def publish(shared: DataRepo, paths: list[Path], message: str, until: float, hea
         return stop
     pushed = push_commit(shared, now, goal, until) if now else "HEAD is not known"  # `_unproved` refused that
     if not pushed:
-        return Sent()
+        return Sent(commit=now)
     if refused := _rejected(shared, rels, pushed, until, own=bool(made)):
-        return refused
+        return _bound(refused, now)
     return _rebase_push(shared, head, until, (rows, paths, rels, made, now, goal))
+
+
+def _bound(sent: Sent, commit: str | None) -> Sent:
+    """*sent*, naming *commit* as the one HEAD must be for the batch to land, unless it is a refusal of the batch."""
+    return sent if sent.stale or sent.ambiguous or sent.uncommitted or not commit else replace(sent, commit=commit)
 
 
 type Rows = dict[str, bytes] | None  # the batch's after images by path, or None outside a journalled batch
@@ -416,7 +437,7 @@ def _rebase_push(
     if refused := _not_rebased(shared, where, head, (sent, goal), until):
         return refused
     if failed := shared.rebase(until):
-        return _rebase_failed(shared, where, failed, until)
+        return _bound(_rebase_failed(shared, where, failed, until), sent)  # never aborted: HEAD must still be *sent*
     rebased, upstream = _rev(shared, "HEAD", until), _rev(shared, goal.tracking, until) if goal else None
     own = _ours(shared, upstream, rels, until) if made and upstream else ""
     if rebased is None or rebased not in {own or upstream, upstream}:  # upstream itself: nothing of ours left to send
@@ -425,8 +446,8 @@ def _rebase_push(
     if unproved := _unproved(shared, rebased, rows, paths, until):
         return unproved
     if failed := push_commit(shared, rebased, goal, until):
-        return Sent(notice=f"{where}, but the push failed: {failed}")
-    return Sent()
+        return Sent(notice=f"{where}, but the push failed: {failed}", commit=rebased)
+    return Sent(commit=rebased)
 
 
 def revision_at(shared: DataRepo, ref: str, rel: str, until: float) -> str:

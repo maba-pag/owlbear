@@ -28,6 +28,7 @@ if TYPE_CHECKING:
 
 JOURNAL = "owlbear-decision-batch.json"
 GENERATION = re.compile(r"[0-9a-f]{8,64}")  # as `begin` makes it (a UUID's hex) and the owner's recovery names it
+COMMIT = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")  # a full SHA-1 or SHA-256 commit id, as `rev-parse` names HEAD
 COMPLETED = "owlbear-decision-batches-completed.json"
 LOCK = "owlbear-decision-batch.lock"
 
@@ -173,7 +174,7 @@ def decode(raw: bytes) -> Batch:
         return Batch(
             _generation(record["generation"]),
             str(record["project"]),
-            str(record["head"]),
+            _commit(record["head"]),
             str(record["message"]),
             ids,
             files,
@@ -202,6 +203,14 @@ def _generation(value: object) -> str:
     """A batch's generation as `begin` makes it and the owner's recovery names it; anything else is damage."""
     if not isinstance(value, str) or not GENERATION.fullmatch(value):
         msg = "the journal's generation is not 8 to 64 lowercase hexadecimal characters"
+        raise ValueError(msg)
+    return value
+
+
+def _commit(value: object) -> str:
+    """The batch's head as `begin` journals it, a full commit id; a ref name, a short id or anything else is damage."""
+    if not isinstance(value, str) or not COMMIT.fullmatch(value):
+        msg = "the journal's head is not a full commit id of 40 or 64 lowercase hexadecimal characters"
         raise ValueError(msg)
     return value
 

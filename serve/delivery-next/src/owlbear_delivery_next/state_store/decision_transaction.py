@@ -159,24 +159,27 @@ def _staged(shared: DataRepo, images: dict[Path, tuple[bytes | None, bytes]]) ->
     return any(shared.git("diff", "--cached", "--quiet", "--", rel, until=until).returncode for rel in rels)
 
 
-def landed(shared: DataRepo, head: str, rows: Sequence[tuple[str, bytes | None, bytes]]) -> bool:
+def landed(shared: DataRepo, head: str, rows: Sequence[tuple[str, bytes | None, bytes]], commit: str = "") -> bool:
     """The one proof that a batch is published.
 
     HEAD descends from *head* and holds each file's after image, and each worktree file is exactly that after image.
     One HEAD commit is read for all of it and checked again at the end, so a commit moving mid-proof cannot pass. An
     active or unknown rebase is never published. The terminal rebase probe runs before the final HEAD read, so a HEAD
-    move during that probe is caught too. Finish and every completion path use this same check.
+    move during that probe is caught too. Finish and every completion path use this same check. A publication names
+    the *commit* it landed: HEAD must be exactly that commit, never an owner's made on it since.
     """
     if not operation_idle(shared):
         return False
-    commit = head_commit(shared)
-    if commit is None or shared.git("merge-base", "--is-ancestor", head, commit).returncode:
+    captured = head_commit(shared)
+    if captured is None or (commit and captured != commit):
         return False
-    if not all(in_head(shared, rel, after, commit) and worktree_holds(shared, rel, after) for rel, _, after in rows):
+    if shared.git("merge-base", "--is-ancestor", head, captured).returncode:
+        return False
+    if not all(in_head(shared, rel, after, captured) and worktree_holds(shared, rel, after) for rel, _, after in rows):
         return False
     if not decision_batch.still_plain(shared.root, [shared.root / rel for rel, _, _ in rows]):  # after every read
         return False
-    return operation_idle(shared) and head_commit(shared) == commit
+    return operation_idle(shared) and head_commit(shared) == captured
 
 
 def operation_idle(shared: DataRepo) -> bool:

@@ -298,13 +298,15 @@ def _journal(shared: DataRepo, items: list[Placed], message: str, head: str, beh
         put_back = sent.uncommitted and decision_transaction.settle(shared, images, head, generation)
         said = f"not saved, the files are put back: {sent.notice.removeprefix('saved, but ')}"
         return _unsaved(shared, decisions, said) if put_back else _held_back(shared, decisions, sent.notice, generation)
-    if not decision_transaction.landed(shared, head, rows):  # a sent publication is not proof of landing
-        notice = f"{sent.notice} (interrupted batch {generation}: not landed in Git; finish or abandon it in Decisions)"
+    if not sent.commit or not decision_transaction.landed(shared, head, rows, sent.commit):  # sent is not landed
+        moved = bool(sent.commit) and not sent.notice and _head(shared) != sent.commit
+        state = f"published as {sent.commit[:12]}, but HEAD moved past it" if moved else "not landed in Git"
+        notice = f"{sent.notice} (interrupted batch {generation}: {state}; finish or abandon it in Decisions)"
         return _unsaved(shared, decisions, notice)
     decision_batch.complete(shared, generation)
     held = [decision_sync.revision_at(shared, "HEAD", p.relative_to(shared.root).as_posix(), until) for p in paths]
     said = [sent.notice]
-    view = _reconcile(shared, decisions, said, until)
+    view = _reconcile(shared, decisions, said, until, sent.commit)
     if view is None:  # saved and published; only the conflict flags are interrupted
         return [Receipt(d.id, saved=True, commit=_head(shared), notice=_join(*said)[:300]) for d in decisions]
     return [
@@ -388,16 +390,17 @@ def _refused(shared: DataRepo, decisions: list[Decision], refused: dict[str, str
     ]
 
 
-def _reconcile(shared: DataRepo, decisions: list[Decision], said: list[str], until: float) -> DataView | None:
+def _reconcile(shared: DataRepo, decisions: list[Decision], said: list[str], until: float, own: str) -> DataView | None:
     """Flag competing successors and publish the flags, reloading until none is left unflagged (ROUNDS at most).
 
     The flags are one journaled batch: a refused flag commit puts them back, and an unknown one stops the loop as
-    interrupted. Nothing is flagged unless `decision_sync.prepare` proved HEAD on the remote first.
+    interrupted. Nothing is flagged unless `decision_sync.prepare` proved HEAD on the remote first, and every round
+    goes on only from *own*, the commit the save landed, or the flag commit the round before landed.
     """
-    project = next((d.project for d in decisions if d.project), "")
+    project, landed = next((d.project for d in decisions if d.project), ""), [own]
     for _ in range(ROUNDS):
         _interrupted(shared)  # before any remote work of this round, as every new writer
-        head, behind = decision_sync.prepare(shared, until)
+        head, behind = decision_sync.prepare(shared, until, landed[-1])  # only from the commit this save landed
         if not head:  # the flags are not written: the competitors stay unflagged and none is active
             said.append(behind)
             return None
@@ -415,6 +418,7 @@ def _reconcile(shared: DataRepo, decisions: list[Decision], said: list[str], unt
             ids = ", ".join(sorted(p.stem for p in flagged))
             sent = decision_sync.publish(shared, flagged, f"decisions: conflict on {ids}", until, head)
             unknown = sent.ambiguous or sent.stale
+            landed.append(sent.commit or head)  # the next round goes on only from the flag commit, or this head
             return decision_transaction.Step(sent.notice, unknown=unknown, refused=sent.uncommitted)
 
         notice = decision_transaction.transaction(shared, project, "decisions: conflict flags", files, flag, head)

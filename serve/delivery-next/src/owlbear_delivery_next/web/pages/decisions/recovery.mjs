@@ -13,11 +13,18 @@ const EFFECT = {
 };
 const TITLE = { finish: "Finish", abandon: "Abandon" };
 
+let recoveryTurn = 0;
+
+// Only the newest read answers: an older one, success or failure, that returns after it never overwrites what it says.
 export async function loadRecovery() {
+  const turn = ++recoveryTurn;
   try {
-    state.recovery.status = await call("/decisions/recovery");
+    const status = await call("/decisions/recovery");
+    if (turn !== recoveryTurn) return;
+    state.recovery.status = status;
     state.recovery.error = "";
   } catch (error) {
+    if (turn !== recoveryTurn) return;
     state.recovery.status = null;
     state.recovery.error = error.message;
   }
