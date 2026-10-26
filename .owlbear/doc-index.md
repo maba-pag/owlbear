@@ -22,7 +22,6 @@
 - [Troubleshooting](../setup/setup-guide.md#troubleshooting)
 - [First successful workflow](../setup/setup-guide.md#first-successful-workflow)
 - [Uninstalling](../setup/operating-owlbear.md#uninstalling)
-- [the setup guide](../setup/setup-guide.md#optional-agent-workspace)
 - [Upgrading OwlBear](../setup/operating-owlbear.md#upgrading-owlbear)
 - [Setup guide](../setup/setup-guide.md)
 - [Operating OwlBear](../setup/operating-owlbear.md)
@@ -58,7 +57,6 @@
 - [Operating OwlBear](../setup/operating-owlbear.md)
 - [package map](../serve/README.md)
 - [loading model](../share/README.md)
-- [What setup creates](../setup/operating-owlbear.md#what-setup-creates)
 - [setup guide](../setup/setup-guide.md)
 - [Operating OwlBear](../setup/operating-owlbear.md)
 - [sharing guide](../setup/sharing-guide.md)
@@ -89,7 +87,6 @@
 ### Outbound links
 - [`renovate.json`](../renovate.json)
 - [`share/`](../share/README.md)
-- [`setup/init.py`](../setup/init.py)
 - [`serve/`](../serve/README.md)
 - [setup guide](../setup/setup-guide.md)
 - [Operating OwlBear](../setup/operating-owlbear.md)
@@ -195,7 +192,6 @@
 
 ### Outbound links
 - [What OwlBear Installs](../setup/operating-owlbear.md#what-owlbear-installs)
-- [`setup/init.py`](../setup/init.py)
 - [`share/`](../share/README.md)
 - [`serve/`](../serve/README.md)
 - [`.github/`](../.github/README-automation.md)
@@ -367,12 +363,17 @@
 - ### `Startup reason codes`
 - ### ``browser_status` fields`
 - ## `Dependencies`
+- ## `Readiness`
+- ### `Managed Mac pilot`
 - ## `Browser and Knowledge Boundaries`
 
 ### Outbound links
 - [serve/README.md](../serve/README.md)
 - [README.md](../README.md)
-- [managed Mac pilot](../setup/setup-guide.md#browser-readiness)
+- [managed Mac pilot](../serve/browser-mcp/README.md#managed-mac-pilot)
+- [Launch / Usage](../serve/browser-mcp/README.md#launch--usage)
+- [Knowledge operations guide](../share/skills/h-knowledge-ops/SKILL.md)
+- [Browser-to-Knowledge vertical test](../tests/test_browser_knowledge_vertical.py)
 - [Knowledge operations guide](../share/skills/h-knowledge-ops/SKILL.md)
 - [Browser-to-Knowledge vertical test](../tests/test_browser_knowledge_vertical.py)
 - [Browser package guide](../serve/browser/README.md)
@@ -687,18 +688,14 @@
 - ## `What OwlBear Installs`
 - ## `Running OwlBear`
 - ## `Upgrading OwlBear`
-- ## `What Setup Creates`
-- ### `Where these files come from`
-- ## `Shared vs Copied`
-- ## `Refreshing Consumer Configs`
 - ## `Uninstalling`
 - ### `Removing OwlBear from your Mac`
-- ### `Removing the agent workspace from a project`
 - ## `Delivery Workflow`
 - ## `Project-Specific Customization`
 - ### `Adding local agents`
 - ### `Overriding instructions`
 - ### `Adding project-specific MCP servers`
+- ### `Memory MCP storage`
 - ### `Knowledge MCP storage`
 
 ### Outbound links
@@ -708,18 +705,8 @@
 - [Running OwlBear](../setup/operating-owlbear.md#running-owlbear)
 - [Upgrading OwlBear](../setup/operating-owlbear.md#upgrading-owlbear)
 - [Delivery Workflow](../setup/operating-owlbear.md#delivery-workflow)
-- [What Setup Creates](../setup/operating-owlbear.md#what-setup-creates)
-- [Shared vs Copied](../setup/operating-owlbear.md#shared-vs-copied)
-- [Refreshing Consumer Configs](../setup/operating-owlbear.md#refreshing-consumer-configs)
 - [Uninstalling](../setup/operating-owlbear.md#uninstalling)
 - [Project-Specific Customization](../setup/operating-owlbear.md#project-specific-customization)
-- [Refreshing Consumer Configs](../setup/operating-owlbear.md#refreshing-consumer-configs)
-- [setup guide](../setup/setup-guide.md#optional-agent-workspace)
-- [What OwlBear Installs](../setup/operating-owlbear.md#what-owlbear-installs)
-- [`seed/`](../seed)
-- [`share/`](../share/README.md)
-- [`serve/`](../serve/README.md)
-- [Upgrading OwlBear](../setup/operating-owlbear.md#upgrading-owlbear)
 - [memory server configuration](../serve/memory-mcp/README.md#configuration)
 - [Troubleshooting](../setup/setup-guide.md#troubleshooting)
 
@@ -734,14 +721,6 @@
 - ### `5. Connect the project's chats`
 - ## `Verify the installation`
 - ## `First successful workflow`
-- ## `Optional agent workspace`
-- ### `1. Open a terminal in the project root`
-- ### `2. Run setup from the project root`
-- ### `3. Open the project in VS Code`
-- ### `4. Confirm it loaded`
-- ### `Browser readiness`
-- ### `Copilot profile settings`
-- ### `Managed Mac browser pilot`
 - ## `Troubleshooting`
 - ## `Next`
 
@@ -756,12 +735,6 @@
 - [Installation guide](https://cli.github.com/manual/installation)
 - [code.visualstudio.com](https://code.visualstudio.com/)
 - [Delivery Workflow](../setup/operating-owlbear.md#delivery-workflow)
-- [Quick Start](../setup/setup-guide.md#quick-start)
-- [What Setup Creates](../setup/operating-owlbear.md#what-setup-creates)
-- [Browser MCP guide](../serve/browser-mcp/README.md)
-- [Knowledge operations guide](../share/skills/h-knowledge-ops/SKILL.md)
-- [Browser-to-Knowledge vertical test](../tests/test_browser_knowledge_vertical.py)
-- [Adding local agents](../setup/operating-owlbear.md#adding-local-agents)
 - [Operating OwlBear](../setup/operating-owlbear.md)
 - [Upgrading OwlBear](../setup/operating-owlbear.md#upgrading-owlbear)
 - [Delivery Workflow](../setup/operating-owlbear.md#delivery-workflow)
@@ -777,21 +750,17 @@
 - ### `2. Install and start OwlBear`
 - ### `3. Point OwlBear at the shared settings repository`
 - ### `4. Add the project and connect its chats`
-- ### `5. Optional: set up the agent workspace`
 - ## `Platform Notes`
 - ## `What's Shared vs. Project-Local`
 - ## `Team Conventions`
 - ### `Agent naming`
 - ### `Project-specific instructions`
-- ### `Monorepo alternative`
-- ## `Organization-Level Sharing (GitHub Teams)`
 - ## `Troubleshooting`
 
 ### Outbound links
 - [Prerequisites](../setup/setup-guide.md#prerequisites)
 - [Quick Start](../setup/setup-guide.md#quick-start)
 - [Quick Start](../setup/setup-guide.md#quick-start)
-- [the setup guide](../setup/setup-guide.md#4-confirm-it-loaded)
 - [Project-Specific Customization](../setup/operating-owlbear.md#project-specific-customization)
 - [official installation guide](https://docs.astral.sh/uv/getting-started/installation/)
 - [Upgrading OwlBear](../setup/operating-owlbear.md#upgrading-owlbear)
@@ -1214,4 +1183,4 @@
 
 ## share/diagrams/mcp-topology.svg
 source: share/diagrams/mcp-topology.architecture.json
-describes: seed/.vscode/mcp.json, setup/init.py, serve/*-mcp/src/**, serve/knowledge/src/**, serve/memory/src/**, serve/browser/src/**
+describes: .mcp.json, serve/*-mcp/src/**, serve/knowledge/src/**, serve/memory/src/**, serve/browser/src/**

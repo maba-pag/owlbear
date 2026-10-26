@@ -75,9 +75,9 @@ that owns the next decision; they should not become a second copy of a skill.
 
 ## Visual Orientation
 
-The [MCP topology diagram](diagrams/mcp-topology.svg) shows the four seeded stdio servers and the
+The [MCP topology diagram](diagrams/mcp-topology.svg) shows OwlBear's stdio tool servers and the
 runtime surfaces behind them. Its [Archify source](diagrams/mcp-topology.architecture.json) and
-[coverage manifest](diagrams/manifest.json) are descriptive; `seed/.vscode/mcp.json` and the server
+[coverage manifest](diagrams/manifest.json) are descriptive; the root `.mcp.json` and the server
 implementations remain authoritative.
 
 ## Product Boundary

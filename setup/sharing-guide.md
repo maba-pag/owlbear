@@ -7,16 +7,9 @@
 OwlBear installs once per Mac. Each teammate installs it on their own Mac and adds their own clone
 of the project on its pages; there is no packaging step, cloning OwlBear is the installation.
 
-Two things can be shared between teammates and machines:
-
-1. A **shared settings repository**: a Git repository that holds project settings, agent memory
-   and the backlog. Each machine points at its own clone of it with `owlbear data PATH`; OwlBear
-   commits and pushes every save there.
-2. The optional **agent workspace**: OwlBear's agents, skills and tool servers loaded into the
-   project's VS Code workspace from the OwlBear runtime alias `~/.owlbear/runtime`. Setup writes
-   relative paths to that alias (e.g., `../../.owlbear/runtime/share/agents` for a project at
-   `~/Dev/my-project`), so self-updates keep them valid; teammates who share these settings keep
-   the project at the same path relative to their home folder.
+Teammates and machines share one thing: a **shared settings repository**, a Git repository that
+holds project settings, agent memory and the backlog. Each machine points at its own clone of it
+with `owlbear data PATH`; OwlBear commits and pushes every save there.
 
 ## Prerequisites
 
@@ -65,19 +58,6 @@ Follow the setup guide's [Quick Start](setup-guide.md#quick-start) steps 4 and 5
 shows no **Setup required** note. Setup finds the project's folder in the shared settings
 repository by the repository's identity, so every teammate's clone uses the same settings.
 
-### 5. Optional: set up the agent workspace
-
-```shell
-cd ~/Dev/my-project
-uv run --project ~/.owlbear/runtime python ~/.owlbear/runtime/setup/init.py
-code .
-```
-
-**Expected result:** setup lists what it would write and asks first; after `y`, VS Code opens
-`~/Dev/my-project` with the shared OwlBear customization roots
-and the four seeded MCP servers; check them as
-[the setup guide](setup-guide.md#4-confirm-it-loaded) describes.
-
 ---
 
 ## Platform Notes
@@ -86,11 +66,9 @@ OwlBear supports macOS only. Linux and Windows are not supported yet.
 
 No further platform-specific configuration is required:
 
-- **Hooks** — the seeded hook `deny-src-writes.py` is a Python script executed by VS Code's
-  extension host — no shell dependency
 - **MCP servers** — OwlBear's memory, knowledge and browser servers start from the installed
   runtime (`python -m owlbear_delivery_next serve <name>`) and stay on the version they started
-  with; markitdown starts via `uvx`
+  with
 
 ## What's Shared vs. Project-Local
 
@@ -99,17 +77,12 @@ No further platform-specific configuration is required:
 | OwlBear runtime | `~/.owlbear/runtime` | No — one per Mac; each machine updates itself |
 | Delivery state | `~/.owlbear/projects/<id>/`, one folder per project | No — per machine |
 | Project settings, agent memory, backlog | Shared settings repository | Yes — when one is set |
-| Agents (`.agent.md`) | `~/.owlbear/runtime/share/agents/` | Yes — all teammates get the same agents |
-| Skills (`SKILL.md`) | `~/.owlbear/runtime/share/skills/` | Yes — all teammates get the same skills |
-| Instructions (`*.instructions.md`) | `~/.owlbear/runtime/share/instructions/` | Yes — shared baseline |
+| Shaping agent and its skill | `~/.copilot/`, linked into `~/.owlbear/runtime` | Yes — every teammate's runtime ships the same ones |
 | MCP server code | `~/.owlbear/versions/<tag>/serve/` | Yes — each server runs from the version it started with, through `~/.owlbear/runtime` |
-| Hook runtime files | `.owlbear/hooks/` in project | No — copied from `seed/` into each project |
-| `.github/copilot-instructions.md` | project root | No — per-project (override layer) |
+| `.github/copilot-instructions.md` | project root | No — per-project |
 | `.owlbear/knowledge/` | project root | No — per-project |
 
-Project-local resources can override or extend shared owlbear resources. Hook files are
-the exception: they are project-local runtime copies, not a live-shared customization
-surface. See
+Project-local agents, instructions and MCP servers add to these. See
 [Project-Specific Customization](operating-owlbear.md#project-specific-customization) in the
 operating guide.
 
@@ -131,27 +104,7 @@ both appear in the picker.
 
 The `.github/copilot-instructions.md` file in the project directory is the right place
 for project-specific rules (coding style, domain conventions, restricted tools).
-This file takes priority over the owlbear shared instructions — create it in your project
-root and keep it in source control.
-
-### Monorepo alternative
-
-If the project is a monorepo, VS Code's `chat.useCustomizationsInParentRepositories`
-setting allows owlbear customizations to be discovered from a parent directory. This
-eliminates the need for the runtime-alias paths but requires all developers to have the
-same directory structure. Use this sparingly — the runtime alias is simpler.
-
----
-
-## Organization-Level Sharing (GitHub Teams)
-
-For organizations with GitHub Copilot Business or Enterprise, VS Code supports
-**organization-level agents** that are discovered automatically for all members without
-any local setup step. This is an alternative to the filesystem sharing model above,
-but it covers agents only (not MCP servers, skills, or instructions).
-
-If your team has org-level Copilot access, consider publishing owlbear agents to the
-organization agent registry as a complement to the local installation.
+Create it in your project root and keep it in source control.
 
 ---
 
@@ -161,7 +114,5 @@ organization agent registry as a complement to the local installation.
 | --- | --- |
 | A teammate's Changes page shows **Setup required** | Run the `owlbear setup --repo PATH` command it names on that teammate's Mac, then reload the project's VS Code window |
 | Setup cannot claim the project's folder in the shared settings | Run `owlbear setup --repo PATH --folder NAME` with a folder name no other repository uses |
-| Agents missing after setup | Run `init.py` again; check that `.vscode/settings.json` was created and contains `chat.agentFilesLocations` pointing to the owlbear installation |
-| Hook updates not taking effect after an OwlBear update | Re-run `init.py`; use `--replace-hooks` if local hook files differ and you want the seeded versions restored |
 | `uv` not found | Install uv using the [official installation guide](https://docs.astral.sh/uv/getting-started/installation/) |
-| Different OwlBear versions between teammates | Compare `owlbear versions` on each Mac; `owlbear update` takes the newest ([Upgrading OwlBear](operating-owlbear.md#upgrading-owlbear)). For the agent workspace, rerun `init.py` after an update to refresh copied runtime files |
+| Different OwlBear versions between teammates | Compare `owlbear versions` on each Mac; `owlbear update` takes the newest ([Upgrading OwlBear](operating-owlbear.md#upgrading-owlbear)) |

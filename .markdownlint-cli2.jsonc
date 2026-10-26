@@ -1,6 +1,5 @@
 {
   // Rules and ignores for markdownlint-cli2 consumers: the pre-commit hook and the VS Code extension.
-  // seed/ keeps a separate .markdownlint.json, because consumers' standalone markdownlint-cli reads only that.
   "config": {
     "MD013": false,
     "MD024": {

@@ -27,13 +27,9 @@ and format marker; see [What OwlBear Installs](../setup/operating-owlbear.md#wha
 
 ## What belongs elsewhere
 
-- Portable project templates are in `seed/.owlbear/` and are rendered by
-  [`setup/init.py`](../setup/init.py).
 - Shared agent ecosystem definitions are in [`share/`](../share/README.md).
 - Runtime code and MCP servers are in [`serve/`](../serve/README.md).
 - Development-only CI and repository automation are in [`.github/`](../.github/README-automation.md).
 - Workspace-wide regression tests are in [`tests/`](../tests/README.md).
 
-This directory is not copied into consumer projects. A consumer project's `.owlbear/` area is
-created from the seed templates by the optional agent workspace setup and then accumulates its own
-memory, knowledge, and runtime state.
+This directory is not copied into consumer projects; setup creates no `.owlbear/` area there.

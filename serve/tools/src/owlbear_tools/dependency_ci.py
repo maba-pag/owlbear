@@ -226,9 +226,7 @@ def _python_behavior_changed(
     after_files: Mapping[str, str | None] | None,
 ) -> bool:
     """Return whether Python behavior or its locked dependencies changed."""
-    if changed & _PYTHON_BEHAVIOR_FILES or any(
-        path.startswith(("serve/", "tests/", "setup/", "seed/")) for path in changed
-    ):
+    if changed & _PYTHON_BEHAVIOR_FILES or any(path.startswith(("serve/", "tests/")) for path in changed):
         return True
     for path in ("pyproject.toml", "uv.lock"):
         if path in changed and (

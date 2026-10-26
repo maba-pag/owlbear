@@ -808,7 +808,7 @@ svg[data-node-ui][data-preset="blueprint"] :is([data-graph-role="structural-fram
 svg[data-node-ui][data-preset="editorial"] :is([data-graph-role="structural-frame-label-mask"], g[data-edge-from] > rect.c-mask, .phase-chip) {rx: 3px;}
   ]]></style>
         <title id="archify-diagram-title">OwlBear MCP Topology</title>
-        <desc id="archify-diagram-description">Four seeded stdio servers; configuration and implementations remain authoritative.</desc>
+        <desc id="archify-diagram-description">OwlBear&#39;s stdio tool servers; configuration and implementations remain authoritative.</desc>
         <!-- Definitions -->
         <defs>
           <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">

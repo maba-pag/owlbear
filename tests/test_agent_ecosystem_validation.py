@@ -191,7 +191,6 @@ def test_agent_workflow_covers_its_contract_tests_without_duplicate_paths() -> N
     assert {
         ".owlbear/instructions/**",
         "serve/*-mcp/**",
-        "seed/.vscode/mcp.json",
         "share/instructions/**",
     } <= set(paths)
     assert not {
@@ -259,9 +258,8 @@ def test_agent_validator_rejects_local_mcp_wildcard(tmp_path: Path) -> None:
 
 def test_agent_validator_checks_mcp_configuration_keys(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     config = tmp_path / "mcp.json"
-    config.write_text('{"servers": {"owlbear-browser": {}, "ddgs": {}}}', encoding="utf-8")
-    monkeypatch.setattr(_AGENT_VALIDATOR, "_CANONICAL_MCP_CONFIG", config)
-    monkeypatch.setattr(_AGENT_VALIDATOR, "_ROOT_MCP_CONFIG", tmp_path / "absent.json")
+    config.write_text('{"mcpServers": {"owlbear-browser": {}, "ddgs": {}}}', encoding="utf-8")
+    monkeypatch.setattr(_AGENT_VALIDATOR, "_MCP_CONFIG", config)
 
     _configured, errors = _AGENT_VALIDATOR._validate_mcp_configuration()  # noqa: SLF001
 
@@ -269,23 +267,23 @@ def test_agent_validator_checks_mcp_configuration_keys(tmp_path: Path, monkeypat
     assert any("MCP servers have no validator registry: ['ddgs']" in error for error in errors)
 
 
-def test_agent_validator_reads_active_mcp_servers_from_the_root_file(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    seed, root = tmp_path / "seed.json", tmp_path / "root.json"
-    seed.write_text('{"servers": {"owlbear-browser": {}, "owlbear-memory": {}}}', encoding="utf-8")
-    root.write_text(
-        '{"mcpServers": {"owlbear-delivery": {}, "owlbear-browser": {}, "owlbear-memory": {}}}', encoding="utf-8"
-    )
-    monkeypatch.setattr(_AGENT_VALIDATOR, "_CANONICAL_MCP_CONFIG", seed)
-    monkeypatch.setattr(_AGENT_VALIDATOR, "_ROOT_MCP_CONFIG", root)
-    errors = lambda: _AGENT_VALIDATOR._configured_mcp_servers()[1]  # noqa: E731, SLF001
+def test_agent_validator_reads_mcp_servers_from_the_root_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    root = tmp_path / "root.json"
+    servers = '"owlbear-browser": {}, "owlbear-knowledge": {}, "owlbear-memory": {}'
+    root.write_text(f'{{"mcpServers": {{"owlbear-delivery": {{}}, {servers}}}}}', encoding="utf-8")
+    monkeypatch.setattr(_AGENT_VALIDATOR, "_MCP_CONFIG", root)
+    validate = _AGENT_VALIDATOR._validate_mcp_configuration  # noqa: SLF001
 
-    assert errors() == []
-    root.write_text('{"mcpServers": {}}', encoding="utf-8")
-    assert any("MCP server names differ" in error for error in errors())
+    configured, errors = validate()
+    assert errors == []
+    assert "owlbear-delivery" not in configured  # no registry to check its grants against
+    assert "markitdown" in configured  # external: its grants stay known though no file configures it
+    root.write_text('{"mcpServers": {"owlbear-memory": {}}}', encoding="utf-8")
+    assert any("MCP servers are missing" in error for error in validate()[1])
+    root.write_text('{"mcpServers": {"owlbear-delivery": {}}}', encoding="utf-8")
+    assert any("MCP servers are missing" in error for error in validate()[1])
     root.write_text('{"servers": {"owlbear-memory": {}}}', encoding="utf-8")
-    assert errors() == [f"{root}: MCP configuration needs a mcpServers object"]
+    assert validate()[1] == [f"{root}: MCP configuration needs a mcpServers object"]
 
 
 def test_agent_validator_rejects_multi_name_tool_search_queries(

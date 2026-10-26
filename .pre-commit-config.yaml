@@ -156,7 +156,6 @@ repos:
           |^\.owlbear/hooks/.*\.py$
           |^\.owlbear/scripts/validate_agents\.py$
           |^\.mcp\.json$
-          |^seed/\.vscode/mcp\.json$
           |^serve/[^/]+-mcp/.*$
         pass_filenames: false
       - id: validate-prompts

@@ -21,15 +21,12 @@ repository and its checks rather than an installed project directly.
 - Tool configuration, including Renovate's [`renovate.json`](../renovate.json) and CodeRabbit's
   `.coderabbit.yaml`, lives at the repository root.
 - Portable agents, skills, instructions, and prompts live in [`share/`](../share/README.md).
-- Consumer-project Copilot and VS Code templates live under `seed/` and are applied by
-  [`setup/init.py`](../setup/init.py).
 - Runtime packages and MCP servers live under [`serve/`](../serve/README.md).
 - Installation and operating procedures live in the [setup guide](../setup/setup-guide.md) and
   [Operating OwlBear](../setup/operating-owlbear.md).
 
-The development instructions in `.github/copilot-instructions.md` are not the same artifact as the
-consumer template at `seed/.github/copilot-instructions.md`. The former describes this repository;
-the latter is a placeholder that `init.py` adapts for a project using OwlBear.
+The development instructions in `.github/copilot-instructions.md` describe this repository; OwlBear
+writes no Copilot instructions into a project using it.
 
 ## Pull-request checks
 
@@ -51,7 +48,7 @@ Within a suite every job starts immediately (no `needs`) and installs only what 
 
 | Workflow | Jobs | Runs when the PR touches |
 | --- | --- | --- |
-| [Python](workflows/python.yml) | 4 hash-sharded test jobs (`worksteal` inside each) | Python sources, tests, setup, seed, manifests, locks |
+| [Python](workflows/python.yml) | 4 hash-sharded test jobs (`worksteal` inside each) | Python sources, tests, manifests, locks |
 | [Python browser](workflows/python-browser.yml) | Browser-marked tests with Chromium | `serve/browser*`, `serve/web-content`, manifests, locks |
 | [Static checks](workflows/static.yml) | `uv run lint --no-fix` and `uv run format --no-fix`, as locally: every hook in `.pre-commit-config.yaml` (the three validators in Agent ecosystem), each fixer through its check, plus Biome | Every change |
 | [Tooling](workflows/tooling.yml) | Lock, toolchain, workflow, hook, and diagram proofs, selected per changed surface | Manifests, locks, workflows, tool configuration, diagrams |
