@@ -273,3 +273,63 @@ def test_settling_against_a_ledger_that_cannot_be_read_fails_closed_and_changes_
     with pytest.raises(maintenance.MaintenanceError):
         settle(root, owner)
     assert (root / pack_state.FILE).read_bytes() == before
+
+
+def rewritten_in_place_while_read(root: Path, record: dict) -> pytest.MonkeyPatch:
+    """A producer rewrites the run file in place, same inode, after the reader stat it and before it decodes.
+
+    The patch writes *record* through another descriptor just before the reader's own decode, then decodes as usual.
+    """
+    real_load = pack_state.json.load
+    patch = pytest.MonkeyPatch()
+
+    def load(source, *args: object, **kwargs: object) -> object:
+        with (root / pack_state.FILE).open("r+", encoding="utf-8") as same:  # the same inode, rewritten in place
+            same.write(json.dumps(pack_job._blank() | record, indent=1) + "\n")  # noqa: SLF001
+            same.truncate()
+        return real_load(source, *args, **kwargs)
+
+    patch.setattr(pack_state.json, "load", load)
+    return patch
+
+
+@pytest.mark.parametrize("recovered", [False, True], ids=["a-held", "a-recovered"])
+def test_a_run_rewritten_in_place_while_restoration_reads_it_is_held_not_taken_for_the_receipted_run(
+    tmp_path, recovered
+):
+    """Review 4377372587: the payload read must be the version its receipt names, or the observation is refused.
+
+    A is receipted to the rewrite's file version. A producer starts B in that very file, in place, while restoration
+    reads it: B's payload would pair with A's version and borrow A's receipt. The changed observation is unreadable,
+    held conservatively, and another project gets no slot.
+    """
+    root, a, _g0 = receipted_rewrite(tmp_path, recovered=recovered)
+    owner = ledger(boot=20.0)
+    patch = rewritten_in_place_while_read(root, {"state": "running"})  # B: a new run, no identity
+    try:
+        import_at(owner, root)
+    finally:
+        patch.undo()
+    states = dict(leases(owner))
+    assert states[a] == ("recovered" if recovered else "held")
+    assert [s for i, s in leases(owner) if i != a] == ["held"]  # B's observation, held as unreadable
+    assert owner.slots.take("other", "probe", 1, 2) == (1 if recovered else 0)  # two slots: B's hold is counted
+    assert owner.pending("pack") is True
+
+
+@pytest.mark.parametrize("reader", ["observed", "read_version"])
+def test_every_reader_refuses_a_run_rewritten_in_place_while_it_read_it_and_closes_its_descriptor(tmp_path, reader):
+    root = store(tmp_path, "clone", SDK_FAILED)
+    fds = {p.name for p in Path("/dev/fd").iterdir()}
+    patch = rewritten_in_place_while_read(root, {"state": "running"})
+    try:
+        if reader == "observed":
+            with pytest.raises(ValueError, match="changed while it was read"):
+                pack_state.observed(root)
+        else:
+            assert pack_state.read_version(root / pack_state.FILE) == (pack_state.blank(), "")
+    finally:
+        patch.undo()
+    assert {p.name for p in Path("/dev/fd").iterdir()} == fds
+    kept, version = pack_state.observed(root)  # control: read again unchanged, it is the new run, whole
+    assert (kept["state"], version != "") == ("running", True)

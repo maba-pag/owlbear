@@ -85,7 +85,9 @@ def read_fd(fd: int) -> tuple[dict[str, Any], str]:
     """The run *fd* holds and that file's version, both from the one open descriptor, which this always closes.
 
     The version is the file's identity and metadata as opened, so a replacement made after the open is not mixed
-    into what was read. Raises OSError or ValueError when the record cannot be read as a run.
+    into what was read; a rewrite of that same file while it is read changes its metadata, so the run read is refused
+    rather than paired with the version before it. Raises OSError or ValueError when the record cannot be read as a
+    run.
     """
     try:
         source = os.fdopen(fd, encoding="utf-8")
@@ -95,6 +97,9 @@ def read_fd(fd: int) -> tuple[dict[str, Any], str]:
     with source as f:
         st = os.fstat(f.fileno())
         kept = json.load(f)
+        if version_of(os.fstat(f.fileno())) != version_of(st):
+            msg = f"{FILE} changed while it was read"
+            raise ValueError(msg)
     if not isinstance(kept, dict):
         msg = f"{FILE} is not a run"
         raise ValueError(msg)  # noqa: TRY004 - callers treat a damaged record as a ValueError
