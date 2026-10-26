@@ -1113,12 +1113,12 @@ def lost_write(*_args: object) -> None:
     raise OSError(msg)
 
 
-def main_refusal(at: datetime, pids: dict[int, float | None]) -> None:
+def main_refusal(at: datetime, pids: dict[int, float | None], reason: str = curation.LEFT) -> None:
     """What main's ``_one`` leaves when it refuses before any session, as while its PIDs may run: the folder's row
     failed with its reason, ending as it starts; ``left`` kept as it was. It cannot read a keyed record, so the file is
-    written afresh."""
+    written afresh. With another *reason*, the same shape is any other row main writes ending as it starts."""
     row = {"state": "failed", "started_at": at.isoformat(), "ended_at": at.isoformat(), "summary": "",
-           "reason": curation.LEFT, "entries": [], "skipped": {}, "seen": {}}  # fmt: skip
+           "reason": reason, "entries": [], "skipped": {}, "seen": {}}  # fmt: skip
     path = local_home.root() / curation.STATE
     path.write_text(json.dumps({"folders": {"shop": row}, "left": {str(p): b for p, b in pids.items()}}))
 
@@ -1156,6 +1156,33 @@ def test_main_refusals_after_its_session_keep_its_one_hold_and_only_a_later_sess
     main_refusal(t0 + timedelta(hours=2), {4242: None})  # its own refusals keep that one hold too
     curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root), run=never_runs(calls))
     assert ([s["state"] for s in ledger_on_disk()["sessions"]], calls) == (["recovered", "held"], [])
+
+
+@pytest.mark.parametrize(
+    "reason",
+    ["RuntimeError: synthetic SDK failure", "an update to v9 is being installed"],
+    ids=["generic-failure-same-clock", "unrecognised-refusal"],
+)
+def test_a_row_ending_as_it_starts_without_a_known_refusal_reason_is_held_anew(root, reason) -> None:
+    """Review turn 27: equal times prove no refusal. main's generic failure, when the clock gave its session's start
+    and end one value, or a refusal text not known for certain, is session evidence: B is held under its own key, its
+    PIDs kept, and a new start runs nothing."""
+    t0 = datetime.now(UTC) - timedelta(hours=2)
+    main_session_row(t0, {4242: None})
+    first = curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root))  # imports A
+    [a] = ledger_on_disk()["sessions"]
+    recovered_by_reboot(first)
+    assert first.working() == []
+    main_refusal(t0 + timedelta(hours=1), {4242: None}, reason)  # main's later row: same PID, birth unknown
+    calls: list[str] = []
+    rebuilt = curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root), run=never_runs(calls))
+    assert ([s["state"] for s in ledger_on_disk()["sessions"]], rebuilt.left_key != a["slot"], rebuilt.left) == (
+        ["recovered", "held"], True, {4242: None},
+    )  # fmt: skip
+    assert rebuilt.load().left_key == rebuilt.left_key
+    rebuilt.start("shop")
+    drained(rebuilt)
+    assert (calls, rebuilt.load().folders["shop"].reason) == ([], curation.LEFT)
 
 
 def test_a_row_in_a_state_no_producer_writes_is_never_taken_for_a_known_snapshot(root) -> None:

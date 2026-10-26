@@ -1,8 +1,8 @@
 """What an older curation host's record proves about the snapshot of PIDs it left (R04, #608).
 
 A restart reads that record before it holds anything. The snapshot is the producer's ``left`` PIDs; its session evidence
-is every row a session wrote. A refusal before any session writes a row too, which proves no session, so the same
-snapshot under refusals stays the one generation its lease already holds or recovered.
+is every row but a refusal the producer is known to write before any session. Such a refusal proves no session, so the
+same snapshot under refusals stays the one generation its lease already holds or recovered.
 """
 
 from __future__ import annotations
@@ -19,6 +19,14 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.machine_host.curation import FolderRun, Runs
 
 STATES = frozenset({"never", "waiting", "running", "done", "failed"})  # every state a folder's row is written in
+REFUSALS = frozenset({  # the fixed reasons main's ``_one`` writes when it refuses before any session
+    "no shared repository is set up, so there is no memory to curate",
+    "the last curation's processes may still run; stop them before curating again",
+    "the machine is paused, and this automatic trigger does not curate while paused; it waits for a later trigger",
+    "this automatic trigger is off in the machine settings; it waits until it is turned on",
+    "stopping",
+    "OwlBear stops once nothing runs: no memory curation starts",
+})  # fmt: skip
 
 
 def observed(runs: Runs) -> str:
@@ -29,9 +37,10 @@ def observed(runs: Runs) -> str:
 def sessions(runs: Runs) -> tuple[str, ...]:
     """The producer's session evidence on file: each row's folder and times, never this host's keys or reasons.
 
-    A refusal before any session is the producer's failed or waiting row that ends as it starts, so it is no session;
-    it may overwrite a session's row, which takes evidence away and adds none. Every other dated row is a session's.
-    A row in a state the producer never writes counts as evidence, so it is never taken for the snapshot's own.
+    Only a refusal the producer is known to write before any session is left out: a failed row, or its waiting copy,
+    with one of its fixed reasons and no time between start and end. It may overwrite a session's row, which takes
+    evidence away and adds none. Every other dated row counts, a generic failure even when the clock gave its start and
+    end one value, and a row in a state the producer never writes is never taken for the snapshot's own.
     """
     found = (
         f"{name}|{r.state if r.state not in STATES else ''}|{_at(r.started_at)}|{_at(r.ended_at)}"
@@ -57,7 +66,12 @@ def same_snapshot(project: str, snapshot: str, seen: tuple[str, ...]) -> Callabl
 
 
 def _refusal(run: FolderRun) -> bool:
-    return run.state in {"failed", "waiting"} and run.started_at is not None and run.ended_at == run.started_at
+    return (
+        run.state in {"failed", "waiting"}
+        and run.reason in REFUSALS
+        and run.started_at is not None
+        and run.ended_at == run.started_at
+    )
 
 
 def _at(when: datetime | None) -> str:
