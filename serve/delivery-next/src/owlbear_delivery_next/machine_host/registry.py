@@ -183,16 +183,27 @@ def canonical(path: Path) -> tuple[Path, Path]:
     except (OSError, ValueError) as exc:
         msg = f"{marker} is unreadable"
         raise RegistryError(msg) from exc
-    if found > STORE_FORMAT and (found != int(project_move.FENCE) or not _switched(store)):
+    switched = _switched(store)  # any move receipt is validated, whatever the marker says
+    if switched and found != int(project_move.FENCE):
+        msg = f"{work}'s Delivery state has a SWITCHED receipt but format {found}, not {project_move.FENCE}: refusing"
+        raise RegistryError(msg)
+    if found > STORE_FORMAT and (found != int(project_move.FENCE) or not switched):
         msg = f"{work}'s Delivery state has format {found}, newer than {STORE_FORMAT}: this OwlBear is older"
         raise RegistryError(msg)
     return work, store
 
 
 def _switched(store: Path) -> bool:
-    """Whether the fenced *store* is a retained source whose SWITCHED receipt names a valid project store."""
+    """Whether the *store*'s move receipt is a valid SWITCHED one naming its project's store; False when there is none.
+
+    Raises:
+        RegistryError: A receipt exists but is bad, pending or names another store, or the clone has no id.
+    """
     pid = clone_id(store)
     if pid is None:
+        if os.path.lexists(store / project_move.MOVE_RECORD):
+            msg = f"{store} has a move receipt but no clone id: nothing was registered"
+            raise RegistryError(msg)
         return False
     try:
         return switched_authority.retained_target(store, pid) is not None

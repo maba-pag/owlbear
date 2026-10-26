@@ -104,35 +104,41 @@ def _project(pid: str, path: Path) -> list[str]:
         with contextlib.suppress(Exception):  # a clone that is gone fails to load as before; not this check's
             clone = project_home.clone_dir(path)
             markers.append(clone / MARKER)
+    retained, problem = _receipt(pid, clone) if clone is not None else (None, None)
+    if problem is not None:
+        found.append(problem)
     for marker in markers:
         try:
             value = int(marker.read_text()) if marker.is_file() else 0
         except OSError, ValueError:
             found.append(f"{marker} is unreadable")
             continue
+        if clone is not None and marker == clone / MARKER and retained is not None:
+            if value != int(FENCE):
+                found.append(f"{marker} has format {value}, but its SWITCHED receipt needs {FENCE}")
+            continue  # the fenced clone is a retained source; the project's store is checked instead
         if value > STORE_FORMAT:
             if clone is not None and marker == clone / MARKER and value == int(FENCE):
-                if (problem := _retained(pid, clone)) is None:
-                    continue  # the fenced clone is a retained source; the project's store is checked instead
-                found.append(problem)
+                if problem is None:
+                    found.append(
+                        f"its store has format {FENCE}, newer than this version's {STORE_FORMAT} "
+                        "and no completed move names it"
+                    )
                 continue
             found.append(f"its store has format {value}, newer than this version's {STORE_FORMAT}")
     layers = [project_home.home(pid) / "config.json", *([clone / "config.json"] if clone else []), *_shared(path)]
     return found + _formats("its settings", layers)
 
 
-def _retained(pid: str, clone: Path) -> str | None:
-    """None when the fenced *clone* is a retained source whose SWITCHED receipt names the project's store; else why."""
+def _receipt(pid: str, clone: Path) -> tuple[Path | None, str | None]:
+    """The project's store the clone's move receipt names (None without a receipt), and why the receipt is unsound."""
     from owlbear_delivery_next.state_store import switched_authority  # noqa: PLC0415
-    from owlbear_delivery_next.state_store.database import STORE_FORMAT, StoreError  # noqa: PLC0415
-    from owlbear_delivery_next.state_store.project_move import FENCE  # noqa: PLC0415
+    from owlbear_delivery_next.state_store.database import StoreError  # noqa: PLC0415
 
     try:
-        if switched_authority.retained_target(clone, pid) is not None:
-            return None
+        return switched_authority.retained_target(clone, pid), None
     except StoreError as exc:
-        return str(exc)
-    return f"its store has format {FENCE}, newer than this version's {STORE_FORMAT} and no completed move names it"
+        return None, str(exc)
 
 
 def _shared(path: Path) -> list[Path]:

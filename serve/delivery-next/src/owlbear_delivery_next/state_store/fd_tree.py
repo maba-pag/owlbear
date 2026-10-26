@@ -252,7 +252,7 @@ def copy(sfd: int, name: str, dfd: int) -> None:
         os.symlink(os.readlink(name, dir_fd=sfd), name, dir_fd=dfd)
     elif stat.S_ISDIR(st.st_mode):
         os.mkdir(name, 0o700, dir_fd=dfd)
-        src, dst = open_dir(sfd, name), open_dir(dfd, name)
+        src, dst = _open_pair_dirs(sfd, dfd, name)
         try:
             for child in os.listdir(src):  # noqa: PTH208 - listed by descriptor, not by path
                 copy(src, child, dst)
@@ -298,8 +298,18 @@ def partial_of(sfd: int, dfd: int, name: str) -> bool:
     return stat.S_ISREG(st.st_mode) and _partial_bytes(sfd, dfd, name)
 
 
+def _open_pair_dirs(sfd: int, dfd: int, name: str) -> tuple[int, int]:
+    """Open the same-named folder under both descriptors; if the second open fails, the first is closed."""
+    src = open_dir(sfd, name)
+    try:
+        return src, open_dir(dfd, name)
+    except BaseException:
+        os.close(src)
+        raise
+
+
 def _partial_dir(sfd: int, dfd: int, name: str) -> bool:
-    src, dst = open_dir(sfd, name), open_dir(dfd, name)
+    src, dst = _open_pair_dirs(sfd, dfd, name)
     try:
         return all(partial_of(src, dst, child) for child in os.listdir(dst))  # noqa: PTH208 - listed by descriptor
     finally:

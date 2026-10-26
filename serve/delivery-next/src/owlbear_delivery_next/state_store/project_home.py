@@ -20,7 +20,7 @@ from pathlib import Path
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.local_system.git_files import git_common_dir
 from owlbear_delivery_next.local_system.storage_io import open_lock
-from owlbear_delivery_next.state_store import fd_tree, project_move
+from owlbear_delivery_next.state_store import fd_tree, format_marker, project_move, project_switch
 from owlbear_delivery_next.state_store.database import (
     MARKER,
     MIGRATE,
@@ -202,7 +202,7 @@ def current(cwd: Path) -> Path | None:
     target = home(pid)
     if rec and rec["phase"] == project_move.SWITCHED:
         _switched_to(target, rec)
-        project_move.named_switched(target, rec)
+        project_switch.named_switched(target, rec)
     return target
 
 
@@ -270,18 +270,17 @@ def _has_locks(folder_fd: int) -> bool:
 
 def _publish_markers(folder_fd: int, tfd: int, previous: int, *, moved: bool) -> None:
     """Write the target's format through the descriptor already validated: the name is never reopened here."""
-    if fd_tree.stat_at(tfd, MARKER) is None:
-        fd_tree.write_at(tfd, MARKER, f"{previous or STORE_FORMAT}\n")  # keeps the format it was written in
+    format_marker.ensure_target(tfd, previous)
     # a moved clone keeps the fence: its retained source must not be opened again as a store by an older runtime
     fd_tree.write_at(folder_fd, MARKER, f"{project_move.FENCE if moved else STORE_FORMAT}\n")
 
 
 def _publish_proven(folder_fd: int, pfd: int, target: Path, rec: dict, previous: int) -> None:
     """Publish the switched target's format through the folder the switch validated, then recheck its name."""
-    tfd = project_move.check_switched(target, pfd, rec)
+    tfd = project_switch.check_switched(target, pfd, rec)
     try:
         _publish_markers(folder_fd, tfd, previous, moved=True)
-        project_move.named_switched(target, rec)  # the name still reaches the descriptor written through
+        project_switch.named_switched(target, rec)  # the name still reaches the descriptor written through
     finally:
         os.close(tfd)
 
@@ -318,35 +317,10 @@ def _refuse_links(folder: Path, folder_fd: int, names: list[str]) -> None:
             raise StoreError(msg)
 
 
-def supported_format(text: object) -> int:
-    """A format marker this runtime opens: an ASCII integer from 1 through STORE_FORMAT; anything else is refused."""
-    digits = text.strip() if isinstance(text, str) else ""
-    if not (digits.isascii() and digits.isdigit()):
-        msg = f"format marker {text!r} is not a supported store format: refusing it; nothing was changed"
-        raise StoreError(msg)
-    value = int(digits)
-    if not 1 <= value <= STORE_FORMAT:
-        msg = f"format {value} is not a supported store format (1 to {STORE_FORMAT}): refusing it"
-        raise StoreError(msg)
-    return value
-
-
-def prior_format(text: object) -> int:
-    """A format the store held before its offline move: 0 when it had no marker, else a supported format.
-
-    Only the exact empty string (how an absent marker is recorded) or None is 0; any other text, including
-    whitespace, must be a supported format. The fence itself is never a prior format, and nothing above
-    STORE_FORMAT is one.
-    """
-    if text is None or text == "":
-        return 0
-    return supported_format(text)
-
-
 def _format_at(folder_fd: int, proof: OfflineProof | None) -> int:
     """The store's format for this open: the prior format a proof names, else the clone's own marker, unfenced."""
     if proof is not None:
-        return prior_format(proof.previous)
+        return format_marker.prior_format(proof.previous)
     found = _marker_at(folder_fd)
     if found > STORE_FORMAT:
         msg = f"store format {found} is newer than {STORE_FORMAT}"
@@ -363,7 +337,7 @@ def _previous_at(folder_fd: int) -> int:
     except (OSError, ValueError) as exc:
         msg = f"{project_move.PREPARED} is unreadable: refusing to admit the moved store"
         raise StoreError(msg) from exc
-    return prior_format(marker)
+    return format_marker.prior_format(marker)
 
 
 def _generation_at(folder: Path, folder_fd: int, proof: OfflineProof) -> None:
@@ -422,7 +396,7 @@ def _move_and_publish(  # noqa: PLR0913, PLR0917
     target: Path,
     proof: OfflineProof | None,
     rec: dict | None,
-    found: str,
+    found: int,
     *,
     pending: bool,
 ) -> None:
@@ -430,7 +404,7 @@ def _move_and_publish(  # noqa: PLR0913, PLR0917
     pfd = project_move.pin_parent(target)
     try:
         if pending:
-            project_move.relocate(folder, folder_fd, target, pfd, rec, proof)
+            project_move.relocate(folder, folder_fd, target, pfd, rec, proof, found)
     finally:
         os.close(pfd)
     pfd = project_move.pin_parent(target)  # re-pinned: the path may have been swapped during the move

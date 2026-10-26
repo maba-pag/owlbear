@@ -12,7 +12,7 @@ import subprocess
 import sys
 from typing import TYPE_CHECKING
 
-from owlbear_delivery_next.state_store import fd_tree, project_home, project_move
+from owlbear_delivery_next.state_store import fd_tree, format_marker, project_home, project_move
 from owlbear_delivery_next.state_store.database import MARKER, StoreError
 from owlbear_delivery_next.state_store.legacy_family import Gap, open_gaps
 from owlbear_delivery_next.state_store.offline_proof import OfflineProof, same_folder
@@ -127,7 +127,7 @@ def _refuse_unsupported_marker(folder: Path, fd: int) -> None:
     if raw is None or raw.strip() == FENCE:
         return
     try:
-        project_home.supported_format(raw)
+        format_marker.supported_format(raw)
     except StoreError as exc:
         msg = f"{folder / MARKER}: {exc}"
         raise StoreError(msg) from exc
@@ -139,7 +139,7 @@ def _refuse_unsupported_prior(folder: Path, record: dict) -> None:
         msg = f"{folder / PREPARED} names no prior format: refusing the offline move"
         raise StoreError(msg)
     try:
-        project_home.prior_format(record["marker"])
+        format_marker.prior_format(record["marker"])
     except StoreError as exc:
         msg = f"{folder / PREPARED}: {exc}"
         raise StoreError(msg) from exc

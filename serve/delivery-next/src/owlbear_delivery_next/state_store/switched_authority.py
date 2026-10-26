@@ -8,7 +8,7 @@ the store still holds that receipt's identity, proof and format.
 import os
 from typing import TYPE_CHECKING
 
-from owlbear_delivery_next.state_store import fd_tree, project_home, project_move
+from owlbear_delivery_next.state_store import fd_tree, format_marker, project_home, project_move, project_switch
 from owlbear_delivery_next.state_store.database import MARKER, StoreError
 from owlbear_delivery_next.state_store.offline_proof import same_folder
 
@@ -38,7 +38,7 @@ def retained_target(folder: Path, pid: str) -> Path | None:
     if rec["phase"] != project_move.SWITCHED or rec["target"] != str(target):
         msg = f"{folder} was not switched to {target}: its receipt names another store; nothing was changed"
         raise StoreError(msg)
-    project_move.named_switched(target, rec)
+    project_switch.named_switched(target, rec)
     _proven(target, rec)
     return target
 
@@ -58,11 +58,9 @@ def _proven(target: Path, rec: dict) -> None:
             msg = f"{target} lost the proof its move recorded: nothing was changed"
             raise StoreError(msg)
         fd_tree.refuse_quarantined(tfd, target)
-        try:
-            project_home.supported_format(fd_tree.read_at(tfd, MARKER))
-        except StoreError as exc:
-            msg = f"{target} is not a supported store format: refusing it; nothing was changed"
-            raise StoreError(msg) from exc
+        text = fd_tree.read_at(tfd, MARKER)  # an absent marker is the owned repair the store's own open makes
+        if text is not None:
+            format_marker.supported_format(text)
     except OSError as exc:
         msg = f"{target} holds an entry OwlBear cannot read: nothing was changed"
         raise StoreError(msg) from exc
