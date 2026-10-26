@@ -23,6 +23,7 @@ from owlbear_delivery_next.local_system import preload, processes
 from owlbear_delivery_next.local_system.mask import redact
 from owlbear_delivery_next.local_system.processes import Termination, verdict
 from owlbear_delivery_next.runtimes import lessons, sdk_teardown, step_decisions, step_input, subagents, watch_feed
+from owlbear_delivery_next.runtimes.chatlogs import around as chatlogged
 from owlbear_delivery_next.runtimes.copilot_cli import cli_path
 from owlbear_delivery_next.runtimes.results import ENDED, Gate
 from owlbear_delivery_next.runtimes.sdk_teardown import CALL
@@ -441,7 +442,7 @@ async def run(cfg: Session) -> Run:
     """Open or resume the session, send the message, await its result, tear down within bounds, then the watcher."""
     st = _Step(cfg, asyncio.get_running_loop())
     st.feed = watch_feed.opened(cfg.watch, cfg.worktree, lambda: st.run.session_id, st.watch)
-    return await watch_feed.around(st.feed, _run(st))
+    return await chatlogged(cfg, watch_feed.around(st.feed, _run(st)), lambda: st.run.session_id)  # design §5
 
 
 async def _run(st: _Step) -> Run:
