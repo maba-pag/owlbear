@@ -331,6 +331,20 @@ its bounded teardown before propagating the original error or cancellation.
 Journal failures cannot skip disconnect, stop or force fallback; failed cleanup
 stays unconfirmed, so a known orphan cannot authorize a successor.
 
+SDK result deadlines (#627) close acceptance before helpers and after validation
+and synchronous recording, and bound active snapshot/reminder RPCs by the remaining result budget
+without waiting for cancellation cooperation. Outstanding request tasks stay owned
+through teardown; pending requests cannot produce confirmed termination. The budget
+still starts at wait entry, without changing startup or cumulative-resume policy.
+SDK session callers bound cancellation of leftover asynchronous requests without
+losing returned usage or payloads. Synchronous tools retain their caller's ownership
+until executor work settles; cancelled waiters neither release running tools nor
+permit queued tools to start later. Unknown shutdown remains unconfirmed.
+Returned snapshot PIDs are recorded inside the owned request even after the
+acceptance cutoff. Teardown list, cancel, disconnect and stop requests also use
+cancellation-independent bounded waits, so one resistant RPC cannot skip later
+cleanup or hide an unresolved session.
+
 Decision lookup (#616) fails closed for any unresolved in-scope authority, even
 beside valid rules: worker and lead-chat replies name the unresolved rules and
 reasons without a governing answer or picker run. The full binding wording kept
