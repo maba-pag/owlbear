@@ -107,22 +107,38 @@ def _refuse_replaced(folder: Path, fd: int) -> None:
 
 def _prepare_at(folder: Path, fd: int, boot: str) -> dict:
     raw = _read(fd, folder, MARKER) or ""
-    current = raw.strip()
-    if current == FENCE:
+    if raw.strip() == FENCE:
         # Repeated prepare keeps the existing generation; the fence is never recorded as the prior format.
         return _record(folder, fd)[0]
-    if current and not current.isdigit():
-        msg = f"the format marker {current!r} is malformed: refusing the offline move"
-        raise StoreError(msg)
-    if current and int(current) >= int(FENCE):
-        msg = f"the format marker {current} is not a prior format: refusing the offline move"
-        raise StoreError(msg)
     dev, ino = fd_tree.ident(os.fstat(fd))
     _refuse_foreign_preparation(folder, fd, raw, [dev, ino])
     record = {"boot": boot, "folder": [dev, ino], "marker": raw}
     fd_tree.write_at(fd, PREPARED, json.dumps(record) + "\n")
     fd_tree.write_at(fd, MARKER, f"{FENCE}\n")
     return record
+
+
+def _refuse_unsupported_marker(folder: Path, fd: int) -> None:
+    """Refuse before any write when the marker is neither the fence nor a prior format this runtime can move."""
+    raw = _read(fd, folder, MARKER) or ""
+    if raw.strip() != FENCE:
+        try:
+            project_home.prior_format(raw)
+        except StoreError as exc:
+            msg = f"{folder / MARKER}: {exc}"
+            raise StoreError(msg) from exc
+
+
+def _refuse_unsupported_prior(folder: Path, record: dict) -> None:
+    """Refuse a preparation whose recorded prior format is not one this runtime moves; nothing is written."""
+    if not isinstance(record["marker"], str):
+        msg = f"{folder / PREPARED} names no prior format: refusing the offline move"
+        raise StoreError(msg)
+    try:
+        project_home.prior_format(record["marker"])
+    except StoreError as exc:
+        msg = f"{folder / PREPARED}: {exc}"
+        raise StoreError(msg) from exc
 
 
 def _refuse_foreign_preparation(folder: Path, fd: int, raw: str, identity: list[int]) -> None:
@@ -162,6 +178,7 @@ def prepare(folder: Path, gaps: Callable[[], tuple[Gap, ...]] = open_gaps) -> di
             raise StoreError(msg)
         _refuse_replaced(folder, fd)
         _refuse_nothing_to_move(folder, fd)
+        _refuse_unsupported_marker(folder, fd)
         project_home.ensure_pinned(folder, fd)
         return _prepare_at(folder, fd, boot)
     finally:
@@ -177,6 +194,7 @@ def finish(folder: Path, gaps: Callable[[], tuple[Gap, ...]] = open_gaps) -> Off
     fd = _pinned(folder)
     try:
         record, prepared = _record(folder, fd)
+        _refuse_unsupported_prior(folder, record)
         boot = boot_session()
         if boot.upper() == record["boot"].upper():  # UUID case variants name the same boot session
             msg = "still the boot session the source was prepared in: reboot before finishing; nothing moves"

@@ -9,7 +9,7 @@ import os
 from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.state_store import fd_tree, project_home, project_move
-from owlbear_delivery_next.state_store.database import MARKER, STORE_FORMAT, StoreError
+from owlbear_delivery_next.state_store.database import MARKER, StoreError
 from owlbear_delivery_next.state_store.offline_proof import same_folder
 
 if TYPE_CHECKING:
@@ -21,7 +21,7 @@ def retained_target(folder: Path, pid: str) -> Path | None:
 
     Raises:
         StoreError: The receipt is not SWITCHED to the project's store, or that store is missing, replaced,
-            quarantined, unproven or not format STORE_FORMAT.
+            quarantined, unproven or not a supported store format.
     """
     target = project_home.home(pid)
     try:
@@ -58,9 +58,11 @@ def _proven(target: Path, rec: dict) -> None:
             msg = f"{target} lost the proof its move recorded: nothing was changed"
             raise StoreError(msg)
         fd_tree.refuse_quarantined(tfd, target)
-        if (fmt := fd_tree.read_at(tfd, MARKER)) is None or fmt.strip() != str(STORE_FORMAT):
-            msg = f"{target} is not format {STORE_FORMAT}: refusing it; nothing was changed"
-            raise StoreError(msg)
+        try:
+            project_home.supported_format(fd_tree.read_at(tfd, MARKER))
+        except StoreError as exc:
+            msg = f"{target} is not a supported store format: refusing it; nothing was changed"
+            raise StoreError(msg) from exc
     except OSError as exc:
         msg = f"{target} holds an entry OwlBear cannot read: nothing was changed"
         raise StoreError(msg) from exc

@@ -91,7 +91,7 @@ def record_at(folder: Path, folder_fd: int) -> dict | None:
     except (OSError, ValueError) as exc:
         msg = f"{folder / MOVE_RECORD} is unreadable ({exc}): nothing was moved; check it, then start again"
         raise StoreError(msg) from exc
-    if found is None:
+    if text is None:
         return None
     if not _is_record(found):
         msg = f"{folder / MOVE_RECORD} is not a move record: nothing was moved; check it, then start again"

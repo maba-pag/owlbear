@@ -33,9 +33,9 @@ CURRENT_MODULES = (
     ("state_store/database.py", "4c58bfc55a9db87a2d6aba3c52de794c06cddfce5aeb19bf3bd84c531bddc901"),
     ("state_store/fd_tree.py", "4c3bd8c8aff0b96d75dff0bfe7ea30b8528200e1f2c3b83be7c3449cf48dee3b"),
     ("state_store/offline_proof.py", "5a4fb1b44ab554ba5e1174da3ae195882284180371011e46da85f4472c344688"),
-    ("state_store/offline_protocol.py", "5142f7302a0e813785c5dd7944496b31c483b3969fc6440cb53defa721208946"),
-    ("state_store/switched_authority.py", "15843f18dd3f41f041144dc5d3bfbbe38a2b390450dffb72cff3a0c35ff32624"),
-    ("state_store/project_home.py", "c407b34a7d6addeeb80a98ede867195ed6edaeb8a1b6399fea836707258ca98c"),
-    ("state_store/project_move.py", "7a05dc5b908b9ede72eb6e82cdfbdc1b021dd8e398ce4a9ab44817c0ee78ee20"),
+    ("state_store/offline_protocol.py", "9c05bd623789d3611755c466add7b21b33321cab74826aca28e43e9a4f59b485"),
+    ("state_store/switched_authority.py", "2dba49d9b9023ee60e8b2c482fb3f58da30636d5e0d3efea22158a0fa875bb55"),
+    ("state_store/project_home.py", "990768bf8579b7e51f9a859fe7ef9aa9a29f4f3a500fd1a1f55ab4ac77b5b6c3"),
+    ("state_store/project_move.py", "f9dd394e81081239cc3c4d4de0dfc424f5167f388c25f871cd9bb794d827ec45"),
     ("state_store/store.py", "c93ae35c9fb506201ebb4ba6010c4be04fd6a8fb9f9ccb3cc1522fbc5e821561"),
 )

@@ -312,19 +312,33 @@ def _refuse_links(folder: Path, folder_fd: int, names: list[str]) -> None:
             raise StoreError(msg)
 
 
-def _prior(text: str | None) -> int:
-    """A format the store held before its offline move; the fence itself is never a prior format."""
-    value = int(text) if text and text.strip() else 0
-    if value >= int(project_move.FENCE):
-        msg = "the preparation recorded the fence as the prior format: refusing the offline move"
+def supported_format(text: object) -> int:
+    """A format marker this runtime opens: an ASCII integer from 1 through STORE_FORMAT; anything else is refused."""
+    digits = text.strip() if isinstance(text, str) else ""
+    if not (digits.isascii() and digits.isdigit()):
+        msg = f"format marker {text!r} is not a supported store format: refusing it; nothing was changed"
+        raise StoreError(msg)
+    value = int(digits)
+    if not 1 <= value <= STORE_FORMAT:
+        msg = f"format {value} is not a supported store format (1 to {STORE_FORMAT}): refusing it"
         raise StoreError(msg)
     return value
+
+
+def prior_format(text: object) -> int:
+    """A format the store held before its offline move: 0 when it had no marker, else a supported format.
+
+    The fence itself is never a prior format, and nothing above STORE_FORMAT is one.
+    """
+    if text is None or (isinstance(text, str) and not text.strip()):
+        return 0
+    return supported_format(text)
 
 
 def _format_at(folder_fd: int, proof: OfflineProof | None) -> int:
     """The store's format for this open: the prior format a proof names, else the clone's own marker, unfenced."""
     if proof is not None:
-        return _prior(proof.previous)
+        return prior_format(proof.previous)
     found = _marker_at(folder_fd)
     if found > STORE_FORMAT:
         msg = f"store format {found} is newer than {STORE_FORMAT}"
@@ -341,7 +355,7 @@ def _previous_at(folder_fd: int) -> int:
     except (OSError, ValueError) as exc:
         msg = f"{project_move.PREPARED} is unreadable: refusing to admit the moved store"
         raise StoreError(msg) from exc
-    return _prior(marker)
+    return prior_format(marker)
 
 
 def _generation_at(folder: Path, folder_fd: int, proof: OfflineProof) -> None:
