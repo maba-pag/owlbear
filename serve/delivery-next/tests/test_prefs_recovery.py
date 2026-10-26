@@ -1903,10 +1903,12 @@ def test_a_published_absent_claim_is_not_won_by_a_stale_clone(shared_repo, tmp_p
     assert "could not be merged with the remote" in str(first.value)
     assert not b.config_path.exists()
 
-    with pytest.raises(StoreError, match="claim was not published"):
-        prefs_import.run(b)  # the unconfirmed claim is published again, still conflicts, and never fills
+    # the conflicting rebase is left as Git stopped it, for the owner (R06): the retry waits for it and never fills
+    assert b.shared.rebasing()
+    with pytest.raises(StoreError, match="rebase in progress"):
+        prefs_import.run(b)
     assert not b.config_path.exists()
-    assert b.read_profile().prefs_import == "pending"
+    assert b.shared.rebasing()
 
     fresh, got = clone_as(remote, tmp_path, "c")
     assert (got.prefs_import, got.prefs_claim) == ("pending", claimed.prefs_claim)

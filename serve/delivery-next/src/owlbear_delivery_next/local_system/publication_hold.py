@@ -242,14 +242,16 @@ def _kept(repo: DataRepo, rel: str, fields: object, what: str, until: float | No
     return ""
 
 
-def _target(repo: DataRepo, push: Sequence[str], until: float | None) -> tuple[str, tuple[str, ...]]:
+def _target(repo: DataRepo, push: Sequence[str], until: float | None, *, held: bool) -> tuple[str, tuple[str, ...]]:
     """Why the git *push* may land elsewhere than the upstream branch the record was checked on, else the push to run.
 
     Git itself resolves where a plain push goes (``branch.<name>.pushRemote``, ``remote.pushDefault``,
     ``push.default``); an explicit push names one remote and one ``source:destination``. Any other form cannot be
     proven, and a remote whose push address differs from the one fetched from may be another repository. A plain push
     runs as the one non-forced refspec it was proven to be, ``HEAD:<upstream branch>``: configured push refspecs, a
-    forced ``+`` one or ``push.default=matching``'s other branches, apply only to a plain push.
+    forced ``+`` one or ``push.default=matching``'s other branches, apply only to a plain push. With no change *held*,
+    an explicit non-forced push may go to the branch its caller captured, such as a decision publication's own target,
+    whatever branch is checked out by then; a held change's push must land on the upstream it was checked on.
     """
     branch = _run(repo, until, "symbolic-ref", "-q", "HEAD").strip()
     atoms = "%(upstream:remotename)%00%(upstream:remoteref)%00%(push:remotename)"
@@ -265,17 +267,18 @@ def _target(repo: DataRepo, push: Sequence[str], until: float | None) -> tuple[s
         ):
             return f"its push ({' '.join(push)}) names no single remote and branch to check", ()
         remote, ref = words[0], words[1].split(":", 1)[1]
-        lands = (remote, ref) == (up_remote, up_ref)
+        lands = (remote, ref) == (up_remote, up_ref) or (not held and bool(ref))
     else:  # Git's own resolution of where this branch pushes, as a remote-tracking branch like its upstream
         ref = _run(repo, until, "rev-parse", "--symbolic-full-name", "@{push}").strip()
         lands = remote == up_remote and ref == _run(repo, until, "rev-parse", "--symbolic-full-name", UPSTREAM).strip()
-    if not (up_remote and up_ref and lands):
+    captured = bool(words) and not held  # an explicit push with nothing held names its own destination
+    if not (lands and (captured or (up_remote and up_ref))):
         goes = f"{remote or 'no remote'} ({ref or 'no branch'})"
         return f"would be pushed to {goes}, not to its upstream {up_remote} {up_ref} where it was checked", ()
-    fetched = _lines(_run(repo, until, "remote", "get-url", up_remote), "remote address")
-    pushed = _lines(_run(repo, until, "remote", "get-url", "--push", "--all", up_remote), "push address")
+    fetched = _lines(_run(repo, until, "remote", "get-url", remote), "remote address")
+    pushed = _lines(_run(repo, until, "remote", "get-url", "--push", "--all", remote), "push address")
     if len(fetched) != 1 or not fetched[0] or pushed != fetched:  # whole values, compared exactly: one address
-        return f"the push address of {up_remote} is not exactly the one address its state was read from", ()
+        return f"the push address of {remote} is not exactly the one address its state was read from", ()
     return "", tuple(push) if words else ("push", "-q", up_remote, f"HEAD:{up_ref}")
 
 
@@ -290,19 +293,19 @@ def check(repo: DataRepo, until: float | None, *, fetch: bool) -> str:
 def pushing(repo: DataRepo, push: Sequence[str], until: float | None) -> tuple[str, tuple[str, ...]]:
     """Why the git *push* may not run, after fetching and checking as `check` does; else the push to run.
 
-    Every push of the shared checkout, whether a change is held or not, must be proven to land on the upstream branch
-    it reads and rebases from, and a plain push runs as that one non-forced refspec: a configured forced or matching
-    push never overwrites another checkout's work, and a held change's checks still apply once its record retires.
+    Plain and held pushes must land on the checked upstream. With nothing held, an explicit non-forced push may
+    name its caller's captured destination. A plain push still runs as one non-forced refspec after a hold retires:
+    configured forced or matching pushes cannot overwrite another checkout's work.
     """
     return _checked(repo, until, fetch=True, push=tuple(push))
 
 
 def _bound(repo: DataRepo, push: tuple[str, ...], until: float | None) -> tuple[str, tuple[str, ...]]:
-    """The push to run with no change held: refused, never redirected, when it cannot be proven to land upstream."""
+    """The checked, non-forced push with nothing held: plain to the upstream, explicit to its captured destination."""
     if not push:
         return "", push
     try:
-        why, run = _target(repo, push, until)
+        why, run = _target(repo, push, until, held=False)
     except _UnknownError as exc:
         why, run = f"its destination cannot be told: {exc}", ()
     return (f"nothing was pushed from {repo.root}: this push {why}", ()) if why else ("", run)
@@ -321,7 +324,7 @@ def _checked(repo: DataRepo, until: float | None, *, fetch: bool, push: tuple[st
             return _bound(repo, push, until)
         why = _unmet(repo, held, until)
         ahead = _changes(repo, str(held["watch"]), until)
-        elsewhere, run = _target(repo, push, until) if push and not why else ("", push)
+        elsewhere, run = _target(repo, push, until, held=True) if push and not why else ("", push)
     except _UnknownError as exc:
         return f"nothing was pushed or rebased in {repo.root}: a held automatic change cannot be checked: {exc}", ()
     if why != held["refused"]:

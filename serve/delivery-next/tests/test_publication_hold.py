@@ -115,8 +115,16 @@ def nth_push(n: int):
     return when
 
 
+def command(args) -> str:
+    """The Git subcommand of *args*, past any leading ``-c key=value`` options (the commit runs with some)."""
+    rest = list(args)
+    while rest[:1] == ["-c"]:
+        rest = rest[2:]
+    return rest[0] if rest else ""
+
+
 def after_pull(args, _seen) -> bool:
-    return args[:1] == ("commit",)  # the first Git write after the pull and the guards: the remote moves now
+    return command(args) == "commit"  # the first Git write after the pull and the guards: the remote moves now
 
 
 def test_a_completion_after_the_winners_pull_holds_the_fill_before_any_push(three, monkeypatch):
@@ -223,8 +231,10 @@ def test_no_later_publication_of_the_held_checkout_pushes_its_stale_fill(held, t
         assert "is held because" in restarted.shared.publish(memory, "memory: note")
         assert "is held because" in restarted.shared.pull()
         assert "is held because" in restarted.shared.rebase()
-        sent = decision_sync.publish(restarted.shared, [memory], "decision: raw push", time.monotonic() + 30)
-        assert "is held because" in sent.notice
+        until = time.monotonic() + 30  # the decision sync's own push: an explicit commit to its captured target
+        goal = decision_sync.target(restarted.shared, until)
+        sent = decision_sync.push_commit(restarted.shared, git(root, "rev-parse", "HEAD"), goal, until)
+        assert sent.startswith(f"nothing was pushed or rebased in {root}")
     assert restarted.shared.git("push", "-q").returncode == 1
     with pytest.raises(StoreError, match="is held because"):
         prefs_import.run(restarted)
@@ -365,7 +375,7 @@ def test_identical_bytes_from_another_lineage_never_retire_the_hold_of_an_unpush
 
     def spy(cwd, *args, until=None):
         if armed and cwd == winner.shared.root:
-            if not steps and args[:1] == ("commit",):
+            if not steps and command(args) == "commit":
                 steps.append("copied")
                 copy_the_fill_then_complete()
             elif steps == ["copied"] and args[:1] == ("push",):
@@ -867,3 +877,122 @@ def test_the_automatic_publications_after_a_retired_hold_never_force_over_anothe
     assert config_bytes(winner) == before
     assert pushes
     assert all(args[-1] == "HEAD:refs/heads/main" and "+" not in " ".join(args) for args in pushes)
+
+
+# The decision batch barrier (R06) and the held change (R15) on one shared checkout: neither bypasses the other.
+
+
+def interrupt_a_batch(store: Store, how: str) -> None:
+    """Leave a decision batch interrupted in *store*'s checkout: a readable journal in flight, or a corrupt one."""
+    from owlbear_decisions import new_id  # noqa: PLC0415
+    from owlbear_delivery_next.state_store import decision_batch  # noqa: PLC0415
+
+    if how == "corrupt":
+        decision_batch.journal_path(store.shared).write_text("{not json")
+        return
+    decision_id = new_id()
+    head = git(store.shared.root, "rev-parse", "HEAD")
+    files = [(f"{PROJECT}/decisions/{decision_id}.md", None, b"in flight\n")]
+    decision_batch.begin(store.shared, PROJECT, head, "decisions: in flight", [decision_id], files)
+
+
+@pytest.mark.parametrize("how", ["pending", "corrupt"])
+def test_an_interrupted_decision_batch_stops_the_import_before_its_pull_or_any_push(three, monkeypatch, how):
+    winner, other, remote = three
+    unrelated_advance(other)  # the import's catch-up would rebase onto this
+    interrupt_a_batch(winner, how)
+    before, head = remote_head(remote), git(winner.shared.root, "rev-parse", "HEAD")
+    real, ran = data_repo._git, []  # noqa: SLF001 - the publisher's own Git calls are the boundary
+
+    def spy(cwd, *args, until=None):
+        if cwd == winner.shared.root and command(args) in {"push", "pull", "rebase"}:
+            ran.append(args)
+        return real(cwd, *args, until=until)
+
+    monkeypatch.setattr(data_repo, "_git", spy)
+    with pytest.raises(StoreError, match="decision batch"):
+        prefs_import.run(winner)
+
+    assert ran == []  # neither rebased nor pushed: the barrier comes first
+    assert remote_head(remote) == before
+    root = winner.shared.root  # the claim is committed here, on top of what was there; nothing was filled
+    assert git(root, "merge-base", "--is-ancestor", head, "HEAD") == ""
+    assert git(root, "ls-tree", "HEAD", "--", f"{PROJECT}/config.json") == ""
+    assert not winner.config_path.exists()
+    assert not remote_has_config(remote)
+
+
+def test_an_interrupted_decision_batch_comes_before_a_held_change_in_every_ordinary_publication(held):
+    winner, remote = held
+    interrupt_a_batch(winner, "pending")
+    before = remote_head(remote)
+
+    notice = publish_memory(winner, "later.md")
+    assert "decision batch" in notice
+    assert "is held because" not in notice  # the barrier answers before the hold is even checked
+    with winner.shared.locked():
+        assert "decision batch" in winner.shared.pull()
+    assert remote_head(remote) == before
+
+
+def test_an_owned_decision_push_never_sends_a_held_stale_fill(held):
+    winner, remote = held
+    shared, before = winner.shared, remote_head(remote)
+    until = time.monotonic() + 30
+    goal = decision_sync.target(shared, until)
+    assert goal is not None
+
+    said = decision_sync.push_commit(shared, git(shared.root, "rev-parse", "HEAD"), goal, until)
+
+    # the explicit SHA and captured target are checked against the hold too (R06 keeps 200 characters of the notice)
+    assert said.startswith(f"nothing was pushed or rebased in {shared.root}")
+    assert remote_head(remote) == before
+    assert not remote_has_config(remote)
+    assert shared.held()  # the kept refusal still names why
+
+
+@pytest.mark.parametrize("remote_name", ["origin", "authority"])
+def test_a_healthy_owned_decision_push_lands_on_its_target_within_one_deadline(three, monkeypatch, remote_name):
+    winner, _, remote = three
+    root = winner.shared.root
+    if remote_name != "origin":
+        git(root, "remote", "rename", "origin", remote_name)
+    git(root, "config", "remote.origin.push" if remote_name == "origin" else f"remote.{remote_name}.push", FORCED)
+    notes = root / "unrelated" / "decision-notes.md"
+    notes.parent.mkdir(parents=True, exist_ok=True)
+    notes.write_text("an owned batch's commit\n")
+    git(root, "add", "--", "unrelated/decision-notes.md")
+    git(root, "commit", "-qm", "decisions: owned batch")
+    made = git(root, "rev-parse", "HEAD")
+    real, untils = data_repo._git, []  # noqa: SLF001
+
+    def spy(cwd, *args, until=None):
+        if cwd == root:
+            untils.append(until)
+        return real(cwd, *args, until=until)
+
+    until = time.monotonic() + 30
+    goal = decision_sync.target(winner.shared, until)
+    assert goal is not None
+    assert (goal.remote, goal.ref) == (remote_name, "refs/heads/main")
+    monkeypatch.setattr(data_repo, "_git", spy)
+
+    assert decision_sync.push_commit(winner.shared, made, goal, until) == ""
+
+    assert remote_head(remote) == made  # a fast-forward of exactly the owned commit, never forced
+    assert untils
+    assert set(untils) == {until}
+
+
+def test_with_nothing_held_an_explicit_push_is_still_never_forced_or_sent_to_another_address(three, tmp_path):
+    winner, _, remote = three
+    root, before = winner.shared.root, remote_head(remote)
+    assert not publication_hold.recorded(winner.shared, None)
+    forced = winner.shared.git("push", "-q", "origin", "+HEAD:refs/heads/main")
+    assert forced.returncode == 1
+    assert "names no single remote and branch to check" in forced.stderr
+    git(root, "config", "remote.origin.pushurl", str(tmp_path / "another.git"))
+    aliased = winner.shared.git("push", "-q", "origin", "HEAD:refs/heads/main")
+    assert aliased.returncode == 1
+    assert "is not exactly the one address" in aliased.stderr
+    assert remote_head(remote) == before
