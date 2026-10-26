@@ -123,7 +123,7 @@ class DataRepo:
         (`publication_hold`).
         """
         pushing = args[:1] == ("push",)
-        if pushing and (held := publication_hold.check(self, until, fetch=True)):
+        if pushing and (held := publication_hold.check(self, until, fetch=True, push=args)):
             return subprocess.CompletedProcess(["git", *args], 1, "", held)
         done = _git(self.root, *args, until=until)
         if pushing and done.returncode == 0:
@@ -266,7 +266,7 @@ class DataRepo:
 
     def _push(self, until: float) -> str:
         """Push; once rejected, rebase on the remote and push again. A held automatic change is checked first."""
-        if held := publication_hold.check(self, until, fetch=True):
+        if held := publication_hold.check(self, until, fetch=True, push=("push", "-q")):
             return f"saved and committed in {self.root}, but not pushed: {held}"
         if _git(self.root, "push", "-q", until=until).returncode == 0:
             publication_hold.settled(self, until)

@@ -546,3 +546,74 @@ def test_an_unpushed_revert_of_the_fill_stays_held_because_a_replay_could_delete
     assert "is held because" in publish_memory(winner, "after-revert.md")
     assert remote_head(remote) == before
     assert git(root, "rev-list", "--count", "@{upstream}..HEAD") == "3"  # fill, revert and memory: all kept
+
+
+def forked_publication(three, tmp_path) -> tuple[Store, Path, Path, Profile]:
+    """The importer checks its claim on origin but Git sends its pushes to a fork where the import was settled."""
+    from owlbear_delivery_next.state_store.profile_share import ABSENT  # noqa: PLC0415
+
+    _, settler, remote = three
+    settler.mark_prefs_import("", "pending", ABSENT, "first")
+    settler.mark_prefs_import("pending", "done")
+    settler.config_path.write_text(Layer().model_dump_json(indent=1))
+    assert settler.shared.publish(settler.config_path, f"settings: {PROJECT}: project layer") == ""
+    settler.config_path.unlink()
+    assert settler.shared.publish(settler.config_path, f"settings: {PROJECT}: project layer removed") == ""
+    publication = tmp_path / "publication.git"
+    git(tmp_path, "clone", "-q", "--bare", str(remote), str(publication))  # the fork: done, config deleted
+    _, notice, applied = settler.mark_prefs_import("done", "pending", ABSENT, "fresh")  # a fresh claim on origin only
+    assert (notice, applied) == ("", True)
+    importer = checkout(remote, tmp_path, "importer")
+    root = importer.shared.root
+    git(root, "remote", "add", "publication", str(publication))
+    git(root, "config", "branch.main.pushRemote", "publication")
+    git(root, "config", "push.default", "current")
+    git(root, "fetch", "-q", "publication")  # the importer's own disposable checkout knows the fork's branch
+    assert git(root, "rev-parse", "--symbolic-full-name", "@{upstream}") == "refs/remotes/origin/main"
+    assert git(root, "rev-parse", "--symbolic-full-name", "@{push}") == "refs/remotes/publication/main"
+    claim = importer.read_profile()
+    assert (claim.prefs_import, claim.prefs_claim) == ("pending", "fresh")
+    return importer, remote, publication, claim
+
+
+def test_a_held_fill_is_never_pushed_to_another_remote_than_the_one_its_claim_was_checked_on(three, tmp_path):
+    from owlbear_delivery_next.settings.prefs_import import plan  # noqa: PLC0415
+    from owlbear_delivery_next.state_store.profile_share import ABSENT  # noqa: PLC0415
+
+    importer, remote, publication, claim = forked_publication(three, tmp_path)
+    fork_before, origin_before = remote_head(publication), remote_head(remote)
+    fields = {"prefs_import": "pending", "prefs_claim": "fresh", "prefs_basis": ABSENT}
+    requires = publication_hold.Requires(profile_share.path(importer), fields, "the import claim")
+    prepared = config_save.Prepared(ABSENT, lambda cur: plan(cur, claim), requires)
+
+    notice = importer.update_config(prepared, "legacy preferences carried")
+    assert "would be pushed to publication (refs/remotes/publication/main), not to its upstream origin" in notice
+    assert "would be pushed to publication" in importer.update_config(prepared, "legacy preferences carried")
+    _, done, _ = importer.mark_prefs_import("pending", "done")
+    assert "would be pushed to publication" in done
+    raw = importer.shared.git("push", "-q", "publication", "HEAD:refs/heads/main")
+    assert raw.returncode == 1
+    assert "would be pushed to publication" in raw.stderr
+
+    assert remote_head(publication) == fork_before
+    assert remote_marker(publication) == "done"
+    assert not remote_has_config(publication)
+    assert remote_head(remote) == origin_before
+    assert not remote_has_config(remote)
+    assert publication_hold.recorded(importer.shared, None)
+
+
+def test_a_full_import_through_a_non_default_remote_that_pushes_where_it_fetches_completes(three):
+    winner, _, remote = three
+    root = winner.shared.root
+    git(root, "remote", "rename", "origin", "authority")
+    git(root, "config", "branch.main.pushRemote", "authority")
+    git(root, "config", "push.default", "current")
+    assert git(root, "rev-parse", "--symbolic-full-name", "@{upstream}") == "refs/remotes/authority/main"
+
+    prefs_import.run(winner)
+
+    assert remote_marker(remote) == "done"
+    assert remote_has_config(remote)
+    assert winner.read_config().prefs.ci_poll_seconds == 45
+    assert not publication_hold.recorded(winner.shared, None)

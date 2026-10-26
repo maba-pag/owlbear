@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING
 from owlbear_delivery_next.local_system.storage_io import atomic_write
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Mapping, Sequence
     from pathlib import Path
 
     from owlbear_delivery_next.local_system.data_repo import DataRepo
@@ -31,6 +31,7 @@ ABSENT = "absent"
 UPSTREAM = "@{upstream}"
 _KEYS = ("watch", "base", "file", "fields", "what")
 _RECORD_KEYS = frozenset((*_KEYS, "refused"))
+_EXPLICIT = 2  # an explicit push: one remote and one source:destination
 _BLOB = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
 
 
@@ -203,10 +204,45 @@ def _unmet(repo: DataRepo, held: Mapping[str, object], until: float | None) -> s
     return ""
 
 
-def check(repo: DataRepo, until: float | None, *, fetch: bool) -> str:
+def _target(repo: DataRepo, push: Sequence[str], until: float | None) -> str:
+    """Why the git *push* may land elsewhere than the upstream branch the record was checked on; nothing when it cannot.
+
+    Git itself resolves where a plain push goes (``branch.<name>.pushRemote``, ``remote.pushDefault``,
+    ``push.default``); an explicit push names one remote and one ``source:destination``. Any other form cannot be
+    proven, and a remote whose push address differs from the one fetched from may be another repository.
+    """
+    branch = _run(repo, until, "symbolic-ref", "-q", "HEAD").strip()
+    atoms = "%(upstream:remotename)%00%(upstream:remoteref)%00%(push:remotename)"
+    said = _run(repo, until, "for-each-ref", f"--format={atoms}", branch).strip().split("\0")
+    up_remote, up_ref, remote = [*said, "", "", ""][:3]
+    words = [a for a in push[1:] if a != "-q"]
+    if words:  # an explicit push: exactly one remote and one source:destination, never forced
+        if (
+            len(words) != _EXPLICIT
+            or words[0].startswith("-")
+            or ":" not in words[1]
+            or words[1].startswith(("-", "+"))
+        ):
+            return f"its push ({' '.join(push)}) names no single remote and branch to check"
+        remote, ref = words[0], words[1].split(":", 1)[1]
+        lands = (remote, ref) == (up_remote, up_ref)
+    else:  # Git's own resolution of where this branch pushes, as a remote-tracking branch like its upstream
+        ref = _run(repo, until, "rev-parse", "--symbolic-full-name", "@{push}").strip()
+        lands = remote == up_remote and ref == _run(repo, until, "rev-parse", "--symbolic-full-name", UPSTREAM).strip()
+    if not (up_remote and up_ref and lands):
+        goes = f"{remote or 'no remote'} ({ref or 'no branch'})"
+        return f"would be pushed to {goes}, not to its upstream {up_remote} {up_ref} where it was checked"
+    fetched = _run(repo, until, "remote", "get-url", up_remote).split()
+    if _run(repo, until, "remote", "get-url", "--push", "--all", up_remote).split() != fetched:
+        return f"the push address of {up_remote} is not the address its state was read from"
+    return ""
+
+
+def check(repo: DataRepo, until: float | None, *, fetch: bool, push: Sequence[str] = ()) -> str:
     """Why nothing may be pushed or rebased here; nothing when no change is held or the remote still meets the record.
 
-    The remote is fetched first when *fetch*. A refusal is kept in the record; a lapsed record is removed.
+    The remote is fetched first when *fetch*. A refusal is kept in the record; a lapsed record is removed. Before a
+    *push* (its git arguments), it must also be proven to land on the upstream branch the record was checked on.
     """
     try:
         path = _path(repo, until)
@@ -220,10 +256,13 @@ def check(repo: DataRepo, until: float | None, *, fetch: bool) -> str:
             return ""
         why = _unmet(repo, held, until)
         ahead = _changes(repo, str(held["watch"]), until)
+        elsewhere = _target(repo, push, until) if push and not why else ""
     except _UnknownError as exc:
         return f"nothing was pushed or rebased in {repo.root}: a held automatic change cannot be checked: {exc}"
     if why != held["refused"]:
         atomic_write(path, json.dumps({**held, "refused": why}))
+    if elsewhere:
+        return f"nothing was pushed from {repo.root}: its held automatic change of {held['watch']} {elsewhere}"
     if not why:
         return ""
     commits = ", ".join(ahead) or "none, the change is uncommitted"
