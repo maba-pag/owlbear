@@ -239,11 +239,17 @@ class Maintenance:
         """The slot of the lease that records every one of *pids*: *hint* when it is one, else the newest.
 
         Empty when none does. A lease that records other processes never matches, so a stale hint or import mark
-        cannot name it.
+        cannot name it. A settled lease matches only as *hint*: a later process with the same PID and an unknown birth
+        is not evidence that it is the settled run's process.
         """
         with self._locked() as ledger:
             found = [
-                s for s in ledger.sessions if s.project == project and s.kind == kind and recorded(s, pids, self.boot())
+                s
+                for s in ledger.sessions
+                if s.project == project
+                and s.kind == kind
+                and (s.state in HELD or s.slot == hint)
+                and recorded(s, pids, self.boot())
             ]
         if not found:
             return ""
@@ -260,12 +266,15 @@ class Maintenance:
         started: datetime | None = None,
         covers: Callable[[Lease], bool] | None = None,
         pids: processes.Pids | None = None,
+        keyed: bool = False,
     ) -> Lease:
         """Import an older host's uncertain work once per proven generation.
 
         A proven generation is covered by its lease in any state, so a recovered one is never resurrected. An unproven
         one (empty *generation*) is covered only by a held lease, so a later unknown run gets its own hold. *covers*
         replaces that rule for a caller that keys its own history. *pids* are the processes a new lease records.
+        A *keyed* import also marks *source* with the lease it created, in the same save, so a retry finds that very
+        lease again instead of matching by window.
         """
 
         def same(s: Lease) -> bool:
@@ -276,6 +285,12 @@ class Maintenance:
             return bool(generation) or s.state in HELD
 
         with self._locked() as ledger:
+            if keyed:
+                prefix = f"{source}:slot:"
+                marked = next((s[len(prefix) :] for s in ledger.imported if s.startswith(prefix)), "")
+                owned = next((s for s in ledger.sessions if marked and s.slot == marked), None)
+                if owned is not None:
+                    return owned
             known = [s for s in ledger.sessions if same(s)]
             if known:
                 return max(known, key=lambda s: s.started_at)
@@ -298,6 +313,8 @@ class Maintenance:
             ledger.sessions.append(lease)
             if source not in ledger.imported:
                 ledger.imported.append(source)
+            if keyed:
+                ledger.imported.append(f"{source}:slot:{lease.slot}")
             self._save(ledger)
         self.slots.restore_one(lease.project, lease.slot, 1)
         return lease

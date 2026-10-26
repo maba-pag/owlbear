@@ -1004,3 +1004,72 @@ def test_a_waiting_request_takes_the_role_settings_in_force_at_its_grant(root) -
 def _record(cfg, seen: list) -> Run:
     seen.append((cfg.model, cfg.limit))
     return quiet(cfg)
+
+
+def test_a_keyless_snapshot_reusing_a_recovered_runs_pid_and_unknown_birth_is_held_anew(root, monkeypatch) -> None:
+    """A later legacy snapshot with no key is not the recovered run's process: it gets its own hold and no SDK."""
+    job = survived_run(root, monkeypatch, birth=None)
+    recovered_by_reboot(job)
+    legacy_left_file({4242: None})
+    calls: list[str] = []
+
+    def run(cfg) -> Run:
+        calls.append(cfg.session_id)
+        return pytest.fail("ran")
+
+    rebuilt = curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root), run=run)
+    assert (rebuilt.maintenance.pending("curation"), len(rebuilt.maintenance.read()["sessions"])) == (True, 2)
+    rebuilt.start("shop")
+    drained(rebuilt)
+    assert calls == []
+
+
+def test_a_keyless_snapshot_is_released_only_by_its_own_recovery_across_a_restart(root, monkeypatch) -> None:
+    job = survived_run(root, monkeypatch, birth=None)
+    recovered_by_reboot(job)
+    legacy_left_file({4242: None})
+    held = curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root))
+    [*_, newer] = held.maintenance.read()["sessions"]
+    booted = held.maintenance.boot
+    held.maintenance.boot = lambda: booted() + 1  # the computer rebooted since the keyless snapshot was held
+    held.maintenance.recover(newer["id"], rebooted=True)
+    for _ in range(2):
+        again = curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root))
+        assert (again.maintenance.pending("curation"), len(again.maintenance.read()["sessions"])) == (False, 2)
+
+
+def test_a_retry_after_a_failed_write_of_an_adopted_unknown_row_reuses_its_one_lease(root) -> None:
+    """The lease is created after the row ended, so the retry must find it by the row's own mark, not its window."""
+    first = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root))
+    first.maintenance.path.unlink()
+    older_unknown_run(first, datetime.now(UTC) - timedelta(minutes=5))
+
+    def fail(*_args: object) -> None:
+        msg = "synthetic write failure"
+        raise OSError(msg)
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(curation.Curation, "_write", fail)
+        with pytest.raises(OSError, match="synthetic write failure"):
+            curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root))
+    retry = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root))
+    [session] = retry.maintenance.read()["sessions"]
+    assert session["state"] == "held"
+    assert retry.maintenance.held(curation.SLOT, retry.load().folders["shop"].key) is True
+    assert retry.maintenance.pending("curation") is True
+
+
+def test_a_recovered_row_lease_is_not_duplicated_by_a_restart_and_a_new_row_holds_again(root) -> None:
+    first = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root))
+    first.maintenance.path.unlink()
+    older_unknown_run(first, datetime.now(UTC) - timedelta(minutes=5))
+    adopted = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root))
+    [session] = adopted.maintenance.read()["sessions"]
+    booted = adopted.maintenance.boot
+    adopted.maintenance.boot = lambda: booted() + 1
+    adopted.maintenance.recover(session["id"], rebooted=True)
+    again = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root))
+    assert (again.maintenance.pending("curation"), len(again.maintenance.read()["sessions"])) == (False, 1)
+    older_unknown_run(again, datetime.now(UTC) - timedelta(minutes=1))
+    newer = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root))
+    assert (newer.maintenance.pending("curation"), len(newer.maintenance.read()["sessions"])) == (True, 2)

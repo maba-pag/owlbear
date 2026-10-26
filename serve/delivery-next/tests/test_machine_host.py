@@ -458,6 +458,17 @@ def test_a_recovered_legacy_pack_generation_is_not_resurrected_by_an_empty_recei
         assert (len(sessions), sessions[0]["state"], machine.slots.counts(good.id)[2]) == (1, "recovered", 0)
 
 
+def test_an_unconfirmed_pack_run_keeps_the_machine_busy_and_not_left_until_its_reboot_recovery(machine):
+    """The pack ledger holds at machine scope even with no loaded project, so an update or stop waits for it."""
+    ident = machine.maintenance.begin("unloaded", "pack:unloaded", "pack", "", now=datetime.now(UTC))
+    machine.maintenance.failed(ident, RuntimeError("synthetic unconfirmed run"))
+    assert (bool(machine.busy()), bool(machine.left())) == (True, True)
+    booted = machine.maintenance.boot
+    machine.maintenance.boot = lambda: booted() + 1  # the computer rebooted since the unconfirmed run
+    machine.maintenance.recover(ident, rebooted=True)
+    assert (machine.busy(), machine.left()) == ([], [])
+
+
 def test_a_modern_failed_uncertain_pack_with_its_workspace_recorded_is_not_adopted_as_older_work(tmp_path, machine):
     """Control: a run that recorded its workspace is ledger-owned already, so nothing is imported from its record."""
     good = registry.register(clone(tmp_path / "good"))

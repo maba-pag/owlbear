@@ -272,10 +272,16 @@ class Machine:
             if p.host:
                 p.host.wake.set()
 
+    def _unproven_packs(self) -> list[str]:
+        """An unconfirmed pack run holds its lease at machine scope, even when its project is unloaded or failed."""
+        return ["pack: an unconfirmed run still holds its lease"] if self.maintenance.pending("pack") else []
+
     def left(self) -> list[str]:
         """What a stop when idle still waits for: each project's running steps, environments and admitted work."""
-        return [f"{p.name}: {w}" for p in list(self.projects.values()) for w in p.working(stopping=True)] + (
-            self.curation.working()
+        return (
+            [f"{p.name}: {w}" for p in list(self.projects.values()) for w in p.working(stopping=True)]
+            + self.curation.working()
+            + self._unproven_packs()
         )
 
     def fence(self, text: str) -> list[str]:
@@ -291,8 +297,10 @@ class Machine:
     def busy(self) -> list[str]:
         """What an update waits for: each project's running steps, environments and admitted work."""
         projects = list(self.projects.values())
-        return [f"{p.name}: {w}" for p in projects for w in p.working(stopping=True, requests=False)] + (
-            self.curation.working()
+        return (
+            [f"{p.name}: {w}" for p in projects for w in p.working(stopping=True, requests=False)]
+            + self.curation.working()
+            + self._unproven_packs()
         )
 
     def fenced(self) -> None:

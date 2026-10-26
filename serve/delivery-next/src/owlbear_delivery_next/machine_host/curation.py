@@ -155,6 +155,7 @@ class Curation:
                     "curation",
                     workspace="",
                     covers=_same_run(name, r),
+                    keyed=True,
                 )
                 runs.folders[name] = r.model_copy(update={"key": lease.slot})
         for name, r in runs.folders.items():
