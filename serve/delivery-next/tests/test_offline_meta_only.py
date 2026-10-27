@@ -142,11 +142,14 @@ def test_the_selfcheck_still_refuses_a_bad_active_target_config(repo, boot, acti
 
 @pytest.mark.usefixtures("current_binding", "boot")
 def test_the_selfcheck_still_refuses_a_corrupted_source_fence(repo, boot) -> None:
-    move_to_next_boot(repo, boot)
+    target = move_to_next_boot(repo, boot)
+    pid = registry.clone_id(source(repo))
+    assert selfcheck._project(pid, repo) == []  # noqa: SLF001
     (source(repo) / MARKER).write_text("998")
 
-    found = selfcheck._project(registry.clone_id(source(repo)), repo)  # noqa: SLF001
-    assert any("SWITCHED receipt needs" in line for line in found)
+    assert selfcheck._project(pid, repo)  # noqa: SLF001
+    assert (source(repo) / MARKER).read_text() == "998"
+    assert (target / MARKER).read_text().strip() == str(STORE_FORMAT)
 
 
 @pytest.mark.usefixtures("current_binding", "boot")
