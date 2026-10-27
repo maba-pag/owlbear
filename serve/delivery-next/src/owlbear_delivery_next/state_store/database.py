@@ -123,7 +123,7 @@ class Database:
         self._ready = False
 
     def marker(self) -> int:
-        """The regular marker's format; 0 only when its entry is absent."""
+        """The regular marker's integer, or 0 when its entry is absent."""
         try:
             raw = read_regular(self.root / MARKER)
             return int(raw.decode("utf-8")) if raw is not None else 0
