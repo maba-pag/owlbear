@@ -353,6 +353,56 @@ def test_finish_rechecks_cheap_authority_witnesses_after_final_source_hashing(pr
     assert {path: snapshot(path) for path in owners} == owners
 
 
+@pytest.mark.parametrize(
+    ("where", "witness"),
+    [
+        ("source", project_move.PREPARED),
+        ("source", MARKER),
+        ("source", project_move.CLONE_ID),
+        ("source", project_move.MOVE_RECORD),
+        ("target", project_move.MOVE_RECORD),
+    ],
+)
+def test_finish_refuses_paths_replaced_during_its_terminal_witness_reads(prepared, monkeypatch, where, witness):
+    repo, source = prepared
+    owners, reads, changed = {}, [], []
+    kept_source = []
+
+    def enable(target):
+        predicate = witness == project_move.MOVE_RECORD
+        name = "holds_text_at" if predicate else "read_at"
+        real = getattr(fd_tree, name)
+
+        def read(dfd, entry, *args):
+            result = real(dfd, entry, *args)
+            if entry == witness and os.path.samestat(os.fstat(dfd), source.stat()):
+                reads.append(True)
+                if len(reads) == 2:
+                    changed.append(True)
+                    folder = source if where == "source" else target
+                    detached = folder.with_name(f"owner-kept-{where}")
+                    folder.rename(detached)
+                    folder.mkdir()
+                    (folder / "owner").write_text(f"replacement {where}\n")
+                    kept_source.append(detached if where == "source" else source)
+                    owners.update({path: snapshot(path) for path in (source, detached, target)})
+            return result
+
+        monkeypatch.setattr(fd_tree, name, read)
+
+    fired = at_sync(monkeypatch, source, "receipt", enable)
+    code = cli.main(["--repo", str(repo), "finish"])
+
+    assert fired == [True]
+    assert changed == [True]
+    assert code == 1
+    assert record(kept_source[0])["phase"] == project_move.COPYING
+    assert {path: snapshot(path) for path in owners} == owners
+    quarantined = list(kept_source[0].glob(f"{fd_tree.QUARANTINE}*"))
+    assert len(quarantined) == 1
+    assert json.loads(quarantined[0].read_text())["phase"] == project_move.SWITCHED
+
+
 @pytest.mark.parametrize("when", ["target", "receipt"])
 @pytest.mark.parametrize("where", ["source", "target"])
 def test_a_late_future_marker_stays_typed_and_keeps_the_owner_bytes(prepared, monkeypatch, when, where):

@@ -378,9 +378,8 @@ def _commit(  # noqa: PLR0913, PLR0917
 ) -> None:
     """Record the switch only after the held copy is durable, still the one published, and the source unchanged.
 
-    The copy is proven ours before anything is written into it. The target's format marker is then written through
-    the held descriptor. The original source proof, manifest and target are checked after both target durability
-    and the SWITCHED record's temporary-file sync, immediately before its rename, with no intervening write or sync.
+    The copy is proven ours before writes. After target durability and the SWITCHED temporary-file sync, the original
+    source proof, manifest and named folders are checked immediately before rename, with no intervening write or sync.
     """
     current, receipt = record_image(folder, folder_fd)
     if current != rec or receipt is None:
@@ -402,9 +401,12 @@ def _commit(  # noqa: PLR0913, PLR0917
             raise StoreError(msg)
         require_proof(folder, folder_fd, target, proof)
         format_marker.written_format(tfd, previous)
-        if not _proof_ok(tfd, rec) or not same_folder(target, tfd):
+        if not _proof_ok(tfd, rec):
             raise _not_published(target)
         fd_tree.require_text_at(folder_fd, MOVE_RECORD, receipt)
+        if not same_folder(folder, folder_fd) or not same_folder(target, tfd):
+            msg = f"{folder} or {target} no longer names its verified folder: nothing was switched"
+            raise StoreError(msg)
 
     rec["phase"] = SWITCHED
     _save(folder, folder_fd, rec, before_replace=unchanged)  # only this guarded rename makes the target authoritative
