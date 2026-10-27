@@ -202,6 +202,7 @@ def current(cwd: Path) -> Path | None:
             return folder  # not moved yet, or its copy is not yet the authority
         if rec and rec["phase"] == project_move.SWITCHED:
             project_switch.prepared_prior(folder_fd)
+            project_switch.source_format(folder_fd)
         pid = _clone_id_at(folder, folder_fd)
         _same_folder(folder, folder_fd)
         if not pid:
@@ -210,6 +211,7 @@ def current(cwd: Path) -> Path | None:
         if rec and rec["phase"] == project_move.SWITCHED:
             _switched_to(target, rec)
             project_switch.require_switched(target, rec)
+            project_switch.source_format(folder_fd)
             _same_folder(folder, folder_fd)
         return target
     finally:

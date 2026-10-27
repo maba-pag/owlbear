@@ -76,7 +76,7 @@ IMPORTS = (
     ("state_store/project_home.py", "c79464a6139fe571efd600903aa848dc67c9673f016d12c093d7d6b94b74a681"),
     ("state_store/store.py", "a3da565feeee931b40d4907f17c46372c000e573e1add938ae3679d175e75de4"),
 )
-CURRENT_FAMILY_AGGREGATE = "7099dffefb5f0d0ecf02195f5883cf736c59b7f3d03496f6d1c31fb4a96fd66c"
+CURRENT_FAMILY_AGGREGATE = "de59669ca4bc6dd4d08d4608b10633779b6a62f736b5d1791e9135db90a2cfdc"
 CURRENT_FUNCTIONS = (
     ("commands/chat_client.py:Chat.call", "0fc1fdb166ea555741a2aa7796a99a4eb7b71c572ad37fba1ae0a9e37171b584"),
     ("commands/chat_client.py:workspace", "4e1bd94f29805ab94eff49182ba65966b93988ce4a8e3f395576601499a4855d"),
@@ -115,7 +115,7 @@ CURRENT_FUNCTIONS = (
     ("state_store/project_home.py:_generation_at", "d048a1d7d993a3fc1fb9ad2756d4e59459e6c43fd90c604d1637de82a4c3533e"),
     ("state_store/project_home.py:clone_dir", "db1b925c614a629f720496a9473f955f44d686c0e8903da656e27288435f3c5d"),
     ("state_store/project_home.py:clone_id", "2a12145869bb15d50f90e34e18ad2ec65b57b0d96c0597797af3f3750e86fbf8"),
-    ("state_store/project_home.py:current", "fc9e41d02cc79331c09b7b387c03a364c5d5be7cd78bf92a43c889da81fb8190"),
+    ("state_store/project_home.py:current", "e707e20857b3f0c20f9eec278a6c13aca55a5c798f0dfb532ef544674dc89892"),
     ("state_store/project_home.py:ensure_id", "0ca91d9cd58f7a7e6f1faf1f5e7a9ae0c0c578ce58f7d798235375e280d05f5d"),
     ("state_store/project_home.py:ensure_pinned", "448d703d46f3c59a8c5856ef22adf3222ddf61d91f88e12ab1de20b0a1cf88db"),
     ("state_store/project_home.py:located", "d859e5fc314bd5c5be3e94cb2e5cdead74832ccbba657ff56ac4a29bc7ffc656"),

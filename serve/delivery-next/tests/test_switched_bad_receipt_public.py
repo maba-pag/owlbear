@@ -546,6 +546,42 @@ def test_store_open_keeps_legitimate_active_payload_changes(repo, boot):
 
 
 @pytest.mark.usefixtures("current_binding")
+@pytest.mark.parametrize("marker", [b"8\n", b"\xff\n", b"", None], ids=["newer", "utf8", "blank", "missing"])
+def test_an_unproven_source_fence_keeps_one_unlocated_reservation(repo, boot, marker):
+    target = _finished_move(repo, boot)
+    entry = registry.register(repo)
+    source = _source(repo)
+    if marker is None:
+        (source / MARKER).unlink()
+    else:
+        (source / MARKER).write_bytes(marker)
+    (source / pack_state.FILE).write_text(
+        json.dumps(pack_state.blank() | {"state": "running", "run": "newer-source-run"})
+    )
+    workspace = source / pack_run.UPDATER
+    workspace.mkdir()
+    (workspace / "sentinel").write_text("keep original workspace")
+    assert not (target / pack_state.FILE).exists()
+    before = _snapshot(source)
+    machine = _machine()
+    try:
+        machine.load_all()
+        machine.retry()
+        assert machine.projects[entry.id].state == "failed"
+        (lease,) = machine.maintenance.read()["sessions"]
+        assert (lease["state"], lease["project"], lease["workspace"]) == ("held", entry.id, str(repo))
+        ledger = json.loads((local_home.root() / maintenance.FILE).read_text())
+        assert ledger["imported"] == [f"{entry.id}:unlocated"]
+        assert machine.slots.take("another-project", "work", 1, 1) == 0
+        with pytest.raises(StoreError):
+            project_home.current(repo)
+        assert _snapshot(source) == before
+    finally:
+        machine.stop_all()
+    assert machine.maintenance.read()["sessions"] == [lease]
+
+
+@pytest.mark.usefixtures("current_binding")
 @pytest.mark.parametrize("damage", ["valid", "missing-proof", "utf8-proof", "utf8-format", "future-format"])
 @pytest.mark.parametrize("lookup", ["current", "adopt", "selfcheck"])
 def test_lookup_closes_each_descriptor_it_acquires_on_success_and_typed_refusal(
