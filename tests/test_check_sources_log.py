@@ -15,7 +15,7 @@ _VALID = "| Lib | <https://example.org/lib> | MIT | A parser | `src/parser.py` |
 
 
 def _code_root(tmp_path: Path) -> Path:
-    (tmp_path / "src").mkdir()
+    (tmp_path / "src").mkdir(parents=True)
     (tmp_path / "src/parser.py").write_text("")
     return tmp_path
 
@@ -76,3 +76,20 @@ def test_checks_a_row_without_a_leading_pipe(tmp_path: Path) -> None:
     assert len(problems) == 2
     assert "<https://" in problems[0]
     assert "src/lexer.py does not exist" in problems[1]
+
+
+def test_rejects_an_absolute_path_even_when_it_exists(tmp_path: Path) -> None:
+    outside = tmp_path / "outside.py"
+    outside.write_text("")
+    row = f"| Lib | <https://example.org/lib> | MIT | A parser | `{outside}` |\n"
+    problems = _CHECKER.check_sources_log(_HEADER + row, _code_root(tmp_path / "code"))
+    assert len(problems) == 1
+    assert "must be relative to the code root" in problems[0]
+
+
+def test_rejects_a_path_outside_the_code_root_even_when_it_exists(tmp_path: Path) -> None:
+    (tmp_path / "outside.py").write_text("")
+    row = "| Lib | <https://example.org/lib> | MIT | A parser | `../outside.py` |\n"
+    problems = _CHECKER.check_sources_log(_HEADER + row, _code_root(tmp_path / "code"))
+    assert len(problems) == 1
+    assert "outside the code root" in problems[0]

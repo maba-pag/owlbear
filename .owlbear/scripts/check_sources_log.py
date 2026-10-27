@@ -66,9 +66,19 @@ def check_sources_log(text: str, code_root: Path) -> list[str]:
         paths = _PATH.findall(where)
         if not paths:
             problems.append(f"Where Used names no backticked path: {row}")
-        missing = [path for path in paths if not (code_root / path).exists()]
-        problems.extend(f"{path} does not exist under {code_root}: {row}" for path in missing)
+        problems.extend(f"{problem}: {row}" for path in paths if (problem := _path_problem(path, code_root)))
     return problems
+
+
+def _path_problem(path: str, code_root: Path) -> str | None:
+    if Path(path).is_absolute():
+        return f"{path} must be relative to the code root"
+    root = code_root.resolve()
+    if not (root / path).resolve().is_relative_to(root):
+        return f"{path} is outside the code root {code_root}"
+    if not (root / path).exists():
+        return f"{path} does not exist under {code_root}"
+    return None
 
 
 def main(argv: list[str] | None = None) -> int:
