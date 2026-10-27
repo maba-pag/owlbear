@@ -10,7 +10,13 @@ import pytest
 
 from owlbear_decisions import Decision, Link, LinkType, Origin, Scope, State, new_id, snapshot, write
 from owlbear_delivery_next.local_system.data_repo import DataRepo, DataRepoError
-from owlbear_delivery_next.state_store import decision_actions, decision_index, decision_store, decision_sync
+from owlbear_delivery_next.state_store import (
+    decision_actions,
+    decision_batch,
+    decision_index,
+    decision_store,
+    decision_sync,
+)
 from owlbear_delivery_next.state_store.decision_store import (
     READ,
     SET_UP_PROJECT,
@@ -216,10 +222,13 @@ def test_a_save_the_remote_overtook_is_taken_back_never_merged(shared_repo, shar
 
     assert (said.saved, said.committed, said.published, said.active) == (False, False, False, False)
     assert f"changed {decision.id} first" in said.notice
-    assert git(second.root, "rev-parse", "HEAD") == git(shared_repo[1], "rev-parse", "main")
-    assert "decisions: edited" not in git(second.root, "log", "--format=%s").splitlines()
+    # Accepted policy: the stale commit stays unpublished in Git, nothing is taken back, and the batch is interrupted.
+    assert git(second.root, "log", "-1", "--format=%s") == "decisions: edited"
+    assert git(second.root, "rev-parse", "HEAD") != git(shared_repo[1], "rev-parse", "main")
     assert git(second.root, "status", "--porcelain") == ""
-    assert load(second, PROJECT).snapshot.get(decision.id).decision == withdrawn  # never a textual merge of both
+    assert decision_batch.pending(second) is not None
+    with pytest.raises(DecisionsUnavailable):  # authority reads are refused while the batch is in flight
+        load(second, PROJECT)
 
 
 @pytest.mark.parametrize("moved", ["before", "during"])
@@ -238,10 +247,18 @@ def test_a_save_of_several_files_writes_all_or_none(shared_repo, shared, tmp_pat
 
     assert [(r.id, r.saved, r.committed, r.published) for r in said] == [
         (successor.id, False, False, False), (decision.id, False, False, False)]  # fmt: skip
-    assert git(second.root, "rev-parse", "HEAD") == git(shared_repo[1], "rev-parse", "main")
     assert git(second.root, "status", "--porcelain", "--untracked-files=all") == ""
-    seen = load(second, PROJECT).snapshot
-    assert [e.decision for e in seen.entries] == [withdrawn]  # no successor, the remote's version kept
+    if moved == "before":
+        assert git(second.root, "rev-parse", "HEAD") == git(shared_repo[1], "rev-parse", "main")
+        seen = load(second, PROJECT).snapshot
+        assert [e.decision for e in seen.entries] == [withdrawn]  # no successor, the remote's version kept
+    else:  # accepted policy: the local commit stays unpublished and HEAD is not restored behind the owner
+        assert git(second.root, "rev-parse", "HEAD") != git(shared_repo[1], "rev-parse", "main")
+        pending = decision_batch.pending(second)
+        assert pending is not None
+        assert set(pending.ids) == {successor.id, decision.id}  # all before/after evidence is retained
+        with pytest.raises(DecisionsUnavailable):  # no partial settled authority is read
+            load(second, PROJECT)
 
 
 def test_a_replacement_whose_predecessor_changed_remotely_writes_neither_file(shared_repo, shared, tmp_path) -> None:
@@ -264,12 +281,12 @@ def test_a_write_that_fails_midway_puts_back_every_file_of_the_batch(shared, mon
     assert save(set_up(shared), decision, expected_revision=None, message="m").published
     real, calls = decision_store.write, []
 
-    def failing(d, folder, expected):
+    def failing(d, folder, expected, **fence):
         calls.append(d.id)
         if len(calls) == 2:
-            real(d, folder, expected)  # the rename lands, then the fsync fails
+            real(d, folder, expected, **fence)  # the rename lands, then the fsync fails
             raise OSError(5, "I/O error")
-        return real(d, folder, expected)
+        return real(d, folder, expected, **fence)
 
     monkeypatch.setattr(decision_store, "write", failing)
     successor, retired = replacing(decision), decision.model_copy(update={"state": State.REPLACED})
@@ -385,7 +402,7 @@ def test_conflict_flags_reach_a_competitor_that_arrives_while_they_publish(
     assert save(shared, one, expected_revision=None, message="decisions: one").active
     real, arrived = decision_sync.publish, []
 
-    def racing(repo, paths, message, until):
+    def racing(repo, paths, message, until, head, *cont):
         if message.startswith("decisions: conflict") and not arrived:
             arrived.append(three)
             git(third.root, "pull", "-q", "--rebase")
@@ -393,7 +410,7 @@ def test_conflict_flags_reach_a_competitor_that_arrives_while_they_publish(
             git(third.root, "add", "-A")
             git(third.root, "commit", "-qm", "decisions: three")
             git(third.root, "push", "-q")
-        return real(repo, paths, message, until)
+        return real(repo, paths, message, until, head, *cont)
 
     monkeypatch.setattr(decision_sync, "publish", racing)
     said = save(shared, two, expected_revision=None, message="decisions: two")
@@ -415,6 +432,25 @@ def test_a_conflict_left_unflagged_fails_closed(shared, monkeypatch) -> None:
     said = save(shared, replacing(old), expected_revision=None, message="m")
     assert (said.saved, said.published, said.active, said.conflict) == (True, True, False, True)
     assert "still unflagged" in said.notice
+
+
+def test_an_ambiguous_conflict_flag_publish_stays_interrupted(shared, monkeypatch) -> None:
+    old = make()
+    for decision in (old, replacing(old)):
+        save(shared, decision, expected_revision=None, message="m")
+    real_publish = decision_sync.publish
+
+    def unknown_flags(repo, paths, message, until, head, *cont):
+        if message.startswith("decisions: conflict on"):
+            return decision_sync.Sent(ambiguous=True, notice="not provably its own commit")
+        return real_publish(repo, paths, message, until, head, *cont)
+
+    monkeypatch.setattr(decision_sync, "publish", unknown_flags)
+    said = save(shared, replacing(old), expected_revision=None, message="m")
+    assert "interrupted batch" in said.notice
+    assert decision_batch.pending(shared) is not None
+    with pytest.raises(DecisionsUnavailable, match="interrupted decision batch"):
+        load(shared, PROJECT)
 
 
 def test_refresh_reports_uncommitted_work_instead_of_pulling(shared) -> None:
@@ -462,8 +498,10 @@ def test_no_rebase_of_the_checkout_combines_two_versions_of_a_decision(shared_re
         notice = second.publish(settings, "settings: a save of something else")
 
     assert "could not be merged" in notice
-    assert decision_sync.revision_at(second, "HEAD", path.relative_to(second.root).as_posix(), 5) == edited.revision
-    assert not (second.root / ".git" / "rebase-merge").exists()
+    rel = path.relative_to(second.root).as_posix()
+    assert decision_sync.revision_at(second, "HEAD", rel, 5) == decision_sync.revision_at(shared, "HEAD", rel, 5)
+    assert decision_sync.revision_at(second, "HEAD", rel, 5) != edited.revision
+    assert (second.root / ".git" / "rebase-merge").is_dir()
 
 
 @pytest.mark.parametrize("broken", ["file", "symlink"])

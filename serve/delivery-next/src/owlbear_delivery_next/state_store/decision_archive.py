@@ -11,6 +11,7 @@ it. A project decision the approval published is left as it is: the Change's end
 
 from __future__ import annotations
 
+import time
 from typing import TYPE_CHECKING, Any
 
 from pydantic import ValidationError
@@ -18,13 +19,15 @@ from pydantic import ValidationError
 from owlbear_decisions import DecisionError, LinkType, Scope, State, check_write, decision_path, new_id, read
 from owlbear_decisions.models import Decision
 from owlbear_decisions.snapshot import read_repo
+from owlbear_decisions.storage import serialize
 from owlbear_decisions.validate import Entry, Layer, check
 from owlbear_delivery_next.change_contracts import decision_wording
 from owlbear_delivery_next.change_contracts.decision_wording import WHOLE, whole  # noqa: F401 - existing consumer API
-from owlbear_delivery_next.local_system.data_repo import DataRepo
-from owlbear_delivery_next.state_store import decision_store
+from owlbear_delivery_next.local_system.data_repo import SAVE_SECONDS, DataRepo
+from owlbear_delivery_next.state_store import decision_store, decision_sync, decision_transaction
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from datetime import datetime
     from pathlib import Path
 
@@ -42,26 +45,81 @@ _STATES = {  # (lasting, the Change's work stays) -> state
 }
 
 
-def archive(root: Path, project: str, c: Change, stem: str, outcome: str) -> tuple[list[Path], list[str]]:
-    """Write the decisions of the finished *c*; the files to publish, and what kept them from being written.
-
-    Every decision is built and checked against its file and, with the decisions already in the data repository,
-    against the graph's rules first; one that cannot be written keeps all of them out, so a published record never
-    comes with part of its decisions, and a write failing midway puts every file back as it was. A file that already
-    holds the same decision stays untouched, so a cleanup run again writes nothing new and publishes the same files.
-    The caller holds the data repository's lock.
-    """
+def plan(root: Path, project: str, c: Change, stem: str, outcome: str) -> tuple[list[Placed], list[str]]:
+    """The finished *c*'s decisions, built and checked, and what kept any from being written; nothing is written."""
     planned, problems = _planned(root, project, c, stem, outcome)
-    problems = problems or _graph(root, project, c, planned)
+    return planned, problems or _graph(root, project, c, planned)
+
+
+def _selected(planned: list[Placed]) -> list[Placed]:
+    """The planned decisions whose files change: the only ones journalled, written and published."""
+    return [(d, layer, rev) for d, layer, rev in planned if rev != d.revision]
+
+
+def batch_files(planned: list[Placed]) -> list[tuple[Path, bytes]]:
+    """The files `write_plan` writes, with their bytes after: what a journal records before the first of them."""
+    return [(decision_path(d, layer), serialize(d).encode("utf-8")) for d, layer, _ in _selected(planned)]
+
+
+def write_plan(
+    planned: list[Placed],
+    problems: list[str],
+    slug: str,
+    fence: Callable[[], None] | None = None,
+    root: Path | None = None,
+) -> tuple[list[Path], list[str]]:
+    """Write the planned decisions unless *problems* keep them all out; the files to publish, and what kept them out.
+
+    Only the files that change are written and returned, the same ones `batch_files` journals: a decision left as it
+    is was never journalled, so it is never published either, whatever its file holds by then. *fence* is the
+    transaction's proof each write runs before its folder is made and immediately before its rename; *root*, the
+    checkout, bounds the folders each rename checks are still plain (`decision_store.write_batch`).
+    """
+    writes = _selected(planned)
     if not problems:
         try:
-            refused = decision_store.write_batch([(d, layer, rev) for d, layer, rev in planned if rev != d.revision])
+            refused = decision_store.write_batch(writes, fence, root)
         except OSError as exc:
-            refused = {"files": f"cannot be written, all put back: {exc}"}
-        problems = [f"decision {key} of {c.slug}: {' '.join(why.split())}"[:240] for key, why in refused.items()]
+            refused = {"files": f"cannot be written: {exc}"}
+        problems = [f"decision {key} of {slug}: {' '.join(why.split())}"[:240] for key, why in refused.items()]
     if problems:
-        return [], [f"no decision of {c.slug} was archived", *problems]
-    return [decision_path(decision, layer) for decision, layer, _ in planned], []
+        return [], [f"no decision of {slug} was archived", *problems]
+    return [decision_path(decision, layer) for decision, layer, _ in writes], []
+
+
+def archive(root: Path, project: str, c: Change, stem: str, outcome: str) -> tuple[list[Path], list[str]]:
+    """Write and publish the decisions of the finished *c*; the files published, and what kept them from being written.
+
+    The writes and their publication are one journaled batch: readers stay blocked from the first write until the
+    commit is proven, and a publication whose outcome is unknown stays interrupted for the owner. Production writes go
+    through `change_record`, which runs the same transaction around its record; nothing nests here.
+    """
+    shared = DataRepo(root)
+    with shared.locked():
+        decision_transaction.guard(shared)
+        head, behind = decision_sync.prepare(shared, time.monotonic() + SAVE_SECONDS)
+        if not head:
+            return [], [behind]
+        planned, problems = plan(root, project, c, stem, outcome)
+        files = batch_files(planned) if not problems else []
+        if not files:
+            written, left = write_plan(planned, problems, c.slug)
+            return written, [n for n in (*left, behind) if n]
+        done: dict[str, tuple[list[Path], list[str]]] = {}
+
+        def step(head: str, fence: Callable[[], None]) -> decision_transaction.Step:
+            written, left = write_plan(planned, problems, c.slug, fence, root)
+            done["result"] = (written, left)
+            if not written:
+                return decision_transaction.Step("", refused=True)
+            sent = decision_sync.publish(shared, written, f"archive {c.slug}", time.monotonic() + SAVE_SECONDS, head)
+            return decision_transaction.Step(
+                sent.notice, unknown=sent.stale or sent.ambiguous, refused=sent.uncommitted
+            )
+
+        notice = decision_transaction.transaction(shared, project, f"archive {c.slug}", files, step, head)
+    written, left = done["result"]
+    return written, [n for n in (*left, notice, behind) if n]
 
 
 def lasting(project: str, c: Change, stem: str, *, root: Path | None = None) -> list[Decision]:

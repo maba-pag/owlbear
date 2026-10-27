@@ -1,6 +1,7 @@
 import json
 import os
 import subprocess
+import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
@@ -18,7 +19,7 @@ from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host import host as host_module
 from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.settings.config import Layer
-from owlbear_delivery_next.state_store import change_record, profile_share
+from owlbear_delivery_next.state_store import change_record, decision_batch, decision_sync, profile_share
 from owlbear_delivery_next.state_store.config_save import Prepared
 from owlbear_delivery_next.state_store.database import put_record
 from owlbear_delivery_next.state_store.project_home import STORE_DIR
@@ -39,7 +40,11 @@ def git(cwd: Path, *args: str) -> str:
     if (cwd / "HEAD").is_file():  # a bare repository: safe.bareRepository=explicit wants it named
         args = ("--git-dir=.", *args)
     who = ["-c", "user.name=t", "-c", "user.email=t@example.com"]
-    return subprocess.run(["git", *who, *args], cwd=cwd, check=True, capture_output=True, text=True).stdout.strip()  # noqa: S603, S607
+    done = subprocess.run(["git", *who, *args], cwd=cwd, capture_output=True, text=True, check=False)  # noqa: S603, S607
+    if done.returncode:
+        msg = f"git {' '.join(args)} failed: {done.stderr.strip()}"
+        raise AssertionError(msg)
+    return done.stdout.strip()
 
 
 @pytest.fixture
@@ -264,6 +269,169 @@ def test_a_finished_change_leaves_its_record_in_the_shared_folder_once(shared, r
     )
     assert change_record.save(store, Change(slug="never"), None, at) == ""  # never approved: no record
     assert not (folder / "20261015-090000-never.json").exists()
+
+
+def test_a_lost_publish_after_the_record_keeps_its_batch_interrupted(shared, repo, monkeypatch) -> None:
+    root, _ = shared
+    store, at = Store.open(repo), datetime(2026, 10, 15, 9, tzinfo=UTC)
+    approved = Brief(version=2, title="Notes", outcome="Owners keep notes")
+    c = Change(slug="notes", handle="c4", brief=Brief(version=2, approved_at=at, approved=[approved]))
+    pr = PullRequest(
+        repository="acme/shop-site", number=7, node_id="n", url="https://x/pull/7", head_branch="owlbear/notes",
+        head_sha="a" * 40, base_branch="main", draft=False, state="closed", merged=True, merge_commit_sha="b" * 40,
+    )  # fmt: skip
+    real_publish = decision_sync.publish
+
+    def lost_after_commit(shared_, paths, message, until, head, *cont):
+        real_publish(shared_, paths, message, until, head, *cont)
+        return decision_sync.Sent(ambiguous=True, notice="the publication of the record is unknown")
+
+    monkeypatch.setattr(decision_sync, "publish", lost_after_commit)
+    notice = change_record.save(store, c, pr, at)
+
+    assert "interrupted batch" in notice
+    assert decision_batch.pending(store.shared) is not None
+    assert (root / "shop-site" / "changes" / "20261015-090000-notes.json").is_file()
+
+
+def git_admin(root: Path) -> Path:
+    return Path(git(root, "rev-parse", "--absolute-git-dir"))
+
+
+def diverged_checkout(root: Path, remote: Path) -> str:
+    (root / "f.txt").write_text("base\n")
+    git(root, "add", "f.txt")
+    git(root, "commit", "-qm", "base")
+    git(root, "push", "-q", "origin", "HEAD")
+    (root / "f.txt").write_text("local\n")
+    git(root, "commit", "-qam", "local edit")
+    local_head = git(root, "rev-parse", "HEAD")
+    other = remote.parent / "other"
+    git(remote.parent, "clone", "-q", str(remote), str(other))
+    (other / "f.txt").write_text("remote\n")
+    git(other, "commit", "-qam", "remote edit")
+    git(other, "push", "-q", "origin", "HEAD")
+    git(root, "fetch", "-q")
+    return local_head
+
+
+def test_an_owner_rebase_in_progress_is_left_as_it_is(shared) -> None:
+    root, _ = shared
+    (root / "owner.txt").write_text("the owner's staged file\n")
+    git(root, "add", "owner.txt")
+    (git_admin(root) / "rebase-merge").mkdir()
+
+    notice = data_repo.DataRepo(root).rebase()
+
+    assert "left as it is" in notice
+    assert (git_admin(root) / "rebase-merge").is_dir()
+    assert git(root, "diff", "--cached", "--name-only") == "owner.txt"
+
+
+def test_a_failed_rebase_is_left_intact_never_aborted(shared) -> None:
+    root, remote = shared
+    diverged_checkout(root, remote)
+
+    notice = data_repo.DataRepo(root).rebase()
+
+    assert notice
+    assert "left as it is" in notice
+    assert (git_admin(root) / "rebase-merge").is_dir()
+    assert git(root, "stash", "list") == ""
+
+
+def test_an_owner_rebase_started_after_the_check_is_left_as_it_is(shared, monkeypatch) -> None:
+    root, remote = shared
+    diverged_checkout(root, remote)
+    real_git = data_repo._git  # noqa: SLF001
+
+    def owner_starts_first(repo, *args, until=None):
+        if "rebase" in args:
+            (git_admin(root) / "rebase-merge").mkdir(exist_ok=True)
+        return real_git(repo, *args, until=until)
+
+    monkeypatch.setattr(data_repo, "_git", owner_starts_first)
+
+    notice = data_repo.DataRepo(root).rebase()
+
+    assert "left as it is" in notice
+    assert (git_admin(root) / "rebase-merge").is_dir()
+    assert git(root, "stash", "list") == ""
+
+
+def test_an_owner_resolution_staged_after_a_failed_rebase_is_kept(shared, monkeypatch) -> None:
+    root, remote = shared
+    diverged_checkout(root, remote)
+    real_git = data_repo._git  # noqa: SLF001
+
+    def owner_stages_after_failure(repo, *args, until=None):
+        done = real_git(repo, *args, until=until)
+        if "rebase" in args and done.returncode:
+            (root / "owner.txt").write_text("the owner's resolution\n")
+            git(root, "add", "owner.txt")
+        return done
+
+    monkeypatch.setattr(data_repo, "_git", owner_stages_after_failure)
+
+    notice = data_repo.DataRepo(root).rebase()
+
+    assert "left as it is" in notice
+    assert (git_admin(root) / "rebase-merge").is_dir()
+    assert "owner.txt" in git(root, "diff", "--cached", "--name-only").splitlines()
+
+
+def test_a_publish_whose_rebase_leaves_git_mid_rebase_is_ambiguous(shared) -> None:
+    root, remote = shared
+    diverged_checkout(root, remote)
+    (root / "f.txt").write_text("again\n")
+    repo = data_repo.DataRepo(root)
+
+    sent = decision_sync.publish(
+        repo, [root / "f.txt"], "decisions: publish", time.monotonic() + 60, git(root, "rev-parse", "HEAD~1")
+    )
+
+    assert sent.ambiguous
+    assert not sent.uncommitted
+    assert (git_admin(root) / "rebase-merge").is_dir()
+
+
+def test_an_owner_resolution_staged_during_a_publish_rebase_stays_ambiguous(shared, monkeypatch) -> None:
+    root, remote = shared
+    diverged_checkout(root, remote)
+    (root / "f.txt").write_text("again\n")
+    real_git = data_repo._git  # noqa: SLF001
+
+    def owner_stages_after_failure(repo, *args, until=None):
+        done = real_git(repo, *args, until=until)
+        if "rebase" in args and done.returncode:
+            (root / "owner.txt").write_text("the owner's resolution\n")
+            git(root, "add", "owner.txt")
+        return done
+
+    monkeypatch.setattr(data_repo, "_git", owner_stages_after_failure)
+    repo = data_repo.DataRepo(root)
+
+    sent = decision_sync.publish(
+        repo, [root / "f.txt"], "decisions: publish", time.monotonic() + 60, git(root, "rev-parse", "HEAD~1")
+    )
+
+    assert sent.ambiguous
+    assert (git_admin(root) / "rebase-merge").is_dir()
+    assert "owner.txt" in git(root, "diff", "--cached", "--name-only").splitlines()
+
+
+def test_a_refused_rebase_with_a_staged_index_touches_nothing(shared) -> None:
+    root, remote = shared
+    diverged_checkout(root, remote)
+    (root / "owner.txt").write_text("the owner's staged file\n")
+    git(root, "add", "owner.txt")
+
+    notice = data_repo.DataRepo(root).rebase()
+
+    assert notice
+    assert "left as it is" not in notice
+    assert not (git_admin(root) / "rebase-merge").exists()
+    assert git(root, "diff", "--cached", "--name-only") == "owner.txt"
 
 
 def test_a_pointer_to_no_repository_stops_delivery(tmp_path: Path, repo, monkeypatch) -> None:

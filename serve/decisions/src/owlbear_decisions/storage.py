@@ -6,12 +6,11 @@ import contextlib
 import fcntl
 import os
 import re
+import secrets
 import stat
 import threading
 from dataclasses import dataclass, field
 from io import StringIO
-from pathlib import Path
-from tempfile import mkstemp
 from typing import TYPE_CHECKING
 
 from pydantic import ValidationError
@@ -22,7 +21,8 @@ from owlbear_decisions.errors import ConcurrencyError, DecisionFileError, Immuta
 from owlbear_decisions.models import Decision, State
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Callable, Iterator
+    from pathlib import Path
 
 DECISIONS_DIR = "decisions"
 _FENCE = "---\n"
@@ -112,12 +112,16 @@ def parse(text: str) -> Decision:
 
 
 def read(path: Path) -> Decision:
-    """Read one decision file; its name must be `<id>.md`."""
+    """Read one decision file; its name must be `<id>.md`.
+
+    The file is opened without following a link and without waiting on a pipe, and must be a regular file
+    (`_regular_text`): a link, a pipe or a folder at its name is refused as unreadable, never read through or waited on.
+    """
     if path.is_symlink():
         msg = "symlinks are not decision files"
         raise DecisionFileError(msg)
     try:
-        text = path.read_text(encoding="utf-8")
+        text = _regular_text(path)
     except (OSError, UnicodeDecodeError) as exc:
         msg = f"unreadable: {type(exc).__name__}"
         raise DecisionFileError(msg) from exc
@@ -126,6 +130,33 @@ def read(path: Path) -> Decision:
         msg = f"file name must be {decision.id}.md"
         raise DecisionFileError(msg, ("id",))
     return decision
+
+
+class NotRegularFileError(OSError):
+    """A decision file's name holds something other than a regular file: a pipe, a folder or a device."""
+
+
+def _regular_text(path: Path) -> str:
+    """*path*'s text, decoded as `Path.read_text(encoding="utf-8")` does, from a regular file only.
+
+    It is opened without following a link (`OSError`) and without waiting on a pipe; any other kind of file raises
+    `NotRegularFileError`. The descriptor is closed on every path.
+    """
+    descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
+    try:
+        _require_regular(descriptor, path)
+        source = os.fdopen(descriptor, encoding="utf-8")
+    except BaseException:
+        os.close(descriptor)
+        raise
+    with source:
+        return source.read()
+
+
+def _require_regular(descriptor: int, path: Path) -> None:
+    if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+        msg = f"{path.name} is not a regular file"
+        raise NotRegularFileError(msg)
 
 
 def kind(path: Path) -> int | None:
@@ -197,29 +228,169 @@ def check_write(current: Decision | None, decision: Decision, expected_revision:
         raise ImmutableError(msg)
 
 
-def _replace(path: Path, text: str) -> None:
-    descriptor, temporary = mkstemp(dir=path.parent, prefix=".", suffix=".tmp")
+class TemporaryReplacedError(OSError):
+    """The temporary name was replaced or already consumed by installation, so nothing more is installed or removed."""
+
+
+class _TemporaryLifecycle:
+    """A successful rename consumes the temporary name irrevocably, independently of its file's identity."""
+
+    def __init__(self) -> None:
+        self._consumed = False
+
+    @property
+    def consumed(self) -> bool:
+        """Whether a successful rename has ended this write's ownership of the temporary name."""
+        return self._consumed
+
+    def consume(self) -> None:
+        """End ownership of the temporary name; it can never become this write's temporary again."""
+        self._consumed = True
+
+
+@dataclass(frozen=True)
+class Temporary:
+    """A write's own temporary file: the folder it was made in, its name there, and its still-open descriptor.
+
+    The descriptor stays open until the write ends, so the file's device and inode cannot be reused by another file
+    meanwhile: a name holding that identity is this file. Identity stays frozen; the separate lifecycle records when
+    installation consumes the temporary name, even if the owner later moves this same file back to it.
+    """
+
+    folder: int
+    name: str
+    descriptor: int
+    identity: tuple[int, int]
+    lifecycle: _TemporaryLifecycle = field(default_factory=_TemporaryLifecycle, init=False, repr=False, compare=False)
+
+    def holds_name(self) -> bool:
+        """Whether the name still holds this very file; a missing name does not."""
+        try:
+            found = os.stat(self.name, dir_fd=self.folder, follow_symlinks=False)
+        except FileNotFoundError:
+            return False
+        return (found.st_dev, found.st_ino) == self.identity
+
+
+@contextlib.contextmanager
+def own_temporary(folder: int, data: bytes) -> Iterator[Temporary]:
+    """A new temporary file in the folder open as *folder*, holding *data* durably, for the length of the block.
+
+    The file is made exclusively, never through a link, mode 0600, and named relative to *folder*, so it is reached
+    there even when the folder's path is moved meanwhile. When the block raises before installation, the file is removed
+    only while its name still holds it; a name now holding another file is left as it is. A successful rename consumes
+    the temporary name before the folder fsync: it is never checked or removed again, even if the same inode returns
+    there. The descriptor is closed on every exit, and an error closing or checking it is raised, never guessed past.
+    When even its identity could not be read, the name is left, since whose file it holds is then unknown.
+    """
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC
+    while True:
+        name = f".{secrets.token_hex(8)}.tmp"
+        try:
+            descriptor = os.open(name, flags, 0o600, dir_fd=folder)
+        except FileExistsError:
+            continue
+        break
     try:
-        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
-            handle.write(text)
-            handle.flush()
-            os.fsync(handle.fileno())
-        Path(temporary).replace(path)
+        found = os.fstat(descriptor)
     except BaseException:
-        Path(temporary).unlink(missing_ok=True)
+        os.close(descriptor)
         raise
-    directory = os.open(path.parent, os.O_RDONLY)
+    temporary = Temporary(folder, name, descriptor, (found.st_dev, found.st_ino))
     try:
-        os.fsync(directory)
+        view = memoryview(data)
+        while view:
+            view = view[os.write(descriptor, view) :]
+        os.fsync(descriptor)
+        yield temporary
+    except BaseException:
+        if not temporary.lifecycle.consumed and temporary.holds_name():
+            os.unlink(name, dir_fd=folder)
+        raise
     finally:
-        os.close(directory)
+        os.close(descriptor)
 
 
-def write(decision: Decision, folder: Path, expected_revision: str | None = None) -> str:
+def install(temporary: Temporary, target: str, path: Path | None = None, root: Path | None = None) -> None:
+    """Rename *temporary* to *target* in its own folder once its name is proved to hold it still; fsync the folder.
+
+    The folder fsynced is the one the rename changed, held open since the file was made, never one reached again by
+    path. A replaced or already consumed temporary name raises `TemporaryReplacedError`; when *path*, the folder's own
+    path, no longer leads to that folder, or a folder between it and *root* is no plain folder, `bound` raises; either
+    way nothing is moved. Once the rename succeeds, the temporary name is consumed even if the folder fsync fails:
+    `own_temporary` must never clean it up again.
+    """
+    if temporary.lifecycle.consumed or not temporary.holds_name():
+        msg = f"the temporary file {temporary.name} was replaced or already installed, so nothing is written"
+        raise TemporaryReplacedError(msg)
+    if path is not None:
+        bound(temporary.folder, path, root)
+    os.replace(temporary.name, target, src_dir_fd=temporary.folder, dst_dir_fd=temporary.folder)
+    temporary.lifecycle.consume()
+    os.fsync(temporary.folder)
+
+
+class FolderMovedError(OSError):
+    """A folder's path no longer leads to the folder held open for a write, so nothing is changed in either."""
+
+
+def bound(folder: int, path: Path, root: Path | None = None) -> None:
+    """Raise `FolderMovedError` unless *path* itself, not followed through a link, is the folder open as *folder*.
+
+    A folder moved aside, or a link put in its place, refuses: the write would otherwise change a file the folder's
+    path no longer names. With *root*, the trusted folder *path* lies in, every folder between them is checked too,
+    after *path*, each a plain folder and no link: a link higher up, even one back to the same folder, refuses. *root*
+    itself and what lies above it are not checked. A missing *path* or folder refuses; any other error is raised.
+    """
+    if not _plain_folder(path) or not os.path.samestat(os.lstat(path), os.fstat(folder)):
+        msg = f"the folder {path} was moved or replaced while it was written, so nothing is changed"
+        raise FolderMovedError(msg)
+    if root is None:
+        return
+    for ancestor in path.parents:
+        if ancestor == root:
+            return
+        if not _plain_folder(ancestor):
+            msg = f"the folder {ancestor} above {path} was moved or linked while it was written, so nothing is changed"
+            raise FolderMovedError(msg)
+    msg = f"the folder {path} does not lie in {root}, so nothing is changed"
+    raise FolderMovedError(msg)
+
+
+def _plain_folder(path: Path) -> bool:
+    """Whether *path* names a folder itself, not a link to one; a missing name is not, other errors raise."""
+    try:
+        return stat.S_ISDIR(os.lstat(path).st_mode)
+    except FileNotFoundError:
+        return False
+
+
+def _replace(path: Path, text: str, fence: Callable[[], None] | None = None, root: Path | None = None) -> None:
+    folder = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        with own_temporary(folder, text.encode("utf-8")) as temporary:
+            if fence is not None:  # last, once the new bytes are durable: the caller's proof the file is its to change
+                fence()
+            install(temporary, path.name, path.parent, root)
+    finally:
+        os.close(folder)
+
+
+def write(
+    decision: Decision,
+    folder: Path,
+    expected_revision: str | None = None,
+    *,
+    fence: Callable[[], None] | None = None,
+    root: Path | None = None,
+) -> str:
     """Write `decision` atomically into the layer `folder` and return its revision.
 
     `expected_revision=None` creates a new file and refuses an existing one; otherwise the file's
-    current revision must equal it. An in-force decision's statement never changes.
+    current revision must equal it. An in-force decision's statement never changes. *fence*, when given, runs after
+    the new bytes are durable and immediately before the rename; when it raises, only this write's own temporary file is
+    removed, through the folder it was made in. *root*, when given, is the trusted folder the file lies in: every folder
+    between them must still be a plain folder at the rename (`bound`).
     """
     path = decision_path(decision, folder)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -233,5 +404,5 @@ def write(decision: Decision, folder: Path, expected_revision: str | None = None
     with _locked(path.parent):
         current = read(path) if path.exists() else None
         check_write(current, decision, expected_revision)
-        _replace(path, text)
+        _replace(path, text, fence, root)
     return decision.revision

@@ -13,10 +13,11 @@ import contextlib
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
+from owlbear_delivery_next.local_system.data_repo import DataRepoError
 from owlbear_delivery_next.local_system.publication_hold import Requires
 from owlbear_delivery_next.settings.prefs_import import plan
 from owlbear_delivery_next.state_store import profile_share
-from owlbear_delivery_next.state_store.config_save import Prepared
+from owlbear_delivery_next.state_store.config_save import REBASING, Prepared
 
 if TYPE_CHECKING:
     from owlbear_delivery_next.change_contracts.profile_record import Profile
@@ -132,10 +133,18 @@ def run(store: Store) -> None:
     A claim is acquired only when the marker reads ``""``: it gets a fresh nonce, and it is the winner only when its
     publication is confirmed by a fresh read that carries that nonce. Any other pending claim resumes only from its own
     durable basis. A claim whose publication was not confirmed is published again before any fill. A completed import
-    whose publication was refused is published again here.
+    whose publication was refused is published again here. A rebase in progress in the shared checkout, which Git left
+    for the owner when it stopped on a conflict, is refused before anything is read from its half-merged files.
     """
     from owlbear_delivery_next.state_store.store import StoreError  # noqa: PLC0415 - the store imports its helpers
 
+    try:
+        rebasing = bool(store.shared) and store.shared.rebasing()
+    except DataRepoError as exc:
+        raise StoreError(str(exc)) from exc
+    if rebasing:
+        msg = f"the legacy preference import waits: {REBASING}"
+        raise StoreError(msg)
     prof = store.read_profile()
     if prof is None:
         return
