@@ -423,6 +423,56 @@ def test_a_late_future_marker_stays_typed_and_keeps_the_owner_bytes(prepared, mo
     assert record(source)["phase"] == project_move.COPYING
 
 
+@pytest.mark.parametrize(
+    ("boundary", "change"),
+    [
+        ("receipt", "preparation"),
+        ("receipt", "clone-id"),
+        ("receipt", "future-fence"),
+        ("receipt", "proof"),
+        ("receipt", "future-target"),
+        (MARKER, "preparation"),
+        (project_move.CLONE_ID, "preparation"),
+    ],
+)
+def test_finish_keeps_its_witness_set_stable_through_the_last_content_read(prepared, monkeypatch, boundary, change):
+    repo, source = prepared
+    owners, reads, changed = {}, [], []
+    source_id = source.stat()
+
+    def enable(target):
+        predicate = boundary == "receipt"
+        name = "holds_text_at" if predicate else "read_at"
+        wanted = project_move.MOVE_RECORD if predicate else boundary
+        real = getattr(fd_tree, name)
+
+        def read(dfd, entry, *args):
+            value = real(dfd, entry, *args)
+            if entry == wanted and os.path.samestat(os.fstat(dfd), source_id):
+                reads.append(True)
+                if len(reads) == 2:
+                    changed.append(True)
+                    if change.startswith("future-"):
+                        folder = source if change == "future-fence" else target
+                        (folder / MARKER).write_text("1000\n")
+                    else:
+                        change_owner(source, target, change)
+                    owners.update({source: snapshot(source), target: snapshot(target)})
+            return value
+
+        monkeypatch.setattr(fd_tree, name, read)
+
+    fired = at_sync(monkeypatch, source, "receipt", enable)
+    error = FormatTooNewError if change.startswith("future-") else project_move.StoreError
+    with pytest.raises(error):
+        offline_protocol.finish_clone(repo)
+
+    assert fired == [True]
+    assert changed == [True]
+    assert record(source)["phase"] == project_move.COPYING
+    assert {path: snapshot(path) for path in owners} == owners
+
+
 def test_finish_switches_after_a_failed_real_receipt_sync_is_retried(prepared, monkeypatch, capsys):
     repo, source = prepared
 

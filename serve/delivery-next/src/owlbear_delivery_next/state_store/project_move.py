@@ -376,11 +376,7 @@ def _stage_and_publish(  # noqa: PLR0913, PLR0917
 def _commit(  # noqa: PLR0913, PLR0917
     folder: Path, folder_fd: int, target: Path, pfd: int, tfd: int, rec: dict, previous: int, proof: OfflineProof
 ) -> None:
-    """Record the switch only after the held copy is durable, still the one published, and the source unchanged.
-
-    The copy is proven ours before writes. After target durability and the SWITCHED temporary-file sync, the original
-    source proof, manifest and named folders are checked immediately before rename, with no intervening write or sync.
-    """
+    """Record SWITCHED only after final source/target proof, content and named-folder checks."""
     current, receipt = record_image(folder, folder_fd)
     if current != rec or receipt is None:
         msg = f"{folder / MOVE_RECORD} changed before publication: nothing was switched"
@@ -389,6 +385,7 @@ def _commit(  # noqa: PLR0913, PLR0917
     format_marker.ensure_target(tfd, previous)
     _sync_published(pfd, target, tfd)  # a retry re-syncs before any switch, so a failure stays uncommitted
 
+    @proof.guard(folder_fd, target, tfd)
     def unchanged() -> None:
         fd_tree.require_text_at(folder_fd, MOVE_RECORD, receipt)
         require_proof(folder, folder_fd, target, proof)
