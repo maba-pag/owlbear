@@ -76,7 +76,7 @@ IMPORTS = (
     ("state_store/project_home.py", "c79464a6139fe571efd600903aa848dc67c9673f016d12c093d7d6b94b74a681"),
     ("state_store/store.py", "a3da565feeee931b40d4907f17c46372c000e573e1add938ae3679d175e75de4"),
 )
-CURRENT_FAMILY_AGGREGATE = "984a1305c1330a7587aa3616c72475bf690e28dc702e90c052c911a2204a6f74"
+CURRENT_FAMILY_AGGREGATE = "8217bc7d2092be6bcdf97828c9bb5d2b5547658aa2fa01d546d0a37d0adf244e"
 CURRENT_FUNCTIONS = (
     ("commands/chat_client.py:Chat.call", "0fc1fdb166ea555741a2aa7796a99a4eb7b71c572ad37fba1ae0a9e37171b584"),
     ("commands/chat_client.py:workspace", "4e1bd94f29805ab94eff49182ba65966b93988ce4a8e3f395576601499a4855d"),
@@ -94,10 +94,10 @@ CURRENT_FUNCTIONS = (
     ("machine_host/machine.py:Machine.load_all", "70b96c5b7e2866db55db01ff96af21ca735ebaaab3f701aac367fda92aaa1370"),
     ("machine_host/machine.py:Machine.retry", "89035a3934b6da831ef697ec64561953d7e56d9bb9577ea6ce69c0155097a051"),
     ("machine_host/project.py:Project.load", "90cb161f238ce91af9469fc383d03ecb7f5225e239796463fd25cb96f5a92654"),
-    ("state_store/registry.py:adopt", "8b2156d8078fa97f4e1dce0154da36ff0e56360b92186411df4d68fb8cb6c74e"),
+    ("state_store/registry.py:adopt", "57e10ae159a32d7da6b2ca403f378d2af53dc7fb8ef8e0b78ed647a2d88cf7ad"),
     ("state_store/registry.py:canonical", "73a7cda1befda9f7e2b3e82a37ae61b582977b1f5bf194b012116e875dc29fa9"),
     ("state_store/registry.py:_switched", "c2978760c71196773958b52f09bf745847b30b7b41eaab6513a88561d9efe9a0"),
-    ("state_store/registry.py:register", "aeba5bf051e8e5e354f88a1d282d84d89ef090754fb7e2744af0af5a9b7132e6"),
+    ("state_store/registry.py:register", "79cb7840274422a93d94582da3f361fb56a1bbd3606dac3808d0cfdb035b255b"),
     ("state_store/registry.py:replaced", "5d48cb39f6ea67966760e0de397f920fd7d6ebf07f403f377fec1e56b0245231"),
     ("machine_host/selfcheck.py:_project", "1db6860c5035b3e805435038ae0122a1e62fe11870a185bd3de268cd2d5355fa"),
     ("machine_host/selfcheck.py:_receipt", "b37c42a3144d55fc5d634b8d9830eb8793752f3ef54ae872be420446c48e4358"),

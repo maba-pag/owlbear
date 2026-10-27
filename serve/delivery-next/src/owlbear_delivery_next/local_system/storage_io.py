@@ -9,6 +9,10 @@ import os
 import stat
 import tempfile
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 _LOCK_FLAGS = os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK
 
@@ -31,11 +35,12 @@ def open_lock(root_fd: int, *, blocking: bool, shared: bool = False, name: str =
     return lock_fd
 
 
-def atomic_write(target: Path, content: str) -> os.stat_result:
+def atomic_write(target: Path, content: str, *, before_replace: Callable[[], None] | None = None) -> os.stat_result:
     """Write *content* to *target* atomically via a fsynced sibling ``.tmp-*`` file and ``os.replace``.
 
     Returns the identity of the inode this call wrote, taken from its own descriptor after the rename, so a later
-    replacement of *target* by another writer cannot be mistaken for this write.
+    replacement of *target* by another writer cannot be mistaken for this write. If supplied, *before_replace* runs
+    after the temporary file is durable, immediately before replacement; its errors propagate without publishing.
 
     Raises:
         OSError: Any I/O failure; an unrenamed temporary is cleaned up before raising. After a successful rename,
@@ -48,6 +53,8 @@ def atomic_write(target: Path, content: str) -> os.stat_result:
             fh.write(content)
             fh.flush()
             os.fsync(fh.fileno())
+            if before_replace is not None:
+                before_replace()
             Path(tmp_path).replace(target)
             renamed = True
             written = os.fstat(fh.fileno())
