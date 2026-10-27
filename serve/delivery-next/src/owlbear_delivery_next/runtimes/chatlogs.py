@@ -25,6 +25,7 @@ import sys
 import tempfile
 import threading
 import time
+import uuid
 from contextlib import contextmanager, suppress
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -115,6 +116,27 @@ def registered(session: str, who: dict[str, Any]) -> bool:
         return True
     note({"event": "started", "session": session, **who})
     return session in (own() or set())
+
+
+UNNOTED = "the session could not be noted as OwlBear's own in Retro's manifest, so it was not created"
+
+
+class UnnotedError(RuntimeError):
+    """A session OwlBear would create could not be noted as its own: it is not created."""
+
+
+def claimed(session: str, who: dict[str, Any], replaces: str = "") -> str:
+    """*session* (a new id when empty: what the SDK would choose), ``registered`` before it is created.
+
+    A replacement names the session it *replaces*.
+
+    Raises:
+        UnnotedError: It could not be noted, so it must not be created.
+    """
+    session = session or str(uuid.uuid4())
+    if not registered(session, who | ({"replaces": replaces} if replaces and replaces != session else {})):
+        raise UnnotedError(UNNOTED)
+    return session
 
 
 def owner(kind: str, role: str, job: str, worktree: Path) -> dict[str, str]:

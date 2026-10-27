@@ -1088,13 +1088,15 @@ class TwoSessions:
 
     def __init__(self, spends: dict[str, float]) -> None:
         self.spends, self.made, self.hear = spends, iter(spends), None
+        self.ids: dict[str, str] = {}  # each spend's name: the session id the look chose and noted
 
     async def start(self) -> None:
         pass
 
     async def create_session(self, **kw: Any) -> Billed:
-        self.hear = kw["on_event"]
-        return Billed(next(self.made), self)
+        self.hear, name = kw["on_event"], next(self.made)
+        self.ids[name] = kw["session_id"]
+        return Billed(kw["session_id"], self.spends[name], self)
 
     async def stop(self) -> None:
         pass
@@ -1103,15 +1105,15 @@ class TwoSessions:
 class Billed:
     """One of ``TwoSessions``' sessions."""
 
-    def __init__(self, sid: str, runtime: TwoSessions) -> None:
-        self.session_id, self.runtime = sid, runtime
+    def __init__(self, sid: str, spend: float, runtime: TwoSessions) -> None:
+        self.session_id, self.spend, self.runtime = sid, spend, runtime
         self.rpc = SimpleNamespace(usage=SimpleNamespace(get_metrics=self.metrics))
 
     async def metrics(self) -> Any:
-        return SimpleNamespace(total_nano_aiu=self.runtime.spends[self.session_id], model_metrics={})
+        return SimpleNamespace(total_nano_aiu=self.spend, model_metrics={})
 
     async def send_and_wait(self, _message: str, **_kw: Any) -> None:
-        self.runtime.hear(usage(self.runtime.spends[self.session_id]))
+        self.runtime.hear(usage(self.spend))
         self.runtime.hear(said('{"category": "none"}'))
 
     async def disconnect(self) -> None:
@@ -1138,20 +1140,21 @@ def test_a_retry_runs_two_sdk_sessions_under_one_look_each_its_own_ledger_run(mo
     assert spotter.WORK.settled(5)
     assert spend_ledger.WRITER.settled(5)
     [rec] = records()
+    a, b = runtime.ids["look-a"], runtime.ids["look-b"]
     assert (rec["sdk_sessions"], rec["credits"], rec["credits_known"], rec["stopped"]) == (
-        ["look-a", "look-b"], 0.4, True, ""
+        [a, b], 0.4, True, ""
     )  # fmt: skip
     lines = spend_ledger.lines()
     ends = [x for x in lines if x["type"] == "end"]
     assert [(x["session"], x["look"], x["usage"]["credits"], x["limit"]) for x in ends] == [
-        ("look-a", rec["id"], 0.1, 5.0), ("look-b", rec["id"], 0.3, 5.0)
+        (a, rec["id"], 0.1, 5.0), (b, rec["id"], 0.3, 5.0)
     ]  # fmt: skip
     assert len({x["run"] for x in ends} | {rec["id"]}) == 3  # a run id per invocation, never the look's id
     assert spend_reconcile._looks(lines, {}) == []  # noqa: SLF001 - the record adds nothing the lines lack
     pieces = spend_shares.derive(lines)
-    assert sorted((p["session"], round(p["credits"], 6)) for p in pieces) == [("look-a", 0.1), ("look-b", 0.3)]
-    kept = [x for x in lines if x["session"] == "look-a"]  # look-b's lines were lost: the record holds the rest
+    assert sorted((p["session"], round(p["credits"], 6)) for p in pieces) == sorted([(a, 0.1), (b, 0.3)])
+    kept = [x for x in lines if x["session"] == a]  # look-b's lines were lost: the record holds the rest
     imported = spend_reconcile._looks(kept, {})  # noqa: SLF001
-    assert [x["sdk_sessions"] for x in imported] == [["look-a", "look-b"]]
+    assert [x["sdk_sessions"] for x in imported] == [[a, b]]
     one_lost = spend_shares.derive([*kept, *imported])
     assert sorted(round(p["credits"], 6) for p in one_lost) == [0.1, 0.3]

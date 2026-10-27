@@ -524,7 +524,7 @@ def test_a_session_that_cannot_be_noted_as_ours_is_never_created(world, monkeypa
     monkeypatch.setattr(chatlogs, "note", lambda _event: False)
     run = asyncio.run(sdk_adapter.run(world.cfg))
     assert created == []
-    assert (run.ending, run.detail) == ("error", sdk_adapter.UNNOTED)
+    assert (run.ending, run.detail) == ("error", f"UnnotedError: {chatlogs.UNNOTED}")
 
 
 def test_a_new_session_is_noted_as_ours_before_it_is_created(world, monkeypatch):
@@ -571,4 +571,4 @@ def test_a_replacement_session_is_noted_as_ours_naming_the_one_it_replaces_befor
     cfg = dataclasses.replace(cfg, journal=sdk_adapter.Journal(event=world.event, replaced=lambda: "synthetic-3"))
     run = asyncio.run(sdk_adapter.run(cfg))
     assert seen == []
-    assert (run.ending, run.detail) == ("error", sdk_adapter.UNNOTED)
+    assert (run.ending, run.detail) == ("error", f"UnnotedError: {chatlogs.UNNOTED}")
