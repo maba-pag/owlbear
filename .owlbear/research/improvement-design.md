@@ -1,6 +1,6 @@
 # Improvement: Design
 
-> **Owning task:** the plan's item 9 (formerly "the watcher"), redesigned with the owner on 2026-10-25
+> **Owning task:** [item 9](https://github.com/maba-pag/owlbear/issues/714) (formerly "the watcher"), redesigned with the owner on 2026-10-25
 > **Date:** 2026-10-25 (approved); status 2026-10-27
 > **Question:** How do agents get better from their own work: fewer common mistakes, wrong tool arguments,
 > rabbit holes and local optimums that miss the real intent, without being steered off course?
