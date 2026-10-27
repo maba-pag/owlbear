@@ -7,16 +7,14 @@ readable, the record and the fence still match the folder, and every legacy prod
 
 import json
 import os
-import re
 import subprocess
 import sys
 from typing import TYPE_CHECKING
 
-from owlbear_delivery_next.local_system.maintenance import Maintenance, MaintenanceError
-from owlbear_delivery_next.state_store import fd_tree, format_marker, pack_run_record, project_home, project_move
+from owlbear_delivery_next.state_store import fd_tree, format_marker, project_home, project_move
 from owlbear_delivery_next.state_store.database import MARKER, StoreError
 from owlbear_delivery_next.state_store.legacy_family import Gap, open_gaps
-from owlbear_delivery_next.state_store.offline_proof import OfflineProof, same_folder
+from owlbear_delivery_next.state_store.offline_proof import UUID, OfflineProof, preparation, same_folder
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -24,7 +22,6 @@ if TYPE_CHECKING:
 
 PREPARED = project_move.PREPARED
 FENCE = project_move.FENCE
-UUID = re.compile(r"[0-9A-F]{8}(?:-[0-9A-F]{4}){3}-[0-9A-F]{12}")
 SYSCTL = "/usr/sbin/sysctl"
 
 
@@ -69,35 +66,7 @@ def _record(folder: Path, fd: int) -> tuple[dict, str]:
     if text is None:
         msg = f"{folder / PREPARED} is missing: nothing was prepared, so nothing moves"
         raise StoreError(msg)
-    data = _parsed(folder, text)
-    if data is None:
-        msg = f"{folder / PREPARED} is not a preparation record OwlBear wrote: refusing the offline move"
-        raise StoreError(msg)
-    return data, text
-
-
-def _parsed(folder: Path, text: str) -> dict | None:
-    try:
-        data = json.loads(text)
-    except ValueError as exc:
-        msg = f"{folder / PREPARED} is unreadable: refusing the offline move"
-        raise StoreError(msg) from exc
-    if not isinstance(data, dict) or set(data) != {"boot", "folder", "marker"} or not _witnessed(data):
-        return None
-    return data
-
-
-def _witnessed(data: dict) -> bool:
-    """A stored boot is a UUID and the folder identity two integers; anything else is unknown, never a new boot."""
-    folder = data["folder"]
-    return (
-        isinstance(data["boot"], str)
-        and UUID.fullmatch(data["boot"].upper()) is not None
-        and isinstance(folder, list)
-        and len(folder) == 2  # noqa: PLR2004 - a (device, inode) pair
-        and all(type(part) is int for part in folder)
-        and isinstance(data["marker"], str)
-    )
+    return preparation(text, fd), text
 
 
 def _refuse_replaced(folder: Path, fd: int) -> None:
@@ -151,15 +120,19 @@ def _refuse_foreign_preparation(folder: Path, fd: int, raw: str, identity: list[
     text = _read(fd, folder, PREPARED)
     if text is None:
         return
-    data = _parsed(folder, text)
-    if data is None or data["folder"] != identity or data["marker"] != raw:
+    data = preparation(text, fd)
+    if data["folder"] != identity or data["marker"] != raw:
         msg = f"{folder / PREPARED} is not this folder's own preparation: refusing; nothing was written"
         raise StoreError(msg)
 
 
 def _refuse_nothing_to_move(folder: Path, fd: int) -> None:
-    """Refuse before any fence when no legacy payload is left and no move record exists: nothing could finish it."""
-    if project_move.left_at(fd) or project_move.record_at(folder, fd) is not None:
+    """Read the receipt first: retained payload never makes a completed or malformed move preparable."""
+    rec = project_move.record_at(folder, fd)
+    if rec is not None and rec["phase"] == project_move.SWITCHED:
+        msg = f"{folder} has already switched to its external store: nothing was prepared or fenced"
+        raise StoreError(msg)
+    if rec is not None or project_move.left_at(fd):
         return
     msg = (
         f"{folder} holds no legacy store to move and no move record: the store is already external or new, "
@@ -231,31 +204,16 @@ def finish_clone(cwd: Path, gaps: Callable[[], tuple[Gap, ...]] = open_gaps) -> 
     """Finish after reboot: prove the preparation, then run the whole-store move; return the project's home."""
     folder = project_home.clone_dir(cwd)
     proof = finish(folder, gaps)
-    _settle_pack_run(folder)
     return project_home.migrated(cwd, proof)
 
 
 def _settle_pack_run(folder: Path) -> None:
-    """Carry a legacy design-pack run's generation into its record before the store is copied; no move record yet.
-
-    The receipt is looked up by the clone's own id with the static ledger read, so an unreadable or unknown ledger
-    refuses here, before any copy or authority change.
-    """
-    if project_move.record(folder) is not None:  # a move in progress already carries its own identity
-        return
-    clone = project_home.clone_id(folder)
-
-    def receipted(digest: str) -> str:
-        if clone is None:
-            msg = f"{folder} has no clone id to read its design-pack receipt by: nothing was moved"
-            raise StoreError(msg)
-        return Maintenance.lookup_receipt(clone, digest)
-
+    """Standalone compatibility entry; real moves settle inside their pinned proof-checked boundary."""
+    fd = _pinned(folder)
     try:
-        pack_run_record.settle(folder, receipted=receipted)
-    except (OSError, ValueError, MaintenanceError) as exc:
-        msg = f"the design-pack run record in {folder} could not be settled: {exc}; nothing was moved"
-        raise StoreError(msg) from exc
+        project_home._settle_pack_run(folder, fd, None)  # noqa: SLF001 - shared settlement owner
+    finally:
+        os.close(fd)
 
 
 def _unfenced(found: tuple[Gap, ...]) -> str:

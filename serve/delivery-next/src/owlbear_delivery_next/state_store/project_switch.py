@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-import json
 import os
 import stat
 from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.state_store import fd_tree, format_marker, project_move
 from owlbear_delivery_next.state_store.database import StoreError
-from owlbear_delivery_next.state_store.offline_proof import same_folder
+from owlbear_delivery_next.state_store.offline_proof import preparation, same_folder
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -31,16 +30,7 @@ def prepared_prior(folder_fd: int) -> int:
     if text is None:
         msg = f"{project_move.PREPARED} is missing: the switched store's prior format is unproven; nothing was changed"
         raise StoreError(msg)
-    try:
-        found = json.loads(text)
-    except ValueError as exc:
-        msg = f"{project_move.PREPARED} is not a preparation record: refusing the switched store; nothing was changed"
-        raise StoreError(msg) from exc
-    marker = found.get("marker") if isinstance(found, dict) else None
-    if not isinstance(marker, str):
-        msg = f"{project_move.PREPARED} names no prior format: refusing the switched store; nothing was changed"
-        raise StoreError(msg)
-    return format_marker.prior_format(marker)
+    return format_marker.prior_format(preparation(text, folder_fd)["marker"])
 
 
 def named_switched(target: Path, rec: dict) -> None:

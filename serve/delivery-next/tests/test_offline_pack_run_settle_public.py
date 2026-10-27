@@ -15,7 +15,7 @@ import pytest
 from owlbear_delivery_next.commands import cli
 from owlbear_delivery_next.local_system import local_home, maintenance
 from owlbear_delivery_next.pack_runs import pack_state
-from owlbear_delivery_next.state_store import offline_protocol, pack_run_record, project_home, project_move
+from owlbear_delivery_next.state_store import fd_tree, offline_protocol, pack_run_record, project_home, project_move
 from owlbear_delivery_next.state_store.database import MARKER, StoreError
 from owlbear_delivery_next.state_store.store import Store
 
@@ -161,13 +161,20 @@ def test_failed_rewrite_of_the_run_record_refuses_finish_before_any_copy(repo, b
     _write_run(_source(repo), _run_record(RUN_A, STARTED_A))
     record_bytes = (_source(repo) / pack_state.FILE).read_bytes()
 
-    def fail_write(*_args, **_kwargs):
+    real_write = fd_tree.write_at
+    failed = []
+
+    def fail_write(dfd, name, text, **kwargs):
+        if name != pack_run_record.FILE:
+            return real_write(dfd, name, text, **kwargs)
+        failed.append(True)
         msg = "injected write failure"
         raise OSError(errno.EIO, msg)
 
-    monkeypatch.setattr(pack_run_record, "atomic_write", fail_write)
+    monkeypatch.setattr(fd_tree, "write_at", fail_write)
 
     assert _finish_refused(repo, capsys), "a failed rewrite of the run record was taken for a settled one"
+    assert failed == [True], "the descriptor-bound write fault never fired"
     assert project_move.record(_source(repo)) is None, "a move was started before the run record was settled"
     assert (_source(repo) / pack_state.FILE).read_bytes() == record_bytes
 

@@ -19,8 +19,9 @@ from pathlib import Path
 
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.local_system.git_files import git_common_dir
+from owlbear_delivery_next.local_system.maintenance import Maintenance, MaintenanceError
 from owlbear_delivery_next.local_system.storage_io import open_lock
-from owlbear_delivery_next.state_store import fd_tree, format_marker, project_move, project_switch
+from owlbear_delivery_next.state_store import fd_tree, format_marker, pack_run_record, project_move, project_switch
 from owlbear_delivery_next.state_store.database import (
     MARKER,
     MIGRATE,
@@ -196,10 +197,19 @@ def current(cwd: Path) -> Path | None:
     A switched store is named only while the target still is the copy the switch recorded.
     """
     folder = clone_dir(cwd)
-    rec = project_move.record(folder)
-    if project_move.left(folder) and not (rec and rec["phase"] == project_move.SWITCHED):
-        return folder  # not moved yet, or its copy is not yet the authority: an older host may run on it
-    pid = clone_id(folder)
+    folder_fd = project_move.pin(folder)
+    if folder_fd is None:
+        return None
+    try:
+        rec = project_move.record_at(folder, folder_fd)
+        if project_move.left_at(folder_fd) and not (rec and rec["phase"] == project_move.SWITCHED):
+            return folder  # not moved yet, or its copy is not yet the authority
+        if rec and rec["phase"] == project_move.SWITCHED:
+            project_switch.prepared_prior(folder_fd)
+        pid = _clone_id_at(folder, folder_fd)
+        _same_folder(folder, folder_fd)
+    finally:
+        os.close(folder_fd)
     if not pid:
         return None
     target = home(pid)
@@ -331,11 +341,6 @@ def _format_at(folder_fd: int, proof: OfflineProof | None) -> int:
     return found
 
 
-def _previous_at(folder_fd: int) -> int:
-    """The prior format the preparation recorded for a switched move; a missing preparation is refused."""
-    return project_switch.prepared_prior(folder_fd)
-
-
 def _generation_at(folder: Path, folder_fd: int, proof: OfflineProof) -> None:
     """Refuse unless the pinned folder still holds the exact preparation and the fence that finish verified."""
     try:
@@ -349,6 +354,34 @@ def _generation_at(folder: Path, folder_fd: int, proof: OfflineProof) -> None:
         raise StoreError(msg)
 
 
+def _settle_pack_run(folder: Path, folder_fd: int, proof: OfflineProof | None) -> None:
+    """Settle through the held source only; receipt lookup is read-only and precedes the final custody check."""
+    if project_move.record_at(folder, folder_fd) is not None:
+        return
+    clone = _clone_id_at(folder, folder_fd)
+
+    def receipted(digest: str) -> str:
+        if clone is None:
+            msg = f"{folder} has no clone id to read its design-pack receipt by: nothing was moved"
+            raise StoreError(msg)
+        return Maintenance.lookup_receipt(clone, digest)
+
+    def guard() -> None:
+        _same_folder(folder, folder_fd)
+        if proof is not None:
+            require_identity(folder, folder_fd, proof)
+            _generation_at(folder, folder_fd, proof)
+        if _clone_id_at(folder, folder_fd) != clone:
+            msg = f"{folder} changed its clone id during receipt lookup: nothing was changed"
+            raise StoreError(msg)
+
+    try:
+        pack_run_record.settle(folder, receipted=receipted, folder_fd=folder_fd, guard=guard)
+    except (OSError, ValueError, MaintenanceError) as exc:
+        msg = f"the design-pack run record in {folder} could not be settled: {exc}; nothing was moved"
+        raise StoreError(msg) from exc
+
+
 def _open(cwd: Path, proof: OfflineProof | None) -> Path:
     folder = clone_dir(cwd)
     folder.mkdir(mode=0o700, exist_ok=True)
@@ -358,6 +391,13 @@ def _open(cwd: Path, proof: OfflineProof | None) -> Path:
             # Both checks run before anything in the folder is read for admission or written.
             require_identity(folder, folder_fd, proof)
             _generation_at(folder, folder_fd, proof)  # the verified preparation and fence, not a reused inode
+            fd_tree.refuse_quarantined(folder_fd, folder)
+            _settle_pack_run(folder, folder_fd, proof)
+            require_identity(folder, folder_fd, proof)
+            _generation_at(folder, folder_fd, proof)
+        rec = project_move.record_at(folder, folder_fd)
+        if rec and rec["phase"] == project_move.SWITCHED:
+            project_switch.prepared_prior(folder_fd)  # before even the clone id is synced or repaired
         pid = _ensure_at(folder, folder_fd)
         target = home(pid)
         lock = open_lock(folder_fd, blocking=True, name=project_move.MOVE_LOCK)
@@ -365,7 +405,7 @@ def _open(cwd: Path, proof: OfflineProof | None) -> Path:
             rec = project_move.record_at(folder, folder_fd)
             fd_tree.refuse_quarantined(folder_fd, folder)  # before anything is recorded, fenced or moved
             if rec is not None and rec["phase"] == project_move.SWITCHED:
-                _open_switched(folder_fd, target, rec, _previous_at(folder_fd))  # the fence is ours: check it first
+                _open_switched(folder_fd, target, rec, project_switch.prepared_prior(folder_fd))
                 return target
             found = _format_at(folder_fd, proof)
             left = project_move.left_at(folder_fd)

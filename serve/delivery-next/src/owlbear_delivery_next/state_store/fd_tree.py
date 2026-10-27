@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING
 from owlbear_delivery_next.state_store.database import StoreError
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from pathlib import Path
 
 DIR_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
@@ -44,11 +45,12 @@ def stat_at(dfd: int, name: str) -> os.stat_result | None:
         return None
 
 
-def write_at(dfd: int, name: str, text: str) -> None:
+def write_at(dfd: int, name: str, text: str, *, before_replace: Callable[[], None] | None = None) -> None:
     """Replace file *name* under *dfd* with *text*: a synced temporary entry renamed over it, then the folder synced.
 
     The temporary name is new and created exclusively, so no existing entry, link included, is written through.
     A failed write keeps whatever sits at the temporary name under a quarantine name and never unlinks it by name.
+    *before_replace*, when supplied, must still admit the replacement after the temporary file is durable.
 
     Raises:
         StoreError: The file could not be written or renamed; the temporary entry is kept and named.
@@ -60,14 +62,20 @@ def write_at(dfd: int, name: str, text: str) -> None:
         msg = f"{name} cannot be written ({exc.strerror}): nothing was moved"
         raise StoreError(msg) from exc
     try:
-        with os.fdopen(fd, "wb") as fh:
-            fh.write(text.encode())
-            fh.flush()
-            os.fsync(fh.fileno())
+        try:
+            with os.fdopen(fd, "wb", closefd=False) as fh:
+                fh.write(text.encode())
+                fh.flush()
+                os.fsync(fh.fileno())
+        finally:
+            os.close(fd)
+        if before_replace is not None:
+            before_replace()
         os.rename(tmp, name, src_dir_fd=dfd, dst_dir_fd=dfd)
-    except OSError as exc:
+    except (OSError, ValueError, StoreError) as exc:
         kept = keep_entry(dfd, tmp)
-        msg = f"{name} could not be written ({exc.strerror}): {kept} was kept; move it away, then start again"
+        detail = exc.strerror if isinstance(exc, OSError) else str(exc)
+        msg = f"{name} could not be written ({detail}): {kept} was kept; move it away, then start again"
         raise StoreError(msg) from exc
     os.fsync(dfd)
 

@@ -261,7 +261,7 @@ def test_meta_without_the_settle_hook_the_unidentified_run_is_carried_unstamped(
 ):
     """Meta-negative control, not acceptance: the settle hook is replaced by an in-memory no-op. The carried record
     then has no generation, which is the omission the unidentified acceptance case above must catch."""
-    monkeypatch.setattr(offline_protocol, "_settle_pack_run", lambda _folder: None)
+    monkeypatch.setattr(project_home, "_settle_pack_run", lambda *_args: None)
     _, _, carried, _, _ = _move_held_a(machines, repo, boot, capsys, recovered=False, identified=False)
     assert pack_state.REWRITTEN not in carried
 
@@ -369,6 +369,9 @@ def test_finish_resumes_a_copy_in_progress_without_settling_the_run_record(repo,
     assert len(settled) == 1, "the first Finish did not settle the run before copying"
     settled.clear()
 
+    before = {p.name: p.read_bytes() for p in source.iterdir() if p.is_file()}
+    assert cli.main(["--repo", str(repo), "prepare"]) == 0
+    assert {p.name: p.read_bytes() for p in source.iterdir() if p.is_file()} == before
     assert cli.main(["--repo", str(repo), "finish"]) == 0
     capsys.readouterr()
     assert settled == [], "Finish settled the run record while a copy was in progress"
