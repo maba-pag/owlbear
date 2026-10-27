@@ -52,7 +52,7 @@ def boot(monkeypatch) -> dict:
 
 @pytest.fixture
 def machines(monkeypatch):
-    monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo: [])
+    monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
     monkeypatch.setattr(Host, "_spawn", lambda _self, slug: pytest.fail(f"no runner starts in these tests ({slug})"))
     made: list[Machine] = []
 
