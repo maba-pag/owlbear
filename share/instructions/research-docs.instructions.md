@@ -1,6 +1,6 @@
 ---
 description: "Planning and build-design documents — keep claims grounded in their sources"
-applyTo: ".owlbear/research/*.md"
+applyTo: "*/research/*.md"
 ---
 
 OwlBear's build designs of work not yet built live, like all research, in owlbear-data's
