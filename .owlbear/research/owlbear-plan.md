@@ -483,6 +483,8 @@ same generation without suppressing a later run.
 Prepare retains its exact marker/preparation observations through id synchronization and both publication fences.
 Read-only switched-target lookup validates held identity, proof, quarantine and marker; unreadable UTF-8 produces
 normal refusal diagnostics. A failed load reserves uncertain ownership even when the unproven target has no run record.
+The common target validator rechecks its named directory after the proof and marker reads; current lookup and
+retained-source admission keep the source descriptor through target validation and then recheck its named directory.
 
 The composition integrates `main` `67824f03`, including R06/R15 from #656 and #704's per-look/per-run credit
 limits, CONFIG 16, MACHINE 8, PROFILE 5 and the window-step runtime's removal. Only CURRENT literal bindings

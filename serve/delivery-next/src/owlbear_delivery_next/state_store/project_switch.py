@@ -74,6 +74,7 @@ def check_switched(target: Path, pfd: int, rec: dict) -> int:
             raise StoreError(msg) from exc
         if text is not None:
             format_marker.supported_format(text)
+        named_switched(target, rec)
     except BaseException:
         os.close(tfd)
         raise

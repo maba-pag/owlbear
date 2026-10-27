@@ -383,6 +383,129 @@ def test_a_valid_target_record_restores_exactly_one_lease_after_a_failed_public_
         machine.stop_all()
 
 
+def _replace_after_authority_read(repo, monkeypatch, changed, seam, *, current_only=False):
+    source = _source(repo)
+    pid = project_home.clone_id(source)
+    assert pid
+    target = project_home.home(pid)
+    held_source, held_target = source.stat(), target.stat()
+    real_read, real_proof = fd_tree.read_at, project_move._proof_ok  # noqa: SLF001 - real proof read boundary
+    moved = (target if changed == "target" else source).with_name("retained-original")
+    fired, expected = [], {}
+
+    def replace():
+        if fired or (current_only and not any(frame.function == "current" for frame in inspect.stack(context=0))):
+            return
+        folder = target if changed == "target" else source
+        folder.rename(moved)
+        folder.mkdir()
+        (folder / MARKER).write_text("7\n" if changed == "target" else "8\n")
+        (folder / project_home.CLONE_ID).write_text("foreign-owner\n")
+        fired.append(True)
+        expected.update(source=_snapshot(source), target=_snapshot(target), moved=_snapshot(moved))
+
+    def read(dfd, name):
+        text = real_read(dfd, name)
+        if (
+            seam == "preparation" and name == project_move.PREPARED and os.path.samestat(os.fstat(dfd), held_source)
+        ) or (
+            name == (MARKER if seam == "marker" else project_move.MOVE_PROOF)
+            and os.path.samestat(os.fstat(dfd), held_target)
+        ):
+            replace()
+        return text
+
+    def proof(dfd, rec):
+        valid = real_proof(dfd, rec)
+        if seam == "proof" and os.path.samestat(os.fstat(dfd), held_target):
+            replace()
+        return valid
+
+    monkeypatch.setattr(fd_tree, "read_at", read)
+    monkeypatch.setattr(project_move, "_proof_ok", proof)
+    return fired, expected, moved
+
+
+@pytest.mark.usefixtures("current_binding")
+@pytest.mark.parametrize("lookup", ["current", "register", "adopt", "selfcheck", "unloaded"])
+@pytest.mark.parametrize("seam", ["proof", "marker"])
+def test_target_replacement_during_authority_reads_refuses_and_keeps_uncertain_ownership(
+    repo, boot, monkeypatch, lookup, seam
+):
+    target = _finished_move(repo, boot)
+    entry = registry.register(repo)
+    if lookup == "register":
+        registry.remove(entry.id)
+    machine, lock = None, None
+    if lookup == "unloaded":
+        machine = _machine()
+        lock = os.open(target / "host.lock", os.O_CREAT | os.O_RDWR, 0o600)
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    fired, expected, moved = _replace_after_authority_read(
+        repo, monkeypatch, "target", seam, current_only=lookup == "unloaded"
+    )
+    try:
+        if machine is not None:
+            machine.load_all()
+            assert fired == [True]
+            assert machine.projects[entry.id].state == "failed"
+            (lease,) = machine.maintenance.read()["sessions"]
+            assert (lease["state"], lease["project"], lease["workspace"]) == ("held", entry.id, str(repo))
+            ledger = json.loads((local_home.root() / maintenance.FILE).read_text())
+            assert ledger["imported"] == [f"{entry.id}:unlocated"]
+            machine.retry()
+            assert machine.maintenance.read()["sessions"] == [lease]
+            assert machine.slots.take("another-project", "work", 1, 1) == 0
+        elif lookup == "selfcheck":
+            assert selfcheck.problems()
+        else:
+            error = StoreError if lookup == "current" else registry.RegistryError
+            action = {
+                "current": lambda: project_home.current(repo),
+                "register": lambda: registry.register(repo),
+                "adopt": lambda: registry.adopt(entry.id),
+            }[lookup]
+            with pytest.raises(error):
+                action()
+        assert fired == [True]
+        assert _snapshot(_source(repo)) == expected["source"]
+        assert _snapshot(target) == expected["target"]
+        assert _snapshot(moved) == expected["moved"]
+    finally:
+        if lock is not None:
+            os.close(lock)
+        if machine is not None:
+            machine.stop_all()
+
+
+@pytest.mark.usefixtures("current_binding")
+@pytest.mark.parametrize("lookup", ["current", "register", "adopt", "selfcheck"])
+@pytest.mark.parametrize("seam", ["preparation", "marker"])
+def test_source_replacement_during_authority_reads_never_admits_the_replacement(repo, boot, monkeypatch, lookup, seam):
+    target = _finished_move(repo, boot)
+    entry = registry.register(repo)
+    if lookup == "register":
+        registry.remove(entry.id)
+    fired, expected, moved = _replace_after_authority_read(repo, monkeypatch, "source", seam)
+
+    if lookup == "selfcheck":
+        assert selfcheck.problems()
+    else:
+        error = StoreError if lookup == "current" else registry.RegistryError
+        action = {
+            "current": lambda: project_home.current(repo),
+            "register": lambda: registry.register(repo),
+            "adopt": lambda: registry.adopt(entry.id),
+        }[lookup]
+        with pytest.raises(error):
+            action()
+
+    assert fired == [True]
+    assert _snapshot(_source(repo)) == expected["source"]
+    assert _snapshot(target) == expected["target"]
+    assert _snapshot(moved) == expected["moved"]
+
+
 @pytest.mark.usefixtures("current_binding")
 @pytest.mark.parametrize("damage", ["valid", "missing-proof", "utf8-proof", "utf8-format", "future-format"])
 @pytest.mark.parametrize("lookup", ["current", "adopt", "selfcheck"])

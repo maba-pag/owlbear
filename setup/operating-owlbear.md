@@ -95,7 +95,9 @@ held descriptors. Repeated Prepare refuses a completed move or malformed receipt
 Prepare rechecks the exact source marker and preparation after id synchronization and immediately before publishing
 either metadata file; a changed or blank marker refuses without replacing the owner's entries. Read-only switched-store
 lookups validate the target's identity, issued proof, quarantine state and existing marker through a held descriptor;
-they leave an absent target marker for store open to repair. Unreadable UTF-8 enters the normal diagnostic channel.
+they recheck its named directory after those reads and leave an absent target marker for store open to repair.
+Current lookup, registration and selfcheck keep the retained source descriptor through target validation and
+recheck the source's named directory before accepting its receipt. Unreadable UTF-8 enters the normal diagnostic channel.
 A failed project load whose target cannot be proven retains an unlocated maintenance reservation, rather than taking
 an absent run record in that target as evidence that nobody owns the work.
 

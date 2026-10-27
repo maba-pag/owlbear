@@ -208,15 +208,16 @@ def current(cwd: Path) -> Path | None:
             project_switch.prepared_prior(folder_fd)
         pid = _clone_id_at(folder, folder_fd)
         _same_folder(folder, folder_fd)
+        if not pid:
+            return None
+        target = home(pid)
+        if rec and rec["phase"] == project_move.SWITCHED:
+            _switched_to(target, rec)
+            project_switch.require_switched(target, rec)
+            _same_folder(folder, folder_fd)
+        return target
     finally:
         os.close(folder_fd)
-    if not pid:
-        return None
-    target = home(pid)
-    if rec and rec["phase"] == project_move.SWITCHED:
-        _switched_to(target, rec)
-        project_switch.require_switched(target, rec)
-    return target
 
 
 def _is_lock(name: str) -> bool:
