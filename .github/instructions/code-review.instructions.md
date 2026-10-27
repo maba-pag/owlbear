@@ -12,7 +12,8 @@ other environments, follow that environment's review or implementation instructi
 - Evaluate the changed behavior against the requested outcome and relevant acceptance criteria.
   Use plans referenced by the task to establish its scope. Read the owning implementation and
   necessary callers/tests; distinguish the requested work from any future work in those plans.
-- `.owlbear/decisions.md` is the generated, read-only view of the decisions in owlbear-data, which are authoritative.
+- Reviewers get no decisions: they live only in owlbear-data, and the plan and implementation challenges check them.
+  Review against the requested outcome and its acceptance criteria.
 - Review planning-only changes for feasible dependencies, complete contracts and discriminating
   acceptance evidence. Do not report unimplemented planned features as code defects.
 - Prioritize concrete correctness, security, data-loss, custody, stale-approval and replay failures.

@@ -67,18 +67,8 @@ available there, and J6 records every decision, so the default models can change
 
 ### 3.4 The owner's decisions, 2026-10-14
 
-TD-74 amended, TD-76 to TD-79 in [the decisions](../decisions.md):
-- The screenshot judgement is a review. Delivery has three: after each task, at the end of a Change, and the
-  visual review.
-- Impeccable is extracted, not installed. "The runner and the extracted design rules" are updated together and
-  regularly, by a structured plan (§3.5). "Runner" is read as the detector engine together with Delivery's code
-  that runs it; the pack covers both.
-- Two judges always judge: correctness and design. There is no "another verdict" button.
-- The detector's findings are evidence for the judges, never a fail on their own.
-- A correctness fail goes back to the build automatically. A design fail goes back or to the owner, by a setting.
-- The owner decides on one page: the screenshot comparison, both verdicts, then Pass or Fail, with finding
-  checkboxes and an optional comment. A Fail comment becomes a criterion of the next visual review; a Pass
-  comment is kept as a note.
+TD-74 was amended and TD-76 to TD-79 were decided on this date. Their wording lives only in owlbear-data
+(D-01M5ZE13N37HZAGJ69VWW69X23); look them up with `find_decisions` or `lookup_decisions`.
 
 ### 3.5 Plan
 

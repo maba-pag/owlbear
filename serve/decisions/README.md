@@ -1,12 +1,12 @@
 # owlbear-decisions — Decision Files
 
 The file contract for OwlBear's decisions and every project's: one Markdown file per lasting decision, a
-validator for a data repository's decision folders, a project's snapshot of them, and OwlBear's generated view. It
+validator for a data repository's decision folders and a project's snapshot of them. It
 is slice 1 of the [decision system design](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/decision-system-build.md); Delivery stores the
 files in `owlbear-data` and indexes them. OwlBear's hand-edited decision record was migrated into `owlbear-data` and
 retired (TD-466); it and its converter remain in Git history.
 
-**Use this guide when:** you write or read decision files, change their rules, or regenerate the view.
+**Use this guide when:** you write or read decision files or change their rules.
 
 Package map: [serve/README.md](../README.md) · Project README: [README.md](../../README.md)
 
@@ -16,20 +16,11 @@ Package map: [serve/README.md](../README.md) · Project README: [README.md](../.
 
 ```bash
 uv run decisions-validate <data-repo-root>
-uv run decisions-view <data-repo-root> [--project owlbear] [--out .owlbear/decisions.md] [--commit SHA] [--check]
 ```
 
 `decisions-validate` prints one line per finding (`path: rule: message`) and exits 1 on any. The Global layer is
 the repository root (`<root>/decisions/`), each project's layer its folder (`<root>/<project>/decisions/`) and a
 Change's layer `<root>/<project>/changes/<slug>/decisions/`, as in Delivery's data repository.
-
-`decisions-view` writes OwlBear's generated, read-only view of the Global and the project's decisions (slice 6,
-TD-425): a header naming the data commit (`--commit`, default the root's `HEAD`; `none` only for a data repository
-without decisions), the rules in force by layer and topic, history,
-the validator's findings, and a last line `<!-- decisions-view sha256:... -->` over everything above it. `--check`
-writes nothing and exits 1 when the view is missing, edited by hand, or shows other decisions than the data; a new
-data commit alone never makes it stale. Pull-request CI checks only the hash (`.github/scripts/decisions_view_hash.py`,
-a config hook); `.github/workflows/decisions-view.yml` runs `--check` with the read-only data token (TD-436).
 
 ```python
 from owlbear_decisions import Decision, load_folder, queue, snapshot, validate_repo, write

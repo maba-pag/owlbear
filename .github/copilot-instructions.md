@@ -26,14 +26,14 @@ generated consumer branch and no sync workflow (TD-203).
 ### Plan and Status
 
 [The pinned tracker issue](https://github.com/maba-pag/owlbear/issues/713) holds where OwlBear stands, the order of the remaining work, as its
-sub-issues, and where the code differs from [the decisions](../.owlbear/decisions.md). Read it and your item's issue
+sub-issues, and where the code differs from the decisions. Read it and your item's issue
 with its parent when you start or resume work and after a context compaction; a pull request that finishes or changes
 an item updates its issue, and the tracker's gap row when it closes or changes a gap. The plan file's
 [last version](https://github.com/maba-pag/owlbear/blob/4461a7972278a44a530f92b9c8908564d9a49622/.owlbear/research/owlbear-plan.md) is history. The
 old Delivery redesign programme and
 [its execution plan](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-redesign-execution-plan.md) are superseded history (TD-202).
-The decisions live in owlbear-data (TD-424); [.owlbear/decisions.md](../.owlbear/decisions.md) is their generated,
-read-only view, and the old decision record is Git history (TD-466). Look decisions up with `find_decisions` or
+The decisions live only in owlbear-data, copied into no repository (D-01M5ZE13N37HZAGJ69VWW69X23); the old decision
+record is Git history (TD-466). Look decisions up with `find_decisions` or
 `lookup_decisions` and change them only with the decision tools or the Decisions page.
 
 ### Asking the Owner
