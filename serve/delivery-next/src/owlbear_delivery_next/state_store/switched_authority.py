@@ -30,7 +30,7 @@ def retained_target(folder: Path, pid: str) -> Path | None:
         msg = f"{folder} holds a link or is not a folder: nothing was checked"
         raise StoreError(msg) from exc
     try:
-        rec = project_move.record_at(folder, fd)
+        rec, image = project_move.record_image(folder, fd)
         if rec is not None:
             _require_id(folder, fd, pid)
             if rec["phase"] != project_move.SWITCHED or rec["target"] != str(target):
@@ -39,6 +39,9 @@ def retained_target(folder: Path, pid: str) -> Path | None:
             project_switch.prepared_prior(fd)
             _proven(target, rec)
             _require_id(folder, fd, pid)
+            if image is None or not fd_tree.holds_text_at(fd, project_move.MOVE_RECORD, image):
+                msg = f"{folder}'s move receipt changed during validation: nothing was changed"
+                raise StoreError(msg)
         if not same_folder(folder, fd):
             msg = f"{folder} no longer names the retained source that was checked: nothing was changed"
             raise StoreError(msg)

@@ -41,7 +41,7 @@ CURRENT_MODULES = (
     ("state_store/offline_proof.py", "7fbad953d0f04fc69b6af63dcdab70db9ad7e7507b076fab1313abbad03cc59e"),
     ("state_store/offline_protocol.py", "3e839a8ff414e501290ff661b52e1a06f1cdbb871ac12a2a9e1527fe5acddcff"),
     ("state_store/pack_run_record.py", "af8fcff2c1d1396435a63f5da36b0d0e61c946ea8fce8a6a3c29366cbd793981"),
-    ("state_store/switched_authority.py", "ddbd36dbde8a23e38e69f8a23c43a55f2013d537de841ac1547a2ee77ca0d02a"),
+    ("state_store/switched_authority.py", "d7de5691fffd9ed8d35a92ebbd3f6a4ce0fa2fb240947da6d20159d216f50fde"),
     ("state_store/project_home.py", "322526ccb69c853abb5454c594e8666fe782e8828cfbc0980dcb5735aa4f135c"),
     ("state_store/project_move.py", "746e2b360d7054aba6b9a3cf0e68af4ee55d608f2135682a4f305e0fe46e6180"),
     ("state_store/project_switch.py", "0fd9810c146f66ec46c6823ae5d539b5d85aabb7c93783a45dee3ec333a2262c"),

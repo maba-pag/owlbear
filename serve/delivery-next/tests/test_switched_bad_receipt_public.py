@@ -628,6 +628,42 @@ def test_an_unproven_source_fence_keeps_one_unlocated_reservation(repo, boot, ma
 
 
 @pytest.mark.usefixtures("current_binding")
+@pytest.mark.parametrize("lookup", ["current", "register", "adopt", "selfcheck"])
+def test_read_only_authority_refuses_a_receipt_replaced_during_target_validation(repo, boot, monkeypatch, lookup):
+    target = _finished_move(repo, boot)
+    entry = registry.register(repo)
+    if lookup == "register":
+        registry.remove(entry.id)
+    source = _source(repo)
+    real_read, held = fd_tree.read_at, target.stat()
+    owner = '{"owner":"concurrent receipt repair"}\n'
+    fired = []
+    target_before = _snapshot(target)
+
+    def read(fd, name):
+        text = real_read(fd, name)
+        if not fired and name == MARKER and os.path.samestat(os.fstat(fd), held):
+            fired.append(True)
+            (source / project_move.MOVE_RECORD).write_text(owner)
+        return text
+
+    monkeypatch.setattr(fd_tree, "read_at", read)
+    if lookup == "selfcheck":
+        assert selfcheck.problems()
+    else:
+        action = {
+            "current": lambda: project_home.current(repo),
+            "register": lambda: registry.register(repo),
+            "adopt": lambda: registry.adopt(entry.id),
+        }[lookup]
+        with pytest.raises(StoreError if lookup == "current" else registry.RegistryError):
+            action()
+    assert fired == [True]
+    assert (source / project_move.MOVE_RECORD).read_text() == owner
+    assert _snapshot(target) == target_before
+
+
+@pytest.mark.usefixtures("current_binding")
 @pytest.mark.parametrize("surface", ["register", "adopt"])
 @pytest.mark.parametrize("when", ["target-read", "id-file-sync", "id-directory-sync"])
 def test_registration_keeps_the_id_it_validated_through_its_durability_work(repo, boot, monkeypatch, surface, when):

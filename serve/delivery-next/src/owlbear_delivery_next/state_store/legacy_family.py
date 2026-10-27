@@ -76,7 +76,7 @@ IMPORTS = (
     ("state_store/project_home.py", "c79464a6139fe571efd600903aa848dc67c9673f016d12c093d7d6b94b74a681"),
     ("state_store/store.py", "a3da565feeee931b40d4907f17c46372c000e573e1add938ae3679d175e75de4"),
 )
-CURRENT_FAMILY_AGGREGATE = "7abe4f02193366a5b5d10db4a17e795867898f39036ba311937e035d49611750"
+CURRENT_FAMILY_AGGREGATE = "253d6a168d75175bbb02bc8140d1411948810341c00809c1faed97a46da997e6"
 CURRENT_FUNCTIONS = (
     ("commands/chat_client.py:Chat.call", "0fc1fdb166ea555741a2aa7796a99a4eb7b71c572ad37fba1ae0a9e37171b584"),
     ("commands/chat_client.py:workspace", "4e1bd94f29805ab94eff49182ba65966b93988ce4a8e3f395576601499a4855d"),
@@ -109,7 +109,7 @@ CURRENT_FUNCTIONS = (
     ),
     (
         "state_store/switched_authority.py:retained_target",
-        "bbd4a145dc959b69d2ef3cb3145210e52d906fcde5d4336c7d97b4f96bab8aea",
+        "50c16696355b398535ff6a25502121ef0194e960d9740f9a92692ddc27879d42",
     ),
     ("state_store/switched_authority.py:_proven", "0ae82f8abddf8bbbb5a5966af6a2d135fc955de8dc9f4cc5eb39cbec796b8780"),
     ("state_store/project_home.py:_generation_at", "d048a1d7d993a3fc1fb9ad2756d4e59459e6c43fd90c604d1637de82a4c3533e"),
