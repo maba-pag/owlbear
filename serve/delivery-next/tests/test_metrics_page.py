@@ -212,3 +212,42 @@ def test_the_page_reads_again_after_a_pass_whose_worker_started_late(pds, monkey
         go.set()
         server.should_exit = True
         machine.stop_all()
+
+
+@pytest.mark.browser
+def test_all_projects_chosen_on_a_clones_page_stays_chosen_after_a_reload(pds) -> None:
+    """Copilot's review: choosing All projects dropped ?in=, so a reload preselected the bar's clone's project again."""
+    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+
+    now = datetime.now(UTC) - timedelta(hours=1)
+    spent = {"credits": 1.0, "models": {"m1": {"credits": 1.0, "input": 10, "output": 1}}}
+    shop = {"project": "shop", "name": "shop", "clone": "c-shop", "change": "c1", "agent": "builder"}
+    owlbear = {"project": "owlbear", "name": "owlbear", "clone": "c-owl", "change": "c2", "agent": "reviewer"}
+    spend_ledger.append([*run("a", now, spent, shop), *run("b", now, spent, owlbear)])
+    machine, server, base = serve()
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except Error as exc:
+                pytest.skip(f"no Playwright Chromium: {exc}")
+            page = browser.new_page(timezone_id="Europe/Berlin")
+            pds.only(page, base)
+
+            def listed(route) -> None:  # the bar serves the clone, so the page keeps ?project=
+                answer = route.fetch()
+                clone = {"id": "c-shop", "name": "shop", "path": "/clones/shop", "state": "loaded"}
+                route.fulfill(response=answer, json=answer.json() | {"projects": [clone]})
+
+            page.route("**/api/next/projects", listed)
+            page.goto(f"{base}/metrics?project=c-shop#token=t")
+            expect(page.locator("#total-credits")).to_contain_text("1.00 credits")  # the bar's clone: its project
+            pds.pick(page.get_by_role("group", name="Show only"), "Project", "")  # All projects
+            expect(page.locator("#total-credits")).to_contain_text("2.00 credits")
+            page.reload()
+            expect(page.locator("#total-credits")).to_contain_text("2.00 credits")  # still every project
+            expect(page.locator("#error")).to_have_count(0)
+            browser.close()
+    finally:
+        server.should_exit = True
+        machine.stop_all()

@@ -21,6 +21,7 @@ from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.local_system.slots import Slots
 from owlbear_delivery_next.machine_host import cases_job
 from owlbear_delivery_next.runtimes import retro_review, spotter_look
+from owlbear_delivery_next.state_store import spend_ledger, spend_metrics, spend_shares
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -888,6 +889,16 @@ def test_a_retro_review_session_is_charged_as_it_reports_and_aborted_at_its_runs
     assert (report["credits"], report["stopped"], report["stopped_by"]) == (pytest.approx(1.2), "reached", "retro-run")
     with pytest.raises(RuntimeError, match="no review starts"):
         asyncio.run(retro_review.asked("another", run_meter, role))
+    assert spend_ledger.WRITER.settled(5)  # Copilot's review: its run was in no ledger, so its stop never showed
+    start, end = spend_ledger.lines()
+    assert (start["type"], start["session"], start["agent"], start["model"], start.get("look", "")) == (
+        "start", "review-1", "retro-review", "m", ""
+    )  # fmt: skip
+    assert (end["run"], end["usage"]["credits"], end["ending"], end["limit"], end["stopped"], end["stopped_by"]) == (
+        start["run"], pytest.approx(1.2), "finished", 1.0, "reached", "retro-run"
+    )  # fmt: skip
+    [piece] = [p for p in spend_shares.derive(spend_ledger.lines()) if p["role"] == "retro-review"]
+    assert spend_metrics.reached(piece)
 
 
 def test_a_replayed_look_is_judged_under_its_frozen_prompt_on_its_own_meter(monkeypatch) -> None:

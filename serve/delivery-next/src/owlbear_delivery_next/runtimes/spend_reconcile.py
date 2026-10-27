@@ -167,6 +167,7 @@ def _pass(projects: list[tuple[Store, Path | None]]) -> dict[str, Any]:
             _save(said)
             return
         ids.update(line["id"] for line in new)
+        known.extend(new)  # what a later source finds is weighed against these too
         for line in new:
             if (c := (line.get("usage") or {}).get("credits")) is not None:
                 high[line["session"]] = max(high.get(line["session"], 0.0), float(c))
@@ -234,24 +235,37 @@ def _events(place: Where, slug: str, events: list[dict[str, Any]]) -> list[dict[
             continue  # a held run's or an unread usage: its mark or a later report counts it
         kind = str(e.get("kind") or "")
         subagents = sum(1 for s in e.get("subagents") or [] if isinstance(s, dict) and s.get("allowed"))
+        ending = str(e.get("ending") or "")
+        stop = {"stopped": "reached", "stopped_by": "session"} if ending == "credit-limit" else {}  # its limit unknown
         out.append(_base(place, slug, id=f"event:{_id(place.clone, slug, e)}", type="event", at=e.get("at"),
                          session=e["session"], usage=usage, agent=_agent(kind), job="" if kind in _steps() else kind,
-                         step=kind if kind in _steps() else "", ending=str(e.get("ending") or ""),
-                         subagents=subagents, source="import:activity"))  # fmt: skip
+                         step=kind if kind in _steps() else "", ending=ending, subagents=subagents,
+                         source="import:activity", **stop))  # fmt: skip
     return out
 
 
 def _marks(place: Where, c: Change, agents: dict[str, str], high: dict[str, float]) -> list[dict[str, Any]]:
+    """Each session's latest totals the Change kept that the ledger does not reach, and its credits no session holds.
+
+    A session whose latest read failed (``unread``) keeps its earlier mark as a lower bound, and one never read at
+    all is unknown, never left out: the runtime's log completes either (``spend_logs``).
+    """
     out = []
     held = 0.0
     for session, mark in c.spend.last.items():
         held += mark.credits
         if mark.credits <= high.get(session, -1.0) + EPS and session in high:
             continue
-        usage = {"credits": mark.credits, "models": {m: s.model_dump() for m, s in mark.models.items()}}
+        usage: dict[str, Any] = {"credits": mark.credits, "models": {m: s.model_dump() for m, s in mark.models.items()}}
+        if session in c.spend.unread:
+            usage["incomplete"] = "unread"  # a later read failed: it spent at least this
         ident = f"mark:{_id(place.clone, c.slug, session, usage)}"
         out.append(_base(place, c.slug, id=ident, type="mark", session=session, usage=usage,
                          agent=agents.get(session, ""), source="import:change"))  # fmt: skip
+    out += [_base(place, c.slug, id=f"mark:{_id(place.clone, c.slug, session, 'unread')}", type="mark",
+                  session=session, usage={"error": "unread"}, agent=agents.get(session, ""), source="import:change")
+            for session in c.spend.unread
+            if session and session not in c.spend.last and session not in high]  # fmt: skip
     if (rest := c.spend.credits - held) > EPS:
         session = f"residual:{place.clone}:{c.slug}"
         out.append(_base(place, c.slug, id=f"residual:{_id(session, round(rest, 6))}", type="residual",

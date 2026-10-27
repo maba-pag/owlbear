@@ -9,23 +9,26 @@ export const SPLITS = [["agent", "Agent"], ["project", "Project"], ["model", "Mo
 export const ZONE = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
 
 // The filters, kept in the address so a reload or a link shows the same: the ledger's own project key is ?in=,
-// apart from the bar's ?project=, which picks a clone; the bar's clone only preselects its project once.
+// apart from the bar's ?project=, which picks a clone; the bar's clone only preselects its project once, and an
+// empty ?in= (all projects, once chosen) says it did.
 const q = new URLSearchParams(location.search);
 export const filter = {
   period: q.get("period") || "30", from: q.get("from") || "", to: q.get("to") || "", in: q.get("in") ?? "",
   agent: q.get("agent") || "", model: q.get("model") || "", change: q.get("change") || "",
   stopped: q.get("stopped") === "1", by: q.get("by") || "agent",
 };
-export const state = { data: null, error: "", reading: 0, runs: [], next: null, more: false, picked: !!q.get("in") };
+export const state = { data: null, error: "", reading: 0, runs: [], next: null, more: false, picked: q.has("in") };
 
 export function show() {
   render(view(), document.getElementById("page"));
 }
 
 export function kept() {
-  history.replaceState(null, "", here({ period: filter.period, from: filter.period === "custom" ? filter.from : "",
+  const at = new URL(here({ period: filter.period, from: filter.period === "custom" ? filter.from : "",
     to: filter.period === "custom" ? filter.to : "", in: filter.in, agent: filter.agent, model: filter.model,
-    change: filter.change, stopped: filter.stopped ? "1" : "", by: filter.by }));
+    change: filter.change, stopped: filter.stopped ? "1" : "", by: filter.by }), location.href);
+  if (state.picked && !filter.in) at.searchParams.set("in", "");  // all projects, chosen over the bar's clone
+  history.replaceState(null, "", at.pathname + at.search + at.hash);
 }
 
 function day(d) {

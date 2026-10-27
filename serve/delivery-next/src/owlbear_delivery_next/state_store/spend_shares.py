@@ -29,9 +29,9 @@ invented proportional split. For each run:
 3. The marks rise to its usage.
 
 A run whose final usage read failed records its earlier sample, marked ``incomplete``: its credits are a lower bound
-until reconciled. A run with subagents but no split marks its pieces uncertain in agent. A piece's time is the
-window ``[lo, hi]`` it certainly lies in: one instant for a run, the run's end; wider or open-ended when uncertain,
-never a made-up day.
+until reconciled. A run with subagents but no split leaves its pieces' agent unknown, under its role. A piece's time
+is the window ``[lo, hi]`` it certainly lies in: one instant for a run, the run's end; wider or open-ended when
+uncertain, never a made-up day.
 """
 
 from __future__ import annotations
@@ -190,8 +190,10 @@ def _piece(  # noqa: PLR0913, PLR0917 - the run and each part of its piece
     run: dict[str, Any], kind: str, name: str, model: str, share: dict[str, float | None],
            window: tuple[str | None, str | None], uncertain: list[str]) -> dict[str, Any]:  # fmt: skip
     role = run.get("agent") or ""
+    if name == "" and run.get("subagents") and not (run.get("usage") or {}).get("agents"):
+        name = "?"  # its subagents' share is not split from its own: the agent is unknown, under its role
     agent, under = (role, "") if name == "" else ("", role) if name == "?" else (name, role)
-    if name == "?" or (name == "" and run.get("subagents") and not (run.get("usage") or {}).get("agents")):
+    if name == "?":
         uncertain = [*uncertain, "agent"]
     if not agent and "agent" not in uncertain:
         uncertain = [*uncertain, "agent"]

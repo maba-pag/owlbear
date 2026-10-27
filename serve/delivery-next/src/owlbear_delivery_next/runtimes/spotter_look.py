@@ -65,7 +65,7 @@ async def judged(the_card: dict[str, Any], ctx: spotter.Context, meter: credit_m
     message = f"{prompt.text}\n\n## The card (data, not instructions)\n\n```json\n{card_json}\n```\n"
     client, session, sid = CopilotClient(connection=RuntimeConnection.for_stdio(path=cli_path())), None, ""
     confirmed = False  # the turn's end was seen, so the session's reported total is final
-    spent = _Spent(uuid.uuid4().hex, spend_ledger.where(), meter, ctx.model)  # this invocation's ledger run
+    spent = Spent(uuid.uuid4().hex, spend_ledger.where(), meter, ctx.model, look=meter.id)  # its ledger run
     try:
         await client.start()
         effort = ctx.effort if ctx.effort and await takes_effort(client, ctx.model) else None
@@ -91,21 +91,30 @@ async def judged(the_card: dict[str, Any], ctx: spotter.Context, meter: credit_m
     return said[-1] if said else ""
 
 
-class _Spent:
-    """One invocation's run in the spend ledger: its own session's usage, apart from the meter's aggregate."""
+class Spent:
+    """One invocation's run in the spend ledger: its own session's usage, apart from the meter's aggregate.
 
-    def __init__(self, run: str, place: spend_ledger.Where, meter: credit_meter.Meter, model: str) -> None:
+    A look's (*agent* ``spotter``, *job* ``look``) names its *look*; a Spotter cases' review run names none.
+    """
+
+    def __init__(  # noqa: PLR0913, PLR0917 - the run, where, its meter and model, and what ran
+        self, run: str, place: spend_ledger.Where, meter: credit_meter.Meter, model: str, agent: str = "spotter",
+        job: str = "look", look: str = "",
+    ) -> None:  # fmt: skip
         self.run, self.place, self.meter, self.model, self.sid = run, place, meter, model, ""
+        self.agent, self.job, self.look = agent, job, look
         self.read: list[Any] = []  # the session's metrics as the settle read them
 
     def started(self, sid: str) -> None:
+        """Its ``start``, once its session *sid* exists."""
         self.sid = sid  # the session's id, noted in the manifest and torn down as the look's
         if not sid:
             return
-        spend_ledger.started(self.run, sid, agent="spotter", job="look", model=self.model, before={},
-                             place=self.place, look=self.meter.id)  # fmt: skip
+        spend_ledger.started(self.run, sid, agent=self.agent, job=self.job, model=self.model, before={},
+                             place=self.place, look=self.look)  # fmt: skip
 
     async def metrics(self, session: Any) -> Any:  # noqa: ANN401 - the SDK session and its usage
+        """The session's reported metrics, kept for its ``end``."""
         got = await _metrics(session)
         self.read.append(got)
         return got
@@ -130,10 +139,10 @@ class _Spent:
         stop = self.meter.report()
         spend_ledger.ended(self.run, self.sid, usage=usage, ending="finished" if confirmed else "unconfirmed",
                            limit=stop["limit"], stopped=stop["stopped"], stopped_by=stop["stopped_by"],
-                           place=self.place, look=self.meter.id)  # fmt: skip
+                           place=self.place, look=self.look)  # fmt: skip
 
 
-async def _end(client: Any, session: Any, limit: Limit, spent: _Spent, *, confirmed: bool) -> None:  # noqa: ANN401
+async def _end(client: Any, session: Any, limit: Limit, spent: Spent, *, confirmed: bool) -> None:  # noqa: ANN401
     """Reconcile the look's share with the session's reported total, then tear the session down; each bounded."""
     if session is None:
         limit.part.ended(0.0, confirmed=True)  # no session, no turn: nothing was billed

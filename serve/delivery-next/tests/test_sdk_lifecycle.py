@@ -436,8 +436,13 @@ def test_a_cancelled_run_reads_its_usage_before_the_disconnect_and_is_recorded(w
     asyncio.run(scenario())
     assert order == ["usage", "disconnect"]
     _, end = _spend()
-    expected = {"credits": 0.75, "models": {}} if read == "read" else {"error": "RuntimeError"}
-    assert (end["ending"], end["usage"]) == ("interrupted", expected)
+    expected = (
+        {"credits": 0.75, "models": {}, "incomplete": "interrupted"} if read == "read" else {"error": "RuntimeError"}
+    )
+    assert (end["ending"], end["usage"]) == (
+        "interrupted",
+        expected,
+    )  # a call may still have been billed: a lower bound
 
 
 def test_a_run_that_never_opened_a_session_records_nothing(world):
@@ -480,3 +485,24 @@ def test_the_ledger_takes_the_usage_read_once_tasks_settled_before_the_disconnec
     assert order == ["step usage", "cancel", "final usage", "disconnect"]
     _, end = _spend()
     assert (end["usage"]["credits"], run.usage["credits"], run.model_check) == (2.0, 2.0, check)
+
+
+@pytest.mark.parametrize("stage", ["list", "cancel"])
+def test_a_usage_read_after_an_unverified_task_cleanup_is_a_lower_bound(world, monkeypatch, stage):
+    """Copilot's review: a failed task list or cancel still let the read stand as complete, so the log never added
+    what a task billed after it."""
+    world.child = True
+    _metered(world, monkeypatch)
+
+    async def failed(*_args):
+        msg = "synthetic"
+        raise RuntimeError(msg)
+
+    async def once(_session, _model):
+        return _used(2.0)
+
+    monkeypatch.setattr(sdk_teardown, "usage_once", once)
+    setattr(world.session.rpc.tasks, stage, failed)
+    asyncio.run(sdk_adapter.run(world.cfg))
+    _, end = _spend()
+    assert (end["usage"]["credits"], end["usage"].get("incomplete")) == (2.0, "tasks unsettled")

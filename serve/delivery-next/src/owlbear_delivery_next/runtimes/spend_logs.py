@@ -2,8 +2,9 @@
 
 The log is ``~/.copilot/session-state/<id>/events.jsonl``, else Retro's copy. It completes a run the ledger left open
 for ``OPEN`` (killed), a run that ended with its usage unread, unknown or a lower bound, and a session only Retro's
-chatlogs manifest names (curator, design pack and lookup runs before the ledger). Its usage stays provisional until
-the log shows the session shut down, and the log is read again whenever it changes.
+chatlogs manifest names (curator, design pack and lookup runs before the ledger). Every checkpoint counts, the
+latest of each quarter hour (``QUARTER``), so a day's total never depends on when the log was first read. Its usage
+stays provisional until the log shows the session shut down, and the log is read again whenever it changes.
 """
 
 from __future__ import annotations
@@ -26,6 +27,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
 OPEN = timedelta(hours=3)  # a run still open after this was killed: its runtime's log says what it spent
+QUARTER = 15 * 60  # seconds: every time zone's midnight is a quarter hour's start in UTC, so no day loses a checkpoint
 LOOKUP = "decision-lookup"
 UNKNOWN_PROJECT = Where(project="(unknown)", name="Project unknown")
 
@@ -50,9 +52,11 @@ def found(
 ) -> list[dict[str, Any]]:
     """What the runtime's log adds: killed runs, runs whose usage was unread or not final, sessions it alone saw.
 
-    A killed run, an ended run whose usage is unread, unknown or a lower bound, and an OwlBear session no other record
-    names get the log's latest usage as another ``end`` of their own run (``log:<session>`` for the last). Each line's
-    id is its content's, so a later, larger checkpoint is a new line, and ``spend_shares`` keeps a run's largest usage.
+    A killed run, an ended run or a Change's mark whose usage is unread, unknown or a lower bound, and an OwlBear
+    session no other record names get the log's checkpoints as more ``end`` lines of their own run (``log:<session>``
+    for the last): a killed run those since it started, the others every one. Each line's id is its content's, so a
+    later, larger checkpoint is a new line, and ``spend_shares`` keeps a run's largest usage, or, for a run whose
+    ending is itself a checkpoint, dates each one's growth between it and the one before.
     Until the log shows the session shut down, its usage stays provisional (``incomplete``) and the log is read again
     whenever it changes. Each log read is noted in *pending*; it counts as read (*checked*) only once its lines are
     written.
@@ -66,8 +70,7 @@ def found(
         with contextlib.suppress(ValueError, TypeError):
             if now - datetime.fromisoformat(run["started"]) < OPEN:
                 continue
-        if (read := _checkpoint(str(run["session"]), checked, pending)) is not None:
-            at, usage, final = read
+        for at, usage, final in _since(_checkpoints(str(run["session"]), checked, pending), run["started"]):
             out.append({k: run.get(k) for k in ("project", "name", "clone", "change", "step")}
                        | _correction(run["run"], str(run["session"]), at, usage, final)
                        | {"ending": "unconfirmed"})  # fmt: skip
@@ -75,11 +78,10 @@ def found(
     for sid, who in _manifest().items():
         if sid in sessions or who.get("kind") == "spotter":  # its runs say it; a legacy look is its Spotter record's
             continue
-        if (read := _checkpoint(sid, checked, pending)) is not None:
-            at, usage, final = read
-            place, change = _owner(sid, who, places)
-            job = str(who.get("job") or "")
-            role = str(who.get("role") or agent(job or str(who.get("kind"))))
+        place, change = _owner(sid, who, places)
+        job = str(who.get("job") or "")
+        role = str(who.get("role") or agent(job or str(who.get("kind"))))
+        for at, usage, final in _checkpoints(sid, checked, pending):
             out.append(base(place, change, agent=role, job=job, step="" if job else str(who.get("kind") or ""),
                              ending="") | _correction(f"log:{sid}", sid, at, usage, final))  # fmt: skip
     return out
@@ -116,26 +118,32 @@ def _unfinished(
     checked: dict[str, Any],
     pending: dict[str, str],
 ) -> list[dict[str, Any]]:
-    """Ended runs whose usage is unread, unknown or a lower bound, completed from their session's log.
+    """Ended runs and Change marks whose usage is unread, unknown or a lower bound, completed from their session's log.
 
     Not when a later run of the session accounts for what it spent; a lower bound is replaced only by at least as much.
     """
     out = []
     for run in found:
         usage = run.get("usage")
-        if not run.get("ended") or run.get("line") != "end" or usage is None:
+        if not run.get("ended") or run.get("line") not in {"end", "mark"} or usage is None:
             continue
         unread = spend_shares.unread(usage)
         if not unread and not usage.get("incomplete"):
             continue
         if later(run):
             continue
-        if (read := _checkpoint(str(run["session"]), checked, pending)) is None:
-            continue
-        at, got, final = read
-        if unread or got["credits"] >= (usage.get("credits") or 0.0):
-            out.append(_correction(run["run"], str(run["session"]), at, got, final))
+        for at, got, final in _checkpoints(str(run["session"]), checked, pending):
+            if unread or got["credits"] >= (usage.get("credits") or 0.0):
+                out.append(_correction(run["run"], str(run["session"]), at, got, final))
     return out
+
+
+def _since(read: list[tuple[str, dict[str, Any], bool]], started: str) -> list[tuple[str, dict[str, Any], bool]]:
+    """The checkpoints from *started* on (those before are an earlier run's), else the latest: its total then."""
+    with contextlib.suppress(ValueError, TypeError):
+        began = datetime.fromisoformat(started)
+        return [x for x in read if datetime.fromisoformat(x[0]) >= began] or read[-1:]
+    return read[-1:]
 
 
 def _manifest() -> dict[str, dict[str, Any]]:
@@ -163,10 +171,12 @@ def _owner(sid: str, who: dict[str, Any], places: dict[str, Where]) -> tuple[Whe
     return UNKNOWN_PROJECT, ""
 
 
-def _checkpoint(sid: str, checked: dict[str, Any], pending: dict[str, str]) -> tuple[str, dict[str, Any], bool] | None:
-    """The session's latest usage in the runtime's log: its time, cumulative usage and whether it is final.
+def _checkpoints(sid: str, checked: dict[str, Any], pending: dict[str, str]) -> list[tuple[str, dict[str, Any], bool]]:
+    """The session's usage checkpoints in the runtime's log, oldest first: time, cumulative usage, whether final.
 
-    It is final when the session shut down and was not resumed since; None without one.
+    The latest of each quarter hour, and only those that grew.
+
+    The latest is final when the session shut down and was not resumed since; none is before it.
     A log read and written before, and unchanged since, is not read again; this read is noted in *pending*.
     """
     for path in (chatlogs.state() / sid / "events.jsonl", chatlogs.root() / "chatlogs" / sid / "log.jsonl.gz"):
@@ -176,24 +186,39 @@ def _checkpoint(sid: str, checked: dict[str, Any], pending: dict[str, str]) -> t
             continue
         mark = f"{seen.st_size}:{seen.st_mtime_ns}"
         if checked.get(sid) == mark:
-            return None
+            return []
         pending[sid] = mark
-        last, final = None, False
+        quarters: dict[int, str] = {}  # each quarter hour's latest checkpoint, as written
+        final = False
         opener = gzip.open if path.suffix == ".gz" else open
         with opener(path, "rt", encoding="utf-8") as f:  # type: ignore[operator]
             for raw in f:
                 kind = _kind(raw)
                 if kind in {"session.usage_checkpoint", "session.shutdown"}:
-                    last, final = raw, kind == "session.shutdown"
+                    with contextlib.suppress(ValueError, TypeError, KeyError):
+                        at = datetime.fromisoformat(str(json.loads(raw)["timestamp"]))
+                        quarters.pop(n := int(at.timestamp()) // QUARTER, None)
+                        quarters[n] = raw
+                    final = kind == "session.shutdown"
                 elif kind in {"session.start", "session.resume"}:
                     final = False
-        if last is None:
-            return None
-        with contextlib.suppress(ValueError, TypeError, KeyError):
-            if (got := _usage(json.loads(last))) is not None:
-                return (*got, final)
-        return None
+        return _grown([read for raw in quarters.values() if (read := _read(raw)) is not None], final=final)
+    return []
+
+
+def _read(raw: str) -> tuple[str, dict[str, Any]] | None:
+    with contextlib.suppress(ValueError, TypeError, KeyError):
+        return _usage(json.loads(raw))
     return None
+
+
+def _grown(read: list[tuple[str, dict[str, Any]]], *, final: bool) -> list[tuple[str, dict[str, Any], bool]]:
+    """The checkpoints whose credits grew over the one before, the latest kept; only the latest may be *final*."""
+    out: list[tuple[str, dict[str, Any], bool]] = []
+    for at, usage in read[:-1]:
+        if (out[-1][1]["credits"] if out else 0.0) < usage["credits"] < read[-1][1]["credits"]:
+            out.append((at, usage, False))
+    return [*out, (*read[-1], final)] if read else []
 
 
 def _kind(raw: str) -> str:

@@ -251,7 +251,7 @@ def step(usage: dict, *, billed: dict | None = None, ending: str = "result", lim
         run.model_check, run.ending = "mismatch", "error"
 
     cfg = SimpleNamespace(model="m1", credit_limit=limit)
-    st = SimpleNamespace(run=run, billed=billed if billed is not None else {}, cfg=cfg, spent={},
+    st = SimpleNamespace(run=run, billed=billed if billed is not None else {}, cfg=cfg, spent={}, turn=False,
                          watch=subagents.Watch(allowed=True), gate=SimpleNamespace(wrong_model=wrong))  # fmt: skip
     return st, said
 
@@ -278,6 +278,20 @@ def test_a_limit_reached_only_by_the_final_read_is_the_runs_stop() -> None:
     st, _ = step(tokens(m1=10), ending="no-result", limit=2.0)
     sdk_spend.final(st, tokens(m1=20))
     assert (st.run.ending, st.run.usage["credits"], st.run.model_check) == ("credit-limit", 2.0, "verified")
+
+
+def test_a_final_read_lower_than_an_earlier_one_leaves_the_earlier_to_the_ledger_as_a_lower_bound() -> None:
+    """Copilot's review: an earlier 3 then a final 2 wrote 2 as complete, so the log never completed it."""
+    st, _ = step(tokens(m1=30))
+    sdk_spend.final(st, tokens(m1=20))
+    assert (st.run.usage, st.spent) == (tokens(m1=30), tokens(m1=30) | {"incomplete": "lower final read"})
+
+
+def test_a_final_read_while_the_turn_still_runs_is_a_lower_bound() -> None:
+    st, _ = step(tokens(m1=10))
+    st.turn = True  # its main turn's end was never seen: a call may still be billed
+    sdk_spend.final(st, tokens(m1=20))
+    assert (st.run.usage, st.spent) == (tokens(m1=20), tokens(m1=20) | {"incomplete": "turn running"})
 
 
 def test_a_failed_final_read_keeps_the_proof_and_marks_the_ledgers_sample_incomplete(project) -> None:
@@ -572,3 +586,75 @@ def test_a_recorded_ending_keeps_its_time_whatever_the_logs_checkpoint_says(proj
     assert spend_reconcile.run([(project, None)])["imported"]["logs"] == 1
     [piece] = [p for p in spend_shares.derive(spend_ledger.lines()) if p["run"] == "r"]
     assert (piece["lo"], piece["hi"], piece["credits"]) == (end["at"], end["at"], 2.0)
+
+
+def test_a_first_read_of_a_finished_log_dates_each_checkpoints_growth_as_a_later_read_would() -> None:
+    """Copilot's review: a first read kept only the shutdown, so 1 on Oct 1 and 3 by Oct 2 counted all 3 on Oct 2, and
+    the days depended on when Metrics was first opened."""
+    runtime_log("solo", checkpoint("2026-10-01T22:00:00Z", 1e9), shutdown("2026-10-02T09:00:00Z", 3e9))
+    chatlogs.root().mkdir(parents=True)
+    solo = {"event": "started", "session": "solo", "kind": "review", "role": "curator"}
+    (chatlogs.root() / "manifest.jsonl").write_text(json.dumps(solo) + "\n")
+    assert spend_reconcile.run([])["imported"]["logs"] == 2
+    assert spend_ledger.WRITER.settled(5)
+    pieces = sorted((p["lo"], p["hi"], p["credits"], p["uncertain"], p["incomplete"])
+                    for p in spend_shares.derive(spend_ledger.lines()) if p["run"] == "log:solo")  # fmt: skip
+    assert pieces == [
+        ("2026-10-01T22:00:00+00:00", "2026-10-01T22:00:00+00:00", 1.0, [], False),
+        ("2026-10-01T22:00:00+00:00", "2026-10-02T09:00:00+00:00", 2.0, ["at"], False),
+    ]  # fmt: skip
+
+
+def test_a_session_a_change_gave_is_never_imported_again_as_one_only_the_log_names(project) -> None:
+    """Copilot's review: the pass weighed the log against its first snapshot only, so s2, imported from its Change's
+    mark moments before, came again as a session only Retro's manifest names."""
+    runtime_log("s2", checkpoint("2026-10-20T11:00:00Z", 2e9))
+    chatlogs.root().mkdir(parents=True)
+    s2 = {"event": "started", "session": "s2", "kind": "build", "job": ""}
+    (chatlogs.root() / "manifest.jsonl").write_text(json.dumps(s2) + "\n")
+    said = spend_reconcile.run([(project, None)])
+    assert (said["imported"]["changes"], said["imported"]["logs"]) == (3, 0)
+    assert "log:s2" not in {line.get("run") for line in spend_ledger.lines()}
+    assert total() == 5.5
+
+
+def changed(tmp_path: Path, spend: Spend, *events: dict) -> Store:
+    store = Store(tmp_path / "projects" / "fedcba9876543210", None, "shop")
+    store.write(Lock("c1"), Change(slug="c1", spend=spend))
+    for e in events:
+        store.log(Lock("c1"), "c1", e)
+    return store
+
+
+def test_a_step_stopped_at_its_credit_limit_before_the_ledger_is_a_reached_stop(tmp_path) -> None:
+    """Copilot's review: its ending was kept, its stop not, so the stopped-only filter and its total left it out."""
+    store = changed(tmp_path, Spend().plus(used(2.0), "s1"), {"event": "step", "at": "2026-10-20T10:00:00+00:00",
+                    "session": "s1", "kind": "build", "usage": used(2.0), "ending": "credit-limit"})  # fmt: skip
+    spend_reconcile.run([(store, None)])
+    assert spend_ledger.WRITER.settled(5)
+    [piece] = spend_shares.derive(spend_ledger.lines())
+    assert (piece["stopped"], piece["stopped_by"], piece["limit"]) == ("reached", "session", None)
+    stopped = spend_metrics.query(spend_metrics.pieces(), tz=UTC_ZONE, stopped=True)["totals"]
+    assert (stopped["credits"], stopped["runs"]) == (2.0, 1)
+
+
+def test_a_changes_unread_sessions_are_unknown_or_lower_bounds_until_their_logs_complete_them(tmp_path) -> None:
+    """Copilot's review: s3, never read, vanished; s1's mark of 3, read again without success, counted as complete;
+    and neither log was read for them."""
+    spend = Spend().plus(used(3.0), "s1").plus({"error": "TimeoutError"}, "s1").plus({"error": "TimeoutError"}, "s3")
+    unread = {"event": "step", "at": "2026-10-20T10:00:00+00:00", "session": "s3", "kind": "review",
+              "usage": {"error": "TimeoutError"}, "ending": "result"}  # fmt: skip
+    store = changed(tmp_path, spend, unread)
+    assert spend_reconcile.run([(store, None)])["imported"]["changes"] == 2
+    assert spend_ledger.WRITER.settled(5)
+
+    def seen() -> dict:
+        assert spend_ledger.WRITER.settled(5)
+        return {p["session"]: (p["kind"], p["credits"], p["incomplete"], p["role"])
+                for p in spend_shares.derive(spend_ledger.lines())}  # fmt: skip
+
+    assert seen() == {"s1": ("run", 3.0, True, ""), "s3": ("unknown", None, False, "reviewer")}
+    runtime_log("s1", shutdown("2026-10-20T10:30:00Z", 4e9))
+    runtime_log("s3", shutdown("2026-10-20T10:40:00Z", 1.5e9))
+    assert spend_reconcile.run([(store, None)])["imported"]["logs"] == 2
+    assert seen() == {"s1": ("run", 4.0, False, ""), "s3": ("run", 1.5, False, "reviewer")}

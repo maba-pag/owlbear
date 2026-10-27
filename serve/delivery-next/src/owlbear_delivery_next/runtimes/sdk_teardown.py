@@ -97,6 +97,7 @@ async def teardown(client: CopilotClient, session: CopilotSession | None, st: _S
                 _guard(problems, "task PID record", st.record, getattr(task, "pid", None))
             return tasks
 
+        unverified = len(problems)  # a failed list or cancel leaves the tasks' end unverified, so the usage read too
         try:
             tasks = await owned_call(st, listing, "tasks.list")
         except Exception as exc:  # noqa: BLE001 - any failure leaves termination unverified
@@ -116,15 +117,16 @@ async def teardown(client: CopilotClient, session: CopilotSession | None, st: _S
                     )
             except Exception as exc:  # noqa: BLE001 - failed cancellation remains an unverified stage
                 problems.append(f"tasks.cancel {tid} failed ({type(exc).__name__})")
+        failed = any(p.startswith(("tasks.list ", "tasks.cancel ")) for p in problems[unverified:])
         _guard(problems, "task tree record", st.record_tree)
         _guard(problems, "tasks log", st.log, event="tasks", listed=sorted(listed), problems=list(problems))
-        await settle(listed, [])
+        settled = (await settle(listed, [])).confirmed and not failed
         if st.metered:  # what it spent once its tasks settled: once, bounded, before the disconnect (``sdk_spend``)
             try:
                 final = await owned_call(st, partial(usage_once, session, st.cfg.model), "usage read")
             except Exception as exc:  # noqa: BLE001 - an unread usage is recorded as such
                 final = {"error": type(exc).__name__}
-            sdk_spend.final(st, final)
+            sdk_spend.final(st, final, settled=settled)
         try:
             await owned_call(st, session.disconnect, "disconnect")
         except Exception as exc:  # noqa: BLE001

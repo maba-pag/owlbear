@@ -217,7 +217,13 @@ def test_subagents_get_exclusive_shares_and_the_unsplit_rest_is_unallocated() ->
 def test_a_run_with_subagents_but_no_split_is_uncertain_in_agent() -> None:
     lines = [start("r1", "2026-10-01T10:00:00+00:00", before={}),
              end("r1", "2026-10-01T10:30:00+00:00", usage(2.0), subagents=2)]  # fmt: skip
-    assert [p["uncertain"] for p in spend_shares.derive(lines)] == [["agent"]]
+    pieces = spend_shares.derive(lines)
+    assert [(p["agent"], p["under"], p["role"], p["uncertain"]) for p in pieces] == [
+        ("", "builder", "builder", ["agent"])
+    ]
+    by_agent = spend_metrics.query(pieces, tz=UTC, by="agent")["rows"]
+    assert [(r["label"], r["credits"]) for r in by_agent] == [("Agent unknown", 2.0)]  # never all the builder's
+    assert spend_metrics.query(pieces, tz=UTC, agent="builder")["totals"]["credits"] == 0
 
 
 @pytest.mark.parametrize(
