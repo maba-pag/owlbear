@@ -60,6 +60,7 @@ from owlbear_delivery_next.pack_runs.pack_state import (
 from owlbear_delivery_next.pack_runs.pack_state import (
     now as _now,
 )
+from owlbear_delivery_next.state_store import spend_ledger
 from owlbear_delivery_next.workflow_steps import sessions
 
 if TYPE_CHECKING:
@@ -371,7 +372,8 @@ class Job:
 
     def _run(self, work: Callable[[], str | None]) -> None:
         try:
-            self._steps(work)
+            with spend_ledger.at(spend_ledger.Where.of(self.store, job="design pack update")):  # its project's spend
+                self._steps(work)
         finally:
             self._release()
 

@@ -109,6 +109,15 @@ an absent run record in that target as evidence that nobody owns the work.
 after a merge and when idle each has its own setting in **Settings → This machine**: off, on, or on
 even while paused; **Curate now** on the Maintenance page always runs.
 
+The **Metrics** page shows every credit OwlBear spent on this Mac: every agent session it ran
+(Delivery's workers, judges, picker and lookups, the curator, design pack runs, Spotter looks),
+summed, split by project, agent (subagents included), model, day, Change or step, and filtered by
+period, project, agent, model, Change, or runs stopped at their credit limit. Each session writes
+its start and end to `~/.owlbear/spend/`, kept for good, even when it is cancelled or fails;
+earlier spend is read from the Changes, the Spotter's records and the runtime's own logs. Credits
+that were not reported count as unknown, never as zero, and spend whose day or agent is not known
+closely is said apart. Metrics never limit any work. Your own chats' spend is not recorded.
+
 A shared settings repository is a local clone of a Git repository you choose, set with
 `owlbear data PATH` and used after `owlbear restart`. When one is set, project settings, agent
 memory and the backlog live there, and OwlBear commits and pushes each save, so they follow you

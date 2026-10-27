@@ -24,6 +24,7 @@ from owlbear_delivery_next.improvement.events import Kept
 from owlbear_delivery_next.runtimes import chatlogs, sdk_adapter, spotter_look, step_decisions
 from owlbear_delivery_next.settings.config import Layer, SettingsUnset, resolve
 from owlbear_delivery_next.settings.improvement import CATEGORIES, Spotter
+from owlbear_delivery_next.state_store import spend_ledger
 from owlbear_delivery_next.state_store.store import Lock, Store
 from owlbear_delivery_next.workflow_steps import watched
 
@@ -413,6 +414,12 @@ def test_a_look_is_one_toolless_session_noted_in_the_chatlogs_manifest(monkeypat
     lines = [json.loads(x) for x in (chatlogs.root() / "manifest.jsonl").read_text().splitlines()]
     assert [(x["event"], x["session"], x.get("kind")) for x in lines] == [
         ("started", "look-1", "spotter"), ("ended", "look-1", None)]  # fmt: skip
+    assert spend_ledger.WRITER.settled(5)
+    start, end = spend_ledger.lines()  # the look's own spend, as read, in the spend ledger
+    assert (start["session"], start["agent"], start["job"], start["model"], start["before"]) == (
+        "look-1", "spotter", "look", "gpt-6-luna", {}
+    )  # fmt: skip
+    assert (end["run"], end["ending"], end["usage"]["credits"]) == (start["run"], "finished", 0.2)
 
 
 class Stalled:
@@ -471,6 +478,10 @@ def test_a_stalled_or_failed_runtime_is_torn_down_within_its_bounds(
     manifest = chatlogs.root() / "manifest.jsonl"
     lines = [json.loads(x) for x in manifest.read_text().splitlines()] if manifest.exists() else []
     assert [x["provisional"] for x in lines if x["event"] == "ended"] == ends  # unconfirmed when the force failed
+    assert spend_ledger.WRITER.settled(5)
+    spent = [(x["type"], x.get("ending"), x.get("usage")) for x in spend_ledger.lines()]
+    cut = [("start", None, None), ("end", "interrupted", {"error": "AttributeError"})]
+    assert spent == ([] if start_fails else cut)
 
 
 def test_a_drain_ends_within_its_bound_even_when_a_look_resists(monkeypatch) -> None:

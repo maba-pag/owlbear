@@ -17,8 +17,9 @@ from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_contracts.tools import Worktree
 from owlbear_delivery_next.change_flow import loop
 from owlbear_delivery_next.local_system import processes
-from owlbear_delivery_next.runtimes import loop_owner, sdk_adapter, sdk_teardown
+from owlbear_delivery_next.runtimes import loop_owner, sdk_adapter, sdk_spend, sdk_teardown
 from owlbear_delivery_next.runtimes.session_result import to_result
+from owlbear_delivery_next.state_store import spend_ledger
 from owlbear_delivery_next.state_store.database import StoreError
 
 ROOT, CHILD = 4242, 4243
@@ -366,3 +367,78 @@ def test_escaped_teardown_failure_still_forces_and_observes_unconfirmed(world, m
     assert not run.termination.confirmed
     assert world.proc_effects == ["terminate", "kill"]
     assert ROOT not in world.live
+
+
+def _metered(world, monkeypatch, *, hold=False):
+    """The session opens and its run is metered, as ``_open`` does just before its first send; *hold* never sends."""
+
+    async def opened(_client, st):
+        world.steps.append(st)
+        st.session, st.billed = world.session, {}
+        sdk_spend.meter(st, "synthetic", "builder")
+        if hold:
+            await asyncio.Event().wait()
+
+    monkeypatch.setattr(sdk_adapter, "_open", opened)
+
+
+def _spend():
+    assert spend_ledger.WRITER.settled(5)
+    return spend_ledger.lines()
+
+
+def test_a_finished_run_records_its_start_and_end_where_it_ran(world, monkeypatch):
+    _metered(world, monkeypatch)
+    used = {"credits": 1.25, "models": {"gpt-6-luna": {"credits": 1.25, "input": 9, "output": 1}}}
+
+    async def usage(_session, _model):
+        return used
+
+    monkeypatch.setattr(sdk_adapter, "usage_read", usage)
+    place = spend_ledger.Where(project="owlbear", name="owlbear", clone="c1", change="fix-it", step="build")
+    with spend_ledger.at(place):
+        run = asyncio.run(sdk_adapter.run(world.cfg))
+    start, end = _spend()
+    assert (start["type"], start["agent"], start["model"], start["before"], start["change"]) == (
+        "start", "builder", "gpt-6-luna", {}, "fix-it"
+    )  # fmt: skip
+    assert (end["run"], end["usage"], end["ending"], end["project"]) == (start["run"], used, run.ending, "owlbear")
+
+
+@pytest.mark.parametrize("read", ["read", "failed"])
+def test_a_cancelled_run_reads_its_usage_before_the_disconnect_and_is_recorded(world, monkeypatch, read):
+    _metered(world, monkeypatch, hold=True)
+    order = []
+
+    async def once(_session, _model):
+        order.append("usage")
+        if read == "failed":
+            msg = "synthetic"
+            raise RuntimeError(msg)
+        return {"credits": 0.75, "models": {}}
+
+    async def disconnect():
+        order.append("disconnect")
+
+    monkeypatch.setattr(sdk_teardown, "usage_once", once)
+    world.session.disconnect = disconnect
+
+    async def scenario():
+        task = asyncio.create_task(sdk_adapter.run(world.cfg))
+        async with asyncio.timeout(2):
+            while not world.steps:  # noqa: ASYNC110 - the fixture's open records its step; nothing signals it
+                await asyncio.sleep(0.01)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+    asyncio.run(scenario())
+    assert order == ["usage", "disconnect"]
+    _, end = _spend()
+    expected = {"credits": 0.75, "models": {}} if read == "read" else {"error": "RuntimeError"}
+    assert (end["ending"], end["usage"]) == ("interrupted", expected)
+
+
+def test_a_run_that_never_opened_a_session_records_nothing(world):
+    asyncio.run(sdk_adapter.run(world.cfg))  # the fixture's session never sends: no spend is possible
+    assert _spend() == []
