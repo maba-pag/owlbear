@@ -165,12 +165,18 @@ def require_admission(
     _guard_target(path, tfd, rec, validate)
 
 
-def _guard_target(target: Path, tfd: int, rec: dict, validate: Callable[[], None]) -> None:
+def admission_state(source: tuple[Path, int], target: tuple[Path, int], rec: dict) -> tuple[str, str, str]:
+    """Read the initial source observation without losing the held target's authority through those reads."""
+    path, tfd = target
+    return _guard_target(path, tfd, rec, lambda: source_state(source, path.name, rec))
+
+
+def _guard_target[T](target: Path, tfd: int, rec: dict, validate: Callable[[], T]) -> T:
     """Keep the held target's proof, format and namespace stable across the later source reads."""
     try:
         images = {name: fd_tree.stat_at(tfd, name) for name in (project_move.MOVE_PROOF, format_marker.MARKER, ".")}
         held_switched(target, tfd, rec)
-        validate()
+        observed = validate()
         stable = all(fd_tree.same_image_at(tfd, name, before) for name, before in images.items())
         if not stable:
             marker = fd_tree.read_at(tfd, format_marker.MARKER)
@@ -181,6 +187,7 @@ def _guard_target(target: Path, tfd: int, rec: dict, validate: Callable[[], None
         msg = f"{target}'s authority witnesses cannot be checked: nothing was changed"
         raise StoreError(msg) from exc
     named_switched(target, rec)
+    return observed
 
 
 def check_switched(target: Path, pfd: int, rec: dict) -> int:

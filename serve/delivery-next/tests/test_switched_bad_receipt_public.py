@@ -602,6 +602,31 @@ def test_store_open_keeps_legitimate_active_payload_changes(repo, boot):
 
 
 @pytest.mark.usefixtures("current_binding")
+def test_missing_target_marker_is_not_created_after_initial_source_reads_lose_its_proof(repo, boot, monkeypatch):
+    target = _finished_move(repo, boot)
+    source = _source(repo)
+    (target / MARKER).unlink()
+    real_state = project_switch.source_state
+    owners, fired = {}, []
+
+    def state(*args):
+        observed = real_state(*args)
+        if not fired:
+            fired.append(True)
+            (target / project_move.MOVE_PROOF).write_text("owner-replaced-proof\n")
+            owners.update({source: _snapshot(source), target: _snapshot(target)})
+        return observed
+
+    monkeypatch.setattr(project_switch, "source_state", state)
+    with pytest.raises(StoreError):
+        Store.open(repo)
+
+    assert fired == [True]
+    assert not (target / MARKER).exists()
+    assert {path: _snapshot(path) for path in owners} == owners
+
+
+@pytest.mark.usefixtures("current_binding")
 @pytest.mark.parametrize(
     "marker",
     [b"8\n", b"\xff\n", b"", None, "\u00b2\n".encode(), b"9" * 5000],

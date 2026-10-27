@@ -299,7 +299,7 @@ def _publish_proven(source: tuple[Path, int], pfd: int, target: Path, rec: dict,
     _, folder_fd = source
     tfd = project_switch.check_switched(target, pfd, rec)
     try:
-        expected = project_switch.source_state(source, target.name, rec)
+        expected = project_switch.admission_state(source, (target, tfd), rec)
 
         def guard() -> None:
             project_switch.require_admission(source, (target, tfd), rec, expected)
