@@ -25,9 +25,11 @@ its end then. A restart records each chat's bytes written while OwlBear was not 
 (D-01M5XCE8ZA4FGYYY45YP44M8RD), from the offsets the last run left in ``chats.json``. A chat without a new event for a
 day goes dormant: its intake is dropped and its offset kept until it grows.
 
-Admission (``room``): one chat look at a time across all chats, a draining one counted; none while the machine is
-paused (D-01M5XCE8ZC030KT2FZ7D6SZCJN), once the follower closes, or while a look's runtime may still run (its lease
-held, ``chat_looks``); the chats are read all the same. The state-change moment of a completed call is looked at
+Admission (``room``, ``chat_looks.Gate``): one chat look at a time across all chats, a draining one counted; none
+while the machine is paused (D-01M5XCE8ZC030KT2FZ7D6SZCJN), once the follower closes, once an update's fence or a stop
+holds the machine's stop barrier (one admitted before is counted as running work), or while a look's runtime may
+still run (its lease held); the chats are read all the same. No turn settles while an event is still being written.
+The state-change moment of a completed call is looked at
 instead of a sample of it. Before any moment is settled or admitted, a chat's Spotter gets the settings in force (its
 ``look_credit_limit`` among them) and every gap known by then; its prompt and cases' snapshot
 (``cases.snapshot``) is taken when a turn starts (a turn begun before following, at its first live event) and serves
@@ -57,12 +59,12 @@ from owlbear_delivery_next.runtimes.chat_moments import Moments
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from contextlib import AbstractContextManager
 
     from owlbear_delivery_next.local_system import maintenance
 
 POLL = 5.0  # seconds between passes
 CHUNK, HISTORY, PASS, LINE = 1 << 20, 8 << 20, 16 << 20, 8 << 20  # bytes: a live read, a context read, a pass, an event
-LOOKS = 1  # chat looks at once on this machine
 QUIET = chatlogs.QUIET.total_seconds()  # a chat without a new event this long goes dormant
 CLOSE = spotter.DRAIN + 3 * spotter.TEARDOWN + 5.0  # seconds the machine's stop waits for the follower to end
 LOCK = "chats.lock"
@@ -102,13 +104,17 @@ class Follower:
         poll: float = POLL,
         sessions: Path | None = None,
         ownership: maintenance.Maintenance | None = None,
+        fenced: Callable[[], str] = str,
+        admission: Callable[[], AbstractContextManager[Any]] | None = None,
     ) -> None:
         """Nothing is read or written until it runs; *sessions* is the runtime's session folder (its own by default).
 
-        With *ownership* (the machine's maintenance ledger) each look holds a lease (``chat_looks``).
+        With *ownership* (the machine's maintenance ledger) each look holds a lease; *fenced* and *admission* are the
+        machine's update fence and stop barrier (``chat_looks``).
         """
         self.paused, self.say, self.read, self.judge, self.poll = paused, say, read, judge, poll
         self.owned = chat_looks.Owned(ownership, say) if ownership is not None else None
+        self.gate = chat_looks.Gate(fenced, admission, self.owned)
         self.sessions = sessions
         self.closed, self.ended = threading.Event(), threading.Event()
         self.thread: threading.Thread | None = None
@@ -140,22 +146,17 @@ class Follower:
         return self.thread is None or not self.thread.is_alive()
 
     def room(self) -> str:
-        """Why no chat look may start now, else ""; read on the follower's loop when a look is admitted."""
+        """Admit a chat look (""), counted until it ends, or say why none starts; on the follower's loop."""
         if self.closed.is_set():
             return "stopping: OwlBear's chats follower is ending"
         if self.paused():
             return "paused: the machine is paused"
         self.leaving = [s for s in self.leaving if s.running]
-        running = sum(c.spot.running for c in self.chats.values() if c.spot) + sum(s.running for s in self.leaving)
-        if running >= LOOKS:
-            return "capacity: a chat look is already running"
-        if self.owned is not None and self.owned.lingering():
-            return "held: a chat look's runtime may still run; no chat look starts until Maintenance recovers it"
-        return ""
+        return self.gate.admit()
 
     def working(self) -> list[str]:
-        """What a stop when idle and an update wait for: a chat look's runtime that may still run."""
-        return [chat_looks.LINGERING] if self.owned is not None and self.owned.lingering() else []
+        """What a stop when idle and an update wait for: an admitted look, or a look's runtime that may still run."""
+        return self.gate.working()
 
     def run(self) -> None:
         """The thread: take the lock, follow until closed, drain and write, then let the lock go."""
@@ -327,7 +328,7 @@ class Follower:
         judge = self.judge or spotter_look.judged
         if self.owned is not None:
             judge = functools.partial(self.owned.judged, judge)
-        c.spot = spotter.Spotter(self._ctx(c, ctx), lambda cid=c.id: cid, judge, room=self.room)
+        c.spot = spotter.Spotter(self._ctx(c, ctx), lambda cid=c.id: cid, judge, room=self.room, left=self.gate.left)
         c.moments = Moments(c.workspace, Path.home(), Path(os.environ["TMPDIR"]) if os.environ.get("TMPDIR") else None)
         c.history, c.offset, c.skipping, c.partial = max(c.history, c.offset), 0, False, b""
 
@@ -399,7 +400,7 @@ class Follower:
 
     def _still(self, c: Chat) -> None:
         """No new byte: settle its turn; a day without one makes it dormant."""
-        if c.moments is not None and c.spot is not None and not c.skipping:
+        if c.moments is not None and c.spot is not None and not c.skipping and not c.partial:  # nothing mid-event
             for m in c.moments.settle(frontier=True, now=time.monotonic()):
                 self._admit(c, m)
         if c.spot is not None and not c.spot.running and time.time() - c.grew >= QUIET:
@@ -423,7 +424,7 @@ class Follower:
                 c.offset, c.skipping, data = c.offset + step, nl < 0, data[step:]
             self._lines(c, c.partial + data)
             await asyncio.sleep(0)  # the looks' tasks run between reads
-        if c.moments is not None and not c.skipping:
+        if c.moments is not None and not c.skipping and not c.partial:  # an event mid-write may go on the turn
             for m in c.moments.settle(frontier=c.offset >= size, now=time.monotonic()):
                 self._admit(c, m)
         return fetched

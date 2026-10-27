@@ -816,7 +816,8 @@ def test_a_look_whose_runtime_ended_releases_its_lease(world):
     asyncio.run(scenario())
     assert [r["skipped"] for r in records()] == [""]
     assert [s["state"] for s in ownership.read()["sessions"]] == ["released"]
-    assert (world.follower.room(), world.follower.working()) == ("", [])
+    assert world.follower.working() == []
+    assert world.follower.room() == ""  # the next look is admitted
 
 
 def test_a_workspace_file_made_unreadable_drops_its_chat(world):
@@ -910,3 +911,80 @@ def test_an_event_left_out_reaches_a_later_look_of_the_same_read(world, monkeypa
     looked = [card for card, _ctx in world.cards if card["moment"].get("call") == "x"]
     assert looked
     assert "an event over 0 MiB was left out" in looked[0]["gaps"]
+
+
+def test_no_hand_off_settles_while_the_next_event_is_still_being_written(world):
+    async def scenario() -> None:
+        await world.passes()
+        log = world.chat("c", [asked("go"), ev("assistant.turn_start", {"turnId": "0"}),
+                               reply("The answer.", phase="final_answer"), ev("assistant.turn_end", {"turnId": "0"}),
+                               ev("session.usage_checkpoint")])  # fmt: skip
+        with log.open("a") as out:
+            out.write('{"type": "assistant.turn_start", "data"')  # the next round, still being written
+        await world.passes()  # its plan; the hand-off waits for that event
+        await world.passes()  # no growth, the event still unfinished: nothing settles
+        assert [r["look"] for r in records()] == ["plan"]
+        with log.open("a") as out:
+            out.write(': {"turnId": "1"}, "id": "e-next", "timestamp": "2026-10-27T00:00:00+00:00"}\n')
+            for d in [reply("One more step.", tools=1), *call("z", "view", {"path": "a.py"}),
+                      ev("assistant.turn_end", {"turnId": "1"}), ev("assistant.turn_start", {"turnId": "2"}),
+                      reply("Now it is done.", phase="final_answer"), ev("assistant.turn_end", {"turnId": "2"}),
+                      ev("session.usage_checkpoint")]:  # fmt: skip
+                out.write(json.dumps(d) + "\n")
+        await world.passes(2)
+
+    asyncio.run(scenario())
+    assert [r["look"] for r in records()] == ["plan", "hand-off"]
+    assert world.cards[-1][0]["moment"]["result"] == "Now it is done."  # the turn's real end, not the earlier reply
+
+
+def test_a_look_admitted_is_counted_before_its_lease_and_none_is_admitted_once_fenced(world):
+    fence, barrier, release = [""], threading.RLock(), asyncio.Event()
+
+    async def slow(card: dict[str, Any], ctx: spotter.Context, meter: credit_meter.Meter) -> str:
+        await release.wait()
+        return await World.judge(world, card, ctx, meter)
+
+    ownership = maintenance.Maintenance(Slots(lambda: 2))
+    world.follower = chats.Follower(lambda: world.paused, lambda _t: None, read=world.read, judge=slow, poll=0.01,
+                                    sessions=world.state, ownership=ownership, fenced=lambda: fence[0],
+                                    admission=lambda: barrier)  # fmt: skip
+
+    async def scenario() -> None:
+        await world.passes()
+        world.chat("a", [asked("one"), ev("assistant.turn_start"), reply("plan a", tools=1)])
+        await world.follower._pass()  # noqa: SLF001 - admitted; its task has built no card and taken no lease yet
+        assert ownership.read()["sessions"] == []
+        assert world.follower.working() == ["Spotter chats: 1 look running"]  # a fence or stop when idle waits
+        release.set()
+        await world.settled(world.follower)
+        assert world.follower.working() == []
+        fence[0] = "updating"  # an update's fence: nothing is admitted from now on
+        world.chat("a", call("x", "bash", {"command": "rm a"}, shell("rm a", read_only=False)))
+        await world.passes()
+
+    asyncio.run(scenario())
+    assert [(r["look"], r["skipped"].split(":")[0]) for r in records()] == [("plan", ""), ("state-change", "fenced")]
+
+
+def test_an_admission_waits_for_the_barrier_and_sees_a_fence_taken_meanwhile():
+    fence, barrier, got = [""], threading.RLock(), []
+    gate = chat_looks.Gate(lambda: fence[0], lambda: barrier, None)
+    with barrier:  # the machine's fence holds its stop barrier
+        admitting = threading.Thread(target=lambda: got.append(gate.admit()))
+        admitting.start()
+        time.sleep(0.1)
+        assert got == []  # it waits for the barrier
+        fence[0] = "updating"
+    admitting.join(5)
+    assert (got, gate.working()) == ([chat_looks.FENCED], [])
+
+
+def test_the_machines_fence_counts_an_admitted_chat_look_and_admits_none_after():
+    now = datetime.now(UTC)
+    m = Machine(HostRecord(url="http://127.0.0.1:9/", token="t", pid=1, started_at=now, code=codebase.CURRENT))  # noqa: S106
+    m.paused = False  # a host starts paused until its projects are loaded
+    assert m.chats.room() == ""  # admitted: counted until it ends
+    assert "Spotter chats: 1 look running" in m.fence("updating to the next version")
+    m.chats.gate.left()
+    assert m.chats.room() == chat_looks.FENCED

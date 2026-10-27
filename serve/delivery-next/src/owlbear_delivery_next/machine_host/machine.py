@@ -100,8 +100,12 @@ class Machine:
             say=self.say,
             ownership=self.maintenance,
         )
-        self.chats = chats.Follower(  # started by ``serve``; each look leased like the cases job's runs
-            paused=lambda: self.paused, say=self.say, ownership=self.maintenance
+        self.chats = chats.Follower(  # started by ``serve``; each look admitted and leased like the cases job's runs
+            paused=lambda: self.paused,
+            say=self.say,
+            ownership=self.maintenance,
+            fenced=self._curation_fence,
+            admission=lambda: self.lock,
         )
 
     def _curation_fence(self) -> str:

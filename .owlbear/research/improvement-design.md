@@ -198,10 +198,13 @@ yet complete is continued at the next read), every fetch counting against a pass
 A chat that existed when following began starts at its end then, a later one at its start, and one found again after
 it was dropped (its metadata missing meanwhile) at its end then; earlier bytes and a replaced log are context, never
 looked at; a restart records the bytes it missed as a gap (D-01M5XCE8ZA4FGYYY45YP44M8RD). One chat look runs at a
-time, a draining one counted, under a maintenance lease from before its session to its runtime's confirmed end; an
+time, a draining one counted. It is admitted under the machine's stop barrier: none once an update's fence, a stop or
+a stop when idle holds it, and one admitted before is counted as running work from then until it ends, so they wait
+for it. It runs under a maintenance lease from before its session to its runtime's confirmed end; an
 unconfirmed end keeps the lease and a session slot held, and no chat look starts until the owner recovers it on the
 Maintenance page, as for the cases job; Pause admits none while the chats
-are still read (D-01M5XCE8ZC030KT2FZ7D6SZCJN). Every settlement and admission uses the settings in force (the
+are still read (D-01M5XCE8ZC030KT2FZ7D6SZCJN). No turn settles while an event is still being written. Every
+settlement and admission uses the settings in force (the
 per-look credit limit among them); the prompt and cases' snapshot is taken when a turn starts (one begun before
 following, at its first live event) and serves that turn's looks. Each look keeps the settings and snapshot it was
 admitted with, and its record the chat as its session, the requester message as its `turn`, the case version and

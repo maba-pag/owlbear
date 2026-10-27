@@ -225,13 +225,24 @@ class Spotter:
     *judge* runs one look (``runtimes.spotter_look``); a test gives its own.
     """
 
-    def __init__(self, ctx: Context, session: Callable[[], str], judge: Judge, rng: random.Random | None = None,
-                 room: Callable[[], str] | None = None) -> None:  # fmt: skip
-        """*room* says why no further look may start now (beyond this session's own capacity), else ""."""
+    def __init__(  # noqa: PLR0913 - a step's seams, and the chats follower's admission
+        self,
+        ctx: Context,
+        session: Callable[[], str],
+        judge: Judge,
+        rng: random.Random | None = None,
+        *,
+        room: Callable[[], str] | None = None,
+        left: Callable[[], None] | None = None,
+    ) -> None:
+        """*room* admits a look ("") or says why none may start now, beyond this session's own capacity.
+
+        *left* is told once when a look *room* admitted ends.
+        """
         if ctx.prompt is None:
             ctx = dataclasses.replace(ctx, prompt=cases.snapshot(verbose=ctx.verbose))
         self.ctx, self.session, self.kept, self.judge = ctx, session, Kept(), judge
-        self.room = room or str
+        self.room, self.left = room or str, left
         self.folder = place()  # where every write of this session goes, whatever changes later; made when written
         self.rng = rng or random.Random()  # noqa: S311 - sampling, not secrecy
         self.tasks: set[asyncio.Future[Any]] = set()
@@ -315,6 +326,8 @@ class Spotter:
 
     def _ended(self, _task: asyncio.Future[Any]) -> None:
         self.running -= 1
+        if self.left is not None:
+            self.left()
 
     async def _run(
         self, look: str, probability: float, snapshot: dict[str, Any], moment: dict[str, Any], ctx: Context

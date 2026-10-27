@@ -500,7 +500,7 @@ Git-common-directory resolution, shared-repository selection and its bounded Git
 The Spotter cases (#705) refreshed only what they change: the `cli.py`, `command.py` and `machine.py` module
 digests, `cli.py:main`, the `cli.py` and `machine.py` import sets and the function aggregate.
 The chats follower refreshed only the `machine.py` module digest and import set; its review fixes refreshed the
-module digest once more.
+module digest twice more.
 The assembled binding and dependency-mutation refusals, default public Prepare/Finish, 13 public lease/copy/restart
 controls, settlement, retained-workspace sentinels and target-admission controls pass locally. Boot changes,
 historical producer records and provider/receipt timing faults are modeled; no physical reboot, live SDK or generic
