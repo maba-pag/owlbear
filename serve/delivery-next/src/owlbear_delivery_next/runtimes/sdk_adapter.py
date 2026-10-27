@@ -346,9 +346,10 @@ class _Step:
             "agent": role["name"],
             "excluded_builtin_agents": [] if self.watch.allowed else list(subagents.BUILTINS),
             "excluded_tools": ["ask_user"],  # autopilot: the owner is asked only through ask_question (N4, N10)
-            "skill_directories": preload.folders(
-                role_of(self.cfg), ui=self.cfg.ui, job=self.cfg.job, folder=self.skills
-            ),
+            "skill_directories": [  # the owner's own skills only when switched on (D-01M5YE505DY18G63VH483CNZZ4)
+                *preload.folders(role_of(self.cfg), ui=self.cfg.ui, job=self.cfg.job, folder=self.skills),
+                *(preload.user_skills(preload.copilot_home(), folder=self.skills) if self.cfg.user.skills else ()),
+            ],
             "mcp_servers": {preload.MEMORY: {"type": "local", **m}} if (m := preload.memory(self.cfg.memory)) else {},
             "enable_file_hooks": False,  # a project's agent hooks never run in a step (TD-142)
             "enable_config_discovery": False,  # nor its or the user's agents and skills (TD-167, TD-274)

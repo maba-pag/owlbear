@@ -125,3 +125,37 @@ def copilot_home() -> Path:
     """The runtime's user folder, with the owner's instructions and skills: ``$COPILOT_HOME``, else ``~/.copilot``."""
     return Path(found) if (found := os.environ.get(COPILOT_HOME)) else Path.home() / ".copilot"
 
+
+def shipped(folder: Path | None = None) -> set[str]:
+    """The names of the skills Delivery ships, in the package and in *folder* (a pack candidate's), and CHAT."""
+    names = {CHAT}
+    for root in {directory(), *((folder,) if folder else ())}:
+        try:
+            entries = [e for e in root.iterdir() if e.is_dir()]
+        except OSError:
+            continue
+        names |= {e.name for e in entries} | {_name(e) for e in entries}
+    return names
+
+
+def user_skills(home: Path, *, folder: Path | None = None) -> list[str]:
+    """The owner's own skill folders, ``<home>/skills/*`` with a ``SKILL.md``, by their link path, links unfollowed.
+
+    D-01M5YE505DY18G63VH483CNZZ4: a skill named as one Delivery ships (``shipped``) is left out, so his never stands in
+    for Delivery's. A missing folder has none.
+    """
+    try:
+        entries = sorted((home / "skills").iterdir())
+    except OSError:
+        return []
+    taken = shipped(folder)
+    return [str(e) for e in entries if (e / "SKILL.md").is_file() and _name(e) not in taken]
+
+
+def _name(skill: Path) -> str:
+    """A skill folder's name: its front matter's, else the folder's."""
+    try:
+        name = front_matter((skill / "SKILL.md").read_text(encoding="utf-8"))[0].get("name")
+    except OSError, ValueError, yaml.YAMLError:
+        name = None
+    return name if isinstance(name, str) and name else skill.name
