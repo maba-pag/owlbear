@@ -194,6 +194,48 @@ def test_finish_rechecks_its_receipt_after_the_final_validator_reads(prepared, m
     assert {path: snapshot(path) for path in owners} == owners
 
 
+def test_finish_keeps_a_receipt_atomically_replaced_during_its_terminal_predicate(prepared, monkeypatch):
+    repo, source = prepared
+    owner = '{"owner":"atomic replacement during the receipt predicate"}\n'
+    checks, active, changed = [], [], []
+    owners = {}
+
+    def enable(target):
+        real_holds, real_read = fd_tree.holds_text_at, os.read
+
+        def holds(dfd, name, text):
+            if name != project_move.MOVE_RECORD:
+                return real_holds(dfd, name, text)
+            checks.append(True)
+            active.append(len(checks))
+            try:
+                return real_holds(dfd, name, text)
+            finally:
+                active.pop()
+
+        def read(fd, count):
+            data = real_read(fd, count)
+            if data and active == [2] and not changed:
+                changed.append(True)
+                replacement = source / "owner-receipt"
+                replacement.write_text(owner)
+                replacement.replace(source / project_move.MOVE_RECORD)
+                owners.update({source: snapshot(source), target: snapshot(target)})
+            return data
+
+        monkeypatch.setattr(fd_tree, "holds_text_at", holds)
+        monkeypatch.setattr(os, "read", read)
+
+    fired = at_sync(monkeypatch, source, "receipt", enable)
+    code = cli.main(["--repo", str(repo), "finish"])
+
+    assert fired == [True]
+    assert changed == [True]
+    assert code == 1
+    assert {path: snapshot(path) for path in owners} == owners
+    assert (source / project_move.MOVE_RECORD).read_text() == owner
+
+
 @pytest.mark.parametrize("when", ["target", "receipt"])
 @pytest.mark.parametrize("where", ["source", "target"])
 def test_a_late_future_marker_stays_typed_and_keeps_the_owner_bytes(prepared, monkeypatch, when, where):

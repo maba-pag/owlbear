@@ -12,6 +12,37 @@ from owlbear_delivery_next.state_store.database import StoreError
 REAL_FSYNC = os.fsync
 
 
+@pytest.mark.parametrize("change", ["replace", "replace-same", "inplace"])
+def test_text_predicate_refuses_an_entry_changed_during_its_read(tmp_path, monkeypatch, change):
+    entry = tmp_path / "receipt.json"
+    entry.write_text("owned\n")
+    before = entry.stat()
+    real_read = os.read
+    fired = []
+    owner = "owned\n" if change == "replace-same" else "other\n"
+
+    def read(fd, count):
+        data = real_read(fd, count)
+        if data and not fired and os.path.samestat(os.fstat(fd), before):
+            fired.append(True)
+            if change == "inplace":
+                entry.write_text(owner)
+            else:
+                replacement = tmp_path / "owner-replacement"
+                replacement.write_text(owner)
+                replacement.replace(entry)
+        return data
+
+    monkeypatch.setattr(os, "read", read)
+    dfd = os.open(tmp_path, fd_tree.DIR_FLAGS)
+    try:
+        assert not fd_tree.holds_text_at(dfd, entry.name, "owned\n")
+    finally:
+        os.close(dfd)
+    assert fired == [True]
+    assert entry.read_text() == owner
+
+
 class HandoverAbort(BaseException):
     """A handover abort outside Exception must still close the writer's raw descriptor."""
 

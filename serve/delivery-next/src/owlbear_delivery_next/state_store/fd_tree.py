@@ -163,7 +163,8 @@ def holds_text_at(dfd: int, name: str, text: str) -> bool:
     """Whether *name* under *dfd* is a regular file whose bytes are exactly *text*.
 
     Opened without following links and without blocking, so a FIFO or other special entry answers False at once;
-    the read stops one byte past *text*, so longer content is never read to the end.
+    the read stops one byte past *text*, so longer content is never read to the end. The opened image must remain
+    unchanged across that read, and the name must still identify that same regular file afterwards.
     """
     want = text.encode()
     try:
@@ -171,12 +172,27 @@ def holds_text_at(dfd: int, name: str, text: str) -> bool:
     except OSError:
         return False
     try:
-        if not stat.S_ISREG(os.fstat(fd).st_mode):
+        before = os.fstat(fd)
+        if not stat.S_ISREG(before.st_mode):
             return False
         got = b""
         while len(got) <= len(want) and (chunk := os.read(fd, len(want) + 1 - len(got))):
             got += chunk
-        return got == want
+        after = os.fstat(fd)
+        try:
+            named = stat_at(dfd, name)
+        except OSError:
+            return False
+        # A read may update atime; only mutation-sensitive metadata belongs in this witness.
+        stamp = before.st_size, before.st_mtime_ns, before.st_ctime_ns
+        return (
+            got == want
+            and named is not None
+            and os.path.samestat(after, named)
+            and stamp
+            == (after.st_size, after.st_mtime_ns, after.st_ctime_ns)
+            == (named.st_size, named.st_mtime_ns, named.st_ctime_ns)
+        )
     finally:
         os.close(fd)
 
