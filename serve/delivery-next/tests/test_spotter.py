@@ -89,6 +89,7 @@ def judge(
             reached.set()
         await asyncio.sleep(wait)
         part = spend.part()
+        part.started(f"sdk-{spend.id}")
         part.call(cost)
         part.ended(None, confirmed=True)
         return answer
@@ -185,6 +186,7 @@ def test_a_hand_off_starts_a_look_without_waiting_and_records_it_owner_only() ->
     assert (rec["prompt"], rec["credits"], rec["credits_known"], rec["limit"]) == (spotter.prompt_version(), 0.25,
                                                                                    True, 0.75)  # fmt: skip
     assert (rec["stopped"], rec["stopped_by"]) == ("", "")
+    assert rec["sdk_sessions"] == [f"sdk-{rec['id']}"]  # the look's meter carries the record's own id
     folder = spotter.root()
     assert stat.S_IMODE(folder.stat().st_mode) == 0o700
     assert stat.S_IMODE((folder / f"records-{spotter._today()}.jsonl").stat().st_mode) == 0o600  # noqa: SLF001

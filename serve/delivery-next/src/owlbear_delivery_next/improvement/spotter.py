@@ -102,7 +102,8 @@ class Record:
     model: str = ""
     effort: str = ""
     prompt: str = ""
-    credits: float = 0.0  # the known spend; see ``credit_meter.Meter.report`` for these five
+    sdk_sessions: list[str] = field(default_factory=list)  # the look's own SDK sessions; ``id`` joins them too
+    credits: float = 0.0  # the known spend; see ``credit_meter.Meter.report`` for these six
     credits_known: bool = False  # a record without it predates measuring: its credits may be an estimate
     limit: float = 0.0
     stopped: str = ""
@@ -303,7 +304,7 @@ class Spotter:
     async def _run(self, look: str, probability: float, snapshot: dict[str, Any], moment: dict[str, Any]) -> None:
         ctx, started, the_card = self.ctx, time.monotonic(), None
         record = self._record(look, probability, moment, skipped="the step ended before the look began")
-        meter = credit_meter.Meter(ctx.limit, "look")
+        meter = credit_meter.Meter(ctx.limit, "look", ident=record.id)  # one identity for the record and its sessions
         try:
             context = {"step": ctx.step, "open_work": list(ctx.open_work), "decisions": list(ctx.decisions),
                        "gaps": list(ctx.gaps)}  # fmt: skip
@@ -334,6 +335,7 @@ class Spotter:
                 spend["limit"],
             )
             record.stopped, record.stopped_by = spend["stopped"], spend["stopped_by"]
+            record.sdk_sessions = spend["sdk_sessions"]
             writing = asyncio.wrap_future(WORK.submit(store, self.folder, record, the_card))  # never cancelled
             await asyncio.wait({writing}, timeout=2 * LOCK)  # it goes on if this wait ends
 

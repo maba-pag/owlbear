@@ -8,6 +8,7 @@ turn once its meter closes, every wait bounded, and keeps an answer that complet
 from __future__ import annotations
 
 import asyncio
+import json
 import math
 import threading
 import uuid
@@ -19,10 +20,11 @@ from copilot.generated.session_events import SessionEvent
 
 from owlbear_delivery_next.improvement import credit_meter, spotter
 from owlbear_delivery_next.improvement.credit_meter import Meter
-from owlbear_delivery_next.runtimes import credit_limit, spotter_look
+from owlbear_delivery_next.runtimes import chatlogs, credit_limit, spotter_look
 
 REAL_LOOK = spotter_look.judged  # taken before the suite's fixture replaces it
-REPORT = ("credits", "credits_known", "limit", "stopped", "stopped_by")
+REPORT = ("id", "sdk_sessions", "credits", "credits_known", "limit", "stopped", "stopped_by")
+SPEND = REPORT[2:]
 
 
 def ctx() -> spotter.Context:
@@ -48,11 +50,22 @@ def said(text: str) -> SessionEvent:
 
 def test_the_schema_the_other_slices_read_is_frozen() -> None:
     assert tuple(Meter(0.75).report()) == REPORT
-    assert Meter(0.75).report() == {"credits": 0.0, "credits_known": True, "limit": 0.75, "stopped": "",
-                                    "stopped_by": ""}  # fmt: skip
+    assert Meter(0.75, ident="look-1").report() == {"id": "look-1", "sdk_sessions": [], "credits": 0.0,
+                                                    "credits_known": True, "limit": 0.75, "stopped": "",
+                                                    "stopped_by": ""}  # fmt: skip
+    assert len({Meter(0.75).id for _ in range(50)}) == 50  # one identity per look or run
     fields = {f.name: f.default for f in spotter.Record.__dataclass_fields__.values()}
-    assert {k: fields[k] for k in REPORT} == {"credits": 0.0, "credits_known": False, "limit": 0.0, "stopped": "",
-                                              "stopped_by": ""}  # fmt: skip  # unmeasured unless measured
+    assert set(REPORT) <= set(fields)  # the record holds the whole report; its id is the look's id
+    assert {k: fields[k] for k in SPEND} == {"credits": 0.0, "credits_known": False, "limit": 0.0, "stopped": "",
+                                             "stopped_by": ""}  # fmt: skip  # unmeasured unless measured
+
+
+def test_each_session_of_a_look_is_listed_on_the_look_alone() -> None:
+    run = Meter(10.0, "replay-run")
+    look = Meter(0.75, parent=run, ident="look-7")
+    for sid in ("sdk-1", "sdk-2", "sdk-2"):  # a retry adds its own session; one session is listed once
+        look.part().started(sid)
+    assert (look.report()["sdk_sessions"], run.report()["sdk_sessions"]) == (["sdk-1", "sdk-2"], [])
 
 
 @pytest.mark.parametrize("bad", [0, -1, math.inf, math.nan, True, "0.5", None])
@@ -78,6 +91,29 @@ def test_sessions_of_a_look_add_up_and_each_reconciles_only_its_own_share_idempo
     second.ended(0.1, confirmed=True)
     assert look.report()["credits"] == pytest.approx(0.3)
     assert (look.report()["credits_known"], look.admit()) == (True, True)
+
+
+def test_many_small_amounts_reach_a_limit_exactly_across_sessions_and_looks() -> None:
+    look = Meter(1.0)
+    for _ in range(10):  # ten sessions of 0.1: as floats they sum to 0.9999999999999999
+        part = look.part()
+        part.call(0.1)
+        part.ended(0.1, confirmed=True)
+    assert (look.report()["credits"], look.report()["stopped"], look.admit(), look.left()) == (1.0, "reached",
+                                                                                                False, 0.0)  # fmt: skip
+    run = Meter(1.0, "replay-run")
+    for i in range(10):  # ten looks in a run, each with calls of 0.03 and 0.07
+        child = Meter(0.75, "look", parent=run)
+        assert child.admit(), i
+        part = child.part()
+        part.call(0.03)
+        part.call(0.07)
+        part.ended(None, confirmed=True)
+    assert (run.report()["credits"], run.report()["stopped"], run.admit()) == (1.0, "reached", False)
+    within = Meter(0.3)
+    for _ in range(2):
+        within.part().call(0.1)
+    assert (within.left(), within.admit()) == (0.1, True)  # 0.30000000000000004 - 0.2 would not be 0.1
 
 
 def test_a_look_in_a_run_charges_both_and_a_closed_run_stops_its_looks() -> None:
@@ -224,8 +260,11 @@ def test_a_turn_that_reaches_its_limit_is_aborted_and_its_total_settles_it(monke
     session = Session(made, [usage(0.5), usage(0.4), "wait-abort"], metrics=0.95)
     text, _ = run_look(monkeypatch, session, look, made)
     assert (text, made["aborted"], made["disconnected"]) == ("", 1, True)
-    assert {k: look.report()[k] for k in REPORT} == {"credits": 0.95, "credits_known": True, "limit": 0.75,
-                                                     "stopped": "reached", "stopped_by": "look"}  # fmt: skip
+    assert {k: look.report()[k] for k in SPEND} == {"credits": 0.95, "credits_known": True, "limit": 0.75,
+                                                    "stopped": "reached", "stopped_by": "look"}  # fmt: skip
+    assert look.report()["sdk_sessions"] == ["look-x"]  # the look's own SDK session, recorded with its id
+    started = [json.loads(x) for x in (chatlogs.root() / "manifest.jsonl").read_text().splitlines()]
+    assert [(x["session"], x["look"]) for x in started if x["event"] == "started"] == [("look-x", look.id)]
 
 
 def test_an_answer_completed_as_the_limit_is_reached_is_kept(monkeypatch) -> None:

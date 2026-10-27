@@ -66,8 +66,9 @@ async def judged(the_card: dict[str, Any], ctx: spotter.Context, meter: credit_m
                 on_permission_request=lambda *_: PermissionDecisionReject(feedback="a look has no tools"),
             )  # fmt: skip
             sid = getattr(session, "session_id", "") or ""
+            limit.part.started(sid)
             started = {"event": "started", "session": sid, "kind": "spotter", "role": "spotter", "job": "",
-                       "worktree": empty}  # fmt: skip
+                       "worktree": empty, "look": meter.id}  # fmt: skip
             await spotter.offload(chatlogs.note, started)
             confirmed = await limit.turn(
                 session.send_and_wait(message, timeout=spotter.LOOK), partial(_abort, session), spotter.TEARDOWN

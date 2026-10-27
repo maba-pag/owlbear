@@ -399,7 +399,7 @@ def _switched(say: Callable[[str], None]) -> str:
     if shared is None:
         return ""  # without Global this machine keeps its own values
     why = settings_carry.sync(shared, state.global_written)  # every start: Global as the other machines left it
-    if state.settings_moved and not settings_carry.due(shared) and not _limits_due(shared):
+    if state.settings_moved and not settings_carry.due(shared) and not settings_carry.limits_due(shared):
         if why:
             say(f"settings: the shared repository could not be brought current: {why}")
         return ""
@@ -412,17 +412,13 @@ def _switched(say: Callable[[str], None]) -> str:
     return _limits(shared)
 
 
-def _limits_due(shared: data_repo.DataRepo) -> bool:
-    """Whether the credit limits' upgrade has work; a failed git probe says no here, and the next start asks again."""
-    try:
-        return settings_carry.limits_due(shared)
-    except data_repo.DataRepoError:
-        return False
-
-
 def _limits(shared: data_repo.DataRepo) -> str:
-    """Save and publish Global in the credit limits' format once (D-01M5XCD49YHHR1NQKKY8TQD0C3); why not, else ''."""
-    notice = settings_carry.limits(shared, _written)
+    """Save and publish Global in the credit limits' format once (D-01M5XCD49YHHR1NQKKY8TQD0C3); why not, else ''.
+
+    A git probe that fails raises, here and in ``limits_due``: the start keeps its pending reason and this machine's
+    last write, so the next start knows that write as its own and tries again.
+    """
+    notice = settings_carry.limits(shared, registry.load().global_written, _written)
     return f"writing the credit limits into Global: {notice}" if notice else ""
 
 

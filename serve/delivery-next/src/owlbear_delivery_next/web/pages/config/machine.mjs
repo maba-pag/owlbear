@@ -41,10 +41,15 @@ function machineValue(key) {
   return state.machineDraft && key in state.machineDraft ? state.machineDraft[key] : state.machine.settings[key];
 }
 
-// Lists compare by content; null (inherit) and [] (none) stay apart.
+// A typed number is kept as typed until the save, so "0.0" on the way to "0.05" stays as it is; this is what is sent.
+function sent(key, value) {
+  return typeof value === "string" && TYPED.includes(key) && key !== "enrolled_chats" ? typedNumber(key, value) : value;
+}
+
+// Lists compare by content; null (inherit) and [] (none) stay apart; a typed number by what it sends.
 function machineEdit(key, value) {
   const draft = { ...(state.machineDraft ?? {}), [key]: value };
-  if (JSON.stringify(value) === JSON.stringify(state.machine.settings[key] ?? null)) delete draft[key];
+  if (JSON.stringify(sent(key, value)) === JSON.stringify(state.machine.settings[key] ?? null)) delete draft[key];
   state.machineDraft = Object.keys(draft).length ? draft : null;
   show();
 }
@@ -70,7 +75,7 @@ function ownControl(key) {
       const raw = e.target.value ?? "", v = raw.trim();
       if (list) state.machineText = { ...(state.machineText ?? {}), [key]: raw };
       machineEdit(key, v === "" ? null : list ? (v === "none" ? [] : v.split(",").map((f) => f.trim()).filter(Boolean))
-        : typedNumber(key, v));
+        : v);
     };
     const typedText = state.machineText?.[key];  // as typed, shown only while its items are the field's own now
     const items = (t) => JSON.stringify(t.split(",").map((f) => f.trim()).filter(Boolean));
@@ -144,7 +149,8 @@ async function saveMachine() {
   show();
   try {
     state.machine = await call("/machine/settings", { method: "PUT", machine: true, timeout: WRITE,
-      body: { rev: state.machine.settings_rev, settings: { ...state.machine.settings, ...state.machineDraft } } });
+      body: { rev: state.machine.settings_rev, settings: { ...state.machine.settings, ...Object.fromEntries(
+        Object.entries(state.machineDraft).map(([key, v]) => [key, sent(key, v)])) } } });
     state.machineDraft = null;
     state.machineText = null;
     state.status = "Saved this machine's settings.";

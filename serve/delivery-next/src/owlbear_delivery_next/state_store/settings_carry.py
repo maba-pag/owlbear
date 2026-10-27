@@ -122,25 +122,28 @@ def limits_due(shared: DataRepo) -> bool:
     return found is not None
 
 
-def limits(shared: DataRepo, keep: Keep = _ignore) -> str:
+def limits(shared: DataRepo, written: Sequence[str], keep: Keep = _ignore) -> str:
     """Save Global in format 16 with the credit limits its migration wrote, and publish it; what to know, else ''.
 
     Only the format and the limits change: the migration drops the daily budgets and adds a limit only where Global
     has none. A layer already in format 16 is only published, so a retry after a failed commit or push writes nothing
-    again and a value the owner cleared since stays cleared. An unsaved owner edit of Global is never published.
-    An invalid Global raises ``StoreError``; a git command that fails raises ``DataRepoError``.
+    again and a value the owner cleared since stays cleared. Under the lock the publication holds, an unsaved Global
+    that is not exactly this machine's last write (*written*, as ``sync`` takes it) is the owner's and is never
+    published, whichever branch runs: an edit made after ``sync`` checked is caught here. An invalid Global raises
+    ``StoreError``; a git command that fails raises ``DataRepoError``.
     """
     until = time.monotonic() + data_repo.SAVE_SECONDS
+    rel = shared.global_path.relative_to(shared.root).as_posix()
     with shared.locked():
         if not limits_due(shared):
             return ""
+        if _dirty(shared, until) and not _own(shared, rel, written, until):
+            return EDITED
         try:
             found = _format(shared.global_path.read_text())
         except FileNotFoundError:
             found = None  # deleted since its commit: only the push is left
         if found is not None and found < LIMITS_FORMAT:
-            if _dirty(shared, until):
-                return EDITED
             update_layer(shared.global_path, GlobalLayer, lambda g: g)  # the read migrates it; the write keeps it
             keep(_digest(shared.global_path))
         elif found is not None:  # written by an earlier start: an invalid layer is never published

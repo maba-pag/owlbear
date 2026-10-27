@@ -335,7 +335,12 @@ def improvement_s_machine_settings_are_typed_and_saved(page, pds) -> None:
     """Improvement (design §4): a credit limit as an amount, Retro's triggers as choices, chats as folders or none."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
-    page.get_by_label("Retro: credit limit per run (credits)", exact=True).fill("7.5")
+    limit = page.get_by_label("Retro: credit limit per run (credits)", exact=True)
+    limit.press_sequentially("0.05")  # keystrokes: "0." and "0.0" stay as typed, never become 0
+    expect(limit).to_have_value("0.05")
+    limit.fill("")
+    limit.press_sequentially("20.05")
+    expect(limit).to_have_value("20.05")
     pds.pick(page, "Retro after a Change ends (the Improvement button always runs)", "off")
     chats = page.get_by_role("textbox", name="Enrolled chats: workspace folders")
     chats.press_sequentially("/w, /p")  # keystrokes: a comma and a space are kept
@@ -346,7 +351,7 @@ def improvement_s_machine_settings_are_typed_and_saved(page, pds) -> None:
     expect(page.locator("#status")).to_have_text("Saved this machine's settings.")
     mine = registry.load().settings
     folders = ["/w", "/p"]
-    assert (mine.retro_run_credit_limit, mine.retro_after_change, mine.enrolled_chats) == (7.5, "off", folders)
+    assert (mine.retro_run_credit_limit, mine.retro_after_change, mine.enrolled_chats) == (20.05, "off", folders)
     chats.fill("/w,/p")  # the saved list again, written differently: no edit
     save = page.get_by_role("region", name="This machine").get_by_role("button", name="Save machine settings")
     expect(save).to_be_disabled()

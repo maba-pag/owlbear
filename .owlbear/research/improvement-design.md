@@ -129,7 +129,7 @@ All settings have no code default; an unset one is an error on the Settings page
   run and each paid replay run of Spotter cases stops at its own credit limit, and the stop is recorded. The per-look
   limit is one of the Spotter's settings (`look_credit_limit`); the run limits are machine settings
   (`retro_run_credit_limit`, `replay_run_credit_limit`). Each was written into Global once at five times its expected
-  cost, a marked assumption (0.75, 20 and 65 credits; the basis is in `settings/carried.py`). There is no SDK credit
+  cost, a marked assumption (0.75, 20 and 90 credits; the basis is in `settings/carried.py`). There is no SDK credit
   cap: the spend the runtime reports is counted and the work stopped once it reaches the limit, so a call already
   under way can pass it;
 - **enrolled chats:** the workspaces or chats the Spotter and Retro may read. Unset reads none. Spotter, Retro and
@@ -161,6 +161,7 @@ it); at most two looks run at once per step. Each look stops at its credit limit
 meter adds each billed call's reported cost and the turn is aborted once the limit is reached or a cost is unknown;
 the call that passed it cannot be stopped, so a look may overshoot; a retry or extension of the look shares its meter
 and does not start once it is closed. Its record keeps the known spend, whether it is complete, the limit and the stop
+with its own id and the ids of its SDK sessions, which the chatlogs manifest's `started` line names with that id
 (`improvement/credit_meter.py`, `runtimes/credit_limit.py`). A look gets 90 seconds. A look never blocks or changes the step's work or its
 acceptance: its files and model call run beside it. Only the session's end waits, bounded: at most 5 seconds for running
 looks, then they are stopped, with up to 15 seconds more for their teardown and records; stopped looks are recorded as

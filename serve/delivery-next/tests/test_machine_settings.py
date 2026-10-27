@@ -115,7 +115,7 @@ def test_the_switch_over_moves_this_machine_s_settings_into_a_carried_global_and
     said = _carry(monkeypatch, shared)
 
     glob = read_layer(shared.global_path, GlobalLayer)
-    limits = {"retro_run_credit_limit": 20.0, "replay_run_credit_limit": 65.0}  # format 16's, written into Global
+    limits = {"retro_run_credit_limit": 20.0, "replay_run_credit_limit": 90.0}  # format 16's, written into Global
     assert (glob.machine, glob.machine_moved) == (MachineValues.model_validate(LEGACY.model_dump() | limits), True)
     assert glob.pr_marker is None  # cleared before: never filled again
     assert _git(shared.root, "status", "--porcelain") == ""
@@ -622,6 +622,65 @@ def test_a_failed_commit_keeps_the_written_global_and_the_next_start_only_publis
     _carry(monkeypatch, shared)
 
     assert shared.global_path.read_text() == written  # published as it was written, not written again
+    assert _git(shared.root, "log", "-1", "--format=%s") == settings_carry.LIMITS
+    assert _published(shared, shared_repo[1])
+    assert not registry.load().settings_pending
+
+
+def _failed_upgrade_commit(shared: DataRepo, monkeypatch) -> str:
+    """A start whose upgrade wrote Global in format 16 and could not commit it; what it wrote."""
+    _moved_global(shared)
+    with monkeypatch.context() as m:
+        m.setattr(DataRepo, "commit", _staged_only)
+        _carry(monkeypatch, shared)
+    assert registry.load().global_written  # this machine knows the write as its own
+    return shared.global_path.read_text()
+
+
+@pytest.mark.usefixtures("no_base")
+@pytest.mark.parametrize("retry", [False, True])
+def test_an_owner_edit_made_after_the_sync_is_never_published_by_the_upgrade(shared_repo, monkeypatch, retry):
+    shared = DataRepo(shared_repo[0])
+    if retry:  # the format-16 write is already there, only its publication is left
+        _failed_upgrade_commit(shared, monkeypatch)
+    else:
+        _moved_global(shared)
+    head, real = _git(shared.root, "rev-parse", "HEAD"), settings_carry.sync
+    edited: list[str] = []
+
+    def sync_then_edit(repo: DataRepo, written) -> str:
+        why = real(repo, written)  # the checkout is current and Global is this machine's or committed
+        text = repo.global_path.read_text().replace('"format"', '"widths": [1440], "format"', 1)
+        repo.global_path.write_text(text)  # the owner saves an edit by hand meanwhile
+        edited.append(text)
+        return why
+
+    monkeypatch.setattr(settings_carry, "sync", sync_then_edit)
+    _carry(monkeypatch, shared)
+
+    assert (_git(shared.root, "rev-parse", "HEAD"), shared.global_path.read_text()) == (head, edited[0])
+    assert settings_carry.LIMITS not in _git(shared.root, "log", "--format=%s")
+    assert "not saved" in registry.load().settings_pending
+
+
+@pytest.mark.usefixtures("no_base")
+def test_a_failed_probe_after_a_failed_upgrade_commit_keeps_it_pending_and_its_write_known(shared_repo, monkeypatch):
+    shared = DataRepo(shared_repo[0])
+    written = _failed_upgrade_commit(shared, monkeypatch)
+    digest = registry.load().global_written
+    real = DataRepo.git
+    probe = f"-G{settings_carry.REACHED}"
+    with monkeypatch.context() as m:
+        m.setattr(DataRepo, "git", lambda self, *a, until=None: real(self, *a, until=until)
+                  if probe not in a else subprocess.CompletedProcess(a, 128, "", "broken"))  # fmt: skip
+        _carry(monkeypatch, shared)
+    machine = registry.load()
+    assert "broken" in machine.settings_pending  # unknown is never taken for done
+    assert machine.global_written == digest  # still known as this machine's own write
+
+    _carry(monkeypatch, shared)
+
+    assert shared.global_path.read_text() == written
     assert _git(shared.root, "log", "-1", "--format=%s") == settings_carry.LIMITS
     assert _published(shared, shared_repo[1])
     assert not registry.load().settings_pending

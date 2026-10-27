@@ -245,7 +245,7 @@ switch is on, a step needs the Spotter's required settings (the four category ac
 Settings page, or switches the Spotter off, before Delivery runs a step again. **Credit limits (2026-10-27):** no
 daily budgets (D-01M5XCD49YHHR1NQKKY8TQD0C3): each look stops at its own credit limit, recorded on its record, with
 no SDK cap; the Retro and paid replay run limits are machine settings their slices use. Settings format 16 writes the
-three limits into Global once (0.75, 20 and 65 credits, five times marked-assumption costs) and the machine host's
+three limits into Global once (0.75, 20 and 90 credits, five times marked-assumption costs) and the machine host's
 start saves and publishes it.
 
 **Next steps, in order:**

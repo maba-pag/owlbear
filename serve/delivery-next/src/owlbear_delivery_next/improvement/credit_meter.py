@@ -14,6 +14,10 @@ reports no usable cost or its session ends unconfirmed, until a confirmed total 
 
 The record of a look or run carries ``Meter.report()`` (the shape the other Improvement slices read):
 
+- ``id`` (str): the look's or run's own identity, the same as its record's ``id``; each SDK session it runs notes it
+  in the chatlogs manifest's ``started`` line (``look``), so a session's usage joins its look without timestamps;
+- ``sdk_sessions`` (list of str): the SDK session ids charged to this meter itself, in order (a retry adds one);
+  a run lists none of its looks' sessions, which its looks' records hold;
 - ``credits`` (float): the known spend, the sum of what was reported;
 - ``credits_known`` (bool): every billed call reported its cost and every session's end was confirmed. A record without
   this key is from before 2026-10-27: its ``credits`` may be the old 0.5 estimate, so it counts as unmeasured;
@@ -28,12 +32,14 @@ from __future__ import annotations
 
 import math
 import threading
+import uuid
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
 type Report = dict[str, Any]
+NANO = 10**9  # nano-credits a credit: the runtime bills in whole ones (``total_nano_aiu``), and a meter counts them
 
 
 def amount(value: object) -> float | None:
@@ -43,17 +49,28 @@ def amount(value: object) -> float | None:
     return float(value)
 
 
-class Meter:
-    """The credits a look or run spent against its limit; thread-safe, its parent's lock shared."""
+def nano(value: object) -> int | None:
+    """*value* in credits as whole nano-credits, the precision the runtime bills at; None when unknown."""
+    whole = amount(value)
+    return None if whole is None else round(whole * NANO)
 
-    def __init__(self, limit: float, scope: str = "look", parent: Meter | None = None) -> None:
-        if amount(limit) is None or limit <= 0:
+
+class Meter:
+    """The credits a look or run spent against its limit; thread-safe, its parent's lock shared.
+
+    It counts whole nano-credits, as the runtime bills, so many small amounts reach a limit exactly.
+    """
+
+    def __init__(self, limit: float, scope: str = "look", parent: Meter | None = None, ident: str = "") -> None:
+        if not (limit_nano := nano(limit)):
             msg = f"a credit limit is a finite number above zero, not {limit!r}"
             raise ValueError(msg)
-        self.limit, self.scope, self.parent = float(limit), scope, parent
+        self.limit, self.limit_nano, self.scope, self.parent = float(limit), limit_nano, scope, parent
         self.lock: threading.RLock = parent.lock if parent else threading.RLock()
-        self.spent, self.calls, self.unresolved = 0.0, 0, 0  # unresolved: shares whose spend is not known
+        self.spent_nano, self.calls, self.unresolved = 0, 0, 0  # unresolved: shares whose spend is not known
         self.stopped = self.stopped_by = ""
+        self.id = ident or uuid.uuid4().hex[:12]  # the record's id: what its sessions are joined on
+        self.sdk_sessions: list[str] = []
 
     def _chain(self) -> Iterator[Meter]:
         meter: Meter | None = self
@@ -68,7 +85,7 @@ class Meter:
             if not meter.stopped:
                 if meter.unresolved:
                     meter.stopped, meter.stopped_by = "unknown", meter.scope
-                elif meter.spent >= meter.limit:
+                elif meter.spent_nano >= meter.limit_nano:
                     meter.stopped, meter.stopped_by = "reached", meter.scope
                 elif cause:
                     meter.stopped, meter.stopped_by = cause
@@ -86,7 +103,7 @@ class Meter:
         with self.lock:
             if not self._latch():
                 return 0.0
-            return max(0.0, min(m.limit - m.spent for m in self._chain()))
+            return max(0, min(m.limit_nano - m.spent_nano for m in self._chain())) / NANO
 
     def part(self) -> Part:
         """A new SDK session's share of this meter."""
@@ -95,7 +112,8 @@ class Meter:
     def report(self) -> Report:
         """What the record of this look or run keeps; see the module's description."""
         with self.lock:
-            return {"credits": round(self.spent, 9), "credits_known": not self.unresolved, "limit": self.limit,
+            return {"id": self.id, "sdk_sessions": list(self.sdk_sessions), "credits": self.spent_nano / NANO,
+                    "credits_known": not self.unresolved, "limit": self.limit,
                     "stopped": self.stopped, "stopped_by": self.stopped_by}  # fmt: skip
 
 
@@ -104,14 +122,20 @@ class Part:
 
     def __init__(self, meter: Meter) -> None:
         self.meter = meter
-        self.share = self.calls_sum = 0.0  # what it adds to the meter; what its calls reported
+        self.share = self.calls_sum = 0  # nano-credits: what it adds to the meter; what its calls reported
         self.calls = 0  # billed calls reported
         self.unknown_call = False  # a billed call reported no usable cost
         self.unresolved = False
 
-    def _add(self, delta: float) -> None:
+    def started(self, session: str) -> None:
+        """The SDK session this share is charged from: its id joins the look's record (``Meter.sdk_sessions``)."""
+        with self.meter.lock:
+            if session and session not in self.meter.sdk_sessions:
+                self.meter.sdk_sessions.append(session)
+
+    def _add(self, delta: int) -> None:
         for meter in self.meter._chain():  # noqa: SLF001 - the share's own meters
-            meter.spent += delta
+            meter.spent_nano += delta
         self.share += delta
 
     def _resolved(self, *, resolved: bool) -> None:
@@ -123,7 +147,7 @@ class Part:
 
     def call(self, reported: object) -> bool:
         """One billed call, its reported cost (unknown when unusable); whether the meter stays open: False, stop now."""
-        cost = amount(reported)
+        cost = nano(reported)
         with self.meter.lock:
             self.calls += 1
             for meter in self.meter._chain():  # noqa: SLF001
@@ -144,7 +168,7 @@ class Part:
         a call may still be billed: the share takes the larger of the two and stays unknown. A session that sent no
         turn ends with a total of 0, confirmed.
         """
-        reported = amount(total)
+        reported = nano(total)
         with self.meter.lock:
             if confirmed and reported is not None:
                 self._add(reported - self.share)
@@ -153,6 +177,6 @@ class Part:
                 self._add(self.calls_sum - self.share)
                 self._resolved(resolved=not self.unknown_call)
             else:
-                self._add(max(self.share, reported or 0.0) - self.share)
+                self._add(max(self.share, reported or 0) - self.share)
                 self._resolved(resolved=False)
             self.meter._latch()  # noqa: SLF001

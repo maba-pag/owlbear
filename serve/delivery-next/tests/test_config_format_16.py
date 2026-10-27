@@ -13,7 +13,7 @@ from owlbear_delivery_next.settings.improvement import Spotter
 from owlbear_delivery_next.state_store import registry
 from owlbear_delivery_next.state_store.store import StoreError, read_layer
 
-LIMITS = {"look": 0.75, "retro": 20.0, "replay": 65.0}
+LIMITS = {"look": 0.75, "retro": 20.0, "replay": 90.0}
 SPOTTER = {"switch": "on", "steer_share": 0, "intervention_cap": 2, "verbose": "off", "looks": ["hand-off"],
            "hand_off_fitness": "record", "course_and_constraints": "record", "outside_state_changes": "record",
            "irreversible_harm": "record"}  # fmt: skip
@@ -34,8 +34,10 @@ def _limits(glob: GlobalLayer) -> tuple[float | None, float | None, float | None
 
 
 def test_the_written_values_are_five_times_the_assumed_costs():
+    replay = 5 * 2 * 59 * 0.15  # 59 scored cases, twice, at 0.15 a look: 88.5, rounded up
     assert (carried.LOOK_CREDIT_LIMIT, carried.RETRO_RUN_CREDIT_LIMIT, carried.REPLAY_RUN_CREDIT_LIMIT) == (
-        5 * 0.15, 5 * 4.0, 5 * 13.0)  # fmt: skip
+        5 * 0.15, 5 * 4.0, 90.0)  # fmt: skip
+    assert replay <= carried.REPLAY_RUN_CREDIT_LIMIT < replay + 5
     assert _limits(carried.layer().model_copy(update={"machine": carried.MACHINE})) == tuple(LIMITS.values())
 
 
@@ -47,7 +49,7 @@ def test_a_format_15_global_drops_its_budgets_and_gets_the_limits_keeping_every_
     assert glob.spotter.model_dump(exclude_none=True) == SPOTTER | {"look_credit_limit": 0.75}
     kept = {k: v for k, v in MACHINE.items() if k not in migrations.DAILY}
     assert glob.machine.model_dump(exclude_none=True) == kept | {"retro_run_credit_limit": 20.0,
-                                                                 "replay_run_credit_limit": 65.0}  # fmt: skip
+                                                                 "replay_run_credit_limit": 90.0}  # fmt: skip
     assert glob.sessions == 2
 
 
@@ -56,7 +58,7 @@ def test_a_global_without_the_sections_or_with_them_null_gets_them_with_the_limi
     glob = read_layer(_file(tmp_path, {"format": 15, **sections, "curator_threshold": 90}), GlobalLayer)
     assert _limits(glob) == tuple(LIMITS.values())
     assert glob.spotter == Spotter(look_credit_limit=0.75)  # the switch and the rest stay unset
-    assert glob.machine == MachineValues(retro_run_credit_limit=20.0, replay_run_credit_limit=65.0)
+    assert glob.machine == MachineValues(retro_run_credit_limit=20.0, replay_run_credit_limit=90.0)
     assert glob.curator_threshold == 90
 
 
