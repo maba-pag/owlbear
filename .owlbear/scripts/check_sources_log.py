@@ -25,21 +25,36 @@ _URL = re.compile(r"<https://[^\s<>]+>")
 _PATH = re.compile(r"`([^`]+)`")
 
 
-def _table(text: str) -> list[str]:
-    return [line for line in text.splitlines() if line.startswith("|")]
+def _table(text: str) -> list[str] | None:
+    """Return the table's lines from its header on, or None when it has no header.
+
+    Every non-blank line after the header up to a blank line is a row, with or without a leading pipe, and so is
+    any later line that starts with one: no row is skipped.
+    """
+    lines = [line.strip() for line in text.splitlines()]
+    start = next((index for index, line in enumerate(lines) if line.startswith("|")), None)
+    if start is None:
+        return None
+    end = next((index for index in range(start, len(lines)) if not lines[index]), len(lines))
+    return lines[start:end] + [line for line in lines[end:] if line.startswith("|")]
+
+
+def _cells(row: str) -> list[str]:
+    row = row.removeprefix("|").removesuffix("|")
+    return [cell.strip() for cell in row.split(" | ")]
 
 
 def check_sources_log(text: str, code_root: Path) -> list[str]:
     """Return the problems of a sources log; an empty list means it is well formed."""
     table = _table(text)
-    if table[:2] != HEADER:
+    if table is None or table[:2] != HEADER:
         return [f"the table must start with {HEADER[0]!r} and its separator"]
     rows = table[2:]
     if not rows:
         return ["the table has no rows"]
     problems: list[str] = []
     for row in rows:
-        cells = [cell.strip() for cell in row.strip("|").split(" | ")]
+        cells = _cells(row)
         if len(cells) != len(HEADER[0].strip("|").split(" | ")):
             problems.append(f"needs 5 cells: {row}")
             continue
@@ -67,7 +82,7 @@ def main(argv: list[str] | None = None) -> int:
     for problem in problems:
         print(problem)
     if not problems:
-        rows = _table(text)[2:]
+        rows = (_table(text) or [])[2:]
         paths = sum(len(_PATH.findall(row.rsplit(" | ", 1)[-1])) for row in rows)
         print(f"{args.log}: {len(rows)} rows and {paths} Where Used paths are well formed")
     return 1 if problems else 0

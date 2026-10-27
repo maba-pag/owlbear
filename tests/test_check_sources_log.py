@@ -68,3 +68,11 @@ def test_main_exits_non_zero_on_a_problem(tmp_path: Path) -> None:
     assert _CHECKER.main([str(log), str(_code_root(tmp_path))]) == 1
     log.write_text(_HEADER + _VALID)
     assert _CHECKER.main([str(log), str(tmp_path)]) == 0
+
+
+def test_checks_a_row_without_a_leading_pipe(tmp_path: Path) -> None:
+    row = "Lib2 | <http://example.org/lib2> | MIT | A lexer | `src/lexer.py` |\n"
+    problems = _CHECKER.check_sources_log(_HEADER + _VALID + row, _code_root(tmp_path))
+    assert len(problems) == 2
+    assert "<https://" in problems[0]
+    assert "src/lexer.py does not exist" in problems[1]
