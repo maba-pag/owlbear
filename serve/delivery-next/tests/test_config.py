@@ -251,11 +251,11 @@ def boot(monkeypatch) -> dict:
     return state
 
 
-def _prepare_reboot_finish(repo, boot) -> None:
+def _prepare_reboot_finish(repo, boot, *, finish_code: int = 0) -> None:
     """The manual move a clone's old store needs before any Store.open: prepare, reboot, finish."""
     assert cli.main(["--repo", str(repo), "prepare"]) == 0
     boot["id"] = AFTER
-    assert cli.main(["--repo", str(repo), "finish"]) == 0
+    assert cli.main(["--repo", str(repo), "finish"]) == finish_code
 
 
 @pytest.mark.usefixtures("current_binding")
@@ -573,16 +573,23 @@ def test_an_owner_clear_after_an_applied_role_move_survives_a_lost_marker(repo, 
     ],
 )
 @pytest.mark.usefixtures("current_binding")
-def test_invalid_old_roles_are_refused_and_never_copied(repo, boot, bad):
+def test_invalid_old_roles_are_refused_and_never_copied(repo, boot, bad, capsys):
     root = repo / ".git" / "owlbear-delivery"
     _old_profile(root, bad)
-    _prepare_reboot_finish(repo, boot)
+    original = (root / "profile.json").read_bytes()
+    _prepare_reboot_finish(repo, boot, finish_code=1)
+    error = capsys.readouterr().err
+    assert any(reason in error for reason in ("role overrides", "cannot be migrated"))
     with pytest.raises(StoreError, match=r"role overrides|cannot be migrated"):
         Store.open(repo)
 
-    root = project_home.located(repo)
-    assert not (root / "config.json").exists()
-    assert not (root / profile_share.ROLES_MOVED).exists()
+    target = project_home.located(repo)
+    assert target != root
+    assert (root / "format").read_text().strip() == "999"
+    assert (root / "profile.json").read_bytes() == original
+    assert (target / "profile.json").read_bytes() == original
+    assert not (target / "config.json").exists()
+    assert not (target / profile_share.ROLES_MOVED).exists()
 
 
 def test_a_damaged_old_profile_is_not_marked_moved_and_its_roles_come_back_once_repaired(repo):

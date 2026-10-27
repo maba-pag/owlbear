@@ -53,11 +53,15 @@ def test_the_current_family_aggregate_is_the_digest_of_its_table() -> None:
 
 def test_the_current_settlement_read_set_covers_its_receipt_schema_reader_and_home() -> None:
     required = {
+        "local_system/data_repo.py",
+        "local_system/git_files.py",
+        "local_system/git_run.py",
         "local_system/local_home.py",
         "local_system/maintenance.py",
         "local_system/storage_io.py",
         "pack_runs/pack_state.py",
         "state_store/offline_protocol.py",
+        "state_store/pack_run_record.py",
     }
     assert required <= set(legacy_family.CURRENT_FILES)
     assert required <= dict(legacy_family.CURRENT_MODULES).keys()
@@ -73,9 +77,24 @@ def test_the_registry_move_changes_only_the_current_read_set() -> None:
     ("rel", "old", "new"),
     [
         (
-            "pack_runs/pack_state.py",
+            "state_store/pack_run_record.py",
             "    record[REWRITTEN] = resolved(record, version, receipted)[0]",
             "    return False",
+        ),
+        (
+            "local_system/git_files.py",
+            "    return (cwd / out).resolve()",
+            "    return cwd.resolve()",
+        ),
+        (
+            "local_system/data_repo.py",
+            '        root = Path(data["repository"]).expanduser().resolve()',
+            "        root = Path.cwd()",
+        ),
+        (
+            "local_system/git_run.py",
+            "            cwd=cwd,",
+            "            cwd=cwd.parent,",
         ),
         (
             "local_system/maintenance.py",
@@ -108,7 +127,18 @@ def test_the_registry_move_changes_only_the_current_read_set() -> None:
             "            if self.store:",
         ),
     ],
-    ids=["settle", "receipt-lookup", "strict-reader", "record-schema", "pid-schema", "ledger-home", "stopped-host"],
+    ids=[
+        "settle",
+        "clone-directory",
+        "shared-data",
+        "git-directory",
+        "receipt-lookup",
+        "strict-reader",
+        "record-schema",
+        "pid-schema",
+        "ledger-home",
+        "stopped-host",
+    ],
 )
 def test_a_current_settlement_dependency_change_is_an_unknown_build(
     current_binding: Binding, rel: str, old: str, new: str

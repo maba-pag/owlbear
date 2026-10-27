@@ -79,7 +79,13 @@ project's Changes while that project's VS Code window is closed.
 
 `owlbear --help` lists every command, including the project commands that take `--repo PATH`.
 
-Moving a project's store to its folder is manual and needs a reboot: run `owlbear prepare --repo PATH`, reboot, then run `owlbear finish --repo PATH` from the new boot. Finish refuses an unknown or dirty OwlBear build, a changed or split install, and an unchanged boot, and it never runs on its own. The clone's old store payload is non-authoritative, but that does not make the whole directory deletable: startup still needs the clone id, the SWITCHED receipt, and the bound directory identity at the original source path. A backup does not make deleting, renaming, or recreating that directory safe, and there is no cleanup command. The fixed gate contracts that prove older builds are safe are maintained in the `state_store/legacy_family` tables; change them only when a gate function changes, and record why. There is no switch that skips these checks.
+Moving a project's store to its folder is manual and needs a reboot: run `owlbear prepare --repo PATH`, reboot, then run `owlbear finish --repo PATH` from the new boot. Prepare records durable preparation and installs the format fence, but copies or switches nothing. Finish refuses an unknown or dirty OwlBear build, a changed or split install, and an unchanged boot, and it never runs on its own. The clone's old store payload is non-authoritative, but that does not make the whole directory deletable: startup still needs the clone id, the SWITCHED receipt, and the bound directory identity at the original source path. A backup does not make deleting, renaming, or recreating that directory safe, and there is no cleanup command.
+
+The fixed gate contracts are maintained in the `state_store/legacy_family` tables. Historical build tables stay
+fixed; refresh only CURRENT literals against the composed source, including critical delegated controls, when that
+source changes, and record why. A function digest excludes its leading docstring; a whole-module digest includes
+the entire syntax tree, including docstrings. The CURRENT file set remains the union of its literal tables, not
+an arbitrary import closure. There is no switch that skips these checks.
 
 **Pause Delivery** in the bar stops new automatic agent steps on every project until you press
 **Resume**; your own actions, such as settings, memory and **New Change**, still run. While paused,
