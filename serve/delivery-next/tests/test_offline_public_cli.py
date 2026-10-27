@@ -129,7 +129,7 @@ def test_a_malformed_stored_boot_is_never_a_new_boot(run, repo, boot, capsys, st
     boot["id"] = AFTER  # a genuinely different current boot must not make a malformed witness proof
 
     assert run(repo, "finish") == 1
-    assert "is not a preparation record" in capsys.readouterr().err
+    assert "not a preparation record OwlBear wrote" in capsys.readouterr().err
     assert source_marker(repo) == "999"
     assert (project_home.clone_dir(repo) / offline_protocol.PREPARED).exists()
 
