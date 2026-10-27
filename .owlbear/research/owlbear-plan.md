@@ -239,10 +239,14 @@ complete, the Spotter on and irreversible harm acting (D-01M5WDN137VPY3W8N0QAJ75
 #668, #697): while the Spotter is on, a Delivery step's hand-offs, and a sample of its actions if chosen, get a look
 whose finding's category and configured action are recorded on this machine; nothing is sent or acted on. While the
 switch is on, a step needs the Spotter's required settings (the four category actions, `steer_share`,
-`intervention_cap`, `verbose`, `looks`, and `sample_rate` when `sample` is a look), the `spotter` role and the
-machine's `spotter_budget`; an unset switch blocks too, and off needs nothing. Global has the switch on with the four
-actions "record" (migrated from `learning`) while the other Spotter settings and the budget are unset, so the owner
-fills them in on the Settings page, or switches the Spotter off, before Delivery runs a step again.
+`intervention_cap`, `verbose`, `looks`, `look_credit_limit`, and `sample_rate` when `sample` is a look) and the
+`spotter` role; an unset switch blocks too, and off needs nothing. Global has the switch on with the four actions
+"record" (migrated from `learning`) while the other Spotter settings are unset, so the owner fills them in on the
+Settings page, or switches the Spotter off, before Delivery runs a step again. **Credit limits (2026-10-27):** no
+daily budgets (D-01M5XCD49YHHR1NQKKY8TQD0C3): each look stops at its own credit limit, recorded on its record, with
+no SDK cap; the Retro and paid replay run limits are machine settings their slices use. Settings format 16 writes the
+three limits into Global once (0.75, 20 and 90 credits, five times marked-assumption costs) and the machine host's
+start saves and publishes it.
 
 **Next steps, in order:**
 1. The rest of #668's follow-ups. Done on 2026-10-26: a live look against the real runtime (it found the credit cap

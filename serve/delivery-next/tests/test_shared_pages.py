@@ -332,10 +332,15 @@ def machine_settings_are_saved_and_a_stale_save_is_refused(page, pds, shared: Da
 
 
 def improvement_s_machine_settings_are_typed_and_saved(page, pds) -> None:
-    """Improvement (design §4): budgets as numbers, Retro's triggers as choices, enrolled chats as folders or none."""
+    """Improvement (design §4): a credit limit as an amount, Retro's triggers as choices, chats as folders or none."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
-    page.get_by_label("Retro: credits a day", exact=True).fill("7")
+    limit = page.get_by_label("Retro: credit limit per run (credits)", exact=True)
+    limit.press_sequentially("0.05")  # keystrokes: "0." and "0.0" stay as typed, never become 0
+    expect(limit).to_have_value("0.05")
+    limit.fill("")
+    limit.press_sequentially("20")
+    expect(limit).to_have_value("20")
     pds.pick(page, "Retro after a Change ends (the Improvement button always runs)", "off")
     chats = page.get_by_role("textbox", name="Enrolled chats: workspace folders")
     chats.press_sequentially("/w, /p")  # keystrokes: a comma and a space are kept
@@ -346,7 +351,7 @@ def improvement_s_machine_settings_are_typed_and_saved(page, pds) -> None:
     expect(page.locator("#status")).to_have_text("Saved this machine's settings.")
     mine = registry.load().settings
     folders = ["/w", "/p"]
-    assert (mine.retro_budget, mine.retro_after_change, mine.enrolled_chats) == (7, "off", folders)
+    assert (mine.retro_run_credit_limit, mine.retro_after_change, mine.enrolled_chats) == (20.0, "off", folders)
     chats.fill("/w,/p")  # the saved list again, written differently: no edit
     save = page.get_by_role("region", name="This machine").get_by_role("button", name="Save machine settings")
     expect(save).to_be_disabled()
@@ -355,6 +360,23 @@ def improvement_s_machine_settings_are_typed_and_saved(page, pds) -> None:
     page.evaluate("document.dispatchEvent(new Event('owlbear-machine'))")
     expect(chats).to_have_value("/x")
     expect(save).to_be_disabled()
+    a_saved_amount_is_edited_key_by_key(page, pds, limit, save)
+
+
+def a_saved_amount_is_edited_key_by_key(page, pds, limit, save) -> None:
+    """Sol: from a saved 20, "20.0" means 20 again on the way to 20.05; its text stays, never "20" then 205."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    expect(limit).to_have_value("20")
+    limit.fill("")
+    for typed in ("2", "20", "20.", "20.0", "20.05"):
+        limit.press_sequentially(typed[-1])
+        expect(limit).to_have_value(typed)
+    save.click()
+    with page.expect_response(lambda r: r.request.method == "PUT"):
+        pds.answer(page, "Save machine settings")
+    expect(save).to_be_disabled()
+    assert registry.load().settings.retro_run_credit_limit == 20.05
 
 
 def a_read_begun_during_a_save_never_undoes_it(page, pds) -> None:
@@ -551,14 +573,14 @@ def test_with_no_machine_setting_set_anywhere_the_page_names_each_and_a_pending_
             page.goto(f"{base}/config?project={DOCS}#token=t")
             region = page.get_by_role("region", name="This machine")
             expect(page.locator("#machine-pending")).to_contain_text("offline")
-            expect(region.get_by_text("unset: set it here or for every machine")).to_have_count(12)
+            expect(region.get_by_text("unset: set it here or for every machine")).to_have_count(11)
             expect(page.locator("#unset")).to_contain_text("machine.channel")
             expect(page.locator("#unset")).to_contain_text("machine.sessions")
             pds.pick(page, "Versions this machine takes", "minor")  # this machine's own: no longer unset
             region.get_by_role("button", name="Save machine settings").click()
             pds.answer(page, "Save machine settings")
             expect(region).to_contain_text("in use: Every minor version (v0.1, v0.2 …), from this machine")
-            expect(region.get_by_text("unset: set it here or for every machine")).to_have_count(11)
+            expect(region.get_by_text("unset: set it here or for every machine")).to_have_count(10)
             browser.close()
     finally:
         server.should_exit = True

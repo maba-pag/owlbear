@@ -14,7 +14,7 @@ import shutil
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Annotated, Any
 
 from pydantic import ConfigDict, Field, TypeAdapter, ValidationError, model_validator
 
@@ -29,9 +29,10 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
 
 MACHINE, LOCK = project_home.MACHINE, "machine.lock"
-MACHINE_FORMAT = 7  # 2: the machine's own settings (TD-243, TD-288, TD-300); 3: its sessions (TD-336); 4: `active`;
+MACHINE_FORMAT = 8  # 2: the machine's own settings (TD-243, TD-288, TD-300); 3: its sessions (TD-336); 4: `active`;
 # 5: one curation setting per trigger; 6: settings inherit Global's and were moved there once (the owner, 2026-10-23);
-# 7: Improvement's machine settings: the budgets, Retro's triggers and the enrolled chats (2026-10-25)
+# 7: Improvement's machine settings: the budgets, Retro's triggers and the enrolled chats (2026-10-25);
+# 8: no daily credit budgets; the Retro and paid replay run credit limits (2026-10-27)
 STALE = "the machine settings changed since this page loaded them"
 
 
@@ -64,6 +65,22 @@ class Settings(MachineValues):
         return data
 
 
+DAILY = ("spotter_budget", "retro_budget", "retro_verbose_cap")  # format 7's daily credit budgets
+BUDGETS_GONE = 8  # the format without them
+_BUDGET: TypeAdapter[int | None] = TypeAdapter(Annotated[int, Field(ge=0)] | None)  # as format 7 read them: lax
+
+
+def _budgets_dropped(settings: Any) -> Any:  # noqa: ANN401 - the raw settings
+    """Format 7's daily budgets leave *settings* (D-01M5XCD49YHHR1NQKKY8TQD0C3); one format 7 refused is refused."""
+    if not isinstance(settings, dict) or not any(k in settings for k in DAILY):
+        return settings
+    settings = dict(settings)
+    for key in DAILY:
+        if key in settings:
+            _BUDGET.validate_python(settings.pop(key))
+    return settings
+
+
 class Machine(Record):
     """``machine.json``: the registered projects, the last Resume and the machine's settings."""
 
@@ -77,6 +94,20 @@ class Machine(Record):
     settings_pending: str = ""  # why the carry or the move is not done yet; shown on the Settings page
     global_written: list[str] = Field(default_factory=list)  # the digest of the last carry or move write to Global,
     # kept until both are published
+
+    @model_validator(mode="before")
+    @classmethod
+    def _no_daily_budgets(cls, data: Any) -> Any:  # noqa: ANN401 - the raw registry
+        """Before format 8, the daily budgets leave the machine's settings and a move's kept values.
+
+        From format 8 on, a budget is an unknown field and refused.
+        """
+        if isinstance(data, dict) and isinstance(found := data.get("format", 1), int) and found < BUDGETS_GONE:
+            data = dict(data)
+            for key in ("settings", "settings_moving"):
+                if key in data:
+                    data[key] = _budgets_dropped(data[key])
+        return data
 
 
 def _home() -> Path:

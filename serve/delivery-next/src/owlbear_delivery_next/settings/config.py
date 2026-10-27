@@ -24,12 +24,13 @@ from owlbear_delivery_next.github.provider import MergeMethod  # noqa: TC001 - p
 from owlbear_delivery_next.settings import improvement
 from owlbear_delivery_next.settings.improvement import Spotter
 
-CONFIG_FORMAT = 15  # 3 renamed the designer to design-judge (TD-169); 4 minutes; 5 PR labels; 6 subagents; 7 sessions;
+CONFIG_FORMAT = 16  # 3 renamed the designer to design-judge (TD-169); 4 minutes; 5 PR labels; 6 subagents; 7 sessions;
 # 8 the test reviewer and curator roles; 9 the watcher's role and switch; 10 no code defaults; 11 Global's machine part;
 # 12 the watcher became the Spotter (role and settings), with the retro roles (2026-10-25);
 # 13 the five unset-by-default preferences and their one-time import marker;
 # 14 the Spotter's on/off switch and its four categories' actions replace its mode (2026-10-26);
-# 15 no window runtime settings: its switches, visibility and tool categories go (2026-10-26)
+# 15 no window runtime settings: its switches, visibility and tool categories go (2026-10-26);
+# 16 credit limits per look and run replace the daily budgets, written into Global once (2026-10-27)
 CARRIED_FORMAT = 10  # a Global layer below it has not had the built-in values carried in (``settings_carry.carry``)
 ROLES: tuple[Role, ...] = get_args(Role.__value__)
 type Source = Literal["default", "global", "machine", "project", "builder"]
@@ -169,9 +170,10 @@ class MachineValues(Record):
     curate_after_merge: Curate | None = None  # automatic memory curation per trigger (the owner, 2026-10-23)
     curate_when_idle: Curate | None = None
     sessions: int | None = Field(default=None, ge=1)  # TD-336: agent sessions at once on the machine, all projects
-    spotter_budget: int | None = Field(default=None, ge=0)  # Improvement (design §4): credits a day for the Spotter
-    retro_budget: int | None = Field(default=None, ge=0)  # credits a day for Retro
-    retro_verbose_cap: int | None = Field(default=None, ge=0)  # credits a day Retro may spend turning verbose on
+    retro_run_credit_limit: improvement.Credits | None = (
+        None  # Improvement (design §5): credits one Retro run may spend
+    )
+    replay_run_credit_limit: improvement.Credits | None = None  # credits one paid replay run of Spotter cases may spend
     retro_after_change: Curate | None = None  # Retro after a Change ends, like curation's triggers
     retro_when_idle: Curate | None = None  # Retro over finished enrolled chats when idle
     enrolled_chats: list[str] | None = None  # workspace folders whose chats the Spotter and Retro may read; [] is none

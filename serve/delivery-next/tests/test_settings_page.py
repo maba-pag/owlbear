@@ -85,6 +85,16 @@ def settings_page(store: Store, pds: Any) -> Iterator[Any]:
         server.should_exit = True
 
 
+def a_look_s_credit_limit_is_typed_as_an_amount(page) -> None:
+    """D-01M5XCD49YHHR1NQKKY8TQD0C3: it inherits Global's, and keystrokes keep a fraction as typed."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    look_limit = page.get_by_label("Credit limit per look", exact=True)
+    expect(look_limit).to_have_attribute("placeholder", "inherit (0.75)")
+    look_limit.press_sequentially("0.05")
+    expect(look_limit).to_have_value("0.05")
+
+
 def a_list_keeps_its_text_as_typed_and_counts_only_new_items(page, looks) -> None:
     """Copilot, #662: a saved list written differently is no edit; extending it by keyboard keeps the comma."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
@@ -160,6 +170,7 @@ def test_each_layer_keeps_its_own_drafts_and_a_save_sends_only_the_shown_layer(s
         expect(looks).to_have_attribute("placeholder", "inherit (hand-off)")
         looks.fill("hand-off, sample")
         page.get_by_label("Sampled actions", exact=True).fill("5")
+        a_look_s_credit_limit_is_typed_as_an_amount(page)
         at_once = page.get_by_label("Agent sessions at once in one project")  # TD-336
         expect(at_once).to_have_attribute("placeholder", "inherit (2)")
         at_once.fill("3")
@@ -186,6 +197,7 @@ def test_each_layer_keeps_its_own_drafts_and_a_save_sends_only_the_shown_layer(s
         ["hand-off", "sample"],
         5,
     )
+    assert project.spotter.look_credit_limit == 0.05
     assert project.spotter.steer_share is None  # the rest still inherit
     assert not store.global_path.exists()
 

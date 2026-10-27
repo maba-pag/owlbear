@@ -7,7 +7,7 @@ import pytest
 from pydantic import ValidationError
 
 from owlbear_delivery_next.local_system.data_repo import DataRepo
-from owlbear_delivery_next.settings import config
+from owlbear_delivery_next.settings import carried, config
 from owlbear_delivery_next.settings.config import GlobalLayer, Layer, MachineLayer, resolve
 from owlbear_delivery_next.settings.improvement import ALLOWED, CATEGORIES, Spotter
 from owlbear_delivery_next.state_store import machine_settings, registry, settings_carry
@@ -21,7 +21,9 @@ MATRIX = {  # D-01M5WP8Z4ADZ5FN7RJDR17RQQ5, as the owner decided it
     "irreversible-harm": {"record", "show-owner", "stop-and-resume", "stop-and-ask"},
 }
 RECORD = dict.fromkeys(CATEGORIES.values(), "record")
-ON = Spotter(switch="on", steer_share=0, intervention_cap=1, verbose="off", looks=["hand-off"], **RECORD)
+ON = Spotter(switch="on", steer_share=0, intervention_cap=1, verbose="off", looks=["hand-off"], look_credit_limit=0.75,
+             **RECORD)  # fmt: skip
+LIMIT = {"look_credit_limit": carried.LOOK_CREDIT_LIMIT}  # what format 16 writes into Global's Spotter, and only there
 
 
 @pytest.fixture
@@ -42,7 +44,7 @@ def test_the_watcher_switch_becomes_the_spotter_switch_and_its_role_moves(tmp_pa
     path = _written(tmp_path, {"watcher": switch, "agents": {"watcher": {"model": "gpt-6-luna", "effort": "medium"}}})
     layer = read_layer(path, GlobalLayer)
     assert (layer.format, layer.spotter, layer.agents["spotter"].model) == (
-        config.CONFIG_FORMAT, expected, "gpt-6-luna")  # fmt: skip
+        config.CONFIG_FORMAT, expected.model_copy(update=LIMIT), "gpt-6-luna")  # fmt: skip
     assert "watcher" not in layer.agents
     assert layer.spotter is not None
     assert layer.spotter.looks is None  # nothing invented: the rest starts unset
@@ -51,7 +53,7 @@ def test_the_watcher_switch_becomes_the_spotter_switch_and_its_role_moves(tmp_pa
 def test_an_unset_watcher_switch_stays_unset_in_every_layer(tmp_path):
     for model in (GlobalLayer, MachineLayer, Layer):
         layer = read_layer(_written(tmp_path, {"watcher": None}, model.__name__), model)
-        assert layer.spotter is None
+        assert layer.spotter == (Spotter(**LIMIT) if model is GlobalLayer else None)  # its switch stays unset
 
 
 def test_the_matrix_is_the_owners_and_each_category_refuses_any_other_action():
@@ -72,7 +74,8 @@ def test_the_matrix_is_the_owners_and_each_category_refuses_any_other_action():
 def test_every_unset_spotter_setting_is_listed_whatever_the_switch(switch):
     got = resolve(GlobalLayer(spotter=Spotter(switch=switch)), Layer())
     listed = [k for k in got.missing if k.startswith("spotter.")]
-    required = ["switch", *CATEGORIES.values(), "steer_share", "intervention_cap", "verbose", "looks"]
+    required = ["switch", *CATEGORIES.values(), "steer_share", "intervention_cap", "verbose", "looks",
+                "look_credit_limit"]  # fmt: skip
     assert listed == [f"spotter.{k}" for k in required if not (k == "switch" and switch)]
     assert "spotter.verbose_until" not in listed  # optional
 
@@ -116,7 +119,8 @@ KEPT = {"steer_share": 20, "intervention_cap": 3, "verbose": "on", "verbose_unti
 @pytest.mark.parametrize("model", [GlobalLayer, MachineLayer, Layer])
 def test_each_old_mode_migrates_in_every_layer_and_keeps_the_other_values(tmp_path, mode, expected, model):
     layer = read_layer(_written(tmp_path, {"spotter": {"mode": mode, **KEPT}}, model.__name__, 13), model)
-    assert (layer.format, layer.spotter) == (config.CONFIG_FORMAT, Spotter(**KEPT, **expected))
+    written = LIMIT if model is GlobalLayer else {}
+    assert (layer.format, layer.spotter) == (config.CONFIG_FORMAT, Spotter(**KEPT, **expected, **written))
 
 
 @pytest.mark.parametrize("mode", ["typo", "Learning", "on", False, True, 7, 0.5, [], ["live"], {}, {"mode": "off"}])
@@ -175,7 +179,7 @@ def test_a_fresh_carry_switches_the_spotter_on_and_leaves_every_action_unset(sha
     shared = DataRepo(shared_repo[0])
     settings_carry.carry(shared)
     glob = read_layer(shared.global_path, GlobalLayer)
-    assert glob.spotter == Spotter(switch="on")
+    assert glob.spotter == Spotter(switch="on", **LIMIT)
     got = resolve(glob, Layer())
     assert (got.spotter.switch, got.sources["spotter.switch"], got.spotter.actions()) == ("on", "global", {})
     assert {f"spotter.{f}" for f in CATEGORIES.values()} <= set(got.missing)
@@ -204,9 +208,9 @@ def test_verbose_counts_as_off_after_its_date():
 
 
 def test_the_machine_values_inherit_global_and_validate_the_enrolled_folders():
-    glob = config.MachineValues(retro_budget=9, enrolled_chats=["/w"])
-    got = machine_settings.resolve(registry.Settings(retro_budget=5), glob)
-    assert (got.retro_budget, got.enrolled_chats, got.sources["enrolled_chats"]) == (5, ["/w"], "global")
+    glob = config.MachineValues(retro_run_credit_limit=9, enrolled_chats=["/w"])
+    got = machine_settings.resolve(registry.Settings(retro_run_credit_limit=5), glob)
+    assert (got.retro_run_credit_limit, got.enrolled_chats, got.sources["enrolled_chats"]) == (5, ["/w"], "global")
     with pytest.raises(ValidationError):
         config.MachineValues(enrolled_chats=["relative/path"])
     with pytest.raises(ValidationError):
