@@ -509,7 +509,17 @@ def test_source_replacement_during_authority_reads_never_admits_the_replacement(
 
 @pytest.mark.usefixtures("current_binding")
 @pytest.mark.parametrize(
-    "change", ["target-proof", "source-preparation", "source-id", "source-fence", "source-path", "target-marker"]
+    "change",
+    [
+        "target-proof",
+        "source-preparation",
+        "source-id",
+        "source-fence",
+        "source-path",
+        "target-marker",
+        "source-receipt",
+        "source-other-receipt",
+    ],
 )
 def test_store_open_revalidates_its_authority_after_the_source_fence_sync(repo, boot, monkeypatch, change):
     target = _finished_move(repo, boot)
@@ -540,6 +550,14 @@ def test_store_open_revalidates_its_authority_after_the_source_fence_sync(repo, 
                         "source-id": (source / project_home.CLONE_ID, "foreign-owner\n"),
                         "source-fence": (source / MARKER, "8\n"),
                         "target-marker": (target / MARKER, "8\n"),
+                        "source-receipt": (source / project_move.MOVE_RECORD, '{"owner":"unfinished repair"}\n'),
+                        "source-other-receipt": (
+                            source / project_move.MOVE_RECORD,
+                            json.dumps(
+                                json.loads((source / project_move.MOVE_RECORD).read_text())
+                                | {"target": str(target.with_name("owner-target"))}
+                            ),
+                        ),
                     }[change]
                     destination.write_text(text)
                 for label, folder in (("source", source), ("target", target), ("retained", retained)):

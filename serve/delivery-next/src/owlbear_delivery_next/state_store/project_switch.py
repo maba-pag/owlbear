@@ -90,9 +90,13 @@ def source_format(folder_fd: int) -> str:
     raise StoreError(msg)
 
 
-def source_state(source: tuple[Path, int], pid: str) -> tuple[str, str]:
-    """The validated preparation and marker in the held, still-named source belonging to *pid*."""
+def source_state(source: tuple[Path, int], pid: str, rec: dict) -> tuple[str, str, str]:
+    """The preparation, marker and admitted receipt in the held, still-named source belonging to *pid*."""
     folder, folder_fd = source
+    observed, image = project_move.record_image(folder, folder_fd)
+    if observed != rec or image is None:
+        msg = f"{folder}'s move receipt changed during admission: nothing was changed"
+        raise StoreError(msg)
     try:
         prepared = fd_tree.read_at(folder_fd, project_move.PREPARED)
     except (OSError, UnicodeError) as exc:
@@ -106,7 +110,7 @@ def source_state(source: tuple[Path, int], pid: str) -> tuple[str, str]:
     if clone_id_at(folder, folder_fd) != pid or not same_folder(folder, folder_fd):
         msg = f"{folder} no longer names the retained source of project {pid}: nothing was changed"
         raise StoreError(msg)
-    return prepared, marker
+    return prepared, marker, image
 
 
 def held_switched(target: Path, tfd: int, rec: dict) -> None:
@@ -123,12 +127,14 @@ def held_switched(target: Path, tfd: int, rec: dict) -> None:
     named_switched(target, rec)
 
 
-def require_admission(source: tuple[Path, int], target: tuple[Path, int], rec: dict, expected: tuple[str, str]) -> None:
+def require_admission(
+    source: tuple[Path, int], target: tuple[Path, int], rec: dict, expected: tuple[str, str, str]
+) -> None:
     """Revalidate source witnesses and target authority after admission's durability work."""
     path, tfd = target
     held_switched(path, tfd, rec)
-    if source_state(source, path.name) != expected:
-        msg = f"{source[0]} changed its preparation or format during admission: nothing was changed"
+    if source_state(source, path.name, rec) != expected:
+        msg = f"{source[0]} changed its preparation, format or receipt during admission: nothing was changed"
         raise StoreError(msg)
     named_switched(path, rec)
 

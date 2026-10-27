@@ -211,7 +211,7 @@ def current(cwd: Path) -> Path | None:
         if rec and rec["phase"] == project_move.SWITCHED:
             _switched_to(target, rec)
             project_switch.require_switched(target, rec)
-            project_switch.source_state((folder, folder_fd), pid)
+            project_switch.source_state((folder, folder_fd), pid, rec)
             _same_folder(folder, folder_fd)
         return target
     finally:
@@ -294,13 +294,15 @@ def _publish_proven(source: tuple[Path, int], pfd: int, target: Path, rec: dict,
     _, folder_fd = source
     tfd = project_switch.check_switched(target, pfd, rec)
     try:
-        expected = project_switch.source_state(source, target.name)
+        expected = project_switch.source_state(source, target.name, rec)
 
         def guard() -> None:
             project_switch.require_admission(source, (target, tfd), rec, expected)
 
         _publish_markers(folder_fd, tfd, previous, moved=True, guard=guard)
-        project_switch.require_admission(source, (target, tfd), rec, (expected[0], f"{project_move.FENCE}\n"))
+        project_switch.require_admission(
+            source, (target, tfd), rec, (expected[0], f"{project_move.FENCE}\n", expected[2])
+        )
     finally:
         os.close(tfd)
 
