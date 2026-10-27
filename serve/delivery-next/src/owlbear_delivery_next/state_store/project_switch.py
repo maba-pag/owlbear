@@ -7,7 +7,7 @@ import stat
 from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.state_store import fd_tree, format_marker, project_move
-from owlbear_delivery_next.state_store.database import StoreError
+from owlbear_delivery_next.state_store.database import STORE_FORMAT, FormatTooNewError, StoreError
 from owlbear_delivery_next.state_store.offline_proof import preparation, same_folder
 
 if TYPE_CHECKING:
@@ -56,6 +56,83 @@ def _refuse_unless_held(target: Path, tfd: int, rec: dict) -> None:
         raise project_move._not_published(target)  # noqa: SLF001 - a freed folder can return with the same identity
 
 
+def clone_id_at(folder: Path, folder_fd: int) -> str | None:
+    """Read the held source's complete clone id; absence alone is None."""
+    try:
+        text = fd_tree.read_at(folder_fd, project_move.CLONE_ID)
+    except (OSError, UnicodeError) as exc:
+        msg = f"{folder / project_move.CLONE_ID} is unreadable: {exc}; nothing was changed"
+        raise StoreError(msg) from exc
+    if text and not text.endswith("\n"):
+        msg = f"{folder / project_move.CLONE_ID} is incomplete: its write was cut short; nothing was changed"
+        raise StoreError(msg)
+    return (text or "").strip() or None
+
+
+def source_format(folder_fd: int) -> str:
+    """Validate a retained source marker, allowing the existing repair of supported older formats."""
+    try:
+        text = fd_tree.read_at(folder_fd, format_marker.MARKER)
+    except (OSError, UnicodeError) as exc:
+        msg = "the switched source's format marker is unreadable: nothing was changed"
+        raise StoreError(msg) from exc
+    value = text.strip() if text is not None else ""
+    if text is None or not value.isdigit():
+        msg = "the switched source has no readable format marker: nothing was changed"
+        raise StoreError(msg)
+    found = int(value)
+    if found == int(project_move.FENCE) or 1 <= found <= STORE_FORMAT:
+        return text
+    if found > STORE_FORMAT:
+        msg = f"switched source format {found} is newer than {STORE_FORMAT}: nothing was changed"
+        raise FormatTooNewError(msg)
+    msg = f"switched source format {found} is not a known format: nothing was changed"
+    raise StoreError(msg)
+
+
+def source_state(source: tuple[Path, int], pid: str) -> tuple[str, str]:
+    """The validated preparation and marker in the held, still-named source belonging to *pid*."""
+    folder, folder_fd = source
+    try:
+        prepared = fd_tree.read_at(folder_fd, project_move.PREPARED)
+    except (OSError, UnicodeError) as exc:
+        msg = f"{folder}'s preparation is unreadable: nothing was changed"
+        raise StoreError(msg) from exc
+    if prepared is None:
+        msg = f"{folder}'s preparation is missing: nothing was changed"
+        raise StoreError(msg)
+    preparation(prepared, folder_fd)
+    marker = source_format(folder_fd)
+    if clone_id_at(folder, folder_fd) != pid or not same_folder(folder, folder_fd):
+        msg = f"{folder} no longer names the retained source of project {pid}: nothing was changed"
+        raise StoreError(msg)
+    return prepared, marker
+
+
+def held_switched(target: Path, tfd: int, rec: dict) -> None:
+    """Revalidate the held target's identity, proof, quarantine state and marker, without reopening it."""
+    _refuse_unless_held(target, tfd, rec)
+    fd_tree.refuse_quarantined(tfd, target)
+    try:
+        text = fd_tree.read_at(tfd, format_marker.MARKER)
+    except (OSError, UnicodeError) as exc:
+        msg = f"{target} holds a format marker OwlBear cannot read: nothing was changed"
+        raise StoreError(msg) from exc
+    if text is not None:
+        format_marker.supported_format(text)
+    named_switched(target, rec)
+
+
+def require_admission(source: tuple[Path, int], target: tuple[Path, int], rec: dict, expected: tuple[str, str]) -> None:
+    """Revalidate source witnesses and target authority after admission's durability work."""
+    path, tfd = target
+    held_switched(path, tfd, rec)
+    if source_state(source, path.name) != expected:
+        msg = f"{source[0]} changed its preparation or format during admission: nothing was changed"
+        raise StoreError(msg)
+    named_switched(path, rec)
+
+
 def check_switched(target: Path, pfd: int, rec: dict) -> int:
     """Refuse unless *target* is still the copy the switch recorded, by identity and proof; return its descriptor.
 
@@ -65,16 +142,7 @@ def check_switched(target: Path, pfd: int, rec: dict) -> int:
     named_switched(target, rec)
     tfd = fd_tree.open_dir(pfd, target.name)
     try:
-        _refuse_unless_held(target, tfd, rec)
-        fd_tree.refuse_quarantined(tfd, target)
-        try:
-            text = fd_tree.read_at(tfd, format_marker.MARKER)
-        except (OSError, UnicodeError) as exc:
-            msg = f"{target} holds a format marker OwlBear cannot read: nothing was changed"
-            raise StoreError(msg) from exc
-        if text is not None:
-            format_marker.supported_format(text)
-        named_switched(target, rec)
+        held_switched(target, tfd, rec)
     except BaseException:
         os.close(tfd)
         raise

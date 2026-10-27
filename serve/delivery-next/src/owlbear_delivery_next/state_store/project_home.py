@@ -16,6 +16,7 @@ import os
 import secrets
 import stat
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.local_system.git_files import git_common_dir
@@ -38,6 +39,9 @@ CLONE_ID = "clone-id"
 MOVE_LOCK = "move.lock"
 KEPT = frozenset({CLONE_ID, MARKER, MOVE_LOCK})  # what stays in the clone
 
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
 
 def clone_dir(cwd: Path) -> Path:
     """The clone's own Delivery folder: its id and the marker."""
@@ -56,15 +60,7 @@ def clone_id(folder: Path) -> str | None:
 
 
 def _clone_id_at(folder: Path, folder_fd: int) -> str | None:
-    try:
-        text = fd_tree.read_at(folder_fd, project_move.CLONE_ID)
-    except (OSError, UnicodeError) as exc:
-        msg = f"{folder / project_move.CLONE_ID} is unreadable: {exc}; nothing was changed"
-        raise StoreError(msg) from exc
-    if text and not text.endswith("\n"):  # the id is written with its newline last, so this one was cut short
-        msg = f"{folder / project_move.CLONE_ID} is incomplete: its write was cut short; nothing was changed"
-        raise StoreError(msg)
-    return (text or "").strip() or None
+    return project_switch.clone_id_at(folder, folder_fd)
 
 
 def _pin(folder: Path) -> int:
@@ -282,19 +278,27 @@ def _has_locks(folder_fd: int) -> bool:
     return any(_is_lock(n) and n != project_move.MOVE_LOCK for n in os.listdir(folder_fd))
 
 
-def _publish_markers(folder_fd: int, tfd: int, previous: int, *, moved: bool) -> None:
+def _publish_markers(
+    folder_fd: int, tfd: int, previous: int, *, moved: bool, guard: Callable[[], None] | None = None
+) -> None:
     """Write the target's format through the descriptor already validated: the name is never reopened here."""
     format_marker.ensure_target(tfd, previous)
     # a moved clone keeps the fence: its retained source must not be opened again as a store by an older runtime
-    fd_tree.write_at(folder_fd, MARKER, f"{project_move.FENCE if moved else STORE_FORMAT}\n")
+    fd_tree.write_at(folder_fd, MARKER, f"{project_move.FENCE if moved else STORE_FORMAT}\n", before_replace=guard)
 
 
-def _publish_proven(folder_fd: int, pfd: int, target: Path, rec: dict, previous: int) -> None:
-    """Publish the switched target's format through the folder the switch validated, then recheck its name."""
+def _publish_proven(source: tuple[Path, int], pfd: int, target: Path, rec: dict, previous: int) -> None:
+    """Publish markers only while the held source witnesses and target authority remain valid."""
+    _, folder_fd = source
     tfd = project_switch.check_switched(target, pfd, rec)
     try:
-        _publish_markers(folder_fd, tfd, previous, moved=True)
-        project_switch.named_switched(target, rec)  # the name still reaches the descriptor written through
+        expected = project_switch.source_state(source, target.name)
+
+        def guard() -> None:
+            project_switch.require_admission(source, (target, tfd), rec, expected)
+
+        _publish_markers(folder_fd, tfd, previous, moved=True, guard=guard)
+        project_switch.require_admission(source, (target, tfd), rec, (expected[0], f"{project_move.FENCE}\n"))
     finally:
         os.close(tfd)
 
@@ -406,7 +410,7 @@ def _open(cwd: Path, proof: OfflineProof | None) -> Path:
             rec = project_move.record_at(folder, folder_fd)
             fd_tree.refuse_quarantined(folder_fd, folder)  # before anything is recorded, fenced or moved
             if rec is not None and rec["phase"] == project_move.SWITCHED:
-                _open_switched(folder_fd, target, rec, project_switch.prepared_prior(folder_fd))
+                _open_switched(folder, folder_fd, target, rec, project_switch.prepared_prior(folder_fd))
                 return target
             found = _format_at(folder_fd, proof)
             left = project_move.left_at(folder_fd)
@@ -447,7 +451,7 @@ def _move_and_publish(  # noqa: PLR0913, PLR0917
     pfd = project_move.pin_parent(target)  # re-pinned: the path may have been swapped during the move
     try:
         if pending:
-            _publish_proven(folder_fd, pfd, target, project_move.record_at(folder, folder_fd), found)
+            _publish_proven((folder, folder_fd), pfd, target, project_move.record_at(folder, folder_fd), found)
         else:
             project_move.make_dir(pfd, target.name)
             tfd = fd_tree.open_dir(pfd, target.name)
@@ -459,36 +463,15 @@ def _move_and_publish(  # noqa: PLR0913, PLR0917
         os.close(pfd)
 
 
-def _switched_source_at(folder_fd: int) -> None:
-    """Refuse a switched source whose marker is not the fence or a readable older format; nothing is written."""
-    try:
-        text = fd_tree.read_at(folder_fd, MARKER)
-    except (OSError, UnicodeError) as exc:
-        msg = "the switched source's format marker is unreadable: nothing was changed"
-        raise StoreError(msg) from exc
-    value = text.strip() if text is not None else ""
-    if not value.isdigit():
-        msg = "the switched source has no readable format marker: nothing was changed"
-        raise StoreError(msg)
-    found = int(value)
-    if found == int(project_move.FENCE) or 1 <= found <= STORE_FORMAT:
-        return
-    if found > STORE_FORMAT:
-        msg = f"switched source format {found} is newer than {STORE_FORMAT}: nothing was changed"
-        raise FormatTooNewError(msg)
-    msg = f"switched source format {found} is not a known format: nothing was changed"
-    raise StoreError(msg)
-
-
-def _open_switched(folder_fd: int, target: Path, rec: dict, previous: int) -> None:
+def _open_switched(folder: Path, folder_fd: int, target: Path, rec: dict, previous: int) -> None:
     """Admit the switched target by identity, keeping the source fenced; the source is never read or moved again."""
-    _switched_source_at(folder_fd)  # before the receipt is trusted, the source marker must be ours or known
+    project_switch.source_format(folder_fd)
     _switched_to(target, rec)
     held = _fence(folder_fd)  # the old path stays locked for as long as this process runs
     try:
         pfd = project_move.pin_parent(target)
         try:
-            _publish_proven(folder_fd, pfd, target, rec, previous)
+            _publish_proven((folder, folder_fd), pfd, target, rec, previous)
         finally:
             os.close(pfd)
     finally:

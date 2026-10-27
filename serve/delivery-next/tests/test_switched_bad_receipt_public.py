@@ -479,7 +479,7 @@ def test_target_replacement_during_authority_reads_refuses_and_keeps_uncertain_o
 
 
 @pytest.mark.usefixtures("current_binding")
-@pytest.mark.parametrize("lookup", ["current", "register", "adopt", "selfcheck"])
+@pytest.mark.parametrize("lookup", ["current", "register", "adopt", "selfcheck", "open"])
 @pytest.mark.parametrize("seam", ["preparation", "marker"])
 def test_source_replacement_during_authority_reads_never_admits_the_replacement(repo, boot, monkeypatch, lookup, seam):
     target = _finished_move(repo, boot)
@@ -491,11 +491,12 @@ def test_source_replacement_during_authority_reads_never_admits_the_replacement(
     if lookup == "selfcheck":
         assert selfcheck.problems()
     else:
-        error = StoreError if lookup == "current" else registry.RegistryError
+        error = StoreError if lookup in {"current", "open"} else registry.RegistryError
         action = {
             "current": lambda: project_home.current(repo),
             "register": lambda: registry.register(repo),
             "adopt": lambda: registry.adopt(entry.id),
+            "open": lambda: Store.open(repo),
         }[lookup]
         with pytest.raises(error):
             action()
@@ -504,6 +505,44 @@ def test_source_replacement_during_authority_reads_never_admits_the_replacement(
     assert _snapshot(_source(repo)) == expected["source"]
     assert _snapshot(target) == expected["target"]
     assert _snapshot(moved) == expected["moved"]
+
+
+@pytest.mark.usefixtures("current_binding")
+def test_store_open_refuses_a_proof_changed_during_the_source_fence_sync(repo, boot, monkeypatch):
+    target = _finished_move(repo, boot)
+    source = _source(repo)
+    before = _snapshot(source)
+    real_sync = os.fsync
+    fired = []
+
+    def sync(fd):
+        real_sync(fd)
+        if fired or not stat.S_ISREG(os.fstat(fd).st_mode):
+            return
+        for path in source.glob(f".tmp-{MARKER}-*"):
+            if os.path.samestat(path.stat(), os.fstat(fd)):
+                fired.append(True)
+                (target / project_move.MOVE_PROOF).write_text("foreign-proof\n")
+
+    monkeypatch.setattr(os, "fsync", sync)
+    with pytest.raises(StoreError):
+        Store.open(repo)
+
+    assert fired == [True]
+    assert (target / project_move.MOVE_PROOF).read_text() == "foreign-proof\n"
+    assert {
+        name: value for name, value in _snapshot(source).items() if not name.startswith(fd_tree.QUARANTINE)
+    } == before
+
+
+@pytest.mark.usefixtures("current_binding")
+def test_store_open_keeps_legitimate_active_payload_changes(repo, boot):
+    target = _finished_move(repo, boot)
+    edited = json.dumps({"format": 1, "widths": [987]})
+    (target / "config.json").write_text(edited)
+
+    assert Store.open(repo).root == target
+    assert (target / "config.json").read_text() == edited
 
 
 @pytest.mark.usefixtures("current_binding")

@@ -60,12 +60,12 @@ def test_a_target_replaced_before_marker_publication_is_refused_and_nothing_is_w
     real_publish = project_home._publish_markers  # noqa: SLF001 - the gap hook wraps the real publication
     gap_taken: list[Path] = []
 
-    def swap_in_the_gap(folder_fd, tfd, previous, *, moved):
+    def swap_in_the_gap(folder_fd, tfd, previous, *, moved, guard=None):
         target.rename(aside)
         target.mkdir()
         (target / "foreign.txt").write_bytes(FOREIGN_BYTES)
         gap_taken.append(target)
-        real_publish(folder_fd, tfd, previous, moved=moved)
+        real_publish(folder_fd, tfd, previous, moved=moved, guard=guard)
 
     monkeypatch.setattr(project_home, "_publish_markers", swap_in_the_gap)
 
