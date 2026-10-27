@@ -30,9 +30,11 @@ def test_the_committed_view_passes_its_hash_check() -> None:
 
 def test_the_hash_check_finds_a_hand_edit_and_a_missing_hash(tmp_path: Path) -> None:
     edited = tmp_path / "edited.md"
-    edited.write_bytes(VIEW.read_bytes().replace(b"None.", b"Nothing.", 1))
+    view = VIEW.read_bytes()
+    edited.write_bytes(view.replace(b"# Decisions", b"# Decisionz", 1))  # a heading every view has
+    assert edited.read_bytes() != view
     cut = tmp_path / "cut.md"
-    cut.write_bytes(VIEW.read_bytes().rsplit(b"<!--", 1)[0])
+    cut.write_bytes(view.rsplit(b"<!--", 1)[0])
 
     for path, message in ((edited, "edited by hand"), (cut, "last line")):
         done = _check(path)
