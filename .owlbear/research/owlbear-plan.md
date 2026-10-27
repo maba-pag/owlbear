@@ -69,8 +69,11 @@ Renovate's pull requests come back now that the old engine is gone (owner, 2026-
 The order is the owner's (TD-394): TD-358's build work, the research move, self-update steps 3c to 5, the old
 engine's removal, v1.0, TD-318's memory work, the window-step gate, the watcher; TD-403 places the build work of
 TD-392..TD-402; TD-338 puts the watcher before any real project. TD-419 puts the decision system next,
-before item 5; TD-422 puts the amendment design session before item 10, after the watcher. Item numbers are stable
-names, not positions: the table lists the items in their order.
+before item 5; TD-422 puts the amendment design session before item 10, after the watcher. The remaining work's
+order, including the items that had no place before, is D-01M5Z6CMV23BVGFYHG1WNEZVZW and D-01M5Z6RCBKS6FZQTZKN0TART14 (2026-10-27): item 9,
+a step's stage (item 24), TD-402 (item 21), item 16,
+item 10, item 15, the visual baseline (item 22), item 17, item 20, the quality service (item 23). Item numbers are
+stable names, not positions: the table lists the items in their order.
 
 | # | Work | Decided by | Build document | Status |
 | --- | --- | --- | --- | --- |
@@ -88,42 +91,44 @@ names, not positions: the table lists the items in their order.
 | 8 | Window-step gate: windows keep repository hooks and user MCP servers out, subagents detected and counted, judge effects contained | TD-223, TD-145, TD-342 | [gate build](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/window-step-gate-build.md), [probes](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/window-step-gate-probes.md) | Retired: window steps are retired as a runtime (D-01M5WG8RGCBKADW6XPGP0E2FAP, 2026-10-26); their code is removed (#698, closing #694; the shaping chat still opens in a window). Before that: TD-267 was built (`ahp.py` on the `websockets` library, #590). The probes of 2026-10-23 settled each part `autonomous` (the owner declined to decide the gate); built: hooks and VS Code MCP servers off per step, the host record's allowlist check, subagents in windows under the SDK rule, read-only steps asking and the SDK policy answering; the live proof of 2026-10-23 held |
 | 18 | Settings without code defaults: every setting comes from Global, the machine or the project; unset is an error on the Settings page and the steps needing it ask; today's values carried into Global once; machine settings get a Global layer | D-01M5MYY55ZX0FPN7VZB021H8MC, D-01M5MZKEPWNASF6X3CNF4FEWZH, D-01M5MZKEPW6WCSM8SZ6DH783EN, D-01M5MZKEPPVMFC9HK795MMG91B | none | Done (#604, #605): layered settings, then machine settings with a Global layer, moved there once on this laptop. R15 (#624): foundation merged in #657; final decision-publication composition verified and merged in #656. The five optional preferences (merge method, delete remote branch, CI poll and start window, ask before merge) resolve PROJECT > machine > Global with no code defaults; one-time guarded PROFILE-to-PROJECT import; current CONFIG format 15, PROFILE format 5. A crash after the durable pending claim resumes only when the basis proves the config unchanged and no owner preference action happened; otherwise the import stays pending with a review diagnostic in Settings (not done, no resurrection of cleared or deleted config). A refused publication keeps the owner's review intent in the page until a retry publishes it, so an edited or already-empty clear, or the explicit "Confirm merge preferences reviewed" action, settles the import once the config is published; a losing concurrent importer resumes only from the durable winning claim and never creates config. The fill stays bound to the remote's config and claim through every push and rebase of its checkout, by a record in that checkout's Git folder. A mismatched or unprovable push remote, ref or complete address is held rather than redirected. A remote that settled or cleared the claim meanwhile holds the checkout with a notice; retirement requires the full unpushed history to contain no change of that config and the index and working copy to match HEAD. Matching remote bytes, a merge or an unpushed revert do not remove a replayable fill. A damaged or unreadable hold, including a dangling link, refuses publication and pull rather than counting as no hold. The owner must resolve the unpushed commits; nothing in Git is undone automatically |
 | 19 | Pinned OwlBear: live chats keep their tools across updates; the chat server a state-free client of the host under a chat contract (first), then the memory, knowledge and browser servers run from the install, pinned and leased; this laptop updates only deliberately | D-01M5Q5GKHX7BJTXPEW2MHGS9E0, D-01M5Q5GKBFGSJRGCPXET234QAH | none | Built: the chat contract (#632, v1.49), the launcher (#636, v1.50) and the memory, knowledge and browser entries of `.mcp.json` and the seed switched to it (#638); item 9 next |
-| 9 | Improvement (formerly the watcher): tool and contract fixes and the Primer first, then the Spotter (Delivery steps and enrolled chats) with its records and cases, then Retro (after-task hindsight analysis) and the Improvement page; each finding gets its category's configured action, irreversible harm acting at once and discretionary steering only after a steered-versus-silent test; built complete before item 10 | TD-224, TD-316, TD-47, the owner's choices of 2026-10-25 | [Improvement](improvement-design.md) | Redesigned 2026-10-25, twice. Built: W1a (#640), the SDK feed and agent identity, which the Spotter reuses. Closed: #647 (a shell-effect parser). Phase 1a built: changed_paths derived, limit errors, check-form hint. The Primer built: lessons in every new step conversation (#653). A pilot and a hindsight review of 83 real moments found the only candidates for a note at hand-offs and fresh instructions, never mid-flow; their value is unproven. The design's slices: built the target design (#660), settings and roles (#662), Retro chatlogs (#663) and the Spotter's core: the card and looks in learning mode at Delivery steps' hand-offs and samples, recorded on this machine (#668). Follow-ups of #668 (2026-10-26): a live test of one look (it found that the runtime refuses a session credit cap under 30, so a look sets none, D-01M5W0HKR9RBAF3G4H8BTZS8E0, #682; a real look then worked), `mask.py` in linear time (#680), the chat server trusting the machine registry (#681); the old watcher decisions settled with the owner (§3.5); the Spotter's on/off switch and its action per category of finding, checked against the allowed set (D-01M5WP8Z4ADZ5FN7RJDR17RQQ5) and recorded with each look, nothing acting yet (#697); the window-step code removed (#698). Per-look and per-run credit limits replaced the daily budget (#704); the Spotter cases are built (#705). The chats follower is built: looks at enrolled chats' plans, hand-offs, state changes and samples, recorded on this machine. Next: Retro, the Improvement page, live delivery, then item 16, then item 10 (§3.5) |
+| 9 | Improvement (formerly the watcher): tool and contract fixes and the Primer first, then the Spotter (Delivery steps and enrolled chats) with its records and cases, then Retro (after-task hindsight analysis) and the Improvement page; each finding gets its category's configured action, irreversible harm acting at once and discretionary steering only after a steered-versus-silent test; built complete before item 10 | TD-224, TD-316, TD-47, the owner's choices of 2026-10-25 | [Improvement](improvement-design.md) | Redesigned 2026-10-25, twice. Built: W1a (#640), the SDK feed and agent identity, which the Spotter reuses. Closed: #647 (a shell-effect parser). Phase 1a built: changed_paths derived, limit errors, check-form hint. The Primer built: lessons in every new step conversation (#653). A pilot and a hindsight review of 83 real moments found the only candidates for a note at hand-offs and fresh instructions, never mid-flow; their value is unproven. The design's slices: built the target design (#660), settings and roles (#662), Retro chatlogs (#663) and the Spotter's core: the card and looks in learning mode at Delivery steps' hand-offs and samples, recorded on this machine (#668). Follow-ups of #668 (2026-10-26): a live test of one look (it found that the runtime refuses a session credit cap under 30, so a look sets none, D-01M5W0HKR9RBAF3G4H8BTZS8E0, #682; a real look then worked), `mask.py` in linear time (#680), the chat server trusting the machine registry (#681); the old watcher decisions settled with the owner (§3.5); the Spotter's on/off switch and its action per category of finding, checked against the allowed set (D-01M5WP8Z4ADZ5FN7RJDR17RQQ5) and recorded with each look, nothing acting yet (#697); the window-step code removed (#698). Per-look and per-run credit limits replaced the daily budget (#704); the Spotter cases are built (#705). The chats follower is built: looks at enrolled chats' plans, hand-offs, state changes and samples, recorded on this machine. Next: Retro, the Improvement page, live delivery (§3.5); then the order goes on with items 24, 21, 16 and 10 |
+| 24 | A step's stage shown from Delivery's own events, without a model; stages may differ by role (C-27, D-01M5WCF6TRXZD7MJG0HEZ4F482); small | D-01M5WCF6TRXZD7MJG0HEZ4F482, D-01M5Z6RCBKS6FZQTZKN0TART14 | none yet | Not started |
+| 21 | TD-402: a project setting names the account for GitHub writes, by default the owner's when `gh` has it; small, needed before items 10 and 15 | TD-402, D-01M5Z6CMV23BVGFYHG1WNEZVZW | none yet | Not started |
 | 16 | Amendment design session with the owner (TD-185), end to end, before any amendment code | TD-185, TD-422 | none yet | Not started |
-| 10 | First real project: the per-project GitHub account setting first; memory publication and curation (F17) fixed; two Changes merged in consumer projects; OwlBear builds itself through Delivery | TD-338, TD-402, TD-90, TD-319 | none yet | Waits for item 9 |
+| 10 | First real project: the per-project GitHub account setting first; memory publication and curation (F17) fixed; two Changes merged in consumer projects; OwlBear builds itself through Delivery | TD-338, TD-402, TD-90, TD-319 | none yet | Waits for items 9, 21 and 16 |
+| 15 | New project from zero: a new project's repository, settings and first Change created by OwlBear; it pulls TD-402's account setting forward; a project created this way waits for the real-project gate (D-01M5WECJV6B3MWJ44C4C0SEJ3B) | TD-421, TD-431..TD-433, D-01M5Z6CMV23BVGFYHG1WNEZVZW | [new project](new-project-build.md) | Designed; not built |
+| 22 | Visual baseline: "before" captured in shaping, retake, preview ports (TD-38, TD-40); and contradicting findings of the two visual judges detected and sent to the owner ([design skill §3.5, §3.7](delivery-next-design-skill.md)); its PDS part was item 11 | TD-38, TD-40, D-01M5Z6CMV23BVGFYHG1WNEZVZW | [visual baseline](delivery-next-visual-baseline.md) | Planned; not built |
 | 17 | Browser and knowledge rebuilt from scratch, from the [ideas of the closed issues](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/closed-issue-ideas-2026-10.md); until then the packages stay untouched | TD-434 | none yet | After item 10 |
 | 20 | Audits as Maintenance actions: agent-audit for OwlBear, doc-audit also for consumer projects; the two skills then go | `D-01M5WG5KHAXT8P99VXHKWW5EBJ` | none yet | Not started |
+| 23 | The quality service: a service that runs linters and judges their exceptions (TD-89) | TD-89, D-01M5Z6CMV23BVGFYHG1WNEZVZW | [research](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/repo-quality-service.md) | Research; not built |
 
-**Not yet placed** (decided or planned, no position in the order):
+**Not in the order** (D-01M5Z6CMV23BVGFYHG1WNEZVZW):
 
-- Visual baseline: "before" captured in shaping, retake, preview ports (TD-38, TD-40); its PDS part is item 11. The
-  repair plan of 2026-10-11 put it after the watcher, because its live proof needs a runtime the owner can follow.
-  [Plan](delivery-next-visual-baseline.md), nothing built.
-- The amendment design (TD-185) is item 16 now (TD-422).
-- New project from zero (TD-421, TD-431..TD-433, item 15): [design](new-project-build.md), answered by the owner;
-  it pulls TD-402's per-project GitHub account forward; a project created this way waits for the real-project gate (D-01M5WECJV6B3MWJ44C4C0SEJ3B).
-- The quality service (TD-89): [research](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/repo-quality-service.md), not built.
-- Contradicting findings of the two visual judges go to the owner ([design skill §3.5](delivery-next-design-skill.md));
-  they are not detected (§3.7 there).
-- An organisation with the merge queue for OwlBear's `main`, once someone else contributes or Delivery builds
-  OwlBear (TD-326).
-- The "align" fixes of §4 that belong to no item above: small, each its own pull request.
+- An organisation with the merge queue for OwlBear's `main`: it waits for its condition, someone else contributing or
+  Delivery building OwlBear (TD-326), not for a position.
+- The "align" fixes of §4 that belong to no item above: small, each its own pull request, any time.
 
 **What depends on what** (open work only; solid: needed first, dashed: decided order without a technical need):
 
 ```mermaid
 flowchart LR
-  A402["TD-402: GitHub account per project"] --> I15["15 New project from zero"]
-  A402 --> I10["10 First real project"]
-  I9["9 Improvement"] --> I16["16 Amendment design"]
+  I9["9 Improvement"] -.-> I24["24 A step's stage"]
+  I24 -.-> I21["21 TD-402: GitHub account per project"]
+  I21 --> I15["15 New project from zero"]
+  I21 --> I10["10 First real project"]
+  I9 --> I16["16 Amendment design"]
   I16 --> I10
   I9 --> I10
+  I10 -.-> I15
   I15 -. waits for the real-project gate .-> I9
-  I10 --> I17["17 Browser and knowledge rebuild"]
-  I9 -.-> VB["Visual baseline"]
+  I15 -.-> I22["22 Visual baseline"]
+  I22 -.-> I17["17 Browser and knowledge rebuild"]
+  I10 --> I17
+  I17 -.-> I20["20 Audits as Maintenance actions"]
+  I20 -.-> I23["23 Quality service"]
 ```
 
-Independent of everything else: TD-402 (small, before item 15), the align fixes of §4 and the quality service.
+Independent of everything else: the align fixes of §4 and the merge queue's condition.
 Renovate's #452 merged on 2026-10-22: Renovate now raises `package.json`'s Node floor with `.nvmrc`. Item 14's
 runner gate only stops and asks until item 16 designs amendments; its CI freshness check (slice 6) runs with the
 owner's `OWLBEAR_DATA_TOKEN` secret (TD-436).
@@ -267,8 +272,9 @@ Done on 2026-10-27, each slice built complete with marked assumptions instead of
    Spotter's records and proposing cases, lessons and fixes, reviewed by `retro-review`.
 2. The Improvement page (slice 8): the Spotter, Retro, cases and proposals managed by direction.
 3. Live delivery and the steered-versus-silent test (slice 9), only once Retro's grades are high enough.
-4. Item 16, the amendment design session with the owner (TD-422: after Improvement, before item 10).
-5. Item 10, the first real project.
+4. Item 24, a step's stage from Delivery's events, then item 21, TD-402's GitHub account per project.
+5. Item 16, the amendment design session with the owner (TD-422: after Improvement, before item 10).
+6. Item 10, the first real project; then items 15, 22, 17, 20 and 23 (§2).
 
 ## 4. Where the Code Differs From the Decisions
 
@@ -450,19 +456,19 @@ instead of passing; conflict paths retain whitespace without Git quoting losses.
 | --- | --- | --- | --- | --- |
 | C-04 | The Spotter reads, steers and stops every runtime used; one that cannot is not used (D-01M5W9YB6VHT7RW53M3133WD3C) | SDK steps read; the Spotter records each finding's category and configured action (#668, #697); steering, refusing and stopping not built | build | 9 |
 | C-04 | A guard denial never leads to more tools; a window-only tool is asked of the owner, naming it, never run elsewhere (D-01M5WG7TB1292KJ05CH0R11WE0) | Asked of the owner | keep | — |
-| C-11 | Shaping captures the target pages; approval waits for them (TD-38) | "Before" is taken at the check | build | visual baseline |
-| C-11 | A target whose UI changed since shaping gets a retake | Partly | build | visual baseline |
-| C-14 | Bounded delegation, the "weaker" rule, the amendment process, fields and baseline | Partly; blocked by the open design TD-185 | keep | not placed |
+| C-11 | Shaping captures the target pages; approval waits for them (TD-38) | "Before" is taken at the check | build | 22 |
+| C-11 | A target whose UI changed since shaping gets a retake | Partly | build | 22 |
+| C-14 | Bounded delegation, the "weaker" rule, the amendment process, fields and baseline | Partly; blocked by the open design TD-185 | keep | 16 |
 | C-16 | OwlBear's own project sets `release:minor` | OwlBear is not a registered project | keep | 10 |
 | C-19 | Add project can create a new project from zero (TD-421) | Only an existing clone can be added | build | 15 |
 | C-20 | OwlBear builds itself through its own Delivery (TD-319) | Developed in chat only | keep | 10 |
 | C-25 | Retro proposes lessons and fixes (D-01M5WAK48NRE79JZFAHDGWS4DA) | Not built | build | 9 |
-| C-27 | A step's stage comes from Delivery's events, without a model (D-01M5WCF6TRXZD7MJG0HEZ4F482) | Not built | build | not placed |
+| C-27 | A step's stage comes from Delivery's events, without a model (D-01M5WCF6TRXZD7MJG0HEZ4F482) | Not built | build | 24 |
 | C-26 | Tests do not assert prose wording | Two memory-governance tests still assert curation wording (identity deferral, corroborated scope): kept until a behavioural test covers the rule | align | — |
 | C-28 | Tool use is measured, success rates included (T8) | Counted per Change and shown on its page (TD-463); no view across Changes, and wrong-tool selection shows only as missing-tool reports | align | — |
 | C-28 | Default rules guide, never gate | Ruff's complexity rule fails CI; `noqa` is the escape | keep | — |
-| S | A project setting names the account for GitHub writes, by default the owner's when `gh` has it (TD-402) | `maba-pag` does everything; both sandboxes are `boecht`'s | build | 10 |
-| S | A quality service runs linters and judges exceptions (TD-89) | Not built | build | not placed |
+| S | A project setting names the account for GitHub writes, by default the owner's when `gh` has it (TD-402) | `maba-pag` does everything; both sandboxes are `boecht`'s | build | 21 |
+| S | A quality service runs linters and judges exceptions (TD-89) | Not built | build | 23 |
 
 Record repairs made with this document: the trim of 2026-10-19 had listed TD-228, TD-250 and TD-358 as spent,
 dropped C-21's lines for TD-199 and TD-201 and cut TD-318's schedule to one of its four parts; they are back in force.
@@ -535,11 +541,11 @@ since item 6; the others are in this folder.
 | [PR, CI, merge queue](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/pr-ci-merge-queue-build.md) | Pull request route and queue support | Built; its pack route with item 2 |
 | [Challenge rounds](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/challenge-rounds-build.md) | Review and challenge loops | Built |
 | [Design skill](delivery-next-design-skill.md) | Design pack and screenshot judges | Built; contradicting findings not detected |
-| [Visual baseline](delivery-next-visual-baseline.md) | TD-38 to TD-40 | Plan; its PDS part (§3.6) built with item 11, the rest not built and not placed |
+| [Visual baseline](delivery-next-visual-baseline.md) | TD-38 to TD-40 | Plan; its PDS part (§3.6) built with item 11, the rest is item 22 |
 | [Decision system](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/decision-system-build.md) | Item 14 | Built (#538 to #547, #550); its migration replaced by the next row |
 | [Decisions as confirmed intent](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/decision-intent-build.md) | Item 14: TD-448..TD-462 | Built (#556 to #565); the migration reviewed by the owner (TD-464..TD-469) and the switch done (#570, #571, TD-466) |
 | [Memory work](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/memory-work-build.md) | Item 5 | Built (#581 to #588) |
-| [New project from zero](new-project-build.md) | Item 15 | Designed; not built, not placed |
+| [New project from zero](new-project-build.md) | Item 15 | Designed; not built; item 15 |
 | [Improvement](improvement-design.md) | Improvement (formerly the watcher), chosen 2026-10-25 | Building: slices 1 to 6 built (#659 to #668, #697, #704, #705, #707); Retro, the Improvement page and live delivery next; the [earlier draft](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-next-watcher-design.md) and its [options](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-next-watcher-options.md) are history |
 | [Transfer ledger](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-next-transfer-ledger.md) | What the old engine leaves; the deletion batches | Built (item 7) |
 | [Cutover](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-next-cutover.md) | D5: coexistence, E1, deletion list, docs list | Built (item 7), as TD-199 and TD-203 changed it |
