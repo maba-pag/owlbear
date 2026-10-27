@@ -96,10 +96,11 @@ Keep it focused and source-grounded:
 ```
 
 Cite the sources in the research document's Sources Studied table. When the work adopts external code, text
-or patterns into the repository, add its row to OwlBear's [sources log](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/sources/overview.md) in owlbear-data per `r-workspace-governance`.
-After editing the log, run its checker with OwlBear's checkout as code root, from that checkout:
-`uv run python .owlbear/scripts/check_sources_log.py <owlbear-data>/owlbear/sources/overview.md .`; it checks each
-row's shape and fields, the `<https://…>` URL and that every Where Used path exists. Delete approved clones from `.owlbear/scratch/research/` before returning.
+or patterns into the repository, add its row to the project's sources log, `owlbear-data/<folder>/sources/overview.md` (OwlBear's:
+[`owlbear/sources/overview.md`](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/sources/overview.md)), per `r-workspace-governance`.
+After editing the log, run OwlBear's checker from OwlBear's checkout with the project's checkout as code root:
+`uv run python .owlbear/scripts/check_sources_log.py <owlbear-data>/<folder>/sources/overview.md <project checkout>`;
+it checks each row's shape and fields, the `<https://…>` URL and that every Where Used path exists. Delete approved clones from `.owlbear/scratch/research/` before returning.
 
 ## Step 7 — Return Evidence To The Caller
 

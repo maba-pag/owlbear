@@ -52,7 +52,7 @@ reverting them.
 | Temporary output, debug files, and one-off scripts | `.owlbear/scratch/{task-id}-{description}.{ext}` | Untracked; delete before task closure. |
 | Approved external repository clones | `.owlbear/scratch/research/{repo-name}/` | Inspect only; delete before task closure. |
 | Durable research findings | `owlbear-data/<folder>/research/{slug}.md` (OwlBear's folder: `owlbear`), OwlBear's unbuilt build designs included; its plan: the [pinned tracker issue](https://github.com/maba-pag/owlbear/issues/713) | Tracked; include the task reference; never committed into another project; OwlBear's `.owlbear/` keeps only agent customizations, scripts and placeholders (TD-227, TD-347, D-01M5ZMXT7H851MZZFJA2P9X179). |
-| External source attribution | `owlbear-data/owlbear/sources/overview.md` ([sources log](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/sources/overview.md)) | Tracked; only sources whose material still ships; use the Attribution schema below. |
+| External source attribution | `owlbear-data/<folder>/sources/overview.md`, the project's own log (OwlBear's: [`owlbear/sources/overview.md`](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/sources/overview.md)) | Tracked; only sources whose material still ships; use the Attribution schema below. |
 
 Project-owned source, test, documentation, and benchmark locations come from the local project map,
 manifests, and existing structure. Use `h-codebase-orientation` to discover them; do not impose
