@@ -260,23 +260,23 @@ def test_the_page_shows_final_review_values_set_while_others_are_unset():
                                            "ask_owner_at": None}  # fmt: skip
 
 
-ON = Spotter(switch="on", steer_share=0, intervention_cap=1, verbose="off", looks=["hand-off"],
+ON = Spotter(switch="on", steer_share=0, intervention_cap=1, verbose="off", looks=["hand-off"], look_credit_limit=0.75,
              **dict.fromkeys(CATEGORIES.values(), "record"))  # fmt: skip
 
 
 @pytest.mark.usefixtures("no_base")
 @pytest.mark.parametrize(
-    ("spot", "budget", "unset"),
+    ("spot", "unset"),
     [
-        (None, 50, r"^settings unset: spotter\.switch;"),
-        (Spotter(switch="on"), 50, r"spotter\.hand_off_fitness.*spotter\.looks"),
-        (ON.model_copy(update={"irreversible_harm": None}), 50, r"^settings unset: spotter\.irreversible_harm;"),
-        (ON, None, "spotter_budget"),
+        (None, r"^settings unset: spotter\.switch;"),
+        (Spotter(switch="on"), r"spotter\.hand_off_fitness.*spotter\.looks.*spotter\.look_credit_limit"),
+        (ON.model_copy(update={"irreversible_harm": None}), r"^settings unset: spotter\.irreversible_harm;"),
+        (ON.model_copy(update={"look_credit_limit": None}), r"^settings unset: spotter\.look_credit_limit;"),
     ],
 )
-def test_an_unset_spotter_setting_asks_before_a_step_records_anything(monkeypatch, tmp_path, spot, budget, unset):
+def test_an_unset_spotter_setting_asks_before_a_step_records_anything(monkeypatch, tmp_path, spot, unset):
     no_switch = resolve(carried.layer().model_copy(update={"spotter": spot}), Layer())
-    monkeypatch.setattr(machine_settings, "BASE", carried.MACHINE.model_copy(update={"spotter_budget": budget}))
+    monkeypatch.setattr(machine_settings, "BASE", None)  # no machine setting is needed: no daily budget
     recorded: list[object] = []
     monkeypatch.setattr(runner.worktree, "ensure", lambda *_a: tmp_path)
     monkeypatch.setattr(runner, "git_common_dir", lambda _repo: tmp_path / ".git")
@@ -305,7 +305,7 @@ def test_a_spotter_switched_off_shows_its_unset_settings_but_never_blocks_a_step
     shown = {f"spotter.{k}" for k in (*CATEGORIES.values(), "steer_share", "intervention_cap", "verbose", "looks")}
     assert shown <= set(off.missing)  # the Settings page still shows each as an error
     assert "agents.spotter.model" in off.missing
-    monkeypatch.setattr(machine_settings, "BASE", carried.MACHINE.model_copy(update={"spotter_budget": None}))
+    monkeypatch.setattr(machine_settings, "BASE", None)
     monkeypatch.setattr(runner.worktree, "ensure", lambda *_a: tmp_path)
     monkeypatch.setattr(runner, "git_common_dir", lambda _repo: tmp_path / ".git")
 

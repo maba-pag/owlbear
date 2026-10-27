@@ -9,7 +9,7 @@ from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.change_contracts.profile_record import PROFILE_FORMAT, Profile, RoleModel
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.settings import carried, roles
-from owlbear_delivery_next.settings.config import Agent, GlobalLayer, Layer, resolve
+from owlbear_delivery_next.settings.config import CONFIG_FORMAT, Agent, GlobalLayer, Layer, resolve
 from owlbear_delivery_next.state_store import layers as layers_mod
 from owlbear_delivery_next.state_store import profile_share, project_home, roles_move
 from owlbear_delivery_next.state_store import store as store_mod
@@ -192,7 +192,7 @@ def test_a_stored_layer_from_before_the_window_runtime_loads_without_its_setting
     path.write_text(json.dumps(old))
 
     layer = read_layer(path, GlobalLayer)
-    assert (layer.format, layer.widths, layer.agents["builder"]) == (15, [1600], Agent(model="g-1"))
+    assert (layer.format, layer.widths, layer.agents["builder"]) == (CONFIG_FORMAT, [1600], Agent(model="g-1"))
     assert not {"runtimes", "visible"} & set(layer.model_dump())
 
 
@@ -210,7 +210,7 @@ def test_a_retired_window_setting_the_format_never_allowed_is_refused_not_droppe
     path.parent.mkdir(parents=True)
     path.write_text(json.dumps({"format": 14, "widths": [1600]} | retired))
 
-    with pytest.raises(StoreError, match="cannot be migrated to format 15"):
+    with pytest.raises(StoreError, match=f"cannot be migrated to format {CONFIG_FORMAT}"):
         read_layer(path, GlobalLayer)
 
 

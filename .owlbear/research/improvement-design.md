@@ -122,9 +122,16 @@ All settings have no code default; an unset one is an error on the Settings page
 - **intervention cap:** at most this many steering notes per step or chat turn; irreversible-harm actions and hand-off
   refusals are never capped (D-01M5W9S636SC6C6JC4EQAM24NN was folded into the category decision);
 - **verbose:** a bounded rationale with its evidence per look, scoped to the machine, a project or a Change, with an
-  expiry. Retro may switch it on within a credit cap and for a named reason, shown on the page; never an action;
+  expiry. Retro may switch it on for a named reason, shown on the page, each look still within its credit limit;
+  never an action;
 - **looks:** which looks are on, and the sample rate;
-- **budgets:** credits per day for the Spotter and for Retro; beyond it, a look or run is skipped and recorded;
+- **credit limits:** no daily budgets (D-01M5XCD49YHHR1NQKKY8TQD0C3). Each Spotter look, live or replayed, each Retro
+  run and each paid replay run of Spotter cases stops at its own credit limit, and the stop is recorded. The per-look
+  limit is one of the Spotter's settings (`look_credit_limit`); the run limits are machine settings
+  (`retro_run_credit_limit`, `replay_run_credit_limit`). Each was written into Global once at five times its expected
+  cost, a marked assumption (0.75, 20 and 65 credits; the basis is in `settings/carried.py`). There is no SDK credit
+  cap: the spend the runtime reports is counted and the work stopped once it reaches the limit, so a call already
+  under way can pass it;
 - **enrolled chats:** the workspaces or chats the Spotter and Retro may read. Unset reads none. Spotter, Retro and
   curation sessions are excluded by provenance. The check comes before any read, copy or model call.
 
@@ -141,7 +148,7 @@ Records are kept on this machine in a daily store (`~/.owlbear/spotter/records-<
 its Change and step or its chat and turn, and its look, so Retro can join them after a restart.
 Active Spotter cases are its prompt examples. A look takes no session slot of its own: the agent it looks at holds
 one, so waiting for another could deadlock a machine limited to one. Instead it is admitted without blocking, within
-the Spotter's own budget and a short timeout; a look that cannot run in time is recorded as skipped, and the agent
+its own credit limit and a short timeout; a look that cannot run in time is recorded as skipped, and the agent
 carries on as without a Spotter.
 - **Hand-off:** Delivery's `submit_result`; in a chat, a turn that ends with a reply to the requester.
 - **Plan:** the agent's first reply after a requester message.
@@ -150,9 +157,11 @@ carries on as without a Spotter.
 
 As built for Delivery steps (#668): the hand-off look starts at the submit call, before Delivery may accept it, over a
 frozen snapshot of a bounded intake of the step's own agent (subagents left out; a resumed session's transcript seeds
-it); at most two looks run at once per step, each reserving 0.5 credits of the day's budget in a locked ledger and
-settling its spend after (an unknown spend counts as 0.5; a look sets no SDK credit cap, since the runtime's minimum is
-30, D-01M5W0HKR9RBAF3G4H8BTZS8E0); a look gets 90 seconds. A look never blocks or changes the step's work or its
+it); at most two looks run at once per step. Each look stops at its credit limit (D-01M5XCD49YHHR1NQKKY8TQD0C3): its
+meter adds each billed call's reported cost and the turn is aborted once the limit is reached or a cost is unknown;
+the call that passed it cannot be stopped, so a look may overshoot; a retry or extension of the look shares its meter
+and does not start once it is closed. Its record keeps the known spend, whether it is complete, the limit and the stop
+(`improvement/credit_meter.py`, `runtimes/credit_limit.py`). A look gets 90 seconds. A look never blocks or changes the step's work or its
 acceptance: its files and model call run beside it. Only the session's end waits, bounded: at most 5 seconds for running
 looks, then they are stopped, with up to 15 seconds more for their teardown and records; stopped looks are recorded as
 skipped. Each record keeps its call and event cutoff, and Delivery's answer to the hand-off is kept beside it in
@@ -246,7 +255,7 @@ hindsight verdicts. Raw cards stay on this machine; only reviewed, minimised and
 
 Each proposal is challenged by `retro-review` (Sol): is the evidence real, is the direction right, what could it
 break. Survivors, capped per week, reach the owner on the **Improvement page**, which also shows the Spotter (its
-switch and category actions, verbose, budget used, recent records with grades), its looks and outside writes across
+switch and category actions, verbose, credits spent and looks stopped at their limit, recent records with grades), its looks and outside writes across
 Changes (filterable by Change, marking those whose irreversible-harm action stopped a step), Retro (runs, state, a
 button) and the Spotter cases (stages, versions). There, and on a Change's page, a finding can be turned into
 follow-up work (D-01M5W9AE1G5T7B5NY998CASAJ9). A Change's page shows the Spotter's and Retro's detail for it only
@@ -282,11 +291,12 @@ Then item 16 (the amendment design session, TD-422), then item 10.
 - Phase 1a (#652) and the Primer (#653) are built.
 - Settings and roles (#662): the `watcher` role and switch became the `spotter` role and the Spotter's settings
   (settings format 12); the `retro` and `retro-review` roles; the machine values for budgets, Retro's triggers and
-  enrolled chats; none has a code default.
+  enrolled chats; none has a code default. The daily budgets were replaced by credit limits per look and run on
+  2026-10-27 (settings format 16, written into Global once by the machine host's start).
 - Retro chatlogs (#663): the Change-to-session manifest, each step's `events.jsonl` and saved outputs captured at its
   end, enrolled-chat discovery and pruning.
 - The Spotter's core (#668): the intake (`improvement/events.py`), the card (`improvement/card.py`), the looks and
-  their records, budget ledger and lifecycle (`improvement/spotter.py`, `runtimes/spotter_look.py`) and the prompt
+  their records, budget ledger (removed with the daily budgets) and lifecycle (`improvement/spotter.py`, `runtimes/spotter_look.py`) and the prompt
   (`improvement/spotter_prompt.md`); `improvement` is a layer between `state_store` and `runtimes`. A live test
 (2026-10-26) found that the runtime refuses a session credit cap under 30; a look now sets none. The machine
   registry and machine settings moved to `state_store` so a step reads its budget (D-01M5VXXFC28ZFHV7HVDTKFHPVF).

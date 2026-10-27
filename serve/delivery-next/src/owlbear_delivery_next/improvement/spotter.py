@@ -4,15 +4,16 @@ It looks at a Delivery step's hand-offs and a sample of its actions, never delay
 
 A look runs as a task on the step's own event loop when the hand-off (the submit tool's call) or a sampled completion
 happens, over a frozen snapshot of the step's intake: the same moment and inputs a live look will have. The loop only
-freezes the snapshot; the reservation, the card and every file write run in threads. A look is one tool-less SDK
-session on the spotter role in an empty folder, with no SDK credit cap, noted in the chatlogs manifest so
-it is never taken for a chat. At most ``RUNNING`` looks run at once per step; each reserves ``ESTIMATE`` against the
-day's Spotter budget in a locked ledger before it starts and settles its spend after (the estimate when unknown). A look
-over capacity, over budget, past ``LOOK``, or still running ``DRAIN`` seconds after the step ends is recorded as
-skipped; its teardown takes at most ``TEARDOWN`` per stage, then its runtime is forced to stop. How Delivery answered
-each hand-off is kept beside its look. Records, outcomes and cards stay on this machine in ``~/.owlbear/spotter/``
-(owner-only). A record that names a state change is marked preliminary: the decision-conflict check comes with live
-delivery, so such records do not count toward going live.
+freezes the snapshot; the card and every file write run in threads. A look is one tool-less SDK session on the spotter
+role in an empty folder, with no SDK credit cap, noted in the chatlogs manifest so it is never taken for a chat. At most
+``RUNNING`` looks run at once per step. Each look stops at its own credit limit (D-01M5XCD49YHHR1NQKKY8TQD0C3): its
+meter (``improvement.credit_meter``) adds the spend the runtime reports and the look is stopped once it reaches the
+limit, cooperatively, so it may pass it; there is no daily budget. A look over capacity, past ``LOOK``, or still running
+``DRAIN`` seconds after the step ends is recorded as skipped; its teardown takes at most ``TEARDOWN`` per stage, then
+its runtime is forced to stop. Each record keeps its spend, whether that is known, its limit and its stop
+(``credit_meter.Meter.report``). How Delivery answered each hand-off is kept beside its look. Records, outcomes and
+cards stay on this machine in ``~/.owlbear/spotter/`` (owner-only). A record that names a state change is marked
+preliminary: the decision-conflict check comes with live delivery, so such records do not count toward going live.
 
 A record keeps its finding's ``category`` (one of ``CATEGORIES``; ``none`` when silent, ``insufficient-context`` when
 the card lacked the facts, ``failed`` for an unusable answer, empty when skipped) and the ``action`` the settings gave
@@ -33,7 +34,6 @@ import os
 import queue
 import random
 import re
-import tempfile
 import threading
 import time
 import uuid
@@ -43,7 +43,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from owlbear_delivery_next.improvement import card
+from owlbear_delivery_next.improvement import card, credit_meter
 from owlbear_delivery_next.improvement.events import Kept, as_dict, clip, kept_text
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.settings.improvement import CATEGORIES
@@ -52,7 +52,7 @@ if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Iterable, Iterator, Mapping
 
 PROMPT = Path(__file__).with_name("spotter_prompt.md")
-RUNNING, ESTIMATE = 2, 0.5  # looks at once per step; credits a look reserves, and counts as when its spend is unknown
+RUNNING = 2  # looks at once per step
 LOOK, TEARDOWN, DRAIN = 90.0, 5.0, 5.0  # seconds a look's answer, each teardown stage and the step's end may take
 LOCK, GRACE = 5.0, 1.0  # seconds a file lock is waited for; and the Spotter's writes at the process's exit
 ANSWERS = frozenset({*CATEGORIES, "none", "insufficient-context"})  # a finding's category, or why there is none
@@ -70,7 +70,7 @@ class Context:
     verbose: bool
     model: str
     effort: str
-    budget: int  # credits a day for every look on this machine
+    limit: float  # credits each look may spend: the Spotter's ``look_credit_limit``
     context: str = ""  # the role's context tier; "long" for the long one
     actions: Mapping[str, str] = field(default_factory=dict)  # each category's configured action
     open_work: tuple[str, ...] = ()
@@ -102,13 +102,17 @@ class Record:
     model: str = ""
     effort: str = ""
     prompt: str = ""
-    credits: float = 0.0
+    credits: float = 0.0  # the known spend; see ``credit_meter.Meter.report`` for these five
+    credits_known: bool = False  # a record without it predates measuring: its credits may be an estimate
+    limit: float = 0.0
+    stopped: str = ""
+    stopped_by: str = ""
     seconds: float = 0.0
     skipped: str = ""
 
 
 def place() -> Path:
-    """Where the Spotter's records, cards and ledger are kept on this machine; nothing is created."""
+    """Where the Spotter's records and cards are kept on this machine; nothing is created."""
     return local_home.root() / "spotter"
 
 
@@ -164,72 +168,6 @@ def store(folder: Path, record: Record, card_: dict[str, Any] | None) -> None:
     _append(folder, "records", asdict(record))
 
 
-class LedgerError(Exception):
-    """The day's budget ledger cannot be read or written."""
-
-    def __init__(self, why: object) -> None:
-        super().__init__(f"the ledger failed: {why}")
-
-
-type Token = tuple[str, str]  # the day a reservation was made on, and its id
-
-
-def _ledger(path: Path) -> dict[str, Any]:
-    if not path.exists():
-        return {"reserved": {}, "spent": 0.0}
-    try:
-        ledger = json.loads(path.read_text())
-        float(ledger["spent"]), sum(float(v) for v in ledger["reserved"].values())
-    except (ValueError, KeyError, TypeError, AttributeError) as exc:
-        raise LedgerError(exc) from exc
-    return ledger
-
-
-def _put(path: Path, ledger: dict[str, Any]) -> None:
-    """Write *ledger* whole or not at all: a killed writer leaves the previous one."""
-    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=".ledger-")
-    try:
-        with os.fdopen(fd, "w") as out:
-            json.dump(ledger, out)
-        Path(tmp).replace(path)
-    except BaseException:
-        Path(tmp).unlink(missing_ok=True)
-        raise
-
-
-def reserve(folder: Path, budget: int, estimate: float = ESTIMATE) -> Token | None:
-    """Reserve *estimate* credits of today's Spotter budget across processes; None when it would pass the budget.
-
-    A reservation its process never settles (it was killed) stays counted for its day: the budget errs on the safe side.
-
-    Raises:
-        LedgerError: The day's ledger cannot be read or written.
-    """
-    day, rid = _today(), uuid.uuid4().hex[:12]
-    try:
-        with _locked(ready(folder) / "ledger.lock"):
-            path = folder / f"ledger-{day}.json"
-            ledger = _ledger(path)
-            if sum(ledger["reserved"].values()) + ledger["spent"] + estimate > budget:
-                return None
-            ledger["reserved"][rid] = estimate
-            _put(path, ledger)
-    except (OSError, TimeoutError) as exc:
-        raise LedgerError(repr(exc)) from exc
-    return day, rid
-
-
-def settle(folder: Path, token: Token, actual: float) -> None:
-    """End the reservation *token* on its own day's ledger in *folder* and book what the look cost; never raises."""
-    day, rid = token
-    with contextlib.suppress(OSError, TimeoutError, LedgerError), _locked(folder / "ledger.lock"):
-        path = folder / f"ledger-{day}.json"
-        ledger = _ledger(path)
-        if ledger["reserved"].pop(rid, None) is not None:
-            ledger["spent"] += actual
-            _put(path, ledger)
-
-
 def prompt_version() -> str:
     """The prompt's version: the start of its content's hash; "unreadable" if it cannot be read, never an error."""
     try:
@@ -279,7 +217,7 @@ def offload[T](work: Callable[..., T], *args: Any) -> asyncio.Future[T]:  # noqa
     return asyncio.shield(asyncio.wrap_future(WORK.submit(work, *args)))
 
 
-type Judge = Callable[[dict[str, Any], Context], Awaitable[tuple[str, float]]]
+type Judge = Callable[[dict[str, Any], Context, credit_meter.Meter], Awaitable[str]]  # the answer; spend: the meter
 
 
 class Spotter:
@@ -363,18 +301,18 @@ class Spotter:
         self.running -= 1
 
     async def _run(self, look: str, probability: float, snapshot: dict[str, Any], moment: dict[str, Any]) -> None:
-        ctx, started, the_card, spent = self.ctx, time.monotonic(), None, 0.0
+        ctx, started, the_card = self.ctx, time.monotonic(), None
         record = self._record(look, probability, moment, skipped="the step ended before the look began")
-        reserving = WORK.submit(reserve, self.folder, ctx.budget)  # owned from here: its end starts ``_finished``
+        meter = credit_meter.Meter(ctx.limit, "look")
         try:
-            if await asyncio.shield(asyncio.wrap_future(reserving)) is None:
-                record.skipped = "budget: today's Spotter budget is spent"
-                return
             context = {"step": ctx.step, "open_work": list(ctx.open_work), "decisions": list(ctx.decisions),
                        "gaps": list(ctx.gaps)}  # fmt: skip
             the_card = await offload(card.build, snapshot, moment, context)
-            record.skipped, spent = "the step ended while the look ran", ESTIMATE  # unknown until it answers
-            text, spent = await asyncio.wait_for(self.judge(the_card, ctx), LOOK)
+            record.skipped = "the step ended while the look ran"
+            text = await asyncio.wait_for(self.judge(the_card, ctx, meter), LOOK)
+            if not text and meter.stopped:
+                record.skipped = f"credit limit: {meter.stopped} ({meter.stopped_by}) before an answer"
+                return
             said = parse(text)
             record.skipped, record.category = "", said["category"]
             record.action = ctx.actions.get(record.category, "")
@@ -385,19 +323,19 @@ class Spotter:
             record.preliminary = bool(record.state_change)
         except TimeoutError:
             record.skipped = f"time: the look took over {LOOK:.0f} seconds"
-        except LedgerError as exc:
-            record.skipped = f"budget: {exc}"[:300]
         except Exception as exc:  # noqa: BLE001 - a look never reaches the step
             record.category, record.skipped = "failed", f"{type(exc).__name__}: {exc}"[:300]
         finally:
             record.prompt, record.seconds = prompt_version(), round(time.monotonic() - started, 1)
-            finishing: Future[None] = Future()
-            reserving.add_done_callback(
-                lambda r: WORK.submit(_finished, self.folder, r, record, the_card, spent).add_done_callback(
-                    lambda _: finishing.set_result(None)
-                )
-            )  # once the reservation ends, never before: what it reserved is always settled, even if the step stops
-            await asyncio.wait({asyncio.wrap_future(finishing)}, timeout=2 * LOCK)  # it goes on if this wait ends
+            spend = meter.report()
+            record.credits, record.credits_known, record.limit = (
+                spend["credits"],
+                spend["credits_known"],
+                spend["limit"],
+            )
+            record.stopped, record.stopped_by = spend["stopped"], spend["stopped_by"]
+            writing = asyncio.wrap_future(WORK.submit(store, self.folder, record, the_card))  # never cancelled
+            await asyncio.wait({writing}, timeout=2 * LOCK)  # it goes on if this wait ends
 
     async def drain(self) -> None:
         """At the step's end: no look starts any more; wait briefly for running ones, then stop the rest; bounded."""
@@ -413,27 +351,13 @@ class Spotter:
         for task in pending:
             task.cancel()
         if pending:
-            await asyncio.wait(pending, timeout=3 * TEARDOWN)  # its two teardown stages, then its record
-
-
-def _finished(
-    folder: Path, reserving: Future[Token | None], record: Record, the_card: dict[str, Any] | None, spent: float
-) -> None:
-    """On the Spotter's threads, once *reserving* ended: adopt what it reserved, store the record, settle once."""
-    token = reserving.result() if not reserving.cancelled() and reserving.exception() is None else None
-    if token is None and record.skipped.startswith("the step ended before"):
-        record.skipped = "the step ended before the look began; nothing was reserved"
-    record.credits = spent if token else 0.0
-    store(folder, record, the_card)
-    if token is not None:
-        settle(folder, token, spent)  # an unknown spend counts as the estimate
+            await asyncio.wait(pending, timeout=4 * TEARDOWN)  # its spend's read, two teardown stages, its record
 
 
 class Worker:
     """The Spotter's own daemon threads, first in, first out: the process waits at most ``GRACE`` for them at exit.
 
-    What a killed write loses errs on the safe side: a ledger is replaced whole, and an unsettled reservation stays
-    counted for its day.
+    A killed write loses at most the line it was writing.
     """
 
     def __init__(self, threads: int) -> None:

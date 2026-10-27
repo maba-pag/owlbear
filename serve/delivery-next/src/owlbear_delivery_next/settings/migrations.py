@@ -8,6 +8,7 @@ from pydantic import TypeAdapter
 
 from owlbear_delivery_next.change_contracts.models import Role
 from owlbear_delivery_next.change_contracts.profile_record import RoleModel
+from owlbear_delivery_next.settings import carried
 from owlbear_delivery_next.settings.config import Agent, Layer
 from owlbear_delivery_next.settings.improvement import CATEGORIES
 
@@ -233,6 +234,48 @@ def window_runtime_dropped(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+def _whole(value: object) -> bool:
+    return value is None or (type(value) is int and value >= 0)
+
+
+DAILY = (
+    "spotter_budget",
+    "retro_budget",
+    "retro_verbose_cap",
+)  # the daily credit budgets, each in Global's machine part
+
+
+def daily_budgets_dropped(data: dict[str, Any]) -> dict[str, Any]:
+    """Settings format 15 to 16: no daily credit budgets (D-01M5XCD49YHHR1NQKKY8TQD0C3); each leaves Global's machine.
+
+    Each look, Retro run and paid replay run stops at its own credit limit instead. A budget the format never allowed
+    (a whole number, at least 0) is refused, not dropped. Only Global has a machine part; other layers pass unchanged.
+    """
+    machine = data.get("machine")
+    if isinstance(machine, dict):
+        for key in DAILY:
+            _retired(machine, key, _whole)
+    return data
+
+
+def credit_limits_written(data: dict[str, Any]) -> dict[str, Any]:
+    """Global's format 15 to 16: the credit limits are written into Global once (D-01M5XCD49YHHR1NQKKY8TQD0C3).
+
+    The per-look limit goes into the Spotter's settings, the Retro and paid replay run limits into the machine part,
+    each at five times its expected cost (``settings.carried``). A section Global leaves out, or sets to null, is made
+    with the limit alone; every other value stays. ``state_store.settings_carry.limits`` saves and publishes the result.
+    """
+    data = daily_budgets_dropped(data)
+    spotter = data.get("spotter") or {}
+    machine = data.get("machine") or {}
+    if isinstance(spotter, dict) and isinstance(machine, dict):  # anything else is left for validation to refuse
+        spotter.setdefault("look_credit_limit", carried.LOOK_CREDIT_LIMIT)
+        machine.setdefault("retro_run_credit_limit", carried.RETRO_RUN_CREDIT_LIMIT)
+        machine.setdefault("replay_run_credit_limit", carried.REPLAY_RUN_CREDIT_LIMIT)
+        data["spotter"], data["machine"] = spotter, machine
+    return data
+
+
 def runtime_switch_dropped(data: dict[str, Any]) -> dict[str, Any]:
     """Profile format 4 to 5: the per-project runtime switch goes; steps run only through the SDK (2026-10-26).
 
@@ -282,4 +325,6 @@ CONFIG: Migrations = {
     12: prefs_added,
     13: spotter_switched,
     14: window_runtime_dropped,
+    15: daily_budgets_dropped,
 }
+GLOBAL: Migrations = CONFIG | {15: credit_limits_written}  # the Global layer's: only it is written the limits

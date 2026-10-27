@@ -846,7 +846,7 @@ def test_the_machine_s_settings_are_saved_against_the_revision_the_page_read(htt
     assert (read["settings"]["channel"], read["resolved"]["channel"], read["resolved"]["sources"]["channel"]) == (
         None, "minor", "default"
     )  # fmt: skip
-    unset = dict.fromkeys(("spotter_budget", "retro_budget", "retro_verbose_cap", "retro_after_change",
+    unset = dict.fromkeys(("retro_run_credit_limit", "replay_run_credit_limit", "retro_after_change",
                            "retro_when_idle", "enrolled_chats"))  # Improvement's: none chosen here  # fmt: skip
     assert (saved.json()["settings"], registry.load().settings.channel) == (chosen | unset, "major")
     assert saved.json()["resolved"]["sources"]["channel"] == "machine"

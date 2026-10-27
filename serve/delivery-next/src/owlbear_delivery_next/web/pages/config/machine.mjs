@@ -1,7 +1,7 @@
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { live } from "/assets/lit-html/3.3.3/directives/live.js";
 import { call, loaded as clones, project as current } from "/assets/ui.mjs";
-import { INHERIT, SOURCES, WRITE, state, show, notify } from "./state.mjs";
+import { CREDITS, INHERIT, SOURCES, WRITE, state, show, notify, typedNumber } from "./state.mjs";
 import { button } from "./cells.mjs";
 import { edit, own } from "./layers.mjs";
 
@@ -16,8 +16,8 @@ const MACHINE_LABELS = {
   update_while_paused: "Update itself while paused", curate_after_merge: "Curate memory after a merge",
   curate_when_idle: "Curate memory when idle (the Maintenance button always runs)",
   sessions: "Agent sessions at once on this machine, across its projects",
-  spotter_budget: "Spotter: credits a day", retro_budget: "Retro: credits a day",
-  retro_verbose_cap: "Retro: credits a day it may spend turning the Spotter's verbose on",
+  retro_run_credit_limit: "Retro: credit limit per run (credits)",
+  replay_run_credit_limit: "Spotter cases: credit limit per paid replay run (credits)",
   retro_after_change: "Retro after a Change ends (the Improvement button always runs)",
   retro_when_idle: "Retro over finished enrolled chats when idle",
   enrolled_chats: "Enrolled chats: workspace folders whose chats the Spotter and Retro may read, comma-separated; "
@@ -26,7 +26,7 @@ const MACHINE_LABELS = {
 const CHOICES = { channel: CHANNELS, update_when_idle: SWITCH, update_while_paused: SWITCH,
   curate_after_merge: CURATE, curate_when_idle: CURATE, retro_after_change: CURATE, retro_when_idle: CURATE };
 // Typed, not chosen.
-const TYPED = ["sessions", "spotter_budget", "retro_budget", "retro_verbose_cap", "enrolled_chats"];
+const TYPED = ["sessions", "retro_run_credit_limit", "replay_run_credit_limit", "enrolled_chats"];
 
 // A machine setting's value in words; "unset" where none is set.
 function said(key, v) {
@@ -70,7 +70,7 @@ function ownControl(key) {
       const raw = e.target.value ?? "", v = raw.trim();
       if (list) state.machineText = { ...(state.machineText ?? {}), [key]: raw };
       machineEdit(key, v === "" ? null : list ? (v === "none" ? [] : v.split(",").map((f) => f.trim()).filter(Boolean))
-        : /^\d+$/.test(v) ? Number(v) : v);
+        : typedNumber(key, v));
     };
     const typedText = state.machineText?.[key];  // as typed, shown only while its items are the field's own now
     const items = (t) => JSON.stringify(t.split(",").map((f) => f.trim()).filter(Boolean));
@@ -79,7 +79,8 @@ function ownControl(key) {
     const shown = typedText !== undefined && (typedText.trim() === "none" ? Array.isArray(value) && !value.length
       : typedText.trim() === "" ? value === null : same(typedText)) ? typedText : fresh;
     control = html`<p-input-text id=${`machine-${key}`} label=${MACHINE_LABELS[key]}
-      inputmode=${list ? nothing : "numeric"} placeholder=${below} .value=${live(shown)}
+      inputmode=${list ? nothing : CREDITS.includes(key) ? "decimal" : "numeric"} placeholder=${below}
+      .value=${live(shown)}
       ?disabled=${common.disabled} @input=${count} @change=${count}></p-input-text>`;
   } else {
     const pick = (e) => {
@@ -99,7 +100,8 @@ function sharedControl(key) {
   const draftKey = `machine.${key}`, value = own(draftKey), label = `Every machine: ${MACHINE_LABELS[key]}`;
   if (TYPED.includes(key)) {
     return html`<p-input-text id=${`global-machine-${key}`} label=${label} data-key=${draftKey}
-      inputmode=${key === "enrolled_chats" ? nothing : "numeric"} placeholder="unset" .value=${live(value)}
+      inputmode=${key === "enrolled_chats" ? nothing : CREDITS.includes(key) ? "decimal" : "numeric"}
+      placeholder="unset" .value=${live(value)}
       ?disabled=${state.saving}
       @input=${(e) => edit(draftKey, e.target.value ?? "")}></p-input-text>`;
   }

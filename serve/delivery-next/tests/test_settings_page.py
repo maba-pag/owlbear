@@ -160,6 +160,9 @@ def test_each_layer_keeps_its_own_drafts_and_a_save_sends_only_the_shown_layer(s
         expect(looks).to_have_attribute("placeholder", "inherit (hand-off)")
         looks.fill("hand-off, sample")
         page.get_by_label("Sampled actions", exact=True).fill("5")
+        look_limit = page.get_by_label("Credit limit per look", exact=True)  # D-01M5XCD49YHHR1NQKKY8TQD0C3
+        expect(look_limit).to_have_attribute("placeholder", "inherit (0.75)")
+        look_limit.fill("0.5")  # an amount: a fraction is kept
         at_once = page.get_by_label("Agent sessions at once in one project")  # TD-336
         expect(at_once).to_have_attribute("placeholder", "inherit (2)")
         at_once.fill("3")
@@ -186,6 +189,7 @@ def test_each_layer_keeps_its_own_drafts_and_a_save_sends_only_the_shown_layer(s
         ["hand-off", "sample"],
         5,
     )
+    assert project.spotter.look_credit_limit == 0.5
     assert project.spotter.steer_share is None  # the rest still inherit
     assert not store.global_path.exists()
 

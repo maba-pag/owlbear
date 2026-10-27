@@ -6,6 +6,9 @@ commit commits the filled layer without filling it again; afterwards nothing doe
 moves its own machine settings: the first move fills Global's and marks it moved, later ones copy nothing (``move``).
 Both run on a current checkout (``sync``) and, like every Settings save, keep their progress when publishing fails;
 nothing is ever undone automatically.
+
+The credit limits' upgrade (``limits``, D-01M5XCD49YHHR1NQKKY8TQD0C3) saves an existing Global in format 16 once, so
+the limits its migration writes are in the file and published with it; nothing else of Global is filled again.
 """
 
 from __future__ import annotations
@@ -30,6 +33,9 @@ if TYPE_CHECKING:
 
 MESSAGE = "settings: today's built-in values carried into Global"  # the carry's commit, found again in the history
 MOVED = "settings: this machine's settings moved into Global"
+LIMITS = "settings: the credit limits written into Global"  # the limits' upgrade commit
+LIMITS_FORMAT = 16  # the format that writes the credit limits into Global
+REACHED = '"format": (1[6-9]|[2-9][0-9]|[1-9][0-9]{2,})([^0-9]|$)'  # a Global line of format 16 or later (-G, ERE)
 MARK = '"machine_moved": true'  # the moved mark as every write of Global spells it (``model_dump_json(indent=1)``)
 EDITED = "the global settings have an edit that is not saved; the carry waits until it is saved or undone"
 
@@ -92,6 +98,54 @@ def move(shared: DataRepo, local: MachineValues, keep: Keep = _ignore) -> str:
                              lambda g: g.model_copy(update={"machine": values, "machine_moved": True}))  # fmt: skip
                 keep(_digest(shared.global_path))
         return shared.publish(shared.global_path, MOVED, until)
+
+
+def limits_due(shared: DataRepo) -> bool:
+    """Whether the credit limits' upgrade has work: an existing Global below format 16, or one not yet published.
+
+    Once the published Global has ever been in format 16 or later, never again: one the owner restores or remakes
+    older stays his (as for the carry), and his reads still get the limits from the migration. A git command that
+    fails raises ``DataRepoError``, so an unknown state never counts as done.
+    """
+    until = time.monotonic() + data_repo.GIT_SECONDS
+    rel = shared.global_path.relative_to(shared.root).as_posix()
+    if _checked(shared, until, "log", "-1", "--format=%H", f"-G{REACHED}", "@{upstream}", "--", rel):
+        return False
+    if _checked(shared, until, "log", "-1", "--format=%H", f"-G{REACHED}", "HEAD", "--", rel):
+        return True  # committed here, its push still pending
+    try:
+        found = _format(shared.global_path.read_text())
+    except FileNotFoundError:
+        return False  # no Global, or the owner deleted it: a fresh one is the carry's, which writes the limits too
+    except OSError:
+        return False  # an unreadable layer is reported where it is read, never overwritten here
+    return found is not None
+
+
+def limits(shared: DataRepo, keep: Keep = _ignore) -> str:
+    """Save Global in format 16 with the credit limits its migration wrote, and publish it; what to know, else ''.
+
+    Only the format and the limits change: the migration drops the daily budgets and adds a limit only where Global
+    has none. A layer already in format 16 is only published, so a retry after a failed commit or push writes nothing
+    again and a value the owner cleared since stays cleared. An unsaved owner edit of Global is never published.
+    An invalid Global raises ``StoreError``; a git command that fails raises ``DataRepoError``.
+    """
+    until = time.monotonic() + data_repo.SAVE_SECONDS
+    with shared.locked():
+        if not limits_due(shared):
+            return ""
+        try:
+            found = _format(shared.global_path.read_text())
+        except FileNotFoundError:
+            found = None  # deleted since its commit: only the push is left
+        if found is not None and found < LIMITS_FORMAT:
+            if _dirty(shared, until):
+                return EDITED
+            update_layer(shared.global_path, GlobalLayer, lambda g: g)  # the read migrates it; the write keeps it
+            keep(_digest(shared.global_path))
+        elif found is not None:  # written by an earlier start: an invalid layer is never published
+            read_layer(shared.global_path, GlobalLayer)
+        return shared.publish(shared.global_path, LIMITS, until)
 
 
 def sync(shared: DataRepo, written: Sequence[str]) -> str:

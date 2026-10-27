@@ -19,7 +19,7 @@ from copilot.tools import ToolInvocation
 from owlbear_delivery_next.change_contracts.models import Change, Plan, StepKind, Task
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_contracts.tools import Worktree
-from owlbear_delivery_next.improvement import card, events, spotter
+from owlbear_delivery_next.improvement import card, credit_meter, events, spotter
 from owlbear_delivery_next.improvement.events import Kept
 from owlbear_delivery_next.runtimes import chatlogs, sdk_adapter, spotter_look, step_decisions
 from owlbear_delivery_next.settings.config import Layer, SettingsUnset, resolve
@@ -60,7 +60,7 @@ ACTIONS = {"hand-off-fitness": "steer", "course-and-constraints": "record", "out
 
 def ctx(**kw: Any) -> spotter.Context:
     base = spotter.Context(project="p", change="c1", step="build", looks=("hand-off",), sample_rate=0, verbose=False,
-                           model="gpt-6-luna", effort="medium", budget=50, actions=ACTIONS)  # fmt: skip
+                           model="gpt-6-luna", effort="medium", limit=0.75, actions=ACTIONS)  # fmt: skip
     return dataclasses.replace(base, **kw)
 
 
@@ -68,8 +68,8 @@ def records() -> list[dict[str, Any]]:
     return [json.loads(x) for f in sorted(spotter.root().glob("records-*.jsonl")) for x in f.read_text().splitlines()]
 
 
-def ledger() -> dict[str, Any]:
-    return json.loads((spotter.root() / f"ledger-{spotter._today()}.json").read_text())  # noqa: SLF001
+def meter(limit: float = 0.75) -> credit_meter.Meter:
+    return credit_meter.Meter(limit, "look")
 
 
 def judge(
@@ -78,14 +78,20 @@ def judge(
     wait: float = 0.0,
     seen: list | None = None,
     reached: asyncio.Event | None = None,
+    cost: float = 0.25,
 ) -> spotter.Judge:
-    async def look(the_card: dict[str, Any], _ctx: spotter.Context) -> tuple[str, float]:
+    """A look that bills one call of *cost* credits and answers *answer*, as a confirmed session."""
+
+    async def look(the_card: dict[str, Any], _ctx: spotter.Context, spend: credit_meter.Meter) -> str:
         if seen is not None:
             seen.append(the_card)
         if reached is not None:
             reached.set()
         await asyncio.sleep(wait)
-        return answer, 0.25
+        part = spend.part()
+        part.call(cost)
+        part.ended(None, confirmed=True)
+        return answer
 
     return look
 
@@ -176,7 +182,9 @@ def test_a_hand_off_starts_a_look_without_waiting_and_records_it_owner_only() ->
         "hand-off", "none", "", "s-1", "")  # fmt: skip
     assert "mode" not in rec
     assert "verdict" not in rec
-    assert (rec["prompt"], rec["credits"]) == (spotter.prompt_version(), 0.25)
+    assert (rec["prompt"], rec["credits"], rec["credits_known"], rec["limit"]) == (spotter.prompt_version(), 0.25,
+                                                                                   True, 0.75)  # fmt: skip
+    assert (rec["stopped"], rec["stopped_by"]) == ("", "")
     folder = spotter.root()
     assert stat.S_IMODE(folder.stat().st_mode) == 0o700
     assert stat.S_IMODE((folder / f"records-{spotter._today()}.jsonl").stat().st_mode) == 0o600  # noqa: SLF001
@@ -192,10 +200,14 @@ def test_a_look_still_running_at_the_steps_end_is_recorded_skipped(monkeypatch) 
     async def main() -> None:
         entered, never = asyncio.Event(), asyncio.Event()
 
-        async def pending_until_cancelled(_card: dict[str, Any], _ctx: spotter.Context) -> tuple[str, float]:
-            entered.set()  # the look's model call has begun: its reservation and card are done
-            await never.wait()  # never set: only the step's end, cancelling the look, ends it
-            return '{"verdict": "silent"}', 0.25
+        async def pending_until_cancelled(_card: dict[str, Any], _ctx: spotter.Context, spend: Any) -> str:
+            part = spend.part()
+            entered.set()  # the look's model call has begun: its card is done
+            try:
+                await never.wait()  # never set: only the step's end, cancelling the look, ends it
+            finally:
+                part.ended(None, confirmed=False)  # as the real look: a turn stopped waiting for is unconfirmed
+            return '{"verdict": "silent"}'
 
         spot = spotter.Spotter(ctx(), lambda: "s-1", pending_until_cancelled)
         spot.handed_off("call-1", {})
@@ -205,8 +217,8 @@ def test_a_look_still_running_at_the_steps_end_is_recorded_skipped(monkeypatch) 
 
     asyncio.run(main())
     assert spotter.WORK.settled(5)
-    assert [(r["skipped"], r["credits"]) for r in records()] == [("the step ended while the look ran", 0.5)]
-    assert ledger() == {"reserved": {}, "spent": 0.5}  # an unknown spend counts as the estimate
+    assert [(r["skipped"], r["credits"], r["credits_known"]) for r in records()] == [
+        ("the step ended while the look ran", 0.0, False)]  # fmt: skip  # its spend is unknown, never estimated
 
 
 def test_a_look_past_its_time_is_skipped_and_a_wrong_answer_fails_never_silent(monkeypatch) -> None:
@@ -223,21 +235,28 @@ def test_a_look_past_its_time_is_skipped_and_a_wrong_answer_fails_never_silent(m
     assert [(r["category"], r["action"], r["skipped"][:4]) for r in records()] == [("", "", "time"), ("failed", "", "")]
 
 
-def test_looks_past_capacity_or_budget_are_recorded_skipped_and_the_ledger_settles() -> None:
+def test_looks_past_capacity_are_recorded_skipped_and_a_look_stopped_at_its_limit_says_so() -> None:
     async def main() -> None:
-        spot = spotter.Spotter(ctx(budget=1), lambda: "s-1", judge(wait=0.1))
+        spot = spotter.Spotter(ctx(), lambda: "s-1", judge(wait=0.1))
         for i in range(3):  # two run; the third finds no room
             spot.handed_off(f"c{i}", {})
         await asyncio.wait(set(spot.tasks))
-        spot.handed_off("c3", {})  # 0.5 spent and 0.5 reserved: within the budget
-        await asyncio.wait(set(spot.tasks))
-        spot.handed_off("c4", {})  # now 0.75 spent: another estimate passes the budget
-        await spot.drain()
+        stopped = spotter.Spotter(ctx(), lambda: "s-2", judge("", cost=0.9))  # aborted before it answered
+        stopped.handed_off("c3", {})
+        passed = spotter.Spotter(ctx(), lambda: "s-3", judge(cost=0.9))  # its one call passed the limit, answered
+        passed.handed_off("c4", {})
+        for spot_ in (spot, stopped, passed):
+            await spot_.drain()
 
     asyncio.run(main())
     assert spotter.WORK.settled(5)
-    assert sorted(r["skipped"].split(":")[0] for r in records()) == ["", "", "", "budget", "capacity"]
-    assert ledger() == {"reserved": {}, "spent": 0.75}
+    got = {r["session"] + r["call"]: r for r in records()}
+    assert sorted(r["skipped"].split(":")[0] for r in got.values()) == ["", "", "", "capacity", "credit limit"]
+    assert got["s-2c3"]["skipped"] == "credit limit: reached (look) before an answer"
+    assert (got["s-2c3"]["category"], got["s-2c3"]["credits"], got["s-2c3"]["stopped"]) == ("", 0.9, "reached")
+    assert (got["s-3c4"]["category"], got["s-3c4"]["stopped"], got["s-3c4"]["stopped_by"]) == ("none", "reached",
+                                                                                              "look")  # fmt: skip
+    assert got["s-1c0"]["stopped"] == ""  # 0.25 of 0.75: within its limit
 
 
 def test_samples_follow_the_seeded_rate_and_a_state_change_is_preliminary() -> None:
@@ -323,8 +342,8 @@ def test_the_runner_gives_the_look_its_settings_open_work_and_decisions(tmp_path
     settings = resolve(None, Layer())
     with step_decisions.using(["## Decisions in force", "- D1: keep it"]):
         got = watched.spot(store, Lock("c1"), "build", settings, watched.needed(settings))
-    assert (got.project, got.change, got.looks, got.budget, got.model, got.open_work) == (
-        "proj", "c1", ("hand-off",), 50, settings.agents["spotter"].model, ("two",))  # fmt: skip
+    assert (got.project, got.change, got.looks, got.limit, got.model, got.open_work) == (
+        "proj", "c1", ("hand-off",), 0.75, settings.agents["spotter"].model, ("two",))  # fmt: skip
     assert got.decisions == ("## Decisions in force", "- D1: keep it")
     assert got.actions == dict.fromkeys(CATEGORIES, "record")  # the conftest's Global layer records every one
     unset = resolve(None, Layer(spotter=Spotter(switch="on")))
@@ -333,9 +352,12 @@ def test_the_runner_gives_the_look_its_settings_open_work_and_decisions(tmp_path
         watched.needed(unset)
     from owlbear_delivery_next.state_store import machine_settings  # noqa: PLC0415
 
-    monkeypatch.setattr(machine_settings, "BASE", None)
-    with pytest.raises(SettingsUnset, match="spotter_budget"):
-        watched.needed(settings)
+    monkeypatch.setattr(machine_settings, "BASE", None)  # no machine setting is read: there is no daily budget
+    assert watched.needed(settings) == 0.75
+    no_limit = resolve(None, Layer())
+    no_limit.missing.append("spotter.look_credit_limit")
+    with pytest.raises(SettingsUnset, match=r"spotter\.look_credit_limit"):
+        watched.needed(no_limit)  # required while the Spotter is on
 
 
 def test_a_look_is_one_toolless_session_noted_in_the_chatlogs_manifest(monkeypatch) -> None:
@@ -373,7 +395,9 @@ def test_a_look_is_one_toolless_session_noted_in_the_chatlogs_manifest(monkeypat
 
     monkeypatch.setattr(spotter_look, "CopilotClient", Client)
     monkeypatch.setattr(spotter_look, "cli_path", lambda: "/bin/false")
-    assert asyncio.run(REAL_LOOK({"step": "build"}, ctx(verbose=True))) == ('{"category": "none"}', 0.2)
+    spend = meter()
+    assert asyncio.run(REAL_LOOK({"step": "build"}, ctx(verbose=True), spend)) == '{"category": "none"}'
+    assert (spend.report()["credits"], spend.report()["credits_known"]) == (0.2, True)
     chosen = ("available_tools", "mcp_servers", "enable_config_discovery", "model", "reasoning_effort", "timeout")
     assert [made[k] for k in chosen] == [[], {}, False, "gpt-6-luna", "medium", spotter.LOOK]
     assert "session_limits" not in made  # no SDK credit cap: a look is bounded by its deadline and teardown
@@ -428,7 +452,7 @@ def test_a_stalled_or_failed_runtime_is_torn_down_within_its_bounds(
     async def main() -> float:
         loop = asyncio.get_running_loop()
         began = loop.time()
-        look = asyncio.ensure_future(REAL_LOOK({}, ctx()))
+        look = asyncio.ensure_future(REAL_LOOK({}, ctx(), meter()))
         await asyncio.sleep(0.05)
         for _ in range(2):  # cancelled twice while it tears down
             look.cancel()
@@ -448,12 +472,12 @@ def test_a_drain_ends_within_its_bound_even_when_a_look_resists(monkeypatch) -> 
     monkeypatch.setattr(spotter, "DRAIN", 0.05)
     monkeypatch.setattr(spotter, "TEARDOWN", 0.05)
 
-    async def stubborn(_card: dict[str, Any], _ctx: spotter.Context) -> tuple[str, float]:
+    async def stubborn(_card: dict[str, Any], _ctx: spotter.Context, _spend: Any) -> str:
         try:
             await asyncio.sleep(30)
         except asyncio.CancelledError:
             await asyncio.sleep(30)  # its cleanup hangs
-        return "", 0.0
+        return ""
 
     async def main() -> float:
         spot = spotter.Spotter(ctx(), lambda: "s-1", stubborn)
@@ -470,42 +494,7 @@ def test_a_drain_ends_within_its_bound_even_when_a_look_resists(monkeypatch) -> 
     assert asyncio.run(main()) < 0.5
 
 
-def test_a_held_ledger_never_stalls_the_steps_loop() -> None:
-    import threading  # noqa: PLC0415
-
-    held, release = threading.Event(), threading.Event()
-
-    def hold() -> None:
-        with spotter._locked(spotter.root() / "ledger.lock"):  # noqa: SLF001 - another process's long write
-            held.set()
-            release.wait(5)
-
-    holder = threading.Thread(target=hold)
-    holder.start()
-    held.wait(5)
-
-    async def main() -> tuple[float, int]:
-        spot = spotter.Spotter(ctx(), lambda: "s-1", judge())
-        loop = asyncio.get_running_loop()
-        began = loop.time()
-        spot.handed_off("c", {})
-        returned, ticks = loop.time() - began, 0
-        while loop.time() - began < 0.3:
-            await asyncio.sleep(0.01)
-            ticks += 1
-        release.set()
-        await spot.drain()
-        return returned, ticks
-
-    returned, ticks = asyncio.run(main())
-    assert spotter.WORK.settled(5)
-    holder.join()
-    assert returned < 0.02
-    assert ticks >= 15  # the loop went on while the look waited for the ledger
-    assert [r["category"] for r in records()] == ["none"]
-
-
-def test_a_card_that_fails_settles_its_reservation_and_is_recorded_failed(monkeypatch) -> None:
+def test_a_card_that_fails_is_recorded_failed_and_spends_nothing(monkeypatch) -> None:
     monkeypatch.setattr(card, "build", lambda *_a: 1 / 0)
 
     async def main() -> None:
@@ -515,28 +504,8 @@ def test_a_card_that_fails_settles_its_reservation_and_is_recorded_failed(monkey
 
     asyncio.run(main())
     assert spotter.WORK.settled(5)
-    assert [(r["category"], r["skipped"][:17], r["credits"]) for r in records()] == [
-        ("failed", "ZeroDivisionError", 0.0)]  # fmt: skip
-    assert ledger() == {"reserved": {}, "spent": 0.0}
-
-
-def test_a_reservation_settles_on_its_own_day_and_an_unreadable_ledger_skips(monkeypatch) -> None:
-    monkeypatch.setattr(spotter, "_today", lambda: "2026-10-26")
-    token = spotter.reserve(spotter.root(), 10)
-    monkeypatch.setattr(spotter, "_today", lambda: "2026-10-27")
-    spotter.settle(spotter.root(), token, 0.2)
-    assert json.loads((spotter.root() / "ledger-2026-10-26.json").read_text()) == {"reserved": {}, "spent": 0.2}
-    assert not (spotter.root() / "ledger-2026-10-27.json").exists()
-    (spotter.root() / "ledger-2026-10-27.json").write_text('{"reserved": ')
-
-    async def main() -> None:
-        spot = spotter.Spotter(ctx(), lambda: "s-1", judge())
-        spot.handed_off("c", {})
-        await spot.drain()
-
-    asyncio.run(main())
-    assert spotter.WORK.settled(5)
-    assert [r["skipped"][:26] for r in records()] == ["budget: the ledger failed:"]
+    assert [(r["category"], r["skipped"][:17], r["credits"], r["credits_known"]) for r in records()] == [
+        ("failed", "ZeroDivisionError", 0.0, True)]  # fmt: skip
 
 
 def test_cut_browser_context_is_dropped_whole() -> None:
@@ -615,11 +584,11 @@ def test_through_passes_on_a_cancellation_that_races_the_tasks_end() -> None:
     asyncio.run(main())
 
 
-def test_a_look_cancelled_twice_while_reserving_still_settles_and_records(monkeypatch) -> None:
+def test_a_look_cancelled_twice_before_its_card_is_built_still_records(monkeypatch) -> None:
     import time  # noqa: PLC0415
 
-    real = spotter.reserve
-    monkeypatch.setattr(spotter, "reserve", lambda *a: (time.sleep(0.2), real(*a))[1])
+    real = card.build
+    monkeypatch.setattr(card, "build", lambda *a: (time.sleep(0.2), real(*a))[1])
 
     async def main() -> None:
         spot = spotter.Spotter(ctx(), lambda: "s-1", judge())
@@ -632,12 +601,12 @@ def test_a_look_cancelled_twice_while_reserving_still_settles_and_records(monkey
 
     asyncio.run(main())
     assert spotter.WORK.settled(5)
-    for _ in range(100):  # the finishing work goes on after the step's loop
+    for _ in range(100):  # the record's write goes on after the step's loop
         if records():
             break
         time.sleep(0.02)
-    assert [r["skipped"] for r in records()] == ["the step ended before the look began"]
-    assert ledger() == {"reserved": {}, "spent": 0.0}
+    assert [(r["skipped"], r["credits"], r["credits_known"]) for r in records()] == [
+        ("the step ended before the look began", 0.0, True)]  # fmt: skip
 
 
 def test_the_steps_loop_ends_without_waiting_for_the_spotters_writes(monkeypatch) -> None:
@@ -725,13 +694,24 @@ def test_a_hand_off_skipped_for_capacity_keeps_the_events_seen_as_its_cutoff() -
     assert sorted((r["skipped"][:8], r["cutoff"]) for r in records()) == [("", 3), ("", 3), ("capacity", 3)]
 
 
-def test_an_unread_usage_keeps_the_answer_and_counts_as_the_estimate(monkeypatch) -> None:
+def usage(nano: float | None, second: int = 0) -> SessionEvent:
+    """One billed call as the runtime reports it; None: without its cost."""
+    data: dict[str, Any] = {"model": "gpt-6-luna"}
+    if nano is not None:
+        data["copilotUsage"] = {"totalNanoAiu": nano, "tokenDetails": []}
+    return event("assistant.usage", data, second=second)
+
+
+@pytest.mark.parametrize(("calls", "known"), [([1.5e8], True), ([], False), ([None], False)])
+def test_an_unread_total_keeps_the_answer_and_its_spend_is_the_calls_reported(monkeypatch, calls, known) -> None:
     made: dict[str, Any] = {}
 
     class Session:
         session_id = "look-3"
 
         async def send_and_wait(self, *_a: Any, **_kw: Any) -> None:
+            for nano in calls:
+                made["on_event"](usage(nano))
             made["on_event"](said('{"category": "course-and-constraints", "note": "Run the tests."}'))
 
         async def disconnect(self) -> None:
@@ -757,9 +737,12 @@ def test_an_unread_usage_keeps_the_answer_and_counts_as_the_estimate(monkeypatch
 
     monkeypatch.setattr(spotter_look, "CopilotClient", Client)
     monkeypatch.setattr(spotter_look, "cli_path", lambda: "/bin/false")
-    text, spent = asyncio.run(REAL_LOOK({}, ctx()))
+    spend = meter()
+    text = asyncio.run(REAL_LOOK({}, ctx(), spend))
     assert spotter.parse(text)["category"] == "course-and-constraints"
-    assert spent == spotter.ESTIMATE
+    reported = spend.report()
+    assert (reported["credits"], reported["credits_known"]) == (0.15 if calls == [1.5e8] else 0.0, known)
+    assert reported["stopped"] == ("" if known else "unknown")  # an unknown spend closes the look's meter
 
 
 def test_a_drain_that_stops_waiting_never_drops_queued_writes(monkeypatch) -> None:
@@ -817,7 +800,9 @@ def test_a_look_the_runtime_reports_as_free_costs_nothing(monkeypatch) -> None:
 
     monkeypatch.setattr(spotter_look, "CopilotClient", Client)
     monkeypatch.setattr(spotter_look, "cli_path", lambda: "/bin/false")
-    assert asyncio.run(REAL_LOOK({}, ctx())) == ('{"category": "none"}', 0.0)
+    spend = meter()
+    assert asyncio.run(REAL_LOOK({}, ctx(), spend)) == '{"category": "none"}'
+    assert (spend.report()["credits"], spend.report()["credits_known"]) == (0.0, True)
 
 
 SHAPES = ["d", "a.", "a@", "x@y.", "<browser_context>", "</browser_context>", "<browser_context>x</browser_context>"]
@@ -973,7 +958,7 @@ def test_a_cancelled_submit_handler_still_keeps_delivery_s_answer(tmp_path) -> N
     assert [json.loads(x)["outcome"] for x in outcomes.read_text().splitlines()] == ["success"]
 
 
-def test_an_unreadable_prompt_still_records_the_look_and_settles_its_reservation(monkeypatch, tmp_path) -> None:
+def test_an_unreadable_prompt_still_records_the_look_and_its_spend(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(spotter, "PROMPT", tmp_path / "missing.md")
 
     async def main() -> None:
@@ -983,8 +968,7 @@ def test_an_unreadable_prompt_still_records_the_look_and_settles_its_reservation
 
     asyncio.run(main())
     assert spotter.WORK.settled(5)
-    assert [r["prompt"] for r in records()] == ["unreadable"]
-    assert ledger() == {"reserved": {}, "spent": 0.25}
+    assert [(r["prompt"], r["credits"]) for r in records()] == [("unreadable", 0.25)]
 
 
 def test_a_slow_manifest_write_never_holds_a_looks_teardown(monkeypatch) -> None:
@@ -1026,7 +1010,7 @@ def test_a_slow_manifest_write_never_holds_a_looks_teardown(monkeypatch) -> None
     monkeypatch.setattr(spotter_look, "cli_path", lambda: "/bin/false")
     monkeypatch.setattr(spotter_look.chatlogs, "note", note)
     began = time.monotonic()
-    asyncio.run(REAL_LOOK({}, ctx()))
+    asyncio.run(REAL_LOOK({}, ctx(), meter()))
     took = time.monotonic() - began
     released.set()
     assert spotter.WORK.settled(5)

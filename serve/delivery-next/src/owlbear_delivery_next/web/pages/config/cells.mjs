@@ -172,7 +172,8 @@ export function spotterCell(field, label) {
     ? choose(label, [[INHERIT, `inherit (${said(below)})`], ...choices], value || INHERIT,
       (v) => edit(key, v), { key, disabled: state.saving })
     : typed(label, value, (v) => edit(key, v, true), { key, placeholder: `inherit (${said(words(below))})`,
-      inputmode: ["looks", "verbose_until"].includes(field) ? undefined : "numeric", disabled: state.saving });
+      inputmode: ["looks", "verbose_until"].includes(field) ? undefined
+        : field === "look_credit_limit" ? "decimal" : "numeric", disabled: state.saving });
   return cell(control, source(`spotter.${field}`, words(state.loaded.settings.spotter?.[field]), needed));
 }
 
