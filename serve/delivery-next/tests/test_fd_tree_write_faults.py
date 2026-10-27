@@ -13,7 +13,8 @@ REAL_FSYNC = os.fsync
 
 
 @pytest.mark.parametrize("change", ["replace", "replace-same", "inplace"])
-def test_text_predicate_refuses_an_entry_changed_during_its_read(tmp_path, monkeypatch, change):
+@pytest.mark.parametrize("reader", ["predicate", "text"])
+def test_text_read_refuses_an_entry_changed_during_its_read(tmp_path, monkeypatch, change, reader):
     entry = tmp_path / "receipt.json"
     entry.write_text("owned\n")
     before = entry.stat()
@@ -36,7 +37,12 @@ def test_text_predicate_refuses_an_entry_changed_during_its_read(tmp_path, monke
     monkeypatch.setattr(os, "read", read)
     dfd = os.open(tmp_path, fd_tree.DIR_FLAGS)
     try:
-        assert not fd_tree.holds_text_at(dfd, entry.name, "owned\n")
+        if reader == "predicate":
+            assert not fd_tree.holds_text_at(dfd, entry.name, "owned\n")
+        else:
+            with pytest.raises(OSError, match="changed while it was read") as refused:
+                fd_tree.read_at(dfd, entry.name)
+            assert refused.value.errno == errno.ESTALE
     finally:
         os.close(dfd)
     assert fired == [True]

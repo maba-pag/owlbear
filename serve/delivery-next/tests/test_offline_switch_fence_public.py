@@ -236,6 +236,48 @@ def test_finish_keeps_a_receipt_atomically_replaced_during_its_terminal_predicat
     assert (source / project_move.MOVE_RECORD).read_text() == owner
 
 
+def test_finish_rejects_a_preparation_atomically_replaced_during_its_final_read(prepared, monkeypatch):
+    repo, source = prepared
+    owners, reads, active, changed = {}, [], [], []
+
+    def enable(target):
+        real_read_at, real_read = fd_tree.read_at, os.read
+
+        def read_at(dfd, name):
+            if name != project_move.PREPARED:
+                return real_read_at(dfd, name)
+            reads.append(True)
+            active.append(len(reads))
+            try:
+                return real_read_at(dfd, name)
+            finally:
+                active.pop()
+
+        def read(fd, count):
+            data = real_read(fd, count)
+            if data and active == [2] and not changed:
+                changed.append(True)
+                replacement = source / "owner-preparation"
+                value = json.loads((source / project_move.PREPARED).read_text())
+                value["boot"] = OWNER_BOOT
+                replacement.write_text(json.dumps(value))
+                replacement.replace(source / project_move.PREPARED)
+                owners.update({source: snapshot(source), target: snapshot(target)})
+            return data
+
+        monkeypatch.setattr(fd_tree, "read_at", read_at)
+        monkeypatch.setattr(os, "read", read)
+
+    fired = at_sync(monkeypatch, source, "receipt", enable)
+    code = cli.main(["--repo", str(repo), "finish"])
+
+    assert fired == [True]
+    assert changed == [True]
+    assert code == 1
+    assert record(source)["phase"] == project_move.COPYING
+    assert {path: snapshot(path) for path in owners} == owners
+
+
 @pytest.mark.parametrize("change", ["preparation", "proof", "marker"])
 def test_finish_rechecks_cheap_authority_witnesses_after_final_source_hashing(prepared, monkeypatch, change):
     repo, source = prepared

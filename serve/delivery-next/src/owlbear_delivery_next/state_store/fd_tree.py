@@ -142,18 +142,35 @@ def open_file(dfd: int, name: str) -> int:
     return fd
 
 
+def _same_file_image(dfd: int, name: str, fd: int, before: os.stat_result) -> bool:
+    after = os.fstat(fd)
+    named = stat_at(dfd, name)
+    # A read may update atime; only mutation-sensitive metadata belongs in this witness.
+    stamp = before.st_size, before.st_mtime_ns, before.st_ctime_ns
+    return (
+        named is not None
+        and os.path.samestat(after, named)
+        and stamp
+        == (after.st_size, after.st_mtime_ns, after.st_ctime_ns)
+        == (named.st_size, named.st_mtime_ns, named.st_ctime_ns)
+    )
+
+
 def read_at(dfd: int, name: str) -> str | None:
-    """The text of regular file *name* under *dfd*, or None when it is absent; a link or other entry is an OSError."""
+    """The stable text of regular file *name*, or None only when absent at open; changed entries raise OSError."""
     try:
         fd = os.open(name, FILE_FLAGS | os.O_NONBLOCK, dir_fd=dfd)
     except FileNotFoundError:
         return None
     try:
-        if not stat.S_ISREG(os.fstat(fd).st_mode):
+        before = os.fstat(fd)
+        if not stat.S_ISREG(before.st_mode):
             raise OSError(errno.EINVAL, f"{name} is not a regular file")
         chunks = []
         while chunk := os.read(fd, 1 << 16):
             chunks.append(chunk)
+        if not _same_file_image(dfd, name, fd, before):
+            raise OSError(errno.ESTALE, f"{name} changed while it was read")
         return b"".join(chunks).decode()
     finally:
         os.close(fd)
@@ -178,21 +195,10 @@ def holds_text_at(dfd: int, name: str, text: str) -> bool:
         got = b""
         while len(got) <= len(want) and (chunk := os.read(fd, len(want) + 1 - len(got))):
             got += chunk
-        after = os.fstat(fd)
         try:
-            named = stat_at(dfd, name)
+            return got == want and _same_file_image(dfd, name, fd, before)
         except OSError:
             return False
-        # A read may update atime; only mutation-sensitive metadata belongs in this witness.
-        stamp = before.st_size, before.st_mtime_ns, before.st_ctime_ns
-        return (
-            got == want
-            and named is not None
-            and os.path.samestat(after, named)
-            and stamp
-            == (after.st_size, after.st_mtime_ns, after.st_ctime_ns)
-            == (named.st_size, named.st_mtime_ns, named.st_ctime_ns)
-        )
     finally:
         os.close(fd)
 
