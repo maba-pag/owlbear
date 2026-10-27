@@ -59,7 +59,7 @@ def _waited(actions: list[dict[str, Any]], now: datetime | None) -> int:
 
 def _brief(a: dict[str, Any]) -> dict[str, Any]:
     if "kind" in a:
-        return {"at": a.get("at"), "kind": a["kind"]}
+        return {"at": a.get("at"), "kind": a["kind"], **({"text": clip(a["text"], 300)} if a.get("text") else {})}
     out = {"at": a.get("at"), "tool": a.get("tool"), "args": clip(a.get("args", ""), 300)}
     if "result" in a:
         out |= {"ok": a.get("ok"), "result": clip(a["result"], 300)}

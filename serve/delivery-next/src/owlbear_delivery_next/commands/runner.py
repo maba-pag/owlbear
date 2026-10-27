@@ -32,7 +32,7 @@ from owlbear_delivery_next.runtimes import (
 )
 from owlbear_delivery_next.settings import profile, roles
 from owlbear_delivery_next.settings.config import SettingsUnset
-from owlbear_delivery_next.state_store import project_home
+from owlbear_delivery_next.state_store import project_home, spend_ledger
 from owlbear_delivery_next.state_store.store import LockHeldError, Store, StoreError
 from owlbear_delivery_next.workflow_steps import (
     amend,
@@ -403,6 +403,8 @@ def main(argv: list[str] | None = None) -> int:
             state, moved = engine.observe(store, repo, args.change)
             leave = queue.barrier(store, repo)
             change, step = store.fold(lock, args.change, datetime.now(UTC), state, moved=moved, leave=leave)
+            kind = step.kind.value if step is not None else ""
+            spend_ledger.enter(spend_ledger.Where.of(store, repo, change=args.change, step=kind))  # every session's
             _step(store, lock, change, step, repo)
             _out(describe(store.read(args.change)))
     except LockHeldError as exc:

@@ -47,7 +47,7 @@ SLOT = "improvement"  # the cases job's own share of the machine's slots
 EVERY = 10.0  # seconds between looks at the queue
 PUBLISH_EVERY = 300.0  # seconds between publication syncs that found work
 DRAIN = 30.0  # seconds the host's end waits for a cancelled run: its sessions' bounded teardown, then its result
-KIND = "replay"  # the maintenance ledger's lane of the job's leases, which no other job uses
+KIND = "replay"  # the Spotter's lane of the maintenance ledger; chat looks hold theirs under their own project
 LINGERING = "Spotter cases: a session's runtime may still run (its end was not confirmed); see Maintenance"
 
 

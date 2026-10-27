@@ -19,7 +19,7 @@ from owlbear_delivery_next.machine_host import curation, curation_snapshots
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.settings import config
 from owlbear_delivery_next.settings.config import GlobalLayer
-from owlbear_delivery_next.state_store import layers, registry, settings_carry
+from owlbear_delivery_next.state_store import layers, registry, settings_carry, spend_ledger
 from owlbear_delivery_next.state_store.store import update_layer
 
 
@@ -65,10 +65,11 @@ def test_the_folders_are_the_shared_repositorys_project_memory_folders_owlbears_
 
 def test_a_run_curates_one_folder_as_the_curator_and_keeps_its_report_and_what_it_skipped(root) -> None:
     left, done = pending(root / "shop" / "memory", "Unsure lesson"), pending(root / "shop" / "memory", "Clear one")
-    seen = []
+    seen, places = [], []
 
     def run(cfg) -> Run:
         seen.append(cfg)
+        places.append(spend_ledger.where())
         report = MemoryCurationResult(summary="1 pruned, 1 skipped", entries=[
             Judged(entry_id=left.id, action="skipped", confidence=60, reason="only one project shows it"),
             Judged(entry_id=done.id, action="pruned", confidence=97),
@@ -89,6 +90,7 @@ def test_a_run_curates_one_folder_as_the_curator_and_keeps_its_report_and_what_i
         "done", "1 pruned, 1 skipped", ["skipped", "pruned"]
     )  # fmt: skip
     assert shop["skipped"] == {left.id: left.revision}  # unchanged, an idle run passes it by
+    assert places == [spend_ledger.Where(project="shop", name="shop")]  # its spend counts for the folder's project
 
 
 def test_a_run_without_a_report_or_while_fenced_fails_with_its_reason(root) -> None:

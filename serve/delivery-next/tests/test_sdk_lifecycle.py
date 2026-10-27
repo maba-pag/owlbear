@@ -1,6 +1,7 @@
 """The real SDK step lifecycle with synthetic clients, journals and process identities; no signals are sent."""
 
 import asyncio
+import dataclasses
 import os
 import signal
 import subprocess
@@ -17,8 +18,9 @@ from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_contracts.tools import Worktree
 from owlbear_delivery_next.change_flow import loop
 from owlbear_delivery_next.local_system import processes
-from owlbear_delivery_next.runtimes import loop_owner, sdk_adapter, sdk_teardown
+from owlbear_delivery_next.runtimes import chatlogs, loop_owner, sdk_adapter, sdk_spend, sdk_teardown
 from owlbear_delivery_next.runtimes.session_result import to_result
+from owlbear_delivery_next.state_store import spend_ledger
 from owlbear_delivery_next.state_store.database import StoreError
 
 ROOT, CHILD = 4242, 4243
@@ -366,3 +368,207 @@ def test_escaped_teardown_failure_still_forces_and_observes_unconfirmed(world, m
     assert not run.termination.confirmed
     assert world.proc_effects == ["terminate", "kill"]
     assert ROOT not in world.live
+
+
+def _metered(world, monkeypatch, *, hold=False):
+    """The session opens and its run is metered, as ``_open`` does just before its first send; *hold* never sends."""
+
+    async def opened(_client, st):
+        world.steps.append(st)
+        st.session, st.billed = world.session, {}
+        sdk_spend.meter(st, "synthetic", "builder")
+        if hold:
+            await asyncio.Event().wait()
+
+    monkeypatch.setattr(sdk_adapter, "_open", opened)
+
+
+def _spend():
+    assert spend_ledger.WRITER.settled(5)
+    return spend_ledger.lines()
+
+
+def test_a_finished_run_records_its_start_and_end_where_it_ran(world, monkeypatch):
+    _metered(world, monkeypatch)
+    used = {"credits": 1.25, "models": {"gpt-6-luna": {"credits": 1.25, "input": 9, "output": 1}}}
+
+    async def usage(_session, _model):
+        return used
+
+    monkeypatch.setattr(sdk_adapter, "usage_read", usage)
+    monkeypatch.setattr(sdk_teardown, "usage_once", usage)  # the same once its tasks settled
+    place = spend_ledger.Where(project="owlbear", name="owlbear", clone="c1", change="fix-it", step="build")
+    with spend_ledger.at(place):
+        run = asyncio.run(sdk_adapter.run(world.cfg))
+    start, end = _spend()
+    assert (start["type"], start["agent"], start["model"], start["before"], start["change"]) == (
+        "start", "builder", "gpt-6-luna", {}, "fix-it"
+    )  # fmt: skip
+    assert (end["run"], end["usage"], end["ending"], end["project"]) == (start["run"], used, run.ending, "owlbear")
+
+
+@pytest.mark.parametrize("read", ["read", "failed"])
+def test_a_cancelled_run_reads_its_usage_before_the_disconnect_and_is_recorded(world, monkeypatch, read):
+    _metered(world, monkeypatch, hold=True)
+    order = []
+
+    async def once(_session, _model):
+        order.append("usage")
+        if read == "failed":
+            msg = "synthetic"
+            raise RuntimeError(msg)
+        return {"credits": 0.75, "models": {}}
+
+    async def disconnect():
+        order.append("disconnect")
+
+    monkeypatch.setattr(sdk_teardown, "usage_once", once)
+    world.session.disconnect = disconnect
+
+    async def scenario():
+        task = asyncio.create_task(sdk_adapter.run(world.cfg))
+        async with asyncio.timeout(2):
+            while not world.steps:  # noqa: ASYNC110 - the fixture's open records its step; nothing signals it
+                await asyncio.sleep(0.01)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+    asyncio.run(scenario())
+    assert order == ["usage", "disconnect"]
+    _, end = _spend()
+    expected = (
+        {"credits": 0.75, "models": {}, "incomplete": "interrupted"} if read == "read" else {"error": "RuntimeError"}
+    )
+    assert (end["ending"], end["usage"]) == (
+        "interrupted",
+        expected,
+    )  # a call may still have been billed: a lower bound
+
+
+def test_a_run_that_never_opened_a_session_records_nothing(world):
+    asyncio.run(sdk_adapter.run(world.cfg))  # the fixture's session never sends: no spend is possible
+    assert _spend() == []
+
+
+def _used(credits_: float, model: str = "gpt-6-luna") -> dict:
+    return {"credits": credits_, "models": {model: {"credits": credits_, "input": 1, "output": 1}}}
+
+
+@pytest.mark.parametrize(("model", "check"), [("gpt-6-luna", "unknown"), ("other-model", "mismatch")])
+def test_the_ledger_takes_the_usage_read_once_tasks_settled_before_the_disconnect(world, monkeypatch, model, check):
+    """Sol's counterexample: the read came before task cancellation and was skipped once a usage existed (1, not 2).
+
+    The step's own usage takes the later read too; another model that grew by then is a wrong model.
+    """
+    world.child = True  # a task still billing until it is cancelled
+    _metered(world, monkeypatch)
+    order = []
+
+    async def usage(_session, _model):
+        order.append("step usage")
+        return _used(1.0)
+
+    async def cancel(_request):
+        order.append("cancel")
+
+    async def once(_session, _model):
+        order.append("final usage")
+        return _used(2.0, model)
+
+    async def disconnect():
+        order.append("disconnect")
+
+    monkeypatch.setattr(sdk_adapter, "usage_read", usage)
+    monkeypatch.setattr(sdk_teardown, "usage_once", once)
+    world.session.rpc.tasks.cancel, world.session.disconnect = cancel, disconnect
+    run = asyncio.run(sdk_adapter.run(world.cfg))
+    assert order == ["step usage", "cancel", "final usage", "disconnect"]
+    _, end = _spend()
+    assert (end["usage"]["credits"], run.usage["credits"], run.model_check) == (2.0, 2.0, check)
+
+
+@pytest.mark.parametrize("stage", ["list", "cancel"])
+def test_a_usage_read_after_an_unverified_task_cleanup_is_a_lower_bound(world, monkeypatch, stage):
+    """Copilot's review: a failed task list or cancel still let the read stand as complete, so the log never added
+    what a task billed after it."""
+    world.child = True
+    _metered(world, monkeypatch)
+
+    async def failed(*_args):
+        msg = "synthetic"
+        raise RuntimeError(msg)
+
+    async def once(_session, _model):
+        return _used(2.0)
+
+    monkeypatch.setattr(sdk_teardown, "usage_once", once)
+    setattr(world.session.rpc.tasks, stage, failed)
+    asyncio.run(sdk_adapter.run(world.cfg))
+    _, end = _spend()
+    assert (end["usage"]["credits"], end["usage"].get("incomplete")) == (2.0, "tasks unsettled")
+
+
+REAL_OPEN = sdk_adapter._open  # noqa: SLF001 - the real one, which the fixture replaces
+
+
+def test_a_session_that_cannot_be_noted_as_ours_is_never_created(world, monkeypatch):
+    """Provenance (Improvement design §4): the manifest still reads, but this session's line was not written."""
+    created = []
+
+    async def create_session(**kw):
+        created.append(kw)
+
+    world.create_session = create_session
+    monkeypatch.setattr(sdk_adapter, "_open", REAL_OPEN)
+    monkeypatch.setattr(chatlogs, "note", lambda _event: False)
+    run = asyncio.run(sdk_adapter.run(world.cfg))
+    assert created == []
+    assert (run.ending, run.detail) == ("error", f"UnnotedError: {chatlogs.UNNOTED}")
+
+
+def test_a_new_session_is_noted_as_ours_before_it_is_created(world, monkeypatch):
+    seen = []
+
+    async def create_session(**kw):
+        seen.append(kw["session_id"] in (chatlogs.own() or set()))
+        msg = "stop here"
+        raise RuntimeError(msg)
+
+    world.create_session = create_session
+    monkeypatch.setattr(sdk_adapter, "_open", REAL_OPEN)
+    asyncio.run(sdk_adapter.run(world.cfg))
+    assert seen == [True]
+
+
+def test_a_replacement_session_is_noted_as_ours_naming_the_one_it_replaces_before_it_is_created(world, monkeypatch):
+    seen = []
+
+    async def missing(_sid):
+        return None
+
+    async def create_session(**kw):
+        seen.append(kw["session_id"])
+        msg = "stop here"
+        raise RuntimeError(msg)
+
+    world.get_session_metadata = missing
+    world.create_session = create_session
+    monkeypatch.setattr(sdk_adapter, "_open", REAL_OPEN)
+    cfg = dataclasses.replace(world.cfg, resume=True, journal=sdk_adapter.Journal(event=world.event,
+                              replaced=lambda: "synthetic-2"))  # fmt: skip
+    noted = []
+    real = chatlogs.note
+    monkeypatch.setattr(chatlogs, "note", lambda e: noted.append(dict(e)) or real(e))
+
+    run = asyncio.run(sdk_adapter.run(cfg))
+    assert seen == ["synthetic-2"]
+    assert run.session_id == "synthetic-2"
+    first = next(e for e in noted if e["session"] == "synthetic-2")
+    assert (first["event"], first["replaces"]) == ("started", "synthetic")
+    monkeypatch.setattr(chatlogs, "note", lambda _e: False)  # a replacement that cannot be noted is never created
+    seen.clear()
+    cfg = dataclasses.replace(cfg, journal=sdk_adapter.Journal(event=world.event, replaced=lambda: "synthetic-3"))
+    run = asyncio.run(sdk_adapter.run(cfg))
+    assert seen == []
+    assert (run.ending, run.detail) == ("error", f"UnnotedError: {chatlogs.UNNOTED}")

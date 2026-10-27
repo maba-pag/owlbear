@@ -174,8 +174,13 @@ def _spotter_writes_end(_no_shared_settings):
     """Every Spotter write a test queued ends before the test's home and patches go."""
     yield
     from owlbear_delivery_next.improvement import spotter  # noqa: PLC0415
+    from owlbear_delivery_next.runtimes import spend_reconcile  # noqa: PLC0415
+    from owlbear_delivery_next.state_store import spend_ledger  # noqa: PLC0415
 
     assert spotter.WORK.settled(10), "Spotter writes still running after the test"
+    assert spend_reconcile.settled(10), "a spend reconciling pass still running after the test"
+    assert spend_ledger.WRITER.settled(10), "spend ledger writes still running after the test"
+    spend_ledger.WRITER.unwritten.clear()
 
 
 async def _silent_look(_card: dict, _ctx: object, _meter: object) -> str:

@@ -15,6 +15,7 @@ TABS = (
     ("/backlog", "Backlog", "backlog.html"),
     ("/memory", "Memory", "memory.html"),
     ("/decisions", "Decisions", "decisions.html"),
+    ("/metrics", "Metrics", "metrics.html"),
     ("/config", "Settings", "config.html"),
     ("/maintenance", "Maintenance", "maintenance.html"),
 )

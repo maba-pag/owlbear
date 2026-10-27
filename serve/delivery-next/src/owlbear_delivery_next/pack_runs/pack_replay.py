@@ -25,6 +25,7 @@ from owlbear_delivery_next.local_system import git_files
 from owlbear_delivery_next.pack_runs.scratch import scratch
 from owlbear_delivery_next.runtimes import loop_owner, sdk_adapter
 from owlbear_delivery_next.settings import roles
+from owlbear_delivery_next.state_store import spend_ledger
 from owlbear_delivery_next.workflow_steps import judges, sessions
 
 if TYPE_CHECKING:
@@ -68,9 +69,19 @@ def replay(
     if store.shared is None:
         msg = "the calibration replay reads the shared repository: set it with `owlbear-next data PATH`"
         raise design_pack.PackError(msg)
+    with spend_ledger.at(spend_ledger.Where.of(store, job="design pack replay")):  # its project's spend
+        return _replay(store, candidate, run or sdk_run, keep)
+
+
+def _replay(
+    store: Store,
+    candidate: Candidate | None,
+    run: Callable[[sdk_adapter.Session], Run],
+    keep: Callable[[Path], bool] | None,
+) -> calibration.Replay:
+    """``replay``'s work, with the shared repository checked."""
     pack = _pack(candidate)
     role, memory = roles.chosen(store.settings(), "design-review"), sessions.memory(store)
-    run = run or sdk_run
     root, pairs, left_out = calibration.folder(store.shared, store.name).resolve(), [], 0
     if not root.is_relative_to(store.shared.root.resolve()):
         msg = f"the calibration folder leads outside the shared repository, to {root}"

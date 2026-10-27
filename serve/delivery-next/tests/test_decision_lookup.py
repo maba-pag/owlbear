@@ -32,7 +32,7 @@ from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.runtimes import sdk_adapter, step_decisions
 from owlbear_delivery_next.runtimes.session_result import Run
-from owlbear_delivery_next.state_store import decision_archive, decision_store
+from owlbear_delivery_next.state_store import decision_archive, decision_store, spend_ledger
 from owlbear_delivery_next.state_store.store import Lock
 from owlbear_delivery_next.workflow_steps import decisions_gate, lookup, pick
 
@@ -588,3 +588,17 @@ def test_a_new_lookup_runs_after_the_owner_resolves_the_invalid_authority(pickin
     assert {row["id"] for row in answer["decisions"]} == {active.id, bad.id}
     assert "failed" not in answer
     assert done is not None
+
+
+def test_a_lead_chats_lookup_spends_for_its_project_as_a_chat_lookup(picking, monkeypatch):
+    places = []
+
+    def chat(_shared, project, _question, _settings):
+        places.append((project, spend_ledger.where()))
+        return {"decisions": []}, Run("look", "result", termination=DONE)
+
+    monkeypatch.setattr(lookup, "chat", chat)
+    assert host_lookup(picking) == {"decisions": []}
+    [(project, place)] = places
+    assert (place.project, place.job, place.change) == (project, "chat lookup", "")
+    assert spend_ledger.where() == spend_ledger.Where()  # the route's thread keeps no place afterwards

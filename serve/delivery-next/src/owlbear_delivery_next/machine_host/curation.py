@@ -29,7 +29,7 @@ from owlbear_delivery_next.machine_host import curation_snapshots
 from owlbear_delivery_next.runtimes import loop_owner, maintained, sdk_adapter
 from owlbear_delivery_next.settings import roles
 from owlbear_delivery_next.settings.config import Settings, SettingsUnset
-from owlbear_delivery_next.state_store import machine_settings, registry
+from owlbear_delivery_next.state_store import machine_settings, registry, spend_ledger
 from owlbear_delivery_next.workflow_steps import lookup
 
 if TYPE_CHECKING:
@@ -394,7 +394,9 @@ class Curation:
             )  # fmt: skip
             with self.lock:
                 self.left_key = key  # persisted with the first PIDs this run records, so a restart knows whose they are
-            done = maintained.run_owned(self.maintenance, cfg, self.run, project=SLOT, slot=key, kind="curation")
+            place = spend_ledger.Where(project=folder, name=folder)  # a memory folder is its project's
+            with spend_ledger.at(place):
+                done = maintained.run_owned(self.maintenance, cfg, self.run, project=SLOT, slot=key, kind="curation")
         t = done.termination
         with self.lock:
             watched = dict.fromkeys((*t.survivors, *t.unknown)) | done.pids if t is not None and not t.confirmed else {}
