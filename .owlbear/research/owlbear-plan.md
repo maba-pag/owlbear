@@ -257,18 +257,17 @@ start saves and publishes it.
    category actions replace `mode`, each action checked against the allowed set (D-01M5WP8Z4ADZ5FN7RJDR17RQQ5); a
    former `learning` became on with every action "record". The window-step code is removed (#698). The owner sets
    the Spotter's remaining settings, or switches it off; until then Delivery steps wait for them.
-2. Spotter cases (slice 5's rest): built 2026-10-27 (stages, versions, rollback, the no-trade regression, releases
-   and the reserve, the seed from the pilot's saved cards, synthetic cases, the reset, publication by `retro-review`);
-   once merged, the owner seeds the cases and `retro-review` checks them.
-3. The chats follower (slice 6's rest): built; the machine host follows each enrolled chat's `events.jsonl` and
-   records looks at its plans, hand-offs, state changes and samples (design §4, "As built for chats"), each with its
-   look credit limit and the cases' prompt snapshot frozen when the look is admitted.
-4. Retro (slice 7): the machine-host job over whole Changes and finished chats, grading the Spotter's records and
-   proposing cases, lessons and fixes, reviewed by `retro-review`.
-5. The Improvement page (slice 8): the Spotter, Retro, cases and proposals managed by direction.
-6. Live delivery and the steered-versus-silent test (slice 9), only once Retro's grades are high enough.
-7. Item 16, the amendment design session with the owner (TD-422: after Improvement, before item 10).
-8. Item 10, the first real project.
+2. Done on 2026-10-27, each slice built complete with marked assumptions instead of deferrals
+   (D-01M5XB9M1A1MNG0S54N367RC70): the per-run credit limits (#704), Spotter cases (#705), spend metrics on the
+   Metrics page (#706) and the chats follower (#707). The owner's next steps on them: seed the cases and start the
+   first `retro-review` check on his word (a check of all ~85 candidates would reach the Retro run limit of 20: in
+   batches, or raise it), and review the three limits written into Global (0.75, 20, 90; marked assumptions).
+3. Retro (slice 7), built complete: the machine-host job over whole Changes and finished chats, grading the
+   Spotter's records and proposing cases, lessons and fixes, reviewed by `retro-review`.
+4. The Improvement page (slice 8): the Spotter, Retro, cases and proposals managed by direction.
+5. Live delivery and the steered-versus-silent test (slice 9), only once Retro's grades are high enough.
+6. Item 16, the amendment design session with the owner (TD-422: after Improvement, before item 10).
+7. Item 10, the first real project.
 
 ## 4. Where the Code Differs From the Decisions
 

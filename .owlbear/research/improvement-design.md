@@ -345,13 +345,15 @@ always shows (D-01M5W9AEB412SNWYM2CS27H68M).
 
 ## 7. Build order
 
-Each slice is a pull request, with Sol on its plan and its code:
+Each slice is a pull request, with Sol on its plan and its code, and is built complete: where evidence is missing,
+marked assumptions or synthetic cases fill the gap and one reset removes them later; nothing is deferred
+(D-01M5XB9M1A1MNG0S54N367RC70):
 1. this design: built (#659, #660);
 2. settings and roles: built (#662); the on/off switch and the four category actions replacing `mode` (#697);
 3. Retro chatlogs: built (#663);
 4. the card builder: built with 6's Delivery part (#668);
-5. Spotter records and cases: records built (#668); cases built (2026-10-27);
-6. the Spotter's looks, recording only, for Delivery and chats: Delivery built (#668); the chats follower built;
+5. Spotter records and cases: records built (#668); cases built (#705);
+6. the Spotter's looks, recording only, for Delivery and chats: Delivery built (#668); the chats follower built (#707);
 7. Retro;
 8. the Improvement page;
 9. live delivery and the test machinery.
@@ -366,7 +368,7 @@ Then item 16 (the amendment design session, TD-422), then item 10.
 - Settings and roles (#662): the `watcher` role and switch became the `spotter` role and the Spotter's settings
   (settings format 12); the `retro` and `retro-review` roles; the machine values for budgets, Retro's triggers and
   enrolled chats; none has a code default. The daily budgets were replaced by credit limits per look and run on
-  2026-10-27 (settings format 16, written into Global once by the machine host's start).
+  2026-10-27 (#704; settings format 16, written into Global once by the machine host's start).
 - Retro chatlogs (#663): the Change-to-session manifest, each step's `events.jsonl` and saved outputs captured at its
   end, enrolled-chat discovery and pruning.
 - The Spotter's core (#668): the intake (`improvement/events.py`), the card (`improvement/card.py`), the looks and
@@ -375,7 +377,11 @@ Then item 16 (the amendment design session, TD-422), then item 10.
 (2026-10-26) found that the runtime refuses a session credit cap under 30; a look now sets none. The machine
   registry and machine settings moved to `state_store` so a step reads its budget (D-01M5VXXFC28ZFHV7HVDTKFHPVF).
   A live test on 2026-10-26 ran a real hand-off look after #682: a correct note for 0.07 credits in 7.5 seconds.
-- The chats follower (slice 6's rest): the machine host follows enrolled chats and records looks at their plans,
+- Spotter cases (#705): stages, versions, the no-trade regression, releases and the reserve, the seed from the pilot's
+  saved cards, synthetic cases, the reset and publication by `retro-review` ("As built" under Spotter cases in §4).
+- Spend metrics (#706): every credit OwlBear spends, Spotter looks and Retro included, is recorded on this machine and
+  shown on the Metrics page by project, agent, model and day; metrics never limit (D-01M5XCDF6G60VG5GHTWF5QSSDE).
+- The chats follower (#707, slice 6's rest): the machine host follows enrolled chats and records looks at their plans,
   hand-offs, state changes and samples ("As built for chats" in §4); every session OwlBear creates is noted in the
   manifest before it is created.
 - The pilot's harness and data stay in `.owlbear/scratch/watcher-replay/` (not committed).
