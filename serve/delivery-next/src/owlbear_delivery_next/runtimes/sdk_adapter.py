@@ -161,6 +161,7 @@ class _Step:
         self.requests: set[asyncio.Task[None]] = set()
         self.workers = tool_workers.Workers()
         self.metered = ""  # this run's id in the spend ledger once its session opened (``sdk_spend``)
+        self.spent: dict[str, Any] = {}  # its usage read after its tasks settled, for the spend ledger
 
     @property
     def done(self) -> bool:

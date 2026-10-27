@@ -100,7 +100,8 @@ function totals() {
       <p-text id="total-credits"><strong>${credits(t.credits)}</strong> credits${unknown}</p-text>
       <p-text id="total-runs">${count(t.runs)} run${t.runs === 1 ? "" : "s"}</p-text>
       <p-text id="total-tokens">${count(t.tokens)} tokens, ${count(t.cache)} cached</p-text>
-      <p-text id="total-stopped">${count(t.stopped)} stopped at their credit limit</p-text>
+      <p-text id="total-stopped">${count(t.stopped)} stopped at their credit limit${t.stopped_unknown
+        ? `, ${count(t.stopped_unknown)} more may have been` : ""}</p-text>
     </div>
     ${uncertain.length ? html`<p-text id="uncertain" size="sm">${uncertain.join("; ")}.</p-text>` : nothing}
     ${undated ? html`<p-text id="undated" size="sm">${credits(undated.credits)} more credits may lie in this period:
@@ -152,8 +153,10 @@ function runRow(r) {
     ? ` with ${r.subagents.join(", ")}` : ""}`;
   const spent = r.open ? "open: no end recorded" : r.unknown ? `${credits(r.credits)}+ (not all reported)`
     : credits(r.credits);
-  const stop = r.stopped ? html`<p-tag color="notification-warning-soft" compact="true">stopped at its credit limit${
-    r.limit != null ? ` of ${r.limit}` : ""}</p-tag>` : nothing;
+  const of = `${r.limit != null ? ` of ${r.limit}` : ""}${r.stopped_by ? ` (${r.stopped_by})` : ""}`;
+  const stop = r.stopped === "reached" ? html`<p-tag color="notification-warning-soft" compact="true">stopped at its
+    credit limit${of}</p-tag>` : r.stopped === "unknown" ? html`<p-tag color="background-surface" compact="true">may
+    have reached its credit limit${of}: not known</p-tag>` : nothing;
   const unsure = r.uncertain.length ? html`<p-tag color="background-surface" compact="true">${r.uncertain
     .map((u) => (u === "at" ? "time uncertain" : "agent uncertain")).join(", ")}</p-tag>` : nothing;
   return html`<p-table-row><p-table-cell>${when}</p-table-cell><p-table-cell>${r.name || "No project"}</p-table-cell>

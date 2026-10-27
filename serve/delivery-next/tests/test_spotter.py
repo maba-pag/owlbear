@@ -1044,3 +1044,21 @@ def test_a_slow_manifest_write_never_holds_a_looks_teardown(monkeypatch) -> None
     released.set()
     assert spotter.WORK.settled(5)
     assert took < 1
+
+
+def test_a_look_gets_its_records_id_so_its_spend_lines_carry_it_too() -> None:
+    told: list[str] = []
+
+    async def look(_card: dict[str, Any], given: spotter.Context) -> tuple[str, float]:
+        told.append(given.look)
+        return '{"category": "none"}', 0.1
+
+    async def main() -> None:
+        spot = spotter.Spotter(ctx(), lambda: "s-1", look)
+        spot.handed_off("call-1", {})
+        await spot.drain()
+
+    asyncio.run(main())
+    assert spotter.WORK.settled(5)
+    [rec] = records()
+    assert told == [rec["id"]]

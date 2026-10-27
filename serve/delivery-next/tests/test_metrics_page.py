@@ -39,9 +39,10 @@ def seeded() -> None:
     spent = {"credits": 1.0, "models": {"m1": {"credits": 1.0, "input": 10, "output": 1}}}
     spend_ledger.append([
         *run("a", now, split, shop),
-        *run("b", now + timedelta(minutes=1), spent, owlbear, stopped="credit-limit", limit=1.0),
+        *run("b", now + timedelta(minutes=1), spent, owlbear, stopped="reached", stopped_by="session", limit=1.0),
         *run("c", now + timedelta(minutes=2), {"error": "TimeoutError"}, {"project": "", "name": "", "change": "",
-                                                                           "agent": "updater"}),
+                                                                           "agent": "updater"},
+             stopped="unknown", stopped_by="session", limit=0.5),
     ])  # fmt: skip
 
 
@@ -77,7 +78,7 @@ def test_the_metrics_page_sums_splits_drills_down_and_lists_runs_with_their_limi
             expect(page.locator("#total-credits")).to_contain_text("3.50 credits")
             expect(page.locator("#total-credits")).to_contain_text("plus 1 run whose credits were not reported")
             expect(page.locator("#total-runs")).to_have_text("3 runs")
-            expect(page.locator("#total-stopped")).to_have_text("1 stopped at their credit limit")
+            expect(page.locator("#total-stopped")).to_have_text("1 stopped at their credit limit, 1 more may have been")
             rows = page.locator("#split p-table-row")
             expect(rows).to_have_count(4)
             expect(rows.nth(0)).to_contain_text("builder")
@@ -87,8 +88,11 @@ def test_the_metrics_page_sums_splits_drills_down_and_lists_runs_with_their_limi
             expect(rows.nth(2)).to_contain_text("0.50")
             expect(page.locator("#runs p-table-row")).to_have_count(3)
             expect(page.locator("#runs-count")).to_contain_text("All 3 runs.")
-            expect(page.locator("#runs p-table-row").nth(1)).to_contain_text("stopped at its credit limit of 1")
+            expect(page.locator("#runs p-table-row").nth(1)).to_contain_text(
+                "stopped at its credit limit of 1 (session)"
+            )
             expect(page.locator("#runs p-table-row").nth(0)).to_contain_text("not all reported")
+            expect(page.locator("#runs p-table-row").nth(0)).to_contain_text("may have reached its credit limit of 0.5")
             assert spend_reconcile.settled(10)
             page.evaluate("document.dispatchEvent(new Event('visibilitychange'))")
             expect(page.locator("#reconcile")).to_contain_text("Earlier records last read")

@@ -157,16 +157,22 @@ def _pass(projects: list[tuple[Store, Path | None]]) -> dict[str, Any]:
     ids, high = {line["id"] for line in known}, _high(known)
     places = _places(projects)
 
+    pending: dict[str, str] = {}  # the runtime logs read in this pass: kept as read only once what they gave is written
+
     def commit(source: str, found: list[dict[str, Any]]) -> None:
         new = [line for line in found if line["id"] not in ids]
-        if new and spend_ledger.append(new):
+        said["done"] += 1
+        if new and spend_ledger.append(new):  # nothing counts as read: the next pass reads it all again
             said["errors"].append(f"{source}: {len(new)} line(s) not written")
+            _save(said)
+            return
         ids.update(line["id"] for line in new)
         for line in new:
             if (c := (line.get("usage") or {}).get("credits")) is not None:
                 high[line["session"]] = max(high.get(line["session"], 0.0), float(c))
         said["imported"][source] = said["imported"].get(source, 0) + len(new)
-        said["done"] += 1
+        if source == "logs":
+            checked.update(pending)
         _save(said)
 
     for store, repo in projects:
@@ -175,7 +181,10 @@ def _pass(projects: list[tuple[Store, Path | None]]) -> dict[str, Any]:
         except Exception as exc:  # noqa: BLE001 - one project's records never stop the others'
             said["errors"].append(f"{store.name or store.root.name}: {type(exc).__name__}: {exc}"[:300])
             said["done"] += 1
-    for source, read in (("spotter", lambda: _looks(known, places)), ("logs", lambda: _logs(known, places, checked))):
+    for source, read in (
+        ("spotter", lambda: _looks(known, places)),
+        ("logs", lambda: _logs(known, places, checked, pending)),
+    ):
         try:
             commit(source, read())
         except Exception as exc:  # noqa: BLE001 - a source that cannot be read is said, never fatal
@@ -259,28 +268,30 @@ def _marks(place: Where, c: Change, agents: dict[str, str], high: dict[str, floa
 
 
 def _looks(known: list[dict[str, Any]], places: dict[str, Where]) -> list[dict[str, Any]]:
-    """Spotter looks recorded before looks wrote the ledger themselves."""
-    live = [line["at"] for line in known if line.get("type") == "start" and line.get("agent") == "spotter"]
-    cutoff = min(live) if live else None
+    """Spotter looks whose own lines the ledger lacks: those recorded before looks wrote it.
+
+    A look and its Spotter record share one id, the record's (``spotter.Context.look``); time never decides it, since
+    the record is made before its look's runtime starts.
+    """
+    own = {str(line["look"]) for line in known if line.get("look")}
     folder, out = local_home.root() / "spotter", []
     for path in sorted(folder.glob("records-*.jsonl")) if folder.is_dir() else ():
         for raw in path.read_text(encoding="utf-8").splitlines():
             with contextlib.suppress(ValueError, TypeError, KeyError, AttributeError):
-                if (line := _look(json.loads(raw), places, cutoff)) is not None:
+                rec = json.loads(raw)
+                if str(rec["id"]) not in own and (line := _look(rec, places)) is not None:
                     out.append(line)
     return out
 
 
-def _look(rec: dict[str, Any], places: dict[str, Where], cutoff: str | None) -> dict[str, Any] | None:
-    if cutoff is not None and str(rec["at"]) >= cutoff:
-        return None
+def _look(rec: dict[str, Any], places: dict[str, Where]) -> dict[str, Any] | None:
     spent = rec.get("credits")
-    if "credits_known" in rec:  # the per-look limit's record: measured, or unknown (stand-in until wt-limits merges)
-        known = bool(rec["credits_known"])
-    else:  # before it: an unreported spend was booked as the estimate
-        if not spent:
-            return None  # no look ran: skipped before it reserved anything
-        known = spent != ESTIMATE
+    if rec.get("credits_known") is False:  # the credit meter's record: its spend is not known
+        known = False
+    elif not spent:
+        return None  # no look ran, or it cost nothing: skipped before it reserved anything
+    else:  # measured; before the meter, an unreported spend was booked as the estimate
+        known = bool(rec["credits_known"]) if "credits_known" in rec else spent != ESTIMATE
     place = places.get(str(rec.get("project") or ""), UNKNOWN_PROJECT if rec.get("project") else Where())
     model = str(rec.get("model") or "")
     usage = {"credits": float(spent), "models": {model: {"credits": float(spent)}}} if known else {"error": "estimate"}
@@ -288,11 +299,17 @@ def _look(rec: dict[str, Any], places: dict[str, Where], cutoff: str | None) -> 
     return _base(place, str(rec.get("change") or ""), id=f"look:{rec['id']}", type="look", at=rec["at"],
                  session=f"look:{rec['id']}", usage=usage, agent="spotter", job=job,
                  step=str(rec.get("step") or ""), model=model, limit=rec.get("limit"),
-                 stopped=str(rec.get("stopped") or ""), ending="look", source="import:spotter")  # fmt: skip
+                 stopped=str(rec.get("stopped") or ""), stopped_by=str(rec.get("stopped_by") or ""), ending="look",
+                 look=str(rec["id"]), source="import:spotter")  # fmt: skip
 
 
-def _logs(known: list[dict[str, Any]], places: dict[str, Where], checked: dict[str, Any]) -> list[dict[str, Any]]:
-    """A killed run's last usage checkpoint, and OwlBear sessions the ledger never saw, from the runtime's log."""
+def _logs(
+    known: list[dict[str, Any]], places: dict[str, Where], checked: dict[str, Any], pending: dict[str, str]
+) -> list[dict[str, Any]]:
+    """A killed run's last usage checkpoint, and OwlBear sessions the ledger never saw, from the runtime's log.
+
+    Each log read is noted in *pending*; it counts as read (*checked*) only once its lines are written.
+    """
     now, sessions, ended = _now(), {line.get("session") for line in known}, {line.get("run") for line in known
                                                                               if line.get("type") == "end"}  # fmt: skip
     latest: dict[str, str] = {}
@@ -306,7 +323,7 @@ def _logs(known: list[dict[str, Any]], places: dict[str, Where], checked: dict[s
         with contextlib.suppress(ValueError, TypeError):
             if now - datetime.fromisoformat(line["at"]) < OPEN:
                 continue
-        if (found := _checkpoint(str(line["session"]), checked)) is not None:
+        if (found := _checkpoint(str(line["session"]), checked, pending)) is not None:
             at, usage = found
             out.append({k: line.get(k) for k in ("project", "name", "clone", "change", "step")}
                        | {"id": f"end:{line['run']}", "type": "end", "run": line["run"], "at": at,
@@ -315,7 +332,7 @@ def _logs(known: list[dict[str, Any]], places: dict[str, Where], checked: dict[s
     for sid, who in _manifest().items():
         if sid in sessions or who.get("kind") == "spotter":  # a legacy look is its Spotter record's
             continue
-        if (found := _checkpoint(sid, checked)) is not None:
+        if (found := _checkpoint(sid, checked, pending)) is not None:
             at, usage = found
             place, change = _owner(sid, who, places)
             job = str(who.get("job") or "")
@@ -352,10 +369,10 @@ def _owner(sid: str, who: dict[str, Any], places: dict[str, Where]) -> tuple[Whe
     return UNKNOWN_PROJECT, ""
 
 
-def _checkpoint(sid: str, checked: dict[str, Any]) -> tuple[str, dict[str, Any]] | None:
+def _checkpoint(sid: str, checked: dict[str, Any], pending: dict[str, str]) -> tuple[str, dict[str, Any]] | None:
     """The session's last usage checkpoint in the runtime's log: its time and cumulative usage; None without one.
 
-    A log read before and unchanged since is not read again.
+    A log read and written before, and unchanged since, is not read again; this read is noted in *pending*.
     """
     for path in (chatlogs.state() / sid / "events.jsonl", chatlogs.root() / "chatlogs" / sid / "log.jsonl.gz"):
         try:
@@ -365,7 +382,7 @@ def _checkpoint(sid: str, checked: dict[str, Any]) -> tuple[str, dict[str, Any]]
         mark = f"{seen.st_size}:{seen.st_mtime_ns}"
         if checked.get(sid) == mark:
             return None
-        checked[sid] = mark
+        pending[sid] = mark
         last = None
         opener = gzip.open if path.suffix == ".gz" else open
         with opener(path, "rt", encoding="utf-8") as f:  # type: ignore[operator]

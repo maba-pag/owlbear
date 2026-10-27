@@ -80,6 +80,14 @@ def _label(p: dict[str, Any], by: str, key: str, names: dict[str, str]) -> str:
     return "Time unknown" if key == UNKNOWN and by == "day" else "Model unknown" if key == UNKNOWN else key
 
 
+def reached(p: dict[str, Any]) -> bool:
+    """Whether the run surely stopped at its credit limit: ``unknown`` is not, nor any other word."""
+    return p["stopped"] in {
+        "reached",
+        "credit-limit",
+    }  # the second: this ledger's first lines, before the meter's names
+
+
 def _in(p: dict[str, Any], since: datetime | None, until: datetime | None) -> bool | None:
     """Whether the piece lies in the range: None when that is unknown (its window is open or crosses an edge)."""
     if since is None and until is None:
@@ -102,7 +110,8 @@ def _sum(group: list[dict[str, Any]]) -> dict[str, Any]:
         "runs": len(runs),
         "unknown": len(unknown),
         "open": len({p["run"] for p in group if p["kind"] == "open"}),
-        "stopped": len({p["run"] for p in group if p["stopped"]}),
+        "stopped": len({p["run"] for p in group if reached(p)}),
+        "stopped_unknown": len({p["run"] for p in group if p["stopped"] == "unknown"}),
         "tokens": int(sum(p["input"] + p["output"] for p in group)),
         "cache": int(sum(p["cache_read"] + p["cache_write"] for p in group)),
         "uncertain_time": round(sum(p["credits"] for p in known if "at" in p["uncertain"]), 4),
@@ -127,7 +136,7 @@ def query(  # noqa: PLR0913 - one value per filter the page offers
             and (not agent or (p["agent"] or UNKNOWN) == agent)
             and (not model or (p["model"] or UNKNOWN) == model)
             and (not change or f"{p['project']}/{p['change']}" == change)
-            and (not stopped or bool(p["stopped"]))
+            and (not stopped or reached(p))
         )
 
     chosen = [p for p in found if kept(p)]
@@ -164,7 +173,8 @@ def _runs(inside: list[dict[str, Any]], names: dict[str, str], cursor: int) -> d
             "agent": first["role"], "job": first["job"], "models": sorted({p["model"] for p in group if p["model"]}),
             "subagents": sorted({p["agent"] for p in group if p["under"]}), "credits": s["credits"],
             "unknown": bool(s["unknown"]), "open": bool(s["open"]), "ending": first["ending"],
-            "stopped": first["stopped"], "limit": first["limit"], "source": first["source"],
+            "stopped": "reached" if reached(first) else first["stopped"], "stopped_by": first["stopped_by"],
+            "limit": first["limit"], "source": first["source"],
             "uncertain": sorted({u for p in group for u in p["uncertain"]}),
         })  # fmt: skip
     items.sort(key=lambda r: r["at"], reverse=True)

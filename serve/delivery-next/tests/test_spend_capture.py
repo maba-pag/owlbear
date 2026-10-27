@@ -99,12 +99,9 @@ def test_legacy_spotter_looks_are_measured_only_when_reported_and_named_by_their
         rec | {"id": "c", "at": "2026-10-20T10:02:00+00:00", "credits": 0.0},  # skipped: no look ran
         rec | {"id": "d", "at": "2026-10-20T10:03:00+00:00", "credits": 0.3, "credits_known": False},
         rec | {"id": "e", "at": "2026-10-20T10:04:00+00:00", "credits": 0.2, "credits_known": True, "limit": 1.0,
-               "stopped": "credit-limit"},
-        rec | {"id": "f", "at": "2026-10-22T10:00:00+00:00", "credits": 0.4},  # after looks wrote the ledger
+               "stopped": "reached", "stopped_by": "look"},
     ]  # fmt: skip
     (folder / "records-2026-10-20.jsonl").write_text("".join(json.dumps(x) + "\n" for x in looks))
-    spend_ledger.append([{"id": "start:L", "type": "start", "run": "L", "at": "2026-10-21T00:00:00+00:00",
-                          "session": "look-L", "agent": "spotter", "before": {}}])  # fmt: skip
     spend_reconcile.run([(project, None)])
     found = {p["run"]: p for p in spend_shares.derive(spend_ledger.lines()) if p["session"].startswith("look:")}
     assert {k: (p["kind"], p["credits"]) for k, p in found.items()} == {
@@ -113,7 +110,11 @@ def test_legacy_spotter_looks_are_measured_only_when_reported_and_named_by_their
     assert {(p["project"], p["name"], p["agent"], p["job"]) for p in found.values()} == {
         ("shop", "shop", "spotter", "hand-off look")
     }
-    assert (found["look:e"]["stopped"], found["look:e"]["limit"]) == ("credit-limit", 1.0)
+    assert (found["look:e"]["stopped"], found["look:e"]["stopped_by"], found["look:e"]["limit"]) == (
+        "reached",
+        "look",
+        1.0,
+    )
 
 
 def checkpoint(at: str, nano: float) -> str:
@@ -177,3 +178,37 @@ def test_the_route_answers_the_page_validates_its_filters_and_reconciles_in_the_
     assert spend_reconcile.settled(10)
     assert done["choices"]["clones"] == {"0123456789abcdef": "shop"}
     assert spend_metrics.query([], tz=UTC_ZONE)["totals"]["credits"] == 0
+
+
+def test_a_live_look_and_its_spotter_record_are_counted_once_whatever_their_times(project) -> None:
+    """Sol's counterexample: the record is made before its look's runtime starts, so a time cutoff counted 0.2 twice."""
+    folder = local_home.root() / "spotter"
+    folder.mkdir()
+    rec = {"id": "x", "at": "2026-10-27T10:00:00+00:00", "credits": 0.2, "project": project.root.name, "model": "m1"}
+    (folder / "records-2026-10-27.jsonl").write_text(json.dumps(rec) + "\n")
+    place = Where(project="shop", name="shop")
+    spend_ledger.started("L", "look-sdk-1", agent="spotter", job="look", model="m1", before={}, place=place, look="x")
+    spend_ledger.ended("L", "look-sdk-1", usage=used(0.2), ending="finished", place=place, look="x")
+    assert spend_ledger.WRITER.settled(5)
+    assert spend_reconcile.run([(project, None)])["imported"]["spotter"] == 0
+    looks = [p for p in spend_shares.derive(spend_ledger.lines()) if p["role"] == "spotter"]
+    assert [(p["run"], p["credits"]) for p in looks] == [("L", 0.2)]
+
+
+def test_a_runtime_log_whose_lines_could_not_be_written_is_read_again(project, monkeypatch) -> None:
+    """Sol's counterexample: the log's fingerprint was kept although its line was not, so no pass appended it."""
+    long_ago = (datetime.now(UTC) - timedelta(hours=4)).isoformat(timespec="seconds")
+    spend_ledger.append([{"id": "start:k", "type": "start", "run": "k", "at": long_ago, "session": "killed",
+                          "agent": "builder", "before": {}, "project": "shop"}])  # fmt: skip
+    runtime_log("killed", checkpoint("2026-10-27T01:00:00Z", 1.5e9))
+    real = spend_ledger.append
+
+    def failing(lines: list[dict]) -> list[dict]:
+        return lines if any(x.get("source") == "import:runtime-log" for x in lines) else real(lines)
+
+    monkeypatch.setattr(spend_ledger, "append", failing)
+    first = spend_reconcile.run([(project, None)])
+    assert (first["imported"].get("logs", 0), first["errors"]) == (0, ["logs: 1 line(s) not written"])
+    monkeypatch.setattr(spend_ledger, "append", real)
+    assert spend_reconcile.run([(project, None)])["imported"]["logs"] == 1
+    assert [p["credits"] for p in spend_shares.derive(spend_ledger.lines()) if p["run"] == "k"] == [1.5]

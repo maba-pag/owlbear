@@ -102,21 +102,30 @@ def _placed(place: Where | None, job: str = "") -> dict[str, str]:
     return found | {"job": job or found["job"]}
 
 
+STOPS = ("", "reached", "unknown")  # a run's stop at its credit limit: none, reached, or not known (``credit_meter``)
+
+
 def started(  # noqa: PLR0913 - the run, its session and what it is
     run: str, session: str, *, agent: str, job: str, model: str | None, before: dict[str, Any] | None,
-            place: Where | None = None) -> None:  # fmt: skip
-    """A run opened its session; *before* is its usage before the first send (None unread, ``{}`` new)."""
+            place: Where | None = None, look: str = "") -> None:  # fmt: skip
+    """A run opened its session; *before* is its usage before the first send (None unread, ``{}`` new).
+
+    *look* is a Spotter look's own id, the one its Spotter record carries, so the two are never counted twice.
+    """
     put({"id": f"start:{run}", "type": "start", "run": run, "at": _now(), "session": session, "agent": agent,
-         "model": model or "", "before": before, **_placed(place, job)})  # fmt: skip
+         "model": model or "", "before": before, **_placed(place, job)} | ({"look": look} if look else {}))  # fmt: skip
 
 
 def ended(  # noqa: PLR0913 - the run, its session and how it ended
     run: str, session: str, *, usage: dict[str, Any], ending: str, limit: float | None = None, stopped: str = "",
-          subagents: int = 0, place: Where | None = None) -> None:  # fmt: skip
-    """A run's lifecycle ended: its session's cumulative *usage* (``{"error": …}`` unread), how and why it stopped."""
+          stopped_by: str = "", subagents: int = 0, place: Where | None = None, look: str = "") -> None:  # fmt: skip
+    """A run's lifecycle ended: its session's cumulative *usage* (``{"error": …}`` unread), how and why it stopped.
+
+    *stopped* is one of ``STOPS``; *stopped_by* names the limit's scope that stopped it, as the credit meter does.
+    """
     put({"id": f"end:{run}", "type": "end", "run": run, "at": _now(), "session": session, "usage": usage,
-         "ending": ending, "limit": limit, "stopped": stopped, "subagents": subagents,
-         **_placed(place)} | {"job": ""})  # fmt: skip
+         "ending": ending, "limit": limit, "stopped": stopped, "stopped_by": stopped_by, "subagents": subagents,
+         **_placed(place)} | {"job": ""} | ({"look": look} if look else {}))  # fmt: skip
 
 
 class _Writer:

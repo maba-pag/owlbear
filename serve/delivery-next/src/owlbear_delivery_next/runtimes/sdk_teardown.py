@@ -14,6 +14,7 @@ from copilot.rpc import TasksCancelRequest
 
 from owlbear_delivery_next.local_system import processes
 from owlbear_delivery_next.local_system.processes import Termination, verdict
+from owlbear_delivery_next.runtimes import sdk_spend
 from owlbear_delivery_next.runtimes.sdk_usage import usage_once
 
 if TYPE_CHECKING:
@@ -88,11 +89,6 @@ async def teardown(client: CopilotClient, session: CopilotSession | None, st: _S
     problems: list[str] = []
     _guard(problems, "runtime PID", st.runtime, client)
     if session is not None:
-        if st.metered and not st.run.usage:  # cut short before its usage was read: once, bounded, before disconnect
-            try:
-                st.run.usage = await owned_call(st, partial(usage_once, session, st.cfg.model), "usage read")
-            except Exception as exc:  # noqa: BLE001 - an unread usage is recorded as such
-                st.run.usage = {"error": type(exc).__name__}
         listed: dict[int, float | None] = {}
 
         async def listing() -> list[TaskInfo]:
@@ -123,6 +119,12 @@ async def teardown(client: CopilotClient, session: CopilotSession | None, st: _S
         _guard(problems, "task tree record", st.record_tree)
         _guard(problems, "tasks log", st.log, event="tasks", listed=sorted(listed), problems=list(problems))
         await settle(listed, [])
+        if st.metered:  # what it spent once its tasks settled: once, bounded, before the disconnect (``sdk_spend``)
+            try:
+                final = await owned_call(st, partial(usage_once, session, st.cfg.model), "usage read")
+            except Exception as exc:  # noqa: BLE001 - an unread usage is recorded as such
+                final = {"error": type(exc).__name__}
+            sdk_spend.final(st, final)
         try:
             await owned_call(st, session.disconnect, "disconnect")
         except Exception as exc:  # noqa: BLE001

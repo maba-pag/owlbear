@@ -442,3 +442,40 @@ def test_a_cancelled_run_reads_its_usage_before_the_disconnect_and_is_recorded(w
 def test_a_run_that_never_opened_a_session_records_nothing(world):
     asyncio.run(sdk_adapter.run(world.cfg))  # the fixture's session never sends: no spend is possible
     assert _spend() == []
+
+
+def _used(credits_: float, model: str = "gpt-6-luna") -> dict:
+    return {"credits": credits_, "models": {model: {"credits": credits_, "input": 1, "output": 1}}}
+
+
+@pytest.mark.parametrize(("model", "adopted"), [("gpt-6-luna", 2.0), ("other-model", 1.0)])
+def test_the_ledger_takes_the_usage_read_once_tasks_settled_before_the_disconnect(world, monkeypatch, model, adopted):
+    """Sol's counterexample: the read came before task cancellation and was skipped once a usage existed (1, not 2).
+
+    The step's own usage, which the model check proved, takes the later read only when it adds no other model.
+    """
+    world.child = True  # a task still billing until it is cancelled
+    _metered(world, monkeypatch)
+    order = []
+
+    async def usage(_session, _model):
+        order.append("step usage")
+        return _used(1.0)
+
+    async def cancel(_request):
+        order.append("cancel")
+
+    async def once(_session, _model):
+        order.append("final usage")
+        return _used(2.0, model)
+
+    async def disconnect():
+        order.append("disconnect")
+
+    monkeypatch.setattr(sdk_adapter, "usage_read", usage)
+    monkeypatch.setattr(sdk_teardown, "usage_once", once)
+    world.session.rpc.tasks.cancel, world.session.disconnect = cancel, disconnect
+    run = asyncio.run(sdk_adapter.run(world.cfg))
+    assert order == ["step usage", "cancel", "final usage", "disconnect"]
+    _, end = _spend()
+    assert (end["usage"]["credits"], run.usage["credits"]) == (2.0, adopted)

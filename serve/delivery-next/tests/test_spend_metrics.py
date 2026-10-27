@@ -76,6 +76,78 @@ def test_a_missing_baseline_takes_the_growth_with_its_time_uncertain() -> None:
     assert said == [("r1", 2.0, ["agent", "at"]), ("r2", 4.0, ["at"])]  # r1's start, naming its agent, was lost
 
 
+def test_an_unread_baseline_spreads_a_runs_share_over_the_window_since_the_last_report() -> None:
+    """Sol's counterexample: 2 on Oct 1, then 6 on Oct 2 after an unread baseline put all 4 on Oct 2."""
+    lines = [
+        start("r1", "2026-10-01T09:00:00+00:00", before={}),
+        end("r1", "2026-10-01T10:00:00+00:00", usage(2.0)),
+        start("r2", "2026-10-02T10:00:00+00:00", before=None),
+        end("r2", "2026-10-02T11:00:00+00:00", usage(6.0)),
+    ]
+    pieces = spend_shares.derive(lines)
+    assert [(p["run"], p["credits"], p["lo"], p["hi"]) for p in pieces] == [
+        ("r1", 2.0, "2026-10-01T10:00:00+00:00", "2026-10-01T10:00:00+00:00"),
+        ("r2", 4.0, "2026-10-01T10:00:00+00:00", "2026-10-02T11:00:00+00:00"),
+    ]
+    days = spend_metrics.query(pieces, tz=UTC, by="day")
+    assert [(r["key"], r["credits"]) for r in days["rows"]] == [("2026-10-01", 2.0), ("?", 4.0)]
+    oct2 = spend_metrics.query(pieces, tz=UTC, start=date(2026, 10, 2), end=date(2026, 10, 3))
+    assert (oct2["totals"]["credits"], oct2["undated"]["credits"]) == (0.0, 4.0)
+    both = spend_metrics.query(pieces, tz=UTC, start=date(2026, 10, 1), end=date(2026, 10, 3))
+    assert (both["totals"]["credits"], both["undated"]) == (6.0, None)
+
+
+def test_re_splitting_earlier_credits_between_agents_never_creates_spend() -> None:
+    """Sol's counterexample: an unsplit legacy total of 10, then the split cumulative total 11, made 13."""
+    unsplit = usage(10.0)
+    split = usage(11.0, main=agent("main", m1=8.0), x1=agent("explore", m1=3.0))
+    lines = [
+        start("r1", "2026-10-01T10:00:00+00:00", before={}),
+        end("r1", "2026-10-01T10:30:00+00:00", unsplit),
+        start("r2", "2026-10-02T10:00:00+00:00", before=unsplit),
+        end("r2", "2026-10-02T10:30:00+00:00", split),
+    ]
+    pieces = spend_shares.derive(lines)
+    assert credits_of(pieces) == 11.0
+    assert credits_of(pieces, run="r2") == 1.0
+    assert sum(p["input"] for p in pieces) == 10  # tokens too: never more than the session's highest total
+
+
+def test_runs_that_spent_nothing_new_or_reported_no_credits_still_count_with_their_stop() -> None:
+    """Sol's counterexamples: credits None with no models vanished; so did a resume stopped at a reached limit."""
+    lines = [
+        start("r1", "2026-10-01T10:00:00+00:00", session="a", before={}),
+        end("r1", "2026-10-01T10:10:00+00:00", {"credits": None, "models": {}}, session="a"),
+        start("r2", "2026-10-01T11:00:00+00:00", session="b", before={}),
+        end("r2", "2026-10-01T11:10:00+00:00", usage(2.0), session="b"),
+        start("r3", "2026-10-01T12:00:00+00:00", session="b", before=usage(2.0)),
+        end("r3", "2026-10-01T12:00:05+00:00", usage(2.0), session="b", ending="credit-limit", stopped="reached",
+            stopped_by="session", limit=2.0),
+    ]  # fmt: skip
+    pieces = spend_shares.derive(lines)
+    assert [(p["run"], p["kind"], p["credits"]) for p in pieces] == [
+        ("r1", "unknown", None), ("r2", "run", 2.0), ("r3", "run", 0.0)
+    ]  # fmt: skip
+    found = spend_metrics.query(pieces, tz=UTC)
+    assert (found["totals"]["runs"], found["totals"]["unknown"], found["totals"]["stopped"]) == (3, 1, 1)
+    r3 = next(r for r in found["runs"]["items"] if r["run"] == "r3")
+    assert (r3["ending"], r3["stopped"], r3["stopped_by"], r3["credits"]) == ("credit-limit", "reached", "session", 0.0)
+
+
+def test_a_stop_not_known_to_have_reached_its_limit_is_never_counted_as_reached() -> None:
+    lines = []
+    for n, stop in enumerate(("reached", "unknown", "")):
+        at = f"2026-10-01T10:0{n}:00+00:00"
+        lines += [
+            start(f"r{n}", at, session=f"s{n}", before={}),
+            end(f"r{n}", at, usage(1.0), session=f"s{n}", stopped=stop, stopped_by="look" if stop else ""),
+        ]
+    found = spend_metrics.query(spend_shares.derive(lines), tz=UTC)
+    assert (found["totals"]["stopped"], found["totals"]["stopped_unknown"]) == (1, 1)
+    only = spend_metrics.query(spend_shares.derive(lines), tz=UTC, stopped=True)
+    assert [(r["run"], r["stopped"], r["stopped_by"]) for r in only["runs"]["items"]] == [("r0", "reached", "look")]
+
+
 def test_a_failed_final_read_is_unknown_until_the_next_run_recovers_it_in_its_window() -> None:
     lines = [
         start("r1", "2026-10-01T10:00:00+00:00", before={}),
@@ -168,7 +240,7 @@ def test_filters_splits_limit_stops_and_a_paged_run_list() -> None:
     lines = []
     for n in range(60):
         at = f"2026-10-01T10:{n:02d}:00+00:00"
-        stop = {"stopped": "credit-limit", "limit": 2.0} if n % 20 == 0 else {}
+        stop = {"stopped": "reached", "stopped_by": "session", "limit": 2.0} if n % 20 == 0 else {}
         project = {"project": "q", "name": "Q", "clone": "c2"} if n % 2 else {}
         lines += [
             start(f"r{n}", at, session=f"s{n}", before={}, **project),
