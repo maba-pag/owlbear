@@ -339,6 +339,7 @@ def _session(group: list[dict[str, Any]]) -> list[dict[str, Any]]:
     lost: dict[str, Any] | None = None  # the latest run whose usage is unknown: later growth may be its own
     placeholder: dict[str, Any] = {}  # its unknown piece, dropped once its spend is recovered
     last: str | None = None  # the latest known time in this session: its last report
+    credited: list[dict[str, Any]] = []  # the pieces of the latest run that spent
     for run in group:
         model = run.get("model") or ""
         if (before := run.get("before")) is not None and "error" not in before:
@@ -365,10 +366,14 @@ def _session(group: list[dict[str, Any]]) -> list[dict[str, Any]]:
         window = (run["at"], run["at"]) if exact else (last, run.get("at"))  # unread baseline: since the last report
         grown, known = marks.grow(usage, model)
         found = _pieces(run, "run", grown, window, [] if exact else ["at"])
+        if not found and _base(run)["incomplete"]:
+            for piece in credited:  # a lower bound repeating what they credited: they are lower bounds too
+                piece["incomplete"] = True
         if not found and _invocation(run) and not run.get("continued"):
             # nothing spent, or nothing known: still a run, with its ending and stop
             zero = {f: (0.0 if known else None) if f == "credits" else 0.0 for f in FIELDS}
             found = [_piece(run, "run" if known else "unknown", "", model, zero, window, [] if exact else ["at"])]
+        credited = [p for p in found if (p["credits"] or 0.0) > EPS] or credited
         out += found
         lost = None
         last = run.get("at") or last

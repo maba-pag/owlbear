@@ -176,9 +176,10 @@ def _pass(projects: list[tuple[Store, Path | None]]) -> dict[str, Any]:
             checked.update(pending)
         _save(said)
 
+    live = {str(x.get("session")) for x in known if x.get("type") in {"start", "end"} and not x.get("source")}
     for store, repo in projects:
         try:
-            commit("changes", _changes(store, repo, high))
+            commit("changes", _changes(store, repo, high, live))
         except Exception as exc:  # noqa: BLE001 - one project's records never stop the others'
             said["errors"].append(f"{store.name or store.root.name}: {type(exc).__name__}: {exc}"[:300])
             said["done"] += 1
@@ -212,8 +213,8 @@ def _steps() -> set[str]:
     return {k.value for k in StepKind}
 
 
-def _changes(store: Store, repo: Path | None, high: dict[str, float]) -> list[dict[str, Any]]:
-    """The step events, marks and residuals of every Change of *store*."""
+def _changes(store: Store, repo: Path | None, high: dict[str, float], live: set[str]) -> list[dict[str, Any]]:
+    """The step events, marks and residuals of every Change of *store*; *live*: the sessions the ledger recorded."""
     place, out, seen = Where.of(store, repo), [], dict(high)
     for slug in store.slugs():
         c = store.read(slug)
@@ -222,7 +223,7 @@ def _changes(store: Store, repo: Path | None, high: dict[str, float]) -> list[di
         for line in found:  # a mark these events already reach adds nothing
             seen[line["session"]] = max(seen.get(line["session"], 0.0), float(line["usage"].get("credits") or 0.0))
         agents = {e["session"]: _agent(str(e.get("kind") or "")) for e in events}
-        out += found + _marks(place, c, agents, seen)
+        out += found + _marks(place, c, agents, seen, live)
     return out
 
 
@@ -244,20 +245,25 @@ def _events(place: Where, slug: str, events: list[dict[str, Any]]) -> list[dict[
     return out
 
 
-def _marks(place: Where, c: Change, agents: dict[str, str], high: dict[str, float]) -> list[dict[str, Any]]:
+def _marks(
+    place: Where, c: Change, agents: dict[str, str], high: dict[str, float], live: set[str]
+) -> list[dict[str, Any]]:
     """Each session's latest totals the Change kept that the ledger does not reach, and its credits no session holds.
 
-    A session whose latest read failed (``unread``) keeps its earlier mark as a lower bound, and one never read at
-    all is unknown, never left out: the runtime's log completes either (``spend_logs``).
+    A session whose latest read failed (``unread``) keeps its earlier mark as a lower bound, even when its events
+    reach it, unless the ledger recorded the session as it ran (its own runs say so): ``spend_shares`` then holds what
+    it credited a lower bound, and the runtime's log completes it (``spend_logs``). One never read at all is unknown,
+    never left out.
     """
     out = []
     held = 0.0
     for session, mark in c.spend.last.items():
         held += mark.credits
-        if mark.credits <= high.get(session, -1.0) + EPS and session in high:
+        unread = session in c.spend.unread and session not in live
+        if not unread and mark.credits <= high.get(session, -1.0) + EPS and session in high:
             continue
         usage: dict[str, Any] = {"credits": mark.credits, "models": {m: s.model_dump() for m, s in mark.models.items()}}
-        if session in c.spend.unread:
+        if unread:
             usage["incomplete"] = "unread"  # a later read failed: it spent at least this
         ident = f"mark:{_id(place.clone, c.slug, session, usage)}"
         out.append(_base(place, c.slug, id=ident, type="mark", session=session, usage=usage,

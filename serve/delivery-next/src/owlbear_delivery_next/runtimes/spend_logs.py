@@ -2,9 +2,11 @@
 
 The log is ``~/.copilot/session-state/<id>/events.jsonl``, else Retro's copy. It completes a run the ledger left open
 for ``OPEN`` (killed), a run that ended with its usage unread, unknown or a lower bound, and a session only Retro's
-chatlogs manifest names (curator, design pack and lookup runs before the ledger). Every checkpoint counts, the
-latest of each quarter hour (``QUARTER``), so a day's total never depends on when the log was first read. Its usage
-stays provisional until the log shows the session shut down, and the log is read again whenever it changes.
+chatlogs manifest names (curator, design pack and lookup runs before the ledger). Every new high of the session's
+cumulative credits counts, at the time it was first reached, the highest of each quarter hour (``QUARTER``), so a
+day's total never depends on when the log was first read and known spend never moves to a later day. Its usage stays
+provisional until the log shows the session shut down at no less than its high, and the log is read again whenever it
+changes.
 """
 
 from __future__ import annotations
@@ -27,6 +29,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
 OPEN = timedelta(hours=3)  # a run still open after this was killed: its runtime's log says what it spent
+EPS = 1e-9
 QUARTER = 15 * 60  # seconds: every time zone's midnight is a quarter hour's start in UTC, so no day loses a checkpoint
 LOOKUP = "decision-lookup"
 UNKNOWN_PROJECT = Where(project="(unknown)", name="Project unknown")
@@ -172,11 +175,9 @@ def _owner(sid: str, who: dict[str, Any], places: dict[str, Where]) -> tuple[Whe
 
 
 def _checkpoints(sid: str, checked: dict[str, Any], pending: dict[str, str]) -> list[tuple[str, dict[str, Any], bool]]:
-    """The session's usage checkpoints in the runtime's log, oldest first: time, cumulative usage, whether final.
+    """The session's usage highs in the runtime's log, oldest first: when first reached, the usage, whether final.
 
-    The latest of each quarter hour, and only those that grew.
-
-    The latest is final when the session shut down and was not resumed since; none is before it.
+    The latest is final when the session shut down, was not resumed since, and reported no less than its high.
     A log read and written before, and unchanged since, is not read again; this read is noted in *pending*.
     """
     for path in (chatlogs.state() / sid / "events.jsonl", chatlogs.root() / "chatlogs" / sid / "log.jsonl.gz"):
@@ -188,21 +189,20 @@ def _checkpoints(sid: str, checked: dict[str, Any], pending: dict[str, str]) -> 
         if checked.get(sid) == mark:
             return []
         pending[sid] = mark
-        quarters: dict[int, str] = {}  # each quarter hour's latest checkpoint, as written
+        read: list[tuple[str, dict[str, Any]]] = []  # every checkpoint, as written
         final = False
         opener = gzip.open if path.suffix == ".gz" else open
         with opener(path, "rt", encoding="utf-8") as f:  # type: ignore[operator]
             for raw in f:
                 kind = _kind(raw)
                 if kind in {"session.usage_checkpoint", "session.shutdown"}:
-                    with contextlib.suppress(ValueError, TypeError, KeyError):
-                        at = datetime.fromisoformat(str(json.loads(raw)["timestamp"]))
-                        quarters.pop(n := int(at.timestamp()) // QUARTER, None)
-                        quarters[n] = raw
-                    final = kind == "session.shutdown"
+                    got = _read(raw)
+                    if got is not None:
+                        read.append(got)
+                    final = kind == "session.shutdown" and got is not None
                 elif kind in {"session.start", "session.resume"}:
                     final = False
-        return _grown([read for raw in quarters.values() if (read := _read(raw)) is not None], final=final)
+        return _highs(read, final=final)
     return []
 
 
@@ -212,13 +212,25 @@ def _read(raw: str) -> tuple[str, dict[str, Any]] | None:
     return None
 
 
-def _grown(read: list[tuple[str, dict[str, Any]]], *, final: bool) -> list[tuple[str, dict[str, Any], bool]]:
-    """The checkpoints whose credits grew over the one before, the latest kept; only the latest may be *final*."""
-    out: list[tuple[str, dict[str, Any], bool]] = []
-    for at, usage in read[:-1]:
-        if (out[-1][1]["credits"] if out else 0.0) < usage["credits"] < read[-1][1]["credits"]:
-            out.append((at, usage, False))
-    return [*out, (*read[-1], final)] if read else []
+def _highs(read: list[tuple[str, dict[str, Any]]], *, final: bool) -> list[tuple[str, dict[str, Any], bool]]:
+    """Each new high of the cumulative credits at the time it was first reached, the highest of each quarter hour.
+
+    A reading at or below the high adds nothing and never moves it later; a quarter hour lies within one day in every
+    time zone. The last high is final only when the log's last reading, its shutdown (*final*), reached it: then it
+    takes that reading's usage, at the high's time. A shutdown lower than the high leaves it a lower bound.
+    """
+    quarters: dict[int, tuple[str, dict[str, Any]]] = {}
+    top = -1.0
+    for at, usage in read:
+        if usage["credits"] > top + EPS:
+            top = usage["credits"]
+            quarters[int(datetime.fromisoformat(at).timestamp()) // QUARTER] = (at, usage)
+    highs = list(quarters.values())
+    if not highs:
+        return []
+    done = final and read[-1][1]["credits"] >= top - EPS
+    last = (highs[-1][0], read[-1][1]) if done else highs[-1]
+    return [(at, usage, False) for at, usage in highs[:-1]] + [(*last, done)]
 
 
 def _kind(raw: str) -> str:

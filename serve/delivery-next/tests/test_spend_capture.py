@@ -658,3 +658,63 @@ def test_a_changes_unread_sessions_are_unknown_or_lower_bounds_until_their_logs_
     runtime_log("s3", shutdown("2026-10-20T10:40:00Z", 1.5e9))
     assert spend_reconcile.run([(store, None)])["imported"]["logs"] == 2
     assert seen() == {"s1": ("run", 4.0, False, ""), "s3": ("run", 1.5, False, "reviewer")}
+
+
+def solo_pieces() -> list[tuple]:
+    assert spend_ledger.WRITER.settled(5)
+    return sorted((p["lo"], p["hi"], p["credits"], p["uncertain"], p["incomplete"])
+                  for p in spend_shares.derive(spend_ledger.lines()) if p["run"] == "log:solo")  # fmt: skip
+
+
+def solo_manifest() -> None:
+    chatlogs.root().mkdir(parents=True)
+    solo = {"event": "started", "session": "solo", "kind": "review", "role": "curator"}
+    (chatlogs.root() / "manifest.jsonl").write_text(json.dumps(solo) + "\n")
+
+
+@pytest.mark.parametrize("reads", ["once", "as it grew"])
+def test_a_plateau_keeps_its_spend_on_the_day_it_was_first_reached(reads) -> None:
+    """Sol's counterexample: 3 credits on Oct 1, then a shutdown of 3 on Oct 2, dated all 3 on Oct 2."""
+    solo_manifest()
+    runtime_log("solo", checkpoint("2026-10-01T22:00:00Z", 3e9))
+    if reads == "as it grew":
+        assert spend_reconcile.run([])["imported"]["logs"] == 1
+    logged("solo", shutdown("2026-10-02T09:00:00Z", 3e9))
+    spend_reconcile.run([])
+    assert solo_pieces() == [("2026-10-01T22:00:00+00:00", "2026-10-01T22:00:00+00:00", 3.0, [], False)]
+    found = spend_metrics.pieces()
+    days = [spend_metrics.query(found, tz=UTC_ZONE, start=date(2026, 10, d), end=date(2026, 10, d + 1))["totals"]
+            for d in (1, 2)]  # fmt: skip
+    assert [d["credits"] for d in days] == [3.0, 0]
+
+
+def test_a_shutdown_lower_than_a_checkpoint_keeps_the_higher_as_a_lower_bound() -> None:
+    """Sol's counterexample: 3 credits, then a shutdown reporting 2 in the same quarter hour, recorded 2 as complete."""
+    solo_manifest()
+    runtime_log("solo", checkpoint("2026-10-01T10:00:00Z", 3e9), shutdown("2026-10-01T10:05:00Z", 2e9))
+    assert spend_reconcile.run([])["imported"]["logs"] == 1
+    assert solo_pieces() == [("2026-10-01T10:00:00+00:00", "2026-10-01T10:00:00+00:00", 3.0, [], True)]
+
+
+def test_an_earlier_read_then_a_failed_one_is_a_lower_bound_until_the_log_completes_it(tmp_path) -> None:
+    """Sol's counterexample: a step's event read 3, its resume's read failed; the event alone was imported, as complete,
+    and the log was never read for it."""
+    spend = Spend().plus(used(3.0), "s1").plus({"error": "TimeoutError"}, "s1")
+    read = {"event": "step", "at": "2026-10-20T10:00:00+00:00", "session": "s1", "kind": "build", "usage": used(3.0),
+            "ending": "result"}  # fmt: skip
+    failed = read | {"at": "2026-10-20T11:00:00+00:00", "usage": {"error": "TimeoutError"}}
+    store = changed(tmp_path, spend, read, failed)
+
+    def s1() -> list[tuple]:
+        assert spend_ledger.WRITER.settled(5)
+        return [(p["lo"], p["hi"], p["credits"], p["incomplete"]) for p in spend_shares.derive(spend_ledger.lines())
+                if p["session"] == "s1"]  # fmt: skip
+
+    assert spend_reconcile.run([(store, None)])["imported"]["changes"] == 2  # its event and its lower-bound mark
+    assert s1() == [("2026-10-20T10:00:00+00:00", "2026-10-20T10:00:00+00:00", 3.0, True)]
+    runtime_log("s1", checkpoint("2026-10-20T10:00:00Z", 3e9), shutdown("2026-10-20T11:30:00Z", 4e9))
+    assert spend_reconcile.run([(store, None)])["imported"]["logs"] >= 1
+    assert s1() == [  # what the resume spent lies after the event, its time otherwise unknown
+        ("2026-10-20T10:00:00+00:00", "2026-10-20T10:00:00+00:00", 3.0, False),
+        ("2026-10-20T10:00:00+00:00", None, 1.0, False),
+    ]  # fmt: skip
