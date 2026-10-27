@@ -10,7 +10,8 @@ const credits = (n) => n.toFixed(2);
 const count = (n) => n.toLocaleString();
 
 export async function refresh() {
-  const reading = ++state.reading;
+  const reading = ++state.reading;  // a new list: an older answer, or a "Show more" still pending, is dropped
+  state.more = false;
   try {
     const data = await call(query(), { machine: true, timeout: 30000 });
     if (reading !== state.reading) return;
@@ -31,13 +32,16 @@ export async function refresh() {
 }
 
 async function more() {
+  const reading = state.reading, asked = query(state.next);  // the list it continues
   state.more = true;
   show();
   try {
-    const data = await call(query(state.next), { machine: true, timeout: 30000 });
+    const data = await call(asked, { machine: true, timeout: 30000 });
+    if (reading !== state.reading) return;  // the filters changed meanwhile: it continues a list no longer shown
     state.runs = [...state.runs, ...data.runs.items];
     state.next = data.runs.next;
   } catch (error) {
+    if (reading !== state.reading) return;
     state.error = error.message;
   }
   state.more = false;

@@ -123,3 +123,92 @@ def test_the_metrics_page_sums_splits_drills_down_and_lists_runs_with_their_limi
     finally:
         server.should_exit = True
         machine.stop_all()
+
+
+HOLD = """
+window.__held = [];
+const real = window.fetch;
+window.fetch = async (...args) => {
+  const answer = await real(...args);
+  if (window.__hold && String(args[0]).includes("cursor=")) await new Promise((go) => window.__held.push(go));
+  return answer;
+};
+"""
+
+
+@pytest.mark.browser
+def test_a_show_more_answered_after_the_filters_changed_is_dropped(pds) -> None:
+    """Sol's counterexample: a pending "Show more" of the old filters appended to the new list and took its cursor."""
+    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+
+    now = datetime.now(UTC) - timedelta(hours=1)
+    shop = {"project": "shop", "name": "shop", "change": "c1", "agent": "builder"}
+    owlbear = {"project": "owlbear", "name": "owlbear", "change": "c2", "agent": "reviewer"}
+    spent = {"credits": 0.1, "models": {"m1": {"credits": 0.1, "input": 1, "output": 1}}}
+    spend_ledger.append([
+        *(x for n in range(55) for x in run(f"s{n}", now + timedelta(seconds=n), spent, shop)),
+        *(x for n in range(3) for x in run(f"o{n}", now + timedelta(seconds=n), spent, owlbear)),
+    ])  # fmt: skip
+    machine, server, base = serve()
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except Error as exc:
+                pytest.skip(f"no Playwright Chromium: {exc}")
+            page = browser.new_page(timezone_id="Europe/Berlin")
+            pds.only(page, base)
+            page.add_init_script(HOLD)
+            page.goto(f"{base}/metrics#token=t")
+            expect(page.locator("#runs-count")).to_contain_text("The newest 50 of 58 runs.")
+            assert spend_reconcile.settled(10)
+            expect(page.locator("#reconcile")).to_contain_text("Earlier records last read", timeout=10000)
+            page.evaluate("window.__hold = true")
+            page.locator("#more").click()
+            page.wait_for_function("window.__held.length === 1")  # its answer is in, held back
+            pds.pick(page, "Project", "owlbear")
+            expect(page.locator("#runs-count")).to_contain_text("All 3 runs.")
+            page.evaluate("window.__held.forEach((go) => go())")  # the old answer arrives last
+            page.wait_for_timeout(500)
+            expect(page.locator("#runs p-table-row")).to_have_count(3)
+            expect(page.locator("#runs-count")).to_contain_text("All 3 runs.")
+            expect(page.locator("#more")).to_have_count(0)
+            expect(page.locator("#error")).to_have_count(0)
+            browser.close()
+    finally:
+        server.should_exit = True
+        machine.stop_all()
+
+
+@pytest.mark.browser
+def test_the_page_reads_again_after_a_pass_whose_worker_started_late(pds, monkeypatch) -> None:
+    """Sol's counterexample: the first answer did not say the pass was running, so the page never read again."""
+    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+
+    seeded()
+    real, go = spend_reconcile.run, threading.Event()
+
+    def late(projects: list) -> dict:
+        go.wait(10)  # the worker thread is slow to begin its pass
+        return real(projects)
+
+    monkeypatch.setattr(spend_reconcile, "run", late)
+    machine, server, base = serve()
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except Error as exc:
+                go.set()
+                pytest.skip(f"no Playwright Chromium: {exc}")
+            page = browser.new_page(timezone_id="Europe/Berlin")
+            pds.only(page, base)
+            page.goto(f"{base}/metrics#token=t")
+            expect(page.locator("#reconcile")).to_contain_text("Reading earlier records")
+            go.set()
+            expect(page.locator("#reconcile")).to_contain_text("Earlier records last read", timeout=10000)
+            browser.close()
+    finally:
+        go.set()
+        server.should_exit = True
+        machine.stop_all()

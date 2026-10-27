@@ -131,10 +131,28 @@ def checkpoint(at: str, nano: float) -> str:
     return json.dumps({"type": "session.usage_checkpoint", "timestamp": at, "data": {"accountingSnapshot": snap}})
 
 
+def shutdown(at: str, nano: float) -> str:
+    snap = json.loads(checkpoint(at, nano))["data"]["accountingSnapshot"]
+    return json.dumps({"type": "session.shutdown", "timestamp": at, "data": {"accountingSnapshot": snap,
+                       "totalNanoAiu": nano, "shutdownType": "routine"}})  # fmt: skip
+
+
 def runtime_log(sid: str, *events: str) -> None:
     folder = Path.home() / ".copilot" / "session-state" / sid
     folder.mkdir(parents=True)
     (folder / "events.jsonl").write_text("".join(f"{e}\n" for e in ('{"type": "session.start"}', *events)))
+
+
+def logged(sid: str, *events: str) -> None:
+    """More of the runtime's log of *sid*, as it writes on."""
+    with (Path.home() / ".copilot" / "session-state" / sid / "events.jsonl").open("a") as f:
+        f.write("".join(f"{e}\n" for e in events))
+
+
+def run_piece(rid: str) -> tuple[float | None, bool, str]:
+    assert spend_ledger.WRITER.settled(5)
+    [piece] = [p for p in spend_shares.derive(spend_ledger.lines()) if p["run"] == rid]
+    return piece["credits"], piece["incomplete"], piece["kind"]
 
 
 def test_a_killed_run_and_sessions_the_ledger_never_saw_are_read_from_the_runtimes_log(project) -> None:
@@ -273,7 +291,7 @@ def test_a_failed_final_read_keeps_the_proof_and_marks_the_ledgers_sample_incomp
     runtime_log("partial", checkpoint("2026-10-27T01:00:00Z", 1.5e9))
     assert spend_reconcile.run([(project, None)])["imported"]["logs"] == 1
     [piece] = [p for p in spend_shares.derive(spend_ledger.lines()) if p["run"] == "r"]
-    assert (piece["credits"], piece["incomplete"], piece["source"]) == (1.5, False, "import:runtime-log")
+    assert (piece["credits"], piece["incomplete"], piece["source"]) == (1.5, True, "import:runtime-log")
 
 
 def test_a_look_finishing_while_a_pass_scans_is_counted_once(project, monkeypatch) -> None:
@@ -384,3 +402,110 @@ def test_a_look_still_running_during_a_pass_is_never_imported_from_a_record(proj
     assert spend_reconcile.run([(project, None)])["imported"]["spotter"] == 0
     looks = [p for p in spend_shares.derive(spend_ledger.lines()) if p["role"] == "spotter"]
     assert sorted((p["run"], p["credits"]) for p in looks) == [("A", 0.1), ("B", 0.3)]
+
+
+def test_a_run_whose_initial_and_final_reads_failed_is_recovered_from_its_runtimes_log(project) -> None:
+    """Sol's counterexample: only usage marked incomplete was recovered, so an unread end stayed unknown for good."""
+    spend_ledger.started("r", "unread", agent="builder", job="", model="m1", before=None)
+    spend_ledger.ended("r", "unread", usage={"error": "TimeoutError"}, ending="result")
+    assert run_piece("r") == (None, False, "unknown")
+    chatlogs.root().mkdir(parents=True)  # Retro's manifest names the session too: it is left to its run
+    (chatlogs.root() / "manifest.jsonl").write_text(json.dumps({"event": "started", "session": "unread",
+                                                                 "kind": "build", "job": ""}) + "\n")  # fmt: skip
+    runtime_log("unread", checkpoint("2026-10-27T01:00:00Z", 2e9))
+    assert spend_reconcile.run([(project, None)])["imported"]["logs"] == 1
+    assert run_piece("r") == (2.0, True, "run")  # its run, provisional: the session never said it shut down
+    assert total() == 5.5 + 2.0
+
+
+def test_later_checkpoints_raise_a_correction_until_the_session_shuts_down(project) -> None:
+    """Sol's counterexample: every correction had one id, so checkpoints of 2 then 3 left 2, marked complete."""
+    spend_ledger.started("r", "growing", agent="builder", job="", model="m1", before={})
+    spend_ledger.ended("r", "growing", usage=used(1.0) | {"incomplete": "TimeoutError"}, ending="result")
+    runtime_log("growing", checkpoint("2026-10-27T01:00:00Z", 2e9))
+    assert spend_reconcile.run([(project, None)])["imported"]["logs"] == 1
+    assert run_piece("r") == (2.0, True, "run")
+    logged("growing", checkpoint("2026-10-27T01:01:00Z", 3e9))  # the runtime was still stopping
+    assert spend_reconcile.run([(project, None)])["imported"]["logs"] == 1
+    assert run_piece("r") == (3.0, True, "run")
+    assert spend_reconcile.run([(project, None)])["imported"]["logs"] == 0  # unchanged: not read again
+    logged("growing", shutdown("2026-10-27T01:02:00Z", 3e9))
+    assert spend_reconcile.run([(project, None)])["imported"]["logs"] == 1
+    assert run_piece("r") == (3.0, False, "run")  # final now
+    logged("growing", checkpoint("2026-10-27T01:03:00Z", 3e9))
+    assert spend_reconcile.run([(project, None)])["imported"]["logs"] == 0  # a final run is not revisited
+    assert run_piece("r") == (3.0, False, "run")
+
+
+def test_a_correction_never_lowers_a_run_and_a_final_tie_beats_a_provisional_one() -> None:
+    def end(usage: dict, n: int) -> dict:
+        return {"id": f"end:r:{n}", "type": "end", "run": "r", "session": "s", "usage": usage}
+
+    start = {"id": "start:r", "type": "start", "run": "r", "session": "s", "at": "2026-10-27T01:00:00+00:00"}
+    lines = [start, end(used(3.0) | {"incomplete": "checkpoint"}, 1), end(used(2.0), 2), end({"error": "x"}, 3)]
+    [run] = spend_shares.runs(lines)
+    assert run["usage"] == used(3.0) | {"incomplete": "checkpoint"}
+    [run] = spend_shares.runs([*lines, end(used(3.0), 4), end(used(3.0) | {"incomplete": "checkpoint"}, 5)])
+    assert run["usage"] == used(3.0)
+
+
+def test_a_killed_run_and_a_logged_session_are_read_again_when_their_logs_grow(project) -> None:
+    long_ago = (datetime.now(UTC) - timedelta(hours=4)).isoformat(timespec="seconds")
+    spend_ledger.append([{"id": "start:k", "type": "start", "run": "k", "at": long_ago, "session": "killed",
+                          "agent": "builder", "before": {}, "project": "shop"}])  # fmt: skip
+    runtime_log("killed", checkpoint("2026-10-27T01:00:00Z", 1e9))
+    runtime_log("solo", checkpoint("2026-10-27T01:00:00Z", 0.5e9))
+    chatlogs.root().mkdir(parents=True)
+    solo = {"event": "started", "session": "solo", "kind": "review", "role": "curator"}
+    (chatlogs.root() / "manifest.jsonl").write_text(json.dumps(solo) + "\n")
+    assert spend_reconcile.run([(project, None)])["imported"]["logs"] == 2
+    assert (run_piece("k"), run_piece("log:solo")) == ((1.0, True, "run"), (0.5, True, "run"))
+    logged("killed", shutdown("2026-10-27T01:05:00Z", 1.2e9))
+    logged("solo", checkpoint("2026-10-27T01:05:00Z", 0.9e9))
+    assert spend_reconcile.run([(project, None)])["imported"]["logs"] == 2
+    assert (run_piece("k"), run_piece("log:solo")) == ((1.2, False, "run"), (0.9, True, "run"))
+    assert total() == 7.6  # the project's Change, the killed run and the logged session
+
+
+def test_a_pass_during_a_looks_teardown_stays_provisional_until_its_runtime_stops(project) -> None:
+    """The look's end line is queued before its runtime stops: a pass meanwhile reads a checkpoint, not the end."""
+    place = Where(project="shop", name="shop")
+    spend_ledger.started("L", "look-t", agent="spotter", job="look", model="m1", before={}, place=place, look="x")
+    spend_ledger.ended("L", "look-t", usage=used(0.1) | {"incomplete": "unconfirmed"}, ending="unconfirmed",
+                       place=place, look="x")  # fmt: skip
+    runtime_log("look-t", checkpoint("2026-10-27T01:00:00Z", 0.2e9))
+    assert spend_reconcile.run([(project, None)])["imported"]["logs"] == 1
+    assert run_piece("L") == (0.2, True, "run")
+    logged("look-t", shutdown("2026-10-27T01:00:05Z", 0.25e9))
+    assert spend_reconcile.run([(project, None)])["imported"]["logs"] == 1
+    assert run_piece("L") == (0.25, False, "run")
+    looks = [p for p in spend_shares.derive(spend_ledger.lines()) if p["role"] == "spotter"]
+    assert [(p["run"], p["credits"]) for p in looks] == [("L", 0.25)]
+
+
+def test_a_pass_whose_worker_starts_late_is_said_running_and_its_imports_follow(project, monkeypatch) -> None:
+    """Sol's counterexample: the answer said the last pass's "done" while the new one had not begun, so the page
+    never read again and showed what was there before the pass."""
+    spend_ledger.folder().mkdir(parents=True, exist_ok=True)
+    long_ago = (datetime.now(UTC) - timedelta(hours=1)).isoformat(timespec="seconds")
+    spend_reconcile.state_path().write_text(json.dumps({"state": "done", "finished": long_ago}))
+    real, began, go = spend_reconcile.run, threading.Event(), threading.Event()
+
+    def late(projects: list) -> dict:
+        began.set()
+        go.wait(5)  # the worker thread is slow to begin its pass
+        return real(projects)
+
+    monkeypatch.setattr(spend_reconcile, "run", late)
+    app = FastAPI()
+    app.include_router(metrics_routes.router(lambda: [(project, None)]), prefix="/api/next")
+    http = TestClient(app)
+    first = http.get("/api/next/metrics?by=project").json()
+    assert (first["coverage"]["reconcile"]["state"], first["rows"]) == ("running", [])
+    assert began.wait(5)
+    assert http.get("/api/next/metrics?by=project").json()["coverage"]["reconcile"]["state"] == "running"
+    go.set()
+    assert spend_reconcile.settled(10)
+    after = http.get("/api/next/metrics?by=project").json()
+    assert after["coverage"]["reconcile"]["state"] == "done"
+    assert [(r["label"], r["credits"]) for r in after["rows"]] == [("shop", 5.5)]

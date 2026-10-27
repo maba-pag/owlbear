@@ -1,7 +1,8 @@
 """The Metrics page's data (D-01M5XCDF6G60VG5GHTWF5QSSDE): every project's spend, from the machine's spend ledger.
 
 A read also starts a reconciling pass over OwlBear's other records when one is due; it runs on its own thread, so
-the answer never waits for it, and says how far it got. Nothing here limits any work.
+the answer never waits for it, and says how far it got: "running" from the moment it is started, so the page reads
+again until the pass is done, and the answer after that holds all it imported. Nothing here limits any work.
 """
 
 from __future__ import annotations
@@ -64,11 +65,11 @@ def router(projects: Projects) -> APIRouter:
             raise HTTPException(422, f"by must be one of {', '.join(spend_metrics.SPLITS)}")
         if spend_reconcile.due():
             spend_reconcile.start(projects())
+        said = spend_reconcile.status()  # before the read: a pass said done has written all it found
         found = spend_metrics.query(
             spend_metrics.pieces(), tz=zone, start=since, end=until, project=project, agent=agent, model=model,
             change=change, stopped=stopped, by=by, cursor=cursor,
         )  # fmt: skip
-        said = spend_reconcile.state()
         found["coverage"]["reconcile"] = {k: said.get(k) for k in ("state", "started", "finished", "sources", "done",
                                                                    "imported", "errors")}  # fmt: skip
         return found

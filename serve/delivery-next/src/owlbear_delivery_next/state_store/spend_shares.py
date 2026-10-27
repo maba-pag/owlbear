@@ -6,7 +6,8 @@ a Change kept, time unknown), a ``residual`` (a Change's spend no session holds)
 the ledger). Every run names the ``session`` whose totals it reports; the totals only grow. A look the ledger has
 from its own lines and from its Spotter record (one ``look`` id, its meter's) counts once: as its own lines, plus,
 when the record names an SDK session those lines lack (``sdk_sessions``), what the record holds beyond them. An
-imported checkpoint that repeats a live run's totals exactly adds nothing.
+imported checkpoint that repeats a live run's totals exactly adds nothing. A run with several ends (its runtime log's
+corrections) keeps its largest usage, a final one over a provisional one of as much.
 
 Shares are derived per session before anything is filtered or grouped, so a filter never hands a resumed run the
 spend of earlier ones. The runs go in time order (unknown times last, as imported). High-water marks start at zero
@@ -113,9 +114,27 @@ def runs(lines: list[dict[str, Any]]) -> list[dict[str, Any]]:
             run.setdefault("source", "recorded")
         else:
             keep = {k: v for k, v in line.items() if k not in {"id", "type"} and (v not in ("", None) or k not in run)}
+            if "usage" in keep and not _larger(run.get("usage"), keep["usage"]):
+                del keep["usage"]  # a correction never lowers what a run is known to have spent
             run |= keep | {"ended": True, "line": kind}
             run.setdefault("source", "recorded" if kind == "end" else f"import:{kind}")
     return list(by.values())
+
+
+def unread(usage: dict[str, Any]) -> bool:
+    """Whether a usage says nothing of the credits spent: unread, or read without them."""
+    return "error" in usage or usage.get("credits") is None
+
+
+def _larger(old: dict[str, Any] | None, new: dict[str, Any] | None) -> bool:
+    """Whether another end's *new* usage replaces a run's *old*: known over unread, else at least as many credits."""
+    if new is None:
+        return False
+    if old is None or unread(old):
+        return True
+    if unread(new) or (more := float(new["credits"]) - float(old["credits"])) < -EPS:
+        return False
+    return more > EPS or not new.get("incomplete") or bool(old.get("incomplete"))  # a tie: final over provisional
 
 
 def _time(run: dict[str, Any]) -> str | None:

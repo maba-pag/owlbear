@@ -12,8 +12,9 @@ What it reads, for each project this machine serves and for this machine:
 - Spotter records written before looks wrote the ledger: one session each; a legacy look whose spend was not
   reported carries the 0.5 estimate it was booked at, which is imported as unknown, never as measured;
 - the runtime's own log of an OwlBear session (``~/.copilot/session-state/<id>/events.jsonl``, else Retro's copy)
-  whose run the ledger left open for ``OPEN`` or which the ledger never saw, from Retro's chatlogs manifest: curator,
-  design pack and lookup runs before the ledger, and a killed run's last usage checkpoint.
+  whose run the ledger left open for ``OPEN``, whose run ended with its usage unread or not final, or which the
+  ledger never saw, from Retro's chatlogs manifest: curator, design pack and lookup runs before the ledger, and a
+  killed run's last usage checkpoint; provisional, and read again as the log grows, until the session shut down.
 Spend that none of these kept is not recoverable: a session OwlBear ran before Retro's manifest (2026-10-25) and
 outside any Change, such as a curator or design pack run, and the events a Change's activity log dropped beyond its
 marks' totals.
@@ -39,11 +40,11 @@ from owlbear_delivery_next.local_system.git_files import git_common_dir
 from owlbear_delivery_next.local_system.storage_io import atomic_write
 from owlbear_delivery_next.runtimes import chatlogs
 from owlbear_delivery_next.settings import roles
-from owlbear_delivery_next.state_store import spend_ledger
+from owlbear_delivery_next.state_store import spend_ledger, spend_shares
 from owlbear_delivery_next.state_store.spend_ledger import Where
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Callable, Iterable
 
     from owlbear_delivery_next.change_contracts.models import Change
     from owlbear_delivery_next.state_store.store import Store
@@ -71,6 +72,12 @@ def state() -> dict[str, Any]:
     return found if isinstance(found, dict) else {"state": "never"}
 
 
+def status() -> dict[str, Any]:
+    """The last pass's progress, "running" from the moment ``start`` took this process's pass, before it says so."""
+    said = state()
+    return said | {"state": "running"} if _running.locked() else said
+
+
 def _save(said: dict[str, Any]) -> None:
     with contextlib.suppress(OSError):
         spend_ledger.folder().mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -84,7 +91,7 @@ def _now() -> datetime:
 def due(now: datetime | None = None) -> bool:
     """Whether a page read should start a pass: none ran, or the last ended ``AGAIN`` ago."""
     said, now = state(), now or _now()
-    if said.get("state") == "running" and _running.locked():
+    if _running.locked():
         return False
     try:
         return now - datetime.fromisoformat(said["finished"]) >= AGAIN
@@ -160,7 +167,7 @@ def _pass(projects: list[tuple[Store, Path | None]]) -> dict[str, Any]:
     pending: dict[str, str] = {}  # the runtime logs read in this pass: kept as read only once what they gave is written
 
     def commit(source: str, found: list[dict[str, Any]]) -> None:
-        new = [line for line in found if line["id"] not in ids]
+        new = list({line["id"]: line for line in found if line["id"] not in ids}.values())
         said["done"] += 1
         if new and spend_ledger.append(new):  # nothing counts as read: the next pass reads it all again
             said["errors"].append(f"{source}: {len(new)} line(s) not written")
@@ -319,70 +326,90 @@ def _look(rec: dict[str, Any], places: dict[str, Where]) -> dict[str, Any] | Non
 def _logs(
     known: list[dict[str, Any]], places: dict[str, Where], checked: dict[str, Any], pending: dict[str, str]
 ) -> list[dict[str, Any]]:
-    """What the runtime's log adds: killed runs, runs whose final read failed, sessions the ledger never saw.
+    """What the runtime's log adds: killed runs, runs whose usage was unread or not final, sessions it alone saw.
 
-    A killed run gets its last usage checkpoint, a run whose final read failed the rest of its spend, and an OwlBear
-    session the ledger never saw its own line. Each log read is noted in *pending*; it counts as read (*checked*)
-    only once its lines are written.
+    A killed run, an ended run whose usage is unread, unknown or a lower bound, and an OwlBear session no other record
+    names get the log's latest usage as another ``end`` of their own run (``log:<session>`` for the last). Each line's
+    id is its content's, so a later, larger checkpoint is a new line, and ``spend_shares`` keeps a run's largest usage.
+    Until the log shows the session shut down, its usage stays provisional (``incomplete``) and the log is read again
+    whenever it changes. Each log read is noted in *pending*; it counts as read (*checked*) only once its lines are
+    written.
     """
-    now, sessions, ended = _now(), {line.get("session") for line in known}, {line.get("run") for line in known
-                                                                              if line.get("type") == "end"}  # fmt: skip
-    latest = _latest(known)
-    out = _incomplete(known, latest, checked, pending)
-    for line in known:
-        if line.get("type") != "start" or line["run"] in ended or latest.get(line["session"], "") > line["at"]:
+    now, later, found = _now(), _resumed(known), spend_shares.runs(known)
+    out = _unfinished(found, later, checked, pending)
+    for run in found:
+        if run.get("ended") or not run.get("started") or later(run):
             continue  # ended, or a later run of its session accounts for what it spent
         with contextlib.suppress(ValueError, TypeError):
-            if now - datetime.fromisoformat(line["at"]) < OPEN:
+            if now - datetime.fromisoformat(run["started"]) < OPEN:
                 continue
-        if (found := _checkpoint(str(line["session"]), checked, pending)) is not None:
-            at, usage = found
-            out.append({k: line.get(k) for k in ("project", "name", "clone", "change", "step")}
-                       | {"id": f"end:{line['run']}", "type": "end", "run": line["run"], "at": at,
-                          "session": line["session"], "usage": usage, "ending": "unconfirmed",
-                          "source": "import:runtime-log"})  # fmt: skip
+        if (read := _checkpoint(str(run["session"]), checked, pending)) is not None:
+            at, usage, final = read
+            out.append({k: run.get(k) for k in ("project", "name", "clone", "change", "step")}
+                       | _correction(run["run"], str(run["session"]), usage, final) | {"at": at,
+                       "ending": "unconfirmed"})  # fmt: skip
+    sessions = {line.get("session") for line in known}
     for sid, who in _manifest().items():
-        if sid in sessions or who.get("kind") == "spotter":  # a legacy look is its Spotter record's
+        if sid in sessions or who.get("kind") == "spotter":  # its runs say it; a legacy look is its Spotter record's
             continue
-        if (found := _checkpoint(sid, checked, pending)) is not None:
-            at, usage = found
+        if (read := _checkpoint(sid, checked, pending)) is not None:
+            at, usage, final = read
             place, change = _owner(sid, who, places)
             job = str(who.get("job") or "")
             agent = str(who.get("role") or _agent(job or str(who.get("kind"))))
-            out.append(_base(place, change, id=f"log:{_id(sid, at, usage.get('credits'))}", type="event", at=at,
-                             session=sid, usage=usage, agent=agent,
-                             job=job, step="" if job else str(who.get("kind") or ""), ending="",
-                             source="import:runtime-log"))  # fmt: skip
+            out.append(_base(place, change, at=at, agent=agent, job=job,
+                             step="" if job else str(who.get("kind") or ""), ending="")
+                       | _correction(f"log:{sid}", sid, usage, final))  # fmt: skip
     return out
 
 
-def _latest(known: list[dict[str, Any]]) -> dict[str, str]:
-    """Each session's latest line time in the ledger."""
-    latest: dict[str, str] = {}
+def _correction(run: str, session: str, usage: dict[str, Any], final: bool) -> dict[str, Any]:  # noqa: FBT001
+    """Another ``end`` of *run* with its session's usage as the runtime's log has it; provisional unless *final*."""
+    usage = usage if final else usage | {"incomplete": "checkpoint"}
+    return {"id": f"end:{run}:log:{_id(usage)}", "type": "end", "run": run, "session": session, "usage": usage,
+            "source": "import:runtime-log"}  # fmt: skip
+
+
+def _resumed(known: list[dict[str, Any]]) -> Callable[[dict[str, Any]], bool]:
+    """Whether a later run of a run's session started: its ``before`` accounts for what the run spent."""
+    starts: dict[str, list[tuple[str, str]]] = {}
     for line in known:
-        if (sid := line.get("session")) and isinstance(at := line.get("at"), str):
-            latest[sid] = max(latest.get(sid, ""), at)
-    return latest
+        if line.get("type") == "start" and isinstance(at := line.get("at"), str):
+            starts.setdefault(str(line.get("session")), []).append((at, str(line.get("run"))))
+
+    def later(run: dict[str, Any]) -> bool:
+        began = run.get("started") or run.get("at") or ""
+        return any(at > began and rid != run["run"] for at, rid in starts.get(str(run.get("session")), ()))
+
+    return later
 
 
-def _incomplete(
-    known: list[dict[str, Any]], latest: dict[str, str], checked: dict[str, Any], pending: dict[str, str]
+def _unfinished(
+    found: list[dict[str, Any]],
+    later: Callable[[dict[str, Any]], bool],
+    checked: dict[str, Any],
+    pending: dict[str, str],
 ) -> list[dict[str, Any]]:
-    """Runs whose final read failed, completed from their session's last checkpoint when no later run covers it.
+    """Ended runs whose usage is unread, unknown or a lower bound, completed from their session's log.
 
-    The completing line is another ``end`` of the same run: its usage replaces the sample, its time stays.
+    Not when a later run of the session accounts for what it spent; a lower bound is replaced only by at least as much.
+    Their time stays.
     """
     out = []
-    for line in known:
-        sample = line.get("usage") or {}
-        if line.get("type") != "end" or not sample.get("incomplete") or latest.get(line["session"], "") > line["at"]:
+    for run in found:
+        usage = run.get("usage")
+        if not run.get("ended") or run.get("line") != "end" or usage is None:
             continue
-        if (found := _checkpoint(str(line["session"]), checked, pending)) is None:
+        unread = spend_shares.unread(usage)
+        if not unread and not usage.get("incomplete"):
             continue
-        usage = found[1]
-        if (usage.get("credits") or 0.0) >= (sample.get("credits") or 0.0):
-            out.append({"id": f"end:{line['run']}:log", "type": "end", "run": line["run"], "session": line["session"],
-                        "usage": usage, "source": "import:runtime-log"})  # fmt: skip
+        if later(run):
+            continue
+        if (read := _checkpoint(str(run["session"]), checked, pending)) is None:
+            continue
+        _, got, final = read
+        if unread or got["credits"] >= (usage.get("credits") or 0.0):
+            out.append(_correction(run["run"], str(run["session"]), got, final))
     return out
 
 
@@ -411,9 +438,10 @@ def _owner(sid: str, who: dict[str, Any], places: dict[str, Where]) -> tuple[Whe
     return UNKNOWN_PROJECT, ""
 
 
-def _checkpoint(sid: str, checked: dict[str, Any], pending: dict[str, str]) -> tuple[str, dict[str, Any]] | None:
-    """The session's last usage checkpoint in the runtime's log: its time and cumulative usage; None without one.
+def _checkpoint(sid: str, checked: dict[str, Any], pending: dict[str, str]) -> tuple[str, dict[str, Any], bool] | None:
+    """The session's latest usage in the runtime's log: its time, cumulative usage and whether it is final.
 
+    It is final when the session shut down and was not resumed since; None without one.
     A log read and written before, and unchanged since, is not read again; this read is noted in *pending*.
     """
     for path in (chatlogs.state() / sid / "events.jsonl", chatlogs.root() / "chatlogs" / sid / "log.jsonl.gz"):
@@ -425,18 +453,32 @@ def _checkpoint(sid: str, checked: dict[str, Any], pending: dict[str, str]) -> t
         if checked.get(sid) == mark:
             return None
         pending[sid] = mark
-        last = None
+        last, final = None, False
         opener = gzip.open if path.suffix == ".gz" else open
         with opener(path, "rt", encoding="utf-8") as f:  # type: ignore[operator]
             for raw in f:
-                if '"session.usage_checkpoint"' in raw or '"session.shutdown"' in raw:
-                    last = raw
+                kind = _kind(raw)
+                if kind in {"session.usage_checkpoint", "session.shutdown"}:
+                    last, final = raw, kind == "session.shutdown"
+                elif kind in {"session.start", "session.resume"}:
+                    final = False
         if last is None:
             return None
         with contextlib.suppress(ValueError, TypeError, KeyError):
-            return _usage(json.loads(last))
+            if (got := _usage(json.loads(last))) is not None:
+                return (*got, final)
         return None
     return None
+
+
+def _kind(raw: str) -> str:
+    """A log line's event type, read without parsing the line when it comes first, as the runtime writes it."""
+    head = raw[:80]
+    if '"type"' not in head:
+        return ""
+    with contextlib.suppress(IndexError):
+        return head.split('"type"', 1)[1].split('"', 2)[1]
+    return ""
 
 
 def _usage(event: dict[str, Any]) -> tuple[str, dict[str, Any]] | None:
