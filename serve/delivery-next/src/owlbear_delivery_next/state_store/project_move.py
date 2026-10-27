@@ -391,9 +391,7 @@ def _commit(  # noqa: PLR0913, PLR0917
     _sync_published(pfd, target, tfd)  # a retry re-syncs before any switch, so a failure stays uncommitted
 
     def unchanged() -> None:
-        if not fd_tree.holds_text_at(folder_fd, MOVE_RECORD, receipt):
-            msg = f"{folder / MOVE_RECORD} changed during publication: nothing was switched"
-            raise StoreError(msg)
+        fd_tree.require_text_at(folder_fd, MOVE_RECORD, receipt)
         require_proof(folder, folder_fd, target, proof)
         _published(pfd, target, tfd, rec)
         format_marker.written_format(tfd, previous)
@@ -403,6 +401,7 @@ def _commit(  # noqa: PLR0913, PLR0917
                 "stop the other OwlBear process, then start again"
             )
             raise StoreError(msg)
+        fd_tree.require_text_at(folder_fd, MOVE_RECORD, receipt)
 
     rec["phase"] = SWITCHED
     _save(folder, folder_fd, rec, before_replace=unchanged)  # only this guarded rename makes the target authoritative

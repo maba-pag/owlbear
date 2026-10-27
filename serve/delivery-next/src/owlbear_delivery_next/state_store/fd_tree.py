@@ -181,6 +181,13 @@ def holds_text_at(dfd: int, name: str, text: str) -> bool:
         os.close(fd)
 
 
+def require_text_at(dfd: int, name: str, text: str) -> None:
+    """Refuse publication unless the named regular entry still holds the exact admitted image."""
+    if not holds_text_at(dfd, name, text):
+        msg = f"{name} changed or could not be verified: refusing publication"
+        raise StoreError(msg)
+
+
 def create_verified_at(dfd: int, name: str, text: str) -> None:
     """Create *name* under *dfd* with exactly *text*, then raise unless it still holds *text* when read back."""
     create_at(dfd, name, text)

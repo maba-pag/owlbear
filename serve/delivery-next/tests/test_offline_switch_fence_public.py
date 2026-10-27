@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from owlbear_delivery_next.commands import cli
-from owlbear_delivery_next.state_store import fd_tree, offline_protocol, project_home, project_move
+from owlbear_delivery_next.state_store import fd_tree, format_marker, offline_protocol, project_home, project_move
 from owlbear_delivery_next.state_store.database import MARKER, FormatTooNewError
 
 BEFORE = "AAAAAAAA-0000-4000-8000-000000000001"
@@ -162,6 +162,36 @@ def test_finish_keeps_a_receipt_replaced_during_its_durability_work(prepared, mo
     quarantined = list(source.glob(f"{fd_tree.QUARANTINE}*"))
     assert len(quarantined) == 1
     assert json.loads(quarantined[0].read_text())["phase"] == project_move.SWITCHED
+
+
+@pytest.mark.parametrize("after", ["marker", "source-digest"])
+def test_finish_rechecks_its_receipt_after_the_final_validator_reads(prepared, monkeypatch, after):
+    repo, source = prepared
+    owners, changed = {}, []
+    owner = '{"owner":"replacement during final validation"}\n'
+
+    def enable(target):
+        module = format_marker if after == "marker" else project_move
+        name = "written_format" if after == "marker" else "_source_unchanged"
+        real = getattr(module, name)
+
+        def late(*args, **kwargs):
+            result = real(*args, **kwargs)
+            changed.append(True)
+            (source / project_move.MOVE_RECORD).write_text(owner)
+            owners.update({source: snapshot(source), target: snapshot(target)})
+            return result
+
+        monkeypatch.setattr(module, name, late)
+
+    fired = at_sync(monkeypatch, source, "receipt", enable)
+    code = cli.main(["--repo", str(repo), "finish"])
+
+    assert fired == [True]
+    assert changed == [True]
+    assert code == 1
+    assert (source / project_move.MOVE_RECORD).read_text() == owner
+    assert {path: snapshot(path) for path in owners} == owners
 
 
 @pytest.mark.parametrize("when", ["target", "receipt"])
