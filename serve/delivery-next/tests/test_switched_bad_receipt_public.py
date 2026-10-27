@@ -23,7 +23,14 @@ from owlbear_delivery_next.machine_host import selfcheck
 from owlbear_delivery_next.machine_host.machine import Machine, MachineError
 from owlbear_delivery_next.pack_runs import pack_run, pack_state
 from owlbear_delivery_next.project_host.host import HostRecord
-from owlbear_delivery_next.state_store import fd_tree, offline_protocol, project_home, project_move, registry
+from owlbear_delivery_next.state_store import (
+    fd_tree,
+    offline_protocol,
+    project_home,
+    project_move,
+    project_switch,
+    registry,
+)
 from owlbear_delivery_next.state_store.database import MARKER, FormatTooNewError, StoreError
 from owlbear_delivery_next.state_store.store import Store
 
@@ -625,6 +632,44 @@ def test_an_unproven_source_fence_keeps_one_unlocated_reservation(repo, boot, ma
     finally:
         machine.stop_all()
     assert machine.maintenance.read()["sessions"] == [lease]
+
+
+@pytest.mark.usefixtures("current_binding")
+@pytest.mark.parametrize("consumer", ["current", "open"])
+@pytest.mark.parametrize("field", [project_move.PREPARED, MARKER, project_home.CLONE_ID])
+def test_source_state_rechecks_the_receipt_after_its_other_witness_reads(repo, boot, monkeypatch, consumer, field):
+    target = _finished_move(repo, boot)
+    source = _source(repo)
+    held = source.stat()
+    real_state, real_read = project_switch.source_state, fd_tree.read_at
+    calls, active, fired = [], [], []
+    wanted = 1 if consumer == "current" else 3
+    owner = '{"owner":"receipt changed during source validation"}\n'
+    target_before = _snapshot(target)
+
+    def state(*args):
+        calls.append(True)
+        active.append(len(calls))
+        try:
+            return real_state(*args)
+        finally:
+            active.pop()
+
+    def read(fd, name):
+        text = real_read(fd, name)
+        if active == [wanted] and not fired and name == field and os.path.samestat(os.fstat(fd), held):
+            fired.append(True)
+            (source / project_move.MOVE_RECORD).write_text(owner)
+        return text
+
+    monkeypatch.setattr(project_switch, "source_state", state)
+    monkeypatch.setattr(fd_tree, "read_at", read)
+    action = (lambda: project_home.current(repo)) if consumer == "current" else (lambda: Store.open(repo))
+    with pytest.raises(StoreError):
+        action()
+    assert fired == [True]
+    assert (source / project_move.MOVE_RECORD).read_text() == owner
+    assert _snapshot(target) == target_before
 
 
 @pytest.mark.usefixtures("current_binding")

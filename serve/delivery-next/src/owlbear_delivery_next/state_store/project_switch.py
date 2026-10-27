@@ -110,6 +110,7 @@ def source_state(source: tuple[Path, int], pid: str, rec: dict) -> tuple[str, st
     if clone_id_at(folder, folder_fd) != pid or not same_folder(folder, folder_fd):
         msg = f"{folder} no longer names the retained source of project {pid}: nothing was changed"
         raise StoreError(msg)
+    fd_tree.require_text_at(folder_fd, project_move.MOVE_RECORD, image)
     return prepared, marker, image
 
 
