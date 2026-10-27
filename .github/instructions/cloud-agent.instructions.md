@@ -57,4 +57,4 @@ or dispatch. When a user decision or human merge is next, state that next step i
 
 The Delivery redesign programme is superseded by the new engine (TD-202). If a task names a redesign
 package or phase, report that and stop; current work is in
-[the plan](../../.owlbear/research/owlbear-plan.md).
+[the pinned tracker issue](https://github.com/maba-pag/owlbear/issues/713): fetch your item's issue and its parent context.
