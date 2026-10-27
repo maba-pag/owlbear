@@ -37,7 +37,7 @@ CURRENT_MODULES = (
     ("project_host/host.py", "692c501f40c468f2ce7bce1d0a6aa74dae9099c1f4349546fb74d931e5938427"),
     ("state_store/database.py", "839595f61f72a0f0b8a5b3ea43295afb4009a5c4467aebd99398567320d416d7"),
     ("state_store/fd_tree.py", "986e95d0e9c3e87e78245d4469e0680b84e499e7bd8482ef5f6f26fd229ace8d"),
-    ("state_store/format_marker.py", "ff53e78b27c7932746e62fb64bf71e022948d3fd0ecbf02884773d7a6baa6d32"),
+    ("state_store/format_marker.py", "9976361dadff815bd3d2a7382819c8707084d529c0a6e6e64f379ed17f278e90"),
     ("state_store/offline_proof.py", "5a4fb1b44ab554ba5e1174da3ae195882284180371011e46da85f4472c344688"),
     ("state_store/offline_protocol.py", "ac15beec23d9e357dfe107afdc082c9c894f884677627ef408bad163b9db245d"),
     ("state_store/pack_run_record.py", "dda1039d73c22629f0e0b08ee5a23ae43d949b2f623b974a316ac7ce61699269"),
