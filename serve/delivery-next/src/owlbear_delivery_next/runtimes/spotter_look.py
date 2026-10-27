@@ -1,7 +1,8 @@
 """One Spotter look (Improvement design §4): a tool-less SDK session on the spotter role, with no SDK credit cap.
 
-It runs in an empty folder without the project's or the user's configuration, noted in the chatlogs manifest so it is
-never taken for a chat. It has a 90-second answer deadline followed by a bounded teardown: ``spotter.TEARDOWN`` per
+It runs in an empty folder in the Spotter's own (``~/.owlbear/spotter/looks/``) without the project's or the user's
+configuration, noted in the chatlogs manifest before it is created, so it is never taken for a chat; one that cannot be
+noted does not start. It has a 90-second answer deadline followed by a bounded teardown: ``spotter.TEARDOWN`` per
 stage, whatever cancels it meanwhile. The session and runtime stop gracefully, or the runtime is forced to; an end it
 could not confirm is noted provisional, and named to a caller that owns the runtimes' lifetime (``UNENDED``).
 
@@ -40,6 +41,7 @@ from owlbear_delivery_next.state_store import spend_ledger
 
 UNENDED: ContextVar[list[str] | None] = ContextVar("spotter_look_unended", default=None)
 """Where a caller owning the runtimes' lifetime (the cases job) collects each session whose runtime's end is unknown."""
+UNNOTED = "the look's session could not be noted as OwlBear's own, so it was not created"
 
 
 async def judged(the_card: dict[str, Any], ctx: spotter.Context, meter: credit_meter.Meter) -> str:
@@ -69,20 +71,24 @@ async def judged(the_card: dict[str, Any], ctx: spotter.Context, meter: credit_m
     try:
         await client.start()
         effort = ctx.effort if ctx.effort and await takes_effort(client, ctx.model) else None
-        with tempfile.TemporaryDirectory(prefix="owlbear-spotter-") as empty:
+        looks = spotter.root() / "looks"
+        looks.mkdir(mode=0o700, exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix="look-", dir=looks) as empty:
+            sid = f"spotter-{uuid.uuid4().hex}"
+            started = {"kind": "spotter", "role": "spotter", "job": "", "worktree": empty, "look": meter.id}
+            if not await spotter.offload(chatlogs.registered, sid, started):
+                sid = ""  # never noted: no session, so nothing to note as ended
+                raise RuntimeError(UNNOTED)
             session = await client.create_session(
+                session_id=sid,
                 model=ctx.model, reasoning_effort=effort,
                 context_tier="long_context" if ctx.context == "long" else None, available_tools=[], mcp_servers={},
                 enable_config_discovery=False, included_builtin_skills=[], enable_file_hooks=False,
                 skip_custom_instructions=True, working_directory=empty, on_event=heard,
                 on_permission_request=lambda *_: PermissionDecisionReject(feedback="a look has no tools"),
             )  # fmt: skip
-            sid = getattr(session, "session_id", "") or ""
             limit.part.started(sid)
             spent.started(sid)
-            started = {"event": "started", "session": sid, "kind": "spotter", "role": "spotter", "job": "",
-                       "worktree": empty, "look": meter.id}  # fmt: skip
-            await spotter.offload(chatlogs.note, started)
             confirmed = await limit.turn(
                 session.send_and_wait(message, timeout=spotter.LOOK), partial(_abort, session), spotter.TEARDOWN
             )

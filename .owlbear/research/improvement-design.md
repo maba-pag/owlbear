@@ -185,6 +185,44 @@ course.
   steerable and stoppable by the Spotter (D-01M5W9YB6VHT7RW53M3133WD3C).
 - **Chats:** a follower in the machine host tails each enrolled chat's `events.jsonl`.
 
+As built for chats (`machine_host/chats.py`, `chat_settings.py`, `chat_looks.py`, `chat_offsets.py`,
+`runtimes/chat_moments.py`): one follower, holding its own lock from before its first read until its thread ends, so a
+handover's next host reads nothing while the old one drains. Every
+5 seconds it reads the Spotter's settings (Global's under this machine's; a chat is no project's) and the enrolled
+chats; off, unset or unreadable, it reads no chat. A chat is a runtime session folder, listed before the manifest of
+OwlBear's own sessions is read, that the manifest does not name (an unreadable manifest reads none, and every session
+OwlBear creates, a look's, a `retro-review`'s and a replacement's included, is noted there before it is created or does
+not start), whose `workspace.yaml` (read again whenever it or its metadata changes) names an enrolled folder outside
+OwlBear's own; only then is its log opened. Its new bytes are read in bounded chunks, each fetched once (an event not
+yet complete is continued at the next read), every fetch counting against a pass's bound.
+A chat that existed when following began starts at its end then, a later one at its start, and one found again after
+it was dropped (its metadata missing meanwhile) at its end then; earlier bytes and a replaced log are context, never
+looked at; a restart records the bytes it missed as a gap (D-01M5XCE8ZA4FGYYY45YP44M8RD). One chat look runs at a
+time, a draining one counted. It is admitted under the machine's stop barrier: none once an update's fence, a stop or
+a stop when idle holds it, and one admitted before is counted as running work from then until it ends, so they wait
+for it. It runs under a maintenance lease from before its session to its runtime's confirmed end; an
+unconfirmed end keeps the lease and a session slot held, and no chat look starts until the owner recovers it on the
+Maintenance page, as for the cases job; Pause admits none while the chats
+are still read (D-01M5XCE8ZC030KT2FZ7D6SZCJN). No turn settles while an event is still being written. Every
+settlement and admission uses the settings in force (the
+per-look credit limit among them); the prompt and cases' snapshot is taken when a turn starts (one begun before
+following, at its first live event) and serves that turn's looks. Each look keeps the settings and snapshot it was
+admitted with, and its record the chat as its session, the requester message as its `turn`, the case version and
+prompt hash, and its meter's spend, limit and stop. A trace of the runtime (2026-10-27) showed the log holds
+each model round and a `session.usage_checkpoint` after a prompt's last one, never `session.idle`; marked assumptions
+(D-01M5XB9M1A1MNG0S54N367RC70) fill the rest:
+- **plan:** the first reply with content after a requester message (one without a source or the user's, not an
+  autopilot continuation), whatever it asks for besides;
+- **hand-off:** one per requester turn, its final reply (no tool requests, its round ended) once the turn settled:
+  a checkpoint after it with the log read to its end, the next requester message, the session's end, or 120 seconds
+  without an event while no round or call is open; a later round supersedes it, an abort drops it;
+- **state change:** a completed call judged against the chat's workspace and the requester's intent (a chat has no
+  Change): a write outside the workspace wherever it goes; else none when the runtime marks a shell call read-only
+  (no redirection into a file); else publishing, deleting or settings by its shell command's words or its tool's
+  name; a call whose effect is not known is a candidate too, its uncertainty in the moment; it is
+  looked at instead of a sample of the same call;
+- **sample:** as for Delivery steps.
+
 ### Live delivery
 - **Delivery hand-off:** an accepted `submit_result` is final (the SDK skips another model round), so the Spotter
   judges the submission before acceptance. When it steers, the tool answers with a non-success note that does not
@@ -313,7 +351,7 @@ Each slice is a pull request, with Sol on its plan and its code:
 3. Retro chatlogs: built (#663);
 4. the card builder: built with 6's Delivery part (#668);
 5. Spotter records and cases: records built (#668); cases built (2026-10-27);
-6. the Spotter's looks, recording only, for Delivery and chats: Delivery built (#668); the chats follower next;
+6. the Spotter's looks, recording only, for Delivery and chats: Delivery built (#668); the chats follower built;
 7. Retro;
 8. the Improvement page;
 9. live delivery and the test machinery.
@@ -337,4 +375,7 @@ Then item 16 (the amendment design session, TD-422), then item 10.
 (2026-10-26) found that the runtime refuses a session credit cap under 30; a look now sets none. The machine
   registry and machine settings moved to `state_store` so a step reads its budget (D-01M5VXXFC28ZFHV7HVDTKFHPVF).
   A live test on 2026-10-26 ran a real hand-off look after #682: a correct note for 0.07 credits in 7.5 seconds.
+- The chats follower (slice 6's rest): the machine host follows enrolled chats and records looks at their plans,
+  hand-offs, state changes and samples ("As built for chats" in §4); every session OwlBear creates is noted in the
+  manifest before it is created.
 - The pilot's harness and data stay in `.owlbear/scratch/watcher-replay/` (not committed).

@@ -270,9 +270,10 @@ def test_a_turn_that_reaches_its_limit_is_aborted_and_its_total_settles_it(monke
     assert (text, made["aborted"], made["disconnected"]) == ("", 1, True)
     assert {k: look.report()[k] for k in SPEND} == {"credits": 0.95, "credits_known": True, "limit": 0.75,
                                                     "stopped": "reached", "stopped_by": "look"}  # fmt: skip
-    assert look.report()["sdk_sessions"] == ["look-x"]  # the look's own SDK session, recorded with its id
+    sid = made["session_id"]  # chosen and noted before the session was created
+    assert look.report()["sdk_sessions"] == [sid]  # the look's own SDK session, recorded with its id
     started = [json.loads(x) for x in (chatlogs.root() / "manifest.jsonl").read_text().splitlines()]
-    assert [(x["session"], x["look"]) for x in started if x["event"] == "started"] == [("look-x", look.id)]
+    assert [(x["session"], x["look"]) for x in started if x["event"] == "started"] == [(sid, look.id)]
 
 
 def test_an_answer_completed_as_the_limit_is_reached_is_kept(monkeypatch) -> None:
