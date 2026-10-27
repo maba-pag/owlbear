@@ -129,7 +129,9 @@ def _project(pid: str, path: Path) -> list[str]:
                     )
                 continue
             found.append(f"its store has format {value}, newer than this version's {STORE_FORMAT}")
-    layers = [project_home.home(pid) / "config.json", *([clone / "config.json"] if clone else []), *_shared(path)]
+    # a validated switch leaves the source's config as a retained copy: the target's config is the one that counts
+    own = [clone / "config.json"] if clone and retained is None else []
+    layers = [project_home.home(pid) / "config.json", *own, *_shared(path)]
     return found + _formats("its settings", layers)
 
 

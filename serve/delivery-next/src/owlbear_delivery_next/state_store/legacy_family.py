@@ -76,7 +76,7 @@ IMPORTS = (
     ("state_store/project_home.py", "c79464a6139fe571efd600903aa848dc67c9673f016d12c093d7d6b94b74a681"),
     ("state_store/store.py", "a3da565feeee931b40d4907f17c46372c000e573e1add938ae3679d175e75de4"),
 )
-CURRENT_FAMILY_AGGREGATE = "d8875b7947dd0efc3319aa966b576f6a0c46d4b2cf055c1ce665e908e2316779"
+CURRENT_FAMILY_AGGREGATE = "5bf81d332c7d7a87ccf711830118c77cd896250e10780442d4ed4b8c7f616424"
 CURRENT_FUNCTIONS = (
     ("commands/chat_client.py:Chat.call", "0fc1fdb166ea555741a2aa7796a99a4eb7b71c572ad37fba1ae0a9e37171b584"),
     ("commands/chat_client.py:workspace", "4e1bd94f29805ab94eff49182ba65966b93988ce4a8e3f395576601499a4855d"),
@@ -99,7 +99,7 @@ CURRENT_FUNCTIONS = (
     ("state_store/registry.py:_switched", "257292defce562b95092b1d361c8265978bda0ae86edbd7d7fb9bf8a7a9dec6f"),
     ("state_store/registry.py:register", "fa6d5044b93bb08ddc2352afd7b6ab30274c9a95a00c27113721c9a62bbc954f"),
     ("state_store/registry.py:replaced", "5d48cb39f6ea67966760e0de397f920fd7d6ebf07f403f377fec1e56b0245231"),
-    ("machine_host/selfcheck.py:_project", "63017984032af5ec9d05d3b13b1243025742af359da9856b33c3621551938994"),
+    ("machine_host/selfcheck.py:_project", "1db6860c5035b3e805435038ae0122a1e62fe11870a185bd3de268cd2d5355fa"),
     ("machine_host/selfcheck.py:_receipt", "b37c42a3144d55fc5d634b8d9830eb8793752f3ef54ae872be420446c48e4358"),
     ("project_host/host.py:running_at", "cc129de6cc691f64d6624765bcfa54fbf82b1e29531f65c8ff16ebf7f7370d00"),
     ("state_store/offline_protocol.py:prepare", "a1bf22be92d5aed9f9643abe143b0022e87d788705b4825bf0e9ceebcabeca71"),
