@@ -7,7 +7,8 @@ the ledger). Every run names the ``session`` whose totals it reports; the totals
 from its own lines and from its Spotter record (one ``look`` id, its meter's) counts once: as its own lines, plus,
 when the record names an SDK session those lines lack (``sdk_sessions``), what the record holds beyond them. An
 imported checkpoint that repeats a live run's totals exactly adds nothing. A run with several ends (its runtime log's
-corrections) keeps its largest usage, a final one over a provisional one of as much.
+corrections) keeps its largest usage, a final one over a provisional one of as much, and its recorded ending's time;
+a run whose ending is itself a log checkpoint dates each later checkpoint's growth between the two checkpoints.
 
 Shares are derived per session before anything is filtered or grouped, so a filter never hands a resumed run the
 spend of earlier ones. The runs go in time order (unknown times last, as imported). High-water marks start at zero
@@ -43,6 +44,7 @@ if TYPE_CHECKING:
 FIELDS = ("credits", "input", "output", "cache_read", "cache_write")
 EPS = 1e-9
 LIVE = ("start", "end")
+LOG = "import:runtime-log"  # a line the runtime's log gave
 CHECKPOINTS = ("event", "mark", "residual")  # imported line types that repeat a session's totals: never a run
 
 type Fields = dict[str, float | None]
@@ -103,8 +105,16 @@ def _print(usage: dict[str, Any] | None) -> str | None:
 
 
 def runs(lines: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """The ledger's lines as runs, in the order their first line came."""
+    """The ledger's lines as runs, in the order their first line came; a run's later log checkpoints after them.
+
+    A run's ``end`` from the runtime's log (``import:runtime-log``) corrects its usage, never lowering it. A run ended
+    as it ran keeps its own time. A run whose ending is itself a log checkpoint (a killed run, a session only the log
+    names) takes each later, larger checkpoint as a continuation: one more entry of the same run, at that checkpoint's
+    time, whose growth lies between the two checkpoints; an ending recorded as it ran, arriving after them, dates the
+    run alone. Once the run's latest usage is final, none of its entries is a lower bound any more (``settled``).
+    """
     by: dict[str, dict[str, Any]] = {}
+    later: dict[str, list[dict[str, Any]]] = {}  # each run's continuations, in time order
     for line in lines:
         kind = line.get("type")
         rid = str(line.get("run") or line.get("id")) if kind in LIVE else str(line.get("id"))
@@ -112,13 +122,38 @@ def runs(lines: list[dict[str, Any]]) -> list[dict[str, Any]]:
         if kind == "start":
             run |= {k: v for k, v in line.items() if k not in {"id", "type", "at"}} | {"started": line.get("at")}
             run.setdefault("source", "recorded")
+        elif line.get("source") == LOG and run.get("checkpointed") and line.get("at"):
+            _continue(run, line, later.setdefault(rid, []))
         else:
-            keep = {k: v for k, v in line.items() if k not in {"id", "type"} and (v not in ("", None) or k not in run)}
-            if "usage" in keep and not _larger(run.get("usage"), keep["usage"]):
-                del keep["usage"]  # a correction never lowers what a run is known to have spent
-            run |= keep | {"ended": True, "line": kind}
-            run.setdefault("source", "recorded" if kind == "end" else f"import:{kind}")
-    return list(by.values())
+            if line.get("source") != LOG and (kept := later.pop(rid, None)):  # its own ending came after all
+                run["usage"] = kept[-1]["usage"]  # it alone dates the run
+            _end(run, line)
+    for rid, kept in later.items():
+        if kept and not (kept[-1].get("usage") or {}).get("incomplete"):
+            for entry in (by[rid], *kept):
+                entry["settled"] = True
+    return [*by.values(), *(x for kept in later.values() for x in kept)]
+
+
+def _continue(run: dict[str, Any], line: dict[str, Any], kept: list[dict[str, Any]]) -> None:
+    """A later, larger log checkpoint of *run*, whose ending is a checkpoint itself: one more entry at its time."""
+    last = kept[-1] if kept else run
+    if _larger(last.get("usage"), line.get("usage")) and line["at"] >= (last.get("at") or ""):
+        kept.append(run | {"usage": line["usage"], "at": line["at"], "started": None, "before": None,
+                           "continued": True, "source": LOG})  # fmt: skip
+
+
+def _end(run: dict[str, Any], line: dict[str, Any]) -> None:
+    """Another ending line of *run*: its time unless a log correction of an ending recorded as it ran."""
+    kind, logged = line.get("type"), line.get("source") == LOG
+    skip = {"id", "type", "at"} if logged and run.get("ended") and not run.get("checkpointed") else {"id", "type"}
+    keep = {k: v for k, v in line.items() if k not in skip and (v not in ("", None) or k not in run)}
+    if "usage" in keep and not _larger(run.get("usage"), keep["usage"]):
+        del keep["usage"]  # a correction never lowers what a run is known to have spent
+    if kind == "end" and not (logged and run.get("ended")):
+        run["checkpointed"] = logged  # its ending is a log checkpoint, not one recorded as it ran
+    run |= keep | {"ended": True, "line": kind}
+    run.setdefault("source", "recorded" if kind == "end" else f"import:{kind}")
 
 
 def unread(usage: dict[str, Any]) -> bool:
@@ -144,7 +179,7 @@ def _time(run: dict[str, Any]) -> str | None:
 def _base(run: dict[str, Any]) -> dict[str, Any]:
     keys = ("run", "session", "project", "name", "clone", "change", "step", "job", "ending", "stopped", "stopped_by",
             "limit", "source")  # fmt: skip
-    incomplete = bool((run.get("usage") or {}).get("incomplete"))  # its final read failed: a lower bound
+    incomplete = bool((run.get("usage") or {}).get("incomplete")) and not run.get("settled")  # a lower bound
     return {k: run.get(k) or ("" if k != "limit" else None) for k in keys} | {
         "role": run.get("agent") or "",
         "incomplete": incomplete,
@@ -324,11 +359,12 @@ def _session(group: list[dict[str, Any]]) -> list[dict[str, Any]]:
             last = _time(run) or last
             continue
         timed = bool(run.get("at"))
-        exact = timed and (before is not None or run.get("source") != "recorded")
+        exact = timed and not run.get("continued") and (before is not None or run.get("source") != "recorded")
         window = (run["at"], run["at"]) if exact else (last, run.get("at"))  # unread baseline: since the last report
         grown, known = marks.grow(usage, model)
         found = _pieces(run, "run", grown, window, [] if exact else ["at"])
-        if not found and _invocation(run):  # nothing spent, or nothing known: still a run, with its ending and stop
+        if not found and _invocation(run) and not run.get("continued"):
+            # nothing spent, or nothing known: still a run, with its ending and stop
             zero = {f: (0.0 if known else None) if f == "credits" else 0.0 for f in FIELDS}
             found = [_piece(run, "run" if known else "unknown", "", model, zero, window, [] if exact else ["at"])]
         out += found

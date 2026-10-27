@@ -5,7 +5,7 @@ from __future__ import annotations
 import contextvars
 import json
 import threading
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 from zoneinfo import ZoneInfo
@@ -150,9 +150,11 @@ def logged(sid: str, *events: str) -> None:
 
 
 def run_piece(rid: str) -> tuple[float | None, bool, str]:
+    """A run's credits over its pieces, whether any is a lower bound, and its first piece's kind."""
     assert spend_ledger.WRITER.settled(5)
-    [piece] = [p for p in spend_shares.derive(spend_ledger.lines()) if p["run"] == rid]
-    return piece["credits"], piece["incomplete"], piece["kind"]
+    pieces = [p for p in spend_shares.derive(spend_ledger.lines()) if p["run"] == rid]
+    spent = None if any(p["credits"] is None for p in pieces) else round(sum(p["credits"] for p in pieces), 6)
+    return spent, any(p["incomplete"] for p in pieces), pieces[0]["kind"]
 
 
 def test_a_killed_run_and_sessions_the_ledger_never_saw_are_read_from_the_runtimes_log(project) -> None:
@@ -449,6 +451,22 @@ def test_a_correction_never_lowers_a_run_and_a_final_tie_beats_a_provisional_one
     assert run["usage"] == used(3.0)
 
 
+def test_a_recorded_end_after_log_checkpoints_dates_the_run_alone() -> None:
+    def end(n: int, spent: float, at: str, **more: object) -> dict:
+        return {"id": f"end:r:{n}", "type": "end", "run": "r", "session": "s", "at": at, "usage": used(spent)} | more
+
+    start = {"id": "start:r", "type": "start", "run": "r", "session": "s", "at": "2026-10-01T20:00:00+00:00",
+             "before": {}}  # fmt: skip
+    log = {"source": "import:runtime-log", "ending": "unconfirmed"}
+    first = end(1, 1.0, "2026-10-01T23:00:00+00:00", **log) | {"usage": used(1.0) | {"incomplete": "checkpoint"}}
+    second = end(2, 2.0, "2026-10-02T01:00:00+00:00", **log) | {"usage": used(2.0) | {"incomplete": "checkpoint"}}
+    assert len(spend_shares.runs([start, first, second])) == 2  # the run and its later checkpoint's continuation
+    [run] = spend_shares.runs([start, first, second, end(3, 2.5, "2026-10-02T02:00:00+00:00", ending="result")])
+    assert (run["at"], run["usage"], run["ending"]) == ("2026-10-02T02:00:00+00:00", used(2.5), "result")
+    [piece] = spend_shares.derive([start, first, second, end(3, 1.5, "2026-10-02T02:00:00+00:00", ending="result")])
+    assert (piece["credits"], piece["incomplete"], piece["lo"]) == (2.0, True, "2026-10-02T02:00:00+00:00")
+
+
 def test_a_killed_run_and_a_logged_session_are_read_again_when_their_logs_grow(project) -> None:
     long_ago = (datetime.now(UTC) - timedelta(hours=4)).isoformat(timespec="seconds")
     spend_ledger.append([{"id": "start:k", "type": "start", "run": "k", "at": long_ago, "session": "killed",
@@ -509,3 +527,46 @@ def test_a_pass_whose_worker_starts_late_is_said_running_and_its_imports_follow(
     after = http.get("/api/next/metrics?by=project").json()
     assert after["coverage"]["reconcile"]["state"] == "done"
     assert [(r["label"], r["credits"]) for r in after["rows"]] == [("shop", 5.5)]
+
+
+def test_a_logged_sessions_growth_across_midnight_is_dated_between_its_checkpoints(project) -> None:
+    """Sol's counterexample: a later checkpoint took the first one's time, so 1 credit on Oct 1 and 3 by Oct 2 counted
+    3 on Oct 1 and 0 on Oct 2, complete. Each checkpoint keeps its time; the growth lies between the two."""
+    runtime_log("solo", checkpoint("2026-10-01T22:00:00Z", 1e9))
+    chatlogs.root().mkdir(parents=True)
+    solo = {"event": "started", "session": "solo", "kind": "review", "role": "curator"}
+    (chatlogs.root() / "manifest.jsonl").write_text(json.dumps(solo) + "\n")
+    assert spend_reconcile.run([(project, None)])["imported"]["logs"] == 1
+    logged("solo", shutdown("2026-10-02T09:00:00Z", 3e9))
+    assert spend_reconcile.run([(project, None)])["imported"]["logs"] == 1
+    assert run_piece("log:solo") == (3.0, False, "run")  # final: no piece of it is a lower bound any more
+    pieces = sorted((p["lo"], p["hi"], p["credits"], p["uncertain"]) for p in spend_shares.derive(spend_ledger.lines())
+                    if p["run"] == "log:solo")  # fmt: skip
+    assert pieces == [
+        ("2026-10-01T22:00:00+00:00", "2026-10-01T22:00:00+00:00", 1.0, []),
+        ("2026-10-01T22:00:00+00:00", "2026-10-02T09:00:00+00:00", 2.0, ["at"]),
+    ]  # fmt: skip
+    found = spend_metrics.pieces()
+
+    def on(start: str, end: str) -> dict:
+        totals = spend_metrics.query(found, tz=UTC_ZONE, start=date.fromisoformat(start), end=date.fromisoformat(end),
+                                     agent="curator")["totals"]  # fmt: skip
+        return {k: totals[k] for k in ("credits", "runs", "incomplete")}
+
+    everything = spend_metrics.query(found, tz=UTC_ZONE, agent="curator")
+    assert (everything["totals"]["credits"], everything["totals"]["runs"]) == (3.0, 1)
+    assert everything["totals"]["uncertain_time"] == 2.0
+    assert on("2026-10-01", "2026-10-02") == {"credits": 1.0, "runs": 1, "incomplete": 0}  # its first checkpoint
+    assert on("2026-10-02", "2026-10-03")["credits"] == 0  # the growth may lie on Oct 1: never pinned to Oct 2
+    assert on("2026-10-01", "2026-10-03")["credits"] == 3.0  # both days: all of it
+
+
+def test_a_recorded_ending_keeps_its_time_whatever_the_logs_checkpoint_says(project) -> None:
+    spend_ledger.started("r", "kept", agent="builder", job="", model="m1", before={})
+    spend_ledger.ended("r", "kept", usage={"error": "TimeoutError"}, ending="result")
+    assert spend_ledger.WRITER.settled(5)
+    [end] = [x for x in spend_ledger.lines() if x["type"] == "end"]
+    runtime_log("kept", checkpoint("2026-10-01T22:00:00Z", 2e9))
+    assert spend_reconcile.run([(project, None)])["imported"]["logs"] == 1
+    [piece] = [p for p in spend_shares.derive(spend_ledger.lines()) if p["run"] == "r"]
+    assert (piece["lo"], piece["hi"], piece["credits"]) == (end["at"], end["at"], 2.0)
