@@ -102,7 +102,7 @@ def test_a_markerless_store_is_a_legitimate_prior_zero_and_still_moves(repo, boo
 
 
 @pytest.mark.usefixtures("current_binding")
-@pytest.mark.parametrize("marker", ["1", "6", "7"])
+@pytest.mark.parametrize("marker", ["1", "2", "3", "4", "5", "6", "7"])
 def test_a_supported_legacy_format_moves_and_every_public_consumer_accepts_it(repo, boot, marker) -> None:
     target = _prepare_and_finish(repo, boot, marker)
     pid = registry.clone_id(_source(repo))
