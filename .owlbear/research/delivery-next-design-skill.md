@@ -67,7 +67,7 @@ available there, and J6 records every decision, so the default models can change
 
 ### 3.4 The owner's decisions, 2026-10-14
 
-TD-74 amended, TD-76 to TD-79 in [the decisions](../decisions.md):
+TD-74 amended, TD-76 to TD-79 in the decisions:
 - The screenshot judgement is a review. Delivery has three: after each task, at the end of a Change, and the
   visual review.
 - Impeccable is extracted, not installed. "The runner and the extracted design rules" are updated together and
