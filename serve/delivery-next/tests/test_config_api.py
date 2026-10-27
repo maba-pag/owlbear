@@ -511,9 +511,9 @@ def _git_project(path: Path) -> Path:
 
 
 def _legacy_reviewer(cwd: Path) -> None:
-    """A format 1 profile whose reviewer role the project config has not yet taken."""
-    root = cwd / ".git" / "owlbear-delivery"
-    root.mkdir(parents=True)
+    """A format 1 profile in the active store whose reviewer role the project config has not yet taken."""
+    root = Store.open(cwd).root
+    root.mkdir(parents=True, exist_ok=True)
     raw = {
         "format": 1,
         "version": 3,
