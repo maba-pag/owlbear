@@ -278,6 +278,54 @@ def test_finish_rejects_a_preparation_atomically_replaced_during_its_final_read(
     assert {path: snapshot(path) for path in owners} == owners
 
 
+def test_finish_refuses_source_payload_replaced_inside_its_final_hash(prepared, monkeypatch):
+    repo, source = prepared
+    before = (source / "config.json").stat()
+    owners, changed = {}, []
+
+    def enable(target):
+        real_fdopen = os.fdopen
+
+        class Reader:
+            def __init__(self, stream):
+                self.stream = stream
+
+            def __getattr__(self, name):
+                return getattr(self.stream, name)
+
+            def __enter__(self):
+                self.stream.__enter__()
+                return self
+
+            def __exit__(self, *args):
+                return self.stream.__exit__(*args)
+
+            def read(self, size):
+                data = self.stream.read(size)
+                if data and not changed:
+                    changed.append(True)
+                    replacement = source / "owner-config"
+                    replacement.write_text(json.dumps({"format": 1, "widths": [987]}))
+                    replacement.replace(source / "config.json")
+                    owners.update({source: snapshot(source), target: snapshot(target)})
+                return data
+
+        def opened(fd, *args, **kwargs):
+            stream = real_fdopen(fd, *args, **kwargs)
+            return Reader(stream) if os.path.samestat(os.fstat(fd), before) else stream
+
+        monkeypatch.setattr(os, "fdopen", opened)
+
+    fired = at_sync(monkeypatch, source, "receipt", enable)
+    code = cli.main(["--repo", str(repo), "finish"])
+
+    assert fired == [True]
+    assert changed == [True]
+    assert code == 1
+    assert record(source)["phase"] == project_move.COPYING
+    assert {path: snapshot(path) for path in owners} == owners
+
+
 @pytest.mark.parametrize("change", ["preparation", "proof", "marker"])
 def test_finish_rechecks_cheap_authority_witnesses_after_final_source_hashing(prepared, monkeypatch, change):
     repo, source = prepared

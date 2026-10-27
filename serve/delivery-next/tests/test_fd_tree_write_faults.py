@@ -53,6 +53,89 @@ class HandoverAbort(BaseException):
     """A handover abort outside Exception must still close the writer's raw descriptor."""
 
 
+class DigestReadSeam:
+    def __init__(self, folder, kind, dfd):
+        self.entry, self.retained = folder / "payload", folder / "retained"
+        self.kind, self.dfd, self.fired = kind, dfd, []
+        self.real_fdopen, self.real_listdir, self.real_readlink = os.fdopen, os.listdir, os.readlink
+        if kind == "directory":
+            self.entry.mkdir()
+            (self.entry / "child").write_text("owned\n")
+        elif kind == "link":
+            self.entry.symlink_to("owned-target")
+        else:
+            self.entry.write_text("owned\n")
+        self.before = self.entry.lstat()
+
+    def replace(self):
+        if self.fired:
+            return
+        self.fired.append(True)
+        self.entry.rename(self.retained)
+        if self.kind == "directory":
+            self.entry.mkdir()
+            (self.entry / "child").write_text("other\n")
+        elif self.kind == "link":
+            self.entry.symlink_to("other-target")
+        else:
+            self.entry.write_text("other\n")
+
+    class Reader:
+        def __init__(self, stream, changed):
+            self.stream, self.changed = stream, changed
+
+        def __getattr__(self, name):
+            return getattr(self.stream, name)
+
+        def __enter__(self):
+            self.stream.__enter__()
+            return self
+
+        def __exit__(self, *args):
+            return self.stream.__exit__(*args)
+
+        def read(self, size):
+            data = self.stream.read(size)
+            if data:
+                self.changed()
+            return data
+
+    def opened(self, fd, *args, **kwargs):
+        stream = self.real_fdopen(fd, *args, **kwargs)
+        if self.kind == "file" and os.path.samestat(os.fstat(fd), self.before):
+            return self.Reader(stream, self.replace)
+        return stream
+
+    def listed(self, fd):
+        children = self.real_listdir(fd)
+        if self.kind == "directory" and isinstance(fd, int) and os.path.samestat(os.fstat(fd), self.before):
+            self.replace()
+        return children
+
+    def linked(self, name, **kwargs):
+        target = self.real_readlink(name, **kwargs)
+        if self.kind == "link" and name == self.entry.name and kwargs.get("dir_fd") == self.dfd:
+            self.replace()
+        return target
+
+
+@pytest.mark.parametrize("kind", ["file", "directory", "link"])
+def test_digest_verification_refuses_an_entry_replaced_during_its_read(tmp_path, monkeypatch, kind):
+    dfd = os.open(tmp_path, fd_tree.DIR_FLAGS)
+    try:
+        seam = DigestReadSeam(tmp_path, kind, dfd)
+        digest = fd_tree.digest_at(dfd, seam.entry.name)
+        assert fd_tree.entry_ok(dfd, seam.entry.name, digest)
+        monkeypatch.setattr(os, "fdopen", seam.opened)
+        monkeypatch.setattr(os, "listdir", seam.listed)
+        monkeypatch.setattr(os, "readlink", seam.linked)
+        assert not fd_tree.entry_ok(dfd, seam.entry.name, digest)
+    finally:
+        os.close(dfd)
+    assert seam.fired == [True]
+    assert seam.retained.is_symlink() if kind == "link" else seam.retained.exists()
+
+
 @pytest.mark.parametrize(
     "failure",
     [OSError(errno.ENOMEM, "handover failed"), RuntimeError("handover failed"), HandoverAbort("handover failed")],

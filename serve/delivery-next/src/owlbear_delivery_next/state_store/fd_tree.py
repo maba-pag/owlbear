@@ -142,18 +142,22 @@ def open_file(dfd: int, name: str) -> int:
     return fd
 
 
+def _same_entry_image(before: os.stat_result, after: os.stat_result | None) -> bool:
+    if after is None:
+        return False
+    # A read may update atime; only mutation-sensitive metadata belongs in this witness.
+    stamp = before.st_mode, before.st_size, before.st_mtime_ns, before.st_ctime_ns
+    return os.path.samestat(before, after) and stamp == (
+        after.st_mode,
+        after.st_size,
+        after.st_mtime_ns,
+        after.st_ctime_ns,
+    )
+
+
 def _same_file_image(dfd: int, name: str, fd: int, before: os.stat_result) -> bool:
     after = os.fstat(fd)
-    named = stat_at(dfd, name)
-    # A read may update atime; only mutation-sensitive metadata belongs in this witness.
-    stamp = before.st_size, before.st_mtime_ns, before.st_ctime_ns
-    return (
-        named is not None
-        and os.path.samestat(after, named)
-        and stamp
-        == (after.st_size, after.st_mtime_ns, after.st_ctime_ns)
-        == (named.st_size, named.st_mtime_ns, named.st_ctime_ns)
-    )
+    return _same_entry_image(before, after) and _same_entry_image(after, stat_at(dfd, name))
 
 
 def read_at(dfd: int, name: str) -> str | None:
@@ -236,11 +240,15 @@ def digest_at(dfd: int, name: str) -> str:
 
 
 def entry_ok(dfd: int, name: str, digest: str) -> bool:
-    """Whether entry *name* under *dfd* still holds what *digest* recorded; a missing entry does not."""
+    """Whether the current, stable entry still holds what *digest* recorded; a missing or changing one does not."""
     try:
         return digest_at(dfd, name) == digest
     except FileNotFoundError:
         return False
+    except OSError as exc:
+        if exc.errno == errno.ESTALE:
+            return False
+        raise
 
 
 def _feed(digest: hashlib._Hash, dfd: int, name: str, rel: str) -> None:
@@ -248,20 +256,28 @@ def _feed(digest: hashlib._Hash, dfd: int, name: str, rel: str) -> None:
     digest.update(f"{rel}\0".encode())
     if stat.S_ISLNK(st.st_mode):
         digest.update(b"link\0" + os.readlink(name, dir_fd=dfd).encode())
+        if not _same_entry_image(st, stat_at(dfd, name)):
+            raise OSError(errno.ESTALE, f"{name} changed while it was hashed")
     elif stat.S_ISDIR(st.st_mode):
         digest.update(b"dir\0")
         fd = open_dir(dfd, name)
         try:
+            before = os.fstat(fd)
             for child in sorted(os.listdir(fd)):  # noqa: PTH208 - listed by descriptor, not by path
                 _feed(digest, fd, child, f"{rel}/{child}")
+            if not _same_file_image(dfd, name, fd, before):
+                raise OSError(errno.ESTALE, f"{name} changed while it was hashed")
         finally:
             os.close(fd)
     else:
         digest.update(b"file\0")
         fd = open_file(dfd, name)
         with os.fdopen(fd, "rb") as fh:
+            before = os.fstat(fh.fileno())
             for chunk in iter(lambda: fh.read(CHUNK), b""):
                 digest.update(chunk)
+            if not _same_file_image(dfd, name, fh.fileno(), before):
+                raise OSError(errno.ESTALE, f"{name} changed while it was hashed")
     digest.update(b"\0")
 
 
