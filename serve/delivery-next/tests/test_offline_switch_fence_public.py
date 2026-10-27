@@ -633,3 +633,89 @@ def test_finish_retains_payload_images_through_the_terminal_receipt_read(prepare
     assert entry.read_bytes() == owner
     assert (target / relative).read_bytes() == old
     assert {path: snapshot(path) for path in owners} == owners
+
+
+@pytest.mark.parametrize("nested", [False, True], ids=["top-level", "nested"])
+@pytest.mark.parametrize("boundary", ["source-hash", "receipt"])
+def test_finish_retains_target_payload_images_through_later_reads(prepared, monkeypatch, nested, boundary):
+    repo, source = prepared
+    entry = source / "config.json"
+    if nested:
+        entry = source / "payload" / "nested" / "a"
+        entry.parent.mkdir(parents=True)
+        entry.write_text("old\n")
+    old, relative = entry.read_bytes(), entry.relative_to(source)
+    owner = b'{"format":1,"widths":[987]}\n'
+    checks, changed, owners = [], [], {}
+
+    def enable(target):
+        def change():
+            changed.append(True)
+            (target / relative).write_bytes(owner)
+            owners.update({source: snapshot(source), target: snapshot(target)})
+
+        if boundary == "source-hash":
+            real = project_move._source_unchanged  # noqa: SLF001 - mutate after real source hashing
+
+            def hashed(*args, **kwargs):
+                valid = real(*args, **kwargs)
+                change()
+                return valid
+
+            monkeypatch.setattr(project_move, "_source_unchanged", hashed)
+        else:
+            real = fd_tree.holds_text_at
+
+            def holds(dfd, name, text):
+                valid = real(dfd, name, text)
+                if name == project_move.MOVE_RECORD:
+                    checks.append(True)
+                    if len(checks) == 2:
+                        change()
+                return valid
+
+            monkeypatch.setattr(fd_tree, "holds_text_at", holds)
+
+    fired = at_sync(monkeypatch, source, "receipt", enable)
+    with pytest.raises(project_move.StoreError):
+        offline_protocol.finish_clone(repo)
+
+    assert fired == [True]
+    assert changed == [True]
+    assert record(source)["phase"] == project_move.COPYING
+    target = Path(record(source)["target"])
+    assert entry.read_bytes() == old
+    assert (target / relative).read_bytes() == owner
+    assert {path: snapshot(path) for path in owners} == owners
+
+
+def test_finish_refuses_target_payload_changes_before_the_first_target_marker_write(prepared, monkeypatch):
+    repo, source = prepared
+    real_commit, real_holds = project_move._commit, fd_tree.holds_text_at  # noqa: SLF001 - public pre-write boundary
+    active, changed, owners = [], [], {}
+
+    def commit(*args, **kwargs):
+        active.append(args[2])
+        try:
+            return real_commit(*args, **kwargs)
+        finally:
+            active.pop()
+
+    def holds(dfd, name, text):
+        valid = real_holds(dfd, name, text)
+        if active and not changed and name == project_move.MOVE_PROOF:
+            target = active[-1]
+            assert os.path.samestat(os.fstat(dfd), target.stat())
+            changed.append(True)
+            (target / "config.json").write_text('{"format":1,"widths":[987]}\n')
+            owners.update({source: snapshot(source), target: snapshot(target)})
+        return valid
+
+    monkeypatch.setattr(project_move, "_commit", commit)
+    monkeypatch.setattr(project_move, "_holds_text_at", holds)
+    with pytest.raises(project_move.StoreError):
+        offline_protocol.finish_clone(repo)
+
+    assert changed == [True]
+    assert record(source)["phase"] == project_move.COPYING
+    assert {path: snapshot(path) for path in owners} == owners

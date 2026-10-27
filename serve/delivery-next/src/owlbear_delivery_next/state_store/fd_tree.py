@@ -265,6 +265,23 @@ def entry_ok(dfd: int, name: str, digest: str, *, images: TreeImages | None = No
         raise
 
 
+def manifest_ok(dfd: int, manifest: dict[str, str], *, images: PayloadImages | None = None) -> bool:
+    """Verify all recorded entries together, retaining their images through the complete manifest read."""
+    observed = {} if images is None else images
+    if not all(entry_ok(dfd, name, digest, images=observed.setdefault(name, {})) for name, digest in manifest.items()):
+        return False
+    try:
+        for name, tree in observed.items():
+            confirm_at(dfd, name, tree)
+    except FileNotFoundError:
+        return False
+    except OSError as exc:
+        if exc.errno == errno.ESTALE:
+            return False
+        raise
+    return True
+
+
 def _feed(digest: hashlib._Hash, dfd: int, name: str, rel: str, images: TreeImages) -> None:
     st = os.stat(name, dir_fd=dfd, follow_symlinks=False)
     digest.update(f"{rel}\0".encode())

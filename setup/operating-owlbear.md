@@ -101,8 +101,8 @@ recheck the source's named directory before accepting its receipt. Unreadable UT
 Source witness images and the held target's proof, marker and directory namespace must stay stable across later
 validation reads. A change refuses without replacing owner state; a newly installed newer marker keeps its upgrade
 diagnostic. These are bounded read-set checks, not an atomic filesystem snapshot.
-Recursive payload checks retain descendant image stamps through the final witness reads, so an earlier child's
-edit cannot hide behind an unchanged parent directory timestamp while a later child is read.
+Source and target payload checks retain every descendant's image through the final witness reads. Initial target
+validation also confirms those images before writing its marker; later sibling reads cannot hide an earlier edit.
 After a validated switch, selfcheck checks the active store's settings rather than the retained backup's
 `config.json`; the source's identity, receipt and fence remain required.
 A failed project load whose target cannot be proven retains an unlocated maintenance reservation, rather than taking

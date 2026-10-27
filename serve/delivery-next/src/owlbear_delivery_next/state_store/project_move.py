@@ -218,11 +218,8 @@ def _stage_name(target: Path) -> str:
     return f".{target.name}.staging"
 
 
-def _published(pfd: int, target: Path, tfd: int, rec: dict) -> None:
-    """Refuse unless the copy this move published, held open at *tfd*, still holds the recorded digests.
-
-    The target's name must still name the same folder the descriptor holds, and the copy holds exactly the manifest.
-    """
+def _published(pfd: int, target: Path, tfd: int, rec: dict, images: fd_tree.PayloadImages | None = None) -> None:
+    """Refuse a changed held/named target, proof or manifest; retain payload images when requested."""
     st = _stat_at(pfd, target.name)
     if (
         rec["stage_id"] is None
@@ -233,7 +230,7 @@ def _published(pfd: int, target: Path, tfd: int, rec: dict) -> None:
         or not same_folder(target, tfd)  # the path must still reach the pinned folder through its ancestors
     ):
         raise _not_published(target)
-    if not all(_entry_ok(tfd, n, d) for n, d in rec["manifest"].items()) or not _proof_ok(tfd, rec):
+    if not fd_tree.manifest_ok(tfd, rec["manifest"], images=images) or not _proof_ok(tfd, rec):
         raise _not_published(target)
     if set(os.listdir(tfd)) - {MARKER} != set(rec["manifest"]) | {MOVE_PROOF}:
         raise _not_published(target)
@@ -276,7 +273,7 @@ def _owned(pfd: int, stage_name: str, rec: dict, *, complete: bool) -> None:
             raise _unrecorded(stage)
         if _ident(os.fstat(sfd)) != rec["stage_id"] or not _staged_ok(sfd, names, rec, complete=complete):
             raise _unrecorded(stage)
-        if not all(_entry_ok(sfd, n, d) for n, d in rec["copied"].items()):
+        if not fd_tree.manifest_ok(sfd, rec["copied"]):
             raise _unrecorded(stage)
     finally:
         os.close(sfd)
@@ -296,9 +293,8 @@ def _pending_ours(folder_fd: int, pfd: int, stage_name: str, rec: dict) -> None:
 
 def _source_unchanged(folder_fd: int, rec: dict, images: fd_tree.PayloadImages | None = None) -> bool:
     """Whether the source still holds exactly the manifest the move recorded: no entry added, removed or edited."""
-    return set(left_at(folder_fd)) == set(rec["manifest"]) and all(
-        _entry_ok(folder_fd, n, d, images=None if images is None else images.setdefault(n, {}))
-        for n, d in rec["manifest"].items()
+    return set(left_at(folder_fd)) == set(rec["manifest"]) and fd_tree.manifest_ok(
+        folder_fd, rec["manifest"], images=images
     )
 
 
@@ -382,18 +378,18 @@ def _commit(  # noqa: PLR0913, PLR0917
     if current != rec or receipt is None:
         msg = f"{folder / MOVE_RECORD} changed before publication: nothing was switched"
         raise StoreError(msg)
-    _published(pfd, target, tfd, rec)  # a foreign or altered copy is refused before any byte is written into it
+    images: dict[int, fd_tree.PayloadImages] = {folder_fd: {}, tfd: {}}
+    with proof.guard(folder_fd, target, tfd, images):
+        _published(pfd, target, tfd, rec, images[tfd])  # an altered copy is refused before any write into it
     format_marker.ensure_target(tfd, previous)
     _sync_published(pfd, target, tfd)  # a retry re-syncs before any switch, so a failure stays uncommitted
-
-    images: fd_tree.PayloadImages = {}
 
     @proof.guard(folder_fd, target, tfd, images)
     def unchanged() -> None:
         fd_tree.require_text_at(folder_fd, MOVE_RECORD, receipt)
         require_proof(folder, folder_fd, target, proof)
-        _published(pfd, target, tfd, rec)
-        if not _source_unchanged(folder_fd, rec, images):
+        _published(pfd, target, tfd, rec, images[tfd])
+        if not _source_unchanged(folder_fd, rec, images[folder_fd]):
             msg = (
                 f"{folder} changed after it was copied: the copy is kept at {target} and the switch was not recorded; "
                 "stop the other OwlBear process, then start again"

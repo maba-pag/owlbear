@@ -194,6 +194,34 @@ def test_collected_digest_images_can_be_confirmed_after_later_validation(tmp_pat
     assert entry.read_text() == "owner-edited\n"
 
 
+def test_manifest_verification_retains_earlier_root_entry_images(tmp_path, monkeypatch):
+    first, later = tmp_path / "a", tmp_path / "b"
+    first.write_text("owned\n")
+    later.write_text("later\n")
+    before, real_fdopen, fired = later.stat(), os.fdopen, []
+    dfd = os.open(tmp_path, fd_tree.DIR_FLAGS)
+    try:
+        manifest = {name: fd_tree.digest_at(dfd, name) for name in ("a", "b")}
+        assert fd_tree.manifest_ok(dfd, manifest)
+
+        def change():
+            if not fired:
+                fired.append(True)
+                first.write_text("owner-edited\n")
+
+        def opened(fd, *args, **kwargs):
+            stream = real_fdopen(fd, *args, **kwargs)
+            return DigestReadSeam.Reader(stream, change) if os.path.samestat(os.fstat(fd), before) else stream
+
+        monkeypatch.setattr(os, "fdopen", opened)
+        assert not fd_tree.manifest_ok(dfd, manifest)
+    finally:
+        os.close(dfd)
+    assert fired == [True]
+    assert first.read_text() == "owner-edited\n"
+    assert later.read_text() == "later\n"
+
+
 @pytest.mark.parametrize(
     "failure",
     [OSError(errno.ENOMEM, "handover failed"), RuntimeError("handover failed"), HandoverAbort("handover failed")],
