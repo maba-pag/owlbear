@@ -15,7 +15,7 @@ IMPORT_OVERRIDES_V151 = (
 )
 CURRENT_MODULES = (
     ("commands/chat_client.py", "061dff82bf8f8034ebf9cc9040a1e170645b9202510d1e1c48b75f8803333057"),
-    ("commands/cli.py", "ac78a58b5d43995723d2f22987ba116d21a6c6dd82843edac20bfd535f4719f4"),
+    ("commands/cli.py", "f8b89226ae7d05ecc6a3fdb026e4a94fedafa4b5aa9d4e35694477ca2d2f9f4e"),
     ("commands/dispatch.py", "8af7e2e296eae5cd7a70dd441af65472745988da535b558121d8ab3ccbc3851c"),
     ("commands/mcp_server.py", "7f65bb676454919b0e5293089a411a9f8c272f694ef7fe8b0464be468d077cba"),
     ("commands/runner.py", "04cac502282ba5573a43566f27df20caf89b576918e5b2abc039ea862b19ae75"),
@@ -27,9 +27,9 @@ CURRENT_MODULES = (
     ("local_system/maintenance.py", "be7f5d44eebd5d240f54d2363307d97be2cd61335377c605824ce61d90ff4bd1"),
     ("local_system/storage_io.py", "74b3baabe77205729ee075671348b9f41198888296c50b7239c8655b765c16ba"),
     ("machine_host/app.py", "153d868bfa75a55788c7f3ac26df9323236306dd8f01bc309dad9c1b5c180418"),
-    ("machine_host/command.py", "47df14591c557c39773616cbeedca135d8ac02affeeeb4d1843cd17cb9c68606"),
+    ("machine_host/command.py", "0b52f45d04208ad576cb9b498ec8f4f2002e0ece505c5390e867ef429f44d6c8"),
     ("machine_host/install.py", "6b32a6818f1e6e5c8807520b8acf4677702b39d4b97526cb5e8881f701d086bf"),
-    ("machine_host/machine.py", "016b3787efd2b66960ab095670e9dabc30ab4560461863f0bf5eae57bc2a30b9"),
+    ("machine_host/machine.py", "42130a71271ba40d476778cc5483fc0bc9c6125e4dcd1aa963a17faf30c1cbf4"),
     ("machine_host/project.py", "1e1aca5b919dea4cd33f0380c0a96878385f454780051b18df7eab3ff0784754"),
     ("state_store/registry.py", "71403afb2bbe72145eb9a5348bdd4aedc0421a5937076c8b03306fd76c393e40"),
     ("machine_host/selfcheck.py", "584261be4e669b4fea2a9b326878e969c45271d0ce0087afcb4fb5fafa24f3e1"),
