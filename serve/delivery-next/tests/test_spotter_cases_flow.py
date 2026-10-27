@@ -481,6 +481,50 @@ def test_a_stop_closes_the_running_replays_meter(monkeypatch) -> None:
     assert next(r for r in case_replay.results() if r["id"] == rid)["result"].startswith("refused: stopped")
 
 
+def test_a_stop_during_the_final_look_vetoes_activation_though_its_answer_is_valid(monkeypatch) -> None:
+    j = Job(monkeypatch)
+    rid = queue_regression()
+    original = j.job.looked
+
+    async def stopping_last(the_card, prompt, meter, spot) -> dict[str, Any]:
+        if len(j.looks) == 3:  # the fourth and final look of two cases, two prompts each
+            j.job.stop()
+        return await original(the_card, prompt, meter, spot)
+
+    j.job.looked = stopping_last
+    before = cases.current()
+    j.job.tick(0)
+    assert len(j.looks) == 4  # every answer came, each valid
+    kept = [r for r in case_replay.results() if r["id"] == rid]
+    assert kept[0]["result"] == "refused: stopped: OwlBear is stopping"
+    assert all("applied" not in r for r in kept)
+    assert cases.current() == before
+
+
+def test_a_stop_just_before_activation_vetoes_it() -> None:
+    cid = reviewed(call="none")
+    reviewed(call="none")
+    chosen = reviewed()
+    cur = cases.current()
+    edits = {chosen: cases.edited(chosen, cur["cases"][chosen], stage="example", example="a moment")}
+    request = case_replay.regression(edits, "owner", "promote")
+    asked: list[int] = []
+
+    def halt() -> str:  # quiet through every look and the result, set as the store's lock is taken to activate
+        asked.append(1)
+        return "OwlBear is stopping" if len(asked) == 10 else ""  # 4 looks x 2, the result, then this
+
+    async def look(_card, _prompt, meter) -> dict[str, Any]:
+        spend(meter, 0.1)
+        return {"category": "none", "note": ""}
+
+    out = asyncio.run(case_replay.run(request, look, Meter(10, "replay-run"), 1.0, halt))
+    assert len(asked) == 10  # the stop came only at the read under the store's lock
+    assert out["result"] == "refused: stopped: OwlBear is stopping"
+    assert cases.current()["cases"][chosen]["stage"] == "test"
+    assert cid in cases.current()["cases"]
+
+
 def test_publication_runs_on_its_own_and_no_paid_replay_does(monkeypatch, shared_repo) -> None:
     j = Job(monkeypatch)
     j.job.shared = lambda: DataRepo(shared_repo[0])

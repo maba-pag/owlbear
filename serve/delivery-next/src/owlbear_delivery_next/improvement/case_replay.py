@@ -211,10 +211,10 @@ async def run(  # noqa: C901 - the run, its stop and its result
 ) -> dict[str, Any]:
     """Replay *request* within the run's *meter*, each look on its own meter of *look_limit*; its result, kept.
 
-    *halt* says why no further look may start (OwlBear stopping), else nothing. A look meter or the run's meter that
-    stopped (its limit reached, or its spend unknown), even on the final look, vetoes the result: a regression is then
-    refused, a comparison incomplete. A passing regression is written onto the version it was asked against, under
-    the store's lock.
+    *halt* says why no further look may start (OwlBear stopping), else nothing. A stop, or a look meter or the run's
+    meter that stopped (its limit reached, or its spend unknown), even during the final look, vetoes the result: a
+    regression is then refused, a comparison incomplete; the stop is read again just before activation. A passing
+    regression is written onto the version it was asked against, under the store's lock.
     """
     out: dict[str, Any] = {k: request[k] for k in ("id", "kind", "by", "frozen") if k in request}
     out |= {
@@ -250,10 +250,12 @@ async def run(  # noqa: C901 - the run, its stop and its result
         why = f"stopped: {exc}"
     except CaseError as exc:
         why = str(exc)
-    why = why or _vetoed(meter, looks)
+    why = why or _halted(halt) or _vetoed(meter, looks)
     out |= {"answers": answers, "counts": _counts(answers), "credits": meter.report(), "ended": cases.now()}
     out["result"] = _result(request, answers, why, out["counts"])
     with cases.locked():
+        if stop := _halted(halt):  # a stop that came while the result was made: read again just before activation
+            out["result"] = _result(request, answers, stop, out["counts"])
         cases.append("runs.jsonl", out)
         if request["kind"] == "regression" and out["result"] == "passed":
             try:
@@ -270,6 +272,11 @@ async def run(  # noqa: C901 - the run, its stop and its result
 
 class _Stopped(Exception):  # noqa: N818 - the run's limit stopped it
     pass
+
+
+def _halted(halt: Callable[[], str]) -> str:
+    """Why OwlBear's stop vetoes the result, a stop during the final look included; else nothing."""
+    return f"stopped: {stop}" if (stop := halt()) else ""
 
 
 def _vetoed(run_meter: Meter, looks: list[dict[str, Any]]) -> str:
