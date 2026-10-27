@@ -2,15 +2,50 @@
 
 from __future__ import annotations
 
+import json
 import os
+import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from owlbear_delivery_next.state_store import fd_tree
+from owlbear_delivery_next.state_store import fd_tree, format_marker
 from owlbear_delivery_next.state_store.database import StoreError
 
 if TYPE_CHECKING:
     from pathlib import Path
+
+UUID = re.compile(r"[0-9A-F]{8}(?:-[0-9A-F]{4}){3}-[0-9A-F]{12}")
+
+
+def preparation(text: str, folder_fd: int) -> dict:
+    """Validate the complete preparation and its pinned source identity, including the supported prior format.
+
+    Every source consumer uses this witness, not just Finish: copied metadata proves no custody of another folder.
+    """
+    try:
+        data = json.loads(text)
+    except ValueError as exc:
+        msg = "offline preparation is unreadable: refusing it; nothing was changed"
+        raise StoreError(msg) from exc
+    valid = isinstance(data, dict) and set(data) == {"boot", "folder", "marker"}
+    if valid:
+        folder = data["folder"]
+        valid = (
+            isinstance(data["boot"], str)
+            and UUID.fullmatch(data["boot"].upper()) is not None
+            and isinstance(folder, list)
+            and len(folder) == 2  # noqa: PLR2004 - a (device, inode) pair
+            and all(type(part) is int for part in folder)
+            and isinstance(data["marker"], str)
+        )
+    if not valid:
+        msg = "not a preparation record OwlBear wrote: refusing it; nothing was changed"
+        raise StoreError(msg)
+    if data["folder"] != fd_tree.ident(os.fstat(folder_fd)):
+        msg = "not the folder that was prepared: refusing it; nothing was changed"
+        raise StoreError(msg)
+    format_marker.prior_format(data["marker"])
+    return data
 
 
 @dataclass(frozen=True)
@@ -31,7 +66,8 @@ class OfflineProof:
 def same_folder(folder: Path, folder_fd: int) -> bool:
     """Whether the path *folder* still names the folder the descriptor pins."""
     try:
-        return fd_tree.ident(folder.stat()) == fd_tree.ident(os.fstat(folder_fd))
+        st = folder.stat(follow_symlinks=False)
+        return fd_tree.ident(st) == fd_tree.ident(os.fstat(folder_fd))
     except OSError:
         return False
 

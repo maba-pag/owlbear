@@ -33,9 +33,9 @@ def test_the_move_settles_the_record_through_the_store_owned_module(tmp_path, mo
     settled = []
     real_settle = pack_run_record.settle
 
-    def spy(root, *, receipted):
+    def spy(root, *, receipted, **kwargs):
         settled.append(root)
-        return real_settle(root, receipted=receipted)
+        return real_settle(root, receipted=receipted, **kwargs)
 
     monkeypatch.setattr(pack_run_record, "settle", spy)
     monkeypatch.setattr(maintenance.Maintenance, "lookup_receipt", staticmethod(lambda _key, _digest: ""))

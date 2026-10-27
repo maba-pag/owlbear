@@ -15,6 +15,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.local_system.storage_io import atomic_write
+from owlbear_delivery_next.state_store import fd_tree
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -43,13 +44,17 @@ def now() -> str:
     return datetime.now(UTC).isoformat(timespec="seconds")
 
 
-def open_record(path: Path) -> int:
+def open_record(path: Path, *, folder_fd: int | None = None) -> int:
     """A descriptor for the run file at *path*, opened without following a link or waiting on a pipe; regular only.
 
     Raises FileNotFoundError when there is no file, and OSError or ValueError when it is anything but a regular file
     that can be opened: no other kind is ever read, or taken for absent. The descriptor is closed on every failure.
     """
-    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    fd = os.open(
+        path if folder_fd is None else path.name,
+        os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
+        dir_fd=folder_fd,
+    )
     try:
         regular = stat.S_ISREG(os.fstat(fd).st_mode)
     except BaseException:
@@ -96,10 +101,10 @@ def version_of(st: os.stat_result) -> str:
     return f"{st.st_dev}:{st.st_ino}:{st.st_size}:{st.st_mtime_ns}:{st.st_ctime_ns}"
 
 
-def observed(root: Path) -> tuple[dict[str, Any], str] | None:
+def observed(root: Path, *, folder_fd: int | None = None) -> tuple[dict[str, Any], str] | None:
     """The last run as *root* holds it with its file version; None when it has no record. Reads without writing."""
     try:
-        fd = open_record(root / FILE)
+        fd = open_record(root / FILE, folder_fd=folder_fd)
     except FileNotFoundError:
         return None
     return read_fd(fd)
@@ -213,7 +218,13 @@ def ended(record: dict[str, Any], state: str, reason: str) -> None:
     record["context"] = None
 
 
-def settle(root: Path, *, receipted: Callable[[str], str]) -> bool:
+def settle(
+    root: Path,
+    *,
+    receipted: Callable[[str], str],
+    folder_fd: int | None = None,
+    guard: Callable[[], None] | None = None,
+) -> bool:
     """Carry a legacy record's generation into the record itself, before its store is copied; whether it wrote.
 
     A copy is another file, so a fingerprint would name another run: the generation carried in the record names the
@@ -224,8 +235,11 @@ def settle(root: Path, *, receipted: Callable[[str], str]) -> bool:
     the owner with its context whole. Nothing is held, recovered or released here, and a record already carrying its
     generation, a modern one or any other is left as it is. Raises OSError or ValueError when the record cannot be read
     or written, and whatever *receipted* raises: an unreadable record or ledger is never taken for a settled one.
+
+    With *folder_fd*, both the read and replacement are relative to that held folder. The caller's *guard* checks
+    custody after the potentially blocking receipt lookup; the observed file version is checked before any write.
     """
-    got = observed(root)
+    got = observed(root, folder_fd=folder_fd)
     if got is None:
         return False
     record, version = got
@@ -237,5 +251,15 @@ def settle(root: Path, *, receipted: Callable[[str], str]) -> bool:
     record[REWRITTEN] = resolved(record, version, receipted)[0]
     if record["state"] == "running":
         ended(record, "failed", HOST_STOPPED)  # as the Job's own rewrite ends it, carrying the generation it saw
-    atomic_write(root / FILE, json.dumps(record, indent=1) + "\n")
+    if guard is not None:
+        guard()  # receipt lookup can block: source identity and preparation must still hold after it returns
+    st = (root / FILE).stat(follow_symlinks=False) if folder_fd is None else fd_tree.stat_at(folder_fd, FILE)
+    if st is None or version_of(st) != version:
+        msg = f"{FILE} changed before it could be settled: nothing was written"
+        raise ValueError(msg)
+    text = json.dumps(record, indent=1) + "\n"
+    if folder_fd is None:
+        atomic_write(root / FILE, text)
+    else:
+        fd_tree.write_at(folder_fd, FILE, text)
     return True
