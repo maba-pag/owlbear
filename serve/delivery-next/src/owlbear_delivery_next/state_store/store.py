@@ -8,6 +8,7 @@ import json
 import os
 import re
 import socket
+import stat
 import time
 import uuid
 from datetime import UTC, datetime
@@ -376,10 +377,13 @@ class Store:
     def holder(self, slug: str) -> Holder | None:
         """Return the live holder of the Change lock, or None when nobody holds it."""
         try:
-            fd = os.open(self._dir(slug) / "lock", os.O_RDONLY | os.O_NOFOLLOW)
+            fd = os.open(self._dir(slug) / "lock", os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
         except FileNotFoundError:
             return None
         try:
+            if not stat.S_ISREG(os.fstat(fd).st_mode):
+                msg = f"{slug} lock must be a regular file: nothing was changed"
+                raise StoreError(msg)
             fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)
         except BlockingIOError:
             with contextlib.suppress(ValidationError):

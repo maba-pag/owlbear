@@ -73,9 +73,35 @@ project's Changes while that project's VS Code window is closed.
 | `owlbear setup --repo PATH` | Checks a project's readiness, confirms its profile and registers its chat server |
 | `owlbear data [PATH]` | Shows or sets the shared settings repository |
 | `owlbear home` | Shows OwlBear's folder on this Mac |
+| `owlbear prepare --repo PATH` | Before a reboot: binds the clone's store id and records its boot session with a format fence. Nothing is copied or switched; refused while any legacy producer is unfenced, and refused with no changes when the clone holds no legacy store to move (its store is already external or new, or a move already completed) |
+| `owlbear finish --repo PATH` | After a reboot, from a different boot session: proves the preparation and moves the store to its folder. The clone's old store is kept in place as a non-authoritative source, not deleted |
 | `owlbear install`, `owlbear uninstall` | Adds or removes the command link, the shaping agent links and the login item |
 
 `owlbear --help` lists every command, including the project commands that take `--repo PATH`.
+
+Moving a project's store to its folder is manual and needs a reboot: run `owlbear prepare --repo PATH`, reboot, then run `owlbear finish --repo PATH` from the new boot. Prepare records durable preparation and installs the format fence, but copies or switches nothing. Finish refuses an unknown or dirty OwlBear build, a changed or split install, and an unchanged boot, and it never runs on its own. The clone's old store payload is non-authoritative, but that does not make the whole directory deletable: startup still needs the clone id, the SWITCHED receipt, and the bound directory identity at the original source path. A backup does not make deleting, renaming, or recreating that directory safe, and there is no cleanup command.
+
+The fixed gate contracts are maintained in the `state_store/legacy_family` tables. Historical build tables stay
+fixed; refresh only CURRENT literals against the composed source, including critical delegated controls, when that
+source changes, and record why. A function digest excludes its leading docstring; a whole-module digest includes
+the entire syntax tree, including docstrings. The CURRENT file set remains the union of its literal tables, not
+an arbitrary import closure. There is no switch that skips these checks.
+
+Format markers must be regular files. Registration, store reads and selfcheck report unreadable or nonregular
+markers without following a marker link or waiting on a pipe; only a genuinely missing entry counts as absent.
+Missing target markers are created exclusively; a concurrent existing marker is validated and made durable,
+never replaced. Settlement and admission validate the complete preparation and original source identity through
+held descriptors. Repeated Prepare refuses a completed move or malformed receipt, even while its backup payload remains.
+Prepare rechecks the exact source marker and preparation after id synchronization and immediately before publishing
+either metadata file; a changed or blank marker refuses without replacing the owner's entries. Read-only switched-store
+lookups validate the target's identity, issued proof, quarantine state and existing marker through a held descriptor;
+they recheck its named directory after those reads and leave an absent target marker for store open to repair.
+Current lookup, registration and selfcheck keep the retained source descriptor through target validation and
+recheck the source's named directory before accepting its receipt. Unreadable UTF-8 enters the normal diagnostic channel.
+After a validated switch, selfcheck checks the active store's settings rather than the retained backup's
+`config.json`; the source's identity, receipt and fence remain required.
+A failed project load whose target cannot be proven retains an unlocated maintenance reservation, rather than taking
+an absent run record in that target as evidence that nobody owns the work.
 
 **Pause Delivery** in the bar stops new automatic agent steps on every project until you press
 **Resume**; your own actions, such as settings, memory and **New Change**, still run. While paused,

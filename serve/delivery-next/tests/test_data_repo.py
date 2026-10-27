@@ -19,7 +19,13 @@ from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host import host as host_module
 from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.settings.config import Layer
-from owlbear_delivery_next.state_store import change_record, decision_batch, decision_sync, profile_share
+from owlbear_delivery_next.state_store import (
+    change_record,
+    decision_batch,
+    decision_sync,
+    offline_protocol,
+    profile_share,
+)
 from owlbear_delivery_next.state_store.config_save import Prepared
 from owlbear_delivery_next.state_store.database import put_record
 from owlbear_delivery_next.state_store.project_home import STORE_DIR
@@ -28,6 +34,8 @@ from owlbear_delivery_next.workflow_steps import sessions
 
 AUTH = {"authorization": "Bearer t"}
 EMPTY = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"  # sha256 of nothing
+BEFORE = "AAAAAAAA-0000-4000-8000-000000000001"  # boot sessions a synthetic Darwin witness reports
+AFTER = "BBBBBBBB-0000-4000-8000-000000000002"
 
 
 class Host:
@@ -142,17 +150,25 @@ def test_a_failed_push_keeps_the_commit_and_says_so(shared, repo) -> None:
     assert "not pushed" in c.get("/api/next/config").json()["notice"]  # stays visible after reload
 
 
-def test_a_clones_own_settings_move_into_the_shared_repository_once(shared, repo) -> None:
+@pytest.mark.usefixtures("current_binding")
+def test_a_clones_own_settings_move_into_the_shared_repository_once(shared, repo, monkeypatch) -> None:
     root, remote = shared
     local = repo / ".git" / STORE_DIR / "config.json"
     local.parent.mkdir(parents=True)
     local.write_text(json.dumps({"format": 1, "widths": [1600]}))
+    boot = {"id": BEFORE}
+    monkeypatch.setattr(offline_protocol, "boot_session", lambda: boot["id"])
+    assert cli.main(["--repo", str(repo), "prepare"]) == 0
+    boot["id"] = AFTER  # the reboot
+    assert cli.main(["--repo", str(repo), "finish"]) == 0
 
     store = Store.open(repo)
     assert store.settings().widths == [1600]
+    assert Store.open(repo).root == store.root  # a fresh startup selects the same target
     assert json.loads((root / "shop-site" / "config.json").read_text())["widths"] == [1600]
-    assert not local.exists()
+    assert len(git(root, "log", "--format=%H", "--", "shop-site/config.json").splitlines()) == 1
     assert (store.root / "config.json.moved").exists()  # moved with the store (TD-334); the recovery copy stays
+    assert local.read_text() == json.dumps({"format": 1, "widths": [1600]})  # retained in place, not deleted
     assert pushed(remote, "shop-site/config.json")
 
 

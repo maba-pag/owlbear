@@ -1,6 +1,6 @@
 """R04 core for the R16 store copy: a legacy pack record carries its generation into the record before it is copied.
 
-A copy is another file, so a fingerprint taken from it would name another run. ``pack_state.settle`` writes the
+A copy is another file, so a fingerprint taken from it would name another run. ``pack_run_record.settle`` writes the
 generation this host saw into the record itself; the copy keeps it, so the lease already held for it, held or
 recovered, still covers it wherever the store now lies. A later record carries none and is held anew.
 """
@@ -16,6 +16,7 @@ from owlbear_delivery_next.local_system.slots import Slots
 from owlbear_delivery_next.local_system.storage_io import atomic_write
 from owlbear_delivery_next.pack_runs import pack_job, pack_state
 from owlbear_delivery_next.project_host import session_slots
+from owlbear_delivery_next.state_store import fd_tree, pack_run_record
 from owlbear_delivery_next.state_store.store import Store
 
 STARTED = "2026-10-25T00:00:00+00:00"
@@ -67,8 +68,8 @@ def leases(owner: maintenance.Maintenance) -> list[tuple[str, str]]:
 def settle(root: Path, owner: maintenance.Maintenance | None = None) -> bool:
     """Settle *root* as the move would: against *owner*'s ledger for project ``p``, or as a folder no machine knows."""
     if owner is None:
-        return pack_state.settle(root, receipted=lambda _digest: "")
-    return pack_state.settle(root, receipted=lambda found: owner.receipted("p", found))
+        return pack_run_record.settle(root, receipted=lambda _digest: "")
+    return pack_run_record.settle(root, receipted=lambda found: owner.receipted("p", found))
 
 
 @pytest.mark.parametrize("identity", IDENTITIES.values(), ids=IDENTITIES.keys())
@@ -107,12 +108,12 @@ def test_a_failed_stamp_leaves_the_record_whole_and_a_retry_carries_the_same_gen
     root = store(tmp_path, "clone", {"state": "running"})
     before, original = pack_state.generation(*pack_state.observed(root))[0], (root / pack_state.FILE).read_bytes()
 
-    def full(*_args: object) -> None:
+    def full(*_args: object, **_kwargs: object) -> None:
         msg = "synthetic: disk full"
         raise OSError(msg)
 
     with pytest.MonkeyPatch.context() as patch:
-        patch.setattr(pack_state, "atomic_write", full)
+        patch.setattr(fd_tree, "write_at", full)
         with pytest.raises(OSError, match="disk full"):
             settle(root)
     assert (root / pack_state.FILE).read_bytes() == original
@@ -281,7 +282,7 @@ def rewritten_in_place_while_read(root: Path, record: dict) -> pytest.MonkeyPatc
 
     The patch writes *record* through another descriptor just before the reader's own decode, then decodes as usual.
     """
-    real_load = pack_state.json.load
+    real_load = pack_run_record.json.load
     patch = pytest.MonkeyPatch()
 
     def load(source, *args: object, **kwargs: object) -> object:
@@ -290,7 +291,7 @@ def rewritten_in_place_while_read(root: Path, record: dict) -> pytest.MonkeyPatc
             same.truncate()
         return real_load(source, *args, **kwargs)
 
-    patch.setattr(pack_state.json, "load", load)
+    patch.setattr(pack_run_record.json, "load", load)
     return patch
 
 
@@ -469,7 +470,7 @@ def test_a_run_observed_at_startup_stays_held_when_the_file_is_gone_before_it_is
     job = pack_job.Job(Store(root))
     assert job.state["state"] == "waiting"
     write_record(root, B_RUN)  # B over the publication the Job set waiting
-    real_read_fd, reads = pack_state.read_fd, []
+    real_read_fd, reads = pack_run_record.read_fd, []
 
     def read_then_gone(fd: int) -> tuple[dict, str]:
         got = real_read_fd(fd)
@@ -479,7 +480,7 @@ def test_a_run_observed_at_startup_stays_held_when_the_file_is_gone_before_it_is
         return got
 
     with pytest.MonkeyPatch.context() as patch:
-        patch.setattr(pack_state, "read_fd", read_then_gone)
+        patch.setattr(pack_run_record, "read_fd", read_then_gone)
         owner = started(job)
     assert (reads[0][0]["stage"], [s for _, s in leases(owner)]) == ("update", ["held"])
     assert owner.slots.take("other", "probe", 1, 1) == 0

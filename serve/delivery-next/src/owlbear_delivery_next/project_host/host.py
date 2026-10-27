@@ -6,8 +6,10 @@ The process that runs it, with its HTTP server, starts in ``commands/serve`` (TD
 from __future__ import annotations
 
 import contextlib
+import errno
 import fcntl
 import os
+import stat
 import subprocess
 import sys
 import threading
@@ -84,10 +86,12 @@ def running(store: Store) -> HostRecord | None:
 def running_at[R: BaseModel](root: Path, model: type[R] = HostRecord) -> R | None:
     """The record of the host whose ``host.lock`` and ``host.json`` are in *root* as *model*, if one holds the lock."""
     try:
-        fd = os.open(root / "host.lock", os.O_RDONLY | os.O_NOFOLLOW)
+        fd = os.open(root / "host.lock", os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     except FileNotFoundError:
         return None
     try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            raise OSError(errno.EINVAL, "host.lock is not a regular file")
         fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)
     except BlockingIOError:
         with contextlib.suppress(OSError, ValidationError):

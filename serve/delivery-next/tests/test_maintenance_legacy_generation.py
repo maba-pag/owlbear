@@ -20,7 +20,7 @@ from owlbear_delivery_next.machine_host.machine import UNPROVEN_PACK, Machine
 from owlbear_delivery_next.pack_runs import pack_job, pack_run, pack_state
 from owlbear_delivery_next.project_host import session_slots
 from owlbear_delivery_next.project_host.host import Host, HostRecord
-from owlbear_delivery_next.state_store import project_home, registry
+from owlbear_delivery_next.state_store import pack_run_record, project_home, registry
 from owlbear_delivery_next.state_store.store import Store
 
 REPLAY_UNCERTAIN = (
@@ -140,9 +140,9 @@ def test_a_legacy_run_with_its_full_identity_holds_once_and_a_restart_after_reco
 def open_project(tmp_path: Path, shared, name: str):
     """A registered project whose store opens, so its pack record is read by the loaded project."""
     repo = clone(tmp_path / name)
-    Store(repo, DataRepo(shared), name)
+    store = Store(project_home.located(repo), DataRepo(shared), name)
     entry = registry.register(repo)
-    return entry, Path(entry.path) / ".git" / "owlbear-delivery"
+    return entry, store.root
 
 
 def test_a_loaded_project_legacy_run_without_its_proven_identity_is_held_once_and_not_resurrected_on_restart(
@@ -203,7 +203,7 @@ def project_with_legacy_run(tmp_path: Path, shared, *, loaded: bool):
 
 
 def live_folder(entry, folder: Path, *, loaded: bool) -> Path:
-    """Where the record lives once a loaded store has moved it out of the clone; an unopened clone keeps it."""
+    """A loaded project's active store is already outside the clone; an unopened clone keeps its record."""
     return project_home.home(entry.id) if loaded else folder
 
 
@@ -315,19 +315,19 @@ def test_a_legacy_run_whose_metadata_cannot_be_read_is_held_again_after_a_real_r
     shared, _remote = shared_repo
     entry, folder = project_with_legacy_run(tmp_path, shared, loaded=loaded)
     write_pack(folder, {})
-    monkeypatch.setattr(pack_state, "os", NoFstat(os))
+    monkeypatch.setattr(pack_run_record, "os", NoFstat(os))
     first = machines()
     first.load_all()
     assert len(held(first, entry.id)) == 1, sessions_of(first, entry.id)
     reboot_then_recover(first, held(first, entry.id)[0]["id"])
-    monkeypatch.setattr(pack_state, "os", os)
+    monkeypatch.setattr(pack_run_record, "os", os)
     first.stop_all()
     folder = live_folder(entry, folder, loaded=loaded)
 
     record = folder / pack_job.FILE
     atomic_write(record, record.read_text(encoding="utf-8"))
 
-    monkeypatch.setattr(pack_state, "os", NoFstat(os))
+    monkeypatch.setattr(pack_run_record, "os", NoFstat(os))
     replaced = machines()
     replaced.load_all()
     assert [s["state"] for s in sessions_of(replaced, entry.id)] == ["recovered", "held"]
@@ -562,7 +562,7 @@ def test_a_foreign_replacement_landing_after_the_constructors_own_rewrite_gets_i
     good, folder = open_project(tmp_path, shared, "good")
     write_pack(folder, {"state": "running"})
     original = (folder / pack_job.FILE).read_text(encoding="utf-8")
-    record = live_folder(good, folder, loaded=True) / pack_job.FILE  # the loaded store moves it before the constructor
+    record = live_folder(good, folder, loaded=True) / pack_job.FILE
     real_write, seams = pack_job.atomic_write, []
 
     def replace_after_own_rewrite(path, text):
@@ -680,7 +680,7 @@ def test_a_historical_finish_landing_after_the_constructors_own_rewrite_gets_its
     shared, _remote = shared_repo
     good, folder = open_project(tmp_path, shared, "good")
     write_pack(folder, {"state": "running"})
-    record = live_folder(good, folder, loaded=True) / pack_job.FILE  # the loaded store moves it before the constructor
+    record = live_folder(good, folder, loaded=True) / pack_job.FILE
     real_write, seams = pack_job.atomic_write, []
 
     def historical_finish_after_own_rewrite(path, text):

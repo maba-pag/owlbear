@@ -15,6 +15,8 @@ from importlib import import_module
 from importlib.resources import files
 from pathlib import Path
 
+from owlbear_delivery_next.local_system.storage_io import read_regular
+
 IMPORT = r"""(?:\bfrom|\bimport)\s*\(?\s*["']\./([^"'/]+)["']"""  # a page module's import of a sibling module
 MODULES = (
     "machine_host.serve", "machine_host.app", "commands.runner", "commands.mcp_server", "project_host.api",
@@ -96,23 +98,52 @@ def _project(pid: str, path: Path) -> list[str]:
     """A registered project's store and settings formats, read without opening or migrating anything."""
     from owlbear_delivery_next.state_store import project_home  # noqa: PLC0415
     from owlbear_delivery_next.state_store.database import MARKER, STORE_FORMAT  # noqa: PLC0415
+    from owlbear_delivery_next.state_store.project_move import FENCE  # noqa: PLC0415
 
-    found, clone = [], None
     markers = [project_home.home(pid) / MARKER]
+    found, clone = [], None
     if path.is_dir():
         with contextlib.suppress(Exception):  # a clone that is gone fails to load as before; not this check's
             clone = project_home.clone_dir(path)
             markers.append(clone / MARKER)
+    retained, problem = _receipt(pid, clone) if clone is not None else (None, None)
+    if problem is not None:
+        found.append(problem)
     for marker in markers:
         try:
-            value = int(marker.read_text()) if marker.is_file() else 0
+            raw = read_regular(marker)
+            value = int(raw.decode("utf-8")) if raw is not None else 0
         except OSError, ValueError:
             found.append(f"{marker} is unreadable")
             continue
+        if clone is not None and marker == clone / MARKER and retained is not None:
+            if value != int(FENCE):
+                found.append(f"{marker} has format {value}, but its SWITCHED receipt needs {FENCE}")
+            continue  # the fenced clone is a retained source; the project's store is checked instead
         if value > STORE_FORMAT:
+            if clone is not None and marker == clone / MARKER and value == int(FENCE):
+                if problem is None:
+                    found.append(
+                        f"its store has format {FENCE}, newer than this version's {STORE_FORMAT} "
+                        "and no completed move names it"
+                    )
+                continue
             found.append(f"its store has format {value}, newer than this version's {STORE_FORMAT}")
-    layers = [project_home.home(pid) / "config.json", *([clone / "config.json"] if clone else []), *_shared(path)]
+    # a validated switch leaves the source's config as a retained copy: the target's config is the one that counts
+    own = [clone / "config.json"] if clone and retained is None else []
+    layers = [project_home.home(pid) / "config.json", *own, *_shared(path)]
     return found + _formats("its settings", layers)
+
+
+def _receipt(pid: str, clone: Path) -> tuple[Path | None, str | None]:
+    """The project's store the clone's move receipt names (None without a receipt), and why the receipt is unsound."""
+    from owlbear_delivery_next.state_store import switched_authority  # noqa: PLC0415
+    from owlbear_delivery_next.state_store.database import StoreError  # noqa: PLC0415
+
+    try:
+        return switched_authority.retained_target(clone, pid), None
+    except StoreError as exc:
+        return None, str(exc)
 
 
 def _shared(path: Path) -> list[Path]:

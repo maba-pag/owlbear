@@ -38,7 +38,13 @@ from owlbear_delivery_next.pack_runs import pack_replay
 from owlbear_delivery_next.project_host import answers, host
 from owlbear_delivery_next.settings import profile, roles
 from owlbear_delivery_next.settings.config import Agent, Layer
-from owlbear_delivery_next.state_store import backlog_migrate, prefs_import, profile_share
+from owlbear_delivery_next.state_store import (
+    backlog_migrate,
+    offline_protocol,
+    prefs_import,
+    profile_share,
+    project_home,
+)
 from owlbear_delivery_next.state_store.backlog import Backlog, BacklogError
 from owlbear_delivery_next.state_store.config_save import Prepared
 from owlbear_delivery_next.state_store.store import Store, StoreError
@@ -266,7 +272,31 @@ def _role(text: str) -> tuple[Role, RoleModel]:
         raise argparse.ArgumentTypeError(str(exc)) from exc
 
 
-def main(argv: list[str] | None = None) -> int:  # noqa: PLR0915 - one parser and one branch per command
+def prepare_move(repo: Path) -> int:
+    """Bind the clone's store id, then record its boot session and fence the move; nothing is copied or switched."""
+    try:
+        offline_protocol.prepare_clone(repo)
+    except StoreError as exc:
+        sys.stderr.write(f"{exc}\n")
+        return 1
+    sys.stdout.write("prepared: reboot, then run owlbear-next finish; nothing has moved\n")
+    return 0
+
+
+def finish_move(repo: Path) -> int:
+    """After a reboot: prove the preparation, switch to the target store and keep the old source in place."""
+    source = project_home.clone_dir(repo)
+    try:
+        offline_protocol.finish_clone(repo)
+        store = Store.open(repo)
+    except StoreError as exc:
+        sys.stderr.write(f"{exc}\n")
+        return 1
+    sys.stdout.write(f"moved: authoritative store {store.root}; retained non-authoritative source {source}\n")
+    return 0
+
+
+def main(argv: list[str] | None = None) -> int:  # noqa: PLR0911, PLR0915 - one parser and one branch per command
     """Run one command."""
     parser = argparse.ArgumentParser(prog="owlbear-next")
     parser.add_argument("--repo", type=Path, default=Path.cwd())
@@ -306,6 +336,8 @@ def main(argv: list[str] | None = None) -> int:  # noqa: PLR0915 - one parser an
     shared = sub.add_parser("data", help="show or set the shared settings repository (TD-57)")
     shared.add_argument("path", nargs="?", type=Path)
     sub.add_parser("home", help="show OwlBear's folder on this machine (TD-198)")
+    sub.add_parser("prepare", help="before a reboot: bind the clone's store id and fence the offline move")
+    sub.add_parser("finish", help="after a reboot: prove the preparation and move the store; the source stays in place")
     pack = sub.add_parser("design-pack", help="show, install or update the pinned design pack (TD-76)")
     pack.add_argument("--install", action="store_true", help="download and verify what is missing")
     pack.add_argument("--check", action="store_true", help="count upstream releases since the pinned one")
@@ -338,6 +370,8 @@ def main(argv: list[str] | None = None) -> int:  # noqa: PLR0915 - one parser an
         say, repo = lambda t: sys.stdout.write(t + "\n"), a.repo.resolve()
         found = setup.project_folder(repo, a.folder, setup.ask_tty, say)
         return setup.run(repo, a.confirm, yes=a.yes, local_files=a.local_files) if found else 1
+    if a.command in {"prepare", "finish"}:
+        return (prepare_move if a.command == "prepare" else finish_move)(a.repo.resolve())
     store = Store.open(a.repo.resolve())
     if a.command in {"backlog", "status", "profile"}:
         return report(store, a)

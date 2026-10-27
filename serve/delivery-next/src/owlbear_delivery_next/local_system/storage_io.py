@@ -10,7 +10,7 @@ import stat
 import tempfile
 from pathlib import Path
 
-_LOCK_FLAGS = os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW
+_LOCK_FLAGS = os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK
 
 
 def open_lock(root_fd: int, *, blocking: bool, shared: bool = False, name: str = ".storage.lock") -> int:

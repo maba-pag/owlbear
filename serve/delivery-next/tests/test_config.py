@@ -7,13 +7,17 @@ from pydantic import ValidationError
 
 from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.change_contracts.profile_record import PROFILE_FORMAT, Profile, RoleModel
+from owlbear_delivery_next.commands import cli
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.settings import carried, roles
 from owlbear_delivery_next.settings.config import CONFIG_FORMAT, Agent, GlobalLayer, Layer, resolve
 from owlbear_delivery_next.state_store import layers as layers_mod
-from owlbear_delivery_next.state_store import profile_share, project_home, roles_move
+from owlbear_delivery_next.state_store import offline_protocol, profile_share, project_home, roles_move
 from owlbear_delivery_next.state_store import store as store_mod
 from owlbear_delivery_next.state_store.store import Store, StoreError, read_layer, update_layer
+
+BEFORE = "AAAAAAAA-0000-4000-8000-000000000001"
+AFTER = "BBBBBBBB-0000-4000-8000-000000000002"
 
 
 @pytest.fixture
@@ -240,11 +244,27 @@ def _old_profile(root, roles_: object, fmt: object = 1) -> None:
     (root / "profile.json").write_text(json.dumps(raw))
 
 
+@pytest.fixture
+def boot(monkeypatch) -> dict:
+    state = {"id": BEFORE}
+    monkeypatch.setattr(offline_protocol, "boot_session", lambda: state["id"])
+    return state
+
+
+def _prepare_reboot_finish(repo, boot, *, finish_code: int = 0) -> None:
+    """The manual move a clone's old store needs before any Store.open: prepare, reboot, finish."""
+    assert cli.main(["--repo", str(repo), "prepare"]) == 0
+    boot["id"] = AFTER
+    assert cli.main(["--repo", str(repo), "finish"]) == finish_code
+
+
+@pytest.mark.usefixtures("current_binding")
 @pytest.mark.parametrize("fmt", [1])
-def test_a_format_1_profile_moves_its_roles_into_the_project_config_once(repo, fmt):
+def test_a_format_1_profile_moves_its_roles_into_the_project_config_once(repo, boot, fmt):
     root = repo / ".git" / "owlbear-delivery"
     old = {"builder": {"model": "m-1", "effort": "low"}, "reviewer": {"model": "r-1", "effort": "max"}}
     _old_profile(root, old, fmt)
+    _prepare_reboot_finish(repo, boot)
     store = Store.open(repo)
     root = store.root  # moved into ~/.owlbear (TD-334)
 
@@ -265,19 +285,21 @@ def test_a_format_1_profile_moves_its_roles_into_the_project_config_once(repo, f
 
 
 def test_a_format_1_profile_whose_format_is_a_string_is_refused_and_kept(repo):
-    root = repo / ".git" / "owlbear-delivery"
+    root = Store.open(repo).root
     _old_profile(root, {"builder": {"model": "m-1", "effort": "low"}}, "1")
     before = (root / "profile.json").read_bytes()
     with pytest.raises(StoreError, match=r"state of profile\.json is unreadable"):
         Store.open(repo)
-    assert (project_home.located(repo) / "profile.json").read_bytes() == before  # moved with its store, never rewritten
+    assert (root / "profile.json").read_bytes() == before
 
 
-def test_old_roles_fill_only_the_fields_an_existing_project_config_leaves_empty(repo):
+@pytest.mark.usefixtures("current_binding")
+def test_old_roles_fill_only_the_fields_an_existing_project_config_leaves_empty(repo, boot):
     root = repo / ".git" / "owlbear-delivery"
     _old_profile(root, {"builder": {"model": "m-1", "effort": "low"}, "reviewer": {"model": "r-1", "effort": "max"}})
     own = Layer(agents={"builder": Agent(model="own")}, widths=[1600])
     (root / "config.json").write_text(own.model_dump_json())
+    _prepare_reboot_finish(repo, boot)
     store = Store.open(repo)
 
     assert roles.chosen(store.settings(), StepKind.BUILD) == RoleModel(model="own", effort="low")
@@ -477,7 +499,7 @@ def test_a_role_move_applied_before_its_marker_fails_is_visible_and_heals_on_ret
 
 
 def test_an_owner_clear_right_after_the_roles_move_survives_a_fresh_reopen(repo, monkeypatch):
-    root = repo / ".git" / "owlbear-delivery"
+    root = Store.open(repo).root
     _old_profile(root, {"reviewer": {"model": "r-1", "effort": "max"}})
     real = Store.update_config
 
@@ -506,7 +528,7 @@ class _Abrupt(BaseException):
 
 @pytest.mark.parametrize("exc", [OSError, _Abrupt], ids=["marker-fails", "abrupt-stop"])
 def test_an_owner_clear_after_an_applied_role_move_survives_a_lost_marker(repo, monkeypatch, exc):
-    root = repo / ".git" / "owlbear-delivery"
+    root = Store.open(repo).root
     _old_profile(root, {"reviewer": {"model": "r-1", "effort": "max"}})
     real, failed = roles_move.atomic_write, []
 
@@ -550,14 +572,24 @@ def test_an_owner_clear_after_an_applied_role_move_survives_a_lost_marker(repo, 
         "",
     ],
 )
-def test_invalid_old_roles_are_refused_and_never_copied(repo, bad):
-    _old_profile(repo / ".git" / "owlbear-delivery", bad)
+@pytest.mark.usefixtures("current_binding")
+def test_invalid_old_roles_are_refused_and_never_copied(repo, boot, bad, capsys):
+    root = repo / ".git" / "owlbear-delivery"
+    _old_profile(root, bad)
+    original = (root / "profile.json").read_bytes()
+    _prepare_reboot_finish(repo, boot, finish_code=1)
+    error = capsys.readouterr().err
+    assert any(reason in error for reason in ("role overrides", "cannot be migrated"))
     with pytest.raises(StoreError, match=r"role overrides|cannot be migrated"):
         Store.open(repo)
 
-    root = project_home.located(repo)
-    assert not (root / "config.json").exists()
-    assert not (root / profile_share.ROLES_MOVED).exists()
+    target = project_home.located(repo)
+    assert target != root
+    assert (root / "format").read_text().strip() == "999"
+    assert (root / "profile.json").read_bytes() == original
+    assert (target / "profile.json").read_bytes() == original
+    assert not (target / "config.json").exists()
+    assert not (target / profile_share.ROLES_MOVED).exists()
 
 
 def test_a_damaged_old_profile_is_not_marked_moved_and_its_roles_come_back_once_repaired(repo):
@@ -580,7 +612,8 @@ def test_a_damaged_old_profile_is_not_marked_moved_and_its_roles_come_back_once_
 
 
 def test_an_old_profile_with_an_invalid_role_is_not_marked_moved_and_restores_once_repaired(repo):
-    _old_profile(repo / ".git" / "owlbear-delivery", {"reviewer": {"model": "r-1"}})  # no effort: the role is invalid
+    root = Store.open(repo).root
+    _old_profile(root, {"reviewer": {"model": "r-1"}})  # no effort: the role is invalid
     with pytest.raises(StoreError, match="role overrides are invalid"):
         Store.open(repo)
     root = project_home.located(repo)
@@ -594,7 +627,8 @@ def test_an_old_profile_with_an_invalid_role_is_not_marked_moved_and_restores_on
 
 
 def test_an_old_profile_that_cannot_be_read_is_not_marked_moved_and_restores_once_repaired(repo):
-    (repo / ".git" / "owlbear-delivery" / "profile.json").mkdir(parents=True)  # a directory: the read fails
+    root = Store.open(repo).root
+    (root / "profile.json").mkdir()  # a directory: the read fails
     with pytest.raises(StoreError, match="could not be read"):
         Store.open(repo)
     root = project_home.located(repo)
@@ -610,7 +644,7 @@ def test_an_old_profile_that_cannot_be_read_is_not_marked_moved_and_restores_onc
 
 def test_an_invalid_local_role_source_in_a_shared_project_is_refused_visibly_and_stays_retryable(shared_repo):
     repo, _remote = shared_repo
-    legacy = repo / ".git" / "owlbear-delivery"
+    legacy = Store.open(repo).root
     _old_profile(legacy, {"reviewer": {"model": "r-1", "effort": "bogus"}})
     with pytest.raises(StoreError) as caught:
         Store.open(repo)
@@ -627,7 +661,7 @@ def test_an_invalid_local_role_source_in_a_shared_project_is_refused_visibly_and
 
 
 def test_a_valid_empty_old_roles_profile_counts_as_already_satisfied(repo):
-    root = repo / ".git" / "owlbear-delivery"
+    root = Store.open(repo).root
     _old_profile(root, {})
     store = Store.open(repo)
 
@@ -647,8 +681,7 @@ def test_a_valid_empty_old_roles_profile_counts_as_already_satisfied(repo):
     ],
 )
 def test_an_unknown_old_profile_refuses_before_any_marker_or_config_and_a_valid_one_then_imports(repo, raw):
-    legacy = repo / ".git" / "owlbear-delivery"
-    legacy.mkdir(parents=True)
+    legacy = Store.open(repo).root
     (legacy / "profile.json").write_bytes(raw)
     with pytest.raises(StoreError):
         Store.open(repo)
@@ -663,8 +696,7 @@ def test_an_unknown_old_profile_refuses_before_any_marker_or_config_and_a_valid_
 
 
 def test_a_validated_current_format_profile_has_no_roles_to_move_and_is_marked_once(repo):
-    legacy = repo / ".git" / "owlbear-delivery"
-    legacy.mkdir(parents=True)
+    legacy = Store.open(repo).root
     (legacy / "profile.json").write_text(Profile().model_dump_json())
     store = Store.open(repo)
 

@@ -260,9 +260,8 @@ def test_an_unreadable_role_source_in_a_shared_project_fails_visibly_and_imports
     monkeypatch.setenv("OWLBEAR_DATA", str(shared_repo[0]))
     shop = origin(clone(shared_repo[0].parent / "shop"), "https://github.com/acme/shop.git")
     p = registry.register(shop)
-    legacy = shop / ".git" / "owlbear-delivery"
-    legacy.mkdir(parents=True, exist_ok=True)
-    (legacy / "profile.json").write_text(bad)
+    root = Store.open(shop).root
+    (root / "profile.json").write_text(bad)
     machine.load_all()
 
     shown = {x["name"]: x for x in http.get("/api/next/projects").json()["projects"]}
@@ -716,7 +715,7 @@ def test_a_project_whose_lock_cannot_be_taken_fails_alone(tmp_path, http, machin
     lock.symlink_to(tmp_path / "elsewhere")
     machine.load_all()
     shown = {p["name"]: p for p in http.get("/api/next/projects").json()["projects"]}
-    assert (shown["bad"]["state"], "host lock cannot be taken" in shown["bad"]["reason"]) == ("failed", True)
+    assert (shown["bad"]["state"], "host.lock cannot be locked" in shown["bad"]["reason"]) == ("failed", True)
     assert shown["good"]["state"] == "loaded"
 
 

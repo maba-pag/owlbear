@@ -28,7 +28,7 @@ from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.runtimes import model_choices, sdk_adapter, spotter_look
 from owlbear_delivery_next.runtimes.session_result import Run
-from owlbear_delivery_next.state_store import backlog, backlog_issues
+from owlbear_delivery_next.state_store import backlog, backlog_issues, legacy_family
 from owlbear_delivery_next.state_store.store import Lock, Store
 
 MACHINE_HOME = Path.home()  # read before any test replaces HOME
@@ -452,3 +452,95 @@ def pds() -> type[Pds]:
 def _offline(url: str, *_args: object, **_kwargs: object) -> bytes:
     msg = f"offline in tests: {url}"
     raise OSError(msg)
+
+
+AUDITED_COMMIT = "51aa0e1c6"
+LEGACY_V1_COMMIT = "e58e0ace4eadf44fabc775fa82adfdb2bac265e0"
+AUDITED_PACKAGE = "serve/delivery-next/src/owlbear_delivery_next"
+GIT_IDENTITY = ("-c", "user.name=fixture", "-c", "user.email=fixture@example.invalid")
+
+
+def commit_package(package: Path) -> None:
+    """Commit every change in a fixture checkout so the gate sees a clean build."""
+    subprocess.run(["git", "-C", str(package), "add", "-A"], check=True, capture_output=True)  # noqa: S603, S607
+    commit = ["git", "-C", str(package), *GIT_IDENTITY, "commit", "-q", "-m", "fixture"]
+    subprocess.run(commit, check=True, capture_output=True)  # noqa: S603
+
+
+@pytest.fixture
+def audited_package(tmp_path: Path) -> Path:
+    """A clean git checkout holding the audited source bytes of 51aa0e1c6, read from that commit."""
+    return checkout_package(tmp_path, AUDITED_COMMIT, legacy_family.FILES)
+
+
+@pytest.fixture
+def legacy_v1_package(tmp_path: Path) -> Path:
+    """A clean git checkout holding the source bytes of the v1.0 cold channel, read from e58e0ace4."""
+    return checkout_package(tmp_path / "v1", LEGACY_V1_COMMIT, legacy_family.LEGACY_V1_FILES)
+
+
+def checkout_package(root: Path, commit: str, files: tuple[str, ...]) -> Path:
+    """Write the named package files of one commit into a fresh clean git checkout under root."""
+    package = root / "owlbear_delivery_next"
+    package.mkdir(parents=True)
+    subprocess.run(["git", "init", "-q", str(package)], check=True, capture_output=True)  # noqa: S603, S607
+    for rel in files:
+        show = ["git", "-C", str(Path(__file__).parent), "show", f"{commit}:{AUDITED_PACKAGE}/{rel}"]
+        blob = subprocess.run(show, capture_output=True, check=True).stdout  # noqa: S603
+        (package / rel).parent.mkdir(parents=True, exist_ok=True)
+        (package / rel).write_bytes(blob)
+    commit_package(package)
+    return package
+
+
+@pytest.fixture
+def audited_binding(audited_package: Path, tmp_path: Path, monkeypatch) -> legacy_family.Binding:
+    """Bind the gate to the audited checkout through a launcher that runs the interpreter which loaded it."""
+    return _bind(audited_package, tmp_path, monkeypatch)
+
+
+@pytest.fixture
+def legacy_v1_binding(legacy_v1_package: Path, tmp_path: Path, monkeypatch) -> legacy_family.Binding:
+    """Bind the gate to the v1.0 checkout through the same launcher shape as the audited binding."""
+    return _bind(legacy_v1_package, tmp_path / "v1", monkeypatch)
+
+
+@pytest.fixture
+def current_package(tmp_path: Path) -> Path:
+    """A clean checkout of the candidate bytes copied from the working tree; the real tree is only read."""
+    source = Path(__file__).resolve().parents[1] / "src" / "owlbear_delivery_next"
+    package = tmp_path / "current" / "owlbear_delivery_next"
+    package.mkdir(parents=True)
+    subprocess.run(["git", "init", "-q", str(package)], check=True, capture_output=True)  # noqa: S603, S607
+    for rel in legacy_family.CURRENT_FILES:
+        (package / rel).parent.mkdir(parents=True, exist_ok=True)
+        (package / rel).write_bytes((source / rel).read_bytes())
+    commit_package(package)
+    return package
+
+
+@pytest.fixture
+def current_binding(current_package: Path, tmp_path: Path, monkeypatch) -> legacy_family.Binding:
+    """Bind the gate to the clean candidate checkout through the same launcher shape as the audited binding."""
+    return _bind(current_package, tmp_path / "current", monkeypatch)
+
+
+@pytest.fixture
+def release_binding(tmp_path: Path, monkeypatch) -> Callable[[str], legacy_family.Binding]:
+    """Bind the gate to a clean checkout of one shipped release commit's audited family files."""
+
+    def bind(commit: str) -> legacy_family.Binding:
+        root = tmp_path / commit[:12]
+        return _bind(checkout_package(root, commit, legacy_family.FILES), root, monkeypatch)
+
+    return bind
+
+
+def _bind(package: Path, root: Path, monkeypatch) -> legacy_family.Binding:
+    launcher = root / "owlbear"
+    launcher.parent.mkdir(parents=True, exist_ok=True)
+    launcher.write_text(f"#!{sys.executable}\n")
+    launcher.chmod(0o755)
+    binding = legacy_family.Binding(launcher, Path(sys.executable), package)
+    monkeypatch.setattr(legacy_family, "live_binding", lambda: binding)
+    return binding
