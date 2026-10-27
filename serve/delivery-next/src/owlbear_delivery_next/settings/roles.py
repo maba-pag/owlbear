@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, get_args
 
 from pydantic import ValidationError
@@ -39,10 +40,32 @@ SESSIONS: dict[str, Role] = {
 }
 
 
+USER_CONFIG = ("load_user_instructions", "load_user_skills")  # D-01M5YE4P5317N1HWD0QN6N05E0: every step's session
+
+
+@dataclass(frozen=True)
+class UserConfig:
+    """Whether a step's session loads the owner's own instructions and skills (D-01M5YE4P5317N1HWD0QN6N05E0)."""
+
+    instructions: bool
+    skills: bool
+
+
 def chosen(settings: Settings, session: str) -> RoleModel:
-    """The model, effort and context tier a session kind or reviewer label runs with, from the resolved settings."""
+    """The model, effort and context tier a session kind or reviewer label runs with, from the resolved settings.
+
+    A step's session also needs both user-config switches set (D-01M5YE4P5317N1HWD0QN6N05E0): unset refuses here,
+    before any session opens. The shaper's chat and the Spotter read ``Settings.agent`` and do not need them.
+    """
+    settings.need(*USER_CONFIG)
     agent = settings.agent(SESSIONS[session])
     return RoleModel(model=agent.model, effort=agent.effort, context=agent.context)
+
+
+def user_config(settings: Settings) -> UserConfig:
+    """The user-config switches a step's session runs with; ``SettingsUnset`` while either is unset."""
+    settings.need(*USER_CONFIG)
+    return UserConfig(instructions=bool(settings.load_user_instructions), skills=bool(settings.load_user_skills))
 
 
 def limit(settings: Settings, session: str) -> float:

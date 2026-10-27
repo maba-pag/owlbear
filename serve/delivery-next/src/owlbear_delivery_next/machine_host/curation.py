@@ -455,10 +455,10 @@ def legacy_uncertain(run: FolderRun) -> bool:
 
 
 def _unset(settings: Settings) -> str:
-    """Why a run cannot start for unset settings: the curator's role or its threshold; empty when both are set."""
+    """Why a run cannot start for unset settings: the curator's role, its threshold or a user-config switch; else ''."""
     try:
         agent = settings.agent(roles.SESSIONS[LABEL])
-        settings.need("curator_threshold")
+        settings.need("curator_threshold", *roles.USER_CONFIG)
     except SettingsUnset as exc:
         return str(exc)
     if agent.subagents is None:  # set per role: a run never guesses whether its subagents may start

@@ -32,7 +32,10 @@ from owlbear_delivery_next.workflow_steps import (
     lookup,
     review,
     unset_settings,
+    watched,
 )
+
+SWITCHES = {"load_user_instructions": False, "load_user_skills": False}  # set by the owner, never carried
 
 
 @pytest.fixture
@@ -55,7 +58,7 @@ def test_a_setting_no_layer_sets_is_unset_and_listed_never_filled_from_code():
     assert "sessions" not in empty.sources
 
     builder = carried.layer().agents["builder"]
-    some = resolve(GlobalLayer(agents={"builder": builder}, sessions=3), Layer())
+    some = resolve(GlobalLayer(agents={"builder": builder}, sessions=3, **SWITCHES), Layer())
     assert (some.agent("builder").model, some.sessions, some.sources["sessions"]) == ("claude-opus-5.5", 3, "global")
     assert some.final_review is not None  # the final review inherits the builder's rounds
     with pytest.raises(SettingsUnset, match=r"agents\.reviewer\.model") as caught:
@@ -171,8 +174,11 @@ def test_the_decision_gate_asking_for_an_unset_setting_asks_the_owner(monkeypatc
 def test_curation_never_starts_with_its_threshold_or_role_unset(shared_repo):
     shared = DataRepo(shared_repo[0])
     settings_carry.carry(shared)
-    assert curation._unset(lookup.machine(shared)) == ""  # noqa: SLF001
     glob = read_layer(shared.global_path, GlobalLayer)
+    assert "load_user_instructions, load_user_skills" in curation._unset(lookup.machine(shared))  # noqa: SLF001
+    glob = glob.model_copy(update=SWITCHES)
+    shared.global_path.write_text(glob.model_dump_json())
+    assert curation._unset(lookup.machine(shared)) == ""  # noqa: SLF001
     shared.global_path.write_text(glob.model_copy(update={"curator_threshold": None}).model_dump_json())
     assert "curator_threshold" in curation._unset(lookup.machine(shared))  # noqa: SLF001
     job = curation.Curation(Slots(lambda: 1), shared=lambda: shared, run=lambda _cfg: pytest.fail("never started"))
@@ -181,6 +187,25 @@ def test_curation_never_starts_with_its_threshold_or_role_unset(shared_repo):
     agents = {r: a for r, a in glob.agents.items() if r != "curator"}
     shared.global_path.write_text(glob.model_copy(update={"agents": agents}).model_dump_json())
     assert "agents.curator.model" in curation._unset(lookup.machine(shared))  # noqa: SLF001
+
+
+@pytest.mark.parametrize("key", roles.USER_CONFIG)
+def test_each_unset_user_config_switch_refuses_every_step_session_but_not_the_page_shaper_or_spotter(key, monkeypatch):
+    monkeypatch.setattr(config, "BASE", config.BASE.model_copy(update={key: None}))  # no test default for it
+    settings = resolve(None, Layer())
+    assert settings.missing == [key]  # otherwise complete
+    for session in roles.SESSIONS:
+        with pytest.raises(SettingsUnset) as caught:
+            roles.chosen(settings, session)
+        assert caught.value.keys == [key]
+    with pytest.raises(SettingsUnset, match=key):
+        roles.user_config(settings)
+    assert key in curation._unset(settings)  # noqa: SLF001 - machine curation never starts either
+    assert settings.agent("shaper").model  # the shaper's chat opens (project_host.api.start_chat)
+    assert settings.agent("spotter").model
+    assert watched.needed(settings) == settings.spotter.look_credit_limit  # the Spotter's check passes
+    assert "unset" not in roles.table(settings)
+    assert settings.page()[key] is None  # the Settings page shows it, unset
 
 
 def test_a_carry_whose_commit_failed_is_committed_at_the_next_start_never_filled_again(shared_repo, monkeypatch):
@@ -276,7 +301,7 @@ ON = Spotter(switch="on", steer_share=0, intervention_cap=1, verbose="off", look
     ],
 )
 def test_an_unset_spotter_setting_asks_before_a_step_records_anything(monkeypatch, tmp_path, spot, unset):
-    no_switch = resolve(carried.layer().model_copy(update={"spotter": spot}), Layer())
+    no_switch = resolve(carried.layer().model_copy(update={"spotter": spot, **SWITCHES}), Layer())
     monkeypatch.setattr(machine_settings, "BASE", None)  # no machine setting is needed: no daily budget
     recorded: list[object] = []
     monkeypatch.setattr(runner.worktree, "ensure", lambda *_a: tmp_path)
@@ -302,7 +327,8 @@ class _PastTheSpotterError(Exception):
 @pytest.mark.usefixtures("no_base")
 def test_a_spotter_switched_off_shows_its_unset_settings_but_never_blocks_a_step(monkeypatch, tmp_path):
     agents = {r: a for r, a in carried.layer().agents.items() if r != "spotter"}  # the spotter role unset too
-    off = resolve(carried.layer().model_copy(update={"spotter": Spotter(switch="off"), "agents": agents}), Layer())
+    off = resolve(carried.layer().model_copy(update={"spotter": Spotter(switch="off"), "agents": agents, **SWITCHES}),
+                  Layer())  # fmt: skip
     shown = {f"spotter.{k}" for k in (*CATEGORIES.values(), "steer_share", "intervention_cap", "verbose", "looks")}
     assert shown <= set(off.missing)  # the Settings page still shows each as an error
     assert "agents.spotter.model" in off.missing
