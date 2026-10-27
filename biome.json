@@ -30,6 +30,14 @@
       "preset": "recommended"
     }
   },
+  "overrides": [
+    {
+      "includes": ["serve/delivery-next/src/owlbear_delivery_next/design_pack.json"],
+      "formatter": {
+        "enabled": false
+      }
+    }
+  ],
   "vcs": {
     "clientKind": "git",
     "enabled": true,
