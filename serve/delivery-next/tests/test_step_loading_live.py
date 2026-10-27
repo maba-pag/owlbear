@@ -7,6 +7,7 @@ runtime gets as its config folder and Delivery as ``preload.copilot_home()``.
 """
 
 import asyncio
+import contextlib
 import os
 import pwd
 import subprocess
@@ -244,7 +245,8 @@ async def offered(work: Path, home: Path, *, skills: bool) -> dict[str, object]:
             listed = await session.rpc.skills.list()
         finally:
             await session.disconnect()
-            await client.delete_session(session.session_id)
+            with contextlib.suppress(RuntimeError):  # no message was sent, so the runtime kept no session file
+                await client.delete_session(session.session_id)
     finally:
         await client.stop()
     return {s.name: s for s in listed.skills}
