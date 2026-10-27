@@ -1,6 +1,7 @@
 import json
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -99,9 +100,19 @@ def test_the_selfcheck_passes_a_finished_move_and_refuses_a_future_target(repo, 
 )
 def test_the_selfcheck_ignores_the_backup_config_of_a_validated_move(repo, boot, backup) -> None:
     target = move_to_next_boot(repo, boot)
+    registry.register(repo)
     (source(repo) / "config.json").write_bytes(backup)  # the retained copy; the target's config is what counts
 
     assert selfcheck._project(registry.clone_id(source(repo)), repo) == []  # noqa: SLF001
+    assert selfcheck.problems() == []
+    checked = subprocess.run(
+        [sys.executable, "-m", "owlbear_delivery_next", "selfcheck"],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=30,
+    )
+    assert (checked.returncode, checked.stdout) == (0, "selfcheck passed\n"), checked.stderr
     assert (source(repo) / "config.json").read_bytes() == backup
     assert json.loads((target / "config.json").read_text()) == {"format": 1, "widths": [1600]}
 
