@@ -141,6 +141,30 @@ def test_finish_refuses_late_witness_changes_without_switching_or_overwriting_ow
 
 
 @pytest.mark.parametrize("when", ["target", "receipt"])
+@pytest.mark.parametrize("replacement", ["owner-text", "different-proof"])
+def test_finish_keeps_a_receipt_replaced_during_its_durability_work(prepared, monkeypatch, when, replacement):
+    repo, source = prepared
+    owners = {}
+
+    def changed(target):
+        text = '{"owner":"concurrent metadata repair"}\n'
+        if replacement == "different-proof":
+            text = json.dumps(record(source) | {"proof": "f" * 32}) + "\n"
+        (source / project_move.MOVE_RECORD).write_text(text)
+        owners.update({source: snapshot(source), target: snapshot(target)})
+
+    fired = at_sync(monkeypatch, source, when, changed)
+
+    code = cli.main(["--repo", str(repo), "finish"])
+    assert fired == [True]
+    assert code == 1
+    assert {path: snapshot(path) for path in owners} == owners
+    quarantined = list(source.glob(f"{fd_tree.QUARANTINE}*"))
+    assert len(quarantined) == 1
+    assert json.loads(quarantined[0].read_text())["phase"] == project_move.SWITCHED
+
+
+@pytest.mark.parametrize("when", ["target", "receipt"])
 @pytest.mark.parametrize("where", ["source", "target"])
 def test_a_late_future_marker_stays_typed_and_keeps_the_owner_bytes(prepared, monkeypatch, when, where):
     repo, source = prepared

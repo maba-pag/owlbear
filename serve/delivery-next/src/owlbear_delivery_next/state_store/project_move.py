@@ -89,6 +89,11 @@ def left(folder: Path) -> list[str]:
 
 def record_at(folder: Path, folder_fd: int) -> dict | None:
     """The cross-volume move the pinned folder began and has not finished, or None; an unreadable record is refused."""
+    return record_image(folder, folder_fd)[0]
+
+
+def record_image(folder: Path, folder_fd: int) -> tuple[dict | None, str | None]:
+    """The validated receipt and its exact bytes read together through the held source."""
     try:
         text = fd_tree.read_at(folder_fd, MOVE_RECORD)
         found = None if text is None else json.loads(text)
@@ -96,11 +101,11 @@ def record_at(folder: Path, folder_fd: int) -> dict | None:
         msg = f"{folder / MOVE_RECORD} is unreadable ({exc}): nothing was moved; check it, then start again"
         raise StoreError(msg) from exc
     if text is None:
-        return None
+        return None, None
     if not _is_record(found):
         msg = f"{folder / MOVE_RECORD} is not a move record: nothing was moved; check it, then start again"
         raise StoreError(msg)
-    return found
+    return found, text
 
 
 def record(folder: Path) -> dict | None:
@@ -377,11 +382,18 @@ def _commit(  # noqa: PLR0913, PLR0917
     the held descriptor. The original source proof, manifest and target are checked after both target durability
     and the SWITCHED record's temporary-file sync, immediately before its rename, with no intervening write or sync.
     """
+    current, receipt = record_image(folder, folder_fd)
+    if current != rec or receipt is None:
+        msg = f"{folder / MOVE_RECORD} changed before publication: nothing was switched"
+        raise StoreError(msg)
     _published(pfd, target, tfd, rec)  # a foreign or altered copy is refused before any byte is written into it
     format_marker.ensure_target(tfd, previous)
     _sync_published(pfd, target, tfd)  # a retry re-syncs before any switch, so a failure stays uncommitted
 
     def unchanged() -> None:
+        if not fd_tree.holds_text_at(folder_fd, MOVE_RECORD, receipt):
+            msg = f"{folder / MOVE_RECORD} changed during publication: nothing was switched"
+            raise StoreError(msg)
         require_proof(folder, folder_fd, target, proof)
         _published(pfd, target, tfd, rec)
         format_marker.written_format(tfd, previous)
