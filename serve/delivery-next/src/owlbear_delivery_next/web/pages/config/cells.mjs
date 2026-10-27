@@ -192,6 +192,25 @@ export function prMarker() {
   { key, disabled: state.saving }), source(key, state.loaded.settings[key]));
 }
 
+// D-01M5YE4P5317N1HWD0QN6N05E0: whether a Delivery step loads the owner's own instruction files or is offered his own
+// skills, from his Copilot folder; layered, with no default: steps refuse while either is unset.
+const USER_CONFIG = {
+  load_user_instructions: ["Your instructions in Delivery steps", "on: your instruction files load too",
+    "off: only the repository's instructions"],
+  load_user_skills: ["Your skills in Delivery steps", "on: your skills are offered too", "off: only Delivery's skills"],
+};
+export const USER_KEYS = Object.keys(USER_CONFIG);
+
+export function userConfigLabel(key) {
+  return USER_CONFIG[key][0];
+}
+
+export function userConfig(key) {
+  const [label, on, off] = USER_CONFIG[key], below = onOff(inherited()[key]);
+  return cell(choose(label, [[INHERIT, `inherit (${said(below)})`], ["on", on], ["off", off]], own(key) || INHERIT,
+    (v) => edit(key, v), { key, disabled: state.saving }), source(key, onOff(state.loaded.settings[key])));
+}
+
 function tokens(n) {
   return n >= 1e6 ? `${+(n / 1e6).toFixed(1)}M` : `${Math.round(n / 1000)}k`;
 }
