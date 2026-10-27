@@ -869,6 +869,50 @@ def test_later_source_reads_cannot_admit_changed_target_witnesses(repo, boot, mo
 
 
 @pytest.mark.usefixtures("current_binding")
+@pytest.mark.parametrize("action", ["register", "adopt"])
+def test_registry_does_not_read_source_after_its_final_held_target_validation(repo, boot, monkeypatch, action):
+    target = _finished_move(repo, boot)
+    entry = registry.register(repo)
+    if action == "register":
+        registry.remove(entry.id)
+    source_id = _source(repo).stat()
+    before = _snapshot(target)
+    real_revalidate, real_canonical = registry._revalidate, registry._canonical  # noqa: SLF001
+    real_read = fd_tree.read_at
+    publishing, canonical_done, fired = [], [], []
+
+    def revalidate(*args):
+        publishing.append(True)
+        try:
+            return real_revalidate(*args)
+        finally:
+            publishing.pop()
+
+    def canonical(*args):
+        result = real_canonical(*args)
+        if publishing:
+            canonical_done.append(True)
+        return result
+
+    def read(dfd, name):
+        result = real_read(dfd, name)
+        if publishing and canonical_done and name == project_move.CLONE_ID:
+            assert os.path.samestat(os.fstat(dfd), source_id)
+            fired.append(True)
+            (target / project_move.MOVE_PROOF).write_text("owner-replaced-proof\n")
+        return result
+
+    monkeypatch.setattr(registry, "_revalidate", revalidate)
+    monkeypatch.setattr(registry, "_canonical", canonical)
+    monkeypatch.setattr(fd_tree, "read_at", read)
+    result = registry.register(repo) if action == "register" else registry.adopt(entry.id)
+    assert canonical_done
+    assert fired == [], "a source read escaped the held target's final validation"
+    assert result.id == entry.id
+    assert _snapshot(target) == before
+
+
+@pytest.mark.usefixtures("current_binding")
 @pytest.mark.parametrize("surface", ["register", "adopt"])
 @pytest.mark.parametrize("when", ["target-read", "id-file-sync", "id-directory-sync"])
 def test_registration_keeps_the_id_it_validated_through_its_durability_work(repo, boot, monkeypatch, surface, when):

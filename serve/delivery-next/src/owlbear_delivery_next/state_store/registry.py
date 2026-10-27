@@ -223,6 +223,9 @@ def _canonical(path: Path) -> tuple[Path, Path, str | None]:
         raise RegistryError(msg) from exc
     pid = clone_id(store)
     switched = _switched(store, pid)  # any move receipt is validated, whatever the marker says
+    if not switched and clone_id(store) != pid:
+        msg = f"{store}'s clone id changed during canonical validation: nothing was registered"
+        raise RegistryError(msg)
     if switched and found != int(project_move.FENCE):
         msg = f"{work}'s Delivery state has a SWITCHED receipt but format {found}, not {project_move.FENCE}: refusing"
         raise RegistryError(msg)
@@ -276,7 +279,7 @@ def _ensure_id(work: Path, store: Path, expected: str | None) -> str:
 def _revalidate(work: Path, store: Path, pid: str) -> None:
     """Fence registry publication with the same canonical paths and id admitted before the write."""
     try:
-        same = _canonical(work) == (work, store, pid) and clone_id(store) == pid
+        same = _canonical(work) == (work, store, pid)
     except RegistryError as exc:
         msg = f"{work}'s clone is no longer admissible: nothing was registered; check the clone and retry: {exc}"
         raise RegistryError(msg) from exc
