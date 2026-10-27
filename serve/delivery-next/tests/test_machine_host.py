@@ -63,6 +63,14 @@ def add(http, path: Path) -> dict:
     return r.json()
 
 
+def test_the_hosts_stop_drains_the_spotter_cases_job_whose_leases_are_on_the_machines_ledger(machine, monkeypatch):
+    assert machine.cases.maintenance is machine.maintenance
+    drained: list[bool] = []
+    monkeypatch.setattr(machine.cases, "drain", lambda: drained.append(True) or True)
+    machine.stop_all()
+    assert drained == [True]
+
+
 def test_one_host_serves_each_project_under_its_id_and_each_clone_finds_it(tmp_path, http, machine):
     a, b = add(http, clone(tmp_path / "a")), add(http, clone(tmp_path / "b"))
     listed = http.get("/api/next/projects").json()

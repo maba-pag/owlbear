@@ -22,6 +22,7 @@ prompt experiments: it is historically exposed, not unseen.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import uuid
 from typing import TYPE_CHECKING, Any
@@ -206,7 +207,7 @@ def _claim(request: dict[str, Any]) -> None:
 # Running: the job's part
 
 
-async def run(  # noqa: C901 - the run, its stop and its result
+async def run(  # noqa: C901, PLR0912 - the run, its stop and its result
     request: dict[str, Any], look: Look, meter: Meter, look_limit: float, halt: Callable[[], str] = str
 ) -> dict[str, Any]:
     """Replay *request* within the run's *meter*, each look on its own meter of *look_limit*; its result, kept.
@@ -250,6 +251,8 @@ async def run(  # noqa: C901 - the run, its stop and its result
         why = f"stopped: {exc}"
     except CaseError as exc:
         why = str(exc)
+    except asyncio.CancelledError:  # the host ended: the look's teardown and spend are done, the result is kept
+        why = "stopped: OwlBear stopped during a look"
     why = why or _halted(halt) or _vetoed(meter, looks)
     out |= {"answers": answers, "counts": _counts(answers), "credits": meter.report(), "looks": looks,
             "ended": cases.now()}  # fmt: skip

@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.improvement import case_intake, case_replay, cases, pilot_seed
-from owlbear_delivery_next.improvement.cases import CaseError
+from owlbear_delivery_next.improvement.cases import CaseError, Stale
 
 if TYPE_CHECKING:
     import argparse
@@ -89,7 +89,9 @@ def _cases(a: argparse.Namespace) -> int:  # noqa: C901, PLR0912 - one branch pe
     elif a.action == "move":
         return _move(a)
     elif a.action == "rollback":
-        return _change(cases.rollback_edits(a.version), f"rollback to version {a.version}")
+        with cases.locked():  # the copy is made of the version it is written onto
+            edits = cases.rollback_edits(a.version)
+            return _change(edits, f"rollback to version {a.version}", cases.current()["n"])
     elif a.action == "check":
         _check(a.ids)
     elif a.action == "release":
@@ -122,29 +124,37 @@ def _list(n: int | None) -> None:
 
 
 def _move(a: argparse.Namespace) -> int:
-    cur = cases.current()
-    if a.case not in cur["cases"]:
-        msg = f"case {a.case} is not in version {cur['n']}"
-        raise CaseError(msg)
-    if a.stage == "removed":
-        return _change({a.case: None}, f"{a.case} removed")
-    entry = cases.edited(
-        a.case,
-        cur["cases"][a.case],
-        stage=a.stage,
-        call=a.call,
-        why=a.why,
-        example=a.example,
-        reviewed_by=a.reviewed_by,
-        note=a.note,
-    )
-    return _change({a.case: entry}, f"{a.case} to {a.stage}")
+    with cases.locked():  # the edit is made of the version it is written onto
+        cur = cases.current()
+        if a.case not in cur["cases"]:
+            msg = f"case {a.case} is not in version {cur['n']}"
+            raise CaseError(msg)
+        if a.stage == "removed":
+            return _change({a.case: None}, f"{a.case} removed", cur["n"])
+        entry = cases.edited(
+            a.case,
+            cur["cases"][a.case],
+            stage=a.stage,
+            call=a.call,
+            why=a.why,
+            example=a.example,
+            reviewed_by=a.reviewed_by,
+            note=a.note,
+        )
+        return _change({a.case: entry}, f"{a.case} to {a.stage}", cur["n"])
 
 
-def _change(edits: dict[str, Any], reason: str) -> int:
-    """Write *edits*, or queue their regression when they change the active examples."""
+def _change(edits: dict[str, Any], reason: str, parent: int) -> int:
+    """Write *edits*, made of version *parent*, or queue their regression when they change the active examples.
+
+    Raises:
+        Stale: The newest version is no longer *parent*: nothing is written or queued.
+    """
     with cases.locked():
         cur = cases.current()
+        if cur["n"] != parent:
+            msg = f"the Spotter cases are at version {cur['n']} now, not {parent}: look again and retry"
+            raise Stale(msg)
         after = cases.applied(cur["cases"], edits)
         if cases.shown(after) == cases.shown(cur["cases"]):
             _say(f"version {cases.commit(cur['n'], edits, BY, reason)}")

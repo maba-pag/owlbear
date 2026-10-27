@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import subprocess
 import threading
@@ -11,14 +12,15 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from owlbear_delivery_next.commands import cli
+from owlbear_delivery_next.commands import cases_cli, cli
 from owlbear_delivery_next.improvement import case_intake, case_replay, case_review, cases, pilot_seed
 from owlbear_delivery_next.improvement.cases import CaseError
 from owlbear_delivery_next.improvement.credit_meter import Meter
+from owlbear_delivery_next.local_system import maintenance
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.local_system.slots import Slots
 from owlbear_delivery_next.machine_host import cases_job
-from owlbear_delivery_next.runtimes import retro_review
+from owlbear_delivery_next.runtimes import retro_review, spotter_look
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -174,6 +176,29 @@ def test_the_synthetic_cases_are_cards_of_todays_shape_for_the_missing_categorie
         assert (f["source"], f["reserve"], f["assumption"]) == ("synthetic", False, "synthetic-cases-1")
         assert {"intent", "moment", "recent", "gaps"} <= set(cases.card(cid))
     assert pilot_seed.synthetic("owner") == {"seeded": 0, "already": 6}
+
+
+def test_a_seed_stopped_before_its_version_seeds_again_and_a_removed_case_stays_seeded(tmp_path, monkeypatch) -> None:
+    folder = pilot(tmp_path)
+    original = cases.commit
+
+    def stopped(*_args: Any, **_kw: Any) -> int:
+        msg = "the seed stopped"
+        raise CaseError(msg)
+
+    monkeypatch.setattr(cases, "commit", stopped)
+    with pytest.raises(CaseError, match="the seed stopped"):
+        pilot_seed.seed(folder, CALLS, "owner")
+    with pytest.raises(CaseError, match="the seed stopped"):
+        pilot_seed.synthetic("owner")
+    assert list(cases.place().glob("c-*.json"))  # frozen, in no version
+    monkeypatch.setattr(cases, "commit", original)
+    assert pilot_seed.seed(folder, CALLS, "owner")["seeded"] == 4
+    assert pilot_seed.synthetic("owner")["seeded"] == 6
+    pilots = {c: cases.fact(c)["provenance"].get("pilot", {}) for c in cases.current()["cases"]}
+    [gone] = [c for c, p in pilots.items() if p.get("moment") == "wr-f-cns"]
+    cases.commit(cases.current()["n"], {gone: None}, "t", "removed")
+    assert pilot_seed.seed(folder, CALLS, "owner") == {"seeded": 0, "already": 4, "left_out": ["wr-p-b75e11"]}
 
 
 def spend(meter: Meter, cost: float | None) -> None:
@@ -392,6 +417,45 @@ def test_publication_stops_at_its_run_credit_limit(shared_repo) -> None:
     assert out["stopped"]
 
 
+def test_a_review_the_limit_stopped_before_its_answer_is_no_refusal_and_stays_due(shared_repo) -> None:
+    root, _ = shared_repo
+    cid = reviewed()
+    ask, seen = asker([""], spent=2.0)  # the meter closed and the turn was aborted before an answer
+    out = asyncio.run(case_review.sync(DataRepo(root), ask, Meter(1.5, "retro-run")))
+    assert len(seen) == 1
+    assert (out["refused"], out["stopped"]) == ([], "the retro run's spend is reached")
+    assert case_review.state().get(cid, {}).get("review", {}).get("outcome") != "refused"
+    assert not (cases.place() / "rejected").exists()
+    assert cid in case_review.due()[0]  # a higher limit reviews it again
+    ask, _ = asker([GOOD])
+    assert asyncio.run(case_review.sync(DataRepo(root), ask, Meter(5, "retro-run")))["published"] == [cid]
+
+
+def test_a_first_publication_whose_commit_failed_is_withdrawn_when_the_case_leaves(shared_repo, monkeypatch) -> None:
+    root, _ = shared_repo
+    cid = reviewed()
+    path, original = root / "owlbear" / "improvement" / "spotter-cases" / f"{cid}.json", DataRepo.publish
+
+    def staged_only(self: DataRepo, paths: Any, _message: str, _until: Any = None) -> str:
+        _git(self.root, "add", "--", str(paths))
+        return "saved, but not committed: a hook refused it"
+
+    monkeypatch.setattr(DataRepo, "publish", staged_only)
+    ask, _ = asker([GOOD])
+    out = asyncio.run(case_review.sync(DataRepo(root), ask, Meter(5, "retro-run")))
+    assert out["failed"] == [cid]
+    assert path.exists()
+    assert case_review.state()[cid]["remote"] == ""
+    monkeypatch.setattr(DataRepo, "publish", original)
+    cases.commit(cases.current()["n"], {cid: None}, "t", "removed")
+    assert case_review.due()[2] == [cid]
+    out = asyncio.run(case_review.sync(DataRepo(root), ask, Meter(5, "retro-run")))
+    assert out["removed"] == [cid]
+    assert not path.exists()
+    assert _git(root, "ls-files", "--", str(path)) == ""  # nor in the index
+    assert case_review.due() == ({}, {}, [])
+
+
 class Job:
     """A cases job with fakes for its sessions and limits."""
 
@@ -575,6 +639,22 @@ def test_a_failed_check_is_kept_with_its_spend_and_never_rerun(monkeypatch) -> N
     assert not list((cases.place() / "queue").glob("*.taken"))
 
 
+def test_a_request_whose_limits_cannot_be_read_is_kept_failed_never_lost(monkeypatch) -> None:
+    j = Job(monkeypatch)
+    rid = queue_regression()
+
+    def unreadable() -> dict[str, float | None]:
+        msg = "machine.json cannot be read"
+        raise OSError(msg)
+
+    monkeypatch.setattr(cases_job, "limits", unreadable)
+    j.job.tick(0)
+    assert j.looks == []
+    [kept] = [r for r in case_replay.results() if r["id"] == rid]
+    assert kept["result"] == "failed: OSError: machine.json cannot be read"
+    assert not case_replay.queued()
+
+
 def test_a_failed_publication_is_kept_with_its_spend(monkeypatch, shared_repo) -> None:
     j = Job(monkeypatch)
     j.job.shared = lambda: DataRepo(shared_repo[0])
@@ -611,6 +691,89 @@ def test_the_job_counts_in_what_a_stop_waits_for(monkeypatch) -> None:
     j.job.loop(stop, lambda: 0.0)  # a stopped machine's loop ends at once
 
 
+class Stuck:
+    """A look runtime that neither stops nor can be forced to."""
+
+    async def stop(self) -> None:
+        msg = "the runtime does not answer"
+        raise RuntimeError(msg)
+
+    async def force_stop(self) -> None:
+        msg = "the runtime cannot be killed"
+        raise RuntimeError(msg)
+
+
+def test_a_runtime_whose_end_is_unconfirmed_keeps_the_runs_lease_and_slot_held(monkeypatch) -> None:
+    j = Job(monkeypatch)
+    queue_regression()
+    original = j.job.looked
+
+    async def stuck(the_card, prompt, meter, spot) -> dict[str, Any]:
+        said = await original(the_card, prompt, meter, spot)
+        await spotter_look.teardown(Stuck(), None, f"look-{len(j.looks)}")
+        return said
+
+    j.job.looked = stuck
+    j.job.tick(0)
+    assert len(j.looks) == 4
+    [lease] = j.job.maintenance.read()["sessions"]
+    assert (lease["project"], lease["kind"], lease["state"]) == (cases_job.SLOT, cases_job.KIND, "held")
+    assert "look-1" in lease["reason"]
+    assert j.job.slots.counts(cases_job.SLOT)[2] == 1  # the reservation stays
+    assert j.job.working() == [cases_job.LINGERING]  # a stop when idle and an update wait
+    rid = queue_regression()
+    j.job.tick(1)
+    assert len(j.looks) == 4  # nothing else of the job starts
+    assert [r["id"] for r in case_replay.queued()] == [rid]
+    again = Slots(lambda: 1)
+    maintenance.Maintenance(again)  # a restarted host restores the held reservation
+    assert again.counts(cases_job.SLOT)[2] == 1
+
+
+def test_a_run_whose_runtimes_ended_releases_its_lease_and_slot(monkeypatch) -> None:
+    j = Job(monkeypatch)
+    queue_regression()
+    j.job.tick(0)
+    leases = j.job.maintenance.read()["sessions"]
+    assert [s["state"] for s in leases] == ["released", "released"]  # the replay's, then the publication sync's
+    assert j.job.slots.counts(cases_job.SLOT)[2] == 0
+    assert j.job.working() == []
+
+
+def test_the_hosts_end_cancels_the_running_session_and_keeps_its_result_and_spend(monkeypatch) -> None:
+    j = Job(monkeypatch)
+    rid = queue_regression()
+    monkeypatch.setattr(cases_job, "EVERY", 0.01)
+    started, ended = threading.Event(), []
+
+    async def hanging(_card, _prompt, meter, _spot) -> dict[str, Any]:
+        spend(meter, 0.4)
+        started.set()
+        try:
+            await asyncio.Event().wait()  # an SDK call that would outlive the host
+        finally:
+            ended.append(await spotter_look.teardown(SimpleNamespace(stop=_fine, force_stop=_fine), None, ""))
+        return {"category": "none", "note": ""}
+
+    j.job.looked = hanging
+    stopping = threading.Event()
+    j.job.start(stopping, lambda: 0.0)
+    assert started.wait(5)
+    stopping.set()
+    assert j.job.drain(5) is True
+    assert ended == [True]  # its teardown ran
+    [kept] = [r for r in case_replay.results() if r["id"] == rid]
+    assert kept["result"].startswith("refused: stopped")
+    assert kept["credits"]["credits"] == pytest.approx(0.4)
+    assert not case_replay.queued()
+    assert j.job.slots.counts(cases_job.SLOT)[2] == 0
+    assert [s["state"] for s in j.job.maintenance.read()["sessions"]] == ["released"]
+
+
+async def _fine() -> None:
+    pass
+
+
 def test_the_commands_write_moves_and_queue_a_paid_one(capsys) -> None:
     cid = reviewed(call="none")
     reviewed(call="none")
@@ -626,6 +789,49 @@ def test_the_commands_write_moves_and_queue_a_paid_one(capsys) -> None:
     assert cli.main(["cases", "list"]) == 0
     assert cli.main(["improvement", "reset"]) == 0
     assert "retired:" in capsys.readouterr().out
+
+
+def racing(monkeypatch, change: Any) -> None:
+    """Another writer's *change* lands just before the command's first outer take of the store's lock."""
+    original, fired, depth = cases.locked, [], [0]
+
+    @contextlib.contextmanager
+    def locked() -> Any:
+        if not fired and not depth[0]:
+            fired.append(1)
+            with original():
+                change()
+        depth[0] += 1
+        try:
+            with original():
+                yield
+        finally:
+            depth[0] -= 1
+
+    monkeypatch.setattr(cases, "locked", locked)
+
+
+def test_a_move_or_rollback_is_made_of_the_version_it_is_written_onto(monkeypatch, capsys) -> None:
+    cid = reviewed(call="none")
+    racing(monkeypatch, lambda: cases.commit(cases.current()["n"], {cid: None}, "t", "removed meanwhile"))
+    assert cli.main(["cases", "move", cid, "candidate"]) == 1
+    assert "refused: case" in capsys.readouterr().out
+    assert cid not in cases.current()["cases"]  # never resurrected
+    first = cases.current()["n"]
+    other = reviewed(call="none")
+    added: list[str] = []
+
+    def add() -> None:
+        added.append(reviewed(stage="candidate"))
+
+    racing(monkeypatch, add)
+    assert cli.main(["cases", "rollback", str(first)]) == 0
+    assert cases.current()["cases"] == cases.version(first)["cases"]  # a copy: the case added meanwhile too is out
+    assert other not in cases.current()["cases"]
+    assert added
+    assert added[0] not in cases.current()["cases"]
+    with cases.locked(), pytest.raises(cases.Stale):
+        cases_cli._change({other: None}, "stale", first)  # noqa: SLF001 - the guard against a stale parent
 
 
 def test_a_retro_review_session_is_charged_as_it_reports_and_aborted_at_its_runs_limit(  # noqa: C901 - its fakes

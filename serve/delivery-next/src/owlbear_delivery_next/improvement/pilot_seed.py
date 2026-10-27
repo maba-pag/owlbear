@@ -131,10 +131,14 @@ def _sides(folder: Path, saved: Mapping[str, dict[str, Any]], ids: list[str]) ->
 
 
 def _seeded(kind: str) -> set[str]:
-    """The pilot moments or synthetic names already seeded."""
+    """The pilot moments or synthetic names already seeded: those of every case some version ever held.
+
+    A case frozen by a seed that stopped before its version was written is in no version, so it is seeded again; one
+    removed since stays seeded.
+    """
     out = set()
-    for path in cases.place().glob("c-*.json"):
-        prov = json.loads(path.read_text()).get("provenance", {})
+    for cid in {cid for v in cases.versions() for cid in v["cases"]}:
+        prov = cases.fact(cid).get("provenance", {})
         if kind in prov:
             out.add(prov[kind] if isinstance(prov[kind], str) else prov[kind].get("moment", ""))
     return out

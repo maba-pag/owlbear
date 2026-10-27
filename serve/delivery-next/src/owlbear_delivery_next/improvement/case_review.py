@@ -8,7 +8,8 @@ bound to exactly the card, call and why that were checked; a candidate changed m
 the shared repository's ``owlbear/improvement/spotter-cases/<id>.json`` once ``retro-review`` minimised and sanitised
 it, credentials included. Its answer is validated strictly (its call must be the case's own), then the whole export,
 metadata included, must pass the deterministic check (``mask.redact``, emails, home paths); what fails stays here,
-owner-only, never in the shared checkout. The export names the case only by its local id (its provenance stays on
+owner-only, never in the shared checkout; a review stopped before it answered (the run's limit, OwlBear's stop) is
+no refusal, and its revision stays due. The export names the case only by its local id (its provenance stays on
 this machine). Before writing, the case is checked again under the store's lock: one changed or removed during its
 review is not published. A case that leaves the published stages is removed from the shared repository, also when it
 leaves while a newer revision is under review: what the repository holds is kept apart from each review's outcome. A
@@ -18,6 +19,7 @@ pushed.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import re
@@ -75,10 +77,12 @@ async def check(request: dict[str, Any], ask: Ask, meter: Meter, halt: Callable[
     why = ""
     try:
         for cid, wanted in request["ids"].items():
-            if stop := halt() or ("" if meter.admit() else f"the retro run's spend is {meter.report()['stopped']}"):
+            if stop := _stopped(meter, halt):
                 why = f"stopped: {stop}"
                 break
             out["reviews"][cid] = await _check_one(cid, wanted, ask, meter)
+    except asyncio.CancelledError:  # the host ended: the session's teardown and spend are done, the result is kept
+        why = "stopped: OwlBear stopped during a review"
     except Exception as exc:  # noqa: BLE001 - a failed review ends the run; its result is kept, never rerun
         why = f"failed: {type(exc).__name__}: {exc}"[:300]
     out |= {"result": why or "checked", "credits": meter.report(), "ended": cases.now()}
@@ -122,7 +126,8 @@ def state() -> dict[str, dict[str, Any]]:
     """Each case's publication state, what the shared repository holds kept apart from how its reviews went.
 
     ``remote``: the revision its committed file holds ("" for none); ``pushed``: whether that commit reached the
-    remote; ``review``: the last reviewed revision, its outcome (passed, refused, changed) and why.
+    remote, false too after a write that failed before its commit and may have left the file in the checkout or its
+    index; ``review``: the last reviewed revision, its outcome (passed, refused, changed) and why.
     """
     try:
         return json.loads((cases.place() / "published.json").read_text())
@@ -281,8 +286,24 @@ async def sync(shared: DataRepo | None, ask: Ask, meter: Meter, halt: Callable[[
         out["removed" if committed and pushed else "pending" if committed else "failed"].append(cid)
     for cid, rev in write.items():
         out[_place(shared, cid, rev, _kept(cid, rev) or "")].append(cid)
+    try:
+        await _review(shared, review, ask, meter, halt, out)
+    except asyncio.CancelledError:  # the host ended: the revision under review stays due
+        out["stopped"] = "OwlBear stopped during a review"
+    return out
+
+
+async def _review(  # noqa: PLR0913, PLR0917 - the repository, what is due, the session, its meter, the stop, the record
+    shared: DataRepo,
+    review: dict[str, str],
+    ask: Ask,
+    meter: Meter,
+    halt: Callable[[], str],
+    out: dict[str, Any],
+) -> None:
+    """Review and write each revision due, until the run's meter or OwlBear's stop ends it; *out* says what it did."""
     for cid, rev in review.items():
-        if stop := halt() or ("" if meter.admit() else f"the retro run's spend is {meter.report()['stopped']}"):
+        if stop := _stopped(meter, halt):
             out["stopped"] = stop
             break
         entry = cases.current()["cases"].get(cid)
@@ -290,6 +311,9 @@ async def sync(shared: DataRepo | None, ask: Ask, meter: Meter, halt: Callable[[
             continue  # changed since: the next sync takes it
         text = await ask(_message(PUBLISH, cid, entry), meter)
         said = _answer(text)
+        if said is None and (stop := _stopped(meter, halt)):
+            out["stopped"] = stop  # stopped before an answer: the revision stays due, never refused
+            break
         made = export(cid, rev, said, entry["call"]) if said is not None else "refused: the review gave no JSON object"
         if made.startswith("refused:"):
             _keep_rejected(cid, rev, text)
@@ -299,7 +323,11 @@ async def sync(shared: DataRepo | None, ask: Ask, meter: Meter, halt: Callable[[
         _keep(cid, rev, made)
         _set(cid, review={"revision": rev, "outcome": "passed", "why": ""})
         out[_place(shared, cid, rev, made)].append(cid)
-    return out
+
+
+def _stopped(meter: Meter, halt: Callable[[], str]) -> str:
+    """Why no further review may start or count: OwlBear's stop, or the run's meter closed; else nothing."""
+    return halt() or ("" if meter.admit() else f"the retro run's spend is {meter.report()['stopped']}")
 
 
 def _place(shared: DataRepo, cid: str, rev: str, text: str) -> str:
@@ -323,5 +351,5 @@ def _place(shared: DataRepo, cid: str, rev: str, text: str) -> str:
         if committed:
             _set(cid, remote=rev, pushed=pushed, why=why)
             return "published" if pushed else "pending"
-        _set(cid, why=why)
+        _set(cid, pushed=False, why=why)  # the file may be in the checkout or its index: a withdrawal cleans it
         return "failed"

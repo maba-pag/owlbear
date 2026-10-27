@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any
 from owlbear_delivery_next.change_flow.status import RESUME, status
 from owlbear_delivery_next.local_system import data_repo, maintenance
 from owlbear_delivery_next.local_system.slots import Slots
+from owlbear_delivery_next.machine_host import cases_job
 from owlbear_delivery_next.machine_host.cases_job import CasesJob
 from owlbear_delivery_next.machine_host.curation import Curation
 from owlbear_delivery_next.machine_host.project import Project
@@ -97,6 +98,7 @@ class Machine:
             paused=lambda: self.paused,
             admission=lambda: self.lock,
             say=self.say,
+            ownership=self.maintenance,
         )
 
     def _curation_fence(self) -> str:
@@ -388,6 +390,8 @@ class Machine:
             for p in self.projects.values():
                 if p.state != "stopped":
                     p.stop()
+        if not self.cases.drain():  # its running session cancelled, so its result and spend are kept before the exit
+            self.say(f"the Spotter cases job did not end within {cases_job.DRAIN:.0f} s")
         self.say("stopped: every project closed")
 
 
