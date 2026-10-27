@@ -97,6 +97,12 @@ def source_format(folder_fd: int) -> str:
 def source_state(source: tuple[Path, int], pid: str, rec: dict) -> tuple[str, str, str]:
     """The preparation, marker and admitted receipt in the held, still-named source belonging to *pid*."""
     folder, folder_fd = source
+    names = (project_move.PREPARED, format_marker.MARKER, project_move.CLONE_ID, project_move.MOVE_RECORD)
+    try:
+        images = {name: fd_tree.stat_at(folder_fd, name) for name in names}
+    except OSError as exc:
+        msg = f"{folder}'s source witnesses cannot be checked: nothing was changed"
+        raise StoreError(msg) from exc
     observed, image = project_move.record_image(folder, folder_fd)
     if observed != rec or image is None:
         msg = f"{folder}'s move receipt changed during admission: nothing was changed"
@@ -115,6 +121,15 @@ def source_state(source: tuple[Path, int], pid: str, rec: dict) -> tuple[str, st
         msg = f"{folder} no longer names the retained source of project {pid}: nothing was changed"
         raise StoreError(msg)
     fd_tree.require_text_at(folder_fd, project_move.MOVE_RECORD, image)
+    try:
+        stable = all(fd_tree.same_image_at(folder_fd, name, before) for name, before in images.items())
+    except OSError as exc:
+        msg = f"{folder}'s source witnesses cannot be checked: nothing was changed"
+        raise StoreError(msg) from exc
+    if not stable:
+        source_format(folder_fd)  # a concurrently installed newer marker keeps its typed refusal
+        msg = f"{folder}'s source witnesses changed during admission: nothing was changed"
+        raise StoreError(msg)
     return prepared, marker, image
 
 

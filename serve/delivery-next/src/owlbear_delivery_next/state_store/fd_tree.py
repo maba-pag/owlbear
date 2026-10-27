@@ -160,6 +160,12 @@ def _same_file_image(dfd: int, name: str, fd: int, before: os.stat_result) -> bo
     return _same_entry_image(before, after) and _same_entry_image(after, stat_at(dfd, name))
 
 
+def same_image_at(dfd: int, name: str, before: os.stat_result | None) -> bool:
+    """Whether a named entry retains a previously observed image, without another content read."""
+    after = stat_at(dfd, name)
+    return after is None if before is None else _same_entry_image(before, after)
+
+
 def read_at(dfd: int, name: str) -> str | None:
     """The stable text of regular file *name*, or None only when absent at open; changed entries raise OSError."""
     try:

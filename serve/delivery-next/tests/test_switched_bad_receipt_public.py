@@ -715,6 +715,50 @@ def test_read_only_authority_refuses_a_receipt_replaced_during_target_validation
     assert _snapshot(target) == target_before
 
 
+def _during_terminal_source_receipt(monkeypatch, source, boundary, change):
+    real_state, real_holds = project_switch.source_state, fd_tree.holds_text_at
+    held = source.stat()
+    calls, active, fired = [], [], []
+
+    def state(*args):
+        calls.append(True)
+        active.append(len(calls))
+        try:
+            return real_state(*args)
+        finally:
+            active.pop()
+
+    def holds(dfd, name, text):
+        valid = real_holds(dfd, name, text)
+        if active == [boundary] and not fired and name == project_move.MOVE_RECORD:
+            assert os.path.samestat(os.fstat(dfd), held)
+            fired.append(True)
+            change()
+        return valid
+
+    monkeypatch.setattr(project_switch, "source_state", state)
+    monkeypatch.setattr(fd_tree, "holds_text_at", holds)
+    return fired
+
+
+@pytest.mark.usefixtures("current_binding")
+@pytest.mark.parametrize("boundary", [2, 3], ids=["before-fence-replace", "after-fence-replace"])
+def test_open_preserves_a_future_source_marker_installed_during_terminal_receipt(repo, boot, monkeypatch, boundary):
+    target = _finished_move(repo, boot)
+    source = _source(repo)
+    before = _snapshot(target)
+    fired = _during_terminal_source_receipt(
+        monkeypatch, source, boundary, lambda: (source / MARKER).write_text("1000\n")
+    )
+
+    with pytest.raises(FormatTooNewError):
+        Store.open(repo)
+
+    assert fired == [True]
+    assert (source / MARKER).read_text() == "1000\n"
+    assert _snapshot(target) == before
+
+
 @pytest.mark.usefixtures("current_binding")
 @pytest.mark.parametrize("surface", ["register", "adopt"])
 @pytest.mark.parametrize("when", ["target-read", "id-file-sync", "id-directory-sync"])
