@@ -62,7 +62,7 @@ def _proven(target: Path, rec: dict) -> None:
         text = fd_tree.read_at(tfd, MARKER)  # an absent marker is the owned repair the store's own open makes
         if text is not None:
             format_marker.supported_format(text)
-    except OSError as exc:
+    except (OSError, UnicodeError) as exc:
         msg = f"{target} holds an entry OwlBear cannot read: nothing was changed"
         raise StoreError(msg) from exc
     finally:

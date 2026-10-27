@@ -215,7 +215,16 @@ def current(cwd: Path) -> Path | None:
     target = home(pid)
     if rec and rec["phase"] == project_move.SWITCHED:
         _switched_to(target, rec)
-        project_switch.named_switched(target, rec)
+        try:
+            parent_fd = os.open(target.parent, fd_tree.DIR_FLAGS)
+            try:
+                tfd = project_switch.check_switched(target, parent_fd, rec)
+                os.close(tfd)
+            finally:
+                os.close(parent_fd)
+        except OSError as exc:
+            msg = f"{target} is not a store OwlBear can read: nothing was changed"
+            raise StoreError(msg) from exc
     return target
 
 
