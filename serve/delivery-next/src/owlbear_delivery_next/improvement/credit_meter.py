@@ -63,7 +63,7 @@ class Meter:
 
     def __init__(self, limit: float, scope: str = "look", parent: Meter | None = None, ident: str = "") -> None:
         if not (limit_nano := nano(limit)):
-            msg = f"a credit limit is a finite number above zero, not {limit!r}"
+            msg = f"a credit limit is a finite number of at least one nano-credit, not {limit!r}"
             raise ValueError(msg)
         self.limit, self.limit_nano, self.scope, self.parent = float(limit), limit_nano, scope, parent
         self.lock: threading.RLock = parent.lock if parent else threading.RLock()

@@ -62,6 +62,17 @@ def test_a_global_without_the_sections_or_with_them_null_gets_them_with_the_limi
     assert glob.curator_threshold == 90
 
 
+@pytest.mark.parametrize("sections", [{"spotter": False}, {"machine": []}, {"spotter": "on"}, {"machine": 0}])
+def test_a_section_that_is_neither_a_mapping_nor_null_is_refused_never_replaced(tmp_path, sections):
+    with pytest.raises(StoreError, match="cannot be migrated"):
+        read_layer(_file(tmp_path, {"format": 15, **sections}), GlobalLayer)
+
+
+def test_an_empty_section_gets_the_limits_in_it(tmp_path):
+    glob = read_layer(_file(tmp_path, {"format": 15, "spotter": {}, "machine": {}}), GlobalLayer)
+    assert _limits(glob) == tuple(LIMITS.values())
+
+
 def test_an_older_global_gets_them_through_the_whole_chain(tmp_path):
     glob = read_layer(_file(tmp_path, {"format": 13, "spotter": {"mode": "learning"}}), GlobalLayer)
     spotter = glob.spotter
@@ -95,8 +106,8 @@ def test_a_format_16_layer_naming_a_budget_is_refused(tmp_path):
         read_layer(_file(tmp_path, {"format": 16, "machine": {"spotter_budget": 5}}), GlobalLayer)
 
 
-VALUES = [(1, True), (0.4, True), (2.5, True), (0, False), (-1, False), (True, False), ("0.5", False),
-          (math.inf, False), (math.nan, False)]  # fmt: skip
+VALUES = [(1, True), (0.4, True), (2.5, True), (1e-9, True), (0, False), (1e-10, False), (-1, False), (True, False),
+          ("0.5", False), (math.inf, False), (math.nan, False)]  # fmt: skip  # at least one nano-credit
 
 
 @pytest.mark.parametrize(("value", "ok"), VALUES)

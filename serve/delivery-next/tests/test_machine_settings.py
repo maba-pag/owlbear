@@ -687,6 +687,25 @@ def test_a_failed_probe_after_a_failed_upgrade_commit_keeps_it_pending_and_its_w
 
 
 @pytest.mark.usefixtures("no_base")
+def test_another_machine_s_format_16_never_clears_this_machine_s_unpublished_upgrade(
+    shared_repo, tmp_path, monkeypatch
+):
+    shared = DataRepo(shared_repo[0])
+    written = _failed_upgrade_commit(shared, monkeypatch)
+    digest = registry.load().global_written
+    other = _clone(tmp_path, shared_repo)  # another machine publishes its own format-16 Global meanwhile
+    glob = read_layer(other.global_path, GlobalLayer)
+    _committed(other, glob.model_copy(update={"sessions": 7}).model_dump(mode="json"))
+
+    _carry(monkeypatch, shared)
+
+    machine = registry.load()
+    assert "another machine changed the global settings" in machine.settings_pending  # the owner reconciles
+    assert machine.global_written == digest  # still known as this machine's own write
+    assert shared.global_path.read_text() == written  # nothing undone
+
+
+@pytest.mark.usefixtures("no_base")
 def test_a_failed_push_keeps_the_commit_and_the_next_start_pushes_it(shared_repo, monkeypatch):
     shared = DataRepo(shared_repo[0])
     _moved_global(shared)

@@ -266,8 +266,8 @@ def credit_limits_written(data: dict[str, Any]) -> dict[str, Any]:
     with the limit alone; every other value stays. ``state_store.settings_carry.limits`` saves and publishes the result.
     """
     data = daily_budgets_dropped(data)
-    spotter = data.get("spotter") or {}
-    machine = data.get("machine") or {}
+    spotter = {} if data.get("spotter") is None else data["spotter"]  # absent or null only: made with the limit
+    machine = {} if data.get("machine") is None else data["machine"]
     if isinstance(spotter, dict) and isinstance(machine, dict):  # anything else is left for validation to refuse
         spotter.setdefault("look_credit_limit", carried.LOOK_CREDIT_LIMIT)
         machine.setdefault("retro_run_credit_limit", carried.RETRO_RUN_CREDIT_LIMIT)

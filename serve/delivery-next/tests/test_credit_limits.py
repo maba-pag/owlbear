@@ -68,9 +68,9 @@ def test_each_session_of_a_look_is_listed_on_the_look_alone() -> None:
     assert (look.report()["sdk_sessions"], run.report()["sdk_sessions"]) == (["sdk-1", "sdk-2"], [])
 
 
-@pytest.mark.parametrize("bad", [0, -1, math.inf, math.nan, True, "0.5", None])
+@pytest.mark.parametrize("bad", [0, 1e-10, -1, math.inf, math.nan, True, "0.5", None])
 def test_a_limit_is_a_finite_amount_above_zero(bad: object) -> None:
-    with pytest.raises(ValueError, match="finite number above zero"):
+    with pytest.raises(ValueError, match="finite number of at least one nano-credit"):
         Meter(bad)  # type: ignore[arg-type]
 
 
@@ -199,7 +199,7 @@ class Session:
 
     def __init__(self, made: dict[str, Any], script: list[Any], *, abort: str = "ends", metrics: Any = 0.0) -> None:
         self.made, self.script, self.abort_mode, self.metrics = made, script, abort, metrics
-        self.session_id, self.aborted = "look-x", asyncio.Event()
+        self.session_id, self.aborted, self.asked = "look-x", asyncio.Event(), asyncio.Event()
         self.rpc = SimpleNamespace(usage=SimpleNamespace(get_metrics=self._metrics))
 
     async def send_and_wait(self, *_a: Any, **_kw: Any) -> None:
@@ -209,10 +209,18 @@ class Session:
                 return
             if step == "hang":
                 await asyncio.sleep(30)
+            if step in ("raise-after-abort", "idle-raise-after-abort"):  # the transport fails once abort was asked
+                await self.asked.wait()
+                if step.startswith("idle"):
+                    self.made["on_event"](event("session.idle", {"aborted": True}))
+                raise TimeoutError  # the transport broke
             self.made["on_event"](step)
 
     async def abort(self) -> None:
         self.made["aborted"] = self.made.get("aborted", 0) + 1
+        self.asked.set()
+        if self.abort_mode == "fails":
+            raise ConnectionError  # the abort is refused
         if self.abort_mode == "stalls":
             await asyncio.sleep(30)
         self.aborted.set()
@@ -286,6 +294,19 @@ def test_a_stalled_abort_leaves_the_turn_unconfirmed_and_every_wait_bounded(monk
     assert took < 1.5  # abort, the turn's end and the total each at most TEARDOWN, then the teardown
     report = look.report()
     assert (report["credits"], report["credits_known"], report["stopped"]) == (0.8, False, "reached")
+
+
+@pytest.mark.parametrize(("step", "known"), [("raise-after-abort", False), ("idle-raise-after-abort", True)])
+def test_a_failed_abort_and_a_failed_turn_leave_the_spend_unknown_unless_the_runtime_said_idle(
+    monkeypatch, step, known
+) -> None:
+    made: dict[str, Any] = {}
+    look = Meter(0.75)
+    session = Session(made, [usage(0.8), step], abort="fails", metrics=0.8)
+    text, _ = run_look(monkeypatch, session, look, made)
+    assert (text, made["aborted"]) == ("", 1)
+    report = look.report()
+    assert (report["credits"], report["credits_known"], report["stopped"]) == (0.8, known, "reached")
 
 
 def test_a_stalled_usage_read_keeps_the_calls_reported_within_its_bound(monkeypatch) -> None:

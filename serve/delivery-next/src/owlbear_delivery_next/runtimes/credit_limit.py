@@ -42,11 +42,15 @@ class Limit:
     def __init__(self, meter: Meter) -> None:
         self.part = meter.part()
         self.reached = asyncio.Event()
+        self.idle = False  # the runtime said the session is idle: its turn has ended
         self.loop = asyncio.get_running_loop()
 
     def heard(self, ev: Any) -> None:  # noqa: ANN401 - an SDK event
-        """Charge one billed call; the turn is stopped once the meter closes."""
-        if getattr(getattr(ev, "type", None), "value", getattr(ev, "type", None)) != "assistant.usage":
+        """Charge one billed call; the turn is stopped once the meter closes. An idle session is noted as ended."""
+        kind = getattr(getattr(ev, "type", None), "value", getattr(ev, "type", None))
+        if kind == "session.idle":
+            self.idle = True
+        if kind != "assistant.usage":
             return
         nano = getattr(getattr(getattr(ev, "data", None), "copilot_usage", None), "total_nano_aiu", None)
         cost = nano / 1e9 if isinstance(nano, int | float) and not isinstance(nano, bool) else None
@@ -58,8 +62,9 @@ class Limit:
         """Await the turn *send* until it ends or the meter closes; whether its end is confirmed.
 
         The turn's own error is raised. Once the meter closes, *abort* is asked within *bound*, then the turn gets
-        *bound* to end; one that does not is left unconfirmed. A cancellation stops the wait, never the turn: the
-        caller's teardown ends the session.
+        *bound* to end. Its end is confirmed when the wait returns, or when it fails or is cancelled only once the
+        runtime said the session is idle after the abort; otherwise, or when it does not end in time, it is left
+        unconfirmed. A cancellation stops the wait, never the turn: the caller's teardown ends the session.
         """
         sending, reaching = asyncio.ensure_future(send), asyncio.ensure_future(self.reached.wait())
         try:
@@ -72,14 +77,15 @@ class Limit:
         if sending.done():
             sending.result()
             return True
+        self.idle = False  # only an idle session after the abort confirms the turn's end
         await bounded(abort, bound)
         done, _ = await asyncio.wait({sending}, timeout=bound)
         if not done:
             sending.cancel()
             return False
-        with contextlib.suppress(Exception):  # the abort ends the turn with an error of its own
-            sending.result()
-        return not sending.cancelled()
+        if sending.cancelled() or sending.exception() is not None:  # a timeout or a broken transport ends nothing
+            return self.idle
+        return True
 
     async def settle(self, metrics: Callable[[], Awaitable[Any]], *, confirmed: bool, bound: float) -> None:
         """Read the session's reported total within *bound* and reconcile this session's share with it."""

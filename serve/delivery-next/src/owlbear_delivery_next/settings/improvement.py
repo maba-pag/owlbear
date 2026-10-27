@@ -35,7 +35,8 @@ type FindingCategory = Literal[
 type HandOffAction = Literal["record", "show-owner", "steer", "refuse-hand-off"]
 type CourseAction = Literal["record", "show-owner", "steer", "stop-and-resume", "stop-and-ask"]
 type StateAction = Literal["record", "show-owner", "stop-and-resume", "stop-and-ask"]  # outside state and harm
-type Credits = Annotated[float, Field(strict=True, gt=0, allow_inf_nan=False)]  # a credit limit: finite, above 0
+# A credit limit: finite, and at least one nano-credit, the precision the runtime bills and a meter counts at.
+type Credits = Annotated[float, Field(strict=True, ge=1e-9, allow_inf_nan=False)]
 LOOKS: tuple[str, ...] = get_args(Look.__value__)
 CATEGORIES: dict[str, str] = {c: c.replace("-", "_") for c in get_args(FindingCategory.__value__)}  # -> its field
 REQUIRED: tuple[str, ...] = (

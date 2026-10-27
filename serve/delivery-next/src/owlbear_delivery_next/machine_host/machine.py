@@ -399,7 +399,8 @@ def _switched(say: Callable[[str], None]) -> str:
     if shared is None:
         return ""  # without Global this machine keeps its own values
     why = settings_carry.sync(shared, state.global_written)  # every start: Global as the other machines left it
-    if state.settings_moved and not settings_carry.due(shared) and not settings_carry.limits_due(shared):
+    settled = state.settings_moved and not state.global_written  # no write of this machine's waits to be reconciled
+    if settled and not settings_carry.due(shared) and not settings_carry.limits_due(shared):
         if why:
             say(f"settings: the shared repository could not be brought current: {why}")
         return ""

@@ -304,8 +304,9 @@ class Spotter:
     async def _run(self, look: str, probability: float, snapshot: dict[str, Any], moment: dict[str, Any]) -> None:
         ctx, started, the_card = self.ctx, time.monotonic(), None
         record = self._record(look, probability, moment, skipped="the step ended before the look began")
-        meter = credit_meter.Meter(ctx.limit, "look", ident=record.id)  # one identity for the record and its sessions
+        meter: credit_meter.Meter | None = None
         try:
+            meter = credit_meter.Meter(ctx.limit, "look", ident=record.id)  # one identity: the record and its sessions
             context = {"step": ctx.step, "open_work": list(ctx.open_work), "decisions": list(ctx.decisions),
                        "gaps": list(ctx.gaps)}  # fmt: skip
             the_card = await offload(card.build, snapshot, moment, context)
@@ -328,14 +329,15 @@ class Spotter:
             record.category, record.skipped = "failed", f"{type(exc).__name__}: {exc}"[:300]
         finally:
             record.prompt, record.seconds = prompt_version(), round(time.monotonic() - started, 1)
-            spend = meter.report()
-            record.credits, record.credits_known, record.limit = (
-                spend["credits"],
-                spend["credits_known"],
-                spend["limit"],
-            )
-            record.stopped, record.stopped_by = spend["stopped"], spend["stopped_by"]
-            record.sdk_sessions = spend["sdk_sessions"]
+            if meter is not None:  # without one (a limit it refused) nothing ran: the record still says why
+                spend = meter.report()
+                record.credits, record.credits_known, record.limit = (
+                    spend["credits"],
+                    spend["credits_known"],
+                    spend["limit"],
+                )
+                record.stopped, record.stopped_by = spend["stopped"], spend["stopped_by"]
+                record.sdk_sessions = spend["sdk_sessions"]
             writing = asyncio.wrap_future(WORK.submit(store, self.folder, record, the_card))  # never cancelled
             await asyncio.wait({writing}, timeout=2 * LOCK)  # it goes on if this wait ends
 

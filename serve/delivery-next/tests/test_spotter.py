@@ -496,6 +496,19 @@ def test_a_drain_ends_within_its_bound_even_when_a_look_resists(monkeypatch) -> 
     assert asyncio.run(main()) < 0.5
 
 
+def test_a_limit_the_meter_refuses_still_records_the_look_as_failed() -> None:
+    async def main() -> None:
+        spot = spotter.Spotter(ctx(limit=1e-10), lambda: "s-1", judge())  # rounds to no nano-credit at all
+        spot.handed_off("c", {})
+        await spot.drain()
+
+    asyncio.run(main())
+    assert spotter.WORK.settled(5)
+    [rec] = records()
+    assert (rec["category"], rec["skipped"][:28], rec["credits_known"], rec["sdk_sessions"]) == (
+        "failed", "ValueError: a credit limit i", False, [])  # fmt: skip
+
+
 def test_a_card_that_fails_is_recorded_failed_and_spends_nothing(monkeypatch) -> None:
     monkeypatch.setattr(card, "build", lambda *_a: 1 / 0)
 
