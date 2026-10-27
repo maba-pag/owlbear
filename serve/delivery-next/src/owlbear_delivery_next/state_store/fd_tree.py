@@ -77,7 +77,7 @@ def create_at(dfd: int, name: str, text: str) -> None:
 
     An existing entry, link included, is never followed or replaced: it raises FileExistsError and nothing is
     written. A write that fails after the name is created leaves that entry in place, never unlinked by name,
-    and raises StoreError.
+    and raises StoreError. The raw descriptor stays owned until finally, even if its file-object handover fails.
 
     Raises:
         FileExistsError: *name* already exists.
@@ -91,10 +91,13 @@ def create_at(dfd: int, name: str, text: str) -> None:
         msg = f"{name} cannot be created ({exc.strerror}): nothing was written"
         raise StoreError(msg) from exc
     try:
-        with os.fdopen(fd, "wb") as fh:
-            fh.write(text.encode())
-            fh.flush()
-            os.fsync(fh.fileno())
+        try:
+            with os.fdopen(fd, "wb", closefd=False) as fh:
+                fh.write(text.encode())
+                fh.flush()
+                os.fsync(fh.fileno())
+        finally:
+            os.close(fd)
         os.fsync(dfd)
     except OSError as exc:
         msg = f"{name} was not finished ({exc.strerror}): it was left in place; move it away, then start again"
