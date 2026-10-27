@@ -23,6 +23,7 @@ from pathlib import Path
 HEADER = ["| Source | URL | Licence | What | Where Used |", "| --- | --- | --- | --- | --- |"]
 _URL = re.compile(r"<https://[^\s<>]+>")
 _PATH = re.compile(r"`([^`]+)`")
+_DELIMITER = re.compile(r"(?<!\\)\|")
 
 
 def _table(text: str) -> list[str] | None:
@@ -40,8 +41,11 @@ def _table(text: str) -> list[str] | None:
 
 
 def _cells(row: str) -> list[str]:
-    row = row.removeprefix("|").removesuffix("|")
-    return [cell.strip() for cell in row.split(" | ")]
+    """Split a row on every unescaped pipe, whatever its spacing, as Markdown renders it."""
+    row = row.removeprefix("|")
+    if row.endswith("|") and not row.endswith("\\|"):
+        row = row[:-1]
+    return [cell.strip() for cell in _DELIMITER.split(row)]
 
 
 def check_sources_log(text: str, code_root: Path) -> list[str]:
@@ -55,7 +59,7 @@ def check_sources_log(text: str, code_root: Path) -> list[str]:
     problems: list[str] = []
     for row in rows:
         cells = _cells(row)
-        if len(cells) != len(HEADER[0].strip("|").split(" | ")):
+        if len(cells) != len(_cells(HEADER[0])):
             problems.append(f"needs 5 cells: {row}")
             continue
         source, url, licence, what, where = cells
@@ -93,7 +97,7 @@ def main(argv: list[str] | None = None) -> int:
         print(problem)
     if not problems:
         rows = (_table(text) or [])[2:]
-        paths = sum(len(_PATH.findall(row.rsplit(" | ", 1)[-1])) for row in rows)
+        paths = sum(len(_PATH.findall(_cells(row)[-1])) for row in rows)
         print(f"{args.log}: {len(rows)} rows and {paths} Where Used paths are well formed")
     return 1 if problems else 0
 

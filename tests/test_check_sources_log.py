@@ -93,3 +93,15 @@ def test_rejects_a_path_outside_the_code_root_even_when_it_exists(tmp_path: Path
     problems = _CHECKER.check_sources_log(_HEADER + row, _code_root(tmp_path / "code"))
     assert len(problems) == 1
     assert "outside the code root" in problems[0]
+
+
+def test_rejects_an_extra_delimiter_without_spaces(tmp_path: Path) -> None:
+    row = _VALID.replace("| Lib |", "| Lib|extra |")
+    problems = _CHECKER.check_sources_log(_HEADER + row, _code_root(tmp_path))
+    assert len(problems) == 1
+    assert "5 cells" in problems[0]
+
+
+def test_accepts_an_escaped_pipe_inside_a_cell(tmp_path: Path) -> None:
+    row = _VALID.replace("| A parser |", r"| A parser \| lexer |")
+    assert _CHECKER.check_sources_log(_HEADER + row, _code_root(tmp_path)) == []
