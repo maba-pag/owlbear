@@ -223,6 +223,7 @@ def config(  # noqa: PLR0913, PLR0917 - one picker session's place, id, message,
         policy=Policy(at, write=False), observe=lambda: tools.Worktree("", ""), checks=(),
         submit=submit, model=role.model, effort=role.effort, context=role.context,
         limit=limit or roles.limit(settings, job), role=tools.PICKER, job=job, journal=journal,
+        user=roles.user_config(settings),
     )  # fmt: skip
 
 

@@ -293,7 +293,7 @@ def test_a_replay_compares_agreement_with_the_owner_and_holds_back_only_from_eno
     assert calibration.replayed([(undecided, "pass")]).rounds == 0
 
 
-def test_a_replay_rejudges_kept_rounds_with_their_exact_messages_and_screenshots(repo, tmp_path) -> None:
+def test_a_replay_rejudges_kept_rounds_with_their_exact_messages_and_screenshots(repo, tmp_path, user_on) -> None:
     store = Store.open(repo)
     after, before = tmp_path / "after.png", tmp_path / "before.png"
     after.write_bytes(b"after")
@@ -340,6 +340,7 @@ def test_a_replay_rejudges_kept_rounds_with_their_exact_messages_and_screenshots
     assert result.pack.startswith("impeccable-4.6.0.1+")
     [cfg] = seen
     assert cfg.skills == folder  # the judge loads the candidate's skills
+    assert cfg.user == user_on
     assert (cfg.role, cfg.message, cfg.reveal, cfg.model) == (
         "design-judge",
         "judge home",

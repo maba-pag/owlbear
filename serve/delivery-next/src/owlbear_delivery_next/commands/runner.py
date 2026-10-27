@@ -170,6 +170,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:  # noq
             plan_tasks=disputes.planned(change),
             amendable=amendments.amendable(change),
             subagents=roles.subagents(settings, session),  # TD-374, TD-376: the role's setting
+            user=roles.user_config(settings),  # D-01M5YE4P5317N1HWD0QN6N05E0: the owner's own instructions and skills
             memory=sessions.memory(store),
             ui=change.brief.ui,
             helpers=_helpers(change, at, asked),

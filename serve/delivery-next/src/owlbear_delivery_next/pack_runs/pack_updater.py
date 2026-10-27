@@ -156,6 +156,7 @@ def config(  # noqa: PLR0913 - one session: its worktree, id, message, resume, f
         context=role.context, role="updater", fresh=fresh, journal=sdk_adapter.Journal(replaced=replaced),
         limit=roles.limit(store.settings(), LABEL), subagents=roles.subagents(store.settings(), LABEL),
         memory=sessions.memory(store),  # TD-399: it recalls and saves like the other producing roles
+        user=roles.user_config(store.settings()),
     )  # fmt: skip
 
 

@@ -975,13 +975,13 @@ def test_curate_now_bypasses_the_automatic_switch_and_pause_but_never_a_fence(ro
 
 
 @pytest.mark.parametrize(("setting", "may"), [(True, True), (False, False)])
-def test_the_curator_session_starts_subagents_only_as_its_role_setting_allows(root, setting, may) -> None:
+def test_the_curator_session_starts_subagents_only_as_its_role_setting_allows(root, setting, may, user_on) -> None:
     curator(root, subagents=setting)
     seen = []
     job = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root), run=recording(seen))
     job.start("shop")
     finished(job)
-    assert [cfg.subagents for cfg in seen] == [may]
+    assert [(cfg.subagents, cfg.user) for cfg in seen] == [(may, user_on)]
 
 
 def test_a_curator_whose_subagent_setting_is_unset_never_starts(root, monkeypatch) -> None:

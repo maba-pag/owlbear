@@ -389,7 +389,7 @@ class Curation:
                 message=said, fresh=said, resume=False, policy=Policy(at, write=False),
                 observe=lambda: tools.Worktree("", ""), checks=(), submit=memory_curation_tools.SUBMIT,
                 model=role.model, effort=role.effort, context=role.context, limit=roles.limit(settings, LABEL),
-                subagents=roles.subagents(settings, LABEL),
+                subagents=roles.subagents(settings, LABEL), user=roles.user_config(settings),
                 role=tools.CURATOR, job=LABEL, journal=sdk_adapter.Journal(event=self._pids), memory=store,
             )  # fmt: skip
             with self.lock:

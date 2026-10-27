@@ -129,6 +129,17 @@ def complete_layer():
     return base.model_copy(update=update)
 
 
+@pytest.fixture
+def user_on(monkeypatch, _carried_settings):
+    """Both user-config switches on under every layer: a session site that omits them shows as off, never as set."""
+    from owlbear_delivery_next.settings import config  # noqa: PLC0415
+    from owlbear_delivery_next.settings.roles import UserConfig  # noqa: PLC0415
+
+    switched = {"load_user_instructions": True, "load_user_skills": True}
+    monkeypatch.setattr(config, "BASE", config.BASE.model_copy(update=switched))
+    return UserConfig(instructions=True, skills=True)
+
+
 @pytest.fixture(autouse=True)
 def _no_shared_settings(tmp_path_factory, monkeypatch):
     """Tests never read the machine's pointer to the shared settings repository (TD-57), nor go online.
@@ -138,6 +149,7 @@ def _no_shared_settings(tmp_path_factory, monkeypatch):
     """
     fake = tmp_path_factory.mktemp("home")
     monkeypatch.setenv("HOME", str(fake))
+    monkeypatch.delenv("COPILOT_HOME", raising=False)  # nor the owner's Copilot folder: his skills and instructions
     browsers = MACHINE_HOME / ("Library/Caches" if sys.platform == "darwin" else ".cache") / "ms-playwright"
     monkeypatch.setenv("PLAYWRIGHT_BROWSERS_PATH", os.environ.get("PLAYWRIGHT_BROWSERS_PATH") or str(browsers))
     home = fake / ".owlbear"

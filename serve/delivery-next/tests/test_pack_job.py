@@ -464,7 +464,7 @@ REVIEW_SKILL = "skills/owlbear-design-review/SKILL.md"  # in the updater's workt
 PACKAGED = "skills/owlbear-design-review/SKILL.md"  # in the package
 
 
-def test_the_updaters_edit_is_what_the_replay_the_challenger_and_the_commit_see(tmp_path, checkout, clone):
+def test_the_updaters_edit_is_what_the_replay_the_challenger_and_the_commit_see(tmp_path, checkout, clone, user_on):
     fakes = Fakes(clone)
     new = (checkout / PACKAGED).read_text() + "\n- glow: a zero-offset coloured halo is decoration.\n"
     fakes.edits = [{REVIEW_SKILL: new}]
@@ -474,6 +474,7 @@ def test_the_updaters_edit_is_what_the_replay_the_challenger_and_the_commit_see(
     assert state["state"] == "passed", state["reason"]
     (cfg,) = fakes.updates
     assert (cfg.role, cfg.policy.write, cfg.resume, cfg.submit) == ("updater", True, False, pack_updater.UPDATE)
+    assert [c.user for c in (cfg, *fakes.sessions)] == [user_on] * 2  # the updater and the challenger
     assert (cfg.worktree / "upstream" / "skill" / "SKILL.md").exists() is False  # its worktree is gone after the run
     ((identity, judged),) = fakes.replays
     assert judged == new  # the replay's judge loads the edited skill, not the installed one

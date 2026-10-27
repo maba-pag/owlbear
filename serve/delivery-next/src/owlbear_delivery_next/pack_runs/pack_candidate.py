@@ -251,6 +251,7 @@ def challenge(  # noqa: PLR0913 - the candidate, its upstream, the message, the 
             submit=submit, model=role.model, effort=role.effort, context=role.context, role="challenger",
             limit=roles.limit(store.settings(), label), subagents=roles.subagents(store.settings(), label),
             judging=True, memory=sessions.memory(store), rechecks=rechecks, cap=cap, changed=changed,
+            user=roles.user_config(store.settings()),
         )  # fmt: skip
         return run(store, replace(cfg, fresh=cfg.message))
 
