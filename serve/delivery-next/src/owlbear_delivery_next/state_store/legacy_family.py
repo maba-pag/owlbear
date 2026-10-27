@@ -132,7 +132,7 @@ CURRENT_IMPORTS = (
     ("machine_host/app.py", "68818b17c70f19616d627b8af788e098b0a37fcd4397db9fbff73fd1b4e6afb1"),
     ("machine_host/command.py", "9fa9ae7ffdfbc3d49c49b4bde8775c2770186e33e5e5f1f0006ffaf1d61d079b"),
     ("machine_host/install.py", "8a6c8c8653d886877d9848bf7e9e01274fa4daced682ed0e1094e9db9d02543f"),
-    ("machine_host/machine.py", "a85f74b3794d212f81687e174a54c3243fe7436e28e83526b3e0f764291972ad"),
+    ("machine_host/machine.py", "e8914dc14e4eecb2291a91768cb6a2c29c57c8bf6230ed4528a49d39a253b91b"),
     ("machine_host/project.py", "d8a347359ed0487e2ada6cc2de722439091e660e1496f034726ec4414e8e63ff"),
     ("state_store/registry.py", "174785f5ce9e9aae85933a328d06673ee6593bddac8cf4372d0bea5764fab83e"),
     ("machine_host/selfcheck.py", "9578776030cc7242cb20352ae35b009bdf4ac70d41fc91a08b9bac555ab4c15c"),

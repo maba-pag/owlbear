@@ -2,7 +2,7 @@
 
 > **Owning task:** owner request 2026-10-19: one document that grounds any session in what is built, what comes
 > next and where the code differs from the decisions
-> **Date:** 2026-10-27, status at `main` `c910afa07` after #706 with the post-#661 authority repairs, decisions to TD-469, item 5's
+> **Date:** 2026-10-27, status at `main` `499ff3cc` after #704 to #709 with the post-#661 authority repairs, decisions to TD-469, item 5's
 > decisions of 2026-10-22 and the owner's of 2026-10-23 to 2026-10-26
 > **Question:** Where does OwlBear stand, in what order does the remaining work come, and where does the code
 > differ from the decisions in force?
@@ -59,10 +59,10 @@ Renovate's pull requests come back now that the old engine is gone (owner, 2026-
 | The decision system (item 14) except the migration: files and validator, Change decisions archived, store with receipts, step context and runner gate, Decisions tab and chat tools, generated view, read-back queue, impact report, fix entries ticked by merged Changes | [decision system](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/decision-system-build.md) | #538 to #547, #550 |
 | Memory: the residuals of #238, #244 and #249; a chat's memory in its project's folder of `owlbear-data` (TD-72) | — | #548, #553 |
 | Decisions as confirmed intent (item 14): inherited decisions, saving at confirmation, the picker and lookups, answers classed by their relayer, the migration and the switch to `owlbear-data` (TD-466) | [decisions as confirmed intent](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/decision-intent-build.md) | #556 to #565, #570, #571 |
-| Improvement (item 9) slices 1 to 4 and 6's Delivery part: the design, settings and roles, Retro chatlogs, the Spotter's card and learning-mode looks at Delivery steps | [Improvement](improvement-design.md) | #659, #660, #662, #663, #668 |
+| Improvement (item 9) slices 1 to 6: the design, settings and roles, Retro chatlogs, the Spotter's card, record-only looks at Delivery steps and enrolled chats, its category settings, per-run credit limits and Spotter cases | [Improvement](improvement-design.md) | #659, #660, #662, #663, #668, #697, #704, #705, #707 |
 | The workspace-era installer retired: Delivery's chat server path-free in the root `.mcp.json`, `share/prompts`, `setup/init.py` and `seed/`; `owlbear setup` offers the memory server for the shaper (`D-01M5TYMBBBHQRN172N977ND3VS`) | — | #665 to #667 |
 | No generated indexes, Archify diagrams, prompt files or prompt validator: agents find code by search and package READMEs (`D-01M5WA09V20PP0K0HV920FT3Q8`, `D-01M5WG5KH9R31YWK82YDF3RX7W`, `D-01M5WG6AX489EK20815YJECZ7E`) | — | #689, #695 |
-| Spend metrics for all agents (`D-01M5XCDF6G60VG5GHTWF5QSSDE`): every SDK session and Spotter look writes its start and end to one ledger on the machine, cancelled or failed runs included; shares derived per session, subagents split by the runtime's own agent metrics; earlier spend reconciled from Changes, Spotter records and runtime logs; the Metrics page (marked assumptions: its name and place, the owner's chats not recorded, records kept for good) | — | this pull request |
+| Spend metrics for all agents (`D-01M5XCDF6G60VG5GHTWF5QSSDE`): every SDK session and Spotter look writes its start and end to one ledger on the machine, cancelled or failed runs included; shares derived per session, subagents split by the runtime's own agent metrics; earlier spend reconciled from Changes, Spotter records and runtime logs; the Metrics page (marked assumptions: its name and place, the owner's chats not recorded, records kept for good) | — | #706 |
 
 ## 2. The Plan
 
@@ -88,7 +88,7 @@ names, not positions: the table lists the items in their order.
 | 8 | Window-step gate: windows keep repository hooks and user MCP servers out, subagents detected and counted, judge effects contained | TD-223, TD-145, TD-342 | [gate build](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/window-step-gate-build.md), [probes](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/window-step-gate-probes.md) | Retired: window steps are retired as a runtime (D-01M5WG8RGCBKADW6XPGP0E2FAP, 2026-10-26); their code is removed (#698, closing #694; the shaping chat still opens in a window). Before that: TD-267 was built (`ahp.py` on the `websockets` library, #590). The probes of 2026-10-23 settled each part `autonomous` (the owner declined to decide the gate); built: hooks and VS Code MCP servers off per step, the host record's allowlist check, subagents in windows under the SDK rule, read-only steps asking and the SDK policy answering; the live proof of 2026-10-23 held |
 | 18 | Settings without code defaults: every setting comes from Global, the machine or the project; unset is an error on the Settings page and the steps needing it ask; today's values carried into Global once; machine settings get a Global layer | D-01M5MYY55ZX0FPN7VZB021H8MC, D-01M5MZKEPWNASF6X3CNF4FEWZH, D-01M5MZKEPW6WCSM8SZ6DH783EN, D-01M5MZKEPPVMFC9HK795MMG91B | none | Done (#604, #605): layered settings, then machine settings with a Global layer, moved there once on this laptop. R15 (#624): foundation merged in #657; final decision-publication composition verified and merged in #656. The five optional preferences (merge method, delete remote branch, CI poll and start window, ask before merge) resolve PROJECT > machine > Global with no code defaults; one-time guarded PROFILE-to-PROJECT import; current CONFIG format 15, PROFILE format 5. A crash after the durable pending claim resumes only when the basis proves the config unchanged and no owner preference action happened; otherwise the import stays pending with a review diagnostic in Settings (not done, no resurrection of cleared or deleted config). A refused publication keeps the owner's review intent in the page until a retry publishes it, so an edited or already-empty clear, or the explicit "Confirm merge preferences reviewed" action, settles the import once the config is published; a losing concurrent importer resumes only from the durable winning claim and never creates config. The fill stays bound to the remote's config and claim through every push and rebase of its checkout, by a record in that checkout's Git folder. A mismatched or unprovable push remote, ref or complete address is held rather than redirected. A remote that settled or cleared the claim meanwhile holds the checkout with a notice; retirement requires the full unpushed history to contain no change of that config and the index and working copy to match HEAD. Matching remote bytes, a merge or an unpushed revert do not remove a replayable fill. A damaged or unreadable hold, including a dangling link, refuses publication and pull rather than counting as no hold. The owner must resolve the unpushed commits; nothing in Git is undone automatically |
 | 19 | Pinned OwlBear: live chats keep their tools across updates; the chat server a state-free client of the host under a chat contract (first), then the memory, knowledge and browser servers run from the install, pinned and leased; this laptop updates only deliberately | D-01M5Q5GKHX7BJTXPEW2MHGS9E0, D-01M5Q5GKBFGSJRGCPXET234QAH | none | Built: the chat contract (#632, v1.49), the launcher (#636, v1.50) and the memory, knowledge and browser entries of `.mcp.json` and the seed switched to it (#638); item 9 next |
-| 9 | Improvement (formerly the watcher): tool and contract fixes and the Primer first, then the Spotter (Delivery steps and enrolled chats) with its records and cases, then Retro (after-task hindsight analysis) and the Improvement page; each finding gets its category's configured action, irreversible harm acting at once and discretionary steering only after a steered-versus-silent test; built complete before item 10 | TD-224, TD-316, TD-47, the owner's choices of 2026-10-25 | [Improvement](improvement-design.md) | Redesigned 2026-10-25, twice. Built: W1a (#640), the SDK feed and agent identity, which the Spotter reuses. Closed: #647 (a shell-effect parser). Phase 1a built: changed_paths derived, limit errors, check-form hint. The Primer built: lessons in every new step conversation (#653). A pilot and a hindsight review of 83 real moments found the only candidates for a note at hand-offs and fresh instructions, never mid-flow; their value is unproven. The design's slices: built the target design (#660), settings and roles (#662), Retro chatlogs (#663) and the Spotter's core: the card and looks in learning mode at Delivery steps' hand-offs and samples, recorded on this machine (#668). Follow-ups of #668 (2026-10-26): a live test of one look (it found that the runtime refuses a session credit cap under 30, so a look sets none, D-01M5W0HKR9RBAF3G4H8BTZS8E0, #682; a real look then worked), `mask.py` in linear time (#680), the chat server trusting the machine registry (#681); the old watcher decisions settled with the owner (§3.5); the Spotter's on/off switch and its action per category of finding, checked against the allowed set (D-01M5WP8Z4ADZ5FN7RJDR17RQQ5) and recorded with each look, nothing acting yet (#697); the window-step code removed (#698). Next: Spotter cases, the chats follower, Retro, the Improvement page, live delivery, then item 16, then item 10 (§3.5) |
+| 9 | Improvement (formerly the watcher): tool and contract fixes and the Primer first, then the Spotter (Delivery steps and enrolled chats) with its records and cases, then Retro (after-task hindsight analysis) and the Improvement page; each finding gets its category's configured action, irreversible harm acting at once and discretionary steering only after a steered-versus-silent test; built complete before item 10 | TD-224, TD-316, TD-47, the owner's choices of 2026-10-25 | [Improvement](improvement-design.md) | Redesigned 2026-10-25, twice. Built: W1a (#640), the SDK feed and agent identity, which the Spotter reuses. Closed: #647 (a shell-effect parser). Phase 1a built: changed_paths derived, limit errors, check-form hint. The Primer built: lessons in every new step conversation (#653). A pilot and a hindsight review of 83 real moments found the only candidates for a note at hand-offs and fresh instructions, never mid-flow; their value is unproven. The design's slices: built the target design (#660), settings and roles (#662), Retro chatlogs (#663) and the Spotter's core: the card and looks in learning mode at Delivery steps' hand-offs and samples, recorded on this machine (#668). Follow-ups of #668 (2026-10-26): a live test of one look (it found that the runtime refuses a session credit cap under 30, so a look sets none, D-01M5W0HKR9RBAF3G4H8BTZS8E0, #682; a real look then worked), `mask.py` in linear time (#680), the chat server trusting the machine registry (#681); the old watcher decisions settled with the owner (§3.5); the Spotter's on/off switch and its action per category of finding, checked against the allowed set (D-01M5WP8Z4ADZ5FN7RJDR17RQQ5) and recorded with each look, nothing acting yet (#697); the window-step code removed (#698). Per-look and per-run credit limits replaced the daily budget (#704); the Spotter cases are built (#705). The chats follower is built: looks at enrolled chats' plans, hand-offs, state changes and samples, recorded on this machine. Next: Retro, the Improvement page, live delivery, then item 16, then item 10 (§3.5) |
 | 16 | Amendment design session with the owner (TD-185), end to end, before any amendment code | TD-185, TD-422 | none yet | Not started |
 | 10 | First real project: the per-project GitHub account setting first; memory publication and curation (F17) fixed; two Changes merged in consumer projects; OwlBear builds itself through Delivery | TD-338, TD-402, TD-90, TD-319 | none yet | Waits for item 9 |
 | 17 | Browser and knowledge rebuilt from scratch, from the [ideas of the closed issues](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/closed-issue-ideas-2026-10.md); until then the packages stay untouched | TD-434 | none yet | After item 10 |
@@ -242,32 +242,33 @@ whose finding's category and configured action are recorded on this machine; not
 switch is on, a step needs the Spotter's required settings (the four category actions, `steer_share`,
 `intervention_cap`, `verbose`, `looks`, `look_credit_limit`, and `sample_rate` when `sample` is a look) and the
 `spotter` role; an unset switch blocks too, and off needs nothing. Global has the switch on with the four actions
-"record" (migrated from `learning`) while the other Spotter settings are unset, so the owner fills them in on the
-Settings page, or switches the Spotter off, before Delivery runs a step again. **Credit limits (2026-10-27):** no
+"record" (migrated from `learning`) and `look_credit_limit` written by #704, while `steer_share`, `intervention_cap`,
+`verbose` and `looks` are unset, so the owner fills them in on the Settings page, or switches the Spotter off, before
+Delivery runs a step again. **Credit limits (2026-10-27):** no
 daily budgets (D-01M5XCD49YHHR1NQKKY8TQD0C3): each look stops at its own credit limit, recorded on its record, with
 no SDK cap; the Retro and paid replay run limits are machine settings their slices use. Settings format 16 writes the
 three limits into Global once (0.75, 20 and 90 credits, five times marked-assumption costs) and the machine host's
 start saves and publishes it.
 
 **Next steps, in order:**
-1. The rest of #668's follow-ups. Done on 2026-10-26: a live look against the real runtime (it found the credit cap
+Done: the rest of #668's follow-ups, on 2026-10-26: a live look against the real runtime (it found the credit cap
    the runtime refuses, removed in #682; then a real hand-off look gave a correct note for 0.07 credits in 7.5 s),
    `mask.py` in linear time (#680), the chat server never taking a clone id the registry does not list (#681).
    The old watcher decisions are settled (above). The settings slice is built (#697): the on/off switch and the four
    category actions replace `mode`, each action checked against the allowed set (D-01M5WP8Z4ADZ5FN7RJDR17RQQ5); a
    former `learning` became on with every action "record". The window-step code is removed (#698). The owner sets
    the Spotter's remaining settings, or switches it off; until then Delivery steps wait for them.
-2. Spotter cases (slice 5's rest): built 2026-10-27 (stages, versions, rollback, the no-trade regression, releases
-   and the reserve, the seed from the pilot's saved cards, synthetic cases, the reset, publication by `retro-review`);
-   once merged, the owner seeds the cases and `retro-review` checks them.
-3. The chats follower (slice 6's rest): the machine host tails each enrolled chat's `events.jsonl` and looks at its
-   hand-offs and plans.
-4. Retro (slice 7): the machine-host job over whole Changes and finished chats, grading the Spotter's records and
-   proposing cases, lessons and fixes, reviewed by `retro-review`.
-5. The Improvement page (slice 8): the Spotter, Retro, cases and proposals managed by direction.
-6. Live delivery and the steered-versus-silent test (slice 9), only once Retro's grades are high enough.
-7. Item 16, the amendment design session with the owner (TD-422: after Improvement, before item 10).
-8. Item 10, the first real project.
+Done on 2026-10-27, each slice built complete with marked assumptions instead of deferrals
+   (D-01M5XB9M1A1MNG0S54N367RC70): the per-run credit limits (#704), Spotter cases (#705), spend metrics on the
+   Metrics page (#706) and the chats follower (#707). The owner's next steps on them: seed the cases and start the
+   first `retro-review` check on his word (a check of all ~85 candidates would reach the Retro run limit of 20: in
+   batches, or raise it), and review the three limits written into Global (0.75, 20, 90; marked assumptions).
+1. Retro (slice 7), not yet built, to be built complete: the machine-host job over whole Changes and finished chats, grading the
+   Spotter's records and proposing cases, lessons and fixes, reviewed by `retro-review`.
+2. The Improvement page (slice 8): the Spotter, Retro, cases and proposals managed by direction.
+3. Live delivery and the steered-versus-silent test (slice 9), only once Retro's grades are high enough.
+4. Item 16, the amendment design session with the owner (TD-422: after Improvement, before item 10).
+5. Item 10, the first real project.
 
 ## 4. Where the Code Differs From the Decisions
 
@@ -499,7 +500,7 @@ active store. Read-only lookup refuses an invalid source fence, so failed-load r
 Retained authority checks its supplied id against the held source before and after target validation; registration
 and adoption preserve the admitted id through durability and revalidate authority before saving the registry.
 
-The composition integrates `main` `c910afa07`, including R06/R15 from #656 and #704's per-look/per-run credit
+The composition integrates `main` `499ff3cc`, including R06/R15 from #656 and #704's per-look/per-run credit
 limits, CONFIG 16, MACHINE 8, PROFILE 5 and the window-step runtime's removal. Only CURRENT literal bindings
 were refreshed: 37 functions,
 17 import sets, 7 constants and 32 whole-module digests. The retired `commands/step_mcp.py` is absent only from
@@ -507,6 +508,8 @@ CURRENT; the historical channels are unchanged. The current read set includes th
 Git-common-directory resolution, shared-repository selection and its bounded Git runner, not every publication import.
 The Spotter cases (#705) refreshed only what they change: the `cli.py`, `command.py` and `machine.py` module
 digests, `cli.py:main`, the `cli.py` and `machine.py` import sets and the function aggregate.
+The chats follower refreshed only the `machine.py` module digest and import set; its review fixes refreshed the
+module digest twice more.
 The assembled binding and dependency-mutation refusals, default public Prepare/Finish, 13 public lease/copy/restart
 controls, settlement, retained-workspace sentinels and target-admission controls pass locally. Boot changes,
 historical producer records and provider/receipt timing faults are modeled; no physical reboot, live SDK or generic
@@ -547,7 +550,7 @@ since item 6; the others are in this folder.
 | [Decisions as confirmed intent](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/decision-intent-build.md) | Item 14: TD-448..TD-462 | Built (#556 to #565); the migration reviewed by the owner (TD-464..TD-469) and the switch done (#570, #571, TD-466) |
 | [Memory work](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/memory-work-build.md) | Item 5 | Built (#581 to #588) |
 | [New project from zero](new-project-build.md) | Item 15 | Designed; not built, not placed |
-| [Improvement](improvement-design.md) | Improvement (formerly the watcher), chosen 2026-10-25 | Building: slices 1 to 4 and 6's Delivery part built (#659 to #668); the [earlier draft](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-next-watcher-design.md) and its [options](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-next-watcher-options.md) are history |
+| [Improvement](improvement-design.md) | Improvement (formerly the watcher), chosen 2026-10-25 | Building: slices 1 to 6 built (#659 to #668, #697, #704, #705, #707); Retro, the Improvement page and live delivery next; the [earlier draft](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-next-watcher-design.md) and its [options](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-next-watcher-options.md) are history |
 | [Transfer ledger](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-next-transfer-ledger.md) | What the old engine leaves; the deletion batches | Built (item 7) |
 | [Cutover](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-next-cutover.md) | D5: coexistence, E1, deletion list, docs list | Built (item 7), as TD-199 and TD-203 changed it |
 | [Quality service](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/repo-quality-service.md) | TD-89's service | Research; not built |
