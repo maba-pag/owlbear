@@ -111,7 +111,8 @@ IMPROVEMENT_MACHINE = {  # tests only: settings added after the carry start unse
 
 
 def complete_layer():
-    """The carried values plus test values for what came later: the Spotter's settings and the retro roles."""
+    """The carried values plus test values for what came later: the Spotter's settings, the retro roles and the
+    user-config switches, off (D-01M5YE4P5317N1HWD0QN6N05E0)."""
     from owlbear_delivery_next.settings import carried  # noqa: PLC0415
     from owlbear_delivery_next.settings.improvement import CATEGORIES, Spotter  # noqa: PLC0415
 
@@ -124,7 +125,8 @@ def complete_layer():
         role: base.agents["curator"].model_copy(update={"model": "gpt-6.1-sol", "effort": "medium"})
         for role in ("retro", "retro-review")
     }
-    return base.model_copy(update={"spotter": spotter, "agents": agents})
+    update = {"spotter": spotter, "agents": agents, "load_user_instructions": False, "load_user_skills": False}
+    return base.model_copy(update=update)
 
 
 @pytest.fixture(autouse=True)

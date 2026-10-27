@@ -131,6 +131,7 @@ def test_a_carried_global_resolves_every_setting(shared_repo):
     later |= {f"spotter.{k}" for k in CATEGORIES.values()}  # the categories' actions too (2026-10-26)
     later |= {f"agents.{r}.{f}" for r in ("retro", "retro-review") for f in ("model", "effort", "context", "minutes",
                                                                              "subagents")}  # fmt: skip
+    later |= {"load_user_instructions", "load_user_skills"}  # the owner sets them; never carried (2026-10-27)
     assert set(resolve(read_layer(shared.global_path, GlobalLayer), Layer()).missing) == prefs | later
 
 
