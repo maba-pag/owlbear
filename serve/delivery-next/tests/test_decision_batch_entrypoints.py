@@ -2097,39 +2097,44 @@ def test_a_recreated_temporary_name_is_left_while_the_write_still_holds_its_file
 
 @pytest.mark.parametrize("fault", ["first-fstat", "write"])
 @pytest.mark.parametrize("writer", ["batch", "decisions"])
-@pytest.mark.usefixtures("closed_writer_descriptors")
-def test_a_fault_while_the_temporary_is_made_leaks_no_descriptor(tmp_path, monkeypatch, writer, fault):
+def test_a_fault_while_the_temporary_is_made_leaks_no_descriptor(
+    tmp_path, monkeypatch, writer, fault, closed_writer_descriptors
+):
     """`first-fstat`: the file's identity cannot be read, so its name is left rather than guessed at. `write`: the
     identity is known, so the file is removed. Either way every descriptor is closed and the error is raised."""
     folder = tmp_path / "layer" / "decisions"
+    descriptors = closed_writer_descriptors
     made: list[int] = []
-    real_open, real_fstat, real_write = os.open, os.fstat, os.write
+    real_open, real_fstat, real_write = descriptors.open, os.fstat, os.write
 
     def recording_open(path, flags, *args, **kwargs):
         descriptor = real_open(path, flags, *args, **kwargs)
-        if kwargs.get("dir_fd") is not None and str(path).endswith(".tmp"):
+        if (
+            threading.current_thread() is descriptors.caller
+            and kwargs.get("dir_fd") is not None
+            and str(path).endswith(".tmp")
+        ):
             made.append(descriptor)
         return descriptor
 
     def failing_fstat(descriptor, *args, **kwargs):
-        if fault == "first-fstat" and descriptor in made:
+        if threading.current_thread() is descriptors.caller and fault == "first-fstat" and descriptor in made:
             raise OSError(5, "Input/output error")
         return real_fstat(descriptor, *args, **kwargs)
 
     def failing_write(descriptor, data):
-        if fault == "write" and descriptor in made:
+        if threading.current_thread() is descriptors.caller and fault == "write" and descriptor in made:
             raise OSError(5, "Input/output error")
         return real_write(descriptor, data)
 
-    open_before = sum(1 for _ in Path("/dev/fd").iterdir())
     with monkeypatch.context() as m:
-        m.setattr(os, "open", recording_open)
-        m.setattr(os, "fstat", failing_fstat)
-        m.setattr(os, "write", failing_write)
+        m.setattr(descriptors, "open", recording_open)
+        m.setattr(descriptors, "fstat", failing_fstat)
+        m.setattr(descriptors, "write", failing_write)
         with pytest.raises(OSError, match="Input/output error"):
             _write_with(writer, tmp_path, None)
 
-    assert sum(1 for _ in Path("/dev/fd").iterdir()) == open_before  # every descriptor of the write is closed
+    assert descriptors.all_closed()
     assert made
     left = [p.name for p in folder.iterdir()]
     if fault == "write":

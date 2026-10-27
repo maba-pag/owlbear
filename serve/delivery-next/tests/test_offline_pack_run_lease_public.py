@@ -6,6 +6,7 @@ restart is a fresh ``Machine``, so each check reads the lease ledger again.
 """
 
 import json
+import os
 import shutil
 import subprocess
 from datetime import UTC, datetime
@@ -208,7 +209,6 @@ def _move_held_a(  # noqa: PLR0913
     kept workspace and the source run record as Finish settled it (its bytes are stable from here on)."""
     project_id, a_id = _hold_a(machines, repo, recovered=recovered, identified=identified)
     source = project_home.clone_dir(repo)
-    source_inode = (source / pack_state.FILE).stat().st_ino
     kept = _keep_workspace(a_id)
     head = head_of(repo)
     _prepared(repo, boot)
@@ -223,8 +223,9 @@ def _move_held_a(  # noqa: PLR0913
     target = _store(repo)
     assert target != source
     carried_path = target / pack_state.FILE
-    assert carried_path.stat().st_ino != source_inode
     assert (source / pack_state.FILE).is_file(), "the source run record was lost"
+    # Settlement can retire the earlier inode; compare the two files that still exist.
+    assert not os.path.samestat(carried_path.stat(), (source / pack_state.FILE).stat())
     assert head_of(repo) == head
     _assert_workspace_kept(a_id, kept, target)
     return project_id, a_id, json.loads(carried_path.read_text()), kept, settled
