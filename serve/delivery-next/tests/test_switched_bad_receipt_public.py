@@ -599,7 +599,11 @@ def test_store_open_keeps_legitimate_active_payload_changes(repo, boot):
 
 
 @pytest.mark.usefixtures("current_binding")
-@pytest.mark.parametrize("marker", [b"8\n", b"\xff\n", b"", None], ids=["newer", "utf8", "blank", "missing"])
+@pytest.mark.parametrize(
+    "marker",
+    [b"8\n", b"\xff\n", b"", None, "\u00b2\n".encode(), b"9" * 5000],
+    ids=["newer", "utf8", "blank", "missing", "non-ascii-digit", "oversized"],
+)
 def test_an_unproven_source_fence_keeps_one_unlocated_reservation(repo, boot, marker):
     target = _finished_move(repo, boot)
     entry = registry.register(repo)

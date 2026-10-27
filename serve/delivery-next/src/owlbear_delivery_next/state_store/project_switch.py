@@ -70,17 +70,21 @@ def clone_id_at(folder: Path, folder_fd: int) -> str | None:
 
 
 def source_format(folder_fd: int) -> str:
-    """Validate a retained source marker, allowing the existing repair of supported older formats."""
+    """Validate a retained ASCII-integer marker, allowing repair of supported older formats."""
     try:
         text = fd_tree.read_at(folder_fd, format_marker.MARKER)
     except (OSError, UnicodeError) as exc:
         msg = "the switched source's format marker is unreadable: nothing was changed"
         raise StoreError(msg) from exc
     value = text.strip() if text is not None else ""
-    if text is None or not value.isdigit():
+    if text is None or not (value.isascii() and value.isdigit()):
         msg = "the switched source has no readable format marker: nothing was changed"
         raise StoreError(msg)
-    found = int(value)
+    try:
+        found = int(value)
+    except ValueError as exc:
+        msg = "the switched source's format marker is not a readable integer: nothing was changed"
+        raise StoreError(msg) from exc
     if found == int(project_move.FENCE) or 1 <= found <= STORE_FORMAT:
         return text
     if found > STORE_FORMAT:
