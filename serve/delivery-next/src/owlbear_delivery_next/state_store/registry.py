@@ -26,7 +26,7 @@ from owlbear_delivery_next.state_store import project_home, project_move, switch
 from owlbear_delivery_next.state_store.database import STORE_FORMAT, StoreError
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Callable, Iterator
 
 MACHINE, LOCK = project_home.MACHINE, "machine.lock"
 MACHINE_FORMAT = 8  # 2: the machine's own settings (TD-243, TD-288, TD-300); 3: its sessions (TD-336); 4: `active`;
@@ -151,11 +151,11 @@ def load() -> Machine:
     return machine
 
 
-def save(machine: Machine) -> None:
-    """Write the registry atomically in this format, readable only by the owner; call it under ``locked()``."""
+def save(machine: Machine, *, before_replace: Callable[[], None] | None = None) -> None:
+    """Write under ``locked()``, owner-readable, optionally rechecking authority after the temporary is synced."""
     path = _home() / MACHINE
     machine.format = MACHINE_FORMAT
-    atomic_write(path, machine.model_dump_json(indent=2) + "\n")
+    atomic_write(path, machine.model_dump_json(indent=2) + "\n", before_replace=before_replace)
     path.chmod(0o600)
 
 
@@ -273,6 +273,18 @@ def _ensure_id(work: Path, store: Path, expected: str | None) -> str:
     return pid
 
 
+def _revalidate(work: Path, store: Path, pid: str) -> None:
+    """Fence registry publication with the same canonical paths and id admitted before the write."""
+    try:
+        same = _canonical(work) == (work, store, pid)
+    except RegistryError as exc:
+        msg = f"{work}'s clone is no longer admissible: nothing was registered; check the clone and retry: {exc}"
+        raise RegistryError(msg) from exc
+    if not same:
+        msg = f"{work}'s clone changed before publication: nothing was registered; check the clone and retry"
+        raise RegistryError(msg)
+
+
 def register(path: Path) -> Project:
     """Add the clone at *path*; refused when it is registered already, under its id or its path."""
     work, store, admitted = _canonical(path)
@@ -287,7 +299,7 @@ def register(path: Path) -> Project:
             raise RegistryError(msg)
         project = Project(id=pid, path=str(work), added_at=datetime.now(UTC))
         machine.projects.append(project)
-        save(machine)
+        save(machine, before_replace=lambda: _revalidate(work, store, pid))
     return project
 
 
@@ -319,7 +331,7 @@ def adopt(pid: str) -> Project:
             msg = f"this clone is registered already as project {new.id}"
             raise RegistryError(msg)
         machine.projects = [new if p.id == pid else p for p in machine.projects]
-        save(machine)
+        save(machine, before_replace=lambda: _revalidate(work, store, new.id))
     return new
 
 

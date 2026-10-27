@@ -1,13 +1,15 @@
+import json
 import os
 import subprocess
 from pathlib import Path
 
 import pytest
 
+from owlbear_delivery_next.commands import cli
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.machine_host import environment
-from owlbear_delivery_next.state_store import registry
-from owlbear_delivery_next.state_store.database import STORE_FORMAT
+from owlbear_delivery_next.state_store import offline_protocol, project_home, registry
+from owlbear_delivery_next.state_store.database import MARKER, STORE_FORMAT
 from owlbear_delivery_next.state_store.registry import RegistryError
 
 
@@ -143,3 +145,98 @@ def test_paths_outside_owlbear_name_the_runtime_alias_so_a_later_version_serves_
     assert local_home.stable(version / "python") == alias / "python"
     assert local_home.stable(alias / "owlbear") == alias / "owlbear"
     assert local_home.stable(elsewhere) == elsewhere  # a developer checkout keeps its own path
+
+
+def _change_registration_owner(store, damage):
+    if damage == "work-path":
+        work = store.parent.parent
+        moved = work.with_name("owner-work")
+        work.rename(moved)
+        work.mkdir()
+        (work / "owner").write_text("owner's replacement folder\n")
+        return work, moved
+    if damage == "git-common-dir":
+        work = store.parent.parent
+        other = clone(work.with_name("owner-other"))
+        other_store = project_home.clone_dir(other)
+        other_store.mkdir()
+        (other_store / "clone-id").write_text("owned\n")
+        store.parent.rename(work / "owner-git")
+        (work / ".git").write_text(f"gitdir: {other / '.git'}\n")
+        return work, other
+    if damage == "missing-id":
+        (store / "clone-id").unlink()
+    elif damage == "future-format":
+        (store / MARKER).write_text("1000\n")
+    else:
+        (store / "clone-id").write_text("foreign-owner\n")
+        if damage == "clone-id-and-deleted-config":
+            (store / "config.json").unlink()
+    return (store,)
+
+
+def _owner_files(folders):
+    return {p: p.read_bytes() for folder in folders for p in folder.rglob("*") if p.is_file()}
+
+
+@pytest.mark.usefixtures("current_binding")
+@pytest.mark.parametrize("switched", [False, True], ids=["ordinary", "real-prepare-finish"])
+@pytest.mark.parametrize("action", ["register", "adopt"])
+@pytest.mark.parametrize(
+    "damage", ["clone-id", "missing-id", "future-format", "clone-id-and-deleted-config", "work-path", "git-common-dir"]
+)
+def test_registration_rechecks_the_admitted_clone_after_the_registry_temporary_is_synced(
+    tmp_path, monkeypatch, switched, action, damage
+):
+    home = local_home.root()
+    work = clone(tmp_path / "work")
+    store = project_home.clone_dir(work)
+    store.mkdir()
+    (store / "clone-id").write_text("owned\n")
+    (store / MARKER).write_text("7\n")
+    (store / "config.json").write_text(json.dumps({"format": 1, "widths": [1600]}))
+    if action == "adopt":
+        (store / "clone-id").write_text("old\n")
+        old = registry.register(work)
+        (store / "clone-id").write_text("owned\n")
+    if switched:
+        monkeypatch.setattr(offline_protocol, "boot_session", lambda: "AAAAAAAA-0000-4000-8000-000000000001")
+        assert cli.main(["--repo", str(work), "prepare"]) == 0
+        monkeypatch.setattr(offline_protocol, "boot_session", lambda: "BBBBBBBB-0000-4000-8000-000000000002")
+        assert cli.main(["--repo", str(work), "finish"]) == 0
+    assert registry.canonical(work) == (work, store)
+    machine = home / registry.MACHINE
+    before = machine.read_bytes() if machine.exists() else None
+    real_fsync, fired = os.fsync, []
+    owner_before = {}
+    owner_folders = []
+
+    def owner_changes_id(fd):
+        real_fsync(fd)
+        if fired:
+            return
+        for temporary in home.glob(".tmp-*.tmp"):
+            if os.path.samestat(temporary.stat(), os.fstat(fd)):
+                pending = json.loads(temporary.read_text())
+                assert pending["projects"][-1]["id"] == "owned"
+                fired.append(True)
+                owner_folders.extend(_change_registration_owner(store, damage))
+                owner_before.update(_owner_files(owner_folders))
+
+    monkeypatch.setattr(os, "fsync", owner_changes_id)
+    error, returned = None, None
+    try:
+        returned = registry.register(work) if action == "register" else registry.adopt(old.id)
+    except RegistryError as exc:
+        error = exc
+
+    assert fired == [True], "the real machine.json temporary fsync was not reached"
+    assert _owner_files(owner_folders) == owner_before
+    assert (machine.read_bytes() if machine.exists() else None) == before, (
+        f"{action} published a stale registration: returned {returned!r}, error {error!r}"
+    )
+    assert isinstance(error, RegistryError), f"{action} returned {returned!r} instead of refusing"
+    assert "nothing was registered" in str(error)
+    assert not list(home.glob(".tmp-*.tmp"))
+    if action == "adopt":
+        assert registry.load().projects == [old]
