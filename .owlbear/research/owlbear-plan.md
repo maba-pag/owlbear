@@ -483,6 +483,9 @@ run's generation before copying; the Job's `pack_state` delegates record evidenc
 termination retains maintenance slots, locks and the original workspace across restarts; receipts deduplicate the
 same generation without suppressing a later run.
 Prepare retains its exact marker/preparation observations through id synchronization and both publication fences.
+Finish carries its original offline proof through copying and retries. After syncing the SWITCHED record's actual
+temporary file, its guarded rename rechecks the source identity, exact preparation, fence, clone-id target binding
+and payload manifest, plus the held/named target's identity, proof, contents and marker; a refusal keeps both stores.
 Read-only switched-target lookup validates held identity, proof, quarantine and marker; unreadable UTF-8 produces
 normal refusal diagnostics. A failed load reserves uncertain ownership even when the unproven target has no run record.
 The common target validator rechecks its named directory after the proof and marker reads; current lookup and

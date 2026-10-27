@@ -53,8 +53,8 @@ def move(repo, monkeypatch):
 def crash_after_switch(monkeypatch):
     """Let the switch be recorded, then crash before anything else runs."""
 
-    def save(folder, folder_fd, rec):
-        REAL_SAVE(folder, folder_fd, rec)
+    def save(folder, folder_fd, rec, **kwargs):
+        REAL_SAVE(folder, folder_fd, rec, **kwargs)
         if rec["phase"] == project_move.SWITCHED:
             msg = "simulated crash"
             raise CrashError(msg)
@@ -62,26 +62,27 @@ def crash_after_switch(monkeypatch):
     monkeypatch.setattr(project_move, "_save", save)
 
 
-def test_a_write_through_a_descriptor_after_the_digest_and_before_the_switch_stays_in_the_source(clone, monkeypatch):
-    """The residual window: the switch is recorded after the last check, so the late bytes stay in the source only."""
+def test_a_write_through_a_descriptor_before_the_switch_refuses_and_stays_in_the_source(clone, monkeypatch):
+    """The final publication guard refuses a source edited before the SWITCHED record's durable write."""
     repo, folder = clone
     target = project_home.home(SOURCE_ID)
     runner = folder / "changes" / "c1" / "runner.log"
     writer = os.open(runner, os.O_WRONLY | os.O_APPEND | os.O_NOFOLLOW)
 
-    def save(clone_folder, folder_fd, rec):
+    def save(clone_folder, folder_fd, rec, **kwargs):
         if rec["phase"] == project_move.SWITCHED:  # after the digest check, before the switch is recorded
             os.write(writer, b"late owner bytes\n")
-        REAL_SAVE(clone_folder, folder_fd, rec)
+        REAL_SAVE(clone_folder, folder_fd, rec, **kwargs)
 
     monkeypatch.setattr(project_move, "_save", save)
     try:
-        assert move(repo, monkeypatch) == target
+        with pytest.raises(StoreError, match="changed after it was copied"):
+            move(repo, monkeypatch)
     finally:
         os.close(writer)
     assert runner.read_text() == "ran\nlate owner bytes\n"
     assert (target / "changes" / "c1" / "runner.log").read_text() == "ran\n"
-    assert project_home.current(repo) == target
+    assert project_move.record(folder)["phase"] == project_move.COPYING
 
 
 def test_a_write_through_a_descriptor_after_the_switch_stays_in_the_source_at_its_path(clone, monkeypatch):

@@ -44,8 +44,8 @@ def test_a_late_foreign_file_after_the_switch_stays_in_the_retained_source_and_n
     target = project_home.home(SOURCE_ID)
     real_save = project_move._save  # noqa: SLF001
 
-    def save(clone_folder, folder_fd, rec):
-        real_save(clone_folder, folder_fd, rec)
+    def save(clone_folder, folder_fd, rec, **kwargs):
+        real_save(clone_folder, folder_fd, rec, **kwargs)
         if rec["phase"] == project_move.SWITCHED:  # a writer that missed the fence adds a file after the switch
             (folder / "late.txt").write_text("late\n")
 
@@ -116,8 +116,8 @@ def test_a_destination_swapped_for_a_link_after_the_switch_is_refused_and_the_so
     (foreign / "keep.txt").write_text("foreign\n")
     real_save = project_move._save  # noqa: SLF001
 
-    def save(clone_folder, folder_fd, rec):
-        real_save(clone_folder, folder_fd, rec)
+    def save(clone_folder, folder_fd, rec, **kwargs):
+        real_save(clone_folder, folder_fd, rec, **kwargs)
         if rec["phase"] == project_move.SWITCHED:  # the published copy is renamed aside and a link takes its path
             target.rename(target.parent / "aside")
             target.symlink_to(foreign, target_is_directory=True)
