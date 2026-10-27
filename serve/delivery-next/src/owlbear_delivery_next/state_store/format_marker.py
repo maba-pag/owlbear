@@ -20,7 +20,11 @@ def supported_format(text: object) -> int:
     if not (digits.isascii() and digits.isdigit()):
         msg = f"format marker {text!r} is not a supported store format: refusing it; nothing was changed"
         raise StoreError(msg)
-    value = int(digits)
+    try:
+        value = int(digits)
+    except ValueError as exc:
+        msg = "format marker is not a readable integer: refusing it; nothing was changed"
+        raise StoreError(msg) from exc
     if value > STORE_FORMAT:
         msg = f"store format {value} is newer than {STORE_FORMAT}"
         raise FormatTooNewError(msg)

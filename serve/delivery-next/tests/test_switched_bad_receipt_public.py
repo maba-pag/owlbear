@@ -198,6 +198,7 @@ TARGET_DAMAGE = [
     pytest.param("utf8-proof", id="utf8-proof"),
     pytest.param("utf8-format", id="utf8-format"),
     pytest.param("future-format", id="future-format"),
+    pytest.param("oversized-format", id="oversized-format"),
     pytest.param("quarantined", id="quarantined"),
 ]
 
@@ -217,6 +218,8 @@ def _damage(target: Path, damage: str, monkeypatch) -> type[StoreError]:
         (target / MARKER).write_text("7\n")
     elif damage == "quarantined":
         (target / f"{fd_tree.QUARANTINE}foreign").write_bytes(b"keep me")
+    elif damage == "oversized-format":
+        (target / MARKER).write_bytes(b"9" * 5000)
     else:
         name = MARKER if damage in {"utf8-format", "future-format"} else project_move.MOVE_PROOF
         content = b"99\n" if damage == "future-format" else b"\xff" if "utf8" in damage else b"wrong\n"
