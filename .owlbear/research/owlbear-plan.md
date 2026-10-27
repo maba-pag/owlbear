@@ -2,7 +2,7 @@
 
 > **Owning task:** owner request 2026-10-19: one document that grounds any session in what is built, what comes
 > next and where the code differs from the decisions
-> **Date:** 2026-10-27, status at `main` `d8001d2a` after #711 with the post-#661 authority repairs, decisions to TD-469, item 5's
+> **Date:** 2026-10-27, status at `main` `ea31ddd6` after #712 with the post-#661 authority repairs, decisions to TD-469, item 5's
 > decisions of 2026-10-22 and the owner's of 2026-10-23 to 2026-10-26
 > **Question:** Where does OwlBear stand, in what order does the remaining work come, and where does the code
 > differ from the decisions in force?
@@ -513,7 +513,7 @@ Ordinary and read-only admission retain the corresponding SWITCHED receipt throu
 adoption repeat their admitted path/id authority check after the registry temporary file is synced, before its
 actual replacement; a refusal leaves the previous registry unchanged.
 
-The composition integrates `main` `d8001d2a`, including R06/R15 from #656 and #704's per-look/per-run credit
+The composition integrates `main` `ea31ddd6`, including R06/R15 from #656 and #704's per-look/per-run credit
 limits, #708's user-configuration switches, CONFIG 17, MACHINE 8, PROFILE 5 and the window-step runtime's removal. Only CURRENT literal bindings
 were refreshed: 37 functions,
 17 import sets, 7 constants and 32 whole-module digests. The retired `commands/step_mcp.py` is absent only from
