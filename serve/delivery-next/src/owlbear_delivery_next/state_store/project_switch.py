@@ -57,16 +57,23 @@ def _refuse_unless_held(target: Path, tfd: int, rec: dict) -> None:
 
 
 def check_switched(target: Path, pfd: int, rec: dict) -> int:
-    """Refuse unless *target* is still the copy the switch recorded, by identity; return its validated descriptor.
+    """Refuse unless *target* is still the copy the switch recorded, by identity and proof; return its descriptor.
 
     Raises:
-        StoreError: The target is missing or is another folder, or it holds a quarantined entry.
+        StoreError: The target is missing, replaced, quarantined, unproven, or holds an unsupported format marker.
     """
     named_switched(target, rec)
     tfd = fd_tree.open_dir(pfd, target.name)
     try:
         _refuse_unless_held(target, tfd, rec)
         fd_tree.refuse_quarantined(tfd, target)
+        try:
+            text = fd_tree.read_at(tfd, format_marker.MARKER)
+        except (OSError, UnicodeError) as exc:
+            msg = f"{target} holds a format marker OwlBear cannot read: nothing was changed"
+            raise StoreError(msg) from exc
+        if text is not None:
+            format_marker.supported_format(text)
     except BaseException:
         os.close(tfd)
         raise
