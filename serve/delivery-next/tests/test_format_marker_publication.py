@@ -138,28 +138,102 @@ def test_an_invalid_regular_collision_is_not_absence_and_is_kept(tmp_path, monke
     assert fd_tree.ident((tmp_path / MARKER).stat()) == owner
 
 
+class _MarkerIO:
+    def __init__(self, open_file):
+        self.open_file = open_file
+        self.fd = None
+        self.stream = None
+        self.transferred = False
+        self.released = False
+        self.failure = None
+
+    def __getattr__(self, name):
+        return getattr(os, name)
+
+    def acquire(self, dfd, name):
+        assert self.fd is None
+        self.fd = self.open_file(dfd, name)
+        return self.fd
+
+    def fdopen(self, fd, *args, **kwargs):
+        assert fd == self.fd
+        if self.failure is not None:
+            raise self.failure
+        self.stream = os.fdopen(fd, *args, **kwargs)
+        self.transferred = kwargs.get("closefd", True)
+        return self.stream
+
+    def close(self, fd):
+        assert fd == self.fd
+        assert not self.released
+        assert not self.transferred
+        os.close(fd)
+        self.released = True
+
+    @property
+    def closed(self):
+        return self.released or (self.transferred and self.stream.closed)
+
+    def cleanup(self):
+        if self.stream is not None:
+            self.stream.close()
+        if self.fd is not None and not self.released and not self.transferred:
+            self.close(self.fd)
+
+
+@pytest.fixture
+def marker_io(monkeypatch):
+    probe = _MarkerIO(fd_tree.open_file)
+    monkeypatch.setattr(fd_tree, "open_file", probe.acquire)
+    monkeypatch.setattr(format_marker, "os", probe)
+    try:
+        yield probe
+    finally:
+        probe.cleanup()
+
+
 @pytest.mark.parametrize("text", [b"8\n", b"\xff\n"])
-def test_a_refused_collision_closes_the_descriptor_it_opened(tmp_path, monkeypatch, text):
-    _owner_after_absence(monkeypatch, tmp_path, text)
-    real_open = fd_tree.open_file
-    opened = []
-
-    def open_file(dfd, name):
-        fd = real_open(dfd, name)
-        opened.append(fd)
-        return fd
-
-    monkeypatch.setattr(fd_tree, "open_file", open_file)
+def test_a_refused_collision_closes_the_descriptor_it_opened(tmp_path, monkeypatch, marker_io, text):
+    owner = _owner_after_absence(monkeypatch, tmp_path, text)
     tfd = os.open(tmp_path, fd_tree.DIR_FLAGS)
     try:
         with pytest.raises(StoreError):
             format_marker.ensure_target(tfd, 7)
-        assert len(opened) == 1
-        with pytest.raises(OSError) as caught:  # noqa: PT011 - only the owned descriptor's EBADF is accepted
-            os.fstat(opened[0])
-        assert caught.value.errno == errno.EBADF
+        assert marker_io.fd is not None
+        assert marker_io.stream.closed
+        assert marker_io.closed
     finally:
         os.close(tfd)
+
+    assert (tmp_path / MARKER).read_bytes() == text
+    assert fd_tree.ident((tmp_path / MARKER).stat()) == owner
+
+
+class _HandoverError(BaseException):
+    pass
+
+
+@pytest.mark.parametrize("failure", ["oserror", "baseexception"])
+def test_a_failed_marker_fdopen_handover_closes_its_owned_descriptor(tmp_path, marker_io, failure):
+    marker = tmp_path / MARKER
+    marker.write_bytes(b"7\n")
+    owner = fd_tree.ident(marker.stat())
+    error = OSError(errno.ENOMEM, "injected fdopen failure") if failure == "oserror" else _HandoverError("interrupted")
+    marker_io.failure = error
+    expected = StoreError if failure == "oserror" else _HandoverError
+    tfd = os.open(tmp_path, fd_tree.DIR_FLAGS)
+    try:
+        with pytest.raises(expected) as caught:
+            format_marker.ensure_target(tfd, 7)
+        assert caught.value.__cause__ is error if failure == "oserror" else caught.value is error
+        assert marker_io.fd is not None
+        assert marker_io.stream is None
+        assert marker_io.closed, "the failed handover left the caller-owned marker descriptor live"
+    finally:
+        os.close(tfd)
+
+    assert marker.read_bytes() == b"7\n"
+    assert fd_tree.ident(marker.stat()) == owner
 
 
 SPECIAL_ENTRY_PROBE = """

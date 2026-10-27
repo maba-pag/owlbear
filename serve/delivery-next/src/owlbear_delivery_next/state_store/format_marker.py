@@ -62,22 +62,31 @@ def ensure_target(tfd: int, previous: int) -> None:
 
 
 def _durable_target(tfd: int) -> None:
-    """Sync the supported regular marker actually read, then refuse if its name or bytes changed during the sync."""
+    """Sync the supported regular marker actually read, then refuse if its name or bytes changed during the sync.
+
+    The raw descriptor stays owned until finally, including when its file-object handover fails.
+    """
     try:
         fd = fd_tree.open_file(tfd, MARKER)
-        with os.fdopen(fd, "rb") as marker:
-            held = fd_tree.ident(os.fstat(marker.fileno()))
-            text = marker.read().decode()
-            supported_format(text)
-            os.fsync(marker.fileno())
-            os.fsync(tfd)
-            current = fd_tree.read_at(tfd, MARKER)
-            if current is not None:
-                supported_format(current)
-            now = fd_tree.stat_at(tfd, MARKER)
-            if current != text or now is None or fd_tree.ident(now) != held:
-                msg = "the target's format marker changed while it was made durable: nothing was switched; start again"
-                raise StoreError(msg)
+        try:
+            with os.fdopen(fd, "rb", closefd=False) as marker:
+                held = fd_tree.ident(os.fstat(marker.fileno()))
+                text = marker.read().decode()
+                supported_format(text)
+                os.fsync(marker.fileno())
+                os.fsync(tfd)
+                current = fd_tree.read_at(tfd, MARKER)
+                if current is not None:
+                    supported_format(current)
+                now = fd_tree.stat_at(tfd, MARKER)
+                if current != text or now is None or fd_tree.ident(now) != held:
+                    msg = (
+                        "the target's format marker changed while it was made durable: "
+                        "nothing was switched; start again"
+                    )
+                    raise StoreError(msg)
+        finally:
+            os.close(fd)
     except (OSError, UnicodeError) as exc:
         msg = f"the target's format marker could not be made durable ({exc}): nothing was switched; it is kept"
         raise StoreError(msg) from exc
