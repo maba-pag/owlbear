@@ -6,6 +6,7 @@ hold credentials, tokens, keys, passwords, personal names, email addresses, home
 repository or customer names, and long logs.
 
 Write the case so that it teaches the same call with the least information:
+
 - `situation`: at most 900 characters: what the agent was asked, what it did, and the moment, with only the facts the
   call depends on. Generic wording: "a repository", "the owner", "a token"; never a credential, a personal name, an
   email address, a home path, a hostname, an internal URL, a session id or a private project's name.
