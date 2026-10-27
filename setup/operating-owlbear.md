@@ -87,6 +87,9 @@ source changes, and record why. A function digest excludes its leading docstring
 the entire syntax tree, including docstrings. The CURRENT file set remains the union of its literal tables, not
 an arbitrary import closure. There is no switch that skips these checks.
 
+Format markers must be regular files. Registration, store reads and selfcheck report unreadable or nonregular
+markers without following a marker link or waiting on a pipe; only a genuinely missing entry counts as absent.
+
 **Pause Delivery** in the bar stops new automatic agent steps on every project until you press
 **Resume**; your own actions, such as settings, memory and **New Change**, still run. While paused,
 **Pause and stop when idle** stops OwlBear once the running steps end. Automatic memory curation

@@ -24,7 +24,7 @@ import time
 from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.change_contracts.models import ErrorKind, Stop
-from owlbear_delivery_next.local_system.storage_io import atomic_write, open_lock
+from owlbear_delivery_next.local_system.storage_io import atomic_write, open_lock, read_regular
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
@@ -123,10 +123,10 @@ class Database:
         self._ready = False
 
     def marker(self) -> int:
-        """The store's format marker; 0 when there is none."""
+        """The regular marker's format; 0 only when its entry is absent."""
         try:
-            path = self.root / MARKER
-            return int(path.read_text()) if path.exists() else 0
+            raw = read_regular(self.root / MARKER)
+            return int(raw.decode("utf-8")) if raw is not None else 0
         except (OSError, ValueError) as exc:
             msg = "store format marker is unreadable"
             raise StoreError(msg) from exc

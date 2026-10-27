@@ -20,7 +20,7 @@ from pydantic import ConfigDict, Field, TypeAdapter, ValidationError, model_vali
 
 from owlbear_delivery_next.change_contracts.models import Record
 from owlbear_delivery_next.local_system import local_home
-from owlbear_delivery_next.local_system.storage_io import atomic_write, open_lock
+from owlbear_delivery_next.local_system.storage_io import atomic_write, open_lock, read_regular
 from owlbear_delivery_next.settings.config import MachineValues
 from owlbear_delivery_next.state_store import project_home, project_move, switched_authority
 from owlbear_delivery_next.state_store.database import STORE_FORMAT, StoreError
@@ -179,7 +179,8 @@ def canonical(path: Path) -> tuple[Path, Path]:
         _owned(owned)
     marker = store / "format"
     try:
-        found = int(marker.read_text()) if marker.exists() else 0
+        raw = read_regular(marker)
+        found = int(raw.decode("utf-8")) if raw is not None else 0
     except (OSError, ValueError) as exc:
         msg = f"{marker} is unreadable"
         raise RegistryError(msg) from exc

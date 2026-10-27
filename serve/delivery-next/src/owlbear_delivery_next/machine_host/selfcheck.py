@@ -15,6 +15,8 @@ from importlib import import_module
 from importlib.resources import files
 from pathlib import Path
 
+from owlbear_delivery_next.local_system.storage_io import read_regular
+
 IMPORT = r"""(?:\bfrom|\bimport)\s*\(?\s*["']\./([^"'/]+)["']"""  # a page module's import of a sibling module
 MODULES = (
     "machine_host.serve", "machine_host.app", "commands.runner", "commands.mcp_server", "project_host.api",
@@ -109,7 +111,8 @@ def _project(pid: str, path: Path) -> list[str]:
         found.append(problem)
     for marker in markers:
         try:
-            value = int(marker.read_text()) if marker.is_file() else 0
+            raw = read_regular(marker)
+            value = int(raw.decode("utf-8")) if raw is not None else 0
         except OSError, ValueError:
             found.append(f"{marker} is unreadable")
             continue

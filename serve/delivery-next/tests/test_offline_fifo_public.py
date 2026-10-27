@@ -11,6 +11,7 @@ import json
 import os
 import stat
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -242,3 +243,69 @@ def test_the_active_store_startup_does_not_read_the_machine_host_lock(repo, boot
     assert blocking_opens == []
     assert _snapshot(target) == before
     assert _is_fifo(target / "host.lock")
+
+
+MARKER_CHILD = r"""
+import json, os, sys
+from pathlib import Path
+from owlbear_delivery_next.machine_host import selfcheck
+from owlbear_delivery_next.state_store import project_home, registry
+from owlbear_delivery_next.state_store.database import Database, MARKER, STORE_FORMAT, StoreError
+repo, target, action = Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3]
+_, source = registry.canonical(repo)
+pid = project_home.clone_id(source)
+assert pid is not None
+assert Database(target).marker() == STORE_FORMAT
+assert selfcheck._project(pid, repo) == []
+marker = (source if action == "registry" else target) / MARKER
+fired = []
+def plant():
+    marker.unlink()
+    os.mkfifo(marker)
+    fired.append(True)
+if action == "selfcheck":
+    real = selfcheck._receipt
+    def receipt(*args):
+        answer = real(*args)
+        assert answer == (target, None)
+        plant()
+        return answer
+    selfcheck._receipt = receipt
+    problems = selfcheck._project(pid, repo)
+    outcome, said = ("refused" if problems else "accepted"), "; ".join(problems)
+else:
+    plant()
+    try:
+        registry.canonical(repo) if action == "registry" else Database(target).marker()
+    except (registry.RegistryError, StoreError) as error:
+        outcome, said = "refused", str(error)
+    else:
+        outcome, said = "accepted", ""
+print(json.dumps({"fired": fired, "outcome": outcome, "said": said}))
+"""
+
+
+@pytest.mark.usefixtures("current_binding")
+@pytest.mark.parametrize("action", ["registry", "selfcheck", "database"])
+def test_marker_readers_refuse_a_fifo_without_waiting_or_treating_it_as_absent(repo, boot, action):
+    target = _move_to_next_boot(repo, boot)
+    source = _source(repo)
+    source_before, target_before = _snapshot(source), _snapshot(target)
+    env = {**os.environ, "PYTHONPATH": os.pathsep.join(p for p in sys.path if p)}
+    done = subprocess.run(  # noqa: S603 - fixed diagnostic, this interpreter and disposable stores only
+        [sys.executable, "-c", MARKER_CHILD, str(repo), str(target), action],
+        capture_output=True,
+        text=True,
+        timeout=5,
+        env=env,
+        check=False,
+    )
+    assert done.returncode == 0, done.stderr
+    said = json.loads(done.stdout.strip().splitlines()[-1])
+    assert said["fired"] == [True]
+    assert said["outcome"] == "refused", said
+    assert "unreadable" in said["said"], said
+    expected_source = source_before | ({MARKER: "fifo"} if action == "registry" else {})
+    expected_target = target_before | ({MARKER: "fifo"} if action != "registry" else {})
+    assert _snapshot(source) == expected_source
+    assert _snapshot(target) == expected_target

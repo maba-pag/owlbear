@@ -77,7 +77,12 @@ def test_prepare_refuses_an_unsupported_prior_format_before_any_write(repo, mark
 
     assert cli.main(["--repo", str(repo), "prepare"]) == 1
 
-    assert "not a supported store format" in capsys.readouterr().err
+    expected = (
+        f"store format {marker} is newer than {STORE_FORMAT}"
+        if marker in {"8", "998", "1000"}
+        else "not a supported store format"
+    )
+    assert expected in capsys.readouterr().err
     assert _snapshot(_source(repo)) == before, "a refused prepare wrote to the source"
 
 
@@ -122,7 +127,7 @@ def test_finish_refuses_a_tampered_prior_format_and_writes_nothing(repo, boot, s
 
     assert cli.main(["--repo", str(repo), "finish"]) == 1
 
-    assert "not a supported store format" in capsys.readouterr().err
+    assert f"store format {stored} is newer than {STORE_FORMAT}" in capsys.readouterr().err
     assert _snapshot(_source(repo)) == before, "a refused finish changed the source or its preparation"
 
 
