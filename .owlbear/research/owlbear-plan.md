@@ -499,6 +499,11 @@ fence replacement uses the same post-temporary-sync guard. They do not compare t
 active store. Read-only lookup refuses an invalid source fence, so failed-load recovery keeps an unlocated reservation.
 Retained authority checks its supplied id against the held source before and after target validation; registration
 and adoption preserve the admitted id through durability and revalidate authority before saving the registry.
+The shipment challenge also made the receipt itself part of that observation: Finish retains its admitted
+COPYING receipt before target synchronization and compares its exact image before SWITCHED replacement.
+Ordinary and read-only admission retain the corresponding SWITCHED receipt through validation. Registration and
+adoption repeat their admitted path/id authority check after the registry temporary file is synced, before its
+actual replacement; a refusal leaves the previous registry unchanged.
 
 The composition integrates `main` `499ff3cc`, including R06/R15 from #656 and #704's per-look/per-run credit
 limits, CONFIG 16, MACHINE 8, PROFILE 5 and the window-step runtime's removal. Only CURRENT literal bindings
