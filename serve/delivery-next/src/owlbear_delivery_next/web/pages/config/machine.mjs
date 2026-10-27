@@ -71,15 +71,18 @@ function ownControl(key) {
   let control;
   if (TYPED.includes(key)) {
     const list = key === "enrolled_chats";
-    const count = (e) => {  // a list keeps the text as typed until saved, so a comma or a space is never lost
+    // The text stays as typed until saved, whether or not it changes the value: a comma or a space in a list, and
+    // "20.0" on the way to "20.05" where 20 is saved, are never lost.
+    const count = (e) => {
       const raw = e.target.value ?? "", v = raw.trim();
-      if (list) state.machineText = { ...(state.machineText ?? {}), [key]: raw };
+      state.machineText = { ...(state.machineText ?? {}), [key]: raw };
       machineEdit(key, v === "" ? null : list ? (v === "none" ? [] : v.split(",").map((f) => f.trim()).filter(Boolean))
         : v);
     };
-    const typedText = state.machineText?.[key];  // as typed, shown only while its items are the field's own now
+    const typedText = state.machineText?.[key];  // as typed, shown only while it still means the field's value now
     const items = (t) => JSON.stringify(t.split(",").map((f) => f.trim()).filter(Boolean));
-    const same = (t) => items(t) === JSON.stringify(value ?? []);
+    const same = (t) => (list ? items(t) === JSON.stringify(value ?? [])
+      : JSON.stringify(sent(key, t.trim())) === JSON.stringify(sent(key, value)));
     const fresh = value === null || value === undefined ? "" : list ? said(key, value) : String(value);
     const shown = typedText !== undefined && (typedText.trim() === "none" ? Array.isArray(value) && !value.length
       : typedText.trim() === "" ? value === null : same(typedText)) ? typedText : fresh;
