@@ -13,9 +13,9 @@ frontend design handbook.
 
 - Establish from the repository: product and audience, the visitor's job on this surface, the established
   design system, component library, tokens and supported widths. Never infer a stack or brand without evidence.
-- An established design system and the project's conventions outrank everything below.
-- **The brief wins.** Honour the aesthetics, fonts, palettes and states it names, even against a rule here.
-  Steering a clear brief towards your own taste is a failure.
+- An established design system and the project's conventions outrank everything below except a ban.
+- **The brief wins.** Honour the aesthetics, fonts, palettes and states it names, even against a rule here,
+  except a ban. Steering a clear brief towards your own taste is a failure.
 - **Refinement preserves; redesign replaces.** A refinement keeps the identity, behaviour, copy and everything
   outside its scope. A redesign keeps product truth, content and function and replaces the look. Never split
   the difference into polish on a look the brief discards.
@@ -60,8 +60,8 @@ Use the project's accessibility target; without one, WCAG 2.2 AA.
 - Every control has an accessible name; labels, instructions and errors are tied to their fields.
 - Non-text content has a text alternative; a decorative image has empty alt text.
 - Headings follow a logical order, and the page has landmarks (header, navigation, main, footer).
-- Pointer targets are at least 24 by 24 CSS pixels, or spaced so that a 24px circle centred on each overlaps no
-  other target (WCAG 2.5.8). Exceptions: an equivalent control of that size on the same page, a target inline in
+- Pointer targets are at least 24 by 24 CSS pixels, or spaced so that a 24px circle centred on each undersized
+  target's bounding box overlaps no other target and no other undersized target's circle (WCAG 2.5.8). Exceptions: an equivalent control of that size on the same page, a target inline in
   text, a size the browser sets, or a size that is essential or legally required.
 - A modal keeps focus inside while it is open and returns it to the control that opened it when it closes.
   Prove both with the keyboard in a real browser; a screenshot cannot show either.
@@ -70,7 +70,7 @@ Use the project's accessibility target; without one, WCAG 2.2 AA.
 
 - Same-size cards of icon, heading and text as the page structure; nested cards are always wrong.
 - The hero-metric template (big number, small label, supporting stats).
-- An eyebrow or kicker label above a heading; tiny section numbers that carry no information.
+- Tiny section numbers that carry no information.
 - Gradient text; glass and blur as decoration; a coloured side stripe on cards or alerts; hard offset shadows.
 - Purple-to-blue or cyan-on-dark palettes by habit; glowing accents on dark mode.
 - Overused default faces (Inter, Roboto, Geist and the like) chosen by habit; a system display face as the voice
@@ -78,6 +78,9 @@ Use the project's accessibility target; without one, WCAG 2.2 AA.
 - Emoji or glyphs standing in for icons; icons are one library, one stroke, one weight.
 - A modal for a task that needs neither interruption nor protected focus.
 - Light or dark chosen by category rather than by where and how the product is used.
+
+A ban, which no brief, design system or visual world earns back: an eyebrow or kicker label above a heading. The
+heading carries its own weight.
 
 ## Typography
 
@@ -87,6 +90,12 @@ Use the project's accessibility target; without one, WCAG 2.2 AA.
   more line height, tracking and weight. Tracking never below -0.04em.
 - Load only used fonts and weights, with metric-compatible fallbacks; never invisible text while loading.
 - Preserve browser zoom and the user's text settings.
+- Set `text-wrap: balance` on headings and short centred blocks and `text-wrap: pretty` on body copy. In a column
+  too narrow for either to help, edit the copy or widen the column. Break a heading by hand only between phrases,
+  checked at every width it renders at.
+- An uneven break can carry meaning (a headline landing on one word for weight, a poster line, a pull quote): make
+  it deliberate with a hard break or a wrap set on that element, and keep it rare. The detector's `straggler` and
+  `unbalanced-heading` findings are advisory for this reason; say which breaks are intended.
 
 ## Colour
 
@@ -118,4 +127,4 @@ Use the project's accessibility target; without one, WCAG 2.2 AA.
 - Match each claim to its evidence: source shows tokens and declared states; rendered pages and screenshots
   show geometry, overlap, hierarchy and contrast. Say which you have.
 - The design detector's findings name a rule and a place. They are evidence, not proof: a clean scan is a
-  floor, and a finding can be a deliberate choice the brief names.
+  floor, and a finding can be a deliberate choice the brief names, unless it is a ban.
