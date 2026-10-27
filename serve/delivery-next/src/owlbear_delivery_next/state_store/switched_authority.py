@@ -32,17 +32,25 @@ def retained_target(folder: Path, pid: str) -> Path | None:
     try:
         rec = project_move.record_at(folder, fd)
         if rec is not None:
+            _require_id(folder, fd, pid)
             if rec["phase"] != project_move.SWITCHED or rec["target"] != str(target):
                 msg = f"{folder} was not switched to {target}: its receipt names another store; nothing was changed"
                 raise StoreError(msg)
             project_switch.prepared_prior(fd)
             _proven(target, rec)
+            _require_id(folder, fd, pid)
         if not same_folder(folder, fd):
             msg = f"{folder} no longer names the retained source that was checked: nothing was changed"
             raise StoreError(msg)
         return target if rec is not None else None
     finally:
         os.close(fd)
+
+
+def _require_id(folder: Path, folder_fd: int, pid: str) -> None:
+    if project_switch.clone_id_at(folder, folder_fd) != pid:
+        msg = f"{folder}'s clone id does not match project {pid}: nothing was changed"
+        raise StoreError(msg)
 
 
 def _proven(target: Path, rec: dict) -> None:

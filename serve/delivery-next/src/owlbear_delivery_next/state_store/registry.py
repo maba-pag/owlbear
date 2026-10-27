@@ -200,6 +200,12 @@ def store_of(work: Path) -> Path:
 
 def canonical(path: Path) -> tuple[Path, Path]:
     """The clone's work tree and store, as real paths; refused unless it is the owner's git work tree."""
+    work, store, _ = _canonical(path)
+    return work, store
+
+
+def _canonical(path: Path) -> tuple[Path, Path, str | None]:
+    """Canonical paths and the exact clone id their authority admitted, before any durability work."""
     try:
         work = _git(path.resolve(strict=True), "rev-parse", "--show-toplevel")
     except OSError as exc:
@@ -215,23 +221,23 @@ def canonical(path: Path) -> tuple[Path, Path]:
     except (OSError, ValueError) as exc:
         msg = f"{marker} is unreadable"
         raise RegistryError(msg) from exc
-    switched = _switched(store)  # any move receipt is validated, whatever the marker says
+    pid = clone_id(store)
+    switched = _switched(store, pid)  # any move receipt is validated, whatever the marker says
     if switched and found != int(project_move.FENCE):
         msg = f"{work}'s Delivery state has a SWITCHED receipt but format {found}, not {project_move.FENCE}: refusing"
         raise RegistryError(msg)
     if found > STORE_FORMAT and (found != int(project_move.FENCE) or not switched):
         msg = f"{work}'s Delivery state has format {found}, newer than {STORE_FORMAT}: this OwlBear is older"
         raise RegistryError(msg)
-    return work, store
+    return work, store, pid
 
 
-def _switched(store: Path) -> bool:
+def _switched(store: Path, pid: str | None) -> bool:
     """Whether the *store*'s move receipt is a valid SWITCHED one naming its project's store; False when there is none.
 
     Raises:
         RegistryError: A receipt exists but is bad, pending or names another store, or the clone has no id.
     """
-    pid = clone_id(store)
     if pid is None:
         if os.path.lexists(store / project_move.MOVE_RECORD):
             msg = f"{store} has a move receipt but no clone id: nothing was registered"
@@ -251,23 +257,31 @@ def clone_id(store: Path) -> str | None:
         raise RegistryError(str(exc)) from exc
 
 
-def _ensure_id(store: Path) -> str:
-    """The clone's id: reused when present, else created once; never rewritten."""
+def _ensure_id(work: Path, store: Path, expected: str | None) -> str:
+    """Make the admitted id durable, then revalidate authority without changing the id that was admitted."""
     try:
-        return project_home.ensure_id(store)
+        pid = project_home.ensure_id(store)
     except StoreError as exc:
         raise RegistryError(str(exc)) from exc
+    if (expected is not None and pid != expected) or clone_id(store) != pid:
+        msg = f"{store}'s clone id changed while it was made durable: nothing was registered"
+        raise RegistryError(msg)
+    _, checked, actual = _canonical(work)
+    if checked != store or actual != pid:
+        msg = f"{work}'s clone changed after its id was made durable: nothing was registered"
+        raise RegistryError(msg)
+    return pid
 
 
 def register(path: Path) -> Project:
     """Add the clone at *path*; refused when it is registered already, under its id or its path."""
-    work, store = canonical(path)
+    work, store, admitted = _canonical(path)
     with locked():
         machine = load()
         if found := next((p for p in machine.projects if p.path == str(work)), None):
             msg = f"{work} is registered already (project {found.id})"
             raise RegistryError(msg)
-        pid = _ensure_id(store)
+        pid = _ensure_id(work, store, admitted)
         if found := next((p for p in machine.projects if p.id == pid), None):
             msg = f"this clone is registered already at {found.path}; remove that project first"
             raise RegistryError(msg)
@@ -299,8 +313,8 @@ def adopt(pid: str) -> Project:
         if old is None:
             msg = f"no project {pid} is registered"
             raise RegistryError(msg)
-        work, store = canonical(Path(old.path))
-        new = Project(id=_ensure_id(store), path=str(work), added_at=datetime.now(UTC))
+        work, store, admitted = _canonical(Path(old.path))
+        new = Project(id=_ensure_id(work, store, admitted), path=str(work), added_at=datetime.now(UTC))
         if any(p.id == new.id and p.id != pid for p in machine.projects):
             msg = f"this clone is registered already as project {new.id}"
             raise RegistryError(msg)

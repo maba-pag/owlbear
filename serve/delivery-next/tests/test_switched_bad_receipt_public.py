@@ -582,6 +582,63 @@ def test_an_unproven_source_fence_keeps_one_unlocated_reservation(repo, boot, ma
 
 
 @pytest.mark.usefixtures("current_binding")
+@pytest.mark.parametrize("surface", ["register", "adopt"])
+@pytest.mark.parametrize("when", ["target-read", "id-file-sync", "id-directory-sync"])
+def test_registration_keeps_the_id_it_validated_through_its_durability_work(repo, boot, monkeypatch, surface, when):
+    target = _finished_move(repo, boot)
+    entry = registry.register(repo) if surface == "adopt" else None
+    source = _source(repo)
+    registry_path = local_home.root() / registry.MACHINE
+    saved = registry_path.read_bytes() if registry_path.exists() else None
+    real_read, real_sync = fd_tree.read_at, os.fsync
+    target_identity, source_identity = target.stat(), source.stat()
+    id_identity = (source / project_home.CLONE_ID).stat()
+    fired = []
+
+    def replace_id():
+        if not fired:
+            fired.append(True)
+            (source / project_home.CLONE_ID).write_text("foreign-owner\n")
+
+    def read(fd, name):
+        text = real_read(fd, name)
+        if when == "target-read" and name == MARKER and os.path.samestat(os.fstat(fd), target_identity):
+            replace_id()
+        return text
+
+    def sync(fd):
+        real_sync(fd)
+        wanted = id_identity if when == "id-file-sync" else source_identity
+        if when != "target-read" and os.path.samestat(os.fstat(fd), wanted):
+            replace_id()
+
+    monkeypatch.setattr(fd_tree, "read_at", read)
+    monkeypatch.setattr(os, "fsync", sync)
+    action = (lambda: registry.register(repo)) if entry is None else (lambda: registry.adopt(entry.id))
+    with pytest.raises(registry.RegistryError):
+        action()
+
+    assert fired == [True]
+    assert (source / project_home.CLONE_ID).read_text() == "foreign-owner\n"
+    assert (registry_path.read_bytes() if registry_path.exists() else None) == saved
+    assert not project_home.home("foreign-owner").exists()
+    assert json.loads((source / project_move.MOVE_RECORD).read_text())["target"] == str(target)
+
+
+@pytest.mark.usefixtures("current_binding")
+def test_selfcheck_refuses_a_readable_clone_id_that_disagrees_with_its_registered_receipt(repo, boot):
+    _finished_move(repo, boot)
+    registry.register(repo)
+    (_source(repo) / project_home.CLONE_ID).write_text("foreign-owner\n")
+
+    with pytest.raises(StoreError):
+        project_home.current(repo)
+    problems = selfcheck.problems()
+    assert problems
+    assert any(str(repo) in problem for problem in problems)
+
+
+@pytest.mark.usefixtures("current_binding")
 @pytest.mark.parametrize("damage", ["valid", "missing-proof", "utf8-proof", "utf8-format", "future-format"])
 @pytest.mark.parametrize("lookup", ["current", "adopt", "selfcheck"])
 def test_lookup_closes_each_descriptor_it_acquires_on_success_and_typed_refusal(
