@@ -76,31 +76,47 @@ def _refuse_replaced(folder: Path, fd: int) -> None:
 
 
 def _prepare_at(folder: Path, fd: int, boot: str) -> dict:
-    raw = _read(fd, folder, MARKER) or ""
-    if raw.strip() == FENCE:
+    raw = _refuse_unsupported_marker(folder, fd)
+    fenced = raw is not None and raw.strip() == FENCE
+    if fenced:
         # Repeated prepare keeps the existing generation; the fence is never recorded as the prior format.
-        return _record(folder, fd)[0]
-    dev, ino = fd_tree.ident(os.fstat(fd))
-    _refuse_foreign_preparation(folder, fd, raw, [dev, ino])
-    record = {"boot": boot, "folder": [dev, ino], "marker": raw}
-    fd_tree.write_at(fd, PREPARED, json.dumps(record) + "\n")
-    fd_tree.write_at(fd, MARKER, f"{FENCE}\n")
+        record, prepared = _record(folder, fd)
+    else:
+        identity = fd_tree.ident(os.fstat(fd))
+        prior = "" if raw is None else raw
+        prepared = _refuse_foreign_preparation(folder, fd, prior, identity)
+        record = {"boot": boot, "folder": identity, "marker": prior}
+
+    def unchanged(expected: str | None) -> None:
+        _refuse_replaced(folder, fd)
+        observed = _refuse_unsupported_marker(folder, fd)
+        if observed != raw or _read(fd, folder, PREPARED) != expected:
+            msg = f"{folder} changed while preparing: refusing to replace its marker or preparation; both are kept"
+            raise StoreError(msg)
+
+    project_home.ensure_pinned(folder, fd)
+    unchanged(prepared)
+    if not fenced:
+        text = json.dumps(record) + "\n"
+        fd_tree.write_at(fd, PREPARED, text, before_replace=lambda: unchanged(prepared))
+        fd_tree.write_at(fd, MARKER, f"{FENCE}\n", before_replace=lambda: unchanged(text))
     return record
 
 
-def _refuse_unsupported_marker(folder: Path, fd: int) -> None:
+def _refuse_unsupported_marker(folder: Path, fd: int) -> str | None:
     """Refuse before any write when a present marker is neither the fence nor a supported prior format.
 
     An absent marker (None) is the markerless prior 0; a present blank marker is refused, not treated as absent.
     """
     raw = _read(fd, folder, MARKER)
     if raw is None or raw.strip() == FENCE:
-        return
+        return raw
     try:
         format_marker.supported_format(raw)
     except StoreError as exc:
         msg = f"{folder / MARKER}: {exc}"
         raise StoreError(msg) from exc
+    return raw
 
 
 def _refuse_unsupported_prior(folder: Path, record: dict) -> None:
@@ -115,15 +131,16 @@ def _refuse_unsupported_prior(folder: Path, record: dict) -> None:
         raise StoreError(msg) from exc
 
 
-def _refuse_foreign_preparation(folder: Path, fd: int, raw: str, identity: list[int]) -> None:
+def _refuse_foreign_preparation(folder: Path, fd: int, raw: str, identity: list[int]) -> str | None:
     """Refuse to overwrite a preparation record that this folder's own interrupted prepare did not write."""
     text = _read(fd, folder, PREPARED)
     if text is None:
-        return
+        return None
     data = preparation(text, fd)
     if data["folder"] != identity or data["marker"] != raw:
         msg = f"{folder / PREPARED} is not this folder's own preparation: refusing; nothing was written"
         raise StoreError(msg)
+    return text
 
 
 def _refuse_nothing_to_move(folder: Path, fd: int) -> None:
@@ -145,7 +162,8 @@ def prepare(folder: Path, gaps: Callable[[], tuple[Gap, ...]] = open_gaps) -> di
     """Record the folder's identity and boot session and install the fence; refuse first if a producer is unfenced.
 
     The folder is pinned once, before anything is read. The clone id and the preparation are both made through that
-    descriptor, so a path swapped after the pin cannot receive a write.
+    descriptor, so a path swapped after the pin cannot receive a write. The source identity, marker and preparation
+    are rechecked after the id sync and each temporary-file sync, before either preparation or fence is published.
     """
     boot = boot_session()
     fd = _pinned(folder)
@@ -156,8 +174,6 @@ def prepare(folder: Path, gaps: Callable[[], tuple[Gap, ...]] = open_gaps) -> di
             raise StoreError(msg)
         _refuse_replaced(folder, fd)
         _refuse_nothing_to_move(folder, fd)
-        _refuse_unsupported_marker(folder, fd)
-        project_home.ensure_pinned(folder, fd)
         return _prepare_at(folder, fd, boot)
     finally:
         os.close(fd)
