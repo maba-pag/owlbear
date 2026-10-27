@@ -16,7 +16,7 @@ from copilot import CopilotClient, RuntimeConnection
 from copilot.rpc import PermissionDecisionApproveOnce, PermissionDecisionReject
 from copilot.tools import Tool, ToolInvocation, ToolResult
 
-from owlbear_delivery_next.change_contracts import tool_schema, tools
+from owlbear_delivery_next.change_contracts import tool_schema, tools, user_config
 from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.change_contracts.permissions import decide, identities, view
 from owlbear_delivery_next.local_system import preload, processes
@@ -36,14 +36,13 @@ from owlbear_delivery_next.runtimes import (
 )
 from owlbear_delivery_next.runtimes.chatlogs import around as chatlogged
 from owlbear_delivery_next.runtimes.copilot_cli import cli_path
-from owlbear_delivery_next.runtimes.instruction_scope import own as own_instructions
+from owlbear_delivery_next.runtimes.instruction_scope import applied as own_instructions
 from owlbear_delivery_next.runtimes.model_choices import takes_effort
 from owlbear_delivery_next.runtimes.results import ENDED, Gate
 from owlbear_delivery_next.runtimes.sdk_teardown import CALL
 from owlbear_delivery_next.runtimes.sdk_teardown import call as _call
 from owlbear_delivery_next.runtimes.sdk_usage import USAGE_PAUSE, unexpected_models, unproven, unread, usage_read
 from owlbear_delivery_next.runtimes.session_result import PROVEN, Run, limit_reached, note_quota
-from owlbear_delivery_next.settings.roles import USER_OFF, UserConfig
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
@@ -116,7 +115,7 @@ class Session:
     amendable: tuple[str, ...] = ()  # generated criteria a premise may propose new wording for (TD-179)
     skills: Path | None = None  # the skill folder this session loads instead of the package's: a pack candidate's
     subagents: bool = False  # its role's setting: it may start built-in subagents (TD-374, TD-376)
-    user: UserConfig = USER_OFF  # the owner's switches (D-01M5YE4P5317N1HWD0QN6N05E0); off where a site sets none
+    user: user_config.UserConfig = user_config.USER_OFF  # the owner's switches; off where a site sets none
     credit_limit: float | None = None  # the runtime's hard session limit; an experiment's ledger sets it (TD-178)
     model: str | None = None
     effort: str | None = None  # the SDK's reasoning effort
@@ -350,10 +349,9 @@ class _Step:
             "agent": role["name"],
             "excluded_builtin_agents": [] if self.watch.allowed else list(subagents.BUILTINS),
             "excluded_tools": ["ask_user"],  # autopilot: the owner is asked only through ask_question (N4, N10)
-            "skill_directories": [  # the owner's own skills only when switched on (D-01M5YE505DY18G63VH483CNZZ4)
-                *preload.folders(role_of(self.cfg), ui=self.cfg.ui, job=self.cfg.job, folder=self.skills),
-                *(preload.user_skills(preload.copilot_home(), folder=self.skills) if self.cfg.user.skills else ()),
-            ],
+            "skill_directories": preload.folders(  # plus the owner's own when on (D-01M5YE505DY18G63VH483CNZZ4)
+                role_of(self.cfg), ui=self.cfg.ui, job=self.cfg.job, folder=self.skills, user=self.cfg.user.skills
+            ),
             "mcp_servers": {preload.MEMORY: {"type": "local", **m}} if (m := preload.memory(self.cfg.memory)) else {},
             "enable_file_hooks": False,  # a project's agent hooks never run in a step (TD-142)
             "enable_config_discovery": False,  # nor its or the user's agents and skills (TD-167, TD-274)
@@ -417,13 +415,7 @@ async def _open(client: CopilotClient, st: _Step) -> CopilotSession | None:
         session = await _call(client.create_session(session_id=sid, **opts), "session create", START)
         st.session, st.created = session, True
         message, exposure = lessons.opening(role_of(cfg), cfg.memory, message, st.log)  # once per new conversation
-    scope = await own_instructions(
-        session, cfg.worktree, user_instructions=cfg.user.instructions, home=preload.copilot_home()
-    )
-    if scope.off:
-        st.log(event="instructions-off", sources=scope.off)
-    if scope.user:  # the owner's own files, switched on (D-01M5YE4TRV2T08TW0FA2FGSDBK)
-        st.log(event="instructions-user", sources=scope.user)
+    await own_instructions(session, cfg.worktree, cfg.user, st.log)  # D-01M5YE55W7P4A6PS8YZV8K7J6A
     st.log(event="session", id=sid, resumed=resumed, resent=resent, runtime=st.run.runtime_pid)
     st.billed = await usage_read(session, cfg.model) if resumed else {}
     sdk_spend.meter(st, sid, role_of(cfg))

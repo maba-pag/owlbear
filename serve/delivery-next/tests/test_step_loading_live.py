@@ -21,10 +21,10 @@ from copilot.generated.rpc import SessionAgentListRequest
 from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_contracts.tools import Worktree
+from owlbear_delivery_next.change_contracts.user_config import USER_OFF, UserConfig
 from owlbear_delivery_next.local_system import preload
 from owlbear_delivery_next.runtimes import instruction_scope, sdk_adapter
 from owlbear_delivery_next.runtimes.copilot_cli import cli_path
-from owlbear_delivery_next.settings.roles import USER_OFF, UserConfig
 
 pytestmark = pytest.mark.model
 

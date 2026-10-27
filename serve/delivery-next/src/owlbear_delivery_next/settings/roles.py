@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, get_args
 
 from pydantic import ValidationError
 
 from owlbear_delivery_next.change_contracts.models import Effort, Role, StepKind
 from owlbear_delivery_next.change_contracts.profile_record import RoleModel
+from owlbear_delivery_next.change_contracts.user_config import UserConfig
 
 if TYPE_CHECKING:
     from owlbear_delivery_next.settings.config import Settings
@@ -41,17 +41,6 @@ SESSIONS: dict[str, Role] = {
 
 
 USER_CONFIG = ("load_user_instructions", "load_user_skills")  # D-01M5YE4P5317N1HWD0QN6N05E0: every step's session
-
-
-@dataclass(frozen=True)
-class UserConfig:
-    """Whether a step's session loads the owner's own instructions and skills (D-01M5YE4P5317N1HWD0QN6N05E0)."""
-
-    instructions: bool
-    skills: bool
-
-
-USER_OFF = UserConfig(instructions=False, skills=False)  # a session no site switched on: never more than its own
 
 
 def chosen(settings: Settings, session: str) -> RoleModel:

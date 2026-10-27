@@ -111,9 +111,14 @@ def required(role: str, *, ui: bool = False, job: str = "") -> tuple[str, ...]:
     return (*JOBS.get(job, REQUIRED.get(role, ())), *(UI.get(role, ()) if ui else ()))
 
 
-def folders(role: str, *, ui: bool = False, job: str = "", folder: Path | None = None) -> list[str]:
-    """One folder per skill the session preloads, so it sees no other (TD-166)."""
-    return [str((folder or directory()) / name) for name in required(role, ui=ui, job=job)]
+def folders(role: str, *, ui: bool = False, job: str = "", folder: Path | None = None, user: bool = False) -> list[str]:
+    """One folder per skill the session preloads, so it sees no other (TD-166); with *user*, also the owner's own.
+
+    The owner's are offered, not preloaded: the role's agent names only its required skills
+    (D-01M5YE505DY18G63VH483CNZZ4).
+    """
+    own = [str((folder or directory()) / name) for name in required(role, ui=ui, job=job)]
+    return own + (user_skills(copilot_home(), folder=folder) if user else [])
 
 
 def missing(role: str, *, ui: bool = False, job: str = "", folder: Path | None = None) -> list[str]:

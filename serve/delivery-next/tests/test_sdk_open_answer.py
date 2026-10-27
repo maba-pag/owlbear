@@ -117,9 +117,8 @@ def test_a_refused_first_send_is_never_acknowledged_as_delivered(tmp_path, monke
 def test_the_sources_outside_the_worktree_are_off_before_the_first_message(tmp_path, monkeypatch):
     order = []
 
-    async def scoped(_session, worktree, **_user):
+    async def scoped(_session, worktree, _user, _log):
         order.append(("scoped", worktree))
-        return instruction_scope.Scope(off=["home-copilot"], user=[])
 
     monkeypatch.setattr(sdk_adapter, "own_instructions", scoped)
     _open(tmp_path, _Session(order), order, monkeypatch)
@@ -183,7 +182,7 @@ def test_the_real_scope_keeps_the_owners_files_only_with_his_switch_on_before_th
     work = tmp_path / "work"
     work.mkdir()
     monkeypatch.setenv("COPILOT_HOME", str(home))
-    monkeypatch.setattr(sdk_adapter, "own_instructions", instruction_scope.own)  # undo conftest's no-op
+    monkeypatch.setattr(sdk_adapter, "own_instructions", instruction_scope.applied)  # undo conftest's no-op
     monkeypatch.setattr(sdk_adapter, "usage_read", lambda *_a: asyncio.sleep(0, {}))
     monkeypatch.setattr(sdk_adapter.preload, "missing", lambda *_a, **_k: [])
     order, events = [], []

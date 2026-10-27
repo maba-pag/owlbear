@@ -26,7 +26,7 @@ from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import HostRecord
-from owlbear_delivery_next.runtimes import instruction_scope, model_choices, sdk_adapter, spotter_look
+from owlbear_delivery_next.runtimes import model_choices, sdk_adapter, spotter_look
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.state_store import backlog, backlog_issues, legacy_family
 from owlbear_delivery_next.state_store.store import Lock, Store
@@ -187,8 +187,8 @@ async def _silent_look(_card: dict, _ctx: object, _meter: object) -> str:
     return '{"category": "none", "note": "", "evidence": [], "state_change": null}'
 
 
-async def _no_instructions(_session: object, _worktree: Path, **_user: object) -> instruction_scope.Scope:
-    return instruction_scope.Scope(off=[], user=[])
+async def _no_instructions(*_args: object) -> None:
+    return None
 
 
 def _no_runtime(**_kw: object) -> None:

@@ -13,11 +13,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from copilot.rpc import InstructionLocation, SessionUpdateOptionsParams
 
+from owlbear_delivery_next.local_system import preload
 from owlbear_delivery_next.runtimes.sdk_teardown import call as _call
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from owlbear_delivery_next.change_contracts.user_config import UserConfig
 
 
 @dataclass(frozen=True)
@@ -53,6 +59,15 @@ async def own(
             msg = f"the runtime kept instruction sources outside the worktree on: {', '.join(off)}"
             raise RuntimeError(msg)
     return Scope(off=off, user=user)
+
+
+async def applied(session: Any, worktree: Path, user: UserConfig, log: Callable[..., None]) -> None:  # noqa: ANN401
+    """``own`` with the owner's Copilot home, logging what it switched off and which of his files it kept on."""
+    scope = await own(session, worktree, user_instructions=user.instructions, home=preload.copilot_home())
+    if scope.off:
+        log(event="instructions-off", sources=scope.off)
+    if scope.user:  # the owner's own files, switched on (D-01M5YE4TRV2T08TW0FA2FGSDBK)
+        log(event="instructions-user", sources=scope.user)
 
 
 def outside(sources: list[Any], worktree: Path) -> list[str]:
