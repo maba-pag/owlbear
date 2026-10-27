@@ -116,11 +116,12 @@ flowchart LR
   I24 -.-> I21["21 TD-402: GitHub account per project"]
   I21 --> I15["15 New project from zero"]
   I21 --> I10["10 First real project"]
+  I21 -.-> I16
   I9 --> I16["16 Amendment design"]
   I16 --> I10
   I9 --> I10
   I10 -.-> I15
-  I15 -. waits for the real-project gate .-> I9
+  I9 -- real-project gate --> I15
   I15 -.-> I22["22 Visual baseline"]
   I22 -.-> I17["17 Browser and knowledge rebuild"]
   I10 --> I17
@@ -128,7 +129,8 @@ flowchart LR
   I20 -.-> I23["23 Quality service"]
 ```
 
-Independent of everything else: the align fixes of §4 and the merge queue's condition.
+A project created from zero (item 15) also waits for the real-project gate, Improvement complete
+(D-01M5WECJV6B3MWJ44C4C0SEJ3B). Independent of everything else: the align fixes of §4 and the merge queue's condition.
 Renovate's #452 merged on 2026-10-22: Renovate now raises `package.json`'s Node floor with `.nvmrc`. Item 14's
 runner gate only stops and asks until item 16 designs amendments; its CI freshness check (slice 6) runs with the
 owner's `OWLBEAR_DATA_TOKEN` secret (TD-436).
