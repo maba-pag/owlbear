@@ -25,6 +25,9 @@ FILE_FLAGS = os.O_RDONLY | os.O_NOFOLLOW
 CHUNK = 1 << 20
 QUARANTINE = ".retired-"  # where an entry whose write or check failed is kept, under a name no one else chooses
 
+TreeImages = dict[str, os.stat_result]
+PayloadImages = dict[str, TreeImages]
+
 
 def open_dir(dfd: int, name: str) -> int:
     """Open folder *name* under *dfd* without following a link; a link or a non-folder is refused."""
@@ -238,17 +241,22 @@ def ident(st: os.stat_result) -> list[int]:
     return [st.st_dev, st.st_ino]
 
 
-def digest_at(dfd: int, name: str) -> str:
-    """What entry *name* holds under *dfd*: names, kinds, link targets and bytes."""
+def digest_at(dfd: int, name: str, *, images: TreeImages | None = None) -> str:
+    """Hash an entry's names, kinds, link targets and bytes, retaining every descendant image until the end.
+
+    An optional caller-owned collector keeps those images for later metadata-only confirmation under the same root.
+    """
     digest = hashlib.sha256()
-    _feed(digest, dfd, name, ".")  # the entry's own name is not hashed: an entry moved aside keeps its digest
+    observed = {} if images is None else images
+    _feed(digest, dfd, name, ".", observed)  # the entry's own name is not hashed: a moved entry keeps its digest
+    confirm_at(dfd, name, observed)
     return digest.hexdigest()
 
 
-def entry_ok(dfd: int, name: str, digest: str) -> bool:
+def entry_ok(dfd: int, name: str, digest: str, *, images: TreeImages | None = None) -> bool:
     """Whether the current, stable entry still holds what *digest* recorded; a missing or changing one does not."""
     try:
-        return digest_at(dfd, name) == digest
+        return digest_at(dfd, name, images=images) == digest
     except FileNotFoundError:
         return False
     except OSError as exc:
@@ -257,20 +265,22 @@ def entry_ok(dfd: int, name: str, digest: str) -> bool:
         raise
 
 
-def _feed(digest: hashlib._Hash, dfd: int, name: str, rel: str) -> None:
+def _feed(digest: hashlib._Hash, dfd: int, name: str, rel: str, images: TreeImages) -> None:
     st = os.stat(name, dir_fd=dfd, follow_symlinks=False)
     digest.update(f"{rel}\0".encode())
     if stat.S_ISLNK(st.st_mode):
         digest.update(b"link\0" + os.readlink(name, dir_fd=dfd).encode())
         if not _same_entry_image(st, stat_at(dfd, name)):
             raise OSError(errno.ESTALE, f"{name} changed while it was hashed")
+        images[rel] = st
     elif stat.S_ISDIR(st.st_mode):
         digest.update(b"dir\0")
         fd = open_dir(dfd, name)
         try:
             before = os.fstat(fd)
-            for child in sorted(os.listdir(fd)):  # noqa: PTH208 - listed by descriptor, not by path
-                _feed(digest, fd, child, f"{rel}/{child}")
+            images[rel] = before
+            for child in names_at(fd):
+                _feed(digest, fd, child, f"{rel}/{child}", images)
             if not _same_file_image(dfd, name, fd, before):
                 raise OSError(errno.ESTALE, f"{name} changed while it was hashed")
         finally:
@@ -278,13 +288,38 @@ def _feed(digest: hashlib._Hash, dfd: int, name: str, rel: str) -> None:
     else:
         digest.update(b"file\0")
         fd = open_file(dfd, name)
-        with os.fdopen(fd, "rb") as fh:
-            before = os.fstat(fh.fileno())
-            for chunk in iter(lambda: fh.read(CHUNK), b""):
-                digest.update(chunk)
-            if not _same_file_image(dfd, name, fh.fileno(), before):
-                raise OSError(errno.ESTALE, f"{name} changed while it was hashed")
+        try:
+            with os.fdopen(fd, "rb", closefd=False) as fh:
+                before = os.fstat(fd)
+                images[rel] = before
+                for chunk in iter(lambda: fh.read(CHUNK), b""):
+                    digest.update(chunk)
+                if not _same_file_image(dfd, name, fd, before):
+                    raise OSError(errno.ESTALE, f"{name} changed while it was hashed")
+        finally:
+            os.close(fd)
     digest.update(b"\0")
+
+
+def confirm_at(dfd: int, name: str, images: TreeImages) -> None:
+    """Confirm a retained tree image without reading payload bytes, with only directory-depth descriptors held."""
+    _confirm(dfd, name, ".", images)
+
+
+def _confirm(dfd: int, name: str, rel: str, images: TreeImages) -> None:
+    before = images.get(rel)
+    if before is None or not same_image_at(dfd, name, before):
+        raise OSError(errno.ESTALE, f"{name} changed after it was hashed")
+    if not stat.S_ISDIR(before.st_mode):
+        return
+    fd = open_dir(dfd, name)
+    try:
+        for child in names_at(fd):
+            _confirm(fd, child, f"{rel}/{child}", images)
+        if not _same_file_image(dfd, name, fd, before):
+            raise OSError(errno.ESTALE, f"{name} changed after it was hashed")
+    finally:
+        os.close(fd)
 
 
 def sync(dfd: int, name: str) -> None:

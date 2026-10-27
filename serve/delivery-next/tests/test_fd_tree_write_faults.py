@@ -137,6 +137,64 @@ def test_digest_verification_refuses_an_entry_replaced_during_its_read(tmp_path,
 
 
 @pytest.mark.parametrize(
+    ("kind", "nested"),
+    [("file", False), ("file", True), ("directory", True), ("link", True), ("directory", False), ("link", False)],
+)
+def test_digest_retains_earlier_descendant_images_during_later_reads(tmp_path, monkeypatch, kind, nested):
+    root = tmp_path / "tree"
+    parent = root / "a" if nested else root
+    parent.mkdir(parents=True)
+    later = root / "z"
+    later.write_text("later\n")
+    before = later.stat()
+    dfd = os.open(tmp_path, fd_tree.DIR_FLAGS)
+    try:
+        seam = DigestReadSeam(parent, kind, dfd)
+        digest = fd_tree.digest_at(dfd, root.name)
+        assert fd_tree.entry_ok(dfd, root.name, digest)
+
+        def change():
+            if seam.fired:
+                return
+            if kind == "file":
+                seam.fired.append(True)
+                seam.entry.write_text("owner-edited\n")
+            else:
+                seam.replace()
+
+        def opened(fd, *args, **kwargs):
+            stream = seam.real_fdopen(fd, *args, **kwargs)
+            return seam.Reader(stream, change) if os.path.samestat(os.fstat(fd), before) else stream
+
+        monkeypatch.setattr(os, "fdopen", opened)
+        assert not fd_tree.entry_ok(dfd, root.name, digest)
+    finally:
+        os.close(dfd)
+    assert seam.fired == [True]
+    assert later.read_text() == "later\n"
+
+
+def test_collected_digest_images_can_be_confirmed_after_later_validation(tmp_path):
+    root = tmp_path / "tree"
+    root.mkdir()
+    entry = root / "a"
+    entry.write_text("owned\n")
+    images = {}
+    dfd = os.open(tmp_path, fd_tree.DIR_FLAGS)
+    try:
+        digest = fd_tree.digest_at(dfd, root.name, images=images)
+        assert fd_tree.entry_ok(dfd, root.name, digest)
+        fd_tree.confirm_at(dfd, root.name, images)
+        entry.write_text("owner-edited\n")
+        with pytest.raises(OSError, match=rf"\b{errno.ESTALE}\b") as refused:
+            fd_tree.confirm_at(dfd, root.name, images)
+        assert refused.value.errno == errno.ESTALE
+    finally:
+        os.close(dfd)
+    assert entry.read_text() == "owner-edited\n"
+
+
+@pytest.mark.parametrize(
     "failure",
     [OSError(errno.ENOMEM, "handover failed"), RuntimeError("handover failed"), HandoverAbort("handover failed")],
 )

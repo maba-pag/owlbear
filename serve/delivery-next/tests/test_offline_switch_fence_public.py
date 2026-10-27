@@ -525,3 +525,70 @@ def test_a_changed_publication_guard_is_an_unknown_build_not_an_offline_proof(
     assert "current family modules differ from the candidate" in capsys.readouterr().err
     assert snapshot(source) == before
     assert not (source / project_move.MOVE_RECORD).exists()
+
+
+@pytest.mark.parametrize("edit_earlier", [False, True], ids=["control", "edited"])
+def test_finish_refuses_an_earlier_sibling_edited_during_a_later_hash(prepared, monkeypatch, capsys, edit_earlier):
+    repo, source = prepared
+    payload = source / "payload"
+    payload.mkdir()
+    (payload / "a").write_text("old\n")
+    (payload / "b").write_text("later\n")
+    later = (payload / "b").stat()
+    real_fdopen = os.fdopen
+    owners, edited = {}, []
+
+    def enable(target):
+        def change():
+            if edit_earlier and not edited:
+                edited.append(True)
+                (payload / "a").write_text("edited while b was hashed\n")
+                owners.update({source: snapshot(source), target: snapshot(target)})
+
+        def opened(fd, *args, **kwargs):
+            stream = real_fdopen(fd, *args, **kwargs)
+            return DigestReader(stream, change) if os.path.samestat(os.fstat(fd), later) else stream
+
+        monkeypatch.setattr(os, "fdopen", opened)
+
+    fired = at_sync(monkeypatch, source, "receipt", enable)
+    code = cli.main(["--repo", str(repo), "finish"])
+    error = capsys.readouterr().err
+    target = Path(record(source)["target"])
+
+    assert fired == [True]
+    assert (source / "payload" / "b").read_text() == (target / "payload" / "b").read_text() == "later\n"
+    assert (target / "payload" / "a").read_text() == "old\n"
+    if not edit_earlier:
+        assert code == 0, error
+        assert record(source)["phase"] == project_move.SWITCHED
+        return
+    assert edited == [True]
+    assert code == 1, error
+    assert record(source)["phase"] == project_move.COPYING
+    assert (source / "payload" / "a").read_text() == "edited while b was hashed\n"
+    assert {path: snapshot(path) for path in owners} == owners
+    quarantined = list(source.glob(f"{fd_tree.QUARANTINE}*"))
+    assert len(quarantined) == 1
+    assert json.loads(quarantined[0].read_text())["phase"] == project_move.SWITCHED
+
+
+class DigestReader:
+    def __init__(self, stream, change):
+        self.stream, self.change = stream, change
+
+    def __getattr__(self, name):
+        return getattr(self.stream, name)
+
+    def __enter__(self):
+        self.stream.__enter__()
+        return self
+
+    def __exit__(self, *args):
+        return self.stream.__exit__(*args)
+
+    def read(self, size):
+        data = self.stream.read(size)
+        if data:
+            self.change()
+        return data
