@@ -4,8 +4,9 @@ The ledger's lines (``spend_ledger``) become runs: a live ``start`` and ``end`` 
 ``spend_reconcile`` imported: an ``event`` (a step's usage at a known time), a ``mark`` (a session's latest totals
 a Change kept, time unknown), a ``residual`` (a Change's spend no session holds) or a ``look`` (a Spotter look before
 the ledger). Every run names the ``session`` whose totals it reports; the totals only grow. A look the ledger has
-from its own lines and from its Spotter record (one ``look`` id) counts once, as its own lines; an imported
-checkpoint that repeats a live run's totals exactly adds nothing.
+from its own lines and from its Spotter record (one ``look`` id, its meter's) counts once: as its own lines, plus,
+when the record names an SDK session those lines lack (``sdk_sessions``), what the record holds beyond them. An
+imported checkpoint that repeats a live run's totals exactly adds nothing.
 
 Shares are derived per session before anything is filtered or grouped, so a filter never hands a resumed run the
 spend of earlier ones. The runs go in time order (unknown times last, as imported). High-water marks start at zero
@@ -239,12 +240,17 @@ def _invocation(run: dict[str, Any]) -> bool:
 def derive(lines: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Every piece of spend the ledger holds: exclusive, additive, each in one run, agent and model."""
     found = runs(lines)
-    live = {str(r["look"]) for r in found if r.get("look") and r.get("source") != "import:spotter"}
+    live: dict[str, set[str]] = {}  # each look's sessions its own lines record
+    for r in found:
+        if r.get("look") and r.get("source") != "import:spotter":
+            live.setdefault(str(r["look"]), set()).add(str(r.get("session") or ""))
     sessions: dict[str, list[dict[str, Any]]] = {}
+    records: list[dict[str, Any]] = []  # Spotter records of looks whose own lines the ledger also has
     for n, run in enumerate(found):
-        if run.get("source") == "import:spotter" and str(run.get("look") or "") in live:
-            continue  # the look's own lines count it
         run["n"] = n
+        if run.get("source") == "import:spotter" and str(run.get("look") or "") in live:
+            records.append(run)
+            continue
         sessions.setdefault(str(run.get("session") or run["run"]), []).append(run)
     pieces: list[dict[str, Any]] = []
     for group in sessions.values():
@@ -252,7 +258,23 @@ def derive(lines: list[dict[str, Any]]) -> list[dict[str, Any]]:
         group = [r for r in group if _invocation(r) or _print(r.get("usage")) not in prints]  # noqa: PLW2901
         group.sort(key=lambda r: (_time(r) is None, _time(r) or "", r["n"]))
         pieces += _session(group)
-    return pieces
+    return pieces + [p for r in records for p in _beyond(r, live[str(r["look"])], pieces)]
+
+
+def _beyond(record: dict[str, Any], sessions: set[str], pieces: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """What a look's Spotter record holds beyond its own lines: only when it names a session they lack."""
+    if set(record.get("sdk_sessions") or ()) <= sessions:
+        return []
+    own = sum(p["credits"] or 0.0 for p in pieces if p["session"] in sessions)
+    spent = (record.get("usage") or {}).get("credits")
+    when = (record.get("at"), record.get("at"))
+    if spent is None:  # unknown: so is what the session its lines lack spent
+        unknown: Fields = {"credits": None} | dict.fromkeys(FIELDS[1:], 0.0)
+        return [_piece(record, "unknown", "", record.get("model") or "", unknown, when, [])]
+    if (rest := float(spent) - own) <= EPS:
+        return []
+    share: Fields = {"credits": rest} | dict.fromkeys(FIELDS[1:], 0.0)
+    return [_piece(record, "run", "", record.get("model") or "", share, when, [])]
 
 
 def _session(group: list[dict[str, Any]]) -> list[dict[str, Any]]:

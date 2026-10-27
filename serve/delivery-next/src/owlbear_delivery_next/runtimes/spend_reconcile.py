@@ -270,37 +270,50 @@ def _marks(place: Where, c: Change, agents: dict[str, str], high: dict[str, floa
 def _looks(known: list[dict[str, Any]], places: dict[str, Where]) -> list[dict[str, Any]]:
     """Spotter looks whose own lines the ledger lacks: those recorded before looks wrote it.
 
-    A look and its Spotter record share one id, the record's (``spotter.Context.look``); time never decides it, since
-    the record is made before its look's runtime starts.
+    A look and its Spotter record share one id, its meter's (``credit_meter.Meter.id``, the record's ``id``); time
+    never decides it, since the record is made before its look's runtime starts. A record the ledger has lines for
+    is still imported when its ``sdk_sessions`` name one the ledger lacks: ``spend_shares`` then counts only what the
+    record holds beyond the ledger's own lines.
     """
-    own = {str(line["look"]) for line in known if line.get("look")}
+    seen: dict[str, set[str]] = {}
+    for line in known:
+        if line.get("look") and line.get("type") in {"start", "end"}:
+            seen.setdefault(str(line["look"]), set()).add(str(line.get("session") or ""))
     folder, out = local_home.root() / "spotter", []
     for path in sorted(folder.glob("records-*.jsonl")) if folder.is_dir() else ():
         for raw in path.read_text(encoding="utf-8").splitlines():
             with contextlib.suppress(ValueError, TypeError, KeyError, AttributeError):
                 rec = json.loads(raw)
-                if str(rec["id"]) not in own and (line := _look(rec, places)) is not None:
+                covered = str(rec["id"]) in seen and set(rec.get("sdk_sessions") or ()) <= seen[str(rec["id"])]
+                if not covered and (line := _look(rec, places)) is not None:
                     out.append(line)
     return out
 
 
 def _look(rec: dict[str, Any], places: dict[str, Where]) -> dict[str, Any] | None:
-    spent = rec.get("credits")
+    """A Spotter record as one ``look`` line; None when no look ran.
+
+    The credit meter's record says whether its ``credits`` are known (``credits_known``); a legacy record, without
+    that key, booked the 0.5 estimate when its spend was not reported, so that amount is unknown, never measured.
+    """
+    spent, legacy = rec.get("credits"), "credits_known" not in rec
     if rec.get("credits_known") is False:  # the credit meter's record: its spend is not known
         known = False
-    elif not spent:
-        return None  # no look ran, or it cost nothing: skipped before it reserved anything
-    else:  # measured; before the meter, an unreported spend was booked as the estimate
-        known = bool(rec["credits_known"]) if "credits_known" in rec else spent != ESTIMATE
+    elif not spent and not rec.get("sdk_sessions"):
+        return None  # no look ran: skipped, or refused by its limit, before any session
+    else:
+        known = spent != ESTIMATE if legacy else bool(rec["credits_known"])
     place = places.get(str(rec.get("project") or ""), UNKNOWN_PROJECT if rec.get("project") else Where())
     model = str(rec.get("model") or "")
-    usage = {"credits": float(spent), "models": {model: {"credits": float(spent)}}} if known else {"error": "estimate"}
+    usage = ({"credits": float(spent), "models": {model: {"credits": float(spent)}}} if known
+             else {"error": "estimate" if legacy else "unknown"})  # fmt: skip
     job = f"{rec.get('look') or ''} look".strip()
     return _base(place, str(rec.get("change") or ""), id=f"look:{rec['id']}", type="look", at=rec["at"],
                  session=f"look:{rec['id']}", usage=usage, agent="spotter", job=job,
                  step=str(rec.get("step") or ""), model=model, limit=rec.get("limit"),
                  stopped=str(rec.get("stopped") or ""), stopped_by=str(rec.get("stopped_by") or ""), ending="look",
-                 look=str(rec["id"]), source="import:spotter")  # fmt: skip
+                 look=str(rec["id"]), sdk_sessions=list(rec.get("sdk_sessions") or ()),
+                 source="import:spotter")  # fmt: skip
 
 
 def _logs(

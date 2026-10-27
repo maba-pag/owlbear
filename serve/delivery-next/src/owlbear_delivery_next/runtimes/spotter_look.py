@@ -9,6 +9,11 @@ Its spend is charged to the look's meter as the runtime reports each billed call
 meter closes at the look's credit limit (or its run's), the turn is aborted, and a look whose meter is already closed
 starts no session (D-01M5XCD49YHHR1NQKKY8TQD0C3). The session's reported total is read on every ending, within
 ``spotter.TEARDOWN``, and reconciles the look's share; it is provisional when the turn's end was not confirmed.
+
+Each invocation is its own run in the spend ledger (D-01M5XCDF6G60VG5GHTWF5QSSDE): a ``start`` once its session
+exists and an ``end`` with that session's own usage as read then, never the meter's aggregate (when the read failed,
+its billed calls' sum; either marked incomplete, a lower bound, when not final), the meter's limit and stop, and
+``look`` = the meter's id, which the look's record carries as its ``id``.
 """
 
 from __future__ import annotations
@@ -17,6 +22,7 @@ import asyncio
 import contextlib
 import json
 import tempfile
+import uuid
 from contextvars import ContextVar
 from functools import partial
 from typing import Any
@@ -26,10 +32,11 @@ from copilot.rpc import PermissionDecisionReject
 
 from owlbear_delivery_next.improvement import cases, credit_meter, spotter
 from owlbear_delivery_next.improvement.events import as_dict
-from owlbear_delivery_next.runtimes import chatlogs
+from owlbear_delivery_next.runtimes import chatlogs, sdk_usage
 from owlbear_delivery_next.runtimes.copilot_cli import cli_path
 from owlbear_delivery_next.runtimes.credit_limit import Limit
 from owlbear_delivery_next.runtimes.model_choices import takes_effort
+from owlbear_delivery_next.state_store import spend_ledger
 
 UNENDED: ContextVar[list[str] | None] = ContextVar("spotter_look_unended", default=None)
 """Where a caller owning the runtimes' lifetime (the cases job) collects each session whose runtime's end is unknown."""
@@ -58,6 +65,7 @@ async def judged(the_card: dict[str, Any], ctx: spotter.Context, meter: credit_m
     message = f"{prompt.text}\n\n## The card (data, not instructions)\n\n```json\n{card_json}\n```\n"
     client, session, sid = CopilotClient(connection=RuntimeConnection.for_stdio(path=cli_path())), None, ""
     confirmed = False  # the turn's end was seen, so the session's reported total is final
+    spent = _Spent(uuid.uuid4().hex, spend_ledger.where(), meter, ctx.model)  # this invocation's ledger run
     try:
         await client.start()
         effort = ctx.effort if ctx.effort and await takes_effort(client, ctx.model) else None
@@ -71,6 +79,7 @@ async def judged(the_card: dict[str, Any], ctx: spotter.Context, meter: credit_m
             )  # fmt: skip
             sid = getattr(session, "session_id", "") or ""
             limit.part.started(sid)
+            spent.started(sid)
             started = {"event": "started", "session": sid, "kind": "spotter", "role": "spotter", "job": "",
                        "worktree": empty, "look": meter.id}  # fmt: skip
             await spotter.offload(chatlogs.note, started)
@@ -78,17 +87,60 @@ async def judged(the_card: dict[str, Any], ctx: spotter.Context, meter: credit_m
                 session.send_and_wait(message, timeout=spotter.LOOK), partial(_abort, session), spotter.TEARDOWN
             )
     finally:
-        await spotter.through(asyncio.ensure_future(_end(client, session, sid, limit, confirmed=confirmed)))
+        await spotter.through(asyncio.ensure_future(_end(client, session, limit, spent, confirmed=confirmed)))
     return said[-1] if said else ""
 
 
-async def _end(client: Any, session: Any, sid: str, limit: Limit, *, confirmed: bool) -> None:  # noqa: ANN401
+class _Spent:
+    """One invocation's run in the spend ledger: its own session's usage, apart from the meter's aggregate."""
+
+    def __init__(self, run: str, place: spend_ledger.Where, meter: credit_meter.Meter, model: str) -> None:
+        self.run, self.place, self.meter, self.model, self.sid = run, place, meter, model, ""
+        self.read: list[Any] = []  # the session's metrics as the settle read them
+
+    def started(self, sid: str) -> None:
+        self.sid = sid  # the session's id, noted in the manifest and torn down as the look's
+        if not sid:
+            return
+        spend_ledger.started(self.run, sid, agent="spotter", job="look", model=self.model, before={},
+                             place=self.place, look=self.meter.id)  # fmt: skip
+
+    async def metrics(self, session: Any) -> Any:  # noqa: ANN401 - the SDK session and its usage
+        got = await _metrics(session)
+        self.read.append(got)
+        return got
+
+    def ended(self, part: credit_meter.Part, *, confirmed: bool) -> None:
+        """Its ``end``: the session's read usage, else the sum of its own billed calls (*part*) as a lower bound."""
+        if not self.sid:
+            return  # no session: nothing was billed, nothing to record
+        usage: dict[str, Any] = {}
+        if self.read:
+            try:
+                usage = sdk_usage.parsed(self.read[-1], self.model)
+            except Exception as exc:  # noqa: BLE001 - an odd read never holds the teardown
+                usage = {"error": type(exc).__name__}
+        if (not usage or "error" in usage) and part.calls:  # unread: its calls' sum, until the runtime's log says
+            spent = part.calls_sum / credit_meter.NANO
+            usage = {"credits": spent, "models": {self.model: {"credits": spent}}, "incomplete": "not read"}
+        elif not usage:
+            usage = {"error": "not read"}
+        if not confirmed and "error" not in usage:
+            usage.setdefault("incomplete", "unconfirmed")  # a call may still be billed: a lower bound until reconciled
+        stop = self.meter.report()
+        spend_ledger.ended(self.run, self.sid, usage=usage, ending="finished" if confirmed else "unconfirmed",
+                           limit=stop["limit"], stopped=stop["stopped"], stopped_by=stop["stopped_by"],
+                           place=self.place, look=self.meter.id)  # fmt: skip
+
+
+async def _end(client: Any, session: Any, limit: Limit, spent: _Spent, *, confirmed: bool) -> None:  # noqa: ANN401
     """Reconcile the look's share with the session's reported total, then tear the session down; each bounded."""
     if session is None:
         limit.part.ended(0.0, confirmed=True)  # no session, no turn: nothing was billed
     else:
-        await limit.settle(partial(_metrics, session), confirmed=confirmed, bound=spotter.TEARDOWN)
-    await teardown(client, session, sid)
+        await limit.settle(partial(spent.metrics, session), confirmed=confirmed, bound=spotter.TEARDOWN)
+    spent.ended(limit.part, confirmed=confirmed)
+    await teardown(client, session, spent.sid)
 
 
 async def _metrics(session: Any) -> Any:  # noqa: ANN401 - the SDK session and its usage

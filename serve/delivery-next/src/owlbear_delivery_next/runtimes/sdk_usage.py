@@ -43,6 +43,11 @@ async def _usage(session: CopilotSession, requested: str | None) -> dict[str, An
         m = await asyncio.wait_for(session.rpc.usage.get_metrics(), READ)
     except Exception as exc:  # noqa: BLE001 - experimental RPC; usage is reported, never required
         return {"error": type(exc).__name__}
+    return parsed(m, requested)
+
+
+def parsed(m: Any, requested: str | None) -> dict[str, Any]:  # noqa: ANN401 - the SDK's usage metrics
+    """A session's usage metrics as Delivery keeps them: credits, each model's and each agent instance's."""
     nano = getattr(m, "total_nano_aiu", None)
     models = _models(m)
     mismatch = bool(requested and models and requested not in models)

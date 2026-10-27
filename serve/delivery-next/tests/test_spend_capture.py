@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextvars
 import json
+import threading
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
@@ -101,12 +102,17 @@ def test_legacy_spotter_looks_are_measured_only_when_reported_and_named_by_their
         rec | {"id": "d", "at": "2026-10-20T10:03:00+00:00", "credits": 0.3, "credits_known": False},
         rec | {"id": "e", "at": "2026-10-20T10:04:00+00:00", "credits": 0.2, "credits_known": True, "limit": 1.0,
                "stopped": "reached", "stopped_by": "look"},
+        rec | {"id": "f", "at": "2026-10-20T10:05:00+00:00", "credits": 0.0, "credits_known": True,
+               "sdk_sessions": ["s-f"]},  # a session that cost nothing is still a run
+        rec | {"id": "g", "at": "2026-10-20T10:06:00+00:00", "credits": 0.0, "credits_known": True,
+               "stopped": "reached", "stopped_by": "retro-run"},  # refused by its run's limit: no session
     ]  # fmt: skip
     (folder / "records-2026-10-20.jsonl").write_text("".join(json.dumps(x) + "\n" for x in looks))
     spend_reconcile.run([(project, None)])
     found = {p["run"]: p for p in spend_shares.derive(spend_ledger.lines()) if p["session"].startswith("look:")}
     assert {k: (p["kind"], p["credits"]) for k, p in found.items()} == {
         "look:a": ("unknown", None), "look:b": ("run", 0.07), "look:d": ("unknown", None), "look:e": ("run", 0.2),
+        "look:f": ("run", 0.0),
     }  # fmt: skip
     assert {(p["project"], p["name"], p["agent"], p["job"]) for p in found.values()} == {
         ("shop", "shop", "spotter", "hand-off look")
@@ -275,7 +281,18 @@ def test_a_look_finishing_while_a_pass_scans_is_counted_once(project, monkeypatc
     was imported from its Spotter record too."""
     folder = local_home.root() / "spotter"
     folder.mkdir()
-    rec = {"id": "x", "at": "2026-10-27T10:00:00+00:00", "credits": 0.2, "project": project.root.name, "model": "m1"}
+    rec = {
+        "id": "x",
+        "at": "2026-10-27T10:00:00+00:00",
+        "credits": 0.2,
+        "credits_known": True,
+        "limit": 1.0,
+        "stopped": "",
+        "stopped_by": "",
+        "sdk_sessions": ["look-sdk"],
+        "project": project.root.name,
+        "model": "m1",
+    }
     (folder / "records-2026-10-27.jsonl").write_text(json.dumps(rec) + "\n")
     real = spend_ledger.lines
 
@@ -292,3 +309,78 @@ def test_a_look_finishing_while_a_pass_scans_is_counted_once(project, monkeypatc
     monkeypatch.setattr(spend_reconcile.spend_ledger, "lines", real)
     looks = [p for p in spend_shares.derive(spend_ledger.lines()) if p["role"] == "spotter"]
     assert [(p["run"], p["credits"]) for p in looks] == [("L", 0.2)]
+
+
+def test_two_passes_at_once_import_each_line_once(project, monkeypatch) -> None:
+    """Reconciliation running concurrently: a second pass while one runs does nothing, and the totals stay right."""
+    real, entered, release = spend_reconcile._changes, threading.Event(), threading.Event()  # noqa: SLF001
+
+    def slow(*args: object) -> list[dict]:
+        entered.set()
+        release.wait(5)
+        return real(*args)
+
+    monkeypatch.setattr(spend_reconcile, "_changes", slow)
+    results: list[dict] = []
+    first = threading.Thread(target=lambda: results.append(spend_reconcile.run([(project, None)])))
+    first.start()
+    assert entered.wait(5)
+    second = spend_reconcile.run([(project, None)])  # the first holds the machine's pass lock
+    assert second["state"] == "running"
+    release.set()
+    first.join(10)
+    assert results[0]["imported"]["changes"] == 3
+    assert spend_reconcile.run([(project, None)])["imported"] == {"changes": 0, "spotter": 0, "logs": 0}
+    assert total() == 5.5
+
+
+def test_a_pass_during_a_looks_retry_counts_each_session_once_and_the_look_once(project, monkeypatch) -> None:
+    """A pass reads the ledger while a look's retry is live: its first session's lines are in, its second's arrive
+    while the pass reads the Spotter records, whose record already names both. The record is imported, yet the look
+    counts as its two sessions, once each, never again as its record."""
+    place = Where(project="shop", name="shop")
+    spend_ledger.started("A", "look-a", agent="spotter", job="look", model="m1", before={}, place=place, look="x")
+    spend_ledger.ended("A", "look-a", usage=used(0.1), ending="finished", place=place, look="x")
+    assert spend_ledger.WRITER.settled(5)
+    folder = local_home.root() / "spotter"
+    folder.mkdir()
+    rec = {"id": "x", "at": "2026-10-27T10:00:00+00:00", "credits": 0.4, "credits_known": True, "limit": 1.0,
+           "stopped": "", "stopped_by": "", "sdk_sessions": ["look-a", "look-b"], "project": project.root.name,
+           "model": "m1"}  # fmt: skip
+    (folder / "records-2026-10-27.jsonl").write_text(json.dumps(rec) + "\n")
+    real = spend_ledger.lines
+
+    def snapshot_then_retry_ends() -> list[dict]:
+        seen = real()
+        spend_ledger.started("B", "look-b", agent="spotter", job="look", model="m1", before={}, place=place, look="x")
+        spend_ledger.ended("B", "look-b", usage=used(0.3), ending="finished", place=place, look="x")
+        assert spend_ledger.WRITER.settled(5)
+        return seen
+
+    monkeypatch.setattr(spend_reconcile.spend_ledger, "lines", snapshot_then_retry_ends)
+    assert spend_reconcile.run([(project, None)])["imported"]["spotter"] == 1  # look-b's lines came after its read
+    monkeypatch.setattr(spend_reconcile.spend_ledger, "lines", real)
+    assert spend_reconcile.run([(project, None)])["imported"]["spotter"] == 0
+    looks = [p for p in spend_shares.derive(spend_ledger.lines()) if p["role"] == "spotter"]
+    assert sorted((p["run"], p["session"], p["credits"]) for p in looks) == [("A", "look-a", 0.1), ("B", "look-b", 0.3)]
+    assert total() == 5.5 + 0.4  # the project's Change and the look
+
+
+def test_a_look_still_running_during_a_pass_is_never_imported_from_a_record(project) -> None:
+    """A live look has no record yet, and its finished first session's lines cover nothing the pass could import."""
+    place = Where(project="shop", name="shop")
+    spend_ledger.started("A", "look-a", agent="spotter", job="look", model="m1", before={}, place=place, look="x")
+    spend_ledger.ended("A", "look-a", usage=used(0.1), ending="finished", place=place, look="x")
+    spend_ledger.started("B", "look-b", agent="spotter", job="look", model="m1", before={}, place=place, look="x")
+    assert spend_ledger.WRITER.settled(5)
+    assert spend_reconcile.run([(project, None)])["imported"]["spotter"] == 0
+    spend_ledger.ended("B", "look-b", usage=used(0.3), ending="finished", place=place, look="x")
+    folder = local_home.root() / "spotter"
+    folder.mkdir()
+    rec = {"id": "x", "at": "2026-10-27T10:00:00+00:00", "credits": 0.4, "credits_known": True,
+           "sdk_sessions": ["look-a", "look-b"], "project": project.root.name, "model": "m1"}  # fmt: skip
+    (folder / "records-2026-10-27.jsonl").write_text(json.dumps(rec) + "\n")
+    assert spend_ledger.WRITER.settled(5)
+    assert spend_reconcile.run([(project, None)])["imported"]["spotter"] == 0
+    looks = [p for p in spend_shares.derive(spend_ledger.lines()) if p["role"] == "spotter"]
+    assert sorted((p["run"], p["credits"]) for p in looks) == [("A", 0.1), ("B", 0.3)]
