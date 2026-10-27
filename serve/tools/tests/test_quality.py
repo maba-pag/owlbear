@@ -30,7 +30,7 @@ from owlbear_tools.quality import (
 from owlbear_tools.quality_runtime import _call
 
 _ROOT = Path(__file__).resolve().parents[3]
-_UNCLAIMED = ("check-yaml", "check-merge-conflict", "check-added-large-files", "decisions-view-hash")
+_UNCLAIMED = ("check-yaml", "check-merge-conflict", "check-added-large-files")
 
 
 def _ecosystem_hooks() -> set[str]:
