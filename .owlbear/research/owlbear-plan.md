@@ -2,7 +2,7 @@
 
 > **Owning task:** owner request 2026-10-19: one document that grounds any session in what is built, what comes
 > next and where the code differs from the decisions
-> **Date:** 2026-10-27, status at `main` `499ff3cc` after #704 to #709 with the post-#661 authority repairs, decisions to TD-469, item 5's
+> **Date:** 2026-10-27, status at `main` `d8001d2a` after #711 with the post-#661 authority repairs, decisions to TD-469, item 5's
 > decisions of 2026-10-22 and the owner's of 2026-10-23 to 2026-10-26
 > **Question:** Where does OwlBear stand, in what order does the remaining work come, and where does the code
 > differ from the decisions in force?
@@ -513,8 +513,8 @@ Ordinary and read-only admission retain the corresponding SWITCHED receipt throu
 adoption repeat their admitted path/id authority check after the registry temporary file is synced, before its
 actual replacement; a refusal leaves the previous registry unchanged.
 
-The composition integrates `main` `499ff3cc`, including R06/R15 from #656 and #704's per-look/per-run credit
-limits, CONFIG 16, MACHINE 8, PROFILE 5 and the window-step runtime's removal. Only CURRENT literal bindings
+The composition integrates `main` `d8001d2a`, including R06/R15 from #656 and #704's per-look/per-run credit
+limits, #708's user-configuration switches, CONFIG 17, MACHINE 8, PROFILE 5 and the window-step runtime's removal. Only CURRENT literal bindings
 were refreshed: 37 functions,
 17 import sets, 7 constants and 32 whole-module digests. The retired `commands/step_mcp.py` is absent only from
 CURRENT; the historical channels are unchanged. The current read set includes the lower record owner,
@@ -528,7 +528,8 @@ controls, settlement, retained-workspace sentinels and target-admission controls
 historical producer records and provider/receipt timing faults are modeled; no physical reboot, live SDK or generic
 filesystem/Git compare-and-swap guarantee is claimed. Acceptance requires independent source review, exact-head CI
 and handled review before protected merge. #661 and #606 record the original repairs' gates; the follow-up pull
-request records the four authority fixes' own Sol challenge, final checks and current-head CI/review.
+request [#710](https://github.com/maba-pag/owlbear/pull/710) records the authority fixes' own Sol challenge,
+final checks and current-head CI/review.
 
 ## 5. Open Questions for the Owner
 
