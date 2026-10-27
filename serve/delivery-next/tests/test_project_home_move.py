@@ -75,8 +75,8 @@ def crash_after_switch(monkeypatch):
     """Let the switch be recorded, then crash before anything else runs."""
     real = project_move._save  # noqa: SLF001
 
-    def save(folder, folder_fd, rec):
-        real(folder, folder_fd, rec)
+    def save(folder, folder_fd, rec, **kwargs):
+        real(folder, folder_fd, rec, **kwargs)
         if rec["phase"] == project_move.SWITCHED:
             msg = "simulated crash"
             raise CrashError(msg)
@@ -477,11 +477,11 @@ def test_an_empty_stage_made_before_its_identity_was_recorded_is_never_adopted(c
     stage = target.parent / project_move._stage_name(target)  # noqa: SLF001
     real = project_move._save  # noqa: SLF001
 
-    def save(folder_arg, folder_fd, rec):
+    def save(folder_arg, folder_fd, rec, **kwargs):
         if rec["stage_id"] is not None and rec["proof"] is None:  # the stage_id record itself: crash before it lands
             msg = "simulated crash"
             raise CrashError(msg)
-        real(folder_arg, folder_fd, rec)
+        real(folder_arg, folder_fd, rec, **kwargs)
 
     monkeypatch.setattr(project_move, "_save", save)
     with pytest.raises(CrashError):

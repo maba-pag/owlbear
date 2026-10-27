@@ -1,0 +1,214 @@
+"""Finish rechecks its issued witnesses after the last blocking sync, before publishing SWITCHED."""
+
+import errno
+import json
+import os
+import subprocess
+from pathlib import Path
+
+import pytest
+
+from owlbear_delivery_next.commands import cli
+from owlbear_delivery_next.state_store import fd_tree, offline_protocol, project_home, project_move
+from owlbear_delivery_next.state_store.database import MARKER, FormatTooNewError
+
+BEFORE = "AAAAAAAA-0000-4000-8000-000000000001"
+AFTER = "BBBBBBBB-0000-4000-8000-000000000002"
+OWNER_BOOT = "CCCCCCCC-0000-4000-8000-000000000003"
+pytestmark = pytest.mark.usefixtures("current_binding")
+
+
+@pytest.fixture
+def prepared(tmp_path, monkeypatch):
+    repo = tmp_path / "shop"
+    subprocess.run(["git", "init", "-q", str(repo)], check=True, capture_output=True)  # noqa: S603, S607
+    source = project_home.clone_dir(repo)
+    source.mkdir()
+    (source / MARKER).write_text("7")
+    (source / project_move.CLONE_ID).write_text("owned\n")
+    (source / "config.json").write_text(json.dumps({"format": 1, "widths": [1600]}))
+    monkeypatch.setattr(offline_protocol, "boot_session", lambda: BEFORE)
+    assert cli.main(["--repo", str(repo), "prepare"]) == 0
+    monkeypatch.setattr(offline_protocol, "boot_session", lambda: AFTER)
+    return repo, source
+
+
+def snapshot(folder):
+    return {
+        p.name: p.read_bytes()
+        for p in folder.iterdir()
+        if p.is_file() and not p.name.startswith((".tmp-", fd_tree.QUARANTINE))
+    }
+
+
+def record(source):
+    return json.loads((source / project_move.MOVE_RECORD).read_text())
+
+
+def at_sync(monkeypatch, source, when, change):
+    """Run the real durability operation first; mutate only at its matching final publication boundary."""
+    fired = []
+    real_sync = project_move._sync_published  # noqa: SLF001 - exercise the real target durability boundary
+    real_fsync = os.fsync
+
+    def after_sync(pfd, target, tfd):
+        real_sync(pfd, target, tfd)
+        if not fired:
+            fired.append(True)
+            change(target)
+
+    def after_fsync(fd):
+        real_fsync(fd)
+        if fired:
+            return
+        for temp in source.glob(f".tmp-{project_move.MOVE_RECORD}-*"):
+            if os.path.samestat(temp.stat(), os.fstat(fd)):
+                pending = json.loads(temp.read_text())
+                if pending["phase"] == project_move.SWITCHED:
+                    fired.append(True)
+                    change(Path(pending["target"]))
+
+    if when == "target":
+        monkeypatch.setattr(project_move, "_sync_published", after_sync)
+    else:
+        monkeypatch.setattr(os, "fsync", after_fsync)
+    return fired
+
+
+def change_owner(source, target, change):
+    source_at = source
+    target_at = target
+    if change == "payload":
+        (source / "config.json").write_text(json.dumps({"format": 1, "widths": [987]}))
+    elif change == "preparation":
+        prepared = json.loads((source / project_move.PREPARED).read_text())
+        prepared["boot"] = OWNER_BOOT
+        (source / project_move.PREPARED).write_text(json.dumps(prepared) + "\n")
+    elif change == "clone-id":
+        (source / project_move.CLONE_ID).write_text("owner-rebound\n")
+    elif change == "fence":
+        (source / MARKER).write_text("6\n")
+    elif change == "source-path":
+        source_at = source.with_name("source-aside")
+        source.rename(source_at)
+        source.mkdir()
+        (source / "owner").write_text("foreign source\n")
+    elif change == "target-path":
+        target_at = target.with_name("target-aside")
+        target.rename(target_at)
+        target.mkdir()
+        (target / "owner").write_text("foreign target\n")
+    elif change == "proof":
+        (target / project_move.MOVE_PROOF).write_text("owner proof\n")
+    elif change == "content":
+        (target / "config.json").write_text(json.dumps({"format": 1, "widths": [654]}))
+    else:
+        assert change == "marker"
+        (target / MARKER).write_text("6\n")
+    return source_at, target_at
+
+
+@pytest.mark.parametrize("when", ["target", "receipt"])
+@pytest.mark.parametrize(
+    "change",
+    ["payload", "preparation", "clone-id", "fence", "source-path", "target-path", "proof", "content", "marker"],
+)
+def test_finish_refuses_late_witness_changes_without_switching_or_overwriting_owners(
+    prepared, monkeypatch, capsys, when, change
+):
+    repo, source = prepared
+    owners = {}
+    held_source = []
+
+    def changed(target):
+        source_at, target_at = change_owner(source, target, change)
+        held_source.append(source_at)
+        for path in {source, source_at, target, target_at}:
+            owners[path] = snapshot(path)
+
+    fired = at_sync(monkeypatch, source, when, changed)
+    code = cli.main(["--repo", str(repo), "finish"])
+    capsys.readouterr()
+
+    assert fired == [True], f"the real {when} sync was not reached"
+    assert code == 1, f"Finish admitted {change} changed at the {when} durability boundary"
+    assert record(held_source[0])["phase"] == project_move.COPYING
+    assert {path: snapshot(path) for path in owners} == owners
+    if when == "receipt":
+        quarantined = list(held_source[0].glob(f"{fd_tree.QUARANTINE}*"))
+        assert len(quarantined) == 1
+        assert json.loads(quarantined[0].read_text())["phase"] == project_move.SWITCHED
+
+
+@pytest.mark.parametrize("when", ["target", "receipt"])
+@pytest.mark.parametrize("where", ["source", "target"])
+def test_a_late_future_marker_stays_typed_and_keeps_the_owner_bytes(prepared, monkeypatch, when, where):
+    repo, source = prepared
+    changed = []
+
+    def future(target):
+        path = (source if where == "source" else target) / MARKER
+        path.write_text("1000\n")
+        changed.append(path)
+
+    fired = at_sync(monkeypatch, source, when, future)
+    with pytest.raises(FormatTooNewError):
+        offline_protocol.finish_clone(repo)
+
+    assert fired == [True]
+    assert changed[0].read_text() == "1000\n"
+    assert record(source)["phase"] == project_move.COPYING
+
+
+def test_finish_switches_after_a_failed_real_receipt_sync_is_retried(prepared, monkeypatch, capsys):
+    repo, source = prepared
+
+    def fail(_target):
+        raise OSError(errno.EIO, "injected receipt durability failure")
+
+    fired = at_sync(monkeypatch, source, "receipt", fail)
+    assert cli.main(["--repo", str(repo), "finish"]) == 1
+    capsys.readouterr()
+    assert fired == [True]
+    assert record(source)["phase"] == project_move.COPYING
+    assert len(list(source.glob(f"{fd_tree.QUARANTINE}*"))) == 1
+
+    # Quarantine requires an explicit owner action, not an automatic deletion or adoption on retry.
+    kept = next(source.glob(f"{fd_tree.QUARANTINE}*"))
+    kept.rename(source.parent / "owner-kept-receipt")
+    assert cli.main(["--repo", str(repo), "finish"]) == 0
+    capsys.readouterr()
+    assert record(source)["phase"] == project_move.SWITCHED
+    target = Path(record(source)["target"])
+    assert json.loads((target / "config.json").read_text())["widths"] == [1600]
+    assert json.loads((source / "config.json").read_text())["widths"] == [1600]
+    assert (source / MARKER).read_text() == f"{project_move.FENCE}\n"
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        ("offline_proof.py", "    require_identity(folder, folder_fd, proof)", "    pass"),
+        ("project_move.py", "before_replace=unchanged)", "before_replace=None)"),
+        ("fd_tree.py", "            before_replace()", "            pass"),
+    ],
+)
+def test_a_changed_publication_guard_is_an_unknown_build_not_an_offline_proof(
+    prepared, current_package, capsys, mutation
+):
+    repo, source = prepared
+    module, old, new = mutation
+    before = snapshot(source)
+    path = current_package / "state_store" / module
+    text = path.read_text()
+    assert text.count(old) == 1
+    path.write_text(text.replace(old, new))
+    who = ["-c", "user.name=fixture", "-c", "user.email=fixture@example.invalid"]
+    commit = ["git", "-C", str(current_package), *who, "commit", "-qam", "changed guard"]
+    subprocess.run(commit, check=True, capture_output=True)  # noqa: S603 - only the synthetic binding's checkout
+
+    assert cli.main(["--repo", str(repo), "finish"]) == 1
+
+    assert "current family modules differ from the candidate" in capsys.readouterr().err
+    assert snapshot(source) == before
+    assert not (source / project_move.MOVE_RECORD).exists()

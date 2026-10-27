@@ -205,11 +205,11 @@ def test_a_crash_between_the_marker_and_the_switch_leaves_a_durable_marker_and_r
     _prepared(repo, boot)
     real_save = project_move._save  # noqa: SLF001 - the crash is injected at the SWITCHED record write
 
-    def crash_before_switched(folder, folder_fd, rec):
+    def crash_before_switched(folder, folder_fd, rec, **kwargs):
         if rec.get("phase") == project_move.SWITCHED:
             msg = "injected crash before the SWITCHED record"
             raise OSError(errno.EIO, msg)
-        real_save(folder, folder_fd, rec)
+        real_save(folder, folder_fd, rec, **kwargs)
 
     monkeypatch.setattr(project_move, "_save", crash_before_switched)
     with pytest.raises((OSError, StoreError)):

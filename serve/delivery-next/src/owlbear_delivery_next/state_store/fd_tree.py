@@ -14,7 +14,7 @@ import secrets
 import stat
 from typing import TYPE_CHECKING
 
-from owlbear_delivery_next.state_store.database import StoreError
+from owlbear_delivery_next.state_store.database import FormatTooNewError, StoreError
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -76,7 +76,8 @@ def write_at(dfd: int, name: str, text: str, *, before_replace: Callable[[], Non
         kept = keep_entry(dfd, tmp)
         detail = exc.strerror if isinstance(exc, OSError) else str(exc)
         msg = f"{name} could not be written ({detail}): {kept} was kept; move it away, then start again"
-        raise StoreError(msg) from exc
+        error = FormatTooNewError if isinstance(exc, FormatTooNewError) else StoreError
+        raise error(msg) from exc
     os.fsync(dfd)
 
 

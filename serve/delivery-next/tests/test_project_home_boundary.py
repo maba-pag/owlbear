@@ -73,10 +73,10 @@ def test_the_published_name_is_durable_in_its_parent_before_the_switch_is_record
         events.append(("sync", st.st_dev, st.st_ino))
         real_fsync(fd)
 
-    def save(folder, folder_fd, rec):
+    def save(folder, folder_fd, rec, **kwargs):
         if rec["phase"] == project_move.SWITCHED:
             events.append(("switch",))
-        REAL_SAVE(folder, folder_fd, rec)
+        REAL_SAVE(folder, folder_fd, rec, **kwargs)
 
     monkeypatch.setattr(os, "fsync", fsync)
     monkeypatch.setattr(project_move, "_save", save)
@@ -92,8 +92,8 @@ def test_an_ancestor_swapped_after_the_switch_refuses_and_keeps_the_source_and_r
     target = project_home.home(SOURCE_ID)
     aside = target.parent.parent / "projects-aside"
 
-    def save(clone_folder, folder_fd, rec):
-        REAL_SAVE(clone_folder, folder_fd, rec)
+    def save(clone_folder, folder_fd, rec, **kwargs):
+        REAL_SAVE(clone_folder, folder_fd, rec, **kwargs)
         if rec["phase"] == project_move.SWITCHED:
             target.parent.rename(aside)  # the path that named the published copy now names another folder
             target.parent.mkdir()
@@ -240,10 +240,10 @@ def test_a_resumed_move_syncs_the_published_name_before_it_switches(clone, monke
         events.append(("sync", st.st_dev, st.st_ino))
         real_fsync(fd)
 
-    def save(folder, folder_fd, rec):
+    def save(folder, folder_fd, rec, **kwargs):
         if rec["phase"] == project_move.SWITCHED:
             events.append(("switch",))
-        REAL_SAVE(folder, folder_fd, rec)
+        REAL_SAVE(folder, folder_fd, rec, **kwargs)
 
     monkeypatch.setattr(os, "fsync", fsync)
     monkeypatch.setattr(project_move, "_save", save)
