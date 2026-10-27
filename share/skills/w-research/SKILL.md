@@ -76,9 +76,10 @@ owns any required challenger review or user decision.
 
 Write a research document only when the evidence has durable value beyond the active shaping conversation:
 to the project's folder in the shared data repository, `owlbear-data/<folder>/research/{slug}.md` (OwlBear's
-folder is `owlbear`), never into the project itself (TD-227, TD-347). Only OwlBear's build designs of work not
-yet built stay in its `.owlbear/research/` (its plan is the [pinned tracker issue](https://github.com/maba-pag/owlbear/issues/713)), which GitHub's agents read; a design moves once built
-(TD-395).
+folder is `owlbear`), never into the project itself (TD-227, TD-347). OwlBear's build designs of work not yet
+built live there too, in [`owlbear/research/`](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/); its repository's `.owlbear/` keeps only agent customizations,
+scripts and placeholders, and its plan is the [pinned tracker issue](https://github.com/maba-pag/owlbear/issues/713)
+(D-01M5ZMXT7H851MZZFJA2P9X179).
 Keep it focused and source-grounded:
 
 ```markdown
@@ -95,7 +96,7 @@ Keep it focused and source-grounded:
 ```
 
 Cite the sources in the research document's Sources Studied table. When the work adopts external code, text
-or patterns into the repository, add its row to `.owlbear/sources/overview.md` per `r-workspace-governance`. Delete approved clones from `.owlbear/scratch/research/` before returning.
+or patterns into the repository, add its row to OwlBear's [sources log](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/sources/overview.md) in owlbear-data per `r-workspace-governance`. Delete approved clones from `.owlbear/scratch/research/` before returning.
 
 ## Step 7 — Return Evidence To The Caller
 

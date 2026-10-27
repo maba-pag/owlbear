@@ -10,8 +10,6 @@ copied into a consumer project.
 | --- | --- |
 | `instructions/` and `skills/` | Project-local operational customizations loaded alongside the portable shared ecosystem; project workflows such as `doc-audit` and `w-agent-audit` are skills invoked by name |
 | `scripts/` | Development validators and operational helper scripts |
-| `research/` | Build designs of work not yet built (OwlBear's plan and status are the [pinned tracker issue](https://github.com/maba-pag/owlbear/issues/713)); other research lives in the project's folder of the data repository |
-| `sources/` | External-source attribution for research and implementation work |
 | `memory/` | Agent memory entries written by the `owlbear-memory` server; host-local memory databases are ignored |
 | `knowledge/` | Local Knowledge database and placeholders; databases and vectors are ignored |
 | `scratch/` | Temporary investigation output; it is ignored and should be cleaned up after use |
@@ -25,6 +23,10 @@ and format marker; see [What OwlBear Installs](../setup/operating-owlbear.md#wha
 
 ## What belongs elsewhere
 
+- OwlBear's research, its designs of unbuilt work and its external-sources log are in owlbear-data's `owlbear/`
+  folder: [research and designs](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/) and [the sources log](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/sources/overview.md) (D-01M5ZMXT7H851MZZFJA2P9X179). Its documents stay out of
+  `.owlbear/`, which keeps agent customizations, scripts and placeholders; OwlBear's plan and status are the
+  [pinned tracker issue](https://github.com/maba-pag/owlbear/issues/713).
 - Shared agent ecosystem definitions are in [`share/`](../share/README.md).
 - Runtime code and MCP servers are in [`serve/`](../serve/README.md).
 - Development-only CI and repository automation are in [`.github/`](../.github/README-automation.md).
