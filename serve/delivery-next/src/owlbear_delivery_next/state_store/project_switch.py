@@ -11,6 +11,7 @@ from owlbear_delivery_next.state_store.database import STORE_FORMAT, FormatTooNe
 from owlbear_delivery_next.state_store.offline_proof import preparation, same_folder
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from pathlib import Path
 
 
@@ -155,11 +156,31 @@ def require_admission(
 ) -> None:
     """Revalidate source witnesses and target authority after admission's durability work."""
     path, tfd = target
-    held_switched(path, tfd, rec)
-    if source_state(source, path.name, rec) != expected:
-        msg = f"{source[0]} changed its preparation, format or receipt during admission: nothing was changed"
-        raise StoreError(msg)
-    named_switched(path, rec)
+
+    def validate() -> None:
+        if source_state(source, path.name, rec) != expected:
+            msg = f"{source[0]} changed its preparation, format or receipt during admission: nothing was changed"
+            raise StoreError(msg)
+
+    _guard_target(path, tfd, rec, validate)
+
+
+def _guard_target(target: Path, tfd: int, rec: dict, validate: Callable[[], None]) -> None:
+    """Keep the held target's proof, format and namespace stable across the later source reads."""
+    try:
+        images = {name: fd_tree.stat_at(tfd, name) for name in (project_move.MOVE_PROOF, format_marker.MARKER, ".")}
+        held_switched(target, tfd, rec)
+        validate()
+        stable = all(fd_tree.same_image_at(tfd, name, before) for name, before in images.items())
+        if not stable:
+            marker = fd_tree.read_at(tfd, format_marker.MARKER)
+            if marker is not None:
+                format_marker.supported_format(marker)
+            raise project_move._not_published(target)  # noqa: SLF001 - shared publication refusal
+    except (OSError, UnicodeError) as exc:
+        msg = f"{target}'s authority witnesses cannot be checked: nothing was changed"
+        raise StoreError(msg) from exc
+    named_switched(target, rec)
 
 
 def check_switched(target: Path, pfd: int, rec: dict) -> int:
@@ -178,8 +199,8 @@ def check_switched(target: Path, pfd: int, rec: dict) -> int:
     return tfd
 
 
-def require_switched(target: Path, rec: dict) -> None:
-    """Prove a switched target read-only and close the descriptors acquired for that lookup.
+def require_switched(target: Path, rec: dict, *, validate: Callable[[], None] | None = None) -> None:
+    """Prove a switched target around optional source validation, closing this lookup's descriptors.
 
     Raises:
         StoreError: The target cannot be read or does not pass the held identity, proof and marker checks.
@@ -187,7 +208,12 @@ def require_switched(target: Path, rec: dict) -> None:
     try:
         pfd = os.open(target.parent, fd_tree.DIR_FLAGS)
         try:
-            os.close(check_switched(target, pfd, rec))
+            tfd = check_switched(target, pfd, rec)
+            try:
+                if validate is not None:
+                    _guard_target(target, tfd, rec, validate)
+            finally:
+                os.close(tfd)
         finally:
             os.close(pfd)
     except OSError as exc:

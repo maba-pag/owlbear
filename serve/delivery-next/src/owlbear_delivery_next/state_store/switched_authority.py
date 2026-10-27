@@ -13,6 +13,7 @@ from owlbear_delivery_next.state_store.database import StoreError
 from owlbear_delivery_next.state_store.offline_proof import same_folder
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from pathlib import Path
 
 
@@ -37,11 +38,14 @@ def retained_target(folder: Path, pid: str) -> Path | None:
                 msg = f"{folder} was not switched to {target}: its receipt names another store; nothing was changed"
                 raise StoreError(msg)
             project_switch.prepared_prior(fd)
-            _proven(target, rec)
-            _require_id(folder, fd, pid)
-            if image is None or not fd_tree.holds_text_at(fd, project_move.MOVE_RECORD, image):
-                msg = f"{folder}'s move receipt changed during validation: nothing was changed"
-                raise StoreError(msg)
+
+            def validate() -> None:
+                admitted = project_switch.source_state((folder, fd), pid, rec)
+                if image is None or admitted[2] != image:
+                    msg = f"{folder}'s move receipt changed during validation: nothing was changed"
+                    raise StoreError(msg)
+
+            _proven(target, rec, validate)
         if not same_folder(folder, fd):
             msg = f"{folder} no longer names the retained source that was checked: nothing was changed"
             raise StoreError(msg)
@@ -56,6 +60,6 @@ def _require_id(folder: Path, folder_fd: int, pid: str) -> None:
         raise StoreError(msg)
 
 
-def _proven(target: Path, rec: dict) -> None:
-    """Refuse unless *target* is the folder the receipt recorded, holding its proof and format, nothing quarantined."""
-    project_switch.require_switched(target, rec)
+def _proven(target: Path, rec: dict, validate: Callable[[], None]) -> None:
+    """Hold the proven target through source validation, with no intervening authority-image change."""
+    project_switch.require_switched(target, rec, validate=validate)

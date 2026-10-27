@@ -76,7 +76,7 @@ IMPORTS = (
     ("state_store/project_home.py", "c79464a6139fe571efd600903aa848dc67c9673f016d12c093d7d6b94b74a681"),
     ("state_store/store.py", "a3da565feeee931b40d4907f17c46372c000e573e1add938ae3679d175e75de4"),
 )
-CURRENT_FAMILY_AGGREGATE = "9641ea7de5e6da0c5370366d2eb95b4359a47588408714088348d64f24805589"
+CURRENT_FAMILY_AGGREGATE = "bbe84730885d5758277eaa4931fa534b3dc245428bae45c5f71959e521da112d"
 CURRENT_FUNCTIONS = (
     ("commands/chat_client.py:Chat.call", "0fc1fdb166ea555741a2aa7796a99a4eb7b71c572ad37fba1ae0a9e37171b584"),
     ("commands/chat_client.py:workspace", "4e1bd94f29805ab94eff49182ba65966b93988ce4a8e3f395576601499a4855d"),
@@ -109,13 +109,13 @@ CURRENT_FUNCTIONS = (
     ),
     (
         "state_store/switched_authority.py:retained_target",
-        "50c16696355b398535ff6a25502121ef0194e960d9740f9a92692ddc27879d42",
+        "e71f921c519345308e0ae99775698b82632c1ca57bcf88213d760d2e61d5f7fe",
     ),
-    ("state_store/switched_authority.py:_proven", "0ae82f8abddf8bbbb5a5966af6a2d135fc955de8dc9f4cc5eb39cbec796b8780"),
+    ("state_store/switched_authority.py:_proven", "823679ab6239a59c29de42e974e946e204d5a12fbf587fcb0dee419b22ef29bf"),
     ("state_store/project_home.py:_generation_at", "d048a1d7d993a3fc1fb9ad2756d4e59459e6c43fd90c604d1637de82a4c3533e"),
     ("state_store/project_home.py:clone_dir", "db1b925c614a629f720496a9473f955f44d686c0e8903da656e27288435f3c5d"),
     ("state_store/project_home.py:clone_id", "db67bbd9c2b604a58dc2ab9509ae5b9949f274f92ee64bbc65cdb215ae9b0d8b"),
-    ("state_store/project_home.py:current", "1000348e7e489caf55dd8f2c73788ac5636462ac254907073d8512f98046d729"),
+    ("state_store/project_home.py:current", "d90ec79598ee4b896b04b572e9da2f644950831b8840265f8e33e207a82963ba"),
     ("state_store/project_home.py:ensure_id", "0ca91d9cd58f7a7e6f1faf1f5e7a9ae0c0c578ce58f7d798235375e280d05f5d"),
     ("state_store/project_home.py:ensure_pinned", "448d703d46f3c59a8c5856ef22adf3222ddf61d91f88e12ab1de20b0a1cf88db"),
     ("state_store/project_home.py:located", "d859e5fc314bd5c5be3e94cb2e5cdead74832ccbba657ff56ac4a29bc7ffc656"),

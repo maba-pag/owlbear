@@ -785,6 +785,90 @@ def test_open_refuses_a_source_renamed_during_terminal_receipt(repo, boot, monke
 
 
 @pytest.mark.usefixtures("current_binding")
+@pytest.mark.parametrize(
+    ("consumer", "damage"),
+    [
+        ("open-before", "proof"),
+        ("open", "proof"),
+        ("current", "proof"),
+        ("selfcheck", "proof"),
+        ("register", "proof"),
+        ("adopt", "proof"),
+        ("current", "marker"),
+        ("current", "quarantine"),
+    ],
+)
+def test_later_source_reads_cannot_admit_changed_target_witnesses(repo, boot, monkeypatch, consumer, damage):
+    target = _finished_move(repo, boot)
+    entry = registry.register(repo)
+    if consumer == "register":
+        registry.remove(entry.id)
+    source = _source(repo)
+    original, source_id, target_id = fd_tree.read_at, source.stat(), target.stat()
+    real_state, real_revalidate = project_switch.source_state, registry._revalidate  # noqa: SLF001
+    calls, active, publishing, armed, fired = [], [], [], [], []
+    registry_path = local_home.root() / project_home.MACHINE
+    registry_before = registry_path.read_bytes()
+    owner = []
+
+    def revalidate(*args):
+        publishing.append(True)
+        try:
+            return real_revalidate(*args)
+        finally:
+            publishing.pop()
+
+    def state(*args):
+        calls.append(True)
+        active.append(len(calls))
+        try:
+            return real_state(*args)
+        finally:
+            active.pop()
+
+    def read(dfd, name):
+        value = original(dfd, name)
+        if name == MARKER and os.path.samestat(os.fstat(dfd), target_id):
+            armed.append(True)
+        if (
+            armed
+            and not fired
+            and name == project_move.CLONE_ID
+            and os.path.samestat(os.fstat(dfd), source_id)
+            and (not consumer.startswith("open") or active == [2 if consumer == "open-before" else 3])
+            and (consumer not in {"register", "adopt"} or publishing)
+        ):
+            fired.append(True)
+            path, text = {
+                "proof": (target / project_move.MOVE_PROOF, "owner-replaced-proof\n"),
+                "marker": (target / MARKER, "1000\n"),
+                "quarantine": (target / f"{fd_tree.QUARANTINE}owner", "owner-kept-state\n"),
+            }[damage]
+            path.write_text(text)
+            owner.append((path, text))
+        return value
+
+    monkeypatch.setattr(project_switch, "source_state", state)
+    monkeypatch.setattr(registry, "_revalidate", revalidate)
+    monkeypatch.setattr(fd_tree, "read_at", read)
+    if consumer == "selfcheck":
+        assert selfcheck._project(entry.id, repo)  # noqa: SLF001 - real read-only consumer
+    else:
+        action = {
+            "open-before": lambda: Store.open(repo),
+            "open": lambda: Store.open(repo),
+            "current": lambda: project_home.current(repo),
+            "register": lambda: registry.register(repo),
+            "adopt": lambda: registry.adopt(entry.id),
+        }[consumer]
+        with pytest.raises(registry.RegistryError if consumer in {"register", "adopt"} else StoreError):
+            action()
+    assert fired == [True]
+    assert owner[0][0].read_text() == owner[0][1]
+    assert registry_path.read_bytes() == registry_before
+
+
+@pytest.mark.usefixtures("current_binding")
 @pytest.mark.parametrize("surface", ["register", "adopt"])
 @pytest.mark.parametrize("when", ["target-read", "id-file-sync", "id-directory-sync"])
 def test_registration_keeps_the_id_it_validated_through_its_durability_work(repo, boot, monkeypatch, surface, when):

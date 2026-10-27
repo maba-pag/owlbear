@@ -98,6 +98,9 @@ lookups validate the target's identity, issued proof, quarantine state and exist
 they recheck its named directory after those reads and leave an absent target marker for store open to repair.
 Current lookup, registration and selfcheck keep the retained source descriptor through target validation and
 recheck the source's named directory before accepting its receipt. Unreadable UTF-8 enters the normal diagnostic channel.
+Source witness images and the held target's proof, marker and directory namespace must stay stable across later
+validation reads. A change refuses without replacing owner state; a newly installed newer marker keeps its upgrade
+diagnostic. These are bounded read-set checks, not an atomic filesystem snapshot.
 After a validated switch, selfcheck checks the active store's settings rather than the retained backup's
 `config.json`; the source's identity, receipt and fence remain required.
 A failed project load whose target cannot be proven retains an unlocated maintenance reservation, rather than taking

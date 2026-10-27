@@ -212,8 +212,11 @@ def current(cwd: Path) -> Path | None:
         target = home(pid)
         if rec and rec["phase"] == project_move.SWITCHED:
             _switched_to(target, rec)
-            project_switch.require_switched(target, rec)
-            project_switch.source_state((folder, folder_fd), pid, rec)
+
+            def validate() -> None:
+                project_switch.source_state((folder, folder_fd), pid, rec)
+
+            project_switch.require_switched(target, rec, validate=validate)
             _same_folder(folder, folder_fd)
         return target
     finally:
