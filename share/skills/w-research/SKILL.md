@@ -76,8 +76,8 @@ owns any required challenger review or user decision.
 
 Write a research document only when the evidence has durable value beyond the active shaping conversation:
 to the project's folder in the shared data repository, `owlbear-data/<folder>/research/{slug}.md` (OwlBear's
-folder is `owlbear`), never into the project itself (TD-227, TD-347). Only OwlBear's plan and build
-designs of work not yet built stay in its `.owlbear/research/`, which GitHub's agents read; a design moves once built
+folder is `owlbear`), never into the project itself (TD-227, TD-347). Only OwlBear's build designs of work not
+yet built stay in its `.owlbear/research/` (its plan is the [pinned tracker issue](https://github.com/maba-pag/owlbear/issues/713)), which GitHub's agents read; a design moves once built
 (TD-395).
 Keep it focused and source-grounded:
 

@@ -6,7 +6,7 @@
 > unmodified or by extracting its useful parts? And how should screenshots be judged when one model may miss
 > that a technically correct change looks bad?
 > **Status 2026-10-19:** built (§3.6 to §3.8, #449); contradicting findings are not detected (§3.7). Design pack
-> updates move to pull requests with self-update step 3c ([the plan](owlbear-plan.md) item 2).
+> updates move to pull requests with self-update step 3c ([the plan](https://github.com/maba-pag/owlbear/blob/4461a7972278a44a530f92b9c8908564d9a49622/.owlbear/research/owlbear-plan.md) item 2).
 
 ## 1. Context and Question
 
