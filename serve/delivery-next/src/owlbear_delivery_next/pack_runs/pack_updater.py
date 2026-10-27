@@ -18,7 +18,7 @@ from pydantic import Field
 from owlbear_delivery_next.change_contracts import tools
 from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.change_contracts.permissions import Policy
-from owlbear_delivery_next.design_packs import design_pack
+from owlbear_delivery_next.design_packs import design_pack, pack_update
 from owlbear_delivery_next.pack_runs import pack_candidate, pack_gates
 from owlbear_delivery_next.runtimes import sdk_adapter
 from owlbear_delivery_next.settings import roles
@@ -32,6 +32,7 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.state_store.store import Store
 
 LABEL = "pack-update"
+UPSTREAM_DIFF = "upstream/skill.diff"  # upstream's skill text from the pinned tag, laid out for the updater
 FINISH = (
     "Call `submit_result` once with `summary`, file by file, `evidence` when you changed `golden/`, and `rejected` for "
     "each finding you judge wrong. If the calibration rounds would have to change, call `report_wrong_premise`."
@@ -84,8 +85,15 @@ def lay_out(at: Path, c: pack_candidate.Candidate, clone: Path, package: Path) -
         (at / "skills" / name).mkdir(parents=True, exist_ok=True)
         (at / "skills" / name / "SKILL.md").write_bytes(skill(c, name).read_bytes())
     pack_gates.lay_out(at, package)
-    pack_candidate.upstream_skill(clone, c.pins["upstream"]["commit"], at / "upstream")
+    upstream(at, c, clone)
     return _files(at)
+
+
+def upstream(at: Path, c: pack_candidate.Candidate, clone: Path) -> None:
+    """Upstream's new skill text and its diff from the pinned tag, for the updater to read: it runs no shell."""
+    commit = c.pins["upstream"]["commit"]
+    pack_candidate.upstream_skill(clone, commit, at / "upstream")
+    (at / UPSTREAM_DIFF).write_text(pack_update.skill_diff(clone, commit), encoding="utf-8")
 
 
 def skill(c: pack_candidate.Candidate, name: str) -> Path:
@@ -116,14 +124,17 @@ def taken(at: Path, c: pack_candidate.Candidate) -> list[str]:
 
 def prompt(c: pack_candidate.Candidate, diff: str, lines: list[str], earlier: str = "", golden: str = "") -> str:
     """The updater's whole first message: the update, the challenger's findings, an earlier session's work."""
+    kept = [n for n in diff.splitlines() if not n.startswith(pack_update.SKILL_TEXT)]  # a command it cannot run
+    shown = "\n".join([*kept, f"{pack_update.SKILL_TEXT}`{UPSTREAM_DIFF}`"])
     head = f"You update Delivery's design pack to `{c.pins['pack']}` (upstream `{c.tag}`). Edit the skills under "
     out = [
         (
             f"{head}`skills/`, the golden pages and their expectations under `golden/` and the detector's glue under "
             "`code/` (`detector.py` calls the engine and reads its findings; `pack_update.py` reads upstream's "
-            "registry and skills). Upstream's new skill text is under `upstream/`."
+            f"registry and skills). Upstream's new skill text is under `upstream/{pack_update.SKILL}/`, and "
+            f"`{UPSTREAM_DIFF}` is its diff from the pinned tag. You have no shell: read these files."
         ),
-        "", "## What you may change", RULES, "", "## Rule and skill diff", diff,
+        "", "## What you may change", RULES, "", "## Rule and skill diff", shown,
     ]  # fmt: skip
     out += ["", "## Golden pages with the package's expectations", golden] if golden else []
     out += lines
@@ -164,7 +175,8 @@ def ended(done: Run) -> UpdateResult:
     """The updater's result; any other ending stops the update with its reason, for the owner.
 
     Raises:
-        design_pack.PackError: Its processes are not confirmed gone, it reported a premise, or it gave no result.
+        design_pack.PackError: Its processes are not confirmed gone, it reported a premise or a missing tool, or it
+            gave no result.
     """
     p = done.payload
     if not (done.termination and done.termination.confirmed):
@@ -173,6 +185,9 @@ def ended(done: Run) -> UpdateResult:
     if done.ending == "premise" and isinstance(p, tools.WrongPremise):
         msg = f"the updater asks the owner: {p.reason} ({'; '.join(p.evidence)})"
         raise design_pack.PackError(msg[:2000])
+    if done.ending == "missing-tool" and isinstance(p, tools.MissingTool):
+        msg = f"the updater lacks {p.tool}: {p.need} ({p.error})"
+        raise design_pack.PackError(msg[:600])
     if done.ending != "result" or not isinstance(p, UpdateResult):
         msg = f"the updater ended with {done.ending}: {done.detail or 'no result'}"
         raise design_pack.PackError(msg[:600])

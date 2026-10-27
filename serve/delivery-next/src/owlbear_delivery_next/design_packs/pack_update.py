@@ -39,6 +39,7 @@ SECONDS = 10.0  # the notice's one request: the readiness check at host start ne
 REGISTRY = "crates/foundation/src/registry.rs"  # upstream's rule registry
 TABLE = "pub static ANTIPATTERNS"  # its rule table, ended by the first line "];"
 SKILL = "skill"  # upstream's skill text
+SKILL_TEXT = "Skill text: "  # the diff report's last line, naming the command that shows the skill text
 ENTRY = re.compile(r"^ {4}Antipattern \{\n(?P<body>.*?)^ {4}\},?$", re.DOTALL | re.MULTILINE)  # rustfmt's layout
 FIELD = re.compile(r"^ {8}(?P<key>\w+): (?P<value>.*?),?\s*(?=^ {8}\w+: |\Z)", re.DOTALL | re.MULTILINE)
 
@@ -152,7 +153,12 @@ def diff(clone: Path, to: str) -> str:
             *(f"  - {k}: {old[r].get(k)} -> {new[r].get(k)}" for k in keys),
         ]
     lines += ["", "## Skill files changed", *(f"- {f}" for f in files_changed), *([] if files_changed else ["- none"])]
-    return "\n".join([*lines, "", f"Skill text: git -C {clone} diff {pinned} {to} -- {SKILL}"])
+    return "\n".join([*lines, "", f"{SKILL_TEXT}git -C {clone} diff {pinned} {to} -- {SKILL}"])
+
+
+def skill_diff(clone: Path, to: str) -> str:
+    """Upstream's skill text from the pinned tag to *to*, as one unified diff: what that last line shows."""
+    return _git(clone, "diff", design_pack.manifest()["upstream"]["tag"], to, "--", SKILL)
 
 
 def golden(
