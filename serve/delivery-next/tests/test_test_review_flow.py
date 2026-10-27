@@ -250,7 +250,7 @@ def curated(applied: bool):  # noqa: FBT001 - one switch per test
     return done
 
 
-def test_the_curator_builds_with_its_role_and_every_retire_or_merge_verdict(curating, monkeypatch):
+def test_the_curator_builds_with_its_role_and_every_retire_or_merge_verdict(curating, monkeypatch, user_on):
     curating.curate = curated(applied=True)
     base = config.BASE  # the builder's own session values unset: the curator's build never needs them
     builder = base.agents["builder"].model_copy(update={"model": None, "effort": None, "minutes": None})
@@ -260,6 +260,7 @@ def test_the_curator_builds_with_its_role_and_every_retire_or_merge_verdict(cura
     assert (cfg.role, cfg.model, cfg.effort, cfg.context, cfg.submit) == (
         "test-curator", "claude-opus-5.5", "high", "long", TEST_CURATION
     )  # fmt: skip
+    assert cfg.user == user_on
     assert "tests/test_a.py::old: retire" in cfg.message
     assert "share 2 (web/src/b.test.ts" not in cfg.message  # every share ended
     assert "::slow" not in cfg.message  # rewrite-lower waits (TD-312)

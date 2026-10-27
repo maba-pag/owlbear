@@ -18,7 +18,7 @@ from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.runtimes import sdk_adapter
 from owlbear_delivery_next.settings import carried, profile, roles
-from owlbear_delivery_next.settings.config import Agent, Layer, resolve
+from owlbear_delivery_next.settings.config import Agent, GlobalLayer, Layer, resolve
 from owlbear_delivery_next.state_store.store import Store, StoreError
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
@@ -44,6 +44,16 @@ def test_plan_challenge_is_the_challenger_not_the_planner():
     settings = resolve(None, Layer(agents={"planner": Agent(model="p", effort="low")}))
     assert roles.chosen(settings, StepKind.PLAN) == RoleModel(model="p", effort="low")
     assert roles.chosen(settings, "plan-challenge") == carried.MODELS["challenger"]
+
+
+@pytest.mark.parametrize(("instructions", "skills"), [(False, False), (True, False), (False, True), (True, True)])
+def test_the_user_config_switches_reach_a_step_as_set_the_project_over_global(instructions, skills):
+    expected = roles.UserConfig(instructions=instructions, skills=skills)
+    glob = GlobalLayer(load_user_instructions=instructions, load_user_skills=skills)
+    assert roles.user_config(resolve(glob, Layer())) == expected
+    flipped = GlobalLayer(load_user_instructions=not instructions, load_user_skills=not skills)
+    project = Layer(load_user_instructions=instructions, load_user_skills=skills)
+    assert roles.user_config(resolve(flipped, project)) == expected
 
 
 def test_a_project_override_wins_and_is_marked_in_the_table():

@@ -14,6 +14,7 @@ from owlbear_delivery_next.design_packs import design_pack
 from owlbear_delivery_next.local_system import preload
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.runtimes import chatlogs, sdk_adapter
+from owlbear_delivery_next.settings.roles import UserConfig
 
 ROLES = ("builder", "planner", "reviewer")
 
@@ -95,6 +96,56 @@ def test_the_sdk_session_sees_only_its_roles_skill_folders() -> None:
     ]
     assert "disabled_skills" not in opts  # a project's own skills stay as the project has them
     assert opts["custom_agents"][0]["skills"] == ["owlbear-module-design", "owlbear-acceptance-criteria"]
+
+
+def _user_skills(home: Path, tmp_path: Path) -> None:
+    """The owner's skills: his own, one linked in, one named as Delivery's, his copy of the chat skill, a folder."""
+    skills = home / "skills"
+    skills.mkdir(parents=True)
+    for folder, name in [("ah-asking", "ah-asking"), ("mine", None), ("design", "owlbear-module-design"),
+                         ("owlbear-change-shaping", None)]:  # fmt: skip
+        (skills / folder).mkdir()
+        meta = f"name: {name}\n" if name else ""
+        (skills / folder / "SKILL.md").write_text(f"---\n{meta}description: x\n---\n")
+    linked = tmp_path / "agent-home" / "ah-decisions"
+    linked.mkdir(parents=True)
+    (linked / "SKILL.md").write_text("---\nname: ah-decisions\ndescription: x\n---\n")
+    (skills / "ah-decisions").symlink_to(linked)
+    (skills / "notes").mkdir()  # no SKILL.md: no skill
+
+
+@pytest.mark.parametrize("on", [True, False])
+def test_the_owners_skills_are_available_only_with_his_switch_on_never_as_delivery_s(tmp_path, monkeypatch, on):
+    home = tmp_path / "copilot"
+    _user_skills(home, tmp_path)
+    monkeypatch.setenv("COPILOT_HOME", str(home))
+    cfg = session(user=UserConfig(instructions=False, skills=True)) if on else session()  # a site that sets none: off
+    st = sdk_adapter._Step(cfg, SimpleNamespace(call_soon_threadsafe=lambda *_: None))  # noqa: SLF001
+    opts = st.options()
+    folder = preload.directory()
+    own = [str(folder / "owlbear-module-design"), str(folder / "owlbear-acceptance-criteria")]
+    his = [str(home / "skills" / n) for n in ("ah-asking", "ah-decisions", "mine")]  # by their link path
+    assert opts["skill_directories"] == own + (his if on else [])
+    assert opts["custom_agents"][0]["skills"] == ["owlbear-module-design", "owlbear-acceptance-criteria"]
+    assert (opts["enable_config_discovery"], opts["included_builtin_skills"]) == (False, [])
+
+
+def test_the_runtimes_user_folder_is_copilot_home_else_the_home_s_copilot(tmp_path, monkeypatch):
+    monkeypatch.setenv("COPILOT_HOME", str(tmp_path / "elsewhere"))
+    assert preload.copilot_home() == tmp_path / "elsewhere"
+    monkeypatch.delenv("COPILOT_HOME")
+    monkeypatch.setenv("HOME", str(tmp_path))
+    assert preload.copilot_home() == tmp_path / ".copilot"
+    assert preload.user_skills(tmp_path / ".copilot") == []  # no folder: no skills, no error
+
+
+def test_a_pack_candidate_s_skill_names_are_reserved_too(tmp_path):
+    home, candidate = tmp_path / "copilot", tmp_path / "candidate"
+    (home / "skills" / "new-pack-skill").mkdir(parents=True)
+    (home / "skills" / "new-pack-skill" / "SKILL.md").write_text("---\nname: new-pack-skill\n---\n")
+    (candidate / "new-pack-skill").mkdir(parents=True)
+    assert preload.user_skills(home) == [str(home / "skills" / "new-pack-skill")]
+    assert preload.user_skills(home, folder=candidate) == []
 
 
 @pytest.mark.usefixtures("gap")

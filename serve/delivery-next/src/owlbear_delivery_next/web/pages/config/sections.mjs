@@ -4,7 +4,7 @@ import { here, loaded as clones, project as current } from "/assets/ui.mjs";
 import { SOURCES, ROUNDS, LOOPS, state, drafts, show, notify, shown } from "./state.mjs";
 import {
   cell, row, table, button, numberCell, designFailures, widths, sessionsAtOnce, prLabels, prMarker, subagentsCell,
-  curatorThreshold, spotterCell, prefRows,
+  curatorThreshold, spotterCell, prefRows, USER_KEYS, userConfig, userConfigLabel,
   contextCell, ratesCell, editable,
 } from "./cells.mjs";
 import { pendingLine, save, rename, reviewPrefs } from "./layers.mjs";
@@ -211,6 +211,16 @@ function settingsSections() {
       ${table("Subagents: they apply to the next session", ["Agent", "Built-in subagents"], "subagents",
         roles.filter((role) => !["shaper", "spotter"].includes(role)).map((role) =>
           row(text(role), subagentsCell(role))))}
+    </section>
+    <section class="panel" aria-labelledby="user-config-title">
+      <p-heading size="lg"><h2 id="user-config-title">Your instructions and skills</h2></p-heading>
+      <p-text>A Delivery step reads its repository's instructions and Delivery's own skills. Switched on, it also
+        reads your own instruction files in your Copilot folder (instructions/ and copilot-instructions.md, links
+        followed), and is offered your own skills there (skills/), never one named as Delivery's. A plugin's files and
+        your agents stay off either way. Neither has a default: until both are set, a step asks you to set them
+        instead of starting its session.</p-text>
+      ${table("Your instructions and skills: they apply to the next session", ["Setting", "Value"], "user-config",
+        USER_KEYS.map((key) => row(text(userConfigLabel(key)), userConfig(key))))}
     </section>
     <section class="panel" aria-labelledby="general-title">
       <p-heading size="lg"><h2 id="general-title">Visual checks</h2></p-heading>

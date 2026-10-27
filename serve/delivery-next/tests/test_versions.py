@@ -251,6 +251,19 @@ def test_the_selfcheck_refuses_a_clones_unmoved_settings_newer_than_it_reads(tmp
     assert found == [f"{clone}: {said}"]
 
 
+def test_the_selfcheck_reads_settings_in_format_17_and_refuses_the_next_one(tmp_path):
+    clone = registered(tmp_path)
+    folder = project_home.clone_dir(clone)
+    folder.mkdir(exist_ok=True)
+    switched = {"format": 17, "load_user_instructions": True, "load_user_skills": False}
+    (folder / "config.json").write_text(json.dumps(switched))
+    assert selfcheck.problems() == []
+
+    (folder / "config.json").write_text(json.dumps(switched | {"format": 18}))
+    said = f"its settings in {folder / 'config.json'} have format 18, newer than this version's 17"
+    assert selfcheck.problems() == [f"{clone}: {said}"]
+
+
 @pytest.mark.usefixtures("origin")
 def test_a_runtime_whose_commit_cannot_be_read_takes_nothing():
     (local_home.root() / local_home.RUNTIME).mkdir()

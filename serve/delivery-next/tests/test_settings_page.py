@@ -378,6 +378,65 @@ def test_merge_and_cleanup_preferences_save_reload_and_clear_back_to_inherit(sto
     assert (prefs.ci_poll_seconds, prefs.ask_before_merge) == (45, True)
 
 
+INSTRUCTIONS, SKILLS = "Your instructions in Delivery steps", "Your skills in Delivery steps"
+
+
+def _saved(page, pds, button: str, whose: str) -> None:
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    page.locator(".bar").get_by_role("button", name=button).click()
+    pds.answer(page, button)
+    expect(page.locator("#status")).to_have_text(f"Saved {whose} settings. They apply to the next session.")
+
+
+@pytest.mark.browser
+def test_the_user_config_switches_save_in_each_layer_reload_and_clear_back_to_inherit(store, pds, monkeypatch) -> None:
+    """D-01M5YE4P5317N1HWD0QN6N05E0: no default; Global, this machine and the project set them; the project wins."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    from owlbear_delivery_next.settings import config  # noqa: PLC0415
+    from owlbear_delivery_next.state_store.store import read_layer  # noqa: PLC0415
+
+    unset = {"load_user_instructions": None, "load_user_skills": None}
+    monkeypatch.setattr(config, "BASE", config.BASE.model_copy(update=unset))
+    with settings_page(store, pds) as page:
+        shown = page.locator("#user-config")
+        expect(page.locator("#unset")).to_contain_text("load_user_instructions, load_user_skills")
+        expect(shown).to_contain_text("unset: set it here or in a wider layer")
+        pds.pick(page, "Layer", "global")
+        expect(shown).to_contain_text("inherit (unset)")
+        pds.pick(page, INSTRUCTIONS, "off")
+        pds.pick(page, SKILLS, "off")
+        _saved(page, pds, "Save global defaults", "the global")
+        pds.pick(page, "Layer", "machine")
+        expect(pds.select(page, INSTRUCTIONS)).to_have_js_property("value", "inherit")
+        expect(shown).to_contain_text("inherit (off)")
+        pds.pick(page, INSTRUCTIONS, "on")
+        _saved(page, pds, "Save this machine's preferences", "this machine's")
+        pds.pick(page, "Layer", "project")
+        pds.pick(page, SKILLS, "on")
+        _saved(page, pds, "Save project settings", "this project's")
+        expect(page.locator("#unset")).to_have_count(0)
+
+        page.reload()
+        page.locator("#models-note").get_by_text("as this machine's Copilot offers them").wait_for()
+        expect(pds.select(page, INSTRUCTIONS)).to_have_js_property("value", "inherit")
+        expect(pds.select(page, SKILLS)).to_have_js_property("value", "on")
+        expect(shown).to_contain_text("in use: on, from this machine")
+        expect(shown).to_contain_text("in use: on, from this project")
+        pds.pick(page, SKILLS, "inherit")  # the project's own value is cleared: Global's off applies again
+        _saved(page, pds, "Save project settings", "this project's")
+        expect(shown).to_contain_text("in use: off, from global")
+    project, machine = store.read_config(), read_layer(store.machine_path, config.MachineLayer)
+    glob = read_layer(store.global_path, config.GlobalLayer)
+    assert (project.load_user_instructions, project.load_user_skills) == (None, None)
+    assert (machine.load_user_instructions, machine.load_user_skills) == (True, None)
+    assert (glob.load_user_instructions, glob.load_user_skills) == (False, False)
+    resolved = store.settings()
+    assert (resolved.load_user_instructions, resolved.sources["load_user_instructions"]) == (True, "machine")
+    assert (resolved.load_user_skills, resolved.sources["load_user_skills"]) == (False, "global")
+
+
 CATEGORY_LABELS = {
     "hand_off_fitness": "Hand-off fitness",
     "course_and_constraints": "Course and constraints",

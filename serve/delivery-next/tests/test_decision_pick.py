@@ -36,7 +36,7 @@ def verdict(*places: str) -> tools.ReviewResult:
     return tools.ReviewResult(verdict="fix" if places else "pass", findings=found)
 
 
-def test_the_first_challenge_request_picks_from_the_complete_list_and_approval_pins_the_pick(picking):
+def test_the_first_challenge_request_picks_from_the_complete_list_and_approval_pins_the_pick(picking, user_on):
     rule, general = picking.put(make()), picking.put(make(scope=Scope.GLOBAL, project="", title="Ask one question"))
     other = picking.put(make(title="Invoices are PDF", topic="billing", statement="Invoices are sent as PDF."))
     old = picking.put(make(title="Pages use React", state=State.REPLACED))
@@ -49,6 +49,7 @@ def test_the_first_challenge_request_picks_from_the_complete_list_and_approval_p
     c = picking.step()
     first, judge = picking.told
     assert (first.role, judge.role, first.model, first.effort) == ("picker", "challenger", "gpt-6.1-sol", "medium")
+    assert (first.user, judge.user) == (user_on, user_on)
     said = first.message
     assert said.startswith(pick.INSTRUCTION)
     assert said.index("Missed page rules") < said.index(f"{rule.id} | pages | {rule.statement}") < said.index("Title:")

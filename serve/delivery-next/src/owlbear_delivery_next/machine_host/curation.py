@@ -389,7 +389,7 @@ class Curation:
                 message=said, fresh=said, resume=False, policy=Policy(at, write=False),
                 observe=lambda: tools.Worktree("", ""), checks=(), submit=memory_curation_tools.SUBMIT,
                 model=role.model, effort=role.effort, context=role.context, limit=roles.limit(settings, LABEL),
-                subagents=roles.subagents(settings, LABEL),
+                subagents=roles.subagents(settings, LABEL), user=roles.user_config(settings),
                 role=tools.CURATOR, job=LABEL, journal=sdk_adapter.Journal(event=self._pids), memory=store,
             )  # fmt: skip
             with self.lock:
@@ -457,10 +457,10 @@ def legacy_uncertain(run: FolderRun) -> bool:
 
 
 def _unset(settings: Settings) -> str:
-    """Why a run cannot start for unset settings: the curator's role or its threshold; empty when both are set."""
+    """Why a run cannot start for unset settings: the curator's role, its threshold or a user-config switch; else ''."""
     try:
         agent = settings.agent(roles.SESSIONS[LABEL])
-        settings.need("curator_threshold")
+        settings.need("curator_threshold", *roles.USER_CONFIG)
     except SettingsUnset as exc:
         return str(exc)
     if agent.subagents is None:  # set per role: a run never guesses whether its subagents may start

@@ -53,7 +53,7 @@ def test_get_shows_each_layer_the_resolved_values_their_source_and_what_is_appli
     assert got["project"] == {
         "format": F, "prefs": None, "prefs_imported": False, "roles_moved": False, "agents": {}, "widths": None,
         "preparations": None, "data": None, "design_failures": None, "final_review": None, "pr_labels": None,
-        "pr_marker": None, "sessions": None, "spotter": None,
+        "pr_marker": None, "load_user_instructions": None, "load_user_skills": None, "sessions": None, "spotter": None,
     }  # fmt: skip
     assert (got["global"], got["global_location"]) == (None, False)
     assert got["settings"]["agents"]["builder"]["model"] == "claude-opus-5.5"
@@ -70,7 +70,8 @@ def test_get_shows_each_layer_the_resolved_values_their_source_and_what_is_appli
         "agents.shaper.max_findings", "agents.shaper.last_round_at", "agents.shaper.ask_owner_at", "final_review",
         "agents.planner.minutes", "agents.builder.minutes", "agents.reviewer.minutes", "agents.challenger.minutes",
         "agents.design-judge.minutes", "agents.preparer.minutes", "agents.updater.minutes", "agents.picker.minutes",
-        "pr_labels", "pr_marker", "prefs.merge_method", "prefs.delete_remote_branch", "prefs.ci_poll_seconds",
+        "pr_labels", "pr_marker", "load_user_instructions", "load_user_skills", "prefs.merge_method",
+        "prefs.delete_remote_branch", "prefs.ci_poll_seconds",
         "prefs.ci_start_window_seconds", "prefs.ask_before_merge",
         "agents.planner.subagents", "agents.builder.subagents", "agents.reviewer.subagents",
         "agents.challenger.subagents", "agents.design-judge.subagents", "agents.preparer.subagents",
@@ -226,7 +227,8 @@ def test_the_global_layer_is_saved_only_where_a_location_is_configured(store, tm
                                                          "agents": {}, "widths": None,
                                                          "preparations": None, "data": None, "design_failures": None,
                                                          "final_review": None, "pr_labels": None,
-                                                         "pr_marker": None, "sessions": None, "spotter": None,
+                                                         "pr_marker": None, "load_user_instructions": None,
+                                                         "load_user_skills": None, "sessions": None, "spotter": None,
                                                          "curator_threshold": None, "machine": None,
                                                          "machine_moved": None},
                                                         True)  # fmt: skip
