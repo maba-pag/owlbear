@@ -112,6 +112,8 @@ store opens recheck source preparation, format and clone id plus target proof af
 guard the source-fence replacement after its temporary file is synced. Active-store edits remain valid: opening
 does not compare them against the historical copied payload. Registration and adoption retain the id their
 authority check admitted through id synchronization and revalidate before recording it.
+Canonical registration keeps marker, ID and receipt image stamps under a held clone directory through its remaining
+reads, even without a move receipt. A late newer marker refuses without overwriting it or publishing the registry.
 The move receipt is part of the retained observation, not just an earlier lookup: replacing it during target
 validation or temporary-file synchronization refuses without overwriting the owner's receipt. Registration and
 adoption also guard the registry's final replacement after its temporary file is synced, leaving the previous

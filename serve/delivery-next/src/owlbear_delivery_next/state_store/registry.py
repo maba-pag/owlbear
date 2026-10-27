@@ -20,10 +20,11 @@ from pydantic import ConfigDict, Field, TypeAdapter, ValidationError, model_vali
 
 from owlbear_delivery_next.change_contracts.models import Record
 from owlbear_delivery_next.local_system import local_home
-from owlbear_delivery_next.local_system.storage_io import atomic_write, open_lock, read_regular
+from owlbear_delivery_next.local_system.storage_io import atomic_write, open_lock
 from owlbear_delivery_next.settings.config import MachineValues
-from owlbear_delivery_next.state_store import project_home, project_move, switched_authority
-from owlbear_delivery_next.state_store.database import STORE_FORMAT, StoreError
+from owlbear_delivery_next.state_store import fd_tree, project_home, project_move, switched_authority
+from owlbear_delivery_next.state_store.database import MARKER, STORE_FORMAT, StoreError
+from owlbear_delivery_next.state_store.offline_proof import same_folder
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
@@ -204,6 +205,57 @@ def canonical(path: Path) -> tuple[Path, Path]:
     return work, store
 
 
+def _marker_at(store: Path, folder_fd: int | None) -> int:
+    if folder_fd is None:
+        return 0
+    try:
+        text = fd_tree.read_at(folder_fd, MARKER)
+        return int(text) if text is not None else 0
+    except (OSError, UnicodeError, ValueError) as exc:
+        msg = f"{store / MARKER} is unreadable"
+        raise RegistryError(msg) from exc
+
+
+@contextlib.contextmanager
+def _source_images(store: Path) -> Iterator[int | None]:
+    """Keep canonical source images stable through all later validation reads, without creating a store."""
+    folder_fd = None
+    try:
+        folder_fd = project_move.pin(store)
+        images = (
+            {
+                name: fd_tree.stat_at(folder_fd, name)
+                for name in (MARKER, project_move.CLONE_ID, project_move.MOVE_RECORD, ".")
+            }
+            if folder_fd is not None
+            else {}
+        )
+        yield folder_fd
+        if folder_fd is None:
+            try:
+                store.lstat()
+            except FileNotFoundError:
+                return
+            msg = f"{store} appeared during canonical validation: nothing was registered"
+            raise RegistryError(msg)
+        if not all(fd_tree.same_image_at(folder_fd, name, before) for name, before in images.items()):
+            found = _marker_at(store, folder_fd)
+            if found > STORE_FORMAT and found != int(project_move.FENCE):
+                msg = f"{store} has format {found}, newer than {STORE_FORMAT}: nothing was registered"
+                raise RegistryError(msg)
+            msg = f"{store}'s source witnesses changed during canonical validation: nothing was registered"
+            raise RegistryError(msg)
+        if not same_folder(store, folder_fd):
+            msg = f"{store} no longer names the source being validated: nothing was registered"
+            raise RegistryError(msg)
+    except (OSError, StoreError) as exc:
+        msg = f"{store}'s source witnesses cannot be checked: nothing was registered: {exc}"
+        raise RegistryError(msg) from exc
+    finally:
+        if folder_fd is not None:
+            os.close(folder_fd)
+
+
 def _canonical(path: Path) -> tuple[Path, Path, str | None]:
     """Canonical paths and the exact clone id their authority admitted, before any durability work."""
     try:
@@ -214,25 +266,22 @@ def _canonical(path: Path) -> tuple[Path, Path, str | None]:
     store = store_of(work)
     for owned in (work, store.parent):
         _owned(owned)
-    marker = store / "format"
-    try:
-        raw = read_regular(marker)
-        found = int(raw.decode("utf-8")) if raw is not None else 0
-    except (OSError, ValueError) as exc:
-        msg = f"{marker} is unreadable"
-        raise RegistryError(msg) from exc
-    pid = clone_id(store)
-    switched = _switched(store, pid)  # any move receipt is validated, whatever the marker says
-    if not switched and clone_id(store) != pid:
-        msg = f"{store}'s clone id changed during canonical validation: nothing was registered"
-        raise RegistryError(msg)
-    if switched and found != int(project_move.FENCE):
-        msg = f"{work}'s Delivery state has a SWITCHED receipt but format {found}, not {project_move.FENCE}: refusing"
-        raise RegistryError(msg)
-    if found > STORE_FORMAT and (found != int(project_move.FENCE) or not switched):
-        msg = f"{work}'s Delivery state has format {found}, newer than {STORE_FORMAT}: this OwlBear is older"
-        raise RegistryError(msg)
-    return work, store, pid
+    with _source_images(store) as folder_fd:
+        found = _marker_at(store, folder_fd)
+        pid = clone_id(store)
+        switched = _switched(store, pid)  # any move receipt is validated, whatever the marker says
+        if not switched and clone_id(store) != pid:
+            msg = f"{store}'s clone id changed during canonical validation: nothing was registered"
+            raise RegistryError(msg)
+        if switched and found != int(project_move.FENCE):
+            msg = (
+                f"{work}'s Delivery state has a SWITCHED receipt but format {found}, not {project_move.FENCE}: refusing"
+            )
+            raise RegistryError(msg)
+        if found > STORE_FORMAT and (found != int(project_move.FENCE) or not switched):
+            msg = f"{work}'s Delivery state has format {found}, newer than {STORE_FORMAT}: this OwlBear is older"
+            raise RegistryError(msg)
+        return work, store, pid
 
 
 def _switched(store: Path, pid: str | None) -> bool:
