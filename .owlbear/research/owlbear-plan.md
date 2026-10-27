@@ -256,8 +256,9 @@ start saves and publishes it.
    category actions replace `mode`, each action checked against the allowed set (D-01M5WP8Z4ADZ5FN7RJDR17RQQ5); a
    former `learning` became on with every action "record". The window-step code is removed (#698). The owner sets
    the Spotter's remaining settings, or switches it off; until then Delivery steps wait for them.
-2. Spotter cases (slice 5's rest): records become candidate cases, stages, versions, a holdout and the regression,
-   seeded from the pilot's moments with their hindsight verdicts.
+2. Spotter cases (slice 5's rest): built 2026-10-27 (stages, versions, rollback, the no-trade regression, releases
+   and the reserve, the seed from the pilot's saved cards, synthetic cases, the reset, publication by `retro-review`);
+   once merged, the owner seeds the cases and `retro-review` checks them.
 3. The chats follower (slice 6's rest): the machine host tails each enrolled chat's `events.jsonl` and looks at its
    hand-offs and plans.
 4. Retro (slice 7): the machine-host job over whole Changes and finished chats, grading the Spotter's records and
@@ -494,6 +495,8 @@ were refreshed: 37 functions,
 17 import sets, 7 constants and 32 whole-module digests. The retired `commands/step_mcp.py` is absent only from
 CURRENT; the historical channels are unchanged. The current read set includes the lower record owner,
 Git-common-directory resolution, shared-repository selection and its bounded Git runner, not every publication import.
+The Spotter cases (#705) refreshed only what they change: the `cli.py`, `command.py` and `machine.py` module
+digests, `cli.py:main`, the `cli.py` and `machine.py` import sets and the function aggregate.
 The assembled binding and dependency-mutation refusals, default public Prepare/Finish, 13 public lease/copy/restart
 controls, settlement, retained-workspace sentinels and target-admission controls pass locally. Boot changes,
 historical producer records and provider/receipt timing faults are modeled; no physical reboot, live SDK or generic

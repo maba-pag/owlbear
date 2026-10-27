@@ -23,6 +23,8 @@ PROJECT = {
     "finish": "After a reboot: prove the preparation and move the clone's store",
     "design-pack": "Show, install or update the pinned design pack",
     "backlog": "The improvement backlog",
+    "cases": "The Spotter cases: stages, versions, replays",
+    "improvement": "Improvement's marked assumptions",
 }
 DROPPED: list[str] = []  # what the environment scrub removed, for doctor
 
