@@ -2,7 +2,7 @@
 
 Each case runs the real ``cli.main`` Prepare and Finish on a real git clone with a temporary HOME. The reboot is
 modeled by changing the boot session id. The Finish move copies the store into a different target root, so the
-carried run record must be a different file on a different inode.
+carried run record must have a different file identity from the retained source.
 """
 
 import json
@@ -87,7 +87,6 @@ def test_a_held_run_survives_the_public_move_into_a_new_root_and_two_restarts(re
     _prepared(repo, boot)
     source = _source(repo)
     _write_run(source, _run_record(RUN_A, STARTED_A))
-    source_inode = (source / pack_state.FILE).stat().st_ino
 
     assert cli.main(["--repo", str(repo), "finish"]) == 0
     capsys.readouterr()
@@ -95,7 +94,9 @@ def test_a_held_run_survives_the_public_move_into_a_new_root_and_two_restarts(re
     target = Store.open(repo).root
     assert target != source
     carried_path = target / pack_state.FILE
-    assert carried_path.stat().st_ino != source_inode, "the run record was not copied into the new root"
+    assert not os.path.samestat(carried_path.stat(), (source / pack_state.FILE).stat()), (
+        "the run record was not copied into the new root"
+    )
     carried = json.loads(carried_path.read_text())
     assert carried["state"] == "failed"
     assert carried["reason"] == pack_state.HOST_STOPPED
