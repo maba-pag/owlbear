@@ -111,7 +111,8 @@ IMPROVEMENT_MACHINE = {  # tests only: settings added after the carry start unse
 
 
 def complete_layer():
-    """The carried values plus test values for what came later: the Spotter's settings and the retro roles."""
+    """The carried values plus test values for what came later: the Spotter's settings, the retro roles and the
+    user-config switches, off (D-01M5YE4P5317N1HWD0QN6N05E0)."""
     from owlbear_delivery_next.settings import carried  # noqa: PLC0415
     from owlbear_delivery_next.settings.improvement import CATEGORIES, Spotter  # noqa: PLC0415
 
@@ -124,7 +125,19 @@ def complete_layer():
         role: base.agents["curator"].model_copy(update={"model": "gpt-6.1-sol", "effort": "medium"})
         for role in ("retro", "retro-review")
     }
-    return base.model_copy(update={"spotter": spotter, "agents": agents})
+    update = {"spotter": spotter, "agents": agents, "load_user_instructions": False, "load_user_skills": False}
+    return base.model_copy(update=update)
+
+
+@pytest.fixture
+def user_on(monkeypatch, _carried_settings):
+    """Both user-config switches on under every layer: a session site that omits them shows as off, never as set."""
+    from owlbear_delivery_next.settings import config  # noqa: PLC0415
+    from owlbear_delivery_next.settings.roles import UserConfig  # noqa: PLC0415
+
+    switched = {"load_user_instructions": True, "load_user_skills": True}
+    monkeypatch.setattr(config, "BASE", config.BASE.model_copy(update=switched))
+    return UserConfig(instructions=True, skills=True)
 
 
 @pytest.fixture(autouse=True)
@@ -136,6 +149,7 @@ def _no_shared_settings(tmp_path_factory, monkeypatch):
     """
     fake = tmp_path_factory.mktemp("home")
     monkeypatch.setenv("HOME", str(fake))
+    monkeypatch.delenv("COPILOT_HOME", raising=False)  # nor the owner's Copilot folder: his skills and instructions
     browsers = MACHINE_HOME / ("Library/Caches" if sys.platform == "darwin" else ".cache") / "ms-playwright"
     monkeypatch.setenv("PLAYWRIGHT_BROWSERS_PATH", os.environ.get("PLAYWRIGHT_BROWSERS_PATH") or str(browsers))
     home = fake / ".owlbear"
@@ -173,8 +187,8 @@ async def _silent_look(_card: dict, _ctx: object, _meter: object) -> str:
     return '{"category": "none", "note": "", "evidence": [], "state_change": null}'
 
 
-async def _no_instructions(_session: object, _worktree: Path) -> list[str]:
-    return []
+async def _no_instructions(*_args: object) -> None:
+    return None
 
 
 def _no_runtime(**_kw: object) -> None:

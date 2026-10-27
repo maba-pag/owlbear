@@ -231,8 +231,8 @@ def judges(  # noqa: PLR0913, PLR0917 - the round's settings snapshot
                     cfg, role=cfg.role or roles.SESSIONS[label], kind=StepKind.REVIEW, session_id=session_id,
                     resume=False, checks=(), model=model, effort=effort, context=role.context, fresh=cfg.message,
                     limit=roles.limit(settings, label), subagents=roles.subagents(settings, label),
-                    previous={}, journal=journal, worktree=at, policy=Policy(at, write=False),
-                    judging=label in tools.VERDICTS, job=label,
+                    user=roles.user_config(settings), previous={}, journal=journal, worktree=at,
+                    policy=Policy(at, write=False), judging=label in tools.VERDICTS, job=label,
                     watch=watched.watching(store, lock, label, settings, at, out, look_limit),
                 )
             )  # fmt: skip

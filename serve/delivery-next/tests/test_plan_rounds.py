@@ -33,6 +33,8 @@ from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.runtimes import step_input
 from owlbear_delivery_next.runtimes.session_result import Run
+from owlbear_delivery_next.settings import config
+from owlbear_delivery_next.settings.roles import UserConfig
 from owlbear_delivery_next.state_store.store import Lock, Store
 
 NOW = datetime(2026, 10, 18, 3, tzinfo=UTC)
@@ -170,6 +172,19 @@ def test_a_failed_challenge_challenges_the_same_plan_again_without_planning_agai
     c = step(store, change_repo)
     assert mp.kinds() == ["plan", "challenge", "challenge"]
     assert (c.step.kind, c.loops[PLAN].ended, c.loops[PLAN].round) == (K.BUILD, "clean", 1)
+
+
+@pytest.mark.parametrize(("instructions", "skills"), [(True, True), (True, False), (False, True)])
+def test_the_planner_and_its_challenger_run_with_the_owners_user_config(  # noqa: PLR0913, PLR0917 - fixtures
+    store, change_repo, mp, monkeypatch, instructions, skills
+):
+    switched = {"load_user_instructions": instructions, "load_user_skills": skills}
+    monkeypatch.setattr(config, "BASE", config.BASE.model_copy(update=switched))
+    mp.plans += [plan(1)]
+    mp.reviews += [review()]
+    step(store, change_repo)
+    assert mp.kinds() == ["plan", "challenge"]
+    assert [cfg.user for _, cfg in mp.told] == [UserConfig(instructions=instructions, skills=skills)] * 2
 
 
 def test_a_host_that_dies_during_the_challenge_keeps_the_revision_and_challenges_it(store, change_repo, mp):

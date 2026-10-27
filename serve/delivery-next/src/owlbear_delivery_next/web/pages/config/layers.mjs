@@ -1,7 +1,7 @@
 import { call } from "/assets/ui.mjs";
 import { CREDITS, INHERIT, LAYERS, NUMBERS, WRITE, state, drafts, page, show, showIdle, notify, typedNumber }
   from "./state.mjs";
-import { mismatch, tierMismatch } from "./cells.mjs";
+import { USER_KEYS, mismatch, tierMismatch } from "./cells.mjs";
 import { readAcross } from "./machine.mjs";
 import { named } from "./sections.mjs";
 
@@ -18,7 +18,7 @@ function saved(layer, key) {
     const v = loaded[layer]?.spotter?.[key.slice(5)];
     return v === null || v === undefined ? "" : Array.isArray(v) ? v.join(", ") : String(v);
   }
-  if (key === "pr_labels" || key === "pr_marker") {
+  if (key === "pr_labels" || key === "pr_marker" || USER_KEYS.includes(key)) {
     const v = loaded[layer]?.[key];
     if (v === null || v === undefined) return "";
     return key === "pr_labels" ? v.join(", ") || "none" : v ? "on" : "off";
@@ -133,7 +133,7 @@ function edited(layer) {
       next.spotter = Object.values(mine).some((v) => v !== null) ? mine : null;
       continue;
     }
-    if (key === "pr_marker") {
+    if (key === "pr_marker" || USER_KEYS.includes(key)) {
       next[key] = value ? value === "on" : null;
       continue;
     }

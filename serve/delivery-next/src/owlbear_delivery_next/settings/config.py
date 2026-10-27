@@ -24,13 +24,14 @@ from owlbear_delivery_next.github.provider import MergeMethod  # noqa: TC001 - p
 from owlbear_delivery_next.settings import improvement
 from owlbear_delivery_next.settings.improvement import Spotter
 
-CONFIG_FORMAT = 16  # 3 renamed the designer to design-judge (TD-169); 4 minutes; 5 PR labels; 6 subagents; 7 sessions;
+CONFIG_FORMAT = 17  # 3 renamed the designer to design-judge (TD-169); 4 minutes; 5 PR labels; 6 subagents; 7 sessions;
 # 8 the test reviewer and curator roles; 9 the watcher's role and switch; 10 no code defaults; 11 Global's machine part;
 # 12 the watcher became the Spotter (role and settings), with the retro roles (2026-10-25);
 # 13 the five unset-by-default preferences and their one-time import marker;
 # 14 the Spotter's on/off switch and its four categories' actions replace its mode (2026-10-26);
 # 15 no window runtime settings: its switches, visibility and tool categories go (2026-10-26);
-# 16 credit limits per look and run replace the daily budgets, written into Global once (2026-10-27)
+# 16 credit limits per look and run replace the daily budgets, written into Global once (2026-10-27);
+# 17 the user-config switches for Delivery steps (2026-10-27)
 CARRIED_FORMAT = 10  # a Global layer below it has not had the built-in values carried in (``settings_carry.carry``)
 ROLES: tuple[Role, ...] = get_args(Role.__value__)
 type Source = Literal["default", "global", "machine", "project", "builder"]
@@ -112,6 +113,9 @@ class Layer(Record):
     final_review: FinalReview | None = None  # TD-211
     pr_labels: list[str] | None = None  # TD-308: on every PR OwlBear opens; a project's list replaces the global one
     pr_marker: bool | None = None  # TD-308: the "Opened by OwlBear Delivery" line, switched per project
+    # D-01M5YE4P5317N1HWD0QN6N05E0: Delivery steps load the owner's own instructions and skills; no code default
+    load_user_instructions: bool | None = None
+    load_user_skills: bool | None = None
     sessions: int | None = Field(default=None, ge=1)  # TD-336: agent sessions at once in a project, layered
     spotter: Spotter | None = None  # Improvement's Spotter (design §4); a project may set its own, e.g. switch it off
 
@@ -254,6 +258,8 @@ class Settings(Record):
     final_review: RoundPolicy | None = None
     pr_labels: list[str] | None = None
     pr_marker: bool | None = None
+    load_user_instructions: bool | None = None  # D-01M5YE4P5317N1HWD0QN6N05E0: unset refuses a step's session
+    load_user_skills: bool | None = None
     sessions: int | None = None
     prefs: Prefs = Field(default_factory=Prefs)  # R15: each field None where no layer sets it
     spotter: Spotter = Field(default_factory=Spotter)
@@ -320,7 +326,15 @@ def resolve(glob: GlobalLayer | None, project: Layer, machine: MachineLayer | No
     agents = {r: e for r, e in every.items() if all(roles[r][n] is not None for n in used(r))}
     general = {
         key: _pick(key, sources, *((s, getattr(layer, key)) for s, layer in layers))
-        for key in ("widths", "design_failures", "pr_labels", "pr_marker", "sessions")
+        for key in (
+            "widths",
+            "design_failures",
+            "pr_labels",
+            "pr_marker",
+            "load_user_instructions",
+            "load_user_skills",
+            "sessions",
+        )
     }
     spotter, unset = improvement.resolve(lambda key, *values: _pick(key, sources, *values), layers)
     general["curator_threshold"] = _pick(  # global only (TD-400)

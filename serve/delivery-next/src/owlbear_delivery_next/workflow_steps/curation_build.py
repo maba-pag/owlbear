@@ -63,7 +63,8 @@ def curator(cfg: sdk_adapter.Session, change: Change, settings: Settings) -> sdk
     return dataclasses.replace(
         cfg, role=roles.SESSIONS[LABEL], job=LABEL, model=role.model, effort=role.effort, context=role.context,
         limit=roles.limit(settings, LABEL), subagents=roles.subagents(settings, LABEL),
-        submit=curation_tools.TEST_CURATION, checks=(), fresh=fresh, message=cfg.message if cfg.resume else fresh,
+        user=roles.user_config(settings), submit=curation_tools.TEST_CURATION, checks=(), fresh=fresh,
+        message=cfg.message if cfg.resume else fresh,
     )  # fmt: skip
 
 
