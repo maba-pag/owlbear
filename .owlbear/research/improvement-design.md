@@ -233,23 +233,27 @@ D-01M5XCE8ZEX5WPSCBZ5Y9S4K96, D-01M5XCD49YHHR1NQKKY8TQD0C3, D-01M5XCE8ZFZE8Q1XCN
   bytes, with the cases' version) frozen when a step starts, or a chat turn begins; a record keeps both.
 - **Regression** (a smoke check, not proof): a change of the active examples, a rollback included, is replayed before
   it is written: the scored test cases and their calls, and both prompts, are frozen when it is asked for; an empty
-  comparison is refused; false notes, misses and wrong categories are counted apart and none may rise. A passing
-  change is written only onto the version it was asked against, else refused as stale and never rerun.
+  comparison is refused; false notes, misses and wrong categories are counted apart and none may rise; a run whose
+  meter, or any look's, stopped (its limit reached or its spend unknown), the final look's included, is refused
+  whatever the answers. A passing change is written only onto the version it was asked against, else refused as
+  stale and never rerun.
 - **Release** (a marked assumption): a frozen manifest of the reviewed corpus and the grading contract; equal manifests
   are one release, so choosing examples makes none. The reserve (the pilot's holdout, historically exposed by its
   prompt experiments) compares two versions once per release, claimed before the first look.
 - **Paid runs** (replays, and `retro-review`'s check of candidates) start only from `owlbear cases` and run as the
-  machine host's job on a slot of their own; each stops at its run credit limit, every look and review metered
-  against what the run has left; a run a stopped host left is recorded stopped, never rerun.
+  machine host's job on a slot of their own, admitted only while the machine is neither paused nor fenced; each stops
+  at its run credit limit, every look and review metered inside the run's meter; a run that fails, or that a stopped
+  host left, is recorded with its spend, never rerun.
 - **Seed**: the pilot's 83 hindsight moments from their saved cards (no chat log read again; missing evidence a gap),
   as candidates; `should` moments take the category the calls file names; `unknown` ones are left out; wr-p-759028 is
   unscored while TD-435 is absent from its card. Both pilot splits are kept; other families are assigned once.
   Synthetic cases (a marked assumption) stand in for outside-state changes and irreversible harm: never in the
   reserve, never examples, never published. `owlbear improvement reset` retires every marked assumption for good.
 - **Publication** runs on its own: `retro-review` minimises and sanitises each test case and example; its answer must
-  keep the call; the whole export must pass `mask.redact`, email and home-path checks; it names the case by its local
-  id only; a case changed during its review is not published; one that leaves those stages is withdrawn; an unpushed
-  commit is pending until a later push.
+  keep the call; every decoded text of the export and its serialized form must pass `mask.redact`, email and
+  home-path checks; it names the case by its local id only; a case changed during its review is not published; one
+  that leaves those stages is withdrawn, also while a newer revision is under review (what the shared repository
+  holds is kept apart from each review's outcome); an unpushed commit is pending until a later push.
 
 ## 5. Retro
 

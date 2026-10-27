@@ -6,6 +6,7 @@ import asyncio
 import json
 import subprocess
 import threading
+from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
 import pytest
@@ -13,10 +14,11 @@ import pytest
 from owlbear_delivery_next.commands import cli
 from owlbear_delivery_next.improvement import case_intake, case_replay, case_review, cases, pilot_seed
 from owlbear_delivery_next.improvement.cases import CaseError
-from owlbear_delivery_next.improvement.credits import Meter
+from owlbear_delivery_next.improvement.credit_meter import Meter
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.local_system.slots import Slots
 from owlbear_delivery_next.machine_host import cases_job
+from owlbear_delivery_next.runtimes import retro_review
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -174,6 +176,12 @@ def test_the_synthetic_cases_are_cards_of_todays_shape_for_the_missing_categorie
     assert pilot_seed.synthetic("owner") == {"seeded": 0, "already": 6}
 
 
+def spend(meter: Meter, cost: float | None) -> None:
+    share = meter.part()
+    share.call(cost)
+    share.ended(cost, confirmed=True)
+
+
 def asker(answers: list[str], spent: float = 0.1, during: Any = None):
     seen: list[str] = []
 
@@ -181,7 +189,7 @@ def asker(answers: list[str], spent: float = 0.1, during: Any = None):
         seen.append(message)
         if during:
             during()
-        meter.charge(spent)
+        spend(meter, spent)
         return answers[len(seen) - 1]
 
     return ask, seen
@@ -215,7 +223,7 @@ def check_request(ids: list[str]) -> dict[str, Any]:
 def test_a_check_promotes_only_what_the_card_supports() -> None:
     a, b, c = candidates(3)
     ask, seen = asker(['{"supported": true, "note": "silence fits"}', '{"supported": false, "note": "no"}', "huh"])
-    out = asyncio.run(case_review.check(check_request([a, b, c]), ask, Meter(10)))
+    out = asyncio.run(case_review.check(check_request([a, b, c]), ask, Meter(10, "retro-run")))
     cur = cases.current()["cases"]
     assert [cur[x]["stage"] for x in (a, b, c)] == ["test", "candidate", "candidate"]
     assert cur[a]["review"]["by"] == "retro-review"
@@ -232,7 +240,7 @@ def test_a_check_never_promotes_a_case_changed_during_its_review_and_stops_at_it
         cases.commit(cases.current()["n"], {a: {**entry, "why": "changed"}}, "t", "edit")
 
     ask, seen = asker(['{"supported": true}', '{"supported": true}'], spent=1.0, during=edit)
-    out = asyncio.run(case_review.check(request, ask, Meter(1.0)))
+    out = asyncio.run(case_review.check(request, ask, Meter(1.0, "retro-run")))
     assert cases.current()["cases"][a]["stage"] == "candidate"
     assert "changed during the review" in out["reviews"][a]["result"]
     assert len(seen) == 1
@@ -240,7 +248,7 @@ def test_a_check_never_promotes_a_case_changed_during_its_review_and_stops_at_it
 
 
 def _git(cwd: Path, *args: str) -> str:
-    return subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True).stdout  # noqa: S603, S607
+    return subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True).stdout  # noqa: S603, S607 - git on a test repository
 
 
 def reviewed(call: str = "hand-off-fitness", source: str = "pilot", stage: str = "test") -> str:
@@ -261,7 +269,7 @@ def test_a_reviewed_case_is_published_with_only_its_local_id(shared_repo) -> Non
     reviewed(source="synthetic")
     reviewed(stage="candidate")
     ask, seen = asker([GOOD])
-    out = asyncio.run(case_review.sync(DataRepo(root), ask, Meter(5)))
+    out = asyncio.run(case_review.sync(DataRepo(root), ask, Meter(5, "retro-run")))
     assert out["published"] == [cid]
     assert len(seen) == 1
     path = root / "owlbear" / "improvement" / "spotter-cases" / f"{cid}.json"
@@ -270,7 +278,7 @@ def test_a_reviewed_case_is_published_with_only_its_local_id(shared_repo) -> Non
     assert body["call"] == "hand-off-fitness"
     assert "ghp_" not in path.read_text()
     assert f"{cid}.json" in _git(remote, "--git-dir=.", "ls-tree", "-r", "--name-only", "main")
-    assert asyncio.run(case_review.sync(DataRepo(root), ask, Meter(5)))["published"] == []  # nothing due
+    assert asyncio.run(case_review.sync(DataRepo(root), ask, Meter(5, "retro-run")))["published"] == []  # nothing due
 
 
 @pytest.mark.parametrize(
@@ -282,15 +290,26 @@ def test_a_reviewed_case_is_published_with_only_its_local_id(shared_repo) -> Non
         ('{"situation": "in /Users/someone/app", "call": "hand-off-fitness", "why": "w"}', "a home path"),
         ('{"situation": "s", "call": "hand-off-fitness", "why": "w", "session": "abc"}', "more than"),
         ("no json", "no JSON object"),
+        (
+            json.dumps({"situation": '{"password": "example-secret"}', "call": "hand-off-fitness", "why": "w"}),
+            "a credential",
+        ),  # quoted JSON: escaped in the export, found in the decoded text
+        (
+            json.dumps({"situation": "s", "call": "hand-off-fitness", "why": "config: {'api_key': 'example-key-1'}"}),
+            "a credential",
+        ),
     ],
 )
 def test_a_review_that_fails_validation_stays_here_owner_only(shared_repo, answer, why) -> None:
     root, _ = shared_repo
     cid = reviewed()
     ask, _seen = asker([answer])
-    out = asyncio.run(case_review.sync(DataRepo(root), ask, Meter(5)))
+    out = asyncio.run(case_review.sync(DataRepo(root), ask, Meter(5, "retro-run")))
     assert out["refused"] == [cid]
-    assert why in case_review._state()[cid]["why"]  # noqa: SLF001
+    state = case_review.state()[cid]
+    assert why in state["review"]["why"]
+    assert (state["review"]["outcome"], state["remote"]) == ("refused", "")
+    assert case_review.due() == ({}, {}, [])  # a refused revision is not reviewed again until the case changes
     assert not (root / "owlbear").exists()
     [kept] = (cases.place() / "rejected").iterdir()
     assert kept.stat().st_mode & 0o777 == 0o600
@@ -304,13 +323,13 @@ def test_a_case_removed_during_its_review_is_not_published_and_a_published_one_i
         cases.commit(cases.current()["n"], {cid: None}, "t", "removed")
 
     ask, _ = asker([GOOD], during=remove)
-    asyncio.run(case_review.sync(DataRepo(root), ask, Meter(5)))
+    asyncio.run(case_review.sync(DataRepo(root), ask, Meter(5, "retro-run")))
     assert not (root / "owlbear" / "improvement" / "spotter-cases" / f"{cid}.json").exists()
     other = reviewed()
     ask, _ = asker([GOOD])
-    asyncio.run(case_review.sync(DataRepo(root), ask, Meter(5)))
+    asyncio.run(case_review.sync(DataRepo(root), ask, Meter(5, "retro-run")))
     cases.commit(cases.current()["n"], {other: None}, "t", "removed")
-    out = asyncio.run(case_review.sync(DataRepo(root), ask, Meter(5)))
+    out = asyncio.run(case_review.sync(DataRepo(root), ask, Meter(5, "retro-run")))
     assert out["removed"] == [other]
     assert not (root / "owlbear" / "improvement" / "spotter-cases" / f"{other}.json").exists()
 
@@ -322,20 +341,43 @@ def test_an_unpushed_publication_is_pending_and_pushed_later_without_another_rev
     _git(root, "config", "--unset", f"url.{remote}.insteadOf")
     cid = reviewed()
     ask, seen = asker([GOOD])
-    out = asyncio.run(case_review.sync(DataRepo(root), ask, Meter(5)))
+    out = asyncio.run(case_review.sync(DataRepo(root), ask, Meter(5, "retro-run")))
     assert out["pending"] == [cid]
-    assert case_review._state()[cid]["state"] == "pending"  # noqa: SLF001
+    assert case_review.state()[cid]["pushed"] is False
     _git(root, "config", f"url.{remote}.insteadOf", url)
     _git(root, "remote", "set-url", "origin", url)
-    out = asyncio.run(case_review.sync(DataRepo(root), ask, Meter(5)))
+    out = asyncio.run(case_review.sync(DataRepo(root), ask, Meter(5, "retro-run")))
     assert out["published"] == [cid]
     assert len(seen) == 1
+
+
+def test_a_published_case_removed_while_its_new_revision_is_reviewed_is_withdrawn(shared_repo) -> None:
+    root, remote = shared_repo
+    cid = reviewed()
+    ask, _ = asker([GOOD])
+    asyncio.run(case_review.sync(DataRepo(root), ask, Meter(5, "retro-run")))
+    path = root / "owlbear" / "improvement" / "spotter-cases" / f"{cid}.json"
+    assert path.exists()
+    entry = cases.current()["cases"][cid]  # a new revision: another why, reviewed again
+    cases.commit(cases.current()["n"], {cid: cases.edited(cid, entry, why="a new why", reviewed_by="sol")}, "t", "e")
+
+    def remove() -> None:
+        cases.commit(cases.current()["n"], {cid: None}, "t", "removed")
+
+    ask, _ = asker([GOOD], during=remove)
+    out = asyncio.run(case_review.sync(DataRepo(root), ask, Meter(5, "retro-run")))
+    assert out["changed"] == [cid]
+    assert not path.exists()
+    assert f"{cid}.json" not in _git(remote, "--git-dir=.", "ls-tree", "-r", "--name-only", "main")
+    state = case_review.state()[cid]
+    assert (state["remote"], state["pushed"], state["review"]["outcome"]) == ("", True, "changed")
+    assert case_review.due() == ({}, {}, [])
 
 
 def test_without_a_shared_repository_nothing_is_reviewed() -> None:
     reviewed()
     ask, seen = asker([GOOD])
-    out = asyncio.run(case_review.sync(None, ask, Meter(5)))
+    out = asyncio.run(case_review.sync(None, ask, Meter(5, "retro-run")))
     assert out["stopped"] == "no shared repository on this machine"
     assert seen == []
 
@@ -345,7 +387,7 @@ def test_publication_stops_at_its_run_credit_limit(shared_repo) -> None:
     reviewed()
     reviewed()
     ask, seen = asker([GOOD, GOOD], spent=2.0)
-    out = asyncio.run(case_review.sync(DataRepo(root), ask, Meter(1.5)))
+    out = asyncio.run(case_review.sync(DataRepo(root), ask, Meter(1.5, "retro-run")))
     assert len(seen) == 1
     assert out["stopped"]
 
@@ -365,12 +407,12 @@ class Job:
 
         async def looked(_card, prompt, meter, _spot) -> dict[str, Any]:
             self.looks.append(prompt.hash)
-            meter.charge(0.1)
+            spend(meter, 0.1)
             return {"category": "none", "note": ""}
 
         async def asked(message, meter, _role) -> str:
             self.asks.append(message)
-            meter.charge(0.1)
+            spend(meter, 0.1)
             return GOOD
 
         self.job = cases_job.CasesJob(
@@ -451,6 +493,61 @@ def test_publication_runs_on_its_own_and_no_paid_replay_does(monkeypatch, shared
     assert next(r for r in case_replay.results() if r["kind"] == "publication")["published"]
 
 
+def test_a_pause_that_comes_while_the_slot_is_granted_leaves_the_request_queued(monkeypatch) -> None:
+    j = Job(monkeypatch)
+    rid = queue_regression()
+    asked = iter([False])  # the pass begins unpaused; the pause comes before admission
+    j.job.paused = lambda: next(asked, True)
+    j.job.tick(0)
+    assert j.looks == []
+    assert [r["id"] for r in case_replay.queued()] == [rid]
+    assert j.job.slots.counts(cases_job.SLOT)[0] == 0
+    j.job.paused = lambda: False
+    j.job.tick(1)
+    assert len(j.looks) == 4
+
+
+def test_a_failed_check_is_kept_with_its_spend_and_never_rerun(monkeypatch) -> None:
+    j = Job(monkeypatch)
+    calls: list = []
+
+    async def failing(_text, meter, _role) -> str:
+        calls.append(1)
+        spend(meter, 0.3)
+        raise TimeoutError
+
+    j.job.asked = failing
+    cid = reviewed(stage="candidate")
+    request = {"id": "r-check1", "kind": "check", "at": "t", "by": "owner",
+               "ids": {cid: cases.content(cid, cases.current()["cases"][cid])}}  # fmt: skip
+    case_replay.ask(request)
+    j.job.tick(0)
+    j.job.tick(1)
+    assert calls == [1]
+    [kept] = [r for r in case_replay.results() if r["id"] == "r-check1"]
+    assert kept["result"].startswith("failed: TimeoutError")
+    assert kept["credits"]["credits"] == pytest.approx(0.3)
+    assert not case_replay.queued()
+    assert not list((cases.place() / "queue").glob("*.taken"))
+
+
+def test_a_failed_publication_is_kept_with_its_spend(monkeypatch, shared_repo) -> None:
+    j = Job(monkeypatch)
+    j.job.shared = lambda: DataRepo(shared_repo[0])
+
+    async def failing(_text, meter, _role) -> str:
+        spend(meter, 0.2)
+        msg = "the runtime went away"
+        raise RuntimeError(msg)
+
+    j.job.asked = failing
+    reviewed()
+    j.job.tick(1000)
+    [kept] = [r for r in case_replay.results() if r["kind"] == "publication"]
+    assert kept["result"].startswith("failed: RuntimeError")
+    assert kept["credits"]["credits"] == pytest.approx(0.2)
+
+
 def test_the_job_counts_in_what_a_stop_waits_for(monkeypatch) -> None:
     j = Job(monkeypatch)
     queue_regression()
@@ -485,3 +582,59 @@ def test_the_commands_write_moves_and_queue_a_paid_one(capsys) -> None:
     assert cli.main(["cases", "list"]) == 0
     assert cli.main(["improvement", "reset"]) == 0
     assert "retired:" in capsys.readouterr().out
+
+
+def test_a_retro_review_session_is_charged_as_it_reports_and_aborted_at_its_runs_limit(  # noqa: C901 - its fakes
+    monkeypatch,
+) -> None:
+    made: dict[str, Any] = {"aborted": False}
+
+    def usage(nano: float) -> SimpleNamespace:
+        cost = SimpleNamespace(copilot_usage=SimpleNamespace(total_nano_aiu=nano))
+        return SimpleNamespace(type="assistant.usage", data=cost)
+
+    class Session:
+        session_id = "review-1"
+
+        def __init__(self, on_event: Any) -> None:
+            self.on_event = on_event
+            self.rpc = SimpleNamespace(usage=SimpleNamespace(get_metrics=self.metrics))
+            self.done = asyncio.Event()
+
+        async def metrics(self) -> Any:
+            return SimpleNamespace(total_nano_aiu=1.2e9)
+
+        async def send_and_wait(self, _message: str, **_kw: Any) -> None:
+            self.on_event(usage(1.2e9))  # one billed call past the run's limit
+            await self.done.wait()  # the turn goes on until it is aborted
+
+        async def abort(self) -> None:
+            made["aborted"] = True
+            self.done.set()
+
+        async def disconnect(self) -> None:
+            pass
+
+    class Client:
+        def __init__(self, **_kw: Any) -> None:
+            pass
+
+        async def start(self) -> None:
+            pass
+
+        async def create_session(self, **kw: Any) -> Session:
+            return Session(kw["on_event"])
+
+        async def stop(self) -> None:
+            pass
+
+    monkeypatch.setattr(retro_review, "CopilotClient", Client)
+    monkeypatch.setattr(retro_review, "cli_path", lambda: "/bin/false")
+    run_meter = Meter(1.0, "retro-run")
+    role = cases_job.RoleModel(model="m", effort="medium")
+    assert asyncio.run(retro_review.asked("review this", run_meter, role)) == ""
+    assert made["aborted"] is True
+    report = run_meter.report()
+    assert (report["credits"], report["stopped"], report["stopped_by"]) == (pytest.approx(1.2), "reached", "retro-run")
+    with pytest.raises(RuntimeError, match="no review starts"):
+        asyncio.run(retro_review.asked("another", run_meter, role))

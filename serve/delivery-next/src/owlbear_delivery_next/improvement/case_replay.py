@@ -28,7 +28,7 @@ from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.improvement import assumptions, cases
 from owlbear_delivery_next.improvement.cases import CaseError, Prompt, Stale
-from owlbear_delivery_next.improvement.credits import Meter
+from owlbear_delivery_next.improvement.credit_meter import Meter
 from owlbear_delivery_next.improvement.events import clip
 from owlbear_delivery_next.local_system.storage_io import atomic_write
 from owlbear_delivery_next.settings.improvement import CATEGORIES
@@ -206,10 +206,15 @@ def _claim(request: dict[str, Any]) -> None:
 # Running: the job's part
 
 
-async def run(request: dict[str, Any], look: Look, meter: Meter, look_limit: float) -> dict[str, Any]:  # noqa: C901
-    """Replay *request* within *meter*, each look within *look_limit* and what the run has left; its result, kept.
+async def run(  # noqa: C901 - the run, its stop and its result
+    request: dict[str, Any], look: Look, meter: Meter, look_limit: float, halt: Callable[[], str] = str
+) -> dict[str, Any]:
+    """Replay *request* within the run's *meter*, each look on its own meter of *look_limit*; its result, kept.
 
-    A passing regression is written onto the version it was asked against, under the store's lock.
+    *halt* says why no further look may start (OwlBear stopping), else nothing. A look meter or the run's meter that
+    stopped (its limit reached, or its spend unknown), even on the final look, vetoes the result: a regression is then
+    refused, a comparison incomplete. A passing regression is written onto the version it was asked against, under
+    the store's lock.
     """
     out: dict[str, Any] = {k: request[k] for k in ("id", "kind", "by", "frozen") if k in request}
     out |= {
@@ -223,6 +228,7 @@ async def run(request: dict[str, Any], look: Look, meter: Meter, look_limit: flo
     }
     prompts = {k: Prompt(p["text"], p["cases"], p["hash"]) for k, p in request["prompts"].items()}
     answers: dict[str, dict[str, Any]] = {}
+    looks: list[dict[str, Any]] = []  # each look meter's report
     why = ""
     try:
         if request["kind"] == "compare":
@@ -234,7 +240,7 @@ async def run(request: dict[str, Any], look: Look, meter: Meter, look_limit: flo
                 raise CaseError(msg)  # noqa: TRY301
             answers[cid] = {}
             for side, prompt in prompts.items():
-                said = await _once(the_card, prompt, look, meter, look_limit)
+                said = await _once(the_card, prompt, look, meter, look_limit, halt, looks)
                 answers[cid][side] = {**said, "grade": grade(want["call"], said.get("category", ""))}
                 if answers[cid][side]["grade"] == "failed":
                     why = why or f"case {cid} got no usable answer twice"
@@ -244,6 +250,7 @@ async def run(request: dict[str, Any], look: Look, meter: Meter, look_limit: flo
         why = f"stopped: {exc}"
     except CaseError as exc:
         why = str(exc)
+    why = why or _vetoed(meter, looks)
     out |= {"answers": answers, "counts": _counts(answers), "credits": meter.report(), "ended": cases.now()}
     out["result"] = _result(request, answers, why, out["counts"])
     with cases.locked():
@@ -265,16 +272,33 @@ class _Stopped(Exception):  # noqa: N818 - the run's limit stopped it
     pass
 
 
-async def _once(
-    the_card: dict[str, Any], prompt: Prompt, look: Look, run_meter: Meter, look_limit: float
+def _vetoed(run_meter: Meter, looks: list[dict[str, Any]]) -> str:
+    """Why the meters veto the result: a stopped or unknown spend anywhere, the final look's included; else nothing."""
+    for report in (run_meter.report(), *looks):
+        if report["stopped"] or not report["credits_known"]:
+            return f"stopped: the {report['stopped_by'] or 'look'} spend is {report['stopped'] or 'unknown'}"
+    return ""
+
+
+async def _once(  # noqa: PLR0913, PLR0917 - the card, its prompt and look, the meters and the stop
+    the_card: dict[str, Any],
+    prompt: Prompt,
+    look: Look,
+    run_meter: Meter,
+    look_limit: float,
+    halt: Callable[[], str],
+    looks: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    """One look, retried once on an unusable answer, on one look meter within what the run has left."""
-    if not run_meter.open():
-        raise _Stopped(run_meter.report()["stopped"] or "the run's credit limit is reached")
-    meter = Meter(min(look_limit, run_meter.left()), parent=run_meter)
+    """One look, retried once on an unusable answer, on its own look meter inside the run's."""
+    if stop := halt():
+        raise _Stopped(stop)
+    if not run_meter.admit():
+        stop = f"the replay-run spend is {run_meter.report()['stopped']}"
+        raise _Stopped(stop)
+    meter = Meter(look_limit, "look", parent=run_meter)
     said: dict[str, Any] = {}
     for _ in range(2):
-        if not meter.open():
+        if halt() or not meter.admit():
             break
         try:
             said = await look(the_card, prompt, meter)
@@ -282,8 +306,9 @@ async def _once(
             said = {"category": "failed", "note": f"{type(exc).__name__}: {exc}"[:300]}
         if said.get("category") in SILENT or said.get("category") in CATEGORIES:
             break
-    if not run_meter.open() and said.get("category") not in SILENT | set(CATEGORIES):
-        raise _Stopped(run_meter.report()["stopped"] or "the run's credit limit is reached")
+    looks.append(meter.report())
+    if said.get("category") not in SILENT | set(CATEGORIES) and (stop := halt() or meter.report()["stopped"]):
+        raise _Stopped(stop if halt() else f"the {meter.report()['stopped_by']} spend is {stop}")
     return {"category": said.get("category", "failed"), "note": clip(said.get("note") or "", 1200)}
 
 

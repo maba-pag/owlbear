@@ -10,8 +10,10 @@ it, credentials included. Its answer is validated strictly (its call must be the
 metadata included, must pass the deterministic check (``mask.redact``, emails, home paths); what fails stays here,
 owner-only, never in the shared checkout. The export names the case only by its local id (its provenance stays on
 this machine). Before writing, the case is checked again under the store's lock: one changed or removed during its
-review is not published. A case that leaves the published stages is removed from the shared repository. A commit
-that could not be pushed is pending and pushed by a later sync; nothing is called published until it was pushed.
+review is not published. A case that leaves the published stages is removed from the shared repository, also when it
+leaves while a newer revision is under review: what the repository holds is kept apart from each review's outcome. A
+commit that could not be pushed is pending and pushed by a later sync; nothing is called published until it was
+pushed.
 """
 
 from __future__ import annotations
@@ -24,7 +26,6 @@ from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.improvement import cases
 from owlbear_delivery_next.improvement.cases import CaseError
-from owlbear_delivery_next.improvement.credits import Meter
 from owlbear_delivery_next.improvement.events import EMAIL
 from owlbear_delivery_next.local_system import mask
 from owlbear_delivery_next.local_system.data_repo import DataRepoError
@@ -33,6 +34,7 @@ from owlbear_delivery_next.local_system.storage_io import atomic_write
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
+    from owlbear_delivery_next.improvement.credit_meter import Meter
     from owlbear_delivery_next.local_system.data_repo import DataRepo
 
 CHECK = Path(__file__).with_name("case_check_prompt.md")
@@ -42,7 +44,7 @@ SITUATION = 1200  # characters of a published case's situation
 HOME = re.compile(r"(?:/Users|/home|/root)/[^/\s\"']+|[A-Za-z]:\\\\Users\\\\")
 PUBLISHED = frozenset({"test", "example"})
 
-type Ask = Callable[[str, Meter], Awaitable[str]]  # one retro-review session: the message in, its last answer out
+type Ask = Callable[[str, "Meter"], Awaitable[str]]  # one retro-review session: the message in, its last answer out
 
 
 def _message(prompt: Path, cid: str, entry: cases.Entry) -> str:
@@ -62,39 +64,39 @@ def _answer(text: str) -> dict[str, Any] | None:
 # Check
 
 
-async def check(request: dict[str, Any], ask: Ask, meter: Meter) -> dict[str, Any]:
-    """Review *request*'s candidates within *meter*; the run's result, kept with the other runs."""
-    out: dict[str, Any] = {
-        "id": request["id"],
-        "kind": "check",
-        "by": request["by"],
-        "asked": request["at"],
-        "started": cases.now(),
-        "reviews": {},
-    }
+async def check(request: dict[str, Any], ask: Ask, meter: Meter, halt: Callable[[], str] = str) -> dict[str, Any]:
+    """Review *request*'s candidates within the run's *meter*; the run's result, kept with the other runs.
+
+    Each review is one session on *meter*; a closed meter, *halt* or a failed review ends the run, its result and
+    spend kept. Nothing reruns it.
+    """
+    out: dict[str, Any] = {"id": request["id"], "kind": "check", "by": request["by"], "asked": request["at"],
+                           "started": cases.now(), "reviews": {}}  # fmt: skip
     why = ""
-    for cid, wanted in request["ids"].items():
-        if not meter.open():
-            why = f"stopped: {meter.report()['stopped'] or 'the run credit limit is reached'}"
-            break
-        entry = cases.current()["cases"].get(cid)
-        if entry is None or entry["stage"] != "candidate" or cases.content(cid, entry) != wanted:
-            out["reviews"][cid] = {"result": "changed since it was asked: not reviewed"}
-            continue
-        said = _answer(await ask(_message(CHECK, cid, entry), Meter(meter.left(), parent=meter)))
-        if said is None or not isinstance(said.get("supported"), bool) or not isinstance(said.get("note", ""), str):
-            out["reviews"][cid] = {"result": "no usable answer"}
-            continue
-        out["reviews"][cid] = {
-            "result": "supported" if said["supported"] else "not supported",
-            "note": said.get("note", "")[:600],
-        }
-        if said["supported"]:
-            out["reviews"][cid]["result"] = _promote(cid, wanted, said.get("note", ""))
+    try:
+        for cid, wanted in request["ids"].items():
+            if stop := halt() or ("" if meter.admit() else f"the retro run's spend is {meter.report()['stopped']}"):
+                why = f"stopped: {stop}"
+                break
+            out["reviews"][cid] = await _check_one(cid, wanted, ask, meter)
+    except Exception as exc:  # noqa: BLE001 - a failed review ends the run; its result is kept, never rerun
+        why = f"failed: {type(exc).__name__}: {exc}"[:300]
     out |= {"result": why or "checked", "credits": meter.report(), "ended": cases.now()}
     with cases.locked():
         cases.append("runs.jsonl", out)
     return out
+
+
+async def _check_one(cid: str, wanted: str, ask: Ask, meter: Meter) -> dict[str, Any]:
+    entry = cases.current()["cases"].get(cid)
+    if entry is None or entry["stage"] != "candidate" or cases.content(cid, entry) != wanted:
+        return {"result": "changed since it was asked: not reviewed"}
+    said = _answer(await ask(_message(CHECK, cid, entry), meter))
+    if said is None or not isinstance(said.get("supported"), bool) or not isinstance(said.get("note", ""), str):
+        return {"result": "no usable answer"}
+    if not said["supported"]:
+        return {"result": "not supported", "note": said.get("note", "")[:600]}
+    return {"result": _promote(cid, wanted, said.get("note", "")), "note": said.get("note", "")[:600]}
 
 
 def _promote(cid: str, wanted: str, note: str) -> str:
@@ -106,21 +108,22 @@ def _promote(cid: str, wanted: str, note: str) -> str:
             return "supported, but it changed during the review: not promoted"
         review = {"by": "retro-review", "at": cases.now(), "note": note[:600], "content": wanted}
         try:
-            cases.commit(
-                cur["n"],
-                {cid: {**entry, "stage": "test", "review": review}},
-                "retro-review",
-                f"check: the card supports {entry['call']}",
-            )
+            cases.commit(cur["n"], {cid: {**entry, "stage": "test", "review": review}}, "retro-review",
+                         f"check: the card supports {entry['call']}")  # fmt: skip
         except CaseError as exc:
             return f"supported, but not promoted: {exc}"
         return "supported: now a test case"
 
 
-# Publication
+# Publication: what the shared repository holds is kept apart from how each revision's review went
 
 
-def _state() -> dict[str, dict[str, Any]]:
+def state() -> dict[str, dict[str, Any]]:
+    """Each case's publication state, what the shared repository holds kept apart from how its reviews went.
+
+    ``remote``: the revision its committed file holds ("" for none); ``pushed``: whether that commit reached the
+    remote; ``review``: the last reviewed revision, its outcome (passed, refused, changed) and why.
+    """
     try:
         return json.loads((cases.place() / "published.json").read_text())
     except FileNotFoundError:
@@ -130,10 +133,14 @@ def _state() -> dict[str, dict[str, Any]]:
         raise CaseError(msg) from exc
 
 
-def _set(cid: str, **state: Any) -> None:  # noqa: ANN401 - the case's publication state
+def _get(cid: str) -> dict[str, Any]:
+    return {"remote": "", "pushed": True, "review": {}, **state().get(cid, {})}
+
+
+def _set(cid: str, **fields: Any) -> None:  # noqa: ANN401 - the case's publication state
     with cases.locked():
-        found = _state()
-        found[cid] = {**state, "at": cases.now()}
+        found = state()
+        found[cid] = {**_get(cid), **fields, "at": cases.now()}
         atomic_write(cases.ready() / "published.json", json.dumps(found, indent=1) + "\n")
 
 
@@ -142,16 +149,31 @@ def eligible(cid: str, entry: cases.Entry) -> bool:
     return entry.get("stage") in PUBLISHED and cases.fact(cid)["source"] != "synthetic"
 
 
-def leaks(text: str) -> list[str]:
-    """What the deterministic check still finds in *text*: credentials, emails, home paths."""
-    out = []
-    if mask.redact(text) != text:
-        out.append("a credential")
-    if EMAIL.search(text):
-        out.append("an email address")
-    if HOME.search(text):
-        out.append("a home path")
-    return out
+def leaks(value: Any) -> list[str]:  # noqa: ANN401 - an export's JSON value, or its serialized text
+    """What the deterministic check finds in *value*: credentials, emails, home paths.
+
+    Every decoded string *value* holds is checked, keys included, as is any serialized form given with it: JSON
+    escaping (a quoted ``{"password": ...}`` inside a text) hides nothing.
+    """
+    found: set[str] = set()
+    for text in _texts(value):
+        if mask.redact(text) != text:
+            found.add("a credential")
+        if EMAIL.search(text):
+            found.add("an email address")
+        if HOME.search(text):
+            found.add("a home path")
+    return sorted(found)
+
+
+def _texts(value: Any) -> list[str]:  # noqa: ANN401 - JSON values
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, dict):
+        return [t for k, v in value.items() for t in (*_texts(k), *_texts(v))]
+    if isinstance(value, list):
+        return [t for v in value for t in _texts(v)]
+    return []
 
 
 def export(cid: str, revision: str, said: dict[str, Any], call: str) -> str:
@@ -164,17 +186,10 @@ def export(cid: str, revision: str, said: dict[str, Any], call: str) -> str:
         return f"refused: the review changed the call from {call} to {said['call']}"
     if len(said["situation"]) > SITUATION or len(said["why"]) > cases.WHY:
         return "refused: the review's situation or why is too long"
-    body = {
-        "format": 1,
-        "id": cid,
-        "revision": revision,
-        "call": call,
-        "situation": said["situation"],
-        "why": said["why"],
-        "provenance": {"local": cid},
-    }
+    body = {"format": 1, "id": cid, "revision": revision, "call": call, "situation": said["situation"],
+            "why": said["why"], "provenance": {"local": cid}}  # fmt: skip
     text = json.dumps(body, indent=1, sort_keys=True, ensure_ascii=False) + "\n"
-    if found := leaks(text):
+    if found := leaks([body, text]):
         return f"refused: the export still holds {', '.join(found)}"
     return text
 
@@ -185,26 +200,6 @@ def _keep_rejected(cid: str, revision: str, text: str) -> None:
     fd = os.open(folder / f"{cid}-{revision}.txt", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(fd, "w") as out:
         out.write(text)
-
-
-def due() -> tuple[dict[str, str], list[str], list[str]]:
-    """What a sync has to do: cases to review (by revision), pending pushes, published cases to remove."""
-    cur, state = cases.current()["cases"], _state()
-    review, push = {}, []
-    for cid, entry in sorted(cur.items()):
-        if not eligible(cid, entry):
-            continue
-        rev, had = cases.content(cid, entry), state.get(cid, {})
-        if had.get("revision") == rev and had.get("state") in {"pending", "failed"} and _kept(cid, rev) is not None:
-            push.append(cid)  # reviewed already: written again from the kept export, never reviewed again
-        elif had.get("revision") != rev or had.get("state") not in {"published", "refused"}:
-            review[cid] = rev
-    gone = [
-        cid
-        for cid, had in state.items()
-        if had.get("state") in {"published", "pending", "withdrawing"} and not (cid in cur and eligible(cid, cur[cid]))
-    ]
-    return review, push, gone
 
 
 def _kept(cid: str, rev: str) -> str | None:
@@ -221,14 +216,39 @@ def _keep(cid: str, rev: str, text: str) -> None:
     atomic_write(folder / f"{cid}-{rev}.json", text)
 
 
+def due() -> tuple[dict[str, str], dict[str, str], list[str]]:
+    """What a sync has to do: cases to review and cases to write (each by revision), cases to withdraw.
+
+    A revision reviewed and passed is written from its kept export, never reviewed again; one refused stays refused
+    until the case changes. A case whose file the shared repository may hold, or whose removal is not pushed, and
+    that is no longer published, is withdrawn, whatever its last review's outcome.
+    """
+    cur, held = cases.current()["cases"], state()
+    review, write = {}, {}
+    for cid, entry in sorted(cur.items()):
+        if not eligible(cid, entry):
+            continue
+        rev, had = cases.content(cid, entry), {"remote": "", "pushed": True, "review": {}, **held.get(cid, {})}
+        if had["remote"] == rev and had["pushed"]:
+            continue
+        last = had["review"]
+        if last.get("revision") == rev and last.get("outcome") == "passed" and _kept(cid, rev) is not None:
+            write[cid] = rev
+        elif not (last.get("revision") == rev and last.get("outcome") == "refused"):
+            review[cid] = rev
+    gone = [cid for cid, had in sorted(held.items()) if (had.get("remote") or not had.get("pushed", True))
+            and not (cid in cur and eligible(cid, cur[cid]))]  # fmt: skip
+    return review, write, gone
+
+
 def _path(shared: DataRepo, cid: str) -> Path:
     return shared.root.joinpath(*FOLDER, f"{cid}.json")
 
 
-def _write(shared: DataRepo, cid: str, text: str | None) -> tuple[str, str]:
+def _write(shared: DataRepo, cid: str, text: str | None) -> tuple[bool, bool, str]:
     """Write (or, with None, remove) case *cid*'s file, then commit and push it, under the repository's lock.
 
-    Its state (published; pending: committed, not pushed; or failed) and why.
+    Whether it was committed, whether pushed, and why not.
     """
     path, message = _path(shared, cid), f"Spotter case {cid}: {'removed' if text is None else 'published'}"
     try:
@@ -240,53 +260,68 @@ def _write(shared: DataRepo, cid: str, text: str | None) -> tuple[str, str]:
                 atomic_write(path, text)
             said = shared.publish(path, message)
     except (DataRepoError, OSError) as exc:
-        return "failed", str(exc)
+        return False, False, str(exc)
     if not said:
-        return "published", ""
-    return ("pending" if "committed" in said and "not committed" not in said else "failed"), said
+        return True, True, ""
+    return ("committed" in said and "not committed" not in said), False, said
 
 
-async def sync(shared: DataRepo | None, ask: Ask, meter: Meter) -> dict[str, Any]:
-    """Bring the shared repository's cases to the newest version within *meter*; what it did."""
-    review, push, gone = due()
-    out: dict[str, Any] = {"published": [], "pending": [], "removed": [], "refused": [], "failed": [], "stopped": ""}
+async def sync(shared: DataRepo | None, ask: Ask, meter: Meter, halt: Callable[[], str] = str) -> dict[str, Any]:
+    """Bring the shared repository's cases to the newest version within the run's *meter*; what it did."""
+    review, write, gone = due()
+    out: dict[str, Any] = {"published": [], "pending": [], "removed": [], "refused": [], "changed": [],
+                           "failed": [], "stopped": ""}  # fmt: skip
     if shared is None:
-        out["stopped"] = "no shared repository on this machine" if review or push or gone else ""
+        out["stopped"] = "no shared repository on this machine" if review or write or gone else ""
         return out
     for cid in gone:
-        state, why = _write(shared, cid, None)
-        _set(cid, revision="", state="removed" if state == "published" else "withdrawing", why=why)
-        out["removed" if state == "published" else state].append(cid)
-    for cid in push:
-        rev = _state()[cid]["revision"]
+        committed, pushed, why = _write(shared, cid, None)
+        if committed:
+            _set(cid, remote="", pushed=pushed, why=why)
+        out["removed" if committed and pushed else "pending" if committed else "failed"].append(cid)
+    for cid, rev in write.items():
         out[_place(shared, cid, rev, _kept(cid, rev) or "")].append(cid)
     for cid, rev in review.items():
-        if not meter.open():
-            out["stopped"] = meter.report()["stopped"] or "the run credit limit is reached"
+        if stop := halt() or ("" if meter.admit() else f"the retro run's spend is {meter.report()['stopped']}"):
+            out["stopped"] = stop
             break
         entry = cases.current()["cases"].get(cid)
         if entry is None or cases.content(cid, entry) != rev:
             continue  # changed since: the next sync takes it
-        text = await ask(_message(PUBLISH, cid, entry), Meter(meter.left(), parent=meter))
+        text = await ask(_message(PUBLISH, cid, entry), meter)
         said = _answer(text)
         made = export(cid, rev, said, entry["call"]) if said is not None else "refused: the review gave no JSON object"
         if made.startswith("refused:"):
             _keep_rejected(cid, rev, text)
-            _set(cid, revision=rev, state="refused", why=made)
+            _set(cid, review={"revision": rev, "outcome": "refused", "why": made})
             out["refused"].append(cid)
             continue
         _keep(cid, rev, made)
+        _set(cid, review={"revision": rev, "outcome": "passed", "why": ""})
         out[_place(shared, cid, rev, made)].append(cid)
     return out
 
 
 def _place(shared: DataRepo, cid: str, rev: str, text: str) -> str:
-    """Write the reviewed export, if the case is still exactly what was reviewed; its state."""
+    """Write the reviewed export, if the case is still exactly what was reviewed; what happened.
+
+    A case changed during its review is not written; one removed (or no longer published) meanwhile is withdrawn now
+    if the shared repository holds an earlier revision of it, else by the next sync: what the repository holds is kept
+    apart from the review's outcome.
+    """
     with cases.locked():
         entry = cases.current()["cases"].get(cid)
         if entry is None or not eligible(cid, entry) or cases.content(cid, entry) != rev:
-            _set(cid, revision="", state="changed", why="changed or removed during its review: not published")
-            return "refused"
-        state, why = _write(shared, cid, text)
-        _set(cid, revision=rev, state=state, why=why)
-        return state
+            _set(cid, review={"revision": rev, "outcome": "changed", "why": "changed or removed during its review"})
+            had = _get(cid)
+            if (entry is None or not eligible(cid, entry)) and (had["remote"] or not had["pushed"]):
+                committed, pushed, why = _write(shared, cid, None)
+                if committed:
+                    _set(cid, remote="", pushed=pushed, why=why)
+            return "changed"
+        committed, pushed, why = _write(shared, cid, text)
+        if committed:
+            _set(cid, remote=rev, pushed=pushed, why=why)
+            return "published" if pushed else "pending"
+        _set(cid, why=why)
+        return "failed"

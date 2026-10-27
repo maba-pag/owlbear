@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.change_contracts.profile_record import RoleModel
 from owlbear_delivery_next.improvement import case_replay, case_review, cases, spotter
-from owlbear_delivery_next.improvement.credits import Meter
+from owlbear_delivery_next.improvement.credit_meter import Meter
 from owlbear_delivery_next.local_system import data_repo, local_home
 from owlbear_delivery_next.runtimes import retro_review, spotter_look
 from owlbear_delivery_next.settings.config import Layer, MachineLayer, SettingsUnset, resolve
@@ -78,11 +78,15 @@ def role(name: str) -> RoleModel:
 async def look(the_card: dict[str, Any], prompt: cases.Prompt, meter: Meter, spot: RoleModel) -> dict[str, Any]:
     """One replayed look: the frozen card under the frozen prompt, its answer parsed.
 
-    STAND-IN until feat/run-credit-limits: there ``spotter_look.judged(card, ctx, meter)`` meters the look itself and
-    ``Context.limit`` replaces ``budget``; here its spend is charged after it ends.
+    STAND-IN until feat/run-credit-limits merges: there ``spotter_look.judged(card, ctx, meter) -> str`` meters the
+    look itself through ``runtimes.credit_limit.Limit`` and ``Context.limit`` replaces ``budget``; here the look's
+    reported spend is charged to its meter once it ends.
     """
-    if not meter.open():
-        raise RuntimeError(meter.report()["stopped"] or "no credits left for this look")
+    if not meter.admit():
+        return {
+            "category": "failed",
+            "note": f"the {meter.report()['stopped_by']} spend is {meter.report()['stopped']}",
+        }
     ctx = spotter.Context(
         project="",
         change="",
@@ -97,7 +101,9 @@ async def look(the_card: dict[str, Any], prompt: cases.Prompt, meter: Meter, spo
         prompt=prompt,
     )
     text, spent = await spotter_look.judged(the_card, ctx)
-    meter.charge(spent)
+    share = meter.part()
+    share.call(spent)
+    share.ended(spent, confirmed=True)
     return spotter.parse(text)
 
 
@@ -119,7 +125,7 @@ class CasesJob:
         self.slots, self.fenced, self.paused, self.say = slots, fenced, paused, say
         self.admission = admission or threading.Lock
         self.looked, self.asked, self.shared = looked, asked, shared
-        self.running, self.meter, self.lock = "", None, threading.Lock()
+        self.running, self.halting, self.meter, self.lock = "", "", None, threading.Lock()
         self.published_at, self.checked = -PUBLISH_EVERY, False
 
     def working(self) -> list[str]:
@@ -127,10 +133,12 @@ class CasesJob:
         return [f"Spotter cases: {self.running}"] if self.running else []
 
     def stop(self) -> None:
-        """Close the running run's meter: no further look or review starts; it is kept as stopped."""
-        with self.lock:
-            if self.meter is not None:
-                self.meter.refuse("OwlBear is stopping")
+        """OwlBear stops: no further look or review of the running run starts; it is kept as stopped."""
+        self.halting = "OwlBear is stopping"
+
+    def halt(self) -> str:
+        """Why no further look or review may start now, else nothing."""
+        return self.halting
 
     def loop(self, stopping: threading.Event, clock: Callable[[], float]) -> None:
         """Thread: every ``EVERY`` seconds, run what is queued, then publish what is due."""
@@ -148,51 +156,55 @@ class CasesJob:
             case_replay.interrupted()
             self.checked = True
         for request in case_replay.queued():
-            if self.paused() or self.fenced():
-                return
-            self._admitted(request["id"], lambda r=request: self._taken(r))
+            if not self._admitted(request["id"], lambda r=request: self._taken(r)):
+                return  # paused, fenced or stopping: it stays queued
         if now - self.published_at >= PUBLISH_EVERY and any(case_review.due()):
             self.published_at = now
             self._admitted("publication", self._publish)
 
-    def _admitted(self, what: str, work: Callable[[], None]) -> None:
-        """Run *work* on one slot, admitted under the stop barrier."""
+    def _held(self) -> str:
+        return self.fenced() or self.halting or ("paused" if self.paused() else "")
+
+    def _admitted(self, what: str, work: Callable[[], None]) -> bool:
+        """Run *work* on one slot, admitted under the stop barrier; whether it ran.
+
+        Pause, the fence and a stop are read again once the slot is granted, under the barrier: then the slot is
+        given back and nothing starts, so a queued request stays queued.
+        """
         key = f"cases:{what}"
         turn = threading.Event()
         while not self.slots.take(SLOT, key, 1, 1, wake=turn.set):
-            if self.fenced():
+            if self._held():
                 self.slots.cancel(SLOT, key)
-                return
+                return False
             turn.wait(5)
             turn.clear()
         try:
             with self.admission():
-                if self.fenced():
-                    return
+                if self._held():
+                    return False
                 self.running = what
             work()
+            return True
         finally:
             self.running = ""
             self.slots.give(SLOT, key)
 
-    def _metered(self, limit: float) -> Meter:
+    def _metered(self, limit: float, scope: str) -> Meter:
         with self.lock:
-            self.meter = Meter(limit)
+            self.meter = Meter(limit, scope)
             return self.meter
 
-    def _refused(self, request: dict[str, Any], why: str) -> None:
+    def _ended(self, request: dict[str, Any], why: str, meter: Meter | None = None) -> None:
+        """Keep *request*'s result as *why*, with what it spent, unless a result of it is kept already."""
         with cases.locked():
-            cases.append(
-                "runs.jsonl",
-                {
-                    "id": request["id"],
-                    "kind": request["kind"],
-                    "by": request.get("by", ""),
-                    "asked": request.get("at"),
-                    "result": f"refused: {why}",
-                    "ended": cases.now(),
-                },
-            )
+            if any(r.get("id") == request["id"] and "result" in r for r in case_replay.results()):
+                return
+            line = {"id": request["id"], "kind": request.get("kind"), "by": request.get("by", ""),
+                    "asked": request.get("at"), "result": why, "ended": cases.now()}  # fmt: skip
+            if meter is not None:
+                line["credits"] = meter.report()
+            cases.append("runs.jsonl", line)
 
     def _taken(self, request: dict[str, Any]) -> None:
         """Run *request* once: off the queue before it starts, so a crash never runs it again."""
@@ -203,27 +215,31 @@ class CasesJob:
                 case_replay.done(request["id"])
 
     def _request(self, request: dict[str, Any]) -> None:
-        lim = limits()
-        kind = request.get("kind")
+        """Run one taken request; whatever happens, its result and spend are kept, and nothing reruns it."""
+        lim, kind, meter = limits(), request.get("kind"), None
         try:
             if kind in {"regression", "compare"}:
                 if lim["replay"] is None or lim["look"] is None:
-                    self._refused(request, "the replay run's or a look's credit limit is unset")
+                    self._ended(request, "refused: the replay run's or a look's credit limit is unset")
                     return
                 spot = role("spotter")
-                meter = self._metered(lim["replay"])
-                asyncio.run(case_replay.run(request, lambda c, p, m: self.looked(c, p, m, spot), meter, lim["look"]))
+                meter = self._metered(lim["replay"], "replay-run")
+                looked = lambda c, p, m: self.looked(c, p, m, spot)  # noqa: E731 - the role bound once
+                asyncio.run(case_replay.run(request, looked, meter, lim["look"], self.halt))
             elif kind == "check":
                 if lim["retro"] is None:
-                    self._refused(request, "the Retro run credit limit is unset")
+                    self._ended(request, "refused: the Retro run credit limit is unset")
                     return
                 reviewer = role("retro-review")
-                meter = self._metered(lim["retro"])
-                asyncio.run(case_review.check(request, lambda text, m: self.asked(text, m, reviewer), meter))
+                meter = self._metered(lim["retro"], "retro-run")
+                asked = lambda text, m: self.asked(text, m, reviewer)  # noqa: E731 - the role bound once
+                asyncio.run(case_review.check(request, asked, meter, self.halt))
             else:
-                self._refused(request, f"unknown request {kind!r}")
+                self._ended(request, f"refused: unknown request {kind!r}")
         except (SettingsUnset, cases.CaseError) as exc:
-            self._refused(request, str(exc))
+            self._ended(request, f"refused: {exc}", meter)
+        except Exception as exc:  # noqa: BLE001 - a failed run is kept as failed with its spend, never rerun
+            self._ended(request, f"failed: {type(exc).__name__}: {exc}"[:300], meter)
         finally:
             with self.lock:
                 self.meter = None
@@ -238,9 +254,12 @@ class CasesJob:
         except SettingsUnset:
             self.say("the Spotter cases are not published: the retro-review role is unset")
             return
-        meter = self._metered(lim["retro"])
+        meter = self._metered(lim["retro"], "retro-run")
+        asked = lambda text, m: self.asked(text, m, reviewer)  # noqa: E731 - the role bound once
         try:
-            done = asyncio.run(case_review.sync(self.shared(), lambda text, m: self.asked(text, m, reviewer), meter))
+            done = asyncio.run(case_review.sync(self.shared(), asked, meter, self.halt))
+        except Exception as exc:  # noqa: BLE001 - kept as failed with its spend; the next sync takes what is due
+            done = {"result": f"failed: {type(exc).__name__}: {exc}"[:300]}
         finally:
             with self.lock:
                 self.meter = None

@@ -13,7 +13,7 @@ import pytest
 
 from owlbear_delivery_next.improvement import assumptions, case_intake, case_replay, cases, pilot_seed, spotter
 from owlbear_delivery_next.improvement.cases import CaseError
-from owlbear_delivery_next.improvement.credits import Meter
+from owlbear_delivery_next.improvement.credit_meter import Meter
 
 
 def card(text: str = "the agent stops with work unfinished") -> dict[str, Any]:
@@ -66,14 +66,21 @@ def promote(cid: str, example: str) -> None:
         cases.commit(cur["n"], edits, "t", "promote", rid)
 
 
-def looker(answers: dict[str, dict[str, str]], cost: float | None = 0.1, seen: list | None = None):
+def spend(meter: Meter, cost: float | None) -> None:
+    """One session's spend on *meter*, as a look reports it: one billed call, then its confirmed total."""
+    share = meter.part()
+    share.call(cost)
+    share.ended(cost, confirmed=True)
+
+
+def looker(answers: dict[str, dict[str, str]], cost: Any = 0.1, seen: list | None = None):
     """A fake look: per prompt side ("before"/"after", told by the prompt's examples), each card's category."""
 
     async def look(the_card: dict[str, Any], prompt: cases.Prompt, meter: Meter) -> dict[str, Any]:
         side = "after" if "Example" in prompt.text and prompt.cases > 0 and prompt.text.count("###") > 0 else "before"
         if seen is not None:
             seen.append((the_card["intent"]["task"], side, meter.limit))
-        meter.charge(cost)
+        spend(meter, cost(the_card) if callable(cost) else cost)
         said = answers.get(side, {}).get(the_card["intent"]["task"], "none")
         return {"category": said, "note": ""} if said != "garbage" else {"category": "failed"}
 
@@ -81,7 +88,7 @@ def looker(answers: dict[str, dict[str, str]], cost: float | None = 0.1, seen: l
 
 
 def run(request: dict[str, Any], look, limit: float = 50.0, look_limit: float = 1.0) -> dict[str, Any]:
-    return asyncio.run(case_replay.run(request, look, Meter(limit), look_limit))
+    return asyncio.run(case_replay.run(request, look, Meter(limit, "replay-run"), look_limit))
 
 
 def test_a_case_is_frozen_owner_only_and_every_change_is_a_new_version() -> None:
@@ -228,14 +235,37 @@ def test_a_passing_result_on_a_changed_store_is_refused_as_stale_and_not_rerun()
     assert cases.current()["cases"][chosen]["stage"] == "test"
 
 
-def test_the_run_stops_at_its_credit_limit_and_each_look_gets_at_most_what_is_left() -> None:
+def test_the_run_stops_at_its_credit_limit_and_each_look_has_its_own_meter_inside_the_runs() -> None:
     _, request = _regression_setup()
     seen: list = []
     out = run(request, looker({}, cost=0.4, seen=seen), limit=1.0, look_limit=0.5)
     assert out["result"].startswith("refused: stopped")
-    assert [round(s[2], 2) for s in seen] == [0.5, 0.5, 0.2]
-    assert out["credits"]["stopped"]
-    assert len(seen) == 3
+    assert [s[2] for s in seen] == [0.5, 0.5, 0.5]
+    assert (out["credits"]["stopped"], out["credits"]["stopped_by"]) == ("reached", "replay-run")
+    assert len(seen) == 3  # no look starts once the run's limit is reached
+
+
+@pytest.mark.parametrize(
+    ("last", "limit", "why"),
+    [
+        (0.25, 1.0, "the replay-run spend is reached"),  # the run's limit reached exactly on the final look
+        (None, 50.0, "the replay-run spend is unknown"),  # the final look's spend unknown
+        (0.6, 50.0, "the look spend is reached"),  # the final look passed its own limit
+    ],
+)
+def test_a_meter_closed_by_the_final_look_vetoes_activation_whatever_the_answers(last, limit, why) -> None:
+    chosen, request = _regression_setup()
+    looks: list = []
+
+    def cost(_card: dict[str, Any]) -> float | None:
+        looks.append(1)
+        return last if len(looks) == 4 else 0.25
+
+    out = run(request, looker({}, cost=cost), limit=limit, look_limit=0.5)
+    assert len(looks) == 4
+    assert out["result"] == f"refused: stopped: {why}"
+    assert "applied" not in out
+    assert cases.current()["cases"][chosen]["stage"] == "test"
 
 
 def test_unknown_spend_admits_no_further_look() -> None:
