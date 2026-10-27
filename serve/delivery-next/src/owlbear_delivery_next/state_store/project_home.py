@@ -462,7 +462,7 @@ def _switched_source_at(folder_fd: int) -> None:
     """Refuse a switched source whose marker is not the fence or a readable older format; nothing is written."""
     try:
         text = fd_tree.read_at(folder_fd, MARKER)
-    except OSError as exc:
+    except (OSError, UnicodeError) as exc:
         msg = "the switched source's format marker is unreadable: nothing was changed"
         raise StoreError(msg) from exc
     value = text.strip() if text is not None else ""

@@ -103,6 +103,20 @@ def test_a_valid_switched_receipt_is_accepted_by_every_public_consumer(repo, boo
 
 
 @pytest.mark.usefixtures("current_binding")
+def test_an_unreadable_switched_source_marker_refuses_store_open_without_writes(repo, boot):
+    target = _finished_move(repo, boot)
+    source = _source(repo)
+    (source / MARKER).write_bytes(b"\xff\n")
+    source_before, target_before = _snapshot(source), _snapshot(target)
+
+    with pytest.raises(StoreError, match=r"switched source.*unreadable"):
+        Store.open(repo)
+
+    assert _snapshot(source) == source_before
+    assert _snapshot(target) == target_before
+
+
+@pytest.mark.usefixtures("current_binding")
 @pytest.mark.parametrize("corrupt", CORRUPTIONS)
 def test_a_corrupt_switched_receipt_is_refused_by_registration_adoption_selfcheck_and_open(repo, boot, corrupt):
     target = _finished_move(repo, boot)
