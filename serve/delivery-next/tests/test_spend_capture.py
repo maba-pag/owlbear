@@ -424,6 +424,7 @@ def test_later_checkpoints_raise_a_correction_until_the_session_shuts_down(proje
     """Sol's counterexample: every correction had one id, so checkpoints of 2 then 3 left 2, marked complete."""
     spend_ledger.started("r", "growing", agent="builder", job="", model="m1", before={})
     spend_ledger.ended("r", "growing", usage=used(1.0) | {"incomplete": "TimeoutError"}, ending="result")
+    assert spend_ledger.WRITER.settled(5)  # the pass reads the run's lines
     runtime_log("growing", checkpoint("2026-10-27T01:00:00Z", 2e9))
     assert spend_reconcile.run([(project, None)])["imported"]["logs"] == 1
     assert run_piece("r") == (2.0, True, "run")
@@ -491,6 +492,7 @@ def test_a_pass_during_a_looks_teardown_stays_provisional_until_its_runtime_stop
     spend_ledger.started("L", "look-t", agent="spotter", job="look", model="m1", before={}, place=place, look="x")
     spend_ledger.ended("L", "look-t", usage=used(0.1) | {"incomplete": "unconfirmed"}, ending="unconfirmed",
                        place=place, look="x")  # fmt: skip
+    assert spend_ledger.WRITER.settled(5)
     runtime_log("look-t", checkpoint("2026-10-27T01:00:00Z", 0.2e9))
     assert spend_reconcile.run([(project, None)])["imported"]["logs"] == 1
     assert run_piece("L") == (0.2, True, "run")
