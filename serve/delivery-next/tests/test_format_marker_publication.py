@@ -600,23 +600,29 @@ def test_public_finish_refuses_a_collided_marker_whose_sync_failed(prepared_repo
     assert json.loads((source / project_move.MOVE_RECORD).read_text())["phase"] == project_move.COPYING
 
 
-def test_public_finish_still_validates_the_marker_after_the_publication_sync(prepared_repo, monkeypatch, capsys):
+@pytest.mark.parametrize(
+    ("marker", "message"),
+    [(b"8\n", "store format 8 is newer than 7"), (b"\xff\n", "format marker is not a regular file")],
+)
+def test_public_finish_still_validates_the_marker_after_the_publication_sync(
+    prepared_repo, monkeypatch, capsys, marker, message
+):
     repo, source, target = prepared_repo
     real_sync = project_move._sync_published  # noqa: SLF001 - the final publication-sync boundary
     owner: list[int] = []
 
     def sync(pfd, published, tfd):
         replacement = target / "owner"
-        replacement.write_bytes(b"8\n")
+        replacement.write_bytes(marker)
         replacement.replace(target / MARKER)
         owner.extend(fd_tree.ident((target / MARKER).stat()))
         real_sync(pfd, published, tfd)
 
     monkeypatch.setattr(project_move, "_sync_published", sync)
     assert cli.main(["--repo", str(repo), "finish"]) == 1
-    assert "store format 8 is newer than 7" in capsys.readouterr().err
+    assert message in capsys.readouterr().err
 
     assert owner
-    assert (target / MARKER).read_bytes() == b"8\n"
+    assert (target / MARKER).read_bytes() == marker
     assert fd_tree.ident((target / MARKER).stat()) == owner
     assert json.loads((source / project_move.MOVE_RECORD).read_text())["phase"] == project_move.COPYING

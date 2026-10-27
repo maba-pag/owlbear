@@ -20,7 +20,7 @@ import pytest
 from owlbear_delivery_next.commands import cli
 from owlbear_delivery_next.local_system import codebase, local_home, maintenance
 from owlbear_delivery_next.machine_host import selfcheck
-from owlbear_delivery_next.machine_host.machine import Machine
+from owlbear_delivery_next.machine_host.machine import Machine, MachineError
 from owlbear_delivery_next.pack_runs import pack_run, pack_state
 from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.state_store import fd_tree, offline_protocol, project_home, project_move, registry
@@ -262,6 +262,44 @@ def _machine() -> Machine:
     machine.slots.total = lambda: 1
     machine.maintenance.boot = lambda: 10.0
     return machine
+
+
+@pytest.mark.usefixtures("current_binding")
+@pytest.mark.parametrize("switched", [False, True], ids=["legacy", "switched"])
+def test_an_unreadable_clone_id_refuses_registration_and_adoption_with_an_actionable_status(repo, boot, switched):
+    if switched:
+        _finished_move(repo, boot)
+    entry = registry.register(repo)
+    source = _source(repo)
+    target = project_home.home(entry.id)
+    (source / project_home.CLONE_ID).write_text("replacement\n")
+    machine = _machine()
+    try:
+        machine.load_all()
+        assert machine.projects[entry.id].state == "replaced"
+        (source / project_home.CLONE_ID).write_bytes(b"\xff\n")
+        source_before = _snapshot(source)
+        target_before = target.exists(), _snapshot(target)
+        registry_path = local_home.root() / registry.MACHINE
+        registry_before = registry_path.read_bytes()
+
+        for action in (lambda: machine.register(repo), lambda: machine.adopt(entry.id)):
+            with pytest.raises(MachineError, match=r"clone-id.*unreadable") as refused:
+                action()
+            assert refused.value.status == 409
+        for action in (lambda: registry.register(repo), lambda: registry.adopt(entry.id)):
+            with pytest.raises(registry.RegistryError, match=r"clone-id.*unreadable"):
+                action()
+        if switched:
+            with pytest.raises(StoreError, match=r"clone-id.*unreadable"):
+                project_home.current(repo)
+        else:
+            assert project_home.current(repo) == source
+        assert _snapshot(source) == source_before
+        assert (target.exists(), _snapshot(target)) == target_before
+        assert registry_path.read_bytes() == registry_before
+    finally:
+        machine.stop_all()
 
 
 @pytest.mark.usefixtures("current_binding")

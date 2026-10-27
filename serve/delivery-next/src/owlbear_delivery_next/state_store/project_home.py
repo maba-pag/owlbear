@@ -58,7 +58,7 @@ def clone_id(folder: Path) -> str | None:
 def _clone_id_at(folder: Path, folder_fd: int) -> str | None:
     try:
         text = fd_tree.read_at(folder_fd, project_move.CLONE_ID)
-    except OSError as exc:
+    except (OSError, UnicodeError) as exc:
         msg = f"{folder / project_move.CLONE_ID} is unreadable: {exc}; nothing was changed"
         raise StoreError(msg) from exc
     if text and not text.endswith("\n"):  # the id is written with its newline last, so this one was cut short

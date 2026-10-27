@@ -99,7 +99,7 @@ def written_format(tfd: int, previous: int) -> None:
     """
     try:
         text = fd_tree.read_at(tfd, MARKER)
-    except OSError as exc:
+    except (OSError, UnicodeError) as exc:
         msg = "the target's format marker is not a regular file: nothing was switched"
         raise StoreError(msg) from exc
     if text is None or supported_format(text) != (previous or STORE_FORMAT):
