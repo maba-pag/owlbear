@@ -236,6 +236,33 @@ def test_finish_keeps_a_receipt_atomically_replaced_during_its_terminal_predicat
     assert (source / project_move.MOVE_RECORD).read_text() == owner
 
 
+@pytest.mark.parametrize("change", ["preparation", "proof", "marker"])
+def test_finish_rechecks_cheap_authority_witnesses_after_final_source_hashing(prepared, monkeypatch, change):
+    repo, source = prepared
+    owners, changed = {}, []
+
+    def enable(target):
+        real = project_move._source_unchanged  # noqa: SLF001 - mutate only after the actual final payload digest
+
+        def late(dfd, rec):
+            valid = real(dfd, rec)
+            changed.append(True)
+            change_owner(source, target, change)
+            owners.update({source: snapshot(source), target: snapshot(target)})
+            return valid
+
+        monkeypatch.setattr(project_move, "_source_unchanged", late)
+
+    fired = at_sync(monkeypatch, source, "receipt", enable)
+    code = cli.main(["--repo", str(repo), "finish"])
+
+    assert fired == [True]
+    assert changed == [True]
+    assert code == 1
+    assert record(source)["phase"] == project_move.COPYING
+    assert {path: snapshot(path) for path in owners} == owners
+
+
 @pytest.mark.parametrize("when", ["target", "receipt"])
 @pytest.mark.parametrize("where", ["source", "target"])
 def test_a_late_future_marker_stays_typed_and_keeps_the_owner_bytes(prepared, monkeypatch, when, where):

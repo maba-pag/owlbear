@@ -394,13 +394,16 @@ def _commit(  # noqa: PLR0913, PLR0917
         fd_tree.require_text_at(folder_fd, MOVE_RECORD, receipt)
         require_proof(folder, folder_fd, target, proof)
         _published(pfd, target, tfd, rec)
-        format_marker.written_format(tfd, previous)
         if not _source_unchanged(folder_fd, rec):
             msg = (
                 f"{folder} changed after it was copied: the copy is kept at {target} and the switch was not recorded; "
                 "stop the other OwlBear process, then start again"
             )
             raise StoreError(msg)
+        require_proof(folder, folder_fd, target, proof)
+        format_marker.written_format(tfd, previous)
+        if not _proof_ok(tfd, rec) or not same_folder(target, tfd):
+            raise _not_published(target)
         fd_tree.require_text_at(folder_fd, MOVE_RECORD, receipt)
 
     rec["phase"] = SWITCHED
