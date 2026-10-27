@@ -17,7 +17,7 @@ from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.github.provider import PullRequest
 from owlbear_delivery_next.project_host import api
-from owlbear_delivery_next.state_store import change_record, decision_store
+from owlbear_delivery_next.state_store import change_record, decision_batch, decision_store
 from owlbear_delivery_next.state_store.store import Lock
 from owlbear_delivery_next.workflow_steps import decision_publication, decisions_gate, pick
 
@@ -200,8 +200,10 @@ def test_a_commit_a_hook_refuses_puts_the_files_back_and_refuses_the_approval(pi
 
     assert said.status_code == 409
     assert "refused by policy" in said.json()["detail"]
-    assert list((root / PROJECT).rglob("D-*.md")) == []  # no rule the commit refused is read by other Changes
-    assert (git(root, "rev-parse", "HEAD"), git(root, "status", "--porcelain"), git(root, "diff", "--cached")) == state
+    assert git(root, "rev-parse", "HEAD") == state[0]  # the refused commit is not made
+    assert decision_batch.pending(picking.shared) is not None  # interrupted: the staged rules are not settled
+    with pytest.raises(decision_store.DecisionsUnavailable):  # no rule the refused commit held is read by other Changes
+        decision_store.load(picking.shared, PROJECT)
     a = picking.approved()
     assert (a.brief.approved_version, a.step.kind, a.decisions_published) == (None, StepKind.SHAPE, [])
 
@@ -314,19 +316,21 @@ def test_a_refused_conflict_flag_commit_after_the_approvals_commit_keeps_the_app
     hook.write_text('#!/bin/sh\nif grep -q "conflict on" "$1"; then echo flags refused >&2; exit 1; fi\n')
     hook.chmod(0o755)
 
-    assert picking.approve(2).status_code == 200
+    said = picking.approve(2)
 
+    # Accepted policy: the approval's own commit stays; only the refused conflict-flag batch is interrupted.
+    assert said.status_code == 409
+    assert "flags refused" in said.json()["detail"]
     assert git(root, "log", "-1", "--format=%s") == APPROVED.format(2)
-    assert git(root, "status", "--porcelain", "--untracked-files=all", "--", f"{PROJECT}/decisions") == ""
-    seen = decision_store.load(picking.shared, PROJECT).snapshot
-    assert not any(seen.get(d).decision.conflict for d in (rival.id, later.id))  # no flag Git does not hold
-    assert [seen.active(rival.id), seen.active(later.id)] == [False, False]  # the conflict still fails closed
+    pending = decision_batch.pending(picking.shared)
+    assert pending is not None
+    assert rival.id in pending.ids
+    assert later.id in pending.ids
+    with pytest.raises(decision_store.DecisionsUnavailable):  # the conflict still fails closed for every reader
+        decision_store.load(picking.shared, PROJECT)
     a = picking.approved()
-    p = next(p for p in a.decisions_published if p.id == later.id)
-    assert (a.brief.approved_version, p.saved, p.committed) == (2, True, True)
-    assert p.revision == seen.get(later.id).decision.revision
-    assert "conflict flags" in p.notice
-    assert "put back" in p.notice
+    # The refused publication is not recorded as the Change's approval, so the Change still shows v1; the commit stays.
+    assert a.brief.approved_version == 1
 
 
 def test_a_published_decision_withdrawn_outside_the_change_makes_the_next_versions_pick_stale(picking, shared_repo):

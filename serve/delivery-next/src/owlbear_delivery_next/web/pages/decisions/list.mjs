@@ -4,6 +4,7 @@ import { call } from "/assets/ui.mjs";
 import { receipts } from "./actions.mjs";
 import { detail, open } from "./entry.mjs";
 import { queue } from "./queue.mjs";
+import { loadRecovery, recoveryView } from "./recovery.mjs";
 import { addressOf, filter, readBack, sameAddress, STATES, scopeOf, show, state, TAGS } from "./state.mjs";
 import { button, field, select } from "./widgets.mjs";
 
@@ -25,6 +26,7 @@ let listTurn = 0;
 
 export async function refresh() {
   const turn = ++listTurn, where = filter.where;
+  await loadRecovery();
   try {
     const list = await call(`/decisions?${query()}`);
     if (turn !== listTurn) return;
@@ -83,6 +85,7 @@ export function view() {
   document.getElementById("shown").textContent = available ? `${rows.length} of ${loaded.total} shown` : "";
   const empty = loaded?.total ? "No decision matches these filters." : "No decision is recorded yet.";
   return html`
+    ${recoveryView()}
     <p-inline-notification id="error" state="error" dismiss-button="false" ?hidden=${!state.error}>${state.error}
     </p-inline-notification>
     <p-inline-notification id="unavailable" state="info" heading="Decisions cannot be read" heading-tag="h2"

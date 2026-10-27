@@ -190,10 +190,16 @@ def test_a_look_still_running_at_the_steps_end_is_recorded_skipped(monkeypatch) 
     monkeypatch.setattr(spotter, "DRAIN", 0.05)
 
     async def main() -> None:
-        reached = asyncio.Event()
-        spot = spotter.Spotter(ctx(), lambda: "s-1", judge(wait=5, reached=reached))
+        entered, never = asyncio.Event(), asyncio.Event()
+
+        async def pending_until_cancelled(_card: dict[str, Any], _ctx: spotter.Context) -> tuple[str, float]:
+            entered.set()  # the look's model call has begun: its reservation and card are done
+            await never.wait()  # never set: only the step's end, cancelling the look, ends it
+            return '{"verdict": "silent"}', 0.25
+
+        spot = spotter.Spotter(ctx(), lambda: "s-1", pending_until_cancelled)
         spot.handed_off("call-1", {})
-        await asyncio.wait_for(reached.wait(), 5)  # the look is with its judge when the step ends
+        await asyncio.wait_for(entered.wait(), timeout=30)  # running when the step ends, not merely queued
         await spot.drain()
         assert not spot.tasks
 
@@ -246,7 +252,7 @@ def test_samples_follow_the_seeded_rate_and_a_state_change_is_preliminary() -> N
         for i in range(20):
             spot.seen(started(f"c{i}", "bash", {"command": "ls"}))
             spot.seen(done(f"c{i}", "ok"))
-            if spot.tasks:  # the look, its record included, ends before the next action
+            while spot.tasks:  # each look, record and settlement end before the next action
                 await asyncio.wait(set(spot.tasks))
         await spot.drain()
         rng = random.Random(7)  # noqa: S311

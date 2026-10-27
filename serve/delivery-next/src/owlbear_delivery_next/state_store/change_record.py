@@ -8,13 +8,16 @@ Its decisions become decision files in the same commit (TD-419, `decision_archiv
 from __future__ import annotations
 
 import json
+import time
 from typing import TYPE_CHECKING
 
-from owlbear_delivery_next.local_system.data_repo import DataRepoError
-from owlbear_delivery_next.local_system.storage_io import atomic_write
-from owlbear_delivery_next.state_store import decision_archive
+from owlbear_delivery_next.local_system import storage_io
+from owlbear_delivery_next.local_system.data_repo import SAVE_SECONDS, DataRepoError
+from owlbear_delivery_next.state_store import decision_archive, decision_batch, decision_sync, decision_transaction
+from owlbear_delivery_next.state_store.decision_store import DecisionsUnavailable
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from datetime import datetime
 
     from owlbear_delivery_next.change_contracts.models import Change
@@ -65,12 +68,39 @@ def save(
         }
     stem = f"{c.brief.approved_at:%Y%m%d-%H%M%S}-{c.slug}"
     path = store.shared.root / store.name / decision_archive.CHANGES / f"{stem}.json"
+    text = json.dumps(record, indent=1) + "\n"
+    message = f"changes: {store.name}: {c.slug} {outcome}"
     try:
         with store.shared.locked():
-            path.parent.mkdir(parents=True, exist_ok=True)
-            atomic_write(path, json.dumps(record, indent=1) + "\n")
-            files, left = decision_archive.archive(store.shared.root, store.name, c, stem, outcome)
-            said = store.shared.publish([path, *files], f"changes: {store.name}: {c.slug} {outcome}")
-    except (DataRepoError, OSError) as exc:
+            decision_transaction.guard(store.shared)
+            head, behind = decision_sync.prepare(store.shared, time.monotonic() + SAVE_SECONDS)
+            if not head:
+                return f"the record of {c.slug} was not saved: {behind}"[:300]
+            planned, problems = decision_archive.plan(store.shared.root, store.name, c, stem, outcome)
+            if problems:  # refused before any journal, folder or file: the record stays out with its decisions
+                refusal = f"the record of {c.slug} was not saved; " + "; ".join(
+                    [f"no decision of {c.slug} was archived", *problems]
+                )
+                return "; ".join(filter(None, [behind, refusal]))[:1000]
+            storage_io.make_dirs(path.parent)
+            writes = decision_archive.batch_files(planned)
+
+            def publish(head: str, fence: Callable[[], None]) -> decision_transaction.Step:
+                files, left = decision_archive.write_plan(planned, [], c.slug, fence, store.shared.root)
+                if left:  # a decision refused: the record commits with none of the batch
+                    return decision_transaction.Step(
+                        f"the record of {c.slug} was not saved; " + "; ".join(left), refused=True
+                    )
+                decision_batch.replace_file(path, text.encode("utf-8"), fence, store.shared.root)
+                sent = decision_sync.publish(
+                    store.shared, [path, *files], message, time.monotonic() + SAVE_SECONDS, head
+                )
+                notice = "; ".join(filter(None, [sent.notice, *left]))
+                return decision_transaction.Step(notice, unknown=sent.stale or sent.ambiguous, refused=sent.uncommitted)
+
+            notice = decision_transaction.transaction(
+                store.shared, store.name, message, [(path, text.encode("utf-8")), *writes], publish, head
+            )
+    except (DataRepoError, OSError, DecisionsUnavailable, decision_batch.JournalError) as exc:
         return f"the record of {c.slug} was not saved: {exc}"[:300]
-    return "; ".join(filter(None, [said, *left]))[:1000]
+    return "; ".join(filter(None, [behind, notice]))[:1000]
