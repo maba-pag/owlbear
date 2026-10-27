@@ -239,6 +239,8 @@ class Fakes:
         self.edits: list[dict[str, str]] = []  # per updater round: worktree path -> new text
         self.rejects: list[list[str]] = []  # per updater round: finding keys it rejects
         self.upheld, self.premise, self.confirmed = False, False, True
+        self.missing = ""  # the error of a missing tool the updater reports
+        self.upstream_diffs: list[str] = []  # the upstream skill diff each updater session found in its folder
         self.found, self.reconsider = 1, "withdrawn"  # findings per fix verdict; a reconsideration's verdict
         self.replays: list[tuple[str, str]] = []  # what each replay judged: the pack identity and the edited skill
         self.during = lambda: None  # something else that happens while the challenger runs
@@ -312,6 +314,7 @@ class Fakes:
         """The writing updater: each planned edit lands in its worktree, then it submits (or reports a premise)."""
         self.calls.append("update")
         self.updates.append(cfg)
+        self.upstream_diffs.append((cfg.worktree / pack_updater.UPSTREAM_DIFF).read_text())
         edit = self.edits.pop(0) if self.edits else {}
         for path, text in edit.items():
             if isinstance(text, Path):  # a link the updater made
@@ -324,6 +327,9 @@ class Fakes:
         if self.premise:
             premise = tools.WrongPremise(stage="brief", reason="golden page glow.html must change", evidence=["g"])
             return Run(cfg.session_id, "premise", payload=premise, termination=Termination(confirmed=True))
+        if self.missing:
+            missing = tools.MissingTool(tool="shell", need="run git diff", error=self.missing)
+            return Run(cfg.session_id, "missing-tool", payload=missing, termination=Termination(confirmed=True))
         reject = [{"finding": k, "reason": "it already holds"} for k in (self.rejects.pop(0) if self.rejects else [])]
         result = pack_updater.UpdateResult(
             summary=f"round {len(self.updates)}", rejected=reject, evidence=self.evidence
@@ -476,6 +482,10 @@ def test_the_updaters_edit_is_what_the_replay_the_challenger_and_the_commit_see(
     assert (cfg.role, cfg.policy.write, cfg.resume, cfg.submit) == ("updater", True, False, pack_updater.UPDATE)
     assert [c.user for c in (cfg, *fakes.sessions)] == [user_on] * 2  # the updater and the challenger
     assert (cfg.worktree / "upstream" / "skill" / "SKILL.md").exists() is False  # its worktree is gone after the run
+    (laid_out,) = fakes.upstream_diffs  # upstream's skill diff is a file it reads, not a command it would have to run
+    assert "-# Impeccable skill-v4.5.2\n+# Impeccable skill-v4.6.0\n" in laid_out
+    assert "git -C" not in cfg.message
+    assert f"Skill text: `{pack_updater.UPSTREAM_DIFF}`" in cfg.message
     ((identity, judged),) = fakes.replays
     assert judged == new  # the replay's judge loads the edited skill, not the installed one
     activated = tmp_path / "activated"
@@ -805,10 +815,22 @@ def test_a_premise_the_updater_reports_stops_for_the_owner(tmp_path, checkout, c
     assert snapshot(checkout) == before
 
 
+def test_a_missing_tool_the_updater_reports_stops_with_its_words(tmp_path, checkout, clone):
+    fakes = Fakes(clone)
+    fakes.missing = "x" * 980 + " no shell tool"  # near its limit: the cause at its end still reaches the owner
+
+    state = run(pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout)))
+
+    assert (state["state"], results(state)["update"]) == ("failed", "failed")
+    assert "the updater lacks shell: run git diff (" in state["reason"]
+    assert state["reason"].endswith(" no shell tool)")
+
+
 @pytest.mark.parametrize(
     "edit",
     [
         {"upstream/skill/SKILL.md": "mine"},
+        {pack_updater.UPSTREAM_DIFF: "mine"},
         {"notes.md": "mine"},
         {"golden/deep/page.html": "mine"},
         {"code/other.py": "mine"},
@@ -832,6 +854,7 @@ def test_an_edit_beyond_the_pack_asks_the_owner_and_an_undo_restores_it_for_a_re
     assert state["state"] == "passed", state["reason"]
     second = fakes.updates[1].message
     assert f"{path}: Delivery restored the package's version" in second  # the owner's finding, never rejectable
+    assert fakes.upstream_diffs[1] == fakes.upstream_diffs[0] != "mine"  # upstream's diff is laid out again
     assert fakes.updates[1].settled == ("F1",)
     assert snapshot(checkout)[:3] == before[:3]
 
