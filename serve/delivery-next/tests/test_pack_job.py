@@ -51,6 +51,13 @@ AUTH = {"authorization": "Bearer t"}
 PKG = files("owlbear_delivery_next")
 OLD = design_pack.manifest()
 BUNDLE = OLD["bundle"]["path"]
+# The fake upstream follows whichever release the package pins, so a shipped pack update keeps these tests valid.
+PINNED = OLD["upstream"]["tag"]
+_MAJOR, _MINOR, _ = PINNED.removeprefix("skill-v").split(".")
+NEWER = f"skill-v{_MAJOR}.{int(_MINOR) + 1}.0"
+OLDER = f"skill-v{int(_MAJOR) - 1}.0.0"
+NEW_PACK = f"impeccable-{NEWER.removeprefix('skill-v')}.1"
+TITLE = f"design pack: {OLD['pack']} to {NEW_PACK} (upstream {PINNED} to {NEWER})"
 NAMES = [name for name, _ in pack_job.STAGES]
 GITHUB_URL = "https://github.com/maba-pag/owlbear.git"
 
@@ -198,8 +205,8 @@ def clone(tmp_path: Path) -> Path:
     git(tmp_path, "init", "-q", "-b", "main", str(root))
     licence = PKG.joinpath("skills", "IMPECCABLE-LICENSE").read_bytes()
     for tag, rules, engine in (
-        ("skill-v4.5.2", ["side-tab"], "0.1.14"),
-        ("skill-v4.6.0", ["side-tab", "glow"], "0.2.0"),
+        (PINNED, ["side-tab"], "0.1.14"),
+        (NEWER, ["side-tab", "glow"], "0.2.0"),
     ):
         entries = "".join(
             f'    Antipattern {{\n        id: "{r}",\n        name: "{r.title()}",\n        description: "d",\n'
@@ -247,7 +254,7 @@ class Fakes:
         self.at_golden = lambda: None  # something else that happens while the golden pages run
         self.hold: threading.Event | None = None
         self.waiting = threading.Event()
-        self.tags = ["skill-v4.5.2", "skill-v4.6.0"]
+        self.tags = [PINNED, NEWER]
 
     def releases(self, url: str) -> bytes:
         self.calls.append("releases")
@@ -269,7 +276,7 @@ class Fakes:
     def golden(self, installed: design_pack.Installed, folder: Path | None = None) -> dict:
         self.calls.append("golden")
         self.folders.append(folder)
-        assert installed.bundle == "bundle skill-v4.6.0"  # the candidate's detector, not the active one
+        assert installed.bundle == f"bundle {NEWER}"  # the candidate's detector, not the active one
         self.at_golden()
         return self.wrong if folder is None else self.wrong_after
 
@@ -416,7 +423,7 @@ def test_a_passing_update_runs_every_stage_then_merges_one_commit_through_a_pull
     # The package's folder comes first, then the candidate's.
     assert fakes.folders == [None, store.root / pack_job.RUNS / state["run"] / "golden"]
     replayed = fakes.replayed  # the replay judges with the candidate pack, not the active one
-    assert (replayed.pins["pack"], replayed.installed.bundle) == ("impeccable-4.6.0.1", "bundle skill-v4.6.0")
+    assert (replayed.pins["pack"], replayed.installed.bundle) == (NEW_PACK, f"bundle {NEWER}")
     assert replayed.manifest == shown(checkout, "design_pack.json")  # the pack then activated
     cfg = fakes.sessions[0]
     assert (cfg.role, cfg.policy.write, cfg.judging, cfg.submit, cfg.changed) == (
@@ -430,30 +437,29 @@ def test_a_passing_update_runs_every_stage_then_merges_one_commit_through_a_pull
     written = shown(checkout, "design_pack.json")
     pins = json.loads(written)
     assert pins["upstream"] | {"commit": "x"} == {
-        "repository": "pbakaus/impeccable", "tag": "skill-v4.6.0", "commit": "x", "engine": "0.2.0"
+        "repository": "pbakaus/impeccable", "tag": NEWER, "commit": "x", "engine": "0.2.0"
     }  # fmt: skip
-    assert pins["upstream"]["commit"] == git(clone, "rev-parse", "skill-v4.6.0")
-    assert pins["pack"] == "impeccable-4.6.0.1"
+    assert pins["upstream"]["commit"] == git(clone, "rev-parse", NEWER)
+    assert pins["pack"] == NEW_PACK
     assert pins["engine"]["linux-x64"] == hashlib.sha256(engine("linux-x64")).hexdigest()
-    assert pins["bundle"]["sha256"] == hashlib.sha256(b"bundle skill-v4.6.0").hexdigest()
+    assert pins["bundle"]["sha256"] == hashlib.sha256(f"bundle {NEWER}".encode()).hexdigest()
     assert (pins["skills"], pins["licence"]) == (OLD["skills"], OLD["licence"])
     assert written == json.dumps(pins, indent=2, ensure_ascii=False) + "\n"  # TD-270
     assert list(pins) == list(OLD)  # in the old file's key order
     notice = shown(checkout, "skills/NOTICE.md")
-    assert "`skill-v4.6.0`" in notice
+    assert f"`{NEWER}`" in notice
     assert OLD["upstream"]["commit"] not in notice
     root, made = checkout.parents[1], landed(checkout)
     assert git(root, "rev-parse", f"{made}^") == before[2]  # on the base pinned when the candidate was made
     assert git(root, "show", "--name-only", "--format=%s", made).splitlines() == [
-        "design pack: impeccable-4.5.2.1 to impeccable-4.6.0.1 (upstream skill-v4.5.2 to skill-v4.6.0)",
+        TITLE,
         "",
         "src/pkg/design_pack.json",
         "src/pkg/skills/NOTICE.md",
     ]
     (pr,) = fakes.github.prs.values()
     assert (pr["branch"], pr["draft"], pr["labels"], pr["title"]) == (
-        pub["branch"], False, ["release:minor"],
-        "design pack: impeccable-4.5.2.1 to impeccable-4.6.0.1 (upstream skill-v4.5.2 to skill-v4.6.0)"
+        pub["branch"], False, ["release:minor"], TITLE
     )  # fmt: skip
     assert pr["body"].endswith(pack_publish.MARKER)
     assert "The challenger passed." in pr["body"]
@@ -483,7 +489,7 @@ def test_the_updaters_edit_is_what_the_replay_the_challenger_and_the_commit_see(
     assert [c.user for c in (cfg, *fakes.sessions)] == [user_on] * 2  # the updater and the challenger
     assert (cfg.worktree / "upstream" / "skill" / "SKILL.md").exists() is False  # its worktree is gone after the run
     (laid_out,) = fakes.upstream_diffs  # upstream's skill diff is a file it reads, not a command it would have to run
-    assert "-# Impeccable skill-v4.5.2\n+# Impeccable skill-v4.6.0\n" in laid_out
+    assert f"-# Impeccable {PINNED}\n+# Impeccable {NEWER}\n" in laid_out
     assert "git -C" not in cfg.message
     assert f"Skill text: `{pack_updater.UPSTREAM_DIFF}`" in cfg.message
     ((identity, judged),) = fakes.replays
@@ -577,12 +583,12 @@ def test_a_waiting_run_whose_candidate_is_no_longer_installed_stops(tmp_path, ch
     before = snapshot(checkout)
     job = pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout))
     run(job)
-    shutil.rmtree(design_pack.folder({"pack": "impeccable-4.6.0.1"}))
+    shutil.rmtree(design_pack.folder({"pack": NEW_PACK}))
 
     state = answered(job, "activate")
 
     assert state["state"] == "failed"
-    assert "impeccable-4.6.0.1 is no longer installed on this machine" in state["reason"]
+    assert f"{NEW_PACK} is no longer installed on this machine" in state["reason"]
     assert snapshot(checkout) == before
 
 
@@ -1117,13 +1123,13 @@ def test_a_passing_challenger_whose_processes_are_not_confirmed_gone_never_passe
 
 def test_when_upstream_is_not_ahead_the_run_is_up_to_date_and_does_nothing_else(tmp_path, checkout, clone):
     fakes = Fakes(clone)
-    fakes.tags = ["skill-v4.5.2", "skill-v4.0.0"]
+    fakes.tags = [PINNED, OLDER]
     before = snapshot(checkout)
 
     state = run(pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout)))
 
     assert state["state"] == "up-to-date"
-    assert "no skill release newer than skill-v4.5.2" in state["reason"]
+    assert f"no skill release newer than {PINNED}" in state["reason"]
     assert results(state) == {"notice": "passed"} | dict.fromkeys(NAMES[1:], "skipped")
     assert fakes.calls == ["releases"]
     assert snapshot(checkout) == before
@@ -1620,7 +1626,7 @@ def test_the_answer_routes_take_only_an_open_questions_options(tmp_path, checkou
 def test_the_last_run_survives_a_host_restart_and_a_run_cut_short_reads_failed(tmp_path, checkout, clone):
     store = Store(tmp_path / "store")
     fakes = Fakes(clone)
-    fakes.tags = ["skill-v4.5.2"]
+    fakes.tags = [PINNED]
     ended = run(pack_job.Job(store, fakes.live(checkout)))
 
     again = pack_job.Job(store, fakes.live(checkout)).read()
@@ -1656,7 +1662,7 @@ def test_settings_shows_the_design_pack_section_and_its_update_button(tmp_path, 
     got = c.get("/api/next/design-pack").json()
     assert (got["pack"], got["upstream"]) == (OLD["pack"], OLD["upstream"]["tag"])
     assert got["identity"] == design_pack.identity()
-    assert got["notice"] == "design pack impeccable-4.5.2.1: releases upstream unknown"  # never online
+    assert got["notice"] == f"design pack {OLD['pack']}: releases upstream unknown"  # never online
     assert got["update"]["state"] == "idle"
     assert [s["name"] for s in got["update"]["stages"]] == NAMES
 
