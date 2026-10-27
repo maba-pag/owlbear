@@ -1,0 +1,328 @@
+"""Spend the ledger lacks, taken from OwlBear's other records: earlier work, lost lines and killed runs.
+
+One pass, on the machine host's own thread, never under the ledger's lock while it reads; it appends what it found
+per source, each line with a deterministic id, so a pass cut short and run again adds nothing twice, and
+``spend_shares`` takes a session's highest totals, so a line that repeats what the ledger holds adds nothing either.
+Its progress and what it could not read are in ``reconcile.json`` beside the ledger, which the Metrics page shows.
+
+What it reads, for each project this machine serves and for this machine:
+- each Change's step events (their session, kind, time and cumulative usage; the activity log keeps the last 200);
+- each Change's per-session marks (``Spend.last``: a session's highest totals, time unknown) where they exceed what
+  the ledger has for that session, and the Change's credits no session holds (``residual``: time and agent unknown);
+- Spotter records written before looks wrote the ledger: one session each; a legacy look whose spend was not
+  reported carries the 0.5 estimate it was booked at, which is imported as unknown, never as measured;
+- the runtime's own log of an OwlBear session (``spend_logs``): a killed run, a run whose usage was unread or not
+  final, and a session only Retro's chatlogs manifest names, such as curator, design pack and lookup runs before the
+  ledger; provisional, and read again as the log grows, until the session shut down.
+Spend that none of these kept is not recoverable: a session OwlBear ran before Retro's manifest (2026-10-25) and
+outside any Change, such as a curator or design pack run, and the events a Change's activity log dropped beyond its
+marks' totals.
+"""
+
+from __future__ import annotations
+
+import contextlib
+import fcntl
+import json
+import os
+import threading
+from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING, Any
+
+from owlbear_delivery_next.change_contracts.models import StepKind
+from owlbear_delivery_next.change_flow import worktree
+from owlbear_delivery_next.local_system import local_home
+from owlbear_delivery_next.local_system.git_files import git_common_dir
+from owlbear_delivery_next.local_system.storage_io import atomic_write
+from owlbear_delivery_next.runtimes import spend_logs
+from owlbear_delivery_next.runtimes.spend_logs import UNKNOWN_PROJECT
+from owlbear_delivery_next.runtimes.spend_logs import agent as _agent
+from owlbear_delivery_next.runtimes.spend_logs import base as _base
+from owlbear_delivery_next.runtimes.spend_logs import ident as _id
+from owlbear_delivery_next.state_store import spend_ledger
+from owlbear_delivery_next.state_store.spend_ledger import Where
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+    from pathlib import Path
+
+    from owlbear_delivery_next.change_contracts.models import Change
+    from owlbear_delivery_next.state_store.store import Store
+
+AGAIN = timedelta(minutes=10)  # a page read starts another pass at most this often
+ESTIMATE = 0.5  # what a legacy Spotter look booked when its spend was not reported
+EPS = 1e-6
+_running = threading.Lock()
+
+
+def state_path() -> Path:
+    """The pass's progress and findings."""
+    return spend_ledger.folder() / "reconcile.json"
+
+
+def state() -> dict[str, Any]:
+    """The last pass's progress, or none yet."""
+    try:
+        found = json.loads(state_path().read_text())
+    except OSError, ValueError:
+        return {"state": "never"}
+    return found if isinstance(found, dict) else {"state": "never"}
+
+
+def status() -> dict[str, Any]:
+    """The last pass's progress, "running" from the moment ``start`` took this process's pass, before it says so."""
+    said = state()
+    return said | {"state": "running"} if _running.locked() else said
+
+
+def _save(said: dict[str, Any]) -> None:
+    with contextlib.suppress(OSError):
+        spend_ledger.folder().mkdir(parents=True, exist_ok=True, mode=0o700)
+        atomic_write(state_path(), json.dumps(said, indent=1))
+
+
+def _now() -> datetime:
+    return datetime.now(UTC)
+
+
+def due(now: datetime | None = None) -> bool:
+    """Whether a page read should start a pass: none ran, or the last ended ``AGAIN`` ago."""
+    said, now = state(), now or _now()
+    if _running.locked():
+        return False
+    try:
+        return now - datetime.fromisoformat(said["finished"]) >= AGAIN
+    except KeyError, TypeError, ValueError:
+        return True
+
+
+def start(projects: Iterable[tuple[Store, Path | None]]) -> bool:
+    """Run a pass on a daemon thread unless one runs; whether one started."""
+    if not _running.acquire(blocking=False):
+        return False
+    listed = list(projects)
+
+    def work() -> None:
+        try:
+            run(listed)
+        finally:
+            _running.release()
+
+    threading.Thread(target=work, name="spend-reconcile", daemon=True).start()
+    return True
+
+
+def settled(seconds: float) -> bool:
+    """Wait at most *seconds* until no pass runs in this process; whether none does."""
+    if not _running.acquire(timeout=seconds):
+        return False
+    _running.release()
+    return True
+
+
+def _high(lines: list[dict[str, Any]]) -> dict[str, float]:
+    """Each session's highest known credits in the ledger."""
+    out: dict[str, float] = {}
+    for line in lines:
+        usage = line.get("usage") or {}
+        if (c := usage.get("credits")) is not None and (s := line.get("session")):
+            out[s] = max(out.get(s, 0.0), float(c))
+    return out
+
+
+def run(projects: list[tuple[Store, Path | None]]) -> dict[str, Any]:
+    """One pass over every source; its final state.
+
+    The machine's own lock file keeps two hosts from passing at once; the second ends at once, having done nothing.
+    """
+    spend_ledger.folder().mkdir(parents=True, exist_ok=True, mode=0o700)
+    fd = os.open(spend_ledger.folder() / "reconcile.lock", os.O_WRONLY | os.O_CREAT, 0o600)
+    try:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return state()
+        return _pass(projects)
+    finally:
+        os.close(fd)
+
+
+def _pass(projects: list[tuple[Store, Path | None]]) -> dict[str, Any]:
+    said = state()
+    checked = said.get("checked") if isinstance(said.get("checked"), dict) else {}
+    said = {"state": "running", "started": _now().isoformat(timespec="seconds"), "finished": said.get("finished"),
+            "sources": len(projects) + 2, "done": 0, "imported": {}, "errors": [], "checked": checked}  # fmt: skip
+    _save(said)
+    known = spend_ledger.lines()
+    ids, high = {line["id"] for line in known}, _high(known)
+    places = _places(projects)
+
+    pending: dict[str, str] = {}  # the runtime logs read in this pass: kept as read only once what they gave is written
+
+    def commit(source: str, found: list[dict[str, Any]]) -> None:
+        new = list({line["id"]: line for line in found if line["id"] not in ids}.values())
+        said["done"] += 1
+        if new and spend_ledger.append(new):  # nothing counts as read: the next pass reads it all again
+            said["errors"].append(f"{source}: {len(new)} line(s) not written")
+            _save(said)
+            return
+        ids.update(line["id"] for line in new)
+        known.extend(new)  # what a later source finds is weighed against these too
+        for line in new:
+            if (c := (line.get("usage") or {}).get("credits")) is not None:
+                high[line["session"]] = max(high.get(line["session"], 0.0), float(c))
+        said["imported"][source] = said["imported"].get(source, 0) + len(new)
+        if source == "logs":
+            checked.update(pending)
+        _save(said)
+
+    live = {str(x.get("session")) for x in known if x.get("type") in {"start", "end"} and not x.get("source")}
+    for store, repo in projects:
+        try:
+            commit("changes", _changes(store, repo, high, live))
+        except Exception as exc:  # noqa: BLE001 - one project's records never stop the others'
+            said["errors"].append(f"{store.name or store.root.name}: {type(exc).__name__}: {exc}"[:300])
+            said["done"] += 1
+    for source, read in (
+        ("spotter", lambda: _looks(known, places)),
+        ("logs", lambda: spend_logs.found(known, places, checked, pending)),
+    ):
+        try:
+            commit(source, read())
+        except Exception as exc:  # noqa: BLE001 - a source that cannot be read is said, never fatal
+            said["errors"].append(f"{source}: {type(exc).__name__}: {exc}"[:300])
+            said["done"] += 1
+    said |= {"state": "done", "finished": _now().isoformat(timespec="seconds")}
+    _save(said)
+    return said
+
+
+def _places(projects: list[tuple[Store, Path | None]]) -> dict[str, Where]:
+    """Each project's place by its clone id and by its worktrees' folder name."""
+    out: dict[str, Where] = {}
+    for store, repo in projects:
+        place = Where.of(store, repo)
+        out[place.clone] = place
+        if repo is not None:
+            with contextlib.suppress(Exception):
+                out[worktree.path_for(git_common_dir(repo), "x").parent.name] = place
+    return out
+
+
+def _steps() -> set[str]:
+    return {k.value for k in StepKind}
+
+
+def _changes(store: Store, repo: Path | None, high: dict[str, float], live: set[str]) -> list[dict[str, Any]]:
+    """The step events, marks and residuals of every Change of *store*; *live*: the sessions the ledger recorded."""
+    place, out, seen = Where.of(store, repo), [], dict(high)
+    for slug in store.slugs():
+        c = store.read(slug)
+        events = [e for e in store.events(slug) if e.get("event") == "step" and e.get("session")]
+        found = _events(place, slug, events)
+        for line in found:  # a mark these events already reach adds nothing
+            seen[line["session"]] = max(seen.get(line["session"], 0.0), float(line["usage"].get("credits") or 0.0))
+        agents = {e["session"]: _agent(str(e.get("kind") or "")) for e in events}
+        out += found + _marks(place, c, agents, seen, live)
+    return out
+
+
+def _events(place: Where, slug: str, events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    out = []
+    for e in events:
+        usage = e.get("usage")
+        unread = not isinstance(usage, dict) or "error" in usage
+        if unread or (usage.get("credits") is None and not usage.get("models")):
+            continue  # a held run's or an unread usage: its mark or a later report counts it
+        kind = str(e.get("kind") or "")
+        subagents = sum(1 for s in e.get("subagents") or [] if isinstance(s, dict) and s.get("allowed"))
+        ending = str(e.get("ending") or "")
+        stop = {"stopped": "reached", "stopped_by": "session"} if ending == "credit-limit" else {}  # its limit unknown
+        out.append(_base(place, slug, id=f"event:{_id(place.clone, slug, e)}", type="event", at=e.get("at"),
+                         session=e["session"], usage=usage, agent=_agent(kind), job="" if kind in _steps() else kind,
+                         step=kind if kind in _steps() else "", ending=ending, subagents=subagents,
+                         source="import:activity", **stop))  # fmt: skip
+    return out
+
+
+def _marks(
+    place: Where, c: Change, agents: dict[str, str], high: dict[str, float], live: set[str]
+) -> list[dict[str, Any]]:
+    """Each session's latest totals the Change kept that the ledger does not reach, and its credits no session holds.
+
+    A session whose latest read failed (``unread``) keeps its earlier mark as a lower bound, even when its events
+    reach it, unless the ledger recorded the session as it ran (its own runs say so): ``spend_shares`` then holds what
+    it credited a lower bound, and the runtime's log completes it (``spend_logs``). One never read at all is unknown,
+    never left out.
+    """
+    out = []
+    held = 0.0
+    for session, mark in c.spend.last.items():
+        held += mark.credits
+        unread = session in c.spend.unread and session not in live
+        if not unread and mark.credits <= high.get(session, -1.0) + EPS and session in high:
+            continue
+        usage: dict[str, Any] = {"credits": mark.credits, "models": {m: s.model_dump() for m, s in mark.models.items()}}
+        if unread:
+            usage["incomplete"] = "unread"  # a later read failed: it spent at least this
+        ident = f"mark:{_id(place.clone, c.slug, session, usage)}"
+        out.append(_base(place, c.slug, id=ident, type="mark", session=session, usage=usage,
+                         agent=agents.get(session, ""), source="import:change"))  # fmt: skip
+    out += [_base(place, c.slug, id=f"mark:{_id(place.clone, c.slug, session, 'unread')}", type="mark",
+                  session=session, usage={"error": "unread"}, agent=agents.get(session, ""), source="import:change")
+            for session in c.spend.unread
+            if session and session not in c.spend.last and session not in high]  # fmt: skip
+    if (rest := c.spend.credits - held) > EPS:
+        session = f"residual:{place.clone}:{c.slug}"
+        out.append(_base(place, c.slug, id=f"residual:{_id(session, round(rest, 6))}", type="residual",
+                         session=session, usage={"credits": rest}, source="import:change"))  # fmt: skip
+    return out
+
+
+def _looks(known: list[dict[str, Any]], places: dict[str, Where]) -> list[dict[str, Any]]:
+    """Spotter looks whose own lines the ledger lacks: those recorded before looks wrote it.
+
+    A look and its Spotter record share one id, its meter's (``credit_meter.Meter.id``, the record's ``id``); time
+    never decides it, since the record is made before its look's runtime starts. A record the ledger has lines for
+    is still imported when its ``sdk_sessions`` name one the ledger lacks: ``spend_shares`` then counts only what the
+    record holds beyond the ledger's own lines.
+    """
+    seen: dict[str, set[str]] = {}
+    for line in known:
+        if line.get("look") and line.get("type") in {"start", "end"}:
+            seen.setdefault(str(line["look"]), set()).add(str(line.get("session") or ""))
+    folder, out = local_home.root() / "spotter", []
+    for path in sorted(folder.glob("records-*.jsonl")) if folder.is_dir() else ():
+        for raw in path.read_text(encoding="utf-8").splitlines():
+            with contextlib.suppress(ValueError, TypeError, KeyError, AttributeError):
+                rec = json.loads(raw)
+                covered = str(rec["id"]) in seen and set(rec.get("sdk_sessions") or ()) <= seen[str(rec["id"])]
+                if not covered and (line := _look(rec, places)) is not None:
+                    out.append(line)
+    return out
+
+
+def _look(rec: dict[str, Any], places: dict[str, Where]) -> dict[str, Any] | None:
+    """A Spotter record as one ``look`` line; None when no look ran.
+
+    The credit meter's record says whether its ``credits`` are known (``credits_known``); a legacy record, without
+    that key, booked the 0.5 estimate when its spend was not reported, so that amount is unknown, never measured.
+    """
+    spent, legacy = rec.get("credits"), "credits_known" not in rec
+    if rec.get("credits_known") is False:  # the credit meter's record: its spend is not known
+        known = False
+    elif not spent and not rec.get("sdk_sessions"):
+        return None  # no look ran: skipped, or refused by its limit, before any session
+    else:
+        known = spent != ESTIMATE if legacy else bool(rec["credits_known"])
+    place = places.get(str(rec.get("project") or ""), UNKNOWN_PROJECT if rec.get("project") else Where())
+    model = str(rec.get("model") or "")
+    usage = ({"credits": float(spent), "models": {model: {"credits": float(spent)}}} if known
+             else {"error": "estimate" if legacy else "unknown"})  # fmt: skip
+    job = f"{rec.get('look') or ''} look".strip()
+    return _base(place, str(rec.get("change") or ""), id=f"look:{rec['id']}", type="look", at=rec["at"],
+                 session=f"look:{rec['id']}", usage=usage, agent="spotter", job=job,
+                 step=str(rec.get("step") or ""), model=model, limit=rec.get("limit"),
+                 stopped=str(rec.get("stopped") or ""), stopped_by=str(rec.get("stopped_by") or ""), ending="look",
+                 look=str(rec["id"]), sdk_sessions=list(rec.get("sdk_sessions") or ()),
+                 source="import:spotter")  # fmt: skip

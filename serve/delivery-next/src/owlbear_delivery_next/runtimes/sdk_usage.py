@@ -24,13 +24,8 @@ def unexpected_models(before: dict[str, Any], after: dict[str, Any], model: str 
     return sorted(grew - {model})
 
 
-async def _usage(session: CopilotSession, requested: str | None) -> dict[str, Any]:
-    try:
-        m = await asyncio.wait_for(session.rpc.usage.get_metrics(), READ)
-    except Exception as exc:  # noqa: BLE001 - experimental RPC; usage is reported, never required
-        return {"error": type(exc).__name__}
-    nano = getattr(m, "total_nano_aiu", None)
-    models = {
+def _models(metrics: Any) -> dict[str, dict[str, Any]]:  # noqa: ANN401 - the SDK's per-model metrics holder
+    return {
         name: {
             "credits": None if (aiu := getattr(mm, "total_nano_aiu", None)) is None else aiu / 1e9,
             "tokens": mm.usage.input_tokens + mm.usage.output_tokens,
@@ -39,10 +34,35 @@ async def _usage(session: CopilotSession, requested: str | None) -> dict[str, An
             "cache_read": getattr(mm.usage, "cache_read_tokens", 0) or 0,
             "cache_write": getattr(mm.usage, "cache_write_tokens", 0) or 0,
         }
-        for name, mm in (getattr(m, "model_metrics", None) or {}).items()
+        for name, mm in (getattr(metrics, "model_metrics", None) or {}).items()
     }
+
+
+async def _usage(session: CopilotSession, requested: str | None) -> dict[str, Any]:
+    try:
+        m = await asyncio.wait_for(session.rpc.usage.get_metrics(), READ)
+    except Exception as exc:  # noqa: BLE001 - experimental RPC; usage is reported, never required
+        return {"error": type(exc).__name__}
+    return parsed(m, requested)
+
+
+def parsed(m: Any, requested: str | None) -> dict[str, Any]:  # noqa: ANN401 - the SDK's usage metrics
+    """A session's usage metrics as Delivery keeps them: credits, each model's and each agent instance's."""
+    nano = getattr(m, "total_nano_aiu", None)
+    models = _models(m)
     mismatch = bool(requested and models and requested not in models)
-    return {"credits": None if nano is None else nano / 1e9, "models": models, "model_mismatch": mismatch}
+    out = {"credits": None if nano is None else nano / 1e9, "models": models, "model_mismatch": mismatch}
+    if agents := getattr(m, "agent_metrics", None):  # the runtime's own split: "main" and each subagent instance
+        out["agents"] = {
+            key: {"agent": getattr(a, "agent_name", None) or ("main" if key == "main" else ""), "models": _models(a)}
+            for key, a in agents.items()
+        }
+    return out
+
+
+async def usage_once(session: CopilotSession, requested: str | None) -> dict[str, Any]:
+    """One usage read, bounded by ``READ``: what a session's teardown takes when the run ended early."""
+    return await _usage(session, requested)
 
 
 async def usage_read(session: CopilotSession, requested: str | None) -> dict[str, Any]:

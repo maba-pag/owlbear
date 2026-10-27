@@ -21,9 +21,10 @@ from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_contracts.tools import Worktree
 from owlbear_delivery_next.improvement import card, cases, credit_meter, events, spotter
 from owlbear_delivery_next.improvement.events import Kept
-from owlbear_delivery_next.runtimes import chatlogs, sdk_adapter, spotter_look, step_decisions
+from owlbear_delivery_next.runtimes import chatlogs, sdk_adapter, spend_reconcile, spotter_look, step_decisions
 from owlbear_delivery_next.settings.config import Layer, SettingsUnset, resolve
 from owlbear_delivery_next.settings.improvement import CATEGORIES, Spotter
+from owlbear_delivery_next.state_store import spend_ledger, spend_shares
 from owlbear_delivery_next.state_store.store import Lock, Store
 from owlbear_delivery_next.workflow_steps import watched
 
@@ -413,6 +414,13 @@ def test_a_look_is_one_toolless_session_noted_in_the_chatlogs_manifest(monkeypat
     lines = [json.loads(x) for x in (chatlogs.root() / "manifest.jsonl").read_text().splitlines()]
     assert [(x["event"], x["session"], x.get("kind")) for x in lines] == [
         ("started", "look-1", "spotter"), ("ended", "look-1", None)]  # fmt: skip
+    assert spend_ledger.WRITER.settled(5)
+    start, end = spend_ledger.lines()  # the look's own spend, as read, in the spend ledger
+    assert (start["session"], start["agent"], start["job"], start["model"], start["before"]) == (
+        "look-1", "spotter", "look", "gpt-6-luna", {}
+    )  # fmt: skip
+    assert (end["run"], end["ending"], end["usage"]["credits"]) == (start["run"], "finished", 0.2)
+    assert start["look"] == end["look"] == spend.id  # the look's record carries the same id
 
 
 class Stalled:
@@ -471,6 +479,10 @@ def test_a_stalled_or_failed_runtime_is_torn_down_within_its_bounds(
     manifest = chatlogs.root() / "manifest.jsonl"
     lines = [json.loads(x) for x in manifest.read_text().splitlines()] if manifest.exists() else []
     assert [x["provisional"] for x in lines if x["event"] == "ended"] == ends  # unconfirmed when the force failed
+    assert spend_ledger.WRITER.settled(5)
+    spent = [(x["type"], x.get("ending"), x.get("usage")) for x in spend_ledger.lines()]
+    cut = [("start", None, None), ("end", "unconfirmed", {"error": "not read"})]
+    assert spent == ([] if start_fails else cut)
 
 
 def test_a_drain_ends_within_its_bound_even_when_a_look_resists(monkeypatch) -> None:
@@ -761,6 +773,13 @@ def test_an_unread_total_keeps_the_answer_and_its_spend_is_the_calls_reported(mo
     reported = spend.report()
     assert (reported["credits"], reported["credits_known"]) == (0.15 if calls == [1.5e8] else 0.0, known)
     assert reported["stopped"] == ("" if known else "unknown")  # an unknown spend closes the look's meter
+    assert spend_ledger.WRITER.settled(5)
+    [end] = [x for x in spend_ledger.lines() if x["type"] == "end"]  # this session's own calls, a lower bound
+    assert end["usage"] == (
+        {"credits": 0.15, "models": {"gpt-6-luna": {"credits": 0.15}}, "incomplete": "not read"}
+        if calls == [1.5e8] else {"credits": 0.0, "models": {"gpt-6-luna": {"credits": 0.0}}, "incomplete": "not read"}
+        if calls else {"error": "not read"}
+    )  # fmt: skip
 
 
 def test_a_drain_that_stops_waiting_never_drops_queued_writes(monkeypatch) -> None:
@@ -1033,3 +1052,77 @@ def test_a_slow_manifest_write_never_holds_a_looks_teardown(monkeypatch) -> None
     released.set()
     assert spotter.WORK.settled(5)
     assert took < 1
+
+
+class TwoSessions:
+    """A runtime whose looks open one session each, in turn; each bills one call and reports its own total."""
+
+    def __init__(self, spends: dict[str, float]) -> None:
+        self.spends, self.made, self.hear = spends, iter(spends), None
+
+    async def start(self) -> None:
+        pass
+
+    async def create_session(self, **kw: Any) -> Billed:
+        self.hear = kw["on_event"]
+        return Billed(next(self.made), self)
+
+    async def stop(self) -> None:
+        pass
+
+
+class Billed:
+    """One of ``TwoSessions``' sessions."""
+
+    def __init__(self, sid: str, runtime: TwoSessions) -> None:
+        self.session_id, self.runtime = sid, runtime
+        self.rpc = SimpleNamespace(usage=SimpleNamespace(get_metrics=self.metrics))
+
+    async def metrics(self) -> Any:
+        return SimpleNamespace(total_nano_aiu=self.runtime.spends[self.session_id], model_metrics={})
+
+    async def send_and_wait(self, _message: str, **_kw: Any) -> None:
+        self.runtime.hear(usage(self.runtime.spends[self.session_id]))
+        self.runtime.hear(said('{"category": "none"}'))
+
+    async def disconnect(self) -> None:
+        pass
+
+
+def test_a_retry_runs_two_sdk_sessions_under_one_look_each_its_own_ledger_run(monkeypatch) -> None:
+    """Each invocation is its own run in the spend ledger, its own session's usage, linked to the look by its meter's
+    id; the look's record lists both sessions, so reconciling imports nothing and each session counts once."""
+
+    async def retried(the_card: dict[str, Any], given: spotter.Context, spend: credit_meter.Meter) -> str:
+        await REAL_LOOK(the_card, given, spend)  # its answer was unusable: the look tries again on the same meter
+        return await REAL_LOOK(the_card, given, spend)
+
+    async def main() -> None:
+        spot = spotter.Spotter(ctx(effort="", limit=5.0), lambda: "s-1", retried)
+        spot.handed_off("call-1", {})
+        await spot.drain()
+
+    runtime = TwoSessions({"look-a": 1e8, "look-b": 3e8})
+    monkeypatch.setattr(spotter_look, "CopilotClient", lambda **_kw: runtime)
+    monkeypatch.setattr(spotter_look, "cli_path", lambda: "/bin/false")
+    asyncio.run(main())
+    assert spotter.WORK.settled(5)
+    assert spend_ledger.WRITER.settled(5)
+    [rec] = records()
+    assert (rec["sdk_sessions"], rec["credits"], rec["credits_known"], rec["stopped"]) == (
+        ["look-a", "look-b"], 0.4, True, ""
+    )  # fmt: skip
+    lines = spend_ledger.lines()
+    ends = [x for x in lines if x["type"] == "end"]
+    assert [(x["session"], x["look"], x["usage"]["credits"], x["limit"]) for x in ends] == [
+        ("look-a", rec["id"], 0.1, 5.0), ("look-b", rec["id"], 0.3, 5.0)
+    ]  # fmt: skip
+    assert len({x["run"] for x in ends} | {rec["id"]}) == 3  # a run id per invocation, never the look's id
+    assert spend_reconcile._looks(lines, {}) == []  # noqa: SLF001 - the record adds nothing the lines lack
+    pieces = spend_shares.derive(lines)
+    assert sorted((p["session"], round(p["credits"], 6)) for p in pieces) == [("look-a", 0.1), ("look-b", 0.3)]
+    kept = [x for x in lines if x["session"] == "look-a"]  # look-b's lines were lost: the record holds the rest
+    imported = spend_reconcile._looks(kept, {})  # noqa: SLF001
+    assert [x["sdk_sessions"] for x in imported] == [["look-a", "look-b"]]
+    one_lost = spend_shares.derive([*kept, *imported])
+    assert sorted(round(p["credits"], 6) for p in one_lost) == [0.1, 0.3]

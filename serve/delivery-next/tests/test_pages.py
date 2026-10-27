@@ -11,6 +11,7 @@ TABS = [
     ("/backlog", "Backlog"),
     ("/memory", "Memory"),
     ("/decisions", "Decisions"),
+    ("/metrics", "Metrics"),
     ("/config", "Settings"),
     ("/maintenance", "Maintenance"),
 ]

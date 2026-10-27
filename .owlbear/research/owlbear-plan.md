@@ -62,6 +62,7 @@ Renovate's pull requests come back now that the old engine is gone (owner, 2026-
 | Improvement (item 9) slices 1 to 4 and 6's Delivery part: the design, settings and roles, Retro chatlogs, the Spotter's card and learning-mode looks at Delivery steps | [Improvement](improvement-design.md) | #659, #660, #662, #663, #668 |
 | The workspace-era installer retired: Delivery's chat server path-free in the root `.mcp.json`, `share/prompts`, `setup/init.py` and `seed/`; `owlbear setup` offers the memory server for the shaper (`D-01M5TYMBBBHQRN172N977ND3VS`) | — | #665 to #667 |
 | No generated indexes, Archify diagrams, prompt files or prompt validator: agents find code by search and package READMEs (`D-01M5WA09V20PP0K0HV920FT3Q8`, `D-01M5WG5KH9R31YWK82YDF3RX7W`, `D-01M5WG6AX489EK20815YJECZ7E`) | — | #689, #695 |
+| Spend metrics for all agents (`D-01M5XCDF6G60VG5GHTWF5QSSDE`): every SDK session and Spotter look writes its start and end to one ledger on the machine, cancelled or failed runs included; shares derived per session, subagents split by the runtime's own agent metrics; earlier spend reconciled from Changes, Spotter records and runtime logs; the Metrics page (marked assumptions: its name and place, the owner's chats not recorded, records kept for good) | — | this pull request |
 
 ## 2. The Plan
 

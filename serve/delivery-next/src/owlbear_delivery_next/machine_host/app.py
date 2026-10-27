@@ -30,6 +30,7 @@ from owlbear_delivery_next.project_host import (
     decision_routes,
     impact_routes,
     maintenance_routes,
+    metrics_routes,
     pages,
 )
 from owlbear_delivery_next.state_store import decision_impact, machine_settings, registry
@@ -202,9 +203,15 @@ def _routes(machine: Machine) -> APIRouter:
     routes.add_api_route("/chat/contract", chat_routes.contract, methods=["GET"])  # what a chat server asks first
     _machine_routes(routes, machine)
     routes.include_router(maintenance_routes.router(machine))  # machine-wide: every project's held sessions
+    routes.include_router(metrics_routes.router(lambda: _stores(machine)))  # every project's spend
     _curation_routes(routes, machine)
     _update_routes(routes, machine)
     return routes
+
+
+def _stores(machine: Machine) -> list[tuple[Any, Path | None]]:
+    """Each served project's store and clone, for the spend metrics' reconciling pass."""
+    return [(p.store, Path(p.entry.path)) for p in list(machine.projects.values()) if p.store is not None]
 
 
 def _shared() -> data_repo.DataRepo | None:

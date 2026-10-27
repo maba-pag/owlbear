@@ -29,7 +29,7 @@ from owlbear_delivery_next.local_system import local_home, processes
 from owlbear_delivery_next.runtimes import loop_owner, sdk_adapter
 from owlbear_delivery_next.settings import roles
 from owlbear_delivery_next.settings.config import GlobalLayer, Layer, MachineLayer, resolve
-from owlbear_delivery_next.state_store import decision_store
+from owlbear_delivery_next.state_store import decision_store, spend_ledger
 from owlbear_delivery_next.state_store.decision_archive import whole
 from owlbear_delivery_next.state_store.store import MACHINE_SETTINGS, StoreError, read_layer
 from owlbear_delivery_next.workflow_steps import decisions_gate, pick, sessions
@@ -46,6 +46,7 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.state_store.store import Lock, Store
 
 LABEL = "decision-lookup"
+CHAT = "chat lookup"  # the work a lead chat's lookup is part of, in the spend ledger
 ASKED = (
     "Someone doing work asks which decisions (rules) govern their question. Read the COMPLETE list. Select every "
     "decision that answers the question or constrains what the answer may be, including general rules for this kind "
@@ -167,7 +168,8 @@ class Chats:
         try:
             if self.left and not processes.verdict(self.left, processes.alive).confirmed:
                 return {"failed": LEFT}
-            said, done = chat(shared, project, question, settings)
+            with spend_ledger.at(spend_ledger.Where(project=project, name=project, job=CHAT)):  # never the chat's
+                said, done = chat(shared, project, question, settings)
             t = done.termination if done else None
             gone = done is None or (t is not None and t.confirmed)
             left = dict.fromkeys((*t.survivors, *t.unknown) if t else ()) | (done.pids if done else {})

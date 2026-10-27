@@ -24,6 +24,7 @@ from owlbear_delivery_next.local_system.mask import redact
 from owlbear_delivery_next.local_system.processes import Termination, verdict
 from owlbear_delivery_next.runtimes import (
     lessons,
+    sdk_spend,
     sdk_teardown,
     step_budget,
     step_decisions,
@@ -159,6 +160,8 @@ class _Step:
         self.feed: watch_feed.Feed | None = None  # its watcher, for the run only
         self.requests: set[asyncio.Task[None]] = set()
         self.workers = tool_workers.Workers()
+        self.metered = ""  # this run's id in the spend ledger once its session opened (``sdk_spend``)
+        self.spent: dict[str, Any] = {}  # its usage read after its tasks settled, for the spend ledger
 
     @property
     def done(self) -> bool:
@@ -413,6 +416,7 @@ async def _open(client: CopilotClient, st: _Step) -> CopilotSession | None:
         st.log(event="instructions-off", sources=off)
     st.log(event="session", id=sid, resumed=resumed, resent=resent, runtime=st.run.runtime_pid)
     st.billed = await usage_read(session, cfg.model) if resumed else {}
+    sdk_spend.meter(st, sid, role_of(cfg))
     extra = {"attachments": list(cfg.attachments)} if cfg.attachments else {}  # e.g. visual screenshots
     st.sending = True
     await _call(session.send(message, **extra), "send")
@@ -443,24 +447,29 @@ async def _run(st: _Step) -> Run:
         st.finish("error", detail=refused)
         st.run.termination = Termination(confirmed=True)
         return st.run
-    async with sdk_teardown.managed(st):
-        try:
-            async with asyncio.timeout((cfg.limit or DEADLINES.get(cfg.kind, 2400.0)) + START + CALL):
-                client = st.client = CopilotClient(connection=RuntimeConnection.for_stdio(path=cli_path()))
-                await _call(client.start(), "runtime start", START)
-                st.runtime(client)
-                session = await _open(client, st)
-                if session is not None:
-                    await st.wait(session)
-        except TimeoutError as exc:
-            st.finish("deadline", detail=str(exc) or "step deadline")
-        except Exception as exc:  # noqa: BLE001 - any SDK failure ends the step with retry after teardown
-            st.finish("error", detail=f"{type(exc).__name__}: {exc}"[:300])
-        session = st.session
-        st.run.usage = await usage_read(session, cfg.model) if session else {}
-        limit_reached(st.run, cfg.credit_limit)
-        st.run.subagents = st.watch.report()
-        await _proven(st, session)
+    interrupted = True
+    try:
+        async with sdk_teardown.managed(st):  # its teardown reads a cut-short run's usage
+            try:
+                async with asyncio.timeout((cfg.limit or DEADLINES.get(cfg.kind, 2400.0)) + START + CALL):
+                    client = st.client = CopilotClient(connection=RuntimeConnection.for_stdio(path=cli_path()))
+                    await _call(client.start(), "runtime start", START)
+                    st.runtime(client)
+                    session = await _open(client, st)
+                    if session is not None:
+                        await st.wait(session)
+            except TimeoutError as exc:
+                st.finish("deadline", detail=str(exc) or "step deadline")
+            except Exception as exc:  # noqa: BLE001 - any SDK failure ends the step with retry after teardown
+                st.finish("error", detail=f"{type(exc).__name__}: {exc}"[:300])
+            session = st.session
+            st.run.usage = await usage_read(session, cfg.model) if session else {}
+            limit_reached(st.run, cfg.credit_limit)
+            st.run.subagents = st.watch.report()
+            await _proven(st, session)
+        interrupted = False
+    finally:
+        sdk_spend.metered(st, interrupted=interrupted)
     return st.run
 
 
