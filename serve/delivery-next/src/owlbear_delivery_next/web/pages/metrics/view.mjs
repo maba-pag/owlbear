@@ -134,8 +134,10 @@ function splitRow(row, top) {
   const share = top ? Math.round((row.credits / top) * 100) : 0;
   return html`<p-table-row><p-table-cell>${name}</p-table-cell>
     <p-table-cell class="num">${credits(row.credits)}</p-table-cell>
-    <p-table-cell><span class="share" style="width: ${share}%; max-width: 8rem" aria-hidden="true"></span></p-table-cell>
-    <p-table-cell class="num">${count(row.runs)}</p-table-cell><p-table-cell class="num">${row.unknown || ""}</p-table-cell>
+    <p-table-cell><span class="share" style="width: ${share}%; max-width: 8rem"
+      aria-hidden="true"></span></p-table-cell>
+    <p-table-cell class="num">${count(row.runs)}</p-table-cell>
+    <p-table-cell class="num">${row.unknown || ""}</p-table-cell>
     <p-table-cell class="num">${count(row.tokens)}</p-table-cell></p-table-row>`;
 }
 
