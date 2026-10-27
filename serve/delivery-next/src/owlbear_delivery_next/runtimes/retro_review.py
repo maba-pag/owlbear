@@ -63,6 +63,7 @@ async def asked(message: str, meter: Meter, role: RoleModel) -> str:
                 on_permission_request=lambda *_: PermissionDecisionReject(feedback="a review has no tools"),
             )  # fmt: skip
             sid = getattr(session, "session_id", "") or ""
+            limit.part.started(sid)
             started = {"event": "started", "session": sid, "kind": "retro-review", "role": "retro-review", "job": "",
                        "worktree": empty}  # fmt: skip
             await spotter.offload(chatlogs.note, started)

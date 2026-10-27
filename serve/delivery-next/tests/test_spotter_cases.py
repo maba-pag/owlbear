@@ -423,14 +423,15 @@ def test_a_spotter_record_keeps_the_hash_and_version_of_the_prompt_it_sent() -> 
         verbose=False,
         model="m",
         effort="",
-        budget=50,
+        limit=0.75,
         prompt=prompt,
     )
     sent: list = []
 
-    async def judge(_card: dict[str, Any], c: spotter.Context) -> tuple[str, float]:
+    async def judge(_card: dict[str, Any], c: spotter.Context, meter: Meter) -> str:
         sent.append(c.prompt)
-        return '{"category": "none", "note": ""}', 0.1
+        spend(meter, 0.1)
+        return '{"category": "none", "note": ""}'
 
     async def main() -> None:
         spot = spotter.Spotter(ctx, lambda: "s", judge)
@@ -442,6 +443,7 @@ def test_a_spotter_record_keeps_the_hash_and_version_of_the_prompt_it_sent() -> 
     [line] = (spotter.place() / f"records-{spotter._today()}.jsonl").read_text().splitlines()  # noqa: SLF001
     rec = json.loads(line)
     assert (rec["prompt"], rec["cases"]) == (prompt.hash, prompt.cases)
+    assert (rec["credits"], rec["limit"]) == (pytest.approx(0.1), 0.75)
     assert sent == [prompt]
 
 

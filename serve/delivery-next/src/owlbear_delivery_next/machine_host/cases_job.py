@@ -48,21 +48,16 @@ def _settings() -> Settings:
 
 
 def limits() -> dict[str, float | None]:
-    """The run and look credit limits in force; None where unset.
+    """The run and look credit limits in force (D-01M5XCD49YHHR1NQKKY8TQD0C3); None where unset.
 
-    STAND-IN until feat/run-credit-limits merges: it adds ``replay_run_credit_limit`` and ``retro_run_credit_limit``
-    to the machine values and ``look_credit_limit`` to the Spotter's settings; read here by name until then.
+    The replay and Retro run limits are this machine's values; a replayed look's is the Spotter's ``look_credit_limit``.
     """
     values = machine_settings.current()
     try:
-        look = getattr(_settings().spotter, "look_credit_limit", None)
+        look = _settings().spotter.look_credit_limit
     except OSError, ValueError, SettingsUnset:
         look = None
-    return {
-        "replay": getattr(values, "replay_run_credit_limit", None),
-        "retro": getattr(values, "retro_run_credit_limit", None),
-        "look": look,
-    }
+    return {"replay": values.replay_run_credit_limit, "retro": values.retro_run_credit_limit, "look": look}
 
 
 def role(name: str) -> RoleModel:
@@ -76,35 +71,15 @@ def role(name: str) -> RoleModel:
 
 
 async def look(the_card: dict[str, Any], prompt: cases.Prompt, meter: Meter, spot: RoleModel) -> dict[str, Any]:
-    """One replayed look: the frozen card under the frozen prompt, its answer parsed.
+    """One replayed look: the frozen card under the frozen prompt, on its own look *meter* inside the run's.
 
-    STAND-IN until feat/run-credit-limits merges: there ``spotter_look.judged(card, ctx, meter) -> str`` meters the
-    look itself through ``runtimes.credit_limit.Limit`` and ``Context.limit`` replaces ``budget``; here the look's
-    reported spend is charged to its meter once it ends.
+    ``spotter_look.judged`` charges the look's billed calls to *meter* as they are reported and stops the turn once
+    it closes; an empty answer (the meter closed before one) parses as failed, never as silence.
     """
-    if not meter.admit():
-        return {
-            "category": "failed",
-            "note": f"the {meter.report()['stopped_by']} spend is {meter.report()['stopped']}",
-        }
-    ctx = spotter.Context(
-        project="",
-        change="",
-        step="replay",
-        looks=(),
-        sample_rate=0,
-        verbose=False,
-        model=spot.model or "",
-        effort=spot.effort or "",
-        budget=0,
-        context=spot.context or "",
-        prompt=prompt,
-    )
-    text, spent = await spotter_look.judged(the_card, ctx)
-    share = meter.part()
-    share.call(spent)
-    share.ended(spent, confirmed=True)
-    return spotter.parse(text)
+    ctx = spotter.Context(project="", change="", step="replay", looks=(), sample_rate=0, verbose=False,
+                          model=spot.model or "", effort=spot.effort or "", limit=meter.limit,
+                          context=spot.context or "", prompt=prompt)  # fmt: skip
+    return spotter.parse(await spotter_look.judged(the_card, ctx, meter))
 
 
 class CasesJob:

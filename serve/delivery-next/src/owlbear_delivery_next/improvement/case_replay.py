@@ -251,7 +251,8 @@ async def run(  # noqa: C901 - the run, its stop and its result
     except CaseError as exc:
         why = str(exc)
     why = why or _halted(halt) or _vetoed(meter, looks)
-    out |= {"answers": answers, "counts": _counts(answers), "credits": meter.report(), "ended": cases.now()}
+    out |= {"answers": answers, "counts": _counts(answers), "credits": meter.report(), "looks": looks,
+            "ended": cases.now()}  # fmt: skip
     out["result"] = _result(request, answers, why, out["counts"])
     with cases.locked():
         if stop := _halted(halt):  # a stop that came while the result was made: read again just before activation

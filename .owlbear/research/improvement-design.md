@@ -242,8 +242,9 @@ D-01M5XCE8ZEX5WPSCBZ5Y9S4K96, D-01M5XCD49YHHR1NQKKY8TQD0C3, D-01M5XCE8ZFZE8Q1XCN
   prompt experiments) compares two versions once per release, claimed before the first look.
 - **Paid runs** (replays, and `retro-review`'s check of candidates) start only from `owlbear cases` and run as the
   machine host's job on a slot of their own, admitted only while the machine is neither paused nor fenced; each stops
-  at its run credit limit, every look and review metered inside the run's meter; a run that fails, or that a stopped
-  host left, is recorded with its spend, never rerun.
+  at its run credit limit (`replay_run_credit_limit`, or `retro_run_credit_limit` for a check and publication), each
+  replayed look on its own `look_credit_limit` meter inside the run's, each `retro-review` session charged through
+  `credit_limit.Limit`; a run that fails, or that a stopped host left, is recorded with its spend, never rerun.
 - **Seed**: the pilot's 83 hindsight moments from their saved cards (no chat log read again; missing evidence a gap),
   as candidates; `should` moments take the category the calls file names; `unknown` ones are left out; wr-p-759028 is
   unscored while TD-435 is absent from its card. Both pilot splits are kept; other families are assigned once.

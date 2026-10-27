@@ -682,3 +682,32 @@ def test_a_retro_review_session_is_charged_as_it_reports_and_aborted_at_its_runs
     assert (report["credits"], report["stopped"], report["stopped_by"]) == (pytest.approx(1.2), "reached", "retro-run")
     with pytest.raises(RuntimeError, match="no review starts"):
         asyncio.run(retro_review.asked("another", run_meter, role))
+
+
+def test_a_replayed_look_is_judged_under_its_frozen_prompt_on_its_own_meter(monkeypatch) -> None:
+    seen: dict[str, Any] = {}
+
+    async def judged(the_card, ctx, meter) -> str:
+        seen.update(card=the_card, prompt=ctx.prompt, limit=ctx.limit, meter=meter)
+        spend(meter, 0.2)
+        return '{"category": "hand-off-fitness", "note": "the criteria are unmet"}'
+
+    monkeypatch.setattr(cases_job.spotter_look, "judged", judged)
+    prompt = cases.snapshot(verbose=False)
+    run_meter = Meter(90, "replay-run")
+    meter = Meter(0.75, "look", parent=run_meter)
+    said = asyncio.run(cases_job.look({"step": "x"}, prompt, meter, cases_job.RoleModel(model="m", effort="medium")))
+    assert said["category"] == "hand-off-fitness"
+    assert (seen["prompt"], seen["limit"], seen["meter"]) == (prompt, 0.75, meter)
+    assert run_meter.report()["credits"] == pytest.approx(0.2)  # the look's spend reaches its run
+
+
+def test_a_replayed_look_whose_meter_closed_before_an_answer_counts_as_failed(monkeypatch) -> None:
+    async def judged(_card, _ctx, meter) -> str:
+        spend(meter, 1.0)
+        return ""  # the meter closed before an answer
+
+    monkeypatch.setattr(cases_job.spotter_look, "judged", judged)
+    said = asyncio.run(cases_job.look({}, cases.snapshot(verbose=False), Meter(0.75, "look"),
+                                      cases_job.RoleModel(model="m", effort="medium")))  # fmt: skip
+    assert said["category"] == "failed"

@@ -40,7 +40,6 @@ import uuid
 from concurrent.futures import Future
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.improvement import card, cases, credit_meter
@@ -50,6 +49,7 @@ from owlbear_delivery_next.settings.improvement import CATEGORIES
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Iterable, Iterator, Mapping
+    from pathlib import Path
 
 PROMPT = cases.PROMPT  # the prompt file; what a look sends is ``Context.prompt``, frozen with its examples
 RUNNING = 2  # looks at once per step
@@ -169,8 +169,6 @@ def store(folder: Path, record: Record, card_: dict[str, Any] | None) -> None:
             with os.fdopen(fd, "wb") as raw, gzip.open(raw, "wt") as out:
                 json.dump(card_, out)
     _append(folder, "records", asdict(record))
-
-
 
 
 def parse(text: str) -> dict[str, Any]:
