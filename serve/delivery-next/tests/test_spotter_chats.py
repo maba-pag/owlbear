@@ -22,11 +22,12 @@ import pytest
 
 from owlbear_delivery_next.change_contracts import watch_policy
 from owlbear_delivery_next.improvement import cases, credit_meter, spotter
-from owlbear_delivery_next.local_system import codebase, local_home
-from owlbear_delivery_next.machine_host import chat_settings, chats
+from owlbear_delivery_next.local_system import codebase, local_home, maintenance
+from owlbear_delivery_next.local_system.slots import Slots
+from owlbear_delivery_next.machine_host import chat_looks, chat_settings, chats
 from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.project_host.host import HostRecord
-from owlbear_delivery_next.runtimes import chat_moments, chatlogs
+from owlbear_delivery_next.runtimes import chat_moments, chatlogs, spotter_look
 from owlbear_delivery_next.runtimes.chat_moments import Moments, classify, shell_effects, tokens
 
 LOOKS = ("hand-off", "plan", "state-change", "sample")
@@ -756,3 +757,156 @@ def test_a_chat_look_keeps_its_turns_case_snapshot_and_its_limit_whatever_change
         assert (r["credits"], r["credits_known"], r["stopped"], r["stopped_by"], r["sdk_sessions"], r["skipped"]) == (
             0.01, True, "", "", [f"sdk-{r['id']}"], "")  # fmt: skip
     assert world.cards[0][1].prompt == sent  # exactly the snapshot the look was admitted with
+
+
+class Stuck:
+    """A look's runtime that neither stops nor can be forced to."""
+
+    async def stop(self) -> None:
+        msg = "the runtime does not answer"
+        raise RuntimeError(msg)
+
+    async def force_stop(self) -> None:
+        msg = "the runtime cannot be killed"
+        raise RuntimeError(msg)
+
+
+def owned(world: World, judge: spotter.Judge) -> maintenance.Maintenance:
+    ownership = maintenance.Maintenance(Slots(lambda: 2))
+    world.follower = chats.Follower(lambda: world.paused, lambda _t: None, read=world.read, judge=judge, poll=0.01,
+                                    sessions=world.state, ownership=ownership)  # fmt: skip
+    return ownership
+
+
+def test_a_look_whose_runtime_end_is_unconfirmed_holds_its_lease_and_admits_no_further_look(world):
+    async def stuck(card: dict[str, Any], ctx: spotter.Context, meter: credit_meter.Meter) -> str:
+        await spotter_look.teardown(Stuck(), None, f"look-{len(world.cards)}")
+        return await World.judge(world, card, ctx, meter)
+
+    ownership = owned(world, stuck)
+
+    async def scenario() -> None:
+        await world.passes()
+        world.chat("c", [asked("one"), ev("assistant.turn_start"), reply("plan one", tools=1)])
+        await world.passes()
+        assert world.follower.room().startswith("held: ")
+        world.chat("c", [asked("two"), ev("assistant.turn_start"), reply("plan two", tools=1)])
+        await world.passes()
+
+    asyncio.run(scenario())
+    assert [(r["look"], r["skipped"].split(":")[0]) for r in records()] == [("plan", ""), ("plan", "held")]
+    [lease] = ownership.read()["sessions"]
+    assert (lease["project"], lease["kind"], lease["state"]) == (chat_looks.PROJECT, chat_looks.KIND, "held")
+    assert "look-0" in lease["reason"]
+    assert ownership.slots.counts(chat_looks.PROJECT)[2] == 1  # its runtime may still use a session
+    assert world.follower.working() == [chat_looks.LINGERING]  # a stop when idle and an update wait
+    again = Slots(lambda: 2)
+    maintenance.Maintenance(again)  # a restarted host restores the held lease
+    assert again.counts(chat_looks.PROJECT)[2] == 1
+
+
+def test_a_look_whose_runtime_ended_releases_its_lease(world):
+    ownership = owned(world, world.judge)
+
+    async def scenario() -> None:
+        await world.passes()
+        world.chat("c", [asked("one"), ev("assistant.turn_start"), reply("plan one", tools=1)])
+        await world.passes()
+
+    asyncio.run(scenario())
+    assert [r["skipped"] for r in records()] == [""]
+    assert [s["state"] for s in ownership.read()["sessions"]] == ["released"]
+    assert (world.follower.room(), world.follower.working()) == ("", [])
+
+
+def test_a_workspace_file_made_unreadable_drops_its_chat(world):
+    async def scenario() -> None:
+        await world.passes()
+        world.chat("c", [asked("go")])
+        await world.passes()
+        assert "c" in world.follower.chats
+        meta = world.state / "c" / "workspace.yaml"
+        meta.chmod(0)  # its inode, size and mtime stay; its ctime changes
+        try:
+            await world.passes()
+            assert "c" not in world.follower.chats
+        finally:
+            meta.chmod(0o600)
+
+    asyncio.run(scenario())
+
+
+def test_a_chat_found_again_after_its_metadata_was_missing_starts_at_its_end(world):
+    async def scenario() -> None:
+        await world.passes()  # the baseline: no chat yet
+        whole = turn()
+        world.chat("c", whole[:4])
+        await world.passes()
+        world.chat("c", whole[4:])
+        await world.passes(2)  # its plan and hand-off are looked at
+        meta = world.state / "c" / "workspace.yaml"
+        kept = meta.read_text()
+        meta.unlink()  # briefly missing: the chat is no longer followed
+        await world.passes()
+        assert "c" not in world.follower.chats
+        meta.write_text(kept)
+        await world.passes(2)  # found again: what it held is context, never looked at again
+        assert len(records()) == 2
+        again = turn("the next one")
+        world.chat("c", again[:4])
+        await world.passes()
+        world.chat("c", again[4:])
+        await world.passes(2)
+
+    asyncio.run(scenario())
+    assert [r["look"] for r in records()] == ["plan", "hand-off", "plan", "hand-off"]
+
+
+def test_a_pass_fetches_at_most_its_budget_and_a_long_event_is_fetched_once(world, monkeypatch):
+    monkeypatch.setattr(chats, "PASS", 1000)
+    monkeypatch.setattr(chats, "CHUNK", 400)
+    fetched: list[int] = []
+    real = os.pread
+    monkeypatch.setattr(chats.os, "pread", lambda fd, n, at: fetched.append(len(got := real(fd, n, at))) or got)
+    long = json.dumps(reply("x" * 2500))  # each over a pass and still being written
+
+    async def scenario() -> None:
+        await world.passes()
+        for cid in ("a", "b"):
+            world.chat(cid, [asked("go")])
+            with (world.state / cid / "events.jsonl").open("a") as out:
+                out.write(long[:2900])
+        for _ in range(12):
+            fetched.clear()
+            await world.passes()
+            assert sum(fetched) <= chats.PASS
+        for cid in ("a", "b"):
+            with (world.state / cid / "events.jsonl").open("a") as out:
+                out.write(long[2900:] + "\n")
+        fetched.clear()
+        await world.passes(6)
+
+    asyncio.run(scenario())
+    sizes = sum((world.state / cid / "events.jsonl").stat().st_size for cid in ("a", "b"))
+    for cid in ("a", "b"):
+        c = world.follower.chats[cid]
+        assert (c.offset, c.partial, c.gaps) == ((world.state / cid / "events.jsonl").stat().st_size, b"", [])
+        assert c.spot.kept.said[-1]["text"].startswith("x")  # the long event was taken in whole
+    assert sizes > 0
+
+
+def test_an_event_left_out_reaches_a_later_look_of_the_same_read(world, monkeypatch):
+    monkeypatch.setattr(chats, "LINE", 300)
+
+    async def scenario() -> None:
+        await world.passes()
+        world.chat("c", [asked("go"), ev("assistant.turn_start"), reply("plan", tools=1)])
+        await world.passes()  # the turn's plan look: its snapshot is taken
+        world.chat("c", [reply("y" * 1000), *call("x", "bash", {"command": "git push"},
+                                                    shell("git push", read_only=False))])  # fmt: skip
+        await world.passes()
+
+    asyncio.run(scenario())
+    looked = [card for card, _ctx in world.cards if card["moment"].get("call") == "x"]
+    assert looked
+    assert "an event over 0 MiB was left out" in looked[0]["gaps"]

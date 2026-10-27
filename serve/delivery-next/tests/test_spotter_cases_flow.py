@@ -13,14 +13,14 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from owlbear_delivery_next.commands import cases_cli, cli
-from owlbear_delivery_next.improvement import case_intake, case_replay, case_review, cases, pilot_seed
+from owlbear_delivery_next.improvement import case_intake, case_replay, case_review, cases, pilot_seed, spotter
 from owlbear_delivery_next.improvement.cases import CaseError
 from owlbear_delivery_next.improvement.credit_meter import Meter
 from owlbear_delivery_next.local_system import maintenance
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.local_system.slots import Slots
 from owlbear_delivery_next.machine_host import cases_job
-from owlbear_delivery_next.runtimes import retro_review, spotter_look
+from owlbear_delivery_next.runtimes import chatlogs, retro_review, spotter_look
 from owlbear_delivery_next.state_store import spend_ledger, spend_metrics, spend_shares
 
 if TYPE_CHECKING:
@@ -891,14 +891,57 @@ def test_a_retro_review_session_is_charged_as_it_reports_and_aborted_at_its_runs
         asyncio.run(retro_review.asked("another", run_meter, role))
     assert spend_ledger.WRITER.settled(5)  # Copilot's review: its run was in no ledger, so its stop never showed
     start, end = spend_ledger.lines()
-    assert (start["type"], start["session"], start["agent"], start["model"], start.get("look", "")) == (
-        "start", "review-1", "retro-review", "m", ""
+    assert (start["type"], start["session"][:13], start["agent"], start["model"], start.get("look", "")) == (
+        "start", "retro-review-", "retro-review", "m", ""
     )  # fmt: skip
     assert (end["run"], end["usage"]["credits"], end["ending"], end["limit"], end["stopped"], end["stopped_by"]) == (
         start["run"], pytest.approx(1.2), "finished", 1.0, "reached", "retro-run"
     )  # fmt: skip
     [piece] = [p for p in spend_shares.derive(spend_ledger.lines()) if p["role"] == "retro-review"]
     assert spend_metrics.reached(piece)
+
+
+def test_a_retro_review_session_is_noted_as_ours_before_it_is_created_or_never_created(monkeypatch) -> None:
+    made: list[dict[str, Any]] = []
+
+    class Session:
+        def __init__(self, on_event: Any) -> None:
+            self.on_event = on_event
+            self.rpc = SimpleNamespace(usage=SimpleNamespace(get_metrics=self.metrics))
+
+        async def metrics(self) -> Any:
+            return SimpleNamespace(total_nano_aiu=0)
+
+        async def send_and_wait(self, _message: str, **_kw: Any) -> None:
+            self.on_event({"type": "assistant.message", "data": {"content": "reviewed"}})
+
+        async def disconnect(self) -> None:
+            pass
+
+    class Client:
+        def __init__(self, **_kw: Any) -> None:
+            pass
+
+        async def start(self) -> None:
+            pass
+
+        async def create_session(self, **kw: Any) -> Session:
+            made.append({**kw, "noted": kw.get("session_id") in (chatlogs.own() or set())})
+            return Session(kw["on_event"])
+
+        async def stop(self) -> None:
+            pass
+
+    monkeypatch.setattr(retro_review, "CopilotClient", Client)
+    monkeypatch.setattr(retro_review, "cli_path", lambda: "/bin/false")
+    role = cases_job.RoleModel(model="m", effort="medium")
+    assert asyncio.run(retro_review.asked("review this", Meter(1.0, "retro-run"), role)) == "reviewed"
+    assert [m["noted"] for m in made] == [True]  # in OwlBear's manifest before the session existed
+    assert str(made[0]["working_directory"]).startswith(str(spotter.place() / "looks"))  # never an enrolled folder
+    monkeypatch.setattr(chatlogs, "note", lambda _event: False)  # the manifest cannot be written
+    with pytest.raises(RuntimeError, match="could not be noted"):
+        asyncio.run(retro_review.asked("another", Meter(1.0, "retro-run"), role))
+    assert len(made) == 1  # never created
 
 
 def test_a_replayed_look_is_judged_under_its_frozen_prompt_on_its_own_meter(monkeypatch) -> None:

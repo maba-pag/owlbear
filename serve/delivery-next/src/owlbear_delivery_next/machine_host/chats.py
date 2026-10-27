@@ -11,22 +11,25 @@ Every ``POLL`` seconds, one pass:
    or unreadable: no chat is read, and what was followed is dropped.
 2. The manifest of OwlBear's own sessions; unreadable, no chat is read this pass (provenance fails closed).
 3. The chats: each session folder of the runtime the manifest does not name whose ``workspace.yaml`` (the only file
-   read before enrolment is checked; read again whenever it changes, never kept when unreadable) names a folder in an
-   enrolled one and outside OwlBear's own. Only then is its ``events.jsonl`` opened.
-4. Each chat's new complete lines, at most ``PASS`` bytes a pass in all and ``CHUNK`` (``HISTORY`` for context) a
-   read, the chats' order turning each pass; an event over ``LINE`` bytes is left out and said in the chat's cards.
+   read before enrolment is checked; read again whenever it or its metadata changes, never kept when unreadable) names
+   a folder in an enrolled one and outside OwlBear's own. Only then is its ``events.jsonl`` opened.
+4. Each chat's new bytes, at most ``PASS`` fetched a pass in all and ``CHUNK`` (``HISTORY`` for context) a read, the
+   chats' order turning each pass. Each byte is fetched once: an event not yet complete is kept and continued at the
+   next read; one over ``LINE`` bytes is left out and said in the chat's cards from then on.
 
 Where a chat starts: one whose folder existed when the follower started following (at its start, when switched on and
 when the enrolled folders change: the baseline, by folder names alone) starts at its end then; one found later starts
 at its beginning. What came before the start is read as context once the chat grows, never looked at; so is a
-replaced log. A restart records each chat's bytes written while OwlBear was not following them as a gap
+replaced log, and so is a chat followed before and found again (its metadata was missing meanwhile): it starts at
+its end then. A restart records each chat's bytes written while OwlBear was not following them as a gap
 (D-01M5XCE8ZA4FGYYY45YP44M8RD), from the offsets the last run left in ``chats.json``. A chat without a new event for a
 day goes dormant: its intake is dropped and its offset kept until it grows.
 
 Admission (``room``): one chat look at a time across all chats, a draining one counted; none while the machine is
-paused (D-01M5XCE8ZC030KT2FZ7D6SZCJN) or once the follower closes; the chats are read all the same. The state-change
-moment of a completed call is looked at instead of a sample of it. Before any moment is settled or admitted, a chat's
-Spotter gets the settings in force (its ``look_credit_limit`` among them); its prompt and cases' snapshot
+paused (D-01M5XCE8ZC030KT2FZ7D6SZCJN), once the follower closes, or while a look's runtime may still run (its lease
+held, ``chat_looks``); the chats are read all the same. The state-change moment of a completed call is looked at
+instead of a sample of it. Before any moment is settled or admitted, a chat's Spotter gets the settings in force (its
+``look_credit_limit`` among them) and every gap known by then; its prompt and cases' snapshot
 (``cases.snapshot``) is taken when a turn starts (a turn begun before following, at its first live event) and serves
 every look of that turn. An admitted look keeps both, whatever changes before it runs, and its record keeps the turn,
 the case version and prompt hash, and its meter's spend and stop.
@@ -35,21 +38,19 @@ the case version and prompt hash, and its meter's spend and stop.
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import dataclasses
 import fcntl
+import functools
 import json
 import os
-import tempfile
 import threading
 import time
-import uuid
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.improvement import cases, spotter
+from owlbear_delivery_next.machine_host import chat_looks, chat_offsets
 from owlbear_delivery_next.machine_host.chat_settings import Plan, settings_now
 from owlbear_delivery_next.runtimes import chatlogs, spotter_look
 from owlbear_delivery_next.runtimes.chat_moments import Moments
@@ -57,12 +58,14 @@ from owlbear_delivery_next.runtimes.chat_moments import Moments
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from owlbear_delivery_next.local_system import maintenance
+
 POLL = 5.0  # seconds between passes
 CHUNK, HISTORY, PASS, LINE = 1 << 20, 8 << 20, 16 << 20, 8 << 20  # bytes: a live read, a context read, a pass, an event
 LOOKS = 1  # chat looks at once on this machine
 QUIET = chatlogs.QUIET.total_seconds()  # a chat without a new event this long goes dormant
 CLOSE = spotter.DRAIN + 3 * spotter.TEARDOWN + 5.0  # seconds the machine's stop waits for the follower to end
-LOCK, STATE = "chats.lock", "chats.json"
+LOCK = "chats.lock"
 
 
 @dataclass
@@ -76,6 +79,7 @@ class Chat:
     file: tuple[int, int] = (0, 0)  # the log's device and inode
     grew: float = 0.0  # when it last grew (wall clock)
     skipping: bool = False  # inside an event over ``LINE`` bytes
+    partial: bytes = b""  # the bytes after *offset* already read: an event not yet complete
     spot: spotter.Spotter | None = None
     moments: Moments | None = None
     gaps: list[str] = field(default_factory=list)
@@ -97,9 +101,14 @@ class Follower:
         judge: spotter.Judge | None = None,
         poll: float = POLL,
         sessions: Path | None = None,
+        ownership: maintenance.Maintenance | None = None,
     ) -> None:
-        """Nothing is read or written until it runs; *sessions* is the runtime's session folder (its own by default)."""
+        """Nothing is read or written until it runs; *sessions* is the runtime's session folder (its own by default).
+
+        With *ownership* (the machine's maintenance ledger) each look holds a lease (``chat_looks``).
+        """
         self.paused, self.say, self.read, self.judge, self.poll = paused, say, read, judge, poll
+        self.owned = chat_looks.Owned(ownership, say) if ownership is not None else None
         self.sessions = sessions
         self.closed, self.ended = threading.Event(), threading.Event()
         self.thread: threading.Thread | None = None
@@ -110,7 +119,7 @@ class Follower:
         self.folders: tuple[str, ...] = ()
         self.last: dict[str, Any] = {}  # the last run's offsets, until its chats were found again
         self.restarted = True  # the first time following begins compares with the last run's offsets
-        self.metadata: dict[str, tuple[tuple[int, int, int], str]] = {}  # a session's workspace.yaml: its stamp, folder
+        self.metadata: dict[str, tuple[tuple[int, ...], str]] = {}  # a session's workspace.yaml: its stamp, folder
         self.turns = 0
         self.said = ""
         self.saved: dict[str, Any] = {}
@@ -138,7 +147,15 @@ class Follower:
             return "paused: the machine is paused"
         self.leaving = [s for s in self.leaving if s.running]
         running = sum(c.spot.running for c in self.chats.values() if c.spot) + sum(s.running for s in self.leaving)
-        return "capacity: a chat look is already running" if running >= LOOKS else ""
+        if running >= LOOKS:
+            return "capacity: a chat look is already running"
+        if self.owned is not None and self.owned.lingering():
+            return "held: a chat look's runtime may still run; no chat look starts until Maintenance recovers it"
+        return ""
+
+    def working(self) -> list[str]:
+        """What a stop when idle and an update wait for: a chat look's runtime that may still run."""
+        return [chat_looks.LINGERING] if self.owned is not None and self.owned.lingering() else []
 
     def run(self) -> None:
         """The thread: take the lock, follow until closed, drain and write, then let the lock go."""
@@ -247,7 +264,7 @@ class Follower:
     def _begin(self, folders: tuple[str, ...]) -> None:
         """Following begins, or the enrolled folders changed: the session folders now are the baseline."""
         if self.restarted:
-            self.last, self.restarted = self._load(), False
+            self.last, self.restarted = chat_offsets.load(), False
         self.folders = folders
         try:
             self.baseline = {p.name for p in self._root().iterdir() if p.is_dir()}
@@ -270,13 +287,13 @@ class Follower:
         return found
 
     def _workspace(self, folder: Path) -> str:
-        """``chatlogs.workspace``, read again whenever the file changes; an unreadable one is never kept."""
+        """``chatlogs.workspace``, read again whenever the file or its metadata changes; never kept when unreadable."""
         try:
             st = (folder / "workspace.yaml").stat()
         except OSError:
             self.metadata.pop(folder.name, None)
             return ""
-        stamp = (st.st_ino, st.st_size, st.st_mtime_ns)
+        stamp = (st.st_ino, st.st_size, st.st_mtime_ns, st.st_ctime_ns)  # ctime: its permissions changed too
         if (kept := self.metadata.get(folder.name)) is not None and kept[0] == stamp:
             return kept[1]
         if cwd := chatlogs.workspace(folder):
@@ -286,7 +303,10 @@ class Follower:
         return cwd
 
     def _forget(self, cid: str) -> None:
+        """Stop following *cid*; found again, it starts at its end then, what it held before being context only."""
         self._dormant(self.chats.pop(cid))
+        if self.baseline is not None:
+            self.baseline.add(cid)
 
     def _new(self, cid: str, cwd: str, size: int, file: tuple[int, int]) -> Chat:
         start = size if self.baseline is not None and cid in self.baseline else 0
@@ -294,25 +314,22 @@ class Follower:
         if (old := self.last.get(cid)) is not None:
             was = (int(old.get("offset") or 0), tuple(old.get("file") or (0, 0)))
             if was[1] != file:
-                self._gap(cid, "the chat's log was replaced while OwlBear was not following it; read as context only")
+                chat_offsets.gap(
+                    cid, "the chat's log was replaced while OwlBear was not following it; read as context only"
+                )
             elif was[0] < start:
-                self._gap(cid, f"OwlBear was not following: bytes {was[0]}..{start} of the chat's log were read as "
-                               "context, never looked at")  # fmt: skip
+                missed = f"bytes {was[0]}..{start} of the chat's log were read as context, never looked at"
+                chat_offsets.gap(cid, f"OwlBear was not following: {missed}")
         return c
-
-    def _gap(self, cid: str, why: str) -> None:
-        record = spotter.Record(
-            id=uuid.uuid4().hex[:12], at=datetime.now(UTC).isoformat(timespec="seconds"), project="", change="",
-            step="chat", session=cid, look="gap", call="", cutoff=0, probability=0.0, skipped=why,
-        )  # fmt: skip
-        spotter.WORK.submit(spotter.store, spotter.place(), record, None)
 
     def _intake(self, c: Chat, ctx: spotter.Context) -> None:
         """The chat grew: its Spotter and moments, rebuilt from its beginning, what came before its start as context."""
         judge = self.judge or spotter_look.judged
+        if self.owned is not None:
+            judge = functools.partial(self.owned.judged, judge)
         c.spot = spotter.Spotter(self._ctx(c, ctx), lambda cid=c.id: cid, judge, room=self.room)
         c.moments = Moments(c.workspace, Path.home(), Path(os.environ["TMPDIR"]) if os.environ.get("TMPDIR") else None)
-        c.history, c.offset, c.skipping = max(c.history, c.offset), 0, False
+        c.history, c.offset, c.skipping, c.partial = max(c.history, c.offset), 0, False, b""
 
     async def _tail(self, cid: str, cwd: str, ctx: spotter.Context, left: int) -> int:
         """Read the chat's new complete lines, at most *left* bytes; the bytes read."""
@@ -325,15 +342,15 @@ class Follower:
             file = (st.st_dev, st.st_ino)
             if (c := self.chats.get(cid)) is None:
                 c = self.chats[cid] = self._new(cid, cwd, st.st_size, file)
-            if c.workspace != cwd or c.file != file or st.st_size < max(c.offset, c.history):
-                if c.file != file or st.st_size < max(c.offset, c.history):
+            if c.workspace != cwd or c.file != file or st.st_size < max(c.offset + len(c.partial), c.history):
+                if c.file != file or st.st_size < max(c.offset + len(c.partial), c.history):
                     c.gaps.append("the chat's log was replaced; what it held then is context only")
                     c.offset = c.history = st.st_size
                 self._dormant(c)
                 c.workspace, c.file = cwd, file
             if c.spot is not None:  # what this pass admits uses today's settings; admitted looks keep theirs
                 c.spot.ctx = self._ctx(c, ctx)
-            if st.st_size == max(c.offset, c.history) and (c.spot is None or c.offset >= c.history):
+            if st.st_size == max(c.offset + len(c.partial), c.history) and (c.spot is None or c.offset >= c.history):
                 self._still(c)
                 return 0
             if c.spot is None:
@@ -360,6 +377,12 @@ class Follower:
         c.prompt = cases.snapshot(verbose=c.verbose)
         c.spot.ctx = self._ctx(c, c.base)
 
+    def _fresh(self, c: Chat) -> None:
+        """Before a look is admitted: its turn's snapshot, and this pass's settings with every gap known by now."""
+        self._snapped(c)
+        if c.spot is not None and c.base is not None:
+            c.spot.ctx = self._ctx(c, c.base)
+
     def _forgotten(self, c: Chat) -> tuple[str, ...]:
         n = c.moments.forgotten if c.moments else 0
         return (f"{n} of the agent's calls were open too long to be judged when they completed",) if n else ()
@@ -371,8 +394,8 @@ class Follower:
             self.tasks.add(task)
             task.add_done_callback(self.tasks.discard)
         c.spot, c.moments = None, None
-        c.history = max(c.history, c.offset)
-        c.offset = c.history
+        c.history = max(c.history, c.offset)  # an event not yet complete is read again, as context
+        c.offset, c.partial = c.history, b""
 
     def _still(self, c: Chat) -> None:
         """No new byte: settle its turn; a day without one makes it dormant."""
@@ -383,35 +406,47 @@ class Follower:
             self._dormant(c)
 
     async def _read(self, c: Chat, fd: int, size: int, left: int) -> int:
-        read = 0
-        while c.offset < size and read < left and not self.closed.is_set():
-            data = os.pread(fd, min(HISTORY if c.offset < c.history else CHUNK, size - c.offset), c.offset)
+        """Read *c*'s log up to *size*, fetching at most *left* bytes; the bytes fetched.
+
+        Every byte is fetched once: an event not yet complete stays in ``Chat.partial`` (at most ``LINE`` bytes) and
+        the next read, in this pass or a later one, goes on after it.
+        """
+        fetched = 0
+        while (at := c.offset + len(c.partial)) < size and fetched < left and not self.closed.is_set():
+            data = os.pread(fd, min(HISTORY if c.offset < c.history else CHUNK, size - at, left - fetched), at)
             if not data:  # the log shrank since it was measured: the next pass finds it replaced
                 break
+            fetched += len(data)
             if c.skipping:
                 nl = data.find(b"\n")
                 step = len(data) if nl < 0 else nl + 1
-                c.offset, read, c.skipping = c.offset + step, read + step, nl < 0
-                continue
-            if (nl := data.rfind(b"\n")) < 0:  # no whole event in this read: a long one, or one still being written
-                data = os.pread(fd, min(LINE + 1, size - c.offset), c.offset)
-                if (nl := data.find(b"\n")) < 0:
-                    if len(data) <= LINE:  # still being written, or the log shrank
-                        break
-                    c.gaps.append(f"an event over {LINE >> 20} MiB was left out")
-                    c.offset, read, c.skipping = c.offset + len(data), read + len(data), True
-                    continue
-            start = c.offset
-            for line in data[: nl + 1].splitlines(keepends=True):
-                self._event(c, line, live=start >= c.history)
-                start += len(line)
-            read += nl + 1
-            c.offset += nl + 1
+                c.offset, c.skipping, data = c.offset + step, nl < 0, data[step:]
+            self._lines(c, c.partial + data)
             await asyncio.sleep(0)  # the looks' tasks run between reads
         if c.moments is not None and not c.skipping:
             for m in c.moments.settle(frontier=c.offset >= size, now=time.monotonic()):
                 self._admit(c, m)
-        return read
+        return fetched
+
+    def _lines(self, c: Chat, data: bytes) -> None:
+        """Take in *data*'s complete events, read from ``Chat.offset``; keep the rest; skip an event over ``LINE``."""
+        nl = data.rfind(b"\n")
+        start = c.offset
+        for line in data[: nl + 1].splitlines(keepends=True):
+            if len(line) > LINE + 1:
+                self._left_out(c)
+            else:
+                self._event(c, line, live=start >= c.history)
+            start += len(line)
+        c.offset, c.partial = start, data[nl + 1 :]
+        if len(c.partial) > LINE:
+            c.offset, c.partial, c.skipping = c.offset + len(c.partial), b"", True
+            self._left_out(c)
+
+    def _left_out(self, c: Chat) -> None:
+        c.gaps.append(f"an event over {LINE >> 20} MiB was left out")
+        if c.spot is not None and c.base is not None:  # the next look of this read says so
+            c.spot.ctx = self._ctx(c, c.base)
 
     def _event(self, c: Chat, line: bytes, *, live: bool) -> None:
         try:
@@ -431,6 +466,7 @@ class Follower:
         for m in after:
             changed = self._admit(c, m) or changed
         if completed and not changed:
+            self._fresh(c)
             c.spot.sample(d)
 
     def _admit(self, c: Chat, moment: dict[str, Any]) -> bool:
@@ -438,30 +474,12 @@ class Follower:
         look = moment.pop("look")
         if c.spot is None or look not in c.spot.ctx.looks:
             return False
-        self._snapped(c)
+        self._fresh(c)
         c.spot.look(look, 1.0, moment)
         return look == "state-change"
 
-    def _load(self) -> dict[str, Any]:
-        with contextlib.suppress(OSError, ValueError):
-            got = json.loads((spotter.place() / STATE).read_text())
-            if isinstance(got, dict):
-                return {k: v for k, v in got.items() if isinstance(v, dict)}
-        return {}
-
     def _save(self) -> None:
-        """Keep each followed chat's offset for the next run's gap record; a failure loses only that record's bounds."""
+        """Keep each followed chat's offset for the next run's gap record (``chat_offsets``)."""
         now = {c.id: {"offset": max(c.offset, c.history), "file": list(c.file)} for c in self.chats.values()}
-        if now == self.saved:
-            return
-        with contextlib.suppress(OSError):
-            folder = spotter.root()
-            fd, tmp = tempfile.mkstemp(dir=folder, prefix=".chats-")
-            try:
-                with os.fdopen(fd, "w") as out:
-                    json.dump(now, out)
-                Path(tmp).replace(folder / STATE)
-            except BaseException:
-                Path(tmp).unlink(missing_ok=True)
-                raise
+        if now != self.saved and chat_offsets.save(now):
             self.saved = now

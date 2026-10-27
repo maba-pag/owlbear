@@ -100,7 +100,9 @@ class Machine:
             say=self.say,
             ownership=self.maintenance,
         )
-        self.chats = chats.Follower(paused=lambda: self.paused, say=self.say)  # started by ``serve``
+        self.chats = chats.Follower(  # started by ``serve``; each look leased like the cases job's runs
+            paused=lambda: self.paused, say=self.say, ownership=self.maintenance
+        )
 
     def _curation_fence(self) -> str:
         """Why no memory curation starts now: an update's fence, a stop, or a stop when idle, which starts nothing."""
@@ -294,6 +296,7 @@ class Machine:
             [f"{p.name}: {w}" for p in list(self.projects.values()) for w in p.working(stopping=True)]
             + self.curation.working()
             + self.cases.working()
+            + self.chats.working()
             + self._unproven_packs()
         )
 
@@ -314,6 +317,7 @@ class Machine:
             [f"{p.name}: {w}" for p in projects for w in p.working(stopping=True, requests=False)]
             + self.curation.working()
             + self.cases.working()
+            + self.chats.working()
             + self._unproven_packs()
         )
 

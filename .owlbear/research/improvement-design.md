@@ -185,16 +185,22 @@ course.
   steerable and stoppable by the Spotter (D-01M5W9YB6VHT7RW53M3133WD3C).
 - **Chats:** a follower in the machine host tails each enrolled chat's `events.jsonl`.
 
-As built for chats (`machine_host/chats.py` and `chat_settings.py`, `runtimes/chat_moments.py`): one follower,
-holding its own lock from before its first read until its thread ends, so a handover's next host reads nothing while the old one drains. Every
+As built for chats (`machine_host/chats.py`, `chat_settings.py`, `chat_looks.py`, `chat_offsets.py`,
+`runtimes/chat_moments.py`): one follower, holding its own lock from before its first read until its thread ends, so a
+handover's next host reads nothing while the old one drains. Every
 5 seconds it reads the Spotter's settings (Global's under this machine's; a chat is no project's) and the enrolled
 chats; off, unset or unreadable, it reads no chat. A chat is a runtime session folder, listed before the manifest of
-OwlBear's own sessions is read, that the manifest does not name (an unreadable manifest reads none, and every session OwlBear creates, a look's and a
-replacement's included, is noted there before it is created or does not start), whose `workspace.yaml` names an
-enrolled folder outside OwlBear's own; only then is its log opened. Its new complete lines are read in bounded chunks.
-A chat that existed when following began starts at its end then, a later one at its start; earlier bytes and a
-replaced log are context, never looked at; a restart records the bytes it missed as a gap
-(D-01M5XCE8ZA4FGYYY45YP44M8RD). One chat look runs at a time, a draining one counted; Pause admits none while the chats
+OwlBear's own sessions is read, that the manifest does not name (an unreadable manifest reads none, and every session
+OwlBear creates, a look's, a `retro-review`'s and a replacement's included, is noted there before it is created or does
+not start), whose `workspace.yaml` (read again whenever it or its metadata changes) names an enrolled folder outside
+OwlBear's own; only then is its log opened. Its new bytes are read in bounded chunks, each fetched once (an event not
+yet complete is continued at the next read), every fetch counting against a pass's bound.
+A chat that existed when following began starts at its end then, a later one at its start, and one found again after
+it was dropped (its metadata missing meanwhile) at its end then; earlier bytes and a replaced log are context, never
+looked at; a restart records the bytes it missed as a gap (D-01M5XCE8ZA4FGYYY45YP44M8RD). One chat look runs at a
+time, a draining one counted, under a maintenance lease from before its session to its runtime's confirmed end; an
+unconfirmed end keeps the lease and a session slot held, and no chat look starts until the owner recovers it on the
+Maintenance page, as for the cases job; Pause admits none while the chats
 are still read (D-01M5XCE8ZC030KT2FZ7D6SZCJN). Every settlement and admission uses the settings in force (the
 per-look credit limit among them); the prompt and cases' snapshot is taken when a turn starts (one begun before
 following, at its first live event) and serves that turn's looks. Each look keeps the settings and snapshot it was

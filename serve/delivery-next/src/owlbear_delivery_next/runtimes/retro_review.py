@@ -1,10 +1,11 @@
 """One ``retro-review`` session for the Spotter cases (Improvement design §4, §6): tool-less, within its meter.
 
 It checks a candidate's card against its call, or minimises and sanitises a case for publication. Like a look, it runs
-in an empty folder without the project's or the user's configuration, noted in the chatlogs manifest so it is never
-taken for a chat, and its teardown is bounded. Its billed calls are charged to the run's meter as they are reported
-(``runtimes.credit_limit.Limit``); once the meter closes the turn is aborted, and the session's share is reconciled
-with its reported total at its end. Like a look's, each session is its own run in the spend ledger
+in an empty folder in the Spotter's own (``~/.owlbear/spotter/looks/``) without the project's or the user's
+configuration, noted in the chatlogs manifest before it is created so it is never taken for a chat (one that cannot be
+noted does not start), and its teardown is bounded. Its billed calls are charged to the run's meter as they are
+reported (``runtimes.credit_limit.Limit``); once the meter closes the turn is aborted, and the session's share is
+reconciled with its reported total at its end. Like a look's, each session is its own run in the spend ledger
 (D-01M5XCDF6G60VG5GHTWF5QSSDE): its own usage, ending, the meter's limit and stop (``spotter_look.Spent``).
 """
 
@@ -32,6 +33,7 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.improvement.credit_meter import Meter
 
 SECONDS = 180.0  # an answer's deadline
+UNNOTED = "the review's session could not be noted as OwlBear's own, so it was not created"
 
 
 async def asked(message: str, meter: Meter, role: RoleModel) -> str:
@@ -58,20 +60,24 @@ async def asked(message: str, meter: Meter, role: RoleModel) -> str:
     try:
         await client.start()
         effort = role.effort if role.effort and await takes_effort(client, role.model) else None
-        with tempfile.TemporaryDirectory(prefix="owlbear-retro-review-") as empty:
+        looks = spotter.root() / "looks"  # in OwlBear's own folder, never an enrolled one
+        looks.mkdir(mode=0o700, exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix="retro-review-", dir=looks) as empty:
+            sid = f"retro-review-{uuid.uuid4().hex}"
+            started = {"kind": "retro-review", "role": "retro-review", "job": "", "worktree": empty}
+            if not await spotter.offload(chatlogs.registered, sid, started):
+                sid = ""  # never noted: no session, so nothing to note as ended
+                raise RuntimeError(UNNOTED)
             session = await client.create_session(
+                session_id=sid,
                 model=role.model, reasoning_effort=effort,
                 context_tier="long_context" if role.context == "long" else None, available_tools=[], mcp_servers={},
                 enable_config_discovery=False, included_builtin_skills=[], enable_file_hooks=False,
                 skip_custom_instructions=True, working_directory=empty, on_event=heard,
                 on_permission_request=lambda *_: PermissionDecisionReject(feedback="a review has no tools"),
             )  # fmt: skip
-            sid = getattr(session, "session_id", "") or ""
             limit.part.started(sid)
             spent.started(sid)
-            started = {"event": "started", "session": sid, "kind": "retro-review", "role": "retro-review", "job": "",
-                       "worktree": empty}  # fmt: skip
-            await spotter.offload(chatlogs.note, started)
             confirmed = await limit.turn(
                 session.send_and_wait(message, timeout=SECONDS), partial(_abort, session), spotter.TEARDOWN
             )
