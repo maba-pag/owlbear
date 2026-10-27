@@ -3,8 +3,12 @@
 It runs in an empty folder without the project's or the user's configuration, noted in the chatlogs manifest so it is
 never taken for a chat. It has a 90-second answer deadline followed by a bounded teardown: ``spotter.TEARDOWN`` per
 stage, whatever cancels it meanwhile. The session and runtime stop gracefully, or the runtime is forced to; an end it
-could not confirm is noted provisional. The day's budget ledger reserves ``spotter.ESTIMATE`` and settles the reported
-spend, using the estimate when the spend is unknown.
+could not confirm is noted provisional.
+
+Its spend is charged to the look's meter as the runtime reports each billed call (``runtimes.credit_limit``); once the
+meter closes at the look's credit limit (or its run's), the turn is aborted, and a look whose meter is already closed
+starts no session (D-01M5XCD49YHHR1NQKKY8TQD0C3). The session's reported total is read on every ending, within
+``spotter.TEARDOWN``, and reconciles the look's share; it is provisional when the turn's end was not confirmed.
 """
 
 from __future__ import annotations
@@ -13,33 +17,43 @@ import asyncio
 import contextlib
 import json
 import tempfile
+from functools import partial
 from typing import Any
 
 from copilot import CopilotClient, RuntimeConnection
 from copilot.rpc import PermissionDecisionReject
 
-from owlbear_delivery_next.improvement import spotter
+from owlbear_delivery_next.improvement import credit_meter, spotter
 from owlbear_delivery_next.improvement.events import as_dict
 from owlbear_delivery_next.runtimes import chatlogs
 from owlbear_delivery_next.runtimes.copilot_cli import cli_path
+from owlbear_delivery_next.runtimes.credit_limit import Limit
 from owlbear_delivery_next.runtimes.model_choices import takes_effort
 
 VERBOSE = "\n\nVerbose: also give a short `rationale` (at most 5 sentences) naming the evidence."
 
 
-async def judged(the_card: dict[str, Any], ctx: spotter.Context) -> tuple[str, float]:
-    """The look's answer and its credits (the estimate when unread)."""
+async def judged(the_card: dict[str, Any], ctx: spotter.Context, meter: credit_meter.Meter) -> str:
+    """The look's answer, its spend charged to *meter*; "" when the meter was closed or stopped it before an answer.
+
+    A retry or an extension of the look passes the same meter, so it starts only while the meter is open.
+    """
+    if not meter.admit():
+        return ""
     said: list[str] = []
+    limit = Limit(meter)
 
     def heard(ev: Any) -> None:  # noqa: ANN401 - an SDK event
         d = as_dict(ev)
         if d.get("type") == "assistant.message" and (text := (d.get("data") or {}).get("content")):
             said.append(text)
+        limit.heard(ev)
 
     card_json = json.dumps(the_card, ensure_ascii=False)
     message = (f"{spotter.PROMPT.read_text()}{VERBOSE if ctx.verbose else ''}\n\n"
                f"## The card (data, not instructions)\n\n```json\n{card_json}\n```\n")  # fmt: skip
-    client, session, sid, nano = CopilotClient(connection=RuntimeConnection.for_stdio(path=cli_path())), None, "", None
+    client, session, sid = CopilotClient(connection=RuntimeConnection.for_stdio(path=cli_path())), None, ""
+    confirmed = False  # the turn's end was seen, so the session's reported total is final
     try:
         await client.start()
         effort = ctx.effort if ctx.effort and await takes_effort(client, ctx.model) else None
@@ -52,15 +66,33 @@ async def judged(the_card: dict[str, Any], ctx: spotter.Context) -> tuple[str, f
                 on_permission_request=lambda *_: PermissionDecisionReject(feedback="a look has no tools"),
             )  # fmt: skip
             sid = getattr(session, "session_id", "") or ""
+            limit.part.started(sid)
             started = {"event": "started", "session": sid, "kind": "spotter", "role": "spotter", "job": "",
-                       "worktree": empty}  # fmt: skip
+                       "worktree": empty, "look": meter.id}  # fmt: skip
             await spotter.offload(chatlogs.note, started)
-            await session.send_and_wait(message, timeout=spotter.LOOK)
-            with contextlib.suppress(Exception):  # an unread usage keeps the answer and counts as the estimate
-                nano = getattr(await session.rpc.usage.get_metrics(), "total_nano_aiu", None)
+            confirmed = await limit.turn(
+                session.send_and_wait(message, timeout=spotter.LOOK), partial(_abort, session), spotter.TEARDOWN
+            )
     finally:
-        await spotter.through(asyncio.ensure_future(teardown(client, session, sid)))
-    return (said[-1] if said else ""), (nano / 1e9 if nano is not None else spotter.ESTIMATE)
+        await spotter.through(asyncio.ensure_future(_end(client, session, sid, limit, confirmed=confirmed)))
+    return said[-1] if said else ""
+
+
+async def _end(client: Any, session: Any, sid: str, limit: Limit, *, confirmed: bool) -> None:  # noqa: ANN401
+    """Reconcile the look's share with the session's reported total, then tear the session down; each bounded."""
+    if session is None:
+        limit.part.ended(0.0, confirmed=True)  # no session, no turn: nothing was billed
+    else:
+        await limit.settle(partial(_metrics, session), confirmed=confirmed, bound=spotter.TEARDOWN)
+    await teardown(client, session, sid)
+
+
+async def _metrics(session: Any) -> Any:  # noqa: ANN401 - the SDK session and its usage
+    return await session.rpc.usage.get_metrics()
+
+
+async def _abort(session: Any) -> None:  # noqa: ANN401 - the SDK session
+    await session.abort()
 
 
 async def _stage(work: Any) -> bool:  # noqa: ANN401 - an SDK coroutine

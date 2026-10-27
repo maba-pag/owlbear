@@ -1,5 +1,6 @@
 import { call } from "/assets/ui.mjs";
-import { INHERIT, LAYERS, NUMBERS, WRITE, state, drafts, page, show, showIdle, notify } from "./state.mjs";
+import { CREDITS, INHERIT, LAYERS, NUMBERS, WRITE, state, drafts, page, show, showIdle, notify, typedNumber }
+  from "./state.mjs";
 import { mismatch, tierMismatch } from "./cells.mjs";
 import { readAcross } from "./machine.mjs";
 import { named } from "./sections.mjs";
@@ -50,7 +51,7 @@ export function edit(key, raw, literal = false) {
   const field = key.split(".")[1] ?? key;
   // even a no-op clear is a review
 if (state.layer === "project" && key.startsWith("prefs.")) state.prefsReview = true;
-  const value = !literal && !NUMBERS.includes(field) && raw === INHERIT ? "" : raw;
+  const value = !literal && !NUMBERS.includes(field) && !CREDITS.includes(field) && raw === INHERIT ? "" : raw;
   if (LISTS.includes(key)) typing[state.layer][key] = value;  // shown as typed: a comma, a space
   if (canonical(key, value) === saved(state.layer, key)) delete drafts[state.layer][key];
   else drafts[state.layer][key] = value;
@@ -126,7 +127,8 @@ function edited(layer) {
     }
     if (key.startsWith("spot.")) {
       const field = key.slice(5), mine = { ...(next.spotter ?? {}) };
-      mine[field] = value === "" ? null : NUMBERS.includes(field) ? (/^\d+$/.test(value) ? Number(value) : value)
+      const number = NUMBERS.includes(field) || CREDITS.includes(field);
+      mine[field] = value === "" ? null : number ? typedNumber(field, value)
         : field === "looks" ? value.split(",").map((l) => l.trim()).filter(Boolean) : value;
       next.spotter = Object.values(mine).some((v) => v !== null) ? mine : null;
       continue;
@@ -136,7 +138,8 @@ function edited(layer) {
       continue;
     }
     const [role, field] = key.split(".");
-    const number = !NUMBERS.includes(field) || value === "" ? null : /^\d+$/.test(value) ? Number(value) : value;
+    const number = (!NUMBERS.includes(field) && !CREDITS.includes(field)) || value === "" ? null
+      : typedNumber(field, value);
     if (role === "machine") {  // Global's machine settings (2026-10-23): "true"/"false" for the switches
       const flag = value === "" ? null : value === "true";
       const list = value === "" ? null : value === "none" ? [] : value.split(",").map((f) => f.trim()).filter(Boolean);

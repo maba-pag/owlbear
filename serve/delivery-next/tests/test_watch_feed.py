@@ -335,7 +335,7 @@ def test_a_spotter_that_cannot_start_leaves_the_watcher_watching(place, monkeypa
 
     monkeypatch.setattr(spotter, "Spotter", broken)
     spot = spotter.Context(project="p", change="c1", step="build", looks=("hand-off",), sample_rate=0, verbose=False,
-                           model="m", effort="", budget=1)  # fmt: skip
+                           model="m", effort="", limit=1.0)  # fmt: skip
     place.watching = dataclasses.replace(place.watching, spot=spot)
     st = stepped(place, start("c1"), write("c1", str(place.elsewhere / "x")))
     assert st.feed is not None

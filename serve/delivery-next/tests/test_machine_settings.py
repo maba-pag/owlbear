@@ -86,7 +86,7 @@ def test_each_setting_is_this_machine_s_else_global_s_else_unset():
     assert (got.channel, got.sessions, got.update_when_idle) == ("major", 2, None)
     assert (got.sources, got.shared["sessions"]) == ({"channel": "global", "sessions": "machine"}, 6)
     assert got.missing == ["update_when_idle", "update_while_paused", "curate_after_merge", "curate_when_idle",
-                           "spotter_budget", "retro_budget", "retro_verbose_cap", "retro_after_change",
+                           "retro_run_credit_limit", "replay_run_credit_limit", "retro_after_change",
                            "retro_when_idle", "enrolled_chats"]  # fmt: skip
     chats = machine_settings.resolve(registry.Settings(enrolled_chats=[]), None)
     assert (chats.enrolled_chats, "enrolled_chats" in chats.missing) == ([], False)  # none enrolled is set, not unset
@@ -115,7 +115,8 @@ def test_the_switch_over_moves_this_machine_s_settings_into_a_carried_global_and
     said = _carry(monkeypatch, shared)
 
     glob = read_layer(shared.global_path, GlobalLayer)
-    assert (glob.machine, glob.machine_moved) == (MachineValues.model_validate(LEGACY.model_dump()), True)
+    limits = {"retro_run_credit_limit": 20.0, "replay_run_credit_limit": 90.0}  # format 16's, written into Global
+    assert (glob.machine, glob.machine_moved) == (MachineValues.model_validate(LEGACY.model_dump() | limits), True)
     assert glob.pr_marker is None  # cleared before: never filled again
     assert _git(shared.root, "status", "--porcelain") == ""
     assert _git(shared.root, "rev-parse", "HEAD") == _git(shared_repo[1], "rev-parse", "HEAD")  # published
@@ -522,3 +523,227 @@ def test_every_start_takes_in_what_another_machine_changed_in_global(shared_repo
     monkeypatch.setenv(data_repo.VIEW, str(second.root))
     assert machine_settings.current().sessions is None  # no stale value from before
     assert _done()
+
+
+# The credit limits' upgrade (D-01M5XCD49YHHR1NQKKY8TQD0C3): a start saves Global in format 16 with the limits its
+# migration wrote, and publishes it once; nothing else is filled, and the owner's later changes stay his.
+LIMITS = (carried.LOOK_CREDIT_LIMIT, carried.RETRO_RUN_CREDIT_LIMIT, carried.REPLAY_RUN_CREDIT_LIMIT)
+OLD_MACHINE = {"channel": "minor", "sessions": 3, "spotter_budget": 50, "retro_budget": 20, "retro_verbose_cap": 5}
+
+
+def _limits(glob: GlobalLayer) -> tuple[float | None, float | None, float | None]:
+    machine = glob.machine or MachineValues()
+    return glob.spotter.look_credit_limit if glob.spotter else None, machine.retro_run_credit_limit, (
+        machine.replay_run_credit_limit)  # fmt: skip
+
+
+def _moved_global(shared: DataRepo, **extra) -> None:
+    """A Global the carry and the move filled before format 16, published; this machine has moved."""
+    old = carried.layer().model_dump(mode="json", exclude={"machine", "machine_moved", "format"})
+    old["spotter"] = {k: v for k, v in old["spotter"].items() if k != "look_credit_limit"}
+    _committed(shared, {"format": 15, **old, "machine": OLD_MACHINE, "machine_moved": True, **extra})
+    _local(registry.Settings())
+    with registry.locked():
+        machine = registry.load()
+        machine.settings_moved = True
+        registry.save(machine)
+
+
+def _published(shared: DataRepo, remote) -> bool:
+    return _git(shared.root, "rev-parse", "HEAD") == _git(remote, "rev-parse", "HEAD") and not _git(
+        shared.root, "status", "--porcelain")  # fmt: skip
+
+
+@pytest.mark.usefixtures("no_base")
+def test_a_start_writes_the_limits_into_global_and_publishes_them_once(shared_repo, monkeypatch):
+    shared = DataRepo(shared_repo[0])
+    _moved_global(shared, pr_marker=None)
+    assert settings_carry.limits_due(shared)
+
+    _carry(monkeypatch, shared)
+
+    raw = json.loads(shared.global_path.read_text())
+    assert raw["format"] == 16
+    assert (raw["spotter"]["look_credit_limit"], raw["machine"]["retro_run_credit_limit"],
+            raw["machine"]["replay_run_credit_limit"]) == LIMITS  # fmt: skip
+    assert not set(registry.DAILY) & set(raw["machine"])
+    assert (raw["pr_marker"], raw["machine"]["sessions"]) == (None, 3)  # nothing else filled or lost
+    assert _git(shared.root, "log", "-1", "--format=%s") == settings_carry.LIMITS
+    assert _published(shared, shared_repo[1])
+    assert not registry.load().settings_pending
+    head = _git(shared.root, "rev-parse", "HEAD")
+    assert _carry(monkeypatch, shared) == []  # once
+    assert _git(shared.root, "rev-parse", "HEAD") == head
+
+
+@pytest.mark.usefixtures("no_base")
+def test_a_limit_the_owner_clears_after_the_upgrade_stays_cleared(shared_repo, monkeypatch):
+    shared = DataRepo(shared_repo[0])
+    _moved_global(shared)
+    _carry(monkeypatch, shared)
+    glob = read_layer(shared.global_path, GlobalLayer)
+    cleared = glob.model_copy(update={"spotter": glob.spotter.model_copy(update={"look_credit_limit": None})})
+    _committed(shared, cleared.model_dump(mode="json"))  # the owner clears it on the Settings page
+    head = _git(shared.root, "rev-parse", "HEAD")
+
+    _carry(monkeypatch, shared)
+
+    assert _git(shared.root, "rev-parse", "HEAD") == head
+    assert read_layer(shared.global_path, GlobalLayer).spotter.look_credit_limit is None
+
+
+@pytest.mark.usefixtures("no_base")
+def test_an_older_global_the_owner_restores_after_the_upgrade_is_not_written_again(shared_repo, monkeypatch):
+    shared = DataRepo(shared_repo[0])
+    _moved_global(shared)
+    _carry(monkeypatch, shared)
+    _committed(shared, {"format": 15, "sessions": 2})  # the owner restores an older Global
+    head = _git(shared.root, "rev-parse", "HEAD")
+
+    _carry(monkeypatch, shared)
+
+    assert (_git(shared.root, "rev-parse", "HEAD"), settings_carry.limits_due(shared)) == (head, False)
+    assert json.loads(shared.global_path.read_text())["format"] == 15  # his; a read still gets the limits
+    assert _limits(read_layer(shared.global_path, GlobalLayer)) == LIMITS
+
+
+@pytest.mark.usefixtures("no_base")
+def test_a_failed_commit_keeps_the_written_global_and_the_next_start_only_publishes_it(shared_repo, monkeypatch):
+    shared = DataRepo(shared_repo[0])
+    _moved_global(shared)
+    with monkeypatch.context() as m:
+        m.setattr(DataRepo, "commit", _staged_only)
+        _carry(monkeypatch, shared)
+    assert "the commit failed" in registry.load().settings_pending
+    written = shared.global_path.read_text()
+    assert json.loads(written)["format"] == 16
+    assert settings_carry.limits_due(shared)
+
+    _carry(monkeypatch, shared)
+
+    assert shared.global_path.read_text() == written  # published as it was written, not written again
+    assert _git(shared.root, "log", "-1", "--format=%s") == settings_carry.LIMITS
+    assert _published(shared, shared_repo[1])
+    assert not registry.load().settings_pending
+
+
+def _failed_upgrade_commit(shared: DataRepo, monkeypatch) -> str:
+    """A start whose upgrade wrote Global in format 16 and could not commit it; what it wrote."""
+    _moved_global(shared)
+    with monkeypatch.context() as m:
+        m.setattr(DataRepo, "commit", _staged_only)
+        _carry(monkeypatch, shared)
+    assert registry.load().global_written  # this machine knows the write as its own
+    return shared.global_path.read_text()
+
+
+@pytest.mark.usefixtures("no_base")
+@pytest.mark.parametrize("retry", [False, True])
+def test_an_owner_edit_made_after_the_sync_is_never_published_by_the_upgrade(shared_repo, monkeypatch, retry):
+    shared = DataRepo(shared_repo[0])
+    if retry:  # the format-16 write is already there, only its publication is left
+        _failed_upgrade_commit(shared, monkeypatch)
+    else:
+        _moved_global(shared)
+    head, real = _git(shared.root, "rev-parse", "HEAD"), settings_carry.sync
+    edited: list[str] = []
+
+    def sync_then_edit(repo: DataRepo, written) -> str:
+        why = real(repo, written)  # the checkout is current and Global is this machine's or committed
+        text = repo.global_path.read_text().replace('"format"', '"widths": [1440], "format"', 1)
+        repo.global_path.write_text(text)  # the owner saves an edit by hand meanwhile
+        edited.append(text)
+        return why
+
+    monkeypatch.setattr(settings_carry, "sync", sync_then_edit)
+    _carry(monkeypatch, shared)
+
+    assert (_git(shared.root, "rev-parse", "HEAD"), shared.global_path.read_text()) == (head, edited[0])
+    assert settings_carry.LIMITS not in _git(shared.root, "log", "--format=%s")
+    assert "not saved" in registry.load().settings_pending
+
+
+@pytest.mark.usefixtures("no_base")
+def test_a_failed_probe_after_a_failed_upgrade_commit_keeps_it_pending_and_its_write_known(shared_repo, monkeypatch):
+    shared = DataRepo(shared_repo[0])
+    written = _failed_upgrade_commit(shared, monkeypatch)
+    digest = registry.load().global_written
+    real = DataRepo.git
+    probe = f"-G{settings_carry.REACHED}"
+    with monkeypatch.context() as m:
+        m.setattr(DataRepo, "git", lambda self, *a, until=None: real(self, *a, until=until)
+                  if probe not in a else subprocess.CompletedProcess(a, 128, "", "broken"))  # fmt: skip
+        _carry(monkeypatch, shared)
+    machine = registry.load()
+    assert "broken" in machine.settings_pending  # unknown is never taken for done
+    assert machine.global_written == digest  # still known as this machine's own write
+
+    _carry(monkeypatch, shared)
+
+    assert shared.global_path.read_text() == written
+    assert _git(shared.root, "log", "-1", "--format=%s") == settings_carry.LIMITS
+    assert _published(shared, shared_repo[1])
+    assert not registry.load().settings_pending
+
+
+@pytest.mark.usefixtures("no_base")
+def test_another_machine_s_format_16_never_clears_this_machine_s_unpublished_upgrade(
+    shared_repo, tmp_path, monkeypatch
+):
+    shared = DataRepo(shared_repo[0])
+    written = _failed_upgrade_commit(shared, monkeypatch)
+    digest = registry.load().global_written
+    other = _clone(tmp_path, shared_repo)  # another machine publishes its own format-16 Global meanwhile
+    glob = read_layer(other.global_path, GlobalLayer)
+    _committed(other, glob.model_copy(update={"sessions": 7}).model_dump(mode="json"))
+
+    _carry(monkeypatch, shared)
+
+    machine = registry.load()
+    assert "another machine changed the global settings" in machine.settings_pending  # the owner reconciles
+    assert machine.global_written == digest  # still known as this machine's own write
+    assert shared.global_path.read_text() == written  # nothing undone
+
+
+@pytest.mark.usefixtures("no_base")
+def test_a_failed_push_keeps_the_commit_and_the_next_start_pushes_it(shared_repo, monkeypatch):
+    shared = DataRepo(shared_repo[0])
+    _moved_global(shared)
+    _git(shared.root, "remote", "set-url", "--push", "origin", str(shared.root / "nowhere"))
+    _carry(monkeypatch, shared)
+    assert registry.load().settings_pending
+    assert _git(shared.root, "log", "-1", "--format=%s") == settings_carry.LIMITS  # kept, not undone
+    assert settings_carry.limits_due(shared)
+    _git(shared.root, "remote", "set-url", "--push", "origin", str(shared_repo[1]))
+
+    _carry(monkeypatch, shared)
+
+    assert _published(shared, shared_repo[1])
+    assert (registry.load().settings_pending, settings_carry.limits_due(shared)) == ("", False)
+    assert _git(shared.root, "log", "--format=%s").count(settings_carry.LIMITS) == 1
+
+
+@pytest.mark.usefixtures("no_base")
+def test_an_unsaved_owner_edit_of_an_older_global_is_never_published(shared_repo, monkeypatch):
+    shared = DataRepo(shared_repo[0])
+    _moved_global(shared)
+    head = _git(shared.root, "rev-parse", "HEAD")
+    edited = shared.global_path.read_text().replace('"format"', '"widths": [1440], "format"')
+    shared.global_path.write_text(edited)  # the owner's edit, not saved
+
+    _carry(monkeypatch, shared)
+
+    assert (_git(shared.root, "rev-parse", "HEAD"), shared.global_path.read_text()) == (head, edited)
+    assert "not saved" in registry.load().settings_pending
+
+
+@pytest.mark.usefixtures("no_base")
+def test_a_fresh_install_carries_the_limits_with_the_built_in_values(shared_repo, monkeypatch):
+    shared = DataRepo(shared_repo[0])
+    _local()
+
+    _carry(monkeypatch, shared)
+
+    assert _limits(read_layer(shared.global_path, GlobalLayer)) == LIMITS
+    assert not settings_carry.limits_due(shared)
+    assert settings_carry.LIMITS not in _git(shared.root, "log", "--format=%s")  # the carry wrote format 16 itself

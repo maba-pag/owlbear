@@ -179,9 +179,11 @@ function settingsSections() {
         actions. It files each finding under one of four categories, each set to an action its category allows; so
         far every look only records its finding with that action, and Retro grades those records. Steering,
         refusing and stopping come with live delivery, discretionary ones only after a steered-versus-silent test.
-        Its model, effort and context are the spotter row under Agents; the budgets and enrolled chats are machine
-        settings. Off stops its looks and the recording of new outside writes for each Change's page; the reports
-        already recorded stay, and steps no longer need its other settings.</p-text>
+        Its model, effort and context are the spotter row under Agents; the enrolled chats are a machine setting.
+        Each look stops at its own credit limit, also when replayed: once the spend the runtime reports reaches it, the
+        look is stopped and its record says so; a call already under way still finishes, so a look may pass its limit
+        a little. There is no daily budget. Off stops its looks and the recording of new outside writes for each
+        Change's page; the reports already recorded stay, and steps no longer need its other settings.</p-text>
       ${table("Spotter: it applies to the next look", ["Setting", "Value"], "spotter", [
         row(text("On or off"), spotterCell("switch", "On or off")),
         row(text("Hand-off fitness: the result should not be accepted as it stands"),
@@ -198,6 +200,7 @@ function settingsSections() {
         row(text("Verbose until (YYYY-MM-DD; empty: no end)"), spotterCell("verbose_until", "Verbose until")),
         row(text("Looks (hand-off, plan, state-change, sample)"), spotterCell("looks", "Looks")),
         row(text("Sampled actions (%)"), spotterCell("sample_rate", "Sampled actions")),
+        row(text("Credit limit per look (credits)"), spotterCell("look_credit_limit", "Credit limit per look")),
       ])}
     </section>
     <section class="panel" aria-labelledby="subagents-title">

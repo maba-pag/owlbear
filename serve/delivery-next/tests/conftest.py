@@ -106,8 +106,7 @@ def _carried_settings(monkeypatch):
 
 
 IMPROVEMENT_MACHINE = {  # tests only: settings added after the carry start unset in production (2026-10-25)
-    "spotter_budget": 50, "retro_budget": 50, "retro_verbose_cap": 5, "retro_after_change": "on",
-    "retro_when_idle": "on", "enrolled_chats": [],
+    "retro_after_change": "on", "retro_when_idle": "on", "enrolled_chats": [],
 }  # fmt: skip
 
 
@@ -118,7 +117,7 @@ def complete_layer():
 
     base = carried.layer()
     spotter = Spotter(
-        switch="on", steer_share=0, intervention_cap=1, verbose="off", looks=["hand-off"],
+        switch="on", steer_share=0, intervention_cap=1, verbose="off", looks=["hand-off"], look_credit_limit=0.75,
         **dict.fromkeys(CATEGORIES.values(), "record"),
     )  # fmt: skip
     agents = base.agents | {
@@ -165,8 +164,8 @@ def _spotter_writes_end(_no_shared_settings):
     assert spotter.WORK.settled(10), "Spotter writes still running after the test"
 
 
-async def _silent_look(_card: dict, _ctx: object) -> tuple[str, float]:
-    return '{"category": "none", "note": "", "evidence": [], "state_change": null}', 0.0
+async def _silent_look(_card: dict, _ctx: object, _meter: object) -> str:
+    return '{"category": "none", "note": "", "evidence": [], "state_change": null}'
 
 
 async def _no_instructions(_session: object, _worktree: Path) -> list[str]:

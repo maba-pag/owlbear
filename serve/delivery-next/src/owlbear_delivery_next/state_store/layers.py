@@ -11,7 +11,7 @@ from pydantic import ValidationError
 from owlbear_delivery_next.change_contracts.models import Record
 from owlbear_delivery_next.local_system.storage_io import atomic_write, open_lock
 from owlbear_delivery_next.settings import migrations
-from owlbear_delivery_next.settings.config import CONFIG_FORMAT, Layer
+from owlbear_delivery_next.settings.config import CONFIG_FORMAT, GlobalLayer, Layer
 from owlbear_delivery_next.state_store.database import FormatTooNewError, StoreError
 
 if TYPE_CHECKING:
@@ -66,7 +66,10 @@ def read_layer[T: Layer](path: Path, model: type[T]) -> T:
 
 
 def read_layer_bytes[T: Layer](path: Path, model: type[T]) -> tuple[T, bytes]:
-    """One settings layer and the exact bytes it was parsed from; an absent file is the empty layer."""
+    """One settings layer and the exact bytes it was parsed from; an absent file is the empty layer.
+
+    Global's own migrations write what only Global holds, such as the credit limits (format 16).
+    """
     try:
         raw = path.read_bytes()
         text = raw.decode()
@@ -75,7 +78,8 @@ def read_layer_bytes[T: Layer](path: Path, model: type[T]) -> tuple[T, bytes]:
     except (OSError, ValueError) as exc:  # ValueError: bytes that are not UTF-8
         msg = f"state of {path.stem} is unreadable"
         raise StoreError(msg) from exc
-    return _parse(text, path.stem, model, CONFIG_FORMAT, migrations.CONFIG), raw
+    forward = migrations.GLOBAL if issubclass(model, GlobalLayer) else migrations.CONFIG
+    return _parse(text, path.stem, model, CONFIG_FORMAT, forward), raw
 
 
 def update_layer[T: Layer](

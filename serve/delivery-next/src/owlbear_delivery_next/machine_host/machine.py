@@ -391,12 +391,16 @@ def _moving() -> registry.Settings:
 
 
 def _switched(say: Callable[[str], None]) -> str:
-    """The carry and this machine's move, each once and silently (D-01M5MZKEPWNASF6X3CNF4FEWZH); why not, else ''."""
+    """The carry, this machine's move and the credit limits' upgrade, each once and silently; why not, else ''.
+
+    D-01M5MZKEPWNASF6X3CNF4FEWZH for the carry and the move; D-01M5XCD49YHHR1NQKKY8TQD0C3 for the limits.
+    """
     shared, state = data_repo.locate(), registry.load()
     if shared is None:
         return ""  # without Global this machine keeps its own values
     why = settings_carry.sync(shared, state.global_written)  # every start: Global as the other machines left it
-    if state.settings_moved and not settings_carry.due(shared):
+    settled = state.settings_moved and not state.global_written  # no write of this machine's waits to be reconciled
+    if settled and not settings_carry.due(shared) and not settings_carry.limits_due(shared):
         if why:
             say(f"settings: the shared repository could not be brought current: {why}")
         return ""
@@ -404,7 +408,19 @@ def _switched(say: Callable[[str], None]) -> str:
         return f"the shared repository could not be brought current: {why}"
     if settings_carry.due(shared) and (notice := settings_carry.carry(shared, _written)):
         return f"carrying the built-in values into Global: {notice}"
-    return "" if state.settings_moved else _move(shared, say)
+    if not state.settings_moved and (notice := _move(shared, say)):
+        return notice
+    return _limits(shared)
+
+
+def _limits(shared: data_repo.DataRepo) -> str:
+    """Save and publish Global in the credit limits' format once (D-01M5XCD49YHHR1NQKKY8TQD0C3); why not, else ''.
+
+    A git probe that fails raises, here and in ``limits_due``: the start keeps its pending reason and this machine's
+    last write, so the next start knows that write as its own and tries again.
+    """
+    notice = settings_carry.limits(shared, registry.load().global_written, _written)
+    return f"writing the credit limits into Global: {notice}" if notice else ""
 
 
 def _move(shared: data_repo.DataRepo, say: Callable[[str], None]) -> str:

@@ -214,7 +214,9 @@ def judges(  # noqa: PLR0913, PLR0917 - the round's settings snapshot
     nothing is processed (TD-54), unless *hold* keeps it for the round's own decision (TD-94).
     """
     settings = settings or store.settings()
-    budget = watched.needed(settings)  # each judge is watched: an unset Spotter setting asks before any judge starts
+    look_limit = watched.needed(
+        settings
+    )  # each judge is watched: an unset Spotter setting asks before any judge starts
     labels: list[str] = []
 
     def fresh(at: Path) -> list[sdk_adapter.Session]:
@@ -231,7 +233,7 @@ def judges(  # noqa: PLR0913, PLR0917 - the round's settings snapshot
                     limit=roles.limit(settings, label), subagents=roles.subagents(settings, label),
                     previous={}, journal=journal, worktree=at, policy=Policy(at, write=False),
                     judging=label in tools.VERDICTS, job=label,
-                    watch=watched.watching(store, lock, label, settings, at, out, budget),
+                    watch=watched.watching(store, lock, label, settings, at, out, look_limit),
                 )
             )  # fmt: skip
         return cfgs

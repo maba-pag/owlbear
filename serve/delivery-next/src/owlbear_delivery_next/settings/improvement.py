@@ -1,20 +1,23 @@
 """Improvement's layered settings (design §4, the owner's choices of 2026-10-25 and 2026-10-26): the Spotter's.
 
 Global, this machine or a project sets each field; none is built in. ``switch``, the four categories' actions,
-``steer_share``, ``intervention_cap``, ``verbose`` and ``looks`` must be set, and ``sample_rate`` when ``sample`` is a
-look; ``verbose_until`` is optional. Each unset one is listed whatever the switch, so the Settings page shows it; a step
-is refused only for what it reads (``workflow_steps.watched.needed``): off reads the switch alone.
+``steer_share``, ``intervention_cap``, ``verbose``, ``looks`` and ``look_credit_limit`` must be set, and ``sample_rate``
+when ``sample`` is a look; ``verbose_until`` is optional. Each unset one is listed whatever the switch, so the Settings
+page shows it; a step is refused only for what it reads (``workflow_steps.watched.needed``): off reads the switch alone.
 
 The switch turns W1a's feed and the Spotter's looks on or off (D-01M5WB09Z3ZKJVN02WGWVHGWBH). The Spotter files each
 finding under one of four categories, each set to one action its category allows (D-01M5WP8Z4ADZ5FN7RJDR17RQQ5); a
 look records the action its category is given, and nothing acts yet: steering, refusing and stopping come with live
 delivery, with the steer share, the cap and the steered-versus-silent test.
+
+Each look, live or replayed, stops at its own credit limit (D-01M5XCD49YHHR1NQKKY8TQD0C3); there is no daily budget.
+The limit is a credit amount, a finite number above zero, written into Global once (``settings.carried``).
 """
 
 from __future__ import annotations
 
 from datetime import date
-from typing import TYPE_CHECKING, Any, Literal, get_args
+from typing import TYPE_CHECKING, Annotated, Any, Literal, get_args
 
 from pydantic import ConfigDict, Field, field_validator
 
@@ -32,9 +35,13 @@ type FindingCategory = Literal[
 type HandOffAction = Literal["record", "show-owner", "steer", "refuse-hand-off"]
 type CourseAction = Literal["record", "show-owner", "steer", "stop-and-resume", "stop-and-ask"]
 type StateAction = Literal["record", "show-owner", "stop-and-resume", "stop-and-ask"]  # outside state and harm
+# A credit limit: finite, and at least one nano-credit, the precision the runtime bills and a meter counts at.
+type Credits = Annotated[float, Field(strict=True, ge=1e-9, allow_inf_nan=False)]
 LOOKS: tuple[str, ...] = get_args(Look.__value__)
 CATEGORIES: dict[str, str] = {c: c.replace("-", "_") for c in get_args(FindingCategory.__value__)}  # -> its field
-REQUIRED: tuple[str, ...] = ("switch", *CATEGORIES.values(), "steer_share", "intervention_cap", "verbose", "looks")
+REQUIRED: tuple[str, ...] = (
+    "switch", *CATEGORIES.values(), "steer_share", "intervention_cap", "verbose", "looks", "look_credit_limit"
+)  # fmt: skip
 
 
 class Spotter(Record):
@@ -53,6 +60,7 @@ class Spotter(Record):
     verbose_until: str | None = None  # an ISO date; after it, verbose counts as off
     looks: list[Look] | None = None
     sample_rate: int | None = Field(default=None, ge=0, le=100)  # percent of completed actions, when sample is a look
+    look_credit_limit: Credits | None = None  # credits one look, live or replayed, may spend before it is stopped
 
     @field_validator("looks")
     @classmethod
