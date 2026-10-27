@@ -176,7 +176,7 @@ def _update(job: Job, c: pack_candidate.Candidate, ctx: Context, lp: RoundLoop) 
     if ctx.undo:  # what the owner had undone, restored before the updater adjusts the rest
         pack_gates.restore(at, ctx.undo, live.package.resolve(), c)
         if any(p.startswith("upstream/") for p in ctx.undo):
-            pack_candidate.upstream_skill(live.clone, c.pins["upstream"]["commit"], at / "upstream")
+            pack_updater.upstream(at, c, live.clone)
         ctx.undo = []
         job.keep(ctx, lp)
     lines = pack_rounds.updater_lines(lp)

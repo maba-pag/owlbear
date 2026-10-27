@@ -163,6 +163,7 @@ def test_the_diff_reports_rules_added_removed_and_changed_and_skill_files_change
     assert '  - description: "old" -> "new \\"text\\""\n' in report  # every field, not only the ones once read
     assert "## Skill files changed\n- M\tskill/SKILL.md\n- A\tskill/new.md\n" in report
     assert report.endswith(f"Skill text: git -C {clone} diff skill-v4.5.2 skill-v4.6.0 -- skill")
+    assert "+++ b/skill/new.md\n" in pack_update.skill_diff(clone, "skill-v4.6.0")  # what that line shows
     (clone / pack_update.REGISTRY).write_text(registry(("side-tab", "x", "y")).replace('        name: "x",\n', ""))
     git(clone, "commit", "-qam", "unnamed")
     git(clone, "tag", "skill-v4.7.0")
