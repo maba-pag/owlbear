@@ -239,7 +239,7 @@ class Fakes:
         self.edits: list[dict[str, str]] = []  # per updater round: worktree path -> new text
         self.rejects: list[list[str]] = []  # per updater round: finding keys it rejects
         self.upheld, self.premise, self.confirmed = False, False, True
-        self.missing = False  # the updater reports a missing tool
+        self.missing = ""  # the error of a missing tool the updater reports
         self.upstream_diffs: list[str] = []  # the upstream skill diff each updater session found in its folder
         self.found, self.reconsider = 1, "withdrawn"  # findings per fix verdict; a reconsideration's verdict
         self.replays: list[tuple[str, str]] = []  # what each replay judged: the pack identity and the edited skill
@@ -328,7 +328,7 @@ class Fakes:
             premise = tools.WrongPremise(stage="brief", reason="golden page glow.html must change", evidence=["g"])
             return Run(cfg.session_id, "premise", payload=premise, termination=Termination(confirmed=True))
         if self.missing:
-            missing = tools.MissingTool(tool="shell", need="run git diff", error="no shell tool")
+            missing = tools.MissingTool(tool="shell", need="run git diff", error=self.missing)
             return Run(cfg.session_id, "missing-tool", payload=missing, termination=Termination(confirmed=True))
         reject = [{"finding": k, "reason": "it already holds"} for k in (self.rejects.pop(0) if self.rejects else [])]
         result = pack_updater.UpdateResult(
@@ -817,12 +817,13 @@ def test_a_premise_the_updater_reports_stops_for_the_owner(tmp_path, checkout, c
 
 def test_a_missing_tool_the_updater_reports_stops_with_its_words(tmp_path, checkout, clone):
     fakes = Fakes(clone)
-    fakes.missing = True
+    fakes.missing = "x" * 980 + " no shell tool"  # near its limit: the cause at its end still reaches the owner
 
     state = run(pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout)))
 
     assert (state["state"], results(state)["update"]) == ("failed", "failed")
-    assert "the updater lacks shell: run git diff (no shell tool)" in state["reason"]
+    assert "the updater lacks shell: run git diff (" in state["reason"]
+    assert state["reason"].endswith(" no shell tool)")
 
 
 @pytest.mark.parametrize(
