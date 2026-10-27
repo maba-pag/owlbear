@@ -1,6 +1,6 @@
 # New Project From Zero Build Design
 
-> **Owning task:** item 15 of [the plan](owlbear-plan.md); owner decisions TD-421, TD-431..TD-433, TD-420; TD-420,
+> **Owning task:** [item 15](https://github.com/maba-pag/owlbear/issues/723); owner decisions TD-421, TD-431..TD-433, TD-420; TD-420,
 > TD-421 and TD-431/TD-432 since replaced by `D-01M5TYMBBBHQRN172N977ND3VS`, `D-01M5TYMBBAFTPN27RQKFVCEN6A`
 > and `D-01M5TYR46VTW65B5JH1KM1M089`: no agent workspace
 > **Date:** 2026-10-20

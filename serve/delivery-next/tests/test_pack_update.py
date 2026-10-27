@@ -61,6 +61,15 @@ def releases(*tags: str, prerelease: tuple[str, ...] = ()):
     return lambda _url: json.dumps([{"tag_name": t, "prerelease": t in prerelease} for t in tags]).encode()
 
 
+@pytest.fixture
+def pinned(monkeypatch) -> None:
+    """The package pins skill-v4.5.2, whichever release it ships: version logic is tested against known tags."""
+    made = design_pack.manifest()
+    made["upstream"]["tag"], made["pack"] = "skill-v4.5.2", "impeccable-4.5.2.1"
+    monkeypatch.setattr(design_pack, "manifest", lambda: json.loads(json.dumps(made)))
+
+
+@pytest.mark.usefixtures("pinned")
 def test_the_notice_counts_newer_skill_releases_and_offline_is_unknown() -> None:
     assert design_pack.manifest()["upstream"]["tag"] == "skill-v4.5.2"
     tags = ("skill-v4.5.1", "skill-v4.5.2", "skill-v4.5.10", "skill-v5.0.0", "skill-v5.1.0-rc1", "engine-v9.0.0")
@@ -79,6 +88,7 @@ def test_the_notice_counts_newer_skill_releases_and_offline_is_unknown() -> None
         design_pack.install()  # the default download is offline in tests too
 
 
+@pytest.mark.usefixtures("pinned")
 def test_the_notice_is_read_offline_refreshed_at_most_daily_and_shown_by_setup_and_settings(repo, monkeypatch) -> None:
     calls = []
 
@@ -125,6 +135,7 @@ def registry(*rules: tuple[str, ...]) -> str:
     return f"pub static ANTIPATTERNS: &[Antipattern] = &[\n{entries}];\n\n#[cfg(test)]\nmod tests {{\n{fixture}}}\n"
 
 
+@pytest.mark.usefixtures("pinned")
 def test_the_diff_reports_rules_added_removed_and_changed_and_skill_files_changed(tmp_path) -> None:
     clone = tmp_path / "impeccable"
     git(tmp_path, "init", "-q", "-b", "main", str(clone))
@@ -450,7 +461,7 @@ def test_the_cli_replay_below_the_margin_and_a_refused_host_both_exit_one(repo, 
 
 def test_the_cli_runs_each_update_tool_and_reports_failures(repo, capsys) -> None:
     assert cli.main(["--repo", str(repo), "design-pack", "--check"]) == 0
-    assert capsys.readouterr().out == "design pack impeccable-4.5.2.1: releases upstream unknown\n"
+    assert capsys.readouterr().out == f"design pack {design_pack.manifest()['pack']}: releases upstream unknown\n"
     assert cli.main(["--repo", str(repo), "design-pack", "--golden"]) == 1
     assert "not installed" in capsys.readouterr().out
     assert cli.main(["--repo", str(repo), "design-pack", "--replay"]) == 1

@@ -10,7 +10,7 @@ copied into a consumer project.
 | --- | --- |
 | `instructions/` and `skills/` | Project-local operational customizations loaded alongside the portable shared ecosystem; project workflows such as `doc-audit` and `w-agent-audit` are skills invoked by name |
 | `scripts/` | Development validators and operational helper scripts |
-| `research/` | OwlBear's plan and status, and build designs of work not yet built; other research lives in the project's folder of the data repository |
+| `research/` | Build designs of work not yet built (OwlBear's plan and status are the [pinned tracker issue](https://github.com/maba-pag/owlbear/issues/713)); other research lives in the project's folder of the data repository |
 | `sources/` | External-source attribution for research and implementation work |
 | `memory/` | Agent memory entries written by the `owlbear-memory` server; host-local memory databases are ignored |
 | `knowledge/` | Local Knowledge database and placeholders; databases and vectors are ignored |

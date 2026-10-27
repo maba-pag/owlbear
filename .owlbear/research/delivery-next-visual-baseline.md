@@ -6,11 +6,11 @@
 > code and docs, and in what order is it built and proven?
 > **Status:** plan, revised after Sol challenges (§6) and the retrospective review of 2026-10-11
 > (§7); nothing built
-> **Status 2026-10-19:** still not built. The PDS part (§3.6) is [the plan](owlbear-plan.md)'s item 11, with browser
+> **Status 2026-10-19:** still not built. The PDS part (§3.6) is [the plan](https://github.com/maba-pag/owlbear/blob/4461a7972278a44a530f92b9c8908564d9a49622/.owlbear/research/owlbear-plan.md)'s item 11, with browser
 > tests on the real CDN (TD-398); the rest is decided (TD-38, TD-40) but not yet placed in the order. Slices now reach
 > `main` as pull requests, not as commits on `next/m4-slice1`.
 > **Status 2026-10-20:** §3.6 is built (item 11's first part): every page loads PDS only from its CDN, with no
-> native branch, and the browser tests reach the CDN. The rest is still not built.
+> native branch, and the browser tests reach the CDN. The rest is still not built: [item 22](https://github.com/maba-pag/owlbear/issues/724).
 
 ## 1. Context, decisions and gaps
 

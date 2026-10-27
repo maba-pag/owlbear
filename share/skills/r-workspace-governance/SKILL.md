@@ -51,7 +51,7 @@ reverting them.
 | --- | --- | --- |
 | Temporary output, debug files, and one-off scripts | `.owlbear/scratch/{task-id}-{description}.{ext}` | Untracked; delete before task closure. |
 | Approved external repository clones | `.owlbear/scratch/research/{repo-name}/` | Inspect only; delete before task closure. |
-| Durable research findings | `owlbear-data/<folder>/research/{slug}.md` (OwlBear's folder: `owlbear`); OwlBear's record, plan and unbuilt build designs: `.owlbear/research/` | Tracked; include the task reference; never committed into another project (TD-227, TD-347, TD-395). |
+| Durable research findings | `owlbear-data/<folder>/research/{slug}.md` (OwlBear's folder: `owlbear`); OwlBear's record and unbuilt build designs: `.owlbear/research/`; its plan: the [pinned tracker issue](https://github.com/maba-pag/owlbear/issues/713) | Tracked; include the task reference; never committed into another project (TD-227, TD-347, TD-395). |
 | External source attribution | `.owlbear/sources/overview.md` | Tracked; only sources whose material still ships; use the Attribution schema below. |
 
 Project-owned source, test, documentation, and benchmark locations come from the local project map,
