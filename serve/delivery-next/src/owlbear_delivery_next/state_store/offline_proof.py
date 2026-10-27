@@ -65,14 +65,18 @@ class OfflineProof:
     prepared: str
 
     @contextlib.contextmanager
-    def guard(self, folder_fd: int, target: Path, target_fd: int | None = None) -> Iterator[None]:
-        """Retain the finite source and optional target witness images through all validation reads."""
+    def guard(
+        self, folder_fd: int, target: Path, target_fd: int | None = None, payload: fd_tree.PayloadImages | None = None
+    ) -> Iterator[None]:
+        """Retain source, optional target and collected payload images through all validation reads."""
         try:
             groups = [(folder_fd, ("prepare.json", MARKER, "clone-id", "move.json", "."))]
             if target_fd is not None:
                 groups.append((target_fd, (".move-proof", MARKER, ".")))
             images = [(dfd, name, fd_tree.stat_at(dfd, name)) for dfd, names in groups for name in names]
             yield
+            for name, tree in payload.items() if payload is not None else ():
+                fd_tree.confirm_at(folder_fd, name, tree)
             if not all(fd_tree.same_image_at(dfd, name, before) for dfd, name, before in images):
                 marker = fd_tree.read_at(folder_fd, MARKER)
                 if marker is not None and marker.strip() != "999":

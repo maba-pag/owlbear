@@ -334,8 +334,8 @@ def test_finish_rechecks_cheap_authority_witnesses_after_final_source_hashing(pr
     def enable(target):
         real = project_move._source_unchanged  # noqa: SLF001 - mutate only after the actual final payload digest
 
-        def late(dfd, rec):
-            valid = real(dfd, rec)
+        def late(dfd, rec, *args, **kwargs):
+            valid = real(dfd, rec, *args, **kwargs)
             changed.append(True)
             change_owner(source, target, change)
             owners.update({source: snapshot(source), target: snapshot(target)})
@@ -592,3 +592,44 @@ class DigestReader:
         if data:
             self.change()
         return data
+
+
+@pytest.mark.parametrize("nested", [False, True], ids=["top-level", "nested"])
+def test_finish_retains_payload_images_through_the_terminal_receipt_read(prepared, monkeypatch, nested):
+    repo, source = prepared
+    entry = source / "config.json"
+    if nested:
+        entry = source / "payload" / "nested" / "a"
+        entry.parent.mkdir(parents=True)
+        entry.write_text("old\n")
+    old = entry.read_bytes()
+    relative = entry.relative_to(source)
+    owner = b'{"format":1,"widths":[987]}\n'
+    checks, changed, owners = [], [], {}
+
+    def enable(target):
+        real = fd_tree.holds_text_at
+
+        def holds(dfd, name, text):
+            valid = real(dfd, name, text)
+            if name == project_move.MOVE_RECORD:
+                checks.append(True)
+                if len(checks) == 2:
+                    changed.append(True)
+                    entry.write_bytes(owner)
+                    owners.update({source: snapshot(source), target: snapshot(target)})
+            return valid
+
+        monkeypatch.setattr(fd_tree, "holds_text_at", holds)
+
+    fired = at_sync(monkeypatch, source, "receipt", enable)
+    with pytest.raises(project_move.StoreError):
+        offline_protocol.finish_clone(repo)
+
+    assert fired == [True]
+    assert changed == [True]
+    assert record(source)["phase"] == project_move.COPYING
+    target = Path(record(source)["target"])
+    assert entry.read_bytes() == owner
+    assert (target / relative).read_bytes() == old
+    assert {path: snapshot(path) for path in owners} == owners

@@ -294,10 +294,11 @@ def _pending_ours(folder_fd: int, pfd: int, stage_name: str, rec: dict) -> None:
         os.close(sfd)
 
 
-def _source_unchanged(folder_fd: int, rec: dict) -> bool:
+def _source_unchanged(folder_fd: int, rec: dict, images: fd_tree.PayloadImages | None = None) -> bool:
     """Whether the source still holds exactly the manifest the move recorded: no entry added, removed or edited."""
     return set(left_at(folder_fd)) == set(rec["manifest"]) and all(
-        _entry_ok(folder_fd, n, d) for n, d in rec["manifest"].items()
+        _entry_ok(folder_fd, n, d, images=None if images is None else images.setdefault(n, {}))
+        for n, d in rec["manifest"].items()
     )
 
 
@@ -385,12 +386,14 @@ def _commit(  # noqa: PLR0913, PLR0917
     format_marker.ensure_target(tfd, previous)
     _sync_published(pfd, target, tfd)  # a retry re-syncs before any switch, so a failure stays uncommitted
 
-    @proof.guard(folder_fd, target, tfd)
+    images: fd_tree.PayloadImages = {}
+
+    @proof.guard(folder_fd, target, tfd, images)
     def unchanged() -> None:
         fd_tree.require_text_at(folder_fd, MOVE_RECORD, receipt)
         require_proof(folder, folder_fd, target, proof)
         _published(pfd, target, tfd, rec)
-        if not _source_unchanged(folder_fd, rec):
+        if not _source_unchanged(folder_fd, rec, images):
             msg = (
                 f"{folder} changed after it was copied: the copy is kept at {target} and the switch was not recorded; "
                 "stop the other OwlBear process, then start again"
