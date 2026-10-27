@@ -16,7 +16,7 @@ from owlbear_delivery_next.local_system.slots import Slots
 from owlbear_delivery_next.local_system.storage_io import atomic_write
 from owlbear_delivery_next.pack_runs import pack_job, pack_state
 from owlbear_delivery_next.project_host import session_slots
-from owlbear_delivery_next.state_store import pack_run_record
+from owlbear_delivery_next.state_store import fd_tree, pack_run_record
 from owlbear_delivery_next.state_store.store import Store
 
 STARTED = "2026-10-25T00:00:00+00:00"
@@ -108,12 +108,12 @@ def test_a_failed_stamp_leaves_the_record_whole_and_a_retry_carries_the_same_gen
     root = store(tmp_path, "clone", {"state": "running"})
     before, original = pack_state.generation(*pack_state.observed(root))[0], (root / pack_state.FILE).read_bytes()
 
-    def full(*_args: object) -> None:
+    def full(*_args: object, **_kwargs: object) -> None:
         msg = "synthetic: disk full"
         raise OSError(msg)
 
     with pytest.MonkeyPatch.context() as patch:
-        patch.setattr(pack_run_record, "atomic_write", full)
+        patch.setattr(fd_tree, "write_at", full)
         with pytest.raises(OSError, match="disk full"):
             settle(root)
     assert (root / pack_state.FILE).read_bytes() == original

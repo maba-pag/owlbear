@@ -3,6 +3,7 @@
 import json
 import os
 import shutil
+import stat
 import subprocess
 import threading
 from concurrent.futures import ThreadPoolExecutor
@@ -165,6 +166,64 @@ def test_settlement_reads_the_original_descriptor_when_the_directory_name_is_rep
     assert not target.exists()
 
 
+@pytest.mark.parametrize("change", ["owner-run", "replacement", "preparation", "clone-id"])
+def test_finish_refuses_changes_during_real_temporary_sync_before_publishing_the_run(prepared, monkeypatch, change):
+    repo, folder = prepared
+    aside, foreign = folder.with_name("original"), folder.with_name("foreign")
+    shutil.copytree(folder, foreign)
+    foreign_before = snapshot(foreign)
+    target = project_home.home(project_home.clone_id(folder))
+    ledger = local_home.root() / maintenance.FILE
+    ledger_before = ledger.read_bytes() if ledger.exists() else None
+    fired, expected = [], {}
+
+    class SyncingOS:
+        def __getattr__(self, name):
+            return getattr(os, name)
+
+        def fsync(self, fd):
+            os.fsync(fd)
+            if fired or not stat.S_ISREG(os.fstat(fd).st_mode):
+                return
+            temporary = next(folder.glob(f".tmp-{pack_state.FILE}-*"), None)
+            if temporary is None:
+                return
+            assert os.path.samestat(os.fstat(fd), temporary.stat())
+            fired.append(True)
+            if change == "replacement":
+                folder.rename(aside)
+                foreign.rename(folder)
+            elif change == "owner-run":
+                owner = folder / "owner-b"
+                owner.write_text(json.dumps(pack_state.blank() | {"state": "running", "run": "OWNER-B"}))
+                owner.replace(folder / pack_state.FILE)
+            else:
+                name = offline_protocol.PREPARED if change == "preparation" else project_home.CLONE_ID
+                path = folder / name
+                path.write_text(path.read_text() + (" " if change == "preparation" else "FOREIGN\n"))
+            expected.update(snapshot(aside if aside.exists() else folder))
+            del expected[temporary.name]
+
+    monkeypatch.setattr(fd_tree, "os", SyncingOS())
+    was_refused = refused(repo)
+    assert fired == [True], "the real temporary sync injection never ran"
+    assert was_refused, "Finish overwrote a run after its temporary sync changed the source"
+    held = aside if aside.exists() else folder
+    kept = list(held.glob(fd_tree.QUARANTINE + "*"))
+    assert len(kept) == 1
+    assert json.loads(kept[0].read_text())[pack_state.REWRITTEN]
+    assert snapshot(held) == expected | {kept[0].name: kept[0].read_bytes()}
+    assert snapshot(foreign if foreign.exists() else folder) == foreign_before
+    assert (ledger.read_bytes() if ledger.exists() else None) == ledger_before
+    assert not target.exists()
+    assert not (local_home.root() / project_home.PROJECTS).exists()
+    before_retry = snapshot(held)
+    assert refused(repo), "a quarantined candidate must not be retried automatically"
+    assert snapshot(held) == before_retry, "a refused retry settled the owner's replacement run"
+    assert (ledger.read_bytes() if ledger.exists() else None) == ledger_before
+    assert not (local_home.root() / project_home.PROJECTS).exists()
+
+
 @pytest.mark.parametrize("alias", [False, True], ids=["replacement", "directory-alias"])
 def test_descriptor_write_cannot_follow_a_source_swap_after_its_final_guard(prepared, monkeypatch, alias):
     """The residual check-to-I/O window can write the original only, never the replacement folder."""
@@ -173,22 +232,25 @@ def test_descriptor_write_cannot_follow_a_source_swap_after_its_final_guard(prep
     shutil.copytree(folder, foreign)
     original, foreign_before = snapshot(folder), snapshot(foreign)
     target = project_home.home(project_home.clone_id(folder))
-    real_write = fd_tree.write_at
     fired = []
 
-    def write(dfd, name, text):
-        if name == pack_state.FILE:
-            assert os.path.samestat(os.fstat(dfd), folder.stat())
-            folder.rename(aside)
-            if alias:
-                folder.symlink_to(foreign, target_is_directory=True)
-            else:
-                foreign.rename(folder)
-            assert os.path.samestat(os.fstat(dfd), aside.stat())
-            fired.append(True)
-        return real_write(dfd, name, text)
+    class RenamingOS:
+        def __getattr__(self, name):
+            return getattr(os, name)
 
-    monkeypatch.setattr(fd_tree, "write_at", write)
+        def rename(self, src, dst, *, src_dir_fd, dst_dir_fd):
+            if dst == pack_state.FILE:
+                assert os.path.samestat(os.fstat(dst_dir_fd), folder.stat())
+                folder.rename(aside)
+                if alias:
+                    folder.symlink_to(foreign, target_is_directory=True)
+                else:
+                    foreign.rename(folder)
+                assert os.path.samestat(os.fstat(dst_dir_fd), aside.stat())
+                fired.append(True)
+            return os.rename(src, dst, src_dir_fd=src_dir_fd, dst_dir_fd=dst_dir_fd)
+
+    monkeypatch.setattr(fd_tree, "os", RenamingOS())
     assert refused(repo)
     assert fired == [True], "the descriptor-bound write never ran"
     settled = json.loads((aside / pack_state.FILE).read_text())

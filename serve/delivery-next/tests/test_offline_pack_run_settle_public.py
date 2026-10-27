@@ -164,9 +164,9 @@ def test_failed_rewrite_of_the_run_record_refuses_finish_before_any_copy(repo, b
     real_write = fd_tree.write_at
     failed = []
 
-    def fail_write(dfd, name, text):
+    def fail_write(dfd, name, text, **kwargs):
         if name != pack_run_record.FILE:
-            return real_write(dfd, name, text)
+            return real_write(dfd, name, text, **kwargs)
         failed.append(True)
         msg = "injected write failure"
         raise OSError(errno.EIO, msg)

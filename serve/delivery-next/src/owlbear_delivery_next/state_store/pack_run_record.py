@@ -14,7 +14,6 @@ import stat
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-from owlbear_delivery_next.local_system.storage_io import atomic_write
 from owlbear_delivery_next.state_store import fd_tree
 
 if TYPE_CHECKING:
@@ -233,12 +232,22 @@ def settle(
     still uncertain; an uncertain failed one keeps every field. A run stopped while it was being published is left as
     it is: no session runs then, its run and start prove it, and the Job's own startup puts its publication back to
     the owner with its context whole. Nothing is held, recovered or released here, and a record already carrying its
-    generation, a modern one or any other is left as it is. Raises OSError or ValueError when the record cannot be read
-    or written, and whatever *receipted* raises: an unreadable record or ledger is never taken for a settled one.
+    generation, a modern one or any other is left as it is. An unreadable record raises OSError or ValueError, a
+    refused publication raises StoreError, and *receipted* failures propagate: unread evidence is never settled.
 
-    With *folder_fd*, both the read and replacement are relative to that held folder. The caller's *guard* checks
-    custody after the potentially blocking receipt lookup; the observed file version is checked before any write.
+    Both the read and replacement are relative to *folder_fd*, or a folder pinned just for this call. The caller's
+    *guard* and the observed file version are checked after receipt lookup and again after the temporary file is
+    durable, immediately before replacement. A refused replacement keeps the candidate under a quarantine name.
     """
+    if folder_fd is None:
+        try:
+            pinned = os.open(root, os.O_RDONLY | os.O_DIRECTORY)
+        except FileNotFoundError:
+            return False
+        try:
+            return settle(root, receipted=receipted, folder_fd=pinned, guard=guard)
+        finally:
+            os.close(pinned)
     got = observed(root, folder_fd=folder_fd)
     if got is None:
         return False
@@ -251,15 +260,16 @@ def settle(
     record[REWRITTEN] = resolved(record, version, receipted)[0]
     if record["state"] == "running":
         ended(record, "failed", HOST_STOPPED)  # as the Job's own rewrite ends it, carrying the generation it saw
-    if guard is not None:
-        guard()  # receipt lookup can block: source identity and preparation must still hold after it returns
-    st = (root / FILE).stat(follow_symlinks=False) if folder_fd is None else fd_tree.stat_at(folder_fd, FILE)
-    if st is None or version_of(st) != version:
-        msg = f"{FILE} changed before it could be settled: nothing was written"
-        raise ValueError(msg)
+
+    def check() -> None:
+        if guard is not None:
+            guard()
+        st = fd_tree.stat_at(folder_fd, FILE)
+        if st is None or version_of(st) != version:
+            msg = f"{FILE} changed before it could be settled: nothing was written"
+            raise ValueError(msg)
+
+    check()  # refuse before even a temporary write if receipt lookup invalidated the observation
     text = json.dumps(record, indent=1) + "\n"
-    if folder_fd is None:
-        atomic_write(root / FILE, text)
-    else:
-        fd_tree.write_at(folder_fd, FILE, text)
+    fd_tree.write_at(folder_fd, FILE, text, before_replace=check)
     return True

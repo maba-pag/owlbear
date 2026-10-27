@@ -391,6 +391,7 @@ def _open(cwd: Path, proof: OfflineProof | None) -> Path:
             # Both checks run before anything in the folder is read for admission or written.
             require_identity(folder, folder_fd, proof)
             _generation_at(folder, folder_fd, proof)  # the verified preparation and fence, not a reused inode
+            fd_tree.refuse_quarantined(folder_fd, folder)
             _settle_pack_run(folder, folder_fd, proof)
             require_identity(folder, folder_fd, proof)
             _generation_at(folder, folder_fd, proof)
