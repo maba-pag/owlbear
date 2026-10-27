@@ -40,7 +40,7 @@ def test_text_read_refuses_an_entry_changed_during_its_read(tmp_path, monkeypatc
         if reader == "predicate":
             assert not fd_tree.holds_text_at(dfd, entry.name, "owned\n")
         else:
-            with pytest.raises(OSError, match="changed while it was read") as refused:
+            with pytest.raises(OSError, match=rf"\b{errno.ESTALE}\b") as refused:
                 fd_tree.read_at(dfd, entry.name)
             assert refused.value.errno == errno.ESTALE
     finally:
