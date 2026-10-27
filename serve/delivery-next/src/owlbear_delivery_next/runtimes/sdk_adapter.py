@@ -41,6 +41,7 @@ from owlbear_delivery_next.runtimes.sdk_teardown import CALL
 from owlbear_delivery_next.runtimes.sdk_teardown import call as _call
 from owlbear_delivery_next.runtimes.sdk_usage import USAGE_PAUSE, unexpected_models, unproven, unread, usage_read
 from owlbear_delivery_next.runtimes.session_result import PROVEN, Run, limit_reached, note_quota
+from owlbear_delivery_next.settings.roles import USER_OFF, UserConfig
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
@@ -113,6 +114,7 @@ class Session:
     amendable: tuple[str, ...] = ()  # generated criteria a premise may propose new wording for (TD-179)
     skills: Path | None = None  # the skill folder this session loads instead of the package's: a pack candidate's
     subagents: bool = False  # its role's setting: it may start built-in subagents (TD-374, TD-376)
+    user: UserConfig = USER_OFF  # the owner's switches (D-01M5YE4P5317N1HWD0QN6N05E0); off where a site sets none
     credit_limit: float | None = None  # the runtime's hard session limit; an experiment's ledger sets it (TD-178)
     model: str | None = None
     effort: str | None = None  # the SDK's reasoning effort

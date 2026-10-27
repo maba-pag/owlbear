@@ -51,6 +51,9 @@ class UserConfig:
     skills: bool
 
 
+USER_OFF = UserConfig(instructions=False, skills=False)  # a session no site switched on: never more than its own
+
+
 def chosen(settings: Settings, session: str) -> RoleModel:
     """The model, effort and context tier a session kind or reviewer label runs with, from the resolved settings.
 
