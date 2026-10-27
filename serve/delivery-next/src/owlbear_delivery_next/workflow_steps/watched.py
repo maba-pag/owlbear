@@ -2,7 +2,8 @@
 
 The Spotter's looks at the session (Improvement design §4) get what the runner knows when the step starts: the
 Spotter's settings (its categories' actions and its per-look credit limit among them) and role, the Change's unfinished
-plan tasks and the decisions in force the step's worker has.
+plan tasks, the decisions in force the step's worker has, and the prompt with the Spotter cases' active examples,
+frozen once for every look of the step.
 
 The session's own folder is its worktree, given when it runs. Guarded besides: every worktree in Delivery's worktrees
 folder, every Change's state folder but this Change's own, and the project's main checkout with its Git folder, found
@@ -21,7 +22,7 @@ from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.change_contracts import watch_policy
 from owlbear_delivery_next.change_flow import worktree
-from owlbear_delivery_next.improvement import spotter
+from owlbear_delivery_next.improvement import cases, spotter
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.local_system.git_files import git_common_dir
 from owlbear_delivery_next.runtimes import step_decisions, watch_feed
@@ -85,13 +86,14 @@ def spot(store: Store, lock: Lock, step: str, settings: Settings, limit: float) 
     except StoreError as exc:  # a look never stops a step: it goes without the plan
         change, gaps = None, [f"the Change's plan could not be read ({exc})"]
     plan = change.plan if change is not None else None
+    verbose = s.verbose_on(datetime.now(UTC).date())
     return spotter.Context(
         project=store.root.name,
         change=lock.slug,
         step=step,
         looks=tuple(s.looks or ()),
         sample_rate=s.sample_rate or 0,
-        verbose=s.verbose_on(datetime.now(UTC).date()),
+        verbose=verbose,
         model=role.model or "",
         effort=role.effort or "",
         limit=limit,
@@ -100,4 +102,5 @@ def spot(store: Store, lock: Lock, step: str, settings: Settings, limit: float) 
         open_work=tuple(t.title for t in plan.tasks if not t.done) if plan else (),
         decisions=tuple(line for line in step_decisions.held() if line.strip()),
         gaps=tuple(gaps),
+        prompt=cases.snapshot(verbose=verbose),  # one prompt, with its examples, for every look of this step
     )

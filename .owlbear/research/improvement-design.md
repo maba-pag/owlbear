@@ -221,6 +221,36 @@ of active examples runs the regression and is refused if it gets worse. Seeded f
 hindsight verdicts. Raw cards stay on this machine; only reviewed, minimised and sanitised cases go to owlbear-data
 (`owlbear/improvement/spotter-cases/`), with local provenance references.
 
+As built (2026-10-27, `improvement/cases.py`, `case_replay.py`, `case_review.py`, `pilot_seed.py`, the machine host's
+`cases_job.py`; the owner's decisions D-01M5XB9M1A1MNG0S54N367RC70, D-01M5XCDRZJQJW4JMAQQ5G371YV,
+D-01M5XCE8ZEX5WPSCBZ5Y9S4K96, D-01M5XCD49YHHR1NQKKY8TQD0C3, D-01M5XCE8ZFZE8Q1XCN1EE4B29S):
+- **Store** (`~/.owlbear/spotter/cases/`, owner-only): each case's frozen card and facts (source, local provenance,
+  session family, reserve, unscored, the assumption it rests on), and `versions.jsonl`, each line a whole version:
+  every case's stage, call (a category or `none`), why, example text and review. A test case or example needs a review
+  of exactly its card, call and why; an example is never in the reserve, synthetic or unscored, and all examples stay
+  within 6,000 characters. A rollback appends a copy of an earlier version.
+- **Prompt**: one immutable snapshot (the prompt file, the verbose line, the examples; its hash is of exactly those
+  bytes, with the cases' version) frozen when a step starts, or a chat turn begins; a record keeps both.
+- **Regression** (a smoke check, not proof): a change of the active examples, a rollback included, is replayed before
+  it is written: the scored test cases and their calls, and both prompts, are frozen when it is asked for; an empty
+  comparison is refused; false notes, misses and wrong categories are counted apart and none may rise. A passing
+  change is written only onto the version it was asked against, else refused as stale and never rerun.
+- **Release** (a marked assumption): a frozen manifest of the reviewed corpus and the grading contract; equal manifests
+  are one release, so choosing examples makes none. The reserve (the pilot's holdout, historically exposed by its
+  prompt experiments) compares two versions once per release, claimed before the first look.
+- **Paid runs** (replays, and `retro-review`'s check of candidates) start only from `owlbear cases` and run as the
+  machine host's job on a slot of their own; each stops at its run credit limit, every look and review metered
+  against what the run has left; a run a stopped host left is recorded stopped, never rerun.
+- **Seed**: the pilot's 83 hindsight moments from their saved cards (no chat log read again; missing evidence a gap),
+  as candidates; `should` moments take the category the calls file names; `unknown` ones are left out; wr-p-759028 is
+  unscored while TD-435 is absent from its card. Both pilot splits are kept; other families are assigned once.
+  Synthetic cases (a marked assumption) stand in for outside-state changes and irreversible harm: never in the
+  reserve, never examples, never published. `owlbear improvement reset` retires every marked assumption for good.
+- **Publication** runs on its own: `retro-review` minimises and sanitises each test case and example; its answer must
+  keep the call; the whole export must pass `mask.redact`, email and home-path checks; it names the case by its local
+  id only; a case changed during its review is not published; one that leaves those stages is withdrawn; an unpushed
+  commit is pending until a later push.
+
 ## 5. Retro
 
 - **Runs** as a machine-host job like memory curation: one run at a time, its own session slot, pause and the stop
@@ -277,7 +307,7 @@ Each slice is a pull request, with Sol on its plan and its code:
 2. settings and roles: built (#662); the on/off switch and the four category actions replacing `mode` (#697);
 3. Retro chatlogs: built (#663);
 4. the card builder: built with 6's Delivery part (#668);
-5. Spotter records and cases: records built (#668); cases next;
+5. Spotter records and cases: records built (#668); cases built (2026-10-27);
 6. the Spotter's looks, recording only, for Delivery and chats: Delivery built (#668); the chats follower next;
 7. Retro;
 8. the Improvement page;

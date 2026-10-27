@@ -26,9 +26,9 @@ from __future__ import annotations
 import asyncio
 import atexit
 import contextlib
+import dataclasses
 import fcntl
 import gzip
-import hashlib
 import json
 import os
 import queue
@@ -43,7 +43,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from owlbear_delivery_next.improvement import card, credit_meter
+from owlbear_delivery_next.improvement import card, cases, credit_meter
 from owlbear_delivery_next.improvement.events import Kept, as_dict, clip, kept_text
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.settings.improvement import CATEGORIES
@@ -51,7 +51,7 @@ from owlbear_delivery_next.settings.improvement import CATEGORIES
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Iterable, Iterator, Mapping
 
-PROMPT = Path(__file__).with_name("spotter_prompt.md")
+PROMPT = cases.PROMPT  # the prompt file; what a look sends is ``Context.prompt``, frozen with its examples
 RUNNING = 2  # looks at once per step
 LOOK, TEARDOWN, DRAIN = 90.0, 5.0, 5.0  # seconds a look's answer, each teardown stage and the step's end may take
 LOCK, GRACE = 5.0, 1.0  # seconds a file lock is waited for; and the Spotter's writes at the process's exit
@@ -76,6 +76,7 @@ class Context:
     open_work: tuple[str, ...] = ()
     decisions: tuple[str, ...] = ()
     gaps: tuple[str, ...] = ()  # what the runner could not give
+    prompt: cases.Prompt | None = None  # frozen when the step starts (a chat: its turn); None: frozen by ``Spotter``
 
 
 @dataclass
@@ -101,7 +102,8 @@ class Record:
     preliminary: bool = False
     model: str = ""
     effort: str = ""
-    prompt: str = ""
+    prompt: str = ""  # the hash of exactly what the look sent before its card
+    cases: int = 0  # the version of the Spotter cases its examples came from; 0: none
     sdk_sessions: list[str] = field(default_factory=list)  # the look's own SDK sessions; ``id`` joins them too
     credits: float = 0.0  # the known spend; see ``credit_meter.Meter.report`` for these six
     credits_known: bool = False  # a record without it predates measuring: its credits may be an estimate
@@ -169,12 +171,6 @@ def store(folder: Path, record: Record, card_: dict[str, Any] | None) -> None:
     _append(folder, "records", asdict(record))
 
 
-def prompt_version() -> str:
-    """The prompt's version: the start of its content's hash; "unreadable" if it cannot be read, never an error."""
-    try:
-        return hashlib.sha256(PROMPT.read_bytes()).hexdigest()[:12]
-    except OSError:
-        return "unreadable"
 
 
 def parse(text: str) -> dict[str, Any]:
@@ -229,6 +225,8 @@ class Spotter:
 
     def __init__(self, ctx: Context, session: Callable[[], str], judge: Judge,
                  rng: random.Random | None = None) -> None:  # fmt: skip
+        if ctx.prompt is None:
+            ctx = dataclasses.replace(ctx, prompt=cases.snapshot(verbose=ctx.verbose))
         self.ctx, self.session, self.kept, self.judge = ctx, session, Kept(), judge
         self.folder = place()  # where every write of this session goes, whatever changes later; made when written
         self.rng = rng or random.Random()  # noqa: S311 - sampling, not secrecy
@@ -307,8 +305,9 @@ class Spotter:
         meter: credit_meter.Meter | None = None
         try:
             meter = credit_meter.Meter(ctx.limit, "look", ident=record.id)  # one identity: the record and its sessions
+            gaps = [*ctx.gaps, *([ctx.prompt.gap] if ctx.prompt and ctx.prompt.gap else [])]
             context = {"step": ctx.step, "open_work": list(ctx.open_work), "decisions": list(ctx.decisions),
-                       "gaps": list(ctx.gaps)}  # fmt: skip
+                       "gaps": gaps}  # fmt: skip
             the_card = await offload(card.build, snapshot, moment, context)
             record.skipped = "the step ended while the look ran"
             text = await asyncio.wait_for(self.judge(the_card, ctx, meter), LOOK)
@@ -328,7 +327,8 @@ class Spotter:
         except Exception as exc:  # noqa: BLE001 - a look never reaches the step
             record.category, record.skipped = "failed", f"{type(exc).__name__}: {exc}"[:300]
         finally:
-            record.prompt, record.seconds = prompt_version(), round(time.monotonic() - started, 1)
+            record.prompt, record.cases = ctx.prompt.hash if ctx.prompt else "", ctx.prompt.cases if ctx.prompt else 0
+            record.seconds = round(time.monotonic() - started, 1)
             if meter is not None:  # without one (a limit it refused) nothing ran: the record still says why
                 spend = meter.report()
                 record.credits, record.credits_known, record.limit = (

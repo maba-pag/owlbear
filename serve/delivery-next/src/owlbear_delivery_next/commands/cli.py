@@ -1,4 +1,4 @@
-"""Project commands, which `owlbear` runs too: ``setup``, ``status``; ``seed``, ``answer``, ``show`` for dev."""
+"""Project commands, which `owlbear` runs too: ``setup``, ``status``, ``cases``; ``seed``, ``answer``, ``show``: dev."""
 
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ from owlbear_delivery_next.change_contracts.profile_record import (
     RoleModel,
 )
 from owlbear_delivery_next.change_flow.status import status, unloadable
-from owlbear_delivery_next.commands import replay_client, setup
+from owlbear_delivery_next.commands import cases_cli, replay_client, setup
 from owlbear_delivery_next.design_packs import design_pack, pack_update
 from owlbear_delivery_next.design_packs.detector import DetectorError
 from owlbear_delivery_next.local_system import data_repo, local_home
@@ -357,7 +357,10 @@ def main(argv: list[str] | None = None) -> int:  # noqa: PLR0911, PLR0915 - one 
     )
     add.add_argument("--evidence", action="append", default=[], help="a Change, step, session, path or URL")
     found.add_parser("migrate", help="once: move the file entries into GitHub issues, then delete the files")
+    cases_cli.parsers(sub)
     a = parser.parse_args(argv)
+    if a.command in {"cases", "improvement"}:
+        return cases_cli.main(a)
     if a.command == "design-pack" and bool(a.diff) != bool(a.to):
         parser.error("--diff and --to go together")
     if a.command in {"data", "home"}:

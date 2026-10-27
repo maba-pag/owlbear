@@ -256,8 +256,9 @@ start saves and publishes it.
    category actions replace `mode`, each action checked against the allowed set (D-01M5WP8Z4ADZ5FN7RJDR17RQQ5); a
    former `learning` became on with every action "record". The window-step code is removed (#698). The owner sets
    the Spotter's remaining settings, or switches it off; until then Delivery steps wait for them.
-2. Spotter cases (slice 5's rest): records become candidate cases, stages, versions, a holdout and the regression,
-   seeded from the pilot's moments with their hindsight verdicts.
+2. Spotter cases (slice 5's rest): built 2026-10-27 (stages, versions, rollback, the no-trade regression, releases
+   and the reserve, the seed from the pilot's saved cards, synthetic cases, the reset, publication by `retro-review`);
+   once merged, the owner seeds the cases and `retro-review` checks them.
 3. The chats follower (slice 6's rest): the machine host tails each enrolled chat's `events.jsonl` and looks at its
    hand-offs and plans.
 4. Retro (slice 7): the machine-host job over whole Changes and finished chats, grading the Spotter's records and

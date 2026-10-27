@@ -19,7 +19,7 @@ from copilot.tools import ToolInvocation
 from owlbear_delivery_next.change_contracts.models import Change, Plan, StepKind, Task
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_contracts.tools import Worktree
-from owlbear_delivery_next.improvement import card, credit_meter, events, spotter
+from owlbear_delivery_next.improvement import card, cases, credit_meter, events, spotter
 from owlbear_delivery_next.improvement.events import Kept
 from owlbear_delivery_next.runtimes import chatlogs, sdk_adapter, spotter_look, step_decisions
 from owlbear_delivery_next.settings.config import Layer, SettingsUnset, resolve
@@ -183,8 +183,9 @@ def test_a_hand_off_starts_a_look_without_waiting_and_records_it_owner_only() ->
         "hand-off", "none", "", "s-1", "")  # fmt: skip
     assert "mode" not in rec
     assert "verdict" not in rec
-    assert (rec["prompt"], rec["credits"], rec["credits_known"], rec["limit"]) == (spotter.prompt_version(), 0.25,
-                                                                                   True, 0.75)  # fmt: skip
+    sent = cases.snapshot(verbose=False)
+    assert (rec["prompt"], rec["cases"], rec["credits"], rec["credits_known"], rec["limit"]) == (
+        sent.hash, 0, 0.25, True, 0.75)  # fmt: skip
     assert (rec["stopped"], rec["stopped_by"]) == ("", "")
     assert rec["sdk_sessions"] == [f"sdk-{rec['id']}"]  # the look's meter carries the record's own id
     folder = spotter.root()
@@ -347,6 +348,7 @@ def test_the_runner_gives_the_look_its_settings_open_work_and_decisions(tmp_path
     assert (got.project, got.change, got.looks, got.limit, got.model, got.open_work) == (
         "proj", "c1", ("hand-off",), 0.75, settings.agents["spotter"].model, ("two",))  # fmt: skip
     assert got.decisions == ("## Decisions in force", "- D1: keep it")
+    assert got.prompt == cases.snapshot(verbose=got.verbose)  # frozen once for the step's looks
     assert got.actions == dict.fromkeys(CATEGORIES, "record")  # the conftest's Global layer records every one
     unset = resolve(None, Layer(spotter=Spotter(switch="on")))
     unset.missing.append("spotter.looks")
@@ -404,6 +406,7 @@ def test_a_look_is_one_toolless_session_noted_in_the_chatlogs_manifest(monkeypat
     assert [made[k] for k in chosen] == [[], {}, False, "gpt-6-luna", "medium", spotter.LOOK]
     assert "session_limits" not in made  # no SDK credit cap: a look is bounded by its deadline and teardown
     assert "rationale" in made["message"]
+    assert made["message"].startswith(cases.snapshot(verbose=True).text + "\n\n## The card")  # exactly the bytes hashed
     assert '{"step": "build"}' in made["message"]
     assert (made["disconnected"], made["stopped"]) == (True, True)
     assert spotter.WORK.settled(5)  # the end's line is queued, not awaited
@@ -974,7 +977,7 @@ def test_a_cancelled_submit_handler_still_keeps_delivery_s_answer(tmp_path) -> N
 
 
 def test_an_unreadable_prompt_still_records_the_look_and_its_spend(monkeypatch, tmp_path) -> None:
-    monkeypatch.setattr(spotter, "PROMPT", tmp_path / "missing.md")
+    monkeypatch.setattr(cases, "PROMPT", tmp_path / "missing.md")
 
     async def main() -> None:
         spot = spotter.Spotter(ctx(), lambda: "s-1", judge())

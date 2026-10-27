@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any
 from owlbear_delivery_next.change_flow.status import RESUME, status
 from owlbear_delivery_next.local_system import data_repo, maintenance
 from owlbear_delivery_next.local_system.slots import Slots
+from owlbear_delivery_next.machine_host.cases_job import CasesJob
 from owlbear_delivery_next.machine_host.curation import Curation
 from owlbear_delivery_next.machine_host.project import Project
 from owlbear_delivery_next.project_host import session_slots
@@ -89,6 +90,13 @@ class Machine:
             paused=lambda: self.paused,
             admission=lambda: self.lock,  # the stop barrier pause_stop and idle_stop already use
             ownership=self.maintenance,
+        )
+        self.cases = CasesJob(  # the Spotter cases' replays, checks and publication, on a slot of their own
+            self.slots,
+            fenced=self._curation_fence,
+            paused=lambda: self.paused,
+            admission=lambda: self.lock,
+            say=self.say,
         )
 
     def _curation_fence(self) -> str:
@@ -282,6 +290,7 @@ class Machine:
         return (
             [f"{p.name}: {w}" for p in list(self.projects.values()) for w in p.working(stopping=True)]
             + self.curation.working()
+            + self.cases.working()
             + self._unproven_packs()
         )
 
@@ -301,6 +310,7 @@ class Machine:
         return (
             [f"{p.name}: {w}" for p in projects for w in p.working(stopping=True, requests=False)]
             + self.curation.working()
+            + self.cases.working()
             + self._unproven_packs()
         )
 
@@ -367,6 +377,7 @@ class Machine:
     def closing(self) -> None:
         """The machine stops: every gate closes at once, so nothing is admitted or launched from now on."""
         self.stopping.set()
+        self.cases.stop()
         for p in list(self.projects.values()):
             p.gate.close(0)
 
