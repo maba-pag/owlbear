@@ -78,3 +78,20 @@ def check_switched(target: Path, pfd: int, rec: dict) -> int:
         os.close(tfd)
         raise
     return tfd
+
+
+def require_switched(target: Path, rec: dict) -> None:
+    """Prove a switched target read-only and close the descriptors acquired for that lookup.
+
+    Raises:
+        StoreError: The target cannot be read or does not pass the held identity, proof and marker checks.
+    """
+    try:
+        pfd = os.open(target.parent, fd_tree.DIR_FLAGS)
+        try:
+            os.close(check_switched(target, pfd, rec))
+        finally:
+            os.close(pfd)
+    except OSError as exc:
+        msg = f"{target} is not a store OwlBear can read: nothing was changed"
+        raise StoreError(msg) from exc
