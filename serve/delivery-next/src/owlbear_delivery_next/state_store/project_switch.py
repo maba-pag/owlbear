@@ -117,7 +117,7 @@ def source_state(source: tuple[Path, int], pid: str, rec: dict) -> tuple[str, st
         raise StoreError(msg)
     preparation(prepared, folder_fd)
     marker = source_format(folder_fd)
-    if clone_id_at(folder, folder_fd) != pid or not same_folder(folder, folder_fd):
+    if clone_id_at(folder, folder_fd) != pid:
         msg = f"{folder} no longer names the retained source of project {pid}: nothing was changed"
         raise StoreError(msg)
     fd_tree.require_text_at(folder_fd, project_move.MOVE_RECORD, image)
@@ -129,6 +129,9 @@ def source_state(source: tuple[Path, int], pid: str, rec: dict) -> tuple[str, st
     if not stable:
         source_format(folder_fd)  # a concurrently installed newer marker keeps its typed refusal
         msg = f"{folder}'s source witnesses changed during admission: nothing was changed"
+        raise StoreError(msg)
+    if not same_folder(folder, folder_fd):
+        msg = f"{folder} no longer names the retained source of project {pid}: nothing was changed"
         raise StoreError(msg)
     return prepared, marker, image
 

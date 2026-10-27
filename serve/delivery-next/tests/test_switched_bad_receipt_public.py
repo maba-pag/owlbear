@@ -760,6 +760,31 @@ def test_open_preserves_a_future_source_marker_installed_during_terminal_receipt
 
 
 @pytest.mark.usefixtures("current_binding")
+@pytest.mark.parametrize("boundary", [2, 3], ids=["before-fence-replace", "after-fence-replace"])
+def test_open_refuses_a_source_renamed_during_terminal_receipt(repo, boot, monkeypatch, boundary):
+    target = _finished_move(repo, boot)
+    source = _source(repo)
+    detached = source.with_name("owner-retained-source")
+    before = _snapshot(target)
+    if boundary == 2:
+        (source / MARKER).write_text("7\n")
+
+    def change():
+        source.rename(detached)
+        source.mkdir()
+        (source / "owner").write_text("replacement source\n")
+
+    fired = _during_terminal_source_receipt(monkeypatch, source, boundary, change)
+    with pytest.raises(StoreError):
+        Store.open(repo)
+
+    assert fired == [True]
+    assert (source / "owner").read_text() == "replacement source\n"
+    assert (detached / MARKER).read_text() == ("7\n" if boundary == 2 else f"{project_move.FENCE}\n")
+    assert _snapshot(target) == before
+
+
+@pytest.mark.usefixtures("current_binding")
 @pytest.mark.parametrize("surface", ["register", "adopt"])
 @pytest.mark.parametrize("when", ["target-read", "id-file-sync", "id-directory-sync"])
 def test_registration_keeps_the_id_it_validated_through_its_durability_work(repo, boot, monkeypatch, surface, when):

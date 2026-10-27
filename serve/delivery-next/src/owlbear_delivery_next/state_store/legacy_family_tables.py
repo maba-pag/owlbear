@@ -44,6 +44,6 @@ CURRENT_MODULES = (
     ("state_store/switched_authority.py", "d7de5691fffd9ed8d35a92ebbd3f6a4ce0fa2fb240947da6d20159d216f50fde"),
     ("state_store/project_home.py", "215139579d7e87f11425e55725ac356695b31f9807808784c9addee3997cc463"),
     ("state_store/project_move.py", "a37f110e770cadbfc14c1b2096d3da052ace918051519d2df4b76c1e2762d98f"),
-    ("state_store/project_switch.py", "3637aa81c5f8628d9e6cf400e15fa764b72bb4cb9702ab1b4633209d3746e8e0"),
+    ("state_store/project_switch.py", "4349de39b9fa17f3d734ec9c6250da3fa168c8762c55d88c85138f50ef322414"),
     ("state_store/store.py", "9797dc2abdc3c519ec8e4e97f0fd3183f6f498bc82a8da659ed7c3332cf3d41b"),
 )
