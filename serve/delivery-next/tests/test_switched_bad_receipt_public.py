@@ -508,10 +508,14 @@ def test_source_replacement_during_authority_reads_never_admits_the_replacement(
 
 
 @pytest.mark.usefixtures("current_binding")
-def test_store_open_refuses_a_proof_changed_during_the_source_fence_sync(repo, boot, monkeypatch):
+@pytest.mark.parametrize(
+    "change", ["target-proof", "source-preparation", "source-id", "source-fence", "source-path", "target-marker"]
+)
+def test_store_open_revalidates_its_authority_after_the_source_fence_sync(repo, boot, monkeypatch, change):
     target = _finished_move(repo, boot)
     source = _source(repo)
-    before = _snapshot(source)
+    retained = source.with_name("retained-original")
+    expected = {}
     real_sync = os.fsync
     fired = []
 
@@ -522,17 +526,41 @@ def test_store_open_refuses_a_proof_changed_during_the_source_fence_sync(repo, b
         for path in source.glob(f".tmp-{MARKER}-*"):
             if os.path.samestat(path.stat(), os.fstat(fd)):
                 fired.append(True)
-                (target / project_move.MOVE_PROOF).write_text("foreign-proof\n")
+                if change == "source-preparation":
+                    record = json.loads((source / project_move.PREPARED).read_text())
+                    record["boot"] = "CCCCCCCC-0000-4000-8000-000000000003"
+                    (source / project_move.PREPARED).write_text(json.dumps(record))
+                elif change == "source-path":
+                    source.rename(retained)
+                    source.mkdir()
+                    (source / "owner").write_text("foreign source")
+                else:
+                    destination, text = {
+                        "target-proof": (target / project_move.MOVE_PROOF, "foreign-proof\n"),
+                        "source-id": (source / project_home.CLONE_ID, "foreign-owner\n"),
+                        "source-fence": (source / MARKER, "8\n"),
+                        "target-marker": (target / MARKER, "8\n"),
+                    }[change]
+                    destination.write_text(text)
+                for label, folder in (("source", source), ("target", target), ("retained", retained)):
+                    expected[label] = {
+                        name: value
+                        for name, value in _snapshot(folder).items()
+                        if not name.startswith((f".tmp-{MARKER}-", fd_tree.QUARANTINE))
+                    }
 
     monkeypatch.setattr(os, "fsync", sync)
-    with pytest.raises(StoreError):
+    error = FormatTooNewError if change in {"source-fence", "target-marker"} else StoreError
+    with pytest.raises(error):
         Store.open(repo)
 
     assert fired == [True]
-    assert (target / project_move.MOVE_PROOF).read_text() == "foreign-proof\n"
-    assert {
-        name: value for name, value in _snapshot(source).items() if not name.startswith(fd_tree.QUARANTINE)
-    } == before
+    for label, folder in (("source", source), ("target", target), ("retained", retained)):
+        assert {
+            name: value
+            for name, value in _snapshot(folder).items()
+            if not name.startswith((f".tmp-{MARKER}-", fd_tree.QUARANTINE))
+        } == expected[label]
 
 
 @pytest.mark.usefixtures("current_binding")

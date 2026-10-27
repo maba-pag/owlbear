@@ -102,6 +102,11 @@ After a validated switch, selfcheck checks the active store's settings rather th
 `config.json`; the source's identity, receipt and fence remain required.
 A failed project load whose target cannot be proven retains an unlocated maintenance reservation, rather than taking
 an absent run record in that target as evidence that nobody owns the work.
+The same reservation is kept when the source fence is unreadable, missing or newer than this runtime. Ordinary
+store opens recheck source preparation, format and clone id plus target proof after making markers durable, and
+guard the source-fence replacement after its temporary file is synced. Active-store edits remain valid: opening
+does not compare them against the historical copied payload. Registration and adoption retain the id their
+authority check admitted through id synchronization and revalidate before recording it.
 
 **Pause Delivery** in the bar stops new automatic agent steps on every project until you press
 **Resume**; your own actions, such as settings, memory and **New Change**, still run. While paused,

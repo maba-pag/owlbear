@@ -2,7 +2,7 @@
 
 > **Owning task:** owner request 2026-10-19: one document that grounds any session in what is built, what comes
 > next and where the code differs from the decisions
-> **Date:** 2026-10-27, status at `main` `67824f03` after #704 and the unmerged #661 candidate, decisions to TD-469, item 5's
+> **Date:** 2026-10-27, status at `main` `c910afa07` after #706 with the post-#661 authority repairs, decisions to TD-469, item 5's
 > decisions of 2026-10-22 and the owner's of 2026-10-23 to 2026-10-26
 > **Question:** Where does OwlBear stand, in what order does the remaining work come, and where does the code
 > differ from the decisions in force?
@@ -492,8 +492,14 @@ The common target validator rechecks its named directory after the proof and mar
 retained-source admission keep the source descriptor through target validation and then recheck its named directory.
 Selfcheck excludes the retained clone's config only after that authority validates; active settings, source receipt
 and fence checks remain in force.
+The post-merge Sol challenge found four further gaps at publication and admission boundaries. Ordinary store opens
+now recheck the held source's preparation, format and id plus target proof after their own durability work; source
+fence replacement uses the same post-temporary-sync guard. They do not compare the historical copy manifest on an
+active store. Read-only lookup refuses an invalid source fence, so failed-load recovery keeps an unlocated reservation.
+Retained authority checks its supplied id against the held source before and after target validation; registration
+and adoption preserve the admitted id through durability and revalidate authority before saving the registry.
 
-The composition integrates `main` `67824f03`, including R06/R15 from #656 and #704's per-look/per-run credit
+The composition integrates `main` `c910afa07`, including R06/R15 from #656 and #704's per-look/per-run credit
 limits, CONFIG 16, MACHINE 8, PROFILE 5 and the window-step runtime's removal. Only CURRENT literal bindings
 were refreshed: 37 functions,
 17 import sets, 7 constants and 32 whole-module digests. The retired `commands/step_mcp.py` is absent only from
@@ -505,7 +511,8 @@ The assembled binding and dependency-mutation refusals, default public Prepare/F
 controls, settlement, retained-workspace sentinels and target-admission controls pass locally. Boot changes,
 historical producer records and provider/receipt timing faults are modeled; no physical reboot, live SDK or generic
 filesystem/Git compare-and-swap guarantee is claimed. Acceptance requires independent source review, exact-head CI
-and handled review before protected merge; #661 and #606 record those gates, rather than a static completion count here.
+and handled review before protected merge. #661 and #606 record the original repairs' gates; the follow-up pull
+request records the four authority fixes' own Sol challenge, final checks and current-head CI/review.
 
 ## 5. Open Questions for the Owner
 
