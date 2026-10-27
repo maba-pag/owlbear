@@ -9,6 +9,8 @@ from __future__ import annotations
 import uuid
 from typing import TYPE_CHECKING, Any
 
+from owlbear_delivery_next.runtimes.sdk_usage import unexpected_models
+from owlbear_delivery_next.runtimes.session_result import limit_reached
 from owlbear_delivery_next.state_store import spend_ledger
 
 if TYPE_CHECKING:
@@ -25,20 +27,27 @@ def meter(st: _Step, sid: str, agent: str) -> None:
 def final(st: _Step, usage: dict[str, Any]) -> None:
     """The run's last usage, read once its tasks settled and before its disconnect: what the ledger records.
 
-    The step's own usage, which Delivery's model check proved, takes it only when both were read and it adds no
-    model that check would not have allowed: the step's own and those its subagents billed. A step whose usage was
-    unread stays so for that check, and the ledger still gets what could be read; a run cut short gets it as its own.
+    A run cut short takes it as its own. A step whose usage was read takes it under the same rules as Delivery's
+    model check: the models that grew since the step began must be its own or those its subagents billed, else the
+    step is a wrong model; a credit limit reached by then is its stop (``limit_reached``). A step whose usage was
+    unread stays so. A failed read leaves the step's earlier usage to Delivery and gives the ledger that sample marked
+    ``incomplete``: a lower bound, which ``spend_reconcile`` completes from the runtime's own log.
     """
-    st.spent = usage if "error" not in usage else (st.run.usage or usage)
-    if not st.run.usage:
-        st.run.usage = usage
+    if "error" in usage:
+        earlier = st.run.usage
+        st.spent = earlier | {"incomplete": usage["error"]} if earlier and "error" not in earlier else earlier or usage
+        st.run.usage = earlier or usage
         return
-    if "error" in usage or "error" in st.run.usage:
+    st.spent = usage
+    if st.run.usage and "error" in st.run.usage:
         return
-    allowed = set(st.run.usage.get("models") or {}) | st.watch.child_models() | {st.cfg.model}
-    grew = (usage.get("credits") or 0.0) >= (st.run.usage.get("credits") or 0.0)
-    if grew and set(usage.get("models") or {}) <= allowed:
-        st.run.usage = usage
+    if (usage.get("credits") or 0.0) < (st.run.usage.get("credits") or 0.0):
+        return  # an earlier read cannot be undone by a lower one
+    if st.run.usage and (wrong := sorted(set(unexpected_models(st.billed, usage, st.cfg.model))
+                                         - st.watch.child_models())):  # fmt: skip
+        st.gate.wrong_model(f"the usage names {', '.join(wrong)}, the step needs {st.cfg.model}")
+    st.run.usage = usage
+    limit_reached(st.run, st.cfg.credit_limit)
 
 
 def metered(st: _Step, *, interrupted: bool) -> None:

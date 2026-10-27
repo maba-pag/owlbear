@@ -306,17 +306,16 @@ def _look(rec: dict[str, Any], places: dict[str, Where]) -> dict[str, Any] | Non
 def _logs(
     known: list[dict[str, Any]], places: dict[str, Where], checked: dict[str, Any], pending: dict[str, str]
 ) -> list[dict[str, Any]]:
-    """A killed run's last usage checkpoint, and OwlBear sessions the ledger never saw, from the runtime's log.
+    """What the runtime's log adds: killed runs, runs whose final read failed, sessions the ledger never saw.
 
-    Each log read is noted in *pending*; it counts as read (*checked*) only once its lines are written.
+    A killed run gets its last usage checkpoint, a run whose final read failed the rest of its spend, and an OwlBear
+    session the ledger never saw its own line. Each log read is noted in *pending*; it counts as read (*checked*)
+    only once its lines are written.
     """
     now, sessions, ended = _now(), {line.get("session") for line in known}, {line.get("run") for line in known
                                                                               if line.get("type") == "end"}  # fmt: skip
-    latest: dict[str, str] = {}
-    for line in known:
-        if (sid := line.get("session")) and isinstance(at := line.get("at"), str):
-            latest[sid] = max(latest.get(sid, ""), at)
-    out = []
+    latest = _latest(known)
+    out = _incomplete(known, latest, checked, pending)
     for line in known:
         if line.get("type") != "start" or line["run"] in ended or latest.get(line["session"], "") > line["at"]:
             continue  # ended, or a later run of its session accounts for what it spent
@@ -341,6 +340,36 @@ def _logs(
                              session=sid, usage=usage, agent=agent,
                              job=job, step="" if job else str(who.get("kind") or ""), ending="",
                              source="import:runtime-log"))  # fmt: skip
+    return out
+
+
+def _latest(known: list[dict[str, Any]]) -> dict[str, str]:
+    """Each session's latest line time in the ledger."""
+    latest: dict[str, str] = {}
+    for line in known:
+        if (sid := line.get("session")) and isinstance(at := line.get("at"), str):
+            latest[sid] = max(latest.get(sid, ""), at)
+    return latest
+
+
+def _incomplete(
+    known: list[dict[str, Any]], latest: dict[str, str], checked: dict[str, Any], pending: dict[str, str]
+) -> list[dict[str, Any]]:
+    """Runs whose final read failed, completed from their session's last checkpoint when no later run covers it.
+
+    The completing line is another ``end`` of the same run: its usage replaces the sample, its time stays.
+    """
+    out = []
+    for line in known:
+        sample = line.get("usage") or {}
+        if line.get("type") != "end" or not sample.get("incomplete") or latest.get(line["session"], "") > line["at"]:
+            continue
+        if (found := _checkpoint(str(line["session"]), checked, pending)) is None:
+            continue
+        usage = found[1]
+        if (usage.get("credits") or 0.0) >= (sample.get("credits") or 0.0):
+            out.append({"id": f"end:{line['run']}:log", "type": "end", "run": line["run"], "session": line["session"],
+                        "usage": usage, "source": "import:runtime-log"})  # fmt: skip
     return out
 
 

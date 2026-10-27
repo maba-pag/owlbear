@@ -19,7 +19,8 @@ from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.pack_runs import pack_job, pack_replay
 from owlbear_delivery_next.project_host import metrics_routes
-from owlbear_delivery_next.runtimes import chatlogs, spend_reconcile
+from owlbear_delivery_next.runtimes import chatlogs, sdk_spend, spend_reconcile, subagents
+from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.state_store import spend_ledger, spend_metrics, spend_shares
 from owlbear_delivery_next.state_store.spend_ledger import Where
 from owlbear_delivery_next.state_store.store import Lock, Store
@@ -212,3 +213,82 @@ def test_a_runtime_log_whose_lines_could_not_be_written_is_read_again(project, m
     monkeypatch.setattr(spend_ledger, "append", real)
     assert spend_reconcile.run([(project, None)])["imported"]["logs"] == 1
     assert [p["credits"] for p in spend_shares.derive(spend_ledger.lines()) if p["run"] == "k"] == [1.5]
+
+
+def step(usage: dict, *, billed: dict | None = None, ending: str = "result", limit: float | None = None):
+    """A step's state as its teardown finds it: the usage Delivery's model check proved, and how it ended."""
+    said: list[str] = []
+    run = Run("s1", ending=ending, usage=usage, model_check="verified")
+
+    def wrong(detail: str) -> None:
+        said.append(detail)
+        run.model_check, run.ending = "mismatch", "error"
+
+    cfg = SimpleNamespace(model="m1", credit_limit=limit)
+    st = SimpleNamespace(run=run, billed=billed if billed is not None else {}, cfg=cfg, spent={},
+                         watch=subagents.Watch(allowed=True), gate=SimpleNamespace(wrong_model=wrong))  # fmt: skip
+    return st, said
+
+
+def tokens(**models: int) -> dict:
+    return {"credits": float(sum(models.values())) / 10,
+            "models": {m: {"credits": n / 10, "tokens": n} for m, n in models.items()}}  # fmt: skip
+
+
+def test_a_final_read_where_another_model_grew_is_a_wrong_model_even_if_it_billed_before() -> None:
+    """Sol's counterexample: a historical foreign model growing only in the final read stayed verified."""
+    st, said = step(tokens(m1=10, other=5), billed=tokens(m1=2, other=5))
+    sdk_spend.final(st, tokens(m1=12, other=7))
+    assert (st.run.model_check, st.run.ending, said) == (
+        "mismatch",
+        "error",
+        ["the usage names other, the step needs m1"],
+    )
+    assert st.spent == tokens(m1=12, other=7)  # the ledger still records every credit
+
+
+def test_a_limit_reached_only_by_the_final_read_is_the_runs_stop() -> None:
+    """Sol's counterexample: earlier 1 of a limit of 2, ending no-result; the final 2 was adopted without a stop."""
+    st, _ = step(tokens(m1=10), ending="no-result", limit=2.0)
+    sdk_spend.final(st, tokens(m1=20))
+    assert (st.run.ending, st.run.usage["credits"], st.run.model_check) == ("credit-limit", 2.0, "verified")
+
+
+def test_a_failed_final_read_keeps_the_proof_and_marks_the_ledgers_sample_incomplete(project) -> None:
+    """Sol's counterexample: the earlier sample stood in as fully known; now it is a lower bound, completed later."""
+    st, _ = step(tokens(m1=10))
+    sdk_spend.final(st, {"error": "TimeoutError"})
+    assert (st.run.usage, st.spent) == (tokens(m1=10), tokens(m1=10) | {"incomplete": "TimeoutError"})
+    spend_ledger.started("r", "partial", agent="builder", job="", model="m1", before={})
+    spend_ledger.ended("r", "partial", usage=st.spent, ending="result")
+    assert spend_ledger.WRITER.settled(5)
+    [piece] = [p for p in spend_shares.derive(spend_ledger.lines()) if p["run"] == "r"]
+    assert (piece["credits"], piece["incomplete"]) == (1.0, True)
+    runtime_log("partial", checkpoint("2026-10-27T01:00:00Z", 1.5e9))
+    assert spend_reconcile.run([(project, None)])["imported"]["logs"] == 1
+    [piece] = [p for p in spend_shares.derive(spend_ledger.lines()) if p["run"] == "r"]
+    assert (piece["credits"], piece["incomplete"], piece["source"]) == (1.5, False, "import:runtime-log")
+
+
+def test_a_look_finishing_while_a_pass_scans_is_counted_once(project, monkeypatch) -> None:
+    """Sol's counterexample: the pass checked look ids against its first snapshot only, so a look ending meanwhile
+    was imported from its Spotter record too."""
+    folder = local_home.root() / "spotter"
+    folder.mkdir()
+    rec = {"id": "x", "at": "2026-10-27T10:00:00+00:00", "credits": 0.2, "project": project.root.name, "model": "m1"}
+    (folder / "records-2026-10-27.jsonl").write_text(json.dumps(rec) + "\n")
+    real = spend_ledger.lines
+
+    def snapshot_then_look_ends() -> list[dict]:
+        seen = real()
+        place = Where(project="shop", name="shop")
+        spend_ledger.started("L", "look-sdk", agent="spotter", job="look", model="m1", before={}, place=place, look="x")
+        spend_ledger.ended("L", "look-sdk", usage=used(0.2), ending="finished", place=place, look="x")
+        assert spend_ledger.WRITER.settled(5)
+        return seen
+
+    monkeypatch.setattr(spend_reconcile.spend_ledger, "lines", snapshot_then_look_ends)
+    assert spend_reconcile.run([(project, None)])["imported"]["spotter"] == 1  # it could not know yet
+    monkeypatch.setattr(spend_reconcile.spend_ledger, "lines", real)
+    looks = [p for p in spend_shares.derive(spend_ledger.lines()) if p["role"] == "spotter"]
+    assert [(p["run"], p["credits"]) for p in looks] == [("L", 0.2)]

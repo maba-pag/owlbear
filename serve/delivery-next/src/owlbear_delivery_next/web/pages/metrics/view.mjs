@@ -94,6 +94,7 @@ function totals() {
   const uncertain = [];
   if (t.uncertain_time) uncertain.push(`${credits(t.uncertain_time)} of them at a time known only roughly`);
   if (t.uncertain_agent) uncertain.push(`${credits(t.uncertain_agent)} not split between an agent and its subagents`);
+  if (t.incomplete) uncertain.push(`${t.incomplete} run${t.incomplete === 1 ? "" : "s"} counted up to an earlier read`);
   return html`<section aria-labelledby="totals-title">
     <p-heading size="lg"><h2 id="totals-title">Totals</h2></p-heading>
     <div id="totals">
@@ -152,7 +153,7 @@ function runRow(r) {
   const who = `${r.agent || "Agent unknown"}${r.job ? ` (${r.job})` : ""}${r.subagents.length
     ? ` with ${r.subagents.join(", ")}` : ""}`;
   const spent = r.open ? "open: no end recorded" : r.unknown ? `${credits(r.credits)}+ (not all reported)`
-    : credits(r.credits);
+    : r.incomplete ? `${credits(r.credits)}+ (its last read failed)` : credits(r.credits);
   const of = `${r.limit != null ? ` of ${r.limit}` : ""}${r.stopped_by ? ` (${r.stopped_by})` : ""}`;
   const stop = r.stopped === "reached" ? html`<p-tag color="notification-warning-soft" compact="true">stopped at its
     credit limit${of}</p-tag>` : r.stopped === "unknown" ? html`<p-tag color="background-surface" compact="true">may

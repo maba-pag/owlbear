@@ -395,6 +395,7 @@ def test_a_finished_run_records_its_start_and_end_where_it_ran(world, monkeypatc
         return used
 
     monkeypatch.setattr(sdk_adapter, "usage_read", usage)
+    monkeypatch.setattr(sdk_teardown, "usage_once", usage)  # the same once its tasks settled
     place = spend_ledger.Where(project="owlbear", name="owlbear", clone="c1", change="fix-it", step="build")
     with spend_ledger.at(place):
         run = asyncio.run(sdk_adapter.run(world.cfg))
@@ -448,11 +449,11 @@ def _used(credits_: float, model: str = "gpt-6-luna") -> dict:
     return {"credits": credits_, "models": {model: {"credits": credits_, "input": 1, "output": 1}}}
 
 
-@pytest.mark.parametrize(("model", "adopted"), [("gpt-6-luna", 2.0), ("other-model", 1.0)])
-def test_the_ledger_takes_the_usage_read_once_tasks_settled_before_the_disconnect(world, monkeypatch, model, adopted):
+@pytest.mark.parametrize(("model", "check"), [("gpt-6-luna", "unknown"), ("other-model", "mismatch")])
+def test_the_ledger_takes_the_usage_read_once_tasks_settled_before_the_disconnect(world, monkeypatch, model, check):
     """Sol's counterexample: the read came before task cancellation and was skipped once a usage existed (1, not 2).
 
-    The step's own usage, which the model check proved, takes the later read only when it adds no other model.
+    The step's own usage takes the later read too; another model that grew by then is a wrong model.
     """
     world.child = True  # a task still billing until it is cancelled
     _metered(world, monkeypatch)
@@ -478,4 +479,4 @@ def test_the_ledger_takes_the_usage_read_once_tasks_settled_before_the_disconnec
     run = asyncio.run(sdk_adapter.run(world.cfg))
     assert order == ["step usage", "cancel", "final usage", "disconnect"]
     _, end = _spend()
-    assert (end["usage"]["credits"], run.usage["credits"]) == (2.0, adopted)
+    assert (end["usage"]["credits"], run.usage["credits"], run.model_check) == (2.0, 2.0, check)

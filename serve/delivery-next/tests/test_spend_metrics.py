@@ -276,3 +276,65 @@ def test_imported_marks_and_residuals_say_what_is_uncertain() -> None:
     found = spend_metrics.query(pieces, tz=UTC)
     assert (found["totals"]["credits"], found["totals"]["unknown"]) == (1.5, 1)
     assert found["coverage"]["sources"] == {"import:change": 1.5, "import:spotter": 0.0}
+
+
+def both(models: dict[str, float], **agents: dict) -> dict:
+    """A usage as the runtime reports it: per model and, when given, per agent instance."""
+    out: dict = {"credits": sum(models.values()), "models": {m: {"credits": c} for m, c in models.items()}}
+    return out | ({"agents": agents} if agents else {})
+
+
+def test_agents_named_later_never_move_credits_between_models() -> None:
+    """Sol's counterexample: m1=7, m2=3, then main/m1=8 and explore/m2=3 reported m1=7.25, m2=3.75, not 8 and 3."""
+    first = both({"m1": 7.0, "m2": 3.0})
+    later = both({"m1": 8.0, "m2": 3.0}, main=agent("main", m1=8.0), x1=agent("explore", m2=3.0))
+    lines = [
+        start("r1", "2026-10-01T10:00:00+00:00", before={}),
+        end("r1", "2026-10-01T10:30:00+00:00", first),
+        start("r2", "2026-10-02T10:00:00+00:00", before=first),
+        end("r2", "2026-10-02T10:30:00+00:00", later),
+    ]
+    pieces = spend_shares.derive(lines)
+    assert (credits_of(pieces, model="m1"), credits_of(pieces, model="m2")) == (8.0, 3.0)
+    assert [(p["run"], p["agent"], p["model"], p["credits"]) for p in pieces if p["run"] == "r2"] == [
+        ("r2", "builder", "m1", 1.0)
+    ]
+
+
+def test_a_model_whose_agents_re_split_earlier_spend_leaves_the_agent_unknown_not_invented() -> None:
+    first = both({"m1": 10.0})
+    later = both({"m1": 11.0}, main=agent("main", m1=8.0), x1=agent("explore", m1=3.0))
+    lines = [
+        start("r1", "2026-10-01T10:00:00+00:00", before={}),
+        end("r1", "2026-10-01T10:30:00+00:00", first),
+        start("r2", "2026-10-02T10:00:00+00:00", before=first),
+        end("r2", "2026-10-02T10:30:00+00:00", later),
+    ]
+    r2 = [p for p in spend_shares.derive(lines) if p["run"] == "r2"]
+    assert [(p["agent"], p["under"], p["model"], p["credits"], p["uncertain"]) for p in r2] == [
+        ("", "builder", "m1", 1.0, ["agent"])
+    ]
+
+
+@pytest.mark.parametrize("live_first", [True, False])
+def test_a_look_seen_by_its_own_lines_and_its_spotter_record_counts_once(live_first) -> None:
+    """Sol's counterexample: a look finishing while a pass scanned was imported too (0.2 counted as 0.4)."""
+    live = [
+        start("L", "2026-10-27T10:00:01+00:00", session="look-sdk", before={}, agent="spotter", look="x"),
+        end("L", "2026-10-27T10:00:09+00:00", usage(0.2), session="look-sdk", look="x"),
+    ]
+    imported = {"id": "look:x", "type": "look", "at": "2026-10-27T10:00:00+00:00", "session": "look:x",
+                "usage": usage(0.2), "agent": "spotter", "look": "x", "source": "import:spotter"}  # fmt: skip
+    pieces = spend_shares.derive([*live, imported] if live_first else [imported, *live])
+    assert [(p["run"], p["credits"]) for p in pieces] == [("L", 0.2)]
+
+
+@pytest.mark.parametrize("event_at", ["2026-10-01T10:29:59+00:00", "2026-10-01T10:30:01+00:00"])
+def test_an_imported_checkpoint_repeating_a_runs_totals_adds_no_run(event_at) -> None:
+    """Sol's counterexample: an invocation and its activity event with the same totals made an extra zero run."""
+    event = {"id": "event:e", "type": "event", "at": event_at, "session": "s1", "usage": usage(3.0),
+             "agent": "builder", "project": "p", "change": "ch", "source": "import:activity"}  # fmt: skip
+    lines = [start("r1", "2026-10-01T10:00:00+00:00", before={}), end("r1", "2026-10-01T10:30:00+00:00", usage(3.0)),
+             event]  # fmt: skip
+    found = spend_metrics.query(spend_shares.derive(lines), tz=UTC)
+    assert (found["totals"]["runs"], found["totals"]["credits"], found["runs"]["items"][0]["run"]) == (1, 3.0, "r1")
