@@ -2,7 +2,7 @@
 
 > **Owning task:** owner request 2026-10-19: one document that grounds any session in what is built, what comes
 > next and where the code differs from the decisions
-> **Date:** 2026-10-27, status at `main` `bb0b63e07` after #656 and the unmerged #661 candidate, decisions to TD-469, item 5's
+> **Date:** 2026-10-27, status at `main` `67824f03` after #704 and the unmerged #661 candidate, decisions to TD-469, item 5's
 > decisions of 2026-10-22 and the owner's of 2026-10-23 to 2026-10-26
 > **Question:** Where does OwlBear stand, in what order does the remaining work come, and where does the code
 > differ from the decisions in force?
@@ -484,8 +484,9 @@ Prepare retains its exact marker/preparation observations through id synchroniza
 Read-only switched-target lookup validates held identity, proof, quarantine and marker; unreadable UTF-8 produces
 normal refusal diagnostics. A failed load reserves uncertain ownership even when the unproven target has no run record.
 
-The composition integrates `main` `bb0b63e07`, including R06/R15 from #656, CONFIG 15,
-PROFILE 5 and the window-step runtime's removal. Only CURRENT literal bindings were refreshed: 37 functions,
+The composition integrates `main` `67824f03`, including R06/R15 from #656 and #704's per-look/per-run credit
+limits, CONFIG 16, MACHINE 8, PROFILE 5 and the window-step runtime's removal. Only CURRENT literal bindings
+were refreshed: 37 functions,
 17 import sets, 7 constants and 32 whole-module digests. The retired `commands/step_mcp.py` is absent only from
 CURRENT; the historical channels are unchanged. The current read set includes the lower record owner,
 Git-common-directory resolution, shared-repository selection and its bounded Git runner, not every publication import.
