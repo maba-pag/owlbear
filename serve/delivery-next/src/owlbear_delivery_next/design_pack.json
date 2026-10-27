@@ -1,24 +1,27 @@
 {
-  "pack": "impeccable-4.5.2.1",
+  "pack": "impeccable-4.8.0.1",
   "upstream": {
     "repository": "pbakaus/impeccable",
-    "tag": "skill-v4.5.2",
-    "commit": "d631a8827f99414d2b6daba4ef08b7f8701751d7",
-    "engine": "0.1.14"
+    "tag": "skill-v4.8.0",
+    "commit": "414603bf14c7a344edb466bb1f85690c77ce8b7d",
+    "engine": "0.1.18"
   },
   "engine": {
-    "darwin-arm64": "abbd69d540532b91e9599c41d3a6127dfbaabae5e24bafd74ff7e2fb18f4f87c",
-    "darwin-x64": "dfa4570309939f49615a441baa9c73f1c2d339bf07494517a6c6eb2eb28aa0f5",
-    "linux-arm64": "396263ee694780db942483fc80933a012ef08bf981f5f26b0da5e16b6208c948",
-    "linux-x64": "3d31ec1a664ac35c815ea1d7c10abad1155ce364d0f461157eb837a34368efb6"
+    "darwin-arm64": "543ee2f72036ad185dc9991ac3ba86b74d91f988f3d497776a088b8b65c8a9e1",
+    "darwin-x64": "1f1eee78c142f7e40e16f481aeeeb1fad1d8515d8a1ef033d7c6d133e52232b3",
+    "linux-arm64": "317cb18d64b0f7715681dd6e574ad64b2adb5a6caf8e7a1b3b57965f805404be",
+    "linux-x64": "736ed785e74ae2344d3036127f614ddde5ab520a527d8bc82a891612ef71f648"
   },
   "bundle": {
     "path": "crates/live/assets/detect-antipatterns-browser.js",
-    "sha256": "d71d1c762197231f8dfb7cc34eca3bff536ad2dfb34300b320e355939bbd9483"
+    "sha256": "3d1bec626b10850644418cb20977e76e9aa3de1e4a7650abf9dd435dda4bdabe"
   },
   "licence": {
     "IMPECCABLE-LICENSE": "02bb8c3b4e70190e3986c0404ad2fd8d639b4f534252d82379cc1b502b6d1812"
   },
-  "skills": ["owlbear-interface-design", "owlbear-design-review"],
+  "skills": [
+    "owlbear-interface-design",
+    "owlbear-design-review"
+  ],
   "extracted": "2026-10-14"
 }
