@@ -41,6 +41,15 @@ REPO_SCOPED = ".github/instructions/y.instructions.md"
 CHEAP = "claude-haiku-4.5"
 
 
+@pytest.fixture(autouse=True)
+def _signed_in(monkeypatch) -> None:
+    """The runtime's sign-in is the machine's: the conftest's fake HOME and its cleared COPILOT_HOME would hide it.
+
+    The user files a test reads stay fake: each session gets its own config folder.
+    """
+    monkeypatch.setenv("HOME", pwd.getpwuid(os.getuid()).pw_dir)
+
+
 def project(root: Path) -> Path:
     for rel, text in PROJECT.items():
         (root / rel).parent.mkdir(parents=True, exist_ok=True)
@@ -117,8 +126,7 @@ async def prompts(
     return built
 
 
-def scoped_project(tmp_path: Path, monkeypatch) -> Path:
-    monkeypatch.setenv("HOME", pwd.getpwuid(os.getuid()).pw_dir)  # the runtime's sign-in; the user files stay fake
+def scoped_project(tmp_path: Path) -> Path:
     work = project(tmp_path / "shop")
     (work / REPO_SCOPED).parent.mkdir(parents=True)
     (work / REPO_SCOPED).write_text('---\napplyTo: "**"\n---\nCodeword WREN-REPO.\n')
@@ -136,20 +144,20 @@ def only_the_repositorys(built: str) -> None:
     assert "OTTER-USER" not in built
 
 
-def test_a_step_keeps_the_repositorys_instructions_and_never_the_users(tmp_path, monkeypatch) -> None:
-    work = scoped_project(tmp_path, monkeypatch)
+def test_a_step_keeps_the_repositorys_instructions_and_never_the_users(tmp_path) -> None:
+    work = scoped_project(tmp_path)
 
     only_the_repositorys(asyncio.run(prompts(work, tmp_path / "home"))[""])
 
 
-def test_a_cold_resumed_step_drops_the_users_instructions_again(tmp_path, monkeypatch) -> None:
-    work = scoped_project(tmp_path, monkeypatch)  # a resumed runtime rebuilds the prompt with every source back on
+def test_a_cold_resumed_step_drops_the_users_instructions_again(tmp_path) -> None:
+    work = scoped_project(tmp_path)  # a resumed runtime rebuilds the prompt with every source back on
 
     only_the_repositorys(asyncio.run(prompts(work, tmp_path / "home", resume=True))[""])
 
 
-def test_a_steps_general_purpose_subagent_inherits_its_scope(tmp_path, monkeypatch) -> None:
-    work = scoped_project(tmp_path, monkeypatch)  # explore gets no instructions at all; general-purpose gets the step's
+def test_a_steps_general_purpose_subagent_inherits_its_scope(tmp_path) -> None:
+    work = scoped_project(tmp_path)  # explore gets no instructions at all; general-purpose gets the step's
 
     built = asyncio.run(prompts(work, tmp_path / "home", ask=CHILD))
 
@@ -186,14 +194,14 @@ def the_repositorys_and_the_owners(built: str) -> None:
 def test_with_his_switch_on_a_step_keeps_the_owners_instruction_files_beside_the_repositorys(
     tmp_path, monkeypatch
 ) -> None:
-    work = scoped_project(tmp_path, monkeypatch)
+    work = scoped_project(tmp_path)
     home = linked_home(tmp_path, monkeypatch)
 
     the_repositorys_and_the_owners(asyncio.run(prompts(work, home, user=(True,)))[""])
 
 
 def test_with_his_switch_off_a_step_drops_his_linked_file_too(tmp_path, monkeypatch) -> None:
-    work = scoped_project(tmp_path, monkeypatch)
+    work = scoped_project(tmp_path)
     home = linked_home(tmp_path, monkeypatch)
 
     built = asyncio.run(prompts(work, home, user=(False,)))[""]
@@ -203,7 +211,7 @@ def test_with_his_switch_off_a_step_drops_his_linked_file_too(tmp_path, monkeypa
 
 
 def test_a_step_cold_resumed_after_he_switched_off_drops_his_files(tmp_path, monkeypatch) -> None:
-    work = scoped_project(tmp_path, monkeypatch)
+    work = scoped_project(tmp_path)
     home = linked_home(tmp_path, monkeypatch)
 
     built = asyncio.run(prompts(work, home, resume=True, user=(True, False)))[""]
@@ -213,7 +221,7 @@ def test_a_step_cold_resumed_after_he_switched_off_drops_his_files(tmp_path, mon
 
 
 def test_a_steps_general_purpose_subagent_inherits_his_files_with_the_switch_on(tmp_path, monkeypatch) -> None:
-    work = scoped_project(tmp_path, monkeypatch)
+    work = scoped_project(tmp_path)
     home = linked_home(tmp_path, monkeypatch)
 
     built = asyncio.run(prompts(work, home, ask=CHILD, user=(True,)))
