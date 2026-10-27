@@ -8,7 +8,7 @@ import pytest
 from owlbear_delivery_next.commands import cli
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.machine_host import environment
-from owlbear_delivery_next.state_store import offline_protocol, project_home, registry
+from owlbear_delivery_next.state_store import fd_tree, offline_protocol, project_home, project_move, registry
 from owlbear_delivery_next.state_store.database import MARKER, STORE_FORMAT
 from owlbear_delivery_next.state_store.registry import RegistryError
 
@@ -177,6 +177,51 @@ def _change_registration_owner(store, damage):
 
 def _owner_files(folders):
     return {p: p.read_bytes() for folder in folders for p in folder.rglob("*") if p.is_file()}
+
+
+@pytest.mark.parametrize("action", ["register", "adopt"])
+def test_registry_publication_rechecks_id_after_an_absent_receipt_lookup(tmp_path, monkeypatch, action):
+    work = clone(tmp_path / "work")
+    store = project_home.clone_dir(work)
+    store.mkdir()
+    (store / "clone-id").write_text("old\n" if action == "adopt" else "owned\n")
+    if action == "adopt":
+        old = registry.register(work)
+        (store / "clone-id").write_text("owned\n")
+    machine = local_home.root() / registry.MACHINE
+    before = machine.read_bytes() if machine.exists() else None
+    real_sync, real_read = os.fsync, fd_tree.read_at
+    enabled, fired = [], []
+
+    def synced(fd):
+        real_sync(fd)
+        if not enabled and any(
+            os.path.samestat(temporary.stat(), os.fstat(fd)) for temporary in local_home.root().glob(".tmp-*.tmp")
+        ):
+            enabled.append(True)
+
+    def read(dfd, name):
+        text = real_read(dfd, name)
+        if enabled and not fired and name == project_move.MOVE_RECORD:
+            fired.append(True)
+            replacement = store / "owner-id"
+            replacement.write_text("foreign-owner\n")
+            replacement.replace(store / "clone-id")
+        return text
+
+    monkeypatch.setattr(os, "fsync", synced)
+    monkeypatch.setattr(fd_tree, "read_at", read)
+    call = (lambda: registry.register(work)) if action == "register" else (lambda: registry.adopt(old.id))
+    failure = None
+    try:
+        call()
+    except RegistryError as exc:
+        failure = exc
+    assert enabled == fired == [True]
+    assert isinstance(failure, RegistryError)
+    assert (store / "clone-id").read_text() == "foreign-owner\n"
+    assert (machine.read_bytes() if machine.exists() else None) == before
+    assert registry.load().projects == ([old] if action == "adopt" else [])
 
 
 @pytest.mark.usefixtures("current_binding")

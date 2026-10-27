@@ -54,7 +54,9 @@ def clone_id(folder: Path) -> str | None:
     if fd is None:
         return None
     try:
-        return _clone_id_at(folder, fd)
+        found = _clone_id_at(folder, fd)
+        _same_folder(folder, fd)
+        return found
     finally:
         os.close(fd)
 

@@ -276,7 +276,7 @@ def _ensure_id(work: Path, store: Path, expected: str | None) -> str:
 def _revalidate(work: Path, store: Path, pid: str) -> None:
     """Fence registry publication with the same canonical paths and id admitted before the write."""
     try:
-        same = _canonical(work) == (work, store, pid)
+        same = _canonical(work) == (work, store, pid) and clone_id(store) == pid
     except RegistryError as exc:
         msg = f"{work}'s clone is no longer admissible: nothing was registered; check the clone and retry: {exc}"
         raise RegistryError(msg) from exc

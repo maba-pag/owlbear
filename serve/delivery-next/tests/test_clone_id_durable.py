@@ -13,6 +13,7 @@ import pytest
 
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.state_store import fd_tree, project_home, registry
+from owlbear_delivery_next.state_store.database import StoreError
 from owlbear_delivery_next.state_store.registry import RegistryError
 
 
@@ -42,6 +43,30 @@ class Seam:
         self.store.rename(aside)
         self.store.mkdir(mode=0o700)
         (self.store / "clone-id").write_text("other\n")
+
+
+def test_read_only_clone_id_rejects_a_folder_replaced_during_the_read(tmp_path, monkeypatch):
+    folder, retained = tmp_path / "store", tmp_path / "retained"
+    folder.mkdir()
+    (folder / "clone-id").write_text("owned\n")
+    real_read = fd_tree.read_at
+    fired = []
+
+    def read(dfd, name):
+        text = real_read(dfd, name)
+        if not fired and name == "clone-id":
+            fired.append(True)
+            folder.rename(retained)
+            folder.mkdir()
+            (folder / "clone-id").write_text("foreign-owner\n")
+        return text
+
+    monkeypatch.setattr(fd_tree, "read_at", read)
+    with pytest.raises(StoreError):
+        project_home.clone_id(folder)
+    assert fired == [True]
+    assert (folder / "clone-id").read_text() == "foreign-owner\n"
+    assert (retained / "clone-id").read_text() == "owned\n"
 
 
 @pytest.fixture
