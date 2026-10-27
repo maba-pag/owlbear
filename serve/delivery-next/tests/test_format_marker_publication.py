@@ -236,6 +236,90 @@ def test_a_failed_marker_fdopen_handover_closes_its_owned_descriptor(tmp_path, m
     assert fd_tree.ident(marker.stat()) == owner
 
 
+class _CreatingMarkerIO(_MarkerIO):
+    def __init__(self):
+        super().__init__(None)
+        self.created = None
+        self.syncs = []
+
+    def open(self, name, flags, mode=0o777, *, dir_fd=None):
+        fd = os.open(name, flags, mode, dir_fd=dir_fd)
+        if flags & os.O_CREAT:
+            assert flags & os.O_EXCL
+            assert self.fd is None
+            self.fd = fd
+            self.created = fd_tree.ident(os.fstat(fd))
+        return fd
+
+    def close(self, fd):
+        if fd == self.fd and not self.released and not self.transferred:
+            super().close(fd)
+        else:
+            os.close(fd)
+
+    def fsync(self, fd):
+        self.syncs.append("marker" if fd == self.fd and not self.released else "directory")
+        os.fsync(fd)
+
+
+@pytest.fixture
+def creation_io(monkeypatch):
+    probe = _CreatingMarkerIO()
+    monkeypatch.setattr(fd_tree, "os", probe)
+    try:
+        yield probe
+    finally:
+        probe.cleanup()
+
+
+def _create_marker(tfd: int, entrypoint: str) -> None:
+    if entrypoint == "create":
+        fd_tree.create_at(tfd, MARKER, "7\n")
+    else:
+        format_marker.ensure_target(tfd, 7)
+
+
+@pytest.mark.parametrize("entrypoint", ["create", "ensure"])
+@pytest.mark.parametrize("failure", ["oserror", "baseexception"])
+def test_a_failed_creation_fdopen_handover_closes_its_owned_descriptor(tmp_path, creation_io, failure, entrypoint):
+    error = (
+        OSError(errno.ENOMEM, "injected creation fdopen failure") if failure == "oserror" else _HandoverError("stopped")
+    )
+    creation_io.failure = error
+    expected = StoreError if failure == "oserror" else _HandoverError
+    tfd = os.open(tmp_path, fd_tree.DIR_FLAGS)
+    try:
+        with pytest.raises(expected) as caught:
+            _create_marker(tfd, entrypoint)
+        assert caught.value.__cause__ is error if failure == "oserror" else caught.value is error
+        assert creation_io.fd is not None
+        assert creation_io.stream is None
+        assert creation_io.closed, "the failed creation handover left the caller-owned descriptor live"
+        assert creation_io.syncs == []
+    finally:
+        os.close(tfd)
+
+    assert (tmp_path / MARKER).read_bytes() == b""
+    assert fd_tree.ident((tmp_path / MARKER).stat()) == creation_io.created
+    assert sorted(p.name for p in tmp_path.iterdir()) == [MARKER]
+
+
+@pytest.mark.parametrize("entrypoint", ["create", "ensure"])
+def test_a_successful_creation_handover_closes_and_syncs_its_marker(tmp_path, creation_io, entrypoint):
+    tfd = os.open(tmp_path, fd_tree.DIR_FLAGS)
+    try:
+        _create_marker(tfd, entrypoint)
+        assert creation_io.stream.closed
+        assert creation_io.closed
+        assert creation_io.syncs == ["marker", "directory"]
+    finally:
+        os.close(tfd)
+
+    assert (tmp_path / MARKER).read_bytes() == b"7\n"
+    assert fd_tree.ident((tmp_path / MARKER).stat()) == creation_io.created
+    assert sorted(p.name for p in tmp_path.iterdir()) == [MARKER]
+
+
 SPECIAL_ENTRY_PROBE = """
 import os
 import stat
