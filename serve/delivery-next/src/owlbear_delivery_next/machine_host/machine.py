@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Any
 from owlbear_delivery_next.change_flow.status import RESUME, status
 from owlbear_delivery_next.local_system import data_repo, maintenance
 from owlbear_delivery_next.local_system.slots import Slots
-from owlbear_delivery_next.machine_host import cases_job
+from owlbear_delivery_next.machine_host import cases_job, chats
 from owlbear_delivery_next.machine_host.cases_job import CasesJob
 from owlbear_delivery_next.machine_host.curation import Curation
 from owlbear_delivery_next.machine_host.project import Project
@@ -100,6 +100,7 @@ class Machine:
             say=self.say,
             ownership=self.maintenance,
         )
+        self.chats = chats.Follower(paused=lambda: self.paused, say=self.say)  # started by ``serve``
 
     def _curation_fence(self) -> str:
         """Why no memory curation starts now: an update's fence, a stop, or a stop when idle, which starts nothing."""
@@ -380,6 +381,7 @@ class Machine:
         """The machine stops: every gate closes at once, so nothing is admitted or launched from now on."""
         self.stopping.set()
         self.cases.stop()
+        self.chats.close()  # no chat look is admitted from now on
         for p in list(self.projects.values()):
             p.gate.close(0)
 
@@ -392,6 +394,8 @@ class Machine:
                     p.stop()
         if not self.cases.drain():  # its running session cancelled, so its result and spend are kept before the exit
             self.say(f"the Spotter cases job did not end within {cases_job.DRAIN:.0f} s")
+        if not self.chats.join(chats.CLOSE):  # outside the lock; the follower keeps its own lock until it ends
+            self.say("the chats follower is still ending; no other follower starts until it has")
         self.say("stopped: every project closed")
 
 

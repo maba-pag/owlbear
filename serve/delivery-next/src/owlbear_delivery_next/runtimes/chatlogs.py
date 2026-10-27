@@ -91,8 +91,8 @@ def _locked(path: Path) -> Iterator[None]:
         os.close(fd)
 
 
-def note(event: dict[str, Any]) -> None:
-    """Append one line to the manifest under its lock; a failure is told on stderr and never raised."""
+def note(event: dict[str, Any]) -> bool:
+    """Append one line to the manifest under its lock; whether it was written. A failure is told, never raised."""
     try:
         folder = _private(root())
         with _locked(folder / "manifest.lock"):
@@ -101,6 +101,20 @@ def note(event: dict[str, Any]) -> None:
                 out.write(json.dumps(event | {"at": _now()}) + "\n")
     except (OSError, TimeoutError) as exc:
         sys.stderr.write(f"retro chatlogs: manifest not written ({exc})\n")
+        return False
+    return True
+
+
+def registered(session: str, who: dict[str, Any]) -> bool:
+    """Note *session* as OwlBear's own before it is created, and read it back: no session of ours runs unnoted.
+
+    The chats follower never reads a session the manifest names (design §4: provenance before any read), so a session
+    whose line was not written, or cannot be read back, must not start.
+    """
+    if session in (own() or set()):  # ``around`` noted it already
+        return True
+    note({"event": "started", "session": session, **who})
+    return session in (own() or set())
 
 
 def owner(kind: str, role: str, job: str, worktree: Path) -> dict[str, str]:
@@ -109,11 +123,18 @@ def owner(kind: str, role: str, job: str, worktree: Path) -> dict[str, str]:
 
 
 def sessions() -> set[str]:
-    """Every session id the manifest names: OwlBear's own sessions, never taken for a chat."""
+    """Every session id the manifest names: OwlBear's own sessions, never taken for a chat; none when unreadable."""
+    return own() or set()
+
+
+def own() -> set[str] | None:
+    """Every session id the manifest names; None when it exists but cannot be read, so a reader fails closed."""
     try:
         lines = (root() / "manifest.jsonl").read_text().splitlines()
-    except OSError:
+    except FileNotFoundError:
         return set()
+    except OSError, ValueError:
+        return None
     found = set()
     for line in lines:
         with suppress(ValueError, AttributeError, KeyError, TypeError):
@@ -383,7 +404,7 @@ def enrolled(cwd: str, folders: Iterable[str]) -> bool:
     return any(here.is_relative_to(Path(f).resolve()) for f in folders if f)
 
 
-def _cwd(folder: Path) -> str:
+def workspace(folder: Path) -> str:
     """A session's workspace folder, from ``workspace.yaml``: the only file read before enrolment is checked."""
     with suppress(OSError, ValueError, yaml.YAMLError):  # unreadable or invalid metadata: no folder, never enrolled
         data = yaml.safe_load((folder / "workspace.yaml").read_text())
@@ -399,17 +420,28 @@ def finished_chats(folders: list[str], now: datetime, records: Path | None = Non
     kind that does not, such as a Spotter look, notes itself there too) and any in its own folder (worktrees).
     """
     records = records or state()
-    if not folders or not records.is_dir():
+    if not folders or not records.is_dir() or (ours := own()) is None:  # an unreadable manifest reads no chat
         return
-    own, outside = sessions(), (local_home.root().resolve(),)
     for folder in sorted(p for p in records.iterdir() if p.is_dir()):
-        cwd = _cwd(folder)
-        if folder.name in own or not enrolled(cwd, folders) or any(Path(cwd).resolve().is_relative_to(o)
-                                                                  for o in outside):  # fmt: skip
+        if not chat(folder, folders, ours):
             continue
         with suppress(OSError):
             if now - datetime.fromtimestamp((folder / "events.jsonl").stat().st_mtime, UTC) >= QUIET:
                 yield folder.name
+
+
+def chat(folder: Path, folders: Iterable[str], ours: set[str], read: Callable[[Path], str] | None = None) -> str:
+    """The workspace of the session in *folder* when it is a chat that may be read, else "".
+
+    Never one of OwlBear's own (*ours*, the manifest's) or one in OwlBear's folder; only one in an enrolled folder.
+    *read* gives the workspace (``workspace`` unless a caller keeps its own copy).
+    """
+    if folder.name in ours or not (cwd := (read or workspace)(folder)) or not enrolled(cwd, folders):
+        return ""
+    with suppress(OSError, ValueError):
+        if not Path(cwd).resolve().is_relative_to(local_home.root().resolve()):
+            return cwd
+    return ""
 
 
 def prune(now: datetime, judged: dict[str, datetime], pinned: set[str]) -> list[str]:

@@ -1,10 +1,12 @@
 """Improvement's event intake (design §4): a watched session's own events, kept bounded for the Spotter's cards.
 
 Every SDK event passes through ``Kept.add`` as the same dict a session's ``events.jsonl`` line holds (``to_dict()``),
-so a live session and a logged one read alike. Only the session's own agent counts (no subagent's events). Kept:
-the first requester message (the step's task) and the last few, the agent's last messages, the last answers to its
-questions, and a ring of the last actions, each field cut to a bound; what the ring drops is counted. A snapshot is a
-frozen copy: a result that completes after it is not in it.
+so a live session and a logged one read alike. Only the session's own agent counts (no subagent's events). A user
+message is the requester's unless a source other than the user sent it or it continues autopilot (``requester``); any
+other is kept as an action, so it never replaces the request or the plan. Kept: the first requester message (the
+step's task) and the last few, the turn (the latest requester message's event id), the agent's last messages, the last
+answers to its questions, and a ring of the last actions, each field cut to a bound; what the ring drops is counted. A
+snapshot is a frozen copy: a result that completes after it is not in it.
 """
 
 from __future__ import annotations
@@ -40,6 +42,20 @@ def main_agent(d: dict[str, Any]) -> bool:
     """Whether the event is the session's own agent's, not a subagent's."""
     data = d.get("data")
     return isinstance(data, dict) and not d.get("agentId") and not data.get("parentToolCallId")
+
+
+def requester(d: dict[str, Any]) -> bool:
+    """Whether a main-agent ``user.message`` is the requester's: no source or the user's, and no autopilot continuation.
+
+    The runtime writes no ``source`` for a message an SDK client sends without one (a Delivery step's, a chat's own,
+    traced 2026-10-27); a system, command or agent source and an autopilot continuation are not the requester.
+    """
+    data = d.get("data") or {}
+    return (
+        d.get("type") == "user.message"
+        and data.get("source") in {None, "", "user"}
+        and not data.get("isAutopilotContinuation")
+    )
 
 
 def as_dict(ev: Any) -> dict[str, Any]:  # noqa: ANN401 - an SDK event object or a logged event
@@ -97,6 +113,7 @@ class Kept:
 
     def __init__(self) -> None:
         self.task, self.task_n = "", 0  # the first requester message: a step's task, criteria and scope
+        self.turn = ""  # the latest requester message's event id: the turn a moment belongs to
         self.first_reply: dict[str, Any] | None = None  # the agent's first message after the latest request: its plan
         self.requests: deque[dict[str, Any]] = deque(maxlen=4)
         self.answers: deque[dict[str, Any]] = deque(maxlen=3)
@@ -114,11 +131,7 @@ class Kept:
         if not main_agent(d):
             return False
         if kind == "user.message":
-            text = kept_text(str(data.get("content") or ""), TEXT)
-            if not self.task:
-                self.task, self.task_n = text, self.n
-            self._ring(self.requests, {"n": self.n, "at": at, "text": text}, "requests")
-            self.first_reply = None
+            self._asked(d, at)
         elif kind == "assistant.message" and str(data.get("content") or "").strip():
             message = {"n": self.n, "at": at, "text": kept_text(str(data["content"]), SAID)}
             self.first_reply = self.first_reply or message
@@ -139,6 +152,19 @@ class Kept:
             self._push({"n": self.n, "at": at, "kind": "stop" if kind in STOPS else "compaction"})
         return False
 
+    def _asked(self, d: dict[str, Any], at: str) -> None:
+        """A user message: the requester's starts a turn; any other is an action."""
+        content = str((d.get("data") or {}).get("content") or "")
+        if not requester(d):
+            self._push({"n": self.n, "at": at, "kind": "system message", "text": kept_text(content, SAID)})
+            return
+        text = kept_text(content, TEXT)
+        self.turn = str(d.get("id") or f"event {self.n}")
+        if not self.task:
+            self.task, self.task_n = text, self.n
+        self._ring(self.requests, {"n": self.n, "at": at, "text": text}, "requests")
+        self.first_reply = None
+
     def _stopped(self, call: dict[str, Any]) -> bool:
         """Whether a question's result was written by a stop, not answered (the pilot's b6f1f8)."""
         return "cancelled the request" in call.get("result", "") and any(
@@ -156,7 +182,8 @@ class Kept:
     def snapshot(self) -> dict[str, Any]:
         """A frozen copy at this moment; calls still open have no result in it."""
         return json.loads(json.dumps({
-            "task": self.task, "task_n": self.task_n, "first_reply": self.first_reply, "requests": list(self.requests),
-            "answers": list(self.answers), "said": list(self.said), "actions": list(self.actions),
+            "task": self.task, "task_n": self.task_n, "turn": self.turn, "first_reply": self.first_reply,
+            "requests": list(self.requests), "answers": list(self.answers), "said": list(self.said),
+            "actions": list(self.actions),
             "dropped": self.dropped, "n": self.n,
         }, default=str))  # fmt: skip

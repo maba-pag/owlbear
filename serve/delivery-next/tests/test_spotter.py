@@ -9,6 +9,7 @@ import json
 import random
 import stat
 import uuid
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
@@ -392,7 +393,7 @@ def test_a_look_is_one_toolless_session_noted_in_the_chatlogs_manifest(monkeypat
             pass
 
         async def create_session(self, **kw: Any) -> Session:
-            made.update(kw)
+            made.update(kw, noted=kw["session_id"] in (chatlogs.own() or set()))  # noted before it exists
             return Session()
 
         async def stop(self) -> None:
@@ -403,6 +404,10 @@ def test_a_look_is_one_toolless_session_noted_in_the_chatlogs_manifest(monkeypat
     spend = meter()
     assert asyncio.run(REAL_LOOK({"step": "build"}, ctx(verbose=True), spend)) == '{"category": "none"}'
     assert (spend.report()["credits"], spend.report()["credits_known"]) == (0.2, True)
+    sid = made["session_id"]
+    assert made["noted"]
+    assert spend.report()["sdk_sessions"] == [sid]
+    assert Path(made["working_directory"]).parent == spotter.place() / "looks"  # in OwlBear's own folder: never a chat
     chosen = ("available_tools", "mcp_servers", "enable_config_discovery", "model", "reasoning_effort", "timeout")
     assert [made[k] for k in chosen] == [[], {}, False, "gpt-6-luna", "medium", spotter.LOOK]
     assert "session_limits" not in made  # no SDK credit cap: a look is bounded by its deadline and teardown
@@ -413,14 +418,38 @@ def test_a_look_is_one_toolless_session_noted_in_the_chatlogs_manifest(monkeypat
     assert spotter.WORK.settled(5)  # the end's line is queued, not awaited
     lines = [json.loads(x) for x in (chatlogs.root() / "manifest.jsonl").read_text().splitlines()]
     assert [(x["event"], x["session"], x.get("kind")) for x in lines] == [
-        ("started", "look-1", "spotter"), ("ended", "look-1", None)]  # fmt: skip
+        ("started", sid, "spotter"), ("ended", sid, None)]  # fmt: skip
     assert spend_ledger.WRITER.settled(5)
     start, end = spend_ledger.lines()  # the look's own spend, as read, in the spend ledger
     assert (start["session"], start["agent"], start["job"], start["model"], start["before"]) == (
-        "look-1", "spotter", "look", "gpt-6-luna", {}
+        sid, "spotter", "look", "gpt-6-luna", {}
     )  # fmt: skip
     assert (end["run"], end["ending"], end["usage"]["credits"]) == (start["run"], "finished", 0.2)
     assert start["look"] == end["look"] == spend.id  # the look's record carries the same id
+
+
+def test_a_look_that_cannot_be_noted_as_ours_never_creates_its_session(monkeypatch) -> None:
+    created = []
+
+    class Client:
+        def __init__(self, **_kw: Any) -> None:
+            pass
+
+        async def start(self) -> None:
+            pass
+
+        async def create_session(self, **kw: Any) -> None:
+            created.append(kw)
+
+        async def stop(self) -> None:
+            pass
+
+    monkeypatch.setattr(spotter_look, "CopilotClient", Client)
+    monkeypatch.setattr(spotter_look, "cli_path", lambda: "/bin/false")
+    monkeypatch.setattr(chatlogs, "note", lambda _event: False)  # the write fails; the manifest still reads
+    with pytest.raises(RuntimeError, match="could not be noted"):
+        asyncio.run(REAL_LOOK({"step": "build"}, ctx(), meter()))
+    assert created == []
 
 
 class Stalled:

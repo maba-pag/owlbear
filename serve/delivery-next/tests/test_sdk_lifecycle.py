@@ -1,6 +1,7 @@
 """The real SDK step lifecycle with synthetic clients, journals and process identities; no signals are sent."""
 
 import asyncio
+import dataclasses
 import os
 import signal
 import subprocess
@@ -17,7 +18,7 @@ from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_contracts.tools import Worktree
 from owlbear_delivery_next.change_flow import loop
 from owlbear_delivery_next.local_system import processes
-from owlbear_delivery_next.runtimes import loop_owner, sdk_adapter, sdk_spend, sdk_teardown
+from owlbear_delivery_next.runtimes import chatlogs, loop_owner, sdk_adapter, sdk_spend, sdk_teardown
 from owlbear_delivery_next.runtimes.session_result import to_result
 from owlbear_delivery_next.state_store import spend_ledger
 from owlbear_delivery_next.state_store.database import StoreError
@@ -506,3 +507,68 @@ def test_a_usage_read_after_an_unverified_task_cleanup_is_a_lower_bound(world, m
     asyncio.run(sdk_adapter.run(world.cfg))
     _, end = _spend()
     assert (end["usage"]["credits"], end["usage"].get("incomplete")) == (2.0, "tasks unsettled")
+
+
+REAL_OPEN = sdk_adapter._open  # noqa: SLF001 - the real one, which the fixture replaces
+
+
+def test_a_session_that_cannot_be_noted_as_ours_is_never_created(world, monkeypatch):
+    """Provenance (Improvement design §4): the manifest still reads, but this session's line was not written."""
+    created = []
+
+    async def create_session(**kw):
+        created.append(kw)
+
+    world.create_session = create_session
+    monkeypatch.setattr(sdk_adapter, "_open", REAL_OPEN)
+    monkeypatch.setattr(chatlogs, "note", lambda _event: False)
+    run = asyncio.run(sdk_adapter.run(world.cfg))
+    assert created == []
+    assert (run.ending, run.detail) == ("error", sdk_adapter.UNNOTED)
+
+
+def test_a_new_session_is_noted_as_ours_before_it_is_created(world, monkeypatch):
+    seen = []
+
+    async def create_session(**kw):
+        seen.append(kw["session_id"] in (chatlogs.own() or set()))
+        msg = "stop here"
+        raise RuntimeError(msg)
+
+    world.create_session = create_session
+    monkeypatch.setattr(sdk_adapter, "_open", REAL_OPEN)
+    asyncio.run(sdk_adapter.run(world.cfg))
+    assert seen == [True]
+
+
+def test_a_replacement_session_is_noted_as_ours_naming_the_one_it_replaces_before_it_is_created(world, monkeypatch):
+    seen = []
+
+    async def missing(_sid):
+        return None
+
+    async def create_session(**kw):
+        seen.append(kw["session_id"])
+        msg = "stop here"
+        raise RuntimeError(msg)
+
+    world.get_session_metadata = missing
+    world.create_session = create_session
+    monkeypatch.setattr(sdk_adapter, "_open", REAL_OPEN)
+    cfg = dataclasses.replace(world.cfg, resume=True, journal=sdk_adapter.Journal(event=world.event,
+                              replaced=lambda: "synthetic-2"))  # fmt: skip
+    noted = []
+    real = chatlogs.note
+    monkeypatch.setattr(chatlogs, "note", lambda e: noted.append(dict(e)) or real(e))
+
+    run = asyncio.run(sdk_adapter.run(cfg))
+    assert seen == ["synthetic-2"]
+    assert run.session_id == "synthetic-2"
+    first = next(e for e in noted if e["session"] == "synthetic-2")
+    assert (first["event"], first["replaces"]) == ("started", "synthetic")
+    monkeypatch.setattr(chatlogs, "note", lambda _e: False)  # a replacement that cannot be noted is never created
+    seen.clear()
+    cfg = dataclasses.replace(cfg, journal=sdk_adapter.Journal(event=world.event, replaced=lambda: "synthetic-3"))
+    run = asyncio.run(sdk_adapter.run(cfg))
+    assert seen == []
+    assert (run.ending, run.detail) == ("error", sdk_adapter.UNNOTED)

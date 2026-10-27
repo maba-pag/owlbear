@@ -1,6 +1,9 @@
 """The Spotter (design §4): it records what it would say and the action its finding's category is set to, never acting.
 
-It looks at a Delivery step's hand-offs and a sample of its actions, never delaying the step or changing its outcome.
+It looks at a Delivery step's hand-offs and a sample of its actions, never delaying the step or changing its outcome;
+the machine host's chats follower (``machine_host.chats``) gives an enrolled chat's hand-offs, plans, state changes and
+samples to one ``Spotter`` per chat, whose ``room`` admits at most one chat look at a time and none while paused. Each
+look keeps the settings in force when it was admitted, and its record the turn (requester message) it belongs to.
 
 A look runs as a task on the step's own event loop when the hand-off (the submit tool's call) or a sampled completion
 happens, over a frozen snapshot of the step's intake: the same moment and inputs a live look will have. The loop only
@@ -93,6 +96,7 @@ class Record:
     call: str  # the hand-off's or sampled action's call id
     cutoff: int  # the intake's events up to the moment
     probability: float
+    turn: str = ""  # the requester message the moment belongs to: its event id
     category: str = ""
     action: str = ""  # the setting of the finding's category; recorded only, nothing acts yet
     note: str = ""
@@ -221,25 +225,39 @@ class Spotter:
     *judge* runs one look (``runtimes.spotter_look``); a test gives its own.
     """
 
-    def __init__(self, ctx: Context, session: Callable[[], str], judge: Judge,
-                 rng: random.Random | None = None) -> None:  # fmt: skip
+    def __init__(self, ctx: Context, session: Callable[[], str], judge: Judge, rng: random.Random | None = None,
+                 room: Callable[[], str] | None = None) -> None:  # fmt: skip
+        """*room* says why no further look may start now (beyond this session's own capacity), else ""."""
         if ctx.prompt is None:
             ctx = dataclasses.replace(ctx, prompt=cases.snapshot(verbose=ctx.verbose))
         self.ctx, self.session, self.kept, self.judge = ctx, session, Kept(), judge
+        self.room = room or str
         self.folder = place()  # where every write of this session goes, whatever changes later; made when written
         self.rng = rng or random.Random()  # noqa: S311 - sampling, not secrecy
         self.tasks: set[asyncio.Future[Any]] = set()
         self.running = 0  # looks admitted and not ended
-        self.crowded = 0  # sampled looks skipped for capacity, recorded once at the end
+        self.crowded: dict[str, int] = {}  # sampled looks skipped, by why, recorded once at the end
         self.closing = False  # the step ended: no look starts any more
 
     def seen(self, ev: Any) -> None:  # noqa: ANN401 - an SDK event, on the step's loop
         """Take one event in; a completed action of the session's own agent may be sampled for a look."""
         d = as_dict(ev)
-        if (self.kept.add(d) and "sample" in self.ctx.looks
-                and self.rng.random() * 100 < self.ctx.sample_rate):  # fmt: skip
+        if self.take(d):
+            self.sample(d)
+
+    def take(self, ev: Any) -> bool:  # noqa: ANN401 - an SDK event or a logged one
+        """Take one event in without a look; whether it completed a call of the session's own agent."""
+        return self.kept.add(ev)
+
+    def sample(self, d: dict[str, Any]) -> None:
+        """Maybe sample the completed call *d* for a look, at the configured rate."""
+        if "sample" in self.ctx.looks and self.rng.random() * 100 < self.ctx.sample_rate:
             moment = {"at": d.get("timestamp"), "kind": "a completed action", "call": d["data"].get("toolCallId")}
             self._look("sample", self.ctx.sample_rate / 100, moment)
+
+    def look(self, look: str, probability: float, moment: dict[str, Any]) -> None:
+        """A look of kind *look* at *moment*, admitted now with the settings in force now, or recorded as skipped."""
+        self._look(look, probability, moment)
 
     def history(self, events: Iterable[Any]) -> None:
         """A resumed session's transcript, taken in without looks: the task, plan and evidence the agent has."""
@@ -268,38 +286,41 @@ class Spotter:
         task.add_done_callback(self.tasks.discard)
         return task
 
-    def _record(self, look: str, probability: float, moment: dict[str, Any], **fields: Any) -> Record:  # noqa: ANN401
-        ctx = self.ctx
+    def _record(self, look: str, probability: float, moment: dict[str, Any], ctx: Context | None = None,
+                **fields: Any) -> Record:  # noqa: ANN401 # fmt: skip
+        ctx = ctx or self.ctx
         return Record(id=uuid.uuid4().hex[:12], at=datetime.now(UTC).isoformat(timespec="seconds"),
                       project=ctx.project, change=ctx.change, step=ctx.step, session=self.session(), look=look,
                       call=str(moment.get("call") or ""), cutoff=int(moment.get("cutoff") or 0),
-                      probability=probability, model=ctx.model, effort=ctx.effort, **fields)  # fmt: skip
+                      probability=probability, turn=str(moment.get("turn") or ""), model=ctx.model,
+                      effort=ctx.effort, **fields)  # fmt: skip
 
     def _look(self, look: str, probability: float, moment: dict[str, Any]) -> None:
-        """Freeze the intake now; everything else runs in a task, its file work on the Spotter's own threads."""
+        """Freeze the intake and the settings now; the rest runs in a task, its file work on the Spotter's threads."""
         if self.closing:
             return
-        if self.running >= RUNNING:
+        if why := ("capacity: looks already running" if self.running >= RUNNING else self.room()):
             if look == "sample":  # a burst of samples is one count, not a write each
-                self.crowded += 1
+                self.crowded[why] = self.crowded.get(why, 0) + 1
             else:
-                moment = {**moment, "cutoff": self.kept.n}
-                skipped = self._record(look, probability, moment, skipped="capacity: looks already running")
+                moment = {"turn": self.kept.turn, **moment, "cutoff": self.kept.n}
+                skipped = self._record(look, probability, moment, skipped=why)
                 self._track(offload(store, self.folder, skipped, None))
             return
         snapshot = self.kept.snapshot()
-        moment = {**moment, "cutoff": snapshot["n"]}
+        moment = {"turn": snapshot["turn"], **moment, "cutoff": snapshot["n"]}
         self.running += 1
-        self._track(asyncio.ensure_future(self._run(look, probability, snapshot, moment))).add_done_callback(
-            self._ended
-        )
+        task = self._run(look, probability, snapshot, moment, self.ctx)
+        self._track(asyncio.ensure_future(task)).add_done_callback(self._ended)
 
     def _ended(self, _task: asyncio.Future[Any]) -> None:
         self.running -= 1
 
-    async def _run(self, look: str, probability: float, snapshot: dict[str, Any], moment: dict[str, Any]) -> None:
-        ctx, started, the_card = self.ctx, time.monotonic(), None
-        record = self._record(look, probability, moment, skipped="the step ended before the look began")
+    async def _run(
+        self, look: str, probability: float, snapshot: dict[str, Any], moment: dict[str, Any], ctx: Context
+    ) -> None:
+        started, the_card = time.monotonic(), None
+        record = self._record(look, probability, moment, ctx, skipped="the step ended before the look began")
         meter: credit_meter.Meter | None = None
         try:
             meter = credit_meter.Meter(ctx.limit, "look", ident=record.id)  # one identity: the record and its sessions
@@ -342,11 +363,12 @@ class Spotter:
     async def drain(self) -> None:
         """At the step's end: no look starts any more; wait briefly for running ones, then stop the rest; bounded."""
         self.closing = True
-        if self.crowded:
-            why = f"capacity: {self.crowded} sampled looks skipped, looks already running"
-            skipped = self._record("sample", self.ctx.sample_rate / 100, {"kind": "samples"}, skipped=why)
-            self.crowded = 0
+        for why, n in self.crowded.items():
+            said = f"capacity: {n} sampled looks skipped, looks already running" if why.startswith("capacity") else (
+                f"{why}: {n} sampled looks skipped")  # fmt: skip
+            skipped = self._record("sample", self.ctx.sample_rate / 100, {"kind": "samples"}, skipped=said)
             self._track(offload(store, self.folder, skipped, None))
+        self.crowded = {}
         if not self.tasks:
             return
         _, pending = await asyncio.wait(set(self.tasks), timeout=DRAIN)
