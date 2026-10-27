@@ -1,14 +1,14 @@
 # Improvement: Design
 
 > **Owning task:** the plan's item 9 (formerly "the watcher"), redesigned with the owner on 2026-10-25
-> **Date:** 2026-10-25 (approved); status 2026-10-26
+> **Date:** 2026-10-25 (approved); status 2026-10-27
 > **Question:** How do agents get better from their own work: fewer common mistakes, wrong tool arguments,
 > rabbit holes and local optimums that miss the real intent, without being steered off course?
 > **Status:** the owner's choices of 2026-10-25, after a pilot, a hindsight review of 83 real moments and Sol's
 > challenges (§3); built complete, for Delivery steps and chats, before item 10 (the owner's choice, same day). They replace the live coach of this design's first version and the per-call outside-write watcher
 > of [the earlier draft](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-next-watcher-design.md). Catching malicious calls is out of scope for now. Built so
-> far: W1a's feed (#640), phase 1a (#652), the Primer (#653), and slices 1 to 4 and 6's Delivery part (#659 to #668,
-> §8).
+> far: W1a's feed (#640), phase 1a (#652), the Primer (#653), slices 1 to 6 (#659 to #668, #697, #704, #705, #707)
+> and spend metrics (#706) (§8); Retro, the Improvement page and live delivery are next.
 
 ## Names
 
@@ -105,7 +105,7 @@ widening the agent's scope. Otherwise silence, and the moment feeds Retro's less
 
 ### Modes and settings
 All settings have no code default; an unset one is an error on the Settings page (Global, with a machine override):
-- **on/off:** replaces the former mode (D-01M5WB09Z3ZKJVN02WGWVHGWBH, D-01M5WBAFQPZT6QBMV3V3HZ83ES); off also stops
+- **on/off:** replaces the former mode (D-01M5WB09Z3ZKJVN02WGWVHGWBH, D-01M5XCCPEVGT1RK90WF1M09VNZ); off also stops
   W1a's feed. "Learning" and "live" now describe the actions configured below, not a setting;
 - **actions per category of finding:** the Spotter files each finding under one of four broad categories, the
   examples illustrating, never limiting: **hand-off fitness** (the result should not be accepted as it stands: an
@@ -278,7 +278,8 @@ D-01M5XCE8ZEX5WPSCBZ5Y9S4K96, D-01M5XCD49YHHR1NQKKY8TQD0C3, D-01M5XCE8ZFZE8Q1XCN
 - **Release** (a marked assumption): a frozen manifest of the reviewed corpus and the grading contract; equal manifests
   are one release, so choosing examples makes none. The reserve (the pilot's holdout, historically exposed by its
   prompt experiments) compares two versions once per release, claimed before the first look.
-- **Paid runs** (replays, and `retro-review`'s check of candidates) start only from `owlbear cases` and run as the
+- **Paid runs** (replays, and `retro-review`'s check of candidates) start only on the owner's word, his own or a chat's
+  acting on it (D-01M5XCE8ZEX5WPSCBZ5Y9S4K96), through `owlbear cases`, and run as the
   machine host's job on a slot of their own, admitted only while the machine is neither paused nor fenced; each stops
   at its run credit limit (`replay_run_credit_limit`, or `retro_run_credit_limit` for a check and publication), each
   replayed look on its own `look_credit_limit` meter inside the run's, each `retro-review` session charged through
@@ -345,13 +346,15 @@ always shows (D-01M5W9AEB412SNWYM2CS27H68M).
 
 ## 7. Build order
 
-Each slice is a pull request, with Sol on its plan and its code:
+Each slice is a pull request, with Sol on its plan and its code, and is built complete: where evidence is missing,
+marked assumptions or synthetic cases fill the gap and one reset removes them later; nothing is deferred
+(D-01M5XB9M1A1MNG0S54N367RC70):
 1. this design: built (#659, #660);
 2. settings and roles: built (#662); the on/off switch and the four category actions replacing `mode` (#697);
 3. Retro chatlogs: built (#663);
 4. the card builder: built with 6's Delivery part (#668);
-5. Spotter records and cases: records built (#668); cases built (2026-10-27);
-6. the Spotter's looks, recording only, for Delivery and chats: Delivery built (#668); the chats follower built;
+5. Spotter records and cases: records built (#668); cases built (#705);
+6. the Spotter's looks, recording only, for Delivery and chats: Delivery built (#668); the chats follower built (#707);
 7. Retro;
 8. the Improvement page;
 9. live delivery and the test machinery.
@@ -366,16 +369,20 @@ Then item 16 (the amendment design session, TD-422), then item 10.
 - Settings and roles (#662): the `watcher` role and switch became the `spotter` role and the Spotter's settings
   (settings format 12); the `retro` and `retro-review` roles; the machine values for budgets, Retro's triggers and
   enrolled chats; none has a code default. The daily budgets were replaced by credit limits per look and run on
-  2026-10-27 (settings format 16, written into Global once by the machine host's start).
+  2026-10-27 (#704; settings format 16, written into Global once by the machine host's start).
 - Retro chatlogs (#663): the Change-to-session manifest, each step's `events.jsonl` and saved outputs captured at its
   end, enrolled-chat discovery and pruning.
 - The Spotter's core (#668): the intake (`improvement/events.py`), the card (`improvement/card.py`), the looks and
   their records, budget ledger (removed with the daily budgets) and lifecycle (`improvement/spotter.py`, `runtimes/spotter_look.py`) and the prompt
   (`improvement/spotter_prompt.md`); `improvement` is a layer between `state_store` and `runtimes`. A live test
 (2026-10-26) found that the runtime refuses a session credit cap under 30; a look now sets none. The machine
-  registry and machine settings moved to `state_store` so a step reads its budget (D-01M5VXXFC28ZFHV7HVDTKFHPVF).
+  registry and machine settings moved to `state_store` so a step reads its machine values (D-01M5VXXFC28ZFHV7HVDTKFHPVF).
   A live test on 2026-10-26 ran a real hand-off look after #682: a correct note for 0.07 credits in 7.5 seconds.
-- The chats follower (slice 6's rest): the machine host follows enrolled chats and records looks at their plans,
+- Spotter cases (#705): stages, versions, the no-trade regression, releases and the reserve, the seed from the pilot's
+  saved cards, synthetic cases, the reset and publication by `retro-review` ("As built" under Spotter cases in §4).
+- Spend metrics (#706): every credit OwlBear spends, Spotter looks and Retro included, is recorded on this machine and
+  shown on the Metrics page by project, agent, model and day; metrics never limit (D-01M5XCDF6G60VG5GHTWF5QSSDE).
+- The chats follower (#707, slice 6's rest): the machine host follows enrolled chats and records looks at their plans,
   hand-offs, state changes and samples ("As built for chats" in §4); every session OwlBear creates is noted in the
   manifest before it is created.
 - The pilot's harness and data stay in `.owlbear/scratch/watcher-replay/` (not committed).
