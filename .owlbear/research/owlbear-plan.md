@@ -284,8 +284,8 @@ following symlink parents. Decision publication (#613, R06), verified and merged
 and explicit generation-bound Finish/Abandon; authority reads refuse active or unknown rebases as well as an unsettled
 batch. Publication retains the operation's own commit and captured repository destination. After a successful file
 installation, the former temporary name is no longer owned and is never cleaned up on a later durability failure.
-That merge completes the R15 foundation from #657 as well (#624). The programme stands at 19 of 21 packages;
-R16 (#623) and R04 (#608) remain candidates together in #661 until their final gates and protected merge.
+That merge completes the R15 foundation from #657 as well (#624). R16 (#623) and R04 (#608) have their final
+composition together in #661; #606 and those issues hold the current verification and merge status.
 
 The owner-continuation candidate (#618, R12) sends a
 replacement check session the owner's pending answer before its delivery is recorded,
@@ -461,9 +461,9 @@ Record repairs made with this document: the trim of 2026-10-19 had listed TD-228
 dropped C-21's lines for TD-199 and TD-201 and cut TD-318's schedule to one of its four parts; they are back in force.
 
 **R16 store relocation and R04 ownership (issues [#623](https://github.com/maba-pag/owlbear/issues/623) and
-[#608](https://github.com/maba-pag/owlbear/issues/608)): CANDIDATE in [#661](https://github.com/maba-pag/owlbear/pull/661),
-not merged or done.**
-The candidate, on `fix/audit-r16-relocation`, moves a project's store to its folder only by a manual
+[#608](https://github.com/maba-pag/owlbear/issues/608), implementation in
+[#661](https://github.com/maba-pag/owlbear/pull/661)).**
+The offline protocol moves a project's store to its folder only by a manual
 `owlbear prepare --repo PATH`, a reboot, then `owlbear finish --repo PATH` from the new boot session. Prepare records
 durable preparation and installs the format fence, but copies or switches nothing; an ordinary `Store.open` refuses
 until Finish. Finish refuses an unknown, dirty or altered OwlBear build,
@@ -477,7 +477,7 @@ run's generation before copying; the Job's `pack_state` delegates record evidenc
 termination retains maintenance slots, locks and the original workspace across restarts; receipts deduplicate the
 same generation without suppressing a later run.
 
-The final local composition integrates actual `main` `bb0b63e07`, including R06/R15 from #656, CONFIG 15,
+The composition integrates `main` `bb0b63e07`, including R06/R15 from #656, CONFIG 15,
 PROFILE 5 and the window-step runtime's removal. Only CURRENT literal bindings were refreshed: 37 functions,
 17 import sets, 7 constants and 32 whole-module digests. The retired `commands/step_mcp.py` is absent only from
 CURRENT; the historical channels are unchanged. The current read set includes the lower record owner,
@@ -485,8 +485,8 @@ Git-common-directory resolution, shared-repository selection and its bounded Git
 The assembled binding and dependency-mutation refusals, default public Prepare/Finish, 13 public lease/copy/restart
 controls, settlement, retained-workspace sentinels and target-admission controls pass locally. Boot changes,
 historical producer records and provider/receipt timing faults are modeled; no physical reboot, live SDK or generic
-filesystem/Git compare-and-swap guarantee is claimed. The candidate is frozen for the parent's independent review,
-CI and protected merge through existing #661; these local checks do not make the programme 21 of 21.
+filesystem/Git compare-and-swap guarantee is claimed. Acceptance requires independent source review, exact-head CI
+and handled review before protected merge; #661 and #606 record those gates, rather than a static completion count here.
 
 ## 5. Open Questions for the Owner
 
