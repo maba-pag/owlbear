@@ -16,6 +16,7 @@ SHIPPED = (
     "design_pack.json",
     "agents/*.md",
     "improvement/*.md",
+    "improvement/*.json",  # the synthetic Spotter cases
     "golden/*.html",
     "golden/*.json",
     "skills/**/*.md",
