@@ -476,6 +476,9 @@ deleting, renaming or recreating it invalidates that authority. The store-owned 
 run's generation before copying; the Job's `pack_state` delegates record evidence to that lower owner. Unknown
 termination retains maintenance slots, locks and the original workspace across restarts; receipts deduplicate the
 same generation without suppressing a later run.
+Prepare retains its exact marker/preparation observations through id synchronization and both publication fences.
+Read-only switched-target lookup validates held identity, proof, quarantine and marker; unreadable UTF-8 produces
+normal refusal diagnostics. A failed load reserves uncertain ownership even when the unproven target has no run record.
 
 The composition integrates `main` `bb0b63e07`, including R06/R15 from #656, CONFIG 15,
 PROFILE 5 and the window-step runtime's removal. Only CURRENT literal bindings were refreshed: 37 functions,

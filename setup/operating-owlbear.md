@@ -92,6 +92,12 @@ markers without following a marker link or waiting on a pipe; only a genuinely m
 Missing target markers are created exclusively; a concurrent existing marker is validated and made durable,
 never replaced. Settlement and admission validate the complete preparation and original source identity through
 held descriptors. Repeated Prepare refuses a completed move or malformed receipt, even while its backup payload remains.
+Prepare rechecks the exact source marker and preparation after id synchronization and immediately before publishing
+either metadata file; a changed or blank marker refuses without replacing the owner's entries. Read-only switched-store
+lookups validate the target's identity, issued proof, quarantine state and existing marker through a held descriptor;
+they leave an absent target marker for store open to repair. Unreadable UTF-8 enters the normal diagnostic channel.
+A failed project load whose target cannot be proven retains an unlocated maintenance reservation, rather than taking
+an absent run record in that target as evidence that nobody owns the work.
 
 **Pause Delivery** in the bar stops new automatic agent steps on every project until you press
 **Resume**; your own actions, such as settings, memory and **New Change**, still run. While paused,
