@@ -65,9 +65,9 @@ def seam(tmp_path, monkeypatch):
                 state.replace_store()
         real_fsync(fd)
 
-    def save(machine) -> None:
+    def save(machine, *, before_replace=None) -> None:
         state.events.append("publish")
-        real_save(machine)
+        real_save(machine, before_replace=before_replace)
 
     monkeypatch.setattr(os, "fsync", fsync)
     monkeypatch.setattr(registry, "save", save)
