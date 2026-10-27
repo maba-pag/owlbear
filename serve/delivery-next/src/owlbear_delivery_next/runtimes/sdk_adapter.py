@@ -411,8 +411,13 @@ async def _open(client: CopilotClient, st: _Step) -> CopilotSession | None:
         session = await _call(client.create_session(session_id=sid, **opts), "session create", START)
         st.session, st.created = session, True
         message, exposure = lessons.opening(role_of(cfg), cfg.memory, message, st.log)  # once per new conversation
-    if off := await own_instructions(session, cfg.worktree):
-        st.log(event="instructions-off", sources=off)
+    scope = await own_instructions(
+        session, cfg.worktree, user_instructions=cfg.user.instructions, home=preload.copilot_home()
+    )
+    if scope.off:
+        st.log(event="instructions-off", sources=scope.off)
+    if scope.user:  # the owner's own files, switched on (D-01M5YE4TRV2T08TW0FA2FGSDBK)
+        st.log(event="instructions-user", sources=scope.user)
     st.log(event="session", id=sid, resumed=resumed, resent=resent, runtime=st.run.runtime_pid)
     st.billed = await usage_read(session, cfg.model) if resumed else {}
     extra = {"attachments": list(cfg.attachments)} if cfg.attachments else {}  # e.g. visual screenshots

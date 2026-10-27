@@ -7,6 +7,7 @@ the owner's chat skill among them; a step sees only its own role's.
 
 from __future__ import annotations
 
+import os
 import sys
 from importlib.resources import files
 from importlib.util import find_spec
@@ -41,6 +42,7 @@ MEMORY = "owlbear-memory"  # the memory server's name; agent files name its tool
 MEMORY_MODULE = "owlbear_memory_mcp"  # run as the workspace's .vscode/mcp.json runs it
 MEMORY_DIR = "OWLBEAR_MEMORY_DIR"  # the memory server's store folder
 MEMORY_GLOBAL = "OWLBEAR_MEMORY_GLOBAL_DIR"  # the shared repository's Global memory, read beside it (TD-241)
+COPILOT_HOME = "COPILOT_HOME"  # the Copilot runtime's user folder, when not ~/.copilot
 
 
 def front_matter(doc: str) -> tuple[dict[str, Any], str]:
@@ -117,3 +119,9 @@ def folders(role: str, *, ui: bool = False, job: str = "", folder: Path | None =
 def missing(role: str, *, ui: bool = False, job: str = "", folder: Path | None = None) -> list[str]:
     """The role's skills Delivery cannot preload from *folder*: absent, or named otherwise in their front matter."""
     return [name for name in required(role, ui=ui, job=job) if not _named(name, folder)]
+
+
+def copilot_home() -> Path:
+    """The runtime's user folder, with the owner's instructions and skills: ``$COPILOT_HOME``, else ``~/.copilot``."""
+    return Path(found) if (found := os.environ.get(COPILOT_HOME)) else Path.home() / ".copilot"
+
