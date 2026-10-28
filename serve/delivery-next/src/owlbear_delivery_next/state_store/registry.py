@@ -289,7 +289,7 @@ def _git_images(work: Path) -> Iterator[Path]:
             ):
                 msg = f"{work}'s Git directory binding changed during validation: nothing was registered"
                 raise RegistryError(msg)
-    except (OSError, StoreError) as exc:
+    except (OSError, ValueError, StoreError) as exc:
         msg = f"{work}'s Git directory binding cannot be checked: nothing was registered: {exc}"
         raise RegistryError(msg) from exc
 

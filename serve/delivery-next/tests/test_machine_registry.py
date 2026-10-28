@@ -239,6 +239,54 @@ def test_registry_publication_refuses_a_git_mapping_changed_during_final_source_
     assert (machine.read_bytes() if machine.exists() else None) == before
 
 
+@pytest.mark.parametrize("action", ["register", "adopt"])
+@pytest.mark.parametrize("control", [".git", "commondir"])
+@pytest.mark.parametrize("malformed", [b"\xff\n", b"bad\x00path\n"], ids=["utf8", "nul"])
+def test_registry_refuses_malformed_git_references_at_final_publication(
+    tmp_path, monkeypatch, action, control, malformed
+):
+    work, gitdir = tmp_path / "work", tmp_path / "external-git"
+    subprocess.run(["git", "init", "-q", "--separate-git-dir", str(gitdir), str(work)], check=True)  # noqa: S603, S607
+    store = gitdir / project_home.STORE_DIR
+    store.mkdir()
+    (store / "clone-id").write_text("old\n" if action == "adopt" else "owned\n")
+    if action == "adopt":
+        old = registry.register(work)
+        (store / "clone-id").write_text("owned\n")
+    machine = local_home.root() / registry.MACHINE
+    before = machine.read_bytes() if machine.exists() else None
+    source_before = _owner_files((store,))
+    real_sync, real_git = os.fsync, registry._git  # noqa: SLF001 - mutate only after the actual Git probe
+    enabled, fired = [], []
+    path = work / ".git" if control == ".git" else gitdir / control
+    owner = b"gitdir: " + malformed if control == ".git" else malformed
+    probe = "--show-toplevel" if control == ".git" else "--absolute-git-dir"
+
+    def synced(fd):
+        real_sync(fd)
+        if not enabled and any(
+            os.path.samestat(temporary.stat(), os.fstat(fd)) for temporary in local_home.root().glob(".tmp-*.tmp")
+        ):
+            enabled.append(True)
+
+    def git(cwd, *args):
+        result = real_git(cwd, *args)
+        if enabled and not fired and probe in args:
+            fired.append(True)
+            path.write_bytes(owner)
+        return result
+
+    monkeypatch.setattr(os, "fsync", synced)
+    monkeypatch.setattr(registry, "_git", git)
+    call = (lambda: registry.register(work)) if action == "register" else (lambda: registry.adopt(old.id))
+    with pytest.raises(registry.RegistryError):
+        call()
+    assert fired == [True]
+    assert path.read_bytes() == owner
+    assert _owner_files((store,)) == source_before
+    assert (machine.read_bytes() if machine.exists() else None) == before
+
+
 @pytest.mark.parametrize("referent", [False, True], ids=["control-file", "symlink-referent"])
 def test_registry_publication_refuses_a_linked_worktree_common_dir_redirect_during_source_reads(
     tmp_path, monkeypatch, referent
