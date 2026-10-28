@@ -11,6 +11,7 @@ the [sharing guide](sharing-guide.md).
 | See what OwlBear installed on your Mac and in a project | [What OwlBear Installs](#what-owlbear-installs) |
 | Start, stop, pause, or check OwlBear | [Running OwlBear](#running-owlbear) |
 | Update OwlBear | [Upgrading OwlBear](#upgrading-owlbear) |
+| Back up what only this Mac holds | [Backing Up](#backing-up) |
 | Run a Change from idea to merge | [Delivery Workflow](#delivery-workflow) |
 | Remove OwlBear | [Uninstalling](#uninstalling) |
 | Add project-local agents, instructions, or servers | [Project-Specific Customization](#project-specific-customization) |
@@ -29,7 +30,8 @@ OwlBear keeps everything it runs and records under `~/.owlbear/` on your Mac:
 | `worktrees/` | The worktrees OwlBear's agents work in |
 | `design-pack/` | The pinned design pack Delivery's design checks use |
 | `machine.json` | The registered projects and the machine's settings |
-| `data.json` | Which shared settings repository OwlBear uses |
+| `data/` | The [shared settings repository](#the-shared-settings-repository)'s checkout, unless you set one elsewhere; updates and uninstalling never delete it |
+| `data.json`, `data.lock` | Which shared settings repository OwlBear uses and where it is cloned from, and the lock held while that changes |
 | `host.log` | The running host's log; `owlbear logs` shows its end |
 
 Only with your yes at `owlbear install`, OwlBear also adds:
@@ -64,14 +66,17 @@ project's Changes while that project's VS Code window is closed.
 | `owlbear start [--paused]` | Starts it in the background, running, or paused until you press **Resume** |
 | `owlbear stop` | Stops it; running steps finish on their own |
 | `owlbear restart [--paused]` | Stops it, then starts it running or paused as it was |
-| `owlbear status` | Its address, pause, projects, and login item |
+| `owlbear status` | Its address, pause, projects, shared settings repository, and login item |
 | `owlbear logs [-n N]` | The end of its log |
-| `owlbear doctor` | Checks Git, the GitHub CLI and its sign-in, uv, the Copilot CLI, whether the login item's saved PATH and `COPILOT_CLI_PATH` find them, and each project's readiness, with the fix |
+| `owlbear doctor` | Checks Git, the GitHub CLI and its sign-in, uv, the Copilot CLI, whether the login item's saved PATH and `COPILOT_CLI_PATH` find them, whether the shared settings repository can be used, and each project's readiness, with the fix |
 | `owlbear update` | Runs updates now |
 | `owlbear versions [--prepare]` | The version it runs and the one it would take next; `--prepare` installs and checks that one without switching |
 | `owlbear autostart on` or `off` | Starts OwlBear at login, or not; `on` saves this shell's PATH and `COPILOT_CLI_PATH` as they are now, so run it again after adding or removing a tool or Node version |
 | `owlbear setup --repo PATH` | Checks a project's readiness, confirms its profile and registers its chat server |
-| `owlbear data [PATH]` | Shows or sets the shared settings repository |
+| `owlbear data` | Shows the shared settings repository and what only this Mac's checkout of it holds |
+| `owlbear data URL` | Clones that repository into `~/.owlbear/data`, or adopts the checkout of it already in use or there |
+| `owlbear data PATH` | Uses a checkout you keep elsewhere instead of `~/.owlbear/data` |
+| `owlbear data --move [DEST]` | With OwlBear stopped, moves the checkout to DEST, by default `~/.owlbear/data`; see [Moving it](#moving-the-shared-settings-repository) |
 | `owlbear home` | Shows OwlBear's folder on this Mac |
 | `owlbear prepare --repo PATH` | Before a reboot: binds the clone's store id and records its boot session with a format fence. Nothing is copied or switched; refused while any legacy producer is unfenced, and refused with no changes when the clone holds no legacy store to move (its store is already external or new, or a move already completed) |
 | `owlbear finish --repo PATH` | After a reboot, from a different boot session: proves the preparation and moves the store to its folder. The clone's old store is kept in place as a non-authoritative source, not deleted |
@@ -142,10 +147,43 @@ earlier spend is read from the Changes, the Spotter's records and the runtime's 
 that were not reported count as unknown, never as zero, and spend whose day or agent is not known
 closely is said apart. Metrics never limit any work. Your own chats' spend is not recorded.
 
-A shared settings repository is a local clone of a Git repository you choose, set with
-`owlbear data PATH` and used after `owlbear restart`. When one is set, project settings, agent
-memory and the backlog live there, and OwlBear commits and pushes each save, so they follow you
-across clones and machines. Without one, they stay on this Mac in `~/.owlbear/projects/<id>/`.
+### The shared settings repository
+
+A shared settings repository is a Git repository you choose for project settings, agent memory and
+the backlog. When one is set, they live in its checkout on this Mac, and OwlBear commits and pushes
+each save, so they follow you across clones and machines. Without one, they stay on this Mac in
+`~/.owlbear/projects/<id>/`.
+
+- `owlbear data URL` clones it into `~/.owlbear/data`. A checkout already there, or the one this Mac
+  already uses, is adopted when it is a checkout of the same repository, and refused otherwise; it is
+  never cloned twice.
+- `owlbear data PATH` uses a checkout you keep elsewhere instead; that setting wins over
+  `~/.owlbear/data`.
+- Run `owlbear restart` after either. Each start adopts a checkout found at `~/.owlbear/data` when none
+  is set, and when a clone was asked for but did not finish, tries it again in the background every 10 minutes.
+- `owlbear status` names the checkout in use and whether it is the default or your own;
+  `owlbear status`, `owlbear doctor` and `owlbear data` say when it cannot be used, and why.
+- Updates, `owlbear uninstall` and removing an old version never delete it, wherever it is.
+
+#### Moving the shared settings repository
+
+`owlbear data --move [DEST]` moves the checkout this Mac uses to DEST, by default `~/.owlbear/data`,
+and points OwlBear at it. It keeps everything the checkout holds: files not committed, commits no
+remote has, stashes, and its linked worktrees elsewhere, which it repairs to point at the new place.
+It lists them before the move and checks them after it.
+
+1. Stop OwlBear with `owlbear stop`, and end the chats whose OwlBear servers use the repository
+   (memory, Delivery). The move refuses while any OwlBear process or a project's recorded runner
+   could still write it, and says which.
+2. Run `owlbear data --move`.
+
+   **Expected result:** `moving ...` with what only this Mac holds, then
+   `moved: the shared repository is now ...`.
+3. Run `owlbear start`.
+
+A move only renames, so DEST must be on the same disk and must not exist. If the repair of a linked
+worktree fails, the move stops with the reason and nothing reads either copy until you fix it and run
+`owlbear data`, which finishes the move.
 
 OwlBear's code ships no settings defaults: every model, effort, limit and switch comes from the
 global settings in the shared repository, this machine's, or the project's. A setting no layer
@@ -206,9 +244,31 @@ one, checks it, and switches only while nothing runs; it never moves to an older
 
 ---
 
+## Backing Up
+
+What only this Mac holds lives in `~/.owlbear/`:
+
+- The shared settings repository's checkout: `~/.owlbear/data`, or the folder `owlbear data` names.
+  Whatever it pushed is safe on its remote; `owlbear data` lists what only this checkout holds
+  (files not committed, commits no remote has, stashes, linked worktrees elsewhere), so back those up
+  with it.
+- `data.json` and `machine.json`: the shared repository's place and remote, and the registered projects.
+- `projects/<id>/`: each project's Delivery state, which no remote holds.
+
+Before you copy, stop everything that writes there. On the page, press **Pause Delivery**, then
+**Pause and stop when idle**, and wait until `owlbear status` reports `OwlBear is not running`; plain
+`owlbear stop` lets running agent steps go on writing. Then end the chats whose OwlBear tools
+(decisions, memories) use the shared repository.
+
+---
+
 ## Uninstalling
 
 ### Removing OwlBear from your Mac
+
+Before you start, run `owlbear data`. If it names a checkout inside `~/.owlbear` other than
+`~/.owlbear/data` (an older setting), move it there with `owlbear data --move` while OwlBear is still
+installed; step 4 keeps only `~/.owlbear/data`.
 
 1. On the page, press **Pause Delivery**, then **Pause and stop when idle**, and wait until
    `owlbear status` reports `OwlBear is not running`. Plain `owlbear stop` stops the host but lets
@@ -219,12 +279,21 @@ one, checks it, and switches only while nothing runs; it never moves to an older
    owlbear uninstall
    ```
 
-   **Expected result:** one `removed ...` line per link; the runtime and every project stay.
+   **Expected result:** one `removed ...` line per link, then `kept: your shared data at ...` with
+   what only that checkout holds; the runtime, every project and the shared data stay.
 3. In each project, delete the `owlbear-delivery` and `owlbear-memory` entries from `.mcp.json` and
    `chat.defaultToCopilotHarness` from `.vscode/settings.json` if setup wrote them, and their lines in
    `.git/info/exclude`.
-4. To remove everything, delete `~/.owlbear`. This deletes every project's Delivery state and
-   cannot be undone; your projects' own files, branches and pull requests stay.
+4. To remove everything else, delete everything in `~/.owlbear` except `data`:
+
+   ```shell
+   find ~/.owlbear -mindepth 1 -maxdepth 1 ! -name data -exec rm -rf {} +
+   ```
+
+   This deletes every project's Delivery state and cannot be undone; your projects' own files,
+   branches and pull requests stay. The shared settings repository's checkout in `~/.owlbear/data`
+   is kept on purpose, and one you set elsewhere is not touched. Delete it yourself only after backing
+   up what step 2 listed as only there.
 
 To stop serving only one project, use **Remove project** on its page. OwlBear forgets the project
 and deletes nothing; its clone keeps its id.

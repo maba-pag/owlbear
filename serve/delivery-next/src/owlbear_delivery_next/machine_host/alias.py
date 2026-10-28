@@ -11,18 +11,20 @@ from __future__ import annotations
 
 import contextlib
 import ctypes
+import logging
 import os
 import subprocess
 import sys
 from typing import TYPE_CHECKING
 
-from owlbear_delivery_next.local_system import local_home
+from owlbear_delivery_next.local_system import data_place, data_repo, local_home
 from owlbear_delivery_next.machine_host import versions
 from owlbear_delivery_next.state_store import registry
 
 if TYPE_CHECKING:
     from pathlib import Path
 
+_log = logging.getLogger(__name__)
 NEW = "runtime.new"
 RENAME_SWAP = 0x2  # macOS renamex_np: exchange the two names atomically (APFS; TD-262 Mac first)
 RENAME_EXCHANGE, AT_FDCWD = 0x2, -100  # Linux renameat2, where CI runs the same exchange
@@ -48,6 +50,8 @@ def activate(folder: Path, tag: str) -> None:
     """
     home = local_home.root()
     runtime, new = home / local_home.RUNTIME, home / NEW
+    if not runtime.is_symlink() and runtime.exists():
+        versions.keep_data(runtime)  # the legacy folder is put away under versions/, which never keeps the data
     new.unlink(missing_ok=True)
     new.symlink_to(folder)
     if runtime.is_symlink() or not runtime.exists():
@@ -67,14 +71,38 @@ def complete() -> None:
     if new.is_symlink():
         new.unlink()  # made, never renamed: the old version stays
     elif new.is_dir():
-        legacy = home / local_home.VERSIONS / f"legacy-{_commit(new)}"
-        legacy.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-        new.rename(legacy)
+        if why := _kept(new):
+            _log.warning("%s", why)  # left in place, the data with it; the host still starts
+        else:
+            legacy = home / local_home.VERSIONS / f"legacy-{_commit(new)}"
+            legacy.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+            new.rename(legacy)
     runtime = home / local_home.RUNTIME
     if runtime.is_symlink():
         with contextlib.suppress(OSError):
             (runtime.resolve() / versions.ACTIVATED).touch(exist_ok=True)
         _marked(runtime.resolve().name)
+
+
+def _kept(new: Path) -> str:
+    """Why the legacy folder at *new* stays, else '': it holds the shared data.
+
+    That includes data the pointer names through ``runtime``, the folder's name before the update.
+    """
+    try:
+        versions.keep_data(new)
+        named = data_place.protected()
+    except (versions.VersionError, data_repo.DataRepoError) as exc:
+        return str(exc)
+    runtime = local_home.root() / local_home.RUNTIME
+    for path in named:
+        if path.absolute() == runtime or runtime in path.absolute().parents:
+            inside, place = new / path.absolute().relative_to(runtime), data_place.default()
+            return (
+                f"{new} is not put away: it holds the shared data at {inside}, which the pointer names as {path}; "
+                f"move it to {place}, then run `owlbear data {place}`"
+            )
+    return ""
 
 
 def _commit(folder: Path) -> str:

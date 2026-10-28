@@ -156,7 +156,7 @@ Global memory in `OWLBEAR_MEMORY_GLOBAL_DIR`, read beside it and never written; 
 initialized workspace.
 
 Without them, as in a chat, the server finds the shared data repository as Delivery does: `OWLBEAR_DATA` when set
-(empty means none), else the machine's pointer `~/.owlbear/data.json`. The folder whose `repository` file holds the
+(empty means none), else the machine's pointer `~/.owlbear/data.json`, else `~/.owlbear/data` when it exists. The folder whose `repository` file holds the
 workspace's identity (its origin without scheme, user and `.git`) keeps its memory in `memory`, and the repository's
 own `memory` is Global memory (TD-72, TD-241). A pointer or claim that cannot tell the folder stops the server with
 the reason. A workspace no folder claims keeps its memory at `.owlbear/memory` in the initialized workspace.
