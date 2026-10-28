@@ -14,7 +14,7 @@ import secrets
 import stat
 from typing import TYPE_CHECKING
 
-from owlbear_delivery_next.state_store.database import StoreError
+from owlbear_delivery_next.state_store.database import FormatTooNewError, StoreError
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -24,6 +24,9 @@ DIR_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
 FILE_FLAGS = os.O_RDONLY | os.O_NOFOLLOW
 CHUNK = 1 << 20
 QUARANTINE = ".retired-"  # where an entry whose write or check failed is kept, under a name no one else chooses
+
+TreeImages = dict[str, os.stat_result]
+PayloadImages = dict[str, TreeImages]
 
 
 def open_dir(dfd: int, name: str) -> int:
@@ -76,7 +79,8 @@ def write_at(dfd: int, name: str, text: str, *, before_replace: Callable[[], Non
         kept = keep_entry(dfd, tmp)
         detail = exc.strerror if isinstance(exc, OSError) else str(exc)
         msg = f"{name} could not be written ({detail}): {kept} was kept; move it away, then start again"
-        raise StoreError(msg) from exc
+        error = FormatTooNewError if isinstance(exc, FormatTooNewError) else StoreError
+        raise error(msg) from exc
     os.fsync(dfd)
 
 
@@ -141,18 +145,50 @@ def open_file(dfd: int, name: str) -> int:
     return fd
 
 
+def _same_entry_image(before: os.stat_result, after: os.stat_result | None) -> bool:
+    if after is None:
+        return False
+    # A read may update atime; only mutation-sensitive metadata belongs in this witness.
+    stamp = before.st_mode, before.st_size, before.st_mtime_ns, before.st_ctime_ns
+    return os.path.samestat(before, after) and stamp == (
+        after.st_mode,
+        after.st_size,
+        after.st_mtime_ns,
+        after.st_ctime_ns,
+    )
+
+
+def _same_file_image(dfd: int, name: str, fd: int, before: os.stat_result) -> bool:
+    after = os.fstat(fd)
+    return _same_entry_image(before, after) and _same_entry_image(after, stat_at(dfd, name))
+
+
+def same_entry_image(before: os.stat_result, after: os.stat_result | None) -> bool:
+    """Compare two named entry observations with the same mutation-sensitive contract as held reads."""
+    return _same_entry_image(before, after)
+
+
+def same_image_at(dfd: int, name: str, before: os.stat_result | None) -> bool:
+    """Whether a named entry retains a previously observed image, without another content read."""
+    after = stat_at(dfd, name)
+    return after is None if before is None else _same_entry_image(before, after)
+
+
 def read_at(dfd: int, name: str) -> str | None:
-    """The text of regular file *name* under *dfd*, or None when it is absent; a link or other entry is an OSError."""
+    """The stable text of regular file *name*, or None only when absent at open; changed entries raise OSError."""
     try:
         fd = os.open(name, FILE_FLAGS | os.O_NONBLOCK, dir_fd=dfd)
     except FileNotFoundError:
         return None
     try:
-        if not stat.S_ISREG(os.fstat(fd).st_mode):
+        before = os.fstat(fd)
+        if not stat.S_ISREG(before.st_mode):
             raise OSError(errno.EINVAL, f"{name} is not a regular file")
         chunks = []
         while chunk := os.read(fd, 1 << 16):
             chunks.append(chunk)
+        if not _same_file_image(dfd, name, fd, before):
+            raise OSError(errno.ESTALE, f"{name} changed while it was read")
         return b"".join(chunks).decode()
     finally:
         os.close(fd)
@@ -162,7 +198,8 @@ def holds_text_at(dfd: int, name: str, text: str) -> bool:
     """Whether *name* under *dfd* is a regular file whose bytes are exactly *text*.
 
     Opened without following links and without blocking, so a FIFO or other special entry answers False at once;
-    the read stops one byte past *text*, so longer content is never read to the end.
+    the read stops one byte past *text*, so longer content is never read to the end. The opened image must remain
+    unchanged across that read, and the name must still identify that same regular file afterwards.
     """
     want = text.encode()
     try:
@@ -170,14 +207,25 @@ def holds_text_at(dfd: int, name: str, text: str) -> bool:
     except OSError:
         return False
     try:
-        if not stat.S_ISREG(os.fstat(fd).st_mode):
+        before = os.fstat(fd)
+        if not stat.S_ISREG(before.st_mode):
             return False
         got = b""
         while len(got) <= len(want) and (chunk := os.read(fd, len(want) + 1 - len(got))):
             got += chunk
-        return got == want
+        try:
+            return got == want and _same_file_image(dfd, name, fd, before)
+        except OSError:
+            return False
     finally:
         os.close(fd)
+
+
+def require_text_at(dfd: int, name: str, text: str) -> None:
+    """Refuse publication unless the named regular entry still holds the exact admitted image."""
+    if not holds_text_at(dfd, name, text):
+        msg = f"{name} changed or could not be verified: refusing publication"
+        raise StoreError(msg)
 
 
 def create_verified_at(dfd: int, name: str, text: str) -> None:
@@ -198,41 +246,102 @@ def ident(st: os.stat_result) -> list[int]:
     return [st.st_dev, st.st_ino]
 
 
-def digest_at(dfd: int, name: str) -> str:
-    """What entry *name* holds under *dfd*: names, kinds, link targets and bytes."""
+def digest_at(dfd: int, name: str, *, images: TreeImages | None = None) -> str:
+    """Hash an entry's names, kinds, link targets and bytes, retaining every descendant image until the end.
+
+    An optional caller-owned collector keeps those images for later metadata-only confirmation under the same root.
+    """
     digest = hashlib.sha256()
-    _feed(digest, dfd, name, ".")  # the entry's own name is not hashed: an entry moved aside keeps its digest
+    observed = {} if images is None else images
+    _feed(digest, dfd, name, ".", observed)  # the entry's own name is not hashed: a moved entry keeps its digest
+    confirm_at(dfd, name, observed)
     return digest.hexdigest()
 
 
-def entry_ok(dfd: int, name: str, digest: str) -> bool:
-    """Whether entry *name* under *dfd* still holds what *digest* recorded; a missing entry does not."""
+def entry_ok(dfd: int, name: str, digest: str, *, images: TreeImages | None = None) -> bool:
+    """Whether the current, stable entry still holds what *digest* recorded; a missing or changing one does not."""
     try:
-        return digest_at(dfd, name) == digest
+        return digest_at(dfd, name, images=images) == digest
     except FileNotFoundError:
         return False
+    except OSError as exc:
+        if exc.errno == errno.ESTALE:
+            return False
+        raise
 
 
-def _feed(digest: hashlib._Hash, dfd: int, name: str, rel: str) -> None:
+def manifest_ok(dfd: int, manifest: dict[str, str], *, images: PayloadImages | None = None) -> bool:
+    """Verify all recorded entries together, retaining their images through the complete manifest read."""
+    observed = {} if images is None else images
+    if not all(entry_ok(dfd, name, digest, images=observed.setdefault(name, {})) for name, digest in manifest.items()):
+        return False
+    try:
+        for name, tree in observed.items():
+            confirm_at(dfd, name, tree)
+    except FileNotFoundError:
+        return False
+    except OSError as exc:
+        if exc.errno == errno.ESTALE:
+            return False
+        raise
+    return True
+
+
+def _feed(digest: hashlib._Hash, dfd: int, name: str, rel: str, images: TreeImages) -> None:
     st = os.stat(name, dir_fd=dfd, follow_symlinks=False)
     digest.update(f"{rel}\0".encode())
     if stat.S_ISLNK(st.st_mode):
         digest.update(b"link\0" + os.readlink(name, dir_fd=dfd).encode())
+        if not _same_entry_image(st, stat_at(dfd, name)):
+            raise OSError(errno.ESTALE, f"{name} changed while it was hashed")
+        images[rel] = st
     elif stat.S_ISDIR(st.st_mode):
         digest.update(b"dir\0")
         fd = open_dir(dfd, name)
         try:
-            for child in sorted(os.listdir(fd)):  # noqa: PTH208 - listed by descriptor, not by path
-                _feed(digest, fd, child, f"{rel}/{child}")
+            before = os.fstat(fd)
+            images[rel] = before
+            for child in names_at(fd):
+                _feed(digest, fd, child, f"{rel}/{child}", images)
+            if not _same_file_image(dfd, name, fd, before):
+                raise OSError(errno.ESTALE, f"{name} changed while it was hashed")
         finally:
             os.close(fd)
     else:
         digest.update(b"file\0")
         fd = open_file(dfd, name)
-        with os.fdopen(fd, "rb") as fh:
-            for chunk in iter(lambda: fh.read(CHUNK), b""):
-                digest.update(chunk)
+        try:
+            with os.fdopen(fd, "rb", closefd=False) as fh:
+                before = os.fstat(fd)
+                images[rel] = before
+                for chunk in iter(lambda: fh.read(CHUNK), b""):
+                    digest.update(chunk)
+                if not _same_file_image(dfd, name, fd, before):
+                    raise OSError(errno.ESTALE, f"{name} changed while it was hashed")
+        finally:
+            os.close(fd)
     digest.update(b"\0")
+
+
+def confirm_at(dfd: int, name: str, images: TreeImages) -> None:
+    """Confirm a retained tree image without reading payload bytes, with only directory-depth descriptors held."""
+    _confirm(dfd, name, ".", images)
+
+
+def _confirm(dfd: int, name: str, rel: str, images: TreeImages) -> None:
+    before = images.get(rel)
+    if before is None or not same_image_at(dfd, name, before):
+        raise OSError(errno.ESTALE, f"{name} changed after it was hashed")
+    if not stat.S_ISDIR(before.st_mode):
+        return
+    fd = open_dir(dfd, name)
+    try:
+        for child in names_at(fd):
+            _confirm(fd, child, f"{rel}/{child}", images)
+        if not _same_file_image(dfd, name, fd, before):
+            raise OSError(errno.ESTALE, f"{name} changed after it was hashed")
+    finally:
+        os.close(fd)
 
 
 def sync(dfd: int, name: str) -> None:

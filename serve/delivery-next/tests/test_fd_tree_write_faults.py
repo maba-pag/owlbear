@@ -12,8 +12,214 @@ from owlbear_delivery_next.state_store.database import StoreError
 REAL_FSYNC = os.fsync
 
 
+@pytest.mark.parametrize("change", ["replace", "replace-same", "inplace"])
+@pytest.mark.parametrize("reader", ["predicate", "text"])
+def test_text_read_refuses_an_entry_changed_during_its_read(tmp_path, monkeypatch, change, reader):
+    entry = tmp_path / "receipt.json"
+    entry.write_text("owned\n")
+    before = entry.stat()
+    real_read = os.read
+    fired = []
+    owner = "owned\n" if change == "replace-same" else "other\n"
+
+    def read(fd, count):
+        data = real_read(fd, count)
+        if data and not fired and os.path.samestat(os.fstat(fd), before):
+            fired.append(True)
+            if change == "inplace":
+                entry.write_text(owner)
+            else:
+                replacement = tmp_path / "owner-replacement"
+                replacement.write_text(owner)
+                replacement.replace(entry)
+        return data
+
+    monkeypatch.setattr(os, "read", read)
+    dfd = os.open(tmp_path, fd_tree.DIR_FLAGS)
+    try:
+        if reader == "predicate":
+            assert not fd_tree.holds_text_at(dfd, entry.name, "owned\n")
+        else:
+            with pytest.raises(OSError, match=rf"\b{errno.ESTALE}\b") as refused:
+                fd_tree.read_at(dfd, entry.name)
+            assert refused.value.errno == errno.ESTALE
+    finally:
+        os.close(dfd)
+    assert fired == [True]
+    assert entry.read_text() == owner
+
+
 class HandoverAbort(BaseException):
     """A handover abort outside Exception must still close the writer's raw descriptor."""
+
+
+class DigestReadSeam:
+    def __init__(self, folder, kind, dfd):
+        self.entry, self.retained = folder / "payload", folder / "retained"
+        self.kind, self.dfd, self.fired = kind, dfd, []
+        self.real_fdopen, self.real_listdir, self.real_readlink = os.fdopen, os.listdir, os.readlink
+        if kind == "directory":
+            self.entry.mkdir()
+            (self.entry / "child").write_text("owned\n")
+        elif kind == "link":
+            self.entry.symlink_to("owned-target")
+        else:
+            self.entry.write_text("owned\n")
+        self.before = self.entry.lstat()
+
+    def replace(self):
+        if self.fired:
+            return
+        self.fired.append(True)
+        self.entry.rename(self.retained)
+        if self.kind == "directory":
+            self.entry.mkdir()
+            (self.entry / "child").write_text("other\n")
+        elif self.kind == "link":
+            self.entry.symlink_to("other-target")
+        else:
+            self.entry.write_text("other\n")
+
+    class Reader:
+        def __init__(self, stream, changed):
+            self.stream, self.changed = stream, changed
+
+        def __getattr__(self, name):
+            return getattr(self.stream, name)
+
+        def __enter__(self):
+            self.stream.__enter__()
+            return self
+
+        def __exit__(self, *args):
+            return self.stream.__exit__(*args)
+
+        def read(self, size):
+            data = self.stream.read(size)
+            if data:
+                self.changed()
+            return data
+
+    def opened(self, fd, *args, **kwargs):
+        stream = self.real_fdopen(fd, *args, **kwargs)
+        if self.kind == "file" and os.path.samestat(os.fstat(fd), self.before):
+            return self.Reader(stream, self.replace)
+        return stream
+
+    def listed(self, fd):
+        children = self.real_listdir(fd)
+        if self.kind == "directory" and isinstance(fd, int) and os.path.samestat(os.fstat(fd), self.before):
+            self.replace()
+        return children
+
+    def linked(self, name, **kwargs):
+        target = self.real_readlink(name, **kwargs)
+        if self.kind == "link" and name == self.entry.name and kwargs.get("dir_fd") == self.dfd:
+            self.replace()
+        return target
+
+
+@pytest.mark.parametrize("kind", ["file", "directory", "link"])
+def test_digest_verification_refuses_an_entry_replaced_during_its_read(tmp_path, monkeypatch, kind):
+    dfd = os.open(tmp_path, fd_tree.DIR_FLAGS)
+    try:
+        seam = DigestReadSeam(tmp_path, kind, dfd)
+        digest = fd_tree.digest_at(dfd, seam.entry.name)
+        assert fd_tree.entry_ok(dfd, seam.entry.name, digest)
+        monkeypatch.setattr(os, "fdopen", seam.opened)
+        monkeypatch.setattr(os, "listdir", seam.listed)
+        monkeypatch.setattr(os, "readlink", seam.linked)
+        assert not fd_tree.entry_ok(dfd, seam.entry.name, digest)
+    finally:
+        os.close(dfd)
+    assert seam.fired == [True]
+    assert seam.retained.is_symlink() if kind == "link" else seam.retained.exists()
+
+
+@pytest.mark.parametrize(
+    ("kind", "nested"),
+    [("file", False), ("file", True), ("directory", True), ("link", True), ("directory", False), ("link", False)],
+)
+def test_digest_retains_earlier_descendant_images_during_later_reads(tmp_path, monkeypatch, kind, nested):
+    root = tmp_path / "tree"
+    parent = root / "a" if nested else root
+    parent.mkdir(parents=True)
+    later = root / "z"
+    later.write_text("later\n")
+    before = later.stat()
+    dfd = os.open(tmp_path, fd_tree.DIR_FLAGS)
+    try:
+        seam = DigestReadSeam(parent, kind, dfd)
+        digest = fd_tree.digest_at(dfd, root.name)
+        assert fd_tree.entry_ok(dfd, root.name, digest)
+
+        def change():
+            if seam.fired:
+                return
+            if kind == "file":
+                seam.fired.append(True)
+                seam.entry.write_text("owner-edited\n")
+            else:
+                seam.replace()
+
+        def opened(fd, *args, **kwargs):
+            stream = seam.real_fdopen(fd, *args, **kwargs)
+            return seam.Reader(stream, change) if os.path.samestat(os.fstat(fd), before) else stream
+
+        monkeypatch.setattr(os, "fdopen", opened)
+        assert not fd_tree.entry_ok(dfd, root.name, digest)
+    finally:
+        os.close(dfd)
+    assert seam.fired == [True]
+    assert later.read_text() == "later\n"
+
+
+def test_collected_digest_images_can_be_confirmed_after_later_validation(tmp_path):
+    root = tmp_path / "tree"
+    root.mkdir()
+    entry = root / "a"
+    entry.write_text("owned\n")
+    images = {}
+    dfd = os.open(tmp_path, fd_tree.DIR_FLAGS)
+    try:
+        digest = fd_tree.digest_at(dfd, root.name, images=images)
+        assert fd_tree.entry_ok(dfd, root.name, digest)
+        fd_tree.confirm_at(dfd, root.name, images)
+        entry.write_text("owner-edited\n")
+        with pytest.raises(OSError, match=rf"\b{errno.ESTALE}\b") as refused:
+            fd_tree.confirm_at(dfd, root.name, images)
+        assert refused.value.errno == errno.ESTALE
+    finally:
+        os.close(dfd)
+    assert entry.read_text() == "owner-edited\n"
+
+
+def test_manifest_verification_retains_earlier_root_entry_images(tmp_path, monkeypatch):
+    first, later = tmp_path / "a", tmp_path / "b"
+    first.write_text("owned\n")
+    later.write_text("later\n")
+    before, real_fdopen, fired = later.stat(), os.fdopen, []
+    dfd = os.open(tmp_path, fd_tree.DIR_FLAGS)
+    try:
+        manifest = {name: fd_tree.digest_at(dfd, name) for name in ("a", "b")}
+        assert fd_tree.manifest_ok(dfd, manifest)
+
+        def change():
+            if not fired:
+                fired.append(True)
+                first.write_text("owner-edited\n")
+
+        def opened(fd, *args, **kwargs):
+            stream = real_fdopen(fd, *args, **kwargs)
+            return DigestReadSeam.Reader(stream, change) if os.path.samestat(os.fstat(fd), before) else stream
+
+        monkeypatch.setattr(os, "fdopen", opened)
+        assert not fd_tree.manifest_ok(dfd, manifest)
+    finally:
+        os.close(dfd)
+    assert fired == [True]
+    assert first.read_text() == "owner-edited\n"
+    assert later.read_text() == "later\n"
 
 
 @pytest.mark.parametrize(

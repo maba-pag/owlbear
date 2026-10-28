@@ -13,6 +13,7 @@ from owlbear_delivery_next.state_store.database import StoreError
 from owlbear_delivery_next.state_store.offline_proof import same_folder
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from pathlib import Path
 
 
@@ -30,13 +31,21 @@ def retained_target(folder: Path, pid: str) -> Path | None:
         msg = f"{folder} holds a link or is not a folder: nothing was checked"
         raise StoreError(msg) from exc
     try:
-        rec = project_move.record_at(folder, fd)
+        rec, image = project_move.record_image(folder, fd)
         if rec is not None:
+            _require_id(folder, fd, pid)
             if rec["phase"] != project_move.SWITCHED or rec["target"] != str(target):
                 msg = f"{folder} was not switched to {target}: its receipt names another store; nothing was changed"
                 raise StoreError(msg)
             project_switch.prepared_prior(fd)
-            _proven(target, rec)
+
+            def validate() -> None:
+                admitted = project_switch.source_state((folder, fd), pid, rec)
+                if image is None or admitted[2] != image:
+                    msg = f"{folder}'s move receipt changed during validation: nothing was changed"
+                    raise StoreError(msg)
+
+            _proven(target, rec, validate)
         if not same_folder(folder, fd):
             msg = f"{folder} no longer names the retained source that was checked: nothing was changed"
             raise StoreError(msg)
@@ -45,6 +54,12 @@ def retained_target(folder: Path, pid: str) -> Path | None:
         os.close(fd)
 
 
-def _proven(target: Path, rec: dict) -> None:
-    """Refuse unless *target* is the folder the receipt recorded, holding its proof and format, nothing quarantined."""
-    project_switch.require_switched(target, rec)
+def _require_id(folder: Path, folder_fd: int, pid: str) -> None:
+    if project_switch.clone_id_at(folder, folder_fd) != pid:
+        msg = f"{folder}'s clone id does not match project {pid}: nothing was changed"
+        raise StoreError(msg)
+
+
+def _proven(target: Path, rec: dict, validate: Callable[[], None]) -> None:
+    """Hold the proven target through source validation, with no intervening authority-image change."""
+    project_switch.require_switched(target, rec, validate=validate)

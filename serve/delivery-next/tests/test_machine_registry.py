@@ -1,13 +1,16 @@
+import json
 import os
+import shutil
 import subprocess
 from pathlib import Path
 
 import pytest
 
+from owlbear_delivery_next.commands import cli
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.machine_host import environment
-from owlbear_delivery_next.state_store import registry
-from owlbear_delivery_next.state_store.database import STORE_FORMAT
+from owlbear_delivery_next.state_store import fd_tree, offline_protocol, project_home, project_move, registry
+from owlbear_delivery_next.state_store.database import MARKER, STORE_FORMAT
 from owlbear_delivery_next.state_store.registry import RegistryError
 
 
@@ -143,3 +146,362 @@ def test_paths_outside_owlbear_name_the_runtime_alias_so_a_later_version_serves_
     assert local_home.stable(version / "python") == alias / "python"
     assert local_home.stable(alias / "owlbear") == alias / "owlbear"
     assert local_home.stable(elsewhere) == elsewhere  # a developer checkout keeps its own path
+
+
+def _change_registration_owner(store, damage):
+    if damage == "work-path":
+        work = store.parent.parent
+        moved = work.with_name("owner-work")
+        work.rename(moved)
+        work.mkdir()
+        (work / "owner").write_text("owner's replacement folder\n")
+        return work, moved
+    if damage == "git-common-dir":
+        work = store.parent.parent
+        other = clone(work.with_name("owner-other"))
+        other_store = project_home.clone_dir(other)
+        other_store.mkdir()
+        (other_store / "clone-id").write_text("owned\n")
+        store.parent.rename(work / "owner-git")
+        (work / ".git").write_text(f"gitdir: {other / '.git'}\n")
+        return work, other
+    if damage == "missing-id":
+        (store / "clone-id").unlink()
+    elif damage == "future-format":
+        (store / MARKER).write_text("1000\n")
+    else:
+        (store / "clone-id").write_text("foreign-owner\n")
+        if damage == "clone-id-and-deleted-config":
+            (store / "config.json").unlink()
+    return (store,)
+
+
+def _owner_files(folders):
+    return {p: p.read_bytes() for folder in folders for p in folder.rglob("*") if p.is_file()}
+
+
+@pytest.mark.parametrize("action", ["register", "adopt"])
+@pytest.mark.parametrize("field", [project_move.CLONE_ID, project_move.MOVE_RECORD])
+@pytest.mark.parametrize("alias", [False, True], ids=["gitfile", "directory-alias"])
+def test_registry_publication_refuses_a_git_mapping_changed_during_final_source_reads(
+    tmp_path, monkeypatch, action, field, alias
+):
+    work, other = tmp_path / "work", tmp_path / "other"
+    first, second = tmp_path / "first-git", tmp_path / "second-git"
+    for path, gitdir in ((work, first), (other, second)):
+        subprocess.run(["git", "init", "-q", "--separate-git-dir", str(gitdir), str(path)], check=True)  # noqa: S603, S607
+    link = tmp_path / "git-alias"
+    if alias:
+        link.symlink_to(first, target_is_directory=True)
+        (work / ".git").write_text(f"gitdir: {link}\n")
+    store = first / project_home.STORE_DIR
+    store.mkdir()
+    (store / MARKER).write_text("7\n")
+    (store / "clone-id").write_text("old\n" if action == "adopt" else "owned\n")
+    assert registry.canonical(work) == (work.resolve(), store.resolve())
+    if action == "adopt":
+        old = registry.register(work)
+        (store / "clone-id").write_text("owned\n")
+    source_before = _owner_files((store,))
+    machine = local_home.root() / registry.MACHINE
+    before = machine.read_bytes() if machine.exists() else None
+    real_sync, real_read = os.fsync, fd_tree.read_at
+    enabled, fired = [], []
+    mapping = f"gitdir: {second}\n"
+
+    def synced(fd):
+        real_sync(fd)
+        if not enabled and any(
+            os.path.samestat(temporary.stat(), os.fstat(fd)) for temporary in local_home.root().glob(".tmp-*.tmp")
+        ):
+            enabled.append(True)
+
+    def read(dfd, name):
+        value = real_read(dfd, name)
+        if enabled and not fired and name == field:
+            fired.append(True)
+            if alias:
+                link.unlink()
+                link.symlink_to(second, target_is_directory=True)
+            else:
+                (work / ".git").write_text(mapping)
+        return value
+
+    monkeypatch.setattr(os, "fsync", synced)
+    monkeypatch.setattr(fd_tree, "read_at", read)
+    call = (lambda: registry.register(work)) if action == "register" else (lambda: registry.adopt(old.id))
+    with pytest.raises(registry.RegistryError):
+        call()
+    assert fired == [True]
+    assert (work / ".git").read_text() == (f"gitdir: {link}\n" if alias else mapping)
+    assert project_home.clone_dir(work) == second / project_home.STORE_DIR
+    assert _owner_files((store,)) == source_before
+    assert (machine.read_bytes() if machine.exists() else None) == before
+
+
+@pytest.mark.parametrize("action", ["register", "adopt"])
+@pytest.mark.parametrize("control", [".git", "commondir"])
+@pytest.mark.parametrize("malformed", [b"\xff\n", b"bad\x00path\n"], ids=["utf8", "nul"])
+def test_registry_refuses_malformed_git_references_at_final_publication(
+    tmp_path, monkeypatch, action, control, malformed
+):
+    work, gitdir = tmp_path / "work", tmp_path / "external-git"
+    subprocess.run(["git", "init", "-q", "--separate-git-dir", str(gitdir), str(work)], check=True)  # noqa: S603, S607
+    store = gitdir / project_home.STORE_DIR
+    store.mkdir()
+    (store / "clone-id").write_text("old\n" if action == "adopt" else "owned\n")
+    if action == "adopt":
+        old = registry.register(work)
+        (store / "clone-id").write_text("owned\n")
+    machine = local_home.root() / registry.MACHINE
+    before = machine.read_bytes() if machine.exists() else None
+    source_before = _owner_files((store,))
+    real_sync, real_git = os.fsync, registry._git  # noqa: SLF001 - mutate only after the actual Git probe
+    enabled, fired = [], []
+    path = work / ".git" if control == ".git" else gitdir / control
+    owner = b"gitdir: " + malformed if control == ".git" else malformed
+    probe = "--show-toplevel" if control == ".git" else "--absolute-git-dir"
+
+    def synced(fd):
+        real_sync(fd)
+        if not enabled and any(
+            os.path.samestat(temporary.stat(), os.fstat(fd)) for temporary in local_home.root().glob(".tmp-*.tmp")
+        ):
+            enabled.append(True)
+
+    def git(cwd, *args):
+        result = real_git(cwd, *args)
+        if enabled and not fired and probe in args:
+            fired.append(True)
+            path.write_bytes(owner)
+        return result
+
+    monkeypatch.setattr(os, "fsync", synced)
+    monkeypatch.setattr(registry, "_git", git)
+    call = (lambda: registry.register(work)) if action == "register" else (lambda: registry.adopt(old.id))
+    with pytest.raises(registry.RegistryError):
+        call()
+    assert fired == [True]
+    assert path.read_bytes() == owner
+    assert _owner_files((store,)) == source_before
+    assert (machine.read_bytes() if machine.exists() else None) == before
+
+
+@pytest.mark.parametrize("referent", [False, True], ids=["control-file", "symlink-referent"])
+def test_registry_publication_refuses_a_linked_worktree_common_dir_redirect_during_source_reads(
+    tmp_path, monkeypatch, referent
+):
+    first, second = clone(tmp_path / "first"), clone(tmp_path / "second")
+    git = shutil.which("git")
+    assert git is not None
+    subprocess.run(  # noqa: S603 - synthetic repository and identity
+        [
+            git,
+            "-C",
+            str(first),
+            "-c",
+            "user.name=fixture",
+            "-c",
+            "user.email=fixture@example.invalid",
+            "commit",
+            "-q",
+            "--allow-empty",
+            "-m",
+            "fixture",
+        ],
+        check=True,
+    )
+    work = tmp_path / "linked"
+    subprocess.run([git, "-C", str(first), "worktree", "add", "-q", "-b", "linked", str(work)], check=True)  # noqa: S603
+    gitdir = registry._git(work, "rev-parse", "--absolute-git-dir")  # noqa: SLF001 - real linked-worktree metadata
+    store = project_home.clone_dir(work)
+    control = gitdir / "commondir"
+    if referent:
+        pointer = tmp_path / "common-pointer"
+        pointer.write_bytes(control.read_bytes())
+        control.unlink()
+        control.symlink_to(pointer)
+        control = pointer
+    store.mkdir()
+    (store / MARKER).write_text("7\n")
+    (store / "clone-id").write_text("owned\n")
+    assert registry.canonical(work) == (work.resolve(), store.resolve())
+    machine = local_home.root() / registry.MACHINE
+    before = machine.read_bytes() if machine.exists() else None
+    real_sync, real_read = os.fsync, fd_tree.read_at
+    enabled, fired = [], []
+    mapping = f"{second / '.git'}\n"
+
+    def synced(fd):
+        real_sync(fd)
+        if not enabled and any(
+            os.path.samestat(temporary.stat(), os.fstat(fd)) for temporary in local_home.root().glob(".tmp-*.tmp")
+        ):
+            enabled.append(True)
+
+    def read(dfd, name):
+        value = real_read(dfd, name)
+        if enabled and not fired and name == project_move.MOVE_RECORD:
+            fired.append(True)
+            control.write_text(mapping)
+        return value
+
+    monkeypatch.setattr(os, "fsync", synced)
+    monkeypatch.setattr(fd_tree, "read_at", read)
+    with pytest.raises(registry.RegistryError):
+        registry.register(work)
+    assert fired == [True]
+    assert control.read_text() == mapping
+    assert not referent or (gitdir / "commondir").is_symlink()
+    assert project_home.clone_dir(work) == second / ".git" / project_home.STORE_DIR
+    assert (machine.read_bytes() if machine.exists() else None) == before
+
+
+@pytest.mark.parametrize("action", ["register", "adopt"])
+@pytest.mark.parametrize("field", [project_move.CLONE_ID, project_move.MOVE_RECORD])
+def test_registry_publication_keeps_a_newer_ordinary_marker_installed_during_later_reads(
+    tmp_path, monkeypatch, action, field
+):
+    work = clone(tmp_path / "work")
+    store = project_home.clone_dir(work)
+    store.mkdir()
+    (store / MARKER).write_text("7\n")
+    (store / "clone-id").write_text("old\n" if action == "adopt" else "owned\n")
+    if action == "adopt":
+        old = registry.register(work)
+        (store / "clone-id").write_text("owned\n")
+    machine = local_home.root() / registry.MACHINE
+    before = machine.read_bytes() if machine.exists() else None
+    real_sync, real_read = os.fsync, fd_tree.read_at
+    enabled, fired = [], []
+
+    def synced(fd):
+        real_sync(fd)
+        if not enabled and any(
+            os.path.samestat(temporary.stat(), os.fstat(fd)) for temporary in local_home.root().glob(".tmp-*.tmp")
+        ):
+            enabled.append(True)
+
+    def read(dfd, name):
+        text = real_read(dfd, name)
+        if enabled and not fired and name == field:
+            fired.append(True)
+            (store / MARKER).write_text("1000\n")
+        return text
+
+    monkeypatch.setattr(os, "fsync", synced)
+    monkeypatch.setattr(fd_tree, "read_at", read)
+    call = (lambda: registry.register(work)) if action == "register" else (lambda: registry.adopt(old.id))
+    with pytest.raises(registry.RegistryError):
+        call()
+    assert fired == [True]
+    assert (store / MARKER).read_text() == "1000\n"
+    assert (machine.read_bytes() if machine.exists() else None) == before
+
+
+@pytest.mark.parametrize("action", ["register", "adopt"])
+def test_registry_publication_rechecks_id_after_an_absent_receipt_lookup(tmp_path, monkeypatch, action):
+    work = clone(tmp_path / "work")
+    store = project_home.clone_dir(work)
+    store.mkdir()
+    (store / "clone-id").write_text("old\n" if action == "adopt" else "owned\n")
+    if action == "adopt":
+        old = registry.register(work)
+        (store / "clone-id").write_text("owned\n")
+    machine = local_home.root() / registry.MACHINE
+    before = machine.read_bytes() if machine.exists() else None
+    real_sync, real_read = os.fsync, fd_tree.read_at
+    enabled, fired = [], []
+
+    def synced(fd):
+        real_sync(fd)
+        if not enabled and any(
+            os.path.samestat(temporary.stat(), os.fstat(fd)) for temporary in local_home.root().glob(".tmp-*.tmp")
+        ):
+            enabled.append(True)
+
+    def read(dfd, name):
+        text = real_read(dfd, name)
+        if enabled and not fired and name == project_move.MOVE_RECORD:
+            fired.append(True)
+            replacement = store / "owner-id"
+            replacement.write_text("foreign-owner\n")
+            replacement.replace(store / "clone-id")
+        return text
+
+    monkeypatch.setattr(os, "fsync", synced)
+    monkeypatch.setattr(fd_tree, "read_at", read)
+    call = (lambda: registry.register(work)) if action == "register" else (lambda: registry.adopt(old.id))
+    failure = None
+    try:
+        call()
+    except RegistryError as exc:
+        failure = exc
+    assert enabled == fired == [True]
+    assert isinstance(failure, RegistryError)
+    assert (store / "clone-id").read_text() == "foreign-owner\n"
+    assert (machine.read_bytes() if machine.exists() else None) == before
+    assert registry.load().projects == ([old] if action == "adopt" else [])
+
+
+@pytest.mark.usefixtures("current_binding")
+@pytest.mark.parametrize("switched", [False, True], ids=["ordinary", "real-prepare-finish"])
+@pytest.mark.parametrize("action", ["register", "adopt"])
+@pytest.mark.parametrize(
+    "damage", ["clone-id", "missing-id", "future-format", "clone-id-and-deleted-config", "work-path", "git-common-dir"]
+)
+def test_registration_rechecks_the_admitted_clone_after_the_registry_temporary_is_synced(
+    tmp_path, monkeypatch, switched, action, damage
+):
+    home = local_home.root()
+    work = clone(tmp_path / "work")
+    store = project_home.clone_dir(work)
+    store.mkdir()
+    (store / "clone-id").write_text("owned\n")
+    (store / MARKER).write_text("7\n")
+    (store / "config.json").write_text(json.dumps({"format": 1, "widths": [1600]}))
+    if action == "adopt":
+        (store / "clone-id").write_text("old\n")
+        old = registry.register(work)
+        (store / "clone-id").write_text("owned\n")
+    if switched:
+        monkeypatch.setattr(offline_protocol, "boot_session", lambda: "AAAAAAAA-0000-4000-8000-000000000001")
+        assert cli.main(["--repo", str(work), "prepare"]) == 0
+        monkeypatch.setattr(offline_protocol, "boot_session", lambda: "BBBBBBBB-0000-4000-8000-000000000002")
+        assert cli.main(["--repo", str(work), "finish"]) == 0
+    assert registry.canonical(work) == (work, store)
+    machine = home / registry.MACHINE
+    before = machine.read_bytes() if machine.exists() else None
+    real_fsync, fired = os.fsync, []
+    owner_before = {}
+    owner_folders = []
+
+    def owner_changes_id(fd):
+        real_fsync(fd)
+        if fired:
+            return
+        for temporary in home.glob(".tmp-*.tmp"):
+            if os.path.samestat(temporary.stat(), os.fstat(fd)):
+                pending = json.loads(temporary.read_text())
+                assert pending["projects"][-1]["id"] == "owned"
+                fired.append(True)
+                owner_folders.extend(_change_registration_owner(store, damage))
+                owner_before.update(_owner_files(owner_folders))
+
+    monkeypatch.setattr(os, "fsync", owner_changes_id)
+    error, returned = None, None
+    try:
+        returned = registry.register(work) if action == "register" else registry.adopt(old.id)
+    except RegistryError as exc:
+        error = exc
+
+    assert fired == [True], "the real machine.json temporary fsync was not reached"
+    assert _owner_files(owner_folders) == owner_before
+    assert (machine.read_bytes() if machine.exists() else None) == before, (
+        f"{action} published a stale registration: returned {returned!r}, error {error!r}"
+    )
+    assert isinstance(error, RegistryError), f"{action} returned {returned!r} instead of refusing"
+    assert "nothing was registered" in str(error)
+    assert not list(home.glob(".tmp-*.tmp"))
+    if action == "adopt":
+        assert registry.load().projects == [old]

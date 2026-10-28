@@ -535,22 +535,22 @@ def test_public_finish_syncs_the_marker_and_directory_before_switched(prepared_r
     events = _observe_syncs(monkeypatch, target)
     switches = []
 
-    def ensure(tfd, previous):
+    def ensure(tfd, previous, **kwargs):
         if not owner and when == "existing":
             (target / MARKER).write_text("7\n")
             owner.extend(fd_tree.ident((target / MARKER).stat()))
-        real_ensure(tfd, previous)
+        real_ensure(tfd, previous, **kwargs)
 
     if when == "collision":
         owner = _owner_after_absence(monkeypatch, target, b"7\n")
 
-    def save(folder, folder_fd, rec):
+    def save(folder, folder_fd, rec, **kwargs):
         if rec["phase"] == project_move.SWITCHED:
             _assert_durable(events, target)
             if owner:
                 assert fd_tree.ident((target / MARKER).stat()) == owner
             switches.append(rec["phase"])
-        real_save(folder, folder_fd, rec)
+        real_save(folder, folder_fd, rec, **kwargs)
 
     monkeypatch.setattr(format_marker, "ensure_target", ensure)
     monkeypatch.setattr(project_move, "_save", save)

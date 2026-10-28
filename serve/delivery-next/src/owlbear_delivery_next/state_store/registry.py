@@ -20,13 +20,15 @@ from pydantic import ConfigDict, Field, TypeAdapter, ValidationError, model_vali
 
 from owlbear_delivery_next.change_contracts.models import Record
 from owlbear_delivery_next.local_system import local_home
-from owlbear_delivery_next.local_system.storage_io import atomic_write, open_lock, read_regular
+from owlbear_delivery_next.local_system.storage_io import atomic_write, open_lock
 from owlbear_delivery_next.settings.config import MachineValues
-from owlbear_delivery_next.state_store import project_home, project_move, switched_authority
-from owlbear_delivery_next.state_store.database import STORE_FORMAT, StoreError
+from owlbear_delivery_next.state_store import fd_tree, project_home, project_move, switched_authority
+from owlbear_delivery_next.state_store.database import MARKER, STORE_FORMAT, StoreError
+from owlbear_delivery_next.state_store.git_images import GitImages
+from owlbear_delivery_next.state_store.offline_proof import same_folder
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Callable, Iterator
 
 MACHINE, LOCK = project_home.MACHINE, "machine.lock"
 MACHINE_FORMAT = 8  # 2: the machine's own settings (TD-243, TD-288, TD-300); 3: its sessions (TD-336); 4: `active`;
@@ -151,11 +153,11 @@ def load() -> Machine:
     return machine
 
 
-def save(machine: Machine) -> None:
-    """Write the registry atomically in this format, readable only by the owner; call it under ``locked()``."""
+def save(machine: Machine, *, before_replace: Callable[[], None] | None = None) -> None:
+    """Write under ``locked()``, owner-readable, optionally rechecking authority after the temporary is synced."""
     path = _home() / MACHINE
     machine.format = MACHINE_FORMAT
-    atomic_write(path, machine.model_dump_json(indent=2) + "\n")
+    atomic_write(path, machine.model_dump_json(indent=2) + "\n", before_replace=before_replace)
     path.chmod(0o600)
 
 
@@ -200,38 +202,133 @@ def store_of(work: Path) -> Path:
 
 def canonical(path: Path) -> tuple[Path, Path]:
     """The clone's work tree and store, as real paths; refused unless it is the owner's git work tree."""
+    work, store, _ = _canonical(path)
+    return work, store
+
+
+def _marker_at(store: Path, folder_fd: int | None) -> int:
+    if folder_fd is None:
+        return 0
+    try:
+        text = fd_tree.read_at(folder_fd, MARKER)
+        return int(text) if text is not None else 0
+    except (OSError, UnicodeError, ValueError) as exc:
+        msg = f"{store / MARKER} is unreadable"
+        raise RegistryError(msg) from exc
+
+
+@contextlib.contextmanager
+def _source_images(store: Path) -> Iterator[int | None]:
+    """Keep canonical source images stable through all later validation reads, without creating a store."""
+    folder_fd = None
+    try:
+        folder_fd = project_move.pin(store)
+        images = (
+            {
+                name: fd_tree.stat_at(folder_fd, name)
+                for name in (MARKER, project_move.CLONE_ID, project_move.MOVE_RECORD, ".")
+            }
+            if folder_fd is not None
+            else {}
+        )
+        yield folder_fd
+        if folder_fd is None:
+            try:
+                store.lstat()
+            except FileNotFoundError:
+                return
+            msg = f"{store} appeared during canonical validation: nothing was registered"
+            raise RegistryError(msg)
+        if not all(fd_tree.same_image_at(folder_fd, name, before) for name, before in images.items()):
+            found = _marker_at(store, folder_fd)
+            if found > STORE_FORMAT and found != int(project_move.FENCE):
+                msg = f"{store} has format {found}, newer than {STORE_FORMAT}: nothing was registered"
+                raise RegistryError(msg)
+            msg = f"{store}'s source witnesses changed during canonical validation: nothing was registered"
+            raise RegistryError(msg)
+        if not same_folder(store, folder_fd):
+            msg = f"{store} no longer names the source being validated: nothing was registered"
+            raise RegistryError(msg)
+    except (OSError, StoreError) as exc:
+        msg = f"{store}'s source witnesses cannot be checked: nothing was registered: {exc}"
+        raise RegistryError(msg) from exc
+    finally:
+        if folder_fd is not None:
+            os.close(folder_fd)
+
+
+@contextlib.contextmanager
+def _git_images(work: Path) -> Iterator[Path]:
+    """Keep local worktree/Git-directory binding controls stable through later source validation reads."""
+    try:
+        with contextlib.ExitStack() as held:
+            work_fd = os.open(work, fd_tree.DIR_FLAGS)
+            held.callback(os.close, work_fd)
+            references = GitImages()
+            references.reference(work, ".git", "gitdir: ")
+            gitdir = _git(work, "rev-parse", "--absolute-git-dir")
+            git_fd = os.open(gitdir, fd_tree.DIR_FLAGS)
+            held.callback(os.close, git_fd)
+            references.reference(gitdir, "commondir")
+            for name in ("gitdir", "config", "config.worktree"):
+                references.path(gitdir / name)
+            if _git(work, "rev-parse", "--show-toplevel") != work:
+                msg = f"{work}'s Git worktree changed during validation: nothing was registered"
+                raise RegistryError(msg)
+            store = store_of(work)
+            common_fd = os.open(store.parent, fd_tree.DIR_FLAGS)
+            held.callback(os.close, common_fd)
+            for name in ("config", "config.worktree"):
+                references.path(store.parent / name)
+            yield store
+            references.confirm()
+            if (
+                not same_folder(work, work_fd)
+                or not same_folder(gitdir, git_fd)
+                or not same_folder(store.parent, common_fd)
+            ):
+                msg = f"{work}'s Git directory binding changed during validation: nothing was registered"
+                raise RegistryError(msg)
+    except (OSError, ValueError, StoreError) as exc:
+        msg = f"{work}'s Git directory binding cannot be checked: nothing was registered: {exc}"
+        raise RegistryError(msg) from exc
+
+
+def _canonical(path: Path) -> tuple[Path, Path, str | None]:
+    """Canonical paths and the exact clone id their authority admitted, before any durability work."""
     try:
         work = _git(path.resolve(strict=True), "rev-parse", "--show-toplevel")
     except OSError as exc:
         msg = f"{path} does not exist"
         raise RegistryError(msg) from exc
-    store = store_of(work)
-    for owned in (work, store.parent):
-        _owned(owned)
-    marker = store / "format"
-    try:
-        raw = read_regular(marker)
-        found = int(raw.decode("utf-8")) if raw is not None else 0
-    except (OSError, ValueError) as exc:
-        msg = f"{marker} is unreadable"
-        raise RegistryError(msg) from exc
-    switched = _switched(store)  # any move receipt is validated, whatever the marker says
-    if switched and found != int(project_move.FENCE):
-        msg = f"{work}'s Delivery state has a SWITCHED receipt but format {found}, not {project_move.FENCE}: refusing"
-        raise RegistryError(msg)
-    if found > STORE_FORMAT and (found != int(project_move.FENCE) or not switched):
-        msg = f"{work}'s Delivery state has format {found}, newer than {STORE_FORMAT}: this OwlBear is older"
-        raise RegistryError(msg)
-    return work, store
+    _owned(work)
+    with _git_images(work) as store:
+        _owned(store.parent)
+        with _source_images(store) as folder_fd:
+            found = _marker_at(store, folder_fd)
+            pid = clone_id(store)
+            switched = _switched(store, pid)  # any move receipt is validated, whatever the marker says
+            if not switched and clone_id(store) != pid:
+                msg = f"{store}'s clone id changed during canonical validation: nothing was registered"
+                raise RegistryError(msg)
+            if switched and found != int(project_move.FENCE):
+                msg = (
+                    f"{work}'s Delivery state has a SWITCHED receipt but format {found}, "
+                    f"not {project_move.FENCE}: refusing"
+                )
+                raise RegistryError(msg)
+            if found > STORE_FORMAT and (found != int(project_move.FENCE) or not switched):
+                msg = f"{work}'s Delivery state has format {found}, newer than {STORE_FORMAT}: this OwlBear is older"
+                raise RegistryError(msg)
+            return work, store, pid
 
 
-def _switched(store: Path) -> bool:
+def _switched(store: Path, pid: str | None) -> bool:
     """Whether the *store*'s move receipt is a valid SWITCHED one naming its project's store; False when there is none.
 
     Raises:
         RegistryError: A receipt exists but is bad, pending or names another store, or the clone has no id.
     """
-    pid = clone_id(store)
     if pid is None:
         if os.path.lexists(store / project_move.MOVE_RECORD):
             msg = f"{store} has a move receipt but no clone id: nothing was registered"
@@ -251,29 +348,49 @@ def clone_id(store: Path) -> str | None:
         raise RegistryError(str(exc)) from exc
 
 
-def _ensure_id(store: Path) -> str:
-    """The clone's id: reused when present, else created once; never rewritten."""
+def _ensure_id(work: Path, store: Path, expected: str | None) -> str:
+    """Make the admitted id durable, then revalidate authority without changing the id that was admitted."""
     try:
-        return project_home.ensure_id(store)
+        pid = project_home.ensure_id(store)
     except StoreError as exc:
         raise RegistryError(str(exc)) from exc
+    if (expected is not None and pid != expected) or clone_id(store) != pid:
+        msg = f"{store}'s clone id changed while it was made durable: nothing was registered"
+        raise RegistryError(msg)
+    _, checked, actual = _canonical(work)
+    if checked != store or actual != pid:
+        msg = f"{work}'s clone changed after its id was made durable: nothing was registered"
+        raise RegistryError(msg)
+    return pid
+
+
+def _revalidate(work: Path, store: Path, pid: str) -> None:
+    """Fence registry publication with the same canonical paths and id admitted before the write."""
+    try:
+        same = _canonical(work) == (work, store, pid)
+    except RegistryError as exc:
+        msg = f"{work}'s clone is no longer admissible: nothing was registered; check the clone and retry: {exc}"
+        raise RegistryError(msg) from exc
+    if not same:
+        msg = f"{work}'s clone changed before publication: nothing was registered; check the clone and retry"
+        raise RegistryError(msg)
 
 
 def register(path: Path) -> Project:
     """Add the clone at *path*; refused when it is registered already, under its id or its path."""
-    work, store = canonical(path)
+    work, store, admitted = _canonical(path)
     with locked():
         machine = load()
         if found := next((p for p in machine.projects if p.path == str(work)), None):
             msg = f"{work} is registered already (project {found.id})"
             raise RegistryError(msg)
-        pid = _ensure_id(store)
+        pid = _ensure_id(work, store, admitted)
         if found := next((p for p in machine.projects if p.id == pid), None):
             msg = f"this clone is registered already at {found.path}; remove that project first"
             raise RegistryError(msg)
         project = Project(id=pid, path=str(work), added_at=datetime.now(UTC))
         machine.projects.append(project)
-        save(machine)
+        save(machine, before_replace=lambda: _revalidate(work, store, pid))
     return project
 
 
@@ -299,13 +416,13 @@ def adopt(pid: str) -> Project:
         if old is None:
             msg = f"no project {pid} is registered"
             raise RegistryError(msg)
-        work, store = canonical(Path(old.path))
-        new = Project(id=_ensure_id(store), path=str(work), added_at=datetime.now(UTC))
+        work, store, admitted = _canonical(Path(old.path))
+        new = Project(id=_ensure_id(work, store, admitted), path=str(work), added_at=datetime.now(UTC))
         if any(p.id == new.id and p.id != pid for p in machine.projects):
             msg = f"this clone is registered already as project {new.id}"
             raise RegistryError(msg)
         machine.projects = [new if p.id == pid else p for p in machine.projects]
-        save(machine)
+        save(machine, before_replace=lambda: _revalidate(work, store, new.id))
     return new
 
 

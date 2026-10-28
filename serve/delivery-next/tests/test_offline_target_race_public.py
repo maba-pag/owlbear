@@ -14,7 +14,7 @@ import pytest
 
 from owlbear_delivery_next.commands import cli
 from owlbear_delivery_next.state_store import offline_protocol, project_home, project_move
-from owlbear_delivery_next.state_store.database import MARKER, STORE_FORMAT, StoreError
+from owlbear_delivery_next.state_store.database import MARKER, StoreError
 from owlbear_delivery_next.state_store.store import Store
 
 BEFORE = "AAAAAAAA-0000-4000-8000-000000000001"
@@ -56,16 +56,17 @@ def test_a_target_replaced_before_marker_publication_is_refused_and_nothing_is_w
     repo, boot, capsys, monkeypatch
 ) -> None:
     target = _switched_store(repo, boot, capsys)
+    before = {p.name: p.read_bytes() for p in target.iterdir() if p.is_file()}
     aside = target.with_name(target.name + ".aside")
     real_publish = project_home._publish_markers  # noqa: SLF001 - the gap hook wraps the real publication
     gap_taken: list[Path] = []
 
-    def swap_in_the_gap(folder_fd, tfd, previous, *, moved):
+    def swap_in_the_gap(folder_fd, tfd, previous, *, moved, guard=None):
         target.rename(aside)
         target.mkdir()
         (target / "foreign.txt").write_bytes(FOREIGN_BYTES)
         gap_taken.append(target)
-        real_publish(folder_fd, tfd, previous, moved=moved)
+        real_publish(folder_fd, tfd, previous, moved=moved, guard=guard)
 
     monkeypatch.setattr(project_home, "_publish_markers", swap_in_the_gap)
 
@@ -77,6 +78,7 @@ def test_a_target_replaced_before_marker_publication_is_refused_and_nothing_is_w
     assert sorted(p.name for p in target.iterdir()) == ["foreign.txt"], (
         "a marker was written into the foreign directory"
     )
-    assert (aside / MARKER).read_text().strip() == str(STORE_FORMAT), "the validated inode kept its own publication"
+    assert not (aside / MARKER).exists(), "the detached target must not gain a marker after authority is lost"
+    assert {p.name: p.read_bytes() for p in aside.iterdir() if p.is_file()} == before
     record = json.loads((project_home.clone_dir(repo) / project_move.MOVE_RECORD).read_text())
     assert Path(record["target"]) == target

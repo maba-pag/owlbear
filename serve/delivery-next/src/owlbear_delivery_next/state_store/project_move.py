@@ -16,6 +16,7 @@ import os
 import secrets
 import stat
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.local_system import codebase, local_home
 from owlbear_delivery_next.state_store import fd_tree, format_marker
@@ -39,6 +40,9 @@ from owlbear_delivery_next.state_store.fd_tree import (
     stat_at as _stat_at,
 )
 from owlbear_delivery_next.state_store.offline_proof import OfflineProof, require_proof, same_folder
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 CLONE_ID = "clone-id"
 MOVE_LOCK = "move.lock"
@@ -85,6 +89,11 @@ def left(folder: Path) -> list[str]:
 
 def record_at(folder: Path, folder_fd: int) -> dict | None:
     """The cross-volume move the pinned folder began and has not finished, or None; an unreadable record is refused."""
+    return record_image(folder, folder_fd)[0]
+
+
+def record_image(folder: Path, folder_fd: int) -> tuple[dict | None, str | None]:
+    """The validated receipt and its exact bytes read together through the held source."""
     try:
         text = fd_tree.read_at(folder_fd, MOVE_RECORD)
         found = None if text is None else json.loads(text)
@@ -92,11 +101,11 @@ def record_at(folder: Path, folder_fd: int) -> dict | None:
         msg = f"{folder / MOVE_RECORD} is unreadable ({exc}): nothing was moved; check it, then start again"
         raise StoreError(msg) from exc
     if text is None:
-        return None
+        return None, None
     if not _is_record(found):
         msg = f"{folder / MOVE_RECORD} is not a move record: nothing was moved; check it, then start again"
         raise StoreError(msg)
-    return found
+    return found, text
 
 
 def record(folder: Path) -> dict | None:
@@ -135,12 +144,12 @@ def _proof_ok(dfd: int, rec: dict) -> bool:
     return rec["proof"] is not None and _holds_text_at(dfd, MOVE_PROOF, f"{rec['proof']}\n")
 
 
-def _save(folder: Path, folder_fd: int, rec: dict) -> None:
+def _save(folder: Path, folder_fd: int, rec: dict, *, before_replace: Callable[[], None] | None = None) -> None:
     """Write the move record into the pinned folder; refused, not written, when the clone path no longer names it."""
     if not same_folder(folder, folder_fd):
         msg = f"{folder} no longer names the folder being moved: nothing was changed; check it, then start again"
         raise StoreError(msg)
-    fd_tree.write_at(folder_fd, MOVE_RECORD, json.dumps(rec, sort_keys=True) + "\n")
+    fd_tree.write_at(folder_fd, MOVE_RECORD, json.dumps(rec, sort_keys=True) + "\n", before_replace=before_replace)
 
 
 def make_dir(dfd: int, name: str) -> None:
@@ -209,11 +218,8 @@ def _stage_name(target: Path) -> str:
     return f".{target.name}.staging"
 
 
-def _published(pfd: int, target: Path, tfd: int, rec: dict) -> None:
-    """Refuse unless the copy this move published, held open at *tfd*, still holds the recorded digests.
-
-    The target's name must still name the same folder the descriptor holds, and the copy holds exactly the manifest.
-    """
+def _published(pfd: int, target: Path, tfd: int, rec: dict, images: fd_tree.PayloadImages | None = None) -> None:
+    """Refuse a changed held/named target, proof or manifest; retain payload images when requested."""
     st = _stat_at(pfd, target.name)
     if (
         rec["stage_id"] is None
@@ -224,7 +230,7 @@ def _published(pfd: int, target: Path, tfd: int, rec: dict) -> None:
         or not same_folder(target, tfd)  # the path must still reach the pinned folder through its ancestors
     ):
         raise _not_published(target)
-    if not all(_entry_ok(tfd, n, d) for n, d in rec["manifest"].items()) or not _proof_ok(tfd, rec):
+    if not fd_tree.manifest_ok(tfd, rec["manifest"], images=images) or not _proof_ok(tfd, rec):
         raise _not_published(target)
     if set(os.listdir(tfd)) - {MARKER} != set(rec["manifest"]) | {MOVE_PROOF}:
         raise _not_published(target)
@@ -267,7 +273,7 @@ def _owned(pfd: int, stage_name: str, rec: dict, *, complete: bool) -> None:
             raise _unrecorded(stage)
         if _ident(os.fstat(sfd)) != rec["stage_id"] or not _staged_ok(sfd, names, rec, complete=complete):
             raise _unrecorded(stage)
-        if not all(_entry_ok(sfd, n, d) for n, d in rec["copied"].items()):
+        if not fd_tree.manifest_ok(sfd, rec["copied"]):
             raise _unrecorded(stage)
     finally:
         os.close(sfd)
@@ -285,18 +291,15 @@ def _pending_ours(folder_fd: int, pfd: int, stage_name: str, rec: dict) -> None:
         os.close(sfd)
 
 
-def _source_unchanged(folder_fd: int, rec: dict) -> bool:
+def _source_unchanged(folder_fd: int, rec: dict, images: fd_tree.PayloadImages | None = None) -> bool:
     """Whether the source still holds exactly the manifest the move recorded: no entry added, removed or edited."""
-    return set(left_at(folder_fd)) == set(rec["manifest"]) and all(
-        _entry_ok(folder_fd, n, d) for n, d in rec["manifest"].items()
+    return set(left_at(folder_fd)) == set(rec["manifest"]) and fd_tree.manifest_ok(
+        folder_fd, rec["manifest"], images=images
     )
 
 
 def _copy_each(folder: Path, folder_fd: int, sfd: int, rec: dict) -> None:
-    """Copy each source entry into the staging folder, verifying it against the digest taken before the move began.
-
-    A mismatched copy is kept where it is, named as pending in the record; the source keeps every byte.
-    """
+    """Verify each source copy against its recorded digest; keep a mismatch as pending and every source byte."""
     for name, digest in rec["manifest"].items():
         src = folder / name
         rec["pending"] = name
@@ -314,7 +317,7 @@ def _copy_each(folder: Path, folder_fd: int, sfd: int, rec: dict) -> None:
         _save(folder, folder_fd, rec)
 
 
-def _move(folder: Path, folder_fd: int, target: Path, pfd: int, previous: int) -> None:
+def _move(folder: Path, folder_fd: int, target: Path, pfd: int, proof: OfflineProof) -> None:
     """Copy the clone's store beside *target*, verify it, rename it into place, then keep the source untouched."""
     if _stat_at(pfd, target.name):
         raise _both(folder, target)
@@ -333,11 +336,11 @@ def _move(folder: Path, folder_fd: int, target: Path, pfd: int, previous: int) -
     }
     _save(folder, folder_fd, rec)  # the record exists before anything is made beside the source
     os.mkdir(stage_name, 0o700, dir_fd=pfd)
-    _stage_and_publish(folder, folder_fd, target, pfd, rec, previous)
+    _stage_and_publish(folder, folder_fd, target, pfd, rec, format_marker.prior_format(proof.previous), proof)
 
 
 def _stage_and_publish(  # noqa: PLR0913, PLR0917
-    folder: Path, folder_fd: int, target: Path, pfd: int, rec: dict, previous: int
+    folder: Path, folder_fd: int, target: Path, pfd: int, rec: dict, previous: int, proof: OfflineProof
 ) -> None:
     """Record the proof nonce before its file exists, copy the source into the stage, then publish it at *target*."""
     stage_name = _stage_name(target)
@@ -361,35 +364,55 @@ def _stage_and_publish(  # noqa: PLR0913, PLR0917
             "stop the other OwlBear process, then start again"
         )
         raise StoreError(msg)
-    _publish(folder, folder_fd, target, pfd, rec, previous)
+    _publish(folder, folder_fd, target, pfd, rec, previous, proof)
 
 
 def _commit(  # noqa: PLR0913, PLR0917
-    folder: Path, folder_fd: int, target: Path, pfd: int, tfd: int, rec: dict, previous: int
+    folder: Path, folder_fd: int, target: Path, pfd: int, tfd: int, rec: dict, previous: int, proof: OfflineProof
 ) -> None:
-    """Record the switch only after the held copy is durable, still the one published, and the source unchanged.
-
-    The copy is proven ours before anything is written into it. The target's format marker is then written through
-    the held descriptor, so a switch is never recorded without it. Every check runs after the sync, and the marker
-    must still hold the format written, so a change made during the sync is refused before the switch.
-    """
-    _published(pfd, target, tfd, rec)  # a foreign or altered copy is refused before any byte is written into it
-    format_marker.ensure_target(tfd, previous)
-    _sync_published(pfd, target, tfd)  # a retry re-syncs before any switch, so a failure stays uncommitted
-    _published(pfd, target, tfd, rec)  # the name, identity and digests are rechecked after the sync
-    format_marker.written_format(tfd, previous)  # the marker survived the sync with the format it was written in
-    if not _source_unchanged(folder_fd, rec):  # a write after the copy: the switch is refused, nothing is lost
-        msg = (
-            f"{folder} changed after it was copied: the copy is kept at {target} and the switch was not recorded; "
-            "stop the other OwlBear process, then start again"
-        )
+    """Record SWITCHED only after final source/target proof, content and named-folder checks."""
+    current, receipt = record_image(folder, folder_fd)
+    if current != rec or receipt is None:
+        msg = f"{folder / MOVE_RECORD} changed before publication: nothing was switched"
         raise StoreError(msg)
+    images: dict[int, fd_tree.PayloadImages] = {folder_fd: {}, tfd: {}}
+
+    @proof.guard(folder_fd, target, tfd, images)
+    def before_marker() -> None:
+        fd_tree.require_text_at(folder_fd, MOVE_RECORD, receipt)
+        require_proof(folder, folder_fd, target, proof)
+        _published(pfd, target, tfd, rec, images[tfd])  # an altered copy is refused before any write into it
+
+    before_marker()
+    format_marker.ensure_target(tfd, previous, before_create=before_marker)
+    _sync_published(pfd, target, tfd)  # a retry re-syncs before any switch, so a failure stays uncommitted
+
+    @proof.guard(folder_fd, target, tfd, images)
+    def unchanged() -> None:
+        fd_tree.require_text_at(folder_fd, MOVE_RECORD, receipt)
+        require_proof(folder, folder_fd, target, proof)
+        _published(pfd, target, tfd, rec, images[tfd])
+        if not _source_unchanged(folder_fd, rec, images[folder_fd]):
+            msg = (
+                f"{folder} changed after it was copied: the copy is kept at {target} and the switch was not recorded; "
+                "stop the other OwlBear process, then start again"
+            )
+            raise StoreError(msg)
+        require_proof(folder, folder_fd, target, proof)
+        format_marker.written_format(tfd, previous)
+        if not _proof_ok(tfd, rec):
+            raise _not_published(target)
+        fd_tree.require_text_at(folder_fd, MOVE_RECORD, receipt)
+        if not same_folder(folder, folder_fd) or not same_folder(target, tfd):
+            msg = f"{folder} or {target} no longer names its verified folder: nothing was switched"
+            raise StoreError(msg)
+
     rec["phase"] = SWITCHED
-    _save(folder, folder_fd, rec)  # the target is the authority from here; the source is kept, never removed
+    _save(folder, folder_fd, rec, before_replace=unchanged)  # only this guarded rename makes the target authoritative
 
 
 def _publish(  # noqa: PLR0913, PLR0917
-    folder: Path, folder_fd: int, target: Path, pfd: int, rec: dict, previous: int
+    folder: Path, folder_fd: int, target: Path, pfd: int, rec: dict, previous: int, proof: OfflineProof
 ) -> None:
     """Rename the verified stage to *target*, sync it durably, then record the switch (a failure keeps copying)."""
     if _stat_at(pfd, target.name):
@@ -398,7 +421,7 @@ def _publish(  # noqa: PLR0913, PLR0917
     fd_tree.sync(pfd, target.name)
     tfd = _open_at(pfd, target.name)  # held until the switch is recorded: the published copy cannot swap under it
     try:
-        _commit(folder, folder_fd, target, pfd, tfd, rec, previous)
+        _commit(folder, folder_fd, target, pfd, tfd, rec, previous, proof)
     finally:
         os.close(tfd)
 
@@ -415,7 +438,7 @@ def _holds_only_issued_proof(pfd: int, stage_name: str, rec: dict) -> bool:
 
 
 def _resume(  # noqa: PLR0913, PLR0917
-    folder: Path, folder_fd: int, target: Path, pfd: int, rec: dict, previous: int
+    folder: Path, folder_fd: int, target: Path, pfd: int, rec: dict, previous: int, proof: OfflineProof
 ) -> bool:
     """Finish the move the record proves; return True when the move must start again from the source.
 
@@ -436,7 +459,7 @@ def _resume(  # noqa: PLR0913, PLR0917
         if rec["phase"] == COPYING:
             tfd = _open_at(pfd, target.name)  # only the copy this move published may stand in for the store
             try:
-                _commit(folder, folder_fd, target, pfd, tfd, rec, previous)
+                _commit(folder, folder_fd, target, pfd, tfd, rec, previous, proof)
             finally:
                 os.close(tfd)
         return False
@@ -446,7 +469,7 @@ def _resume(  # noqa: PLR0913, PLR0917
     _pending_ours(folder_fd, pfd, stage_name, rec)
     # Nothing copied yet: the issued nonce is reused, not replaced.
     if _stat_at(pfd, stage_name) is not None and _holds_only_issued_proof(pfd, stage_name, rec):
-        _stage_and_publish(folder, folder_fd, target, pfd, rec, previous)
+        _stage_and_publish(folder, folder_fd, target, pfd, rec, previous, proof)
         return False
     if _stat_at(pfd, stage_name) is not None:
         fd_tree.keep_entry(pfd, stage_name)  # kept, synced, never reused; the source is still whole
@@ -463,14 +486,14 @@ def relocate(  # noqa: PLR0913, PLR0917
     Raises:
         StoreError: No offline proof was issued, a link is in the way, or the record or a folder is not what it proves.
     """
-    require_proof(folder, folder_fd, target, proof)
+    proof = require_proof(folder, folder_fd, target, proof)
     st = _stat_at(pfd, target.name)
     if st is not None and stat.S_ISLNK(st.st_mode):
         msg = f"{target} holds a link: refusing to move through it; nothing was moved"
         raise StoreError(msg)
     if rec is None:
         if left_at(folder_fd):
-            _move(folder, folder_fd, target, pfd, previous)
+            _move(folder, folder_fd, target, pfd, proof)
         return
-    if _resume(folder, folder_fd, target, pfd, rec, previous):
-        _move(folder, folder_fd, target, pfd, previous)
+    if _resume(folder, folder_fd, target, pfd, rec, previous, proof):
+        _move(folder, folder_fd, target, pfd, proof)

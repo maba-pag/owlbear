@@ -7,10 +7,11 @@ import stat
 from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.state_store import fd_tree, format_marker, project_move
-from owlbear_delivery_next.state_store.database import StoreError
+from owlbear_delivery_next.state_store.database import STORE_FORMAT, FormatTooNewError, StoreError
 from owlbear_delivery_next.state_store.offline_proof import preparation, same_folder
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from pathlib import Path
 
 
@@ -56,6 +57,140 @@ def _refuse_unless_held(target: Path, tfd: int, rec: dict) -> None:
         raise project_move._not_published(target)  # noqa: SLF001 - a freed folder can return with the same identity
 
 
+def clone_id_at(folder: Path, folder_fd: int) -> str | None:
+    """Read the held source's complete clone id; absence alone is None."""
+    try:
+        text = fd_tree.read_at(folder_fd, project_move.CLONE_ID)
+    except (OSError, UnicodeError) as exc:
+        msg = f"{folder / project_move.CLONE_ID} is unreadable: {exc}; nothing was changed"
+        raise StoreError(msg) from exc
+    if text and not text.endswith("\n"):
+        msg = f"{folder / project_move.CLONE_ID} is incomplete: its write was cut short; nothing was changed"
+        raise StoreError(msg)
+    return (text or "").strip() or None
+
+
+def source_format(folder_fd: int) -> str:
+    """Validate a retained ASCII-integer marker, allowing repair of supported older formats."""
+    try:
+        text = fd_tree.read_at(folder_fd, format_marker.MARKER)
+    except (OSError, UnicodeError) as exc:
+        msg = "the switched source's format marker is unreadable: nothing was changed"
+        raise StoreError(msg) from exc
+    value = text.strip() if text is not None else ""
+    if text is None or not (value.isascii() and value.isdigit()):
+        msg = "the switched source has no readable format marker: nothing was changed"
+        raise StoreError(msg)
+    try:
+        found = int(value)
+    except ValueError as exc:
+        msg = "the switched source's format marker is not a readable integer: nothing was changed"
+        raise StoreError(msg) from exc
+    if found == int(project_move.FENCE) or 1 <= found <= STORE_FORMAT:
+        return text
+    if found > STORE_FORMAT:
+        msg = f"switched source format {found} is newer than {STORE_FORMAT}: nothing was changed"
+        raise FormatTooNewError(msg)
+    msg = f"switched source format {found} is not a known format: nothing was changed"
+    raise StoreError(msg)
+
+
+def source_state(source: tuple[Path, int], pid: str, rec: dict) -> tuple[str, str, str]:
+    """The preparation, marker and admitted receipt in the held, still-named source belonging to *pid*."""
+    folder, folder_fd = source
+    names = (project_move.PREPARED, format_marker.MARKER, project_move.CLONE_ID, project_move.MOVE_RECORD)
+    try:
+        images = {name: fd_tree.stat_at(folder_fd, name) for name in names}
+    except OSError as exc:
+        msg = f"{folder}'s source witnesses cannot be checked: nothing was changed"
+        raise StoreError(msg) from exc
+    observed, image = project_move.record_image(folder, folder_fd)
+    if observed != rec or image is None:
+        msg = f"{folder}'s move receipt changed during admission: nothing was changed"
+        raise StoreError(msg)
+    try:
+        prepared = fd_tree.read_at(folder_fd, project_move.PREPARED)
+    except (OSError, UnicodeError) as exc:
+        msg = f"{folder}'s preparation is unreadable: nothing was changed"
+        raise StoreError(msg) from exc
+    if prepared is None:
+        msg = f"{folder}'s preparation is missing: nothing was changed"
+        raise StoreError(msg)
+    preparation(prepared, folder_fd)
+    marker = source_format(folder_fd)
+    if clone_id_at(folder, folder_fd) != pid:
+        msg = f"{folder} no longer names the retained source of project {pid}: nothing was changed"
+        raise StoreError(msg)
+    fd_tree.require_text_at(folder_fd, project_move.MOVE_RECORD, image)
+    try:
+        stable = all(fd_tree.same_image_at(folder_fd, name, before) for name, before in images.items())
+    except OSError as exc:
+        msg = f"{folder}'s source witnesses cannot be checked: nothing was changed"
+        raise StoreError(msg) from exc
+    if not stable:
+        source_format(folder_fd)  # a concurrently installed newer marker keeps its typed refusal
+        msg = f"{folder}'s source witnesses changed during admission: nothing was changed"
+        raise StoreError(msg)
+    if not same_folder(folder, folder_fd):
+        msg = f"{folder} no longer names the retained source of project {pid}: nothing was changed"
+        raise StoreError(msg)
+    return prepared, marker, image
+
+
+def held_switched(target: Path, tfd: int, rec: dict) -> None:
+    """Revalidate the held target's identity, proof, quarantine state and marker, without reopening it."""
+    _refuse_unless_held(target, tfd, rec)
+    fd_tree.refuse_quarantined(tfd, target)
+    try:
+        text = fd_tree.read_at(tfd, format_marker.MARKER)
+    except (OSError, UnicodeError) as exc:
+        msg = f"{target} holds a format marker OwlBear cannot read: nothing was changed"
+        raise StoreError(msg) from exc
+    if text is not None:
+        format_marker.supported_format(text)
+    named_switched(target, rec)
+
+
+def require_admission(
+    source: tuple[Path, int], target: tuple[Path, int], rec: dict, expected: tuple[str, str, str]
+) -> None:
+    """Revalidate source witnesses and target authority after admission's durability work."""
+    path, tfd = target
+
+    def validate() -> None:
+        if source_state(source, path.name, rec) != expected:
+            msg = f"{source[0]} changed its preparation, format or receipt during admission: nothing was changed"
+            raise StoreError(msg)
+
+    _guard_target(path, tfd, rec, validate)
+
+
+def admission_state(source: tuple[Path, int], target: tuple[Path, int], rec: dict) -> tuple[str, str, str]:
+    """Read the initial source observation without losing the held target's authority through those reads."""
+    path, tfd = target
+    return _guard_target(path, tfd, rec, lambda: source_state(source, path.name, rec))
+
+
+def _guard_target[T](target: Path, tfd: int, rec: dict, validate: Callable[[], T]) -> T:
+    """Keep target authority stable through source reads, allowing ordinary active-store namespace writes."""
+    try:
+        images = {name: fd_tree.stat_at(tfd, name) for name in (project_move.MOVE_PROOF, format_marker.MARKER)}
+        held_switched(target, tfd, rec)
+        observed = validate()
+        fd_tree.refuse_quarantined(tfd, target)
+        stable = all(fd_tree.same_image_at(tfd, name, before) for name, before in images.items())
+        if not stable:
+            marker = fd_tree.read_at(tfd, format_marker.MARKER)
+            if marker is not None:
+                format_marker.supported_format(marker)
+            raise project_move._not_published(target)  # noqa: SLF001 - shared publication refusal
+    except (OSError, UnicodeError) as exc:
+        msg = f"{target}'s authority witnesses cannot be checked: nothing was changed"
+        raise StoreError(msg) from exc
+    named_switched(target, rec)
+    return observed
+
+
 def check_switched(target: Path, pfd: int, rec: dict) -> int:
     """Refuse unless *target* is still the copy the switch recorded, by identity and proof; return its descriptor.
 
@@ -65,24 +200,15 @@ def check_switched(target: Path, pfd: int, rec: dict) -> int:
     named_switched(target, rec)
     tfd = fd_tree.open_dir(pfd, target.name)
     try:
-        _refuse_unless_held(target, tfd, rec)
-        fd_tree.refuse_quarantined(tfd, target)
-        try:
-            text = fd_tree.read_at(tfd, format_marker.MARKER)
-        except (OSError, UnicodeError) as exc:
-            msg = f"{target} holds a format marker OwlBear cannot read: nothing was changed"
-            raise StoreError(msg) from exc
-        if text is not None:
-            format_marker.supported_format(text)
-        named_switched(target, rec)
+        held_switched(target, tfd, rec)
     except BaseException:
         os.close(tfd)
         raise
     return tfd
 
 
-def require_switched(target: Path, rec: dict) -> None:
-    """Prove a switched target read-only and close the descriptors acquired for that lookup.
+def require_switched(target: Path, rec: dict, *, validate: Callable[[], None] | None = None) -> None:
+    """Prove a switched target around optional source validation, closing this lookup's descriptors.
 
     Raises:
         StoreError: The target cannot be read or does not pass the held identity, proof and marker checks.
@@ -90,7 +216,12 @@ def require_switched(target: Path, rec: dict) -> None:
     try:
         pfd = os.open(target.parent, fd_tree.DIR_FLAGS)
         try:
-            os.close(check_switched(target, pfd, rec))
+            tfd = check_switched(target, pfd, rec)
+            try:
+                if validate is not None:
+                    _guard_target(target, tfd, rec, validate)
+            finally:
+                os.close(tfd)
         finally:
             os.close(pfd)
     except OSError as exc:

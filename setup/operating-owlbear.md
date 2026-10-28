@@ -90,7 +90,9 @@ an arbitrary import closure. There is no switch that skips these checks.
 Format markers must be regular files. Registration, store reads and selfcheck report unreadable or nonregular
 markers without following a marker link or waiting on a pipe; only a genuinely missing entry counts as absent.
 Missing target markers are created exclusively; a concurrent existing marker is validated and made durable,
-never replaced. Settlement and admission validate the complete preparation and original source identity through
+never replaced. Ordinary admission and Finish revalidate authority after reading an absent target marker and before
+creating it, leaving both a replaced target and the detached original untouched on refusal.
+Settlement and admission validate the complete preparation and original source identity through
 held descriptors. Repeated Prepare refuses a completed move or malformed receipt, even while its backup payload remains.
 Prepare rechecks the exact source marker and preparation after id synchronization and immediately before publishing
 either metadata file; a changed or blank marker refuses without replacing the owner's entries. Read-only switched-store
@@ -98,10 +100,30 @@ lookups validate the target's identity, issued proof, quarantine state and exist
 they recheck its named directory after those reads and leave an absent target marker for store open to repair.
 Current lookup, registration and selfcheck keep the retained source descriptor through target validation and
 recheck the source's named directory before accepting its receipt. Unreadable UTF-8 enters the normal diagnostic channel.
+Source witness images and the held target's proof and marker must stay stable across later validation reads.
+Quarantined target entries are checked again, but ordinary active-store atomic writes remain valid: directory
+timestamps alone are not authority. A witness change refuses without replacing owner state; a newly installed newer
+marker keeps its upgrade diagnostic. These are bounded read-set checks, not an atomic filesystem snapshot.
+Source and target payload checks retain every descendant's image through the final witness reads. Initial target
+validation also confirms those images before writing its marker; later sibling reads cannot hide an earlier edit.
 After a validated switch, selfcheck checks the active store's settings rather than the retained backup's
 `config.json`; the source's identity, receipt and fence remain required.
 A failed project load whose target cannot be proven retains an unlocated maintenance reservation, rather than taking
 an absent run record in that target as evidence that nobody owns the work.
+The same reservation is kept when the source fence is unreadable, missing or newer than this runtime. Ordinary
+store opens recheck source preparation, format and clone id plus target proof after making markers durable, and
+guard the source-fence replacement after its temporary file is synced. Active-store edits remain valid: opening
+does not compare them against the historical copied payload. Registration and adoption retain the id their
+authority check admitted through id synchronization and revalidate before recording it.
+Canonical registration keeps marker, ID and receipt image stamps under a held clone directory through its remaining
+reads, even without a move receipt. A late newer marker refuses without overwriting it or publishing the registry.
+Registration also holds the local `.git`, linked-worktree and repository-config binding images through those reads;
+directory aliases and control-file symlinks retain their resolution chains and referent images too. Redirecting
+either refuses rather than publishing the cached clone; an unchanged symlink layout remains supported.
+The move receipt is part of the retained observation, not just an earlier lookup: replacing it during target
+validation or temporary-file synchronization refuses without overwriting the owner's receipt. Registration and
+adoption also guard the registry's final replacement after its temporary file is synced, leaving the previous
+registration intact when the admitted clone changes.
 
 **Pause Delivery** in the bar stops new automatic agent steps on every project until you press
 **Resume**; your own actions, such as settings, memory and **New Change**, still run. While paused,

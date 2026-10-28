@@ -23,7 +23,14 @@ from owlbear_delivery_next.machine_host import selfcheck
 from owlbear_delivery_next.machine_host.machine import Machine, MachineError
 from owlbear_delivery_next.pack_runs import pack_run, pack_state
 from owlbear_delivery_next.project_host.host import HostRecord
-from owlbear_delivery_next.state_store import fd_tree, offline_protocol, project_home, project_move, registry
+from owlbear_delivery_next.state_store import (
+    fd_tree,
+    offline_protocol,
+    project_home,
+    project_move,
+    project_switch,
+    registry,
+)
 from owlbear_delivery_next.state_store.database import MARKER, FormatTooNewError, StoreError
 from owlbear_delivery_next.state_store.store import Store
 
@@ -191,6 +198,7 @@ TARGET_DAMAGE = [
     pytest.param("utf8-proof", id="utf8-proof"),
     pytest.param("utf8-format", id="utf8-format"),
     pytest.param("future-format", id="future-format"),
+    pytest.param("oversized-format", id="oversized-format"),
     pytest.param("quarantined", id="quarantined"),
 ]
 
@@ -210,6 +218,8 @@ def _damage(target: Path, damage: str, monkeypatch) -> type[StoreError]:
         (target / MARKER).write_text("7\n")
     elif damage == "quarantined":
         (target / f"{fd_tree.QUARANTINE}foreign").write_bytes(b"keep me")
+    elif damage == "oversized-format":
+        (target / MARKER).write_bytes(b"9" * 5000)
     else:
         name = MARKER if damage in {"utf8-format", "future-format"} else project_move.MOVE_PROOF
         content = b"99\n" if damage == "future-format" else b"\xff" if "utf8" in damage else b"wrong\n"
@@ -479,7 +489,7 @@ def test_target_replacement_during_authority_reads_refuses_and_keeps_uncertain_o
 
 
 @pytest.mark.usefixtures("current_binding")
-@pytest.mark.parametrize("lookup", ["current", "register", "adopt", "selfcheck"])
+@pytest.mark.parametrize("lookup", ["current", "register", "adopt", "selfcheck", "open"])
 @pytest.mark.parametrize("seam", ["preparation", "marker"])
 def test_source_replacement_during_authority_reads_never_admits_the_replacement(repo, boot, monkeypatch, lookup, seam):
     target = _finished_move(repo, boot)
@@ -491,11 +501,12 @@ def test_source_replacement_during_authority_reads_never_admits_the_replacement(
     if lookup == "selfcheck":
         assert selfcheck.problems()
     else:
-        error = StoreError if lookup == "current" else registry.RegistryError
+        error = StoreError if lookup in {"current", "open"} else registry.RegistryError
         action = {
             "current": lambda: project_home.current(repo),
             "register": lambda: registry.register(repo),
             "adopt": lambda: registry.adopt(entry.id),
+            "open": lambda: Store.open(repo),
         }[lookup]
         with pytest.raises(error):
             action()
@@ -504,6 +515,507 @@ def test_source_replacement_during_authority_reads_never_admits_the_replacement(
     assert _snapshot(_source(repo)) == expected["source"]
     assert _snapshot(target) == expected["target"]
     assert _snapshot(moved) == expected["moved"]
+
+
+@pytest.mark.usefixtures("current_binding")
+@pytest.mark.parametrize(
+    "change",
+    [
+        "target-proof",
+        "source-preparation",
+        "source-id",
+        "source-fence",
+        "source-path",
+        "target-marker",
+        "source-receipt",
+        "source-other-receipt",
+    ],
+)
+def test_store_open_revalidates_its_authority_after_the_source_fence_sync(repo, boot, monkeypatch, change):
+    target = _finished_move(repo, boot)
+    source = _source(repo)
+    retained = source.with_name("retained-original")
+    expected = {}
+    real_sync = os.fsync
+    fired = []
+
+    def sync(fd):
+        real_sync(fd)
+        if fired or not stat.S_ISREG(os.fstat(fd).st_mode):
+            return
+        for path in source.glob(f".tmp-{MARKER}-*"):
+            if os.path.samestat(path.stat(), os.fstat(fd)):
+                fired.append(True)
+                if change == "source-preparation":
+                    record = json.loads((source / project_move.PREPARED).read_text())
+                    record["boot"] = "CCCCCCCC-0000-4000-8000-000000000003"
+                    (source / project_move.PREPARED).write_text(json.dumps(record))
+                elif change == "source-path":
+                    source.rename(retained)
+                    source.mkdir()
+                    (source / "owner").write_text("foreign source")
+                else:
+                    destination, text = {
+                        "target-proof": (target / project_move.MOVE_PROOF, "foreign-proof\n"),
+                        "source-id": (source / project_home.CLONE_ID, "foreign-owner\n"),
+                        "source-fence": (source / MARKER, "8\n"),
+                        "target-marker": (target / MARKER, "8\n"),
+                        "source-receipt": (source / project_move.MOVE_RECORD, '{"owner":"unfinished repair"}\n'),
+                        "source-other-receipt": (
+                            source / project_move.MOVE_RECORD,
+                            json.dumps(
+                                json.loads((source / project_move.MOVE_RECORD).read_text())
+                                | {"target": str(target.with_name("owner-target"))}
+                            ),
+                        ),
+                    }[change]
+                    destination.write_text(text)
+                for label, folder in (("source", source), ("target", target), ("retained", retained)):
+                    expected[label] = {
+                        name: value
+                        for name, value in _snapshot(folder).items()
+                        if not name.startswith((f".tmp-{MARKER}-", fd_tree.QUARANTINE))
+                    }
+
+    monkeypatch.setattr(os, "fsync", sync)
+    error = FormatTooNewError if change in {"source-fence", "target-marker"} else StoreError
+    with pytest.raises(error):
+        Store.open(repo)
+
+    assert fired == [True]
+    for label, folder in (("source", source), ("target", target), ("retained", retained)):
+        assert {
+            name: value
+            for name, value in _snapshot(folder).items()
+            if not name.startswith((f".tmp-{MARKER}-", fd_tree.QUARANTINE))
+        } == expected[label]
+
+
+@pytest.mark.usefixtures("current_binding")
+def test_store_open_keeps_legitimate_active_payload_changes(repo, boot):
+    target = _finished_move(repo, boot)
+    edited = json.dumps({"format": 1, "widths": [987]})
+    (target / "config.json").write_text(edited)
+
+    assert Store.open(repo).root == target
+    assert (target / "config.json").read_text() == edited
+
+
+@pytest.mark.usefixtures("current_binding")
+@pytest.mark.parametrize("consumer", ["current", "open"])
+def test_active_payload_atomic_writes_during_source_validation_remain_valid(repo, boot, monkeypatch, consumer):
+    target = _finished_move(repo, boot)
+    original = project_switch.source_state
+    edited = json.dumps({"format": 1, "widths": [987]})
+    fired = []
+
+    def state(*args):
+        observed = original(*args)
+        if not fired:
+            fired.append(True)
+            temporary = target / "active-config-write"
+            temporary.write_text(edited)
+            temporary.replace(target / "config.json")
+        return observed
+
+    monkeypatch.setattr(project_switch, "source_state", state)
+    found = project_home.current(repo) if consumer == "current" else Store.open(repo).root
+    assert fired == [True]
+    assert found == target
+    assert json.loads((target / "config.json").read_text())["widths"] == [987]
+
+
+@pytest.mark.usefixtures("current_binding")
+def test_missing_target_marker_is_not_created_after_initial_source_reads_lose_its_proof(repo, boot, monkeypatch):
+    target = _finished_move(repo, boot)
+    source = _source(repo)
+    (target / MARKER).unlink()
+    real_state = project_switch.source_state
+    owners, fired = {}, []
+
+    def state(*args):
+        observed = real_state(*args)
+        if not fired:
+            fired.append(True)
+            (target / project_move.MOVE_PROOF).write_text("owner-replaced-proof\n")
+            owners.update({source: _snapshot(source), target: _snapshot(target)})
+        return observed
+
+    monkeypatch.setattr(project_switch, "source_state", state)
+    with pytest.raises(StoreError):
+        Store.open(repo)
+
+    assert fired == [True]
+    assert not (target / MARKER).exists()
+    assert {path: _snapshot(path) for path in owners} == owners
+
+
+@pytest.mark.usefixtures("current_binding")
+@pytest.mark.parametrize(
+    "marker",
+    [b"8\n", b"\xff\n", b"", None, "\u00b2\n".encode(), b"9" * 5000],
+    ids=["newer", "utf8", "blank", "missing", "non-ascii-digit", "oversized"],
+)
+def test_an_unproven_source_fence_keeps_one_unlocated_reservation(repo, boot, marker):
+    target = _finished_move(repo, boot)
+    entry = registry.register(repo)
+    source = _source(repo)
+    if marker is None:
+        (source / MARKER).unlink()
+    else:
+        (source / MARKER).write_bytes(marker)
+    (source / pack_state.FILE).write_text(
+        json.dumps(pack_state.blank() | {"state": "running", "run": "newer-source-run"})
+    )
+    workspace = source / pack_run.UPDATER
+    workspace.mkdir()
+    (workspace / "sentinel").write_text("keep original workspace")
+    assert not (target / pack_state.FILE).exists()
+    before = _snapshot(source)
+    machine = _machine()
+    try:
+        machine.load_all()
+        machine.retry()
+        assert machine.projects[entry.id].state == "failed"
+        (lease,) = machine.maintenance.read()["sessions"]
+        assert (lease["state"], lease["project"], lease["workspace"]) == ("held", entry.id, str(repo))
+        ledger = json.loads((local_home.root() / maintenance.FILE).read_text())
+        assert ledger["imported"] == [f"{entry.id}:unlocated"]
+        assert machine.slots.take("another-project", "work", 1, 1) == 0
+        with pytest.raises(StoreError):
+            project_home.current(repo)
+        assert _snapshot(source) == before
+    finally:
+        machine.stop_all()
+    assert machine.maintenance.read()["sessions"] == [lease]
+
+
+@pytest.mark.usefixtures("current_binding")
+@pytest.mark.parametrize("consumer", ["current", "open"])
+@pytest.mark.parametrize("field", [project_move.PREPARED, MARKER, project_home.CLONE_ID])
+def test_source_state_rechecks_the_receipt_after_its_other_witness_reads(repo, boot, monkeypatch, consumer, field):
+    target = _finished_move(repo, boot)
+    source = _source(repo)
+    held = source.stat()
+    real_state, real_read = project_switch.source_state, fd_tree.read_at
+    calls, active, fired = [], [], []
+    wanted = 1 if consumer == "current" else 3
+    owner = '{"owner":"receipt changed during source validation"}\n'
+    target_before = _snapshot(target)
+
+    def state(*args):
+        calls.append(True)
+        active.append(len(calls))
+        try:
+            return real_state(*args)
+        finally:
+            active.pop()
+
+    def read(fd, name):
+        text = real_read(fd, name)
+        if active == [wanted] and not fired and name == field and os.path.samestat(os.fstat(fd), held):
+            fired.append(True)
+            (source / project_move.MOVE_RECORD).write_text(owner)
+        return text
+
+    monkeypatch.setattr(project_switch, "source_state", state)
+    monkeypatch.setattr(fd_tree, "read_at", read)
+    action = (lambda: project_home.current(repo)) if consumer == "current" else (lambda: Store.open(repo))
+    with pytest.raises(StoreError):
+        action()
+    assert fired == [True]
+    assert (source / project_move.MOVE_RECORD).read_text() == owner
+    assert _snapshot(target) == target_before
+
+
+@pytest.mark.usefixtures("current_binding")
+@pytest.mark.parametrize("lookup", ["current", "register", "adopt", "selfcheck"])
+def test_read_only_authority_refuses_a_receipt_replaced_during_target_validation(repo, boot, monkeypatch, lookup):
+    target = _finished_move(repo, boot)
+    entry = registry.register(repo)
+    if lookup == "register":
+        registry.remove(entry.id)
+    source = _source(repo)
+    real_read, held = fd_tree.read_at, target.stat()
+    owner = '{"owner":"concurrent receipt repair"}\n'
+    fired = []
+    target_before = _snapshot(target)
+
+    def read(fd, name):
+        text = real_read(fd, name)
+        if not fired and name == MARKER and os.path.samestat(os.fstat(fd), held):
+            fired.append(True)
+            (source / project_move.MOVE_RECORD).write_text(owner)
+        return text
+
+    monkeypatch.setattr(fd_tree, "read_at", read)
+    if lookup == "selfcheck":
+        assert selfcheck.problems()
+    else:
+        action = {
+            "current": lambda: project_home.current(repo),
+            "register": lambda: registry.register(repo),
+            "adopt": lambda: registry.adopt(entry.id),
+        }[lookup]
+        with pytest.raises(StoreError if lookup == "current" else registry.RegistryError):
+            action()
+    assert fired == [True]
+    assert (source / project_move.MOVE_RECORD).read_text() == owner
+    assert _snapshot(target) == target_before
+
+
+def _during_terminal_source_receipt(monkeypatch, source, boundary, change):
+    real_state, real_holds = project_switch.source_state, fd_tree.holds_text_at
+    held = source.stat()
+    calls, active, fired = [], [], []
+
+    def state(*args):
+        calls.append(True)
+        active.append(len(calls))
+        try:
+            return real_state(*args)
+        finally:
+            active.pop()
+
+    def holds(dfd, name, text):
+        valid = real_holds(dfd, name, text)
+        if active == [boundary] and not fired and name == project_move.MOVE_RECORD:
+            assert os.path.samestat(os.fstat(dfd), held)
+            fired.append(True)
+            change()
+        return valid
+
+    monkeypatch.setattr(project_switch, "source_state", state)
+    monkeypatch.setattr(fd_tree, "holds_text_at", holds)
+    return fired
+
+
+@pytest.mark.usefixtures("current_binding")
+@pytest.mark.parametrize("boundary", [2, 3], ids=["before-fence-replace", "after-fence-replace"])
+def test_open_preserves_a_future_source_marker_installed_during_terminal_receipt(repo, boot, monkeypatch, boundary):
+    target = _finished_move(repo, boot)
+    source = _source(repo)
+    before = _snapshot(target)
+    fired = _during_terminal_source_receipt(
+        monkeypatch, source, boundary, lambda: (source / MARKER).write_text("1000\n")
+    )
+
+    with pytest.raises(FormatTooNewError):
+        Store.open(repo)
+
+    assert fired == [True]
+    assert (source / MARKER).read_text() == "1000\n"
+    assert _snapshot(target) == before
+
+
+@pytest.mark.usefixtures("current_binding")
+@pytest.mark.parametrize("boundary", [2, 3], ids=["before-fence-replace", "after-fence-replace"])
+def test_open_refuses_a_source_renamed_during_terminal_receipt(repo, boot, monkeypatch, boundary):
+    target = _finished_move(repo, boot)
+    source = _source(repo)
+    detached = source.with_name("owner-retained-source")
+    before = _snapshot(target)
+    if boundary == 2:
+        (source / MARKER).write_text("7\n")
+
+    def change():
+        source.rename(detached)
+        source.mkdir()
+        (source / "owner").write_text("replacement source\n")
+
+    fired = _during_terminal_source_receipt(monkeypatch, source, boundary, change)
+    with pytest.raises(StoreError):
+        Store.open(repo)
+
+    assert fired == [True]
+    assert (source / "owner").read_text() == "replacement source\n"
+    assert (detached / MARKER).read_text() == ("7\n" if boundary == 2 else f"{project_move.FENCE}\n")
+    assert _snapshot(target) == before
+
+
+@pytest.mark.usefixtures("current_binding")
+@pytest.mark.parametrize(
+    ("consumer", "damage"),
+    [
+        ("open-before", "proof"),
+        ("open", "proof"),
+        ("current", "proof"),
+        ("selfcheck", "proof"),
+        ("register", "proof"),
+        ("adopt", "proof"),
+        ("current", "marker"),
+        ("current", "quarantine"),
+    ],
+)
+def test_later_source_reads_cannot_admit_changed_target_witnesses(repo, boot, monkeypatch, consumer, damage):
+    target = _finished_move(repo, boot)
+    entry = registry.register(repo)
+    if consumer == "register":
+        registry.remove(entry.id)
+    source = _source(repo)
+    original, source_id, target_id = fd_tree.read_at, source.stat(), target.stat()
+    real_state, real_revalidate = project_switch.source_state, registry._revalidate  # noqa: SLF001
+    calls, active, publishing, armed, fired = [], [], [], [], []
+    registry_path = local_home.root() / project_home.MACHINE
+    registry_before = registry_path.read_bytes()
+    owner = []
+
+    def revalidate(*args):
+        publishing.append(True)
+        try:
+            return real_revalidate(*args)
+        finally:
+            publishing.pop()
+
+    def state(*args):
+        calls.append(True)
+        active.append(len(calls))
+        try:
+            return real_state(*args)
+        finally:
+            active.pop()
+
+    def read(dfd, name):
+        value = original(dfd, name)
+        if name == MARKER and os.path.samestat(os.fstat(dfd), target_id):
+            armed.append(True)
+        if (
+            armed
+            and not fired
+            and name == project_move.CLONE_ID
+            and os.path.samestat(os.fstat(dfd), source_id)
+            and (not consumer.startswith("open") or active == [2 if consumer == "open-before" else 3])
+            and (consumer not in {"register", "adopt"} or publishing)
+        ):
+            fired.append(True)
+            path, text = {
+                "proof": (target / project_move.MOVE_PROOF, "owner-replaced-proof\n"),
+                "marker": (target / MARKER, "1000\n"),
+                "quarantine": (target / f"{fd_tree.QUARANTINE}owner", "owner-kept-state\n"),
+            }[damage]
+            path.write_text(text)
+            owner.append((path, text))
+        return value
+
+    monkeypatch.setattr(project_switch, "source_state", state)
+    monkeypatch.setattr(registry, "_revalidate", revalidate)
+    monkeypatch.setattr(fd_tree, "read_at", read)
+    if consumer == "selfcheck":
+        assert selfcheck._project(entry.id, repo)  # noqa: SLF001 - real read-only consumer
+    else:
+        action = {
+            "open-before": lambda: Store.open(repo),
+            "open": lambda: Store.open(repo),
+            "current": lambda: project_home.current(repo),
+            "register": lambda: registry.register(repo),
+            "adopt": lambda: registry.adopt(entry.id),
+        }[consumer]
+        with pytest.raises(registry.RegistryError if consumer in {"register", "adopt"} else StoreError):
+            action()
+    assert fired == [True]
+    assert owner[0][0].read_text() == owner[0][1]
+    assert registry_path.read_bytes() == registry_before
+
+
+@pytest.mark.usefixtures("current_binding")
+@pytest.mark.parametrize("action", ["register", "adopt"])
+def test_registry_does_not_read_source_after_its_final_held_target_validation(repo, boot, monkeypatch, action):
+    target = _finished_move(repo, boot)
+    entry = registry.register(repo)
+    if action == "register":
+        registry.remove(entry.id)
+    source_id = _source(repo).stat()
+    before = _snapshot(target)
+    real_revalidate, real_canonical = registry._revalidate, registry._canonical  # noqa: SLF001
+    real_read = fd_tree.read_at
+    publishing, canonical_done, fired = [], [], []
+
+    def revalidate(*args):
+        publishing.append(True)
+        try:
+            return real_revalidate(*args)
+        finally:
+            publishing.pop()
+
+    def canonical(*args):
+        result = real_canonical(*args)
+        if publishing:
+            canonical_done.append(True)
+        return result
+
+    def read(dfd, name):
+        result = real_read(dfd, name)
+        if publishing and canonical_done and name == project_move.CLONE_ID:
+            assert os.path.samestat(os.fstat(dfd), source_id)
+            fired.append(True)
+            (target / project_move.MOVE_PROOF).write_text("owner-replaced-proof\n")
+        return result
+
+    monkeypatch.setattr(registry, "_revalidate", revalidate)
+    monkeypatch.setattr(registry, "_canonical", canonical)
+    monkeypatch.setattr(fd_tree, "read_at", read)
+    result = registry.register(repo) if action == "register" else registry.adopt(entry.id)
+    assert canonical_done
+    assert fired == [], "a source read escaped the held target's final validation"
+    assert result.id == entry.id
+    assert _snapshot(target) == before
+
+
+@pytest.mark.usefixtures("current_binding")
+@pytest.mark.parametrize("surface", ["register", "adopt"])
+@pytest.mark.parametrize("when", ["target-read", "id-file-sync", "id-directory-sync"])
+def test_registration_keeps_the_id_it_validated_through_its_durability_work(repo, boot, monkeypatch, surface, when):
+    target = _finished_move(repo, boot)
+    entry = registry.register(repo) if surface == "adopt" else None
+    source = _source(repo)
+    registry_path = local_home.root() / registry.MACHINE
+    saved = registry_path.read_bytes() if registry_path.exists() else None
+    real_read, real_sync = fd_tree.read_at, os.fsync
+    target_identity, source_identity = target.stat(), source.stat()
+    id_identity = (source / project_home.CLONE_ID).stat()
+    fired = []
+
+    def replace_id():
+        if not fired:
+            fired.append(True)
+            (source / project_home.CLONE_ID).write_text("foreign-owner\n")
+
+    def read(fd, name):
+        text = real_read(fd, name)
+        if when == "target-read" and name == MARKER and os.path.samestat(os.fstat(fd), target_identity):
+            replace_id()
+        return text
+
+    def sync(fd):
+        real_sync(fd)
+        wanted = id_identity if when == "id-file-sync" else source_identity
+        if when != "target-read" and os.path.samestat(os.fstat(fd), wanted):
+            replace_id()
+
+    monkeypatch.setattr(fd_tree, "read_at", read)
+    monkeypatch.setattr(os, "fsync", sync)
+    action = (lambda: registry.register(repo)) if entry is None else (lambda: registry.adopt(entry.id))
+    with pytest.raises(registry.RegistryError):
+        action()
+
+    assert fired == [True]
+    assert (source / project_home.CLONE_ID).read_text() == "foreign-owner\n"
+    assert (registry_path.read_bytes() if registry_path.exists() else None) == saved
+    assert not project_home.home("foreign-owner").exists()
+    assert json.loads((source / project_move.MOVE_RECORD).read_text())["target"] == str(target)
+
+
+@pytest.mark.usefixtures("current_binding")
+def test_selfcheck_refuses_a_readable_clone_id_that_disagrees_with_its_registered_receipt(repo, boot):
+    _finished_move(repo, boot)
+    registry.register(repo)
+    (_source(repo) / project_home.CLONE_ID).write_text("foreign-owner\n")
+
+    with pytest.raises(StoreError):
+        project_home.current(repo)
+    problems = selfcheck.problems()
+    assert problems
+    assert any(str(repo) in problem for problem in problems)
 
 
 @pytest.mark.usefixtures("current_binding")
