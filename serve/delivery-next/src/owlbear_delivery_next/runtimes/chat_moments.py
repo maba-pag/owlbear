@@ -5,17 +5,20 @@ Read from the chat's ``events.jsonl`` lines, one dict each, as the runtime wrote
 CLI 1.0.103, 2026-10-27) showed what the log holds: each model round between ``assistant.turn_start`` and
 ``assistant.turn_end``, its ``assistant.message`` with the round's tool requests (none on the final answer), and a
 ``session.usage_checkpoint`` after each prompt's last round; ``session.idle`` is never written. Marked assumptions
-(D-01M5XB9M1A1MNG0S54N367RC70) fill the gaps the trace leaves:
+(D-01M5XB9M1A1MNG0S54N367RC70) fill the gaps the trace leaves, each moment naming its rule's id (``assumptions``):
+once a reset retired a rule, the follower records its moments as skipped and looks at none, until a decided rule (a new
+id) replaces it.
 
-- **Plan:** the agent's first reply with content after a requester message, whatever it asks for besides.
-- **Hand-off:** at most one per requester turn: its final reply (content, no tool requests, its round ended), once
-  the turn settled: a checkpoint after it with the log read to its end, the next requester message, the session's
-  end, or ``QUIET`` seconds without an event of the agent while no round or call of it is open. A round that starts
-  after it supersedes it; an abort drops it.
-- **State change:** a completed call of the agent judged against the chat's workspace folder (a chat has no Change):
-  a write outside it, wherever (no exemption: the look sees caches and temporary folders too); or publishing,
-  deleting or settings by its shell command or its tool's name; a shell or tool call whose effect is not known is a
-  candidate too, its uncertainty in the moment. Known read-only calls are none.
+- **Plan** (``assumptions.PLAN``): the agent's first reply with content after a requester message, whatever it asks
+  for besides.
+- **Hand-off** (``assumptions.HANDOFF``): at most one per requester turn: its final reply (content, no tool requests,
+  its round ended), once the turn settled: a checkpoint after it with the log read to its end, the next requester
+  message, the session's end, or ``QUIET`` seconds without an event of the agent while no round or call of it is open.
+  A round that starts after it supersedes it; an abort drops it.
+- **State change** (``assumptions.STATE_CHANGE``): a completed call of the agent judged against the chat's workspace
+  folder (a chat has no Change): a write outside it, wherever (no exemption: the look sees caches and temporary
+  folders too); or publishing, deleting or settings by its shell command or its tool's name; a shell or tool call
+  whose effect is not known is a candidate too, its uncertainty in the moment. Known read-only calls are none.
 
 Only what is read live makes a moment: history (a log read on restart, a chat found before the follower started, a
 replaced log) builds the state but arms nothing, so a later checkpoint or quiet time never looks at it.
@@ -31,6 +34,7 @@ from typing import Any
 from copilot.generated.session_events import PermissionRequestedData
 
 from owlbear_delivery_next.change_contracts import watch_policy
+from owlbear_delivery_next.improvement import assumptions
 from owlbear_delivery_next.improvement.events import kept_text, main_agent, requester, result_text
 from owlbear_delivery_next.runtimes.watch_feed import asked
 
@@ -218,7 +222,8 @@ class Moments:
             return []
         self.handed = True
         return [{"look": "hand-off", "at": final["at"], "kind": "a turn that ends with a reply to the requester",
-                 "call": final["call"], "turn": self.turn, "result": final["text"], "settled": boundary}]  # fmt: skip
+                 "call": final["call"], "turn": self.turn, "result": final["text"], "settled": boundary,
+                 "assumption": assumptions.HANDOFF}]  # fmt: skip
 
     def _message(self, d: dict[str, Any], *, live: bool) -> list[dict[str, Any]]:
         data = d["data"]
@@ -231,7 +236,8 @@ class Moments:
             if live:
                 out.append({"look": "plan", "at": d.get("timestamp"), "call": str(d.get("id") or ""),
                             "kind": "the agent's first reply after the requester's message", "turn": self.turn,
-                            "result": kept_text(text, 3000), "asks_for_tools": tools})  # fmt: skip
+                            "result": kept_text(text, 3000), "asks_for_tools": tools,
+                            "assumption": assumptions.PLAN})  # fmt: skip
         if tools:
             self._drop()
         elif text.strip():
@@ -288,7 +294,7 @@ class Moments:
                 "call": str(d["data"].get("toolCallId")), "turn": self.turn, "tool": call["tool"],
                 "args": kept_text(command or call["args"], 1500), "certainty": certainty, "what": sorted(what),
                 "targets": list(targets[:20]), "workspace": str(self.own),
-                "result": kept_text(result_text(d["data"]), 1500)}  # fmt: skip
+                "result": kept_text(result_text(d["data"]), 1500), "assumption": assumptions.STATE_CHANGE}  # fmt: skip
 
 
 def classify(  # noqa: PLR0911 - one verdict a line

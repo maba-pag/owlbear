@@ -10,10 +10,13 @@ What it reads, for each project this machine serves and for this machine:
 - each Change's per-session marks (``Spend.last``: a session's highest totals, time unknown) where they exceed what
   the ledger has for that session, and the Change's credits no session holds (``residual``: time and agent unknown);
 - Spotter records written before looks wrote the ledger: one session each; a legacy look whose spend was not
-  reported carries the 0.5 estimate it was booked at, which is imported as unknown, never as measured;
+  reported carries the 0.5 estimate it was booked at, which is imported as unknown, never as measured. A record of a
+  look that never ran (skipped, or refused by its limit, before any session) imports nothing; one an earlier pass
+  imported as unknown spend is taken back by a ``void`` line;
 - the runtime's own log of an OwlBear session (``spend_logs``): a killed run, a run whose usage was unread or not
   final, and a session only Retro's chatlogs manifest names, such as curator, design pack and lookup runs before the
-  ledger; provisional, and read again as the log grows, until the session shut down.
+  ledger, and a Spotter look whose own lines a crash lost (under its look's owner once its record or cases run says,
+  the unknown project until then); provisional, and read again as the log grows, until the session shut down.
 Spend that none of these kept is not recoverable: a session OwlBear ran before Retro's manifest (2026-10-25) and
 outside any Change, such as a curator or design pack run, and the events a Change's activity log dropped beyond its
 marks' totals.
@@ -39,7 +42,7 @@ from owlbear_delivery_next.runtimes.spend_logs import UNKNOWN_PROJECT
 from owlbear_delivery_next.runtimes.spend_logs import agent as _agent
 from owlbear_delivery_next.runtimes.spend_logs import base as _base
 from owlbear_delivery_next.runtimes.spend_logs import ident as _id
-from owlbear_delivery_next.state_store import spend_ledger
+from owlbear_delivery_next.state_store import spend_ledger, spend_shares
 from owlbear_delivery_next.state_store.spend_ledger import Where
 
 if TYPE_CHECKING:
@@ -291,15 +294,34 @@ def _looks(known: list[dict[str, Any]], places: dict[str, Where]) -> list[dict[s
     for line in known:
         if line.get("look") and line.get("type") in {"start", "end"}:
             seen.setdefault(str(line["look"]), set()).add(str(line.get("session") or ""))
+    imported = {str(line["id"]): line for line in known if line.get("source") == "import:spotter"}
     folder, out = local_home.root() / "spotter", []
     for path in sorted(folder.glob("records-*.jsonl")) if folder.is_dir() else ():
-        for raw in path.read_text(encoding="utf-8").splitlines():
+        for raw in path.read_text(encoding="utf-8", errors="replace").splitlines():  # a cut character spoils its line
             with contextlib.suppress(ValueError, TypeError, KeyError, AttributeError):
                 rec = json.loads(raw)
                 covered = str(rec["id"]) in seen and set(rec.get("sdk_sessions") or ()) <= seen[str(rec["id"])]
-                if not covered and (line := _look(rec, places)) is not None:
+                if covered:
+                    continue
+                if (line := _look(rec, places)) is not None:
                     out.append(line)
+                elif _skipped(imported.get(f"look:{rec['id']}")):
+                    out.append(_void(rec))
     return out
+
+
+def _skipped(line: dict[str, Any] | None) -> bool:
+    """Whether *line* is a skipped look's record imported as unknown spend, as passes before 2026-10-28 did."""
+    if not line or line.get("type") != "look" or line.get("sdk_sessions"):
+        return False
+    return (line.get("usage") or {}).get("error") == "unknown"
+
+
+def _void(rec: dict[str, Any]) -> dict[str, Any]:
+    """The correction of a skipped look's ``look`` line: no look ran, so ``spend_shares`` drops that run."""
+    return {"id": f"void:look:{rec['id']}", "type": spend_shares.VOID, "run": f"look:{rec['id']}", "at": rec["at"],
+            "session": f"look:{rec['id']}", "source": "import:spotter",
+            "why": f"no look ran: {rec.get('skipped') or 'skipped before any session'}"}  # fmt: skip
 
 
 def _look(rec: dict[str, Any], places: dict[str, Where]) -> dict[str, Any] | None:
@@ -309,12 +331,9 @@ def _look(rec: dict[str, Any], places: dict[str, Where]) -> dict[str, Any] | Non
     that key, booked the 0.5 estimate when its spend was not reported, so that amount is unknown, never measured.
     """
     spent, legacy = rec.get("credits"), "credits_known" not in rec
-    if rec.get("credits_known") is False:  # the credit meter's record: its spend is not known
-        known = False
-    elif not spent and not rec.get("sdk_sessions"):
-        return None  # no look ran: skipped, or refused by its limit, before any session
-    else:
-        known = spent != ESTIMATE if legacy else bool(rec["credits_known"])
+    if not spent and not rec.get("sdk_sessions"):
+        return None  # no look ran: skipped (paused, fenced, over capacity), or refused by its limit, before any session
+    known = spent != ESTIMATE if legacy else bool(rec["credits_known"])  # the meter's record says whether it knows
     place = places.get(str(rec.get("project") or ""), UNKNOWN_PROJECT if rec.get("project") else Where())
     model = str(rec.get("model") or "")
     usage = ({"credits": float(spent), "models": {model: {"credits": float(spent)}}} if known

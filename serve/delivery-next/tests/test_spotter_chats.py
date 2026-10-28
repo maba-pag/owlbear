@@ -21,7 +21,7 @@ from typing import Any
 import pytest
 
 from owlbear_delivery_next.change_contracts import watch_policy
-from owlbear_delivery_next.improvement import cases, credit_meter, spotter
+from owlbear_delivery_next.improvement import assumptions, cases, credit_meter, spotter
 from owlbear_delivery_next.local_system import codebase, local_home, maintenance
 from owlbear_delivery_next.local_system.slots import Slots
 from owlbear_delivery_next.machine_host import chat_looks, chat_settings, chats
@@ -988,3 +988,172 @@ def test_the_machines_fence_counts_an_admitted_chat_look_and_admits_none_after()
     assert "Spotter chats: 1 look running" in m.fence("updating to the next version")
     m.chats.gate.left()
     assert m.chats.room() == chat_looks.FENCED
+
+
+# Marked assumptions: a reset retires the follower's rules
+
+
+def pushed(text: str) -> list[dict[str, Any]]:
+    """A requester turn whose tool round pushes: its plan, a state change and, once settled, its hand-off."""
+    cid = f"x{next(N)}"
+    return [asked(text), ev("assistant.turn_start"), reply("I will push.", tools=1),
+            *call(cid, "bash", {"command": "git push"}, shell("git push", read_only=False)),
+            ev("assistant.turn_end"), ev("assistant.turn_start"), reply("Pushed."), ev("assistant.turn_end"),
+            ev("session.usage_checkpoint")]  # fmt: skip
+
+
+def retire(*rules: str) -> None:
+    """The registry as a reset leaves it, with only *rules* retired."""
+    assumptions.path().parent.mkdir(parents=True, exist_ok=True)
+    marks = {r: {"what": assumptions.KNOWN[r], "since": None, "retired": "2026-10-28T09:00:00+00:00"} for r in rules}
+    assumptions.path().write_text(json.dumps(marks))
+
+
+def looked() -> list[tuple[str, str]]:
+    """Each record's look and why it was skipped: "" when looked at, "retired <rule>" when its rule was reset."""
+    out = []
+    for r in records():
+        why = r["skipped"]
+        rule = next((a for a in assumptions.KNOWN if why.startswith("retired") and a in why), "")
+        out.append((r["look"], f"retired {rule}" if rule else why))
+    return sorted(out)
+
+
+def test_a_reset_before_any_follower_retires_each_chat_rule_before_and_after_a_restart(world):
+    assert set(assumptions.reset()) == set(assumptions.KNOWN)  # a fresh registry: no rule was ever used
+
+    async def scenario() -> None:
+        await world.passes()
+        world.chat("c", pushed("one"))
+        await world.passes(2)
+        await world.follower._quit()  # noqa: SLF001 - the host stops
+        world.follower = world.new()
+        await world.passes()
+        world.chat("c", pushed("two"))
+        await world.passes(2)
+
+    asyncio.run(scenario())
+    retired = [("hand-off", f"retired {assumptions.HANDOFF}"), ("plan", f"retired {assumptions.PLAN}"),
+               ("state-change", f"retired {assumptions.STATE_CHANGE}")]  # fmt: skip
+    assert looked() == sorted(retired * 2)
+    assert world.cards == []  # no look ran
+    assert not any(assumptions.active(a) for a in assumptions.KNOWN)
+
+
+def test_a_retired_plan_rule_leaves_samples_and_hand_offs_looked_at(world):
+    retire(assumptions.PLAN)
+    world.ctx = dataclasses.replace(world.ctx, sample_rate=100)
+    whole = turn()
+
+    async def scenario() -> None:
+        await world.passes()
+        world.chat("c", whole[:6])  # the request, the plan and its round's completed call
+        await world.passes()
+        world.chat("c", whole[6:])  # the final reply, settled by its checkpoint
+        await world.passes()
+
+    asyncio.run(scenario())
+    assert looked() == [("hand-off", ""), ("plan", f"retired {assumptions.PLAN}"), ("sample", "")]
+
+
+def test_a_retired_state_change_rule_leaves_its_calls_sample_to_be_taken(world):
+    retire(assumptions.STATE_CHANGE)
+    world.ctx = dataclasses.replace(world.ctx, sample_rate=100)
+
+    async def scenario() -> None:
+        await world.passes()
+        world.chat("c", [asked("go"), *call("x", "bash", {"command": "git push"}, shell("git push", read_only=False))])
+        await world.passes()
+
+    asyncio.run(scenario())
+    assert looked() == [("sample", ""), ("state-change", f"retired {assumptions.STATE_CHANGE}")]
+    assert {r["call"] for r in records()} == {"x"}
+
+
+def test_a_replaced_rule_is_looked_at_while_the_old_ids_stay_retired(world, monkeypatch):
+    assumptions.reset()
+    old = assumptions.PLAN
+    monkeypatch.setattr(assumptions, "PLAN", "chat-plan-2")  # a decided rule replaces it, under a new id
+    monkeypatch.setitem(assumptions.KNOWN, "chat-plan-2", "A chat's plan, as decided")
+
+    async def scenario() -> None:
+        await world.passes()
+        world.chat("c", turn())
+        await world.passes(2)
+
+    asyncio.run(scenario())
+    assert looked() == [("hand-off", f"retired {assumptions.HANDOFF}"), ("plan", "")]
+    assert assumptions.active("chat-plan-2")
+    assert assumptions.listed()[old]["retired"]
+    assert assumptions.ensure(old) is False
+
+
+def test_a_look_admitted_before_a_reset_runs_to_its_end(world):
+    release = asyncio.Event()
+
+    async def slow(card: dict[str, Any], ctx: spotter.Context, meter: credit_meter.Meter) -> str:
+        await release.wait()
+        return await World.judge(world, card, ctx, meter)
+
+    async def scenario() -> None:
+        world.follower.judge = slow
+        await world.passes()
+        world.chat("c", [asked("go"), ev("assistant.turn_start"), reply("plan", tools=1)])
+        await world.follower._pass()  # noqa: SLF001 - its plan look is admitted and waits
+        assert assumptions.PLAN in assumptions.reset()
+        release.set()
+        await world.settled(world.follower)
+
+    asyncio.run(scenario())
+    assert [(r["look"], r["skipped"], r["category"]) for r in records()] == [("plan", "", "none")]
+
+
+@pytest.mark.parametrize("registry", ["{bad", "[]", "null", '{"chat-state-change-1": null}'])
+def test_an_unreadable_registry_refuses_its_rules_moments_and_the_chat_reads_on(world, registry):
+    """Sol's counterexample: a registry that parsed into no object raised out of the follower, aborting its read: the
+    offset stayed, the sample was lost and the prefix was read again. Only a bad entry leaves the other rules."""
+    assumptions.path().parent.mkdir(parents=True, exist_ok=True)
+    assumptions.path().write_text(registry)
+    world.ctx = dataclasses.replace(world.ctx, sample_rate=100)
+    log = world.state / "c" / "events.jsonl"
+
+    async def scenario() -> None:
+        await world.passes()
+        world.chat("c", [asked("go"), ev("assistant.turn_start"), reply("I will push.", tools=1)])
+        await world.passes()
+        world.chat("c", call("x", "bash", {"command": "git push"}, shell("git push", read_only=False)))
+        await world.passes()
+        assert world.follower.chats["c"].offset == log.stat().st_size  # read to its end, once
+
+    asyncio.run(scenario())
+    got = {r["look"]: r["skipped"] for r in records()}
+    refused = "the marked assumptions cannot be read ("
+    assert got["state-change"].startswith(refused)
+    assert got["sample"] == ""  # the call's sample is still taken
+    entry_only = registry.startswith('{"')
+    assert (got["plan"] == "") is entry_only  # a valid rule's moment is still looked at
+    assert entry_only or got["plan"].startswith(refused)
+    kept = assumptions.path().read_text()  # unreadable state is never replaced
+    assert json.loads(kept)[assumptions.STATE_CHANGE] is None if entry_only else kept == registry
+
+
+@pytest.mark.parametrize("entry", [{}, {"retired": False}, {"retired": 1}, {"retired": ""}, {"retired": "soon"}])
+def test_a_rule_whose_entry_does_not_say_whether_it_was_retired_is_refused(world, entry):
+    """CodeRabbit's and Copilot's reviews: an entry without a readable ``retired`` (none, or a string that is no time)
+    passed as held. What ``ensure`` and ``reset`` write, ``None`` or the time it was retired, is read as before."""
+    assumptions.path().parent.mkdir(parents=True, exist_ok=True)
+    assumptions.path().write_text(json.dumps({assumptions.PLAN: entry}))
+    assert assumptions.ensure(assumptions.HANDOFF)  # written by ensure, read back: held
+
+    async def scenario() -> None:
+        await world.passes()
+        world.chat("c", turn())
+        await world.passes(2)
+
+    asyncio.run(scenario())
+    got = {r["look"]: r["skipped"] for r in records()}
+    assert got["plan"].startswith("the marked assumptions cannot be read (")
+    assert got["hand-off"] == ""
+    assert json.loads(assumptions.path().read_text())[assumptions.PLAN] == entry  # never replaced
+    with pytest.raises(ValueError, match="retired"):
+        assumptions.reset()  # a reset checks every entry before it changes any

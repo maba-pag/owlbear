@@ -2,7 +2,8 @@
 
 The log is ``~/.copilot/session-state/<id>/events.jsonl``, else Retro's copy. It completes a run the ledger left open
 for ``OPEN`` (killed), a run that ended with its usage unread, unknown or a lower bound, and a session only Retro's
-chatlogs manifest names (curator, design pack and lookup runs before the ledger). Every new high of the session's
+chatlogs manifest names (curator, design pack and lookup runs before the ledger, and a Spotter look whose own lines
+and record a crash lost). Every new high of the session's
 cumulative credits counts, at the time it was first reached, the highest of each quarter hour (``QUARTER``), so a
 day's total never depends on when the log was first read and known spend never moves to a later day. Its usage stays
 provisional until the log shows the session shut down at no less than its high, and the log is read again whenever it
@@ -20,6 +21,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.change_flow import worktree
+from owlbear_delivery_next.improvement import cases
+from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.runtimes import chatlogs
 from owlbear_delivery_next.settings import roles
 from owlbear_delivery_next.state_store import spend_shares
@@ -62,7 +65,8 @@ def found(
     ending is itself a checkpoint, dates each one's growth between it and the one before.
     Until the log shows the session shut down, its usage stays provisional (``incomplete``) and the log is read again
     whenever it changes. Each log read is noted in *pending*; it counts as read (*checked*) only once its lines are
-    written.
+    written. A Spotter look's session (``_look``) carries its look's id, and its owner when known (``Owners``); an
+    owner known only later moves it with an ``owner`` line (``_owned``).
     """
     now, later = datetime.now(UTC), _resumed(known)
     found = list({r["run"]: r for r in spend_shares.runs(known)}.values())  # each run as its latest entry says
@@ -78,8 +82,12 @@ def found(
                        | _correction(run["run"], str(run["session"]), at, usage, final)
                        | {"ending": "unconfirmed"})  # fmt: skip
     sessions = {line.get("session") for line in known}
+    owners = Owners(places)
     for sid, who in _manifest().items():
-        if sid in sessions or who.get("kind") == "spotter":  # its runs say it; a legacy look is its Spotter record's
+        if sid in sessions:
+            continue  # its runs say it
+        if who.get("kind") == "spotter":
+            out += _look(sid, who, owners, checked, pending)
             continue
         place, change = _owner(sid, who, places)
         job = str(who.get("job") or "")
@@ -87,6 +95,91 @@ def found(
         for at, usage, final in _checkpoints(sid, checked, pending):
             out.append(base(place, change, agent=role, job=job, step="" if job else str(who.get("kind") or ""),
                              ending="") | _correction(f"log:{sid}", sid, at, usage, final))  # fmt: skip
+    return out + _owned(found, owners)
+
+
+class Owners:
+    """Who owns each Spotter look, by its id: its Spotter record, else the Spotter cases run that replayed it.
+
+    Read once, when first asked: the place, Change, step and job its spend counts under, and the source that said so.
+    """
+
+    def __init__(self, places: dict[str, Where]) -> None:
+        self.places = places
+        self.found: dict[str, tuple[Where, str, str, str, str]] | None = None
+
+    def of(self, look: str) -> tuple[Where, str, str, str, str] | None:
+        """The owner of *look*, or None while neither its record nor its cases run is written."""
+        if self.found is None:
+            self.found = self._read()
+        return self.found.get(look)
+
+    def _read(self) -> dict[str, tuple[Where, str, str, str, str]]:
+        out: dict[str, tuple[Where, str, str, str, str]] = {}
+        for run in _lines(cases.place() / "runs.jsonl"):  # a replay is machine-wide work, as its own lines say
+            for report in run.get("looks") or ():
+                if isinstance(report, dict) and report.get("id"):
+                    out[str(report["id"])] = (Where(), "", "", "look", "import:cases")
+        folder = local_home.root() / "spotter"
+        for path in sorted(folder.glob("records-*.jsonl")) if folder.is_dir() else ():
+            for rec in _lines(path):
+                if rec.get("id"):
+                    project = str(rec.get("project") or "")
+                    place = self.places.get(project, UNKNOWN_PROJECT if project else Where())
+                    out[str(rec["id"])] = (place, str(rec.get("change") or ""), str(rec.get("step") or ""),
+                                           f"{rec.get('look') or ''} look".strip(), "import:spotter")  # fmt: skip
+        return out
+
+
+def _lines(path: Path) -> list[dict[str, Any]]:
+    """Each readable JSON object line of *path*; none when it cannot be read.
+
+    Bytes that are no UTF-8 (a line cut inside a character) spoil only their own line, which is then left out.
+    """
+    out = []
+    with contextlib.suppress(OSError):
+        for raw in path.read_text(encoding="utf-8", errors="replace").splitlines():
+            with contextlib.suppress(ValueError):
+                if isinstance(line := json.loads(raw), dict):
+                    out.append(line)
+    return out
+
+
+def _look(
+    sid: str, who: dict[str, Any], owners: Owners, checked: dict[str, Any], pending: dict[str, str]
+) -> list[dict[str, Any]]:
+    """A Spotter look's session only the manifest names: its own run, ``log:<session>``, carrying its look's id.
+
+    A legacy look, whose manifest line names no look, is its Spotter record's. Its place is its owner's when known,
+    else the unknown project, never this machine's: a crash may have kept its record or cases run from being written.
+    Its own lines, when they come after all, join this run (``spend_shares.runs``).
+    """
+    look = str(who.get("look") or "")
+    if not look or not (read := _checkpoints(sid, checked, pending)):
+        return []
+    place, change, step, job, _ = owners.of(look) or (UNKNOWN_PROJECT, "", "", "look", "")
+    role = str(who.get("role") or "spotter")
+    return [base(place, change, agent=role, job=job, step=step, ending="", look=look)
+            | _correction(f"log:{sid}", sid, at, usage, final) for at, usage, final in read]  # fmt: skip
+
+
+def _owned(found: list[dict[str, Any]], owners: Owners) -> list[dict[str, Any]]:
+    """An ``owner`` line for each recovered look session still under the unknown project whose owner is now known.
+
+    Its run moves to its owner whether or not its log changed since: ``spend_shares.runs`` applies the line.
+    """
+    out = []
+    for run in found:
+        look, sid = str(run.get("look") or ""), str(run.get("session") or "")
+        if not look or run["run"] != f"log:{sid}" or run.get("project") != UNKNOWN_PROJECT.project:
+            continue
+        owner = owners.of(look)
+        if owner is None or owner[0] == UNKNOWN_PROJECT:
+            continue
+        place, change, step, job, source = owner
+        fields = base(place, change, step=step, job=job)
+        out.append({"id": f"owner:{run['run']}:{ident(fields)}", "type": spend_shares.OWNER, "run": run["run"],
+                    "session": sid, "look": look, "source": source} | fields)  # fmt: skip
     return out
 
 

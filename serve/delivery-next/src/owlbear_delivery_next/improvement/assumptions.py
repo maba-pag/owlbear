@@ -1,9 +1,9 @@
 """Improvement's marked assumptions (D-01M5XB9M1A1MNG0S54N367RC70): what fills an evidence gap until a decision does.
 
-Each assumption has an id, what it assumes and since when; ``owlbear improvement reset`` retires every one at once.
-A retired assumption stays retired: what needs it refuses until a decided replacement (a new id, in code) exists,
-and nothing marks the same id again, so a rollback or a new seed never revives it. Kept owner-only in
-``~/.owlbear/improvement/assumptions.json``.
+Each assumption has an id, what it assumes and since when it was first used; ``owlbear improvement reset`` retires
+every one at once, used or not. A retired assumption stays retired: what needs it refuses until a decided replacement
+(a new id, in code) exists, and nothing marks the same id again, so a rollback, a new seed or a restart never revives
+it. Kept owner-only in ``~/.owlbear/improvement/assumptions.json``.
 """
 
 from __future__ import annotations
@@ -24,11 +24,22 @@ if TYPE_CHECKING:
 
 RELEASE = "assumed-release-1"
 SYNTHETIC = "synthetic-cases-1"
+PLAN = "chat-plan-1"  # the chats follower's moments (``runtimes.chat_moments``)
+HANDOFF = "chat-hand-off-1"
+STATE_CHANGE = "chat-state-change-1"
 KNOWN = {
     RELEASE: "A release of the Spotter cases is a frozen revision of the case corpus (each reviewed case's card, "
     "expected call and family) and its grading contract; choosing active examples alone makes none",
     SYNTHETIC: "Invented cases stand in for the finding categories no real moment shows yet (outside-state changes, "
     "irreversible harm); never in the reserve, never an example, never published",
+    PLAN: "A chat's plan is its agent's first reply with content after a requester message, whatever it asks for "
+    "besides",
+    HANDOFF: "A chat's hand-off is at most one per requester turn: its final reply (content, no tool requests, its "
+    "round ended) once the turn settled, by a checkpoint after it read to the log's end, the next requester message, "
+    "the session's end or a quiet time with nothing of the agent open; a later round supersedes it, an abort drops it",
+    STATE_CHANGE: "A chat's state change is a completed call of its agent that writes outside the chat's workspace "
+    "folder, or publishes, deletes or changes settings by its shell command's words or its tool's name; a call whose "
+    "effect is not known is a candidate too, and known read-only calls are none",
 }
 
 
@@ -49,11 +60,48 @@ def _locked() -> Iterator[None]:
 
 
 def listed() -> dict[str, dict[str, Any]]:
-    """Every assumption ever marked, with its state; none when the file is missing."""
+    """Every assumption ever marked, with its state; none when the file is missing.
+
+    Raises:
+        ValueError: The registry is no JSON object: it is unreadable, never taken as empty.
+    """
     try:
-        return json.loads(path().read_text())
+        marks = json.loads(path().read_text())
     except FileNotFoundError:
         return {}
+    if not isinstance(marks, dict):
+        msg = "the marked assumptions' registry is not an object"
+        raise ValueError(msg)  # noqa: TRY004 - unreadable state, as a file that is no JSON is
+    return marks
+
+
+def _mark(marks: dict[str, Any], name: str) -> dict[str, Any] | None:
+    """*name*'s entry in *marks*; None when it was never marked.
+
+    Raises:
+        ValueError: Its entry is no object, or does not say whether it was retired (None, else the time it was, in ISO
+            form), as ``ensure`` and ``reset`` write it.
+    """
+    if name not in marks:
+        return None
+    if not isinstance(mark := marks[name], dict):
+        msg = f"the marked assumption {name}'s entry is not an object"
+        raise ValueError(msg)  # noqa: TRY004 - unreadable state, as a file that is no JSON is
+    if "retired" not in mark or not (mark["retired"] is None or _time(mark["retired"])):
+        msg = f"the marked assumption {name}'s entry does not say whether it was retired"
+        raise ValueError(msg)
+    return mark
+
+
+def _time(value: object) -> bool:
+    """Whether *value* is a time as ``reset`` writes it."""
+    if not isinstance(value, str):
+        return False
+    try:
+        datetime.fromisoformat(value)
+    except ValueError:
+        return False
+    return True
 
 
 def _save(marks: dict[str, dict[str, Any]]) -> None:
@@ -63,7 +111,7 @@ def _save(marks: dict[str, dict[str, Any]]) -> None:
 
 def active(name: str) -> bool:
     """Whether *name* is marked and not retired."""
-    mark = listed().get(name)
+    mark = _mark(listed(), name)
     return mark is not None and not mark.get("retired")
 
 
@@ -71,21 +119,28 @@ def ensure(name: str) -> bool:
     """Mark *name* when it never was; whether it holds now (False once retired: only a decision replaces it)."""
     with _locked():
         marks = listed()
-        if name not in marks:
+        if (mark := _mark(marks, name)) is None:
             now = datetime.now(UTC).isoformat(timespec="seconds")
-            marks[name] = {"what": KNOWN[name], "since": now, "retired": None}
+            marks[name] = mark = {"what": KNOWN[name], "since": now, "retired": None}
             _save(marks)
-        return not marks[name].get("retired")
+        return not mark.get("retired")
 
 
 def reset() -> list[str]:
-    """Retire every active assumption; the ids retired now."""
+    """Retire every assumption; the ids retired now.
+
+    One never used is listed retired too, so ``ensure`` never marks it later and nothing that rests on it holds.
+    """
     with _locked():
         marks, now, done = listed(), datetime.now(UTC).isoformat(timespec="seconds"), []
-        for name, mark in marks.items():
-            if not mark.get("retired"):
+        read = {name: _mark(marks, name) for name in marks}  # every entry readable before any is changed
+        for name, mark in read.items():
+            if mark is not None and not mark.get("retired"):
                 mark["retired"] = now
                 done.append(name)
+        for name in sorted(KNOWN.keys() - marks.keys()):
+            marks[name] = {"what": KNOWN[name], "since": None, "retired": now}
+            done.append(name)
         if done:
             _save(marks)
         return done

@@ -372,7 +372,7 @@ def test_reset_retires_every_assumption_for_good() -> None:
     with_synthetic = cases.current()["n"]
     rid, _ = case_replay.release("owner")
     retired, n = cases.reset()
-    assert set(retired) == {assumptions.RELEASE, assumptions.SYNTHETIC}
+    assert set(retired) == set(assumptions.KNOWN)  # the chats follower's rules too, though never used here
     assert set(cases.current()["cases"]) == {real}
     with pytest.raises(CaseError, match="reset"):
         pilot_seed.synthetic("owner")
