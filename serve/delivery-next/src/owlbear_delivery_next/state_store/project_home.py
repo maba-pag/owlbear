@@ -289,7 +289,7 @@ def _publish_markers(
     folder_fd: int, tfd: int, previous: int, *, moved: bool, guard: Callable[[], None] | None = None
 ) -> None:
     """Write the target's format through the descriptor already validated: the name is never reopened here."""
-    format_marker.ensure_target(tfd, previous)
+    format_marker.ensure_target(tfd, previous, before_create=guard)
     # a moved clone keeps the fence: its retained source must not be opened again as a store by an older runtime
     fd_tree.write_at(folder_fd, MARKER, f"{project_move.FENCE if moved else STORE_FORMAT}\n", before_replace=guard)
 

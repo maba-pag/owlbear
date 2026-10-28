@@ -6,9 +6,13 @@ its move, or with STORE_FORMAT. An existing or collided marker is kept only when
 
 import contextlib
 import os
+from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.state_store import fd_tree
 from owlbear_delivery_next.state_store.database import MARKER, STORE_FORMAT, FormatTooNewError, StoreError
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 def supported_format(text: object) -> int:
@@ -46,11 +50,12 @@ def prior_format(text: object) -> int:
     return supported_format(text)
 
 
-def ensure_target(tfd: int, previous: int) -> None:
+def ensure_target(tfd: int, previous: int, *, before_create: Callable[[], None] | None = None) -> None:
     """Keep and sync a supported marker; exclusively create *previous* (or STORE_FORMAT) when it has none.
 
     A collision adopts only a supported regular file, never replacing or unlinking the entry. Reads are no-follow
     and non-blocking; the file and folder are synced before admission, then the marker is checked again.
+    *before_create* revalidates authority after an absent-marker read and before the exclusive creation.
     """
     try:
         text = fd_tree.read_at(tfd, MARKER)
@@ -58,6 +63,8 @@ def ensure_target(tfd: int, previous: int) -> None:
         msg = "the target's format marker is not a regular file: refusing it; nothing was changed"
         raise StoreError(msg) from exc
     if text is None:
+        if before_create is not None:
+            before_create()
         with contextlib.suppress(FileExistsError):
             fd_tree.create_at(tfd, MARKER, f"{previous or STORE_FORMAT}\n")
     else:

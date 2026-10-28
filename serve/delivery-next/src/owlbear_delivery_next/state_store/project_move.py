@@ -299,10 +299,7 @@ def _source_unchanged(folder_fd: int, rec: dict, images: fd_tree.PayloadImages |
 
 
 def _copy_each(folder: Path, folder_fd: int, sfd: int, rec: dict) -> None:
-    """Copy each source entry into the staging folder, verifying it against the digest taken before the move began.
-
-    A mismatched copy is kept where it is, named as pending in the record; the source keeps every byte.
-    """
+    """Verify each source copy against its recorded digest; keep a mismatch as pending and every source byte."""
     for name, digest in rec["manifest"].items():
         src = folder / name
         rec["pending"] = name
@@ -379,9 +376,14 @@ def _commit(  # noqa: PLR0913, PLR0917
         msg = f"{folder / MOVE_RECORD} changed before publication: nothing was switched"
         raise StoreError(msg)
     images: dict[int, fd_tree.PayloadImages] = {folder_fd: {}, tfd: {}}
-    with proof.guard(folder_fd, target, tfd, images):
+
+    @proof.guard(folder_fd, target, tfd, images)
+    def before_marker() -> None:
+        require_proof(folder, folder_fd, target, proof)
         _published(pfd, target, tfd, rec, images[tfd])  # an altered copy is refused before any write into it
-    format_marker.ensure_target(tfd, previous)
+
+    before_marker()
+    format_marker.ensure_target(tfd, previous, before_create=before_marker)
     _sync_published(pfd, target, tfd)  # a retry re-syncs before any switch, so a failure stays uncommitted
 
     @proof.guard(folder_fd, target, tfd, images)

@@ -90,7 +90,9 @@ an arbitrary import closure. There is no switch that skips these checks.
 Format markers must be regular files. Registration, store reads and selfcheck report unreadable or nonregular
 markers without following a marker link or waiting on a pipe; only a genuinely missing entry counts as absent.
 Missing target markers are created exclusively; a concurrent existing marker is validated and made durable,
-never replaced. Settlement and admission validate the complete preparation and original source identity through
+never replaced. Ordinary admission and Finish revalidate authority after reading an absent target marker and before
+creating it, leaving both a replaced target and the detached original untouched on refusal.
+Settlement and admission validate the complete preparation and original source identity through
 held descriptors. Repeated Prepare refuses a completed move or malformed receipt, even while its backup payload remains.
 Prepare rechecks the exact source marker and preparation after id synchronization and immediately before publishing
 either metadata file; a changed or blank marker refuses without replacing the owner's entries. Read-only switched-store

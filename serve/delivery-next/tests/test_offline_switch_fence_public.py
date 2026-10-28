@@ -11,6 +11,7 @@ import pytest
 from owlbear_delivery_next.commands import cli
 from owlbear_delivery_next.state_store import fd_tree, format_marker, offline_protocol, project_home, project_move
 from owlbear_delivery_next.state_store.database import MARKER, FormatTooNewError
+from owlbear_delivery_next.state_store.store import Store
 
 BEFORE = "AAAAAAAA-0000-4000-8000-000000000001"
 AFTER = "BBBBBBBB-0000-4000-8000-000000000002"
@@ -718,4 +719,40 @@ def test_finish_refuses_target_payload_changes_before_the_first_target_marker_wr
 
     assert changed == [True]
     assert record(source)["phase"] == project_move.COPYING
+    assert {path: snapshot(path) for path in owners} == owners
+
+
+@pytest.mark.parametrize("consumer", ["open", "finish"])
+def test_target_marker_is_not_created_after_its_absence_read_loses_authority(prepared, monkeypatch, consumer):
+    repo, source = prepared
+    target = project_home.home("owned")
+    if consumer == "open":
+        assert cli.main(["--repo", str(repo), "finish"]) == 0
+        (target / MARKER).unlink()
+    real_ensure, real_read = format_marker.ensure_target, fd_tree.read_at
+    active, fired, owners = [], [], {}
+
+    def ensure(*args, **kwargs):
+        active.append(True)
+        try:
+            return real_ensure(*args, **kwargs)
+        finally:
+            active.pop()
+
+    def read(dfd, name):
+        value = real_read(dfd, name)
+        if active and not fired and name == MARKER and value is None:
+            assert os.path.samestat(os.fstat(dfd), target.stat())
+            fired.append(True)
+            (target / project_move.MOVE_PROOF).write_text("owner-replaced-proof\n")
+            owners.update({source: snapshot(source), target: snapshot(target)})
+        return value
+
+    monkeypatch.setattr(format_marker, "ensure_target", ensure)
+    monkeypatch.setattr(fd_tree, "read_at", read)
+    action = (lambda: Store.open(repo)) if consumer == "open" else (lambda: offline_protocol.finish_clone(repo))
+    with pytest.raises(project_move.StoreError):
+        action()
+    assert fired == [True]
+    assert not (target / MARKER).exists()
     assert {path: snapshot(path) for path in owners} == owners
