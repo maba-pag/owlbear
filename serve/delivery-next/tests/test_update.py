@@ -359,6 +359,8 @@ def test_an_install_ends_only_the_failure_it_set_out_to_repair(updating, monkeyp
     design_pack.install()
     m = updating.machine
     m.packs.failed("v0.1", "the running pack once failed")
+    # an update that failed on v0.3's pack leaves its folder
+    (local_home.root() / local_home.VERSIONS / "v0.3").mkdir(parents=True, exist_ok=True)
 
     def meanwhile() -> bool:  # an update keeps a newer version's failure while this install runs
         m.packs.failed("v0.3", "v0.3's design pack could not be installed")
