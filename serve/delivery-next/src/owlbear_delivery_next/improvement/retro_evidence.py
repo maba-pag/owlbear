@@ -9,6 +9,7 @@ import contextlib
 import json
 from typing import TYPE_CHECKING, Any
 
+from owlbear_delivery_next.improvement import events as ev
 from owlbear_delivery_next.improvement import retro_judge, retro_segments
 from owlbear_delivery_next.improvement import retro_store as store
 from owlbear_delivery_next.improvement import retro_synthetic as syn
@@ -72,9 +73,8 @@ def last_said(sid: str) -> str:
     said = ""
     with contextlib.suppress(OSError):
         for d in units.events(sid):
-            data = d.get("data") if isinstance(d.get("data"), dict) else {}
-            if d.get("type") == "assistant.message" and data.get("content") and not data.get("parentToolCallId"):
-                said = str(data["content"])
+            if d.get("type") == "assistant.message" and ev.main_agent(d) and d["data"].get("content"):
+                said = str(d["data"]["content"])
     return said
 
 

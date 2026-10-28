@@ -3,8 +3,8 @@
 import gzip
 import json
 
+from owlbear_delivery_next.improvement import retro_evidence, retro_units
 from owlbear_delivery_next.improvement import retro_segments as seg
-from owlbear_delivery_next.improvement import retro_units
 
 SECRET = "ghp_" + "a" * 36
 
@@ -75,6 +75,16 @@ def test_a_changes_first_session_sees_what_its_shorter_second_session_did_later_
 
     assert "the reviewer found the build broken" in first.later
     assert "step 4" not in second.later
+
+
+def test_a_chats_outcome_is_its_main_agents_last_word_never_a_subagents():
+    events = [
+        _event("assistant.message", content="the main agent is done"),
+        {"type": "assistant.message", "agentId": "sub-1", "data": {"content": "a subagent's report"}},
+        _event("assistant.message", content="a nested reply", parentToolCallId="t1"),
+    ]
+    _captured("s1", events)
+    assert retro_evidence.last_said("s1") == "the main agent is done"
 
 
 def test_parts_are_bounded_and_masked_and_only_quotes_found_in_the_cited_text_survive():
