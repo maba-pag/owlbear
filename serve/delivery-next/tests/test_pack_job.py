@@ -929,11 +929,38 @@ def test_an_agents_harmless_ci_repair_is_pushed_by_delivery_and_merges_once_ci_p
     assert fakes.github.calls == ["create", "merge", "delete"]
 
 
-def test_a_ci_repair_of_detector_code_is_pushed_but_merges_only_once_the_owner_approved_it(tmp_path, checkout, clone):
-    fakes, job, _ = ci_failed(tmp_path, checkout, clone, {DETECTOR: "# repaired\n"})
+def checked_again(state: dict, before: int) -> list[tuple[str, int, str]]:
+    """The invocations since the *before*-th, each with its round and the identity it is bound to."""
+    return [(i["operation"], i["round"], i["identity"]) for i in state["invocations"][before:]]
+
+
+def test_a_ci_repair_of_detector_code_is_checked_again_and_merges_only_once_the_owner_approved_it(
+    tmp_path, checkout, clone
+):
+    """The repaired pack passes the update's checks again for its own identity, then the owner's gates, then CI."""
+    fakes, job, state = ci_failed(tmp_path, checkout, clone, {DETECTOR: "# repaired\n"})
+    calls, head, seen = len(fakes.calls), pr_head(checkout, state), len(state["invocations"])
+    (passed,) = {i["identity"] for i in state["invocations"] if i["operation"] == "full-challenge"}
     fakes.github.checks = ["success"]
 
     state = answered(job, "repair")
+
+    (q,) = state["questions"]
+    assert (state["state"], q["kind"], [o["id"] for o in q["options"]]) == ("waiting", "code", ["approve", "discard"])
+    assert "+# repaired" in q["diff"]
+    assert fakes.calls[calls:] == ["repair", "golden", "challenger"]  # the replay stands: the skills are unchanged
+    assert "code/detector.py" in fakes.sessions[-1].changed  # a round on the whole pack, the repair in it
+    (repair, golden, replay, challenge, _owner) = checked_again(state, seen)
+    repaired = challenge[2]
+    assert repair[0] == "ci-repair"
+    assert repaired not in {"", passed}
+    assert (golden, replay, challenge) == (
+        ("candidate-golden", 2, repaired), ("replay", 2, repaired), ("full-challenge", 2, repaired)
+    )  # fmt: skip
+    assert next(i for i in state["invocations"] if i["operation"] == "full-challenge")["stale"]
+    assert (pr_head(checkout, state), fakes.github.calls, state["repair"]["phase"]) == (head, ["create"], "checking")
+
+    state = answered(job, "approve")
 
     (q,) = state["questions"]
     assert (state["state"], q["kind"], q["paths"]) == ("waiting", "repair-approval", [DETECTOR])
@@ -944,10 +971,8 @@ def test_a_ci_repair_of_detector_code_is_pushed_but_merges_only_once_the_owner_a
     assert state["repair"] == {
         "phase": "", "attempts": 1, "limit": pack_repair.REPAIRS, "head": "", "summary": "repair 1",
         "commit": pr_head(checkout, state), "paths": [DETECTOR], "held": [], "approved": False,
-    }  # fmt: skip  # pushed, and CI passed there
+    }  # fmt: skip  # pushed once checked, and CI passed there
     assert fakes.github.calls == ["create"]  # never merged without him
-    assert steps(state)[-2:] == [("publish", "merge", 2, "held for you", False),
-                                 ("publish", "owner", 2, "waiting for you", False)]  # fmt: skip
 
     state = answered(job, "approve-repair")
 
@@ -959,7 +984,8 @@ def test_a_ci_repair_of_detector_code_is_pushed_but_merges_only_once_the_owner_a
 def test_a_second_protected_repair_after_the_owners_approval_asks_for_it_again(tmp_path, checkout, clone):
     fakes, job, _ = ci_failed(tmp_path, checkout, clone, {DETECTOR: "# repaired\n"}, {GOLDEN: "<p>repaired</p>\n"})
     fakes.github.checks = ["success"]
-    first = answered(job, "repair")["questions"][0]
+    answered(job, "repair")
+    first = answered(job, "approve")["questions"][0]
     fakes.github.checks = ["failure"]  # CI fails again before the merge
     state = answered(job, "approve-repair")
     assert [o["id"] for o in state["questions"][0]["options"]] == ["retry", "repair", "discard"]
@@ -967,6 +993,10 @@ def test_a_second_protected_repair_after_the_owners_approval_asks_for_it_again(t
 
     state = answered(job, "repair")
 
+    (q,) = state["questions"]  # its changed evidence first, as an update's; the glue's approval still stands
+    assert (q["kind"], [o["id"] for o in q["options"]]) == ("evidence", ["accept", "discard"])
+    assert "+<p>repaired</p>" in q["diff"]
+    state = answered(job, "accept")
     (q,) = state["questions"]
     assert (q["kind"], q["paths"]) == ("repair-approval", sorted([DETECTOR, GOLDEN]))
     assert q["digest"] != first["digest"]
@@ -1001,6 +1031,8 @@ ASKED, REFUSED = ["push-config", "retry", "discard"], ["retry", "discard"]
          ("tests/test_page.py (adds a suppression or skip)", REFUSED)),
         (("tests/test_page.py", "def test_contrast():\n    pass\n"),
          ("tests/test_page.py (removes an assertion or test)", REFUSED)),
+        (("src/pkg/design_pack.json", "{}\n"),
+         ("src/pkg/design_pack.json (pack content only an update may change)", REFUSED)),
     ],
 )  # fmt: skip
 def test_a_ci_repair_that_changes_configuration_or_weakens_a_check_stops_and_asks_without_pushing(
@@ -1105,6 +1137,32 @@ def test_a_host_stop_as_the_repair_was_pushed_pushes_it_no_second_time_and_start
     assert fakes.calls.count("repair") == 1
     pushes = [(i["result"], i["identity"]) for i in state["invocations"] if i["operation"] == "ci-repair"]
     assert pushes == [("stopped", ""), ("pushed", repair)]  # the one the host stopped, then the push found done
+
+
+def test_a_host_stop_while_a_repair_is_checked_again_checks_it_from_the_start_and_pushes_nothing_before(
+    tmp_path, checkout, clone
+):
+    fakes, job, state = ci_failed(tmp_path, checkout, clone, {DETECTOR: "# repaired\n"})
+    head, file, kept = pr_head(checkout, state), job.store.root / pack_job.FILE, {}
+    fakes.at_golden = lambda: kept.update(kept or json.loads(file.read_text()))
+    fakes.github.checks = ["success"]
+    answered(job, "repair")
+    file.write_text(json.dumps(kept))  # the record as the host left it, in the middle of the check
+
+    again = pack_job.Job(job.store, fakes.live(checkout))
+
+    (q,) = again.read()["questions"]
+    assert "was checked again; nothing was pushed" in q["text"]
+    assert [o["id"] for o in q["options"]] == ["retry", "discard"]
+    calls = len(fakes.calls)
+    state = answered(again, "retry")
+    assert (state["questions"][0]["kind"], fakes.calls[calls:]) == ("code", ["golden", "challenger"])
+    assert (pr_head(checkout, state), state["repair"]["phase"]) == (head, "checking")
+    answered(again, "approve")
+    state = answered(again, "approve-repair")
+    assert state["state"] == "passed", state["reason"]
+    assert fakes.calls.count("repair") == 1
+    assert git(checkout.parents[1], "show", f"{landed(checkout)}:{DETECTOR}") == "# repaired"
 
 
 @pytest.mark.parametrize("during", [False, True])

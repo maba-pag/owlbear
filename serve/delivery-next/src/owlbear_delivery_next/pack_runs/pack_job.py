@@ -573,8 +573,9 @@ class Job:
         with self.lock:
             ctx = pack_run.Context.model_validate(self.state["context"])
             lp = RoundLoop.model_validate(self.state["loop"])
-        if ctx.publication and ctx.publication.commit:  # GitHub first: the package may have moved on meanwhile
-            return pack_run.republish(self, ctx)
+        checking = ctx.repair.phase == "checking"  # an agent's repair of pack content, checked before it is pushed
+        if ctx.publication and ctx.publication.commit and not checking:  # GitHub first: the package may have moved on
+            return pack_run.republish(self, ctx, lp)
         return pack_run.advance(self, pack_run.rebuilt(self, ctx), ctx, lp)
 
     def _notice(self) -> str:

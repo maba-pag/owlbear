@@ -5,11 +5,14 @@ failed head with the failed checks' logs; it never pushes. Delivery commits what
 format, CI workflow, hook or security configuration stops and asks the owner with the diff, pushing nothing; a weakened
 test (a deleted test file, an added skip or suppression, a removed assertion or test) is never pushed, and any other
 test edit that removes lines waits for the owner's review of its diff, since those patterns are no proof that a test
-still checks as much; a change to the pack's protected content (the detector's glue, golden pages, skills, pins) is
-pushed but merges only once the owner approved all such changes, so a later one asks again; anything else is pushed.
-Then CI is awaited again. A session that fails or changes nothing gives the owner the CI stop again with its summary.
-The push is a fast-forward from the failed head, so a head someone moved is never overwritten, and a commit already on
-the branch is never pushed twice.
+still checks as much. A change to the pack's protected content is checked again before it is pushed, as the update was
+(``pack_run``): the detector's glue, golden pages and pinned skills are laid into the candidate, which passes the
+golden pages, the calibration replay, a challenger round on the whole pack and the owner's evidence and code gates for
+its new identity; the pins, the notice and other pack files only an update may change, so such a repair is never
+pushed. Once CI passed, it merges only when the owner approved all the protected changes, so a later one asks again.
+Anything else is pushed, and CI is awaited again. A session that fails or changes nothing gives the owner the CI stop
+again with its summary. The push is a fast-forward from the failed head, so a head someone moved is never overwritten,
+and a commit already on the branch is never pushed twice.
 """
 
 from __future__ import annotations
@@ -67,14 +70,14 @@ RULES = (
     "threshold or add a suppression (`noqa`, `type: ignore`, `biome-ignore`, `pragma: no cover` and the like). Do not "
     "change lint, format, CI workflow, hook or security configuration (`.github/`, `pyproject.toml`, `biome.json`, "
     "`.pre-commit-config.yaml`, `conftest.py` and the like): if the fix needs that, change nothing and say so in your "
-    "summary. A change to the detector's glue, the golden pages, the skills or `design_pack.json` needs the owner's "
-    "approval before the merge. You cannot run commands or push: Delivery commits and pushes what you changed, and CI "
-    "runs again."
+    "summary. A change to the detector's glue, the golden pages or the skills is checked again as the update was and "
+    "needs the owner's approval; never change `design_pack.json`, the notice or other files of the pack. You cannot "
+    "run commands or push: Delivery commits and pushes what you changed, and CI runs again."
 )
 FINISH = "Call `submit_result` once with `summary`: what failed, what you changed and why, file by file."
 KINDS = frozenset({"repair-config", "repair-approval"})  # the questions a repair asks the owner
 PUSHES = frozenset({pack_rounds.PUSH_CONFIG, pack_rounds.PUSH_REVIEWED})  # answers that let a held repair through
-type Phase = Literal["", "requested", "running", "committed", "config"]
+type Phase = Literal["", "requested", "running", "committed", "config", "checking"]
 
 
 class RepairResult(tools.Args):
@@ -108,10 +111,11 @@ class Repair(BaseModel):
     commit: str = ""  # the repair's commit, made by Delivery on the failed head
     paths: list[str] = Field(default_factory=list)  # the files it changed, repository paths
     held: list[str] = Field(default_factory=list)  # its configuration changes, which the owner may let through
-    weakened: list[str] = Field(default_factory=list)  # the checks it weakens: never pushed
+    refused: list[str] = Field(default_factory=list)  # never pushed: a weakened check, or what only an update changes
     reviewed: list[str] = Field(default_factory=list)  # its other test edits that remove lines, for the owner's review
     diff: str = ""  # its diff, as the owner is shown it
     allowed: str = ""  # the commit the owner had pushed with its configuration change
+    checked: str = ""  # the commit whose protected content passed the pack's checks again
     protected: dict[str, str] = Field(default_factory=dict)  # protected path -> its blob as the repairs left it
     shown: str = ""  # the repairs' diffs of protected content, for the owner's approval
     approved: str = ""  # the digest of the protected changes the owner approved
@@ -126,6 +130,10 @@ class Asked(pack_publish.Held):
         """Keep the question the owner answers."""
         super().__init__(reason)
         self.question = question
+
+
+class Recheck(Exception):  # noqa: N818 - how a repair hands its protected content to the pack's checks
+    """The committed repair changes protected pack content: ``pack_run`` checks it again before it is pushed."""
 
 
 @dataclass(frozen=True)
@@ -155,6 +163,8 @@ def interrupted(ctx: Context) -> str:
     if r.phase in {"requested", "running"}:
         r.phase = ""
         return "the host stopped while an agent repaired CI; nothing was pushed"
+    if r.phase == "checking":  # trying again checks it from the golden pages on, before anything is pushed
+        return f"the host stopped while the agent's repair {r.commit[:12]} was checked again; nothing was pushed"
     if r.phase == "committed":
         made = r.commit[:12]
         return f"the host stopped as the agent's repair {made} was pushed; trying again pushes it unless it is there"
@@ -168,7 +178,7 @@ def view(context: dict[str, Any] | None) -> dict[str, Any] | None:
         return None
     return {
         "phase": r.phase, "attempts": r.attempts, "limit": REPAIRS, "head": r.stop.head if r.stop else "",
-        "summary": r.summary, "commit": r.commit, "paths": r.paths, "held": [*r.weakened, *r.reviewed, *r.held],
+        "summary": r.summary, "commit": r.commit, "paths": r.paths, "held": [*r.refused, *r.reviewed, *r.held],
         "approved": bool(r.protected) and _digest(r.protected) == r.approved,
     }  # fmt: skip
 
@@ -188,7 +198,7 @@ def decided(q: dict[str, Any], option: str, ctx: Context) -> None:
             r.phase, r.commit, r.stop = "", "", None
     elif q["kind"] == "repair-approval":
         r.approved = q["digest"]
-    ctx.next = "activate"
+    ctx.next = "golden" if r.phase == "checking" else "activate"  # a check the host stopped starts again
 
 
 def repaired(job: Job, ctx: Context) -> None:
@@ -197,8 +207,11 @@ def repaired(job: Job, ctx: Context) -> None:
     Raises:
         pack_publish.CiFailed: The session failed or changed nothing: the CI stop again, with why.
         Asked: The repair changes configuration or tests, or weakens a check; nothing was pushed.
+        Recheck: The repair changes protected pack content, not yet checked again; nothing was pushed.
     """
     r, pub = ctx.repair, ctx.publication
+    if r.phase == "checking":  # only the pack's activation of the checked identity comes here (pack_run)
+        r.phase, r.checked = "committed", r.commit
     if r.phase not in {"requested", "committed"} or pub is None:
         return
     src = pack_git.Source(Path(pub.root), pub.repository, pub.base)
@@ -227,6 +240,8 @@ def repaired(job: Job, ctx: Context) -> None:
         raise pack_publish.CiFailed(msg, number=stop.number, head=stop.head, failed=_checks(stop))
     if out.result == "held":
         raise Asked(out.detail, _config(job.state["run"], r))
+    if out.result == "checking":
+        raise Recheck(out.detail)
 
 
 def gate(job: Job, ctx: Context) -> None:
@@ -253,9 +268,10 @@ def _config(run: str, r: Repair) -> dict[str, Any]:
     """The owner's question about a held repair: a weakened check is never pushed, other holds he may let through."""
     made, said = r.commit[:12], f"The agent said: {r.summary}"
     config = f"; it also changes configuration: {', '.join(r.held[:10])}" if r.held else ""
-    if r.weakened:
-        text = (f"The agent's CI repair {made} weakens a check: {', '.join(r.weakened[:10])}. Delivery pushed nothing "
-                f"and never pushes it. Try again without it, or discard? {said}")  # fmt: skip
+    if r.refused:
+        text = (f"The agent's CI repair {made} weakens a check or changes what only an update may: "
+                f"{', '.join(r.refused[:10])}. Delivery pushed nothing and never pushes it. Try again without it, or "
+                f"discard? {said}")  # fmt: skip
         options = [pack_rounds.RETRY, pack_rounds.DISCARD]
     elif r.reviewed:
         text = (f"The agent's CI repair {made} removes lines from tests: {', '.join(r.reviewed[:10])}{config}. "
@@ -268,7 +284,7 @@ def _config(run: str, r: Repair) -> dict[str, Any]:
                 f"{said}")  # fmt: skip
         options = [pack_rounds.PUSH_CONFIG, pack_rounds.RETRY, pack_rounds.DISCARD]
     q = pack_rounds.question(f"{run}:repair-config:{made}", "repair-config", text, [], commit=r.commit,
-                             paths=[*r.weakened, *r.reviewed, *r.held], diff=r.diff)  # fmt: skip
+                             paths=[*r.refused, *r.reviewed, *r.held], diff=r.diff)  # fmt: skip
     q["options"] = pack_rounds.published(options, opened=True)
     return q
 
@@ -308,7 +324,7 @@ def _made(job: Job, ctx: Context, src: pack_git.Source, gh: Provider) -> Outcome
     assert r.stop is not None  # noqa: S101 - repaired() saw it
     assert pub is not None  # noqa: S101 - a repair follows publication
     r.phase, r.attempts, r.summary, r.commit = "running", r.attempts + 1, "", ""
-    r.paths, r.held, r.weakened, r.reviewed, r.diff = [], [], [], [], ""
+    r.paths, r.held, r.refused, r.reviewed, r.diff, r.checked = [], [], [], [], "", ""
     job.keep(ctx)  # before the session: a host stop now reports, and pushes nothing
     at = job.store.root / RUNS / f"{job.state['run']}-ci-repair"
     try:
@@ -320,7 +336,8 @@ def _made(job: Job, ctx: Context, src: pack_git.Source, gh: Provider) -> Outcome
         if not paths:
             return Outcome("empty", f"the agent's repair changed nothing: {r.summary}")
         r.paths = [p for p, _ in paths]
-        r.held, r.weakened, r.reviewed = _held(run, at, r.stop.head, paths)
+        package, skills = _package(job, src), ctx.pins["skills"]
+        r.held, r.refused, r.reviewed = _held(run, at, r.stop.head, paths, package=package, skills=skills)
         r.diff = run(at, ["diff", "--cached", r.stop.head])[:SHOWN]
         names = ", ".join(c["name"] for c in r.stop.failed)
         message = (f"fix(ci): repair {names} of the design pack update\n\n{r.summary}\n\n"
@@ -342,22 +359,29 @@ def _pushed(job: Job, ctx: Context, src: pack_git.Source) -> Outcome:
     """Gate the committed repair, then fast-forward the branch to it from the failed head, once."""
     r, pub, run = ctx.repair, ctx.publication, job.live.git
     assert pub is not None  # noqa: S101 - a repair follows publication
-    if r.weakened or ((r.held or r.reviewed) and r.allowed != r.commit):
+    if r.refused or ((r.held or r.reviewed) and r.allowed != r.commit):
         r.phase = "config"
         job.keep(ctx)
-        held = ", ".join([*r.weakened, *r.reviewed, *r.held][:10])
+        held = ", ".join([*r.refused, *r.reviewed, *r.held][:10])
         return Outcome("held", f"the agent's repair {r.commit[:12]} changes {held}; pushed nothing")
     try:
         head = run(src.root, ["rev-parse", f"{r.commit}~1"])  # the failed head it was made on, kept after a host stop
-        blobs, diff = _guarded(run, src, r, _package(job, src))  # read before the push, so none goes unrecorded
+        package = _package(job, src)
         there = pack_git.remote_head(src, pub.branch, run)
-        if there == head:
-            run(src.root, ["push", "--quiet", "origin", f"{r.commit}:refs/heads/{pub.branch}"])  # never forced
-        elif there != r.commit and not _holds(src, r.commit, pub.branch, there, run):
+        landed = there != head and (there == r.commit or _holds(src, r.commit, pub.branch, there, run))
+        if there != head and not landed:
             r.phase, r.stop = "", None
             job.keep(ctx)
             return Outcome("moved", f"the branch moved to {there[:12] or 'nothing'} from {head[:12]}; the agent's "
                                     f"repair {r.commit[:12]} was not pushed")  # fmt: skip
+        if not landed and r.checked != r.commit and (checked := [p for p in r.paths if protected(package, p)]):
+            r.phase = "checking"
+            job.keep(ctx)
+            return Outcome("checking", f"the agent's repair {r.commit[:12]} changes the pack's {', '.join(checked)}; "
+                                       "checked again as the update was before it is pushed")  # fmt: skip
+        blobs, diff = _guarded(run, src, r, package)  # read before the push, so none goes unrecorded
+        if not landed:
+            run(src.root, ["push", "--quiet", "origin", f"{r.commit}:refs/heads/{pub.branch}"])  # never forced
     except design_pack.PackError as exc:
         r.phase = ""
         job.keep(ctx)
@@ -443,14 +467,21 @@ def _staged(run: pack_git.Git, at: Path, head: str) -> list[tuple[str, str]]:
     return changed
 
 
-def _held(run: pack_git.Git, at: Path, head: str, changed: list[tuple[str, str]]) -> tuple[list[str], ...]:
-    """What in the change stops for the owner: its configuration, the checks it weakens and its other test edits.
+def _held(  # noqa: PLR0913 - the copy, its head, the change, and the package with its pinned skills
+    run: pack_git.Git, at: Path, head: str, changed: list[tuple[str, str]], *, package: str, skills: list[str]
+) -> tuple[list[str], ...]:
+    """What in the change stops for the owner: its configuration, what is never pushed and its other test edits.
 
     The weakening patterns (a deleted test, an added skip or suppression, a removed assertion or test) are a quick
     filter, not a proof; every other test edit that removes a line is held for the owner's review all the same.
     """
     held = [p for p, how in changed if _configured(p) or how.split()[0] in LINKS]
-    weakened = [f"{p} (deleted test)" for p, how in changed if how.endswith("D") and TESTS.search(p)]
+    refused = [f"{p} (deleted test)" for p, how in changed if how.endswith("D") and TESTS.search(p)]
+    refused += [
+        f"{p} (pack content only an update may change)"
+        for p, how in changed
+        if protected(package, p) and not pack_gates.allowed(_updater_path(package, p), not how.endswith("D"), skills)
+    ]
     reviewed = []
     for path, how in changed:
         if how.endswith("D"):
@@ -459,12 +490,12 @@ def _held(run: pack_git.Git, at: Path, head: str, changed: list[tuple[str, str]]
         added = [x[1:] for x in lines if x.startswith("+") and not x.startswith("+++")]
         removed = [x[1:] for x in lines if x.startswith("-") and not x.startswith("---")] if TESTS.search(path) else []
         if any(WEAKENING.search(x) for x in added):
-            weakened.append(f"{path} (adds a suppression or skip)")
+            refused.append(f"{path} (adds a suppression or skip)")
         elif any(REMOVED.search(x) for x in removed):
-            weakened.append(f"{path} (removes an assertion or test)")
+            refused.append(f"{path} (removes an assertion or test)")
         elif removed:
             reviewed.append(f"{path} (removes lines from a test)")
-    return held, weakened, reviewed
+    return held, refused, reviewed
 
 
 def _configured(path: str) -> bool:
@@ -481,6 +512,41 @@ def protected(package: str, path: str) -> bool:
     """Whether the repository *path* is the pack's protected content: the detector's glue, pins, golden or skills."""
     files = {f"{package}/{p}" for p in (*pack_gates.GLUE.values(), "design_pack.json")}
     return path in files or path.startswith((f"{package}/golden/", f"{package}/skills/"))
+
+
+def _updater_path(package: str, path: str) -> str:
+    """The updater's path of the repository *path* in the package (``pack_gates``), or empty when it has none."""
+    if not path.startswith(f"{package}/"):
+        return ""
+    inner = path.removeprefix(f"{package}/")
+    glue = {theirs: ours for ours, theirs in pack_gates.GLUE.items()}
+    return glue.get(inner, inner if inner.startswith(("golden/", "skills/")) else "")
+
+
+def laid(job: Job, ctx: Context) -> dict[str, bytes | None]:
+    """The committed repair's protected files as they are in it, by updater path; None for one it deletes.
+
+    Raises:
+        design_pack.PackError: Git could not read the commit.
+    """
+    r, pub, run = ctx.repair, ctx.publication, job.live.git
+    assert pub is not None  # noqa: S101 - a repair follows publication
+    src = pack_git.Source(Path(pub.root), pub.repository, pub.base)
+    package = _package(job, src)
+    picked = {p: _updater_path(package, p) for p in r.paths if protected(package, p)}
+    at = job.store.root / RUNS / f"{job.state['run']}-ci-repair"
+    shutil.rmtree(at, ignore_errors=True)
+    _quiet(run, src.root, ["worktree", "prune"])
+    at.parent.mkdir(parents=True, exist_ok=True)
+    run(src.root, ["worktree", "add", "--quiet", "--detach", "--no-checkout", str(at), r.commit])
+    try:
+        there = set(run(at, ["ls-tree", "-r", "--name-only", r.commit, "--", *picked]).splitlines())
+        if there:
+            run(at, ["checkout", r.commit, "--", *sorted(there)])  # the bytes as committed, never git's text output
+        return {ours: (at / p).read_bytes() if p in there else None for p, ours in picked.items()}
+    finally:
+        _quiet(run, src.root, ["worktree", "remove", "--force", str(at)])
+        shutil.rmtree(at, ignore_errors=True)
 
 
 def _guarded(run: pack_git.Git, src: pack_git.Source, r: Repair, package: str) -> tuple[dict[str, str], str]:

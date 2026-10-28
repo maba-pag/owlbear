@@ -40,7 +40,8 @@ PUBLISHED = frozenset({"unchanged-check", "commit", "push", "pull-request", "mer
 SESSIONS = frozenset({"update", "full-challenge", "rejection-recheck", "reconsideration"})
 JUDGED = frozenset({"candidate-golden", "replay", "full-challenge", "rejection-recheck"})  # a pass is the candidate's
 ACTIONS = {  # the controller's next action (pack_run.Action) as the operation it starts
-    "update": "update", "replay": "replay", "challenge": "full-challenge", "recheck": "rejection-recheck",
+    "update": "update", "golden": "candidate-golden", "replay": "replay", "challenge": "full-challenge",
+    "recheck": "rejection-recheck",
     "reconsider": "reconsideration", "wait": OWNER, "activate": "unchanged-check",
 }  # fmt: skip
 FOLLOWS = {  # what the run does after each operation whatever it found; absent: a verdict or the owner decides
@@ -159,6 +160,7 @@ def words(op: str, result: str) -> str:
         "discarded": "discarded by you",
         "stopped": "stopped",
         "pushed": "repair pushed",
+        "checking": "checked again before the push",
         "held": "held for you",
         "empty": "no change made",
         "moved": "head moved; not repaired",
