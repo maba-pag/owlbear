@@ -14,8 +14,12 @@ import sys
 from importlib import import_module
 from importlib.resources import files
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.local_system.storage_io import read_regular
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 IMPORT = r"""(?:\bfrom|\bimport)\s*\(?\s*["']\./([^"'/]+)["']"""  # a page module's import of a sibling module
 MODULES = (
@@ -97,18 +101,30 @@ def _pages() -> list[str]:
 def _project(pid: str, path: Path) -> list[str]:
     """A registered project's store and settings formats, read without opening or migrating anything."""
     from owlbear_delivery_next.state_store import project_home  # noqa: PLC0415
-    from owlbear_delivery_next.state_store.database import MARKER, STORE_FORMAT  # noqa: PLC0415
-    from owlbear_delivery_next.state_store.project_move import FENCE  # noqa: PLC0415
 
-    markers = [project_home.home(pid) / MARKER]
-    found, clone = [], None
+    clone = None
     if path.is_dir():
         with contextlib.suppress(Exception):  # a clone that is gone fails to load as before; not this check's
             clone = project_home.clone_dir(path)
-            markers.append(clone / MARKER)
-    retained, problem = _receipt(pid, clone) if clone is not None else (None, None)
-    if problem is not None:
-        found.append(problem)
+    found: list[str] | None = None
+
+    def inspect(retained: Path) -> None:
+        nonlocal found
+        found = _project_formats(pid, path, clone, retained, None)
+
+    retained, problem = _receipt(pid, clone, inspect=inspect) if clone is not None else (None, None)
+    if found is None:
+        found = _project_formats(pid, path, clone, retained, problem)
+    return ([problem] if problem is not None else []) + found
+
+
+def _project_formats(pid: str, path: Path, clone: Path | None, retained: Path | None, problem: str | None) -> list[str]:
+    from owlbear_delivery_next.state_store import project_home  # noqa: PLC0415
+    from owlbear_delivery_next.state_store.database import MARKER, STORE_FORMAT  # noqa: PLC0415
+    from owlbear_delivery_next.state_store.project_move import FENCE  # noqa: PLC0415
+
+    markers = [project_home.home(pid) / MARKER, *([clone / MARKER] if clone is not None else [])]
+    found = []
     for marker in markers:
         try:
             raw = read_regular(marker)
@@ -135,13 +151,13 @@ def _project(pid: str, path: Path) -> list[str]:
     return found + _formats("its settings", layers)
 
 
-def _receipt(pid: str, clone: Path) -> tuple[Path | None, str | None]:
+def _receipt(pid: str, clone: Path, *, inspect: Callable[[Path], None] | None = None) -> tuple[Path | None, str | None]:
     """The project's store the clone's move receipt names (None without a receipt), and why the receipt is unsound."""
     from owlbear_delivery_next.state_store import switched_authority  # noqa: PLC0415
     from owlbear_delivery_next.state_store.database import StoreError  # noqa: PLC0415
 
     try:
-        return switched_authority.retained_target(clone, pid), None
+        return switched_authority.retained_target(clone, pid, inspect=inspect), None
     except StoreError as exc:
         return None, str(exc)
 
