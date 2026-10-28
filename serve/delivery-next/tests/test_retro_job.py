@@ -30,7 +30,7 @@ from owlbear_delivery_next.local_system.slots import Slots
 from owlbear_delivery_next.machine_host import cases_job, retro_job
 from owlbear_delivery_next.machine_host.auto_update import IDLE_FOR
 from owlbear_delivery_next.machine_host.machine import Machine
-from owlbear_delivery_next.machine_host.retro_inputs import Running
+from owlbear_delivery_next.machine_host.retro_inputs import Running, pinned
 from owlbear_delivery_next.machine_host.retro_job import LINGERING, RetroJob, Seams
 from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.runtimes import spotter_look
@@ -655,3 +655,11 @@ def test_pruning_keeps_every_capture_something_rests_on_and_removes_a_judged_unr
 
     kept = sorted(p.name for p in retro_units.folder("s-ctl").parent.iterdir() if not p.name.startswith("."))
     assert kept == ["c-two", "s-case", "s-find", "s-prop"]
+
+
+def test_the_sessions_a_record_or_pilot_case_rests_on_are_kept_and_a_synthetic_case_has_none():
+    cases.place().mkdir(parents=True, exist_ok=True)
+    made = {"c-1": {"record": {"session": "s-rec"}}, "c-2": {"pilot": {"session": "s-pil"}}, "c-3": {"synthetic": "s"}}
+    for cid, prov in made.items():
+        (cases.place() / f"{cid}.json").write_text(json.dumps({"id": cid, "provenance": prov}))
+    assert pinned() == {"s-rec", "s-pil"}

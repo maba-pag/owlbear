@@ -125,12 +125,13 @@ def settle_open(live: set[tuple[str, str]]) -> None:
 
 
 def pinned() -> set[str]:
-    """The sessions a finding, a Spotter case or an open proposal rests on: never pruned."""
+    """The sessions a finding, a Spotter or pilot case or an open proposal rests on: never pruned."""
     found = store.all_findings()
     pins = {s for f in found for s in f.get("sessions") or ()}
     for path in cases.place().glob("c-*.json"):
         with contextlib.suppress(OSError, ValueError, AttributeError):
-            pins.add(json.loads(path.read_text())["provenance"]["record"]["session"])
+            prov = json.loads(path.read_text()).get("provenance") or {}  # a synthetic case has no session
+            pins |= {str(p["session"]) for p in (prov.get("record"), prov.get("pilot")) if p and p.get("session")}
     owner = {f["id"]: f.get("unit") for f in found} | {g["id"]: g.get("unit") for g in store.grades(synthetic=True)}
     known = store.known()
     for snap in props.folded().values():
