@@ -451,15 +451,16 @@ def test_drain_cancels_the_running_call_and_keeps_how_its_run_ended(monkeypatch)
     assert not job.lingering()
 
 
+@pytest.mark.parametrize("unit", ["large", "verify-a"])  # its first call of several, its only call
 @pytest.mark.usefixtures("said")
-def test_an_unconfirmed_runtime_end_keeps_its_lease_and_ends_the_run_at_its_next_call():
+def test_an_unconfirmed_runtime_end_keeps_its_lease_and_ends_the_run_stopped(unit):
     job = _job(asker := Asker(during=lambda _n: spotter_look.UNENDED.get().append("retro-session")))
-    retro_store.request("owner", synthetic="large")
+    retro_store.request("owner", synthetic=unit)
     job.tick(0.0)
     [run] = _runs()
     assert (run["result"], asker.seen) == ("stopped: runtime end unconfirmed", ["retro"])
     assert job.working() == [LINGERING]
-    retro_store.request("owner", synthetic="verify-a")
+    retro_store.request("owner", synthetic="verify-b")
     job.tick(1.0)
     assert (len(_runs()), len(retro_store.queued())) == (1, 1)  # no Retro call starts until Maintenance recovers it
 

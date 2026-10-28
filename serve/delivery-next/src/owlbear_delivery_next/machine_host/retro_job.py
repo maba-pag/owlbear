@@ -276,7 +276,7 @@ class RetroJob:
                 ctx.meter = Meter(ctx.limit - ctx.spent, "retro-run")
             work = self._admitted(ctx, "open", lambda _key: self._work(ctx))
             out = retro_judge.run(work)
-            result = "judged"
+            result = "stopped: runtime end unconfirmed" if ctx.unended else "judged"  # its last call's end too
         except WaitingError as exc:
             if exc.why != ctx.why:
                 store.run_event(ctx.id, "waiting", why=exc.why)
