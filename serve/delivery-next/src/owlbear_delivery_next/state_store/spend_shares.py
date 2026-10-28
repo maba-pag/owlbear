@@ -50,6 +50,7 @@ CHECKPOINTS = ("event", "mark", "residual")  # imported line types that repeat a
 VOID = "void"  # a Spotter record's ``look`` line imported although no look ran (``spend_reconcile``): no run at all
 OWNER = "owner"  # a recovered Spotter look session's owner, known after it was recovered (``spend_logs``)
 PLACE = ("project", "name", "clone", "change", "step", "job")
+STOP = ("limit", "stopped", "stopped_by")  # an owner line's look meter stop, as its record or cases run keeps it
 RECOVERED = ("id", "type", "at", "session", "usage", "source")  # what a recovered line adds to a run its own lines name
 CONTINUED = ("usage", "at", "started", "before", "continued", "source", "settled")  # a continuation's own
 
@@ -189,11 +190,11 @@ def _surrogates(lines: list[dict[str, Any]]) -> dict[str, str]:
 
 
 def _aside(line: dict[str, Any], void: set[str], owned: dict[str, dict[str, Any]]) -> None:
-    """A line that changes another run: a ``void`` takes it back, an ``owner`` places it."""
+    """A line that changes another run: a ``void`` takes it back, an ``owner`` places it and gives its stop."""
     if line.get("type") == VOID:
         void.add(str(line.get("run")))
     else:
-        owned[str(line.get("run"))] = {k: line.get(k) or "" for k in PLACE}
+        owned[str(line.get("run"))] = {k: line.get(k) or "" for k in PLACE} | {k: line[k] for k in STOP if k in line}
 
 
 def _settled(
