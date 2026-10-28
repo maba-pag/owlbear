@@ -14,6 +14,7 @@ reduction are marked assumption ``retro-segments-1``.
 from __future__ import annotations
 
 import gzip
+import json
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -41,6 +42,19 @@ def cut(text: str, n: int) -> str:
     left = n - 40
     marker = f" [… {len(text) - left} chars omitted] "
     return text[: left // 2] + marker + text[len(text) - left + left // 2 :]
+
+
+def dumps(value: object) -> str:
+    """*value* as the JSON a message carries: characters as they are, so its length is what is sent."""
+    return json.dumps(value, ensure_ascii=False)
+
+
+def fit(text: str, n: int) -> str:
+    """*text* cut so that it takes at most *n* characters as a JSON string, its quotes and escapes counted."""
+    out = cut(text, n)
+    while (over := len(dumps(out)) - 2 - n) > 0:
+        out = cut(text, len(out) - over)
+    return out
 
 
 def masked[T](value: T) -> T:
@@ -184,8 +198,9 @@ def prepare(sessions: list[str], outcome: str, *, low: int = 0, high: int = 0, p
         part.last, ends[-1] = x.n, i
     for part, end in zip(out.parts, ends, strict=True):
         after = "\n".join(y.brief for y in lines[end + 1 :] if y.brief)
-        part.text = mask.redact(cut(part.text, PART))
-        part.later = mask.redact(cut(after, LATER - len(outcome) - 20) + f"\noutcome: {outcome}")
+        part.text = fit(mask.redact(part.text), PART)
+        later = cut(after, LATER - len(outcome) - 20) + f"\noutcome: {outcome}"
+        part.later = fit(mask.redact(later), LATER)
     return out
 
 

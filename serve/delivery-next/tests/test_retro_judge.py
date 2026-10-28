@@ -5,7 +5,7 @@ import json
 
 import pytest
 
-from owlbear_delivery_next.improvement import retro_bars, retro_judge, retro_store, spotter
+from owlbear_delivery_next.improvement import retro_bars, retro_judge, retro_segments, retro_store, retro_units, spotter
 from owlbear_delivery_next.improvement import retro_proposals as props
 from owlbear_delivery_next.improvement.retro_calls import Paid, StoppedError, Work
 from owlbear_delivery_next.improvement.retro_segments import Part, Prepared
@@ -234,3 +234,19 @@ def test_a_secret_in_a_records_note_or_card_or_in_a_findings_text_never_leaves_i
 
     assert len(ask.messages) == 3
     assert not [m for m in ask.messages if SECRET in m]
+
+
+def test_a_judging_message_stays_within_its_bound_when_the_capture_is_all_quotes_and_accents():
+    folder = retro_units.folder("s1")
+    folder.mkdir(parents=True)
+    said = ['"' * 900 + "é" * 500] * 60
+    log = "".join(json.dumps({"type": "assistant.message", "data": {"content": s}}) + "\n" for s in said)
+    (folder / "log.jsonl.gz").write_bytes(gzip.compress(log.encode()))
+    (folder / "sidecar.json").write_text(json.dumps({"session": "s1", "outputs": []}))
+    w = _work(Asked(_graded), [_record("a", 3)])
+    w.prepared = retro_segments.prepare(["s1"], "done")
+
+    sent = [message for _, _, message in retro_judge.judging(w)]
+
+    assert len(sent) > 1
+    assert max(len(m) for m in sent) <= retro_judge.BATCH

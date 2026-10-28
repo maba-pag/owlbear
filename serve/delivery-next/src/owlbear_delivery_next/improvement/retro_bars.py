@@ -16,7 +16,6 @@ Real and synthetic evidence never meet: each bar counts only findings of the run
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -24,7 +23,7 @@ from owlbear_delivery_next.improvement import assumptions
 from owlbear_delivery_next.improvement import retro_proposals as props
 from owlbear_delivery_next.improvement import retro_store as store
 from owlbear_delivery_next.improvement.retro_calls import paid
-from owlbear_delivery_next.improvement.retro_segments import masked
+from owlbear_delivery_next.improvement.retro_segments import dumps, masked
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
@@ -129,7 +128,7 @@ def _confirm(w: Work, pair: tuple[str, str], pool: list[dict[str, Any]], known: 
         "mechanisms": [{"id": k, "mechanism": v} for k, v in known.items()],
         "findings": [{k: f.get(k) for k in ("id", "what", "mechanism", "quotes")} for f in pool],
     }
-    message = f"{CONFIRM.read_text()}\n\n## The evidence\n\n```json\n{json.dumps(masked(evidence))}\n```\n"
+    message = f"{CONFIRM.read_text()}\n\n## The evidence\n\n```json\n{dumps(masked(evidence))}\n```\n"
     said = paid(w, f"confirm:{pair[0]}|{pair[1]}", message, _valid_sorting)
     new = {str(k): str(v) for k, v in (said.get("new") or {}).items()}
     lines = []

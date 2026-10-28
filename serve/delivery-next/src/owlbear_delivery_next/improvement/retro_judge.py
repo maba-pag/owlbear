@@ -11,7 +11,6 @@ evidence has changed since its last review, bound to its evidence digest.
 from __future__ import annotations
 
 import gzip
-import json
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -20,7 +19,7 @@ from owlbear_delivery_next.improvement import retro_proposals as props
 from owlbear_delivery_next.improvement import retro_store as store
 from owlbear_delivery_next.improvement import retro_units as units
 from owlbear_delivery_next.improvement.retro_calls import Work, key, paid
-from owlbear_delivery_next.improvement.retro_segments import cut
+from owlbear_delivery_next.improvement.retro_segments import cut, dumps
 from owlbear_delivery_next.local_system import mask
 
 if TYPE_CHECKING:
@@ -67,7 +66,7 @@ def _entry(r: Mapping[str, Any]) -> dict[str, Any]:
         "session": r.get("session"),
         "note": cut(mask.redact(str(r.get("note") or "")), NOTE),
         "sampled_silence": silence(r),
-        "card": cut(mask.redact(json.dumps(r["card"])), CARD) if "card" in r else _card(r["id"]),
+        "card": cut(mask.redact(dumps(r["card"])), CARD) if "card" in r else _card(r["id"]),
     }
 
 
@@ -92,7 +91,7 @@ def _message(w: Work, parts: Iterable[Part], records: Iterable[Mapping[str, Any]
         "parts": [{"ref": p.ref, "text": p.text, "later": p.later} for p in parts],
         "records": [_entry(r) for r in records],
     }
-    return f"{JUDGE.read_text()}\n\n## The evidence\n\n```json\n{json.dumps(evidence)}\n```\n"
+    return f"{JUDGE.read_text()}\n\n## The evidence\n\n```json\n{dumps(evidence)}\n```\n"
 
 
 def batches(w: Work, records: list[dict[str, Any]]) -> list[tuple[list[Part], list[dict[str, Any]]]]:
@@ -108,12 +107,12 @@ def batches(w: Work, records: list[dict[str, Any]]) -> list[tuple[list[Part], li
     room = BATCH - len(_message(w, (), ()))
     pieces: list[tuple[Part, list[dict[str, Any]]]] = []
     for i, part in enumerate(parts):
-        mine, size = held.get(i, []), len(json.dumps({"ref": part.ref, "text": part.text, "later": part.later}))
+        mine, size = held.get(i, []), len(dumps({"ref": part.ref, "text": part.text, "later": part.later}))
         if w.grade_only and not mine:
             continue
         chunk: list[dict[str, Any]] = []
         for r in mine:
-            if chunk and size + len(json.dumps([_entry(x) for x in [*chunk, r]])) > room:
+            if chunk and size + len(dumps([_entry(x) for x in [*chunk, r]])) > room:
                 pieces.append((part, chunk))
                 chunk = []
             chunk.append(r)
@@ -227,11 +226,11 @@ def render(snap: Mapping[str, Any], findings: Mapping[str, Mapping[str, Any]]) -
     }
     proposal = retro_segments.masked(proposal)
     head = f"{REVIEWING.read_text()}\n\n## The proposal\n\n```json\n"
-    text = json.dumps(proposal)
+    text = dumps(proposal)
     while len(head) + len(text) + 5 > REVIEW and proposal["findings"]:
         proposal["findings"].pop()
         proposal["omitted"] = f"[{len(snap['findings']) - len(proposal['findings'])} more findings omitted]"
-        text = json.dumps(proposal)
+        text = dumps(proposal)
     return f"{head}{cut(text, REVIEW - len(head) - 5)}\n```\n"
 
 
