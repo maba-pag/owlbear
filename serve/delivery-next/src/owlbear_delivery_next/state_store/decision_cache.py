@@ -6,8 +6,8 @@ view's entry is kept for the data commit and a fingerprint of everything the loa
 folder listings of the root, the Global layer and every project's layers), so a commit, a rebase after a fetch or an
 uncommitted edit rebuilds it on the next read. A read is not kept when the fingerprint cannot be taken, moved while
 it was read (a folder's times catch a file added and removed again), or holds a file or folder time within
-`RACY_NS` of the read's start (a coarse clock hides a same-size rewrite in the same tick); a read that raised keeps
-nothing.
+`RACY_NS` of the read's start (a coarse clock hides a same-size rewrite in the same tick); a read that raised, or
+holds a file or folder that did not load, keeps nothing.
 """
 
 from __future__ import annotations
@@ -62,9 +62,14 @@ def files(shared: DataRepo, project: str, commit: str, read: Callable[[DataRepo,
             return kept.snapshot
         seen = read(shared, project)
         again = fingerprint(shared.root, project)
-        if again is not None and again[0] == mark and newest < cutoff:
+        if again is not None and again[0] == mark and newest < cutoff and _whole(seen):
             _entries[key] = _Entry(commit, mark, seen, decision_search.Index(seen))
     return seen
+
+
+def _whole(seen: Snapshot) -> bool:
+    """Every file and folder loaded: a read error may pass while the files' records stay as they were."""
+    return seen.complete and not seen.outside
 
 
 def search(snapshot: Snapshot, text: str, *, include_retired: bool) -> frozenset[str]:

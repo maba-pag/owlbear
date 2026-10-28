@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import errno
 import os
 import shutil
 import threading
@@ -11,7 +12,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from owlbear_decisions import Decision, Link, LinkType, Origin, Scope, State, new_id, write
+from owlbear_decisions import Decision, Link, LinkType, Origin, Scope, State, new_id, storage, write
 from owlbear_delivery_next.local_system import data_repo
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.machine_host import serve
@@ -189,6 +190,23 @@ def test_a_file_added_and_removed_while_it_is_read_is_not_kept(seeded, parses, m
     assert outcome(seeded.shared).get(brief.id) is not None
     monkeypatch.setattr(decision_store, "_files", real)
     assert outcome(seeded.shared).get(brief.id) is None
+    assert parses == [PROJECT, PROJECT]
+
+
+def test_a_read_error_is_not_kept_so_the_next_read_recovers(seeded, parses, monkeypatch) -> None:
+    real, failed = storage._regular_text, []  # noqa: SLF001 - the file read that fails once
+
+    def flaky(path):
+        if not failed and path.name == f"{seeded.notes.id}.md":
+            failed.append(path)
+            raise OSError(errno.EIO, "input/output error")
+        return real(path)
+
+    monkeypatch.setattr(storage, "_regular_text", flaky)
+    assert "cannot be used" in outcome(seeded.shared)
+    recovered = outcome(seeded.shared)
+    assert recovered.get(seeded.notes.id) is not None
+    assert outcome(seeded.shared) is recovered
     assert parses == [PROJECT, PROJECT]
 
 
