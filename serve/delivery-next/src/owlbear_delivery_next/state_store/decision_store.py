@@ -2,12 +2,12 @@
 
 The files in ``owlbear-data`` are the authority. A repository or project folder that is missing or unreadable, or a
 file in the project's view that is not a usable decision, raises `DecisionsUnavailable`, never an empty or partial
-rule set. A save, under the repository-wide lock, catches up with the remote, writes with an expected revision,
-commits and pushes its files alone (`decision_sync`), reloads and validates, and reads its receipt back before the
-lock is released; a save of several files (a successor and what it retires) writes all of them or none, in one
-commit. Neither a Git merge nor a timestamp decides authority: when the reloaded snapshot shows two
-in-force successors of one decision (a widening promotion counts), every successor of it is flagged ``conflict`` and
-published, and the owner resolves them.
+rule set; a read reuses the snapshot `decision_cache` kept while HEAD and the files stay unchanged. A save, under the
+repository-wide lock, catches up with the remote, writes with an expected revision, commits and pushes its files
+alone (`decision_sync`), reloads and validates, and reads its receipt back before the lock is released; a save of
+several files (a successor and what it retires) writes all of them or none, in one commit. Neither a Git merge nor a
+timestamp decides authority: when the reloaded snapshot shows two in-force successors of one decision (a widening
+promotion counts), every successor of it is flagged ``conflict`` and published, and the owner resolves them.
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ from owlbear_decisions.storage import kind, serialize
 from owlbear_decisions.validate import collect, layers, project_folders
 from owlbear_delivery_next.local_system import storage_io
 from owlbear_delivery_next.local_system.data_repo import SAVE_SECONDS, DataRepoError
-from owlbear_delivery_next.state_store import decision_batch, decision_sync, decision_transaction
+from owlbear_delivery_next.state_store import decision_batch, decision_cache, decision_sync, decision_transaction
 from owlbear_delivery_next.state_store.database import StoreError
 from owlbear_delivery_next.state_store.decision_competitors import competitors
 
@@ -180,7 +180,7 @@ def _paired(shared: DataRepo, project: str) -> DataView:
         raise DecisionsUnavailable(msg)
     first = _stamp(shared)
     commit = _head(shared)
-    seen = _files(shared, project)
+    seen = decision_cache.files(shared, project, commit, _files)
     if _stamp(shared) != first or not decision_transaction.operation_idle(shared) or _head(shared) != commit:
         msg = "the decisions or rebase state changed while they were read, so they are not settled; read them again"
         raise DecisionsUnavailable(msg, READ)

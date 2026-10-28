@@ -13,7 +13,7 @@ from owlbear_delivery_next.change_contracts.models import Brief, BriefDecision, 
 from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.commands import cli, setup
 from owlbear_delivery_next.github.provider import FailureCode, ProviderError, PullRequest
-from owlbear_delivery_next.local_system import data_repo, local_home
+from owlbear_delivery_next.local_system import data_place, data_repo, local_home
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host import host as host_module
@@ -461,7 +461,7 @@ def test_a_pointer_to_no_repository_stops_delivery(tmp_path: Path, repo, monkeyp
 
 def test_the_old_common_pointer_moves_to_data_once_and_a_data_pointer_wins(shared, repo, caplog) -> None:
     root, _ = shared
-    home = data_repo.pointer().parent
+    home = data_place.pointer().parent
     (home / "data.json").rename(home / "common.json")
     said = (home / "common.json").read_text()
 
@@ -469,7 +469,7 @@ def test_the_old_common_pointer_moves_to_data_once_and_a_data_pointer_wins(share
         assert Store.open(repo).shared == data_repo.DataRepo(root)
         assert Store.open(repo).shared == data_repo.DataRepo(root)
     assert ((home / "data.json").read_text(), (home / "common.json").exists()) == (said, False)
-    assert sorted(p.name for p in home.iterdir()) == ["data.json", "projects"]  # no temporary file left
+    assert sorted(p.name for p in home.iterdir()) == ["data.json", "data.lock", "projects"]  # no temporary file left
     assert [r.getMessage() for r in caplog.records] == [
         f"moved the shared repository's pointer {home / 'common.json'} to {home / 'data.json'}"
     ]
@@ -477,12 +477,21 @@ def test_the_old_common_pointer_moves_to_data_once_and_a_data_pointer_wins(share
     assert (data_repo.locate(), (home / "common.json").exists()) == (data_repo.DataRepo(root), True)
 
 
+def test_the_old_common_pointer_is_read_while_another_writer_holds_the_lock(shared) -> None:
+    root, _ = shared
+    home = data_place.pointer().parent
+    (home / "data.json").rename(home / "common.json")
+    with data_place.pointer_lock():
+        assert data_repo.locate() == data_repo.DataRepo(root)
+    assert (home / "common.json").exists()
+
+
 def test_recording_a_repository_moves_the_old_pointer_away(tmp_path: Path) -> None:
-    home, local = data_repo.pointer().parent, tmp_path / "local-data"
+    home, local = data_place.pointer().parent, tmp_path / "local-data"
     git(tmp_path, "init", "-q", "-b", "main", str(local))
     (home / "common.json").write_text(json.dumps({"repository": str(tmp_path / "gone")}))
-    assert str(local) in cli.show_data(local)
-    assert sorted(p.name for p in home.iterdir()) == ["data.json"]
+    assert str(local) in cli.show_data(local)[1]
+    assert sorted(p.name for p in home.iterdir()) == ["data.json", "data.lock"]
     assert data_repo.locate() == data_repo.DataRepo(local.resolve())
 
 
@@ -490,9 +499,10 @@ def test_the_cli_records_the_shared_repository_and_refuses_a_plain_folder(tmp_pa
     plain, local = tmp_path / "plain", tmp_path / "local-data"
     plain.mkdir()
     git(tmp_path, "init", "-q", "-b", "main", str(local))
-    assert "No shared settings repository" in cli.show_data(None)
-    assert "not a git repository" in cli.show_data(plain)
-    assert str(local) in cli.show_data(local)
+    assert cli.show_data(None)[0] == 0
+    assert "No shared settings repository" in cli.show_data(None)[1]
+    assert cli.show_data(plain) == (1, f"Not set: {plain.resolve()} is not a git repository's top folder")
+    assert str(local) in cli.show_data(local)[1]
     assert Store.open(repo).global_path == local / "config.json"
     assert (local / "shop-site" / "repository").read_text() == "github.com/acme/shop-site\n"
 

@@ -17,7 +17,7 @@ PROJECT = {
     "seed": "Seed a pre-approved one-task Change",
     "answer": "Write an answer into a Change's inbox",
     "show": "Print a Change's step, exit and open question",
-    "data": "Show or set the shared settings repository",
+    "data": "Show or set the shared data repository: a clone address, a checkout's folder, or --move [DEST]",
     "home": "Show OwlBear's folder on this machine",
     "prepare": "Before a reboot: bind a clone's store id and fence the offline move",
     "finish": "After a reboot: prove the preparation and move the clone's store",
@@ -203,6 +203,10 @@ def main(argv: list[str] | None = None) -> int:
 
     leases.take()  # the command's own version stays while it runs (§3)
     DROPPED[:] = environment.scrub()  # before anything else, so probes and the host it starts see the same environment
+    if args[:1] == ["data"] and "--move" in args:
+        from owlbear_delivery_next.machine_host import data_move  # noqa: PLC0415
+
+        return data_move.main(args[1:], say)
     if args and args[0] in PROJECT:
         return forward(args)
     return app(args) or 0  # help returns nothing

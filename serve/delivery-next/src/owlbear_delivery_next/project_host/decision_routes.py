@@ -1,13 +1,13 @@
 """The Decisions page's API (TD-419 slice 5a): the project's and Global decisions, one entry, and the owner's actions.
 
-Reads come from the data repository's files (`decision_store.load`), text through the index. Every action is a
-`decision_store.save` and answers with its receipts; the owner's actions refuse a chat's call (its ``X-OwlBear-Use``
-header): a chat records what the owner confirmed (in force at once, TD-450) or proposes a draft, retires what he
-confirmed retiring, queues and records read-backs; only the page activates, promotes, records an exception, resolves
-a conflict or ignores a read-back for now. ``where=owlbear`` reads and acts on OwlBear's own decisions
-(owlbear-data's ``owlbear/`` folder) and Global, though OwlBear's repository is not a registered project (TD-435);
-the machine host mounts the same routes for them, the folder fixed, for chats in OwlBear's workspace. The list
-leads with the read-back queue of its scope (TD-427).
+Reads come from the data repository's files (`decision_store.load`), text through the snapshot's search index.
+Every action is a `decision_store.save` and answers with its receipts; the owner's actions refuse a chat's call (its
+``X-OwlBear-Use`` header): a chat records what the owner confirmed (in force at once, TD-450) or proposes a draft,
+retires what he confirmed retiring, queues and records read-backs; only the page activates, promotes, records an
+exception, resolves a conflict or ignores a read-back for now. ``where=owlbear`` reads and acts on OwlBear's own
+decisions (owlbear-data's ``owlbear/`` folder) and Global, though OwlBear's repository is not a registered project
+(TD-435); the machine host mounts the same routes for them, the folder fixed, for chats in OwlBear's workspace. The
+list leads with the read-back queue of its scope (TD-427).
 """
 
 from __future__ import annotations
@@ -24,8 +24,8 @@ from owlbear_delivery_next.change_contracts import decision_wording
 from owlbear_delivery_next.project_host import decision_recovery_routes, impact_routes
 from owlbear_delivery_next.state_store import (
     decision_actions,
+    decision_cache,
     decision_impact,
-    decision_index,
     decision_origin,
     decision_store,
     read_backs,
@@ -326,10 +326,7 @@ def router(shared: Shared, folder: Callable[[], str], places: Places, store: Sto
         project = at(scoped(where))
         try:
             view = decision_store.load(data, project)
-            ids = None
-            if text.strip():
-                hits = decision_index.search(text, project, include_retired=True, limit=1000, view=view)
-                ids = {h.id for h in hits}
+            ids = decision_cache.search(view.snapshot, text, include_retired=True) if text.strip() else None
         except StoreError as exc:
             return {"available": False, "reason": f"{exc} ({exc.action})", "decisions": []}
         rows = [_row(view, e) for e in view.snapshot.entries if ids is None or e.decision.id in ids]

@@ -106,7 +106,7 @@ class Maintenance:
         observe: processes.Observe | None = None,
     ) -> None:
         self.slots, self.boot, self.observe = slots, boot or psutil.boot_time, observe or processes.alive
-        with self._locked() as ledger:
+        with self.locked() as ledger:
             changed, booted = False, self.boot()
             for lease in ledger.sessions:
                 # A later boot proves its caller ended, never its session: held, for the owner's reboot recovery.
@@ -128,7 +128,7 @@ class Maintenance:
 
     @staticmethod
     @contextlib.contextmanager
-    def _locked() -> Iterator[Ledger]:
+    def locked() -> Iterator[Ledger]:
         """The machine's ledger under its maintenance lock, read whole; it needs no instance, so it restores nothing."""
         root = local_home.root()
         root.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -175,7 +175,7 @@ class Maintenance:
             owner_pid=os.getpid(),
             owner_created=processes.started(os.getpid()),
         )
-        with self._locked() as ledger:
+        with self.locked() as ledger:
             if any(s.project == project and s.slot == slot and s.state in HELD for s in ledger.sessions):
                 raise MaintenanceError("this maintenance reservation is already owned")  # noqa: TRY003, EM101
             ledger.sessions.append(lease)
@@ -194,13 +194,13 @@ class Maintenance:
         unreadable ledger raises MaintenanceError and only a missing one holds no receipt.
         """
         prefix = f"{key}:receipt:{digest}:"
-        with Maintenance._locked() as ledger:
+        with Maintenance.locked() as ledger:
             return next((s[len(prefix) :] for s in ledger.imported if s.startswith(prefix)), "")
 
     @staticmethod
     def lease(project: str, slot: str) -> Lease | None:
         """The lease *slot* names in *project*, in any state, read without a host; None when the ledger holds none."""
-        with Maintenance._locked() as ledger:
+        with Maintenance.locked() as ledger:
             return next((s for s in ledger.sessions if s.project == project and s.slot == slot), None)
 
     @staticmethod
@@ -211,7 +211,7 @@ class Maintenance:
     def receipt(self, key: str, digest: str, generation: str) -> None:
         """Record that record version *digest* is the rewrite of run *generation*, so a restart keeps it."""
         mark = self.receipt_note(key, digest, generation)
-        with self._locked() as ledger:
+        with self.locked() as ledger:
             if mark not in ledger.imported:
                 ledger.imported.append(mark)
                 self._save(ledger)
@@ -222,7 +222,7 @@ class Maintenance:
         Only the named lease is judged, never one found by PID: a reused PID with an unknown birth is no evidence
         that another lease's process is the one on file.
         """
-        with self._locked() as ledger:
+        with self.locked() as ledger:
             return any(
                 s.project == project and s.kind == kind and s.slot == slot and recorded(s, pids, self.boot())
                 for s in ledger.sessions
@@ -266,7 +266,7 @@ class Maintenance:
                 return False
             return bool(generation) or (s.workspace == workspace and s.state in HELD)
 
-        with self._locked() as ledger:
+        with self.locked() as ledger:
             missing = [n for n in dict.fromkeys(notes) if n not in ledger.imported]
             found = None
             if keyed:  # a lease a mark names, and only while what *covers* proves still holds for it
@@ -307,24 +307,24 @@ class Maintenance:
 
     def owns(self, workspace: str) -> bool:
         """Whether a lease in any state already accounts for *workspace*, so its record must not be imported again."""
-        with self._locked() as ledger:
+        with self.locked() as ledger:
             return any(s.workspace == workspace for s in ledger.sessions)
 
     def held(self, project: str, slot: str) -> bool:
         """Whether a particular admitted reservation still belongs to uncertain work."""
-        with self._locked() as ledger:
+        with self.locked() as ledger:
             return any(s.project == project and s.slot == slot and s.state in HELD for s in ledger.sessions)
 
     def pending(self, kind: Kind | None = None) -> bool:
         """Any uncertain or active session in the requested maintenance lane, also after a host restart."""
         self.sweep()
-        with self._locked() as ledger:
+        with self.locked() as ledger:
             return any(s.state in HELD and (kind is None or s.kind == kind) for s in ledger.sessions)
 
     def holding(self, kind: Kind) -> list[str]:
         """The projects whose sessions in *kind* are active or not confirmed ended, whether or not they are loaded."""
         self.sweep()
-        with self._locked() as ledger:
+        with self.locked() as ledger:
             return sorted({s.project for s in ledger.sessions if s.state in HELD and s.kind == kind})
 
     @staticmethod
@@ -339,7 +339,7 @@ class Maintenance:
 
     def record(self, ident: str, pids: processes.Pids) -> None:
         """Keep every observed identity; a later unknown start never erases a known birth time."""
-        with self._locked() as ledger:
+        with self.locked() as ledger:
             lease = self._lease(ledger, ident)
             self._record(lease, pids)
             self._save(ledger)
@@ -358,7 +358,7 @@ class Maintenance:
 
     def failed(self, ident: str, error: BaseException) -> None:
         """An exception without a returned Run proves neither absence nor complete process coverage."""
-        with self._locked() as ledger:
+        with self.locked() as ledger:
             lease = self._lease(ledger, ident)
             lease.state, lease.complete = "held", False
             lease.reason = f"session ended without termination proof ({type(error).__name__})"
@@ -366,7 +366,7 @@ class Maintenance:
 
     def finished(self, ident: str, run: Outcome) -> None:
         """Persist complete termination evidence before releasing a reservation; unknown work remains held."""
-        with self._locked() as ledger:
+        with self.locked() as ledger:
             lease = self._lease(ledger, ident)
             self._record(lease, run.pids)
             termination = run.termination
@@ -400,7 +400,7 @@ class Maintenance:
     def sweep(self) -> None:
         """Release complete identified sessions only on positive identity-aware absence, never empty evidence."""
         released = []
-        with self._locked() as ledger:
+        with self.locked() as ledger:
             for lease in ledger.sessions:
                 if lease.state != "held" or not lease.complete or not lease.pids:
                     continue
@@ -415,13 +415,13 @@ class Maintenance:
 
     def retained(self, workspace: str) -> bool:
         """A recovered unknown workspace stays for inspection, even after its reservation is explicitly released."""
-        with self._locked() as ledger:
+        with self.locked() as ledger:
             return any(s.workspace == workspace and s.state in {*HELD, "recovered"} for s in ledger.sessions)
 
     def read(self) -> dict[str, list[dict[str, object]]]:
         """Public state omits process details but retains completed history and captured immutable session IDs."""
         self.sweep()
-        with self._locked() as ledger:
+        with self.locked() as ledger:
             return {
                 "sessions": [
                     {
@@ -442,7 +442,7 @@ class Maintenance:
         """Explicit generation-bound reboot recovery releases a reservation, never a workspace or its history."""
         if rebooted is not True:
             raise ValueError("confirm the computer rebooted since this session")  # noqa: TRY003, EM101
-        with self._locked() as ledger:
+        with self.locked() as ledger:
             lease = self._lease(ledger, ident)
             if lease.state != "held" or self.boot() <= lease.boot:
                 raise ValueError("a reboot since the failed session is required")  # noqa: TRY003, EM101

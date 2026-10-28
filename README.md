@@ -125,7 +125,8 @@ The full walkthrough with expected output at each step is in
 
 ## What setup changes
 
-OwlBear keeps its runtime, versions, logs and each project's Delivery state under `~/.owlbear/`.
+OwlBear keeps its runtime, versions, logs, each project's Delivery state and the shared settings
+repository's checkout under `~/.owlbear/`.
 Only with your yes does it add:
 
 - `~/.local/bin/owlbear`, a link to the command, and the zsh completion in `~/.owlbear/`.
@@ -137,7 +138,8 @@ Only with your yes does it add:
   `.mcp.json` it prints the Delivery entry to add to your user-level MCP configuration.
 
 To undo it, run `owlbear uninstall`: it removes the links, the completion and the login item, and
-keeps the runtime and your projects. **Remove project** on the page stops OwlBear serving a project.
+keeps the runtime, your projects and the shared settings repository's checkout, which nothing of
+OwlBear deletes. **Remove project** on the page stops OwlBear serving a project.
 See [Uninstalling](setup/operating-owlbear.md#uninstalling) for removing everything.
 
 ## Status and expectations

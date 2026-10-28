@@ -177,6 +177,53 @@ def test_doctor_runs_each_tool_and_checks_the_login_items_path(monkeypatch, tmp_
     assert login_item() == [f"login item: copilot at its COPILOT_CLI_PATH {real / 'copilot'} not found"]
 
 
+def shared_data() -> Path:
+    """The default shared checkout, holding one file only it has."""
+    data = local_home.root() / local_home.DATA
+    subprocess.run(["git", "init", "-q", str(data)], check=True)  # noqa: S603, S607
+    (data / "note.md").write_text("only here\n")
+    return data
+
+
+def test_uninstall_keeps_the_shared_data_and_says_what_only_it_holds(monkeypatch) -> None:
+    monkeypatch.setattr(control, "autostart", lambda *_a, **_k: 0)
+    data, said = shared_data(), []
+
+    assert install.uninstall(said.append) == 0
+
+    assert said[-2:] == [
+        f"kept: your shared data at {data.resolve()}; uninstalling never removes it",
+        "  only there: 1 file(s) not committed, 1 of them never added",
+    ]
+    assert (data / "note.md").read_text() == "only here\n"
+
+
+def test_doctor_counts_a_shared_data_repository_it_cannot_use(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr(install, "_tools", lambda _say: 0)
+    monkeypatch.setattr(install, "_login_item", lambda _say: 0)
+    monkeypatch.setenv("PATH", str(tmp_path))  # no gh
+    (local_home.root() / "data.json").write_text(f'{{"repository": "{tmp_path / "gone"}"}}')
+    said = []
+
+    assert install.doctor(said.append, []) == 1
+
+    assert said[0].startswith("shared data: problem: ")
+    assert said[0].endswith(" · fix: `owlbear data` shows it")
+    assert said[1:] == ["1 problem found"]
+
+
+def test_status_says_the_shared_data_with_the_host_down_and_no_project() -> None:
+    data, said = shared_data(), []
+
+    assert control.status(said.append) == 0
+
+    assert said == [
+        "OwlBear is not running; `owlbear start` starts it",
+        f"shared data: {data.resolve()} (default)",
+        "login item: off",
+    ]
+
+
 @pytest.fixture
 def no_host_left():
     """A test that starts real hosts stops what it left running, even when it fails partway."""
@@ -257,6 +304,23 @@ def test_a_host_that_fails_leaves_its_crash_mark_and_a_restart_of_an_unanswering
     monkeypatch.setattr(control, "stop", lambda _say: 0)
     monkeypatch.setattr(control, "start", lambda _say, *, paused: started.append(paused) or 0)
     assert (command.restart(), started) == (0, [True])
+
+
+def test_a_start_removes_the_retired_decision_index_and_says_each_file_once(monkeypatch, capsys) -> None:
+    home, warmed = local_home.root(), []
+    home.mkdir(parents=True, exist_ok=True)
+    for name in control.serve.RETIRED_INDEX:
+        (home / name).write_bytes(b"old")
+    monkeypatch.setattr(control.serve.Server, "run", lambda _self, **_kw: None)
+    monkeypatch.setattr(control.serve, "warm", warmed.append)
+    assert control.serve.serve(run=True) == 0
+    first = capsys.readouterr().out
+    assert control.serve.serve(run=True) == 0
+    assert [n for n in control.serve.RETIRED_INDEX if (home / n).exists()] == []
+    removed = [first.count(f"removed the retired decision index file {n}\n") for n in control.serve.RETIRED_INDEX]
+    assert removed == [1] * 5
+    assert "decision index" not in capsys.readouterr().out
+    assert len(warmed) == 2  # once per start, after the projects loaded
 
 
 def test_stop_never_signals_a_host_that_has_not_named_its_process(monkeypatch) -> None:

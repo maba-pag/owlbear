@@ -65,6 +65,18 @@ def test_the_first_update_swaps_the_legacy_runtime_for_a_link_and_puts_it_away()
     assert registry.load().active == "v0.2"
 
 
+def test_the_first_update_refuses_to_put_away_a_legacy_runtime_holding_the_shared_data():
+    runtime, folder = legacy(), version("v0.2")
+    inside = runtime / "data"
+    git(runtime, "init", "-q", str(inside))
+    (local_home.root() / "data.json").write_text(json.dumps({"repository": str(inside)}))
+
+    with pytest.raises(versions.VersionError, match="holds the shared data"):
+        alias.activate(folder, "v0.2")
+    assert (runtime.is_symlink(), (inside / ".git").is_dir()) == (False, True)
+    assert not (local_home.root() / alias.NEW).exists()
+
+
 def test_a_later_update_renames_a_new_link_over_the_alias_and_the_mark_never_goes_down():
     legacy()
     alias.activate(version("v0.2"), "v0.2")
@@ -88,6 +100,40 @@ def test_every_start_completes_a_first_migration_a_crash_interrupted():
     assert not new.exists()
     assert len(list((local_home.root() / local_home.VERSIONS).glob("legacy-*"))) == 1
     assert registry.load().active == "v0.2"
+
+
+def test_a_start_leaves_an_interrupted_legacy_runtime_holding_the_shared_data_in_place(caplog):
+    runtime, folder = legacy(), version("v0.2")
+    new = local_home.root() / alias.NEW
+    new.symlink_to(folder)
+    alias._swap(new, runtime)  # noqa: SLF001 - an older update crashed right after the rename
+    inside = new / "data"
+    git(new, "init", "-q", str(inside))
+    said = json.dumps({"repository": str(inside)})  # an older `owlbear data` accepted any checkout
+    (local_home.root() / "data.json").write_text(said)
+
+    alias.complete()
+
+    assert ((inside / ".git").is_dir(), (local_home.root() / "data.json").read_text()) == (True, said)
+    assert list((local_home.root() / local_home.VERSIONS).glob("legacy-*")) == []
+    assert "holds the shared data" in caplog.text
+    assert registry.load().active == "v0.2"
+
+
+def test_a_start_keeps_the_legacy_runtime_when_the_pointer_names_the_data_through_the_old_runtime(caplog):
+    runtime, folder = legacy(), version("v0.2")
+    git(runtime, "init", "-q", str(runtime / "data"))
+    said = json.dumps({"repository": str(runtime / "data")})  # written before the update, by an older `owlbear data`
+    (local_home.root() / "data.json").write_text(said)
+    new = local_home.root() / alias.NEW
+    new.symlink_to(folder)
+    alias._swap(new, runtime)  # noqa: SLF001 - an older update crashed right after the rename
+
+    alias.complete()
+
+    assert ((new / "data" / ".git").is_dir(), (local_home.root() / "data.json").read_text()) == (True, said)
+    assert list((local_home.root() / local_home.VERSIONS).glob("legacy-*")) == []
+    assert f"it holds the shared data at {new / 'data'}" in caplog.text
 
 
 def test_a_link_made_but_never_renamed_is_removed_and_the_old_runtime_stays():
@@ -455,6 +501,64 @@ def test_a_version_goes_once_two_newer_ones_were_active_and_no_lease_holds_it(mo
     assert versions.prune() == ["v0.1"]  # v0.2 is held; v0.3 has one newer; v0.4 runs
     assert removed == [".v0.1-removing"]  # renamed first: a process starting from it now finds nothing
     assert not (local_home.root() / local_home.VERSIONS / "v0.1").exists()
+
+
+@pytest.mark.parametrize("pointer", ["data.json", "common.json"])
+def test_a_version_holding_the_shared_data_is_never_removed_and_data_beside_the_versions_survives(pointer):
+    home = local_home.root()
+    for tag in ("v0.1", "v0.2", "v0.3", "v0.4"):
+        (version(tag) / versions.ACTIVATED).touch()
+    (home / local_home.RUNTIME).symlink_to(home / local_home.VERSIONS / "v0.4")
+    inside, beside = home / local_home.VERSIONS / "v0.1" / "data", home / local_home.DATA
+    for checkout in (inside, beside):
+        git(home, "init", "-q", str(checkout))
+        (checkout / "note.md").write_text("kept\n")
+    said = json.dumps({"repository": str(inside)})  # an older `owlbear data` accepted any checkout
+    (home / pointer).write_text(said)
+
+    assert versions.prune() == ["v0.2"]
+    assert ((inside / "note.md").read_text(), (beside / "note.md").read_text()) == ("kept\n", "kept\n")
+    assert sorted(p.name for p in (home / local_home.VERSIONS).iterdir()) == ["v0.1", "v0.3", "v0.4"]  # never renamed
+    assert sorted(p.name for p in home.glob("*.json")) == [pointer]
+    assert (home / pointer).read_text() == said
+    with pytest.raises(versions.VersionError, match="holds the shared data"):
+        versions.remove(home / local_home.VERSIONS / "v0.1")
+    assert (inside / "note.md").exists()
+
+
+def test_a_version_holding_the_git_folder_of_a_linked_shared_checkout_is_never_removed(tmp_path):
+    home = local_home.root()
+    main = version("v0.1") / "data"
+    git(home, "init", "-q", "-b", "main", str(main))
+    git(main, "commit", "-q", "--allow-empty", "-m", "start")
+    linked = tmp_path / "shared"
+    git(main, "worktree", "add", "-q", str(linked))
+    (home / "data.json").write_text(json.dumps({"repository": str(linked)}))
+
+    with pytest.raises(versions.VersionError, match="holds the shared data"):
+        versions.remove(home / local_home.VERSIONS / "v0.1")
+    assert (main / ".git").is_dir()
+
+
+def test_the_bare_clone_is_never_made_again_over_the_shared_data():
+    home = local_home.root()
+    inside = home / versions.REPO / "data"
+    git(home, "init", "-q", str(inside))
+    (home / "data.json").write_text(json.dumps({"repository": str(inside)}))
+
+    with pytest.raises(versions.VersionError, match="holds the shared data"):
+        versions.repo()
+    assert (inside / ".git").is_dir()
+
+
+def test_an_unreadable_pointer_removes_nothing():
+    home = local_home.root()
+    version("v0.1")
+    (home / "data.json").write_text("{")
+
+    with pytest.raises(versions.VersionError, match="pointer cannot be read"):
+        versions.remove(home / local_home.VERSIONS / "v0.1")
+    assert (home / local_home.VERSIONS / "v0.1").is_dir()
 
 
 def test_the_old_runtime_is_removed_only_on_the_owners_word():

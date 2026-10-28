@@ -117,7 +117,26 @@ def listed(c: TestClient, **query) -> list[str]:
 def test_without_a_shared_repository_the_tab_says_so(tmp_path):
     got = client(Store(tmp_path / "store")).get("/api/next/decisions").json()
     assert (got["available"], got["decisions"]) == (False, [])
+    searched = client(Store(tmp_path / "store")).get("/api/next/decisions", params={"text": "notes"}).json()
+    assert (searched["available"], searched["decisions"]) == (False, [])
     assert client(Store(tmp_path / "store"), headers={}).get("/api/next/decisions").status_code == 401
+
+
+@pytest.mark.parametrize("broken", ["invalid", "unreadable"])
+def test_a_search_over_an_unusable_decision_file_says_the_list_is_unavailable(owner, shared, broken):
+    kept, bad = make(), make()
+    seed(shared, kept, bad)
+    path = shared.root / PROJECT / "decisions" / f"{bad.id}.md"
+    if broken == "invalid":
+        path.write_text("nothing\n")
+    else:
+        path.chmod(0)
+    try:
+        got = owner.get("/api/next/decisions", params={"text": "notes"}).json()
+    finally:
+        path.chmod(0o644)
+    assert (got["available"], got["decisions"]) == (False, [])
+    assert f"{bad.id}.md: " in got["reason"]
 
 
 def test_the_list_filters_by_scope_state_origin_topic_read_back_and_text(owner, shared):
@@ -135,6 +154,9 @@ def test_the_list_filters_by_scope_state_origin_topic_read_back_and_text(owner, 
     assert listed(owner, topic="storage") == ["Notes in SQLite"]
     assert listed(owner, read_back="done") == ["Pages are plain HTML"]
     assert listed(owner, text="sqlite") == ["Notes in SQLite"]
+    assert listed(owner, text="export", retired="true") == ["Old export"]
+    assert listed(owner, text="export", state="withdrawn") == ["Old export"]
+    assert listed(owner, text="export") == []
     assert owner.get("/api/next/decisions").json()["topics"] == ["storage"]
 
 
@@ -493,6 +515,7 @@ def test_find_decisions_matches_text_scope_and_retired_ones_with_the_revision_a_
     assert [d["title"] for d in tool("find_decisions", where="global")["decisions"]] == [wide.title]
     assert {d["id"] for d in everything["decisions"]} == {rule.id, gone.id}
     assert everything["more"] == 0
+    assert [d["id"] for d in tool("find_decisions", text="csv", include_retired=True)["decisions"]] == [gone.id]
 
 
 @pytest.mark.usefixtures("chat")

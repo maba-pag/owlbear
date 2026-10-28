@@ -88,9 +88,12 @@ def test_the_registry_move_changes_only_the_current_read_set() -> None:
             "    return cwd.resolve()",
         ),
         (
-            "local_system/data_repo.py",
-            '        root = Path(data["repository"]).expanduser().resolve()',
-            "        root = Path.cwd()",
+            "local_system/data_place.py",
+            (
+                '    root = Path(record["repository"]).expanduser().resolve()\n'
+                '    if _top(root) != root:\n        msg = f"{root}, named in {path}'
+            ),
+            '    root = Path.cwd()\n    if _top(root) != root:\n        msg = f"{root}, named in {path}',
         ),
         (
             "local_system/git_run.py",

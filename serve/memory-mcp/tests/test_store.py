@@ -118,3 +118,30 @@ def test_an_unusable_shared_repository_is_reported_not_bypassed(
 
     with pytest.raises(StoreError, match=message):
         shared_stores(work)
+
+
+@pytest.mark.parametrize("default", ["checkout", "absent", "plain folder", "moving"])
+def test_without_a_pointer_the_default_place_is_the_shared_repository_or_refused(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, default: str
+) -> None:
+    home, work = tmp_path / "home", _workspace(tmp_path / "work", "https://github.com/acme/shop.git")
+    data = home / ".owlbear/data"
+    (work / ".owlbear").mkdir()
+    monkeypatch.delenv("OWLBEAR_DATA")
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.chdir(work)
+    if default == "checkout":
+        _claim(data, "shop", "github.com/acme/shop")
+        assert memory_dir() == data.resolve() / "shop/memory"
+        return
+    if default == "absent":
+        assert memory_dir() == work.resolve() / ".owlbear/memory"  # as before: the workspace keeps its own
+        return
+    if default == "moving":  # a move names no repository until it is done: nobody writes either copy
+        _claim(data, "shop", "github.com/acme/shop")
+        moving = {"remote": "u", "moving_from": str(data), "moving_to": str(tmp_path / "to")}
+        (home / ".owlbear/data.json").write_text(json.dumps(moving), encoding="utf-8")
+    else:
+        data.mkdir(parents=True)
+    with pytest.raises(StoreError, match="names no shared repository" if default == "moving" else "top folder"):
+        memory_dir()

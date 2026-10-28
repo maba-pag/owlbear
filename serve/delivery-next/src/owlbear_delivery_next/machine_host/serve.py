@@ -25,17 +25,21 @@ from typing import TYPE_CHECKING
 
 import uvicorn
 
-from owlbear_delivery_next.local_system import codebase, local_home
+from owlbear_delivery_next.local_system import codebase, data_place, data_repo, local_home
 from owlbear_delivery_next.local_system.storage_io import atomic_write, open_lock
 from owlbear_delivery_next.machine_host import alias, app, environment, handover, versions
 from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.project_host.api import link
+from owlbear_delivery_next.project_host.decision_routes import OWLBEAR
 from owlbear_delivery_next.project_host.host import HostRecord, running_at
-from owlbear_delivery_next.state_store import registry
+from owlbear_delivery_next.state_store import decision_store, registry
+from owlbear_delivery_next.state_store.store import StoreError
 
 if TYPE_CHECKING:
     from pathlib import Path
     from types import FrameType
+
+PROVISION_RETRY = 600  # seconds between tries to clone the shared repository
 
 
 class Server(uvicorn.Server):
@@ -130,7 +134,11 @@ def serve(*, run: bool = False, handing: bool = False) -> int:
     machine = _machine(home, sock, given, run=run)
     if pruned:
         machine.say(f"removed old versions: {', '.join(pruned)}")
+    for line in _retired_index(home):
+        machine.say(line)
+    cloning = _provisioned(machine)
     machine.load_all()
+    _fill(machine, cloning=cloning)
     threading.Thread(target=machine.retry_loop, daemon=True, name="projects").start()
     threading.Thread(target=machine.idle_loop, daemon=True, name="idle-stop").start()
     threading.Thread(target=machine.auto.loop, daemon=True, name="idle-update").start()
@@ -162,12 +170,97 @@ def serve(*, run: bool = False, handing: bool = False) -> int:
     return 0
 
 
+def _fill(machine: Machine, *, cloning: bool) -> None:
+    """Start the threads that pre-load the decisions and, when *cloning*, clone the shared repository."""
+    threading.Thread(target=warm, args=(machine,), daemon=True, name="decisions").start()
+    if cloning:
+        threading.Thread(target=_cloning, args=(machine,), daemon=True, name="data-clone").start()
+
+
+def _provisioned(machine: Machine) -> bool:
+    """Finish or undo a move and adopt ``~/.owlbear/data``, never cloning; whether a clone is still to be done.
+
+    A failure is said and the projects load without the shared data, each saying why; never fatal.
+    """
+    try:
+        _, done = data_place.provision(clone=False)
+        if done:
+            machine.say(f"shared data: {done}")
+    except data_repo.DataRepoError as exc:
+        machine.say(f"shared data: {exc}")
+    try:
+        record = data_place.stored() or {}
+    except data_repo.DataRepoError:
+        return False
+    return bool(record.get("remote")) and not record.get("repository") and not record.get("moving_to")
+
+
+def _cloning(machine: Machine) -> None:
+    """Thread: clone the shared repository the pointer names, then load the projects with it; retried until done.
+
+    While it clones, a project fails to load with the reason, so nothing writes settings elsewhere meanwhile.
+    """
+    said = ""
+    while not machine.stopping.is_set():
+        try:
+            _, done = data_place.provision()
+        except data_place.BusyError:
+            pass  # an `owlbear data` clones it now; looked at again later
+        except data_repo.DataRepoError as exc:
+            if str(exc) != said:
+                machine.say(f"shared data: {exc}; tried again every {PROVISION_RETRY // 60} minutes")
+                said = str(exc)
+        else:
+            if done:
+                machine.say(f"shared data: {done}")
+            machine.carry()
+            machine.retry()
+            return
+        if machine.stopping.wait(PROVISION_RETRY):
+            return
+
+
 def _pruned() -> list[str]:
     """The old versions removed at this start (§3); a failure is said, never fatal."""
     try:
         return versions.prune()
     except (OSError, versions.VersionError) as exc:
         return [f"none: {exc}"]
+
+
+RETIRED_INDEX = tuple(f"decisions.sqlite{end}" for end in ("", "-wal", "-shm", "-journal", ".lock"))
+
+
+def _retired_index(home: Path) -> list[str]:
+    """Remove the decision index the snapshot replaced (owlbear-data#16): one line per file removed or kept."""
+    said = []
+    for name in RETIRED_INDEX:
+        try:
+            (home / name).unlink()
+        except FileNotFoundError:
+            continue
+        except OSError as exc:
+            said.append(f"the retired decision index file {name} could not be removed: {exc}")
+        else:
+            said.append(f"removed the retired decision index file {name}")
+    return said
+
+
+def warm(machine: Machine) -> None:
+    """Read OwlBear's and each loaded project's decisions once, so the first page or tool call finds them kept."""
+    try:
+        views = [(data_repo.locate(), OWLBEAR)]
+    except data_repo.DataRepoError as exc:
+        views = []
+        machine.say(f"decisions of {OWLBEAR} not pre-loaded: {exc}")
+    views += [(p.store.shared, p.store.name) for p in list(machine.projects.values()) if p.store and p.store.shared]
+    for shared, name in views:
+        if shared is None:
+            continue
+        try:
+            decision_store.load(shared, name)
+        except (StoreError, data_repo.DataRepoError, OSError) as exc:
+            machine.say(f"decisions of {name} not pre-loaded: {exc}")
 
 
 def _machine(home: Path, sock: socket.socket, given: handover.Handover | None, *, run: bool) -> Machine:

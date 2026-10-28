@@ -13,7 +13,6 @@ from owlbear_delivery_next.local_system.data_repo import DataRepo, DataRepoError
 from owlbear_delivery_next.state_store import (
     decision_actions,
     decision_batch,
-    decision_index,
     decision_store,
     decision_sync,
 )
@@ -91,8 +90,6 @@ def test_no_data_repository_stops_instead_of_giving_no_decisions() -> None:
         load(None, PROJECT)
     with pytest.raises(DecisionsUnavailable, match="no shared data repository"):
         save(None, make(), expected_revision=None, message="m")
-    with pytest.raises(DecisionsUnavailable, match="no shared data repository"):
-        decision_index.search("notes", PROJECT)
 
 
 @pytest.mark.parametrize("where", ["decisions", f"{PROJECT}/decisions", PROJECT])
@@ -136,25 +133,23 @@ def test_an_unreadable_decisions_folder_stops_loading(shared, locked) -> None:
 
 
 @pytest.mark.parametrize("broken", ["invalid", "unreadable"])
-def test_an_unusable_decision_file_stops_loading_and_searching(indexed, broken) -> None:
+def test_an_unusable_decision_file_stops_loading(shared, broken) -> None:
     kept, bad = make(), make()
     for decision in (kept, bad):
-        save(indexed, decision, expected_revision=None, message="m")
-    path = indexed.root / PROJECT / "decisions" / f"{bad.id}.md"
+        save(shared, decision, expected_revision=None, message="m")
+    path = shared.root / PROJECT / "decisions" / f"{bad.id}.md"
     if broken == "invalid":
         path.write_text("nothing\n")
     else:
         path.chmod(0)
     try:
         with pytest.raises(DecisionsUnavailable, match=f"{bad.id}.md: ") as raised:
-            load(indexed, PROJECT)
+            load(shared, PROJECT)
         assert raised.value.action == READ
-        with pytest.raises(DecisionsUnavailable, match=f"{bad.id}.md: "):
-            decision_index.search("notes", PROJECT)
-        seen = snapshot(indexed.root, PROJECT)  # the diagnostic view keeps what it could not use
+        seen = snapshot(shared.root, PROJECT)  # the diagnostic view keeps what it could not use
         assert [e.decision.id for e in seen.entries] == [kept.id]
         assert ([f.rule for f in seen.findings], seen.complete) == (["schema"], False)
-        assert load(indexed, "").snapshot.complete  # this project's file does not stop the Global view
+        assert load(shared, "").snapshot.complete  # this project's file does not stop the Global view
     finally:
         path.chmod(0o644)
 
@@ -458,12 +453,6 @@ def test_refresh_reports_uncommitted_work_instead_of_pulling(shared) -> None:
     save(shared, decision, expected_revision=None, message="m")
     (shared.root / PROJECT / "decisions" / f"{decision.id}.md").write_text("edited\n")
     assert refresh(shared).startswith("not refreshed: 1 uncommitted file(s)")
-
-
-@pytest.fixture
-def indexed(shared, monkeypatch) -> DataRepo:
-    monkeypatch.setenv("OWLBEAR_DATA", str(shared.root))
-    return shared
 
 
 def test_a_commit_a_hook_added_is_never_taken_back(shared_repo, shared, tmp_path, monkeypatch) -> None:

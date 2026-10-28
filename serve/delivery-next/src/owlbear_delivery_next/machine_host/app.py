@@ -329,6 +329,10 @@ def _update_routes(routes: APIRouter, machine: Machine) -> None:
                 pids = ", ".join(map(str, users[:5]))
                 said = f"processes {pids} still run it: stop each one; for a chat's server use {codebase.STOP_START}"
                 raise HTTPException(409, f"{said}, then try again")
+            try:
+                versions.keep_data(path)
+            except versions.VersionError as exc:
+                raise HTTPException(409, str(exc)) from exc
             shutil.rmtree(path)
         return machine_values(machine)
 

@@ -1,7 +1,7 @@
 """Delivery's settings in the shared data repository (TD-57, TD-59, TD-64, TD-98, TD-128).
 
-A pointer file names the repository; ``common.json``, its name before the repository's rename, moves to ``data.json``
-once. The global layer lives at its root, each project's layer in a folder named
+Where the repository's checkout is and how it gets there is `data_place`'s; this module works in it. The global
+layer lives at its root, each project's layer in a folder named
 after the project's repository unless the owner chose another name; the folder is claimed by that repository's
 identity, and that claim keeps the chosen name for every clone and machine. Every save is committed and pushed
 under one repository-wide lock; a failed commit or push is reported, never hidden. A running host passes its view to
@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import contextlib
 import fcntl
-import json
 import logging
 import os
 import re
@@ -22,15 +21,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from owlbear_delivery_next.local_system import batch_journal, git_run, local_home, publication_hold
-from owlbear_delivery_next.local_system.storage_io import atomic_write
+from owlbear_delivery_next.local_system import batch_journal, git_run, publication_hold
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Sequence
     from typing import Self
 
 CONFIG, CLAIM, MEMORY = "config.json", "repository", "memory"
-POINTER, OLD_POINTER = local_home.POINTER, local_home.OLD_POINTER
 VIEW = "OWLBEAR_DATA"  # the host's view for its runners: the repository's path, or empty for none
 # Delivery's locks, temporary files, calibration screenshots and the backlog migration's journal
 EXCLUDE = (".*.lock", ".tmp-*", "*/visual/*/*.png", ".backlog-migration.json")
@@ -73,25 +70,6 @@ def _held(path: Path) -> str:
         return path.read_text().strip()
     except OSError, ValueError:
         return ""
-
-
-def pointer() -> Path:
-    """Where the machine records the shared repository: ``data.json`` in OwlBear's folder."""
-    return local_home.root() / POINTER
-
-
-def _move_old(path: Path) -> None:
-    """Move the pointer's old ``common.json`` to *path* once: written atomically, then the old file removed."""
-    old = path.with_name(OLD_POINTER)
-    if path.exists() or not old.is_file():
-        return
-    try:
-        atomic_write(path, old.read_text())
-        old.unlink(missing_ok=True)
-    except OSError as exc:
-        msg = f"the pointer {old} could not be moved to {path}: {exc}"
-        raise DataRepoError(msg) from exc
-    _log.warning("moved the shared repository's pointer %s to %s", old, path)
 
 
 def _git(cwd: Path, *args: str, until: float | None = None) -> subprocess.CompletedProcess[str]:
@@ -440,36 +418,10 @@ class DataRepo:
 
 
 def locate() -> DataRepo | None:
-    """The shared repository: the host's view when one is passed down, else the pointer's; None without either."""
-    if (view := os.environ.get(VIEW)) is not None:
-        return DataRepo(Path(view)) if view else None
-    path = pointer()
-    _move_old(path)
-    try:
-        data = json.loads(path.read_text())
-        root = Path(data["repository"]).expanduser().resolve()
-    except FileNotFoundError:
-        return None
-    except (OSError, ValueError, KeyError, TypeError) as exc:
-        msg = f"{path} names no repository"
-        raise DataRepoError(msg) from exc
-    if _top(root) != root:
-        msg = f"{root}, named in {path}, is not a git repository's top folder"
-        raise DataRepoError(msg)
-    return DataRepo(root)
+    """The shared repository this process uses, or None (`data_place.locate`)."""
+    from owlbear_delivery_next.local_system import data_place  # noqa: PLC0415 - it builds on this module
 
-
-def point(root: Path) -> DataRepo:
-    """Record ``root`` as this machine's shared repository; it must be a git checkout's top folder."""
-    root = root.expanduser().resolve()
-    if _top(root) != root:
-        msg = f"{root} is not a git repository's top folder"
-        raise DataRepoError(msg)
-    path = local_home.root() / POINTER
-    path.parent.mkdir(parents=True, exist_ok=True)
-    _move_old(path)
-    path.write_text(json.dumps({"repository": str(root)}) + "\n")
-    return DataRepo(root)
+    return data_place.locate()
 
 
 def remote_identity(url: str) -> str:

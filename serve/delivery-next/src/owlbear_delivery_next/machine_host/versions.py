@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+import logging
 import os
 import re
 import shutil
@@ -19,7 +20,7 @@ import subprocess
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
-from owlbear_delivery_next.local_system import codebase, leases, local_home
+from owlbear_delivery_next.local_system import codebase, data_place, data_repo, leases, local_home
 from owlbear_delivery_next.state_store import machine_settings, registry
 
 if TYPE_CHECKING:
@@ -36,6 +37,9 @@ MANIFEST = "serve/delivery-next/src/owlbear_delivery_next/design_pack.json"  # t
 FIRST_MAJOR = "v0.1"  # a major-only machine's version until v1.0 exists (TD-369)
 ACTIVATED = ".activated"  # in a version's folder once the alias named it
 type Number = tuple[int, int]
+
+
+_log = logging.getLogger(__name__)
 
 
 class VersionError(Exception):
@@ -126,6 +130,7 @@ def repo() -> Path:
     """``~/.owlbear/repo.git``, cloned from OwlBear's repository the first time."""
     path = local_home.root() / REPO
     if not (path / "HEAD").is_file():
+        keep_data(path)
         shutil.rmtree(path, ignore_errors=True)
         path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         _git("clone", "--bare", "--quiet", codebase.URL, str(path), timeout=FETCH * 5)
@@ -309,8 +314,25 @@ def pins(commit: str) -> dict[str, Any]:
     return found
 
 
+def _holds_data(path: Path) -> Path | None:
+    """The shared data *path* is, holds or lies in, read from the pointer alone; an unreadable pointer refuses."""
+    try:
+        return data_place.holds_data(path)
+    except data_repo.DataRepoError as exc:
+        msg = f"nothing is removed while the shared data's pointer cannot be read: {exc}"
+        raise VersionError(msg) from exc
+
+
+def keep_data(path: Path) -> None:
+    """Refuse to remove *path* when it is, holds or lies in the shared data."""
+    if kept := _holds_data(path):
+        msg = f"{path} is not removed: it holds the shared data at {kept}; move it out with `owlbear data --move`"
+        raise VersionError(msg)
+
+
 def remove(folder: Path) -> None:
-    """Remove an installed version's worktree and folder, if there is one."""
+    """Remove an installed version's worktree and folder, if there is one; never one holding the shared data."""
+    keep_data(folder)
     with contextlib.suppress(VersionError):
         _git(_bare(local_home.root() / REPO), "worktree", "remove", "--force", str(folder))
     shutil.rmtree(folder, ignore_errors=True)
@@ -327,6 +349,9 @@ def prune() -> list[str]:
     removed = []
     for path, found in sorted(installed.items(), key=lambda item: item[1]):
         if path.resolve() == current or sum(n > found for n in active) < 2 or leases.held(path):  # noqa: PLR2004
+            continue
+        if kept := _holds_data(path):
+            _log.warning("kept %s: it holds the shared data at %s; move it out with `owlbear data --move`", path, kept)
             continue
         retired = path.with_name(f".{path.name}-removing")  # a process starting from it from now on finds nothing
         path.rename(retired)
