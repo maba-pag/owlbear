@@ -66,7 +66,7 @@ def _entry(r: Mapping[str, Any]) -> dict[str, Any]:
         "session": r.get("session"),
         "note": cut(str(r.get("note") or ""), NOTE),
         "sampled_silence": silence(r),
-        "card": _card(r["id"]),
+        "card": cut(json.dumps(r["card"]), CARD) if "card" in r else _card(r["id"]),
     }
 
 

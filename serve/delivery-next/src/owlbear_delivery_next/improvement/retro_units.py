@@ -39,6 +39,7 @@ if TYPE_CHECKING:
 LINE = 8 << 20  # bytes: a longer event is left out, as the chat intake leaves it out (``chats.LINE``)
 OPEN = frozenset({"open", "waiting"})  # a revision whose run has not ended
 SHAPING = "the chat that shaped the brief is not attributable to the Change"
+SYNTHETIC = "syn-"  # a synthetic unit's session (``retro_synthetic``)
 UNREADABLE = (StoreError, sqlite3.Error, OSError, ValueError)  # a Change or its activity cannot be read
 
 
@@ -89,7 +90,9 @@ def manifest() -> list[dict[str, Any]] | None:
 
 
 def folder(session: str) -> Path:
-    """Where *session*'s capture is kept."""
+    """Where *session*'s capture is kept; a synthetic one's in Retro's own folder, apart from the chatlogs."""
+    if session.startswith(SYNTHETIC):
+        return retro_store.place() / "synthetic" / session
     return chatlogs.root() / "chatlogs" / session
 
 
