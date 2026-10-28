@@ -25,13 +25,15 @@ from typing import TYPE_CHECKING
 
 import uvicorn
 
-from owlbear_delivery_next.local_system import codebase, local_home
+from owlbear_delivery_next.local_system import codebase, data_repo, local_home
 from owlbear_delivery_next.local_system.storage_io import atomic_write, open_lock
 from owlbear_delivery_next.machine_host import alias, app, environment, handover, versions
 from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.project_host.api import link
+from owlbear_delivery_next.project_host.decision_routes import OWLBEAR
 from owlbear_delivery_next.project_host.host import HostRecord, running_at
-from owlbear_delivery_next.state_store import registry
+from owlbear_delivery_next.state_store import decision_store, registry
+from owlbear_delivery_next.state_store.store import StoreError
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -130,7 +132,10 @@ def serve(*, run: bool = False, handing: bool = False) -> int:
     machine = _machine(home, sock, given, run=run)
     if pruned:
         machine.say(f"removed old versions: {', '.join(pruned)}")
+    for line in _retired_index(home):
+        machine.say(line)
     machine.load_all()
+    threading.Thread(target=warm, args=(machine,), daemon=True, name="decisions").start()
     threading.Thread(target=machine.retry_loop, daemon=True, name="projects").start()
     threading.Thread(target=machine.idle_loop, daemon=True, name="idle-stop").start()
     threading.Thread(target=machine.auto.loop, daemon=True, name="idle-update").start()
@@ -167,6 +172,41 @@ def _pruned() -> list[str]:
         return versions.prune()
     except (OSError, versions.VersionError) as exc:
         return [f"none: {exc}"]
+
+
+RETIRED_INDEX = tuple(f"decisions.sqlite{end}" for end in ("", "-wal", "-shm", "-journal", ".lock"))
+
+
+def _retired_index(home: Path) -> list[str]:
+    """Remove the decision index the snapshot replaced (owlbear-data#16): one line per file removed or kept."""
+    said = []
+    for name in RETIRED_INDEX:
+        try:
+            (home / name).unlink()
+        except FileNotFoundError:
+            continue
+        except OSError as exc:
+            said.append(f"the retired decision index file {name} could not be removed: {exc}")
+        else:
+            said.append(f"removed the retired decision index file {name}")
+    return said
+
+
+def warm(machine: Machine) -> None:
+    """Read OwlBear's and each loaded project's decisions once, so the first page or tool call finds them kept."""
+    try:
+        views = [(data_repo.locate(), OWLBEAR)]
+    except data_repo.DataRepoError as exc:
+        views = []
+        machine.say(f"decisions of {OWLBEAR} not pre-loaded: {exc}")
+    views += [(p.store.shared, p.store.name) for p in list(machine.projects.values()) if p.store and p.store.shared]
+    for shared, name in views:
+        if shared is None:
+            continue
+        try:
+            decision_store.load(shared, name)
+        except (StoreError, data_repo.DataRepoError, OSError) as exc:
+            machine.say(f"decisions of {name} not pre-loaded: {exc}")
 
 
 def _machine(home: Path, sock: socket.socket, given: handover.Handover | None, *, run: bool) -> Machine:

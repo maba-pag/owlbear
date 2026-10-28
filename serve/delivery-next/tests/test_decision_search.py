@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import subprocess
+import sys
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
@@ -10,6 +12,7 @@ from types import SimpleNamespace
 import pytest
 
 from owlbear_decisions import Decision, Origin, Scope, State, new_id
+from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.state_store import decision_cache, decision_search, decision_store
 from owlbear_delivery_next.state_store.decision_store import save
@@ -112,3 +115,33 @@ def test_searches_answer_their_own_snapshot_while_a_save_publishes_the_next(shar
     assert built == []  # the new snapshot is the kept one
     assert decision_cache.search(old.snapshot, "notes", include_retired=False) == {notes.id}
     assert built == [old.snapshot]  # the replaced one answers from an index of its own
+
+
+CHILD = """
+import sys
+from pathlib import Path
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+from owlbear_delivery_next.local_system.data_repo import DataRepo
+from owlbear_delivery_next.project_host import decision_routes
+shared = DataRepo(Path(sys.argv[1]))
+app = FastAPI()
+app.include_router(decision_routes.router(lambda: shared, lambda: sys.argv[2], list))
+got = TestClient(app).get("/decisions", params={"text": sys.argv[3], "where": "project"}).json()
+print(" ".join(sorted(d["id"] for d in got["decisions"])))
+"""
+
+
+def test_a_restarted_process_finds_the_committed_text_and_leaves_no_index_file(shared_repo) -> None:
+    shared, notes = DataRepo(shared_repo[0]), make()
+    save(shared, notes, expected_revision=None, message="m")
+
+    def found(text: str) -> set[str]:
+        args = [sys.executable, "-c", CHILD, str(shared.root), PROJECT, text]
+        return set(subprocess.run(args, check=True, capture_output=True, text=True).stdout.split())  # noqa: S603
+
+    assert (found("notes"), found("tags")) == ({notes.id}, set())
+    tags = make(title="Tags are free text", statement="Any tag.")
+    save(shared, tags, expected_revision=None, message="m")
+    assert (found("notes"), found("tags")) == ({notes.id}, {tags.id})
+    assert list(local_home.root().parent.glob("**/decisions.sqlite*")) == []

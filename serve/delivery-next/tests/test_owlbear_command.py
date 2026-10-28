@@ -259,6 +259,23 @@ def test_a_host_that_fails_leaves_its_crash_mark_and_a_restart_of_an_unanswering
     assert (command.restart(), started) == (0, [True])
 
 
+def test_a_start_removes_the_retired_decision_index_and_says_each_file_once(monkeypatch, capsys) -> None:
+    home, warmed = local_home.root(), []
+    home.mkdir(parents=True, exist_ok=True)
+    for name in control.serve.RETIRED_INDEX:
+        (home / name).write_bytes(b"old")
+    monkeypatch.setattr(control.serve.Server, "run", lambda _self, **_kw: None)
+    monkeypatch.setattr(control.serve, "warm", warmed.append)
+    assert control.serve.serve(run=True) == 0
+    first = capsys.readouterr().out
+    assert control.serve.serve(run=True) == 0
+    assert [n for n in control.serve.RETIRED_INDEX if (home / n).exists()] == []
+    removed = [first.count(f"removed the retired decision index file {n}\n") for n in control.serve.RETIRED_INDEX]
+    assert removed == [1] * 5
+    assert "decision index" not in capsys.readouterr().out
+    assert len(warmed) == 2  # once per start, after the projects loaded
+
+
 def test_stop_never_signals_a_host_that_has_not_named_its_process(monkeypatch) -> None:
     said = []
     starting = control.serve.HostRecord(url="(starting)", token="", pid=0, started_at="2026-10-10T12:00:00Z", code="")

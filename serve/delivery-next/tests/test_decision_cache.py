@@ -6,12 +6,15 @@ import os
 import shutil
 import threading
 from datetime import UTC, datetime
+from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
 import pytest
 
 from owlbear_decisions import Decision, Link, LinkType, Origin, Scope, State, new_id, write
+from owlbear_delivery_next.local_system import data_repo
 from owlbear_delivery_next.local_system.data_repo import DataRepo
+from owlbear_delivery_next.machine_host import serve
 from owlbear_delivery_next.state_store import decision_cache, decision_store
 from owlbear_delivery_next.state_store.decision_store import DecisionsUnavailable, save
 
@@ -206,3 +209,17 @@ def test_first_readers_on_several_threads_parse_once(seeded, parses) -> None:
         thread.join()
     assert parses == [PROJECT]
     assert all(s is seen[0] for s in seen)
+
+
+def test_the_host_start_keeps_each_loaded_projects_decisions_and_says_a_view_it_could_not_read(
+    seeded, parses, monkeypatch
+) -> None:
+    said, store = [], SimpleNamespace(shared=seeded.shared, name=PROJECT)
+    monkeypatch.setattr(data_repo, "locate", lambda: seeded.shared)
+    decision_cache.clear()
+    serve.warm(SimpleNamespace(say=said.append, projects={"p": SimpleNamespace(store=store)}))
+    assert len(said) == 1
+    assert said[0].startswith("decisions of owlbear not pre-loaded: the project owlbear has no folder")
+    parses.clear()
+    assert decision_store.load(seeded.shared, PROJECT).snapshot.project == PROJECT
+    assert parses == []
