@@ -54,6 +54,18 @@ def test_a_kept_outputs_decisive_result_and_a_later_recovery_reach_the_judge_and
     assert rests["status"] == "unknown"
 
 
+def test_a_later_turns_kept_test_result_reaches_an_earlier_turns_later_course(tmp_path):
+    early, late = str(tmp_path / "copilot-tool-output-1.txt"), str(tmp_path / "copilot-tool-output-2.txt")
+    events = [*_turn("make the tests pass", "c1", early, "done"), *_turn("ship it", "c2", late, "shipped")]
+    outputs = [{"path": early, "state": "kept"}, {"path": late, "state": "kept"}]
+    bodies = {"copilot-tool-output-1.txt": "12 passed\n", "copilot-tool-output-2.txt": "...\n5 failed, 400 passed\n"}
+    _captured("s1", events, outputs, **bodies)
+
+    first, _ = seg.prepare(["s1"], "the chat ended", per_turn=True).parts
+
+    assert "bash test result: 5 failed, 400 passed; Saved to:" in first.later
+
+
 def test_a_changes_first_session_sees_what_its_shorter_second_session_did_later_and_not_the_reverse():
     _captured("s-a", [_event("assistant.message", content=f"step {i}") for i in range(5)])
     found = [_event("assistant.message", content="the reviewer found the build broken")]

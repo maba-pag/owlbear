@@ -122,10 +122,12 @@ def _message(d: Mapping[str, Any], data: Mapping[str, Any]) -> tuple[str, str]:
 
 def _result(data: Mapping[str, Any], tool: str, said: Mapping[str, Any], session: str) -> tuple[str, str]:
     result = ev.clean(str(ev.result_text(dict(data))))
-    failed, tests = data.get("success") is False, bool(TESTS.search(result))
-    line = f"result {tool} {'failed' if failed else 'ok'}: {cut(result, FULL if failed or tests else RESULT)}"
     outputs = [_excerpt(session, p, said) for p in dict.fromkeys(chatlogs.SAVED.findall(result))]
-    brief = f"{tool} {'failed' if failed else 'test result'}: {cut(result, BRIEF)}" if failed or tests else ""
+    told = [x for o in outputs for x in o.splitlines() if TESTS.search(x)][-2:]  # a kept output's test result
+    failed, tests = data.get("success") is False, bool(TESTS.search(result) or told)
+    line = f"result {tool} {'failed' if failed else 'ok'}: {cut(result, FULL if failed or tests else RESULT)}"
+    brief = f"{tool} {'failed' if failed else 'test result'}: {cut('; '.join([*told, result]), BRIEF)}"
+    brief = brief if failed or tests else ""
     return "\n".join([line, *outputs]), brief
 
 
