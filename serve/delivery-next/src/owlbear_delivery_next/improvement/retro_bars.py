@@ -54,8 +54,12 @@ def kind(cause: str) -> str:
     return "delivery-change" if cause in DELIVERY else "agent-change" if cause in AGENT else "lesson"
 
 
+def _synthetic(w: Work) -> list[str]:
+    return [assumptions.RETRO_SYNTHETIC] if w.provenance == "synthetic" else []
+
+
 def _marks(w: Work, *more: str) -> list[str]:
-    return [assumptions.RETRO_CAUSES, *more, *([assumptions.RETRO_SYNTHETIC] if w.provenance == "synthetic" else [])]
+    return [assumptions.RETRO_CAUSES, *more, *_synthetic(w)]
 
 
 def _delivery(w: Work, mine: Iterable[Mapping[str, Any]]) -> list[str | None]:
@@ -78,11 +82,10 @@ def _delivery(w: Work, mine: Iterable[Mapping[str, Any]]) -> list[str | None]:
 
 def cases(w: Work) -> list[str | None]:
     """A Spotter case proposed for each record of this revision graded wrong or missed; a grade-only run's too."""
-    if w.provenance != "real":
-        return []
+    synthetic = w.provenance != "real"
     return [
         props.file(
-            props.open_key("real", "spotter-case", g["record"]),
+            props.open_key(w.provenance, "spotter-case", g["record"]),
             [g["id"]],
             kind="spotter-case",
             record=g["record"],
@@ -92,10 +95,10 @@ def cases(w: Work) -> list[str | None]:
             mechanism=f"the Spotter's {g.get('look')} look was {g['grade']}: it should have said "
             f"{g.get('should') or 'otherwise'}",
             bar="a record graded wrong or missed",
-            provenance="real",
-            assumptions=[assumptions.RETRO_GRADES],
+            provenance=w.provenance,
+            assumptions=[assumptions.RETRO_GRADES, *_synthetic(w)],
         )
-        for g in store.grades(unit=w.uid)
+        for g in store.grades(unit=w.uid, synthetic=synthetic)
         if g["grade"] in {"wrong", "missed"} and g.get("rev") == w.rev.get("rev")
     ]
 
@@ -221,12 +224,11 @@ def _lessons(w: Work, every: list[dict[str, Any]]) -> list[str | None]:
 
 
 def _catchable(w: Work, every: list[dict[str, Any]]) -> list[str | None]:
-    if w.provenance != "real" or any(
-        p["state"] not in props.CLOSED for p in props.folded().values() if p.get("kind") == "look-reconsider"
-    ):
+    same = [p for p in props.folded().values() if p.get("provenance", "real") == w.provenance]
+    if any(p["state"] not in props.CLOSED for p in same if p.get("kind") == "look-reconsider"):
         return []
     judged = sorted(
-        (u for u in store.known().values() if u.get("judged_at") and u.get("provenance", "real") == "real"),
+        (u for u in store.known().values() if u.get("judged_at") and u.get("provenance", "real") == w.provenance),
         key=lambda u: u["judged_at"],
     )[-WINDOW:]
     window = {u["family"] for u in judged}
@@ -236,13 +238,13 @@ def _catchable(w: Work, every: list[dict[str, Any]]) -> list[str | None]:
         return []
     return [
         props.file(
-            props.open_key("real", "look-reconsider"),
+            props.open_key(w.provenance, "look-reconsider"),
             caught,
             kind="look-reconsider",
             cause="",
             target="spotter:looks",
-            provenance="real",
-            assumptions=[assumptions.RETRO_CATCHABLE],
+            provenance=w.provenance,
+            assumptions=[assumptions.RETRO_CATCHABLE, *_synthetic(w)],
             mechanism=f"{len(caught)} of {len(inside)} findings over the last {len(judged)} judged units "
             "were catchable at their moment",
             bar=f"at least {CATCHABLE:.0%} catchable findings",

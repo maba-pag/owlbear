@@ -211,6 +211,65 @@
     "records": [{ "id": "syn-gap-1", "look": "hand-off", "category": "none", "turn": 4, "note": "" }]
   },
   {
+    "name": "edit-lost",
+    "set": "demo",
+    "role": "builder",
+    "outcome": [
+      "Done after a second edit: the edit tool reported the first edit of app/report.py as made but wrote ",
+      "nothing, which cost a failed test run and a retry."
+    ],
+    "exposure": ["agent:builder", "tool:bash", "tool:edit"],
+    "turns": [
+      ["user", "Task: add a total row to the CSV export in app/report.py, with a test. Run the tests before hand-off."],
+      ["call", "edit", "app/report.py: append a total row after the data rows", "edited app/report.py", true],
+      ["call", "edit", "tests/test_report.py: add test_total_row", "edited tests/test_report.py", true],
+      [
+        "call",
+        "bash",
+        "uv run pytest tests/test_report.py",
+        [
+          "FAILED tests/test_report.py::test_total_row - AssertionError: the export has no total row\n",
+          "1 failed, 6 passed"
+        ],
+        true
+      ],
+      ["call", "bash", "git diff --stat", "tests/test_report.py | 9 +++++++++\n1 file changed, 9 insertions(+)", true],
+      [
+        "agent",
+        [
+          "The edit tool said it edited app/report.py, but git diff shows no change to that file: the edit ",
+          "was never written. Making it again."
+        ]
+      ],
+      ["call", "edit", "app/report.py: append a total row after the data rows", "edited app/report.py", true],
+      [
+        "call",
+        "bash",
+        "git diff --stat",
+        "app/report.py | 4 ++++\ntests/test_report.py | 9 +++++++++\n2 files changed, 13 insertions(+)",
+        true
+      ],
+      ["call", "bash", "uv run pytest tests/test_report.py", "7 passed", true],
+      ["agent", "Done: the export ends with a total row and test_total_row covers it. 7 passed."]
+    ],
+    "records": [
+      {
+        "id": "syn-edit-lost-1",
+        "look": "state-change",
+        "category": "none",
+        "turn": 6,
+        "note": ""
+      },
+      {
+        "id": "syn-edit-lost-2",
+        "look": "hand-off",
+        "category": "hand-off-fitness",
+        "turn": 10,
+        "note": "The hand-off says the tests pass, but no test ran in this session."
+      }
+    ]
+  },
+  {
     "name": "large",
     "set": "stop",
     "role": "builder",

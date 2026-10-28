@@ -16,7 +16,9 @@ CANNED = {  # a quote in a synthetic unit -> the finding's cause and target
     "edit api/schema.json and run the tests": ("instruction-gap", "skill:w-build"),
     "Document every new command in docs/cli.md": ("instruction-gap", "skill:w-build"),
     "the full test run passed": ("skipped-verification", "agent:builder"),
+    "the edit was never written": ("tool-defect", "tool:edit"),
 }
+WRONG = {"syn-edit-lost-2": "none"}  # a record the Spotter got wrong -> what it should have said
 
 
 def _evidence(message):
@@ -35,14 +37,20 @@ def _judged(ev):
             "catchable": True,
             "cause": cause,
             "target": target,
-            "steps": "",
+            "steps": "edit app/report.py, then git diff --stat" if cause == "tool-defect" else "",
             "rests_on_gap": quote == "the full test run passed",
         }
         for p in ev["parts"]
         for quote, (cause, target) in CANNED.items()
         if quote in p["text"]
     ]
-    return {"findings": found, "grades": [{"record": r["id"], "grade": "worth-it"} for r in ev["records"]]}
+    grades = [
+        {"record": r["id"], "grade": "wrong", "call": WRONG[r["id"]], "reason": "the tests ran and passed"}
+        if r["id"] in WRONG
+        else {"record": r["id"], "grade": "worth-it"}
+        for r in ev["records"]
+    ]
+    return {"findings": found, "grades": grades}
 
 
 def ask(_key, message, agent):
@@ -57,17 +65,19 @@ def ask(_key, message, agent):
     return Paid(json.dumps(said), 1.0, 1.0)
 
 
-def test_two_synthetic_families_each_yield_reviewed_proposals_that_no_real_read_and_no_retired_mark_returns():
+def test_the_synthetic_units_yield_every_proposal_kind_reviewed_and_apart_from_every_real_read():
     for n, spec in enumerate(syn.specs()):
         rev = syn.install(spec)
         retro_judge.run(syn.work(spec, rev, f"run-{n}", ask))
         units.settle(syn.unit_id(spec), rev["rev"], "judged", run=f"run-{n}")
 
     shown = {p["kind"]: p for p in props.proposals(synthetic=True)}
-    assert set(shown) == {"lesson", "agent-change"}
+    assert set(shown) == {"lesson", "agent-change", "delivery-change", "spotter-case", "look-reconsider"}
     assert all(p["verdict"] == "survive" and p["state"] == "waiting" for p in shown.values())
     assert all(assumptions.RETRO_SYNTHETIC in p["assumptions"] for p in shown.values())
     assert shown["agent-change"]["target"] == "skill:w-build"
+    assert shown["delivery-change"]["target"] == "tool:edit"
+    assert shown["spotter-case"]["record"] == "syn-edit-lost-2"
     gap = retro_store.findings(synthetic=True, unit="syn:gap")
     assert [f["status"] for f in gap] == ["unknown"]
     assert len(retro_store.grades(synthetic=True)) == sum(len(s["records"]) for s in syn.specs())

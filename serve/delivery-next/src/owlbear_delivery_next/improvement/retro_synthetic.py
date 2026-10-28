@@ -7,8 +7,10 @@ a real unit (``retro_judge.run``). Everything it yields carries provenance ``syn
 ``retro-synthetic-1``: the real reads never return it, and no read returns it once that assumption is retired.
 
 The ``demo`` set shows two lessons' worth of findings (a hand-off claiming tests never run) and two agent changes'
-worth (a skill silent that a file is generated), plus a finding resting on a removed output. ``large`` is sized for
-two judging batches at least, for the credit-stop check. A text too long for one line of the file is a list of pieces,
+worth (a skill silent that a file is generated), plus a finding resting on a removed output, and a Delivery change's
+worth (an edit the tool reported but never wrote) with a hand-off record graded wrong, for a Spotter case. Together,
+judged in a row, they also make the catchable share that reconsiders the Spotter's looks. ``large`` is sized for two
+judging batches at least, for the credit-stop check. A text too long for one line of the file is a list of pieces,
 joined as read.
 """
 
