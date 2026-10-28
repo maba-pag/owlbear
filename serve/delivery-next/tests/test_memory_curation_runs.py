@@ -109,6 +109,26 @@ def test_a_run_without_a_report_or_while_fenced_fails_with_its_reason(root) -> N
     assert (runs["shop"]["state"], runs["shop"]["reason"]) == ("failed", "updating")
 
 
+def test_a_report_whose_model_is_unproven_fails_publishes_nothing_and_leaves_its_entries_due(root, monkeypatch):
+    """#675, TD-94: a curation run whose usage does not prove its model is refused like any unproven step."""
+    pending(root / "shop" / "memory", "Unsure lesson")
+    published = []
+    monkeypatch.setattr(DataRepo, "publish", lambda _self, *args, **_kw: published.append(args) or "")
+
+    def run(cfg) -> Run:
+        return Run(cfg.session_id, ending="result", payload=MemoryCurationResult(summary="ok", entries=[]),
+                   termination=Termination(confirmed=True), usage_unread="no gpt-x tokens in the usage")  # fmt: skip
+
+    job = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root), run=run)
+    job.start("shop")
+    finished(job)
+    shop = job.load().folders["shop"]
+    assert (shop.state, shop.reason, shop.summary, shop.seen, published) == (
+        "failed", "ended result: the model is unknown: no gpt-x tokens in the usage", "", {}, []
+    )  # fmt: skip
+    assert (job.due("shop"), job.slots.counts(curation.SLOT)[2]) == (True, 0)
+
+
 def test_without_a_shared_repository_nothing_is_curated() -> None:
     job = curation.Curation(Slots(lambda: 1), shared=lambda: None)
     assert job.read() == {"available": False, "reason": curation.NO_SHARED, "folders": []}
@@ -200,6 +220,8 @@ def test_processes_that_may_still_run_keep_their_slot_and_the_machine_busy_until
 ) -> None:
     alive = [True]
     monkeypatch.setattr(processes, "alive", lambda _pid, _created: alive[0])
+    published = []
+    monkeypatch.setattr(DataRepo, "publish", lambda _self, *args, **_kw: published.append(args) or "")
     slots = Slots(lambda: 2)
 
     def run(cfg) -> Run:
@@ -214,6 +236,7 @@ def test_processes_that_may_still_run_keep_their_slot_and_the_machine_busy_until
             break
         time.sleep(0.02)
     assert (job.working(), slots.counts(curation.SLOT)[2]) == ([curation.LINGERING], 1)
+    assert (job.load().folders["shop"].state, published) == ("failed", [])  # #675: a survivor's run is refused
     assert curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root)).left == {4242: 1.0}
     alive[0] = False
     assert (job.working(), slots.counts(curation.SLOT)[2]) == ([], 0)
