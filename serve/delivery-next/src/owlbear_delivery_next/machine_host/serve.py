@@ -138,9 +138,7 @@ def serve(*, run: bool = False, handing: bool = False) -> int:
         machine.say(line)
     cloning = _provisioned(machine)
     machine.load_all()
-    threading.Thread(target=warm, args=(machine,), daemon=True, name="decisions").start()
-    if cloning:
-        threading.Thread(target=_cloning, args=(machine,), daemon=True, name="data-clone").start()
+    _fill(machine, cloning=cloning)
     threading.Thread(target=machine.retry_loop, daemon=True, name="projects").start()
     threading.Thread(target=machine.idle_loop, daemon=True, name="idle-stop").start()
     threading.Thread(target=machine.auto.loop, daemon=True, name="idle-update").start()
@@ -169,6 +167,13 @@ def serve(*, run: bool = False, handing: bool = False) -> int:
     if machine.handover is not None:
         _handed(machine, *machine.handover)
     return 0
+
+
+def _fill(machine: Machine, *, cloning: bool) -> None:
+    """Start the threads that pre-load the decisions and, when *cloning*, clone the shared repository."""
+    threading.Thread(target=warm, args=(machine,), daemon=True, name="decisions").start()
+    if cloning:
+        threading.Thread(target=_cloning, args=(machine,), daemon=True, name="data-clone").start()
 
 
 def _provisioned(machine: Machine) -> bool:
