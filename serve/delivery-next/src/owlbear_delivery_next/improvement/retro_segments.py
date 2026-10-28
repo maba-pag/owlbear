@@ -86,6 +86,7 @@ class Prepared:
     parts: list[Part] = field(default_factory=list)
     earlier: str = ""
     gaps: list[str] = field(default_factory=list)
+    activity: str = ""  # a Change's last activity events, supplementary
 
 
 @dataclass

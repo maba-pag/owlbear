@@ -12,6 +12,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from owlbear_delivery_next.change_contracts.decision_records import BriefDecision
 from owlbear_delivery_next.change_contracts.models import Brief, Change, Criterion, Exit, Inputs, Names, Outcome, Review
 from owlbear_delivery_next.improvement import (
     assumptions,
@@ -118,6 +119,9 @@ def _job(asker, state=None, *, restarted=False, projects=None):
     return RetroJob(slots, seams, owner)
 
 
+SECRET = "ghp_" + "b" * 36
+
+
 def _runs():
     return list(retro_store.run_states().values())
 
@@ -184,6 +188,23 @@ def test_a_finished_change_is_planned_then_judged_against_its_brief_and_reviews_
     later = _evidence(asker.messages[0])["parts"][0]["later"]
     assert "its brief: a week column" in later
     assert "finding: the week starts on Sunday" in later
+
+
+def test_a_changes_evidence_holds_its_brief_decisions_and_its_last_activity_masked_and_bounded(said, tmp_path):
+    projects, said.retro_after_change = _finished_change(tmp_path), "on"
+    st, _ = projects["p1"]
+    st.read("fix-it").brief.decisions.append(BriefDecision(question="week start?", answer="Monday", origin="approved"))
+    events = [{"event": "step", "n": n, "token": SECRET if n == 249 else ""} for n in range(250)]
+    st.events = lambda _s: events
+
+    _job(asker := Asker(), projects=projects).tick(0.0)
+
+    sent = _evidence(asker.messages[0])
+    assert "decision (approved): week start? -> Monday" in sent["parts"][0]["later"]
+    lines = sent["activity"].splitlines()
+    assert ('"n": 249' in lines[-1], SECRET in sent["activity"]) == (True, False)
+    assert len(lines) <= retro_evidence.EVENTS
+    assert len(json.dumps(sent["activity"])) - 2 <= retro_evidence.ACTIVITY
 
 
 # Interruptions, gates F1, H1 and J2

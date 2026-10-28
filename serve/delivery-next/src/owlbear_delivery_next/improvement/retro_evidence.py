@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import contextlib
+import json
 from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.improvement import retro_judge, retro_segments
@@ -13,11 +14,15 @@ from owlbear_delivery_next.improvement import retro_store as store
 from owlbear_delivery_next.improvement import retro_synthetic as syn
 from owlbear_delivery_next.improvement import retro_units as units
 from owlbear_delivery_next.improvement.retro_calls import Paid, Work, key
+from owlbear_delivery_next.improvement.retro_segments import dumps
+from owlbear_delivery_next.local_system import mask
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from owlbear_delivery_next.improvement.retro_segments import Prepared
+
+EVENTS, ACTIVITY = 200, 6_000  # a Change's activity events read; the characters they take in a message, newest kept
 
 
 def outcome(uid: str, projects: units.Projects) -> str:
@@ -33,6 +38,7 @@ def outcome(uid: str, projects: units.Projects) -> str:
     brief = change.brief
     said += [f"its brief: {cut(brief.outcome, retro_segments.SAID)}"] if brief.outcome else []
     said += [f"criterion {c.id}: {cut(c.text, retro_segments.BRIEF)}" for c in brief.criteria]
+    said += [f"decision ({d.origin}): {cut(d.question, 120)} -> {cut(d.answer, 120)}" for d in brief.decisions]
     tasks = change.plan.tasks if change.plan else []
     said += [f"task {t.id} ({t.origin}{', done' if t.done else ''}): {cut(t.title, 120)}" for t in tasks]
     for r in change.reviews:
@@ -43,6 +49,22 @@ def outcome(uid: str, projects: units.Projects) -> str:
     tools = [(n, t) for n, t in change.tool_use.tools.items() if t.rejected or t.retries]
     said += [f"tool {n}: {t.calls} calls, {t.rejected} refused, {t.retries} retried" for n, t in tools]
     return "\n".join(said)
+
+
+def activity(uid: str, projects: units.Projects) -> str:
+    """A Change's last ``EVENTS`` activity events, masked, one line each, within ``ACTIVITY`` with the newest kept."""
+    pid, slug = uid.split(":", 2)[1:]
+    try:
+        events = projects[pid][0].events(slug)[-EVENTS:]
+    except (*units.UNREADABLE, KeyError):
+        return ""
+    kept: list[str] = []
+    for event in reversed(events):
+        line = retro_segments.cut(mask.redact(json.dumps(event, sort_keys=True, default=str)), retro_segments.BRIEF)
+        if len(dumps("\n".join([line, *kept]))) - 2 > ACTIVITY:
+            break
+        kept.insert(0, line)
+    return "\n".join(kept)
 
 
 def last_said(sid: str) -> str:
@@ -62,7 +84,9 @@ def evidence(uid: str, unit: Mapping[str, Any], rev: Mapping[str, Any], projects
     if unit.get("kind") == "chat":
         low, high = int(rev.get("from_events") or 0), int(rev.get("cutoff_events") or 0)
         return retro_segments.prepare(sessions, last_said(sessions[0]), low=low, high=high, per_turn=True)
-    return retro_segments.prepare(sessions, outcome(uid, projects))
+    prepared = retro_segments.prepare(sessions, outcome(uid, projects))
+    prepared.activity = activity(uid, projects)
+    return prepared
 
 
 def _never(_batch: str, _message: str, _agent: str) -> Paid:

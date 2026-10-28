@@ -12,6 +12,8 @@ The evidence holds:
 - `later`: for each part, what happened after it, then the work's outcome.
 - `earlier`: what happened before, judged already; context only.
 - `gaps`: what is missing from the evidence.
+- `activity`: for a Change, the last activity events Delivery logged, one JSON line each, oldest first; supplementary,
+  for what the sessions do not show. A finding's `refs` and `quotes` still come from the parts.
 - `records`: the Spotter's looks during this work. A look happened at an event and made a call: `category` is what it
   said (`none` when it stayed silent), `note` why; `card` is an excerpt of what it saw.
 

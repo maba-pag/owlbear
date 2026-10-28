@@ -90,7 +90,7 @@ def _message(w: Work, parts: Iterable[Part], records: Iterable[Mapping[str, Any]
         "earlier": w.prepared.earlier,
         "parts": [{"ref": p.ref, "text": p.text, "later": p.later} for p in parts],
         "records": [_entry(r) for r in records],
-    }
+    } | ({"activity": w.prepared.activity} if w.prepared.activity else {})
     return f"{JUDGE.read_text()}\n\n## The evidence\n\n```json\n{dumps(evidence)}\n```\n"
 
 
