@@ -10,17 +10,17 @@ OwlBear is a laptop-resident AI development system built around VS Code and GitH
 | --- | --- | --- |
 | `main` | The only long-lived branch and GitHub's default | Full workspace: `share/`, `serve/`, `setup/`, `.owlbear/`, `store/`, `tests/`, `pyproject.toml` |
 
-Uncoordinated repository maintenance reaches `main` through a pull request: its required `CI`
-check must pass on a branch that is up to date with `main`, and it merges with a merge commit
-(TD-278). Once its CI passes, a pull request that changes runtime code or CI workflows gets the `coderabbit` label,
-which buys one CodeRabbit review from a free allowance of about one an hour; it merges only after that review is in
-and handled. If CodeRabbit reports its limit or sends no review within 60 minutes, a Copilot review replaces it and
-the pull request merges once that is handled, said in the pull request. Others merge after CI and Sol's review,
-without the label (`D-01M5WG5KS3N4PK44FTHJTCX7RC`). A chat-authored pull request that changes runtime code gets
-`release:minor`, one that changes only docs or tests none, and `release:major` only on the owner's word (TD-314). Target delivery
-uses the branch, worktree, and
-integration target in its per-change coordination record; never substitute `main` by convention.
-Consumers clone the same branch ("clone = install"); versions will be git tags. There is no
+Uncoordinated repository maintenance reaches `main` through a pull request: its required `CI` check must pass on a
+branch that is up to date with `main`, and it merges with a merge commit (TD-278). Changes come from Delivery or from
+chats run by hand; the Copilot cloud agent doesn't work on this repository (D-01M5ZEKEK1AKGQ726K7KVAC3C9). A pull
+request a chat opens by hand merges after green CI and a Copilot review of its latest commit, every finding fixed or
+answered (D-01M5WWSS2EB4SDWNWSEXWWBGH2). One that changes runtime code or CI workflows also gets the `coderabbit` label
+once its CI passes, which buys one CodeRabbit review from a free allowance of about one an hour, and that review is
+handled before it merges; if CodeRabbit reports its limit or sends no review within 60 minutes, the pull request stops
+waiting for it (D-01M5WWSXMG291D6X2XMKJX4XYB). A chat-authored pull request that changes runtime code gets
+`release:minor`, one that changes only docs or tests none, and `release:major` only on the owner's word (TD-314). Target
+delivery uses the branch, worktree, and integration target in its per-change coordination record; never substitute
+`main` by convention. Consumers clone the same branch ("clone = install"); versions will be git tags. There is no
 generated consumer branch and no sync workflow (TD-203).
 
 ### Plan and Status
@@ -49,6 +49,24 @@ what is wrong (TD-150). In OwlBear also:
   `approved` (`confirmed=true`, `origin="approved"`); details you add stay `autonomous` with their reason.
 - End the session with one check of everything you record (TD-448).
 
+### Challenges Run by Hand
+
+PR reviewers get no decisions; the plan and implementation challenges check them (D-01M5ZE13N37HZAGJ69VWW69X23). So a
+plan or implementation challenge a chat runs by hand in this repository states the applicable decisions
+(D-01M5ZE1JHR9T1VCC9AZ80VATB5); Delivery's own challenges get theirs from Delivery.
+
+- Before the first round, the chat asks `lookup_decisions` which decisions govern the plan or change, in a question
+  that names it and what it touches. The picker reads the complete list; a `find_decisions` search, which returns at
+  most 20, is never the source.
+- The challenger gets the whole answer, untrimmed, checks the work against it and names the decisions the work
+  touches or breaks.
+- Before a later round, the chat asks again when a round changed the work materially or a governing decision changed.
+- Without the tool, the chat asks the host through the installed runtime: `~/.owlbear/runtime/.venv/bin/python`
+  calling `owlbear_delivery_next.commands.chat_client.workspace(Path("<this checkout>")).lookup_decisions(question)`.
+  If that fails too, or the answer says `failed`, the challenge says the decisions are unavailable and why, never that
+  none apply.
+- The list stays in the chat: none of it goes into a commit, pull request or comment on this repository.
+
 ## Directory Structure
 
 | Directory | Purpose |
@@ -71,13 +89,10 @@ the Node version pinned in `.nvmrc`); every `serve/` package is Python, so use `
 
 ## 4. Test Domain Mapping
 
-### GitHub Cloud Sessions
+### GitHub-Hosted Reviews
 
-Use explicit affected test selections and scoped checks. If scope is unknown, inspect the owning
-tests before choosing a check. Never run the whole-project suite or `uv run quality`.
-Follow the
-applicable [cloud-agent](instructions/cloud-agent.instructions.md) or
-[code-review](instructions/code-review.instructions.md) instructions. Required external CI gates remain unchanged.
+Copilot code review and CodeRabbit follow the [code-review](instructions/code-review.instructions.md) instructions.
+Required external CI gates remain unchanged.
 
 ### Local Development and CI
 

@@ -1,7 +1,6 @@
 ---
 description: "Review criteria for GitHub's built-in Copilot pull-request reviewer and CodeRabbit"
 applyTo: "**"
-excludeAgent: "cloud-agent"
 ---
 
 # GitHub Copilot Code Review
@@ -34,4 +33,4 @@ other environments, follow that environment's review or implementation instructi
   Do not claim a particular review model, fresh context or a check result without evidence.
 
 Use the native review interface. These instructions guide analysis, not GitHub's comment format,
-overview, model selection or approval behavior. Repairs are a separate user-requested cloud task.
+overview, model selection or approval behavior. Repairs happen in Delivery or in a chat run by hand, not in the review.
