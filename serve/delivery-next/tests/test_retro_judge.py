@@ -74,7 +74,9 @@ def test_fifty_records_are_each_graded_once_within_bounded_batches_and_missed_on
         lambda ev, _a: {
             "findings": [],
             "grades": [
-                {"record": r["id"], "grade": "missed" if r["id"] in {"silent", "loud"} else "worth-it"}
+                {"record": r["id"], "grade": "missed", "call": "hand-off-fitness"}
+                if r["id"] in {"silent", "loud"}
+                else {"record": r["id"], "grade": "worth-it"}
                 for r in ev["records"]
                 if r["id"] != "r01"
             ],
@@ -185,6 +187,19 @@ def test_a_confirm_batchs_sorting_is_kept_in_one_write_so_a_failing_disk_never_l
     assert sorted(retro_bars.assignments()) == ["f1", "f2", "f3"]
 
 
+@pytest.mark.parametrize(
+    "said",
+    [{"assign": {"f1": "new:a"}, "new": {"a": "one reason"}}, {"assign": {"f1": "m-x", "f2": "none"}, "new": {}}],
+)
+def test_a_sorting_that_leaves_a_finding_unsorted_stops_the_run_and_sorts_nothing(said):
+    retro_store.add_findings([_finding("f1", "chat:u1"), _finding("f2", "chat:u2")])
+
+    with pytest.raises(StoppedError, match="not valid"):
+        retro_bars.propose(_work(Asked(lambda _ev, _a: said)), [])
+
+    assert retro_bars.assignments() == {}
+
+
 def test_two_families_whose_findings_the_confirm_batch_separates_do_not_meet_the_bar():
     retro_store.add_findings([_finding("f1", "chat:u1"), _finding("f2", "chat:u2")])
 
@@ -259,12 +274,12 @@ def test_a_grade_only_run_proposes_a_case_for_a_late_record_graded_wrong():
     def said(_ev, agent):
         if agent == "retro-review":
             return {"verdict": "survive", "why": "holds", "risks": [], "publishable": {}}
-        return {"findings": [], "grades": [{"record": "late", "grade": "wrong", "call": "lint"}]}
+        return {"findings": [], "grades": [{"record": "late", "grade": "wrong", "call": "hand-off-fitness"}]}
 
     out = retro_judge.run(_work(Asked(said), [_record("late", 3)], grade_only=True))
 
     [case] = out["proposals"]
-    assert (props.folded()[case]["kind"], props.folded()[case]["call"]) == ("spotter-case", "lint")
+    assert (props.folded()[case]["kind"], props.folded()[case]["call"]) == ("spotter-case", "hand-off-fitness")
 
 
 def test_a_review_reads_a_graded_records_moment_reason_and_right_call_and_a_fixes_steps():
@@ -328,6 +343,8 @@ def test_a_judging_message_stays_within_its_bound_when_the_capture_is_all_quotes
         {"findings": [{"refs": ["s1.e3"], "quotes": "done"}], "grades": []},
         {"findings": [], "grades": [{"record": 7, "grade": "worth-it"}]},
         {"findings": [{"refs": ["s1.e3"], "quotes": ["done"], "target": {"agent": "builder"}}], "grades": []},
+        {"findings": [{"refs": ["s1.e3"], "quotes": ["done"], "catchable": "false"}], "grades": []},
+        {"findings": [], "grades": [{"record": "a", "grade": "wrong", "call": ""}]},
     ],
 )
 def test_a_malformed_judgement_stops_the_run_kept_as_an_attempt_with_nothing_derived(said):

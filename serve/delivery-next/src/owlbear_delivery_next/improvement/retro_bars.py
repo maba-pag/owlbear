@@ -122,14 +122,18 @@ def _assign(lines: Iterable[Mapping[str, Any]]) -> None:
             store.append(ASSIGNED, *rows)
 
 
-def _valid_sorting(said: Mapping[str, Any]) -> bool:
+def _valid_sorting(said: Mapping[str, Any], ids: Iterable[str], known: Mapping[str, str]) -> bool:
+    """A sorting of every finding of *ids* into a *known* mechanism, a new one it states, or none."""
     assign, new = said.get("assign"), said.get("new") or {}
-    return (
+    if not (
         isinstance(assign, dict)
         and strings(list(assign.values()))
         and isinstance(new, dict)
         and strings(list(new.values()))
-    )
+    ):
+        return False
+    made = {f"new:{k}" for k, v in new.items() if v.strip()}
+    return all(assign.get(f) in {*known, *made, "none"} for f in ids)
 
 
 def _confirm(w: Work, pair: tuple[str, str], pool: list[dict[str, Any]], known: dict[str, str]) -> None:
@@ -141,16 +145,16 @@ def _confirm(w: Work, pair: tuple[str, str], pool: list[dict[str, Any]], known: 
         "findings": [{k: f.get(k) for k in ("id", "what", "mechanism", "quotes")} for f in pool],
     }
     message = f"{CONFIRM.read_text()}\n\n## The evidence\n\n```json\n{dumps(masked(evidence))}\n```\n"
-    said = paid(w, f"confirm:{pair[0]}|{pair[1]}", message, _valid_sorting)
+    ids = [f["id"] for f in pool]
+    said = paid(w, f"confirm:{pair[0]}|{pair[1]}", message, lambda s: _valid_sorting(s, ids, known))
     new = {str(k): str(v) for k, v in (said.get("new") or {}).items()}
     lines = []
     for f in pool:
-        to = str(said["assign"].get(f["id"]) or "none")
-        if to.startswith("new:") and (text := new.get(to[4:], "").strip()):
+        to = said["assign"][f["id"]]
+        if to.startswith("new:"):
+            text = new[to[4:]].strip()
             to = f"m-{store.digest([*pair, text])}"
             known[to] = text
-        elif to not in known:
-            to = "none"
         lines.append(
             {
                 "finding": f["id"],

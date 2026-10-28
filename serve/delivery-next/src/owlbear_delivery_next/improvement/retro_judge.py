@@ -14,7 +14,7 @@ import gzip
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from owlbear_delivery_next.improvement import assumptions, case_review, retro_bars, retro_segments, spotter
+from owlbear_delivery_next.improvement import assumptions, case_review, cases, retro_bars, retro_segments, spotter
 from owlbear_delivery_next.improvement import retro_proposals as props
 from owlbear_delivery_next.improvement import retro_store as store
 from owlbear_delivery_next.improvement import retro_units as units
@@ -133,11 +133,18 @@ def _valid_finding(f: object) -> bool:
         isinstance(f, dict)
         and all(strings(f.get(k) or []) for k in ("refs", "quotes"))
         and all(isinstance(f.get(k) or "", str) for k in texts)
+        and all(isinstance(f.get(k, False), bool) for k in ("recovered", "catchable", "rests_on_gap"))
     )
 
 
 def _valid_grade(g: object) -> bool:
-    return isinstance(g, dict) and isinstance(g.get("record"), str) and isinstance(g.get("grade") or "", str)
+    """A grade of a record; a wrong or missed one names the call the look should have made."""
+    return (
+        isinstance(g, dict)
+        and isinstance(g.get("record"), str)
+        and isinstance(g.get("grade") or "", str)
+        and (g.get("grade") not in {"wrong", "missed"} or g.get("call") in cases.CALLS)
+    )
 
 
 def _valid_judgement(said: Mapping[str, Any]) -> bool:
