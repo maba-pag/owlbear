@@ -348,8 +348,13 @@ def test_a_review_reads_a_graded_records_moment_reason_and_right_call_and_a_fixe
             return {"verdict": "survive", "why": "holds", "risks": [], "publishable": SHOWN}
         return {"findings": [], "grades": [{"record": "w", "grade": "wrong", "reason": "it was fine", "call": "none"}]}
 
+    folder = retro_units.folder("s1")
+    folder.mkdir(parents=True)
+    turns = ["the tests pass", "lint is clean", "shipping it", "the build broke on main"]
+    log = "".join(json.dumps({"type": "assistant.message", "data": {"content": c}}) + "\n" for c in turns)
+    (folder / "log.jsonl.gz").write_bytes(gzip.compress(log.encode()))
     ask = Asked(said)
-    retro_judge.run(_work(ask, [_record("w", 3)], grade_only=True))
+    retro_judge.run(_work(ask, [_record("w", 3, note="lint looked skipped")], grade_only=True))
     fix = _finding("f1", "chat:u1", "tool:bash", "tool-defect") | {"steps": "run bash twice", "cost": "an hour"}
     retro_store.add_findings([fix])
     retro_bars.propose(_work(ask), ["f1"])
@@ -357,8 +362,11 @@ def test_a_review_reads_a_graded_records_moment_reason_and_right_call_and_a_fixe
 
     case, delivery = (_evidence(m) for m in ask.messages if "## The proposal" in m)
     [graded] = case["findings"]
-    assert "handoff look at event 3 of session s1, it said lint" in graded["what"]
+    assert "handoff look at event 3 of session s1, it said lint: lint looked skipped" in graded["what"]
     assert graded["mechanism"] == "it was fine; it should have said none"
+    assert graded["moment"].endswith("e3 agent: shipping it")
+    assert "the build broke on main" in graded["later"]
+    assert "moment" not in delivery["findings"][0]
     assert delivery["findings"][0]["steps"] == "run bash twice"
 
 

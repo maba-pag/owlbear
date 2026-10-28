@@ -32,6 +32,7 @@ if TYPE_CHECKING:
 PART, LATER, OUTPUT = 24_000, 6_000, 4_000  # characters: a part, its later course, one saved output's excerpt
 SAID, ASKED, RESULT, FULL = 1_500, 6_000, 2_000, 6_000  # a message, a request, a result, a failure or test result
 BRIEF, QUOTE, OUTCOME = 300, 600, 3_000  # an outcome line's text; a finding's quote; the unit's outcome
+MOMENT = 1_200  # what a review reads of a graded look: its session's lines up to it, and as much again after
 TESTS = re.compile(r"\b\d+ (?:passed|failed|errors?)\b|\bFAIL(?:ED)?\b|Traceback \(most recent call last\)")
 REF = re.compile(r"\bs\d+\.e\d+\b")
 
@@ -225,6 +226,18 @@ def prepare(sessions: list[str], outcome: str, *, low: int = 0, high: int = 0, p
         later = cut(mask.redact(after), LATER - len(outcome) - 20) + f"\noutcome: {outcome}"
         part.later = fit(mask.redact(later), LATER)
     return out
+
+
+def moment(session: str, cutoff: int) -> dict[str, str]:
+    """What a review reads of a look at event *cutoff* of *session*: the lines up to it and how it went, masked."""
+    gaps: list[str] = []
+    lines = _lines([session], 0, per_turn=False, gaps=gaps)
+    if not lines:
+        return {"moment": f"[{gaps[0] if gaps else 'the capture holds nothing'}]"}
+    upto = mask.redact("\n".join(f"e{x.n} {x.text}" for x in lines if x.n <= cutoff))
+    after = mask.redact("\n".join(x.brief for x in lines if x.n > cutoff and x.brief))
+    shown = upto if len(upto) <= MOMENT else "[…] " + upto[4 - MOMENT :]  # the moment is at its end
+    return {"moment": shown, "later": cut(after, MOMENT)}
 
 
 def verify(finding: Mapping[str, Any], parts: Iterable[Part]) -> dict[str, Any]:

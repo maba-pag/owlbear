@@ -254,7 +254,7 @@ def render(snap: Mapping[str, Any], findings: Mapping[str, Mapping[str, Any]]) -
             "families": len({f.get("family") for f in mine}),
             "counterexamples": snap["counterexamples"].get("count", 0),
         },
-        "findings": [{k: f.get(k) for k in ("id", "what", "mechanism", "cost", "steps", "quotes")} for f in shown],
+        "findings": [_shown_finding(f) for f in shown],
         "counterexamples": list(snap["counterexamples"].get("sample") or ())[:SHOWN],
         "omitted": f"[{max(0, len(snap['findings']) - len(shown))} more findings omitted]",
         "evidence": snap["evidence"],
@@ -285,10 +285,21 @@ def _valid_review(said: Mapping[str, Any]) -> bool:
 def _graded(g: Mapping[str, Any]) -> dict[str, Any]:
     """A grade as a review reads it: the look, its moment and call, the grade with its reason and the right call."""
     moment = f"at event {g.get('cutoff')} of session {g.get('session')}"
-    said = f"record {g['record']} ({g.get('look')} look {moment}, it said {g.get('category') or 'nothing'})"
+    note = f": {cut(str(n), NOTE)}" if (n := g.get("note")) else ""
+    said = f"record {g['record']} ({g.get('look')} look {moment}, it said {g.get('category') or 'nothing'}{note})"
     should = f"; it should have said {s}" if (s := g.get("should")) else ""
     what, why = f"{said} graded {g['grade']}", f"{g.get('reason', '')}{should}"
-    return {"id": g["id"], "what": what, "mechanism": why, "family": g.get("family"), "at": g.get("at")}
+    look = {"session": g.get("session"), "cutoff": g.get("cutoff")}
+    return {"id": g["id"], "what": what, "mechanism": why, "family": g.get("family"), "at": g.get("at"), "look": look}
+
+
+def _shown_finding(f: Mapping[str, Any]) -> dict[str, Any]:
+    """A finding as a review shows it; a graded look also with its moment and later course, read from its capture."""
+    shown = {k: f.get(k) for k in ("id", "what", "mechanism", "cost", "steps", "quotes")}
+    look = f.get("look") or {}
+    if look.get("session") and isinstance(look.get("cutoff"), int) and look["cutoff"] > 0:
+        shown |= retro_segments.moment(str(look["session"]), look["cutoff"])
+    return shown
 
 
 def review(w: Work) -> int:

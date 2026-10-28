@@ -261,7 +261,7 @@ def card_gaps(ids: Iterable[str]) -> list[str]:
 def grade(record: Mapping[str, Any], rev: str, value: str, reason: str = "", **more: object) -> dict[str, Any]:
     """A grade of *record* in revision *rev*: what live delivery's gate (#717) and the page (#716) read."""
     uid = unit_of(record)
-    keep = ("look", "category", "preliminary", "prompt", "cases", "session", "call", "cutoff")
+    keep = ("look", "category", "note", "preliminary", "prompt", "cases", "session", "call", "cutoff")
     return {
         "id": f"rg-{record['id']}",
         "record": record["id"],
