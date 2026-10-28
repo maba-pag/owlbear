@@ -18,7 +18,7 @@ from owlbear_delivery_next.improvement import assumptions, case_review, retro_ba
 from owlbear_delivery_next.improvement import retro_proposals as props
 from owlbear_delivery_next.improvement import retro_store as store
 from owlbear_delivery_next.improvement import retro_units as units
-from owlbear_delivery_next.improvement.retro_calls import Work, key, paid
+from owlbear_delivery_next.improvement.retro_calls import Work, key, paid, strings
 from owlbear_delivery_next.improvement.retro_segments import cut, dumps
 from owlbear_delivery_next.local_system import mask
 
@@ -127,9 +127,27 @@ def batches(w: Work, records: list[dict[str, Any]]) -> list[tuple[list[Part], li
     return out
 
 
+def _valid_finding(f: object) -> bool:
+    texts = ("what", "mechanism", "cost", "cause", "target", "steps")
+    return (
+        isinstance(f, dict)
+        and all(strings(f.get(k) or []) for k in ("refs", "quotes"))
+        and all(isinstance(f.get(k) or "", str) for k in texts)
+    )
+
+
+def _valid_grade(g: object) -> bool:
+    return isinstance(g, dict) and isinstance(g.get("record"), str) and isinstance(g.get("grade") or "", str)
+
+
 def _valid_judgement(said: Mapping[str, Any]) -> bool:
     grades, found = said.get("grades"), said.get("findings")
-    return isinstance(found, list) and isinstance(grades, list) and all(isinstance(x, dict) for x in [*found, *grades])
+    return (
+        isinstance(found, list)
+        and isinstance(grades, list)
+        and all(_valid_finding(f) for f in found)
+        and all(_valid_grade(g) for g in grades)
+    )
 
 
 def _finding(w: Work, key: str, n: int, raw: Mapping[str, Any], parts: list[Part]) -> dict[str, Any]:
@@ -235,7 +253,15 @@ def render(snap: Mapping[str, Any], findings: Mapping[str, Mapping[str, Any]]) -
 
 
 def _valid_review(said: Mapping[str, Any]) -> bool:
-    return said.get("verdict") in {"survive", "reject"} and isinstance(said.get("publishable") or {}, dict)
+    shown = said.get("publishable") or {}
+    return (
+        isinstance(said.get("verdict"), str)
+        and said["verdict"] in {"survive", "reject"}
+        and isinstance(said.get("why") or "", str)
+        and strings(said.get("risks") or [])
+        and isinstance(shown, dict)
+        and strings(list(shown.values()))
+    )
 
 
 def review(w: Work) -> int:

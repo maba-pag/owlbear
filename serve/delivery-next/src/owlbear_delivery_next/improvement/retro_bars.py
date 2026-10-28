@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING, Any
 from owlbear_delivery_next.improvement import assumptions
 from owlbear_delivery_next.improvement import retro_proposals as props
 from owlbear_delivery_next.improvement import retro_store as store
-from owlbear_delivery_next.improvement.retro_calls import paid
+from owlbear_delivery_next.improvement.retro_calls import paid, strings
 from owlbear_delivery_next.improvement.retro_segments import dumps, masked
 
 if TYPE_CHECKING:
@@ -117,7 +117,13 @@ def _assign(lines: Iterable[Mapping[str, Any]]) -> None:
 
 
 def _valid_sorting(said: Mapping[str, Any]) -> bool:
-    return isinstance(said.get("assign"), dict) and isinstance(said.get("new") or {}, dict)
+    assign, new = said.get("assign"), said.get("new") or {}
+    return (
+        isinstance(assign, dict)
+        and strings(list(assign.values()))
+        and isinstance(new, dict)
+        and strings(list(new.values()))
+    )
 
 
 def _confirm(w: Work, pair: tuple[str, str], pool: list[dict[str, Any]], known: dict[str, str]) -> None:

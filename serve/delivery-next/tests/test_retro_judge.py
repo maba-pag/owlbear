@@ -5,7 +5,15 @@ import json
 
 import pytest
 
-from owlbear_delivery_next.improvement import retro_bars, retro_judge, retro_segments, retro_store, retro_units, spotter
+from owlbear_delivery_next.improvement import (
+    retro_bars,
+    retro_calls,
+    retro_judge,
+    retro_segments,
+    retro_store,
+    retro_units,
+    spotter,
+)
 from owlbear_delivery_next.improvement import retro_proposals as props
 from owlbear_delivery_next.improvement.retro_calls import Paid, StoppedError, Work
 from owlbear_delivery_next.improvement.retro_segments import Part, Prepared
@@ -250,3 +258,33 @@ def test_a_judging_message_stays_within_its_bound_when_the_capture_is_all_quotes
 
     assert len(sent) > 1
     assert max(len(m) for m in sent) <= retro_judge.BATCH
+
+
+@pytest.mark.parametrize(
+    "said",
+    [
+        {"findings": [{"refs": ["s1.e3"], "quotes": "done"}], "grades": []},
+        {"findings": [], "grades": [{"record": 7, "grade": "worth-it"}]},
+        {"findings": [{"refs": ["s1.e3"], "quotes": ["done"], "target": {"agent": "builder"}}], "grades": []},
+    ],
+)
+def test_a_malformed_judgement_stops_the_run_kept_as_an_attempt_with_nothing_derived(said):
+    w = _work(Asked(lambda _ev, _a: said), [_record("a", 3)])
+
+    with pytest.raises(StoppedError, match="not valid"):
+        retro_judge.judge(w)
+
+    assert (retro_store.grades(), retro_store.all_findings()) == ([], [])
+    assert retro_store.attempts(retro_store.lines("batches.jsonl")[-1]["key"])
+
+
+def test_a_saved_answer_no_longer_valid_stops_the_run_instead_of_being_derived_from():
+    w = _work(Asked(_graded), [_record("a", 3)])
+    [(_, _, message)] = retro_judge.judging(w)
+    batch = retro_calls.key(w, "judge", message)
+    retro_store.keep(batch, "run-0", {"findings": [{"quotes": "x"}], "grades": []}, 1.0)
+
+    with pytest.raises(StoppedError, match="saved answer"):
+        retro_judge.judge(w)
+
+    assert (retro_store.grades(), w.ask.messages) == ([], [])

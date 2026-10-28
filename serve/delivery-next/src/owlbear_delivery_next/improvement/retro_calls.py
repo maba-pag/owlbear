@@ -79,6 +79,11 @@ def answer(text: str) -> dict[str, Any] | None:
     return said if isinstance(said, dict) else None
 
 
+def strings(value: object) -> bool:
+    """Whether *value* is a list of strings, as an answer's lists must be."""
+    return isinstance(value, list) and all(isinstance(x, str) for x in value)
+
+
 def key(w: Work, phase: str, message: str) -> str:
     """The batch key of *message* in *phase* of *w*'s revision."""
     return f"b-{store.digest([w.uid, w.rev.get('rev', ''), phase, store.digest(message, 32)])}"
@@ -90,11 +95,15 @@ def paid(
     """The answer of batch (*phase*, *message*): the kept one, else asked, kept, then settled.
 
     Raises:
-        StoppedError: The answer is unusable; it is kept as an attempt and nothing is derived from it.
+        StoppedError: The answer is unusable; it is kept as an attempt and nothing is derived from it. A saved
+            answer no longer valid stops the run too: nothing is derived from it, and it is never asked again.
     """
     batch = key(w, phase, message)
     if (kept := store.saved(batch)) is not None:
-        return kept["answer"]
+        if isinstance(kept["answer"], dict) and valid(kept["answer"]):
+            return kept["answer"]
+        msg = "stopped: a saved answer is not valid against its schema"
+        raise StoppedError(msg)
     got = w.ask(batch, message, agent)
     said = answer(got.answer)
     why = (
