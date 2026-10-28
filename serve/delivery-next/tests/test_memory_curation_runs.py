@@ -257,6 +257,17 @@ def test_a_run_keeps_its_processes_on_file_while_it_runs_and_a_restart_holds_the
     assert (restarted.working(), slots.counts(curation.SLOT)[2]) == ([curation.LINGERING], 2)
 
 
+def test_an_unreadable_record_naming_left_processes_stops_the_restart_and_stays_as_it_was(root) -> None:
+    """#674: only a missing record is empty; one that cannot be read keeps its evidence and the host does not start."""
+    path = local_home.root() / curation.STATE
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text('{"folders": {}, "left": {"4242": "not a birth time"}}\n')  # e.g. an older or newer format
+    before, slots = path.read_bytes(), Slots(lambda: 1)
+    with pytest.raises(maintenance.MaintenanceError, match="ownership record cannot be read"):
+        curation.Curation(slots, shared=lambda: DataRepo(root))
+    assert (path.read_bytes(), slots.counts(curation.SLOT)[2]) == (before, 0)
+
+
 def test_pids_left_after_an_earlier_empty_import_are_held_before_they_can_be_cleared(root, monkeypatch) -> None:
     """Review F1: an import already recorded must not let a later host's PIDs be cleared as history."""
     monkeypatch.setattr(processes, "alive", lambda _pid, _created: False)
