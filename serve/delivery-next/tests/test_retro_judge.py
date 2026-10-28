@@ -6,6 +6,7 @@ import json
 import pytest
 
 from owlbear_delivery_next.improvement import (
+    assumptions,
     retro_bars,
     retro_calls,
     retro_judge,
@@ -171,6 +172,16 @@ def test_three_families_sharing_one_confirmed_mechanism_make_one_proposal_and_an
     assert made == [snap["id"]]
     assert (snap["kind"], snap["target"], sorted(snap["findings"])) == ("lesson", "agent:builder", ["f1", "f2", "f3"])
     assert len(ask.messages) == 1
+
+
+def test_findings_resting_on_a_retired_assumption_count_toward_no_bar():
+    assumptions.ensure("retro-causes-1")
+    retro_store.add_findings([_finding(f"f{i}", f"chat:u{i}") | {"assumptions": ["retro-causes-1"]} for i in (1, 2)])
+    assumptions.reset()
+    retro_store.add_findings([_finding("f3", "chat:u3")])
+
+    assert retro_bars.propose(_work(Asked(_sorting({"a": {"f1", "f2", "f3"}}))), []) == []
+    assert props.proposals() == []
 
 
 def test_a_confirm_batchs_sorting_is_kept_in_one_write_so_a_failing_disk_never_leaves_part_of_it(monkeypatch):

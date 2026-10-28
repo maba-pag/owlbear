@@ -285,7 +285,14 @@ def _catchable(w: Work, every: list[dict[str, Any]]) -> list[str | None]:
 
 def propose(w: Work, found: list[str]) -> list[str]:
     """Phase 2: file what this run's evidence and what came before it carry; the proposals touched."""
-    every = [f for f in store.all_findings() if f.get("provenance") == w.provenance and f.get("status") == "known"]
+    gone, synthetic = store.retired_ids(), w.provenance == "synthetic"
+    every = [
+        f
+        for f in store.all_findings()
+        if f.get("provenance") == w.provenance
+        and f.get("status") == "known"
+        and store.visible(f, gone, synthetic=synthetic)
+    ]  # what rests on a retired assumption counts toward no bar
     mine = [f for f in every if f["id"] in set(found)]
     out = [*_delivery(w, mine), *cases(w), *_lessons(w, every), *_catchable(w, every)]
     return list(dict.fromkeys(p for p in out if p))
