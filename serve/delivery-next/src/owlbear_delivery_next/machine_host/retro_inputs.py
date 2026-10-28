@@ -61,16 +61,27 @@ def where(uid: str, projects: units.Projects) -> spend_ledger.Where:
 
 
 def outcome(uid: str, projects: units.Projects) -> str:
-    """How a Change ended, as Retro judges its sessions against it: its exit and its reviews' verdicts."""
-    pid, _, slug = uid.split(":", 2)[1:]
+    """How a Change ended, as Retro judges its sessions against it: its exit, brief, plan, reviews and spend."""
+    pid, slug = uid.split(":", 2)[1:]
     try:
         change = projects[pid][0].read(slug)
     except (*units.UNREADABLE, KeyError):
         return ""
-    said = []
+    cut, said = retro_segments.cut, []
     if change.outcome is not None:
         said.append(f"the Change ended {change.outcome.exit}" + (f": {r}" if (r := change.outcome.reason) else ""))
-    said += [f"{r.task or 'final'} review, round {r.round}: {r.verdict}" for r in change.reviews]
+    brief = change.brief
+    said += [f"its brief: {cut(brief.outcome, retro_segments.SAID)}"] if brief.outcome else []
+    said += [f"criterion {c.id}: {cut(c.text, retro_segments.BRIEF)}" for c in brief.criteria]
+    tasks = change.plan.tasks if change.plan else []
+    said += [f"task {t.id} ({t.origin}{', done' if t.done else ''}): {cut(t.title, 120)}" for t in tasks]
+    for r in change.reviews:
+        said.append(f"{r.task or 'final'} review, round {r.round}: {r.verdict}")
+        said += [f"  finding: {cut(f, retro_segments.BRIEF)}" for f in r.findings]
+    lower = " at least" if change.spend.unread else ""
+    said.append(f"it spent{lower} {change.spend.credits:g} credits")
+    tools = [(n, t) for n, t in change.tool_use.tools.items() if t.rejected or t.retries]
+    said += [f"tool {n}: {t.calls} calls, {t.rejected} refused, {t.retries} retried" for n, t in tools]
     return "\n".join(said)
 
 

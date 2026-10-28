@@ -29,7 +29,7 @@ if TYPE_CHECKING:
 
 PART, LATER, OUTPUT = 24_000, 6_000, 4_000  # characters: a part, its later course, one saved output's excerpt
 SAID, ASKED, RESULT, FULL = 1_500, 6_000, 2_000, 6_000  # a message, a request, a result, a failure or test result
-BRIEF, QUOTE = 300, 600  # an outcome line's text; a finding's quote
+BRIEF, QUOTE, OUTCOME = 300, 600, 3_000  # an outcome line's text; a finding's quote; the unit's outcome
 TESTS = re.compile(r"\b\d+ (?:passed|failed|errors?)\b|\bFAIL(?:ED)?\b|Traceback \(most recent call last\)")
 REF = re.compile(r"\bs\d+\.e\d+\b")
 
@@ -155,7 +155,7 @@ def prepare(sessions: list[str], outcome: str, *, low: int = 0, high: int = 0, p
     *per_turn* makes each requester turn a segment (a chat); else each session is one (a Change). Events up to *low*
     were judged before: they are the earlier course, context only.
     """
-    out, outcome = Prepared(), cut(outcome, SAID)
+    out, outcome = Prepared(), cut(outcome, OUTCOME)
     lines = _lines(sessions, high, per_turn=per_turn, gaps=out.gaps)
     before = [x for x in lines if x.n <= low]
     lines = [x for x in lines if x.n > low]

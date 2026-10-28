@@ -1,6 +1,7 @@
 """Retro's job in the machine host (#715): leases per paid call, recovery, triggers, eligibility and pruning."""
 
 import asyncio
+import gzip
 import json
 import os
 import threading
@@ -11,12 +12,13 @@ from types import SimpleNamespace
 
 import pytest
 
-from owlbear_delivery_next.improvement import cases, retro_store, retro_units
+from owlbear_delivery_next.change_contracts.models import Brief, Change, Criterion, Exit, Inputs, Names, Outcome, Review
+from owlbear_delivery_next.improvement import cases, retro_store, retro_units, spotter
 from owlbear_delivery_next.improvement import retro_proposals as props
 from owlbear_delivery_next.improvement import retro_synthetic as syn
 from owlbear_delivery_next.local_system import codebase, maintenance, processes
 from owlbear_delivery_next.local_system.slots import Slots
-from owlbear_delivery_next.machine_host import cases_job, retro_job
+from owlbear_delivery_next.machine_host import cases_job, retro_inputs, retro_job
 from owlbear_delivery_next.machine_host.auto_update import IDLE_FOR
 from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.machine_host.retro_inputs import Running
@@ -68,11 +70,12 @@ class Asker:
     """``retro_review.asked``: each call costs *cost* credits and grades every record it is shown, finding nothing."""
 
     def __init__(self, cost=1.0, during=None):
-        self.cost, self.during, self.seen = cost, during, []
+        self.cost, self.during, self.seen, self.messages = cost, during, [], []
 
     async def __call__(self, message, meter, _role, *, agent, seconds):
         assert seconds == 60.0
         self.seen.append(agent)
+        self.messages.append(message)
         if self.during:
             self.during(len(self.seen))
         share = meter.part()
@@ -92,12 +95,18 @@ def said(monkeypatch):
     return found
 
 
-def _job(asker, state=None, *, restarted=False):
+def _job(asker, state=None, *, restarted=False, projects=None):
     state = state or SimpleNamespace(paused=False, fence="", idle=False)
     slots = Slots(lambda: 1, closed=restarted)
     owner = maintenance.Maintenance(slots, boot=lambda: 10.0, observe=lambda *_: False)  # its leases reloaded
     slots.open()
-    seams = Seams(fenced=lambda: state.fence, paused=lambda: state.paused, asked=asker, idle=lambda: state.idle)
+    seams = Seams(
+        fenced=lambda: state.fence,
+        paused=lambda: state.paused,
+        asked=asker,
+        idle=lambda: state.idle,
+        projects=lambda: projects or {},
+    )
     return RetroJob(slots, seams, owner)
 
 
@@ -121,6 +130,52 @@ def _chat(tmp_path, sid, *, quiet_days=2):
     at = (datetime.now(UTC) - timedelta(days=quiet_days)).timestamp()
     os.utime(log, (at, at))
     return str(folder)
+
+
+def _finished_change(tmp_path):
+    """A finished Change of project p1 with one captured builder session and one Spotter record of it."""
+    place, sid = str(tmp_path / "wt" / "fix-it"), "s-build"
+    chatlogs.root().mkdir(parents=True, exist_ok=True)
+    (chatlogs.root() / "manifest.jsonl").write_text(
+        json.dumps({"event": "started", "session": sid, "worktree": place, "role": "builder"}) + "\n"
+    )
+    folder = retro_units.folder(sid)
+    folder.mkdir(parents=True)
+    turns = [("user.message", "add the week column"), ("assistant.message", "Added; the tests pass.")]
+    log = "".join(json.dumps({"type": t, "data": {"content": c}}) + "\n" for t, c in turns)
+    (folder / "log.jsonl.gz").write_bytes(gzip.compress(log.encode()))
+    (folder / "sidecar.json").write_text(json.dumps({"session": sid, "provisional": False, "outputs": []}))
+    record = {"id": "rec-c", "at": "2026-01-01T00:00:00+00:00", "look": "handoff", "call": "c", "cutoff": 2}
+    record |= {"category": "none", "project": "p1", "change": "fix-it", "step": "build", "session": sid}
+    (spotter.root() / "records-2026-01-01.jsonl").write_text(json.dumps(record) + "\n")
+    (spotter.root() / "cards" / "rec-c.json.gz").write_bytes(gzip.compress(b"{}"))
+    change = Change(
+        slug="fix-it",
+        finished_at=datetime.now(UTC),
+        names=Names(worktree=place),
+        brief=Brief(outcome="a week column in the export", criteria=[Criterion(id="c1", text="weeks are ISO")]),
+        reviews=[Review(commit="abc", inputs=Inputs(), verdict="fix", findings=["the week starts on Sunday"])],
+        outcome=Outcome(exit=Exit.DONE, at=datetime.now(UTC)),
+    )
+    st = SimpleNamespace(
+        root=tmp_path / "p1", name="p1", slugs=lambda: ["fix-it"], read=lambda _s: change, events=lambda _s: []
+    )
+    return {"p1": (st, None)}
+
+
+def test_a_finished_change_is_planned_then_judged_against_its_brief_and_reviews_with_its_records_graded(said, tmp_path):
+    projects, said.retro_after_change = _finished_change(tmp_path), "on"
+    retro_store.update(lambda t: t.update(watermark=(datetime.now(UTC) - timedelta(days=1)).isoformat()))
+    assert retro_inputs.plan("chg:p1:fix-it", projects)["judge_batches"] == 1
+
+    _job(asker := Asker(), projects=projects).tick(0.0)
+
+    [run] = _runs()
+    assert (run["unit"], run["trigger"], run["result"]) == ("chg:p1:fix-it", "change", "judged")
+    assert [g["grade"] for g in retro_store.grades(unit="chg:p1:fix-it")] == ["worth-it"]
+    later = _evidence(asker.messages[0])["parts"][0]["later"]
+    assert "its brief: a week column" in later
+    assert "finding: the week starts on Sunday" in later
 
 
 # Interruptions, gates F1, H1 and J2
