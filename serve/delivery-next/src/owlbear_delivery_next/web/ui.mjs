@@ -36,6 +36,20 @@ export class HostDown extends Error {
   }
 }
 
+// Delivery did not answer within the call's time: it may be up but busy, so it is not said to be down. A call that
+// changes something (*sent*) may have been done all the same; it is never sent again, and a caller that reads the
+// state again says *reread* instead of the message.
+export class Slow extends Error {
+  constructor(sent, seconds) {
+    const unsure = `Delivery did not answer within ${seconds} s, so this may have been done or not. It was not sent `
+      + "again;";
+    super(sent ? `${unsure} reload the page to see which before you try again.`
+      : `Delivery is slow to answer: no reply within ${seconds} s. Try again in a moment.`);
+    this.sent = sent;
+    this.reread = sent ? `${unsure} the page now shows Delivery's state as read again.` : this.message;
+  }
+}
+
 export class Restarted extends Error {
   constructor() {
     super("Delivery restarted at a new address. Open the link from chat or owlbear status.");
@@ -53,7 +67,8 @@ function said(detail) {
   return typeof detail === "string" ? detail : detail ? JSON.stringify(detail) : "";
 }
 
-// One call to the host's API; GET without a body. Throws HostDown, Restarted, or an Error with the host's words.
+// One call to the host's API; GET without a body. Throws HostDown when it cannot be reached, Slow when it did not
+// answer in *timeout* ms, Restarted, or an Error with the host's words.
 // A *machine* call goes to the machine host's own routes; *of* names the project when it is not the page's.
 export async function call(path, { method, body, timeout = 5000, machine = false, of = project } = {}) {
   if (!token) throw new Error("Open the URL the host printed, including #token=…");
@@ -66,7 +81,8 @@ export async function call(path, { method, body, timeout = 5000, machine = false
   let response;
   try {
     response = await fetch(machine ? `/api/next${path}` : api(path, of), init);
-  } catch {
+  } catch (error) {
+    if (error?.name === "TimeoutError") throw new Slow(init.method !== "GET", timeout / 1000);
     throw new HostDown();
   }
   if (response.status === 401) throw new Restarted();
@@ -135,7 +151,7 @@ async function act(name, work) {
   try {
     await work();
   } catch (error) {
-    bar.error = error.message;
+    bar.error = error instanceof Slow ? error.reread : error.message;  // the machine's state is read again below
   }
   bar.busy = "";
   bar.data = await machine().catch(() => bar.data);

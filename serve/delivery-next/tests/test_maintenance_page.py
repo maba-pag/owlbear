@@ -54,6 +54,32 @@ def test_the_maintenance_page_lists_each_action_and_says_when_delivery_stops(tmp
             expect(page.locator("#use p-table-cell")).to_have_text(["builder", "1", "1", "1", "1.25", "explore 1"])
             expect(page.locator("#error")).to_be_hidden()
             assert page.evaluate("location.hash") == ""  # the token left the address bar
+            held = []  # what Delivery takes but never answers: up, yet busy
+
+            def hold(route) -> None:
+                held.append(route)
+
+            page.route("**/api/next/maintenance/subagents", hold)
+            page.route("**/api/next/project", lambda r: r.abort("connectionrefused"))
+            caught = page.evaluate("""async () => {
+              const ui = await import("/assets/ui.mjs"), caught = [];
+              for (const [path, method] of [["/maintenance/subagents", "GET"], ["/maintenance/subagents", "POST"],
+                ["/project", "GET"]]) {
+                await ui.call(path, { method, timeout: 200 }).catch((e) => caught.push({ slow: e instanceof ui.Slow,
+                  down: e instanceof ui.HostDown, sent: e.sent ?? null, said: e.message }));
+              }
+              return caught;
+            }""")
+            unsure = "Delivery did not answer within 0.2 s, so this may have been done or not. It was not sent again;"
+            assert caught == [
+                {"slow": True, "down": False, "sent": False,
+                 "said": "Delivery is slow to answer: no reply within 0.2 s. Try again in a moment."},
+                {"slow": True, "down": False, "sent": True,
+                 "said": f"{unsure} reload the page to see which before you try again."},
+                {"slow": False, "down": True, "sent": None,
+                 "said": "Delivery is not running. Start it, then reload this page."},
+            ]  # fmt: skip
+            assert [r.request.method for r in held].count("POST") == 1  # a timed-out write is never sent again
             page.route("**/api/next/**", lambda r: r.abort())
             page.evaluate("document.dispatchEvent(new Event('visibilitychange'))")
             expect(page.locator("#error")).to_have_text("Delivery is not running. Start it, then reload this page.")
