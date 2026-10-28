@@ -151,8 +151,10 @@ def test_an_unreadable_foreign_folder_is_read_every_time_until_it_is_readable(se
         assert len(parses) == 3
     finally:
         folder.chmod(mode)
-    assert outcome(seeded.shared) is kept  # readable again and nothing else changed
-    assert len(parses) == 3
+    again = outcome(seeded.shared)  # the mode change moved the folder's times, so it is read once more
+    assert again == kept
+    assert outcome(seeded.shared) is again
+    assert len(parses) == 4
 
 
 def test_a_file_changed_while_it_is_read_is_returned_but_not_kept(seeded, parses, monkeypatch) -> None:
@@ -171,6 +173,22 @@ def test_a_file_changed_while_it_is_read_is_returned_but_not_kept(seeded, parses
     fresh = outcome(seeded.shared)
     assert fresh.get(seeded.notes.id).decision.title == "Notes live in one table"
     assert outcome(seeded.shared) is fresh
+    assert parses == [PROJECT, PROJECT]
+
+
+def test_a_file_added_and_removed_while_it_is_read_is_not_kept(seeded, parses, monkeypatch) -> None:
+    real, brief = decision_store._files, make(title="Here a moment")  # noqa: SLF001 - the collection the change races
+
+    def racing(shared, project):
+        write(brief, seeded.root / PROJECT, None)
+        seen = real(shared, project)
+        (seeded.root / PROJECT / "decisions" / f"{brief.id}.md").unlink()  # the listing is as before; the times tell
+        return seen
+
+    monkeypatch.setattr(decision_store, "_files", racing)
+    assert outcome(seeded.shared).get(brief.id) is not None
+    monkeypatch.setattr(decision_store, "_files", real)
+    assert outcome(seeded.shared).get(brief.id) is None
     assert parses == [PROJECT, PROJECT]
 
 

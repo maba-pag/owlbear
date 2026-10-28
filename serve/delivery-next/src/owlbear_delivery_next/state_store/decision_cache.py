@@ -3,10 +3,11 @@
 The files in ``owlbear-data`` stay the authority. `decision_store` collects its files through `files`, inside its
 settled-read checks, so every journal, rebase and HEAD guard still runs on every read; only the parse is reused. A
 view's entry is kept for the data commit and a fingerprint of everything the loader reads (`lstat` records and
-folder listings of the Global layer and every project's layers), so a commit, a rebase after a fetch or an
+folder listings of the root, the Global layer and every project's layers), so a commit, a rebase after a fetch or an
 uncommitted edit rebuilds it on the next read. A read is not kept when the fingerprint cannot be taken, moved while
-it was read, or holds a file time within `RACY_NS` of the read's start (a coarse clock hides a same-size rewrite in
-the same tick); a read that raised keeps nothing.
+it was read (a folder's times catch a file added and removed again), or holds a file or folder time within
+`RACY_NS` of the read's start (a coarse clock hides a same-size rewrite in the same tick); a read that raised keeps
+nothing.
 """
 
 from __future__ import annotations
@@ -94,12 +95,13 @@ def fingerprint(root: Path, project: str) -> tuple[Mark, int] | None:
 
     It follows `snapshot.read_repo`: the root's names (a dot-named folder by name only: it is never read, and Git's
     own folder changes on every call), the Global layer, *project*'s folder whatever its name, and every other
-    folder's layers (`validate.change_folders`, `storage.load_folder`). Folders give their kind, owner and listing,
-    files their full `lstat` record; every entry of a decisions folder counts.
+    folder's layers (`validate.change_folders`, `storage.load_folder`). Folders give their kind, owner, times and
+    listing, files their full `lstat` record; every entry of a decisions folder counts.
     """
     walk = _Walk()
     try:
         names = sorted(child.name for child in root.iterdir())
+        walk.folder(root)
         walk.records.append(("", *names))
         walk.layer(root)
         for name in names:
@@ -131,13 +133,15 @@ class _Walk:
                 self.file(directory / name)
 
     def folder(self, path: Path) -> bool:
-        """Record *path*'s kind and owner; True when it is a real folder."""
+        """Record *path*'s kind, owner and times; True when it is a real folder."""
         try:
             found = path.lstat()
         except FileNotFoundError, NotADirectoryError:
             self.records.append((str(path),))
             return False
-        self.records.append((str(path), found.st_mode, found.st_dev, found.st_ino, found.st_uid, found.st_gid))
+        times = (found.st_mtime_ns, found.st_ctime_ns)
+        self.records.append((str(path), found.st_mode, found.st_dev, found.st_ino, found.st_uid, found.st_gid, *times))
+        self.newest = max(self.newest, *times)
         return stat.S_ISDIR(found.st_mode)
 
     def listing(self, folder: Path) -> list[str]:
