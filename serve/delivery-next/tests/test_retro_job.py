@@ -146,7 +146,8 @@ def _chat(tmp_path, sid, *, quiet_days=2):
 
 
 def _finished_change(tmp_path):
-    """A finished Change of project p1 with one captured builder session and one Spotter record of it."""
+    """A finished Change of project p1, finished after Retro started, with one captured session and one record of it."""
+    retro_store.update(lambda t: t.update(watermark=(datetime.now(UTC) - timedelta(days=1)).isoformat()))
     place, sid = str(tmp_path / "wt" / "fix-it"), "s-build"
     chatlogs.root().mkdir(parents=True, exist_ok=True)
     (chatlogs.root() / "manifest.jsonl").write_text(
@@ -178,7 +179,6 @@ def _finished_change(tmp_path):
 
 def test_a_finished_change_is_planned_then_judged_against_its_brief_and_reviews_with_its_records_graded(said, tmp_path):
     projects, said.retro_after_change = _finished_change(tmp_path), "on"
-    retro_store.update(lambda t: t.update(watermark=(datetime.now(UTC) - timedelta(days=1)).isoformat()))
     assert retro_evidence.plan("chg:p1:fix-it", projects)["judge_batches"] == 1
 
     _job(asker := Asker(), projects=projects).tick(0.0)
