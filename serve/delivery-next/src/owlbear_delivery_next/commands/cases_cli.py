@@ -18,6 +18,7 @@ from owlbear_delivery_next.improvement import retro_store as retro
 from owlbear_delivery_next.improvement import retro_units as units
 from owlbear_delivery_next.improvement.cases import CaseError, Stale
 from owlbear_delivery_next.state_store import registry
+from owlbear_delivery_next.state_store.database import StoreError
 from owlbear_delivery_next.state_store.store import Store
 
 if TYPE_CHECKING:
@@ -86,7 +87,7 @@ def main(a: argparse.Namespace) -> int:
             _say(f"retired: {', '.join(retired) or 'nothing'}" + (f"; cases version {n}" if n else ""))
         else:
             return _cases(a)
-    except (CaseError, retro.RetroError, registry.RegistryError) as exc:
+    except (CaseError, retro.RetroError, registry.RegistryError, StoreError) as exc:
         _say(f"refused: {exc}")
         return 1
     return 0
@@ -249,10 +250,11 @@ def _unit(text: str) -> tuple[str, units.Projects]:
     """The unit *text* names (a unit id or ``PROJECT/SLUG``), with the project its Change is in."""
     if text.startswith(("chat:", "syn:")):
         return text, {}
-    if text.startswith("chg:"):
-        uid, (pid, path) = text, _project(text.split(":", 2)[1])
-    else:
+    name, _, slug = text.removeprefix("chg:").partition(":")
+    if not text.startswith("chg:"):
         name, slug = _slash(text)
-        pid, path = _project(name)
-        uid = units.change_id(pid, slug)
-    return uid, {pid: (Store.open(path), path)}
+    elif not name or not slug:
+        msg = f"{text!r} is not chg:PROJECT:SLUG"
+        raise CaseError(msg)
+    pid, path = _project(name)  # a folder's name is resolved to its project's id
+    return units.change_id(pid, slug), {pid: (Store.open(path), path)}

@@ -1,14 +1,18 @@
 """Retro's synthetic units (#715 gate G2): marked work through the real phases, apart from every real read."""
 
 import json
+from types import SimpleNamespace
 
 from owlbear_delivery_next.commands import cli
-from owlbear_delivery_next.improvement import assumptions, retro_judge, retro_store
+from owlbear_delivery_next.improvement import assumptions, retro_evidence, retro_judge, retro_store
 from owlbear_delivery_next.improvement import retro_proposals as props
 from owlbear_delivery_next.improvement import retro_synthetic as syn
 from owlbear_delivery_next.improvement import retro_units as units
 from owlbear_delivery_next.improvement.retro_calls import Paid
 from owlbear_delivery_next.improvement.retro_segments import REF
+from owlbear_delivery_next.state_store import registry
+from owlbear_delivery_next.state_store.database import StoreError
+from owlbear_delivery_next.state_store.store import Store
 
 CANNED = {  # a quote in a synthetic unit -> the finding's cause and target
     "All tests pass.": ("skipped-verification", "agent:builder"),
@@ -116,3 +120,24 @@ def test_the_command_queues_a_run_and_plans_one_without_asking(capsys):
     planned = json.loads(capsys.readouterr().out)
     assert (planned["taken"], planned["judge_batches"], planned["saved"]) == (True, 2, 0)
     assert len(retro_store.queued()) == 1
+
+
+def test_a_change_named_by_its_folder_is_planned_under_its_projects_id_and_a_bad_name_is_refused(
+    monkeypatch, tmp_path, capsys
+):
+    project = SimpleNamespace(id="p1", path=str(tmp_path / "work"))
+    monkeypatch.setattr(registry, "load", lambda: SimpleNamespace(projects=[project]))
+    monkeypatch.setattr(Store, "open", lambda _path: "store")
+    monkeypatch.setattr(retro_evidence, "plan", lambda uid, projects: {"uid": uid, "projects": sorted(projects)})
+    for named in ("chg:work:fix-it", "work/fix-it", "chg:p1:fix-it"):
+        assert cli.main(["improvement", "retro", "status", "--plan", named]) == 0
+        assert json.loads(capsys.readouterr().out) == {"uid": "chg:p1:fix-it", "projects": ["p1"]}
+
+    def unreadable(_path):
+        msg = "the store is unreadable"
+        raise StoreError(msg)
+
+    monkeypatch.setattr(Store, "open", unreadable)
+    for named in ("chg:p1", "chg:p1:fix-it"):
+        assert cli.main(["improvement", "retro", "status", "--plan", named]) == 1
+    assert capsys.readouterr().out.count("refused: ") == 2
