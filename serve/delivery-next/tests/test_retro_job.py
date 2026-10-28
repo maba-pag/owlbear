@@ -368,6 +368,51 @@ def test_a_late_record_whose_grade_only_run_failed_waits_for_the_button_which_gr
     assert "rec-d" in retro_store.graded()
 
 
+class Reviewer(Asker):
+    """Grades every record wrong; its review calls fail while *broken*."""
+
+    def __init__(self):
+        super().__init__()
+        self.broken = False
+
+    async def __call__(self, message, meter, role, *, agent, seconds):
+        await super().__call__(message, meter, role, agent=agent, seconds=seconds)
+        if agent == "retro-review":
+            if self.broken:
+                msg = "the review session broke"
+                raise RuntimeError(msg)
+            return json.dumps({"verdict": "survive", "why": "it holds", "risks": [], "publishable": {}})
+        grades = [
+            {"record": r["id"], "grade": "wrong", "call": "hand-off-fitness"} for r in _evidence(message)["records"]
+        ]
+        return json.dumps({"findings": [], "grades": grades})
+
+
+def test_a_chats_grade_only_run_stopped_in_review_is_finished_by_the_button_without_grading_again(said, tmp_path):
+    said.enrolled_chats, said.retro_when_idle = [_chat(tmp_path, "c4")], "on"
+    retro_store.update(lambda t: t.update(watermark=(datetime.now(UTC) - timedelta(days=3)).isoformat()))
+    job = _job(asker := Reviewer(), SimpleNamespace(paused=False, fence="", idle=True))
+    job.tick(0.0)
+    late = {"id": "rec-e", "at": "2026-01-01T00:01:00+00:00", "look": "handoff", "call": "e", "cutoff": 2}
+    with (spotter.root() / "records-2026-01-01.jsonl").open("a") as out:
+        out.write(json.dumps(late | {"category": "none", "step": "chat", "session": "c4"}) + "\n")
+    asker.broken = True
+    job.tick(1.0)
+    job.tick(2.0)
+    assert [(r["mode"], r["result"].split(":")[0]) for r in _runs()] == [("judge", "judged"), ("grade-only", "stopped")]
+    assert ("rec-e" in retro_store.graded(), len(props.due_reviews())) == (True, 1)
+    asker.broken, graded = False, asker.seen.count("retro")
+
+    retro_store.request("owner", chat="c4")
+    job.tick(3.0)
+
+    assert [(r["mode"], r["trigger"], r["result"]) for r in _runs()][2:] == [("grade-only", "button", "judged")]
+    assert (asker.seen.count("retro"), props.due_reviews()) == (graded, [])
+    assert [(p["kind"], p["state"], p["verdict"]) for p in props.proposals()] == [
+        ("spotter-case", "waiting", "survive")
+    ]
+
+
 @pytest.mark.usefixtures("said")
 def test_the_button_runs_while_paused_and_switched_off_but_never_through_the_fence():
     state = SimpleNamespace(paused=True, fence="curation is running", idle=False)

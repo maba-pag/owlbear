@@ -43,6 +43,7 @@ from owlbear_delivery_next.machine_host.retro_inputs import (
     judged_sessions,
     pinned,
     session,
+    unfinished,
     where,
 )
 from owlbear_delivery_next.runtimes import retro_review, spotter_look
@@ -213,7 +214,8 @@ class RetroJob:
         if self._took(uid, by):
             return
         late = [i for i in units.late(units.records(), store.known(), store.graded()) if i["unit"] == uid]
-        for i in late:  # records written after a judged revision, a failed grade-only run's among them
+        late += unfinished(uid)  # with records written after a judged revision, grade-only runs that stopped
+        for i in late:
             self._start(Running(uid, "button", by, rev=i["rev"], mode="grade-only", records=i["records"]))
             if self.waiting:
                 return

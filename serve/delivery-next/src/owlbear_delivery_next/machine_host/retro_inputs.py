@@ -77,6 +77,28 @@ def judged_sessions() -> dict[str, datetime]:
     return out
 
 
+def unfinished(uid: str) -> list[dict[str, Any]]:
+    """*uid*'s grade-only work whose records are all graded but whose last run ended short of judged, review unsure.
+
+    None once a later run of *uid* ended judged, since review takes every due proposal. The button finishes it with the
+    saved answers replayed; records still ungraded are ``units.late``'s.
+    """
+    last: dict[tuple[str, tuple[str, ...]], str] = {}
+    for r in store.run_states().values():
+        if r.get("unit") != uid or r["state"] != "ended":
+            continue
+        if r["result"] == "judged":
+            last.clear()
+        if r.get("mode") == "grade-only":
+            last[r.get("rev", ""), tuple(r.get("records") or ())] = r["result"]
+    graded = store.graded()
+    return [
+        {"rev": rev, "records": list(ids)}
+        for (rev, ids), result in last.items()
+        if result != "judged" and rev and set(ids) <= graded
+    ]
+
+
 def pinned() -> set[str]:
     """The sessions a finding, a Spotter case or an open proposal rests on: never pruned."""
     found = store.all_findings()
