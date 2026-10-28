@@ -60,11 +60,33 @@ def _locked() -> Iterator[None]:
 
 
 def listed() -> dict[str, dict[str, Any]]:
-    """Every assumption ever marked, with its state; none when the file is missing."""
+    """Every assumption ever marked, with its state; none when the file is missing.
+
+    Raises:
+        ValueError: The registry is no JSON object: it is unreadable, never taken as empty.
+    """
     try:
-        return json.loads(path().read_text())
+        marks = json.loads(path().read_text())
     except FileNotFoundError:
         return {}
+    if not isinstance(marks, dict):
+        msg = "the marked assumptions' registry is not an object"
+        raise ValueError(msg)  # noqa: TRY004 - unreadable state, as a file that is no JSON is
+    return marks
+
+
+def _mark(marks: dict[str, Any], name: str) -> dict[str, Any] | None:
+    """*name*'s entry in *marks*; None when it was never marked.
+
+    Raises:
+        ValueError: Its entry is no object: whether it was retired is unknown.
+    """
+    if name not in marks:
+        return None
+    if not isinstance(mark := marks[name], dict):
+        msg = f"the marked assumption {name}'s entry is not an object"
+        raise ValueError(msg)  # noqa: TRY004 - unreadable state, as a file that is no JSON is
+    return mark
 
 
 def _save(marks: dict[str, dict[str, Any]]) -> None:
@@ -74,7 +96,7 @@ def _save(marks: dict[str, dict[str, Any]]) -> None:
 
 def active(name: str) -> bool:
     """Whether *name* is marked and not retired."""
-    mark = listed().get(name)
+    mark = _mark(listed(), name)
     return mark is not None and not mark.get("retired")
 
 
@@ -82,11 +104,11 @@ def ensure(name: str) -> bool:
     """Mark *name* when it never was; whether it holds now (False once retired: only a decision replaces it)."""
     with _locked():
         marks = listed()
-        if name not in marks:
+        if (mark := _mark(marks, name)) is None:
             now = datetime.now(UTC).isoformat(timespec="seconds")
-            marks[name] = {"what": KNOWN[name], "since": now, "retired": None}
+            marks[name] = mark = {"what": KNOWN[name], "since": now, "retired": None}
             _save(marks)
-        return not marks[name].get("retired")
+        return not mark.get("retired")
 
 
 def reset() -> list[str]:
@@ -96,8 +118,9 @@ def reset() -> list[str]:
     """
     with _locked():
         marks, now, done = listed(), datetime.now(UTC).isoformat(timespec="seconds"), []
-        for name, mark in marks.items():
-            if not mark.get("retired"):
+        read = {name: _mark(marks, name) for name in marks}  # every entry readable before any is changed
+        for name, mark in read.items():
+            if mark is not None and not mark.get("retired"):
                 mark["retired"] = now
                 done.append(name)
         for name in sorted(KNOWN.keys() - marks.keys()):

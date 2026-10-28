@@ -1106,3 +1106,32 @@ def test_a_look_admitted_before_a_reset_runs_to_its_end(world):
 
     asyncio.run(scenario())
     assert [(r["look"], r["skipped"], r["category"]) for r in records()] == [("plan", "", "none")]
+
+
+@pytest.mark.parametrize("registry", ["{bad", "[]", "null", '{"chat-state-change-1": null}'])
+def test_an_unreadable_registry_refuses_its_rules_moments_and_the_chat_reads_on(world, registry):
+    """Sol's counterexample: a registry that parsed into no object raised out of the follower, aborting its read: the
+    offset stayed, the sample was lost and the prefix was read again. Only a bad entry leaves the other rules."""
+    assumptions.path().parent.mkdir(parents=True, exist_ok=True)
+    assumptions.path().write_text(registry)
+    world.ctx = dataclasses.replace(world.ctx, sample_rate=100)
+    log = world.state / "c" / "events.jsonl"
+
+    async def scenario() -> None:
+        await world.passes()
+        world.chat("c", [asked("go"), ev("assistant.turn_start"), reply("I will push.", tools=1)])
+        await world.passes()
+        world.chat("c", call("x", "bash", {"command": "git push"}, shell("git push", read_only=False)))
+        await world.passes()
+        assert world.follower.chats["c"].offset == log.stat().st_size  # read to its end, once
+
+    asyncio.run(scenario())
+    got = {r["look"]: r["skipped"] for r in records()}
+    refused = "the marked assumptions cannot be read ("
+    assert got["state-change"].startswith(refused)
+    assert got["sample"] == ""  # the call's sample is still taken
+    entry_only = registry.startswith('{"')
+    assert (got["plan"] == "") is entry_only  # a valid rule's moment is still looked at
+    assert entry_only or got["plan"].startswith(refused)
+    kept = assumptions.path().read_text()  # unreadable state is never replaced
+    assert json.loads(kept)[assumptions.STATE_CHANGE] is None if entry_only else kept == registry
