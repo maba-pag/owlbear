@@ -118,6 +118,22 @@ def test_a_start_leaves_an_interrupted_legacy_runtime_holding_the_shared_data_in
     assert registry.load().active == "v0.2"
 
 
+def test_a_start_keeps_the_legacy_runtime_when_the_pointer_names_the_data_through_the_old_runtime(caplog):
+    runtime, folder = legacy(), version("v0.2")
+    git(runtime, "init", "-q", str(runtime / "data"))
+    said = json.dumps({"repository": str(runtime / "data")})  # written before the update, by an older `owlbear data`
+    (local_home.root() / "data.json").write_text(said)
+    new = local_home.root() / alias.NEW
+    new.symlink_to(folder)
+    alias._swap(new, runtime)  # noqa: SLF001 - an older update crashed right after the rename
+
+    alias.complete()
+
+    assert ((new / "data" / ".git").is_dir(), (local_home.root() / "data.json").read_text()) == (True, said)
+    assert list((local_home.root() / local_home.VERSIONS).glob("legacy-*")) == []
+    assert f"it holds the shared data at {new / 'data'}" in caplog.text
+
+
 def test_a_link_made_but_never_renamed_is_removed_and_the_old_runtime_stays():
     runtime = legacy()
     (local_home.root() / alias.NEW).symlink_to(version("v0.2"))
