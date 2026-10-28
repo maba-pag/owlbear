@@ -167,6 +167,24 @@ def test_three_families_sharing_one_confirmed_mechanism_make_one_proposal_and_an
     assert len(ask.messages) == 1
 
 
+def test_a_confirm_batchs_sorting_is_kept_in_one_write_so_a_failing_disk_never_leaves_part_of_it(monkeypatch):
+    retro_store.add_findings([_finding(f"f{i}", f"chat:u{i}") for i in range(1, 4)])
+    writes, real = [], retro_store.append
+
+    def append(name, *rows):
+        if name == retro_bars.ASSIGNED:
+            if writes:
+                msg = "the disk is full"
+                raise OSError(msg)
+            writes.append(rows)
+        real(name, *rows)
+
+    monkeypatch.setattr(retro_store, "append", append)
+    retro_bars.propose(_work(Asked(_sorting({"a": {"f1", "f2", "f3"}}))), [])
+
+    assert sorted(retro_bars.assignments()) == ["f1", "f2", "f3"]
+
+
 def test_two_families_whose_findings_the_confirm_batch_separates_do_not_meet_the_bar():
     retro_store.add_findings([_finding("f1", "chat:u1"), _finding("f2", "chat:u2")])
 

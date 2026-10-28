@@ -109,12 +109,14 @@ def assignments() -> dict[str, dict[str, Any]]:
 
 
 def _assign(lines: Iterable[Mapping[str, Any]]) -> None:
+    """Keep a confirm batch's sorting whole, in one write: a finding sorted already keeps its first mechanism."""
+    first: dict[str, Mapping[str, Any]] = {}
+    for line in lines:
+        first.setdefault(line["finding"], line)
     with store.locked():
         have = set(assignments())
-        for line in lines:
-            if line["finding"] not in have:
-                store.append(ASSIGNED, line)
-                have.add(line["finding"])
+        if rows := [line for f, line in first.items() if f not in have]:
+            store.append(ASSIGNED, *rows)
 
 
 def _valid_sorting(said: Mapping[str, Any]) -> bool:

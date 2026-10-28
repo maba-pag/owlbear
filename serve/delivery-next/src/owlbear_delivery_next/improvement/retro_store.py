@@ -104,11 +104,11 @@ def digest(value: object, n: int = 12) -> str:
     return hashlib.sha256(json.dumps(value, sort_keys=True, ensure_ascii=False).encode()).hexdigest()[:n]
 
 
-def append(name: str, line: Mapping[str, Any]) -> None:
-    """Append *line* to the file *name*, owner-only; the caller holds ``locked``."""
+def append(name: str, *rows: Mapping[str, Any]) -> None:
+    """Append *rows* to the file *name* in one write, owner-only; the caller holds ``locked``."""
     fd = os.open(ready() / name, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
-    with os.fdopen(fd, "a") as out:
-        out.write(json.dumps(line, ensure_ascii=False) + "\n")
+    with os.fdopen(fd, "ab") as out:
+        out.write("".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows).encode())
 
 
 def lines(name: str) -> list[dict[str, Any]]:
