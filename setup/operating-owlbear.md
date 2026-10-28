@@ -255,7 +255,10 @@ What only this Mac holds lives in `~/.owlbear/`:
 - `data.json` and `machine.json`: the shared repository's place and remote, and the registered projects.
 - `projects/<id>/`: each project's Delivery state, which no remote holds.
 
-Stop OwlBear first (`owlbear stop`), so nothing writes while you copy.
+Before you copy, stop everything that writes there. On the page, press **Pause Delivery**, then
+**Pause and stop when idle**, and wait until `owlbear status` reports `OwlBear is not running`; plain
+`owlbear stop` lets running agent steps go on writing. Then end the chats whose OwlBear tools
+(decisions, memories) use the shared repository.
 
 ---
 
