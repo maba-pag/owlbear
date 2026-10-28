@@ -360,15 +360,19 @@ def test_a_review_reads_a_graded_records_moment_reason_and_right_call_and_a_fixe
     _capture("s2", ["the build broke on main"])
     ask = Asked(_wrong)
     parts = retro_segments.prepare(["s1", "s2"], "the change was sent back").parts
-    retro_judge.run(_work(ask, [_record("w", 3, note="lint looked skipped")], parts=parts, grade_only=True))
+    graded = _work(ask, [_record("w", 3, note="lint looked skipped")], parts=parts, grade_only=True)
+    retro_judge.judge(graded)
     _capture("s2", ["all green after all"])  # what it was graded on, never the capture as it is now, is reviewed
     (retro_units.folder("s1") / "log.jsonl.gz").unlink()
+    retro_bars.cases(graded)
     fix = _finding("f1", "chat:u1", "tool:bash", "tool-defect") | {"steps": "run bash twice", "cost": "an hour"}
     retro_store.add_findings([fix])
     retro_bars.propose(_work(ask), ["f1"])
     retro_judge.review(_work(ask, run="run-2"))
 
-    case, delivery = (_evidence(m) for m in ask.messages if "## The proposal" in m)
+    shown = [_evidence(m) for m in ask.messages if "## The proposal" in m]
+    [case] = [p for p in shown if p["findings"][0]["id"].startswith("rg-")]
+    [delivery] = [p for p in shown if p is not case]
     [graded] = case["findings"]
     assert "handoff look at event 3 of session s1, it said lint: lint looked skipped" in graded["what"]
     assert graded["mechanism"] == "it was fine; it should have said none"
