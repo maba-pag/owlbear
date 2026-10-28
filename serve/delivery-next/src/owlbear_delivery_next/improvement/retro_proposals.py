@@ -201,8 +201,8 @@ def transition(proposal: str, state: str, by: str) -> None:
     """The page's move of *proposal* to *state* (shown, accepted, rejected, redirected, later), by the owner *by*.
 
     Raises:
-        RetroError: The state is not one the owner gives, the proposal is unknown or closed, or its evidence (first or
-            grown) waits for its review.
+        RetroError: The state is not one the owner gives, the proposal is unknown, closed or hidden (it rests on a
+            retired assumption), or its evidence (first or grown) waits for its review.
     """
     if state not in OWNER_STATES:
         msg = f"{state!r} is not a state the owner gives a proposal"
@@ -211,6 +211,9 @@ def transition(proposal: str, state: str, by: str) -> None:
         snap = folded().get(proposal)
         if snap is None or snap["state"] in CLOSED:
             msg = f"proposal {proposal} is {'unknown' if snap is None else snap['state']}"
+            raise store.RetroError(msg)
+        if not store.visible(snap, store.retired_ids(), synthetic=True):
+            msg = f"proposal {proposal} is hidden: it rests on a retired assumption"
             raise store.RetroError(msg)
         if snap["state"] == "drafted" or snap.get("review_digest") != snap["evidence"]:
             msg = f"proposal {proposal}'s evidence waits for its review"

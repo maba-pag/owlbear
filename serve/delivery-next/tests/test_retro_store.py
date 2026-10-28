@@ -106,6 +106,16 @@ def test_what_rests_on_a_retired_assumption_is_hidden():
     assert len(store.all_findings()) == 1
 
 
+def test_a_page_left_open_across_a_reset_cannot_move_a_proposal_resting_on_the_retired_assumption():
+    assumptions.ensure("retro-causes-1")
+    pid = props.file("real|lesson|k1", ["rf-1"], provenance="real", assumptions=["retro-causes-1"])
+    props.reviewed(pid, props.folded()[pid]["evidence"], {"verdict": "survive", "why": "holds"})
+    assumptions.reset()
+    with pytest.raises(store.RetroError, match="hidden"):
+        props.transition(pid, "accepted", "owner")
+    assert props.folded()[pid]["state"] == "waiting"
+
+
 def test_what_rests_on_an_unreadable_assumption_entry_is_hidden_and_the_rest_shown():
     assumptions.ensure("retro-causes-1")
     assumptions.ensure("retro-grades-1")
