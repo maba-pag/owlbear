@@ -31,7 +31,7 @@ from owlbear_delivery_next.workflow_steps import conversation as conv
 
 if TYPE_CHECKING:
     from owlbear_delivery_next.change_contracts.models import Change, Question, Task
-    from owlbear_delivery_next.github.provider import CiState, ConversationItem, PullRequest
+    from owlbear_delivery_next.github.provider import Check, CiState, ConversationItem, Provider, PullRequest
     from owlbear_delivery_next.workflow_steps.engine import Ctx
 
 F = StepKind.FOLLOW
@@ -96,12 +96,20 @@ def declared(ctx: Ctx, c: Change, pr: PullRequest, step: StepKind) -> tuple[tupl
     return (), engine.ask(step, text, cause, options)
 
 
+def ci_task(gh: Provider, repository: str, failed: Check) -> tuple[str, str]:
+    """The fix task's title and its detail: the failing check, its link and its job log's tail."""
+    log = gh.job_log(repository, failed.job_id) if failed.job_id else ""
+    return (
+        f"Fix the failing CI check {failed.name}",
+        f"CI check `{failed.name}` failed ({failed.conclusion}); {failed.url or ''}\n{log}",
+    )
+
+
 def fix_ci(ctx: Ctx, c: Change, state: CiState, step: StepKind) -> StepResult:
     """Back to build with a fix task carrying the failing check's log tail; counted per check (bounded)."""
     failed = state.failed[0]
-    log = ctx.gh.job_log(ctx.repository, failed.job_id) if failed.job_id else ""
-    detail = f"CI check `{failed.name}` failed ({failed.conclusion}); {failed.url or ''}\n{log}"
-    fix = engine.task(c, f"Fix the failing CI check {failed.name}", "ci", detail)
+    title, detail = ci_task(ctx.gh, ctx.repository, failed)
+    fix = engine.task(c, title, "ci", detail)
     result = engine.back(ErrorKind.CHECKS, step, failed.name, f"fixing {failed.name}: CI failed", fix)
     score = Score(failing=len(state.failed), findings=sorted(f.name for f in state.failed))
     return result.model_copy(update={"score": score})  # fewer failing checks is progress; a new commit is not
