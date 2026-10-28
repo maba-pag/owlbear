@@ -2,7 +2,8 @@
 
 Delivery's steps name both folders (``OWLBEAR_MEMORY_DIR``, ``OWLBEAR_MEMORY_GLOBAL_DIR``). A chat finds them as
 Delivery does: the shared data repository the host passes down (``OWLBEAR_DATA``, empty for none) or the machine's
-pointer ``~/.owlbear/data.json`` names, and in it the folder whose ``repository`` file holds the workspace's identity.
+pointer ``~/.owlbear/data.json`` names (without a pointer, ``~/.owlbear/data`` when it exists), and in it the folder
+whose ``repository`` file holds the workspace's identity.
 Its memory is that folder's ``memory``, Global memory the repository's own ``memory``.
 """
 
@@ -15,7 +16,7 @@ import subprocess
 from pathlib import Path
 
 DATA_ENV = "OWLBEAR_DATA"
-POINTER = Path(".owlbear") / "data.json"
+POINTER, DEFAULT = Path(".owlbear") / "data.json", Path(".owlbear") / "data"
 CLAIM, MEMORY = "repository", "memory"
 
 
@@ -42,20 +43,26 @@ def _git(cwd: Path, *args: str) -> str:
 
 
 def shared_root() -> Path | None:
-    """The shared repository: the host's view when passed down, else the machine's pointer; None without either."""
+    """The shared repository: the host's view, else the machine's pointer, else ``~/.owlbear/data``; None without any.
+
+    A pointer that names no ``repository`` (a clone not done yet, an unfinished move) stops the server, as does a
+    ``~/.owlbear/data`` that is no checkout: memory never silently goes elsewhere.
+    """
     if (view := os.environ.get(DATA_ENV)) is not None:
         root = Path(view).expanduser().resolve() if view else None
         source = DATA_ENV
     else:
-        path = Path.home() / POINTER
+        path, source = Path.home() / POINTER, str(Path.home() / POINTER)
         try:
             root = Path(json.loads(path.read_text(encoding="utf-8"))["repository"]).expanduser().resolve()
         except FileNotFoundError:
-            return None
+            default = Path.home() / DEFAULT
+            if not default.exists():
+                return None
+            root, source = default.resolve(), "OwlBear's default place"
         except (OSError, ValueError, KeyError, TypeError) as exc:
             msg = f"{path} names no shared repository"
             raise StoreError(msg) from exc
-        source = str(path)
     if root is not None and _git(root, "rev-parse", "--show-toplevel") != str(root):
         msg = f"the shared repository {root}, named by {source}, is no git repository's top folder"
         raise StoreError(msg)
