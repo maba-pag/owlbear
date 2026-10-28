@@ -81,6 +81,19 @@ def _held_host(_tmp: Path, _monkeypatch) -> int:
         os.close(fd)
 
 
+def test_a_checkout_at_the_default_place_without_a_pointer_moves_to_the_folder_given(
+    tmp_path: Path, source: Path
+) -> None:
+    data_place.pointer().unlink()
+    source.rename(data_place.default())
+    git(data_place.default(), "worktree", "repair", str(tmp_path / "linked"))
+    before, said, dest = state(data_place.default()), [], tmp_path / "Projects" / "data"
+    remote = git(data_place.default(), "config", "--get", "remote.origin.url")
+    assert data_move.main(["--move", str(dest)], said.append) == 0, said
+    assert (state(dest), data_place.default().exists()) == (before, False)
+    assert record() == {"repository": str(dest), "remote": remote, "moved_from": str(data_place.default().resolve())}
+
+
 def _live_process(_tmp: Path, monkeypatch) -> None:
     monkeypatch.setattr(data_move, "_processes", lambda: ["process 7: python -m owlbear_delivery_next mcp"])
 

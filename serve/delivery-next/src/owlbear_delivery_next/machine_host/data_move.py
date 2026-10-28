@@ -65,7 +65,10 @@ def move(dest: Path, say: Callable[[str], None]) -> int:
     it, and a failure there leaves the move for `owlbear data` to finish.
     """
     data_place.settle()
-    record = data_place.stored() or {}
+    record = data_place.stored()
+    if record is None and (root := data_place.configured_root()):
+        record = {"repository": str(root)}  # a checkout at the default place, which a start adopts
+    record = record or {}
     if not record.get("repository"):
         say("not moved: no shared repository is set (`owlbear data` shows it)")
         return 1
