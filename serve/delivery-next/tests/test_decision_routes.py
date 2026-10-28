@@ -135,6 +135,9 @@ def test_the_list_filters_by_scope_state_origin_topic_read_back_and_text(owner, 
     assert listed(owner, topic="storage") == ["Notes in SQLite"]
     assert listed(owner, read_back="done") == ["Pages are plain HTML"]
     assert listed(owner, text="sqlite") == ["Notes in SQLite"]
+    assert listed(owner, text="export", retired="true") == ["Old export"]
+    assert listed(owner, text="export", state="withdrawn") == ["Old export"]
+    assert listed(owner, text="export") == []
     assert owner.get("/api/next/decisions").json()["topics"] == ["storage"]
 
 
@@ -493,6 +496,7 @@ def test_find_decisions_matches_text_scope_and_retired_ones_with_the_revision_a_
     assert [d["title"] for d in tool("find_decisions", where="global")["decisions"]] == [wide.title]
     assert {d["id"] for d in everything["decisions"]} == {rule.id, gone.id}
     assert everything["more"] == 0
+    assert [d["id"] for d in tool("find_decisions", text="csv", include_retired=True)["decisions"]] == [gone.id]
 
 
 @pytest.mark.usefixtures("chat")

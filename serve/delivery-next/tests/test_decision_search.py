@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from types import SimpleNamespace
 
@@ -9,7 +11,7 @@ import pytest
 
 from owlbear_decisions import Decision, Origin, Scope, State, new_id
 from owlbear_delivery_next.local_system.data_repo import DataRepo
-from owlbear_delivery_next.state_store import decision_search, decision_store
+from owlbear_delivery_next.state_store import decision_cache, decision_search, decision_store
 from owlbear_delivery_next.state_store.decision_store import save
 
 AT = datetime(2026, 10, 21, 9, tzinfo=UTC)
@@ -61,3 +63,52 @@ def test_search_answers_every_match_however_many(monkeypatch, fts) -> None:
     ]
     index = decision_search.Index(SimpleNamespace(entries=entries))
     assert len(index.matching("same", include_retired=False)) == 1500  # the old index stopped at its limit
+
+
+def _builds(monkeypatch) -> list[object]:
+    built, real = [], decision_search.Index
+    monkeypatch.setattr(decision_search, "Index", lambda snapshot: (built.append(snapshot), real(snapshot))[1])
+    return built
+
+
+def test_a_snapshot_kept_on_one_thread_is_searched_from_another_with_its_index(shared_repo, monkeypatch) -> None:
+    monkeypatch.setattr(decision_cache, "RACY_NS", 0)
+    shared, notes = DataRepo(shared_repo[0]), make()
+    save(shared, notes, expected_revision=None, message="m")
+    decision_cache.clear()
+    built = _builds(monkeypatch)
+    with ThreadPoolExecutor(1) as one:
+        view = one.submit(decision_store.load, shared, PROJECT).result()
+    assert built == [view.snapshot]  # kept, with its index, on the loading thread
+    with ThreadPoolExecutor(4) as many:
+        found = list(many.map(lambda _: decision_cache.search(view.snapshot, "notes", include_retired=False), range(8)))
+    assert found == [{notes.id}] * 8
+    assert built == [view.snapshot]  # every thread used the kept index
+
+
+def test_searches_answer_their_own_snapshot_while_a_save_publishes_the_next(shared_repo, monkeypatch) -> None:
+    monkeypatch.setattr(decision_cache, "RACY_NS", 0)
+    shared, notes = DataRepo(shared_repo[0]), make()
+    save(shared, notes, expected_revision=None, message="m")
+    old = decision_store.load(shared, PROJECT)
+    stop, answers = threading.Event(), []
+
+    def searching() -> None:
+        while not stop.is_set():
+            answers.append(decision_cache.search(old.snapshot, "notes", include_retired=False))
+
+    with ThreadPoolExecutor(3) as pool:
+        running = [pool.submit(searching) for _ in range(3)]
+        added = make(title="Notes have tags")
+        save(shared, added, expected_revision=None, message="m")
+        new = decision_store.load(shared, PROJECT)
+        stop.set()
+        for run in running:
+            run.result()
+    built = _builds(monkeypatch)
+    assert answers
+    assert set(answers) == {frozenset({notes.id})}
+    assert decision_cache.search(new.snapshot, "notes", include_retired=False) == {notes.id, added.id}
+    assert built == []  # the new snapshot is the kept one
+    assert decision_cache.search(old.snapshot, "notes", include_retired=False) == {notes.id}
+    assert built == [old.snapshot]  # the replaced one answers from an index of its own
