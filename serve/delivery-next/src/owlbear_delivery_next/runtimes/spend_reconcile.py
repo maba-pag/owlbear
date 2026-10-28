@@ -297,7 +297,7 @@ def _looks(known: list[dict[str, Any]], places: dict[str, Where]) -> list[dict[s
     imported = {str(line["id"]): line for line in known if line.get("source") == "import:spotter"}
     folder, out = local_home.root() / "spotter", []
     for path in sorted(folder.glob("records-*.jsonl")) if folder.is_dir() else ():
-        for raw in path.read_text(encoding="utf-8").splitlines():
+        for raw in path.read_text(encoding="utf-8", errors="replace").splitlines():  # a cut character spoils its line
             with contextlib.suppress(ValueError, TypeError, KeyError, AttributeError):
                 rec = json.loads(raw)
                 covered = str(rec["id"]) in seen and set(rec.get("sdk_sessions") or ()) <= seen[str(rec["id"])]

@@ -170,6 +170,24 @@ def test_a_skipped_looks_line_an_earlier_pass_imported_is_taken_back_once(projec
     assert spend_metrics.query(spend_metrics.pieces(), tz=UTC_ZONE)["coverage"]["unknown"] == 1
 
 
+def test_a_records_file_cut_inside_a_character_still_takes_back_its_skipped_looks_import(project) -> None:
+    """Sol's review: the Spotter source read the records file whole, so a last line cut inside a multibyte character
+    stopped every import and kept a skipped look's earlier unknown run."""
+    folder = local_home.root() / "spotter"
+    folder.mkdir()
+    skip = look_record("skip", skipped="capacity: a chat look is already running")
+    cut = json.dumps(look_record("cut", note="déjà vu"), ensure_ascii=False).encode()
+    whole = (json.dumps(skip) + "\n").encode()
+    (folder / "records-2026-10-28.jsonl").write_bytes(whole + cut[: cut.index(b"\xc3") + 1])
+    earlier = {"type": "look", "at": "2026-10-28T09:00:00+00:00", "usage": {"error": "unknown"}, "agent": "spotter",
+               "job": "hand-off look", "ending": "look", "sdk_sessions": [], "source": "import:spotter",
+               "project": "shop", "name": "shop", "clone": "0123456789abcdef", "change": "", "id": "look:skip",
+               "session": "look:skip", "look": "skip"}  # fmt: skip
+    spend_ledger.append([earlier])
+    assert spend_reconcile.run([(project, None)])["imported"]["spotter"] == 1
+    assert not [p for p in spend_shares.derive(spend_ledger.lines()) if p["session"].startswith("look:")]
+
+
 def checkpoint(at: str, nano: float) -> str:
     snap = {"totalNanoAiu": nano, "modelMetrics": {"m1": {"totalNanoAiu": nano, "usage": {"inputTokens": 7,
             "outputTokens": 3}}}, "agentMetrics": {"main": {"totalNanoAiu": nano, "modelMetrics": {"m1": {
