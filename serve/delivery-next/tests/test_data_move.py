@@ -4,13 +4,14 @@ import json
 import os
 import subprocess
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
 from owlbear_delivery_next.commands import cli
-from owlbear_delivery_next.local_system import data_place, data_repo, local_home
+from owlbear_delivery_next.local_system import data_place, data_repo, local_home, maintenance
 from owlbear_delivery_next.local_system.storage_io import open_lock
 from owlbear_delivery_next.machine_host import data_move
 
@@ -119,6 +120,22 @@ def _unlistable_changes(tmp: Path, monkeypatch) -> None:
     _projects(monkeypatch, lambda _repo: tmp / "store")
 
 
+def _held_maintenance(_tmp: Path, _monkeypatch) -> None:
+    lease = maintenance.Lease(
+        id="0" * 32,
+        project="shop",
+        slot="curation",
+        kind="curation",
+        workspace="w",
+        state="held",
+        started_at=datetime.now(UTC),
+        boot=1.0,
+        owner_pid=999999,
+        owner_created=None,
+    )
+    (local_home.root() / maintenance.FILE).write_text(maintenance.Ledger(sessions=[lease]).model_dump_json())
+
+
 def _dest_exists(_tmp: Path, _monkeypatch) -> None:
     (data_place.default() / "mine").mkdir(parents=True)
 
@@ -147,11 +164,12 @@ def _linked_source(tmp: Path, _monkeypatch) -> None:
         (_unreadable_store, "/work/shop: its store cannot be read: denied"),
         (_retained_runner, "a runner's record; start OwlBear, let it settle the step"),
         (_unlistable_changes, "/work/shop: its store cannot be read: denied"),
+        (_held_maintenance, "maintenance session curation in shop is held"),
         (_dest_exists, "exists; choose a new folder"),
         (_other_disk, "is on another disk"),
         (_linked_source, "is a linked worktree; move its main checkout"),
     ],
-    ids=["host", "process", "store", "runner", "changes", "dest", "disk", "linked"],
+    ids=["host", "process", "store", "runner", "changes", "maintenance", "dest", "disk", "linked"],
 )
 def test_a_refused_move_changes_nothing(tmp_path: Path, source: Path, monkeypatch, arrange, reason: str) -> None:
     held = arrange(tmp_path, monkeypatch)

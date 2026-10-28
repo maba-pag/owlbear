@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 
 import psutil
 
-from owlbear_delivery_next.local_system import data_place, data_repo, local_home
+from owlbear_delivery_next.local_system import data_place, data_repo, local_home, maintenance
 from owlbear_delivery_next.local_system.data_place import _origin, _write
 from owlbear_delivery_next.local_system.data_repo import _git, _top
 from owlbear_delivery_next.local_system.storage_io import fsync_dir, open_lock
@@ -134,11 +134,12 @@ def _linked(root: Path) -> bool:
 
 
 def writers() -> list[str]:
-    """What could still write the shared repository: OwlBear's processes, and runners a project still records.
+    """What could still write the shared repository: OwlBear's processes, runners and maintenance sessions.
 
-    A process or a store that cannot be read counts, so the move is refused rather than risked.
+    Runners count while a project still records them, maintenance sessions while active or not confirmed ended. A
+    process, a store or a ledger that cannot be read counts, so the move is refused rather than risked.
     """
-    return _processes() + _runners()
+    return _processes() + _runners() + _maintenance()
 
 
 def _processes() -> list[str]:
@@ -196,3 +197,15 @@ def _records(changes: Path) -> list[Path]:
             continue
         found.append(folder / "runner.json")
     return found
+
+
+def _maintenance() -> list[str]:
+    try:
+        with maintenance.Maintenance.locked() as ledger:
+            held = [s for s in ledger.sessions if s.state in maintenance.HELD]
+    except maintenance.MaintenanceError as exc:
+        return [str(exc)]
+    return [
+        f"maintenance session {s.kind} in {s.project} is {s.state}; let it end, or recover it after a restart"
+        for s in held
+    ]
