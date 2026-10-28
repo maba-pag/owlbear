@@ -77,6 +77,11 @@ def opening(role: str, memory: Path | None, message: str, log: Callable[..., Non
     return f"{text}\n\n{message}", exposure
 
 
+def holds(content: str, message: str) -> bool:
+    """Whether a sent user message is *message* itself, or a first message carrying it after its lessons."""
+    return content == message or (content.startswith(HEADING) and content.endswith(f"\n\n{message}"))
+
+
 def shown(exposure: Exposure | None, session: str, log: Callable[..., None], *, confirmed: bool = True) -> None:
     """Log what the conversation *session* was given: ``lessons-shown`` once its first message was acknowledged.
 

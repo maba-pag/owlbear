@@ -2,7 +2,8 @@
 
 A clarification reaches a worker only once its check found it within the brief, and then only as the statement the
 owner confirmed: never the option label or his words. An answer that changes the brief never reaches one. The answer
-goes whole, with its line breaks; only the question is shortened to one line.
+goes whole, with its line breaks; only the question is shortened to one line. A resumed delivery names its question,
+so a new identical answer to another question is never taken for one already sent.
 """
 
 from __future__ import annotations
@@ -54,5 +55,6 @@ def answer(question: Question) -> str:
     quoted = "\n".join(f"> {line}" if line else ">" for line in _lines(question))
     return (
         f'The owner answered your question "{_one(question.text)}":\n{quoted}\n'
-        "Continue with this answer and end the step as the Finish section of your first message says."
+        f"Continue with this answer to question [{question.id}] and end the step as the Finish section of your "
+        "first message says."
     )

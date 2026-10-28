@@ -138,9 +138,9 @@ class Session:
 
 
 def sent(events: Iterable[Any], message: str) -> bool:
-    """Whether a session transcript already holds *message* as a user message."""
+    """Whether a session transcript holds *message* as a whole user message, lessons ahead of it allowed."""
     users = (getattr(e.data, "content", "") or "" for e in events if getattr(e.type, "value", e.type) == "user.message")
-    return any(message.strip() in c for c in users)
+    return any(lessons.holds(c.strip(), message.strip()) for c in users)
 
 
 class _Step:

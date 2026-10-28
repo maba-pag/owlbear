@@ -9,13 +9,33 @@ import psutil
 import pytest
 
 from owlbear_delivery_next.change_contracts import tool_schema, tools
-from owlbear_delivery_next.change_contracts.models import Change, ErrorKind, Exit, ItemRef, Plan, StepKind, Task
+from owlbear_delivery_next.change_contracts.models import (
+    Answer,
+    Change,
+    ErrorKind,
+    Exit,
+    ItemRef,
+    Plan,
+    Question,
+    StepKind,
+    Task,
+)
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
 from owlbear_delivery_next.change_contracts.tools import AskQuestion, BuildResult, Worktree
+from owlbear_delivery_next.change_flow import repairs
 from owlbear_delivery_next.local_system import processes
 from owlbear_delivery_next.local_system.processes import Termination, verdict
-from owlbear_delivery_next.runtimes import sdk_adapter, sdk_teardown, sdk_usage, session_result, step_input
+from owlbear_delivery_next.runtimes import (
+    lessons,
+    sdk_adapter,
+    sdk_teardown,
+    sdk_usage,
+    session_result,
+    step_answers,
+    step_decisions,
+    step_input,
+)
 from owlbear_delivery_next.runtimes.session_result import Run, to_result
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
@@ -405,6 +425,31 @@ def test_a_resumed_answer_is_read_back_before_any_send_and_an_unread_transcript_
     st.run.termination = Termination(confirmed=True)
     r = to_result(st.run, StepKind.BUILD, NOW)
     assert (r.exit, r.cause) == (Exit.RETRY, f"{ErrorKind.LIVENESS}:build:transcript")
+
+
+@pytest.mark.parametrize("earlier", ["another question's", "a repair context holding it", "its own"])
+def test_a_new_identical_answer_to_another_question_is_sent_and_an_interrupted_one_is_not(earlier) -> None:
+    def delivery(qid: str) -> str:
+        answer = Answer(text="Done", kind="event", at=NOW)
+        asked = Question(id=qid, step=StepKind.BUILD, text="Proceed?", answer=answer)
+        return step_decisions.resumed(step_answers.answer(asked))  # as the runner opens a resumed session with it
+
+    message, sends = delivery("q2"), []
+    taken_over = repairs.fallback(Task(id="t1", title="t", earlier=message))  # a worker's summary holding it whole
+    repair = f"{lessons.HEADING}\n{lessons.NONE}\n\nRepair the findings.{taken_over}"
+    content = {"another question's": delivery("q1"), "a repair context holding it": repair, "its own": message}[earlier]
+    user = SimpleNamespace(type=SimpleNamespace(value="user.message"), data=SimpleNamespace(content=content))
+
+    async def send(m):
+        sends.append(m)
+
+    session = SimpleNamespace(get_events=lambda: asyncio.sleep(0, [user]), send=send)
+    client = SimpleNamespace(get_session_metadata=lambda _s: asyncio.sleep(0, {}))
+    client.resume_session = lambda _s, **_o: asyncio.sleep(0, session)
+    st = step()
+    st.cfg = dataclasses.replace(st.cfg, message=message)
+    asyncio.run(sdk_adapter._open(client, st))  # noqa: SLF001
+    assert sends == [step_input.CONTINUE if earlier == "its own" else message]
 
 
 def test_a_hung_runtime_stop_is_bounded_and_falls_back_to_signals(monkeypatch) -> None:
