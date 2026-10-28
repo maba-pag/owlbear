@@ -40,6 +40,7 @@ from owlbear_delivery_next.machine_host.auto_update import IDLE_FOR
 from owlbear_delivery_next.machine_host.retro_inputs import (
     Running,
     enrolled,
+    failed_grading,
     judged_sessions,
     pinned,
     session,
@@ -473,11 +474,7 @@ class RetroJob:
 
     def _late(self, prefix: str, trigger: str) -> None:
         """Grade-only runs of judged revisions with records written after them; one that did not end judged waits."""
-        failed = {
-            (r.get("unit"), r.get("rev"))
-            for r in store.run_states().values()
-            if r.get("mode") == "grade-only" and r["state"] == "ended" and r["result"] != "judged"
-        }
+        failed = failed_grading()
         for item in units.late(units.records(), store.known(), store.graded()):
             if item["unit"].startswith(prefix) and (item["unit"], item["rev"]) not in failed:
                 self._start(Running(item["unit"], trigger, rev=item["rev"], mode="grade-only", records=item["records"]))

@@ -99,6 +99,15 @@ def unfinished(uid: str) -> list[dict[str, Any]]:
     ]
 
 
+def failed_grading() -> set[tuple[str, str]]:
+    """Each (unit, revision) whose last grade-only run ended short of judged: its late records wait for the button."""
+    last: dict[tuple[str, str], str] = {}
+    for r in store.run_states().values():  # in the order the runs opened
+        if r.get("mode") == "grade-only" and r["state"] == "ended":
+            last[r.get("unit", ""), r.get("rev", "")] = r["result"]
+    return {key for key, result in last.items() if result != "judged"}
+
+
 def settle_open(live: set[tuple[str, str]]) -> None:
     """On restore, settle each open revision no *live* run holds: as its run ended when that end was kept, else stopped.
 

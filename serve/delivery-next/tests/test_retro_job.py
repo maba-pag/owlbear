@@ -397,7 +397,7 @@ def test_an_enrolled_chat_is_judged_once_owlbear_is_idle(said, tmp_path):
     assert retro_store.units()["chat:c3"]["revisions"][-1]["state"] == "judged"
 
 
-def test_a_late_record_whose_grade_only_run_failed_waits_for_the_button_which_grades_it(said, tmp_path):
+def test_a_late_record_whose_grade_only_run_failed_waits_for_the_button_and_later_ones_are_graded_again(said, tmp_path):
     said.retro_after_change, projects = "on", _finished_change(tmp_path)
     job = _job(asker := Asker(), projects=projects)
     job.tick(0.0)
@@ -419,6 +419,11 @@ def test_a_late_record_whose_grade_only_run_failed_waits_for_the_button_which_gr
     job.tick(3.0)
     assert [(r["mode"], r["trigger"], r["result"]) for r in _runs()][2:] == [("grade-only", "button", "judged")]
     assert "rec-d" in retro_store.graded()
+    with (spotter.root() / "records-2026-01-01.jsonl").open("a") as out:
+        out.write(json.dumps(late | {"id": "rec-e"}) + "\n")
+    job.tick(4.0)
+    job.tick(5.0)
+    assert [(r["mode"], r["trigger"], r["result"]) for r in _runs()][3:] == [("grade-only", "change", "judged")]
 
 
 class Reviewer(Asker):
