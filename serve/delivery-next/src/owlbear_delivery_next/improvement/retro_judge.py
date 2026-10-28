@@ -185,7 +185,7 @@ def _finding(w: Work, key: str, n: int, raw: Mapping[str, Any], parts: list[Part
     }
 
 
-def _grade(w: Work, r: Mapping[str, Any], said: Mapping[str, Any] | None) -> dict[str, Any]:
+def _grade(w: Work, r: Mapping[str, Any], said: Mapping[str, Any] | None, *, seen: bool = False) -> dict[str, Any]:
     value, reason = (said or {}).get("grade"), str((said or {}).get("reason") or "")[:NOTE]
     if said is None:
         value, reason = "not-assessable", "not answered"
@@ -193,6 +193,8 @@ def _grade(w: Work, r: Mapping[str, Any], said: Mapping[str, Any] | None) -> dic
         value, reason = "not-assessable", "missed is said only of a sampled silent look"
     should = str((said or {}).get("call") or "")[:60] if value in {"wrong", "missed"} else ""
     more: dict[str, Any] = {"should": should} if should else {}
+    if seen:  # what the judge saw of its moment, kept so a review reads that and never a capture changed since
+        more |= retro_segments.moment(w.prepared.parts[_home(r, w.prepared.parts)], int(r.get("cutoff") or 0))
     if w.provenance != "real":
         more |= {
             "provenance": w.provenance,
@@ -230,7 +232,7 @@ def judge(w: Work) -> list[str]:
             w.found["findings"] += len(store.add_findings(found))
             ids += [f["id"] for f in found]
         by_id = {g.get("record"): g for g in said["grades"] if isinstance(g, dict)}
-        w.found["grades"] += len(store.add_grades(_grade(w, r, by_id.get(r["id"])) for r in carried))
+        w.found["grades"] += len(store.add_grades(_grade(w, r, by_id.get(r["id"]), seen=True) for r in carried))
     return ids
 
 
@@ -289,17 +291,14 @@ def _graded(g: Mapping[str, Any]) -> dict[str, Any]:
     said = f"record {g['record']} ({g.get('look')} look {moment}, it said {g.get('category') or 'nothing'}{note})"
     should = f"; it should have said {s}" if (s := g.get("should")) else ""
     what, why = f"{said} graded {g['grade']}", f"{g.get('reason', '')}{should}"
-    look = {"session": g.get("session"), "cutoff": g.get("cutoff")}
-    return {"id": g["id"], "what": what, "mechanism": why, "family": g.get("family"), "at": g.get("at"), "look": look}
+    seen = {k: g[k] for k in ("moment", "later") if g.get(k)}
+    return {"id": g["id"], "what": what, "mechanism": why, "family": g.get("family"), "at": g.get("at")} | seen
 
 
 def _shown_finding(f: Mapping[str, Any]) -> dict[str, Any]:
-    """A finding as a review shows it; a graded look also with its moment and later course, read from its capture."""
+    """A finding as a review shows it; a graded look also with the moment and later course it was graded on."""
     shown = {k: f.get(k) for k in ("id", "what", "mechanism", "cost", "steps", "quotes")}
-    look = f.get("look") or {}
-    if look.get("session") and isinstance(look.get("cutoff"), int) and look["cutoff"] > 0:
-        shown |= retro_segments.moment(str(look["session"]), look["cutoff"])
-    return shown
+    return shown | {k: f[k] for k in ("moment", "later") if f.get(k)}
 
 
 def review(w: Work) -> int:

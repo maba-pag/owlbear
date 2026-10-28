@@ -342,19 +342,27 @@ def test_a_wrong_grade_of_an_earlier_revision_whose_case_was_never_filed_gets_it
     assert (props.folded()[case]["record"], retro_bars.cases(w), len(props.folded())) == ("old", [], 1)
 
 
-def test_a_review_reads_a_graded_records_moment_reason_and_right_call_and_a_fixes_steps():
-    def said(_ev, agent):
-        if agent == "retro-review":
-            return {"verdict": "survive", "why": "holds", "risks": [], "publishable": SHOWN}
-        return {"findings": [], "grades": [{"record": "w", "grade": "wrong", "reason": "it was fine", "call": "none"}]}
-
-    folder = retro_units.folder("s1")
-    folder.mkdir(parents=True)
-    turns = ["the tests pass", "lint is clean", "shipping it", "the build broke on main"]
+def _capture(session, turns):
+    folder = retro_units.folder(session)
+    folder.mkdir(parents=True, exist_ok=True)
     log = "".join(json.dumps({"type": "assistant.message", "data": {"content": c}}) + "\n" for c in turns)
     (folder / "log.jsonl.gz").write_bytes(gzip.compress(log.encode()))
-    ask = Asked(said)
-    retro_judge.run(_work(ask, [_record("w", 3, note="lint looked skipped")], grade_only=True))
+
+
+def _wrong(_ev, agent):
+    if agent == "retro-review":
+        return {"verdict": "survive", "why": "holds", "risks": [], "publishable": SHOWN}
+    return {"findings": [], "grades": [{"record": "w", "grade": "wrong", "reason": "it was fine", "call": "none"}]}
+
+
+def test_a_review_reads_a_graded_records_moment_reason_and_right_call_and_a_fixes_steps():
+    _capture("s1", ["the tests pass", "lint is clean", "shipping it", "handing over"])
+    _capture("s2", ["the build broke on main"])
+    ask = Asked(_wrong)
+    parts = retro_segments.prepare(["s1", "s2"], "the change was sent back").parts
+    retro_judge.run(_work(ask, [_record("w", 3, note="lint looked skipped")], parts=parts, grade_only=True))
+    _capture("s2", ["all green after all"])  # what it was graded on, never the capture as it is now, is reviewed
+    (retro_units.folder("s1") / "log.jsonl.gz").unlink()
     fix = _finding("f1", "chat:u1", "tool:bash", "tool-defect") | {"steps": "run bash twice", "cost": "an hour"}
     retro_store.add_findings([fix])
     retro_bars.propose(_work(ask), ["f1"])
@@ -364,8 +372,11 @@ def test_a_review_reads_a_graded_records_moment_reason_and_right_call_and_a_fixe
     [graded] = case["findings"]
     assert "handoff look at event 3 of session s1, it said lint: lint looked skipped" in graded["what"]
     assert graded["mechanism"] == "it was fine; it should have said none"
-    assert graded["moment"].endswith("e3 agent: shipping it")
+    assert graded["moment"].endswith("s1.e3 agent: shipping it")
+    assert "handing over" in graded["later"]
     assert "the build broke on main" in graded["later"]
+    assert graded["later"].endswith("outcome: the change was sent back")
+    assert "all green" not in json.dumps(case)
     assert "moment" not in delivery["findings"][0]
     assert delivery["findings"][0]["steps"] == "run bash twice"
 

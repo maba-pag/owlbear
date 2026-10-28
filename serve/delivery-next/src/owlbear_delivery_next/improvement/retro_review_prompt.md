@@ -7,8 +7,9 @@ The proposal holds its kind (`lesson`, `agent-change`, `delivery-change`, `look-
 target and mechanism, the bar it met, its counts (findings, independent families, counterexamples), representative
 findings with quotes, a few counterexamples (units that ran the target and did not show the mechanism), and the digest
 of its full evidence. A `spotter-case` proposal's findings are graded Spotter looks: each names the look's moment, its
-call and note, the grade with its reason and the right call, and holds `moment` (the session's lines up to the look)
-and `later` (how it went after), so check the grade against them.
+call and note, the grade with its reason and the right call, and holds what it was graded on: `moment` (the lines up
+to the look) and `later` (how the work went after it, across the unit's sessions, ending with its outcome), so check
+the grade against them.
 
 Reject it when its evidence does not carry it: a grade its moment and later course do not bear out, the findings do not
 share the mechanism, the counterexamples outweigh

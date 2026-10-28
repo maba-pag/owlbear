@@ -32,9 +32,10 @@ if TYPE_CHECKING:
 PART, LATER, OUTPUT = 24_000, 6_000, 4_000  # characters: a part, its later course, one saved output's excerpt
 SAID, ASKED, RESULT, FULL = 1_500, 6_000, 2_000, 6_000  # a message, a request, a result, a failure or test result
 BRIEF, QUOTE, OUTCOME = 300, 600, 3_000  # an outcome line's text; a finding's quote; the unit's outcome
-MOMENT = 1_200  # what a review reads of a graded look: its session's lines up to it, and as much again after
+MOMENT = 1_200  # what a review reads of a graded look: the lines up to it, and as much again of how it went
 TESTS = re.compile(r"\b\d+ (?:passed|failed|errors?)\b|\bFAIL(?:ED)?\b|Traceback \(most recent call last\)")
 REF = re.compile(r"\bs\d+\.e\d+\b")
+_AT = re.compile(r"^s\d+\.e(\d+) ", re.MULTILINE)  # where each line of a part begins, with its event number
 
 
 def cut(text: str, n: int) -> str:
@@ -228,16 +229,16 @@ def prepare(sessions: list[str], outcome: str, *, low: int = 0, high: int = 0, p
     return out
 
 
-def moment(session: str, cutoff: int) -> dict[str, str]:
-    """What a review reads of a look at event *cutoff* of *session*: the lines up to it and how it went, masked."""
-    gaps: list[str] = []
-    lines = _lines([session], 0, per_turn=False, gaps=gaps)
-    if not lines:
-        return {"moment": f"[{gaps[0] if gaps else 'the capture holds nothing'}]"}
-    upto = mask.redact("\n".join(f"e{x.n} {x.text}" for x in lines if x.n <= cutoff))
-    after = mask.redact("\n".join(x.brief for x in lines if x.n > cutoff and x.brief))
+def moment(part: Part, cutoff: int) -> dict[str, str]:
+    """What a review reads of a look at event *cutoff* of the *part* it was graded in, kept with its grade.
+
+    The part's lines up to the look, and what followed: the rest of the part, then its later course across the unit's
+    sessions, ending with the unit's outcome. Both were masked when the part was prepared.
+    """
+    after = next((m.start() for m in _AT.finditer(part.text) if int(m.group(1)) > cutoff), len(part.text))
+    upto, rest = part.text[:after].rstrip("\n"), f"{part.text[after:]}\n{part.later}".strip("\n")
     shown = upto if len(upto) <= MOMENT else "[…] " + upto[4 - MOMENT :]  # the moment is at its end
-    return {"moment": shown, "later": cut(after, MOMENT)}
+    return {"moment": shown, "later": cut(rest, MOMENT)}
 
 
 def verify(finding: Mapping[str, Any], parts: Iterable[Part]) -> dict[str, Any]:
