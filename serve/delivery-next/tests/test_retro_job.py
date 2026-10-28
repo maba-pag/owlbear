@@ -402,6 +402,31 @@ def test_the_machine_waits_for_retros_running_run():
         m.stop_all()
 
 
+def test_an_idle_run_waits_at_its_next_call_once_owlbear_is_busy_and_goes_on_when_idle_again(said, monkeypatch):
+    said.retro_when_idle = "on"
+    state = SimpleNamespace(paused=False, fence="", idle=True)
+    asker = Asker(during=lambda n: n == 1 and setattr(state, "idle", False))  # a builder starts after its first call
+    due = iter([[{"unit": syn.unit_id(_large()), "rev": "", "mode": "judge"}]])
+    monkeypatch.setattr(retro_units, "due_chats", lambda *_a, **_k: next(due, []))
+
+    def chat(uid, trigger, *args, **kwargs):  # the synthetic unit, as if an enrolled chat
+        return Running(uid, trigger, *args, **({"provenance": "synthetic", "spec": "large"} | kwargs))
+
+    monkeypatch.setattr(retro_job, "Running", chat)
+    job = _job(asker, state)
+    job.tick(0.0)
+    [run] = _runs()
+    assert (run["state"], run["why"], run["calls"], len(asker.seen)) == ("waiting", "OwlBear is not idle", 1, 1)
+
+    job.tick(1.0)
+    assert (retro_store.run_states()[run["id"]]["state"], len(asker.seen)) == ("waiting", 1)
+
+    state.idle = True
+    job.tick(2.0)
+    run = retro_store.run_states()[run["id"]]
+    assert (run["result"], run["trigger"], run["calls"]) == ("judged", "idle", 2)
+
+
 # A paused run and the button, gate L3
 
 
