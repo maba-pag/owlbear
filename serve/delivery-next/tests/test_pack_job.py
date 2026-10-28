@@ -199,8 +199,11 @@ def checkout(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
-def clone(tmp_path: Path) -> Path:
-    """Upstream with the pinned tag and one newer skill release: a new rule, skill text and engine version."""
+def clone(tmp_path: Path, monkeypatch) -> Path:
+    """Upstream with the pinned tag and one newer skill release: a new rule, skill text and engine version.
+
+    The installed manifest pins the fake pinned tag's commit, which the diff starts from.
+    """
     root = tmp_path / "impeccable"
     git(tmp_path, "init", "-q", "-b", "main", str(root))
     licence = PKG.joinpath("skills", "IMPECCABLE-LICENSE").read_bytes()
@@ -225,6 +228,9 @@ def clone(tmp_path: Path) -> Path:
         git(root, "add", "-A")
         git(root, "commit", "-qm", tag)
         git(root, "tag", tag)
+    made = design_pack.manifest()
+    made["upstream"]["commit"] = git(root, "rev-parse", PINNED)
+    monkeypatch.setattr(design_pack, "manifest", lambda: json.loads(json.dumps(made)))
     return root
 
 

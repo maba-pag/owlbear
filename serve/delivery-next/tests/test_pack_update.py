@@ -69,6 +69,13 @@ def pinned(monkeypatch) -> None:
     monkeypatch.setattr(design_pack, "manifest", lambda: json.loads(json.dumps(made)))
 
 
+def pin(monkeypatch, commit: str) -> None:
+    """The manifest pins *commit* beside its tag, as a pack extracted from a clone does."""
+    made = design_pack.manifest()
+    made["upstream"]["commit"] = commit
+    monkeypatch.setattr(design_pack, "manifest", lambda: json.loads(json.dumps(made)))
+
+
 @pytest.mark.usefixtures("pinned")
 def test_the_notice_counts_newer_skill_releases_and_offline_is_unknown() -> None:
     assert design_pack.manifest()["upstream"]["tag"] == "skill-v4.5.2"
@@ -136,7 +143,7 @@ def registry(*rules: tuple[str, ...]) -> str:
 
 
 @pytest.mark.usefixtures("pinned")
-def test_the_diff_reports_rules_added_removed_and_changed_and_skill_files_changed(tmp_path) -> None:
+def test_the_diff_reports_rules_added_removed_and_changed_and_skill_files_changed(tmp_path, monkeypatch) -> None:
     clone = tmp_path / "impeccable"
     git(tmp_path, "init", "-q", "-b", "main", str(clone))
     (clone / "crates/foundation/src").mkdir(parents=True)
@@ -163,6 +170,7 @@ def test_the_diff_reports_rules_added_removed_and_changed_and_skill_files_change
         git(clone, "add", "-A")
         git(clone, "commit", "-qm", tag)
         git(clone, "tag", tag)
+    pin(monkeypatch, commit := git(clone, "rev-parse", "skill-v4.5.2"))
     assert set(pack_update.rules(clone, "skill-v4.5.2")) == {"side-tab", "gradient-text", "flat"}  # not the fixture
     report = pack_update.diff(clone, "skill-v4.6.0")
     assert "## Rules added\n- glow: Glow\n" in report
@@ -173,7 +181,8 @@ def test_the_diff_reports_rules_added_removed_and_changed_and_skill_files_change
     )
     assert '  - description: "old" -> "new \\"text\\""\n' in report  # every field, not only the ones once read
     assert "## Skill files changed\n- M\tskill/SKILL.md\n- A\tskill/new.md\n" in report
-    assert report.endswith(f"Skill text: git -C {clone} diff skill-v4.5.2 skill-v4.6.0 -- skill")
+    assert report.startswith(f"# Design pack update: skill-v4.5.2 ({commit}) to skill-v4.6.0\n")
+    assert report.endswith(f"Skill text: git -C {clone} diff {commit} skill-v4.6.0 -- skill")
     assert "+++ b/skill/new.md\n" in pack_update.skill_diff(clone, "skill-v4.6.0")  # what that line shows
     (clone / pack_update.REGISTRY).write_text(registry(("side-tab", "x", "y")).replace('        name: "x",\n', ""))
     git(clone, "commit", "-qam", "unnamed")
@@ -185,6 +194,52 @@ def test_the_diff_reports_rules_added_removed_and_changed_and_skill_files_change
     git(clone, "tag", "skill-v5.0.0")
     with pytest.raises(ValueError, match="no pub static ANTIPATTERNS table"):
         pack_update.rules(clone, "skill-v5.0.0")
+
+
+@pytest.mark.usefixtures("pinned")
+def test_the_diff_starts_from_the_pinned_commit_when_the_tag_has_moved(tmp_path, monkeypatch) -> None:
+    clone = tmp_path / "impeccable"
+    git(tmp_path, "init", "-q", "-b", "main", str(clone))
+    (clone / "crates/foundation/src").mkdir(parents=True)
+    (clone / "skill").mkdir()
+    for name, rules in (
+        ("skill-v4.5.2", [("side-tab", "Side tab", "d")]),
+        ("moved", [("side-tab", "Side tab", "d"), ("glow", "Glow", "x")]),
+        ("skill-v4.6.0", [("side-tab", "Side tab", "d"), ("glow", "Glow", "x")]),
+    ):
+        (clone / pack_update.REGISTRY).write_text(registry(*rules))
+        (clone / "skill/SKILL.md").write_text("pinned\n" if name == "skill-v4.5.2" else "later\n")
+        (clone / "NOTES").write_text(name)
+        git(clone, "add", "-A")
+        git(clone, "commit", "-qm", name)
+        git(clone, "tag", "-f", "skill-v4.5.2" if name == "moved" else name)
+        if name == "skill-v4.5.2":
+            pin(monkeypatch, commit := git(clone, "rev-parse", "HEAD"))
+    assert git(clone, "rev-parse", "skill-v4.5.2") != commit  # the tag moved after the pack was extracted
+    report = pack_update.diff(clone, "skill-v4.6.0")
+    assert "## Rules added\n- glow: Glow\n" in report  # the moved tag already has it
+    assert "## Skill files changed\n- M\tskill/SKILL.md\n" in report
+    assert report.endswith(f"Skill text: git -C {clone} diff {commit} skill-v4.6.0 -- skill")
+    assert "-pinned\n+later" in pack_update.skill_diff(clone, "skill-v4.6.0")
+
+
+@pytest.mark.usefixtures("pinned")
+def test_a_pinned_commit_missing_from_the_clone_fails_visibly(tmp_path, monkeypatch) -> None:
+    clone = tmp_path / "impeccable"
+    git(tmp_path, "init", "-q", "-b", "main", str(clone))
+    (clone / "crates/foundation/src").mkdir(parents=True)
+    (clone / pack_update.REGISTRY).write_text(registry(("side-tab", "Side tab", "d")))
+    git(clone, "add", "-A")
+    git(clone, "commit", "-qm", "skill-v4.6.0")
+    git(clone, "tag", "skill-v4.5.2")  # the tag is there, the pinned commit is not
+    git(clone, "tag", "skill-v4.6.0")
+    missing = "1" * 40
+    pin(monkeypatch, missing)
+    said = f"the pinned commit {missing} \\(skill-v4.5.2\\) is not in the clone {clone}; fetch upstream there first"
+    with pytest.raises(design_pack.PackError, match=said):
+        pack_update.diff(clone, "skill-v4.6.0")
+    with pytest.raises(design_pack.PackError, match=said):
+        pack_update.skill_diff(clone, "skill-v4.6.0")
 
 
 def test_golden_pages_report_what_an_engine_missed_or_found_unexpectedly(monkeypatch) -> None:
@@ -459,13 +514,16 @@ def test_the_cli_replay_below_the_margin_and_a_refused_host_both_exit_one(repo, 
     assert capsys.readouterr().out == "a design pack update is running: wait for it to finish\n"
 
 
-def test_the_cli_runs_each_update_tool_and_reports_failures(repo, capsys) -> None:
+def test_the_cli_runs_each_update_tool_and_reports_failures(repo, capsys, monkeypatch) -> None:
     assert cli.main(["--repo", str(repo), "design-pack", "--check"]) == 0
     assert capsys.readouterr().out == f"design pack {design_pack.manifest()['pack']}: releases upstream unknown\n"
     assert cli.main(["--repo", str(repo), "design-pack", "--golden"]) == 1
     assert "not installed" in capsys.readouterr().out
     assert cli.main(["--repo", str(repo), "design-pack", "--replay"]) == 1
     assert capsys.readouterr().out.strip() in {NOT_RUNNING.format(repo=repo), NOT_SERVED.format(repo=repo)}
+    assert cli.main(["--repo", str(repo), "design-pack", "--diff", str(repo), "--to", "skill-v9"]) == 1
+    assert "PackError: the pinned commit" in capsys.readouterr().out
+    pin(monkeypatch, git(repo, "rev-parse", "HEAD"))
     assert cli.main(["--repo", str(repo), "design-pack", "--diff", str(repo), "--to", "skill-v9"]) == 1
     assert "CalledProcessError" in capsys.readouterr().out
     with pytest.raises(SystemExit):
