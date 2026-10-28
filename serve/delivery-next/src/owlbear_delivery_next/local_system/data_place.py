@@ -130,11 +130,24 @@ def protected() -> list[Path]:
     """Every folder that holds or may hold the shared data: the pointer's checkout and a move's ends, and the default.
 
     Read from the pointer files directly, the old one included, so a check before any migration still sees them; an
-    unreadable pointer is an error, never an empty answer.
+    unreadable pointer is an error, never an empty answer. A checkout's Git folder counts too, wherever it lies.
     """
     record = stored() or {}
     named = [record.get(key, "") for key in ("repository", "moving_from", "moving_to")]
-    return [default(), *(Path(p).expanduser() for p in named if p)]
+    found = [default(), *(Path(p).expanduser() for p in named if p)]
+    return found + [common for folder in found if (common := _common(folder))]
+
+
+def _common(folder: Path) -> Path | None:
+    """The Git folder holding the objects of the checkout at *folder*; None when it is no checkout's top folder."""
+    root = folder.resolve()
+    if _top(root) != root:
+        return None
+    said = _git(root, "rev-parse", "--path-format=absolute", "--git-common-dir")
+    if said.returncode != 0:
+        msg = f"the Git folder of {root} cannot be found: {said.stderr.strip()}"
+        raise DataRepoError(msg)
+    return Path(said.stdout.strip())
 
 
 def holds_data(folder: Path) -> Path | None:

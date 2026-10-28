@@ -447,6 +447,20 @@ def test_a_version_holding_the_shared_data_is_never_removed_and_data_beside_the_
     assert (inside / "note.md").exists()
 
 
+def test_a_version_holding_the_git_folder_of_a_linked_shared_checkout_is_never_removed(tmp_path):
+    home = local_home.root()
+    main = version("v0.1") / "data"
+    git(home, "init", "-q", "-b", "main", str(main))
+    git(main, "commit", "-q", "--allow-empty", "-m", "start")
+    linked = tmp_path / "shared"
+    git(main, "worktree", "add", "-q", str(linked))
+    (home / "data.json").write_text(json.dumps({"repository": str(linked)}))
+
+    with pytest.raises(versions.VersionError, match="holds the shared data"):
+        versions.remove(home / local_home.VERSIONS / "v0.1")
+    assert (main / ".git").is_dir()
+
+
 def test_the_bare_clone_is_never_made_again_over_the_shared_data():
     home = local_home.root()
     inside = home / versions.REPO / "data"
