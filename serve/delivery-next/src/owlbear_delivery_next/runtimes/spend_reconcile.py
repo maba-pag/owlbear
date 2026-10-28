@@ -15,7 +15,8 @@ What it reads, for each project this machine serves and for this machine:
   imported as unknown spend is taken back by a ``void`` line;
 - the runtime's own log of an OwlBear session (``spend_logs``): a killed run, a run whose usage was unread or not
   final, and a session only Retro's chatlogs manifest names, such as curator, design pack and lookup runs before the
-  ledger; provisional, and read again as the log grows, until the session shut down.
+  ledger, and a Spotter look whose own lines a crash lost (under its look's owner once its record or cases run says,
+  the unknown project until then); provisional, and read again as the log grows, until the session shut down.
 Spend that none of these kept is not recoverable: a session OwlBear ran before Retro's manifest (2026-10-25) and
 outside any Change, such as a curator or design pack run, and the events a Change's activity log dropped beyond its
 marks' totals.

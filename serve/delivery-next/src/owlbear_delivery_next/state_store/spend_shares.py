@@ -8,7 +8,8 @@ from its own lines and from its Spotter record (one ``look`` id, its meter's) co
 when the record names an SDK session those lines lack (``sdk_sessions``), what the record holds beyond them. An
 imported checkpoint that repeats a live run's totals exactly adds nothing. A run with several ends (its runtime log's
 corrections) keeps its largest usage, a final one over a provisional one of as much, and its recorded ending's time;
-a run whose ending is itself a log checkpoint dates each later checkpoint's growth between the two checkpoints.
+a run whose ending is itself a log checkpoint dates each later checkpoint's growth between the two checkpoints. Each
+piece of a Spotter look's run names its ``look``, so a look's retries, each its own run, group under it.
 
 Shares are derived per session before anything is filtered or grouped, so a filter never hands a resumed run the
 spend of earlier ones. The runs go in time order (unknown times last, as imported). High-water marks start at zero
@@ -47,6 +48,8 @@ LIVE = ("start", "end")
 LOG = "import:runtime-log"  # a line the runtime's log gave
 CHECKPOINTS = ("event", "mark", "residual")  # imported line types that repeat a session's totals: never a run
 VOID = "void"  # a Spotter record's ``look`` line imported although no look ran (``spend_reconcile``): no run at all
+OWNER = "owner"  # a recovered Spotter look session's owner, known after it was recovered (``spend_logs``)
+PLACE = ("project", "name", "clone", "change", "step", "job")
 
 type Fields = dict[str, float | None]
 type Cell = tuple[str, str]
@@ -114,16 +117,24 @@ def runs(lines: list[dict[str, Any]]) -> list[dict[str, Any]]:
     time, whose growth lies between the two checkpoints; an ending recorded as it ran, arriving after them, dates the
     run alone. Once the run's latest usage is final, none of its entries is a lower bound any more (``settled``).
     A ``void`` line takes back a Spotter record's run (``import:spotter``) imported although no look ran; never another.
+
+    A Spotter look's session recovered from its runtime's log (``log:<session>``, carrying its ``look``) and its own
+    lines, when they come after all, are one run: the recovered lines join the run its own lines name, whose place
+    they record. Until they come, an ``owner`` line gives the recovered run its owner's place, known after it was
+    recovered.
     """
+    alias = _surrogates(lines)
     by: dict[str, dict[str, Any]] = {}
     later: dict[str, list[dict[str, Any]]] = {}  # each run's continuations, in time order
     void: set[str] = set()
+    owned: dict[str, dict[str, Any]] = {}
     for line in lines:
         kind = line.get("type")
-        if kind == VOID:
-            void.add(str(line.get("run")))
+        if kind in {VOID, OWNER}:
+            _aside(line, void, owned)
             continue
         rid = str(line.get("run") or line.get("id")) if kind in LIVE else str(line.get("id"))
+        rid = alias.get(rid, rid)
         run = by.setdefault(rid, {"run": rid, "usage": None, "at": None, "started": None, "before": None})
         if kind == "start":
             run |= {k: v for k, v in line.items() if k not in {"id", "type", "at"}} | {"started": line.get("at")}
@@ -134,7 +145,34 @@ def runs(lines: list[dict[str, Any]]) -> list[dict[str, Any]]:
             if line.get("source") != LOG and (kept := later.pop(rid, None)):  # its own ending came after all
                 run["usage"] = kept[-1]["usage"]  # it alone dates the run
             _end(run, line)
+    for rid, fields in owned.items():
+        if rid in by and rid not in alias:  # its own lines, once in, say where it ran
+            for entry in (by[rid], *later.get(rid, ())):
+                entry.update(fields)
     return _settled(by, later, void)
+
+
+def _surrogates(lines: list[dict[str, Any]]) -> dict[str, str]:
+    """Each recovered Spotter look session's run (``log:<session>``) to the run its own lines name, once they came."""
+    recovered: set[str] = set()
+    live: dict[str, str] = {}
+    for line in lines:
+        if line.get("type") not in LIVE or not line.get("look"):
+            continue
+        session = str(line.get("session") or "")
+        if line.get("source") != LOG:
+            live.setdefault(session, str(line.get("run") or line.get("id")))
+        elif line.get("run") == f"log:{session}":
+            recovered.add(session)
+    return {f"log:{s}": live[s] for s in recovered if s in live}
+
+
+def _aside(line: dict[str, Any], void: set[str], owned: dict[str, dict[str, Any]]) -> None:
+    """A line that changes another run: a ``void`` takes it back, an ``owner`` places it."""
+    if line.get("type") == VOID:
+        void.add(str(line.get("run")))
+    else:
+        owned[str(line.get("run"))] = {k: line.get(k) or "" for k in PLACE}
 
 
 def _settled(
@@ -194,7 +232,7 @@ def _time(run: dict[str, Any]) -> str | None:
 
 def _base(run: dict[str, Any]) -> dict[str, Any]:
     keys = ("run", "session", "project", "name", "clone", "change", "step", "job", "ending", "stopped", "stopped_by",
-            "limit", "source")  # fmt: skip
+            "limit", "source", "look")  # fmt: skip
     incomplete = bool((run.get("usage") or {}).get("incomplete")) and not run.get("settled")  # a lower bound
     return {k: run.get(k) or ("" if k != "limit" else None) for k in keys} | {
         "role": run.get("agent") or "",
