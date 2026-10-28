@@ -1,128 +1,232 @@
 [
- {
-  "name": "verify-a",
-  "set": "demo",
-  "role": "builder",
-  "outcome": "Done after a reviewer's rework: the week-date test failed at hand-off and passed after a second fix.",
-  "exposure": ["agent:builder", "tool:bash", "tool:edit"],
-  "turns": [
-   ["user", "Task: make parse_date in app/dates.py accept ISO week dates such as 2026-W05-3, with a test. Run the test suite before you hand off."],
-   ["agent", "I'll add week-date parsing to parse_date and a test for it."],
-   ["call", "edit", "app/dates.py: add a branch for the YYYY-Www-D form using date.fromisocalendar", "edited app/dates.py", true],
-   ["call", "edit", "tests/test_dates.py: add test_week_date for 2026-W05-3", "edited tests/test_dates.py", true],
-   ["agent", "Done: parse_date now accepts ISO week dates and test_week_date covers it. All tests pass."],
-   ["user", "The reviewer ran the suite: tests/test_dates.py::test_week_date failed with ValueError: invalid literal for int() with base 10: 'W05'. Fix it."],
-   ["call", "bash", "uv run pytest tests/test_dates.py", "FAILED tests/test_dates.py::test_week_date - ValueError: invalid literal for int() with base 10: 'W05'\n1 failed, 11 passed", true],
-   ["call", "edit", "app/dates.py: drop the W before converting the week number", "edited app/dates.py", true],
-   ["call", "bash", "uv run pytest tests/test_dates.py", "12 passed", true],
-   ["agent", "Fixed: the week number kept its W prefix. 12 passed now."]
-  ],
-  "records": [
-   {"id": "syn-verify-a-1", "look": "sample", "category": "none", "turn": 3, "note": ""},
-   {"id": "syn-verify-a-2", "look": "hand-off", "category": "none", "turn": 5, "note": ""}
-  ]
- },
- {
-  "name": "verify-b",
-  "set": "demo",
-  "role": "builder",
-  "outcome": "Done after a reviewer's rework: the CSV header order was wrong at hand-off.",
-  "exposure": ["agent:builder", "tool:bash", "tool:edit"],
-  "turns": [
-   ["user", "Task: add a --csv flag to `report export` that writes the same columns as the table output. Run the tests before you hand off."],
-   ["call", "edit", "app/report.py: add --csv, writing rows with csv.DictWriter", "edited app/report.py", true],
-   ["call", "edit", "tests/test_report.py: add test_export_csv", "edited tests/test_report.py", true],
-   ["agent", "Done: report export --csv writes the table's columns, and the export tests pass."],
-   ["user", "Review: tests/test_report.py::test_export_csv fails: the header is amount,date,name but the table shows date,name,amount. Please fix."],
-   ["call", "bash", "uv run pytest tests/test_report.py", "FAILED tests/test_report.py::test_export_csv - AssertionError: header 'amount,date,name' != 'date,name,amount'\n1 failed, 8 passed", true],
-   ["call", "edit", "app/report.py: take the field order from the table's columns, not a sorted set", "edited app/report.py", true],
-   ["call", "bash", "uv run pytest tests/test_report.py", "9 passed", true],
-   ["agent", "Fixed the column order; 9 passed."]
-  ],
-  "records": [
-   {"id": "syn-verify-b-1", "look": "hand-off", "category": "hand-off-fitness", "turn": 4, "note": "The hand-off says the export tests pass, but no test ran in this session."}
-  ]
- },
- {
-  "name": "generated-a",
-  "set": "demo",
-  "role": "builder",
-  "outcome": "Redone: the field added to api/schema.json was lost when CI regenerated the file from api/schema.yaml.",
-  "exposure": ["agent:builder", "skill:w-build", "tool:bash", "tool:edit", "tool:view"],
-  "turns": [
-   ["user", "Task: add an optional `nickname` string to the User object of the API."],
-   ["call", "view", "share/skills/w-build/SKILL.md", "## Changing the API\nTo change the API, edit api/schema.json and run the tests.", true],
-   ["call", "edit", "api/schema.json: add nickname (string, optional) to User", "edited api/schema.json", true],
-   ["call", "bash", "uv run pytest tests/test_api.py", "14 passed", true],
-   ["agent", "Added nickname to the User schema in api/schema.json; 14 passed."],
-   ["user", "CI ran make generate, which rebuilds api/schema.json from api/schema.yaml, and your field is gone."],
-   ["agent", "The w-build skill told me to edit api/schema.json and does not say it is generated from api/schema.yaml. I'll make the change in api/schema.yaml."],
-   ["call", "edit", "api/schema.yaml: add nickname (string, optional) to User", "edited api/schema.yaml", true],
-   ["call", "bash", "make generate && uv run pytest tests/test_api.py", "api/schema.json regenerated\n14 passed", true],
-   ["agent", "Moved the change to api/schema.yaml; the generated file now carries it."]
-  ],
-  "records": [
-   {"id": "syn-generated-a-1", "look": "state-change", "category": "none", "turn": 3, "note": ""},
-   {"id": "syn-generated-a-2", "look": "sample", "category": "none", "turn": 5, "note": ""}
-  ]
- },
- {
-  "name": "generated-b",
-  "set": "demo",
-  "role": "builder",
-  "outcome": "Redone: the hand-written section of docs/cli.md was overwritten when make docs regenerated it from the CLI's help texts.",
-  "exposure": ["agent:builder", "skill:w-build", "tool:bash", "tool:edit", "tool:view"],
-  "turns": [
-   ["user", "Task: add an `owl prune` command that deletes caches older than 30 days, and document it."],
-   ["call", "view", "share/skills/w-build/SKILL.md", "## Documenting\nDocument every new command in docs/cli.md.", true],
-   ["call", "edit", "app/cli.py: add the prune command with --days (default 30)", "edited app/cli.py", true],
-   ["call", "edit", "docs/cli.md: add a section for owl prune", "edited docs/cli.md", true],
-   ["call", "bash", "uv run pytest tests/test_cli.py", "21 passed", true],
-   ["agent", "Added owl prune and documented it in docs/cli.md; 21 passed."],
-   ["user", "make docs rebuilt docs/cli.md from the commands' help texts and your section is gone; prune has no help text."],
-   ["agent", "w-build says to document commands in docs/cli.md but not that the file is generated from the help texts in app/cli.py. I'll write the help text instead."],
-   ["call", "edit", "app/cli.py: give prune and --days their help texts", "edited app/cli.py", true],
-   ["call", "bash", "make docs && uv run pytest tests/test_cli.py", "docs/cli.md regenerated\n21 passed", true]
-  ],
-  "records": [
-   {"id": "syn-generated-b-1", "look": "hand-off", "category": "none", "turn": 6, "note": ""}
-  ]
- },
- {
-  "name": "gap",
-  "set": "demo",
-  "role": "builder",
-  "outcome": "Reopened: the nightly run found three failures in tests/test_sync.py after hand-off.",
-  "exposure": ["agent:builder", "tool:bash", "tool:edit"],
-  "outputs": {"/tmp/copilot-tool-output-1761600000-sync.txt": "missing"},
-  "turns": [
-   ["user", "Task: retry sync uploads up to three times with a back-off."],
-   ["call", "edit", "app/sync.py: wrap upload in a retry loop with exponential back-off", "edited app/sync.py", true],
-   ["call", "bash", "uv run pytest tests/", "Output too large to show. Saved to: /tmp/copilot-tool-output-1761600000-sync.txt", true],
-   ["agent", "Added the retries; the full test run passed."],
-   ["user", "The nightly run shows 3 failures in tests/test_sync.py."]
-  ],
-  "records": [
-   {"id": "syn-gap-1", "look": "hand-off", "category": "none", "turn": 4, "note": ""}
-  ]
- },
- {
-  "name": "large",
-  "set": "stop",
-  "role": "builder",
-  "outcome": "Done: the build moved to the new compiler with its warnings fixed.",
-  "exposure": ["agent:builder", "tool:bash", "tool:edit"],
-  "filler": {"after": 3, "calls": 40, "chars": 1900},
-  "turns": [
-   ["user", "Task: move the build to the new compiler and fix the warnings it raises."],
-   ["agent", "I'll switch the toolchain, build, and fix the warnings module by module."],
-   ["call", "edit", "build/toolchain.cmake: use the new compiler", "edited build/toolchain.cmake", true],
-   ["call", "bash", "make -j8", "[100%] Built target core\n0 warnings", true],
-   ["agent", "The build is on the new compiler with no warnings left."]
-  ],
-  "records": [
-   {"id": "syn-large-1", "look": "plan", "category": "none", "turn": 2, "note": ""},
-   {"id": "syn-large-2", "look": "hand-off", "category": "none", "turn": 5, "note": ""}
-  ]
- }
+  {
+    "name": "verify-a",
+    "set": "demo",
+    "role": "builder",
+    "outcome": "Done after a reviewer's rework: the week-date test failed at hand-off and passed after a second fix.",
+    "exposure": ["agent:builder", "tool:bash", "tool:edit"],
+    "turns": [
+      [
+        "user",
+        [
+          "Task: make parse_date in app/dates.py accept ISO week dates such as 2026-W05-3, with a test. Run ",
+          "the test suite before you hand off."
+        ]
+      ],
+      ["agent", "I'll add week-date parsing to parse_date and a test for it."],
+      [
+        "call",
+        "edit",
+        "app/dates.py: add a branch for the YYYY-Www-D form using date.fromisocalendar",
+        "edited app/dates.py",
+        true
+      ],
+      ["call", "edit", "tests/test_dates.py: add test_week_date for 2026-W05-3", "edited tests/test_dates.py", true],
+      ["agent", "Done: parse_date now accepts ISO week dates and test_week_date covers it. All tests pass."],
+      [
+        "user",
+        [
+          "The reviewer ran the suite: tests/test_dates.py::test_week_date failed with ValueError: invalid ",
+          "literal for int() with base 10: 'W05'. Fix it."
+        ]
+      ],
+      [
+        "call",
+        "bash",
+        "uv run pytest tests/test_dates.py",
+        [
+          "FAILED tests/test_dates.py::test_week_date - ValueError: invalid literal for int() with base 10: ",
+          "'W05'\n1 failed, 11 passed"
+        ],
+        true
+      ],
+      ["call", "edit", "app/dates.py: drop the W before converting the week number", "edited app/dates.py", true],
+      ["call", "bash", "uv run pytest tests/test_dates.py", "12 passed", true],
+      ["agent", "Fixed: the week number kept its W prefix. 12 passed now."]
+    ],
+    "records": [
+      { "id": "syn-verify-a-1", "look": "sample", "category": "none", "turn": 3, "note": "" },
+      { "id": "syn-verify-a-2", "look": "hand-off", "category": "none", "turn": 5, "note": "" }
+    ]
+  },
+  {
+    "name": "verify-b",
+    "set": "demo",
+    "role": "builder",
+    "outcome": "Done after a reviewer's rework: the CSV header order was wrong at hand-off.",
+    "exposure": ["agent:builder", "tool:bash", "tool:edit"],
+    "turns": [
+      [
+        "user",
+        [
+          "Task: add a --csv flag to `report export` that writes the same columns as the table output. Run the ",
+          "tests before you hand off."
+        ]
+      ],
+      ["call", "edit", "app/report.py: add --csv, writing rows with csv.DictWriter", "edited app/report.py", true],
+      ["call", "edit", "tests/test_report.py: add test_export_csv", "edited tests/test_report.py", true],
+      ["agent", "Done: report export --csv writes the table's columns, and the export tests pass."],
+      [
+        "user",
+        [
+          "Review: tests/test_report.py::test_export_csv fails: the header is amount,date,name but the table ",
+          "shows date,name,amount. Please fix."
+        ]
+      ],
+      [
+        "call",
+        "bash",
+        "uv run pytest tests/test_report.py",
+        [
+          "FAILED tests/test_report.py::test_export_csv - AssertionError: header 'amount,date,name' != ",
+          "'date,name,amount'\n1 failed, 8 passed"
+        ],
+        true
+      ],
+      [
+        "call",
+        "edit",
+        "app/report.py: take the field order from the table's columns, not a sorted set",
+        "edited app/report.py",
+        true
+      ],
+      ["call", "bash", "uv run pytest tests/test_report.py", "9 passed", true],
+      ["agent", "Fixed the column order; 9 passed."]
+    ],
+    "records": [
+      {
+        "id": "syn-verify-b-1",
+        "look": "hand-off",
+        "category": "hand-off-fitness",
+        "turn": 4,
+        "note": "The hand-off says the export tests pass, but no test ran in this session."
+      }
+    ]
+  },
+  {
+    "name": "generated-a",
+    "set": "demo",
+    "role": "builder",
+    "outcome": "Redone: the field added to api/schema.json was lost when CI regenerated the file from api/schema.yaml.",
+    "exposure": ["agent:builder", "skill:w-build", "tool:bash", "tool:edit", "tool:view"],
+    "turns": [
+      ["user", "Task: add an optional `nickname` string to the User object of the API."],
+      [
+        "call",
+        "view",
+        "share/skills/w-build/SKILL.md",
+        "## Changing the API\nTo change the API, edit api/schema.json and run the tests.",
+        true
+      ],
+      ["call", "edit", "api/schema.json: add nickname (string, optional) to User", "edited api/schema.json", true],
+      ["call", "bash", "uv run pytest tests/test_api.py", "14 passed", true],
+      ["agent", "Added nickname to the User schema in api/schema.json; 14 passed."],
+      ["user", "CI ran make generate, which rebuilds api/schema.json from api/schema.yaml, and your field is gone."],
+      [
+        "agent",
+        [
+          "The w-build skill told me to edit api/schema.json and does not say it is generated from ",
+          "api/schema.yaml. I'll make the change in api/schema.yaml."
+        ]
+      ],
+      ["call", "edit", "api/schema.yaml: add nickname (string, optional) to User", "edited api/schema.yaml", true],
+      [
+        "call",
+        "bash",
+        "make generate && uv run pytest tests/test_api.py",
+        "api/schema.json regenerated\n14 passed",
+        true
+      ],
+      ["agent", "Moved the change to api/schema.yaml; the generated file now carries it."]
+    ],
+    "records": [
+      { "id": "syn-generated-a-1", "look": "state-change", "category": "none", "turn": 3, "note": "" },
+      { "id": "syn-generated-a-2", "look": "sample", "category": "none", "turn": 5, "note": "" }
+    ]
+  },
+  {
+    "name": "generated-b",
+    "set": "demo",
+    "role": "builder",
+    "outcome": [
+      "Redone: the hand-written section of docs/cli.md was overwritten when make docs regenerated it from the ",
+      "CLI's help texts."
+    ],
+    "exposure": ["agent:builder", "skill:w-build", "tool:bash", "tool:edit", "tool:view"],
+    "turns": [
+      ["user", "Task: add an `owl prune` command that deletes caches older than 30 days, and document it."],
+      [
+        "call",
+        "view",
+        "share/skills/w-build/SKILL.md",
+        "## Documenting\nDocument every new command in docs/cli.md.",
+        true
+      ],
+      ["call", "edit", "app/cli.py: add the prune command with --days (default 30)", "edited app/cli.py", true],
+      ["call", "edit", "docs/cli.md: add a section for owl prune", "edited docs/cli.md", true],
+      ["call", "bash", "uv run pytest tests/test_cli.py", "21 passed", true],
+      ["agent", "Added owl prune and documented it in docs/cli.md; 21 passed."],
+      [
+        "user",
+        "make docs rebuilt docs/cli.md from the commands' help texts and your section is gone; prune has no help text."
+      ],
+      [
+        "agent",
+        [
+          "w-build says to document commands in docs/cli.md but not that the file is generated from the help ",
+          "texts in app/cli.py. I'll write the help text instead."
+        ]
+      ],
+      ["call", "edit", "app/cli.py: give prune and --days their help texts", "edited app/cli.py", true],
+      ["call", "bash", "make docs && uv run pytest tests/test_cli.py", "docs/cli.md regenerated\n21 passed", true]
+    ],
+    "records": [{ "id": "syn-generated-b-1", "look": "hand-off", "category": "none", "turn": 6, "note": "" }]
+  },
+  {
+    "name": "gap",
+    "set": "demo",
+    "role": "builder",
+    "outcome": "Reopened: the nightly run found three failures in tests/test_sync.py after hand-off.",
+    "exposure": ["agent:builder", "tool:bash", "tool:edit"],
+    "outputs": { "/tmp/copilot-tool-output-1761600000-sync.txt": "missing" },
+    "turns": [
+      ["user", "Task: retry sync uploads up to three times with a back-off."],
+      [
+        "call",
+        "edit",
+        "app/sync.py: wrap upload in a retry loop with exponential back-off",
+        "edited app/sync.py",
+        true
+      ],
+      [
+        "call",
+        "bash",
+        "uv run pytest tests/",
+        "Output too large to show. Saved to: /tmp/copilot-tool-output-1761600000-sync.txt",
+        true
+      ],
+      ["agent", "Added the retries; the full test run passed."],
+      ["user", "The nightly run shows 3 failures in tests/test_sync.py."]
+    ],
+    "records": [{ "id": "syn-gap-1", "look": "hand-off", "category": "none", "turn": 4, "note": "" }]
+  },
+  {
+    "name": "large",
+    "set": "stop",
+    "role": "builder",
+    "outcome": "Done: the build moved to the new compiler with its warnings fixed.",
+    "exposure": ["agent:builder", "tool:bash", "tool:edit"],
+    "filler": { "after": 3, "calls": 40, "chars": 1900 },
+    "turns": [
+      ["user", "Task: move the build to the new compiler and fix the warnings it raises."],
+      ["agent", "I'll switch the toolchain, build, and fix the warnings module by module."],
+      ["call", "edit", "build/toolchain.cmake: use the new compiler", "edited build/toolchain.cmake", true],
+      ["call", "bash", "make -j8", "[100%] Built target core\n0 warnings", true],
+      ["agent", "The build is on the new compiler with no warnings left."]
+    ],
+    "records": [
+      { "id": "syn-large-1", "look": "plan", "category": "none", "turn": 2, "note": "" },
+      { "id": "syn-large-2", "look": "hand-off", "category": "none", "turn": 5, "note": "" }
+    ]
+  }
 ]

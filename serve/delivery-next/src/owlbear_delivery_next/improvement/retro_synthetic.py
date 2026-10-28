@@ -8,7 +8,8 @@ a real unit (``retro_judge.run``). Everything it yields carries provenance ``syn
 
 The ``demo`` set shows two lessons' worth of findings (a hand-off claiming tests never run) and two agent changes'
 worth (a skill silent that a file is generated), plus a finding resting on a removed output. ``large`` is sized for
-two judging batches at least, for the credit-stop check.
+two judging batches at least, for the credit-stop check. A text too long for one line of the file is a list of pieces,
+joined as read.
 """
 
 from __future__ import annotations
@@ -39,12 +40,23 @@ def specs(name: str = "") -> list[dict[str, Any]]:
     Raises:
         RetroError: No synthetic unit has that name.
     """
-    found = json.loads(DATA.read_text())
+    found = [_joined(s) for s in json.loads(DATA.read_text())]
     picked = [s for s in found if s["name"] == name] if name else [s for s in found if s["set"] == DEMO]
     if not picked:
         msg = f"no synthetic unit is named {name!r}"
         raise store.RetroError(msg)
     return picked
+
+
+def _joined(spec: dict[str, Any]) -> dict[str, Any]:
+    """*spec* with each text split into pieces in the file joined: its outcome, its turns' parts and records' fields."""
+
+    def text(v: object) -> object:
+        return "".join(v) if isinstance(v, list) else v
+
+    turns = [[text(v) for v in t] for t in spec["turns"]]
+    records = [{k: text(v) for k, v in r.items()} for r in spec["records"]]
+    return {**spec, "outcome": text(spec["outcome"]), "turns": turns, "records": records}
 
 
 def unit_id(spec: Mapping[str, Any]) -> str:
