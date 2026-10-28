@@ -120,6 +120,7 @@ def _job(asker, state=None, *, restarted=False, projects=None):
 
 
 SECRET = "ghp_" + "b" * 36
+SHOWN = {"title": "a case", "body": "the look said nothing"}
 
 
 def _runs():
@@ -381,7 +382,7 @@ class Reviewer(Asker):
             if self.broken:
                 msg = "the review session broke"
                 raise RuntimeError(msg)
-            return json.dumps({"verdict": "survive", "why": "it holds", "risks": [], "publishable": {}})
+            return json.dumps({"verdict": "survive", "why": "it holds", "risks": [], "publishable": SHOWN})
         grades = [
             {"record": r["id"], "grade": "wrong", "call": "hand-off-fitness"} for r in _evidence(message)["records"]
         ]

@@ -28,6 +28,7 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.improvement.retro_segments import Part
 
 BATCH, REVIEW = 60_000, 20_000  # characters of one judging batch's and one review's message
+TITLE, BODY = 120, 1_500  # characters of a surviving proposal's publishable title and body
 CARD, NOTE, GAPS = 1_200, 600, 2_000  # characters of a record's card excerpt and note; of the gaps said
 SAMPLES, SHOWN = 8, 3  # representative findings and counterexamples a review shows
 JUDGE = Path(__file__).with_name("retro_judge_prompt.md")
@@ -142,8 +143,9 @@ def _valid_grade(g: object) -> bool:
     return (
         isinstance(g, dict)
         and isinstance(g.get("record"), str)
-        and isinstance(g.get("grade") or "", str)
-        and (g.get("grade") not in {"wrong", "missed"} or g.get("call") in cases.CALLS)
+        and isinstance(g.get("grade"), str)
+        and g["grade"] in store.GRADES
+        and (g["grade"] not in {"wrong", "missed"} or g.get("call") in cases.CALLS)
     )
 
 
@@ -184,8 +186,6 @@ def _grade(w: Work, r: Mapping[str, Any], said: Mapping[str, Any] | None) -> dic
         value, reason = "not-assessable", "not answered"
     elif value == "missed" and not silence(r):
         value, reason = "not-assessable", "missed is said only of a sampled silent look"
-    elif value not in store.GRADES:
-        value, reason = "not-assessable", f"not a grade: {str(value)[:40]}"
     should = str((said or {}).get("call") or "")[:60] if value in {"wrong", "missed"} else ""
     more: dict[str, Any] = {"should": should} if should else {}
     if w.provenance != "real":
@@ -273,6 +273,7 @@ def _valid_review(said: Mapping[str, Any]) -> bool:
         and strings(said.get("risks") or [])
         and isinstance(shown, dict)
         and strings(list(shown.values()))
+        and (said["verdict"] == "reject" or all(str(shown.get(k) or "").strip() for k in ("title", "body")))
     )
 
 
@@ -294,6 +295,9 @@ def review(w: Work) -> int:
         if snap.get("provenance") != w.provenance:
             continue
         said = dict(paid(w, f"review:{snap['evidence']}", render(snap, findings), _valid_review, "retro-review"))
+        if said["verdict"] == "survive":  # a survivor's publishable is its title and body, within their bounds
+            shown = said["publishable"]
+            said["publishable"] = {"title": shown["title"][:TITLE], "body": shown["body"][:BODY]}
         if leaked := case_review.leaks(said.get("publishable") or {}):
             said |= {"verdict": "reject", "why": f"leak: {', '.join(leaked)}", "publishable": {}}
         props.reviewed(snap["id"], snap["evidence"], said)

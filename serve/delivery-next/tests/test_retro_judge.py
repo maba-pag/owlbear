@@ -37,6 +37,10 @@ class Asked:
         return Paid(json.dumps(said), 1.0, float(len(self.messages)))
 
 
+SHOWN = {"title": "a case", "body": "the look should have said hand-off-fitness"}
+WRONG = {"call": "hand-off-fitness"}
+
+
 def _record(rid, cutoff, look="handoff", category="lint", **more):
     (spotter.root() / "cards").mkdir(parents=True, exist_ok=True)
     (spotter.root() / "cards" / f"{rid}.json.gz").write_bytes(gzip.compress(json.dumps({"seen": "x" * 900}).encode()))
@@ -284,7 +288,7 @@ def test_a_part_carried_into_a_second_batch_for_its_records_yields_its_findings_
 def test_a_grade_only_run_proposes_a_case_for_a_late_record_graded_wrong():
     def said(_ev, agent):
         if agent == "retro-review":
-            return {"verdict": "survive", "why": "holds", "risks": [], "publishable": {}}
+            return {"verdict": "survive", "why": "holds", "risks": [], "publishable": SHOWN}
         return {"findings": [], "grades": [{"record": "late", "grade": "wrong", "call": "hand-off-fitness"}]}
 
     out = retro_judge.run(_work(Asked(said), [_record("late", 3)], grade_only=True))
@@ -293,10 +297,26 @@ def test_a_grade_only_run_proposes_a_case_for_a_late_record_graded_wrong():
     assert (props.folded()[case]["kind"], props.folded()[case]["call"]) == ("spotter-case", "hand-off-fitness")
 
 
+@pytest.mark.parametrize("shown", [{}, {"title": "a case"}, {"title": "a case", "body": " "}])
+def test_a_survivor_without_a_title_and_body_is_an_attempt_and_its_retry_keeps_them_bounded(shown):
+    review = {"verdict": "survive", "why": "holds", "risks": [], "publishable": shown}
+    said = {"retro-review": review, "retro": {"findings": [], "grades": [{"record": "w", "grade": "wrong"} | WRONG]}}
+    ask = Asked(lambda _ev, agent: said[agent])
+
+    with pytest.raises(StoppedError, match="not valid"):
+        retro_judge.run(_work(ask, [_record("w", 3)], grade_only=True))
+    [due] = props.due_reviews()
+    review["publishable"] = {"title": "t" * 200, "body": "b" * 2000, "path": "/Users/x"}
+    retro_judge.review(_work(ask, run="run-2"))
+
+    got = props.folded()[due["id"]]
+    assert (got["state"], got["publishable"]) == ("waiting", {"title": "t" * 120, "body": "b" * 1500})
+
+
 def test_a_review_reads_a_graded_records_moment_reason_and_right_call_and_a_fixes_steps():
     def said(_ev, agent):
         if agent == "retro-review":
-            return {"verdict": "survive", "why": "holds", "risks": [], "publishable": {}}
+            return {"verdict": "survive", "why": "holds", "risks": [], "publishable": SHOWN}
         return {"findings": [], "grades": [{"record": "w", "grade": "wrong", "reason": "it was fine", "call": "none"}]}
 
     ask = Asked(said)
@@ -325,7 +345,7 @@ def test_a_secret_in_a_records_note_or_card_or_in_a_findings_text_never_leaves_i
 
     retro_judge.judge(_work(ask, [noted, carded]))
     retro_bars.propose(_work(ask), [])
-    ask.answer = lambda _ev, _a: {"verdict": "survive", "why": "", "risks": [], "publishable": {}}
+    ask.answer = lambda _ev, _a: {"verdict": "survive", "why": "", "risks": [], "publishable": SHOWN}
     retro_judge.review(_work(ask))
 
     assert len(ask.messages) == 3
@@ -356,6 +376,7 @@ def test_a_judging_message_stays_within_its_bound_when_the_capture_is_all_quotes
         {"findings": [{"refs": ["s1.e3"], "quotes": ["done"], "target": {"agent": "builder"}}], "grades": []},
         {"findings": [{"refs": ["s1.e3"], "quotes": ["done"], "catchable": "false"}], "grades": []},
         {"findings": [], "grades": [{"record": "a", "grade": "wrong", "call": ""}]},
+        *({"findings": [], "grades": [{"record": "a", "grade": bad}]} for bad in (False, None, [], {}, "bogus")),
     ],
 )
 def test_a_malformed_judgement_stops_the_run_kept_as_an_attempt_with_nothing_derived(said):

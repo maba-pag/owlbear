@@ -21,6 +21,9 @@ CANNED = {  # a quote in a synthetic unit -> the finding's cause and target
 WRONG = {"syn-edit-lost-2": "none"}  # a record the Spotter got wrong -> what it should have said
 
 
+SHOWN = {"title": "a proposal", "body": "what it proposes"}
+
+
 def _evidence(message):
     return json.loads(message.split("```json\n")[-1].rsplit("\n```", 1)[0])
 
@@ -56,7 +59,7 @@ def _judged(ev):
 def ask(_key, message, agent):
     ev = _evidence(message)
     if agent == "retro-review":
-        said = {"verdict": "survive", "why": "shared in two families", "risks": [], "publishable": {}}
+        said = {"verdict": "survive", "why": "shared in two families", "risks": [], "publishable": SHOWN}
     elif "mechanisms" in ev:
         known = [m["id"] for m in ev["mechanisms"]]
         said = {"assign": {f["id"]: known[0] if known else "new:a" for f in ev["findings"]}, "new": {"a": "one reason"}}
