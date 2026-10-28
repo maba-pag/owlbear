@@ -164,10 +164,11 @@ def due_reviews() -> list[dict[str, Any]]:
 def reviewed(proposal: str, digest: str, answer: Mapping[str, Any]) -> None:
     """Keep ``retro-review``'s *answer* for the evidence *digest*.
 
-    A verdict on evidence still current moves the proposal to ``waiting`` (survive) or ``rejected``.
+    A verdict on evidence still current moves the proposal to ``waiting`` (survive) or ``rejected``, in the same write.
     """
     with store.locked():
-        _event(
+        snap = folded().get(proposal)
+        rows = [
             {
                 "eid": f"rev-{proposal}-{digest}",
                 "proposal": proposal,
@@ -178,20 +179,21 @@ def reviewed(proposal: str, digest: str, answer: Mapping[str, Any]) -> None:
                 "risks": list(answer.get("risks") or []),
                 "publishable": dict(answer.get("publishable") or {}),
             }
-        )
-        snap = folded().get(proposal)
-        if snap is None or snap["state"] != "drafted" or snap["evidence"] != digest:
-            return
-        state = "waiting" if answer.get("verdict") == "survive" else "rejected"
-        _event(
-            {
-                "eid": f"st-{proposal}-{digest}",
-                "proposal": proposal,
-                "type": "state",
-                "state": state,
-                "by": "retro-review",
-            }
-        )
+        ]
+        if snap is not None and snap["state"] == "drafted" and snap["evidence"] == digest:
+            state = "waiting" if answer.get("verdict") == "survive" else "rejected"
+            rows.append(
+                {
+                    "eid": f"st-{proposal}-{digest}",
+                    "proposal": proposal,
+                    "type": "state",
+                    "state": state,
+                    "by": "retro-review",
+                }
+            )
+        have, at = {line.get("eid") for line in store.lines(FILE)}, store.now()
+        if new := [{**row, "at": at} for row in rows if row["eid"] not in have]:
+            store.append(FILE, *new)
 
 
 def transition(proposal: str, state: str, by: str) -> None:

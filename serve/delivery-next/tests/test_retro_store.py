@@ -34,6 +34,24 @@ def test_growth_goes_to_the_open_proposal_and_makes_its_review_stale():
     assert [p["id"] for p in props.due_reviews()] == [pid]
 
 
+def test_a_verdict_and_the_state_it_moves_to_are_kept_in_one_write_so_a_failing_disk_never_strands_it(monkeypatch):
+    pid = props.file(props.open_key("real", "spotter-case", "r1"), ["g-1"], kind="spotter-case", provenance="real")
+    writes, real = [], store.append
+
+    def append(name, *rows):
+        if name == props.FILE:
+            if writes:
+                msg = "the disk is full"
+                raise OSError(msg)
+            writes.append(rows)
+        real(name, *rows)
+
+    monkeypatch.setattr(store, "append", append)
+    props.reviewed(pid, props.folded()[pid]["evidence"], {"verdict": "survive", "why": "holds"})
+
+    assert props.folded()[pid]["state"] == "waiting"
+
+
 def test_real_and_synthetic_keys_stay_apart_and_synthetic_ones_are_hidden_unless_asked():
     real = props.file(props.open_key("real", "delivery-change", "tool-defect", "x"), ["rf-1"], provenance="real")
     fake = props.file(
