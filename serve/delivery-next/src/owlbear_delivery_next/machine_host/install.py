@@ -14,7 +14,7 @@ from importlib.resources import files
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from owlbear_delivery_next.local_system import data_repo, local_home, preload
+from owlbear_delivery_next.local_system import data_place, data_repo, local_home, preload
 from owlbear_delivery_next.machine_host import control
 from owlbear_delivery_next.runtimes import copilot_cli, readiness
 from owlbear_delivery_next.state_store import registry
@@ -92,10 +92,10 @@ def uninstall(say: Say) -> int:
             target.unlink()
             say(f"removed {target}")
     (local_home.root() / COMPLETION).unlink(missing_ok=True)
-    found = data_repo.describe()
+    found = data_place.describe()
     if found.root is not None:
         say(f"kept: your shared data at {found.root}; uninstalling never removes it")
-        for line in data_repo.inventory(data_repo.DataRepo(found.root)):
+        for line in data_place.inventory(data_repo.DataRepo(found.root)):
             say(f"  only there: {line}")
     elif found.kind == "problem":
         say(f"shared data: {found.problem}; nothing of it was removed")
@@ -150,7 +150,7 @@ def _login_item(say: Say) -> int:
 
 def _data(say: Say) -> int:
     """1 when the shared data repository the machine is set to cannot be used; its warning is said either way."""
-    found = data_repo.describe()
+    found = data_place.describe()
     if found.kind == "problem":
         say(f"{found.line} · fix: `owlbear data` shows it")
     elif found.warning:

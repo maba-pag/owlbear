@@ -13,7 +13,7 @@ from owlbear_delivery_next.change_contracts.models import Brief, BriefDecision, 
 from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.commands import cli, setup
 from owlbear_delivery_next.github.provider import FailureCode, ProviderError, PullRequest
-from owlbear_delivery_next.local_system import data_repo, local_home
+from owlbear_delivery_next.local_system import data_place, data_repo, local_home
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host import host as host_module
@@ -461,7 +461,7 @@ def test_a_pointer_to_no_repository_stops_delivery(tmp_path: Path, repo, monkeyp
 
 def test_the_old_common_pointer_moves_to_data_once_and_a_data_pointer_wins(shared, repo, caplog) -> None:
     root, _ = shared
-    home = data_repo.pointer().parent
+    home = data_place.pointer().parent
     (home / "data.json").rename(home / "common.json")
     said = (home / "common.json").read_text()
 
@@ -478,7 +478,7 @@ def test_the_old_common_pointer_moves_to_data_once_and_a_data_pointer_wins(share
 
 
 def test_recording_a_repository_moves_the_old_pointer_away(tmp_path: Path) -> None:
-    home, local = data_repo.pointer().parent, tmp_path / "local-data"
+    home, local = data_place.pointer().parent, tmp_path / "local-data"
     git(tmp_path, "init", "-q", "-b", "main", str(local))
     (home / "common.json").write_text(json.dumps({"repository": str(tmp_path / "gone")}))
     assert str(local) in cli.show_data(local)[1]

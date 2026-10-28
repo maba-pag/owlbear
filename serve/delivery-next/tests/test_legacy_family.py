@@ -88,7 +88,7 @@ def test_the_registry_move_changes_only_the_current_read_set() -> None:
             "    return cwd.resolve()",
         ),
         (
-            "local_system/data_repo.py",
+            "local_system/data_place.py",
             (
                 '    root = Path(record["repository"]).expanduser().resolve()\n'
                 '    if _top(root) != root:\n        msg = f"{root}, named in {path}'

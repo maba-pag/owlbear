@@ -18,7 +18,7 @@ import subprocess
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
-from owlbear_delivery_next.local_system import codebase, data_repo, leases, local_home
+from owlbear_delivery_next.local_system import codebase, data_place, data_repo, leases, local_home
 from owlbear_delivery_next.state_store import machine_settings, registry
 
 if TYPE_CHECKING:
@@ -268,7 +268,7 @@ def selfcheck(folder: Path) -> str:
 def _holds_data(path: Path) -> Path | None:
     """The shared data *path* is, holds or lies in, read from the pointer alone; an unreadable pointer refuses."""
     try:
-        return data_repo.holds_data(path)
+        return data_place.holds_data(path)
     except data_repo.DataRepoError as exc:
         msg = f"nothing is removed while the shared data's pointer cannot be read: {exc}"
         raise VersionError(msg) from exc

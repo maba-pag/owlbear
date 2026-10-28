@@ -12,7 +12,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from owlbear_delivery_next.local_system import codebase, data_repo, local_home
+from owlbear_delivery_next.local_system import codebase, data_place, data_repo, local_home
 from owlbear_delivery_next.machine_host import selfcheck, versions
 from owlbear_delivery_next.machine_host.versions import Choice
 from owlbear_delivery_next.project_host import pages
@@ -266,7 +266,7 @@ def test_the_selfcheck_reads_settings_in_format_17_and_refuses_the_next_one(tmp_
 
 def test_the_selfcheck_reads_the_default_shared_checkout_with_no_pointer(tmp_path):
     clone = registered(tmp_path)
-    shared = data_repo.DataRepo(data_repo.default())
+    shared = data_repo.DataRepo(data_place.default())
     git(tmp_path, "init", "-q", str(shared.root))
     shared.global_path.parent.mkdir(parents=True, exist_ok=True)
     shared.global_path.write_text(json.dumps({"format": 99}))

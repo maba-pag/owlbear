@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING
 
 import uvicorn
 
-from owlbear_delivery_next.local_system import codebase, data_repo, local_home
+from owlbear_delivery_next.local_system import codebase, data_place, data_repo, local_home
 from owlbear_delivery_next.local_system.storage_io import atomic_write, open_lock
 from owlbear_delivery_next.machine_host import alias, app, environment, handover, versions
 from owlbear_delivery_next.machine_host.machine import Machine
@@ -177,13 +177,13 @@ def _provisioned(machine: Machine) -> bool:
     A failure is said and the projects load without the shared data, each saying why; never fatal.
     """
     try:
-        _, done = data_repo.provision(clone=False)
+        _, done = data_place.provision(clone=False)
         if done:
             machine.say(f"shared data: {done}")
     except data_repo.DataRepoError as exc:
         machine.say(f"shared data: {exc}")
     try:
-        record = data_repo.stored() or {}
+        record = data_place.stored() or {}
     except data_repo.DataRepoError:
         return False
     return bool(record.get("remote")) and not record.get("repository") and not record.get("moving_to")
@@ -197,8 +197,8 @@ def _cloning(machine: Machine) -> None:
     said = ""
     while not machine.stopping.is_set():
         try:
-            _, done = data_repo.provision()
-        except data_repo.BusyError:
+            _, done = data_place.provision()
+        except data_place.BusyError:
             pass  # an `owlbear data` clones it now; looked at again later
         except data_repo.DataRepoError as exc:
             if str(exc) != said:

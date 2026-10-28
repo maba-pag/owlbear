@@ -10,7 +10,7 @@ from types import SimpleNamespace
 import pytest
 
 from owlbear_delivery_next.commands import cli
-from owlbear_delivery_next.local_system import data_repo, local_home
+from owlbear_delivery_next.local_system import data_place, data_repo, local_home
 from owlbear_delivery_next.local_system.storage_io import open_lock
 from owlbear_delivery_next.machine_host import data_move
 
@@ -40,13 +40,13 @@ def source(tmp_path: Path, monkeypatch) -> Path:
     (root / "config.json").write_text('{"b": 2}\n')
     git(root, "worktree", "add", "-q", str(tmp_path / "linked"), "side")
     local_home.root().mkdir(parents=True, exist_ok=True)
-    data_repo.pointer().write_text(json.dumps({"repository": str(root)}))
+    data_place.pointer().write_text(json.dumps({"repository": str(root)}))
     monkeypatch.setattr(data_move, "_processes", list)  # this machine's own OwlBear runs beside the tests
     return root
 
 
 def record() -> dict[str, str]:
-    return json.loads(data_repo.pointer().read_text())
+    return json.loads(data_place.pointer().read_text())
 
 
 def state(root: Path) -> tuple[str, ...]:
@@ -62,14 +62,14 @@ def test_the_move_keeps_all_the_checkout_holds_and_its_linked_worktree(tmp_path:
     before, said = state(source), []
     remote = git(source, "config", "--get", "remote.origin.url")
     assert data_move.main(["--move"], said.append) == 0
-    dest = data_repo.default()
+    dest = data_place.default()
     assert (state(dest), source.exists()) == (before, False)
     assert record() == {"repository": str(dest), "remote": remote, "moved_from": str(source)}
     common = git(tmp_path / "linked", "rev-parse", "--path-format=absolute", "--git-common-dir")
     assert Path(common) == (dest / ".git").resolve()
     assert git(tmp_path / "linked", "status", "--porcelain") == ""
     assert said[-1] == f"moved: the shared repository is now {dest}; nothing is left at {source}"
-    assert data_repo.describe().line == f"shared data: {dest.resolve()} (default)"
+    assert data_place.describe().line == f"shared data: {dest.resolve()} (default)"
 
 
 def _held_host(_tmp: Path, _monkeypatch) -> int:
@@ -106,11 +106,11 @@ def _retained_runner(tmp: Path, monkeypatch) -> None:
 
 
 def _dest_exists(_tmp: Path, _monkeypatch) -> None:
-    (data_repo.default() / "mine").mkdir(parents=True)
+    (data_place.default() / "mine").mkdir(parents=True)
 
 
 def _other_disk(_tmp: Path, monkeypatch) -> None:
-    real, parent = Path.stat, data_repo.default().parent
+    real, parent = Path.stat, data_place.default().parent
 
     def stat(self: Path, **kwargs: bool) -> os.stat_result:
         found = real(self, **kwargs)
@@ -122,7 +122,7 @@ def _other_disk(_tmp: Path, monkeypatch) -> None:
 
 
 def _linked_source(tmp: Path, _monkeypatch) -> None:
-    data_repo.pointer().write_text(json.dumps({"repository": str(tmp / "linked")}))
+    data_place.pointer().write_text(json.dumps({"repository": str(tmp / "linked")}))
 
 
 @pytest.mark.parametrize(
@@ -148,7 +148,7 @@ def test_a_refused_move_changes_nothing(tmp_path: Path, source: Path, monkeypatc
             os.close(held)
     assert any(reason in line for line in said), said
     assert (record(), state(source)) == (pointer, before)
-    assert sorted(p.name for p in data_repo.default().glob("*")) == (["mine"] if arrange is _dest_exists else [])
+    assert sorted(p.name for p in data_place.default().glob("*")) == (["mine"] if arrange is _dest_exists else [])
 
 
 def test_a_writer_found_after_the_pointer_names_the_move_refuses_it_and_readers_meanwhile_resolve_nothing(
@@ -165,24 +165,24 @@ def test_a_writer_found_after_the_pointer_names_the_move_refuses_it_and_readers_
     monkeypatch.setattr(data_move, "writers", writers)
     pointer, said = record(), []
     assert data_move.main(["--move"], said.append) == 1
-    assert (len(seen), record(), source.is_dir(), data_repo.default().exists()) == (1, pointer, True, False)
+    assert (len(seen), record(), source.is_dir(), data_place.default().exists()) == (1, pointer, True, False)
 
 
 @pytest.mark.usefixtures("source")
 def test_a_failed_repair_keeps_readers_out_until_owlbear_data_finishes_the_move(tmp_path: Path, monkeypatch) -> None:
-    real = data_repo.relink
-    monkeypatch.setattr(data_repo, "relink", lambda _root: "`git worktree repair` failed: injected")
+    real = data_place.relink
+    monkeypatch.setattr(data_place, "relink", lambda _root: "`git worktree repair` failed: injected")
     said = []
     assert data_move.main(["--move"], said.append) == 1
     assert "then run `owlbear data` to finish" in said[-1]
     assert set(record()) == {"remote", "moving_from", "moving_to"}
     with pytest.raises(data_repo.DataRepoError, match="is not finished"):
         data_repo.locate()
-    monkeypatch.setattr(data_repo, "relink", real)
+    monkeypatch.setattr(data_place, "relink", real)
     assert cli.main(["data"]) == 0
-    assert record()["repository"] == str(data_repo.default())
+    assert record()["repository"] == str(data_place.default())
     common = git(tmp_path / "linked", "rev-parse", "--path-format=absolute", "--git-common-dir")
-    assert Path(common) == (data_repo.default() / ".git").resolve()
+    assert Path(common) == (data_place.default() / ".git").resolve()
 
 
 def test_a_running_owlbear_process_is_found_and_this_one_is_not() -> None:

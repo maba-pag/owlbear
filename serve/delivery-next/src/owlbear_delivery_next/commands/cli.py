@@ -33,7 +33,7 @@ from owlbear_delivery_next.change_flow.status import status, unloadable
 from owlbear_delivery_next.commands import cases_cli, replay_client, setup
 from owlbear_delivery_next.design_packs import design_pack, pack_update
 from owlbear_delivery_next.design_packs.detector import DetectorError
-from owlbear_delivery_next.local_system import data_repo, local_home
+from owlbear_delivery_next.local_system import data_place, data_repo, local_home
 from owlbear_delivery_next.pack_runs import pack_replay
 from owlbear_delivery_next.project_host import answers, host
 from owlbear_delivery_next.settings import profile, roles
@@ -61,37 +61,37 @@ def show_data(target: str | Path | None) -> tuple[int, str]:
     if target is None:
         return _shown()
     try:
-        if isinstance(target, str) and data_repo.is_url(target):
-            shared, done = data_repo.provision(target, show=True)
+        if isinstance(target, str) and data_place.is_url(target):
+            shared, done = data_place.provision(target, show=True)
         else:
-            shared, done = data_repo.point(Path(target)), ""
+            shared, done = data_place.point(Path(target)), ""
     except data_repo.DataRepoError as exc:
         return 1, f"Not set: {exc}"
-    root = shared.root if shared else data_repo.default()
+    root = shared.root if shared else data_place.default()
     said = f"{done[:1].upper()}{done[1:]}. " if done else ""
-    return 0, f"{said}Shared data repository: {root} (pointer {data_repo.pointer()}). Run `owlbear restart` to use it."
+    return 0, f"{said}Shared data repository: {root} (pointer {data_place.pointer()}). Run `owlbear restart` to use it."
 
 
 def _shown() -> tuple[int, str]:
     finished = ""
     try:
-        with data_repo.pointer_lock():
-            finished = data_repo.recover()
-    except data_repo.BusyError:
+        with data_place.pointer_lock():
+            finished = data_place.recover()
+    except data_place.BusyError:
         pass
     except data_repo.DataRepoError as exc:
         return 1, f"Shared data: problem: {exc}"
-    found = data_repo.describe()
+    found = data_place.describe()
     lines = [f"{finished[:1].upper()}{finished[1:]}."] if finished else []
     if found.kind == "none":
         lines.append(
             "No shared settings repository; settings stay in each clone. Set one: `owlbear data URL` clones it into "
-            f"{data_repo.default()}, `owlbear data PATH` uses a checkout you keep elsewhere"
+            f"{data_place.default()}, `owlbear data PATH` uses a checkout you keep elsewhere"
         )
     else:
         lines.append(found.line.replace("shared data:", "Shared data repository:", 1))
     if found.root is not None:
-        held = data_repo.inventory(data_repo.DataRepo(found.root))
+        held = data_place.inventory(data_repo.DataRepo(found.root))
         lines += ["Only on this machine, so back it up:", *(f"  {line}" for line in held)] if held else []
     return (1 if found.kind == "problem" else 0), "\n".join(lines)
 
