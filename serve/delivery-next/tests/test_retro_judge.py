@@ -313,6 +313,15 @@ def test_a_survivor_without_a_title_and_body_is_an_attempt_and_its_retry_keeps_t
     assert (got["state"], got["publishable"]) == ("waiting", {"title": "t" * 120, "body": "b" * 1500})
 
 
+def test_a_wrong_grade_of_an_earlier_revision_whose_case_was_never_filed_gets_it_from_a_later_run():
+    retro_store.add_grades([retro_units.grade(_record("old", 3), "r0", "wrong", "fine", should="hand-off-fitness")])
+    w = _work(Asked(lambda *_: {}))
+
+    [case] = retro_bars.cases(w)
+
+    assert (props.folded()[case]["record"], retro_bars.cases(w), len(props.folded())) == ("old", [], 1)
+
+
 def test_a_review_reads_a_graded_records_moment_reason_and_right_call_and_a_fixes_steps():
     def said(_ev, agent):
         if agent == "retro-review":

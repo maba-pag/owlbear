@@ -82,8 +82,11 @@ def _delivery(w: Work, mine: Iterable[Mapping[str, Any]]) -> list[str | None]:
 
 
 def cases(w: Work) -> list[str | None]:
-    """A Spotter case proposed for each record of this revision graded wrong or missed; a grade-only run's too."""
-    synthetic = w.provenance != "real"
+    """A Spotter case proposed for each record of this revision graded wrong or missed; a grade-only run's too.
+
+    One of an earlier revision whose case was never filed, its run ended before, is filed now.
+    """
+    synthetic, held = w.provenance != "real", {f for p in props.folded().values() for f in p["findings"]}
     return [
         props.file(
             props.open_key(w.provenance, "spotter-case", g["record"]),
@@ -100,7 +103,7 @@ def cases(w: Work) -> list[str | None]:
             assumptions=[assumptions.RETRO_GRADES, *_synthetic(w)],
         )
         for g in store.grades(unit=w.uid, synthetic=synthetic)
-        if g["grade"] in {"wrong", "missed"} and g.get("rev") == w.rev.get("rev")
+        if g["grade"] in {"wrong", "missed"} and (g.get("rev") == w.rev.get("rev") or g["id"] not in held)
     ]
 
 
