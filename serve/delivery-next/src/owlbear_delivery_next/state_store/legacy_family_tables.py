@@ -25,7 +25,7 @@ CURRENT_MODULES = (
     ("local_system/git_files.py", "4492e0b9805dfaf97c51c8be028cda698cff0b21587fb45c7961012177625329"),
     ("local_system/git_run.py", "ccdf414296dc12558123f5c8259a579fb1bd2da11b0050e8b8170018cb181967"),
     ("local_system/local_home.py", "9ae0858b0f9af90a86bc6630a1744279988ac6348a0f746fbd25948fd279912d"),
-    ("local_system/maintenance.py", "31c7f3f26a7e0f7ed9f294b6b9ad59be5247d60a31d292259487a2f24dddcce8"),
+    ("local_system/maintenance.py", "16fcf04755321f8e64c18e564f061856316c4bcaecd54d2a087dae8822fc6d73"),
     ("local_system/storage_io.py", "2afa4e09b275f74decaf099826d9ecb13c57abb3fcec00651cc04458e55e6187"),
     ("machine_host/app.py", "168da2c05c434ed59136bb35ff36bd5f303c901da33fd70621810a07b761cc8c"),
     ("machine_host/command.py", "94259c77dd9b75372e3d7fdc0c605ab935d91ee490c783db630a3ab49958c06b"),

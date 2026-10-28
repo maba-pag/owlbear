@@ -36,8 +36,12 @@ SECONDS = 180.0  # an answer's deadline
 UNNOTED = "the review's session could not be noted as OwlBear's own, so it was not created"
 
 
-async def asked(message: str, meter: Meter, role: RoleModel) -> str:
+async def asked(
+    message: str, meter: Meter, role: RoleModel, *, agent: str = "retro-review", seconds: float = SECONDS
+) -> str:
     """The session's last answer to *message*, its spend charged to *meter*; "" when the meter stopped it first.
+
+    *agent* names the session (its kind, role and folder) and its spend; Retro's own judging runs as ``retro``.
 
     Raises:
         RuntimeError: *meter* is closed, so the session never starts.
@@ -56,15 +60,15 @@ async def asked(message: str, meter: Meter, role: RoleModel) -> str:
 
     client, session, sid = CopilotClient(connection=RuntimeConnection.for_stdio(path=cli_path())), None, ""
     confirmed = False
-    spent = spotter_look.Spent(uuid.uuid4().hex, spend_ledger.where(), meter, role.model, agent="retro-review", job="")
+    spent = spotter_look.Spent(uuid.uuid4().hex, spend_ledger.where(), meter, role.model, agent=agent, job="")
     try:
         await client.start()
         effort = role.effort if role.effort and await takes_effort(client, role.model) else None
         looks = spotter.root() / "looks"  # in OwlBear's own folder, never an enrolled one
         looks.mkdir(mode=0o700, exist_ok=True)
-        with tempfile.TemporaryDirectory(prefix="retro-review-", dir=looks) as empty:
-            sid = f"retro-review-{uuid.uuid4().hex}"
-            started = {"kind": "retro-review", "role": "retro-review", "job": "", "worktree": empty}
+        with tempfile.TemporaryDirectory(prefix=f"{agent}-", dir=looks) as empty:
+            sid = f"{agent}-{uuid.uuid4().hex}"
+            started = {"kind": agent, "role": agent, "job": "", "worktree": empty}
             if not await spotter.offload(chatlogs.registered, sid, started):
                 sid = ""  # never noted: no session, so nothing to note as ended
                 raise RuntimeError(UNNOTED)
@@ -79,7 +83,7 @@ async def asked(message: str, meter: Meter, role: RoleModel) -> str:
             limit.part.started(sid)
             spent.started(sid)
             confirmed = await limit.turn(
-                session.send_and_wait(message, timeout=SECONDS), partial(_abort, session), spotter.TEARDOWN
+                session.send_and_wait(message, timeout=seconds), partial(_abort, session), spotter.TEARDOWN
             )
     finally:
         await spotter.through(asyncio.ensure_future(_end(client, session, limit, spent, confirmed=confirmed)))
