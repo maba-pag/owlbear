@@ -242,11 +242,12 @@ def test_start_runs_one_detached_host_and_stop_ends_it() -> None:
     assert said[-1].startswith("OwlBear is running")
     listed = control.projects()
     assert listed is not None
-    assert listed | {"update": None} == {
+    assert listed | {"update": None, "pack": None} == {
         "paused": False, "waiting": 0, "projects": [], "ending": False, "left": [], "update_while_paused": False,
-        "update": None, "updated": "", "announce": None,
+        "update": None, "updated": "", "announce": None, "pack": None,
     }  # fmt: skip  # a real host: no Global and nothing set here, so it never updates while paused (2026-10-23)
     assert listed["update"]["phase"] == "idle"
+    assert set(listed["pack"]) == {"install", "release"}  # its content depends on this machine's own pack
     assert control.stop(said.append) == 0
     assert (control.serve.running(), said[-1]) == (None, "OwlBear stopped; running steps finish on their own")
     logged = (local_home.root() / control.LOG).read_text()
