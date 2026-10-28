@@ -22,7 +22,7 @@ type Counted = Literal["dispute", "reconsider", "update", "pass", "end"]
 FIX, RECONSIDER, DROP = "fix", "reconsider", "drop"
 ANOTHER, ACTIVATE, DISCARD, RETRY = "another", "activate", "discard", "retry"
 ACCEPT, UNDO, KEEP, APPROVE = "accept", "undo", "keep", "approve"
-REPAIR, APPROVE_REPAIR, PUSH_CONFIG = "repair", "approve-repair", "push-config"
+REPAIR, APPROVE_REPAIR, PUSH_CONFIG, PUSH_REVIEWED = "repair", "approve-repair", "push-config", "push-reviewed"
 LABELS = {
     FIX: "Have the updater fix it",
     RECONSIDER: "Ask the challenger to reconsider",
@@ -38,6 +38,7 @@ LABELS = {
     REPAIR: "Have an agent fix CI",
     APPROVE_REPAIR: "Approve the agent's changes",
     PUSH_CONFIG: "Push it, configuration change included",
+    PUSH_REVIEWED: "Push it: I reviewed its test edits",
 }
 PUBLISH = (RETRY, DISCARD)  # publication stopped: try again once fixed, or discard (the pull request stays)
 DISCARD_OPEN = "Discard the update (the pull request stays open)"  # a publication stop's discard, once it has one
