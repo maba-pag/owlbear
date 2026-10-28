@@ -2,6 +2,7 @@
 
 import json
 
+from owlbear_delivery_next.commands import cli
 from owlbear_delivery_next.improvement import assumptions, retro_judge, retro_store
 from owlbear_delivery_next.improvement import retro_proposals as props
 from owlbear_delivery_next.improvement import retro_synthetic as syn
@@ -89,3 +90,16 @@ def test_the_large_unit_needs_two_judging_batches_and_an_unchanged_unit_keeps_it
     assert len(retro_judge.batches(w, w.records)) >= 2
     assert syn.install(spec)["rev"] == rev["rev"]
     assert units.folder(syn.session(spec)).is_relative_to(retro_store.place())
+
+
+def test_the_command_queues_a_run_and_plans_one_without_asking(capsys):
+    assert cli.main(["improvement", "retro", "run", "--synthetic", "large"]) == 0
+    assert [q["synthetic"] for q in retro_store.queued()] == ["large"]
+    assert cli.main(["improvement", "retro", "run", "--change", "nowhere/x"]) == 1
+    capsys.readouterr()
+
+    assert cli.main(["improvement", "retro", "status", "--plan", "syn:large"]) == 0
+
+    planned = json.loads(capsys.readouterr().out)
+    assert (planned["taken"], planned["judge_batches"], planned["saved"]) == (True, 2, 0)
+    assert len(retro_store.queued()) == 1

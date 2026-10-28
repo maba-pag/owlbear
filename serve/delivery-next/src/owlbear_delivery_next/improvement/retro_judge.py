@@ -173,6 +173,13 @@ def _grade(w: Work, r: Mapping[str, Any], said: Mapping[str, Any] | None) -> dic
     return units.grade(r, w.rev.get("rev", ""), value, reason, **more)
 
 
+def judging(w: Work) -> list[tuple[list[Part], list[dict[str, Any]], str]]:
+    """The judging batches of *w*'s assessable records, each with its message; none when no evidence was read."""
+    if not w.prepared.parts:
+        return []
+    return [(p, c, _message(w, p, c)) for p, c in batches(w, [r for r in w.records if assessable(r)])]
+
+
 def judge(w: Work) -> list[str]:
     """Phase 1: grade every record of the revision once and keep the findings; the ids of the findings."""
     open_ = [r for r in w.records if assessable(r)]
@@ -180,11 +187,8 @@ def judge(w: Work) -> list[str]:
     without = [(r, {"grade": "not-assessable", "reason": _unassessable(r)}) for r in w.records if not assessable(r)]
     without += [(r, unseen) for r in open_] if not w.prepared.parts else []
     w.found["grades"] += len(store.add_grades(_grade(w, r, said) for r, said in without))
-    if not w.prepared.parts:
-        return []
     ids: list[str] = []
-    for parts, carried in batches(w, open_):
-        message = _message(w, parts, carried)
+    for parts, carried, message in judging(w):
         said = paid(w, "judge", message, _valid_judgement)
         if not w.grade_only:
             found = [_finding(w, key(w, "judge", message), n, f, parts) for n, f in enumerate(said["findings"])]

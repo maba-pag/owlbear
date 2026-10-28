@@ -27,7 +27,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from owlbear_delivery_next.improvement import assumptions, retro_judge, retro_segments
+from owlbear_delivery_next.improvement import assumptions, retro_judge
 from owlbear_delivery_next.improvement import retro_store as store
 from owlbear_delivery_next.improvement import retro_synthetic as syn
 from owlbear_delivery_next.improvement import retro_units as units
@@ -39,9 +39,8 @@ from owlbear_delivery_next.machine_host.auto_update import IDLE_FOR
 from owlbear_delivery_next.machine_host.retro_inputs import (
     Running,
     enrolled,
+    evidence,
     judged_sessions,
-    last_said,
-    outcome,
     pinned,
     session,
     where,
@@ -319,12 +318,7 @@ class RetroJob:
         unit, rev = store.units()[ctx.uid], self._revision(ctx)
         found = {r["id"]: r for r in units.records()}
         held = [found[i] for i in (ctx.records if ctx.mode == "grade-only" else rev.get("records") or ()) if i in found]
-        sessions = list(unit.get("sessions") or ())
-        if unit.get("kind") == "chat":
-            low, high = int(rev.get("from_events") or 0), int(rev.get("cutoff_events") or 0)
-            prepared = retro_segments.prepare(sessions, last_said(sessions[0]), low=low, high=high, per_turn=True)
-        else:
-            prepared = retro_segments.prepare(sessions, outcome(ctx.uid, projects))
+        prepared = evidence(ctx.uid, unit, rev, projects)
         return Work(ctx.id, ctx.uid, rev, unit, held, prepared, ask, grade_only=ctx.mode == "grade-only")
 
     def _frozen(self, ctx: Running, rev: str) -> None:

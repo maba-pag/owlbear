@@ -12,17 +12,22 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-from owlbear_delivery_next.improvement import cases
+from owlbear_delivery_next.improvement import cases, retro_judge, retro_segments
 from owlbear_delivery_next.improvement import retro_proposals as props
 from owlbear_delivery_next.improvement import retro_store as store
+from owlbear_delivery_next.improvement import retro_synthetic as syn
 from owlbear_delivery_next.improvement import retro_units as units
+from owlbear_delivery_next.improvement.retro_calls import Paid, Work, key
 from owlbear_delivery_next.machine_host import cases_job
 from owlbear_delivery_next.settings.config import SettingsUnset
 from owlbear_delivery_next.state_store import machine_settings, registry, spend_ledger
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from owlbear_delivery_next.change_contracts.profile_record import RoleModel
     from owlbear_delivery_next.improvement.credit_meter import Meter
+    from owlbear_delivery_next.improvement.retro_segments import Prepared
 
 
 def enrolled() -> list[str]:
@@ -78,6 +83,59 @@ def last_said(sid: str) -> str:
             if d.get("type") == "assistant.message" and data.get("content") and not data.get("parentToolCallId"):
                 said = str(data["content"])
     return said
+
+
+def evidence(uid: str, unit: Mapping[str, Any], rev: Mapping[str, Any], projects: units.Projects) -> Prepared:
+    """What a run of *uid*'s revision *rev* reads: a chat's events with its last word, else sessions and outcome."""
+    sessions = list(unit.get("sessions") or ())
+    if unit.get("kind") == "chat":
+        low, high = int(rev.get("from_events") or 0), int(rev.get("cutoff_events") or 0)
+        return retro_segments.prepare(sessions, last_said(sessions[0]), low=low, high=high, per_turn=True)
+    return retro_segments.prepare(sessions, outcome(uid, projects))
+
+
+def _never(_batch: str, _message: str, _agent: str) -> Paid:
+    msg = "a plan asks nothing"
+    raise store.RetroError(msg)
+
+
+def plan(uid: str, projects: units.Projects) -> dict[str, Any]:
+    """What a run of *uid* would ask now, with no paid call: its judging batches and how many are saved already.
+
+    A unit whose last revision is judged, or that has none, is counted as its next revision would be taken; a
+    synthetic unit is installed first, as a run takes it; a chat only once taken, since taking it captures the chat.
+    Proposals and reviews are not counted: they depend on what the judging finds.
+
+    Raises:
+        RetroError: The unit cannot be described.
+    """
+    known = store.units().get(uid) or {}
+    revs, found = list(known.get("revisions") or []), {r["id"]: r for r in units.records()}
+    taken = bool(revs) and revs[-1].get("state") != "judged"
+    if uid.startswith(syn.PREFIX):
+        spec = syn.specs(uid.removeprefix(syn.PREFIX))[0]
+        w, taken = syn.work(spec, syn.install(spec), "plan", _never), True
+    elif taken:
+        unit, rev = known, revs[-1]
+        held = [found[i] for i in rev.get("records") or () if i in found]
+        w = Work("plan", uid, rev, unit, held, evidence(uid, unit, rev, projects), _never)
+    elif uid.startswith("chat:"):
+        return {"unit": uid, "taken": False, "why": "a chat is counted once its revision is taken (that captures it)"}
+    else:
+        unit, graded = units.describe_change(uid, *projects[uid.split(":", 2)[1]]), store.graded()
+        held = [r for r in found.values() if units.unit_of(r) == uid and r.get("cutoff") and r["id"] not in graded]
+        rev = {"rev": f"r{len(revs) + 1}", "records": [r["id"] for r in held]}
+        w = Work("plan", uid, rev, unit, held, evidence(uid, unit, rev, projects), _never)
+    keys = [key(w, "judge", message) for *_, message in retro_judge.judging(w)]
+    return {
+        "unit": uid,
+        "rev": w.rev["rev"],
+        "taken": taken,
+        "records": len(w.records),
+        "judge_batches": len(keys),
+        "saved": sum(store.saved(k) is not None for k in keys),
+        "attempts": sum(len(store.attempts(k)) for k in keys),
+    }
 
 
 def _at(text: str) -> datetime:
