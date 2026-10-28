@@ -7,8 +7,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 
-from owlbear_delivery_next.improvement import retro_store, retro_units, spotter
-from owlbear_delivery_next.runtimes import chatlogs
+from owlbear_delivery_next.improvement import chatlogs, retro_store, retro_units, spotter
 
 LATER = datetime.now(UTC) + timedelta(days=2)
 

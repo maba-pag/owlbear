@@ -20,10 +20,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
+from owlbear_delivery_next.improvement import chatlogs, retro_units
 from owlbear_delivery_next.improvement import events as ev
-from owlbear_delivery_next.improvement import retro_units
 from owlbear_delivery_next.local_system import mask
-from owlbear_delivery_next.runtimes import chatlogs
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping

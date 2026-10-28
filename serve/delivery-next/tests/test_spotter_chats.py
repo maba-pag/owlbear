@@ -21,13 +21,13 @@ from typing import Any
 import pytest
 
 from owlbear_delivery_next.change_contracts import watch_policy
-from owlbear_delivery_next.improvement import assumptions, cases, credit_meter, spotter
+from owlbear_delivery_next.improvement import assumptions, cases, chatlogs, credit_meter, spotter
 from owlbear_delivery_next.local_system import codebase, local_home, maintenance
 from owlbear_delivery_next.local_system.slots import Slots
 from owlbear_delivery_next.machine_host import chat_looks, chat_settings, chats
 from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.project_host.host import HostRecord
-from owlbear_delivery_next.runtimes import chat_moments, chatlogs, spotter_look
+from owlbear_delivery_next.runtimes import chat_moments, spotter_look
 from owlbear_delivery_next.runtimes.chat_moments import Moments, classify, shell_effects, tokens
 
 LOOKS = ("hand-off", "plan", "state-change", "sample")

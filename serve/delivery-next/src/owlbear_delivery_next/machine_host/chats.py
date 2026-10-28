@@ -54,10 +54,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from owlbear_delivery_next.improvement import cases, spotter
+from owlbear_delivery_next.improvement import cases, chatlogs, spotter
 from owlbear_delivery_next.machine_host import chat_looks, chat_offsets
 from owlbear_delivery_next.machine_host.chat_settings import Plan, settings_now
-from owlbear_delivery_next.runtimes import chatlogs, spotter_look
+from owlbear_delivery_next.runtimes import spotter_look
 from owlbear_delivery_next.runtimes.chat_moments import Moments
 
 if TYPE_CHECKING:

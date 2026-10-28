@@ -17,8 +17,9 @@ from owlbear_delivery_next.change_contracts.models import Brief, Change, Exit, P
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_contracts.tools import Worktree
 from owlbear_delivery_next.change_flow import loop
+from owlbear_delivery_next.improvement import chatlogs
 from owlbear_delivery_next.local_system import processes
-from owlbear_delivery_next.runtimes import chatlogs, loop_owner, sdk_adapter, sdk_spend, sdk_teardown
+from owlbear_delivery_next.runtimes import loop_owner, sdk_adapter, sdk_spend, sdk_teardown
 from owlbear_delivery_next.runtimes.session_result import to_result
 from owlbear_delivery_next.state_store import spend_ledger
 from owlbear_delivery_next.state_store.database import StoreError

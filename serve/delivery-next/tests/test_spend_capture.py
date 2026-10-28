@@ -18,11 +18,11 @@ from fastapi.testclient import TestClient
 from owlbear_delivery_next.change_contracts.models import Change, Step, StepKind
 from owlbear_delivery_next.change_contracts.spend import Spend
 from owlbear_delivery_next.commands import runner
-from owlbear_delivery_next.improvement import cases, spotter
+from owlbear_delivery_next.improvement import cases, chatlogs, spotter
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.pack_runs import pack_job, pack_replay
 from owlbear_delivery_next.project_host import metrics_routes
-from owlbear_delivery_next.runtimes import chatlogs, sdk_spend, spend_logs, spend_reconcile, subagents
+from owlbear_delivery_next.runtimes import sdk_spend, spend_logs, spend_reconcile, subagents
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.state_store import spend_ledger, spend_metrics, spend_shares
 from owlbear_delivery_next.state_store.spend_ledger import Where

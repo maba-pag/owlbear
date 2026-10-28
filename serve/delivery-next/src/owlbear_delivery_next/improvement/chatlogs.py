@@ -29,7 +29,7 @@ import uuid
 from contextlib import contextmanager, suppress
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, BinaryIO
+from typing import TYPE_CHECKING, Any, BinaryIO, Protocol
 
 import yaml
 
@@ -38,7 +38,7 @@ from owlbear_delivery_next.local_system import local_home
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Iterable, Iterator
 
-    from owlbear_delivery_next.runtimes.session_result import Run
+    from owlbear_delivery_next.local_system.processes import Termination
 
 SAVED = re.compile(r"Saved to: (\S+copilot-tool-output-[\w.-]+)")
 OUTPUTS, OUTPUT_BYTES = 50, 50 * 2**20  # at most this many saved outputs per session, and this many bytes in all
@@ -374,7 +374,19 @@ def kept(session: str, ending: str, *, provisional: bool, stop: threading.Event 
         sys.stderr.write(f"retro chatlogs: {session} not captured ({type(exc).__name__}: {exc})\n")
 
 
-async def around(cfg: Any, step: Awaitable[Run], current: Callable[[], str] | None = None) -> Run:  # noqa: ANN401
+class Finished(Protocol):
+    """What a finished step tells its capture: the session it ran in, how it ended, and whether that was confirmed."""
+
+    session_id: str
+    ending: str
+    termination: Termination | None
+
+
+async def around[R: Finished](
+    cfg: Any,  # noqa: ANN401
+    step: Awaitable[R],
+    current: Callable[[], str] | None = None,
+) -> R:
     """Run *cfg*'s *step* between its manifest lines, then capture it; an interruption of the step: its line only.
 
     The capture runs in an owned daemon thread that stops at its deadline or when this is cancelled.

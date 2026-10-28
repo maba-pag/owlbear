@@ -13,11 +13,10 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from owlbear_delivery_next.improvement import case_intake, case_replay, cases, pilot_seed
+from owlbear_delivery_next.improvement import case_intake, case_replay, cases, pilot_seed, retro_evidence
 from owlbear_delivery_next.improvement import retro_store as retro
 from owlbear_delivery_next.improvement import retro_units as units
 from owlbear_delivery_next.improvement.cases import CaseError, Stale
-from owlbear_delivery_next.machine_host import retro_inputs
 from owlbear_delivery_next.state_store import registry
 from owlbear_delivery_next.state_store.store import Store
 
@@ -221,7 +220,7 @@ def _retro(a: argparse.Namespace) -> None:
         _say(f"queued {rid}: the machine host's Retro job runs it; `owlbear improvement retro status` shows its result")
     elif a.plan:
         uid, projects = _unit(a.plan)
-        _say(json.dumps(retro_inputs.plan(uid, projects)))
+        _say(json.dumps(retro_evidence.plan(uid, projects)))
     else:
         _say(f"queued: {len(retro.queued())}")
         keep = ("id", "unit", "trigger", "by", "state", "why", "result", "spent", "known", "calls")

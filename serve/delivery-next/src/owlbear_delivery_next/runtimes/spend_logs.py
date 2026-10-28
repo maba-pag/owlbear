@@ -21,9 +21,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.change_flow import worktree
-from owlbear_delivery_next.improvement import cases
+from owlbear_delivery_next.improvement import cases, chatlogs
 from owlbear_delivery_next.local_system import local_home
-from owlbear_delivery_next.runtimes import chatlogs
 from owlbear_delivery_next.settings import roles
 from owlbear_delivery_next.state_store import spend_shares
 from owlbear_delivery_next.state_store.spend_ledger import Where

@@ -23,9 +23,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.change_flow import worktree
-from owlbear_delivery_next.improvement import retro_store, spotter
+from owlbear_delivery_next.improvement import chatlogs, retro_store, spotter
 from owlbear_delivery_next.local_system.git_files import git_common_dir
-from owlbear_delivery_next.runtimes import chatlogs
 from owlbear_delivery_next.state_store.database import StoreError
 from owlbear_delivery_next.state_store.store import ACTIVITY_LIMIT
 

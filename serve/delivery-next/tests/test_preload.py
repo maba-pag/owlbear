@@ -11,9 +11,10 @@ from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_contracts.tools import Worktree
 from owlbear_delivery_next.design_packs import design_pack
+from owlbear_delivery_next.improvement import chatlogs
 from owlbear_delivery_next.local_system import preload
 from owlbear_delivery_next.local_system.processes import Termination
-from owlbear_delivery_next.runtimes import chatlogs, sdk_adapter
+from owlbear_delivery_next.runtimes import sdk_adapter
 from owlbear_delivery_next.settings.roles import UserConfig
 
 ROLES = ("builder", "planner", "reviewer")

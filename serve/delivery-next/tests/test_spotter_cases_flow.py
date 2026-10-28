@@ -13,14 +13,22 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from owlbear_delivery_next.commands import cases_cli, cli
-from owlbear_delivery_next.improvement import case_intake, case_replay, case_review, cases, pilot_seed, spotter
+from owlbear_delivery_next.improvement import (
+    case_intake,
+    case_replay,
+    case_review,
+    cases,
+    chatlogs,
+    pilot_seed,
+    spotter,
+)
 from owlbear_delivery_next.improvement.cases import CaseError
 from owlbear_delivery_next.improvement.credit_meter import Meter
 from owlbear_delivery_next.local_system import maintenance
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.local_system.slots import Slots
 from owlbear_delivery_next.machine_host import cases_job
-from owlbear_delivery_next.runtimes import chatlogs, retro_review, spotter_look
+from owlbear_delivery_next.runtimes import retro_review, spotter_look
 from owlbear_delivery_next.state_store import spend_ledger, spend_metrics, spend_shares
 
 if TYPE_CHECKING:

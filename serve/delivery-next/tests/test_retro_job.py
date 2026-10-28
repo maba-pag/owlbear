@@ -13,18 +13,18 @@ from types import SimpleNamespace
 import pytest
 
 from owlbear_delivery_next.change_contracts.models import Brief, Change, Criterion, Exit, Inputs, Names, Outcome, Review
-from owlbear_delivery_next.improvement import cases, retro_store, retro_units, spotter
+from owlbear_delivery_next.improvement import cases, chatlogs, retro_evidence, retro_store, retro_units, spotter
 from owlbear_delivery_next.improvement import retro_proposals as props
 from owlbear_delivery_next.improvement import retro_synthetic as syn
 from owlbear_delivery_next.local_system import codebase, maintenance, processes
 from owlbear_delivery_next.local_system.slots import Slots
-from owlbear_delivery_next.machine_host import cases_job, retro_inputs, retro_job
+from owlbear_delivery_next.machine_host import cases_job, retro_job
 from owlbear_delivery_next.machine_host.auto_update import IDLE_FOR
 from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.machine_host.retro_inputs import Running
 from owlbear_delivery_next.machine_host.retro_job import LINGERING, RetroJob, Seams
 from owlbear_delivery_next.project_host.host import HostRecord
-from owlbear_delivery_next.runtimes import chatlogs, spotter_look
+from owlbear_delivery_next.runtimes import spotter_look
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.state_store import machine_settings
 
@@ -166,7 +166,7 @@ def _finished_change(tmp_path):
 def test_a_finished_change_is_planned_then_judged_against_its_brief_and_reviews_with_its_records_graded(said, tmp_path):
     projects, said.retro_after_change = _finished_change(tmp_path), "on"
     retro_store.update(lambda t: t.update(watermark=(datetime.now(UTC) - timedelta(days=1)).isoformat()))
-    assert retro_inputs.plan("chg:p1:fix-it", projects)["judge_batches"] == 1
+    assert retro_evidence.plan("chg:p1:fix-it", projects)["judge_batches"] == 1
 
     _job(asker := Asker(), projects=projects).tick(0.0)
 

@@ -20,9 +20,9 @@ from typing import TYPE_CHECKING, Any
 from copilot import CopilotClient, RuntimeConnection
 from copilot.rpc import PermissionDecisionReject
 
-from owlbear_delivery_next.improvement import spotter
+from owlbear_delivery_next.improvement import chatlogs, spotter
 from owlbear_delivery_next.improvement.events import as_dict
-from owlbear_delivery_next.runtimes import chatlogs, spotter_look
+from owlbear_delivery_next.runtimes import spotter_look
 from owlbear_delivery_next.runtimes.copilot_cli import cli_path
 from owlbear_delivery_next.runtimes.credit_limit import Limit
 from owlbear_delivery_next.runtimes.model_choices import takes_effort
