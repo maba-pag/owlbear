@@ -82,7 +82,7 @@ change.
 | `python.instructions.md` | `**/*.py` | `h-python-conventions`, which points to `h-pytest-and-linting` for test and lint commands |
 | `frontend.instructions.md` | The Delivery engine's pages under `serve/delivery-next/src/owlbear_delivery_next/web/` | `h-frontend-conventions`, which points to `h-frontend-design` and, when a project declares a PDS wrapper, its package-provided `pds-knowledge-{framework}` skill |
 | `doc-standards.instructions.md` | Canonical project documentation | `r-doc-standards` |
-| `research-docs.instructions.md` | `.owlbear/research/*.md` | `w-research`, which uses `h-codebase-orientation` |
+| `research-docs.instructions.md` | Research documents in owlbear-data, `*/research/*.md`, in a workspace of that repository that registers `share/instructions` | `w-research`, which uses `h-codebase-orientation` |
 
 Project-local `.owlbear/instructions/` files compose with these when their `applyTo` globs match. They are not part
 of the portable map.

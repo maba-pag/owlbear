@@ -6,7 +6,7 @@ user-invocable: true
 
 # Frontend Design Reference
 
-Design reference for project-authored UI. Adapted from Impeccable (Paul Bakaus) and Anthropic's frontend-design skill; attribution is in `.owlbear/sources/overview.md`.
+Design reference for project-authored UI. Adapted from Impeccable (Paul Bakaus) and Anthropic's frontend-design skill; attribution is in OwlBear's [sources log](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/sources/overview.md).
 
 For frontend component structure, accessibility patterns, and testing conventions, see `h-frontend-conventions`.
 

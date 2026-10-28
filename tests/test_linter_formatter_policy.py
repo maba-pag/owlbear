@@ -86,7 +86,6 @@ _M09_RESEARCH_MARKDOWN_PATHS = (
     ".owlbear/research/linter-formatter-rule-audit.md",
     ".owlbear/research/cockpit-work-items-redesign-evidence/opus-final-plan-review.md",
 )
-_M09_SOURCES_MARKDOWN_PATH = ".owlbear/sources/overview.md"
 _X04_FORMATTERS = {
     "[json]": "biomejs.biome",
     "[javascript][javascriptreact][jsonc][typescript][typescriptreact][css]": "biomejs.biome",
@@ -192,7 +191,7 @@ def test_markdownlint_inline_html_allows_only_agent_sections() -> None:
     assert "<strong>" not in (_ROOT / "setup/sharing-guide.md").read_text(encoding="utf-8")
 
 
-def test_markdownlint_rule_authorities_and_source_suppression_remain_explicit() -> None:
+def test_markdownlint_rule_authorities_remain_explicit() -> None:
     expected_front_matter_title = r"^\s*(?:title|name|description)\s*[:=]"
     config = _markdownlint_rules()
     assert config.get("MD013") is False
@@ -200,9 +199,6 @@ def test_markdownlint_rule_authorities_and_source_suppression_remain_explicit() 
     assert config.get("MD029") == {"style": "ordered"}
     assert config.get("MD041") == {"front_matter_title": expected_front_matter_title}
     assert config.get("MD060") == {"style": "compact"}
-
-    sources = (_ROOT / _M09_SOURCES_MARKDOWN_PATH).read_text(encoding="utf-8")
-    assert "markdownlint-disable" not in sources
 
 
 def test_delivery_packages_remain_excluded_from_markdown_consumers() -> None:
@@ -257,36 +253,6 @@ def test_research_archive_remains_excluded_from_markdown_consumers() -> None:
     config = _read_yaml_mapping(_ROOT / ".pre-commit-config.yaml")
     precommit_exclude = _read_precommit_exclude(config)
     assert all(precommit_exclude.search(path) is not None for path in _M09_RESEARCH_MARKDOWN_PATHS)
-
-
-def test_sources_document_is_included_in_markdown_consumers() -> None:
-    root_cli2 = _read_cli2_ignores(_ROOT / ".markdownlint-cli2.jsonc")
-
-    assert ".owlbear/sources" not in root_cli2
-
-    config = _read_yaml_mapping(_ROOT / ".pre-commit-config.yaml")
-    precommit_exclude = _read_precommit_exclude(config)
-    assert precommit_exclude.search(_M09_SOURCES_MARKDOWN_PATH) is None
-
-
-def test_sources_attribution_rows_are_well_formed() -> None:
-    lines = (_ROOT / _M09_SOURCES_MARKDOWN_PATH).read_text(encoding="utf-8").splitlines()
-    table = [line for line in lines if line.startswith("|")]
-    assert table[:2] == ["| Source | URL | Licence | What | Where Used |", "| --- | --- | --- | --- | --- |"]
-    rows = table[2:]
-    assert rows
-
-    for row in rows:
-        cells = [cell.strip() for cell in row.strip("|").split(" | ")]
-        assert len(cells) == 5, row
-        source, url, licence, what, where = cells
-        assert source, row
-        assert licence, row
-        assert what, row
-        assert re.fullmatch(r"<https://[^\s<>]+>", url), row
-        paths = re.findall(r"`([^`]+)`", where)
-        assert paths, row
-        assert all((_ROOT / path).exists() for path in paths), row
 
 
 def test_precommit_exclusion_taxonomy() -> None:

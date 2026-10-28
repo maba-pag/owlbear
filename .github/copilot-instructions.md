@@ -57,7 +57,7 @@ what is wrong (TD-150). In OwlBear also:
 | `share/agents/` | Agent definitions (`.agent.md`) |
 | `share/skills/` | Agent skills (`SKILL.md` — `w-`, `r-`, `h-` prefixed) |
 | `share/instructions/` | Instruction stubs (`.instructions.md` — pointers to skills) |
-| `.owlbear/` | Project ops data: Delivery authority, research, sources, scratch, scripts |
+| `.owlbear/` | Project ops data: Delivery authority, scratch, scripts; research, designs of unbuilt work and the sources log live in [owlbear-data](https://github.com/maba-pag/owlbear-data/tree/main/owlbear) (D-01M5ZMXT7H851MZZFJA2P9X179) |
 | `store/` | Reference-only knowledge corpus manifest and placeholder directories |
 | `setup/` | Setup guide, operating guide, sharing guide |
 | `tests/` | Workspace regression and integration tests |
