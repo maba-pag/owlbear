@@ -2,6 +2,8 @@
 
 import json
 
+import pytest
+
 from owlbear_delivery_next.improvement import assumptions
 from owlbear_delivery_next.improvement import retro_proposals as props
 from owlbear_delivery_next.improvement import retro_store as store
@@ -72,9 +74,23 @@ def test_real_and_synthetic_keys_stay_apart_and_synthetic_ones_are_hidden_unless
     assert {p["id"] for p in props.proposals(synthetic=True)} == {real, fake}
 
 
+def test_a_proposal_whose_evidence_grew_after_its_review_is_accepted_only_once_reviewed_again():
+    key = props.open_key("real", "agent-change", "instruction-gap", "w-build", "m3")
+    pid = props.file(key, ["rf-1", "rf-2"], provenance="real")
+    props.reviewed(pid, props.folded()[pid]["evidence"], {"verdict": "survive", "why": "holds"})
+    props.transition(pid, "shown", "owner")
+    props.file(key, ["rf-1", "rf-2", "rf-3"])
+    with pytest.raises(store.RetroError, match="waits for its review"):
+        props.transition(pid, "accepted", "owner")
+    props.reviewed(pid, props.folded()[pid]["evidence"], {"verdict": "survive", "why": "still holds"})
+    props.transition(pid, "accepted", "owner")
+    assert props.folded()[pid]["state"] == "accepted"
+
+
 def test_a_recurrence_after_rejection_opens_a_new_proposal_naming_the_prior_one():
     key = props.open_key("real", "agent-change", "instruction-gap", "w-plan", "m2")
     first = props.file(key, ["rf-1", "rf-2"], provenance="real")
+    props.reviewed(first, props.folded()[first]["evidence"], {"verdict": "survive", "why": "holds"})
     props.transition(first, "rejected", "owner")
     assert props.file(key, ["rf-1"]) is None
     again = props.file(key, ["rf-1", "rf-9"], provenance="real")
