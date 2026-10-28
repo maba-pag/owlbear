@@ -1135,3 +1135,25 @@ def test_an_unreadable_registry_refuses_its_rules_moments_and_the_chat_reads_on(
     assert entry_only or got["plan"].startswith(refused)
     kept = assumptions.path().read_text()  # unreadable state is never replaced
     assert json.loads(kept)[assumptions.STATE_CHANGE] is None if entry_only else kept == registry
+
+
+@pytest.mark.parametrize("entry", [{}, {"retired": False}, {"retired": 1}])
+def test_a_rule_whose_entry_does_not_say_whether_it_was_retired_is_refused(world, entry):
+    """CodeRabbit's review: an entry without a readable ``retired`` passed as held. What ``ensure`` and ``reset``
+    write, ``None`` or the time it was retired, is read as before."""
+    assumptions.path().parent.mkdir(parents=True, exist_ok=True)
+    assumptions.path().write_text(json.dumps({assumptions.PLAN: entry}))
+    assert assumptions.ensure(assumptions.HANDOFF)  # written by ensure, read back: held
+
+    async def scenario() -> None:
+        await world.passes()
+        world.chat("c", turn())
+        await world.passes(2)
+
+    asyncio.run(scenario())
+    got = {r["look"]: r["skipped"] for r in records()}
+    assert got["plan"].startswith("the marked assumptions cannot be read (")
+    assert got["hand-off"] == ""
+    assert json.loads(assumptions.path().read_text())[assumptions.PLAN] == entry  # never replaced
+    with pytest.raises(ValueError, match="retired"):
+        assumptions.reset()  # a reset checks every entry before it changes any

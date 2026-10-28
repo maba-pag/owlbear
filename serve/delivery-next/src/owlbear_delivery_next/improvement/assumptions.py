@@ -79,13 +79,17 @@ def _mark(marks: dict[str, Any], name: str) -> dict[str, Any] | None:
     """*name*'s entry in *marks*; None when it was never marked.
 
     Raises:
-        ValueError: Its entry is no object: whether it was retired is unknown.
+        ValueError: Its entry is no object, or does not say whether it was retired (None, else the time it was), as
+            ``ensure`` and ``reset`` write it.
     """
     if name not in marks:
         return None
     if not isinstance(mark := marks[name], dict):
         msg = f"the marked assumption {name}'s entry is not an object"
         raise ValueError(msg)  # noqa: TRY004 - unreadable state, as a file that is no JSON is
+    if "retired" not in mark or not (mark["retired"] is None or isinstance(mark["retired"], str)):
+        msg = f"the marked assumption {name}'s entry does not say whether it was retired"
+        raise ValueError(msg)
     return mark
 
 
