@@ -297,6 +297,28 @@ def test_a_chat_unenrolled_or_resumed_while_its_run_waits_for_a_slot_is_refused_
     assert "chat:c1" not in retro_store.known()
 
 
+def test_a_judged_chat_whose_log_was_replaced_by_a_shorter_one_is_not_read_again(said, tmp_path):
+    said.enrolled_chats, said.retro_when_idle = [_chat(tmp_path, "c1")], "on"
+    retro_store.update(lambda t: t.update(watermark=(datetime.now(UTC) - timedelta(days=3)).isoformat()))
+    job = _job(asker := Asker(), SimpleNamespace(paused=False, fence="", idle=True))
+    job.tick(0.0)
+    taken = retro_units.fingerprint("c1")
+    log = chatlogs.state() / "c1" / "events.jsonl"
+    log.write_text(json.dumps({"type": "user.message", "data": {"content": "hi"}}) + "\n")
+    at = (datetime.now(UTC) - timedelta(days=2)).timestamp()
+    os.utime(log, (at, at))
+    job.tick(1.0)
+    retro_store.request("owner", chat="c1")
+    job.tick(2.0)
+
+    runs = _runs()
+    assert [r["result"] for r in runs][1:] == [
+        "refused: its log is shorter than revision r1 took: it was replaced, and a replaced chat is not read again"
+    ]
+    assert (len(asker.seen), retro_units.fingerprint("c1")) == (1, taken)
+    assert [r["rev"] for r in retro_store.known()["chat:c1"]["revisions"]] == ["r1"]
+
+
 def test_the_button_never_reads_one_of_owlbears_own_sessions(said, tmp_path):
     said.enrolled_chats = [_chat(tmp_path, "c2")]
     chatlogs.root().mkdir(parents=True, exist_ok=True)

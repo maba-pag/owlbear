@@ -29,6 +29,7 @@ from owlbear_delivery_next.state_store.database import StoreError
 from owlbear_delivery_next.state_store.store import ACTIVITY_LIMIT
 
 if TYPE_CHECKING:
+    import os
     from collections.abc import Iterable, Iterator, Mapping
 
     from owlbear_delivery_next.state_store.store import Store
@@ -330,7 +331,8 @@ def due_chats(enrolled: list[str], now: datetime, *, chat: str = "", logs: Path 
     """Enrolled chats quiet for a day whose log grew after the watermark and since their last, judged, revision.
 
     A chat whose last revision did not end judged waits for the button, which takes it again in that revision, its
-    later growth left to the next; with *chat*, that one despite the watermark, still only when enrolled and quiet.
+    later growth left to the next; with *chat*, that one despite the watermark, still only when enrolled and quiet. One
+    whose log is shorter than a revision took was replaced: only the button offers it, and its admission refuses it.
     """
     logs = logs or chatlogs.state()
     mark, known = _when(retro_store.watermark()), retro_store.known()
@@ -345,7 +347,7 @@ def due_chats(enrolled: list[str], now: datetime, *, chat: str = "", logs: Path 
         revs = known.get(chat_id(sid), {}).get("revisions") or []
         last = revs[-1] if revs else {}
         unfinished = bool(last) and last.get("state") != "judged"
-        if not chat and (datetime.fromtimestamp(st.st_mtime, UTC) < mark or unfinished):
+        if not chat and (datetime.fromtimestamp(st.st_mtime, UTC) < mark or unfinished or replaced(sid, st.st_size)):
             continue
         if not unfinished and (last.get("size"), last.get("mtime")) == (st.st_size, st.st_mtime):
             continue
@@ -383,10 +385,25 @@ def _chat_refusal(session: str, enrolled: list[str], logs: Path, *, fresh: bool)
     if not chatlogs.chat(logs / session, enrolled, ours):
         return "it is not an enrolled chat"
     try:
-        quiet = datetime.now(UTC) - datetime.fromtimestamp((logs / session / "events.jsonl").stat().st_mtime, UTC)
+        st = (logs / session / "events.jsonl").stat()
     except OSError as exc:
         return f"its log cannot be read ({type(exc).__name__})"
-    return "it is active again; it is taken once it is quiet" if fresh and quiet < chatlogs.QUIET else ""
+    return _fresh_refusal(session, st) if fresh else ""
+
+
+def _fresh_refusal(session: str, st: os.stat_result) -> str:
+    """Why a new revision of chat *session*, its log at *st*, may not be taken: it is active again, or was replaced."""
+    if datetime.now(UTC) - datetime.fromtimestamp(st.st_mtime, UTC) < chatlogs.QUIET:
+        return "it is active again; it is taken once it is quiet"
+    if rev := replaced(session, st.st_size):
+        return f"its log is shorter than revision {rev} took: it was replaced, and a replaced chat is not read again"
+    return ""
+
+
+def replaced(session: str, size: int) -> str:
+    """The revision of chat *session* that took more of its log than its *size* now; "" when none did."""
+    revs = (retro_store.known().get(chat_id(session)) or {}).get("revisions") or []
+    return next((r["rev"] for r in reversed(revs) if int(r.get("size") or 0) > size), "")
 
 
 # Taking a revision
