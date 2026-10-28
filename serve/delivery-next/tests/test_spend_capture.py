@@ -847,6 +847,19 @@ def test_a_recovered_look_keeps_its_records_credit_limit_stop(project, record) -
     assert (run["name"], run["stopped"], run["stopped_by"], run["limit"]) == ("shop", "reached", "look", 0.3)
 
 
+def test_a_record_file_cut_inside_a_character_still_names_the_owners_of_its_whole_lines(project) -> None:
+    """CodeRabbit's review: a records file whose last line was cut inside a multibyte character raised out of the
+    log source, so no session was recovered that pass."""
+    folder = local_home.root() / "spotter"
+    folder.mkdir()
+    rec = look_record("L1", credits=0.3, credits_known=True, sdk_sessions=["spotter-a"])
+    cut = json.dumps(look_record("L2", note="déjà vu"), ensure_ascii=False).encode()
+    (folder / "records-2026-10-28.jsonl").write_bytes((json.dumps(rec) + "\n").encode() + cut[: cut.index(b"\xc3") + 1])
+    look_session("spotter-a", "L1", checkpoint("2026-10-28T09:00:00Z", 0.3e9))
+    found = spend_logs.found([], {project.root.name: Where.of(project)}, {}, {})
+    assert [(x["project"], x["session"]) for x in found] == [("shop", "spotter-a")]
+
+
 def changed(tmp_path: Path, spend: Spend, *events: dict) -> Store:
     store = Store(tmp_path / "projects" / "fedcba9876543210", None, "shop")
     store.write(Lock("c1"), Change(slug="c1", spend=spend))

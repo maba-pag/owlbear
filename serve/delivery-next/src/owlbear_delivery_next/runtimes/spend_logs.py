@@ -143,10 +143,13 @@ class Owners:
 
 
 def _lines(path: Path) -> list[dict[str, Any]]:
-    """Each readable JSON object line of *path*; none when it cannot be read."""
+    """Each readable JSON object line of *path*; none when it cannot be read.
+
+    Bytes that are no UTF-8 (a line cut inside a character) spoil only their own line, which is then left out.
+    """
     out = []
     with contextlib.suppress(OSError):
-        for raw in path.read_text(encoding="utf-8").splitlines():
+        for raw in path.read_text(encoding="utf-8", errors="replace").splitlines():
             with contextlib.suppress(ValueError):
                 if isinstance(line := json.loads(raw), dict):
                     out.append(line)
