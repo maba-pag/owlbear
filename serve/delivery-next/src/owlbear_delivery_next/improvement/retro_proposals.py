@@ -126,7 +126,8 @@ def file(
             if not new and not moved:
                 return live["id"]
             grown = {"findings": new} | ({"counterexamples": dict(counterexamples)} if moved else {})
-            eid = f"gr-{live['id']}-{store.digest(grown)}"
+            n = sum(line.get("proposal") == live["id"] for line in store.lines(FILE))  # growth back to an earlier
+            eid = f"gr-{live['id']}-{n}-{store.digest(grown)}"  # state is a new event, never a replay of the old
             _event({"eid": eid, "proposal": live["id"], "type": "grown", **grown})
             return live["id"]
         held = {f for p in same for f in p["findings"]}

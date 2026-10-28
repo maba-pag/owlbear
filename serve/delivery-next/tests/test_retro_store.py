@@ -34,6 +34,14 @@ def test_growth_goes_to_the_open_proposal_and_makes_its_review_stale():
     assert [p["id"] for p in props.due_reviews()] == [pid]
 
 
+def test_counterexamples_that_return_to_an_earlier_count_are_kept_as_they_are_now():
+    key = props.open_key("real", "lesson", "skipped-verification", "w-build", "m1")
+    pid = props.file(key, ["rf-1"], {"count": 3, "sample": ["a"]}, kind="lesson", provenance="real")
+    for count in (4, 3, 4):
+        props.file(key, ["rf-1"], {"count": count, "sample": ["a"]})
+    assert props.folded()[pid]["counterexamples"]["count"] == 4
+
+
 def test_a_verdict_and_the_state_it_moves_to_are_kept_in_one_write_so_a_failing_disk_never_strands_it(monkeypatch):
     pid = props.file(props.open_key("real", "spotter-case", "r1"), ["g-1"], kind="spotter-case", provenance="real")
     writes, real = [], store.append
