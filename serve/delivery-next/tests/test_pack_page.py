@@ -123,7 +123,10 @@ def test_the_owner_answers_each_upheld_finding_with_his_note_in_the_owlbear_sect
         expect(state).not_to_contain_text("ended")
         expect(page.get_by_role("button", name="Update design pack")).to_be_disabled()
         first, second = ask.locator(".pack-question").first, ask.locator(".pack-question").last
-        expect(first).to_contain_text("Updater: upstream dropped it Challenger: upstream still names it")
+        facts = first.locator(".pack-facts dd")  # from the finding's record, not the host's sentence
+        expect(facts).to_have_text(["owlbear-design-review: glow 1 - fix: say so", "upstream dropped it",
+                                    "upstream still names it"])  # fmt: skip
+        expect(page.locator("#pack-todo")).to_have_text("Answer the 2 questions below.")
         sent: list[str] = []
         page.on("request", lambda r: sent.append(r.url) if r.url.endswith("/design-pack/update/answer") else None)
         first.get_by_role("button", name="Ask the challenger to reconsider").click()
@@ -207,6 +210,8 @@ def test_each_stop_offers_one_discard_apart_whose_cancel_changes_nothing(served,
         expect(page.locator("#pack-ask").get_by_role("button", name=re.compile("Discard"))).to_have_count(1)
         expect(page.locator("#pack-discard")).to_have_text(discard)
         expect(page.locator("#pack-questions p-button[variant=primary]")).to_have_text(primary)  # none invented
+        offered = [o["label"] for q in job.read()["questions"] for o in q["options"] if o["id"] != "discard"]
+        expect(page.locator("#pack-questions p-button")).to_have_text(offered)  # each the payload offers, as it says
         page.locator("#pack-discard").click()
         expect(pds.modal(page)).to_contain_text("Nothing is activated")
         inside = "document.activeElement?.closest('p-modal') !== null"
@@ -253,28 +258,32 @@ def test_the_update_shows_its_phases_with_each_invocation_in_order_and_what_come
     job._save()  # noqa: SLF001
     with opened(base, pds) as page:
         phases = page.locator("#pack-progress .pack-phase")
-        expect(phases.locator("h4")).to_have_text(["Prepare", "Challenge round 1", "Challenge round 2"])
+        expect(phases.locator("h5")).to_have_text(["Prepare", "Challenge round 1", "Challenge round 2"])
         expect(phases.nth(0).locator("li")).to_have_count(4)
         first, second = phases.nth(1).locator("li"), phases.nth(2).locator("li")
         expect(first).to_have_count(2)
-        for i in range(2):  # the first candidate's evidence, superseded by the second's
-            expect(first.nth(i)).to_contain_text("stale: superseded by a later run")
-        expect(first.nth(1)).to_contain_text("Challenger on the whole pack: findings")
-        expect(second).to_have_text([
-            "Updater session: session completed", "Calibration replay: reused for this identity",
-            "Your answer: waiting for you dispute",
+        for i in range(2):  # the first candidate's evidence, superseded by the second's: out of date, never done
+            expect(first.nth(i).locator(".pack-step-head p-tag")).to_have_text("out of date")
+        expect(first.nth(1).locator(".pack-step-head")).to_have_text("Challenger on the whole pack out of date")
+        expect(first.nth(1).locator("details")).not_to_have_attribute("open", "")  # its detail folded away
+        expect(first.nth(1).locator("details")).to_contain_text("it said: findings")
+        expect(second.locator(".pack-step-head")).to_have_text([
+            "Updater session session completed", "Calibration replay reused for this identity",
+            "Your answer waiting for you",
         ])  # fmt: skip
-        expect(second.get_by_text("stale", exact=False)).to_have_count(0)
+        expect(second.get_by_text("out of date")).to_have_count(0)
         options = "; ".join(pack_rounds.LABELS[o] for o in ("fix", "reconsider", "drop"))
-        expect(page.locator("#pack-next")).to_have_text(f"Next: Your answer decides what runs next ({options})")
+        expect(page.locator("#pack-next")).to_have_text(f"Your answer decides what runs next ({options})")
         expect(page.locator("#pack-stages")).to_have_count(0)  # no slot per stage beside them
         job.state |= {"state": "running", "questions": []}
         pack_progress.opened(job.state["invocations"], "challenger", "full-challenge", round_=2, identity="b")
         job._save()  # noqa: SLF001
         with holding():
             page.reload()
-            expect(page.locator("#pack-state")).to_have_text("Now: Challenge round 2, Challenger on the whole pack…")
-            expect(page.locator("#pack-next")).to_contain_text("Next: Decided by the verdict")
+            expect(page.locator("#pack-now")).to_have_text("Challenge round 2, Challenger on the whole pack…")
+            expect(page.locator("#pack-next")).to_contain_text("Decided by the verdict")
+            expect(page.locator("#pack-todo")).to_contain_text("Nothing for now")
+            expect(page.locator("#pack-ask")).to_be_hidden()  # no Discard while it runs
         expect(page.locator("#pack-state")).to_contain_text("Its host stopped while it ran")  # and the polling ends
 
 
@@ -288,3 +297,72 @@ def test_a_record_from_before_invocations_shows_its_stages_without_made_up_histo
         expect(page.locator("#pack-progress")).to_have_count(0)
         expect(page.locator("#pack-next")).to_have_count(0)
         expect(page.locator("#pack-state")).to_contain_text("The update waits for your answers below.")
+
+
+REPLAY_NONE = "0 decided rounds, 0 left out; the design judge agreed with the owner 0% as recorded, 0% with this pack"
+
+
+@pytest.mark.browser
+def test_a_ci_failed_publish_stop_fits_a_phone_and_says_no_calibration_evidence_instead_of_0(served, pds) -> None:
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    job, base = served()
+    inv = history()
+    replay = pack_progress.opened(inv, "replay", "replay", round_=2, identity="b")
+    pack_progress.closed(inv, replay, "passed", REPLAY_NONE + " (advisory: too few rounds)")
+    log = "\n".join(f"line {i}: " + "x" * 200 for i in range(3))
+    pack_progress.closed(inv, pack_progress.opened(inv, "merge", "merge"), "failed", log)
+    long_diff = DIFF + "+" + "y" * 400 + "\n"
+    job.state |= {"invocations": inv, "questions": [CI_FAILED | {"diff": long_diff}], "published": PUBLISHED}
+    job._save()  # noqa: SLF001
+    with opened(base, pds) as page:
+        page.set_viewport_size({"width": 375, "height": 800})
+        expect(page.locator("#pack-questions p-button")).to_have_text(["Try again", "Have an agent fix CI"])
+        expect(page.locator("#pack-pushed").get_by_role("link")).to_have_text("pull request #7")
+        step = page.locator(".pack-step", has_text="Calibration replay").last
+        expect(step.locator(".pack-step-head p-tag")).to_have_text("no calibration evidence")
+        expect(step).not_to_contain_text("0%")
+        ci = page.locator(".pack-step").last
+        expect(ci.locator("pre.pack-detail")).to_be_hidden()  # a multi-line detail, folded until asked for
+        ci.locator("summary").click()
+        expect(ci.locator("pre.pack-detail")).to_be_visible()
+        expect(page.locator(".pack-diff .pack-add").first).to_have_text("+new line")  # its markers kept
+        assert page.evaluate("document.documentElement.scrollWidth <= document.documentElement.clientWidth")
+        small = page.evaluate("""[...document.querySelectorAll('#owlbear p-button, #owlbear summary')]
+            .filter((b) => b.offsetParent).map((b) => b.getBoundingClientRect()).filter((r) => r.height < 24
+              || r.width < 24).length""")
+        assert small == 0  # every target at least 24px
+
+
+@pytest.mark.browser
+def test_an_unreadable_section_says_what_could_not_be_read(served, pds) -> None:
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    _job, base = served()
+    with opened(base, pds) as page:
+        expect(page.locator("#pack-ask")).to_be_visible()
+        page.route("**/maintenance/pack/runs", lambda r: r.fulfill(status=500, json={"detail": "the disk said no"}))
+        page.route("**/maintenance/pack", lambda r: r.fulfill(status=500, json={"detail": "no pin today"}))
+        page.reload()
+        said = "Could not read the design pack runs: the disk said no"
+        expect(page.locator("#pack-runs-error")).to_contain_text(said)
+        expect(page.locator("#pack-read-error")).to_contain_text("Could not read the design pack: no pin today")
+        expect(page.locator("#pack-run")).to_have_count(0)  # nothing made up in its place
+
+
+@pytest.mark.browser
+def test_a_merged_update_says_how_it_reaches_machines_and_a_new_one_stays_available(served, pds) -> None:
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    job, base = served()
+    job.state |= {"state": "passed", "questions": [], "ended_at": NOW.isoformat(),
+                  "published": PUBLISHED | {"merged": "m" * 40}}  # fmt: skip
+    job._save()  # noqa: SLF001
+    with opened(base, pds) as page:
+        expect(page.locator("#pack-tag")).to_have_text("passed")
+        expect(page.locator("#pack-todo")).to_contain_text("reaches each machine as it takes the OwlBear version")
+        expect(page.locator("#pack-run")).not_to_contain_text("installed")  # nothing claimed of this machine
+        expect(page.locator("#pack-pushed")).to_contain_text("merged into main as mmmmmmmmmmmm")
+        expect(page.locator("#pack-update")).to_be_enabled()
+        expect(page.locator("#pack-notice")).to_contain_text("Upstream:")
+        expect(page.locator("#pack-ask")).to_be_hidden()

@@ -2106,7 +2106,7 @@ def test_maintenance_shows_the_design_pack_section_and_settings_only_links_to_it
     assert '<section id="owlbear" class="panel" aria-labelledby="owlbear-title">' in page  # the global section
     assert '<h3 id="pack-title">Design pack</h3>' in page
     assert 'button("Update design pack", start, { id: "pack-update", icon: "refresh"' in page  # lit-html
-    assert '<p-text id="pack-state" size="sm" role="status" aria-live="polite">${runLine(run)}</p-text>' in page
+    assert '<p-text id="pack-state" size="sm" role="status" aria-live="polite">${runLine(u)}</p-text>' in page
     assert '<ol id="pack-stages" aria-label="Update stages">' in page
     assert "commits design_pack.json, skills/NOTICE.md and " in page  # the Update dialog says what it commits
     settings = page_source(c, "/config")
