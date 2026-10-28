@@ -3,6 +3,7 @@
 The standby runs as a real process of this code; versions and installs are faked, so no environment is built.
 """
 
+import hashlib
 import json
 import os
 import socket
@@ -17,8 +18,9 @@ from types import SimpleNamespace
 import pytest
 from fastapi.testclient import TestClient
 
+from owlbear_delivery_next.design_packs import design_pack
 from owlbear_delivery_next.local_system import leases, local_home, processes
-from owlbear_delivery_next.machine_host import alias, app, control, handover, serve, update, versions
+from owlbear_delivery_next.machine_host import alias, app, control, handover, packs, serve, update, versions
 from owlbear_delivery_next.machine_host.machine import Machine, MachineError
 from owlbear_delivery_next.machine_host.versions import Choice
 from owlbear_delivery_next.project_host.host import HostRecord
@@ -293,6 +295,113 @@ def test_a_standby_that_never_answers_keeps_the_running_version_and_counts_an_at
     assert (state["phase"], state["detail"]) == ("failed", "v0.2 failed 3 times; a later version is tried")
     assert len(FakeStandby.made) == update.ATTEMPTS
     assert updating.activated == []
+
+
+def pinned_pack(monkeypatch) -> None:
+    """The running version pins a pack whose downloads come from here: ``engine`` and ``bundle``."""
+    pins = design_pack.manifest()
+    pins["engine"][design_pack.platform_name()] = hashlib.sha256(b"engine").hexdigest()
+    pins["bundle"]["sha256"] = hashlib.sha256(b"bundle").hexdigest()
+    monkeypatch.setattr(design_pack, "manifest", lambda: json.loads(json.dumps(pins)))
+    monkeypatch.setattr(design_pack, "fetch", lambda url, _s=0: b"engine" if "releases" in url else b"bundle")
+
+
+def test_a_version_whose_pack_failed_is_not_activated_and_every_page_offers_install_also_after_a_restart(
+    updating, monkeypatch
+):
+    pinned_pack(monkeypatch)
+    design_pack.install()  # the running version's own pack stays in place throughout
+
+    def install(_choice: Choice) -> Path:
+        msg = "v0.2's design pack could not be installed: cannot download"
+        raise versions.PackInstallError(msg)
+
+    monkeypatch.setattr(versions, "install", install)
+    m = updating.machine
+
+    m.updater._update()  # noqa: SLF001
+
+    assert (updating.activated, m.handover, FakeStandby.made) == ([], None, [])
+    failed = m.packs.read()["install"]
+    assert (failed["state"], failed["version"]) == ("failed", "v0.2")
+    assert "cannot download" in failed["detail"]
+
+    restarted = Machine(m.record, paused=False)  # a new host over the same home
+    assert restarted.packs.read()["install"] == failed
+    packed: list[Path] = []
+    meanwhile: list[dict] = []  # what the pages say while v0.2's pack is put in place
+
+    def pack(folder: Path) -> str:
+        packed.append(folder)
+        meanwhile.append(restarted.packs.read()["install"])
+        return ""
+
+    monkeypatch.setattr(versions, "pack", pack)
+    restarted.packs.install()
+    restarted.packs.thread.join(10)
+    assert (packed, restarted.packs.read()["install"]) == ([updating.folder], None)
+    assert [(i["state"], i["version"], i["pack"]) for i in meanwhile] == [("installing", "v0.2", "")]
+    assert Machine(m.record).packs.read()["install"] is None  # ended for good
+
+    (local_home.root() / design_pack.PACKS / packs.FAILED).write_text("{not json")
+    monkeypatch.setattr(versions, "running", lambda: "v0.1")  # a versioned machine: an empty tag is no version
+    broken = Machine(m.record)
+    unreadable = broken.packs.read()["install"]
+    assert (unreadable["state"], unreadable["version"]) == ("failed", "")
+    assert "is unreadable" in unreadable["detail"]
+    broken.packs.install()  # the record names no version: only the running one's pack, already in place
+    broken.packs.thread.join(10)
+    assert (packed, broken.packs.read()["install"]) == ([updating.folder], None)
+
+
+def test_an_install_ends_only_the_failure_it_set_out_to_repair(updating, monkeypatch):
+    pinned_pack(monkeypatch)
+    design_pack.install()
+    m = updating.machine
+    m.packs.failed("v0.1", "the running pack once failed")
+
+    def meanwhile() -> bool:  # an update keeps a newer version's failure while this install runs
+        m.packs.failed("v0.3", "v0.3's design pack could not be installed")
+        return True
+
+    monkeypatch.setattr(m.packs, "_installed", meanwhile)
+    m.packs.install()
+    m.packs.thread.join(10)
+
+    assert m.packs.failure["version"] == "v0.3"
+    kept = json.loads((local_home.root() / design_pack.PACKS / packs.FAILED).read_text())
+    assert kept["version"] == "v0.3"
+
+    def fails() -> None:  # nor does this install's own failure replace it
+        said = "the running pack failed again"
+        raise design_pack.PackError(said)
+
+    m.packs.failed("v0.1", "the running pack once failed")
+    monkeypatch.setattr(m.packs, "_installed", lambda: not meanwhile())
+    monkeypatch.setattr(design_pack, "install", fails)
+    m.packs.install()
+    m.packs.thread.join(10)
+
+    assert m.packs.failure["version"] == "v0.3"
+    kept = json.loads((local_home.root() / design_pack.PACKS / packs.FAILED).read_text())
+    assert kept["version"] == "v0.3"
+
+
+def test_install_puts_a_missing_pack_in_place_with_no_newer_version(updating, monkeypatch):
+    pinned_pack(monkeypatch)
+    monkeypatch.setattr(versions, "target", lambda: None)
+    m = updating.machine
+    client = TestClient(app.create(m), base_url="http://127.0.0.1")
+    auth = {"authorization": f"Bearer {TOKEN}"}
+    m.updater._update()  # noqa: SLF001
+    assert m.updater.read()["phase"] == "current"
+    assert client.get("/api/next/projects", headers=auth).json()["pack"]["install"]["state"] == "missing"
+
+    assert client.post("/api/next/design-pack/install", headers=auth).status_code == 200
+    m.packs.thread.join(10)
+
+    assert client.get("/api/next/design-pack", headers=auth).json()["install"] is None
+    assert design_pack.installed() is not None
 
 
 def test_run_updates_now_is_refused_while_owlbear_stops_when_idle(updating):

@@ -7,6 +7,7 @@ import json
 import subprocess
 import threading
 from contextlib import nullcontext
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -45,7 +46,8 @@ def client(replay, lock=None):
         counts=counts,
     )
     app = FastAPI()
-    app.include_router(pack_routes.router(object(), job))
+    store = SimpleNamespace(name="shop", root=Path("/nonexistent/shop"))  # the router names its own project
+    app.include_router(pack_routes.router(store, job))
     return TestClient(app, base_url="http://127.0.0.1"), job
 
 

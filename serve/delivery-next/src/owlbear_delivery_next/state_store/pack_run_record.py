@@ -209,12 +209,29 @@ def resolved(record: dict[str, Any], version: str, receipted: Callable[[str], st
 
 
 def ended(record: dict[str, Any], state: str, reason: str) -> None:
-    """End the run *record* names, as a Job writes it: its open stages failed or skipped, no question left open."""
+    """End the run *record* names, as a Job writes it, with no question left open.
+
+    A stage that never started was not reached; one still running failed with a failed run, else stopped; one waiting
+    for the owner was discarded with the run, else stopped. A finished stage keeps its result, and so does every
+    finished invocation; an open one ends as its stage does.
+    """
     for s in record["stages"]:
-        if s["result"] in OPEN:
-            s["result"] = "failed" if s["result"] == "running" and state == "failed" else "skipped"
-    record |= {"state": state, "stage": "", "ended_at": now(), "reason": reason, "questions": []}
+        if s["result"] == "pending":
+            s["result"] = "not-reached"
+        elif s["result"] in OPEN:
+            s["result"] = _closed(s["result"], state)
+    at = now()
+    for i in record.get("invocations") or []:
+        if i.get("result") in OPEN:
+            i |= {"result": _closed(i["result"], state), "ended_at": at}
+    record |= {"state": state, "stage": "", "ended_at": at, "reason": reason, "questions": []}
     record["context"] = None
+
+
+def _closed(result: str, state: str) -> str:
+    if result == "running":
+        return "failed" if state == "failed" else "stopped"
+    return "discarded" if state == "discarded" else "stopped"
 
 
 def settle(

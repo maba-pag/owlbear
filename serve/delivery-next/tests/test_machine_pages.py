@@ -160,18 +160,26 @@ def test_two_projects_with_one_slug_stay_apart_in_list_detail_actions_and_links(
             page.get_by_role("button", name="Continue").click()
             pds.answer(page, "Not now")
             expect(page.locator("#choose")).to_have_count(0)  # declined: nothing is left to click
-            page.route(f"**/p/{a.id}/api/next/changes", lambda r: r.fulfill(status=503, json={"detail": "stopping"}))
-            expect(page.locator("#notes")).to_contain_text("alpha: not read just now (stopping)")
-            expect(cards).to_have_count(2)  # its Changes stay as last read; beta's go on
-            page.goto(f"{base}/?change={a.id}%2Fsame")  # a link into the project that does not answer just now
-            expect(page.locator("#notes")).to_contain_text("alpha: not read just now")
-            page.unroute(f"**/p/{a.id}/api/next/changes")
-            expect(page.locator("#detail")).to_contain_text("in alpha")  # kept, and opened once it answers
-            assert page.evaluate("location.search") == f"?change={a.id}%2Fsame"
+            _alpha_does_not_answer(page, base, a.id, expect)
             browser.close()
     finally:
         server.should_exit = True
         machine.stop_all()
+
+
+def _alpha_does_not_answer(page, base: str, alpha: str, expect) -> None:
+    changes = f"**/p/{alpha}/api/next/changes"
+    page.route(changes, lambda r: r.fulfill(status=503, json={"detail": "stopping"}))
+    expect(page.locator("#notes")).to_contain_text("alpha: not read just now (stopping)")
+    expect(page.locator("#changes li.card")).to_have_count(2)  # its Changes stay as last read; beta's go on
+    page.goto(f"{base}/?change={alpha}%2Fsame")  # a link into the project that does not answer just now
+    expect(page.locator("#notes")).to_contain_text("alpha: not read just now")
+    page.unroute(changes)
+    expect(page.locator("#detail")).to_contain_text("in alpha")  # kept, and opened once it answers
+    assert page.evaluate("location.search") == f"?change={alpha}%2Fsame"
+    page.route(changes, lambda _r: None)  # up, yet never answers
+    expect(page.locator("#error")).to_contain_text("slow to answer", timeout=30000)
+    expect(page.locator("#detail")).to_have_class("stale")  # not shown as freshly read
 
 
 @pytest.mark.browser
@@ -236,6 +244,114 @@ def test_an_announced_update_counts_down_on_every_page_and_postpone_cancels_it(p
             page.locator("#update-announce").get_by_role("button", name="Postpone").click()
             expect(page.locator("#update-announce")).to_have_count(0)
             assert machine.auto.deadline is None
+            browser.close()
+    finally:
+        server.should_exit = True
+        machine.stop_all()
+
+
+PACK = {
+    "install": {"state": "missing", "version": "v0.2", "pack": "impeccable-4.8.0.1", "detail": "", "at": None},
+    "release": {"state": "newer", "version": "v0.3", "pack": "impeccable-4.9.0.1", "running_pack": "impeccable-4.8.0.1",
+                "checked_at": "2026-10-17T04:00:00+00:00", "detail": ""},
+}  # fmt: skip
+
+
+@pytest.mark.browser
+def test_every_page_shows_the_design_pack_banners_and_install_says_refused_running_and_done(pds) -> None:
+    """D-01M61GW2EAHFFRFHF014A14K98: Install while this version's pack is missing; Update now for a newer one."""
+    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+
+    machine, server, base = serve()
+    state = {"install": dict(PACK["install"]), "release": dict(PACK["release"])}
+    answers = iter([{"refused": "an update runs; it installs the pack of the version it takes"}, {}])
+
+    def install() -> dict:
+        said = next(answers)
+        if not said:
+            state["install"] = state["install"] | {"state": "installing"}
+        return dict(state) | said
+
+    machine.packs.read, machine.packs.install = (lambda: dict(state)), install
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except Error as exc:
+                pytest.skip(f"no Playwright Chromium: {exc}")
+            page = browser.new_page()
+            pds.only(page, base)
+            page.goto(f"{base}/#token=t")
+            missing, newer = page.locator("#pack-install-banner"), page.locator("#pack-release-banner")
+            expect(missing).to_contain_text("The design pack impeccable-4.8.0.1 that this OwlBear version, v0.2, pins "
+                                            "is not installed on this machine")  # fmt: skip
+            expect(newer).to_contain_text("OwlBear v0.3 carries a newer design pack impeccable-4.9.0.1; this version "
+                                          "pins design pack impeccable-4.8.0.1. Checked ")  # fmt: skip
+            page.set_viewport_size({"width": 375, "height": 800})
+            assert page.evaluate("document.documentElement.scrollWidth <= document.documentElement.clientWidth")
+            missing.get_by_role("button", name="Install").click()
+            expect(page.locator("#pack-install-said")).to_have_text(
+                "Not installed now: an update runs; it installs the pack of the version it takes."
+            )
+            missing.get_by_role("button", name="Install").click()
+            expect(missing).to_contain_text("Installing the design pack impeccable-4.8.0.1 for OwlBear v0.2…")
+            state["install"] = None
+            expect(page.locator("#pack-install-said")).to_have_text(
+                "The design pack is installed on this machine.", timeout=12000
+            )  # the poll saw it end
+            expect(missing).to_have_count(0)
+            state["release"] = state["release"] | {"checked_at": None}
+            page.goto(f"{base}/memory#token=t")  # every page
+            expect(newer).to_contain_text("When it was checked is unknown.")
+            newer.get_by_role("button", name="Update now").click()
+            expect(pds.modal(page)).to_contain_text("Run updates now?")
+            browser.close()
+    finally:
+        server.should_exit = True
+        machine.stop_all()
+
+
+@pytest.mark.browser
+def test_maintenance_with_no_project_shows_the_machines_update_read_only_with_its_project_named(
+    tmp_path: Path, monkeypatch, pds
+) -> None:
+    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+
+    from owlbear_delivery_next.pack_runs import pack_job, pack_rounds  # noqa: PLC0415
+
+    monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
+    monkeypatch.setattr(Host, "_launch", lambda _self, _slug: False)
+    path = clone(tmp_path / "alpha")
+    registry.register(path)
+    job = pack_job.Job(Store.open(path), pack_job.Live())
+    question = pack_rounds.question("r1:end:1", "end", "The rounds ended.", ["activate", "discard"])
+    job.state = pack_job._blank() | {  # noqa: SLF001 - a run waiting for the owner
+        "state": "waiting", "started_at": datetime.now(UTC).isoformat(), "run": "r1", "questions": [question],
+    }  # fmt: skip
+    job._save()  # noqa: SLF001
+    machine, server, base = serve()
+    failed = {"state": "failed", "version": "v0.3", "pack": "", "detail": "cannot download", "at": None}
+    machine.packs.read = lambda: {"install": failed, "release": None}  # a newer version's pack, not the running one's
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except Error as exc:
+                pytest.skip(f"no Playwright Chromium: {exc}")
+            page = browser.new_page()
+            pds.only(page, base)
+            page.goto(f"{base}/maintenance#token=t")
+            assert "project=" not in page.url  # no project picked for the owner
+            expect(page.locator("#pack-project")).to_contain_text("Started in alpha")
+            expect(page.locator("#pack-project")).to_contain_text("choose a project above to act on it")
+            expect(page.locator("#pack-questions .pack-question")).to_have_count(1)  # shown,
+            expect(page.locator("#owlbear p-button", has_text="Activate")).to_have_count(0)  # but not answerable
+            expect(page.locator("#pack-discard")).to_have_count(0)
+            expect(page.get_by_role("button", name="Update design pack")).to_be_disabled()
+            expect(page.locator("#owlbear")).to_contain_text("Choose a project above to start one")
+            expect(page.locator("#pack-install-state")).to_have_text(
+                "The design pack of OwlBear v0.3 failed to install on this machine: cannot download."
+            )
             browser.close()
     finally:
         server.should_exit = True

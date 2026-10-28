@@ -15,25 +15,31 @@ import json
 import os
 import shutil
 import threading
-import time
 import uuid
-from dataclasses import dataclass, field
-from importlib.resources import files
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.change_contracts.round_records import RoundLoop
 from owlbear_delivery_next.design_packs import design_pack, pack_git, pack_update
-from owlbear_delivery_next.github.gh import GhProvider
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.local_system.storage_io import atomic_write
-from owlbear_delivery_next.pack_runs import pack_candidate, pack_gates, pack_publish, pack_replay, pack_rounds, pack_run
+from owlbear_delivery_next.pack_runs import (
+    pack_activation,
+    pack_admission,
+    pack_candidate,
+    pack_gates,
+    pack_progress,
+    pack_publish,
+    pack_repair,
+    pack_rounds,
+    pack_run,
+)
 from owlbear_delivery_next.pack_runs.machine_lock import HeldError, take
+from owlbear_delivery_next.pack_runs.pack_live import Live
 from owlbear_delivery_next.pack_runs.pack_run import CANDIDATE, UPDATER, Stopped
 from owlbear_delivery_next.pack_runs.pack_state import (
     FILE,
     HOST_STOPPED,
-    LOG,
     MACHINE_LOCK,
     RUNS,
     STAGES,
@@ -60,17 +66,13 @@ from owlbear_delivery_next.pack_runs.pack_state import (
 from owlbear_delivery_next.pack_runs.pack_state import (
     now as _now,
 )
+from owlbear_delivery_next.pack_runs.pack_steps import Steps
 from owlbear_delivery_next.state_store import spend_ledger
-from owlbear_delivery_next.workflow_steps import sessions
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
 
-    from owlbear_delivery_next.design_packs.calibration import Replay
-    from owlbear_delivery_next.github.provider import Provider
     from owlbear_delivery_next.local_system.maintenance import Maintenance
-    from owlbear_delivery_next.runtimes.sdk_adapter import Session
-    from owlbear_delivery_next.runtimes.session_result import Run
     from owlbear_delivery_next.state_store.store import Store
 
 __all__ = ["CANDIDATE", "FILE", "STAGES", "Busy", "Job", "Live", "Refused", "Stale", "Stopped", "last", "running_for"]
@@ -88,44 +90,7 @@ class Refused(Exception):  # noqa: N818 - the route's answer, not a fault
     """The answer cannot be carried out as given."""
 
 
-def _upstream() -> Path:
-    return design_pack.folder().parent / "upstream"  # beside the packs, outside every project
-
-
-class Replays(Protocol):
-    """The calibration replay: its candidate's session runs under *run*, and *keep* holds its scratch directory."""
-
-    def __call__(
-        self,
-        store: Store,
-        candidate: pack_candidate.Candidate | None,
-        run: Callable[[Session], Run] | None = None,
-        *,
-        keep: Callable[[Path], bool] | None = None,
-    ) -> Replay: ...
-
-
-@dataclass
-class Live:
-    """What reaches outside: upstream, downloads, the browser, model sessions and git. Tests replace each."""
-
-    package: Path = field(default_factory=lambda: Path(str(files("owlbear_delivery_next"))))
-    clone: Path = field(default_factory=_upstream)
-    releases: Callable[[str], bytes] | None = None  # the notice's release list; None reads GitHub
-    sync: Callable[[Path, str], None] = pack_candidate.sync
-    download: Callable[[str], bytes] = design_pack.fetch
-    golden: Callable[..., dict[str, dict[str, list[str]]]] = pack_update.golden  # (installed, folder=None)
-    replay: Replays = pack_replay.replay
-    challenge: Callable[[Store, Session], Run] = sessions.run
-    update: Callable[[Store, Session], Run] = sessions.run  # the writing updater (TD-125)
-    git: pack_git.Git = pack_git.git
-    github: Callable[[Path], Provider] = GhProvider
-    sleep: Callable[[float], None] = time.sleep
-    poll: float = 30.0  # seconds between looks at the pull request's checks
-    ci_wait: float = 3600.0  # seconds CI may take at one head before the owner is asked
-
-
-class Job:
+class Job(Steps):
     """The project's design pack update: start one, answer it, read its state."""
 
     def __init__(self, store: Store, live: Live | None = None) -> None:
@@ -139,8 +104,9 @@ class Job:
         self.version = ""  # the run file's identity as read; see _read
         self.state = self._read()
         if self.state["state"] == "running" and (self.state.get("context") or {}).get("publication"):
-            reason = "the host stopped while the update was being published"
-            self._hold(pack_run.Context.model_validate(self.state["context"]), reason)
+            ctx = pack_run.Context.model_validate(self.state["context"])
+            reason = pack_repair.interrupted(ctx) or "the host stopped while the update was being published"
+            self._hold(ctx, reason)
         elif self.state["state"] == "running":
             self.interrupted = _interrupted(self.state, self.version)  # its identity before this rewrite, carried in it
             # keeps the workspace: nothing is bound to say whether an uncertain session still uses it
@@ -176,7 +142,11 @@ class Job:
             return self._copy()
 
     def _copy(self) -> dict[str, Any]:
-        return json.loads(json.dumps({k: v for k, v in self.state.items() if k != "context"}))
+        shown = {k: v for k, v in self.state.items() if k != "context"} | {
+            "progress": pack_progress.progress(self.state),  # from the context, which the page never gets
+            "repair": pack_repair.view(self.state.get("context")),
+        }
+        return json.loads(json.dumps(shown))
 
     def busy(self) -> bool:
         """Whether an update's thread or a tracked calibration replay runs now."""
@@ -191,7 +161,8 @@ class Job:
         """Start a run on its own thread and return its first state.
 
         Raises:
-            Busy: A run is in progress, or waits for the owner's answers.
+            Busy: A run is in progress or waits for the owner's answers, here or in another project on this machine,
+                or a design pack pull request is open or cannot be ruled out.
         """
         with self.lock:
             if self.state["state"] == "running" or self.busy():
@@ -200,11 +171,11 @@ class Job:
             if self.state["state"] == "waiting":
                 msg = "a design pack update waits for your answers; answer or discard it first"
                 raise Busy(msg)
-            self._claim()
+            self._claim(self._fresh)
             run = uuid.uuid4().hex
             self.state = _blank() | {
                 "state": "running", "started_at": _now(), "run": run,
-                "workspace": str(self.store.root / RUNS / run),
+                "workspace": str(self.store.root / RUNS / run), "invocations": [],
             }  # fmt: skip
             self._save()
             self.thread = threading.Thread(
@@ -219,6 +190,7 @@ class Job:
         Raises:
             Stale: No waiting run asks this question, or the run is still settling.
             Refused: The option is not one of the question's, or a reconsideration lacks its note.
+            Busy: The last answer would resume the run, but it is no longer itself or alone (``pack_admission``).
         """
         with self.lock:
             asked = self.state["questions"] if self.state["state"] == "waiting" and not self.busy() else []
@@ -239,14 +211,18 @@ class Job:
                 return self._copy()
             ctx = pack_run.Context.model_validate(self.state["context"])
             lp = RoundLoop.model_validate(self.state["loop"])
-            left = _decided(self.state["questions"], q, option, note=note, ctx=ctx, lp=lp)
+            left = pack_run.decided(self.state["questions"], q, option, note=note, ctx=ctx, lp=lp)
             if not left:
-                self._claim()  # before anything changes: a refusal leaves the question open
+                self._claim(self._resumed)  # before anything changes: a refusal leaves the question open
             self._log(said)
             self.state |= {"loop": lp.model_dump(mode="json"), "context": ctx.model_dump(mode="json")}
             self.state["questions"] = left
+            if self.state.get("invocations") is not None:
+                pack_progress.answered(self.state["invocations"], said, last=not left)
             if not left:
                 self.state["state"] = "running"
+                for s in self.state["stages"]:  # the stop he answered holds nothing any more
+                    s["result"] = "answered" if s["result"] == "waiting" else s["result"]
                 self.thread = threading.Thread(
                     target=self._run, args=(self._resume,), name="design-pack-update", daemon=True
                 )
@@ -270,39 +246,27 @@ class Job:
             self._finish("discarded", "discarded by you; nothing changed")
             return self._copy()
 
-    def log(self, line: str) -> None:
-        """One line of the run's log, kept with its state."""
+    def keep(self, ctx: pack_run.Context, lp: RoundLoop | None = None) -> None:
+        """Keep the run's context and loop (as kept when None), so it goes on from here."""
         with self.lock:
-            self._log(line)
-            self._save()
-
-    def _log(self, line: str) -> None:
-        self.state["log"] = [*self.state["log"], f"{_now()} {line}"][-LOG:]
-
-    def stage(self, name: str, result: str, detail: str = "") -> None:
-        """One stage's result, shown on the page and logged."""
-        with self.lock:
-            stage = next(s for s in self.state["stages"] if s["name"] == name)
-            stage["result"], stage["detail"] = result, detail[:4000]
-            self.state["stage"] = name if result == "running" else self.state["stage"]
-            self._save()
-        self.log(f"{name}: {result}{f': {detail.splitlines()[0][:300]}' if detail else ''}")
-
-    def keep(self, ctx: pack_run.Context, lp: RoundLoop) -> None:
-        """Keep the run's context and loop, so it goes on from here."""
-        with self.lock:
-            self.state |= {"context": ctx.model_dump(mode="json"), "loop": lp.model_dump(mode="json")}
+            self.state["context"] = ctx.model_dump(mode="json")
+            if lp is not None:
+                self.state["loop"] = lp.model_dump(mode="json")
             self._save()
 
     def wait(
-        self, ctx: pack_run.Context, lp: RoundLoop, questions: list[dict[str, Any]], stage: str = "challenger"
+        self, ctx: pack_run.Context, lp: RoundLoop | None, questions: list[dict[str, Any]], stage: str = "challenger"
     ) -> None:
         """Stop the run for the owner's answers; it goes on when he has answered every question."""
         with self.lock:
             ctx.next = "wait"
             self.state |= {"state": "waiting", "stage": "", "questions": questions}
-            self.state |= {"context": ctx.model_dump(mode="json"), "loop": lp.model_dump(mode="json")}
+            self.state["context"] = ctx.model_dump(mode="json")
+            if lp is not None:
+                self.state["loop"] = lp.model_dump(mode="json")
             next(s for s in self.state["stages"] if s["name"] == stage)["result"] = "waiting"
+            if self.state.get("invocations") is not None:
+                pack_progress.asked(self.state["invocations"], stage, questions)
             self._log(f"waiting for you: {len(questions)} question(s)")
             self._save()
 
@@ -314,12 +278,17 @@ class Job:
     def _hold(self, ctx: pack_run.Context, reason: str) -> None:
         pub = ctx.publication
         link = f" ({pub.url})" if pub and pub.url else ""
+        repair = [pack_rounds.REPAIR] if pack_repair.offered(ctx) else []  # CI failed on its own pull request
+        options = [pack_rounds.RETRY, *repair, pack_rounds.DISCARD]
         question = {"id": f"{self.state['run']}-publish", "kind": "publish", "text": f"{reason}{link}",
-                    "options": [{"id": o, "label": pack_rounds.LABELS[o]} for o in pack_rounds.PUBLISH]}  # fmt: skip
+                    "options": pack_rounds.published(options, opened=bool(pub and pub.number))}  # fmt: skip
         ctx.next = "wait"
         stage = next((s for s in self.state["stages"] if s["result"] in {"running", "failed"}), None)
         if stage is not None:
             stage["result"], stage["detail"] = "waiting", reason[:4000]
+        if self.state.get("invocations") is not None:
+            pack_progress.stopped(self.state["invocations"], reason)
+            pack_progress.asked(self.state["invocations"], stage["name"] if stage else "merge", [question])
         self.state |= {"state": "waiting", "stage": "", "questions": [question], "reason": reason}
         self.state["context"] = ctx.model_dump(mode="json")
         self._log(f"waiting for you: {reason}")
@@ -349,21 +318,48 @@ class Job:
             return workspace != self.store.root / UPDATER
         return not self.maintenance.retained(str(workspace))
 
-    def _claim(self) -> None:
-        """Take the machine's one pack lock for the run's thread; the pack is shared by every project.
+    def _claim(self, admits: Callable[[], None]) -> None:
+        """Take the machine's one pack lock for the run's thread, if the caller's policy *admits* it under the lock.
+
+        The lock stays held from the policy's reading through the caller's saved claim, so no other project's claim
+        comes between them; the pack is shared by every project.
 
         Raises:
-            Busy: Another project's update runs now, or an earlier pack session is still unproven.
+            Busy: Another project's update runs now, an earlier pack session is still unproven, or *admits* refuses.
         """
         self._unproven()
         try:
             # Verified again while the lock is held: an earlier updater may have released it unconfirmed before this.
-            self.held = take(
-                local_home.root() / MACHINE_LOCK, self.store.name or self.store.root.parent.parent.name, self._unproven,
-            )  # fmt: skip
+            self.held = take(local_home.root() / MACHINE_LOCK, self._name, lambda: self._admitted(admits))
         except HeldError as exc:
             msg = f"a design pack update runs for {exc.who}; one runs at a time on this machine"
             raise Busy(msg) from None
+
+    @property
+    def _name(self) -> str:
+        return self.store.name or self.store.root.parent.parent.name
+
+    def _admitted(self, admits: Callable[[], None]) -> None:
+        self._unproven()
+        try:
+            admits()
+        except pack_admission.Refused as exc:
+            raise Busy(str(exc)) from None
+
+    def _fresh(self) -> None:
+        """A new update's policy: no run open on this machine and no pack pull request open (``pack_admission``)."""
+        pack_admission.fresh(self.store.root, self._name, self.live.github(self.live.package))
+
+    def _resumed(self) -> None:
+        """A waiting run's policy, for an answer and a publication retry: it goes on only as itself, with its own PR."""
+        publication = (self.state.get("context") or {}).get("publication") or {}
+        pack_admission.resumed(
+            self.store.root, self._name, run=self.state["run"], version=self.version,
+            branch=str(publication.get("branch") or ""), github=self.live.github(self.live.package),
+        )  # fmt: skip
+
+    def _alone(self) -> None:
+        """A manual replay's policy: the lock alone. It writes no run record and no pull request (TD-177)."""
 
     def _unproven(self) -> None:
         if self.maintenance is not None and self.maintenance.pending(kind="pack"):
@@ -394,7 +390,7 @@ class Job:
             if self.busy() or self.state["state"] in ("running", "waiting"):
                 msg = "a design pack update is running or waits for answers: finish it before a replay"
                 raise Busy(msg)
-            self._claim()
+            self._claim(self._alone)
         try:
             yield
         finally:
@@ -414,29 +410,6 @@ class Job:
             if reason is not None:  # None: the run waits for the owner
                 self._end("passed", reason)
 
-    def do[T](
-        self, name: str, work: Callable[[], T], said: Callable[[T], str] = str, hold: type[Exception] | None = None
-    ) -> T:
-        """Run one stage's work: its result shown, any failure ending the run with the stage named.
-
-        A failure of the *hold* kind is raised as it is, for the owner to decide.
-        """
-        self.stage(name, "running")
-        try:
-            out = work()
-        except Stopped as exc:
-            self.stage(name, "passed" if exc.current else "failed", exc.reason)
-            raise
-        except Exception as exc:
-            if hold is not None and isinstance(exc, hold):
-                self.stage(name, "failed", str(exc))
-                raise
-            reason = f"{name}: {type(exc).__name__}: {exc}"[:2000]  # any failure stops the run, its stage named
-            self.stage(name, "failed", reason)
-            raise Stopped(reason) from exc
-        self.stage(name, "passed", said(out))
-        return out
-
     def _stages(self) -> str | None:
         live, store = self.live, self.store
         package = live.package.resolve()
@@ -453,7 +426,10 @@ class Job:
 
         src, c = self.do("candidate", candidate, lambda out: _pack(*out))
         diff = self.do("diff", lambda: pack_update.diff(live.clone, tag))
-        golden = self.do("golden", lambda: pack_gates.checked(live.golden(c.installed)))  # the updater's evidence
+        golden = self.do(  # the updater's evidence, never a verdict on the candidate
+            "golden", lambda: pack_gates.checked(live.golden(c.installed)), op="initial-golden",
+            judged=lambda _o: "completed",
+        )  # fmt: skip
         why = f"design pack: {old['pack']} to {c.pins['pack']} (upstream {old['upstream']['tag']} to {tag})"
         return pack_run.begin(self, c, src, diff=diff, golden=golden, why=why)
 
@@ -461,8 +437,9 @@ class Job:
         with self.lock:
             ctx = pack_run.Context.model_validate(self.state["context"])
             lp = RoundLoop.model_validate(self.state["loop"])
-        if ctx.publication and ctx.publication.commit:  # GitHub first: the package may have moved on meanwhile
-            return pack_run.republish(self, ctx)
+        checking = ctx.repair.phase == "checking"  # an agent's repair of pack content, checked before it is pushed
+        if ctx.publication and ctx.publication.commit and not checking:  # GitHub first: the package may have moved on
+            return pack_activation.republish(self, ctx, lp)
         return pack_run.advance(self, pack_run.rebuilt(self, ctx), ctx, lp)
 
     def _notice(self) -> str:
@@ -474,25 +451,3 @@ class Job:
             msg = f"up to date: no skill release newer than {design_pack.manifest()['upstream']['tag']}"
             raise Stopped(msg, current=True)
         return found[-1]
-
-
-def _decided(  # noqa: PLR0913 - the open questions, the answered one, the answer and what it changes
-    asked: list[dict[str, Any]], q: dict[str, Any], option: str, *, note: str, ctx: pack_run.Context, lp: RoundLoop
-) -> list[dict[str, Any]]:
-    """Record one answer; the questions still open. The last dispute answer sets what the run does next."""
-    if q["kind"] == "dispute":
-        pack_rounds.decided(lp, q["finding"], option, note)
-        left = [x for x in asked if x["id"] != q["id"]]
-        if not left:  # TD-193: the answers are carried out together
-            ctx.next = pack_run.NEXT[pack_rounds.after(lp)]
-        return left
-    if q["kind"] == "publish":  # trying again reconciles with GitHub before anything is repeated
-        ctx.next = "activate"
-        return []
-    if q["kind"] in pack_gates.KINDS:
-        return pack_run.gated(asked, q, option, ctx, lp)
-    if option == pack_rounds.ANOTHER:
-        lp.extra, lp.ended, ctx.next = lp.extra + 1, "", "challenge"
-    else:
-        lp.ended, ctx.accepted, ctx.next = lp.ended, q["identity"], "activate"
-    return []

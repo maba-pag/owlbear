@@ -1,8 +1,9 @@
 """Updating OwlBear on this machine (self-update build §5; TD-296, TD-299, TD-305, TD-352, TD-353).
 
-One update at a time: prepare the newest version of the machine's channel beside the running one (install and
-selfcheck), start it as a standby, then fence the machine (no runner, environment, background work or project
-change starts) and check again that nothing runs; anything running lifts the fence and the update waits. Otherwise
+One update at a time: prepare the newest version of the machine's channel beside the running one (install,
+selfcheck and its design pack), start it as a standby, then fence the machine (no runner, environment, background
+work or project change starts) and check again that nothing runs; anything running lifts the fence and the update
+waits. Otherwise
 the alias rename activates the new version and the host hands over to it (``handover``). A failure before the rename
 leaves the running version as it was; a version that keeps failing is tried three times.
 """
@@ -99,12 +100,7 @@ class Updater:
         if self.attempts.get(tag, 0) >= ATTEMPTS:
             self._set("failed", f"{tag} failed {ATTEMPTS} times; a later version is tried", tag)
             return
-        self._set("preparing", "installing it beside the running version and checking it", tag)
-        try:
-            folder = versions.install(choice)
-        except versions.VersionError as exc:
-            self.attempts[tag] = self.attempts.get(tag, 0) + 1
-            self._set("failed", str(exc), tag)
+        if (folder := self._prepared(choice)) is None:
             return
         while not (why := self._cancelled()):
             if left := self.machine.busy():  # the request stays: it goes on once they end (TD-353)
@@ -120,6 +116,21 @@ class Updater:
                 self._set("failed", str(exc), tag)
                 return
         self._set("refused", why, tag)
+
+    def _prepared(self, choice: versions.Choice) -> Path | None:
+        """The version installed, checked and its design pack in place; None when that failed, said and counted."""
+        tag = choice.tag
+        self._set("preparing", "installing it beside the running version and checking it", tag)
+        try:
+            folder = versions.install(choice)
+        except versions.VersionError as exc:
+            self.attempts[tag] = self.attempts.get(tag, 0) + 1
+            if isinstance(exc, versions.PackInstallError):  # every page offers Install for it
+                self.machine.packs.failed(tag, str(exc))
+            self._set("failed", str(exc), tag)
+            return None
+        self.machine.packs.ready(tag)
+        return folder
 
     def _switch(self, folder: Path, tag: str) -> bool:
         """A standby, the fence, a last look that nothing runs, the rename and the handover; False to wait again.

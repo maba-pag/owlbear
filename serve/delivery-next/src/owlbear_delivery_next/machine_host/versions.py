@@ -3,20 +3,22 @@
 Every fetch goes through ``~/.owlbear/repo.git``, a bare clone of OwlBear's repository. A version is an annotated
 tag ``vMAJOR.MINOR`` or ``vMAJOR``, installed beside the others as a detached worktree ``~/.owlbear/versions/<tag>``
 with its own environment, never moved. The machine takes the newest version of its channel above the highest one
-ever active whose commit descends from the active one: never backwards. Preparing a version installs it and runs
-its own ``selfcheck``; nothing here switches the runtime.
+ever active whose commit descends from the active one: never backwards. Preparing a version installs it, runs
+its own ``selfcheck`` and installs its own design pack with its own interpreter: only then is it ready. Nothing here
+switches the runtime.
 """
 
 from __future__ import annotations
 
 import contextlib
+import json
 import logging
 import os
 import re
 import shutil
 import subprocess
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from owlbear_delivery_next.local_system import codebase, data_place, data_repo, leases, local_home
 from owlbear_delivery_next.state_store import machine_settings, registry
@@ -30,7 +32,8 @@ if TYPE_CHECKING:
 REPO = "repo.git"
 TAG = re.compile(r"v(\d+)(?:\.(\d+))?")
 FREE = 2 * 1024**3  # bytes an install needs free (§3)
-FETCH, SYNC, CHECK = 120, 900, 300  # seconds a fetch, an environment and a selfcheck may take
+FETCH, SYNC, CHECK, PACK = 120, 900, 300, 300  # seconds a fetch, an environment, a selfcheck and a pack may take
+MANIFEST = "serve/delivery-next/src/owlbear_delivery_next/design_pack.json"  # the pack a version pins, in its tree
 FIRST_MAJOR = "v0.1"  # a major-only machine's version until v1.0 exists (TD-369)
 ACTIVATED = ".activated"  # in a version's folder once the alias named it
 type Number = tuple[int, int]
@@ -41,6 +44,10 @@ _log = logging.getLogger(__name__)
 
 class VersionError(Exception):
     """A version that cannot be fetched, chosen, installed or checked; the text says why."""
+
+
+class PackInstallError(VersionError):
+    """A version built and checked whose design pack could not be installed: it is kept, only its pack is retried."""
 
 
 @dataclass(frozen=True)
@@ -189,17 +196,19 @@ def target() -> Choice | None:
 
 
 def install(choice: Choice) -> Path:
-    """Install *choice* beside the others with its own environment and check it there; its folder.
+    """Install *choice* beside the others with its own environment, check it and install its pack; its folder.
 
-    A failure removes what it made.
+    A failure removes what it made, except a failed pack: the version stays so only its pack is tried again.
 
     Raises:
         VersionError: Too little free disk, or its worktree, environment or selfcheck failed.
+        PackInstallError: Its design pack could not be installed; the version is not ready.
     """
     home = local_home.root()
     folder = home / local_home.VERSIONS / choice.tag
     if _installed(folder, choice.commit) and selfcheck(folder) == "":
-        return folder  # installed and checked before
+        _packed(choice, folder)  # installed and checked before: ready once its pack is in place too
+        return folder
     remove(folder)  # a partial or other install first, so it never holds the disk an install needs
     if shutil.disk_usage(home).free < FREE:
         msg = f"an update needs {FREE // 1024**3} GB free on {home}; it waits until there is"
@@ -207,6 +216,8 @@ def install(choice: Choice) -> Path:
     folder.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     try:
         _build(choice, folder)
+    except PackInstallError:
+        raise
     except VersionError:
         remove(folder)
         raise
@@ -231,6 +242,13 @@ def _build(choice: Choice, folder: Path) -> None:
     if said := selfcheck(folder):
         msg = f"{choice.tag} failed its selfcheck: {said}"
         raise VersionError(msg)
+    _packed(choice, folder)
+
+
+def _packed(choice: Choice, folder: Path) -> None:
+    if said := pack(folder):
+        msg = f"{choice.tag}'s design pack could not be installed: {said}"
+        raise PackInstallError(msg)
 
 
 def _sync(folder: Path) -> None:
@@ -263,6 +281,37 @@ def selfcheck(folder: Path) -> str:
     except (OSError, subprocess.TimeoutExpired) as exc:
         return f"it could not run: {exc}"
     return "" if done.returncode == 0 else (done.stdout + done.stderr).strip()[-600:] or f"exit {done.returncode}"
+
+
+def pack(folder: Path) -> str:
+    """Install the version's own design pack with its own interpreter, from its own manifest; empty when in place."""
+    python = folder / ".venv" / "bin" / "python"
+    try:
+        done = subprocess.run(  # noqa: S603 - the version's own interpreter and a fixed module
+            [str(python), "-m", "owlbear_delivery_next", "design-pack", "--install"], cwd=folder, capture_output=True,
+            text=True, check=False, timeout=PACK,
+        )  # fmt: skip
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return f"it could not run: {exc}"
+    return "" if done.returncode == 0 else (done.stdout + done.stderr).strip()[-600:] or f"exit {done.returncode}"
+
+
+def pins(commit: str) -> dict[str, Any]:
+    """The design pack the version at *commit* pins: its ``design_pack.json`` read from ``repo.git``, never installed.
+
+    Raises:
+        VersionError: The commit or its manifest is missing, or the manifest names no pack.
+    """
+    text = _git(_bare(local_home.root() / REPO), "show", f"{commit}:{MANIFEST}")
+    try:
+        found = json.loads(text)
+    except ValueError as exc:
+        msg = f"{MANIFEST} at {commit[:12]} is no JSON: {exc}"
+        raise VersionError(msg) from exc
+    if not isinstance(found, dict) or not isinstance(found.get("pack"), str):
+        msg = f"{MANIFEST} at {commit[:12]} names no design pack"
+        raise VersionError(msg)
+    return found
 
 
 def _holds_data(path: Path) -> Path | None:

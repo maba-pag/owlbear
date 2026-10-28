@@ -142,3 +142,22 @@ def test_the_pages_reader_shows_a_failed_handover_as_unread_and_lets_a_cancellat
             assert pack_state.last(Store(root)) is None
     assert open_fds() == fds
     assert pack_state.last(Store(root))["started_at"] == "2026-10-15T10:00:00+00:00"  # control: it reads again
+
+
+def test_a_record_from_before_invocations_reads_with_its_stages_and_no_made_up_history(tmp_path):
+    root = tmp_path / "store"
+    root.mkdir()
+    results = ["passed"] * 6 + ["running"] + ["pending"] * 4  # the host stopped while its challenger ran
+    stages = [
+        {"name": n, "label": label, "result": r, "detail": ""}
+        for (n, label), r in zip(pack_state.STAGES, results, strict=True)
+    ]
+    record = pack_state.blank() | {"state": "running", "stage": "challenger", "stages": stages, "run": "r0",
+                                   "started_at": "2026-10-15T10:00:00+00:00"}  # fmt: skip
+    (root / pack_state.FILE).write_text(json.dumps(record))
+
+    state = pack_job.Job(Store(root), pack_job.Live()).read()
+
+    assert "invocations" not in state
+    assert state["progress"] == {"legacy": True, "phases": [], "now": None, "next": None}
+    assert [s["result"] for s in state["stages"]] == ["passed"] * 6 + ["failed"] + ["not-reached"] * 4

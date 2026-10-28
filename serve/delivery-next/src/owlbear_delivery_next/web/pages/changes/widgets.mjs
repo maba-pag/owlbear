@@ -74,7 +74,8 @@ export function row(...children) {
 
 // Something the owner acts on: a framed panel; the status line above already says it is his turn.
 export function panel(title, form, ...children) {
-  const refused = state.refused?.form === form && form ? refusal(state.refused.text) : nothing;
+  const refused = state.refused?.form === form && form ? refusal(state.refused.text, state.refused.unsure)
+    : nothing;
   return html`<section class="panel act">${hd(3, title, "md")}${children}${refused}</section>`;
 }
 
@@ -88,8 +89,10 @@ export function notice(kind, title, ...lines) {
     dismiss-button="false"></p-inline-notification>`;
 }
 
-export function refusal(said) {
-  return html`<div class="refused">${notice("error", "Not done", said)}</div>`;
+// An action Delivery refused, or one it did not answer in time (*unsure*): that one may have been done.
+export function refusal(said, unsure = false) {
+  const [kind, title] = unsure ? ["warning", "Not confirmed"] : ["error", "Not done"];
+  return html`<div class="refused">${notice(kind, title, said)}</div>`;
 }
 
 export function meta(value, cls = "meta") {

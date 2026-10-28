@@ -22,25 +22,11 @@ export const LOOPS = [["shaper", "Brief challenges (shaper)"], ["planner", "Plan
   ["builder", "Task reviews (builder)"], ["final_review", "Final review"],
   ["updater", "Design pack updates (updater)"]];
 export const WRITE = 60000;  // a save commits and pushes the shared settings repository (TD-64): a network round trip
-// TD-101: the design pack update runs in the host; the page starts it and follows its stages.
-export const RESULTS = { pending: "not run", running: "running", passed: "passed", failed: "failed", skipped: "skipped",
-  returned: "findings back to the updater", waiting: "waiting for you" };
-export const TAGS = { pending: "secondary", running: "info", passed: "success", failed: "error", skipped: "secondary",
-  returned: "warning", waiting: "warning" };
-export const ENDINGS = { idle: "Never run.", passed: "Last run passed: its pull request was merged into main.",
-  failed: "Last run failed.", "up-to-date": "Last run: already up to date.",
-  waiting: "The update waits for your answers below.", discarded: "Last run discarded: nothing changed." };
-// TD-220: what became of each finding of the update's challenge rounds, in words.
-export const FOUND = { open: "to fix", fixed: "fixed by the updater",
-  rejected: "rejected by the updater, not judged yet",
-  standing: "rejected by the updater; the challenger accepted that",
-  escalated: "rejected by the updater; the challenger upheld it", "owner-fix": "you decided: fix it",
-  "owner-drop": "you dropped it", withdrawn: "withdrawn by the challenger" };
-// Everything shown comes from here (TD-264): drafts per layer ("role.field" -> as typed), the folder being typed,
-// the offered models once read, and the design pack's update with the notes typed for its questions.
+// Everything shown comes from here (TD-264): drafts per layer ("role.field" -> as typed), the folder being typed and
+// the offered models once read.
 export const state = {
   loaded: null, layer: "project", saving: false, offered: null, modelsNote: "", error: "", status: "",
-  folder: null, pack: null, packProblem: "", update: null, packNotes: new Map(),
+  folder: null,
   machine: null, others: [], unread: [],  // the machine's values and the other projects' settings (TD-243)
   everything: false,  // the overview shows every setting, not only those a project sets apart (TD-295)
   machineDraft: null, machineSaving: false,  // the machine's settings as edited, before they are saved

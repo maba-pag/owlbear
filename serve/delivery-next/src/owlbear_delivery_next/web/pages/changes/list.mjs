@@ -1,6 +1,6 @@
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { repeat } from "/assets/lit-html/3.3.3/directives/repeat.js";
-import { here, HostDown, project, Restarted, shown } from "/assets/ui.mjs";
+import { here, HostDown, project, Restarted, Slow, shown } from "/assets/ui.mjs";
 import { KEY, state, page, show, call, keyOf, parts, several, failed } from "./state.mjs";
 import { hd, text } from "./widgets.mjs";
 import { spentText } from "./progress.mjs";
@@ -144,7 +144,7 @@ async function everything() {
   }
   const each = await Promise.allSettled(projects.map(async (p) => [await call("/changes", undefined, p.id),
     (await call("/project", undefined, p.id)).notes]));
-  const lost = (r) => r.status === "rejected" && (r.reason instanceof HostDown || r.reason instanceof Restarted);
+  const lost = (r) => r.status === "rejected" && [HostDown, Restarted, Slow].some((k) => r.reason instanceof k);
   const down = each.find(lost);
   if (down) throw down.reason;
   const rows = [], notes = [], failing = new Set();

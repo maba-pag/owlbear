@@ -8,7 +8,6 @@ import {
   contextCell, ratesCell, editable,
 } from "./cells.mjs";
 import { pendingLine, save, rename, reviewPrefs } from "./layers.mjs";
-import { packSection } from "./pack.mjs";
 import { machineSection } from "./machine.mjs";
 
 // The project this page edits, by its name in the machine host's list; "This project" on a clone's own host.
@@ -252,7 +251,6 @@ function settingsSections() {
       ${table("Pull request settings: they apply to the next pull request", ["Setting", "Value"], "pr",
         [row(text("Labels"), prLabels()), row(text("Marker line"), prMarker())])}
     </section>
-    ${packSection()}
     <div class="bar" role="region" aria-label="Save settings">
       ${button({ global: "Save global defaults", machine: "Save this machine's preferences" }[state.layer]
         ?? "Save project settings", save,
@@ -276,5 +274,5 @@ export function view() {
     </p-inline-notification>
     <p-text id="status" role="status" aria-live="polite">${state.status}</p-text>
     ${loaded ? html`${scopeSection()}${folderSection()}${settingsSections()}${acrossSection()}${machineSection()}`
-      : packSection()}`;
+      : nothing}`;
 }

@@ -22,6 +22,7 @@ type Counted = Literal["dispute", "reconsider", "update", "pass", "end"]
 FIX, RECONSIDER, DROP = "fix", "reconsider", "drop"
 ANOTHER, ACTIVATE, DISCARD, RETRY = "another", "activate", "discard", "retry"
 ACCEPT, UNDO, KEEP, APPROVE = "accept", "undo", "keep", "approve"
+REPAIR, APPROVE_REPAIR, PUSH_CONFIG, PUSH_REVIEWED = "repair", "approve-repair", "push-config", "push-reviewed"
 LABELS = {
     FIX: "Have the updater fix it",
     RECONSIDER: "Ask the challenger to reconsider",
@@ -34,8 +35,13 @@ LABELS = {
     UNDO: "Have the updater undo it",
     KEEP: "Keep the change",
     APPROVE: "Approve the code change",
+    REPAIR: "Have an agent fix CI",
+    APPROVE_REPAIR: "Approve the agent's changes",
+    PUSH_CONFIG: "Push it, configuration change included",
+    PUSH_REVIEWED: "Push it: I reviewed its test edits",
 }
 PUBLISH = (RETRY, DISCARD)  # publication stopped: try again once fixed, or discard (the pull request stays)
+DISCARD_OPEN = "Discard the update (the pull request stays open)"  # a publication stop's discard, once it has one
 HOW = {
     "fixed": "fixed, not challenged again",
     "rejected": "rejected, never judged",
@@ -212,6 +218,11 @@ def _dispute(run: str, f: RoundFinding) -> dict[str, Any]:
         text += "or drop it?"
         options = [FIX, RECONSIDER, DROP]
     return question(f"{run}:dispute:{f.id}", "dispute", text, options, finding=f.id)
+
+
+def published(options: list[str], *, opened: bool) -> list[dict[str, str]]:
+    """A publication stop's options; once its pull request is *opened*, its discard says that it stays open."""
+    return [{"id": o, "label": DISCARD_OPEN if o == DISCARD and opened else LABELS[o]} for o in options]
 
 
 def question(qid: str, kind: str, text: str, options: list[str], **more: Any) -> dict[str, Any]:  # noqa: ANN401

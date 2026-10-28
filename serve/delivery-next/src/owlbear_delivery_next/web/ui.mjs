@@ -36,6 +36,20 @@ export class HostDown extends Error {
   }
 }
 
+// Delivery did not answer within the call's time: it may be up but busy, so it is not said to be down. A call that
+// changes something (*sent*) may have been done all the same; it is never sent again, and a caller that reads the
+// state again says *reread* instead of the message.
+export class Slow extends Error {
+  constructor(sent, seconds) {
+    const unsure = `Delivery did not answer within ${seconds} s, so this may have been done or not. It was not sent `
+      + "again;";
+    super(sent ? `${unsure} reload the page to see which before you try again.`
+      : `Delivery is slow to answer: no reply within ${seconds} s. Try again in a moment.`);
+    this.sent = sent;
+    this.reread = sent ? `${unsure} the page now shows Delivery's state as read again.` : this.message;
+  }
+}
+
 export class Restarted extends Error {
   constructor() {
     super("Delivery restarted at a new address. Open the link from chat or owlbear status.");
@@ -53,7 +67,8 @@ function said(detail) {
   return typeof detail === "string" ? detail : detail ? JSON.stringify(detail) : "";
 }
 
-// One call to the host's API; GET without a body. Throws HostDown, Restarted, or an Error with the host's words.
+// One call to the host's API; GET without a body. Throws HostDown when it cannot be reached, Slow when it did not
+// answer in *timeout* ms, Restarted, or an Error with the host's words.
 // A *machine* call goes to the machine host's own routes; *of* names the project when it is not the page's.
 export async function call(path, { method, body, timeout = 5000, machine = false, of = project } = {}) {
   if (!token) throw new Error("Open the URL the host printed, including #token=…");
@@ -66,7 +81,8 @@ export async function call(path, { method, body, timeout = 5000, machine = false
   let response;
   try {
     response = await fetch(machine ? `/api/next${path}` : api(path, of), init);
-  } catch {
+  } catch (error) {
+    if (error?.name === "TimeoutError") throw new Slow(init.method !== "GET", timeout / 1000);
     throw new HostDown();
   }
   if (response.status === 401) throw new Restarted();
@@ -94,7 +110,8 @@ async function machine() {
   }
 }
 
-const bar = { data: token ? await machine().catch(() => null) : null, draft: "", busy: "", error: "" };
+const bar = { data: token ? await machine().catch(() => null) : null, draft: "", busy: "", error: "", packed: "",
+  installing: false };
 const listed = (id) => bar.data.projects.some((p) => p.id === id);
 if (bar.data && !listed(project) && (project || scope !== "all")) {
   const first = bar.data.projects.find((p) => p.state === "loaded") ?? bar.data.projects[0];
@@ -121,6 +138,11 @@ function changed() {
   document.dispatchEvent(new CustomEvent("owlbear-machine", { detail: bar.data }));
 }
 
+// The machine host's state as last polled (its version, engine update and design pack); null when none serves the page.
+export function machineState() {
+  return bar.data;
+}
+
 // Every loaded project, whatever the page shows: where an action may go; null when no machine host serves it.
 export function loaded() {
   return bar.data ? bar.data.projects.filter((p) => p.state === "loaded") : null;
@@ -135,7 +157,7 @@ async function act(name, work) {
   try {
     await work();
   } catch (error) {
-    bar.error = error.message;
+    bar.error = error instanceof Slow ? error.reread : error.message;  // the machine's state is read again below
   }
   bar.busy = "";
   bar.data = await machine().catch(() => bar.data);
@@ -223,7 +245,48 @@ function view() {
       ? ` to ${update.version}` : ""}: ${update.phase}${update.detail ? ` · ${update.detail}` : ""}</p>` : nothing}
     ${updated && localStorage.getItem(SEEN) !== updated ? html`<p role="status" id="update-done">OwlBear now runs
       ${updated}. ${control("OK", () => { localStorage.setItem(SEEN, updated); showBar(); })}</p>` : nothing}
+    ${banners(bar.data.pack)}
     ${bar.error ? html`<p role="alert">${bar.error}</p>` : nothing}`;
+}
+
+function when(iso) {
+  return iso ? new Date(iso).toLocaleString() : "";
+}
+
+// D-01M61GW2EAHFFRFHF014A14K98: every page says when this version's design pack is missing or failed to install,
+// with Install, and when a released OwlBear version carries a newer pack, with Update now.
+function banners(pack) {
+  const install = pack?.install, release = pack?.release, named = (p) => (p ? `design pack ${p}` : "design pack");
+  let missing = nothing;
+  if (install) {
+    const running = install.state === "installing", of = install.version ? ` for OwlBear ${install.version}` : "";
+    const said = running ? `Installing the ${named(install.pack)}${of}…`
+      : install.state === "failed" ? `Installing the ${named(install.pack)}${of} failed${install.at
+        ? ` (${when(install.at)})` : ""}${install.detail ? `: ${install.detail}` : "."}`
+      : `The ${named(install.pack)} that this OwlBear version${install.version ? `, ${install.version},` : ""} pins is `
+        + "not installed on this machine; the visual rounds use it.";
+    missing = html`<p class="banner" role="status" id="pack-install-banner"><span>${said}</span>
+      ${control("Install", installPack, { variant: "primary", busy: running || bar.busy === "install" })}</p>`;
+  }
+  const newer = release?.state === "newer" ? html`<p class="banner" role="status" id="pack-release-banner"><span>
+    OwlBear ${release.version} carries a newer ${named(release.pack)}; this version pins ${named(release
+      .running_pack)}. ${release.checked_at ? `Checked ${when(release.checked_at)}.`
+      : "When it was checked is unknown."}
+    </span>${control("Update now", runUpdates, { busy: bar.busy === "update" || updating(bar.data.update) })}</p>`
+    : nothing;
+  const done = bar.packed ? html`<p role="status" id="pack-install-said">${bar.packed}</p>` : nothing;
+  return html`${missing}${newer}${done}`;
+}
+
+// Install answers at once and installs in the background: the polled state shows it running, then how it ended.
+async function installPack() {
+  bar.packed = "";
+  await act("install", async () => {
+    const got = await call("/design-pack/install", { method: "POST", machine: true, timeout: 15000 });
+    if (got.refused) bar.packed = `Not installed now: ${got.refused}.`;
+    else if (!got.install) bar.packed = "The design pack is installed on this machine.";
+    else if (got.install.state === "installing") bar.installing = true;
+  });
 }
 
 const SEEN = "owlbear-version-seen";  // the version the owner was told about, so he is told once (TD-299)
@@ -258,7 +321,7 @@ function updating(update) {
   return Boolean(update?.phase) && !["idle", "current", "failed", "refused"].includes(update.phase);
 }
 
-async function runUpdates() {
+export async function runUpdates() {
   const yes = await window.ask({ title: "Run updates now?",
     now: "OwlBear installs the newest version of this machine's channel beside the running one and checks it.",
     then: "Once no step, check environment or design pack update runs, it switches to that version; this page "
@@ -296,10 +359,16 @@ if (bar.data) {
     if (bar.busy) return;
     const was = bar.data?.paused, before = Boolean(bar.data?.announce);
     bar.data = await machine().catch(() => bar.data);  // always read: an announcement must reach every page (§7)
+    if (bar.installing && bar.data?.pack?.install?.state !== "installing") {  // the Install started here has ended
+      bar.installing = false;
+      bar.packed = bar.data.pack.install ? "" : "The design pack is installed on this machine.";
+      showBar();
+    }
     counted();
     // never re-rendered under the owner's typing, unless an announcement starts or runs: its countdown stays true
     if (!document.activeElement?.closest?.("#machine") || before || bar.data?.announce) showBar();
     if (bar.data?.paused !== was) changed();
+    document.dispatchEvent(new CustomEvent("owlbear-polled", { detail: bar.data }));  // what a page shows of it
   }, 5000);
   setInterval(() => { if (bar.data?.announce) showBar(); }, 1000);
 }

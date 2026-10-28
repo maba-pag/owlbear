@@ -311,6 +311,10 @@ class Provider(Protocol):
         """Return the unique open pull request for one head and base branch."""
         ...
 
+    def open_pull_requests(self, repository: str, prefix: str) -> tuple[PullRequest, ...]:
+        """Every open pull request whose head branch in *repository* starts with *prefix*; raises unless read whole."""
+        ...
+
     def read_pull_request(self, repository: str, number: int) -> PullRequest:
         """Read one exact pull request."""
         ...

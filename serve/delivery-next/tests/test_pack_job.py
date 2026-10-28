@@ -39,12 +39,21 @@ from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.local_system.maintenance import Maintenance
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.local_system.slots import Slots
-from owlbear_delivery_next.pack_runs import pack_gates, pack_job, pack_publish, pack_rounds, pack_updater
+from owlbear_delivery_next.pack_runs import (
+    pack_gates,
+    pack_job,
+    pack_publish,
+    pack_repair,
+    pack_repair_content,
+    pack_rounds,
+    pack_run,
+    pack_updater,
+)
 from owlbear_delivery_next.project_host import api, session_slots
 from owlbear_delivery_next.project_host.admission import STOPPING
 from owlbear_delivery_next.project_host.host import ENDING, HostRecord
 from owlbear_delivery_next.runtimes.session_result import Run
-from owlbear_delivery_next.state_store import pack_run_record
+from owlbear_delivery_next.state_store import pack_run_record, project_home, registry
 from owlbear_delivery_next.state_store.store import Lock, Store
 
 AUTH = {"authorization": "Bearer t"}
@@ -70,6 +79,7 @@ class FakeGitHub:
         self.checks = ["success"]  # the conclusion at each look; the last one stays
         self.behind, self.labels_fail, self.refusal = 0, False, None
         self.can_push, self.lose_create = True, False
+        self.listing: Exception | None = None  # why the open pull requests cannot be read
 
     def read_repository(self) -> Repository:
         return Repository(
@@ -98,6 +108,12 @@ class FakeGitHub:
         found = [n for n, p in self.prs.items() if p["branch"] == head and p["state"] == "open" and base == "main"]
         return self.read_pull_request(repository, found[0]) if found else None
 
+    def open_pull_requests(self, repository: str, prefix: str) -> tuple[PullRequest, ...]:
+        if self.listing:
+            raise self.listing
+        found = [n for n, p in self.prs.items() if p["branch"].startswith(prefix) and p["state"] == "open"]
+        return tuple(self.read_pull_request(repository, n) for n in found)
+
     def create_pull_request(self, repository: str, head: str, base: str, title: str, body: str) -> PullRequest:
         self.calls.append("create")
         number = len(self.prs) + 1
@@ -124,7 +140,12 @@ class FakeGitHub:
     def observe_checks(self, _repository: str, _number: int, _head: str) -> tuple[Check, ...]:
         said = self.checks.pop(0) if len(self.checks) > 1 else self.checks[0]
         status = "in_progress" if said == "running" else "completed"
-        return (Check(name="CI", status=status, conclusion=None if said == "running" else said),)
+        job = 7 if said == "failure" else None
+        return (Check(name="CI", status=status, conclusion=None if said == "running" else said, job_id=job),)
+
+    def job_log(self, _repository: str, job_id: int, lines: int = 40) -> str:
+        assert (job_id, lines) == (7, 40)
+        return "FAILED tests/test_page.py::test_contrast - assert 3.1 >= 4.5"
 
     def update_branch(self, _repository: str, number: int, expected_head: str) -> bool:
         self.calls.append("update-branch")
@@ -199,8 +220,11 @@ def checkout(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
-def clone(tmp_path: Path) -> Path:
-    """Upstream with the pinned tag and one newer skill release: a new rule, skill text and engine version."""
+def clone(tmp_path: Path, monkeypatch) -> Path:
+    """Upstream with the pinned tag and one newer skill release: a new rule, skill text and engine version.
+
+    The installed manifest pins the fake pinned tag's commit, which the diff starts from.
+    """
     root = tmp_path / "impeccable"
     git(tmp_path, "init", "-q", "-b", "main", str(root))
     licence = PKG.joinpath("skills", "IMPECCABLE-LICENSE").read_bytes()
@@ -225,6 +249,9 @@ def clone(tmp_path: Path) -> Path:
         git(root, "add", "-A")
         git(root, "commit", "-qm", tag)
         git(root, "tag", tag)
+    made = design_pack.manifest()
+    made["upstream"]["commit"] = git(root, "rev-parse", PINNED)
+    monkeypatch.setattr(design_pack, "manifest", lambda: json.loads(json.dumps(made)))
     return root
 
 
@@ -255,6 +282,9 @@ class Fakes:
         self.hold: threading.Event | None = None
         self.waiting = threading.Event()
         self.tags = [PINNED, NEWER]
+        self.repairs: list[dict[str, str]] = []  # per CI repair session: repository path -> new text
+        self.repaired: list = []  # each CI repair session's config, its worktree as it was then
+        self.at_repair = lambda: None  # something else that happens while the agent repairs CI
 
     def releases(self, url: str) -> bytes:
         self.calls.append("releases")
@@ -319,6 +349,15 @@ class Fakes:
 
     def update(self, _store: Store, cfg) -> Run:
         """The writing updater: each planned edit lands in its worktree, then it submits (or reports a premise)."""
+        if cfg.submit is pack_repair.SUBMIT:  # the agent repairing the pull request's CI in a copy of its head
+            self.calls.append("repair")
+            self.repaired.append(SimpleNamespace(cfg=cfg, files=sorted(p.name for p in cfg.worktree.iterdir())))
+            for path, text in (self.repairs.pop(0) if self.repairs else {}).items():
+                (cfg.worktree / path).parent.mkdir(parents=True, exist_ok=True)
+                (cfg.worktree / path).write_text(text)
+            self.at_repair()
+            said = pack_repair.RepairResult(summary=f"repair {len(self.repaired)}")
+            return Run(cfg.session_id, "result", payload=said, termination=Termination(confirmed=True))
         self.calls.append("update")
         self.updates.append(cfg)
         self.upstream_diffs.append((cfg.worktree / pack_updater.UPSTREAM_DIFF).read_text())
@@ -417,7 +456,7 @@ def test_a_passing_update_runs_every_stage_then_merges_one_commit_through_a_pull
     assert (state["state"], state["reason"]) == (
         "passed", f"activated: merged into main as {pub['merged'][:12]} through {pub['url']}"
     )  # fmt: skip
-    assert results(state) == dict.fromkeys(NAMES, "passed")
+    assert results(state) == dict.fromkeys(NAMES, "passed") | {"update": "completed"}  # a session judges nothing
     here = design_pack.platform_name()
     assert fakes.calls == ["releases", "sync", f"engine {here}", "golden", "update", "golden", "replay", "challenger"]
     # The package's folder comes first, then the candidate's.
@@ -699,7 +738,7 @@ def test_rounds_ending_without_a_pass_wait_and_a_discard_changes_nothing(tmp_pat
     assert (state["state"], state["reason"]) == ("discarded", "discarded by you; nothing changed")
     assert (state["questions"], snapshot(checkout)) == ([], before)
     assert not (store.root / "design-pack-updater").exists()
-    assert results(state)["commit"] == "skipped"
+    assert results(state)["commit"] == "not-reached"
 
 
 def test_activation_publishes_only_the_candidate_the_owner_was_asked_about(tmp_path, checkout, clone):
@@ -712,9 +751,607 @@ def test_activation_publishes_only_the_candidate_the_owner_was_asked_about(tmp_p
 
     state = answered(job, "activate")
 
-    assert (state["state"], results(state)["commit"]) == ("failed", "skipped")
+    assert (state["state"], results(state)["commit"]) == ("failed", "not-reached")
     assert "is not what the challenger passed or you accepted" in state["reason"]
     assert snapshot(checkout) == before
+
+
+def steps(state: dict) -> list[tuple[str, str, int, str, bool]]:
+    """The run's invocations as the page gets them: phase, operation, attempt, outcome in words, and stale."""
+    return [
+        (ph["key"], i["operation"], i["attempt"], i["outcome"], i["stale"])
+        for ph in state["progress"]["phases"]
+        for i in ph["invocations"]
+    ]
+
+
+PREPARED = [
+    ("prepare", op, 1, said, False)
+    for op, said in [("notice", "passed"), ("candidate", "passed"), ("diff", "passed"), ("initial-golden", "done")]
+]
+PUBLISHED = [
+    ("publish", op, 1, "passed", False) for op in ["unchanged-check", "commit", "push", "pull-request", "merge"]
+]
+
+
+def test_two_rounds_keep_each_invocation_and_a_new_candidate_makes_the_first_rounds_evidence_stale(
+    tmp_path, checkout, clone
+):
+    fakes = Fakes(clone)
+    fakes.verdicts, fakes.edits = ["fix", "pass"], [{}, {REVIEW_SKILL: "repaired\n"}]
+    fakes.hold = threading.Event()
+    job = pack_job.Job(rounds(Store(tmp_path / "store"), last_round_at=0, ask_owner_at=1), fakes.live(checkout))
+    job.start()
+    assert fakes.waiting.wait(10)
+
+    progress = job.read()["progress"]  # the first challenger runs: the verdict decides what comes next
+
+    assert (progress["now"]["phase"], progress["now"]["operation"]) == ("Challenge round 1", "full-challenge")
+    assert (progress["next"]["by"], progress["next"]["operation"]) == ("verdict", "")
+    fakes.hold.set()
+    state = settled(job)
+
+    assert state["state"] == "passed", state["reason"]
+    first = [("round-1", op, 1, said, True) for op, said in [
+        ("update", "session completed"), ("candidate-golden", "candidate passed"), ("replay", "candidate passed"),
+        ("full-challenge", "findings")]]  # fmt: skip
+    second = [("round-2", op, 1, said, False) for op, said in [
+        ("update", "session completed"), ("candidate-golden", "candidate passed"), ("replay", "candidate passed"),
+        ("full-challenge", "candidate passed")]]  # fmt: skip
+    assert steps(state) == PREPARED + first + second + PUBLISHED
+    assert [ph["label"] for ph in state["progress"]["phases"]] == [
+        "Prepare", "Challenge round 1", "Challenge round 2", "Publish"
+    ]  # fmt: skip
+    assert (state["progress"]["now"], state["progress"]["next"]) == (None, None)
+    one, two = (i for i in state["invocations"] if i["operation"] == "full-challenge")
+    assert (one["detail"], two["detail"]) == ("1 new finding(s)", "passed")  # never "passed: 1 new finding(s)"
+    assert one["identity"] != two["identity"] == state["loop"]["head"]
+
+
+def test_an_unchanged_candidate_reuses_its_replay_and_a_rejection_recheck_is_its_own_operation(
+    tmp_path, checkout, clone
+):
+    fakes = Fakes(clone)
+    fakes.verdicts, fakes.rejects = ["fix"], [[], ["F1"]]
+
+    state = run(pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout)))
+
+    assert state["state"] == "passed", state["reason"]
+    first = [("round-1", op, 1, said, False) for op, said in [
+        ("update", "session completed"), ("candidate-golden", "candidate passed"), ("replay", "candidate passed"),
+        ("full-challenge", "findings")]]  # fmt: skip
+    second = [("round-2", op, 1, said, False) for op, said in [
+        ("update", "session completed"), ("candidate-golden", "candidate passed"),
+        ("replay", "reused for this identity"), ("rejection-recheck", "candidate passed")]]  # fmt: skip
+    assert steps(state) == PREPARED + first + second + PUBLISHED
+    replays = [i for i in state["invocations"] if i["operation"] == "replay"]
+    assert replays[1]["detail"] == replays[0]["detail"]  # the result it reuses, for the same candidate
+    assert replays[1]["identity"] == replays[0]["identity"]
+    assert fakes.calls.count("replay") == 1
+    assert any(line.endswith("replay: reused for this identity") for line in state["log"])
+
+
+def test_an_owner_stop_shows_his_gate_now_with_its_options_next_and_a_discard_ends_it(tmp_path, checkout, clone):
+    fakes = Fakes(clone, verdict="fix")
+    fakes.edits = [{}, {REVIEW_SKILL: "repaired\n"}]
+    job = pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout))
+
+    state = run(job)
+
+    first = [("round-1", op, 1, said, True) for op, said in [
+        ("update", "session completed"), ("candidate-golden", "candidate passed"), ("replay", "candidate passed"),
+        ("full-challenge", "findings")]]  # fmt: skip
+    second = [("round-2", op, 1, said, False) for op, said in [
+        ("update", "session completed"), ("candidate-golden", "candidate passed"), ("replay", "candidate passed"),
+        ("owner", "waiting for you")]]  # fmt: skip
+    assert steps(state) == PREPARED + first + second  # round 2's update never shows round 1's verdict as its own
+    now, then = state["progress"]["now"], state["progress"]["next"]
+    assert (now["phase"], now["operation"]) == ("Challenge round 2", "owner")
+    assert then == {"operation": "", "by": "owner", "label": "Your answer decides what runs next",
+                    "options": [pack_rounds.LABELS[o] for o in ("activate", "discard")]}  # fmt: skip
+
+    state = answered(job, "discard")
+
+    assert steps(state)[-1] == ("round-2", "owner", 1, "discarded by you", False)
+    assert (state["progress"]["now"], state["progress"]["next"]) == (None, None)
+    assert all(i["ended_at"] for i in state["invocations"])
+
+
+def test_a_ci_retry_runs_push_pull_request_and_merge_again_and_the_old_merge_is_stale(tmp_path, checkout, clone):
+    fakes = Fakes(clone)
+    job = pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout))
+    fakes.github.checks = ["failure"]
+
+    state = run(job)
+
+    held = [("publish", "merge", 1, "failed", False), ("publish", "owner", 1, "waiting for you", False)]
+    assert steps(state)[-6:] == PUBLISHED[:-1] + held
+    assert (state["progress"]["now"]["phase"], state["progress"]["next"]["options"]) == (
+        "Publish", ["Try again", pack_rounds.LABELS[pack_rounds.REPAIR], pack_rounds.DISCARD_OPEN]
+    )  # fmt: skip
+    fakes.github.checks = ["success"]
+
+    state = answered(job, "retry")
+
+    assert state["state"] == "passed", state["reason"]
+    assert steps(state)[-9:] == [
+        ("publish", "unchanged-check", 1, "passed", False), ("publish", "commit", 1, "passed", False),
+        ("publish", "push", 1, "passed", True), ("publish", "pull-request", 1, "passed", True),
+        ("publish", "merge", 1, "failed", True), ("publish", "owner", 1, "answered by you", False),
+        ("publish", "push", 2, "passed", False), ("publish", "pull-request", 2, "passed", False),
+        ("publish", "merge", 2, "passed", False),
+    ]  # fmt: skip
+    pushed = [i["identity"] for i in state["invocations"] if i["operation"] == "push"]
+    assert pushed == [state["published"]["commit"]] * 2  # the same commit pushed again, never a new one
+
+
+DETECTOR = f"src/pkg/{pack_gates.GLUE['code/detector.py']}"  # protected pack content, as a repository path
+GOLDEN = "src/pkg/golden/good.html"
+
+
+def ci_failed(
+    tmp_path: Path, checkout: Path, clone: Path, *repairs: dict[str, str]
+) -> tuple[Fakes, pack_job.Job, dict]:
+    """A run waiting at its own pull request's failed CI, with the agent's CI repairs planned."""
+    fakes = Fakes(clone)
+    fakes.repairs = list(repairs)
+    job = pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout))
+    fakes.github.checks = ["failure"]
+    state = run(job)
+    (q,) = state["questions"]
+    assert (state["state"], q["kind"], [o["id"] for o in q["options"]]) == (
+        "waiting", "publish", ["retry", "repair", "discard"]
+    )  # fmt: skip
+    return fakes, job, state
+
+
+def pr_head(checkout: Path, state: dict) -> str:
+    """The pull request's branch on the remote."""
+    ref = f"refs/heads/{state['published']['branch']}"
+    return git(checkout.parents[1], "ls-remote", "origin", ref).split()[0]
+
+
+def test_an_agents_harmless_ci_repair_is_pushed_by_delivery_and_merges_once_ci_passes(tmp_path, checkout, clone):
+    """D-01M61GW2EBAHQ9HBY5S2TGHY2P: the agent repairs a copy of the failed head; Delivery pushes it, CI runs again."""
+    fakes, job, state = ci_failed(tmp_path, checkout, clone, {"fixed.txt": "fixed\n"})
+    made, root = state["published"]["commit"], checkout.parents[1]
+    fakes.github.checks = ["success"]
+
+    state = answered(job, "repair")
+
+    assert state["state"] == "passed", state["reason"]
+    (session,) = fakes.repaired
+    assert "src" in session.files  # a copy of the whole head
+    assert not session.cfg.worktree.is_relative_to(root)
+    assert not session.cfg.worktree.exists()
+    assert f"CI failed at {made}" in session.cfg.message
+    assert "FAILED tests/test_page.py::test_contrast" in session.cfg.message  # the failed check's log
+    repair = landed(checkout)
+    assert (git(root, "rev-parse", f"{repair}~1"), git(root, "show", f"{repair}:fixed.txt")) == (made, "fixed")
+    assert "repair 1" in git(root, "log", "-1", "--format=%B", repair)
+    assert steps(state)[-8:] == [
+        ("publish", "push", 1, "passed", True), ("publish", "pull-request", 1, "passed", True),
+        ("publish", "merge", 1, "failed", True), ("publish", "owner", 1, "answered by you", False),
+        ("publish", "ci-repair", 1, "repair pushed", False), ("publish", "push", 2, "passed", False),
+        ("publish", "pull-request", 2, "passed", False), ("publish", "merge", 2, "passed", False),
+    ]  # fmt: skip
+    assert fakes.github.calls == ["create", "merge", "delete"]
+
+
+def checked_again(state: dict, before: int) -> list[tuple[str, int, str]]:
+    """The invocations since the *before*-th, each with its round and the identity it is bound to."""
+    return [(i["operation"], i["round"], i["identity"]) for i in state["invocations"][before:]]
+
+
+def test_a_ci_repair_of_detector_code_is_checked_again_and_merges_only_once_the_owner_approved_it(
+    tmp_path, checkout, clone
+):
+    """The repaired pack passes the update's checks again for its own identity, then the owner's gates, then CI."""
+    fakes, job, state = ci_failed(tmp_path, checkout, clone, {DETECTOR: "# repaired\n"})
+    calls, head, seen = len(fakes.calls), pr_head(checkout, state), len(state["invocations"])
+    (passed,) = {i["identity"] for i in state["invocations"] if i["operation"] == "full-challenge"}
+    fakes.github.checks = ["success"]
+
+    state = answered(job, "repair")
+
+    (q,) = state["questions"]
+    assert (state["state"], q["kind"], [o["id"] for o in q["options"]]) == ("waiting", "code", ["approve", "discard"])
+    assert "+# repaired" in q["diff"]
+    assert fakes.calls[calls:] == ["repair", "golden", "challenger"]  # the replay stands: the skills are unchanged
+    assert "code/detector.py" in fakes.sessions[-1].changed  # a round on the whole pack, the repair in it
+    (repair, golden, replay, challenge, _owner) = checked_again(state, seen)
+    repaired = challenge[2]
+    assert repair[0] == "ci-repair"
+    assert repaired not in {"", passed}
+    assert (golden, replay, challenge) == (
+        ("candidate-golden", 2, repaired), ("replay", 2, repaired), ("full-challenge", 2, repaired)
+    )  # fmt: skip
+    assert next(i for i in state["invocations"] if i["operation"] == "full-challenge")["stale"]
+    assert (pr_head(checkout, state), fakes.github.calls, state["repair"]["phase"]) == (head, ["create"], "checking")
+
+    state = answered(job, "approve")
+
+    (q,) = state["questions"]
+    assert (state["state"], q["kind"], q["paths"]) == ("waiting", "repair-approval", [DETECTOR])
+    assert [(o["id"], o["label"]) for o in q["options"]] == [
+        ("approve-repair", pack_rounds.LABELS["approve-repair"]), ("discard", pack_rounds.DISCARD_OPEN)
+    ]  # fmt: skip
+    assert "+# repaired" in q["diff"]
+    assert state["repair"] == {
+        "phase": "", "attempts": 1, "limit": pack_repair.REPAIRS, "head": "", "summary": "repair 1",
+        "commit": pr_head(checkout, state), "paths": [DETECTOR], "held": [], "approved": False,
+    }  # fmt: skip  # pushed once checked, and CI passed there
+    assert fakes.github.calls == ["create"]  # never merged without him
+
+    state = answered(job, "approve-repair")
+
+    assert state["state"] == "passed", state["reason"]
+    assert git(checkout.parents[1], "show", f"{landed(checkout)}:{DETECTOR}") == "# repaired"
+    assert fakes.github.calls == ["create", "merge", "delete"]
+
+
+def test_a_second_protected_repair_after_the_owners_approval_asks_for_it_again(tmp_path, checkout, clone):
+    fakes, job, _ = ci_failed(tmp_path, checkout, clone, {DETECTOR: "# repaired\n"}, {GOLDEN: "<p>repaired</p>\n"})
+    fakes.github.checks = ["success"]
+    answered(job, "repair")
+    first = answered(job, "approve")["questions"][0]
+    fakes.github.checks = ["failure"]  # CI fails again before the merge
+    state = answered(job, "approve-repair")
+    assert [o["id"] for o in state["questions"][0]["options"]] == ["retry", "repair", "discard"]
+    fakes.github.checks = ["success"]
+
+    state = answered(job, "repair")
+
+    (q,) = state["questions"]  # its changed evidence first, as an update's; the glue's approval still stands
+    assert (q["kind"], [o["id"] for o in q["options"]]) == ("evidence", ["accept", "discard"])
+    assert "+<p>repaired</p>" in q["diff"]
+    state = answered(job, "accept")
+    (q,) = state["questions"]
+    assert (q["kind"], q["paths"]) == ("repair-approval", sorted([DETECTOR, GOLDEN]))
+    assert q["digest"] != first["digest"]
+    assert "again" in q["text"]
+    assert (state["repair"]["approved"], fakes.github.calls) == (False, ["create"])
+    assert answered(job, "approve-repair")["state"] == "passed"
+    assert fakes.github.calls == ["create", "merge", "delete"]
+
+
+TESTED = "def test_contrast():\n    assert contrast() >= LIMIT\n"
+
+
+def on_main(package: Path, path: str, text: str) -> None:
+    """A file of OwlBear's main, as the pull request's failed head holds it too."""
+    root = package.parents[1]
+    (root / path).parent.mkdir(parents=True, exist_ok=True)
+    (root / path).write_text(text, encoding="utf-8")
+    git(root, "add", path)
+    git(root, "commit", "-qm", f"add {path}")
+    git(root, "push", "-q", "origin", "main")
+
+
+ASKED, REFUSED = ["push-config", "retry", "discard"], ["retry", "discard"]
+
+
+@pytest.mark.parametrize(
+    ("change", "asked"),
+    [
+        (("biome.json", "{}\n"), ("biome.json", ASKED)),
+        ((".github/workflows/ci.yml", "on: push\n"), (".github/workflows/ci.yml", ASKED)),
+        (("tests/test_page.py", f"import pytest\n\n@pytest.mark.skip\n{TESTED}"),
+         ("tests/test_page.py (adds a suppression or skip)", REFUSED)),
+        (("tests/test_page.py", "def test_contrast():\n    pass\n"),
+         ("tests/test_page.py (removes an assertion or test)", REFUSED)),
+        (("tests/test_page.py", "def test_contrast():\n    return\n    assert contrast() >= LIMIT\n"),
+         ("tests/test_page.py (disables a test)", REFUSED)),
+        (("src/pkg/design_pack.json", "{}\n"),
+         ("src/pkg/design_pack.json (pack content only an update may change)", REFUSED)),
+    ],
+)  # fmt: skip
+def test_a_ci_repair_that_changes_configuration_or_weakens_a_check_stops_and_asks_without_pushing(
+    tmp_path, checkout, clone, change, asked
+):
+    """As PR #733 was repaired by hand: a lint override is his call, shown its diff; a weakened test never is."""
+    (path, text), (held, options) = change, asked
+    on_main(checkout, "tests/test_page.py", TESTED)
+    fakes, job, state = ci_failed(tmp_path, checkout, clone, {path: text})
+    before = pr_head(checkout, state)
+
+    state = answered(job, "repair")
+
+    (q,) = state["questions"]
+    assert (state["state"], q["kind"], q["paths"]) == ("waiting", "repair-config", [held])
+    assert [o["id"] for o in q["options"]] == options
+    assert f"+++ b/{path}" in q["diff"]
+    assert (pr_head(checkout, state), fakes.github.calls, state["repair"]["phase"]) == (before, ["create"], "config")
+    if "push-config" not in options:
+        with pytest.raises(pack_job.Refused):
+            job.answer(q["id"], "push-config")
+
+    state = answered(job, "retry")  # without it: CI is read again at the head it failed at
+
+    assert (state["questions"][0]["kind"], pr_head(checkout, state)) == ("publish", before)
+
+
+@pytest.mark.parametrize(
+    ("edit", "held"),
+    [
+        ((f"LIMIT = 4.5\n\n\n{TESTED}", f"LIMIT = 3.0\n\n\n{TESTED}"), ("removes lines from a test", "-LIMIT = 4.5")),
+        ((TESTED, f"import flaky\n\n\n@flaky.off\n{TESTED}"), ("changes a test", "+@flaky.off")),
+        ((TESTED, "def test_contrast():\n    assert (\n        contrast() >= LIMIT\n    )\n"),
+         ("reformats a test", "+    assert (")),  # the same syntax tree: no check went, yet he sees it
+    ],
+)  # fmt: skip
+def test_a_repair_that_edits_a_test_is_pushed_only_once_the_owner_reviewed_it(tmp_path, checkout, clone, edit, held):
+    """No pattern proves a test still checks as much: a lowered threshold or an unknown decorator is held regardless."""
+    (before, after), (held, shown) = edit, held
+    on_main(checkout, "tests/test_page.py", before)
+    fakes, job, state = ci_failed(tmp_path, checkout, clone, {"tests/test_page.py": after})
+    head = pr_head(checkout, state)
+
+    state = answered(job, "repair")
+
+    (q,) = state["questions"]
+    assert (q["kind"], q["paths"]) == ("repair-config", [f"tests/test_page.py ({held})"])
+    assert [o["id"] for o in q["options"]] == ["push-reviewed", "discard"]
+    assert shown in q["diff"]
+    assert (pr_head(checkout, state), fakes.github.calls) == (head, ["create"])
+    with pytest.raises(pack_job.Refused):
+        job.answer(q["id"], "push-config")
+    fakes.github.checks = ["success"]
+
+    state = answered(job, "push-reviewed")
+
+    assert state["state"] == "passed", state["reason"]
+    assert git(checkout.parents[1], "show", f"{landed(checkout)}:tests/test_page.py") == after.strip()
+
+
+PUSHED, LONG = ["push-reviewed", "discard"], "".join(f"VALUE_{i} = {i}\n" for i in range(2000))
+
+
+def test_a_held_question_shows_the_diff_of_what_it_asks_about_whatever_else_the_repair_changes(
+    tmp_path, checkout, clone
+):
+    """PR #745's review: a large unrelated change never pushes the held test edit out of the diff he approves."""
+    edited = f"import flaky\n\n\n@flaky.off\n{TESTED}"
+    on_main(checkout, "tests/test_page.py", TESTED)
+    fakes, job, _ = ci_failed(tmp_path, checkout, clone, {"big.txt": "x\n" * 15000, "tests/test_page.py": edited})
+
+    (q,) = answered(job, "repair")["questions"]
+
+    assert (q["paths"], [o["id"] for o in q["options"]]) == (["tests/test_page.py (changes a test)"], PUSHED)
+    assert ("+@flaky.off" in q["diff"], "big.txt" in q["diff"]) == (True, False)
+    fakes.github.checks = ["success"]
+    assert answered(job, "push-reviewed")["state"] == "passed"
+    assert git(checkout.parents[1], "show", f"{landed(checkout)}:big.txt").count("x") == 15000
+
+
+@pytest.mark.parametrize(
+    "change",
+    [("tests/test_page.py", f"{TESTED}\n{LONG}"), ("biome.json", f'{{"x": "{"a" * 25000}"}}\n')],
+)
+def test_a_held_change_too_large_to_show_whole_is_never_pushed_from_its_question(tmp_path, checkout, clone, change):
+    path, text = change
+    on_main(checkout, "tests/test_page.py", TESTED)
+    fakes, job, state = ci_failed(tmp_path, checkout, clone, {path: text})
+    head = pr_head(checkout, state)
+
+    (q,) = answered(job, "repair")["questions"]
+
+    assert (q["kind"], [o["id"] for o in q["options"]]) == ("repair-config", REFUSED)
+    assert "too large to review here" in q["text"]
+    assert len(q["diff"]) == pack_repair.SHOWN
+    for push in pack_repair.PUSHES:
+        with pytest.raises(pack_job.Refused):
+            job.answer(q["id"], push)
+    assert (pr_head(checkout, state), fakes.github.calls) == (head, ["create"])
+
+
+def test_a_held_binary_test_edit_git_does_not_render_is_never_pushed_even_after_a_restart(tmp_path, checkout, clone):
+    on_main(checkout, "tests/fixture.dat", "\0old\n")
+    fakes, job, state = ci_failed(tmp_path, checkout, clone, {"tests/fixture.dat": "\0new\n"})
+    head = pr_head(checkout, state)
+
+    (q,) = answered(job, "repair")["questions"]
+
+    assert (q["paths"], [o["id"] for o in q["options"]]) == (["tests/fixture.dat (changes a test)"], REFUSED)
+    assert ("Binary files" in q["diff"], "binary content" in q["text"]) == (True, True)
+    again = pack_job.Job(job.store, fakes.live(checkout))
+    with pytest.raises(pack_job.Refused):
+        again.answer(q["id"], "push-reviewed")
+    assert (pr_head(checkout, state), fakes.github.calls) == (head, ["create"])
+
+
+def test_protected_repairs_too_large_to_show_whole_are_never_approved_from_the_question(tmp_path, checkout, clone):
+    fakes, job, _ = ci_failed(tmp_path, checkout, clone, {DETECTOR: f"# repaired\n{LONG}"})
+    fakes.github.checks = ["success"]
+    answered(job, "repair")
+
+    (q,) = answered(job, "approve")["questions"]
+
+    assert (q["kind"], [(o["id"], o["label"]) for o in q["options"]]) == (
+        "repair-approval", [("discard", pack_rounds.DISCARD_OPEN)]
+    )  # fmt: skip
+    assert "too large to review here" in q["text"]
+    with pytest.raises(pack_job.Refused):
+        job.answer(q["id"], "approve-repair")
+    assert fakes.github.calls == ["create"]
+
+
+def test_a_configuration_repair_the_owner_lets_through_is_pushed_and_merges(tmp_path, checkout, clone):
+    fakes, job, _ = ci_failed(tmp_path, checkout, clone, {"biome.json": "{}\n"})
+    answered(job, "repair")
+    fakes.github.checks = ["success"]
+
+    state = answered(job, "push-config")
+
+    assert state["state"] == "passed", state["reason"]
+    assert git(checkout.parents[1], "show", f"{landed(checkout)}:biome.json") == "{}"
+
+
+def test_a_repair_that_changes_nothing_gives_the_ci_stop_back_with_its_summary_and_repairs_are_bounded(
+    tmp_path, checkout, clone
+):
+    fakes, job, _ = ci_failed(tmp_path, checkout, clone)
+
+    for attempt in range(1, pack_repair.REPAIRS + 1):
+        state = answered(job, "repair")
+        (q,) = state["questions"]
+        assert f"the agent's repair changed nothing: repair {attempt}" in q["text"]
+
+    assert (q["kind"], [o["id"] for o in q["options"]]) == ("publish", ["retry", "discard"])
+    assert (state["repair"]["attempts"], fakes.calls.count("repair"), fakes.github.calls) == (3, 3, ["create"])
+
+
+def test_a_host_stop_as_the_repair_was_pushed_pushes_it_no_second_time_and_starts_no_other_agent(
+    tmp_path, checkout, clone, monkeypatch
+):
+    fakes, job, state = ci_failed(tmp_path, checkout, clone, {"fixed.txt": "fixed\n"})
+    made, file = state["published"]["commit"], job.store.root / pack_job.FILE
+    kept: dict = {}
+    real = pack_git.remote_head
+
+    def pushing(*args):  # the repair's push reads the branch first: a host stop after it leaves the record as now
+        kept.update(kept or json.loads(file.read_text()))
+        return real(*args)
+
+    monkeypatch.setattr(pack_git, "remote_head", pushing)
+    assert answered(job, "repair")["questions"][0]["kind"] == "publish"  # pushed; CI failed at it again
+    repair = pr_head(checkout, state)
+    file.write_text(json.dumps(kept))
+
+    again = pack_job.Job(job.store, fakes.live(checkout))
+
+    (q,) = again.read()["questions"]
+    assert f"the host stopped as the agent's repair {repair[:12]} was pushed" in q["text"]
+    assert [o["id"] for o in q["options"]] == ["retry", "discard"]  # a host stop is no CI stop
+    fakes.github.checks = ["success"]
+    state = answered(again, "retry")
+    assert state["state"] == "passed", state["reason"]
+    assert (landed(checkout), git(checkout.parents[1], "rev-parse", f"{repair}~1")) == (repair, made)
+    assert fakes.calls.count("repair") == 1
+    pushes = [(i["result"], i["identity"]) for i in state["invocations"] if i["operation"] == "ci-repair"]
+    assert pushes == [("stopped", ""), ("pushed", repair)]  # the one the host stopped, then the push found done
+
+
+@pytest.mark.parametrize("window", ["laying", "golden"])
+def test_a_host_stop_while_a_repair_is_checked_again_checks_it_from_the_start_and_pushes_nothing_before(
+    tmp_path, checkout, clone, monkeypatch, window
+):
+    """Stopped before its files were laid into the candidate, or as its golden pages ran: Retry lays it out again."""
+    fakes, job, state = ci_failed(tmp_path, checkout, clone, {DETECTOR: "# repaired\n"})
+    head, file, kept, real = pr_head(checkout, state), job.store.root / pack_job.FILE, {}, pack_repair_content.snapshot
+    (passed,) = {i["identity"] for i in state["invocations"] if i["operation"] == "full-challenge"}
+
+    def laying(*args):  # the host stops right after the check was recorded, before anything is laid out
+        if not kept:
+            kept.update(json.loads(file.read_text()))
+            for d in (job.workspace, job.store.root / pack_run.CANDIDATE):
+                shutil.copytree(d, tmp_path / "left" / d.name, symlinks=True)
+        return real(*args)
+
+    if window == "laying":
+        monkeypatch.setattr(pack_repair_content, "snapshot", laying)
+    else:
+        fakes.at_golden = lambda: kept.update(kept or json.loads(file.read_text()))
+    fakes.github.checks = ["success"]
+    answered(job, "repair")
+    file.write_text(json.dumps(kept))  # the record as the host left it, in the middle of the check
+    for d in (job.workspace, job.store.root / pack_run.CANDIDATE) if window == "laying" else ():
+        shutil.rmtree(d)
+        shutil.copytree(tmp_path / "left" / d.name, d, symlinks=True)  # and its files, none laid out yet
+    assert (kept["context"]["repair"]["phase"], bool(kept["context"]["repair"]["laid"])) == (
+        "checking",
+        window != "laying",
+    )
+
+    again = pack_job.Job(job.store, fakes.live(checkout))
+
+    (q,) = again.read()["questions"]
+    assert "was checked again; nothing was pushed" in q["text"]
+    assert [o["id"] for o in q["options"]] == ["retry", "discard"]
+    calls = len(fakes.calls)
+    state = answered(again, "retry")
+    assert (state["questions"][0]["kind"], fakes.calls[calls:]) == ("code", ["golden", "challenger"])
+    assert "code/detector.py" in fakes.sessions[-1].changed  # the challenger judged the repair, laid out again
+    (checked,) = {i["identity"] for i in state["invocations"][-3:] if i["operation"] == "full-challenge"}
+    assert checked != passed
+    assert (pr_head(checkout, state), state["repair"]["phase"]) == (head, "checking")
+    answered(again, "approve")
+    state = answered(again, "approve-repair")
+    assert state["state"] == "passed", state["reason"]
+    assert fakes.calls.count("repair") == 1
+    assert git(checkout.parents[1], "show", f"{landed(checkout)}:{DETECTOR}") == "# repaired"
+
+
+def test_a_repair_abandoned_on_a_moved_head_leaves_no_trace_in_a_later_repairs_check(tmp_path, checkout, clone):
+    """Repair B is checked on its own commit's protected content, never on A's, which was laid out and never pushed."""
+    fakes, job, state = ci_failed(tmp_path, checkout, clone, {DETECTOR: "# repaired\n"}, {GOLDEN: "<p>repaired</p>\n"})
+    root, ref = checkout.parents[1], f"refs/heads/{state['published']['branch']}"
+    assert answered(job, "repair")["questions"][0]["kind"] == "code"  # A, checked and waiting for the owner
+    git(root, "fetch", "-q", "origin", ref)
+    theirs = git(root, "commit-tree", "FETCH_HEAD^{tree}", "-p", "FETCH_HEAD", "-m", "theirs")
+    git(root, "push", "-q", "origin", f"{theirs}:{ref}")  # someone pushed meanwhile
+    fakes.github.checks = ["failure"]
+
+    state = answered(job, "approve")  # A finds the branch moved: never pushed; CI fails at their head
+
+    (q,) = state["questions"]
+    assert (q["kind"], pr_head(checkout, state), "repair" in [o["id"] for o in q["options"]]) == (
+        "publish",
+        theirs,
+        True,
+    )
+    state = answered(job, "repair")  # B, made on their head
+    (q,) = state["questions"]
+    made = state["repair"]["commit"]
+    assert (q["kind"], git(root, "rev-parse", f"{made}~1")) == ("evidence", theirs)
+    laid = sorted(
+        p.relative_to(job.workspace).as_posix() for d in ("golden", "code") for p in (job.workspace / d).iterdir()
+    )
+    package = checkout.relative_to(root).as_posix()
+    held = {
+        p.removeprefix(f"{package}/golden/")
+        for p in git(root, "ls-tree", "--name-only", made, f"{package}/golden/").split()
+    }
+    assert laid == sorted([*(f"golden/{p}" for p in held), *pack_gates.GLUE])
+    for ours in laid:
+        assert (job.workspace / ours).read_text().strip() == git(
+            root, "show", f"{made}:{package}/{pack_gates.package_path(ours)}"
+        )
+    assert (job.workspace / "code/detector.py").read_text() != "# repaired\n"  # no trace of A's detector edit
+
+    fakes.github.checks = ["success"]
+    answered(job, "accept")
+    state = answered(job, "approve-repair")
+    assert state["state"] == "passed", state["reason"]
+    assert git(root, "show", f"{landed(checkout)}:{GOLDEN}") == "<p>repaired</p>"
+    assert git(root, "show", f"{landed(checkout)}:{DETECTOR}") != "# repaired"
+
+
+@pytest.mark.parametrize("during", [False, True])
+def test_a_pull_request_someone_moved_is_never_repaired_over_and_ci_is_read_at_its_new_head(
+    tmp_path, checkout, clone, during
+):
+    fakes, job, state = ci_failed(tmp_path, checkout, clone, {"fixed.txt": "fixed\n"})
+    root, ref, theirs = checkout.parents[1], f"refs/heads/{state['published']['branch']}", []
+
+    def push() -> None:
+        git(root, "fetch", "-q", "origin", ref)
+        made = git(root, "commit-tree", "FETCH_HEAD^{tree}", "-p", "FETCH_HEAD", "-m", "theirs")
+        git(root, "push", "-q", "origin", f"{made}:{ref}")
+        theirs.append(made)
+
+    fakes.at_repair = push if during else lambda: None
+    if not during:
+        push()
+    fakes.github.checks = ["success"]
+
+    state = answered(job, "repair")
+
+    assert state["state"] == "passed", state["reason"]
+    assert landed(checkout) == theirs[0]  # merged at their head once CI passed there; the repair never pushed
+    (inv,) = [i for i in state["invocations"] if i["operation"] == "ci-repair"]
+    assert (inv["result"], "moved" in inv["detail"]) == ("moved", True)
+    assert fakes.calls.count("repair") == int(during)
 
 
 def test_many_findings_in_the_last_allowed_round_offer_another_round(tmp_path, checkout, clone):
@@ -879,7 +1516,7 @@ def test_golden_pages_that_differ_go_to_the_updater_and_still_differing_after_it
 
     state = run(pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout)))
 
-    assert (state["state"], results(state)["golden"], results(state)["update"]) == ("failed", "failed", "passed")
+    assert (state["state"], results(state)["golden"], results(state)["update"]) == ("failed", "failed", "completed")
     assert "golden pages differ: bad.html (source): missing glow" in state["reason"]
     assert "## Golden pages with the package's expectations\ngolden pages differ" in fakes.updates[0].message
     assert fakes.calls[-2:] == ["update", "golden"]
@@ -1130,7 +1767,7 @@ def test_when_upstream_is_not_ahead_the_run_is_up_to_date_and_does_nothing_else(
 
     assert state["state"] == "up-to-date"
     assert f"no skill release newer than {PINNED}" in state["reason"]
-    assert results(state) == {"notice": "passed"} | dict.fromkeys(NAMES[1:], "skipped")
+    assert results(state) == {"notice": "passed"} | dict.fromkeys(NAMES[1:], "not-reached")
     assert fakes.calls == ["releases"]
     assert snapshot(checkout) == before
 
@@ -1152,8 +1789,8 @@ def test_a_failing_stage_stops_before_activation_and_changes_nothing(  # noqa: P
     assert state["state"] == "failed"
     assert said in state["reason"]
     at = NAMES.index(stage)
-    assert results(state) == dict.fromkeys(NAMES[:at], "passed") | {stage: "failed"} | dict.fromkeys(
-        NAMES[at + 1 :], "skipped"
+    assert results(state) == dict.fromkeys(NAMES[:at], "passed") | {"update": "completed", stage: "failed"} | (
+        dict.fromkeys(NAMES[at + 1 :], "not-reached")
     )
     assert fakes.calls[-1] == stage
     assert snapshot(checkout) == before
@@ -1172,7 +1809,7 @@ def test_a_refused_push_waits_for_the_owner_and_trying_again_reconciles_with_git
 
     assert (state["state"], results(state)["commit"], results(state)["push"]) == ("waiting", "passed", "waiting")
     (q,) = state["questions"]
-    assert (q["kind"], [o["id"] for o in q["options"]]) == ("publish", ["retry", "discard"])
+    assert (q["kind"], [o["label"] for o in q["options"]]) == ("publish", ["Try again", "Discard the update"])
     assert "refused by the remote" in q["text"]
     assert (snapshot(checkout), fakes.github.prs) == (before, {})
     made = state["published"]["commit"]
@@ -1223,6 +1860,10 @@ def test_a_host_stop_during_publication_waits_for_the_owner_instead_of_failing(t
     (q,) = state["questions"]
     assert (state["state"], q["kind"]) == ("waiting", "publish")
     assert "the host stopped while the update was being published" in q["text"]
+    assert [(o["id"], o["label"]) for o in q["options"]] == [
+        ("retry", "Try again"),
+        ("discard", pack_rounds.DISCARD_OPEN),
+    ]  # a host stop is no CI stop: no agent repairs it
     fakes.github.checks = ["success"]
     assert answered(again, "retry")["state"] == "passed"
     assert fakes.github.calls == ["create", "merge", "delete"]  # the open pull request was found again
@@ -1468,7 +2109,7 @@ def test_every_project_sees_an_update_running_on_the_machine_and_for_whom(tmp_pa
     store.name = "shop"
     job = pack_job.Job(store)
     assert pack_job.running_for() is None
-    job._claim()  # noqa: SLF001 - what a starting run takes
+    job._claim(job._alone)  # noqa: SLF001 - what a starting run takes
     try:
         c = TestClient(api.create_app(Store(tmp_path / "other"), "t", Host()), base_url="http://127.0.0.1")
         assert (pack_job.running_for(), c.get("/api/next/design-pack", headers=AUTH).json()["machine"]) == (
@@ -1482,7 +2123,7 @@ def test_every_project_sees_an_update_running_on_the_machine_and_for_whom(tmp_pa
 def test_a_successor_claim_is_never_erased_by_a_release_paused_after_its_close(tmp_path, monkeypatch):
     """A release closes and clears the claim under the lock a claim takes, so a successor is not erased."""
     job = pack_job.Job(Store(tmp_path / "store"))
-    job._claim()  # noqa: SLF001 - the first run's claim
+    job._claim(job._alone)  # noqa: SLF001 - the first run's claim
     real_close, closed, resume = os.close, threading.Event(), threading.Event()
     armed = [True]
 
@@ -1546,7 +2187,7 @@ def test_a_successor_that_passed_the_check_before_an_unconfirmed_release_is_refu
     with monkeypatch.context() as patch:  # only this fault is undone below, never the HOME isolation
         patch.setattr(pack_job.Job, "_unproven", unproven)
         with pytest.raises(pack_job.Busy, match="unproven"):
-            job._claim()  # noqa: SLF001 - the successor's claim
+            job._claim(job._alone)  # noqa: SLF001 - the successor's claim
     assert job.held is None
     probe = os.open(pack_job.local_home.root() / pack_job.MACHINE_LOCK, os.O_RDWR)
     try:
@@ -1554,7 +2195,7 @@ def test_a_successor_that_passed_the_check_before_an_unconfirmed_release_is_refu
     finally:
         os.close(probe)
     assert pack_job.local_home.root() == home  # still the isolated HOME for the claim below
-    job._claim()  # noqa: SLF001 - after recovery a third claim is admitted
+    job._claim(job._alone)  # noqa: SLF001 - after recovery a third claim is admitted
     try:
         assert job.held is not None
         assert (home / pack_job.MACHINE_LOCK).is_file()
@@ -1600,6 +2241,80 @@ def test_one_update_runs_at_a_time_on_the_machine_whichever_project_starts_it(tm
     first.thread.join(30)
     assert second.start()["state"] == "running"  # the lock went with the first run's thread
     second.thread.join(30)
+
+
+def registered(tmp_path: Path, *names: str) -> list[Store]:
+    """Projects in this machine's registry (under the isolated HOME), each store where the registry places it."""
+    projects = [registry.Project(id=n, path=str(tmp_path / n), added_at=datetime.now(UTC)) for n in names]
+    with registry.locked():
+        registry.save(registry.Machine(projects=projects))
+    return [Store(project_home.home(n), None, n) for n in names]
+
+
+@pytest.mark.parametrize("phase", ["rounds", "publication"])
+def test_a_run_waiting_in_one_project_refuses_a_fresh_start_in_another_and_goes_on_itself_after_a_restart(
+    tmp_path, checkout, clone, phase
+):
+    """P7: a waiting run holds no lock, so a claim reads every project's record; the run goes on only as itself."""
+    fakes = Fakes(clone)
+    if phase == "rounds":
+        fakes.verdicts, fakes.rejects, fakes.upheld = ["fix"], [[], ["F1"]], True
+    alpha, beta = registered(tmp_path, "alpha", "beta")
+    fakes.live(checkout)
+    fakes.github.checks = ["failure"]  # publication waits on its own pull request's CI
+    assert run(pack_job.Job(alpha, fakes.live(checkout)))["state"] == "waiting"
+    assert bool(fakes.github.prs) is (phase == "publication")
+
+    other = pack_job.Job(beta, fakes.live(checkout))
+    with pytest.raises(pack_job.Busy, match="a design pack update waits for answers in alpha"):
+        other.start()
+    assert (other.read()["state"], (beta.root / pack_job.FILE).exists()) == ("idle", False)
+
+    restarted = pack_job.Job(alpha, fakes.live(checkout))  # a host restart reads the waiting run back
+    fakes.github.checks = ["success"]
+    state = answered(restarted, "drop" if phase == "rounds" else "retry")
+    assert state["state"] == "passed", state["reason"]
+
+
+def test_two_projects_starting_at_once_get_exactly_one_update(tmp_path, checkout, clone):
+    fakes = Fakes(clone)
+    fakes.hold = threading.Event()
+    jobs = [pack_job.Job(s, fakes.live(checkout)) for s in registered(tmp_path, "alpha", "beta")]
+    gate, said = threading.Barrier(2), []
+
+    def start(job: pack_job.Job) -> None:
+        gate.wait(10)
+        try:
+            said.append(job.start()["state"])
+        except pack_job.Busy as exc:
+            said.append(str(exc))
+
+    starters = [threading.Thread(target=start, args=(job,)) for job in jobs]
+    for t in starters:
+        t.start()
+    for t in starters:
+        t.join(30)
+    fakes.hold.set()
+    [winner] = [job for job in jobs if job.thread is not None]
+    winner.thread.join(30)
+    assert said.count("running") == 1, said
+    assert [job.read()["state"] for job in jobs if job is not winner] == ["idle"]
+
+
+def test_an_unread_pull_request_list_refuses_a_start_and_leaves_the_waiting_question_open(tmp_path, checkout, clone):
+    """An unread lookup is no evidence that no pack pull request is open: nothing goes on, nothing is rewritten."""
+    job, fakes, state = upheld(tmp_path, checkout, clone)
+    kept = job.path.read_bytes()
+    fakes.github.listing = ProviderError(FailureCode.UNAVAILABLE, "open_pull_requests", "offline", retry_safe=True)
+
+    with pytest.raises(pack_job.Busy, match="pull requests could not be read"):
+        job.answer(state["questions"][0]["id"], "drop")
+    assert (job.read(), job.path.read_bytes()) == (state, kept)
+    with pytest.raises(pack_job.Busy, match="pull requests could not be read"):
+        pack_job.Job(Store(tmp_path / "other"), fakes.live(checkout)).start()
+
+    fakes.github.listing = None
+    assert answered(job, "drop")["state"] == "passed"
 
 
 def test_the_answer_routes_take_only_an_open_questions_options(tmp_path, checkout, clone):
@@ -1648,17 +2363,24 @@ def test_the_last_run_survives_a_host_restart_and_a_run_cut_short_reads_failed(t
     assert json.loads((store.root / pack_job.FILE).read_text())["state"] == "failed"  # kept on disk
 
 
-def test_settings_shows_the_design_pack_section_and_its_update_button(tmp_path, page_source):
+def test_maintenance_shows_the_design_pack_section_and_settings_only_links_to_it(tmp_path, page_source):
     c = TestClient(api.create_app(Store(tmp_path), "t", Host()), base_url="http://127.0.0.1", headers=AUTH)
 
-    page = page_source(c, "/config")
+    page = page_source(c, "/maintenance")
 
-    assert '<section id="pack" class="panel" aria-labelledby="pack-title">' in page
-    assert '<h2 id="pack-title">Design pack</h2>' in page
-    assert 'button("Update design pack", startUpdate, { id: "pack-update", icon: "refresh"' in page  # lit-html
-    assert '<p-text id="pack-state" size="sm" role="status" aria-live="polite">${packLine(u)}</p-text>' in page
+    assert '<section id="owlbear" class="panel" aria-labelledby="owlbear-title">' in page  # the global section
+    assert '<h3 id="pack-title">Design pack</h3>' in page
+    assert 'button("Update design pack", start, { id: "pack-update", icon: "refresh"' in page  # lit-html
+    assert '<p-text id="pack-state" size="sm" role="status" aria-live="polite">${runLine(u)}</p-text>' in page
     assert '<ol id="pack-stages" aria-label="Update stages">' in page
     assert "commits design_pack.json, skills/NOTICE.md and " in page  # the Update dialog says what it commits
+    settings = page_source(c, "/config")
+    assert 'id="pack-update"' not in settings  # the update is OwlBear's maintenance, not a project setting
+    assert 'href=${here({}, "/maintenance#owlbear")}' in settings
+    pinned = c.get("/api/next/maintenance/pack").json()
+    assert (pinned["pack"], pinned["upstream"], pinned["identity"]) == (
+        OLD["pack"], OLD["upstream"]["tag"], design_pack.identity()
+    )  # fmt: skip
     got = c.get("/api/next/design-pack").json()
     assert (got["pack"], got["upstream"]) == (OLD["pack"], OLD["upstream"]["tag"])
     assert got["identity"] == design_pack.identity()
@@ -1680,8 +2402,8 @@ def test_the_maintenance_page_links_each_action_and_shows_what_is_not_built(tmp_
     got = {a["name"]: a for a in c.get("/api/next/maintenance").json()}
     assert list(got) == ["Memory curation", "Design pack update", "Engine update", "Review Tests", "Backlog triage"]
     assert (got["Memory curation"]["href"], got["Memory curation"]["last"]) == ("/memory", None)
-    assert (got["Design pack update"]["href"], got["Design pack update"]["last"]) == ("/config#pack", None)
-    assert (got["Engine update"]["built"], got["Engine update"]["href"]) == (True, "/config#machine-title")
+    assert (got["Design pack update"]["href"], got["Design pack update"]["last"]) == ("#owlbear", None)
+    assert (got["Engine update"]["built"], got["Engine update"]["href"]) == (True, "#owlbear")
     assert (got["Review Tests"]["built"], got["Review Tests"]["href"]) == (True, "#tests")  # started on this page
     assert (got["Backlog triage"]["href"], got["Backlog triage"]["recorded"]) == ("/backlog", False)
     (store.root / pack_job.FILE).write_text(

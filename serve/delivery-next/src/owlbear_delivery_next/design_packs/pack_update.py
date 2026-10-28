@@ -1,8 +1,8 @@
 """Updating the design pack (design skill research §3.5, update procedure; TD-76): the tooling before the first update.
 
 1. Notice: how many skill releases upstream is ahead of the pinned tag; offline is "unknown", never a failure.
-2. Diff: rules added, removed and changed, and skill files changed, between the pinned tag and a candidate, read
-   from a local clone of upstream; the owner chooses what to adopt in a direct chat.
+2. Diff: rules added, removed and changed, and skill files changed, between the pinned commit and a candidate, read
+   from a local clone of upstream; the owner chooses what to adopt in a direct chat. A tag can move; the commit cannot.
 3. Golden pages: an engine must find exactly the expected rules on Delivery's fixture pages.
 4. Calibration replay: ``pack_replay`` reruns the design judge on decided rounds; ``calibration.replayed`` compares.
 5. Activation: a pack is the package's manifest and skills; a reviewed commit switches it in one step, and reverting
@@ -110,6 +110,22 @@ def _git(clone: Path, *args: str) -> str:
     return done.stdout
 
 
+def pinned_commit(clone: Path) -> str:
+    """The commit the manifest pins, which a moved tag cannot change, once the clone is known to have it.
+
+    Raises:
+        design_pack.PackError: The clone does not have the pinned commit.
+    """
+    upstream = design_pack.manifest()["upstream"]
+    commit = upstream["commit"]
+    try:
+        _git(clone, "cat-file", "-e", f"{commit}^{{commit}}")
+    except subprocess.CalledProcessError:
+        msg = f"the pinned commit {commit} ({upstream['tag']}) is not in the clone {clone}; fetch upstream there first"
+        raise design_pack.PackError(msg) from None
+    return commit
+
+
 def rules(clone: Path, tag: str) -> dict[str, dict[str, str]]:
     """Every field of each rule in upstream's ``ANTIPATTERNS`` table at *tag*, by rule id; not the test fixtures.
 
@@ -135,11 +151,15 @@ def diff(clone: Path, to: str) -> str:
     """The report the owner chooses from: rules added, removed and changed field by field, and skill files changed.
 
     The skill text itself is read with ``git diff PINNED TO -- skill`` in the clone, named at the end.
+
+    Raises:
+        design_pack.PackError: The clone does not have the pinned commit.
     """
-    pinned = design_pack.manifest()["upstream"]["tag"]
+    pinned = pinned_commit(clone)
     old, new = rules(clone, pinned), rules(clone, to)
     files_changed = _git(clone, "diff", "--name-status", pinned, to, "--", SKILL).splitlines()
-    lines = [f"# Design pack update: {pinned} to {to}", ""]
+    tag = design_pack.manifest()["upstream"]["tag"]
+    lines = [f"# Design pack update: {tag} ({pinned}) to {to}", ""]
     added, removed = sorted(new.keys() - old.keys()), sorted(old.keys() - new.keys())
     for title, ids in (("Rules added", added), ("Rules removed", removed)):
         named = [f"- {r}: {(new.get(r) or old[r])['name'].strip('"')}" for r in ids]
@@ -157,8 +177,8 @@ def diff(clone: Path, to: str) -> str:
 
 
 def skill_diff(clone: Path, to: str) -> str:
-    """Upstream's skill text from the pinned tag to *to*, as one unified diff: what that last line shows."""
-    return _git(clone, "diff", design_pack.manifest()["upstream"]["tag"], to, "--", SKILL)
+    """Upstream's skill text from the pinned commit to *to*, as one unified diff: what that last line shows."""
+    return _git(clone, "diff", pinned_commit(clone), to, "--", SKILL)
 
 
 def golden(

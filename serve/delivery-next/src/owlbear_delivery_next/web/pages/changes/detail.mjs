@@ -45,7 +45,8 @@ export function badge(c) {
 export function detailView(d) {
   const [variant, label] = badge(d), forms = formsOf(d);
   if (state.refused && state.refused.forms !== forms) state.refused = null;
-  const refusedTop = state.refused && !state.refused.form ? refusal(state.refused.text) : nothing;
+  const refusedTop = state.refused && !state.refused.form ? refusal(state.refused.text, state.refused.unsure)
+    : nothing;
   const behind = d.pullback?.state === "behind";
   const r = d.visual_round, deciding = r && r.outcome === "ask" && d.question?.options.some((o) => o.id === "fail");
   const pictures = d.visual ? visualSection(d.key, d.visual, d.before, d.visual_existing_errors, deciding)

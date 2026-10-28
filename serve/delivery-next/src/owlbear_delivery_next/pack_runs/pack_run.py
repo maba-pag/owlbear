@@ -1,18 +1,20 @@
 """A design pack update's resumable run (TD-208, TD-220, TD-256): its context, its next action and its sessions.
 
 The run is a loop of actions: the updater, the golden pages on its candidate, the replay when the skills changed, the
-challenger's rounds, a reconsideration, the owner and the activation. The owner also decides each change outside the
-pack, to its expected evidence or its code, and each one the challenger is unsure the upgrade needs (``pack_gates``).
-The context, the loop and the owner's questions are kept in the job's state file, and the updater's repository and
-the candidate's skills under the store, so a run that waits for the owner survives a host restart. A session that
-fails ends the run, as before.
+challenger's rounds, a reconsideration, the owner and the activation (``pack_activation``). The owner also decides each
+change outside the pack, to its expected evidence or its code, and each one the challenger is unsure the upgrade needs
+(``pack_gates``). The context, the loop and the owner's questions are kept in the job's state file, and the updater's
+repository and the candidate's skills under the store, so a run that waits for the owner survives a host restart. A
+session that fails ends the run, as before. An agent's CI repair of the pull request that changes protected pack
+content is laid into the candidate, its whole protected content as its commit holds it, and checked the same way, from
+the golden pages on, before Delivery pushes it (``pack_repair``): its findings go to the owner, never back to the
+updater.
 """
 
 from __future__ import annotations
 
 import hashlib
 import shutil
-from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -21,15 +23,25 @@ from owlbear_delivery_next.change_contracts import dispute_tools, pack_tools, to
 from owlbear_delivery_next.change_contracts.round_records import PACK, RoundLoop
 from owlbear_delivery_next.design_packs import design_pack, pack_git
 from owlbear_delivery_next.local_system import preload
-from owlbear_delivery_next.pack_runs import pack_candidate, pack_gates, pack_publish, pack_rounds, pack_updater
-from owlbear_delivery_next.pack_runs.pack_gates import CODE, GOLDEN
+from owlbear_delivery_next.pack_runs import (
+    pack_activation,
+    pack_candidate,
+    pack_gates,
+    pack_publish,
+    pack_repair,
+    pack_rounds,
+    pack_updater,
+)
+from owlbear_delivery_next.pack_runs.pack_gates import GOLDEN
 from owlbear_delivery_next.settings import rounds
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from owlbear_delivery_next.pack_runs.pack_job import Job
     from owlbear_delivery_next.runtimes.session_result import Run
 
-type Action = Literal["update", "replay", "challenge", "recheck", "reconsider", "wait", "activate"]
+type Action = Literal["update", "golden", "replay", "challenge", "recheck", "reconsider", "wait", "activate"]
 CANDIDATE = "design-pack-candidate"  # the run's candidate skills, under the store
 UPDATER = "design-pack-updater"  # the updater's repository, under the store
 NEXT: dict[str, Action] = {
@@ -77,14 +89,17 @@ class Context(BaseModel):
     unsure: dict[str, str] = Field(default_factory=dict)  # the last full round's unsure changes, for the owner
     changes: list[str] = Field(default_factory=list)  # the last full round's judgement of each changed file
     undo: list[str] = Field(default_factory=list)  # the paths the owner had undone, restored before the next session
+    repair: pack_repair.Repair = Field(default_factory=pack_repair.Repair)  # the agent's CI repairs of the pull request
     next: Action = "update"
 
 
-def _sha(data: bytes) -> str:
+def sha(data: bytes) -> str:
+    """The SHA-256 digest of *data*."""
     return hashlib.sha256(data).hexdigest()
 
 
-def _path(name: str) -> str:
+def skill_path(name: str) -> str:
+    """The package path of the pinned skill *name*."""
     return f"{preload.ROOT}/{name}/SKILL.md"
 
 
@@ -119,22 +134,28 @@ def rebuilt(job: Job, ctx: Context) -> pack_candidate.Candidate:
         msg = f"the candidate {ctx.pins['pack']} is no longer installed on this machine; run the update again"
         raise Stopped(msg)
     package = job.live.package.resolve()
-    _unchanged(package, ctx)
-    baseline = {n: (package / _path(n)).read_bytes() for n in ctx.pins["skills"]}
+    unchanged(package, ctx)
+    baseline = {n: (package / skill_path(n)).read_bytes() for n in ctx.pins["skills"]}
     return pack_candidate.Candidate(
         ctx.tag, ctx.pins, ctx.manifest, ctx.notice, installed, job.store.root / CANDIDATE, baseline
     )
 
 
-def _unchanged(package: Path, ctx: Context) -> None:
+def unchanged(package: Path, ctx: Context) -> None:
+    """Check that no package file the update may rewrite changed since it started.
+
+    Raises:
+        Stopped: One changed.
+    """
     for path, digest in ctx.baseline.items():
-        if not (package / path).is_file() or _sha((package / path).read_bytes()) != digest:
+        if not (package / path).is_file() or sha((package / path).read_bytes()) != digest:
             name = path.removeprefix(f"{preload.ROOT}/").removesuffix("/SKILL.md")
             msg = f"{name} changed in the package during the update; run the update again"
             raise Stopped(msg)
 
 
-def _edits(job: Job, ctx: Context) -> dict[str, bytes | None]:
+def updater_edits(job: Job, ctx: Context) -> dict[str, bytes | None]:
+    """The updater's edits in its folder, against the package's files at the start (``pack_gates``)."""
     return pack_gates.edits(job.workspace, ctx.baseline)
 
 
@@ -145,9 +166,13 @@ def advance(job: Job, c: pack_candidate.Candidate, ctx: Context, lp: RoundLoop) 
         Stopped: An action ended the run.
     """
     while True:
+        if (r := ctx.repair).phase == "checking" and r.laid != r.commit and not pack_activation.laid(job, c, ctx, lp):
+            return None  # a repair is checked only on its own snapshot, laid out again after a host stop
         match ctx.next:
-            case "update":
-                ctx.next = _update(job, c, ctx, lp)
+            case "update":  # a repair's findings go to the owner, never the updater
+                ctx.next = "wait" if ctx.repair.phase == "checking" else _update(job, c, ctx, lp)
+            case "golden":  # a CI repair's check: a new round of the repaired candidate
+                ctx.next = _golden(job, c, ctx, lp.round + 1)
             case "replay":
                 ctx.next = _replay(job, c, ctx)
             case "challenge" | "recheck":
@@ -156,10 +181,10 @@ def advance(job: Job, c: pack_candidate.Candidate, ctx: Context, lp: RoundLoop) 
                 ctx.next = _reconsider(job, c, lp)
             case "wait":
                 asked, stage = _asked(job, c, ctx, lp)
-                job.wait(ctx, lp, asked, stage)
+                job.wait(ctx, lp, pack_activation.repairing(ctx, asked), stage)
                 return None
             case "activate":
-                return _activate(job, c, ctx, lp)
+                return pack_activation.activate(job, c, ctx, lp)
             case other:
                 msg = f"the run's next action {other!r} is unknown; run the update again"
                 raise Stopped(msg)
@@ -196,38 +221,55 @@ def _update(job: Job, c: pack_candidate.Candidate, ctx: Context, lp: RoundLoop) 
     keys = (pack_rounds.rejectable(lp), pack_rounds.settled(lp))
     cfg = pack_updater.config(store, at, ctx.sid, ask, resume=resume, fresh=whole, replaced=replaced, keys=keys)
 
-    result = job.do("update", lambda: pack_updater.ended(live.update(store, cfg)), lambda r: r.summary)
+    result = job.do(  # a session that completed, never a verdict on its candidate
+        "update", lambda: pack_updater.ended(live.update(store, cfg)), lambda r: r.summary, round_=lp.round + 1,
+        judged=lambda _r: "completed",
+    )  # fmt: skip
     ctx.sessions, ctx.summary, ctx.reason = ctx.sessions + 1, result.summary, result.evidence
     bad = pack_updater.outside(at, ctx.start, c.pins["skills"])
     if not bad:
         pack_updater.taken(at, c)
-    identity = pack_gates.identity(c, _edits(job, ctx))
+    identity = pack_gates.identity(c, updater_edits(job, ctx))
+    job.identified(identity)
     ctx.after = NEXT[pack_rounds.revised(lp, {r.finding: r.reason for r in result.rejected}, identity)]
     if bad:
         return "wait"  # the owner first: undo or discard (TD-194)
+    return _golden(job, c, ctx)
+
+
+def _golden(job: Job, c: pack_candidate.Candidate, ctx: Context, round_: int | None = None) -> Action:
+    """The golden pages on the candidate (TD-177); its changed evidence goes to the owner first.
+
+    Raises:
+        Stopped: The golden pages differ from the candidate's expectations.
+    """
+    identity = pack_gates.identity(c, updater_edits(job, ctx))
 
     def golden() -> str:  # the candidate's own pages and expectations, with the running code (TD-414)
-        said = pack_gates.checked(live.golden(c.installed, at / "golden"))
+        said = pack_gates.checked(job.live.golden(c.installed, job.workspace / "golden"))
         if said != pack_gates.AS_EXPECTED:
             raise Stopped(said)
         return said
 
-    ctx.golden = job.do("golden", golden)
-    return "wait" if _unaccepted(job, ctx) else "replay"
+    ctx.golden = job.do("golden", golden, op="candidate-golden", round_=round_, identity=identity)
+    job.identified(identity)  # what the rounds found about another candidate is stale now
+    return "wait" if unaccepted(job, ctx) else "replay"
 
 
-def _unaccepted(job: Job, ctx: Context) -> str:
+def unaccepted(job: Job, ctx: Context) -> str:
     """The digest of changed golden evidence the owner has not accepted, or empty."""
-    mark = pack_gates.digest(_edits(job, ctx), GOLDEN)
+    mark = pack_gates.digest(updater_edits(job, ctx), GOLDEN)
     return mark if mark != ctx.evidence else ""
 
 
 def _replay(job: Job, c: pack_candidate.Candidate, ctx: Context) -> Action:
     """The calibration replay when the skills changed since the last one (TD-177); then what the session led to."""
-    identity = design_pack.identity(c.manifest, c.skills)
+    identity, candidate = design_pack.identity(c.manifest, c.skills), pack_gates.identity(c, updater_edits(job, ctx))
     if identity != ctx.judged:
-        replayed = job.do("replay", lambda: _replayed(job.live.replay(job.store, c, keep=job.keeps)))
-        ctx.replayed, ctx.judged = replayed, identity
+        replay = lambda: _replayed(job.live.replay(job.store, c, keep=job.keeps))  # noqa: E731
+        ctx.replayed, ctx.judged = job.do("replay", replay, identity=candidate), identity
+    else:  # the skills it judged are unchanged: its result stands for this candidate
+        job.note("replay", "replay", "reused", ctx.replayed, candidate)
     return ctx.after
 
 
@@ -245,7 +287,7 @@ def _challenge(job: Job, c: pack_candidate.Candidate, ctx: Context, lp: RoundLoo
     A full round judges each file the updater changed (TD-194); one it is unsure about goes to the owner first.
     """
     at, keys = job.workspace, tuple(f.id for f in pack_rounds.pending(lp))
-    edits = _edits(job, ctx)
+    edits = updater_edits(job, ctx)
     changed = None if recheck else pack_gates.diffs(c, at, job.live.package.resolve(), edits)
     text = pack_candidate.message(
         c, ctx.diff, ctx.golden, ctx.replayed, updated=ctx.summary,
@@ -254,18 +296,23 @@ def _challenge(job: Job, c: pack_candidate.Candidate, ctx: Context, lp: RoundLoo
     cap = 0 if recheck else lp.policy.max_findings
     identity = pack_gates.identity(c, edits)
     submit = tools.REVIEW if recheck else pack_tools.REVIEW
+    round_ = lp.round + 1  # a recheck stays in the round of the update whose rejections it judges (TD-330)
 
-    def challenge() -> tuple[list[str], dict[str, tuple[bool, str]], list[pack_tools.Change]]:
+    def challenge() -> tuple[list[str], list[pack_tools.Change], str]:
         run = pack_candidate.challenge(
             job.store, c, job.live.clone, text, job.live.challenge, rechecks=keys, cap=cap, submit=submit,
             changed=tuple(changed or ()), keep=job.keeps,
         )  # fmt: skip
-        return _verdict(run)
+        found, judged, changes = _verdict(run)
+        return found, changes, pack_rounds.counted(lp, found, judged, identity, recheck=recheck)
 
-    found, judged, changes = job.do(
-        "challenger", challenge, lambda v: f"{len(v[0])} new finding(s)" if v[0] else "passed"
-    )
-    then = pack_rounds.counted(lp, found, judged, identity, recheck=recheck)
+    def judgement(v: tuple[list[str], list[pack_tools.Change], str]) -> str:  # the session's, then the candidate's
+        return "passed" if v[2] == "pass" else "findings" if v[0] else "completed"
+
+    _found, changes, then = job.do(
+        "challenger", challenge, lambda v: f"{len(v[0])} new finding(s)" if v[0] else judgement(v),
+        op="rejection-recheck" if recheck else "full-challenge", round_=round_, identity=identity, judged=judgement,
+    )  # fmt: skip
     if not recheck:
         ctx.changes = [f"{x.path}: needed {x.needed}; {x.what}; suspicious: {x.suspicious}" for x in changes]
         ctx.unsure = {
@@ -304,8 +351,8 @@ def _asked(job: Job, c: pack_candidate.Candidate, ctx: Context, lp: RoundLoop) -
     at, run = job.workspace, job.state["run"]
     if bad := pack_updater.outside(at, ctx.start, c.pins["skills"]):
         return [pack_gates.scope(run, bad)], "update"
-    edits = _edits(job, ctx)
-    if mark := _unaccepted(job, ctx):
+    edits = updater_edits(job, ctx)
+    if mark := unaccepted(job, ctx):
         shown = pack_gates.diffs(c, at, job.live.package.resolve(), edits)
         diff = "\n".join(s for p, s in shown.items() if p.startswith(GOLDEN))
         return [pack_gates.evidence(run, diff, ctx.reason, ctx.golden, mark)], "golden"
@@ -366,77 +413,31 @@ def _reconsider(job: Job, c: pack_candidate.Candidate, lp: RoundLoop) -> Action:
             raise design_pack.PackError(msg[:600])
         return {r.finding: (r.verdict, r.text if r.verdict == "clarified" else r.reason) for r in p.reconsidered}
 
-    said = job.do("challenger", reconsider, lambda v: f"reconsidered {', '.join(v)}")
+    said = job.do(
+        "challenger", reconsider, lambda v: f"reconsidered {', '.join(v)}", op="reconsideration",
+        judged=lambda _v: "completed",
+    )  # fmt: skip
     pack_rounds.reconsidered(lp, said)
     return NEXT[pack_rounds.after(lp)]
 
 
-def _activate(job: Job, c: pack_candidate.Candidate, ctx: Context, lp: RoundLoop) -> str | None:
-    """Take exactly the pack the last verdict passed, or the one the owner accepted (TD-256), into ``main``.
-
-    Its changed evidence must be what the owner accepted; a code change waits for his approval first (TD-414). The
-    run waits for the owner (None) when publication stops; trying again goes on from where it got.
-    """
-    package, at = job.live.package.resolve(), job.workspace
-    edits = _edits(job, ctx)
-    expected = ctx.accepted or (lp.head if lp.ended == "clean" else "")
-    if not expected or pack_gates.identity(c, edits) != expected:
-        msg = "the candidate is not what the challenger passed or you accepted; run the update again"
-        raise Stopped(msg)
-    if pack_updater.outside(at, ctx.start, c.pins["skills"]) or _unaccepted(job, ctx):
-        msg = "the candidate holds changes you did not accept; run the update again"
-        raise Stopped(msg)
-    if (mark := pack_gates.digest(edits, CODE)) and mark != ctx.code:
-        shown = pack_gates.diffs(c, at, package, edits)
-        diff = "\n".join(s for p, s in shown.items() if p.startswith(CODE))
-        job.wait(ctx, lp, [pack_gates.code(job.state["run"], diff, mark)], "commit")
-        return None
-    root = Path(ctx.checkout["root"]).resolve()
-    edited = [n for n in c.pins["skills"] if _sha(pack_updater.skill(c, n).read_bytes()) != ctx.baseline[_path(n)]]
-    if ctx.publication is None:  # the edited files join the one commit, checked against the package just before
-        job.do("commit", lambda: _unchanged(package, ctx), lambda _o: "the package's files are as the update found")
-        ctx.publication = _publication(job, ctx, lp, root, [*edited, *edits])
-        job.keep(ctx, lp)
-    files: dict[str, str | None] = {
-        str((package / pack_candidate.MANIFEST).relative_to(root)): c.manifest,
-        str((package / pack_candidate.NOTICE).relative_to(root)): c.notice,
-    }
-    files |= {str((package / _path(n)).relative_to(root)): pack_updater.skill(c, n).read_text("utf-8") for n in edited}
-    files |= {
-        str((package / pack_gates.package_path(p)).relative_to(root)): None if d is None else d.decode("utf-8")
-        for p, d in edits.items()
-    }
-    return _published(job, ctx, files)
-
-
-def _publication(job: Job, ctx: Context, lp: RoundLoop, root: Path, changed: list[str]) -> pack_publish.Publication:
-    """The pull request to be: its branch and its body, which says what was changed, judged and decided."""
-    edits = _edits(job, ctx)
-    said = f"The updater changed {', '.join(changed)}." if changed else "The updater changed nothing."
-    said += " You accepted the changed golden evidence." if pack_gates.digest(edits, GOLDEN) else ""
-    said += " You approved the glue's diff, checked with the running code (TD-414)." if ctx.code else ""
-    passed = "" if ctx.accepted else " The challenger passed."
-    rounds_ = pack_rounds.summary(lp, owner=bool(ctx.accepted))
-    listed = ["", "", "Changed files, as the last full round judged them:", *(f"- {x}" for x in ctx.changes)]
-    return pack_publish.Publication(
-        root=str(root), repository=ctx.checkout["repository"], base=ctx.checkout["base"],
-        branch=f"pack/{job.state['run'][:12]}",
-        body=f"Golden pages {ctx.golden}. Calibration replay: {ctx.replayed}. {said}{passed} {rounds_}"
-        + ("\n".join(listed) if ctx.changes else ""),
-    )  # fmt: skip
-
-
-def republish(job: Job, ctx: Context) -> str | None:
-    """Go on with a publication whose commit exists: GitHub first, never the candidate again (its base moved on)."""
-    return _published(job, ctx, {})
-
-
-def _published(job: Job, ctx: Context, files: dict[str, str | None]) -> str | None:
-    pub = ctx.publication
-    try:
-        merged = pack_publish.publish(job, pub, files, ctx.why)
-    except pack_publish.Held as exc:
-        job.hold(ctx, str(exc))
-        return None
-    by = " by you after rounds without a pass" if ctx.accepted else ""
-    return f"activated{by}: merged into main as {merged[:12]} through {pub.url}"
+def decided(  # noqa: PLR0913 - the open questions, the answered one, the answer and what it changes
+    asked: list[dict[str, Any]], q: dict[str, Any], option: str, *, note: str, ctx: Context, lp: RoundLoop
+) -> list[dict[str, Any]]:
+    """Record one answer; the questions still open. The last dispute answer sets what the run does next."""
+    if q["kind"] == "dispute":
+        pack_rounds.decided(lp, q["finding"], option, note)
+        left = [x for x in asked if x["id"] != q["id"]]
+        if not left:  # TD-193: the answers are carried out together
+            ctx.next = NEXT[pack_rounds.after(lp)]
+        return left
+    if q["kind"] in {"publish", *pack_repair.KINDS}:  # trying again reconciles with GitHub before anything is repeated
+        pack_repair.decided(q, option, ctx)
+        return []
+    if q["kind"] in pack_gates.KINDS:
+        return gated(asked, q, option, ctx, lp)
+    if option == pack_rounds.ANOTHER:
+        lp.extra, lp.ended, ctx.next = lp.extra + 1, "", "challenge"
+    else:
+        lp.ended, ctx.accepted, ctx.next = lp.ended, q["identity"], "activate"
+    return []

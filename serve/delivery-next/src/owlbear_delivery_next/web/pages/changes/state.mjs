@@ -1,5 +1,5 @@
 import { html, render } from "/assets/lit-html/3.3.3/lit-html.js";
-import { call as host, HostDown, project, Restarted, shown, token } from "/assets/ui.mjs";
+import { call as host, HostDown, project, Restarted, Slow, shown, token } from "/assets/ui.mjs";
 import { button } from "./widgets.mjs";
 import { youCount, view, refresh } from "./list.mjs";
 import { newChange } from "./shaping.mjs";
@@ -56,7 +56,8 @@ export function draft(key, fresh) {
 }
 
 function unreachable(e) {
-  state.error = e instanceof Restarted
+  if (e instanceof Slow) state.error = e.message;
+  else state.error = e instanceof Restarted
     ? html`Delivery restarted at a new address — open the link from chat or <code>owlbear status</code>.`
     : html`Delivery is not running. Start it with <code>owlbear start</code>, then reload this page.`;
   state.stale = true;
@@ -64,7 +65,7 @@ function unreachable(e) {
 }
 
 export function failed(e) {
-  if (e instanceof HostDown || e instanceof Restarted) unreachable(e);
+  if (e instanceof HostDown || e instanceof Restarted || e instanceof Slow) unreachable(e);
   else state.error = token ? e.message : "Open the URL the host printed, including #token=…";
   show();
 }
@@ -89,9 +90,11 @@ export async function send(path, body, d, form = "") {
     await call(`/changes/${d.slug}${path}`, body, d.project);
   } catch (e) {
     if (e instanceof HostDown || e instanceof Restarted || state.selected !== d.key) return failed(e) && false;
-    state.refused = { forms: formsOf(d), form, text: e.message };
+    const unsure = e instanceof Slow;
+    state.refused = { forms: formsOf(d), form, text: unsure ? e.reread : e.message, unsure };
     show();
     document.querySelector("#detail .refused")?.scrollIntoView({ block: "nearest" });
+    if (unsure) await refresh();  // it may have been done: what Delivery says now shows which
     return false;
   }
   state.refused = null;

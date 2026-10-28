@@ -19,6 +19,7 @@ from pydantic import BaseModel, ConfigDict
 from owlbear_delivery_next.design_packs import pack_git
 from owlbear_delivery_next.github.provider import (
     BranchState,
+    Check,
     MergeMethod,
     MergeRequest,
     MergeStatus,
@@ -43,6 +44,17 @@ MARKER = "Opened by OwlBear Delivery for a design pack update."
 class Held(Exception):  # noqa: N818 - how publication hands over to the owner
     """Publication cannot go on without the owner; the reason says why."""
 
+    result = "failed"  # how the stage that raised it ended
+
+
+class CiFailed(Held):
+    """A check failed at the head of the update's own pull request: what an agent's repair starts from."""
+
+    def __init__(self, reason: str, *, number: int, head: str, failed: tuple[Check, ...]) -> None:
+        """Keep the pull request, the head the checks failed at and the failed checks."""
+        super().__init__(reason)
+        self.number, self.head, self.failed = number, head, failed
+
 
 class Publication(BaseModel):
     """Where the update goes and how far it got; kept with the run, so a retry reconciles instead of repeating."""
@@ -60,12 +72,14 @@ class Publication(BaseModel):
     merged: str = ""  # the merge commit on main
 
 
-def publish(job: Job, pub: Publication, files: dict[str, str | None], title: str) -> str:
-    """Take the update into ``main``; the merge commit.
+def publish(
+    job: Job, pub: Publication, files: dict[str, str | None], title: str, gate: Callable[[], None] = lambda: None
+) -> str:
+    """Take the update into ``main``; the merge commit. *gate* runs once CI passed, before the merge is requested.
 
     Raises:
-        Held: The owner decides: a refused push, a failed check, a conflict, a closed pull request, rules that
-            cannot be read, CI that does not finish, or the update-branch rounds running out.
+        Held: The owner decides: a refused push, a failed check (``CiFailed``), a conflict, a closed pull request,
+            rules that cannot be read, CI that does not finish, the update-branch rounds running out, or *gate*.
     """
     live, body = job.live, pub.body
     src = pack_git.Source(Path(pub.root), pub.repository, pub.base)
@@ -75,13 +89,15 @@ def publish(job: Job, pub: Publication, files: dict[str, str | None], title: str
     if not pub.commit:
         at = job.store.root / WORKTREE
         pub.commit = _held(job, "commit", lambda: pack_git.commit(src, files, f"{title}\n\n{body}", at, live.git),
-                           lambda c: f"{c[:12]} on {pub.branch}")  # fmt: skip
+                           lambda c: f"{c[:12]} on {pub.branch}", lambda c: c)  # fmt: skip
         job.published(pub)
-    _held(job, "push", lambda: pack_git.push(src, pub.commit, pub.branch, live.git), lambda _o: pub.branch)
-    pr = _held(job, "pull-request", lambda: _opened(job, gh, pub, title, body), lambda p: p.url)
+    _held(job, "push", lambda: pack_git.push(src, pub.commit, pub.branch, live.git), lambda _o: pub.branch,
+          lambda _o: pub.commit)  # fmt: skip
+    pr = _held(job, "pull-request", lambda: _opened(job, gh, pub, title, body), lambda p: p.url, lambda p: p.head_sha)
     pub.number, pub.url = pr.number, pr.url
     job.published(pub)
-    merged, head = _held(job, "merge", lambda: _merged(job, gh, pub), lambda landed: f"merged as {landed[0][:12]}")
+    merged, head = _held(job, "merge", lambda: _merged(job, gh, pub, gate),
+                         lambda landed: f"merged as {landed[0][:12]}", lambda landed: landed[1])  # fmt: skip
     return _done(job, gh, pub, merged, head)
 
 
@@ -115,8 +131,8 @@ def preflight(gh: Provider, repository: str) -> str:
     return f"gh may push to {found.repository}"
 
 
-def _held[T](job: Job, name: str, work: Callable[[], T], said: Callable[[T], str]) -> T:
-    """One stage whose failure goes to the owner instead of ending the run."""
+def _held[T](job: Job, name: str, work: Callable[[], T], said: Callable[[T], str], made: Callable[[T], str]) -> T:
+    """One stage whose failure goes to the owner instead of ending the run; *made* is the commit or head it reached."""
 
     def guarded() -> T:
         try:
@@ -126,7 +142,7 @@ def _held[T](job: Job, name: str, work: Callable[[], T], said: Callable[[T], str
         except Exception as exc:
             raise Held(str(exc)) from exc
 
-    return job.do(name, guarded, said, hold=Held)
+    return job.do(name, guarded, said, hold=Held, identity=made)
 
 
 def _opened(job: Job, gh: Provider, pub: Publication, title: str, body: str) -> PullRequest:
@@ -154,7 +170,7 @@ def _opened(job: Job, gh: Provider, pub: Publication, title: str, body: str) -> 
     return pr
 
 
-def _merged(job: Job, gh: Provider, pub: Publication) -> tuple[str, str]:
+def _merged(job: Job, gh: Provider, pub: Publication, gate: Callable[[], None]) -> tuple[str, str]:
     """Check the current head, update and merge; return the merge commit and the merged head."""
     rules = gh.read_rules(pub.repository, pack_git.BASE)
     if rules.state != "known":
@@ -173,6 +189,7 @@ def _merged(job: Job, gh: Provider, pub: Publication) -> tuple[str, str]:
             gh.update_branch(pub.repository, pr.number, pr.head_sha)
             _moved(job, gh, pr)
             continue
+        gate()
         request = MergeRequest(repository=pub.repository, number=pr.number, expected_head_sha=pr.head_sha,
                                method=MergeMethod.MERGE)  # fmt: skip
         done = gh.request_merge(request)
@@ -204,7 +221,7 @@ def _green(job: Job, gh: Provider, pr: PullRequest, required: tuple[str, ...]) -
         if ci.failed:
             names = ", ".join(c.name for c in ci.failed)
             msg = f"CI failed at {pr.head_sha[:12]} of {pr.url}: {names}; fix it and try again, or discard"
-            raise Held(msg)
+            raise CiFailed(msg, number=pr.number, head=pr.head_sha, failed=tuple(ci.failed))
         if ci.passed and not ci.running and not ci.missing:
             return True
         live.sleep(live.poll)

@@ -1,6 +1,7 @@
 """OwlBear's versions on this machine (self-update build §3, §4, §5.1): choosing, fetching, installing, checking.
 
-Git runs on disposable local repositories; the environment step is replaced, the selfcheck runs for real once.
+Git runs on disposable local repositories; the environment step is replaced, the selfcheck runs for real once, and a
+version's interpreter is a script that records how its design pack was installed.
 """
 
 import json
@@ -12,8 +13,9 @@ from types import SimpleNamespace
 
 import pytest
 
+from owlbear_delivery_next.design_packs import design_pack
 from owlbear_delivery_next.local_system import codebase, data_place, data_repo, local_home
-from owlbear_delivery_next.machine_host import selfcheck, versions
+from owlbear_delivery_next.machine_host import packs, selfcheck, versions
 from owlbear_delivery_next.machine_host.versions import Choice
 from owlbear_delivery_next.project_host import pages
 from owlbear_delivery_next.settings.config import CONFIG_FORMAT
@@ -126,9 +128,23 @@ def test_the_mark_in_machine_json_keeps_a_lower_version_from_being_taken(origin)
 
 @pytest.fixture
 def installing(origin, monkeypatch) -> SimpleNamespace:  # noqa: ARG001 - the repository it installs from
-    """Installs whose environment step only makes the folder, and whose selfcheck says what the test sets."""
-    said = SimpleNamespace(check="", synced=[])
-    monkeypatch.setattr(versions, "_sync", lambda folder: (said.synced.append(folder), (folder / ".venv").mkdir()))
+    """Installs whose environment is an interpreter recording the pack it installs, and whose selfcheck says as set.
+
+    The interpreter writes its folder, its arguments and the manifest it finds there to ``packs.log``, and exits as
+    ``pack-exit`` says.
+    """
+    log, code = local_home.root() / "packs.log", local_home.root() / "pack-exit"
+    said = SimpleNamespace(check="", synced=[], packs=lambda: log.read_text().splitlines() if log.exists() else [])
+
+    def sync(folder: Path) -> None:
+        said.synced.append(folder)
+        python = folder / ".venv" / "bin" / "python"
+        python.parent.mkdir(parents=True)
+        python.write_text(f'#!/bin/sh\necho "$(pwd -P)|$*|$(cat {versions.MANIFEST})" >> {log}\n'
+                          f"exit $(cat {code} 2>/dev/null || echo 0)\n")  # fmt: skip
+        python.chmod(0o755)
+
+    monkeypatch.setattr(versions, "_sync", sync)
     monkeypatch.setattr(versions, "selfcheck", lambda _folder: said.check)
     versions.repo()
     versions.fetch(local_home.root() / versions.REPO)
@@ -155,6 +171,93 @@ def test_a_failed_selfcheck_removes_the_install(origin, installing):
 
     assert not (local_home.root() / local_home.VERSIONS / "v0.2").exists()
     assert "v0.2" not in git(local_home.root() / versions.REPO, "worktree", "list")
+
+
+def released(origin: Path, tag: str, manifest: str | None) -> str:
+    """A commit on main whose design_pack.json is *manifest* (None: it has none), tagged *tag* unless empty."""
+    path = origin / versions.MANIFEST
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.unlink(missing_ok=True)
+    if manifest is not None:
+        path.write_text(manifest)
+    (origin / "f.txt").write_text(f"{tag or 'untagged'}\n")
+    git(origin, "add", "-A")
+    git(origin, "commit", "-qm", tag or "untagged")
+    if tag:
+        git(origin, "tag", "-a", tag, "-m", tag)
+    return git(origin, "rev-parse", "HEAD")
+
+
+def test_a_version_is_ready_only_once_its_own_pack_is_installed_by_its_own_interpreter(origin, installing):
+    commit = released(origin, "v0.3", '{"pack": "p-new"}')
+    versions.fetch(versions.repo())
+
+    folder = versions.install(Choice("v0.3", commit))
+    versions.install(Choice("v0.3", commit))  # installed and checked before: its pack is installed again
+
+    made = f'{folder.resolve()}|-m owlbear_delivery_next design-pack --install|{{"pack": "p-new"}}'
+    assert installing.packs() == [made, made]
+    assert len(installing.synced) == 1
+
+
+def test_a_version_whose_pack_fails_is_kept_unready_and_only_its_pack_is_tried_again(origin, installing):
+    commit = git(origin, "rev-parse", "v0.2^{commit}")
+    (local_home.root() / "pack-exit").write_text("1")
+
+    with pytest.raises(versions.PackInstallError, match=r"v0\.2's design pack could not be installed"):
+        versions.install(Choice("v0.2", commit))
+
+    (local_home.root() / "pack-exit").write_text("0")
+    assert versions.install(Choice("v0.2", commit)) == local_home.root() / local_home.VERSIONS / "v0.2"
+    assert (len(installing.synced), len(installing.packs())) == (1, 2)
+
+
+def at_v0_2(origin: Path) -> Path:
+    """A runtime at v0.2, the highest version ever active, with updating by itself off."""
+    runtime = runtime_at(origin, git(origin, "rev-parse", "v0.2^{commit}"))
+    with registry.locked():
+        saved = registry.load()
+        saved.active, saved.settings = "v0.2", saved.settings.model_copy(update={"update_when_idle": False})
+        registry.save(saved)
+    return runtime
+
+
+def test_upstream_ahead_without_an_owlbear_release_shows_no_newer_pack(origin):
+    at_v0_2(origin)
+    released(origin, "", '{"pack": "p-new"}')
+
+    assert packs.look()["state"] == "none"
+
+
+def test_a_release_pinning_another_pack_is_newer_with_updating_by_itself_off_and_starts_nothing(origin, monkeypatch):
+    runtime = at_v0_2(origin)
+    head = git(runtime, "rev-parse", "HEAD")
+    released(origin, "v0.3", '{"pack": "p-new"}')
+    fetched, target = [], versions.target
+    monkeypatch.setattr(versions, "target", lambda: fetched.append(1) or target())
+
+    said = packs.look()
+
+    assert (said["state"], said["version"], said["pack"]) == ("newer", "v0.3", "p-new")
+    assert said["running_pack"] == design_pack.manifest()["pack"]
+    assert packs.look() == packs.release() == said  # within the day: what was kept, nothing fetched
+    assert fetched == [1]
+    assert packs.look(force=True)["checked_at"] is not None
+    assert fetched == [1, 1]
+    assert not (local_home.root() / local_home.VERSIONS).exists()  # nothing installed
+    assert git(runtime, "rev-parse", "HEAD") == head
+
+
+def test_a_release_pinning_the_same_pack_shows_nothing_and_an_unreadable_one_stays_unknown(origin):
+    at_v0_2(origin)
+    released(origin, "v0.3", json.dumps(design_pack.manifest()))
+
+    assert packs.look()["state"] == "same"
+
+    released(origin, "v0.4", None)
+    said = packs.look(force=True)
+    assert (said["state"], said["version"]) == ("unknown", "v0.4")
+    assert "design pack is unreadable" in said["detail"]
 
 
 def test_an_install_waits_while_the_disk_is_nearly_full(origin, installing, monkeypatch):
