@@ -6,6 +6,8 @@ import { live } from "/assets/lit-html/3.3.3/directives/live.js";
 import { Slow, call, machineState, project, runUpdates } from "/assets/ui.mjs";
 
 const WRITE = 60000;  // an answer may commit and push: a network round trip
+const ADMIT = 90000;  // a start that timed out may still be admitted: its pull request lookup can take a while
+const LOOK = 2500;  // how often the section looks for that run meanwhile
 const RESULTS = { pending: "not run", running: "running", passed: "passed", failed: "failed", skipped: "skipped",
   returned: "findings back to the updater", waiting: "waiting for you", completed: "session completed",
   findings: "findings", reused: "reused for this identity", answered: "answered by you",
@@ -23,7 +25,7 @@ const FOUND = { open: "to fix", fixed: "fixed by the updater", rejected: "reject
   "owner-drop": "you dropped it", withdrawn: "withdrawn by the challenger" };
 
 const own = { pinned: null, runs: null, unread: { pinned: "", runs: "" }, error: "", notes: new Map(), missing: "",
-  busy: "", polling: null, reading: 0, show: () => {} };
+  busy: "", polling: null, reading: 0, awaiting: null, lost: false, show: () => {} };
 
 // *show* renders the whole page; the section calls it whenever its state changes.
 export function follow(show) {
@@ -49,10 +51,20 @@ export async function readOwlbear() {
   else own.unread.pinned = pinned.reason.message;
   if (runs.status === "fulfilled") [own.runs, own.unread.runs] = [runs.value, ""];
   else own.unread.runs = runs.reason.message;
+  const run = own.runs?.run;
+  if (own.awaiting && runs.status === "fulfilled" && key(run) !== own.awaiting.before) own.awaiting = null;
+  else if (own.awaiting && Date.now() >= own.awaiting.until) [own.awaiting, own.lost] = [null, true];
   own.show();
   clearTimeout(own.polling);
-  const run = own.runs?.run;
-  if (own.unread.runs || (run?.state === "running" && !run.interrupted)) own.polling = setTimeout(readOwlbear, 2000);
+  if (own.awaiting) own.polling = setTimeout(readOwlbear, LOOK);  // never sent again: only read until it shows
+  else if (own.unread.runs || (run?.state === "running" && !run.interrupted)) {
+    own.polling = setTimeout(readOwlbear, 2000);
+  }
+}
+
+// Which run a record is: a start that went through shows another one.
+function key(run) {
+  return run ? `${run.pid}:${run.run}:${run.started_at}` : "";
 }
 
 // Where the run's actions go: the project that started it. None on the machine host with no project chosen (the run
@@ -154,7 +166,16 @@ async function start() {
     instead: "The current pack stays active.",
   });
   if (!sure) return;
-  await act("start", () => call("/design-pack/update", { method: "POST", timeout: 10000 }));
+  const before = key(own.runs?.run);
+  own.lost = false;
+  await act("start", async () => {
+    try {
+      await call("/design-pack/update", { method: "POST", timeout: 10000 });
+    } catch (e) {
+      if (!(e instanceof Slow && e.sent)) throw e;
+      own.awaiting = { before, until: Date.now() + ADMIT };  // its admission may still be under way
+    }
+  });
 }
 
 function button(label, onclick, { id, variant = "secondary", busy = false, disabled = false, icon } = {}) {
@@ -448,10 +469,19 @@ export function owlbearSection() {
         branch, opens a pull request to main and merges it once CI passes. One runs at a time on this machine.</p-text>
       <div class="row">
         ${button("Update design pack", start, { id: "pack-update", icon: "refresh", variant: "primary",
-          busy: own.busy === "start", disabled: busy || !canStart || Boolean(own.busy) })}
+          busy: own.busy === "start" || Boolean(own.awaiting),
+        disabled: busy || !canStart || Boolean(own.busy) || Boolean(own.awaiting) })}
         ${canStart ? nothing : html`<p-text size="sm">Choose a project above to start one: it runs on that project's
           labels, calibration and spend.</p-text>`}
       </div>
+      ${own.awaiting ? html`<p-inline-notification id="pack-admitting" state="info" dismiss-button="false">
+        Delivery has not answered the start yet; it may still be checking GitHub for an open design pack pull request.
+        It was not sent again. This section looks for the run until ${new Date(own.awaiting.until)
+          .toLocaleTimeString()}.</p-inline-notification>` : nothing}
+      ${own.lost ? html`<p-inline-notification id="pack-start-unknown" state="warning" dismiss-button="false">
+        Whether the update started is unknown: Delivery did not answer, and no new run appeared within
+        ${ADMIT / 1000} s. It was not sent again. Reload the page to see Delivery's state before you start another.
+        ${button("Reload", () => location.reload(), { id: "pack-reload" })}</p-inline-notification>` : nothing}
       ${own.error ? html`<p-inline-notification id="pack-error" state="error" dismiss-button="false">${
         sentence(own.error)}</p-inline-notification>` : nothing}
       ${own.unread.runs ? html`<p-inline-notification id="pack-runs-error" state="error" dismiss-button="false">

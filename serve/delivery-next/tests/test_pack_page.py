@@ -366,3 +366,34 @@ def test_a_merged_update_says_how_it_reaches_machines_and_a_new_one_stays_availa
         expect(page.locator("#pack-update")).to_be_enabled()
         expect(page.locator("#pack-notice")).to_contain_text("Upstream:")
         expect(page.locator("#pack-ask")).to_be_hidden()
+
+
+@pytest.mark.browser
+def test_a_start_admitted_after_its_timeout_shows_its_run_without_a_reload_or_a_second_post(served, pds) -> None:
+    """I1-3: admission may look up GitHub for longer than the start waits; the section keeps looking, never resends."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    job, base = served()
+    job.state |= {"state": "passed", "questions": [], "ended_at": NOW.isoformat()}
+    job._save()  # noqa: SLF001
+
+    def slow_start() -> dict[str, Any]:
+        time.sleep(12)  # beyond the page's 10 s: the pull request lookup before the run is kept
+        job.state = pack_job._blank() | {"state": "waiting", "run": "r2", "started_at": datetime.now(UTC).isoformat(),  # noqa: SLF001
+                                         "questions": [CI_FAILED | {"id": "r2-publish"}]}  # fmt: skip
+        job._save()  # noqa: SLF001
+        return job.read()
+
+    job.start = slow_start
+    with opened(base, pds) as page:
+        posts: list[str] = []
+        page.on("request", lambda r: posts.append(r.url) if r.method == "POST" else None)
+        expect(page.locator("#pack-tag")).to_have_text("passed")
+        page.get_by_role("button", name="Update design pack").click()
+        pds.answer(page, "Update")
+        expect(page.locator("#pack-admitting")).to_contain_text("It was not sent again", timeout=15000)
+        expect(page.locator("#pack-tag")).to_have_text("waiting for you", timeout=15000)  # read back, no reload
+        expect(page.locator("#pack-admitting")).to_have_count(0)
+        expect(page.locator("#pack-start-unknown")).to_have_count(0)
+        expect(page.locator("#pack-discard")).to_be_visible()
+    assert [u for u in posts if u.endswith("/design-pack/update")] == [f"{base}/api/next/design-pack/update"]
