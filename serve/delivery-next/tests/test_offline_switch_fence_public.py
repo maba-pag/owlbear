@@ -723,7 +723,8 @@ def test_finish_refuses_target_payload_changes_before_the_first_target_marker_wr
 
 
 @pytest.mark.parametrize("consumer", ["open", "finish"])
-def test_target_marker_is_not_created_after_its_absence_read_loses_authority(prepared, monkeypatch, consumer):
+@pytest.mark.parametrize("witness", ["target-proof", "source-receipt"])
+def test_target_marker_is_not_created_after_its_absence_read_loses_authority(prepared, monkeypatch, consumer, witness):
     repo, source = prepared
     target = project_home.home("owned")
     if consumer == "open":
@@ -744,7 +745,8 @@ def test_target_marker_is_not_created_after_its_absence_read_loses_authority(pre
         if active and not fired and name == MARKER and value is None:
             assert os.path.samestat(os.fstat(dfd), target.stat())
             fired.append(True)
-            (target / project_move.MOVE_PROOF).write_text("owner-replaced-proof\n")
+            path = target / project_move.MOVE_PROOF if witness == "target-proof" else source / project_move.MOVE_RECORD
+            path.write_text("owner-replaced-witness\n")
             owners.update({source: snapshot(source), target: snapshot(target)})
         return value
 

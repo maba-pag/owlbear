@@ -379,6 +379,7 @@ def _commit(  # noqa: PLR0913, PLR0917
 
     @proof.guard(folder_fd, target, tfd, images)
     def before_marker() -> None:
+        fd_tree.require_text_at(folder_fd, MOVE_RECORD, receipt)
         require_proof(folder, folder_fd, target, proof)
         _published(pfd, target, tfd, rec, images[tfd])  # an altered copy is refused before any write into it
 
