@@ -15,6 +15,7 @@ from owlbear_delivery_next.state_store.pack_run_record import now
 
 PREPARE, CHALLENGE, PUBLISH = "prepare", "challenge", "publish"
 OWNER = "owner"  # the owner's answer to a stop: a gate, not a stage
+REPAIR = "ci-repair"  # an agent's repair of the pull request's failed CI, which Delivery pushes
 OPERATIONS = {
     "notice": "Notice: newer upstream release",
     "candidate": "Candidate: detector pins and skills",
@@ -32,9 +33,10 @@ OPERATIONS = {
     "push": "Push the branch",
     "pull-request": "Pull request to main",
     "merge": "CI and merge",
+    REPAIR: "Agent repairs CI in a copy of the pull request; Delivery pushes it",
 }
 PREPARED = frozenset({"notice", "candidate", "diff", "initial-golden"})
-PUBLISHED = frozenset({"unchanged-check", "commit", "push", "pull-request", "merge"})
+PUBLISHED = frozenset({"unchanged-check", "commit", "push", "pull-request", "merge", REPAIR})
 SESSIONS = frozenset({"update", "full-challenge", "rejection-recheck", "reconsideration"})
 JUDGED = frozenset({"candidate-golden", "replay", "full-challenge", "rejection-recheck"})  # a pass is the candidate's
 ACTIONS = {  # the controller's next action (pack_run.Action) as the operation it starts
@@ -44,9 +46,10 @@ ACTIONS = {  # the controller's next action (pack_run.Action) as the operation i
 FOLLOWS = {  # what the run does after each operation whatever it found; absent: a verdict or the owner decides
     "notice": "candidate", "candidate": "diff", "diff": "initial-golden", "initial-golden": "update",
     "update": "candidate-golden", "unchanged-check": "commit", "commit": "push", "push": "pull-request",
-    "pull-request": "merge",
+    "pull-request": "merge", REPAIR: "push",
 }  # fmt: skip
 OPEN = frozenset({"running", "waiting"})
+KEPT = frozenset({OWNER, REPAIR})  # never superseded by a re-run
 
 
 def phase(op: str) -> str:
@@ -76,7 +79,8 @@ def opened(  # noqa: PLR0913 - the record's invocations, the stage slot and what
 ) -> dict[str, Any]:
     """A new invocation of *op*, appended in order; a re-run supersedes the earlier run and what followed it.
 
-    *at* overrides the phase (an owner's gate); a challenge round not given is the last one's, else the first.
+    *at* overrides the phase (an owner's gate); a challenge round not given is the last one's, else the first. The
+    owner's answers and the CI repairs are history that stands: never superseded, and superseding nothing.
     """
     at = at or phase(op)
     if at == CHALLENGE and round_ is None:
@@ -89,9 +93,9 @@ def opened(  # noqa: PLR0913 - the record's invocations, the stage slot and what
     same = [i for i in invocations if key(i) == key(inv) and i["operation"] == op]
     inv["attempt"] = len(same) + 1
     rerun = next((i for i in same if not i["stale"]), None)
-    if rerun is not None and op != OWNER and result != "reused":  # a reuse stands on the earlier run, never over it
+    if rerun is not None and op not in KEPT and result != "reused":  # a reuse stands on the earlier run, never over it
         for i in invocations[invocations.index(rerun) :]:
-            if key(i) == key(inv) and i["operation"] != OWNER:
+            if key(i) == key(inv) and i["operation"] not in KEPT:
                 i["stale"] = True
     invocations.append(inv)
     return inv
@@ -154,6 +158,10 @@ def words(op: str, result: str) -> str:
         "answered": "answered by you",
         "discarded": "discarded by you",
         "stopped": "stopped",
+        "pushed": "repair pushed",
+        "held": "held for you",
+        "empty": "no change made",
+        "moved": "head moved; not repaired",
     }.get(result, result)
 
 
