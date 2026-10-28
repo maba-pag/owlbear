@@ -43,6 +43,7 @@ from owlbear_delivery_next.machine_host.retro_inputs import (
     judged_sessions,
     pinned,
     session,
+    settle_open,
     unfinished,
     where,
 )
@@ -197,10 +198,7 @@ class RetroJob:
                 store.run_event(ctx.id, "waiting", why=ctx.why)
                 self.waiting.append(ctx)
                 live.add((ctx.uid, ctx.rev))
-        for uid, unit in store.known().items():
-            for rev in unit.get("revisions") or ():
-                if rev.get("state") in units.OPEN and (uid, rev["rev"]) not in live:
-                    units.settle(uid, rev["rev"], "stopped", result="stopped: its run was interrupted")
+        settle_open(live)
 
     def _button(self, request: dict[str, Any]) -> None:
         by = request.get("by", "")

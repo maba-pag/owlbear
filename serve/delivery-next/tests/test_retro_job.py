@@ -237,6 +237,26 @@ def test_a_call_interrupted_unsettled_ends_its_run_stopped_on_restore_and_nothin
     assert again.working() == ([LINGERING] if again.lingering() else [])
 
 
+@pytest.mark.usefixtures("said")
+def test_a_run_whose_host_stopped_after_its_end_before_its_revision_settled_leaves_it_as_the_run_ended():
+    retro_store.request("owner", synthetic="large")
+    real = retro_units.settle
+
+    def dies_settling_its_end(uid, rev, state, **fields):
+        if state == "judged":
+            raise Dead
+        real(uid, rev, state, **fields)
+
+    with pytest.MonkeyPatch.context() as dying:
+        dying.setattr(retro_units, "settle", dies_settling_its_end)
+        with pytest.raises(Dead):
+            _job(Asker()).tick(0.0)
+
+    _job(Asker(), restarted=True).tick(1.0)
+    [rev] = retro_store.units(synthetic=True)[syn.unit_id(_large())]["revisions"]
+    assert (rev["state"], rev["result"]) == ("judged", "judged")
+
+
 def test_a_run_interrupted_between_settled_calls_resumes_on_what_is_left_of_its_limit(said):
     said.limit = 1.5
     first, calls = Asker(), []

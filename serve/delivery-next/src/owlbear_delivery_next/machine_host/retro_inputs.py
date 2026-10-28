@@ -99,6 +99,22 @@ def unfinished(uid: str) -> list[dict[str, Any]]:
     ]
 
 
+def settle_open(live: set[tuple[str, str]]) -> None:
+    """On restore, settle each open revision no *live* run holds: as its run ended when that end was kept, else stopped.
+
+    A host that stopped between a run's end and its revision's settling left the revision open; its run says how.
+    """
+    runs = store.run_states()
+    for uid, unit in store.known().items():
+        for rev in unit.get("revisions") or ():
+            if rev.get("state") not in units.OPEN or (uid, rev["rev"]) in live:
+                continue
+            if (run := runs.get(rev.get("run") or "", {})).get("state") == "ended":
+                units.settle(uid, rev["rev"], run["result"].split(":", 1)[0], run=rev["run"], result=run["result"])
+            else:
+                units.settle(uid, rev["rev"], "stopped", result="stopped: its run was interrupted")
+
+
 def pinned() -> set[str]:
     """The sessions a finding, a Spotter case or an open proposal rests on: never pruned."""
     found = store.all_findings()
