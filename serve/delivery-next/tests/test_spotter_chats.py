@@ -1137,10 +1137,10 @@ def test_an_unreadable_registry_refuses_its_rules_moments_and_the_chat_reads_on(
     assert json.loads(kept)[assumptions.STATE_CHANGE] is None if entry_only else kept == registry
 
 
-@pytest.mark.parametrize("entry", [{}, {"retired": False}, {"retired": 1}])
+@pytest.mark.parametrize("entry", [{}, {"retired": False}, {"retired": 1}, {"retired": ""}, {"retired": "soon"}])
 def test_a_rule_whose_entry_does_not_say_whether_it_was_retired_is_refused(world, entry):
-    """CodeRabbit's review: an entry without a readable ``retired`` passed as held. What ``ensure`` and ``reset``
-    write, ``None`` or the time it was retired, is read as before."""
+    """CodeRabbit's and Copilot's reviews: an entry without a readable ``retired`` (none, or a string that is no time)
+    passed as held. What ``ensure`` and ``reset`` write, ``None`` or the time it was retired, is read as before."""
     assumptions.path().parent.mkdir(parents=True, exist_ok=True)
     assumptions.path().write_text(json.dumps({assumptions.PLAN: entry}))
     assert assumptions.ensure(assumptions.HANDOFF)  # written by ensure, read back: held
