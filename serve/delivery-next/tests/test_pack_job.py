@@ -1039,6 +1039,8 @@ ASKED, REFUSED = ["push-config", "retry", "discard"], ["retry", "discard"]
          ("tests/test_page.py (adds a suppression or skip)", REFUSED)),
         (("tests/test_page.py", "def test_contrast():\n    pass\n"),
          ("tests/test_page.py (removes an assertion or test)", REFUSED)),
+        (("tests/test_page.py", "def test_contrast():\n    return\n    assert contrast() >= LIMIT\n"),
+         ("tests/test_page.py (disables a test)", REFUSED)),
         (("src/pkg/design_pack.json", "{}\n"),
          ("src/pkg/design_pack.json (pack content only an update may change)", REFUSED)),
     ],
@@ -1068,19 +1070,27 @@ def test_a_ci_repair_that_changes_configuration_or_weakens_a_check_stops_and_ask
     assert (state["questions"][0]["kind"], pr_head(checkout, state)) == ("publish", before)
 
 
-def test_a_repair_that_takes_lines_out_of_a_test_is_pushed_only_once_the_owner_reviewed_it(tmp_path, checkout, clone):
-    """No pattern proves a test still checks as much: a lowered threshold has no removed assertion, yet is held."""
-    on_main(checkout, "tests/test_page.py", f"LIMIT = 4.5\n\n\n{TESTED}")
-    fakes, job, state = ci_failed(tmp_path, checkout, clone, {"tests/test_page.py": f"LIMIT = 3.0\n\n\n{TESTED}"})
-    before = pr_head(checkout, state)
+@pytest.mark.parametrize(
+    ("edit", "held"),
+    [
+        ((f"LIMIT = 4.5\n\n\n{TESTED}", f"LIMIT = 3.0\n\n\n{TESTED}"), ("removes lines from a test", "-LIMIT = 4.5")),
+        ((TESTED, f"import flaky\n\n\n@flaky.off\n{TESTED}"), ("changes a test", "+@flaky.off")),
+    ],
+)  # fmt: skip
+def test_a_repair_that_edits_a_test_is_pushed_only_once_the_owner_reviewed_it(tmp_path, checkout, clone, edit, held):
+    """No pattern proves a test still checks as much: a lowered threshold or an unknown decorator is held regardless."""
+    (before, after), (held, shown) = edit, held
+    on_main(checkout, "tests/test_page.py", before)
+    fakes, job, state = ci_failed(tmp_path, checkout, clone, {"tests/test_page.py": after})
+    head = pr_head(checkout, state)
 
     state = answered(job, "repair")
 
     (q,) = state["questions"]
-    assert (q["kind"], q["paths"]) == ("repair-config", ["tests/test_page.py (removes lines from a test)"])
+    assert (q["kind"], q["paths"]) == ("repair-config", [f"tests/test_page.py ({held})"])
     assert [o["id"] for o in q["options"]] == ["push-reviewed", "discard"]
-    assert "-LIMIT = 4.5" in q["diff"]
-    assert (pr_head(checkout, state), fakes.github.calls) == (before, ["create"])
+    assert shown in q["diff"]
+    assert (pr_head(checkout, state), fakes.github.calls) == (head, ["create"])
     with pytest.raises(pack_job.Refused):
         job.answer(q["id"], "push-config")
     fakes.github.checks = ["success"]
@@ -1088,7 +1098,7 @@ def test_a_repair_that_takes_lines_out_of_a_test_is_pushed_only_once_the_owner_r
     state = answered(job, "push-reviewed")
 
     assert state["state"] == "passed", state["reason"]
-    assert git(checkout.parents[1], "show", f"{landed(checkout)}:tests/test_page.py").startswith("LIMIT = 3.0")
+    assert git(checkout.parents[1], "show", f"{landed(checkout)}:tests/test_page.py") == after.strip()
 
 
 def test_a_configuration_repair_the_owner_lets_through_is_pushed_and_merges(tmp_path, checkout, clone):

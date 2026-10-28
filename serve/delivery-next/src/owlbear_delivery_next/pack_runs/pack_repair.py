@@ -1,19 +1,19 @@
 """An agent's repair of the design pack pull request's failed CI, which Delivery pushes (D-01M61GW2EBAHQ9HBY5S2TGHY2P).
 
-The owner starts it from the CI stop of the run's own pull request. A bounded updater session edits a copy of the
-failed head with the failed checks' logs; it never pushes. Delivery commits what it changed and gates the diff: lint,
-format, CI workflow, hook or security configuration stops and asks the owner with the diff, pushing nothing; a weakened
-test (a deleted test file, an added skip or suppression, a removed assertion or test) is never pushed, and any other
-test edit that removes lines waits for the owner's review of its diff, since those patterns are no proof that a test
-still checks as much. A change to the pack's protected content is checked again before it is pushed, as the update was
-(``pack_run``): the detector's glue, golden pages and pinned skills, whole as the repair's commit holds them, are laid
-into the candidate, which passes the golden pages, the calibration replay, a challenger round on the whole pack and the
-owner's evidence and code gates for its new identity, and is pushed only while it still holds exactly that commit's
-content; the pins, the notice and other pack files only an update may change, so such a repair is never pushed. Once
-CI passed, it merges only when the owner approved all the protected changes, so a later one asks again. Anything else
-is pushed, and CI is awaited again. A session that fails or changes nothing gives the owner the CI stop again with
-its summary. The push is a fast-forward from the failed head, so a head someone moved is never overwritten, and a
-commit already on the branch is never pushed twice.
+The owner starts it from the CI stop of the run's own pull request. A bounded updater session edits a copy of the failed
+head with the failed checks' logs; it never pushes. Delivery commits what it changed and gates the diff: lint, format,
+CI workflow, hook or security configuration stops and asks the owner with the diff, pushing nothing; a weakened test (a
+deleted test file, an added skip, suppression or early return, a removed assertion or test) is never pushed, and any
+other edit of an existing test file waits for the owner's review of its diff, since those patterns are no proof that a
+test still checks as much. A change to the pack's protected content is checked again before it is pushed, as the update
+was (``pack_run``): the detector's glue, golden pages and pinned skills, whole as the repair's commit holds them, are
+laid into the candidate, which passes the golden pages, the calibration replay, a challenger round on the whole pack and
+the owner's evidence and code gates for its new identity, and is pushed only while it still holds exactly that commit's
+content; the pins, the notice and other pack files only an update may change, so such a repair is never pushed. Once CI
+passed, it merges only when the owner approved all the protected changes, so a later one asks again. Anything else is
+pushed, and CI is awaited again. A session that fails or changes nothing gives the owner the CI stop again with its
+summary. The push is a fast-forward from the failed head, so a head someone moved is never overwritten, and a commit
+already on the branch is never pushed twice.
 """
 
 from __future__ import annotations
@@ -64,6 +64,13 @@ WEAKENING = re.compile(
     r"|@ts-(ignore|nocheck|expect-error)|pytest\.mark\.(skip|xfail)|pytest\.(skip|xfail)\(|unittest\.skip"
 )
 REMOVED = re.compile(r"\bassert|\bexpect\(|\bdef test|^\s*(it|test|describe)(\.\w+)?\(")  # a check it took out
+DISABLING = re.compile(  # an added line that turns a test off without a suppression's words
+    r"\b(it|test|describe)\.(skip|todo|only)\b|\bx(it|test|describe)\(|SkipTest|importorskip|__test__\s*=\s*False"
+)
+RETURN = re.compile(r"^\s*return\b")
+BLOCK = re.compile(r"^\s*(async\s+)?def\s|\bfunction\b|=>|^\s*(it|test)(\.\w+)?\(")  # a function's first line
+TEST = re.compile(r"^\s*(async\s+)?def\s+test|^\s*(it|test)(\.\w+)?\(")  # a test's first line
+HUNK = re.compile(r"^@@ -\S+ \+(\d+)")
 REGULAR = frozenset({"100644", "100755"})
 LINKS = frozenset({"120000", "160000"})  # a symbolic link or a submodule: never pushed without the owner
 TESTS = re.compile(r"(^|/)(tests?/|test_[^/]*\.py$|[^/]*_test\.py$|[^/]*\.test\.[mc]?[jt]sx?$)")
@@ -116,7 +123,7 @@ class Repair(BaseModel):
     paths: list[str] = Field(default_factory=list)  # the files it changed, repository paths
     held: list[str] = Field(default_factory=list)  # its configuration changes, which the owner may let through
     refused: list[str] = Field(default_factory=list)  # never pushed: a weakened check, or what only an update changes
-    reviewed: list[str] = Field(default_factory=list)  # its other test edits that remove lines, for the owner's review
+    reviewed: list[str] = Field(default_factory=list)  # its other edits of existing tests, for the owner's review
     diff: str = ""  # its diff, as the owner is shown it
     allowed: str = ""  # the commit the owner had pushed with its configuration change
     laid: str = ""  # the commit whose whole protected content is laid into the candidate for its check
@@ -282,9 +289,9 @@ def _config(run: str, r: Repair) -> dict[str, Any]:
                 f"discard? {said}")  # fmt: skip
         options = [pack_rounds.RETRY, pack_rounds.DISCARD]
     elif r.reviewed:
-        text = (f"The agent's CI repair {made} removes lines from tests: {', '.join(r.reviewed[:10])}{config}. "
-                "Delivery's pattern check found no removed assertion or test, but cannot tell that the tests "
-                f"still check as much: review its diff. Nothing was pushed. Push it, or discard? {said}")  # fmt: skip
+        text = (f"The agent's CI repair {made} changes tests: {', '.join(r.reviewed[:10])}{config}. Delivery's "
+                "pattern check found no known weakening, but cannot tell that the tests still check as much: review "
+                f"its diff. Nothing was pushed. Push it, or discard? {said}")  # fmt: skip
         options = [pack_rounds.PUSH_REVIEWED, pack_rounds.DISCARD]
     else:
         text = (f"The agent's CI repair {made} changes {', '.join(r.held[:10])}: lint, format, CI workflow, hook or "
@@ -480,8 +487,8 @@ def _held(  # noqa: PLR0913 - the copy, its head, the change, and the package wi
 ) -> tuple[list[str], ...]:
     """What in the change stops for the owner: its configuration, what is never pushed and its other test edits.
 
-    The weakening patterns (a deleted test, an added skip or suppression, a removed assertion or test) are a quick
-    filter, not a proof; every other test edit that removes a line is held for the owner's review all the same.
+    The weakening patterns (a deleted test, an added skip, suppression or early return, a removed assertion or test)
+    are a quick filter, not a proof; every other edit of an existing test file is held for the owner's review.
     """
     held = [p for p, how in changed if _configured(p) or how.split()[0] in LINKS]
     refused = [f"{p} (deleted test)" for p, how in changed if how.endswith("D") and TESTS.search(p)]
@@ -494,16 +501,46 @@ def _held(  # noqa: PLR0913 - the copy, its head, the change, and the package wi
     for path, how in changed:
         if how.endswith("D"):
             continue
-        lines = run(at, ["diff", "--cached", head, "--", path]).splitlines()
+        lines = run(at, ["diff", "--cached", "--unified=0", head, "--", path]).splitlines()
         added = [x[1:] for x in lines if x.startswith("+") and not x.startswith("+++")]
-        removed = [x[1:] for x in lines if x.startswith("-") and not x.startswith("---")] if TESTS.search(path) else []
+        edited = how.endswith("M") and bool(TESTS.search(path))  # an existing test file: a new one may be pushed
+        removed = [x[1:] for x in lines if x.startswith("-") and not x.startswith("---")] if edited else []
         if any(WEAKENING.search(x) for x in added):
             refused.append(f"{path} (adds a suppression or skip)")
+        elif edited and (any(DISABLING.search(x) for x in added) or _returns_early(at / path, lines)):
+            refused.append(f"{path} (disables a test)")
         elif any(REMOVED.search(x) for x in removed):
             refused.append(f"{path} (removes an assertion or test)")
-        elif removed:
-            reviewed.append(f"{path} (removes lines from a test)")
+        elif edited:
+            reviewed.append(f"{path} ({'removes lines from' if removed else 'changes'} a test)")
     return held, refused, reviewed
+
+
+def _returns_early(file: Path, diff: list[str]) -> bool:
+    """Whether an added ``return`` line of the zero-context *diff* lies in a test function of the new *file*."""
+    text = file.read_text("utf-8", errors="replace").splitlines()
+    line = 0
+    for x in diff:
+        if found := HUNK.match(x):
+            line = int(found[1])
+        elif x.startswith("+") and not x.startswith("+++"):
+            if RETURN.match(x[1:]) and _in_test(text, line - 1):
+                return True
+            line += 1
+    return False
+
+
+def _in_test(text: list[str], at: int) -> bool:
+    """Whether line *at* of *text* lies in a test function: the first function around it, by indentation, is one."""
+    indent = len(text[at]) - len(text[at].lstrip()) if 0 <= at < len(text) else 0
+    for line in reversed(text[:at]):
+        here = len(line) - len(line.lstrip())
+        if not line.strip() or here >= indent:
+            continue
+        indent = here
+        if BLOCK.search(line):
+            return bool(TEST.search(line))
+    return False
 
 
 def _configured(path: str) -> bool:
