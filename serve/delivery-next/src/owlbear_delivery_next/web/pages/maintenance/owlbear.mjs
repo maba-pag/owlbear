@@ -1,0 +1,292 @@
+// Maintenance's OwlBear section (D-01M61GW2W73KV0F81W3E279H64, D-01M61GWRQSR2V3P0VWMP137Q32): the same in every
+// project. The running version, the engine update with Update now, the pinned design pack and the one design pack
+// update of this machine, kept in the project that started it: its actions go to that project's endpoints.
+import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
+import { live } from "/assets/lit-html/3.3.3/directives/live.js";
+import { Slow, call, machineState, project, runUpdates } from "/assets/ui.mjs";
+
+const WRITE = 60000;  // an answer may commit and push: a network round trip
+const RESULTS = { pending: "not run", running: "running", passed: "passed", failed: "failed", skipped: "skipped",
+  returned: "findings back to the updater", waiting: "waiting for you", completed: "session completed",
+  findings: "findings", reused: "reused for this identity", answered: "answered by you",
+  discarded: "discarded by you", stopped: "stopped", "not-reached": "not reached" };
+const TAGS = { pending: "secondary", running: "info", passed: "success", failed: "error", skipped: "secondary",
+  returned: "warning", waiting: "warning", completed: "info", findings: "warning", reused: "info", answered: "info",
+  discarded: "secondary", stopped: "warning", "not-reached": "secondary" };
+const ENDINGS = { idle: "Never run.", passed: "Last run passed: its pull request was merged into main.",
+  failed: "Last run failed.", "up-to-date": "Last run: already up to date.",
+  waiting: "The update waits for your answers below.", discarded: "Last run discarded: nothing changed." };
+// TD-220: what became of each finding of the update's challenge rounds, in words.
+const FOUND = { open: "to fix", fixed: "fixed by the updater", rejected: "rejected by the updater, not judged yet",
+  standing: "rejected by the updater; the challenger accepted that",
+  escalated: "rejected by the updater; the challenger upheld it", "owner-fix": "you decided: fix it",
+  "owner-drop": "you dropped it", withdrawn: "withdrawn by the challenger" };
+
+const own = { pinned: null, runs: null, unread: { pinned: "", runs: "" }, error: "", notes: new Map(),
+  busy: "", polling: null, reading: 0, show: () => {} };
+
+// *show* renders the whole page; the section calls it whenever its state changes.
+export function follow(show) {
+  own.show = show;
+  for (const kind of ["owlbear-machine", "owlbear-polled"]) document.addEventListener(kind, () => own.show());
+}
+
+function when(iso) {
+  return iso ? new Date(iso).toLocaleString() : "";
+}
+
+function sentence(text) {
+  return text ? text.charAt(0).toUpperCase() + text.slice(1) : "";
+}
+
+export async function readOwlbear() {
+  const generation = ++own.reading;
+  const [pinned, runs] = await Promise.allSettled([
+    call("/maintenance/pack", { timeout: 15000 }), call("/maintenance/pack/runs", { timeout: 15000 }),
+  ]);
+  if (generation !== own.reading) return;  // a later read is under way; it shows the newer state
+  if (pinned.status === "fulfilled") [own.pinned, own.unread.pinned] = [pinned.value, ""];
+  else own.unread.pinned = pinned.reason.message;
+  if (runs.status === "fulfilled") [own.runs, own.unread.runs] = [runs.value, ""];
+  else own.unread.runs = runs.reason.message;
+  own.show();
+  clearTimeout(own.polling);
+  const run = own.runs?.run;
+  if (own.unread.runs || (run?.state === "running" && !run.interrupted)) own.polling = setTimeout(readOwlbear, 2000);
+}
+
+// Where the run's actions go: the project that started it. None on the machine host with no project chosen (the run
+// is shown read-only), nor on a clone's own host for another project's run, which only the machine host reaches.
+function reach(run) {
+  const bar = machineState();
+  if (!bar) return run.own ? { of: project } : null;
+  if (!project) return null;
+  return bar.projects.some((p) => p.id === run.pid && p.state === "loaded") ? { of: run.pid } : null;
+}
+
+async function act(name, work) {
+  own.busy = name;
+  own.error = "";
+  own.show();
+  try {
+    await work();
+  } catch (e) {
+    own.error = e instanceof Slow ? e.reread : e.message;  // a timed-out action is never sent again: read back
+  }
+  own.busy = "";
+  await readOwlbear();
+}
+
+async function answer(run, q, o) {
+  const to = reach(run), note = own.notes.get(q.id) ?? "";
+  const left = ["rejected", "standing", "owner-drop"], loop = run.loop;
+  const standing = (loop?.findings ?? []).filter((f) => left.includes(f.state));
+  const items = [...(loop?.unreviewed ?? []).map((r) => `Repair ${r}: no challenger reviewed it.`),
+    ...standing.map((f) => `${f.id} not changed for (${FOUND[f.state]}): ${f.text}`)];
+  if (o.id === "activate" && !(await window.ask({
+    title: "Activate the pack without a passing challenge?", yes: "Activate", no: "Keep it waiting",
+    now: "Delivery activates the candidate as it is now: it commits design_pack.json, skills/NOTICE.md and the "
+      + "files the updater changed, opens a pull request to main and merges it once CI passes. It activates "
+      + (items.length ? "with these left as they are:" : "with no repair left unreviewed and no finding left open."),
+    items,
+    then: "The commit message records that the rounds ended without a pass and which findings were not changed for.",
+    after: "Later visual rounds use the new pack; run another update when upstream moves on.",
+    instead: "The update keeps waiting; you can still discard it.",
+  }))) return;
+  await act(`${q.id}:${o.id}`, async () => {
+    await call("/design-pack/update/answer", { ...to, body: { question: q.id, option: o.id, note }, timeout: WRITE });
+    own.notes.delete(q.id);
+  });
+}
+
+async function discard(run) {
+  await act("discard", () => call("/design-pack/update/discard", { ...reach(run), method: "POST", timeout: WRITE }));
+}
+
+async function start() {
+  const sure = await window.ask({
+    title: "Update the design pack?", yes: "Update", no: "Keep the current pack",
+    now: "Delivery takes the newest upstream pack, detector pins and design skills together; an updater session "
+      + "brings the skills, golden pages and detector glue in line, then the golden pages, calibration replay and a "
+      + "challenger check it. The challenger's findings go back to the updater. It runs on this project's labels, "
+      + "calibration and AI credits.",
+    then: "Only if every stage passes, it activates the pack: it commits design_pack.json, skills/NOTICE.md and "
+      + "the files the updater changed, opens a pull request to main and merges it once CI passes. It asks you here "
+      + "before changed golden evidence counts and before a glue change goes into the pull request, and when the "
+      + "rounds end without a pass or the challenger upholds a finding the updater rejected.",
+    after: "Later visual rounds use the new pack. If a stage fails, nothing changes and this section says why.",
+    instead: "The current pack stays active.",
+  });
+  if (!sure) return;
+  await act("start", () => call("/design-pack/update", { method: "POST", timeout: 10000 }));
+}
+
+function button(label, onclick, { id, variant = "secondary", busy = false, disabled = false, icon } = {}) {
+  return html`<p-button id=${id ?? nothing} type="button" compact="true" variant=${variant} icon=${icon ?? nothing}
+    .loading=${busy} ?disabled=${disabled} @click=${onclick}>${label}</p-button>`;
+}
+
+function runLine(u) {
+  const at = (u.stages ?? []).findIndex((s) => s.name === u.stage);
+  const now = u.progress && !u.progress.legacy ? u.progress.now : null;
+  let line = ENDINGS[u.state] ?? u.state;
+  if (u.interrupted) {
+    line = "Its host stopped while it ran; it is settled when that project's host starts again.";
+  } else if (u.state === "running" && now) {
+    line = `Now: ${now.phase ? `${now.phase}, ` : ""}${now.label}…`;
+  } else if (u.state === "running") {
+    line = at < 0 ? "Starting the update…" : `Running stage ${at + 1} of ${u.stages.length}: ${u.stages[at].label}…`;
+  } else if (u.started_at) {
+    line += ` Started ${when(u.started_at)}` + (u.ended_at ? `, ended ${when(u.ended_at)}.` : ".");
+  }
+  return line;
+}
+
+function findings(found) {
+  return found.map((f) => {
+    const why = [f.reason && `Updater: ${f.reason}`, f.judgement && `Challenger: ${f.judgement}`,
+      f.note && `Your note: ${f.note}`, f.clarified && `Reconsidered: ${f.clarified}`].filter(Boolean).join(" ");
+    return html`<li>${f.id} (round ${f.raised}), ${FOUND[f.state] ?? f.state}: ${f.text}${why ? ` ${why}` : ""}</li>`;
+  });
+}
+
+function question(run, q, to) {
+  let field = nothing;
+  if (q.kind === "dispute") {
+    const label = "Your note (guides the updater; needed to ask the challenger again)";
+    const note = own.notes.get(q.id) ?? "", keep = (e) => own.notes.set(q.id, e.target.value ?? "");
+    field = html`<p-textarea label=${label} rows="2" max-length="2000" .value=${live(note)} @input=${keep}
+      @change=${keep} ?disabled=${!to}></p-textarea>`;
+  }
+  return html`<div class="pack-question"><p-text>${q.text}</p-text>
+    ${q.diff ? html`<pre class="pack-diff" aria-label="The change">${q.diff}</pre>` : nothing}
+    ${field}
+    ${to ? html`<div class="row">${q.options.map((o) => button(o.label, () => answer(run, q, o),
+      { busy: own.busy === `${q.id}:${o.id}`, disabled: Boolean(own.busy) }))}</div>` : nothing}</div>`;
+}
+
+function progress(u) {
+  const p = u.progress;
+  if (!p || p.legacy) {
+    return html`<ol id="pack-stages" aria-label="Update stages">${(u.stages ?? []).map((s) => html`<li>
+      <p-text size="sm">${s.label}: </p-text><p-tag variant=${TAGS[s.result]} compact="true">${RESULTS[s.result]
+        ?? s.result}</p-tag>${s.detail ? html`<p-text size="xs" color="contrast-medium"> ${s.detail}</p-text>`
+        : nothing}</li>`)}</ol>`;
+  }
+  const next = p.next;
+  return html`<div id="pack-progress">
+    ${next ? html`<p-text id="pack-next" size="sm">Next: ${next.label}${next.options.length
+      ? ` (${next.options.join("; ")})` : ""}</p-text>` : nothing}
+    ${p.phases.map((ph) => html`<section class="pack-phase" aria-labelledby=${`pack-phase-${ph.key}`}>
+      <p-heading size="sm"><h4 id=${`pack-phase-${ph.key}`}>${ph.label}</h4></p-heading>
+      <ol aria-labelledby=${`pack-phase-${ph.key}`}>${ph.invocations.map((i) => html`<li>
+        <p-text size="sm">${i.label}${i.attempt > 1 ? ` (attempt ${i.attempt})` : ""}: </p-text><p-tag
+          variant=${TAGS[i.result] ?? "secondary"} compact="true">${i.outcome}</p-tag>${i.stale ? html` <p-tag
+          variant="secondary" compact="true">stale: superseded by a later run</p-tag>` : nothing}${i.detail
+          ? html`<p-text size="xs" color="contrast-medium"> ${i.detail}</p-text>` : nothing}</li>`)}</ol>
+    </section>`)}
+  </div>`;
+}
+
+// Why the run's actions are not offered here, when they are not.
+function unreachable() {
+  return project || !machineState() ? "; open that project to act on it" : "; choose a project above to act on it";
+}
+
+function runPart(run) {
+  if (!run) return html`<p-text id="pack-state" size="sm">No project has run a design pack update yet.</p-text>`;
+  const to = reach(run), questions = run.state === "waiting" ? run.questions ?? [] : [];
+  const p = run.published, found = run.loop?.findings ?? [];
+  return html`<div id="pack-run">
+    <p-text id="pack-project" size="sm">${["running", "waiting"].includes(run.state) ? "Started" : "Last run"} in
+      <strong>${run.name}</strong>: it uses that project's labels, calibration and spend${to ? "" : unreachable()}.
+      </p-text>
+    <p-text id="pack-state" size="sm" role="status" aria-live="polite">${runLine(run)}</p-text>
+    ${progress(run)}
+    <p-text id="pack-reason" size="sm">${run.state !== "running" ? run.reason : ""}</p-text>
+    <p-text id="pack-pushed" size="sm">${p?.commit ? html`Commit ${p.commit.slice(0, 12)} on ${p.branch}${p.url
+      ? html`, <a href=${p.url} target="_blank" rel="noopener">pull request #${p.number}</a>` : nothing}${p.merged
+      ? `, merged as ${p.merged.slice(0, 12)}` : p.url ? ", not merged yet" : ""}.` : ""}</p-text>
+    <div id="pack-ask" ?hidden=${!questions.length}>
+      <p-heading size="md"><h4 id="pack-ask-title">The update waits for you</h4></p-heading>
+      <div id="pack-questions">${questions.map((q) => question(run, q, to))}</div>
+      ${to ? button("Discard the update", () => discard(run), { id: "pack-discard", icon: "close",
+        busy: own.busy === "discard", disabled: Boolean(own.busy) }) : nothing}
+    </div>
+    <details id="pack-findings-box" ?hidden=${!found.length}>
+      <summary>Findings of the challenge rounds</summary>
+      <ul id="pack-findings">${findings(found)}</ul>
+    </details>
+    <details>
+      <summary>Log of the run</summary>
+      <pre id="pack-log">${run.log?.length ? run.log.join("\n") : "Nothing logged."}</pre>
+    </details>
+  </div>`;
+}
+
+function others(r) {
+  const listed = r.runs.filter((x) => x.state !== "idle" || x.error);
+  if (listed.length < 2 && !r.registry) return nothing;
+  return html`<details id="pack-runs"><summary>Each project's last design pack run</summary>
+    ${r.registry ? html`<p-text size="sm">${sentence(r.registry)}.</p-text>` : nothing}
+    <ul>${listed.map((x) => html`<li>${x.name}: ${x.error ? sentence(x.error) : `${x.state}${x.started_at
+      ? `, started ${when(x.started_at)}` : ""}`}</li>`)}</ul></details>`;
+}
+
+function engine() {
+  const bar = machineState();
+  if (!bar) {
+    return html`<p-text id="owlbear-version" size="sm">This page is served by a clone's own host: the engine
+      updates through the machine host.</p-text>`;
+  }
+  const u = bar.update ?? {}, busy = Boolean(u.phase) && !["idle", "current", "failed", "refused"].includes(u.phase);
+  return html`<p-text id="owlbear-version" size="sm">OwlBear runs ${bar.updated || "an unnumbered version"}.</p-text>
+    <p-text id="owlbear-engine" size="sm">Engine update: ${u.phase && u.phase !== "idle" ? `${u.phase}${u.version
+      ? ` (${u.version})` : ""}${u.detail ? `: ${u.detail}` : ""}${u.at ? `, ${when(u.at)}` : ""}`
+      : "nothing checked since OwlBear started"}.</p-text>
+    <div>${button("Update now", runUpdates, { id: "owlbear-update", busy, disabled: busy })}</div>`;
+}
+
+function packed() {
+  const pin = own.pinned, bar = machineState(), install = bar?.pack?.install, release = bar?.pack?.release;
+  const plain = (t) => String(t).replaceAll(String.fromCharCode(96), "");  // the status is CLI text with code marks
+  return html`
+    ${own.unread.pinned ? html`<p-inline-notification id="pack-read-error" state="error" dismiss-button="false">
+      Could not read the design pack: ${own.unread.pinned}.</p-inline-notification>` : nothing}
+    <p-text id="pack-active" size="sm">${pin ? `Pinned: ${pin.pack} from upstream ${pin.upstream}, identity ${
+      pin.identity}. ${plain(pin.status)}.` : ""}</p-text>
+    <p-text id="pack-notice" size="xs" color="contrast-medium">${pin ? `Upstream: ${pin.notice.said}${pin.notice
+      .checked_at ? `, checked ${when(pin.notice.checked_at)}` : ", not checked yet"}.` : ""}</p-text>
+    ${install ? html`<p-text id="pack-install-state" size="sm">This version's pack ${install.state === "installing"
+      ? "is being installed" : install.state === "failed" ? "failed to install" : "is not installed"} on this
+      machine${install.detail ? `: ${install.detail}` : ""}.</p-text>` : nothing}
+    ${release?.state === "newer" ? html`<p-text id="pack-release" size="sm">OwlBear ${release.version} carries the
+      newer pack ${release.pack}; this version pins ${release.running_pack}.</p-text>` : nothing}`;
+}
+
+export function owlbearSection() {
+  const r = own.runs, run = r?.run, open = run && ["running", "waiting"].includes(run.state);
+  const canStart = Boolean(project || !machineState()), busy = Boolean(open || r?.holder);
+  return html`<section id="owlbear" class="panel" aria-labelledby="owlbear-title">
+    <p-heading size="lg"><h2 id="owlbear-title">OwlBear</h2></p-heading>
+    <p-text size="sm">OwlBear's own maintenance, the same in every project.</p-text>
+    ${engine()}
+    <p-heading size="md"><h3 id="pack-title">Design pack</h3></p-heading>
+    ${packed()}
+    <p-text size="sm">An update takes the newest upstream pack and validates it with model requests. Only if every
+      stage passes, or if you accept it after its challenge rounds end without a pass, it commits it on its own
+      branch, opens a pull request to main and merges it once CI passes. One runs at a time on this machine.</p-text>
+    <div class="row">
+      ${button("Update design pack", start, { id: "pack-update", icon: "refresh", variant: "primary",
+        busy: own.busy === "start", disabled: busy || !canStart || Boolean(own.busy) })}
+      ${canStart ? nothing : html`<p-text size="sm">Choose a project above to start one: it runs on that project's
+        labels, calibration and spend.</p-text>`}
+    </div>
+    ${own.error ? html`<p-inline-notification id="pack-error" state="error" dismiss-button="false">${
+      sentence(own.error)}</p-inline-notification>` : nothing}
+    ${own.unread.runs ? html`<p-inline-notification id="pack-runs-error" state="error" dismiss-button="false">
+      Could not read the design pack runs: ${own.unread.runs}.</p-inline-notification>` : nothing}
+    ${r ? html`${runPart(run)}${others(r)}` : own.unread.runs ? nothing
+      : html`<p-text size="sm">Reading the design pack runs…</p-text>`}
+  </section>`;
+}

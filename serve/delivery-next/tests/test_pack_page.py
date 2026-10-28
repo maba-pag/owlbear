@@ -1,8 +1,9 @@
-"""The design pack update's questions on the Settings page in a real browser (TD-193, TD-220, TD-256)."""
+"""The design pack update in Maintenance's OwlBear section in a real browser (TD-193, TD-220, TD-256)."""
 
 from __future__ import annotations
 
 import contextlib
+import os
 import socket
 import threading
 import time
@@ -13,8 +14,9 @@ import pytest
 import uvicorn
 
 from owlbear_delivery_next.change_contracts.round_records import PACK, RoundFinding, RoundLoop, RoundPolicy
+from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.local_system.codebase import CURRENT
-from owlbear_delivery_next.pack_runs import pack_job, pack_progress, pack_rounds
+from owlbear_delivery_next.pack_runs import machine_lock, pack_job, pack_progress, pack_rounds, pack_state
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.state_store.store import Store
@@ -80,8 +82,18 @@ def served(tmp_path: Path) -> Iterator[Callable[[RoundLoop | None], tuple[pack_j
 
 
 @contextlib.contextmanager
+def holding() -> Iterator[None]:
+    """The machine's design pack lock, as a run's thread holds it while it runs; a running record without it is left."""
+    fd = machine_lock.take(local_home.root() / pack_state.MACHINE_LOCK, "tests", lambda: None)
+    try:
+        yield
+    finally:
+        os.close(fd)
+
+
+@contextlib.contextmanager
 def opened(base: str, pds: Any) -> Iterator[Any]:
-    """The Settings page in a real browser: only the test host and the PDS CDN answer."""
+    """The Maintenance page in a real browser: only the test host and the PDS CDN answer."""
     from playwright.sync_api import Error, sync_playwright  # noqa: PLC0415 - the optional browser runtime
 
     with sync_playwright() as pw:
@@ -92,13 +104,13 @@ def opened(base: str, pds: Any) -> Iterator[Any]:
         page = browser.new_page()
         pds.only(page, base)
         page.add_init_script("sessionStorage.setItem('token', 'tok');")
-        page.goto(f"{base}/config")
+        page.goto(f"{base}/maintenance")
         yield page
         browser.close()
 
 
 @pytest.mark.browser
-def test_the_owner_answers_each_upheld_finding_with_his_note_on_the_settings_page(served, pds) -> None:
+def test_the_owner_answers_each_upheld_finding_with_his_note_in_the_owlbear_section(served, pds) -> None:
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     job, base = served()
@@ -112,7 +124,7 @@ def test_the_owner_answers_each_upheld_finding_with_his_note_on_the_settings_pag
         first, second = ask.locator(".pack-question").first, ask.locator(".pack-question").last
         expect(first).to_contain_text("Updater: upstream dropped it Challenger: upstream still names it")
         first.get_by_role("button", name="Ask the challenger to reconsider").click()
-        expect(page.locator("#error")).to_have_text("Asking the challenger to reconsider needs your note")
+        expect(page.locator("#pack-error")).to_have_text("Asking the challenger to reconsider needs your note")
         second.get_by_label("Your note", exact=False).fill("a draft for F2")
         first.get_by_label("Your note", exact=False).fill("the halo is upstream's own example")
         first.get_by_role("button", name="Drop it").click()
@@ -176,7 +188,7 @@ def test_the_update_shows_its_phases_with_each_invocation_in_order_and_what_come
     job._save()  # noqa: SLF001
     with opened(base, pds) as page:
         phases = page.locator("#pack-progress .pack-phase")
-        expect(phases.locator("h3")).to_have_text(["Prepare", "Challenge round 1", "Challenge round 2"])
+        expect(phases.locator("h4")).to_have_text(["Prepare", "Challenge round 1", "Challenge round 2"])
         expect(phases.nth(0).locator("li")).to_have_count(4)
         first, second = phases.nth(1).locator("li"), phases.nth(2).locator("li")
         expect(first).to_have_count(2)
@@ -194,10 +206,11 @@ def test_the_update_shows_its_phases_with_each_invocation_in_order_and_what_come
         job.state |= {"state": "running", "questions": []}
         pack_progress.opened(job.state["invocations"], "challenger", "full-challenge", round_=2, identity="b")
         job._save()  # noqa: SLF001
-        page.reload()
-        expect(page.locator("#pack-state")).to_have_text("Now: Challenge round 2, Challenger on the whole pack…")
-        expect(page.locator("#pack-next")).to_contain_text("Next: Decided by the verdict")
-        job.state["state"] = "failed"  # stops the page's polling before the server goes
+        with holding():
+            page.reload()
+            expect(page.locator("#pack-state")).to_have_text("Now: Challenge round 2, Challenger on the whole pack…")
+            expect(page.locator("#pack-next")).to_contain_text("Next: Decided by the verdict")
+        expect(page.locator("#pack-state")).to_contain_text("Its host stopped while it ran")  # and the polling ends
 
 
 @pytest.mark.browser

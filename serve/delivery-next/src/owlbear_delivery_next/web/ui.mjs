@@ -137,6 +137,11 @@ function changed() {
   document.dispatchEvent(new CustomEvent("owlbear-machine", { detail: bar.data }));
 }
 
+// The machine host's state as last polled (its version, engine update and design pack); null when none serves the page.
+export function machineState() {
+  return bar.data;
+}
+
 // Every loaded project, whatever the page shows: where an action may go; null when no machine host serves it.
 export function loaded() {
   return bar.data ? bar.data.projects.filter((p) => p.state === "loaded") : null;
@@ -274,7 +279,7 @@ function updating(update) {
   return Boolean(update?.phase) && !["idle", "current", "failed", "refused"].includes(update.phase);
 }
 
-async function runUpdates() {
+export async function runUpdates() {
   const yes = await window.ask({ title: "Run updates now?",
     now: "OwlBear installs the newest version of this machine's channel beside the running one and checks it.",
     then: "Once no step, check environment or design pack update runs, it switches to that version; this page "
@@ -316,6 +321,7 @@ if (bar.data) {
     // never re-rendered under the owner's typing, unless an announcement starts or runs: its countdown stays true
     if (!document.activeElement?.closest?.("#machine") || before || bar.data?.announce) showBar();
     if (bar.data?.paused !== was) changed();
+    document.dispatchEvent(new CustomEvent("owlbear-polled", { detail: bar.data }));  // what a page shows of it
   }, 5000);
   setInterval(() => { if (bar.data?.announce) showBar(); }, 1000);
 }

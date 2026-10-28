@@ -1,4 +1,4 @@
-"""The design pack's Settings section and the Maintenance overview (TD-101, TD-113): reads, and the one update start.
+"""The design pack update's routes and the Maintenance overview (TD-101, TD-113): reads, and the one update start.
 
 The overview only links each maintenance action to where it lives and shows its last run where Delivery keeps one;
 beside it, each role's use of built-in subagents (TD-376).
@@ -85,13 +85,14 @@ def overview(store: Store) -> list[dict[str, Any]]:
     return [
         {"name": "Memory curation", "where": "Memory", "href": "/memory", "built": True, "recorded": True,
          "last": memory_last(store), "note": "Approve, edit, resolve or delete agent memory entries."},
-        {"name": "Design pack update", "where": "Settings", "href": "/config#pack", "built": True,
+        {"name": "Design pack update", "where": "Maintenance", "href": "#owlbear", "built": True,
          "recorded": True, "last": pack_job.last(store),
-         "note": "Detector and design skills together: diff, golden pages, replay, challenger, then commit and push."},
-        {"name": "Engine update", "where": "Settings", "href": "/config#machine-title", "built": True,
+         "note": "Detector and design skills together: diff, golden pages, replay, challenger, then commit and push. "
+                 "One runs at a time on this machine; the OwlBear section shows it in every project."},
+        {"name": "Engine update", "where": "Maintenance", "href": "#owlbear", "built": True,
          "recorded": False, "last": None,
-         "note": "OwlBear updates itself when idle, announced on open pages; Run updates now on a paused page "
-                 "updates at once."},
+         "note": "OwlBear updates itself when idle, announced on open pages; Update now in the OwlBear section "
+                 "updates at once. When it updates is set in Settings, This machine."},
         {"name": "Review Tests", "where": "Maintenance", "href": "#tests", "built": True, "recorded": False,
          "last": None, "note": "Reviewers judge shares of the tests; a curator applies what holds in a Change."},
         {"name": "Backlog triage", "where": "Backlog", "href": "/backlog", "built": True, "recorded": False,
@@ -181,7 +182,7 @@ def router(
     def subagents() -> list[dict[str, Any]]:
         return subagent_use(store)
 
-    routes.include_router(maintenance_routes.router(host))
+    routes.include_router(maintenance_routes.router(host, (store.name or store.root.name, store.root)))
     if host is not None:
         routes.include_router(curation_routes.router(store, host))
     return routes

@@ -1,6 +1,6 @@
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { live } from "/assets/lit-html/3.3.3/directives/live.js";
-import { call, loaded as clones, project as current } from "/assets/ui.mjs";
+import { call, here, loaded as clones, project as current } from "/assets/ui.mjs";
 import { CREDITS, INHERIT, SOURCES, WRITE, state, show, notify, typedNumber } from "./state.mjs";
 import { button } from "./cells.mjs";
 import { edit, own } from "./layers.mjs";
@@ -185,6 +185,8 @@ export function machineSection() {
     <p-text id="machine-note" size="xs" color="contrast-medium">OwlBear updates itself after 15 minutes without
       use while nothing runs, announced on open pages 2 minutes ahead; Run updates now on a paused page or
       <code>owlbear update</code> updates at once.</p-text>
+    <p-text id="machine-owlbear" size="sm">The engine update's status with Update now, and the design pack update, are
+      in <a href=${here({}, "/maintenance#owlbear")}>Maintenance, OwlBear</a>.</p-text>
   </section>`;
 }
 

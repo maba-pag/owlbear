@@ -1,4 +1,8 @@
-"""The Maintenance sessions: unknown work and its owner's explicit reboot recovery (OPS-03, OPS-06)."""
+"""The Maintenance sessions: unknown work and its owner's explicit reboot recovery (OPS-03, OPS-06).
+
+Beside them, the machine's design pack update as the OwlBear section shows it, the same in every project
+(``pack_overview``): the machine host serves it without a project, so the section reads it with none chosen.
+"""
 
 from __future__ import annotations
 
@@ -7,9 +11,11 @@ from typing import TYPE_CHECKING, Any, Protocol
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict
 
-from owlbear_delivery_next.project_host import decision_routes
+from owlbear_delivery_next.project_host import decision_routes, pack_overview
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from owlbear_delivery_next.local_system import maintenance
 
 
@@ -27,12 +33,21 @@ class RecoverBody(BaseModel):
     rebooted: bool
 
 
-def router(host: Holder | None) -> APIRouter:
-    """Held sessions and their recovery; a host without maintenance has none to show.
+def router(host: Holder | None, own: tuple[str, Path] | None = None) -> APIRouter:
+    """Held sessions and their recovery, a host without maintenance has none to show; and the machine's pack update.
 
-    Recovery is the owner's act on the page: a chat tool's call is refused, as the decisions' writes are.
+    Recovery is the owner's act on the page: a chat tool's call is refused, as the decisions' writes are. *own* is the
+    serving project's name and store root, whose run record is read beside the registry's projects'.
     """
     routes = APIRouter()
+
+    @routes.get("/maintenance/pack")
+    def pack() -> dict[str, Any]:
+        return pack_overview.pinned()
+
+    @routes.get("/maintenance/pack/runs")
+    def pack_runs() -> dict[str, Any]:
+        return pack_overview.runs(own)
 
     @routes.get("/maintenance/sessions")
     def sessions() -> dict[str, list[dict[str, Any]]]:

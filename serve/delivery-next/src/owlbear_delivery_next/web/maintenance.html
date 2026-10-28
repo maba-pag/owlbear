@@ -3,6 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- The OwlBear section is the machine's: the page opens without a project, its project parts then wait for one. -->
+<meta name="owlbear-scope" content="all">
 <title>OwlBear Delivery · Maintenance</title>
 <link rel="stylesheet" href="/assets/pds/index.css">
 <script type="module">
@@ -22,6 +24,13 @@
   #use p-table-cell:nth-child(n+2):nth-child(-n+5) { text-align: end; font-variant-numeric: tabular-nums; }
   #tests { display: grid; gap: var(--p-spacing-static-xs); }
   #tests fieldset { display: grid; gap: var(--p-spacing-static-xs); margin: 0; padding: 0; border: 0; }
+  #owlbear .row { align-items: center; }
+  #pack-stages { display: grid; gap: var(--p-spacing-static-xs); margin: 0; padding-inline-start: 1.5rem; }
+  #pack-stages li > * { display: inline-block; vertical-align: middle; margin-inline-end: var(--p-spacing-static-xs); }
+  #pack-log { margin: 0; white-space: pre-wrap; font-size: var(--p-typescale-xs); }
+  .pack-question { display: grid; gap: var(--p-spacing-static-sm); margin-block: var(--p-spacing-static-md);
+    padding-block-start: var(--p-spacing-static-sm); border-block-start: 1px solid var(--p-color-contrast-low); }
+  .pack-diff { margin: 0; max-block-size: 24rem; overflow: auto; white-space: pre; font-size: var(--p-typescale-xs); }
 </style>
 </head>
 <body>
@@ -35,7 +44,11 @@
 <!-- ask -->
 <script type="module">
 import { html, nothing, render } from "/assets/lit-html/3.3.3/lit-html.js";
-import { call, defined, here } from "/assets/ui.mjs";
+import { call, defined, here, project, shown } from "/assets/ui.mjs";
+import { follow, owlbearSection, readOwlbear } from "/assets/page/maintenance/owlbear.mjs";
+
+// Under the machine host with no project chosen, only the machine's parts show: the project's wait for one.
+const none = shown() !== null && !project;
 
 const RESULTS = { passed: "success", "up-to-date": "success", failed: "error", running: "info" };
 const state = {
@@ -65,6 +78,7 @@ function action(a) {
     </div>
     <p-text size="sm">${a.note}</p-text>
     ${a.href && !a.href.startsWith("#") ? html`<a href=${here({}, a.href)}>Open ${a.name} in ${a.where}</a>` : nothing}
+    ${a.href === "#owlbear" ? html`<a href="#owlbear">Go to the OwlBear section</a>` : nothing}
     ${a.href === "#tests" ? testsPart() : nothing}
     <div class="title">${lastRun(a)}</div>
   </li>`;
@@ -339,13 +353,16 @@ function view() {
     <p-inline-notification id="error" state="error" dismiss-button="false" ?hidden=${!error}>${error}
     </p-inline-notification>
     <p-text id="status" role="status" aria-live="polite"></p-text>
+    ${none ? html`<p-text id="no-project" size="sm">Choose a project above for its maintenance actions, test review
+      and subagent use. The OwlBear section below is the machine's, the same in every project.</p-text>` : html`
     <section aria-labelledby="actions-title">
       <p-heading size="lg"><h2 id="actions-title">Maintenance actions</h2></p-heading>
       <ul id="actions" class="actions">${state.actions.map(action)}</ul>
-    </section>
+    </section>`}
+    ${owlbearSection()}
     ${curationSection()}
     ${sessionsSection()}
-    ${useSection()}`;
+    ${none ? nothing : useSection()}`;
 }
 
 function show() {
@@ -354,14 +371,16 @@ function show() {
 
 async function refresh() {
   const generation = ++state.reading;
+  readOwlbear();
   // Keep the established read order, collecting failures without losing another section's data.
+  const idle = Promise.resolve([[], []]);
   const [overview] = await Promise.allSettled([
-    Promise.all([
+    none ? idle : Promise.all([
       call("/maintenance", { timeout: 15000 }), call("/maintenance/subagents", { timeout: 15000 }),
     ]),
   ]);
   const [tests] = await Promise.allSettled([
-    call("/maintenance/test-review", { timeout: 30000 }),
+    none ? Promise.resolve(null) : call("/maintenance/test-review", { timeout: 30000 }),
   ]);
   const [curation] = await Promise.allSettled([
     call("/curation", { machine: true, timeout: 15000 }),
@@ -403,6 +422,7 @@ async function refresh() {
   if (busy) state.again = setTimeout(refresh, 5000);
 }
 
+follow(show);
 show();
 document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh(); });
 await defined(["p-checkbox", "p-button"]);

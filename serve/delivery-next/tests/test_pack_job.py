@@ -1864,17 +1864,24 @@ def test_the_last_run_survives_a_host_restart_and_a_run_cut_short_reads_failed(t
     assert json.loads((store.root / pack_job.FILE).read_text())["state"] == "failed"  # kept on disk
 
 
-def test_settings_shows_the_design_pack_section_and_its_update_button(tmp_path, page_source):
+def test_maintenance_shows_the_design_pack_section_and_settings_only_links_to_it(tmp_path, page_source):
     c = TestClient(api.create_app(Store(tmp_path), "t", Host()), base_url="http://127.0.0.1", headers=AUTH)
 
-    page = page_source(c, "/config")
+    page = page_source(c, "/maintenance")
 
-    assert '<section id="pack" class="panel" aria-labelledby="pack-title">' in page
-    assert '<h2 id="pack-title">Design pack</h2>' in page
-    assert 'button("Update design pack", startUpdate, { id: "pack-update", icon: "refresh"' in page  # lit-html
-    assert '<p-text id="pack-state" size="sm" role="status" aria-live="polite">${packLine(u)}</p-text>' in page
+    assert '<section id="owlbear" class="panel" aria-labelledby="owlbear-title">' in page  # the global section
+    assert '<h3 id="pack-title">Design pack</h3>' in page
+    assert 'button("Update design pack", start, { id: "pack-update", icon: "refresh"' in page  # lit-html
+    assert '<p-text id="pack-state" size="sm" role="status" aria-live="polite">${runLine(run)}</p-text>' in page
     assert '<ol id="pack-stages" aria-label="Update stages">' in page
     assert "commits design_pack.json, skills/NOTICE.md and " in page  # the Update dialog says what it commits
+    settings = page_source(c, "/config")
+    assert 'id="pack-update"' not in settings  # the update is OwlBear's maintenance, not a project setting
+    assert 'href=${here({}, "/maintenance#owlbear")}' in settings
+    pinned = c.get("/api/next/maintenance/pack").json()
+    assert (pinned["pack"], pinned["upstream"], pinned["identity"]) == (
+        OLD["pack"], OLD["upstream"]["tag"], design_pack.identity()
+    )  # fmt: skip
     got = c.get("/api/next/design-pack").json()
     assert (got["pack"], got["upstream"]) == (OLD["pack"], OLD["upstream"]["tag"])
     assert got["identity"] == design_pack.identity()
@@ -1896,8 +1903,8 @@ def test_the_maintenance_page_links_each_action_and_shows_what_is_not_built(tmp_
     got = {a["name"]: a for a in c.get("/api/next/maintenance").json()}
     assert list(got) == ["Memory curation", "Design pack update", "Engine update", "Review Tests", "Backlog triage"]
     assert (got["Memory curation"]["href"], got["Memory curation"]["last"]) == ("/memory", None)
-    assert (got["Design pack update"]["href"], got["Design pack update"]["last"]) == ("/config#pack", None)
-    assert (got["Engine update"]["built"], got["Engine update"]["href"]) == (True, "/config#machine-title")
+    assert (got["Design pack update"]["href"], got["Design pack update"]["last"]) == ("#owlbear", None)
+    assert (got["Engine update"]["built"], got["Engine update"]["href"]) == (True, "#owlbear")
     assert (got["Review Tests"]["built"], got["Review Tests"]["href"]) == (True, "#tests")  # started on this page
     assert (got["Backlog triage"]["href"], got["Backlog triage"]["recorded"]) == ("/backlog", False)
     (store.root / pack_job.FILE).write_text(
