@@ -13,8 +13,9 @@ from types import SimpleNamespace
 
 import pytest
 
+from owlbear_delivery_next.design_packs import design_pack
 from owlbear_delivery_next.local_system import codebase, local_home
-from owlbear_delivery_next.machine_host import selfcheck, versions
+from owlbear_delivery_next.machine_host import packs, selfcheck, versions
 from owlbear_delivery_next.machine_host.versions import Choice
 from owlbear_delivery_next.project_host import pages
 from owlbear_delivery_next.settings.config import CONFIG_FORMAT
@@ -209,6 +210,54 @@ def test_a_version_whose_pack_fails_is_kept_unready_and_only_its_pack_is_tried_a
     (local_home.root() / "pack-exit").write_text("0")
     assert versions.install(Choice("v0.2", commit)) == local_home.root() / local_home.VERSIONS / "v0.2"
     assert (len(installing.synced), len(installing.packs())) == (1, 2)
+
+
+def at_v0_2(origin: Path) -> Path:
+    """A runtime at v0.2, the highest version ever active, with updating by itself off."""
+    runtime = runtime_at(origin, git(origin, "rev-parse", "v0.2^{commit}"))
+    with registry.locked():
+        saved = registry.load()
+        saved.active, saved.settings = "v0.2", saved.settings.model_copy(update={"update_when_idle": False})
+        registry.save(saved)
+    return runtime
+
+
+def test_upstream_ahead_without_an_owlbear_release_shows_no_newer_pack(origin):
+    at_v0_2(origin)
+    released(origin, "", '{"pack": "p-new"}')
+
+    assert packs.look()["state"] == "none"
+
+
+def test_a_release_pinning_another_pack_is_newer_with_updating_by_itself_off_and_starts_nothing(origin, monkeypatch):
+    runtime = at_v0_2(origin)
+    head = git(runtime, "rev-parse", "HEAD")
+    released(origin, "v0.3", '{"pack": "p-new"}')
+    fetched, target = [], versions.target
+    monkeypatch.setattr(versions, "target", lambda: fetched.append(1) or target())
+
+    said = packs.look()
+
+    assert (said["state"], said["version"], said["pack"]) == ("newer", "v0.3", "p-new")
+    assert said["running_pack"] == design_pack.manifest()["pack"]
+    assert packs.look() == packs.release() == said  # within the day: what was kept, nothing fetched
+    assert fetched == [1]
+    assert packs.look(force=True)["checked_at"] is not None
+    assert fetched == [1, 1]
+    assert not (local_home.root() / local_home.VERSIONS).exists()  # nothing installed
+    assert git(runtime, "rev-parse", "HEAD") == head
+
+
+def test_a_release_pinning_the_same_pack_shows_nothing_and_an_unreadable_one_stays_unknown(origin):
+    at_v0_2(origin)
+    released(origin, "v0.3", json.dumps(design_pack.manifest()))
+
+    assert packs.look()["state"] == "same"
+
+    released(origin, "v0.4", None)
+    said = packs.look(force=True)
+    assert (said["state"], said["version"]) == ("unknown", "v0.4")
+    assert "design pack is unreadable" in said["detail"]
 
 
 def test_an_install_waits_while_the_disk_is_nearly_full(origin, installing, monkeypatch):

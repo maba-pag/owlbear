@@ -81,10 +81,12 @@ class Machine:
         self.slots = Slots(self._sessions, closed=True)  # opened once every project's live steps are counted
         self.maintenance = maintenance.Maintenance(self.slots)
         from owlbear_delivery_next.machine_host.auto_update import Auto  # noqa: PLC0415 - it names this class
+        from owlbear_delivery_next.machine_host.packs import Packs  # noqa: PLC0415 - it names this class
         from owlbear_delivery_next.machine_host.update import Updater  # noqa: PLC0415 - it names this class
 
         self.updater = Updater(self)
         self.auto = Auto(self)
+        self.packs = Packs(self)
         self.curation = Curation(
             self.slots,
             fenced=self._curation_fence,
