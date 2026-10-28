@@ -150,28 +150,27 @@ def file(
 
 
 def due_reviews() -> list[dict[str, Any]]:
-    """The open proposals whose evidence has no review yet, synthetic ones included.
+    """The drafted proposals, synthetic ones included: their current evidence has no review yet.
 
-    None that rests on a retired assumption is listed.
+    That holds too for evidence grown back to a digest reviewed before, since growth made that review stale. None that
+    rests on a retired assumption is listed.
     """
     gone = store.retired_ids()
-    return [
-        p
-        for p in folded().values()
-        if p["state"] == "drafted" and p["review_digest"] != p["evidence"] and store.visible(p, gone, synthetic=True)
-    ]
+    return [p for p in folded().values() if p["state"] == "drafted" and store.visible(p, gone, synthetic=True)]
 
 
 def reviewed(proposal: str, digest: str, answer: Mapping[str, Any]) -> None:
     """Keep ``retro-review``'s *answer* for the evidence *digest*.
 
     A verdict on evidence still current moves the proposal to ``waiting`` (survive) or ``rejected``, in the same write.
+    Its events are keyed by the proposal's growth too: evidence grown back to a digest reviewed before is reviewed anew.
     """
     with store.locked():
         snap = folded().get(proposal)
+        grew = sum(line.get("proposal") == proposal and line["type"] == "grown" for line in store.lines(FILE))
         rows = [
             {
-                "eid": f"rev-{proposal}-{digest}",
+                "eid": f"rev-{proposal}-{grew}-{digest}",
                 "proposal": proposal,
                 "type": "reviewed",
                 "digest": digest,
@@ -185,7 +184,7 @@ def reviewed(proposal: str, digest: str, answer: Mapping[str, Any]) -> None:
             state = "waiting" if answer.get("verdict") == "survive" else "rejected"
             rows.append(
                 {
-                    "eid": f"st-{proposal}-{digest}",
+                    "eid": f"st-{proposal}-{grew}-{digest}",
                     "proposal": proposal,
                     "type": "state",
                     "state": state,

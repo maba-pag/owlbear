@@ -87,6 +87,21 @@ def test_a_proposal_whose_evidence_grew_after_its_review_is_accepted_only_once_r
     assert props.folded()[pid]["state"] == "accepted"
 
 
+@pytest.mark.parametrize("review_between", [True, False])
+def test_evidence_that_grows_back_to_a_reviewed_digest_is_reviewed_again_and_leaves_drafted(review_between):
+    key = props.open_key("real", "lesson", "instruction-gap", "w-build", "m3")
+    pid = props.file(key, ["rf-1"], {"count": 3, "sample": []}, provenance="real")
+    props.reviewed(pid, props.folded()[pid]["evidence"], {"verdict": "survive", "why": "holds"})
+    props.file(key, ["rf-1"], {"count": 4, "sample": []})
+    if review_between:
+        props.reviewed(pid, props.folded()[pid]["evidence"], {"verdict": "survive", "why": "holds"})
+    props.file(key, ["rf-1"], {"count": 3, "sample": []})
+
+    assert [p["id"] for p in props.due_reviews()] == [pid]
+    props.reviewed(pid, props.folded()[pid]["evidence"], {"verdict": "survive", "why": "still holds"})
+    assert (props.folded()[pid]["state"], props.due_reviews()) == ("waiting", [])
+
+
 def test_a_recurrence_after_rejection_opens_a_new_proposal_naming_the_prior_one():
     key = props.open_key("real", "agent-change", "instruction-gap", "w-plan", "m2")
     first = props.file(key, ["rf-1", "rf-2"], provenance="real")
