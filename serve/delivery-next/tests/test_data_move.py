@@ -106,6 +106,13 @@ def _retained_runner(tmp: Path, monkeypatch) -> None:
     _projects(monkeypatch, lambda _repo: store)
 
 
+def _homed_runner(_tmp: Path, monkeypatch) -> None:
+    folder = local_home.root() / "projects" / "2970efbd2ef7111c" / "changes" / "fix-x"
+    folder.mkdir(parents=True)
+    (folder / "runner.json").write_text('{"pid": 999999}')
+    _projects(monkeypatch, lambda _repo: None)  # its clone moved, so the store is found only in its home
+
+
 def _unlistable_changes(tmp: Path, monkeypatch) -> None:
     changes, real = tmp / "store" / "changes", Path.iterdir
     changes.mkdir(parents=True)
@@ -163,13 +170,14 @@ def _linked_source(tmp: Path, _monkeypatch) -> None:
         (_live_process, "process 7: python -m owlbear_delivery_next mcp"),
         (_unreadable_store, "/work/shop: its store cannot be read: denied"),
         (_retained_runner, "a runner's record; start OwlBear, let it settle the step"),
+        (_homed_runner, "fix-x/runner.json: a runner's record"),
         (_unlistable_changes, "/work/shop: its store cannot be read: denied"),
         (_held_maintenance, "maintenance session curation in shop is held"),
         (_dest_exists, "exists; choose a new folder"),
         (_other_disk, "is on another disk"),
         (_linked_source, "is a linked worktree; move its main checkout"),
     ],
-    ids=["host", "process", "store", "runner", "changes", "maintenance", "dest", "disk", "linked"],
+    ids=["host", "process", "store", "runner", "homed", "changes", "maintenance", "dest", "disk", "linked"],
 )
 def test_a_refused_move_changes_nothing(tmp_path: Path, source: Path, monkeypatch, arrange, reason: str) -> None:
     held = arrange(tmp_path, monkeypatch)

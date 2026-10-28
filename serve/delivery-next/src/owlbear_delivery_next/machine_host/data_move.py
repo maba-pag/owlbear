@@ -164,23 +164,39 @@ def _processes() -> list[str]:
 
 
 def _runners() -> list[str]:
-    try:
-        projects = registry.load().projects
-    except registry.RegistryError as exc:
-        return [str(exc)]
+    """Runner records in every store: each folder under the stores' home, and a registered clone's own store."""
     found = []
+    try:
+        stores = {folder.resolve(): str(folder) for folder in _children(local_home.root() / project_home.PROJECTS)}
+        projects = registry.load().projects
+    except (registry.RegistryError, OSError) as exc:
+        return [f"the project stores cannot be listed: {exc}"]
     for project in projects:
         try:
             store = project_home.current(Path(project.path))
-            records = _records(store / "changes") if store else []
         except Exception as exc:  # noqa: BLE001 - any failure to read a store refuses the move
             found.append(f"{project.path}: its store cannot be read: {exc}")
+            continue
+        if store:
+            stores.setdefault(store.resolve(), project.path)
+    for store, name in sorted(stores.items()):
+        try:
+            records = _records(store / "changes")
+        except OSError as exc:
+            found.append(f"{name}: its store cannot be read: {exc}")
             continue
         found += [
             f"{path}: a runner's record; start OwlBear, let it settle the step, stop it, then try again"
             for path in records
         ]
     return found
+
+
+def _children(home: Path) -> list[Path]:
+    try:
+        return sorted(folder for folder in home.iterdir() if folder.is_dir())
+    except FileNotFoundError:
+        return []
 
 
 def _records(changes: Path) -> list[Path]:
