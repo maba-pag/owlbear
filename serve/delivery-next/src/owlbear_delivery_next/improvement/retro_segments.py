@@ -108,6 +108,11 @@ def _at(d: Mapping[str, Any]) -> float | None:
     return None
 
 
+def _clean(text: object) -> str:
+    """*text* cleaned and masked before any cut, so a secret the cut splits never survives in part."""
+    return mask.redact(ev.clean(str(text)))
+
+
 def _excerpt(session: str, path: str, said: Mapping[str, Any]) -> str:
     name = Path(path).name
     state = next((o.get("state") for o in said.get("outputs") or () if o.get("path") == path), "not captured")
@@ -118,21 +123,22 @@ def _excerpt(session: str, path: str, said: Mapping[str, Any]) -> str:
             body = fh.read()  # the capture bounded every output it kept
     except (OSError, EOFError) as exc:
         return f"[output {name}: unreadable ({type(exc).__name__})]"
-    return f"[output {name}]\n{cut(ev.clean(body), OUTPUT)}"
+    return f"[output {name}]\n{cut(_clean(body), OUTPUT)}"
 
 
 def _message(d: Mapping[str, Any], data: Mapping[str, Any]) -> tuple[str, str]:
     if d.get("type") == "user.message":
-        text = ev.clean(str(data.get("content") or ""))
+        text = _clean(data.get("content") or "")
         who = "requester" if ev.requester(dict(d)) else "system message"
         return f"{who}: {cut(text, ASKED if who == 'requester' else SAID)}", f"{who}: {cut(text, BRIEF)}"
-    text = ev.clean(str(data.get("content") or ""))
+    text = _clean(data.get("content") or "")
     return (f"agent: {cut(text, SAID)}", f"agent: {cut(text, BRIEF)}") if text.strip() else ("", "")
 
 
 def _result(data: Mapping[str, Any], tool: str, said: Mapping[str, Any], session: str) -> tuple[str, str]:
-    result = ev.clean(str(ev.result_text(dict(data))))
-    outputs = [_excerpt(session, p, said) for p in dict.fromkeys(chatlogs.SAVED.findall(result))]
+    raw = ev.clean(str(ev.result_text(dict(data))))
+    outputs = [_excerpt(session, p, said) for p in dict.fromkeys(chatlogs.SAVED.findall(raw))]
+    result = mask.redact(raw)
     told = [x for o in outputs for x in o.splitlines() if TESTS.search(x)][-2:]  # a kept output's test result
     failed, tests = data.get("success") is False, bool(TESTS.search(result) or told)
     line = f"result {tool} {'failed' if failed else 'ok'}: {cut(result, FULL if failed or tests else RESULT)}"
@@ -150,7 +156,7 @@ def _say(d: Mapping[str, Any], calls: dict[str, str], said: Mapping[str, Any], s
     elif kind == "tool.execution_start":
         tool = str(data.get("toolName") or "")
         calls[str(data.get("toolCallId"))] = tool
-        line = f"call {tool}: {cut(ev.clean(ev.kept_text(data.get('arguments'), ev.RAW)), SAID)}"
+        line = f"call {tool}: {cut(_clean(ev.kept_text(data.get('arguments'), ev.RAW)), SAID)}"
     elif kind == "tool.execution_complete":
         line, brief = _result(data, calls.get(str(data.get("toolCallId")), "?"), said, session)
     elif kind in {"subagent.started", "subagent.completed"}:
@@ -193,11 +199,11 @@ def prepare(sessions: list[str], outcome: str, *, low: int = 0, high: int = 0, p
     were judged before: they are the earlier course, context only. When every event says when it happened, what came
     later is told in that order, and a part ends where another session's events came in between (a resumed session).
     """
-    out, outcome = Prepared(), cut(outcome, OUTCOME)
+    out, outcome = Prepared(), cut(mask.redact(outcome), OUTCOME)
     lines = _lines(sessions, high, per_turn=per_turn, gaps=out.gaps)
     before = [x for x in lines if x.n <= low]
     lines = [x for x in lines if x.n > low]
-    out.earlier = mask.redact(cut("\n".join(x.brief for x in before if x.brief), LATER))
+    out.earlier = cut(mask.redact("\n".join(x.brief for x in before if x.brief)), LATER)
     timed = all(x.at is not None for x in lines)
     order = sorted(range(len(lines)), key=lambda i: (lines[i].at or 0.0, i)) if timed else list(range(len(lines)))
     pos = {i: k for k, i in enumerate(order)}
@@ -216,7 +222,7 @@ def prepare(sessions: list[str], outcome: str, *, low: int = 0, high: int = 0, p
     for part, end in zip(out.parts, ends, strict=True):
         after = "\n".join(lines[j].brief for j in order[pos[end] + 1 :] if lines[j].brief)
         part.text = fit(mask.redact(part.text), PART)
-        later = cut(after, LATER - len(outcome) - 20) + f"\noutcome: {outcome}"
+        later = cut(mask.redact(after), LATER - len(outcome) - 20) + f"\noutcome: {outcome}"
         part.later = fit(mask.redact(later), LATER)
     return out
 

@@ -93,6 +93,14 @@ def test_a_builder_resumed_after_review_is_told_its_course_in_the_order_it_happe
     assert "repaired: tests pass now" in review.later
 
 
+def test_a_secret_split_by_a_cut_never_survives_in_part():
+    token = "ghp_" + "abcDEF123" * 4
+    _captured("s1", [_event("assistant.message", content="word " * 400 + token + " end" * 175)])  # the cut ends in it
+    (part,) = seg.prepare(["s1"], "done").parts
+    assert "omitted]" in part.text
+    assert "abcDEF123abc" not in part.text
+
+
 def test_a_chats_outcome_is_its_main_agents_last_word_never_a_subagents():
     events = [
         _event("assistant.message", content="the main agent is done"),
