@@ -264,13 +264,13 @@ def plant():
     os.mkfifo(marker)
     fired.append(True)
 if action == "selfcheck":
-    real = selfcheck._receipt
-    def receipt(*args):
-        answer = real(*args)
-        assert answer == (target, None)
-        plant()
-        return answer
-    selfcheck._receipt = receipt
+    assert selfcheck._receipt(pid, source) == (target, None)
+    real = selfcheck.read_regular
+    def read_marker(path):
+        if path == marker and not fired:
+            plant()
+        return real(path)
+    selfcheck.read_regular = read_marker
     problems = selfcheck._project(pid, repo)
     outcome, said = ("refused" if problems else "accepted"), "; ".join(problems)
 else:
