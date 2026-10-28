@@ -168,6 +168,9 @@ def test_two_projects_with_one_slug_stay_apart_in_list_detail_actions_and_links(
             page.unroute(f"**/p/{a.id}/api/next/changes")
             expect(page.locator("#detail")).to_contain_text("in alpha")  # kept, and opened once it answers
             assert page.evaluate("location.search") == f"?change={a.id}%2Fsame"
+            page.route(f"**/p/{a.id}/api/next/changes", lambda _r: None)  # up, yet never answers
+            expect(page.locator("#error")).to_contain_text("slow to answer", timeout=30000)
+            expect(page.locator("#detail")).to_have_class("stale")  # not shown as freshly read
             browser.close()
     finally:
         server.should_exit = True
