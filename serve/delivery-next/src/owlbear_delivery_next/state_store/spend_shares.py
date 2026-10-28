@@ -46,6 +46,7 @@ EPS = 1e-9
 LIVE = ("start", "end")
 LOG = "import:runtime-log"  # a line the runtime's log gave
 CHECKPOINTS = ("event", "mark", "residual")  # imported line types that repeat a session's totals: never a run
+VOID = "void"  # a Spotter record's ``look`` line imported although no look ran (``spend_reconcile``): no run at all
 
 type Fields = dict[str, float | None]
 type Cell = tuple[str, str]
@@ -112,11 +113,16 @@ def runs(lines: list[dict[str, Any]]) -> list[dict[str, Any]]:
     names) takes each later, larger checkpoint as a continuation: one more entry of the same run, at that checkpoint's
     time, whose growth lies between the two checkpoints; an ending recorded as it ran, arriving after them, dates the
     run alone. Once the run's latest usage is final, none of its entries is a lower bound any more (``settled``).
+    A ``void`` line takes back a Spotter record's run (``import:spotter``) imported although no look ran; never another.
     """
     by: dict[str, dict[str, Any]] = {}
     later: dict[str, list[dict[str, Any]]] = {}  # each run's continuations, in time order
+    void: set[str] = set()
     for line in lines:
         kind = line.get("type")
+        if kind == VOID:
+            void.add(str(line.get("run")))
+            continue
         rid = str(line.get("run") or line.get("id")) if kind in LIVE else str(line.get("id"))
         run = by.setdefault(rid, {"run": rid, "usage": None, "at": None, "started": None, "before": None})
         if kind == "start":
@@ -128,10 +134,20 @@ def runs(lines: list[dict[str, Any]]) -> list[dict[str, Any]]:
             if line.get("source") != LOG and (kept := later.pop(rid, None)):  # its own ending came after all
                 run["usage"] = kept[-1]["usage"]  # it alone dates the run
             _end(run, line)
+    return _settled(by, later, void)
+
+
+def _settled(
+    by: dict[str, dict[str, Any]], later: dict[str, list[dict[str, Any]]], void: set[str]
+) -> list[dict[str, Any]]:
+    """The runs and their continuations; a run whose latest usage is final settled, and a voided record dropped."""
     for rid, kept in later.items():
         if kept and not (kept[-1].get("usage") or {}).get("incomplete"):
             for entry in (by[rid], *kept):
                 entry["settled"] = True
+    for rid in void:
+        if by.get(rid, {}).get("source") == "import:spotter":
+            del by[rid]
     return [*by.values(), *(x for kept in later.values() for x in kept)]
 
 

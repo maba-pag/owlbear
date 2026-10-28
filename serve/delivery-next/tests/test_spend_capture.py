@@ -5,6 +5,7 @@ from __future__ import annotations
 import contextvars
 import json
 import threading
+from dataclasses import asdict
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
@@ -17,6 +18,7 @@ from fastapi.testclient import TestClient
 from owlbear_delivery_next.change_contracts.models import Change, Step, StepKind
 from owlbear_delivery_next.change_contracts.spend import Spend
 from owlbear_delivery_next.commands import runner
+from owlbear_delivery_next.improvement import spotter
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.pack_runs import pack_job, pack_replay
 from owlbear_delivery_next.project_host import metrics_routes
@@ -122,6 +124,50 @@ def test_legacy_spotter_looks_are_measured_only_when_reported_and_named_by_their
         "look",
         1.0,
     )
+
+
+def look_record(rid: str, **spend: object) -> dict:
+    """A Spotter record as the Spotter writes it today (``spotter.Record``), with its meter's *spend*."""
+    rec = spotter.Record(id=rid, at="2026-10-28T09:00:00+00:00", project="0123456789abcdef", change="", step="chat",
+                         session="chat-1", look="hand-off", call="c1", cutoff=3, probability=1.0,
+                         model="m1")  # fmt: skip
+    return asdict(rec) | spend
+
+
+def test_a_skipped_look_imports_nothing_and_unknown_or_zero_spend_still_counts(project) -> None:
+    folder = local_home.root() / "spotter"
+    folder.mkdir()
+    looks = [
+        look_record("skip", skipped="paused: the machine is paused"),  # Pause, a fence or capacity: no session
+        look_record("unread", sdk_sessions=["s-u"]),  # a session whose spend is not known
+        look_record("lost", credits=0.3),  # spend reported, then not known, its session not named
+        look_record("free", credits_known=True, sdk_sessions=["s-f"]),  # a session that cost nothing
+    ]
+    assert (looks[0]["credits"], looks[0]["credits_known"], looks[0]["sdk_sessions"]) == (0.0, False, [])
+    (folder / "records-2026-10-28.jsonl").write_text("".join(json.dumps(x) + "\n" for x in looks))
+    spend_reconcile.run([(project, None)])
+    found = {p["run"]: (p["kind"], p["credits"]) for p in spend_shares.derive(spend_ledger.lines())
+             if p["session"].startswith("look:")}  # fmt: skip
+    assert found == {"look:unread": ("unknown", None), "look:lost": ("unknown", None), "look:free": ("run", 0.0)}
+
+
+def test_a_skipped_looks_line_an_earlier_pass_imported_is_taken_back_once(project) -> None:
+    """Passes before this fix imported a skipped look's record as an unknown run; the ledger keeps every line."""
+    folder = local_home.root() / "spotter"
+    folder.mkdir()
+    looks = [look_record("skip", skipped="capacity: a chat look is already running"), look_record("lost", credits=0.3)]
+    (folder / "records-2026-10-28.jsonl").write_text("".join(json.dumps(x) + "\n" for x in looks))
+    earlier = {"type": "look", "at": "2026-10-28T09:00:00+00:00", "usage": {"error": "unknown"}, "agent": "spotter",
+               "job": "hand-off look", "ending": "look", "sdk_sessions": [], "source": "import:spotter",
+               "project": "shop", "name": "shop", "clone": "0123456789abcdef", "change": ""}  # fmt: skip
+    spend_ledger.append([earlier | {"id": f"look:{x['id']}", "session": f"look:{x['id']}", "look": x["id"]}
+                         for x in looks])  # fmt: skip
+    assert spend_reconcile.run([(project, None)])["imported"]["spotter"] == 1
+    assert spend_reconcile.run([(project, None)])["imported"]["spotter"] == 0
+    found = {p["run"]: (p["kind"], p["credits"]) for p in spend_shares.derive(spend_ledger.lines())
+             if p["session"].startswith("look:")}  # fmt: skip
+    assert found == {"look:lost": ("unknown", None)}  # only the record that ran no look is taken back
+    assert spend_metrics.query(spend_metrics.pieces(), tz=UTC_ZONE)["coverage"]["unknown"] == 1
 
 
 def checkpoint(at: str, nano: float) -> str:
