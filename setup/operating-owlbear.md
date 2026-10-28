@@ -114,6 +114,8 @@ does not compare them against the historical copied payload. Registration and ad
 authority check admitted through id synchronization and revalidate before recording it.
 Canonical registration keeps marker, ID and receipt image stamps under a held clone directory through its remaining
 reads, even without a move receipt. A late newer marker refuses without overwriting it or publishing the registry.
+Registration also holds the local `.git`, linked-worktree and repository-config binding images through those reads;
+a redirected Git common directory is refused rather than publishing the cached clone.
 The move receipt is part of the retained observation, not just an earlier lookup: replacing it during target
 validation or temporary-file synchronization refuses without overwriting the owner's receipt. Registration and
 adoption also guard the registry's final replacement after its temporary file is synced, leaving the previous

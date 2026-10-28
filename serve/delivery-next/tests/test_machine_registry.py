@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -177,6 +178,113 @@ def _change_registration_owner(store, damage):
 
 def _owner_files(folders):
     return {p: p.read_bytes() for folder in folders for p in folder.rglob("*") if p.is_file()}
+
+
+@pytest.mark.parametrize("action", ["register", "adopt"])
+@pytest.mark.parametrize("field", [project_move.CLONE_ID, project_move.MOVE_RECORD])
+def test_registry_publication_refuses_a_git_mapping_changed_during_final_source_reads(
+    tmp_path, monkeypatch, action, field
+):
+    work, other = tmp_path / "work", tmp_path / "other"
+    first, second = tmp_path / "first-git", tmp_path / "second-git"
+    for path, gitdir in ((work, first), (other, second)):
+        subprocess.run(["git", "init", "-q", "--separate-git-dir", str(gitdir), str(path)], check=True)  # noqa: S603, S607
+    store = first / project_home.STORE_DIR
+    store.mkdir()
+    (store / MARKER).write_text("7\n")
+    (store / "clone-id").write_text("old\n" if action == "adopt" else "owned\n")
+    if action == "adopt":
+        old = registry.register(work)
+        (store / "clone-id").write_text("owned\n")
+    source_before = _owner_files((store,))
+    machine = local_home.root() / registry.MACHINE
+    before = machine.read_bytes() if machine.exists() else None
+    real_sync, real_read = os.fsync, fd_tree.read_at
+    enabled, fired = [], []
+    mapping = f"gitdir: {second}\n"
+
+    def synced(fd):
+        real_sync(fd)
+        if not enabled and any(
+            os.path.samestat(temporary.stat(), os.fstat(fd)) for temporary in local_home.root().glob(".tmp-*.tmp")
+        ):
+            enabled.append(True)
+
+    def read(dfd, name):
+        value = real_read(dfd, name)
+        if enabled and not fired and name == field:
+            fired.append(True)
+            (work / ".git").write_text(mapping)
+        return value
+
+    monkeypatch.setattr(os, "fsync", synced)
+    monkeypatch.setattr(fd_tree, "read_at", read)
+    call = (lambda: registry.register(work)) if action == "register" else (lambda: registry.adopt(old.id))
+    with pytest.raises(registry.RegistryError):
+        call()
+    assert fired == [True]
+    assert (work / ".git").read_text() == mapping
+    assert project_home.clone_dir(work) == second / project_home.STORE_DIR
+    assert _owner_files((store,)) == source_before
+    assert (machine.read_bytes() if machine.exists() else None) == before
+
+
+def test_registry_publication_refuses_a_linked_worktree_common_dir_redirect_during_source_reads(tmp_path, monkeypatch):
+    first, second = clone(tmp_path / "first"), clone(tmp_path / "second")
+    git = shutil.which("git")
+    assert git is not None
+    subprocess.run(  # noqa: S603 - synthetic repository and identity
+        [
+            git,
+            "-C",
+            str(first),
+            "-c",
+            "user.name=fixture",
+            "-c",
+            "user.email=fixture@example.invalid",
+            "commit",
+            "-q",
+            "--allow-empty",
+            "-m",
+            "fixture",
+        ],
+        check=True,
+    )
+    work = tmp_path / "linked"
+    subprocess.run([git, "-C", str(first), "worktree", "add", "-q", "-b", "linked", str(work)], check=True)  # noqa: S603
+    gitdir = registry._git(work, "rev-parse", "--absolute-git-dir")  # noqa: SLF001 - real linked-worktree metadata
+    store = project_home.clone_dir(work)
+    store.mkdir()
+    (store / MARKER).write_text("7\n")
+    (store / "clone-id").write_text("owned\n")
+    machine = local_home.root() / registry.MACHINE
+    before = machine.read_bytes() if machine.exists() else None
+    real_sync, real_read = os.fsync, fd_tree.read_at
+    enabled, fired = [], []
+    mapping = f"{second / '.git'}\n"
+
+    def synced(fd):
+        real_sync(fd)
+        if not enabled and any(
+            os.path.samestat(temporary.stat(), os.fstat(fd)) for temporary in local_home.root().glob(".tmp-*.tmp")
+        ):
+            enabled.append(True)
+
+    def read(dfd, name):
+        value = real_read(dfd, name)
+        if enabled and not fired and name == project_move.MOVE_RECORD:
+            fired.append(True)
+            (gitdir / "commondir").write_text(mapping)
+        return value
+
+    monkeypatch.setattr(os, "fsync", synced)
+    monkeypatch.setattr(fd_tree, "read_at", read)
+    with pytest.raises(registry.RegistryError):
+        registry.register(work)
+    assert fired == [True]
+    assert (gitdir / "commondir").read_text() == mapping
+    assert project_home.clone_dir(work) == second / ".git" / project_home.STORE_DIR
+    assert (machine.read_bytes() if machine.exists() else None) == before
 
 
 @pytest.mark.parametrize("action", ["register", "adopt"])

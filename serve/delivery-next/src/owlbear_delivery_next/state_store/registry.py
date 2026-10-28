@@ -11,6 +11,7 @@ import contextlib
 import hashlib
 import os
 import shutil
+import stat
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
@@ -256,6 +257,49 @@ def _source_images(store: Path) -> Iterator[int | None]:
             os.close(folder_fd)
 
 
+@contextlib.contextmanager
+def _git_images(work: Path) -> Iterator[Path]:
+    """Keep local worktree/Git-directory binding controls stable through later source validation reads."""
+    try:
+        with contextlib.ExitStack() as held:
+            work_fd = os.open(work, fd_tree.DIR_FLAGS)
+            held.callback(os.close, work_fd)
+            mapping = fd_tree.stat_at(work_fd, ".git")
+            gitdir = _git(work, "rev-parse", "--absolute-git-dir")
+            git_fd = os.open(gitdir, fd_tree.DIR_FLAGS)
+            held.callback(os.close, git_fd)
+            images = [
+                (git_fd, name, fd_tree.stat_at(git_fd, name))
+                for name in ("commondir", "gitdir", "config", "config.worktree")
+            ]
+            if _git(work, "rev-parse", "--show-toplevel") != work:
+                msg = f"{work}'s Git worktree changed during validation: nothing was registered"
+                raise RegistryError(msg)
+            store = store_of(work)
+            common_fd = os.open(store.parent, fd_tree.DIR_FLAGS)
+            held.callback(os.close, common_fd)
+            images.extend((common_fd, name, fd_tree.stat_at(common_fd, name)) for name in ("config", "config.worktree"))
+            yield store
+            now = fd_tree.stat_at(work_fd, ".git")
+            same = (
+                now is not None and os.path.samestat(mapping, now)
+                if mapping is not None and stat.S_ISDIR(mapping.st_mode)
+                else fd_tree.same_image_at(work_fd, ".git", mapping)
+            )
+            if (
+                not same
+                or not all(fd_tree.same_image_at(dfd, name, before) for dfd, name, before in images)
+                or not same_folder(work, work_fd)
+                or not same_folder(gitdir, git_fd)
+                or not same_folder(store.parent, common_fd)
+            ):
+                msg = f"{work}'s Git directory binding changed during validation: nothing was registered"
+                raise RegistryError(msg)
+    except (OSError, StoreError) as exc:
+        msg = f"{work}'s Git directory binding cannot be checked: nothing was registered: {exc}"
+        raise RegistryError(msg) from exc
+
+
 def _canonical(path: Path) -> tuple[Path, Path, str | None]:
     """Canonical paths and the exact clone id their authority admitted, before any durability work."""
     try:
@@ -263,25 +307,26 @@ def _canonical(path: Path) -> tuple[Path, Path, str | None]:
     except OSError as exc:
         msg = f"{path} does not exist"
         raise RegistryError(msg) from exc
-    store = store_of(work)
-    for owned in (work, store.parent):
-        _owned(owned)
-    with _source_images(store) as folder_fd:
-        found = _marker_at(store, folder_fd)
-        pid = clone_id(store)
-        switched = _switched(store, pid)  # any move receipt is validated, whatever the marker says
-        if not switched and clone_id(store) != pid:
-            msg = f"{store}'s clone id changed during canonical validation: nothing was registered"
-            raise RegistryError(msg)
-        if switched and found != int(project_move.FENCE):
-            msg = (
-                f"{work}'s Delivery state has a SWITCHED receipt but format {found}, not {project_move.FENCE}: refusing"
-            )
-            raise RegistryError(msg)
-        if found > STORE_FORMAT and (found != int(project_move.FENCE) or not switched):
-            msg = f"{work}'s Delivery state has format {found}, newer than {STORE_FORMAT}: this OwlBear is older"
-            raise RegistryError(msg)
-        return work, store, pid
+    _owned(work)
+    with _git_images(work) as store:
+        _owned(store.parent)
+        with _source_images(store) as folder_fd:
+            found = _marker_at(store, folder_fd)
+            pid = clone_id(store)
+            switched = _switched(store, pid)  # any move receipt is validated, whatever the marker says
+            if not switched and clone_id(store) != pid:
+                msg = f"{store}'s clone id changed during canonical validation: nothing was registered"
+                raise RegistryError(msg)
+            if switched and found != int(project_move.FENCE):
+                msg = (
+                    f"{work}'s Delivery state has a SWITCHED receipt but format {found}, "
+                    f"not {project_move.FENCE}: refusing"
+                )
+                raise RegistryError(msg)
+            if found > STORE_FORMAT and (found != int(project_move.FENCE) or not switched):
+                msg = f"{work}'s Delivery state has format {found}, newer than {STORE_FORMAT}: this OwlBear is older"
+                raise RegistryError(msg)
+            return work, store, pid
 
 
 def _switched(store: Path, pid: str | None) -> bool:
