@@ -366,6 +366,9 @@ def test_a_merged_update_says_how_it_reaches_machines_and_a_new_one_stays_availa
         expect(page.locator("#pack-update")).to_be_enabled()
         expect(page.locator("#pack-notice")).to_contain_text("Upstream:")
         expect(page.locator("#pack-ask")).to_be_hidden()
+        job.state["state"] = "discarded"  # changed elsewhere: an ended run is still read again, with no reload
+        job._save()  # noqa: SLF001
+        expect(page.locator("#pack-state")).to_contain_text("Last run discarded", timeout=25000)
 
 
 @pytest.mark.browser

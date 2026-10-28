@@ -8,6 +8,7 @@ import { Slow, call, machineState, project, runUpdates } from "/assets/ui.mjs";
 const WRITE = 60000;  // an answer may commit and push: a network round trip
 const ADMIT = 90000;  // a start that timed out may still be admitted: its pull request lookup can take a while
 const LOOK = 2500;  // how often the section looks for that run meanwhile
+const IDLE = 15000;  // how often it looks for a run started or answered elsewhere
 const RESULTS = { pending: "not run", running: "running", passed: "passed", failed: "failed", skipped: "skipped",
   returned: "findings back to the updater", waiting: "waiting for you", completed: "session completed",
   findings: "findings", reused: "reused for this identity", answered: "answered by you",
@@ -59,7 +60,7 @@ export async function readOwlbear() {
   if (own.awaiting) own.polling = setTimeout(readOwlbear, LOOK);  // never sent again: only read until it shows
   else if (own.unread.runs || (run?.state === "running" && !run.interrupted)) {
     own.polling = setTimeout(readOwlbear, 2000);
-  }
+  } else if (!document.hidden) own.polling = setTimeout(readOwlbear, IDLE);  // showing again reads at once
 }
 
 // Which run a record is: a start that went through shows another one.
