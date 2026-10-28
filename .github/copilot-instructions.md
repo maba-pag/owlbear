@@ -89,13 +89,10 @@ the Node version pinned in `.nvmrc`); every `serve/` package is Python, so use `
 
 ## 4. Test Domain Mapping
 
-### GitHub Cloud Sessions
+### GitHub-Hosted Reviews
 
-Use explicit affected test selections and scoped checks. If scope is unknown, inspect the owning
-tests before choosing a check. Never run the whole-project suite or `uv run quality`.
-Follow the
-applicable [cloud-agent](instructions/cloud-agent.instructions.md) or
-[code-review](instructions/code-review.instructions.md) instructions. Required external CI gates remain unchanged.
+Copilot code review and CodeRabbit follow the [code-review](instructions/code-review.instructions.md) instructions.
+Required external CI gates remain unchanged.
 
 ### Local Development and CI
 

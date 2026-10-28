@@ -130,3 +130,7 @@ passed, and merge it only after the review is in and handled. If CodeRabbit repo
 60 minutes, they request a Copilot review instead and merge once that is handled, said in the pull request; others
 merge after CI and Sol's review, and only the owner labels them (`D-01M5WG5KS3N4PK44FTHJTCX7RC`). `@coderabbitai review` asks
 again; CodeRabbit never replies on its own (TD-412).
+
+Copilot code review prepares its runner with [Copilot setup steps](workflows/copilot-setup-steps.yml), the file GitHub
+reads for both the review and the Copilot cloud agent; the cloud agent doesn't work on this repository
+(D-01M5ZEKEK1AKGQ726K7KVAC3C9).
