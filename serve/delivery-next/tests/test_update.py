@@ -329,10 +329,18 @@ def test_a_version_whose_pack_failed_is_not_activated_and_every_page_offers_inst
     restarted = Machine(m.record, paused=False)  # a new host over the same home
     assert restarted.packs.read()["install"] == failed
     packed: list[Path] = []
-    monkeypatch.setattr(versions, "pack", lambda folder: packed.append(folder) or "")
+    meanwhile: list[dict] = []  # what the pages say while v0.2's pack is put in place
+
+    def pack(folder: Path) -> str:
+        packed.append(folder)
+        meanwhile.append(restarted.packs.read()["install"])
+        return ""
+
+    monkeypatch.setattr(versions, "pack", pack)
     restarted.packs.install()
     restarted.packs.thread.join(10)
     assert (packed, restarted.packs.read()["install"]) == ([updating.folder], None)
+    assert [(i["state"], i["version"], i["pack"]) for i in meanwhile] == [("installing", "v0.2", "")]
     assert Machine(m.record).packs.read()["install"] is None  # ended for good
 
     (local_home.root() / design_pack.PACKS / packs.FAILED).write_text("{not json")

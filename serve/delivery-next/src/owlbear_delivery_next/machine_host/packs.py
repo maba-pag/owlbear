@@ -112,6 +112,7 @@ class Packs:
         """The failure kept before a restart, if any; whether the pack is in place is looked at on the first read."""
         self.machine, self.mono, self.lock = machine, mono, threading.Lock()
         self.thread: threading.Thread | None = None
+        self.target = ""  # the version the running Install puts in place
         self.present: tuple[float, bool] | None = None
         self.failure: dict[str, Any] | None = self._restored()  # the last pack that failed: its version, what, when
 
@@ -184,13 +185,19 @@ class Packs:
     def read(self) -> dict[str, Any]:
         """What every page shows: ``install`` (None, or missing, failed or installing) and ``release``."""
         with self.lock:
-            installing, failure = self.thread is not None and self.thread.is_alive(), self.failure
+            installing, failure, target = self.thread is not None and self.thread.is_alive(), self.failure, self.target
         if failure and not installing and not self._applies(failure):
             self.ready(failure["version"])
             failure = None
         running, pack = versions.running(), design_pack.manifest()["pack"]
         if installing:
-            install = {"state": "installing", "version": running, "pack": pack, "detail": "", "at": None}
+            install = {
+                "state": "installing",
+                "version": target,
+                "pack": pack if target == running else "",
+                "detail": "",
+                "at": None,
+            }
         elif failure:
             install = {"state": "failed", "pack": pack if failure["version"] == running else ""} | failure
         elif not self._in_place():
@@ -208,14 +215,14 @@ class Packs:
             return self.read() | {"refused": "an update runs; it installs the pack of the version it takes"}
         with self.lock:
             if self.thread is None or not self.thread.is_alive():
-                self.thread = threading.Thread(target=self._run, name="design-pack", daemon=True)
+                failure = self.failure
+                self.target = (failure["version"] if failure else "") or versions.running()  # unreadable: none named
+                self.thread = threading.Thread(target=self._run, args=(failure, self.target), name="design-pack",
+                                               daemon=True)  # fmt: skip
                 self.thread.start()
         return self.read()
 
-    def _run(self) -> None:
-        with self.lock:
-            failure = self.failure
-        tag = (failure["version"] if failure else "") or versions.running()  # an unreadable record names none
+    def _run(self, failure: dict[str, Any] | None, tag: str) -> None:
         try:
             if not self._installed():
                 design_pack.install()  # this host's own manifest: the running version's pinned pack
