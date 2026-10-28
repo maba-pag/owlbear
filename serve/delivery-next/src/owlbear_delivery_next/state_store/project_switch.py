@@ -95,8 +95,10 @@ def source_format(folder_fd: int) -> str:
     raise StoreError(msg)
 
 
-def source_state(source: tuple[Path, int], pid: str, rec: dict) -> tuple[str, str, str]:
-    """The preparation, marker and admitted receipt in the held, still-named source belonging to *pid*."""
+def source_state(
+    source: tuple[Path, int], pid: str, rec: dict, *, validate: Callable[[], None] | None = None
+) -> tuple[str, str, str]:
+    """The source observation, retaining its original witness images through optional further validation reads."""
     folder, folder_fd = source
     names = (project_move.PREPARED, format_marker.MARKER, project_move.CLONE_ID, project_move.MOVE_RECORD)
     try:
@@ -121,6 +123,8 @@ def source_state(source: tuple[Path, int], pid: str, rec: dict) -> tuple[str, st
     if clone_id_at(folder, folder_fd) != pid:
         msg = f"{folder} no longer names the retained source of project {pid}: nothing was changed"
         raise StoreError(msg)
+    if validate is not None:
+        validate()
     fd_tree.require_text_at(folder_fd, project_move.MOVE_RECORD, image)
     try:
         stable = all(fd_tree.same_image_at(folder_fd, name, before) for name, before in images.items())
