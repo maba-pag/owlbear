@@ -39,7 +39,7 @@ from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.local_system.maintenance import Maintenance
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.local_system.slots import Slots
-from owlbear_delivery_next.pack_runs import pack_gates, pack_job, pack_publish, pack_rounds, pack_updater
+from owlbear_delivery_next.pack_runs import pack_gates, pack_job, pack_publish, pack_repair, pack_rounds, pack_updater
 from owlbear_delivery_next.project_host import api, session_slots
 from owlbear_delivery_next.project_host.admission import STOPPING
 from owlbear_delivery_next.project_host.host import ENDING, HostRecord
@@ -131,7 +131,12 @@ class FakeGitHub:
     def observe_checks(self, _repository: str, _number: int, _head: str) -> tuple[Check, ...]:
         said = self.checks.pop(0) if len(self.checks) > 1 else self.checks[0]
         status = "in_progress" if said == "running" else "completed"
-        return (Check(name="CI", status=status, conclusion=None if said == "running" else said),)
+        job = 7 if said == "failure" else None
+        return (Check(name="CI", status=status, conclusion=None if said == "running" else said, job_id=job),)
+
+    def job_log(self, _repository: str, job_id: int, lines: int = 40) -> str:
+        assert (job_id, lines) == (7, 40)
+        return "FAILED tests/test_page.py::test_contrast - assert 3.1 >= 4.5"
 
     def update_branch(self, _repository: str, number: int, expected_head: str) -> bool:
         self.calls.append("update-branch")
@@ -268,6 +273,9 @@ class Fakes:
         self.hold: threading.Event | None = None
         self.waiting = threading.Event()
         self.tags = [PINNED, NEWER]
+        self.repairs: list[dict[str, str]] = []  # per CI repair session: repository path -> new text
+        self.repaired: list = []  # each CI repair session's config, its worktree as it was then
+        self.at_repair = lambda: None  # something else that happens while the agent repairs CI
 
     def releases(self, url: str) -> bytes:
         self.calls.append("releases")
@@ -332,6 +340,15 @@ class Fakes:
 
     def update(self, _store: Store, cfg) -> Run:
         """The writing updater: each planned edit lands in its worktree, then it submits (or reports a premise)."""
+        if cfg.submit is pack_repair.SUBMIT:  # the agent repairing the pull request's CI in a copy of its head
+            self.calls.append("repair")
+            self.repaired.append(SimpleNamespace(cfg=cfg, files=sorted(p.name for p in cfg.worktree.iterdir())))
+            for path, text in (self.repairs.pop(0) if self.repairs else {}).items():
+                (cfg.worktree / path).parent.mkdir(parents=True, exist_ok=True)
+                (cfg.worktree / path).write_text(text)
+            self.at_repair()
+            said = pack_repair.RepairResult(summary=f"repair {len(self.repaired)}")
+            return Run(cfg.session_id, "result", payload=said, termination=Termination(confirmed=True))
         self.calls.append("update")
         self.updates.append(cfg)
         self.upstream_diffs.append((cfg.worktree / pack_updater.UPSTREAM_DIFF).read_text())
@@ -841,7 +858,7 @@ def test_a_ci_retry_runs_push_pull_request_and_merge_again_and_the_old_merge_is_
     held = [("publish", "merge", 1, "failed", False), ("publish", "owner", 1, "waiting for you", False)]
     assert steps(state)[-6:] == PUBLISHED[:-1] + held
     assert (state["progress"]["now"]["phase"], state["progress"]["next"]["options"]) == (
-        "Publish", [pack_rounds.LABELS[o] for o in pack_rounds.PUBLISH]
+        "Publish", ["Try again", pack_rounds.LABELS[pack_rounds.REPAIR], pack_rounds.DISCARD_OPEN]
     )  # fmt: skip
     fakes.github.checks = ["success"]
 
@@ -857,6 +874,219 @@ def test_a_ci_retry_runs_push_pull_request_and_merge_again_and_the_old_merge_is_
     ]  # fmt: skip
     pushed = [i["identity"] for i in state["invocations"] if i["operation"] == "push"]
     assert pushed == [state["published"]["commit"]] * 2  # the same commit pushed again, never a new one
+
+
+DETECTOR = f"src/pkg/{pack_gates.GLUE['code/detector.py']}"  # protected pack content, as a repository path
+GOLDEN = "src/pkg/golden/good.html"
+
+
+def ci_failed(
+    tmp_path: Path, checkout: Path, clone: Path, *repairs: dict[str, str]
+) -> tuple[Fakes, pack_job.Job, dict]:
+    """A run waiting at its own pull request's failed CI, with the agent's CI repairs planned."""
+    fakes = Fakes(clone)
+    fakes.repairs = list(repairs)
+    job = pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout))
+    fakes.github.checks = ["failure"]
+    state = run(job)
+    (q,) = state["questions"]
+    assert (state["state"], q["kind"], [o["id"] for o in q["options"]]) == (
+        "waiting", "publish", ["retry", "repair", "discard"]
+    )  # fmt: skip
+    return fakes, job, state
+
+
+def pr_head(checkout: Path, state: dict) -> str:
+    """The pull request's branch on the remote."""
+    ref = f"refs/heads/{state['published']['branch']}"
+    return git(checkout.parents[1], "ls-remote", "origin", ref).split()[0]
+
+
+def test_an_agents_harmless_ci_repair_is_pushed_by_delivery_and_merges_once_ci_passes(tmp_path, checkout, clone):
+    """D-01M61GW2EBAHQ9HBY5S2TGHY2P: the agent repairs a copy of the failed head; Delivery pushes it, CI runs again."""
+    fakes, job, state = ci_failed(tmp_path, checkout, clone, {"fixed.txt": "fixed\n"})
+    made, root = state["published"]["commit"], checkout.parents[1]
+    fakes.github.checks = ["success"]
+
+    state = answered(job, "repair")
+
+    assert state["state"] == "passed", state["reason"]
+    (session,) = fakes.repaired
+    assert "src" in session.files  # a copy of the whole head
+    assert not session.cfg.worktree.is_relative_to(root)
+    assert not session.cfg.worktree.exists()
+    assert f"CI failed at {made}" in session.cfg.message
+    assert "FAILED tests/test_page.py::test_contrast" in session.cfg.message  # the failed check's log
+    repair = landed(checkout)
+    assert (git(root, "rev-parse", f"{repair}~1"), git(root, "show", f"{repair}:fixed.txt")) == (made, "fixed")
+    assert "repair 1" in git(root, "log", "-1", "--format=%B", repair)
+    assert steps(state)[-8:] == [
+        ("publish", "push", 1, "passed", True), ("publish", "pull-request", 1, "passed", True),
+        ("publish", "merge", 1, "failed", True), ("publish", "owner", 1, "answered by you", False),
+        ("publish", "ci-repair", 1, "repair pushed", False), ("publish", "push", 2, "passed", False),
+        ("publish", "pull-request", 2, "passed", False), ("publish", "merge", 2, "passed", False),
+    ]  # fmt: skip
+    assert fakes.github.calls == ["create", "merge", "delete"]
+
+
+def test_a_ci_repair_of_detector_code_is_pushed_but_merges_only_once_the_owner_approved_it(tmp_path, checkout, clone):
+    fakes, job, _ = ci_failed(tmp_path, checkout, clone, {DETECTOR: "# repaired\n"})
+    fakes.github.checks = ["success"]
+
+    state = answered(job, "repair")
+
+    (q,) = state["questions"]
+    assert (state["state"], q["kind"], q["paths"]) == ("waiting", "repair-approval", [DETECTOR])
+    assert [(o["id"], o["label"]) for o in q["options"]] == [
+        ("approve-repair", pack_rounds.LABELS["approve-repair"]), ("discard", pack_rounds.DISCARD_OPEN)
+    ]  # fmt: skip
+    assert "+# repaired" in q["diff"]
+    assert state["repair"] == {
+        "phase": "", "attempts": 1, "limit": pack_repair.REPAIRS, "head": "", "summary": "repair 1",
+        "commit": pr_head(checkout, state), "paths": [DETECTOR], "held": [], "approved": False,
+    }  # fmt: skip  # pushed, and CI passed there
+    assert fakes.github.calls == ["create"]  # never merged without him
+    assert steps(state)[-2:] == [("publish", "merge", 2, "held for you", False),
+                                 ("publish", "owner", 2, "waiting for you", False)]  # fmt: skip
+
+    state = answered(job, "approve-repair")
+
+    assert state["state"] == "passed", state["reason"]
+    assert git(checkout.parents[1], "show", f"{landed(checkout)}:{DETECTOR}") == "# repaired"
+    assert fakes.github.calls == ["create", "merge", "delete"]
+
+
+def test_a_second_protected_repair_after_the_owners_approval_asks_for_it_again(tmp_path, checkout, clone):
+    fakes, job, _ = ci_failed(tmp_path, checkout, clone, {DETECTOR: "# repaired\n"}, {GOLDEN: "<p>repaired</p>\n"})
+    fakes.github.checks = ["success"]
+    first = answered(job, "repair")["questions"][0]
+    fakes.github.checks = ["failure"]  # CI fails again before the merge
+    state = answered(job, "approve-repair")
+    assert [o["id"] for o in state["questions"][0]["options"]] == ["retry", "repair", "discard"]
+    fakes.github.checks = ["success"]
+
+    state = answered(job, "repair")
+
+    (q,) = state["questions"]
+    assert (q["kind"], q["paths"]) == ("repair-approval", sorted([DETECTOR, GOLDEN]))
+    assert q["digest"] != first["digest"]
+    assert "again" in q["text"]
+    assert (state["repair"]["approved"], fakes.github.calls) == (False, ["create"])
+    assert answered(job, "approve-repair")["state"] == "passed"
+    assert fakes.github.calls == ["create", "merge", "delete"]
+
+
+@pytest.mark.parametrize(
+    ("change", "held"),
+    [
+        (("biome.json", "{}\n"), "biome.json"),
+        ((".github/workflows/ci.yml", "on: push\n"), ".github/workflows/ci.yml"),
+        (("tests/test_page.py", "import pytest\n@pytest.mark.skip\ndef test_contrast(): ...\n"),
+         "tests/test_page.py (adds a suppression or skip)"),
+    ],
+)  # fmt: skip
+def test_a_ci_repair_that_changes_configuration_or_weakens_a_check_stops_and_asks_without_pushing(
+    tmp_path, checkout, clone, change, held
+):
+    """As PR #733 was repaired by hand: a lint override or a weakened test is the owner's call, shown its diff."""
+    path, text = change
+    fakes, job, state = ci_failed(tmp_path, checkout, clone, {path: text})
+    before = pr_head(checkout, state)
+
+    state = answered(job, "repair")
+
+    (q,) = state["questions"]
+    assert (state["state"], q["kind"], q["paths"]) == ("waiting", "repair-config", [held])
+    assert [o["id"] for o in q["options"]] == ["push-config", "retry", "discard"]
+    assert f"+++ b/{path}" in q["diff"]
+    assert (pr_head(checkout, state), fakes.github.calls, state["repair"]["phase"]) == (before, ["create"], "config")
+
+    state = answered(job, "retry")  # without it: CI is read again at the head it failed at
+
+    assert (state["questions"][0]["kind"], pr_head(checkout, state)) == ("publish", before)
+
+
+def test_a_configuration_repair_the_owner_lets_through_is_pushed_and_merges(tmp_path, checkout, clone):
+    fakes, job, _ = ci_failed(tmp_path, checkout, clone, {"biome.json": "{}\n"})
+    answered(job, "repair")
+    fakes.github.checks = ["success"]
+
+    state = answered(job, "push-config")
+
+    assert state["state"] == "passed", state["reason"]
+    assert git(checkout.parents[1], "show", f"{landed(checkout)}:biome.json") == "{}"
+
+
+def test_a_repair_that_changes_nothing_gives_the_ci_stop_back_with_its_summary_and_repairs_are_bounded(
+    tmp_path, checkout, clone
+):
+    fakes, job, _ = ci_failed(tmp_path, checkout, clone)
+
+    for attempt in range(1, pack_repair.REPAIRS + 1):
+        state = answered(job, "repair")
+        (q,) = state["questions"]
+        assert f"the agent's repair changed nothing: repair {attempt}" in q["text"]
+
+    assert (q["kind"], [o["id"] for o in q["options"]]) == ("publish", ["retry", "discard"])
+    assert (state["repair"]["attempts"], fakes.calls.count("repair"), fakes.github.calls) == (3, 3, ["create"])
+
+
+def test_a_host_stop_as_the_repair_was_pushed_pushes_it_no_second_time_and_starts_no_other_agent(
+    tmp_path, checkout, clone, monkeypatch
+):
+    fakes, job, state = ci_failed(tmp_path, checkout, clone, {"fixed.txt": "fixed\n"})
+    made, file = state["published"]["commit"], job.store.root / pack_job.FILE
+    kept: dict = {}
+    real = pack_git.remote_head
+
+    def pushing(*args):  # the repair's push reads the branch first: a host stop after it leaves the record as now
+        kept.update(kept or json.loads(file.read_text()))
+        return real(*args)
+
+    monkeypatch.setattr(pack_git, "remote_head", pushing)
+    assert answered(job, "repair")["questions"][0]["kind"] == "publish"  # pushed; CI failed at it again
+    repair = pr_head(checkout, state)
+    file.write_text(json.dumps(kept))
+
+    again = pack_job.Job(job.store, fakes.live(checkout))
+
+    (q,) = again.read()["questions"]
+    assert f"the host stopped as the agent's repair {repair[:12]} was pushed" in q["text"]
+    assert [o["id"] for o in q["options"]] == ["retry", "discard"]  # a host stop is no CI stop
+    fakes.github.checks = ["success"]
+    state = answered(again, "retry")
+    assert state["state"] == "passed", state["reason"]
+    assert (landed(checkout), git(checkout.parents[1], "rev-parse", f"{repair}~1")) == (repair, made)
+    assert fakes.calls.count("repair") == 1
+    pushes = [(i["result"], i["identity"]) for i in state["invocations"] if i["operation"] == "ci-repair"]
+    assert pushes == [("stopped", ""), ("pushed", repair)]  # the one the host stopped, then the push found done
+
+
+@pytest.mark.parametrize("during", [False, True])
+def test_a_pull_request_someone_moved_is_never_repaired_over_and_ci_is_read_at_its_new_head(
+    tmp_path, checkout, clone, during
+):
+    fakes, job, state = ci_failed(tmp_path, checkout, clone, {"fixed.txt": "fixed\n"})
+    root, ref, theirs = checkout.parents[1], f"refs/heads/{state['published']['branch']}", []
+
+    def push() -> None:
+        git(root, "fetch", "-q", "origin", ref)
+        made = git(root, "commit-tree", "FETCH_HEAD^{tree}", "-p", "FETCH_HEAD", "-m", "theirs")
+        git(root, "push", "-q", "origin", f"{made}:{ref}")
+        theirs.append(made)
+
+    fakes.at_repair = push if during else lambda: None
+    if not during:
+        push()
+    fakes.github.checks = ["success"]
+
+    state = answered(job, "repair")
+
+    assert state["state"] == "passed", state["reason"]
+    assert landed(checkout) == theirs[0]  # merged at their head once CI passed there; the repair never pushed
+    (inv,) = [i for i in state["invocations"] if i["operation"] == "ci-repair"]
+    assert (inv["result"], "moved" in inv["detail"]) == ("moved", True)
+    assert fakes.calls.count("repair") == int(during)
 
 
 def test_many_findings_in_the_last_allowed_round_offer_another_round(tmp_path, checkout, clone):
@@ -1314,7 +1544,7 @@ def test_a_refused_push_waits_for_the_owner_and_trying_again_reconciles_with_git
 
     assert (state["state"], results(state)["commit"], results(state)["push"]) == ("waiting", "passed", "waiting")
     (q,) = state["questions"]
-    assert (q["kind"], [o["id"] for o in q["options"]]) == ("publish", ["retry", "discard"])
+    assert (q["kind"], [o["label"] for o in q["options"]]) == ("publish", ["Try again", "Discard the update"])
     assert "refused by the remote" in q["text"]
     assert (snapshot(checkout), fakes.github.prs) == (before, {})
     made = state["published"]["commit"]
@@ -1365,6 +1595,10 @@ def test_a_host_stop_during_publication_waits_for_the_owner_instead_of_failing(t
     (q,) = state["questions"]
     assert (state["state"], q["kind"]) == ("waiting", "publish")
     assert "the host stopped while the update was being published" in q["text"]
+    assert [(o["id"], o["label"]) for o in q["options"]] == [
+        ("retry", "Try again"),
+        ("discard", pack_rounds.DISCARD_OPEN),
+    ]  # a host stop is no CI stop: no agent repairs it
     fakes.github.checks = ["success"]
     assert answered(again, "retry")["state"] == "passed"
     assert fakes.github.calls == ["create", "merge", "delete"]  # the open pull request was found again

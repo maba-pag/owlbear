@@ -33,6 +33,7 @@ from owlbear_delivery_next.pack_runs import (
     pack_gates,
     pack_progress,
     pack_publish,
+    pack_repair,
     pack_replay,
     pack_rounds,
     pack_run,
@@ -148,8 +149,9 @@ class Job:
         self.version = ""  # the run file's identity as read; see _read
         self.state = self._read()
         if self.state["state"] == "running" and (self.state.get("context") or {}).get("publication"):
-            reason = "the host stopped while the update was being published"
-            self._hold(pack_run.Context.model_validate(self.state["context"]), reason)
+            ctx = pack_run.Context.model_validate(self.state["context"])
+            reason = pack_repair.interrupted(ctx) or "the host stopped while the update was being published"
+            self._hold(ctx, reason)
         elif self.state["state"] == "running":
             self.interrupted = _interrupted(self.state, self.version)  # its identity before this rewrite, carried in it
             # keeps the workspace: nothing is bound to say whether an uncertain session still uses it
@@ -186,7 +188,8 @@ class Job:
 
     def _copy(self) -> dict[str, Any]:
         shown = {k: v for k, v in self.state.items() if k != "context"} | {
-            "progress": pack_progress.progress(self.state)  # from the context, which the page never gets
+            "progress": pack_progress.progress(self.state),  # from the context, which the page never gets
+            "repair": pack_repair.view(self.state.get("context")),
         }
         return json.loads(json.dumps(shown))
 
@@ -343,20 +346,24 @@ class Job:
                 pack_progress.identified(invocations, invocations[-1], identity)
                 self._save()
 
-    def keep(self, ctx: pack_run.Context, lp: RoundLoop) -> None:
-        """Keep the run's context and loop, so it goes on from here."""
+    def keep(self, ctx: pack_run.Context, lp: RoundLoop | None = None) -> None:
+        """Keep the run's context and loop (as kept when None), so it goes on from here."""
         with self.lock:
-            self.state |= {"context": ctx.model_dump(mode="json"), "loop": lp.model_dump(mode="json")}
+            self.state["context"] = ctx.model_dump(mode="json")
+            if lp is not None:
+                self.state["loop"] = lp.model_dump(mode="json")
             self._save()
 
     def wait(
-        self, ctx: pack_run.Context, lp: RoundLoop, questions: list[dict[str, Any]], stage: str = "challenger"
+        self, ctx: pack_run.Context, lp: RoundLoop | None, questions: list[dict[str, Any]], stage: str = "challenger"
     ) -> None:
         """Stop the run for the owner's answers; it goes on when he has answered every question."""
         with self.lock:
             ctx.next = "wait"
             self.state |= {"state": "waiting", "stage": "", "questions": questions}
-            self.state |= {"context": ctx.model_dump(mode="json"), "loop": lp.model_dump(mode="json")}
+            self.state["context"] = ctx.model_dump(mode="json")
+            if lp is not None:
+                self.state["loop"] = lp.model_dump(mode="json")
             next(s for s in self.state["stages"] if s["name"] == stage)["result"] = "waiting"
             if self.state.get("invocations") is not None:
                 pack_progress.asked(self.state["invocations"], stage, questions)
@@ -371,8 +378,10 @@ class Job:
     def _hold(self, ctx: pack_run.Context, reason: str) -> None:
         pub = ctx.publication
         link = f" ({pub.url})" if pub and pub.url else ""
+        repair = [pack_rounds.REPAIR] if pack_repair.offered(ctx) else []  # CI failed on its own pull request
+        options = [pack_rounds.RETRY, *repair, pack_rounds.DISCARD]
         question = {"id": f"{self.state['run']}-publish", "kind": "publish", "text": f"{reason}{link}",
-                    "options": [{"id": o, "label": pack_rounds.LABELS[o]} for o in pack_rounds.PUBLISH]}  # fmt: skip
+                    "options": pack_rounds.published(options, opened=bool(pub and pub.number))}  # fmt: skip
         ctx.next = "wait"
         stage = next((s for s in self.state["stages"] if s["result"] in {"running", "failed"}), None)
         if stage is not None:
@@ -528,7 +537,7 @@ class Job:
             raise
         except Exception as exc:
             if hold is not None and isinstance(exc, hold):
-                self._step(inv, name, "failed", str(exc))
+                self._step(inv, name, getattr(exc, "result", "failed"), str(exc))  # held for the owner, or failed
                 raise
             reason = f"{name}: {type(exc).__name__}: {exc}"[:2000]  # any failure stops the run, its stage named
             self._step(inv, name, "failed", reason)
@@ -589,8 +598,8 @@ def _decided(  # noqa: PLR0913 - the open questions, the answered one, the answe
         if not left:  # TD-193: the answers are carried out together
             ctx.next = pack_run.NEXT[pack_rounds.after(lp)]
         return left
-    if q["kind"] == "publish":  # trying again reconciles with GitHub before anything is repeated
-        ctx.next = "activate"
+    if q["kind"] in {"publish", *pack_repair.KINDS}:  # trying again reconciles with GitHub before anything is repeated
+        pack_repair.decided(q, option, ctx)
         return []
     if q["kind"] in pack_gates.KINDS:
         return pack_run.gated(asked, q, option, ctx, lp)

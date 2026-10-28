@@ -21,7 +21,14 @@ from owlbear_delivery_next.change_contracts import dispute_tools, pack_tools, to
 from owlbear_delivery_next.change_contracts.round_records import PACK, RoundLoop
 from owlbear_delivery_next.design_packs import design_pack, pack_git
 from owlbear_delivery_next.local_system import preload
-from owlbear_delivery_next.pack_runs import pack_candidate, pack_gates, pack_publish, pack_rounds, pack_updater
+from owlbear_delivery_next.pack_runs import (
+    pack_candidate,
+    pack_gates,
+    pack_publish,
+    pack_repair,
+    pack_rounds,
+    pack_updater,
+)
 from owlbear_delivery_next.pack_runs.pack_gates import CODE, GOLDEN
 from owlbear_delivery_next.settings import rounds
 
@@ -77,6 +84,7 @@ class Context(BaseModel):
     unsure: dict[str, str] = Field(default_factory=dict)  # the last full round's unsure changes, for the owner
     changes: list[str] = Field(default_factory=list)  # the last full round's judgement of each changed file
     undo: list[str] = Field(default_factory=list)  # the paths the owner had undone, restored before the next session
+    repair: pack_repair.Repair = Field(default_factory=pack_repair.Repair)  # the agent's CI repairs of the pull request
     next: Action = "update"
 
 
@@ -444,15 +452,23 @@ def _publication(job: Job, ctx: Context, lp: RoundLoop, root: Path, changed: lis
 
 
 def republish(job: Job, ctx: Context) -> str | None:
-    """Go on with a publication whose commit exists: GitHub first, never the candidate again (its base moved on)."""
+    """Go on with a publication whose commit exists: GitHub first, never the candidate again (its base moved on).
+
+    A CI repair the owner asked for runs first, and one a host stop interrupted after its commit is pushed once.
+    """
     return _published(job, ctx, {})
 
 
 def _published(job: Job, ctx: Context, files: dict[str, str | None]) -> str | None:
     pub = ctx.publication
     try:
-        merged = pack_publish.publish(job, pub, files, ctx.why)
-    except pack_publish.Held as exc:
+        pack_repair.repaired(job, ctx)
+        merged = pack_publish.publish(job, pub, files, ctx.why, gate=lambda: pack_repair.gate(job, ctx))
+    except pack_repair.Asked as exc:
+        job.wait(ctx, None, [exc.question], "merge")
+        return None
+    except pack_publish.Held as exc:  # only CI that failed on its own pull request may be repaired
+        ctx.repair.stop = pack_repair.failed(exc) if isinstance(exc, pack_publish.CiFailed) else None
         job.hold(ctx, str(exc))
         return None
     by = " by you after rounds without a pass" if ctx.accepted else ""
