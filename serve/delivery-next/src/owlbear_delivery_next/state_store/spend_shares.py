@@ -50,6 +50,7 @@ CHECKPOINTS = ("event", "mark", "residual")  # imported line types that repeat a
 VOID = "void"  # a Spotter record's ``look`` line imported although no look ran (``spend_reconcile``): no run at all
 OWNER = "owner"  # a recovered Spotter look session's owner, known after it was recovered (``spend_logs``)
 PLACE = ("project", "name", "clone", "change", "step", "job")
+RECOVERED = ("id", "type", "at", "session", "usage", "source")  # what a recovered line adds to a run its own lines name
 
 type Fields = dict[str, float | None]
 type Cell = tuple[str, str]
@@ -119,9 +120,9 @@ def runs(lines: list[dict[str, Any]]) -> list[dict[str, Any]]:
     A ``void`` line takes back a Spotter record's run (``import:spotter``) imported although no look ran; never another.
 
     A Spotter look's session recovered from its runtime's log (``log:<session>``, carrying its ``look``) and its own
-    lines, when they come after all, are one run: the recovered lines join the run its own lines name, whose place
-    they record. Until they come, an ``owner`` line gives the recovered run its owner's place, known after it was
-    recovered.
+    lines, when they come after all, are one run: the recovered lines join the run its own lines name and add their
+    usage and time only, so the place its own lines record stands whichever came first. Until they come, an ``owner``
+    line gives the recovered run its owner's place, known after it was recovered.
     """
     alias = _surrogates(lines)
     by: dict[str, dict[str, Any]] = {}
@@ -134,7 +135,9 @@ def runs(lines: list[dict[str, Any]]) -> list[dict[str, Any]]:
             _aside(line, void, owned)
             continue
         rid = str(line.get("run") or line.get("id")) if kind in LIVE else str(line.get("id"))
-        rid = alias.get(rid, rid)
+        if rid in alias:  # a recovered line of a run whose own lines came: its usage only, never its place
+            rid = alias[rid]
+            line = {k: line[k] for k in RECOVERED if k in line} | {"run": rid}  # noqa: PLW2901
         run = by.setdefault(rid, {"run": rid, "usage": None, "at": None, "started": None, "before": None})
         if kind == "start":
             run |= {k: v for k, v in line.items() if k not in {"id", "type", "at"}} | {"started": line.get("at")}
@@ -146,7 +149,7 @@ def runs(lines: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 run["usage"] = kept[-1]["usage"]  # it alone dates the run
             _end(run, line)
     for rid, fields in owned.items():
-        if rid in by and rid not in alias:  # its own lines, once in, say where it ran
+        if rid in by:  # a recovered run its own lines never joined: they, once in, say where it ran
             for entry in (by[rid], *later.get(rid, ())):
                 entry.update(fields)
     return _settled(by, later, void)

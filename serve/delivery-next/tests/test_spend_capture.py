@@ -22,7 +22,7 @@ from owlbear_delivery_next.improvement import cases, spotter
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.pack_runs import pack_job, pack_replay
 from owlbear_delivery_next.project_host import metrics_routes
-from owlbear_delivery_next.runtimes import chatlogs, sdk_spend, spend_reconcile, subagents
+from owlbear_delivery_next.runtimes import chatlogs, sdk_spend, spend_logs, spend_reconcile, subagents
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.state_store import spend_ledger, spend_metrics, spend_shares
 from owlbear_delivery_next.state_store.spend_ledger import Where
@@ -748,6 +748,42 @@ def test_a_looks_retry_recovered_from_its_logs_is_two_runs_of_one_look(project) 
     assert spotter_spend()[1:] == (2, 0.3)
     looks = {(p["run"], p["look"]) for p in spend_shares.derive(spend_ledger.lines()) if p["role"] == "spotter"}
     assert looks == {("log:spotter-a", "L1"), ("log:spotter-b", "L1")}
+
+
+def recorded(monkeypatch) -> list[dict]:
+    """The lines the ledger's writer is given, in memory, in the order given."""
+    written: list[dict] = []
+    monkeypatch.setattr(spend_ledger, "put", written.append)
+    return written
+
+
+def spotter_view(lines: list[dict]) -> tuple[set[str], float, int]:
+    """The Spotter's spend in *lines*: its projects, credits and runs."""
+    pieces = [p for p in spend_shares.derive(lines) if p["role"] == "spotter"]
+    spent = round(sum(p["credits"] or 0 for p in pieces), 6)
+    return {p["project"] for p in pieces}, spent, len({p["run"] for p in pieces})
+
+
+def test_a_looks_own_lines_written_before_its_recovery_keep_its_place(project, monkeypatch) -> None:
+    """Sol's counterexample: a pass snapshots the ledger, the writer then appends the look's own lines, and the pass
+    appends its recovery after them: the recovered line's place and run overrode the look's own."""
+    written, place = recorded(monkeypatch), Where.of(project)
+    places = {project.root.name: place}
+    look_session("spotter-a", "L1", checkpoint("2026-10-28T09:00:00Z", 0.3e9))
+    checked: dict = {}
+    pending: dict = {}
+    recovered = spend_logs.found([], places, checked, pending)  # its snapshot lacked the look's lines
+    spend_ledger.started("R", "spotter-a", agent="spotter", job="look", model="m1", before={}, place=place, look="L1")
+    spend_ledger.ended("R", "spotter-a", usage=used(0.3), ending="finished", place=place, look="L1")
+    lines = [*written, *recovered]
+    assert spotter_view(lines) == ({"shop"}, 0.3, 1)
+    folder = local_home.root() / "spotter"
+    folder.mkdir()
+    rec = look_record("L1", credits=0.3, credits_known=True, sdk_sessions=["spotter-a"])
+    (folder / "records-2026-10-28.jsonl").write_text(json.dumps(rec) + "\n")
+    checked |= pending
+    lines += spend_logs.found(lines, places, checked, {})  # the next pass, the log unchanged
+    assert spotter_view(lines) == ({"shop"}, 0.3, 1)
 
 
 def changed(tmp_path: Path, spend: Spend, *events: dict) -> Store:
