@@ -159,9 +159,9 @@ class Packs:
     def ready(self, tag: str) -> None:
         """A version's pack is in place: a failure kept for it ends."""
         with self.lock:
-            ended = self.failure is not None and self.failure["version"] == tag
-        if ended:
-            self._keep(None)
+            failure = self.failure
+        if failure is not None and failure["version"] == tag:
+            self._resolved(failure)  # one kept meanwhile, for a newer version, stays
 
     def _applies(self, failure: dict[str, Any]) -> bool:
         """Whether a kept failure still wants Install: its version is there, not older, not running with its pack."""
@@ -187,7 +187,7 @@ class Packs:
         with self.lock:
             installing, failure, target = self.thread is not None and self.thread.is_alive(), self.failure, self.target
         if failure and not installing and not self._applies(failure):
-            self.ready(failure["version"])
+            self._resolved(failure)
             failure = None
         running, pack = versions.running(), design_pack.manifest()["pack"]
         if installing:
