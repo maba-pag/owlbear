@@ -215,3 +215,22 @@ def test_an_empty_answer_at_the_limit_stops_the_run_and_the_button_completes_it_
     retro_judge.run(_work(again, records, parts, run="run-2"))
     assert len(again.messages) == 1
     assert sorted(g["record"] for g in retro_store.grades()) == ["a", "b"]
+
+
+SECRET = "ghp_" + "b" * 36
+
+
+def test_a_secret_in_a_records_note_or_card_or_in_a_findings_text_never_leaves_in_a_message():
+    noted = _record("n", 3, note=f"token {SECRET}")
+    carded = _record("c", 4) | {"card": {"env": f"GITHUB_TOKEN={SECRET}"}}
+    leaky = [_finding(f"f{i}", f"chat:u{i}") | {"what": f"it printed {SECRET}"} for i in (1, 2)]
+    retro_store.add_findings(leaky)
+    ask = Asked(lambda ev, agent: _graded(ev) if "records" in ev else _sorting({"a": {"f1", "f2"}})(ev, agent))
+
+    retro_judge.judge(_work(ask, [noted, carded]))
+    retro_bars.propose(_work(ask), [])
+    ask.answer = lambda _ev, _a: {"verdict": "survive", "why": "", "risks": [], "publishable": {}}
+    retro_judge.review(_work(ask))
+
+    assert len(ask.messages) == 3
+    assert not [m for m in ask.messages if SECRET in m]

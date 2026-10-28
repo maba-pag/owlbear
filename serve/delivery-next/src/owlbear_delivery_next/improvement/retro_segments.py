@@ -17,7 +17,7 @@ import gzip
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from owlbear_delivery_next.improvement import events as ev
 from owlbear_delivery_next.improvement import retro_units
@@ -41,6 +41,17 @@ def cut(text: str, n: int) -> str:
     left = n - 40
     marker = f" [… {len(text) - left} chars omitted] "
     return text[: left // 2] + marker + text[len(text) - left + left // 2 :]
+
+
+def masked[T](value: T) -> T:
+    """*value* with every string in it masked: what leaves the machine in a message."""
+    if isinstance(value, str):
+        return cast("T", mask.redact(value))
+    if isinstance(value, dict):
+        return cast("T", {k: masked(v) for k, v in value.items()})
+    if isinstance(value, list | tuple):
+        return cast("T", [masked(v) for v in value])
+    return value
 
 
 @dataclass

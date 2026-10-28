@@ -21,6 +21,7 @@ from owlbear_delivery_next.improvement import retro_store as store
 from owlbear_delivery_next.improvement import retro_units as units
 from owlbear_delivery_next.improvement.retro_calls import Work, key, paid
 from owlbear_delivery_next.improvement.retro_segments import cut
+from owlbear_delivery_next.local_system import mask
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
@@ -52,7 +53,7 @@ def silence(record: Mapping[str, Any]) -> bool:
 def _card(rid: str) -> str:
     try:
         with gzip.open(spotter.place() / "cards" / f"{rid}.json.gz", "rt") as fh:
-            return cut(fh.read(), CARD)
+            return cut(mask.redact(fh.read()), CARD)
     except (OSError, EOFError) as exc:
         return f"[card missing: {type(exc).__name__}]"
 
@@ -64,9 +65,9 @@ def _entry(r: Mapping[str, Any]) -> dict[str, Any]:
         "category": r.get("category"),
         "at": f"e{r.get('cutoff')}",
         "session": r.get("session"),
-        "note": cut(str(r.get("note") or ""), NOTE),
+        "note": cut(mask.redact(str(r.get("note") or "")), NOTE),
         "sampled_silence": silence(r),
-        "card": cut(json.dumps(r["card"]), CARD) if "card" in r else _card(r["id"]),
+        "card": cut(mask.redact(json.dumps(r["card"])), CARD) if "card" in r else _card(r["id"]),
     }
 
 
@@ -224,6 +225,7 @@ def render(snap: Mapping[str, Any], findings: Mapping[str, Mapping[str, Any]]) -
         "omitted": f"[{max(0, len(snap['findings']) - len(shown))} more findings omitted]",
         "evidence": snap["evidence"],
     }
+    proposal = retro_segments.masked(proposal)
     head = f"{REVIEWING.read_text()}\n\n## The proposal\n\n```json\n"
     text = json.dumps(proposal)
     while len(head) + len(text) + 5 > REVIEW and proposal["findings"]:
