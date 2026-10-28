@@ -323,11 +323,9 @@ def test_a_clarification_asked_at_one_step_is_checked_before_a_worker_of_another
     assert f"- {ASKED}: {SAID}" in "\n".join(step_input.brief(c))  # once checked, as he confirmed it
 
 
-@pytest.mark.parametrize("session", ["c1-build-t1-asked", ""])  # resumed into the asking session, or a fresh one
-def test_a_worker_receives_a_checked_clarification_as_the_confirmed_statement_never_the_owners_words(
-    picking, monkeypatch, session
-):
-    run, told = Asking(picking, monkeypatch, session=session, stub=False), []
+def first_messages(picking, monkeypatch) -> list:
+    """The configurations of the workers the runner starts, each stopped after its first message."""
+    told = []
 
     async def worker(cfg):
         if cfg.role == tools.PICKER:
@@ -336,15 +334,54 @@ def test_a_worker_receives_a_checked_clarification_as_the_confirmed_statement_ne
         return Run(cfg.session_id, "error", detail="stopped after its first message", termination=DONE)
 
     monkeypatch.setattr(runner.sdk_adapter, "run", worker)
-    assert run.answer(kind="clarification", text=WORDS, statement=SAID, confirmed=True).status_code == 200
+    return told
+
+
+def quoted(lines: list[str]) -> str:
+    """The answer's lines as a resumed session reads them."""
+    return "\n".join(f"> {line}" if line else ">" for line in lines)
+
+
+def listed(lines: list[str]) -> str:
+    """The answer's lines as a fresh session's answers so far list them."""
+    return "\n".join([f"- {ASKED}: {lines[0]}", *(f"  {line}" if line else "" for line in lines[1:])])
+
+
+@pytest.mark.parametrize("session", ["c1-build-t1-asked", ""])  # resumed into the asking session, or a fresh one
+def test_a_worker_receives_a_checked_clarification_as_the_confirmed_statement_never_the_owners_words(
+    picking, monkeypatch, session
+):
+    run, told = Asking(picking, monkeypatch, session=session, stub=False), first_messages(picking, monkeypatch)
+    said = [SAID, "It says Hello, never Hi."]  # a confirmed statement may hold two lines
+    body = {"kind": "clarification", "text": WORDS, "statement": "\n".join(said), "confirmed": True}
+    assert run.answer(**body).status_code == 200
     picking.picks.append(verdict())
 
     run.step()
 
     cfg = told[0]
-    assert (cfg.resume, f"> {SAID}" in cfg.message) == ((True, True) if session else (False, False))
-    assert session or f"- {ASKED}: {SAID}" in cfg.message  # a fresh session's answers so far
+    assert (cfg.resume, quoted(said) in cfg.message) == ((True, True) if session else (False, False))
+    assert session or listed(said) in cfg.message  # a fresh session's answers so far
     assert all(WORDS not in m for m in (cfg.message, cfg.fresh))
+
+
+@pytest.mark.parametrize("session", ["c1-build-t1-asked", ""])
+def test_a_worker_receives_a_long_answer_whole_with_its_line_breaks(picking, monkeypatch, session):
+    run, told = Asking(picking, monkeypatch, session=session, stub=False), first_messages(picking, monkeypatch)
+    said = [
+        "    greet(name) stays as it is",
+        "",
+        " ".join(["Background."] * 40),
+        "Essential: end with an exclamation mark.",
+    ]
+    assert len("\n".join(said[:3])) > 400  # the essential line comes after the old cut
+    assert run.answer(kind="event", option=None, text="\n".join(said)).status_code == 200
+
+    run.step()
+
+    cfg = told[0]
+    assert cfg.resume == bool(session)
+    assert (quoted(said) if session else listed(said)) in cfg.message
 
 
 def test_the_check_reads_the_approved_brief_decisions_and_catches_a_clarification_against_one(picking, monkeypatch):
