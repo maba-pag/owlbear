@@ -48,6 +48,8 @@ def activate(folder: Path, tag: str) -> None:
     """
     home = local_home.root()
     runtime, new = home / local_home.RUNTIME, home / NEW
+    if not runtime.is_symlink() and runtime.exists():
+        versions.keep_data(runtime)  # the legacy folder is put away under versions/, which never keeps the data
     new.unlink(missing_ok=True)
     new.symlink_to(folder)
     if runtime.is_symlink() or not runtime.exists():

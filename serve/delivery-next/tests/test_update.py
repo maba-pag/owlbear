@@ -63,6 +63,18 @@ def test_the_first_update_swaps_the_legacy_runtime_for_a_link_and_puts_it_away()
     assert registry.load().active == "v0.2"
 
 
+def test_the_first_update_refuses_to_put_away_a_legacy_runtime_holding_the_shared_data():
+    runtime, folder = legacy(), version("v0.2")
+    inside = runtime / "data"
+    git(runtime, "init", "-q", str(inside))
+    (local_home.root() / "data.json").write_text(json.dumps({"repository": str(inside)}))
+
+    with pytest.raises(versions.VersionError, match="holds the shared data"):
+        alias.activate(folder, "v0.2")
+    assert (runtime.is_symlink(), (inside / ".git").is_dir()) == (False, True)
+    assert not (local_home.root() / alias.NEW).exists()
+
+
 def test_a_later_update_renames_a_new_link_over_the_alias_and_the_mark_never_goes_down():
     legacy()
     alias.activate(version("v0.2"), "v0.2")
