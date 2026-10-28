@@ -12,9 +12,10 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-from owlbear_delivery_next.improvement import cases
+from owlbear_delivery_next.improvement import assumptions, cases, retro_judge
 from owlbear_delivery_next.improvement import retro_proposals as props
 from owlbear_delivery_next.improvement import retro_store as store
+from owlbear_delivery_next.improvement import retro_synthetic as syn
 from owlbear_delivery_next.improvement import retro_units as units
 from owlbear_delivery_next.machine_host import cases_job
 from owlbear_delivery_next.settings.config import SettingsUnset
@@ -92,6 +93,9 @@ def pinned() -> set[str]:
     return pins - {""}
 
 
+NEEDS = (*retro_judge.NEEDS, assumptions.RETRO_LESSON_BAR, assumptions.RETRO_CATCHABLE)  # what every run rests on
+
+
 @dataclass
 class Running:
     """One run: the unit revision it judges, how it was asked for, and its allowance."""
@@ -117,3 +121,13 @@ class Running:
         """A run as its kept snapshot has it, after a restart."""
         keep = ("trigger", "by", "rev", "provenance", "mode", "records", "spec", "id", "limit", "spent", "known")
         return cls(uid=snap.get("unit", ""), **{k: snap[k] for k in keep if k in snap})
+
+    @property
+    def needs(self) -> tuple[str, ...]:
+        """The assumptions this run rests on."""
+        return (*NEEDS, *(syn.NEEDS if self.provenance == "synthetic" else ()))
+
+    def retired(self) -> str:
+        """Why this run may not go on: the assumptions it rests on retired now; "" while none is."""
+        gone = [n for n in self.needs if not assumptions.ensure(n)]
+        return f"refused: it rests on retired assumptions ({', '.join(gone)})" if gone else ""

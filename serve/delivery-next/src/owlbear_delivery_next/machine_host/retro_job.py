@@ -27,7 +27,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from owlbear_delivery_next.improvement import assumptions, chatlogs, retro_judge
+from owlbear_delivery_next.improvement import chatlogs, retro_judge
 from owlbear_delivery_next.improvement import retro_store as store
 from owlbear_delivery_next.improvement import retro_synthetic as syn
 from owlbear_delivery_next.improvement import retro_units as units
@@ -63,7 +63,6 @@ EVERY = 30.0  # seconds between passes
 DRAIN = 30.0  # seconds the host's end waits for a cancelled call: its session's bounded teardown, then the result
 PRUNE_EVERY = 86_400.0  # seconds between prunings of judged captures
 LINGERING = "Retro: a session's runtime may still run (its end was not confirmed); see Maintenance"
-NEEDS = (*retro_judge.NEEDS, assumptions.RETRO_LESSON_BAR, assumptions.RETRO_CATCHABLE)
 SWITCH = {"change": "retro_after_change", "idle": "retro_when_idle"}  # an automatic run's machine setting
 
 
@@ -247,7 +246,6 @@ class RetroJob:
 
     def _start(self, ctx: Running, refused: str = "") -> None:
         """Open *ctx*, recorded, and run it; refused when its limit, a role or an assumption it needs is missing."""
-        needs = (*NEEDS, *(syn.NEEDS if ctx.provenance == "synthetic" else ()))
         why, limit = refused, None
         if not why:
             try:
@@ -258,12 +256,11 @@ class RetroJob:
                 why = f"refused: {type(exc).__name__}: {exc}"[:300]
         if not why and limit is None:
             why = "refused: the Retro run credit limit is unset"
-        if not why and (retired := [n for n in needs if not assumptions.ensure(n)]):
-            why = f"refused: it rests on retired assumptions ({', '.join(retired)})"
+        why = why or ctx.retired()
         ctx.limit = limit or 0.0
         keep = {"trigger": ctx.trigger, "by": ctx.by, "rev": ctx.rev, "mode": ctx.mode, "records": ctx.records}
         store.run_event(ctx.id, "opened", unit=ctx.uid, provenance=ctx.provenance, spec=ctx.spec, limit=ctx.limit,
-                        assumptions=list(needs), **keep)  # fmt: skip
+                        assumptions=list(ctx.needs), **keep)  # fmt: skip
         if why:
             self._ended(ctx, why)
         else:
@@ -362,7 +359,7 @@ class RetroJob:
 
         Raises:
             WaitingError: The fence, a stop, pause, a switch, idle time or a held lease refuses it now.
-            StoppedError: The unit may no longer be read; the run ends refused.
+            StoppedError: The unit may no longer be read, or an assumption the run rests on is retired; it ends refused.
         """
         key, turn = f"retro:{what}:{uuid.uuid4().hex[:8]}", threading.Event()
         while not self.slots.take(SLOT, key, 1, 1, wake=turn.set):
@@ -376,9 +373,9 @@ class RetroJob:
             with self.seams.admission():
                 if why := self._refusal(ctx):
                     raise WaitingError(why)
-                if ctx.provenance == "real" and (why := units.eligible(ctx.uid, enrolled(), self.seams.projects())):
-                    msg = f"refused: {why}"
-                    raise StoppedError(msg)
+                why = ctx.provenance == "real" and units.eligible(ctx.uid, enrolled(), self.seams.projects())
+                if why := ctx.retired() or (f"refused: {why}" if why else ""):
+                    raise StoppedError(why)
                 if lease:
                     begun = self.maintenance.begin(SLOT, key, KIND, "")  # durable before the session starts
             if ctx.why:

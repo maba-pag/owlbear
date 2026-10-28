@@ -13,7 +13,15 @@ from types import SimpleNamespace
 import pytest
 
 from owlbear_delivery_next.change_contracts.models import Brief, Change, Criterion, Exit, Inputs, Names, Outcome, Review
-from owlbear_delivery_next.improvement import cases, chatlogs, retro_evidence, retro_store, retro_units, spotter
+from owlbear_delivery_next.improvement import (
+    assumptions,
+    cases,
+    chatlogs,
+    retro_evidence,
+    retro_store,
+    retro_units,
+    spotter,
+)
 from owlbear_delivery_next.improvement import retro_proposals as props
 from owlbear_delivery_next.improvement import retro_synthetic as syn
 from owlbear_delivery_next.local_system import codebase, maintenance, processes
@@ -425,6 +433,30 @@ def test_an_idle_run_waits_at_its_next_call_once_owlbear_is_busy_and_goes_on_whe
     job.tick(2.0)
     run = retro_store.run_states()[run["id"]]
     assert (run["result"], run["trigger"], run["calls"]) == ("judged", "idle", 2)
+
+
+@pytest.mark.parametrize("restarted", [False, True])
+def test_a_waiting_run_asks_nothing_more_once_an_assumption_it_rests_on_is_retired(said, monkeypatch, restarted):
+    said.retro_after_change = "on"
+    state = SimpleNamespace(paused=False, fence="", idle=False)
+    asker = Asker(during=lambda n: n == 1 and setattr(state, "paused", True))
+    due = iter([[{"unit": syn.unit_id(_large()), "rev": "", "mode": "judge"}]])
+    monkeypatch.setattr(retro_units, "due_changes", lambda *_a, **_k: next(due, []))
+
+    def automatic(uid, trigger, *args, **kwargs):
+        return Running(uid, trigger, *args, **({"provenance": "synthetic", "spec": "large"} | kwargs))
+
+    automatic.of = Running.of
+    monkeypatch.setattr(retro_job, "Running", automatic)
+    job = _job(asker, state)
+    job.tick(0.0)
+    assumptions.reset()
+    state.paused = False
+    (_job(asker, state, restarted=True) if restarted else job).tick(1.0)
+
+    [run] = _runs()
+    assert run["result"].startswith("refused: it rests on retired assumptions (retro-segments-1")
+    assert len(asker.seen) == 1
 
 
 # A paused run and the button, gate L3
