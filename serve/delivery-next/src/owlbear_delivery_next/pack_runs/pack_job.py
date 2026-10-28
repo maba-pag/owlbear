@@ -27,7 +27,15 @@ from owlbear_delivery_next.design_packs import design_pack, pack_git, pack_updat
 from owlbear_delivery_next.github.gh import GhProvider
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.local_system.storage_io import atomic_write
-from owlbear_delivery_next.pack_runs import pack_candidate, pack_gates, pack_publish, pack_replay, pack_rounds, pack_run
+from owlbear_delivery_next.pack_runs import (
+    pack_admission,
+    pack_candidate,
+    pack_gates,
+    pack_publish,
+    pack_replay,
+    pack_rounds,
+    pack_run,
+)
 from owlbear_delivery_next.pack_runs.machine_lock import HeldError, take
 from owlbear_delivery_next.pack_runs.pack_run import CANDIDATE, UPDATER, Stopped
 from owlbear_delivery_next.pack_runs.pack_state import (
@@ -191,7 +199,8 @@ class Job:
         """Start a run on its own thread and return its first state.
 
         Raises:
-            Busy: A run is in progress, or waits for the owner's answers.
+            Busy: A run is in progress or waits for the owner's answers, here or in another project on this machine,
+                or a design pack pull request is open or cannot be ruled out.
         """
         with self.lock:
             if self.state["state"] == "running" or self.busy():
@@ -200,7 +209,7 @@ class Job:
             if self.state["state"] == "waiting":
                 msg = "a design pack update waits for your answers; answer or discard it first"
                 raise Busy(msg)
-            self._claim()
+            self._claim(self._fresh)
             run = uuid.uuid4().hex
             self.state = _blank() | {
                 "state": "running", "started_at": _now(), "run": run,
@@ -219,6 +228,7 @@ class Job:
         Raises:
             Stale: No waiting run asks this question, or the run is still settling.
             Refused: The option is not one of the question's, or a reconsideration lacks its note.
+            Busy: The last answer would resume the run, but it is no longer itself or alone (``pack_admission``).
         """
         with self.lock:
             asked = self.state["questions"] if self.state["state"] == "waiting" and not self.busy() else []
@@ -241,7 +251,7 @@ class Job:
             lp = RoundLoop.model_validate(self.state["loop"])
             left = _decided(self.state["questions"], q, option, note=note, ctx=ctx, lp=lp)
             if not left:
-                self._claim()  # before anything changes: a refusal leaves the question open
+                self._claim(self._resumed)  # before anything changes: a refusal leaves the question open
             self._log(said)
             self.state |= {"loop": lp.model_dump(mode="json"), "context": ctx.model_dump(mode="json")}
             self.state["questions"] = left
@@ -349,21 +359,48 @@ class Job:
             return workspace != self.store.root / UPDATER
         return not self.maintenance.retained(str(workspace))
 
-    def _claim(self) -> None:
-        """Take the machine's one pack lock for the run's thread; the pack is shared by every project.
+    def _claim(self, admits: Callable[[], None]) -> None:
+        """Take the machine's one pack lock for the run's thread, if the caller's policy *admits* it under the lock.
+
+        The lock stays held from the policy's reading through the caller's saved claim, so no other project's claim
+        comes between them; the pack is shared by every project.
 
         Raises:
-            Busy: Another project's update runs now, or an earlier pack session is still unproven.
+            Busy: Another project's update runs now, an earlier pack session is still unproven, or *admits* refuses.
         """
         self._unproven()
         try:
             # Verified again while the lock is held: an earlier updater may have released it unconfirmed before this.
-            self.held = take(
-                local_home.root() / MACHINE_LOCK, self.store.name or self.store.root.parent.parent.name, self._unproven,
-            )  # fmt: skip
+            self.held = take(local_home.root() / MACHINE_LOCK, self._name, lambda: self._admitted(admits))
         except HeldError as exc:
             msg = f"a design pack update runs for {exc.who}; one runs at a time on this machine"
             raise Busy(msg) from None
+
+    @property
+    def _name(self) -> str:
+        return self.store.name or self.store.root.parent.parent.name
+
+    def _admitted(self, admits: Callable[[], None]) -> None:
+        self._unproven()
+        try:
+            admits()
+        except pack_admission.Refused as exc:
+            raise Busy(str(exc)) from None
+
+    def _fresh(self) -> None:
+        """A new update's policy: no run open on this machine and no pack pull request open (``pack_admission``)."""
+        pack_admission.fresh(self.store.root, self._name, self.live.github(self.live.package))
+
+    def _resumed(self) -> None:
+        """A waiting run's policy, for an answer and a publication retry: it goes on only as itself, with its own PR."""
+        publication = (self.state.get("context") or {}).get("publication") or {}
+        pack_admission.resumed(
+            self.store.root, self._name, run=self.state["run"], version=self.version,
+            branch=str(publication.get("branch") or ""), github=self.live.github(self.live.package),
+        )  # fmt: skip
+
+    def _alone(self) -> None:
+        """A manual replay's policy: the lock alone. It writes no run record and no pull request (TD-177)."""
 
     def _unproven(self) -> None:
         if self.maintenance is not None and self.maintenance.pending(kind="pack"):
@@ -394,7 +431,7 @@ class Job:
             if self.busy() or self.state["state"] in ("running", "waiting"):
                 msg = "a design pack update is running or waits for answers: finish it before a replay"
                 raise Busy(msg)
-            self._claim()
+            self._claim(self._alone)
         try:
             yield
         finally:

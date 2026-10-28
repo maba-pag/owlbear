@@ -1,21 +1,28 @@
 """A design pack session's slot follows its maintenance ownership, not the return of its runner."""
 
+import functools
+import json
 import subprocess
 from datetime import UTC, datetime
+from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 from owlbear_delivery_next.change_contracts import tools
 from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.change_contracts.permissions import Policy
+from owlbear_delivery_next.github.gh import GhProvider
+from owlbear_delivery_next.github.provider import PullRequest
 from owlbear_delivery_next.local_system import maintenance, processes
 from owlbear_delivery_next.local_system.slots import Slots
-from owlbear_delivery_next.pack_runs import pack_job, pack_run
+from owlbear_delivery_next.pack_runs import pack_admission, pack_job, pack_run, pack_state
 from owlbear_delivery_next.pack_runs.scratch import scratch
 from owlbear_delivery_next.project_host import session_slots
 from owlbear_delivery_next.project_host.host import Host
 from owlbear_delivery_next.runtimes import sdk_adapter
 from owlbear_delivery_next.runtimes.session_result import Run
+from owlbear_delivery_next.state_store import pack_run_record, project_home, registry
 from owlbear_delivery_next.state_store.store import Store
 from owlbear_delivery_next.workflow_steps import sessions
 
@@ -129,7 +136,7 @@ def test_the_machine_pack_lock_stays_blocked_while_a_pack_lease_is_unproven(tmp_
     host.maintenance.failed(ident, RuntimeError("the session ended without a result"))
 
     with pytest.raises(pack_job.Busy):
-        job._claim()  # noqa: SLF001 - the claim a starting run takes
+        job._claim(job._alone)  # noqa: SLF001 - the claim a starting run takes
 
 
 def usage_unread(termination: processes.Termination | None) -> sessions.UsageUnreadError:
@@ -186,3 +193,96 @@ def test_a_session_error_without_confirmed_termination_still_holds_its_slot(tmp_
     [lease] = host.maintenance.read()["sessions"]
     assert (lease["state"], host.maintenance.pending("pack")) == ("held", True)
     assert slots.take(session_slots.project(host), "successor", 1, 1) == 0
+
+
+def registered(tmp_path, records: dict[str, str]) -> None:
+    """Projects in this machine's registry (under the isolated HOME), each with its run record's text, if any."""
+    projects = [registry.Project(id=n, path=str(tmp_path / n), added_at=AT) for n in records]
+    with registry.locked():
+        registry.save(registry.Machine(projects=projects))
+    for name, text in records.items():
+        if text:
+            project_home.home(name).mkdir(parents=True)
+            (project_home.home(name) / pack_job.FILE).write_text(text)
+
+
+def waiting(run: str) -> str:
+    return json.dumps(pack_state.blank() | {"state": "waiting", "run": run})
+
+
+def pull(number: int, head: str) -> PullRequest:
+    return PullRequest(
+        repository="maba-pag/owlbear", number=number, node_id=f"N{number}", head_branch=head, head_sha="a" * 40,
+        url=f"https://github.com/maba-pag/owlbear/pull/{number}", base_branch="main", draft=False, state="open",
+        merged=False,
+    )  # fmt: skip
+
+
+@pytest.mark.parametrize(
+    ("records", "said"),
+    [({"gamma": "{"}, "the design pack run record of gamma cannot be read"),
+     ({"alpha": waiting("a"), "gamma": waiting("g")}, "design pack updates wait in alpha, gamma")],
+    ids=["unreadable", "two-waiting"],
+)  # fmt: skip
+def test_an_unreadable_or_second_waiting_record_elsewhere_refuses_a_fresh_start_by_name(tmp_path, records, said):
+    registered(tmp_path, {"beta": "", **records})
+    github = SimpleNamespace(open_pull_requests=lambda *_a: ())
+    job = pack_job.Job(Store(project_home.home("beta"), None, "beta"), pack_job.Live(github=lambda _root: github))
+    with pytest.raises(pack_job.Busy, match=said):
+        job.start()
+    assert not (job.store.root / pack_job.FILE).exists()
+
+
+def test_a_waiting_run_goes_on_only_as_itself_alone_and_with_no_pack_pull_request_but_its_own(tmp_path):
+    registered(tmp_path, {"alpha": waiting("r-alpha"), "gamma": ""})
+    root = project_home.home("alpha")
+    version = pack_run_record.observed(root)[1]
+    own = SimpleNamespace(open_pull_requests=lambda *_a: (pull(1, "pack/r-alpha"),))
+    resumed = functools.partial(pack_admission.resumed, root, "alpha", version=version, github=own)
+
+    resumed(run="r-alpha", branch="pack/r-alpha")  # its own pull request: it goes on
+    with pytest.raises(pack_admission.Refused, match="record changed"):
+        resumed(run="r-other", branch="pack/r-alpha")
+    with pytest.raises(pack_admission.Refused, match="another design pack pull request is open"):
+        resumed(run="r-alpha", branch="")  # before its publication, any pack pull request competes
+    project_home.home("gamma").mkdir(parents=True)
+    (project_home.home("gamma") / pack_job.FILE).write_text(waiting("r-gamma"))
+    with pytest.raises(pack_admission.Refused, match="also open in gamma"):
+        resumed(run="r-alpha", branch="pack/r-alpha")
+
+
+def page(nodes: list[dict], total: int, cursor: str = "") -> dict:
+    info = {"hasNextPage": bool(cursor), "endCursor": cursor or None}
+    return {"data": {"repository": {"pullRequests": {"totalCount": total, "pageInfo": info, "nodes": nodes}}}}
+
+
+def node(number: int, head: str, *, fork: bool = False) -> dict:
+    return {"id": f"N{number}", "number": number, "url": f"https://github.com/maba-pag/owlbear/pull/{number}",
+            "headRefName": head, "headRefOid": "a" * 40, "baseRefName": "main", "isDraft": False,
+            "isCrossRepository": fork}  # fmt: skip
+
+
+def served(pages: list[dict], cursors: list) -> GhProvider:
+    """``gh`` answering each GraphQL page in turn, recording the cursor each request asked from."""
+
+    def server(argv, body, _timeout, _cwd):
+        assert "graphql" in argv
+        cursors.append(json.loads(body)["variables"]["after"])
+        return subprocess.CompletedProcess(argv, 0, json.dumps(pages.pop(0)).encode(), b"")
+
+    return GhProvider(Path("/nowhere"), runner=server)
+
+
+def test_open_pack_pull_requests_are_read_to_the_last_page_and_a_list_cut_short_refuses_a_start(tmp_path):
+    """GitHub matches only an exact head, so every open pull request is paged through and matched by prefix here."""
+    cursors: list = []
+    whole = [page([node(1, "pack/a"), node(2, "feature")], 4, "c1"), page([node(3, "pack/b", fork=True),
+             node(4, "pack/c")], 4)]  # fmt: skip
+    found = served(whole, cursors).open_pull_requests("maba-pag/owlbear", "pack/")
+    assert ([p.number for p in found], cursors) == ([1, 4], [None, "c1"])
+
+    cut = served([page([node(1, "pack/a")], 2)], [])  # GitHub counts two; its only page lists one
+    job = pack_job.Job(Store(tmp_path / "store"), pack_job.Live(github=lambda _root: cut))
+    with pytest.raises(pack_job.Busy, match="read 1 of 2 open pull requests"):
+        job.start()
+    assert (job.read()["state"], (job.store.root / pack_job.FILE).exists()) == ("idle", False)

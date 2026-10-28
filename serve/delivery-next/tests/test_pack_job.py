@@ -44,7 +44,7 @@ from owlbear_delivery_next.project_host import api, session_slots
 from owlbear_delivery_next.project_host.admission import STOPPING
 from owlbear_delivery_next.project_host.host import ENDING, HostRecord
 from owlbear_delivery_next.runtimes.session_result import Run
-from owlbear_delivery_next.state_store import pack_run_record
+from owlbear_delivery_next.state_store import pack_run_record, project_home, registry
 from owlbear_delivery_next.state_store.store import Lock, Store
 
 AUTH = {"authorization": "Bearer t"}
@@ -70,6 +70,7 @@ class FakeGitHub:
         self.checks = ["success"]  # the conclusion at each look; the last one stays
         self.behind, self.labels_fail, self.refusal = 0, False, None
         self.can_push, self.lose_create = True, False
+        self.listing: Exception | None = None  # why the open pull requests cannot be read
 
     def read_repository(self) -> Repository:
         return Repository(
@@ -97,6 +98,12 @@ class FakeGitHub:
     def find_pull_request(self, repository: str, head: str, base: str) -> PullRequest | None:
         found = [n for n, p in self.prs.items() if p["branch"] == head and p["state"] == "open" and base == "main"]
         return self.read_pull_request(repository, found[0]) if found else None
+
+    def open_pull_requests(self, repository: str, prefix: str) -> tuple[PullRequest, ...]:
+        if self.listing:
+            raise self.listing
+        found = [n for n, p in self.prs.items() if p["branch"].startswith(prefix) and p["state"] == "open"]
+        return tuple(self.read_pull_request(repository, n) for n in found)
 
     def create_pull_request(self, repository: str, head: str, base: str, title: str, body: str) -> PullRequest:
         self.calls.append("create")
@@ -1474,7 +1481,7 @@ def test_every_project_sees_an_update_running_on_the_machine_and_for_whom(tmp_pa
     store.name = "shop"
     job = pack_job.Job(store)
     assert pack_job.running_for() is None
-    job._claim()  # noqa: SLF001 - what a starting run takes
+    job._claim(job._alone)  # noqa: SLF001 - what a starting run takes
     try:
         c = TestClient(api.create_app(Store(tmp_path / "other"), "t", Host()), base_url="http://127.0.0.1")
         assert (pack_job.running_for(), c.get("/api/next/design-pack", headers=AUTH).json()["machine"]) == (
@@ -1488,7 +1495,7 @@ def test_every_project_sees_an_update_running_on_the_machine_and_for_whom(tmp_pa
 def test_a_successor_claim_is_never_erased_by_a_release_paused_after_its_close(tmp_path, monkeypatch):
     """A release closes and clears the claim under the lock a claim takes, so a successor is not erased."""
     job = pack_job.Job(Store(tmp_path / "store"))
-    job._claim()  # noqa: SLF001 - the first run's claim
+    job._claim(job._alone)  # noqa: SLF001 - the first run's claim
     real_close, closed, resume = os.close, threading.Event(), threading.Event()
     armed = [True]
 
@@ -1552,7 +1559,7 @@ def test_a_successor_that_passed_the_check_before_an_unconfirmed_release_is_refu
     with monkeypatch.context() as patch:  # only this fault is undone below, never the HOME isolation
         patch.setattr(pack_job.Job, "_unproven", unproven)
         with pytest.raises(pack_job.Busy, match="unproven"):
-            job._claim()  # noqa: SLF001 - the successor's claim
+            job._claim(job._alone)  # noqa: SLF001 - the successor's claim
     assert job.held is None
     probe = os.open(pack_job.local_home.root() / pack_job.MACHINE_LOCK, os.O_RDWR)
     try:
@@ -1560,7 +1567,7 @@ def test_a_successor_that_passed_the_check_before_an_unconfirmed_release_is_refu
     finally:
         os.close(probe)
     assert pack_job.local_home.root() == home  # still the isolated HOME for the claim below
-    job._claim()  # noqa: SLF001 - after recovery a third claim is admitted
+    job._claim(job._alone)  # noqa: SLF001 - after recovery a third claim is admitted
     try:
         assert job.held is not None
         assert (home / pack_job.MACHINE_LOCK).is_file()
@@ -1606,6 +1613,80 @@ def test_one_update_runs_at_a_time_on_the_machine_whichever_project_starts_it(tm
     first.thread.join(30)
     assert second.start()["state"] == "running"  # the lock went with the first run's thread
     second.thread.join(30)
+
+
+def registered(tmp_path: Path, *names: str) -> list[Store]:
+    """Projects in this machine's registry (under the isolated HOME), each store where the registry places it."""
+    projects = [registry.Project(id=n, path=str(tmp_path / n), added_at=datetime.now(UTC)) for n in names]
+    with registry.locked():
+        registry.save(registry.Machine(projects=projects))
+    return [Store(project_home.home(n), None, n) for n in names]
+
+
+@pytest.mark.parametrize("phase", ["rounds", "publication"])
+def test_a_run_waiting_in_one_project_refuses_a_fresh_start_in_another_and_goes_on_itself_after_a_restart(
+    tmp_path, checkout, clone, phase
+):
+    """P7: a waiting run holds no lock, so a claim reads every project's record; the run goes on only as itself."""
+    fakes = Fakes(clone)
+    if phase == "rounds":
+        fakes.verdicts, fakes.rejects, fakes.upheld = ["fix"], [[], ["F1"]], True
+    alpha, beta = registered(tmp_path, "alpha", "beta")
+    fakes.live(checkout)
+    fakes.github.checks = ["failure"]  # publication waits on its own pull request's CI
+    assert run(pack_job.Job(alpha, fakes.live(checkout)))["state"] == "waiting"
+    assert bool(fakes.github.prs) is (phase == "publication")
+
+    other = pack_job.Job(beta, fakes.live(checkout))
+    with pytest.raises(pack_job.Busy, match="a design pack update waits for answers in alpha"):
+        other.start()
+    assert (other.read()["state"], (beta.root / pack_job.FILE).exists()) == ("idle", False)
+
+    restarted = pack_job.Job(alpha, fakes.live(checkout))  # a host restart reads the waiting run back
+    fakes.github.checks = ["success"]
+    state = answered(restarted, "drop" if phase == "rounds" else "retry")
+    assert state["state"] == "passed", state["reason"]
+
+
+def test_two_projects_starting_at_once_get_exactly_one_update(tmp_path, checkout, clone):
+    fakes = Fakes(clone)
+    fakes.hold = threading.Event()
+    jobs = [pack_job.Job(s, fakes.live(checkout)) for s in registered(tmp_path, "alpha", "beta")]
+    gate, said = threading.Barrier(2), []
+
+    def start(job: pack_job.Job) -> None:
+        gate.wait(10)
+        try:
+            said.append(job.start()["state"])
+        except pack_job.Busy as exc:
+            said.append(str(exc))
+
+    starters = [threading.Thread(target=start, args=(job,)) for job in jobs]
+    for t in starters:
+        t.start()
+    for t in starters:
+        t.join(30)
+    fakes.hold.set()
+    [winner] = [job for job in jobs if job.thread is not None]
+    winner.thread.join(30)
+    assert said.count("running") == 1, said
+    assert [job.read()["state"] for job in jobs if job is not winner] == ["idle"]
+
+
+def test_an_unread_pull_request_list_refuses_a_start_and_leaves_the_waiting_question_open(tmp_path, checkout, clone):
+    """An unread lookup is no evidence that no pack pull request is open: nothing goes on, nothing is rewritten."""
+    job, fakes, state = upheld(tmp_path, checkout, clone)
+    kept = job.path.read_bytes()
+    fakes.github.listing = ProviderError(FailureCode.UNAVAILABLE, "open_pull_requests", "offline", retry_safe=True)
+
+    with pytest.raises(pack_job.Busy, match="pull requests could not be read"):
+        job.answer(state["questions"][0]["id"], "drop")
+    assert (job.read(), job.path.read_bytes()) == (state, kept)
+    with pytest.raises(pack_job.Busy, match="pull requests could not be read"):
+        pack_job.Job(Store(tmp_path / "other"), fakes.live(checkout)).start()
+
+    fakes.github.listing = None
+    assert answered(job, "drop")["state"] == "passed"
 
 
 def test_the_answer_routes_take_only_an_open_questions_options(tmp_path, checkout, clone):

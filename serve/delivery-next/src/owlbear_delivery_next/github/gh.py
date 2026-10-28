@@ -52,6 +52,13 @@ _BRANCH = """query Branch($owner: String!, $name: String!, $ref: String!) {
 _RETIRE = """mutation Retire($input: UpdateRefsInput!) {
   updateRefs(input: $input) { __typename }
 }"""
+_OPEN = """query Open($owner: String!, $name: String!, $after: String) {
+  repository(owner: $owner, name: $name) { pullRequests(states: OPEN, first: 100, after: $after) {
+    totalCount pageInfo { hasNextPage endCursor }
+    nodes { id number url headRefName headRefOid baseRefName isDraft isCrossRepository }
+  } }
+}"""
+_PAGES = 50  # pages of open pull requests read at most; more is a list cut short, never one without a match
 _OID = re.compile(r"[0-9a-f]{40}")
 _UNCERTAIN = frozenset({FailureCode.RESPONSE_UNKNOWN, FailureCode.TIMEOUT})
 
@@ -76,6 +83,27 @@ def _pull(repository: str, p: Json, operation: str) -> PullRequest:
             merge_state=p.get("mergeable_state"),
             merge_commit_sha=p.get("merge_commit_sha") if p["merged"] else None,
         )
+    except (KeyError, TypeError, ValidationError) as exc:
+        invalid(operation, "GitHub returned an invalid pull request", exc)
+
+
+def _ours(p: Json, prefix: str, operation: str) -> bool:
+    """Whether the open pull request *p* has its head branch under *prefix* in the repository itself."""
+    try:
+        head, fork = p["headRefName"], p["isCrossRepository"]
+    except (KeyError, TypeError) as exc:
+        invalid(operation, "GitHub returned an invalid pull request", exc)
+    if not isinstance(head, str) or not isinstance(fork, bool):
+        invalid(operation, "GitHub returned an invalid pull request head")
+    return head.startswith(prefix) and not fork
+
+
+def _open(repository: str, p: Json, operation: str) -> PullRequest:
+    try:
+        return PullRequest(
+            repository=repository, number=p["number"], node_id=p["id"], url=p["url"], head_branch=p["headRefName"],
+            head_sha=p["headRefOid"], base_branch=p["baseRefName"], draft=p["isDraft"], state="open", merged=False,
+        )  # fmt: skip
     except (KeyError, TypeError, ValidationError) as exc:
         invalid(operation, "GitHub returned an invalid pull request", exc)
 
@@ -157,6 +185,34 @@ class GhProvider(Queue, Conversation):
         if not isinstance(found, list) or len(found) > 1:
             raise ProviderError(FailureCode.CONFLICT, "find_pull_request", "several open PRs match", retry_safe=False)
         return self.read_pull_request(repository, int(found[0]["number"])) if found else None
+
+    def open_pull_requests(self, repository: str, prefix: str) -> tuple[PullRequest, ...]:
+        """Every open pull request whose head branch in *repository* starts with *prefix*, read page by page.
+
+        GitHub matches only an exact head, so every open pull request is read and the heads are matched here. The
+        list counts only when the last page was reached and the pages add up to GitHub's own total; anything less
+        raises, so a list cut short is never read as one without a match. A head in a fork is not this repository's.
+        """
+        op, (owner, name) = "open_pull_requests", repository.split("/", 1)
+        seen: list[Json] = []
+        after, total = None, -1
+        for _ in range(_PAGES):
+            found = self._graphql(op, _OPEN, {"owner": owner, "name": name, "after": after})
+            try:
+                page = found["data"]["repository"]["pullRequests"]
+                seen += list(page["nodes"])
+                total, more, after = page["totalCount"], page["pageInfo"]["hasNextPage"], page["pageInfo"]["endCursor"]
+            except (KeyError, TypeError) as exc:
+                invalid(op, "GitHub returned an invalid page of pull requests", exc)
+            if more is not True:
+                break
+            if not after:
+                invalid(op, "GitHub announced another page of pull requests without a cursor")
+        else:
+            invalid(op, f"more than {_PAGES} pages of open pull requests")
+        if len(seen) != total:
+            invalid(op, f"read {len(seen)} of {total} open pull requests: the list was cut short or changed meanwhile")
+        return tuple(_open(repository, p, op) for p in seen if _ours(p, prefix, op))
 
     def read_pull_request(self, repository: str, number: int) -> PullRequest:
         """Read one exact pull request; a merged one gets its merge commit, which this REST version omits."""
