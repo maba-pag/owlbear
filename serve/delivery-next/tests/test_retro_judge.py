@@ -187,6 +187,17 @@ def test_a_confirm_batchs_sorting_is_kept_in_one_write_so_a_failing_disk_never_l
     assert sorted(retro_bars.assignments()) == ["f1", "f2", "f3"]
 
 
+def test_a_confirm_message_stays_within_its_bound_however_long_the_findings_it_sorts():
+    long = " ".join(f"step{i}" for i in range(6_000))
+    retro_store.add_findings([_finding("f1", "chat:u1") | {"what": long}, _finding("f2", "chat:u2") | {"what": long}])
+    ask = Asked(_sorting({"a": {"f1", "f2"}}))
+
+    retro_bars.propose(_work(ask), [])
+
+    assert [len(m) <= retro_judge.BATCH for m in ask.messages] == [True]
+    assert sorted(retro_bars.assignments()) == ["f1", "f2"]
+
+
 @pytest.mark.parametrize(
     "said",
     [{"assign": {"f1": "new:a"}, "new": {"a": "one reason"}}, {"assign": {"f1": "m-x", "f2": "none"}, "new": {}}],

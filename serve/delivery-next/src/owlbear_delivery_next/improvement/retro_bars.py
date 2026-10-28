@@ -22,8 +22,8 @@ from typing import TYPE_CHECKING, Any
 from owlbear_delivery_next.improvement import assumptions
 from owlbear_delivery_next.improvement import retro_proposals as props
 from owlbear_delivery_next.improvement import retro_store as store
-from owlbear_delivery_next.improvement.retro_calls import paid, strings
-from owlbear_delivery_next.improvement.retro_segments import dumps, masked
+from owlbear_delivery_next.improvement.retro_calls import StoppedError, paid, strings
+from owlbear_delivery_next.improvement.retro_segments import QUOTE, dumps, fit, masked
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
@@ -46,6 +46,7 @@ DELIVERY, AGENT = frozenset({"tool-defect", "delivery-logic"}), frozenset({"inst
 CONFIRM = Path(__file__).with_name("retro_confirm_prompt.md")
 ASSIGNED = "assignments.jsonl"
 CANDIDATES, FAMILIES, SHOWN = 12, 2, 3  # findings one confirm batch sorts; families a mechanism needs; counterexamples
+BOUND, TEXT = 60_000, 1_000  # characters of one confirm message, as of a judging batch's; of one text it shows
 CATCHABLE, WINDOW = 0.3, 20  # the share of catchable findings over the last judged units that reconsiders a look
 
 
@@ -136,16 +137,39 @@ def _valid_sorting(said: Mapping[str, Any], ids: Iterable[str], known: Mapping[s
     return all(assign.get(f) in {*known, *made, "none"} for f in ids)
 
 
+def _shown(text: object, n: int = TEXT) -> str:
+    return fit(masked(str(text or "")), n)
+
+
+def _confirming(pair: tuple[str, str], pool: list[dict[str, Any]], known: dict[str, str]) -> tuple[list[str], str]:
+    """The findings of *pool* one confirm message carries within ``BOUND``, newest first, and that message.
+
+    Raises:
+        StoppedError: Not even one finding fits beside the known mechanisms.
+    """
+    mechanisms = [{"id": k, "mechanism": _shown(v)} for k, v in known.items()]
+    shown = [
+        {"id": f["id"], "what": _shown(f.get("what")), "mechanism": _shown(f.get("mechanism"))}
+        | {"quotes": [_shown(q, QUOTE) for q in (f.get("quotes") or ())[:3]]}
+        for f in pool
+    ]
+    while shown:
+        evidence = {"cause": _shown(pair[0]), "target": _shown(pair[1]), "mechanisms": mechanisms, "findings": shown}
+        message = f"{CONFIRM.read_text()}\n\n## The evidence\n\n```json\n{dumps(evidence)}\n```\n"
+        if len(message) <= BOUND:
+            return [f["id"] for f in shown], message
+        shown = shown[:-1]
+    msg = "stopped: a confirm batch cannot fit its known mechanisms"
+    raise StoppedError(msg)
+
+
 def _confirm(w: Work, pair: tuple[str, str], pool: list[dict[str, Any]], known: dict[str, str]) -> None:
-    """One confirm batch: sort *pool* into the *known* mechanisms of *pair*, new ones or none; keep the sorting."""
-    evidence = {
-        "cause": pair[0],
-        "target": pair[1],
-        "mechanisms": [{"id": k, "mechanism": v} for k, v in known.items()],
-        "findings": [{k: f.get(k) for k in ("id", "what", "mechanism", "quotes")} for f in pool],
-    }
-    message = f"{CONFIRM.read_text()}\n\n## The evidence\n\n```json\n{dumps(masked(evidence))}\n```\n"
-    ids = [f["id"] for f in pool]
+    """One confirm batch: sort *pool* into the *known* mechanisms of *pair*, new ones or none; keep the sorting.
+
+    The findings that do not fit in the message stay unsorted for a later run.
+    """
+    ids, message = _confirming(pair, pool, known)
+    pool = [f for f in pool if f["id"] in ids]
     said = paid(w, f"confirm:{pair[0]}|{pair[1]}", message, lambda s: _valid_sorting(s, ids, known))
     new = {str(k): str(v) for k, v in (said.get("new") or {}).items()}
     lines = []
