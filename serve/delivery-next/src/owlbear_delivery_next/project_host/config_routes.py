@@ -4,7 +4,7 @@ A save names the revision it was based on, so a page opened earlier never overwr
 project layers live where the store says: in the shared repository once its pointer exists (TD-57), where each save
 is committed and pushed (TD-64); without it, only the project layer, in the clone. This machine's layer lives in
 ``~/.owlbear`` and is never published (TD-336). The project's folder in the shared repository can be renamed (TD-98)
-while none of its runners runs.
+while none of its runners runs and no memory curation works in it (#678).
 """
 
 from __future__ import annotations
@@ -276,7 +276,8 @@ def _working(store: Store, host: Host) -> list[str]:
 def _rename(store: Store, host: Host, name: str) -> str:
     """Move the project's folder while no runner of any clone using it can start or run; the publication notice.
 
-    The machine's other clones of the project share the folder (TD-242): each one's launch mutex is held too.
+    The machine's other clones of the project share the folder (TD-242): each one's launch mutex is held too. The
+    machine's memory curation holds the folder too, so no curator works in it while it moves.
     """
     if store.shared is None:
         raise HTTPException(409, "no shared settings location is set up; run `owlbear-next data PATH`")
@@ -288,13 +289,16 @@ def _rename(store: Store, host: Host, name: str) -> str:
             held.append(h)
         if busy := [s for h in held for s in _working(h.store, h)]:
             raise HTTPException(409, f"steps of {', '.join(busy)} are running; rename once they have finished")
-        until = time.monotonic() + data_repo.SAVE_SECONDS
-        with store.shared.locked():
-            old = store.name
-            notice = store.shared.rename(old, name, until)
-            for h in held:
-                h.store.name = name
-            notice = notice or memory_routes.reorigin(store.shared, old, name, until)  # Global keeps its way home
+        with host.curating(store.name) as curating:  # no curation runs in it, nor starts while it moves
+            if curating:
+                raise HTTPException(409, curating)
+            until = time.monotonic() + data_repo.SAVE_SECONDS
+            with store.shared.locked():
+                old = store.name
+                notice = store.shared.rename(old, name, until)
+                for h in held:
+                    h.store.name = name
+                notice = notice or memory_routes.reorigin(store.shared, old, name, until)  # Global keeps its way home
     except DataRepoError as exc:
         raise HTTPException(409, str(exc)) from exc
     except OSError as exc:

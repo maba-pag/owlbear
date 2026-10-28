@@ -27,6 +27,7 @@ REFUSALS = frozenset({  # the fixed reasons main's ``_one`` writes when it refus
     "stopping",
     "OwlBear stops once nothing runs: no memory curation starts",
     "OwlBear is updating; try again in a minute",
+    "its folder is being renamed or is gone; curate it again under its new name",
 })  # fmt: skip
 SUBAGENTS_UNSET = "agents.curator.subagents is unset"  # main's ``_unset`` reasons, before any session and SDK call
 UNSET = ("settings unset: ", "; fill them in on the Settings page")

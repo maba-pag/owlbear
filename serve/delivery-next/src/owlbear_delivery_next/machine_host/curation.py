@@ -5,14 +5,15 @@ Global memory beside it, and gives the curator role its automatic workflow. The 
 report and what it saw in ``~/.owlbear/curation.json``, one run at a time, each holding one of the machine's
 session slots (TD-336). The Maintenance page's button starts it now. A merge starts its project's folder, and idle time
 every folder, when the folder holds a pending entry no run has seen; while paused only with "Curate memory while
-paused" on (the owner, 2026-10-22). An entry a run left pending starts no other run until it changes.
+paused" on (the owner, 2026-10-22). An entry a run left pending starts no other run until it changes. A rename of a
+project's folder waits until no curation of it runs or waits, and no run starts in a folder while it moves (#678).
 """
 
 from __future__ import annotations
 
 import threading
 import uuid
-from contextlib import AbstractContextManager, nullcontext
+from contextlib import AbstractContextManager, contextmanager, nullcontext
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -33,7 +34,7 @@ from owlbear_delivery_next.state_store import machine_settings, registry, spend_
 from owlbear_delivery_next.workflow_steps import lookup
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Iterator
     from pathlib import Path
 
     from owlbear_delivery_next.local_system.slots import Slots
@@ -51,6 +52,9 @@ OFF = "this automatic trigger is off in the machine settings; it waits until it 
 LEFT = "the last curation's processes may still run; stop them before curating again"
 LINGERING = "memory curation: its last session's processes may still run"
 INTERRUPTED = "interrupted: OwlBear stopped while it ran or waited"
+CURATING = "memory curation of {folder} runs or waits; rename once it has finished"
+LEFT_RENAME = "the last memory curation's processes may still run; rename once they are gone"
+MOVED = "its folder is being renamed or is gone; curate it again under its new name"  # in curation_snapshots.REFUSALS
 UNKNOWN = "its processes could not be identified, so none could be confirmed gone; check for a stray copilot process"
 
 
@@ -119,6 +123,7 @@ class Curation:
         self.queue, self.worker, self.running = list[str](), None, ""
         self.asked: dict[str, Asked] = {}  # each queued folder's trigger, read again at its grant
         self.again: dict[str, Trigger] = {}  # a running folder's follow-up, when an automatic trigger asks for one
+        self.renaming = set[str]()  # folders a rename holds: none of them is admitted
         runs = self.load()
         self.maintenance = ownership or maintenance.Maintenance(slots)
         if runs.left_key and not self.maintenance.records(SLOT, "curation", runs.left_key, runs.left):
@@ -225,6 +230,25 @@ class Curation:
         with self.lock:
             busy = [f"memory curation: {', '.join(self.queue)}"] if self.queue else []
         return busy + ([LINGERING] if self.lingering() else [])
+
+    @contextmanager
+    def fence(self, folder: str) -> Iterator[str]:
+        """Hold *folder* against curation while it moves; yields why it cannot move now instead, else ''.
+
+        It cannot while its run waits or runs, or while a run's processes may still run and none runs: those may be
+        any folder's, while a running one's are its own, since a run starts only once none linger.
+        """
+        with self.lock:
+            why = CURATING.format(folder=folder) if folder in self.queue else ""
+            why = why or (LEFT_RENAME if not self.running and self.lingering() else "")
+            if not why:
+                self.renaming.add(folder)
+        try:
+            yield why
+        finally:
+            if not why:
+                with self.lock:
+                    self.renaming.discard(folder)
 
     def due(self, folder: str) -> bool:
         """Whether *folder* holds a pending entry, or a changed one, that no finished run saw."""
@@ -350,24 +374,26 @@ class Curation:
                 self._save(folder, FolderRun(state="failed", started_at=started, ended_at=started, reason=why))
                 return False
             turn.wait(5)
-        with self.admission():  # the stop barrier: a stop when idle sees this run admitted, or it is refused here
-            why = self.fenced()
-            with self.lock:  # the automatic switches are read at the grant, not when the request was made
-                asked = self.asked.get(folder, "manual")
-                admitted = not why and (asked == "manual" or self.allowed(asked))
-                self.running = folder if admitted else ""
-        if why:
-            self.slots.give(SLOT, key)
-            self._save(folder, FolderRun(state="failed", started_at=started, ended_at=started, reason=why))
-            return False
-        if not admitted:  # the folder stays due, so a later allowed trigger runs it
-            self.slots.give(SLOT, key)
-            prior = self.load().folders.get(folder, FolderRun())  # keeps what the last finished run left pending
-            why = self._refusal(asked)
-            update = {"state": "failed", "started_at": started, "ended_at": started, "reason": why}
-            self._save(folder, prior.model_copy(update=update))
-            return True
-        try:
+        try:  # from the grant on, the slot goes back however this ends, unless the ledger holds it
+            with self.admission():  # the stop barrier: a stop when idle sees this run admitted, or it is refused here
+                why = self.fenced()
+                with self.lock:  # the automatic switches are read at the grant, not when the request was made
+                    asked = self.asked.get(folder, "manual")
+                    # a rename holds it, or moved it after it was queued: the run would curate a folder that is gone
+                    why = why or (MOVED if folder in self.renaming or folder not in folders(shared.root) else "")
+                    admitted = not why and (asked == "manual" or self.allowed(asked))
+                    self.running = folder if admitted else ""
+            if why:
+                self.slots.give(SLOT, key)
+                self._save(folder, FolderRun(state="failed", started_at=started, ended_at=started, reason=why))
+                return False
+            if not admitted:  # the folder stays due, so a later allowed trigger runs it
+                self.slots.give(SLOT, key)
+                prior = self.load().folders.get(folder, FolderRun())  # keeps what the last finished run left pending
+                why = self._refusal(asked)
+                update = {"state": "failed", "started_at": started, "ended_at": started, "reason": why}
+                self._save(folder, prior.model_copy(update=update))
+                return True
             self._save(folder, FolderRun(state="running", started_at=started, key=key))
             self._save(folder, self._session(shared, folder, started, key))
         finally:
@@ -407,8 +433,10 @@ class Curation:
         unknown = not (t and t.confirmed)
         ended = datetime.now(UTC)
         report = done.payload if isinstance(done.payload, memory_curation_tools.MemoryCurationResult) else None
-        if done.ending != "result" or report is None or unknown:
+        if done.ending != "result" or report is None or unknown or done.usage_unread:
             why = " ".join((done.detail or "no report was submitted").split())[:300]
+            if done.usage_unread and done.ending == "result" and report is not None:  # TD-94: its model is unproven
+                why = " ".join(f"the model is unknown: {done.usage_unread}".split())[:300]
             why = f"{UNKNOWN}; {why}" if unknown else why
             return FolderRun(
                 state="failed",

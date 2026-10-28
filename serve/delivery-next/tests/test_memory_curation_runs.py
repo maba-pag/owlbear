@@ -109,6 +109,26 @@ def test_a_run_without_a_report_or_while_fenced_fails_with_its_reason(root) -> N
     assert (runs["shop"]["state"], runs["shop"]["reason"]) == ("failed", "updating")
 
 
+def test_a_report_whose_model_is_unproven_fails_publishes_nothing_and_leaves_its_entries_due(root, monkeypatch):
+    """#675, TD-94: a curation run whose usage does not prove its model is refused like any unproven step."""
+    pending(root / "shop" / "memory", "Unsure lesson")
+    published = []
+    monkeypatch.setattr(DataRepo, "publish", lambda _self, *args, **_kw: published.append(args) or "")
+
+    def run(cfg) -> Run:
+        return Run(cfg.session_id, ending="result", payload=MemoryCurationResult(summary="ok", entries=[]),
+                   termination=Termination(confirmed=True), usage_unread="no gpt-x tokens in the usage")  # fmt: skip
+
+    job = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root), run=run)
+    job.start("shop")
+    finished(job)
+    shop = job.load().folders["shop"]
+    assert (shop.state, shop.reason, shop.summary, shop.seen, published) == (
+        "failed", "ended result: the model is unknown: no gpt-x tokens in the usage", "", {}, []
+    )  # fmt: skip
+    assert (job.due("shop"), job.slots.counts(curation.SLOT)[2]) == (True, 0)
+
+
 def test_without_a_shared_repository_nothing_is_curated() -> None:
     job = curation.Curation(Slots(lambda: 1), shared=lambda: None)
     assert job.read() == {"available": False, "reason": curation.NO_SHARED, "folders": []}
@@ -200,6 +220,8 @@ def test_processes_that_may_still_run_keep_their_slot_and_the_machine_busy_until
 ) -> None:
     alive = [True]
     monkeypatch.setattr(processes, "alive", lambda _pid, _created: alive[0])
+    published = []
+    monkeypatch.setattr(DataRepo, "publish", lambda _self, *args, **_kw: published.append(args) or "")
     slots = Slots(lambda: 2)
 
     def run(cfg) -> Run:
@@ -214,9 +236,97 @@ def test_processes_that_may_still_run_keep_their_slot_and_the_machine_busy_until
             break
         time.sleep(0.02)
     assert (job.working(), slots.counts(curation.SLOT)[2]) == ([curation.LINGERING], 1)
+    assert (job.load().folders["shop"].state, published) == ("failed", [])  # #675: a survivor's run is refused
     assert curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root)).left == {4242: 1.0}
     alive[0] = False
     assert (job.working(), slots.counts(curation.SLOT)[2]) == ([], 0)
+
+
+def _recorded(ran: list) -> object:
+    def run(cfg) -> Run:
+        ran.append(cfg.memory.parent.name)
+        return Run(cfg.session_id, ending="result", payload=MemoryCurationResult(summary="ok", entries=[]),
+                   termination=Termination(confirmed=True))  # fmt: skip
+
+    return run
+
+
+def test_a_curation_granted_its_slot_after_its_folder_moved_never_starts_on_the_old_name(root) -> None:
+    """#678: a run queued before a rename and granted after it would curate a folder that is gone."""
+    ran, slots = [], Slots(lambda: 1)
+    assert slots.take(curation.SLOT, "another", 1, 1) == 1  # it waits for the only slot
+    job = curation.Curation(slots, shared=lambda: DataRepo(root), run=_recorded(ran))
+    with job.fence("shop") as busy:
+        job.start("shop")
+        (root / "shop").rename(root / "acme-shop")
+    slots.give(curation.SLOT, "another")
+    drained(job)
+    shop = job.load().folders["shop"]
+    assert (busy, ran, shop.state, shop.reason, slots.counts(curation.SLOT)[2]) == ("", [], "failed", curation.MOVED, 0)
+    again = Slots(lambda: 1)
+    restarted = curation.Curation(again, shared=lambda: DataRepo(root))  # a refusal, never an uncertain session
+    assert (restarted.working(), again.counts(curation.SLOT)[2]) == ([], 0)
+
+
+def test_a_curation_granted_its_slot_while_a_rename_holds_its_folder_never_starts(root) -> None:
+    ran = []
+    job = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root), run=_recorded(ran))
+    with job.fence("shop") as busy:
+        job.start("shop")
+        drained(job)
+    held = job.load().folders["shop"]
+    job.start("shop")
+    drained(job)
+    assert (busy, held.state, held.reason) == ("", "failed", curation.MOVED)
+    assert (ran, job.load().folders["shop"].state) == (["shop"], "done")
+
+
+def test_a_rename_waits_while_its_folders_curation_waits_or_any_runs_processes_may_still_run(root, monkeypatch):
+    """#678: a waiting run would start in the moved folder; a finished run's survivors name no folder."""
+    alive = [True]
+    monkeypatch.setattr(processes, "alive", lambda _pid, _created: alive[0])  # read as the ledger is made
+    ran, slots = [], Slots(lambda: 1)
+    assert slots.take(curation.SLOT, "another", 1, 1) == 1
+    job = curation.Curation(slots, shared=lambda: DataRepo(root), run=_recorded(ran))
+    job.start("shop")
+    with job.fence("shop") as waiting, job.fence("owlbear") as other:
+        pass
+    slots.give(curation.SLOT, "another")
+    drained(job)
+    assert (waiting, other, ran) == (curation.CURATING.format(folder="shop"), "", ["shop"])
+
+    job.run = lambda cfg: Run(
+        cfg.session_id, ending="result", payload=MemoryCurationResult(summary="ok", entries=[]), runtime_pid=4242,
+        pids={4242: 1.0}, termination=Termination(confirmed=False, survivors=(4242,)),
+    )  # fmt: skip
+    job.start("shop")
+    drained(job)
+    with job.fence("shop") as own, job.fence("owlbear") as any_other:
+        pass
+    alive[0] = False
+    with job.fence("shop") as gone:
+        pass
+    assert (own, any_other, gone) == (curation.LEFT_RENAME, curation.LEFT_RENAME, "")
+
+
+def test_a_folder_that_cannot_be_listed_at_admission_gives_its_slot_back(root, monkeypatch) -> None:
+    """Sol on #678: the admission check reads the disk after the grant; its failure never strands the slot."""
+    ran, slots = [], Slots(lambda: 1)
+    assert slots.take(curation.SLOT, "another", 1, 1) == 1
+    job = curation.Curation(slots, shared=lambda: DataRepo(root), run=_recorded(ran))
+    job.start("shop")
+
+    def unreadable(_root):
+        msg = "the shared repository is gone"
+        raise OSError(msg)
+
+    monkeypatch.setattr(curation, "folders", unreadable)
+    slots.give(curation.SLOT, "another")
+    drained(job)
+    shop = job.load().folders["shop"]
+    assert (ran, shop.state, shop.reason, slots.counts(curation.SLOT)[2]) == (
+        [], "failed", "OSError: the shared repository is gone", 0
+    )  # fmt: skip
 
 
 def test_a_linked_memory_folder_is_never_curated(root) -> None:
@@ -255,6 +365,17 @@ def test_a_run_keeps_its_processes_on_file_while_it_runs_and_a_restart_holds_the
     assert (slots.counts(curation.SLOT)[2], restarted.working()) == (2, [curation.LINGERING])
     alive[0] = False
     assert (restarted.working(), slots.counts(curation.SLOT)[2]) == ([curation.LINGERING], 2)
+
+
+def test_an_unreadable_record_naming_left_processes_stops_the_restart_and_stays_as_it_was(root) -> None:
+    """#674: only a missing record is empty; one that cannot be read keeps its evidence and the host does not start."""
+    path = local_home.root() / curation.STATE
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text('{"folders": {}, "left": {"4242": "not a birth time"}}\n')  # e.g. an older or newer format
+    before, slots = path.read_bytes(), Slots(lambda: 1)
+    with pytest.raises(maintenance.MaintenanceError, match="ownership record cannot be read"):
+        curation.Curation(slots, shared=lambda: DataRepo(root))
+    assert (path.read_bytes(), slots.counts(curation.SLOT)[2]) == (before, 0)
 
 
 def test_pids_left_after_an_earlier_empty_import_are_held_before_they_can_be_cleared(root, monkeypatch) -> None:

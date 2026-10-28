@@ -162,6 +162,7 @@ class Machine:
             h.slots = self.slots
             h.maintenance = self.maintenance
             h.merged = lambda: self.curation.nudge([h.store.name], "merge")
+            h.curating = self.curation.fence
 
         try:
             p.load(self.record, lambda: self.paused or self.stopping.is_set(), bind)
