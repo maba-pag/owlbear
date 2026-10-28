@@ -152,9 +152,9 @@ class Packs:
             except OSError as exc:  # the banner holds it until the host ends
                 self.machine.say(f"design pack: the failure could not be kept in {path}: {exc}")
 
-    def failed(self, tag: str, detail: str) -> None:
+    def failed(self, tag: str, detail: str, expected: object = ANY) -> None:
         """Keep a version's pack that could not be installed, for the pages' banner, also across restarts."""
-        self._keep({"version": tag, "detail": detail[:600], "at": _now()})
+        self._keep({"version": tag, "detail": detail[:600], "at": _now()}, expected)
 
     def ready(self, tag: str) -> None:
         """A version's pack is in place: a failure kept for it ends."""
@@ -229,7 +229,7 @@ class Packs:
             if tag != versions.running():
                 self._version(tag)
         except Exception as exc:  # noqa: BLE001 - the banner says how it ended
-            self.failed(tag, f"{type(exc).__name__}: {exc}")
+            self.failed(tag, f"{type(exc).__name__}: {exc}", expected=failure)  # an update's newer one stays
             self.machine.say(f"design pack: installing failed: {exc}")
         else:
             self._resolved(failure)

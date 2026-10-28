@@ -372,6 +372,20 @@ def test_an_install_ends_only_the_failure_it_set_out_to_repair(updating, monkeyp
     kept = json.loads((local_home.root() / design_pack.PACKS / packs.FAILED).read_text())
     assert kept["version"] == "v0.3"
 
+    def fails() -> None:  # nor does this install's own failure replace it
+        said = "the running pack failed again"
+        raise design_pack.PackError(said)
+
+    m.packs.failed("v0.1", "the running pack once failed")
+    monkeypatch.setattr(m.packs, "_installed", lambda: not meanwhile())
+    monkeypatch.setattr(design_pack, "install", fails)
+    m.packs.install()
+    m.packs.thread.join(10)
+
+    assert m.packs.failure["version"] == "v0.3"
+    kept = json.loads((local_home.root() / design_pack.PACKS / packs.FAILED).read_text())
+    assert kept["version"] == "v0.3"
+
 
 def test_install_puts_a_missing_pack_in_place_with_no_newer_version(updating, monkeypatch):
     pinned_pack(monkeypatch)
