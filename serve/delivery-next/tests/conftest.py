@@ -28,7 +28,7 @@ from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.runtimes import model_choices, sdk_adapter, spotter_look
 from owlbear_delivery_next.runtimes.session_result import Run
-from owlbear_delivery_next.state_store import backlog, backlog_issues, legacy_family
+from owlbear_delivery_next.state_store import backlog, backlog_issues, decision_cache, decision_store, legacy_family
 from owlbear_delivery_next.state_store.store import Lock, Store
 
 MACHINE_HOME = Path.home()  # read before any test replaces HOME
@@ -161,6 +161,7 @@ def _no_shared_settings(tmp_path_factory, monkeypatch):
     monkeypatch.setattr(backlog_issues, "RUNNER", FakeGitHub(down=True))  # never the real backlog issues
     monkeypatch.setattr(backlog, "_cache", {})
     monkeypatch.setattr(backlog, "_recent", {})
+    monkeypatch.setattr(decision_cache, "_entries", {})  # no test sees another's decision snapshot
     monkeypatch.setattr(backlog_issues, "_private", {})
     root = tmp_path_factory.mktemp("worktrees").resolve()
     monkeypatch.setattr(worktree, "data_root", lambda: root)  # never the machine's worktrees
@@ -271,6 +272,38 @@ def github(monkeypatch) -> FakeGitHub:
     fake = FakeGitHub()
     monkeypatch.setattr(backlog_issues, "RUNNER", fake)
     return fake
+
+
+class Warmth:
+    """A decision read made cold (nothing kept) or warm (its snapshot kept); `parses` counts the parses after it."""
+
+    def __init__(self, monkeypatch: pytest.MonkeyPatch, *, warm: bool) -> None:
+        self.warm, self.monkeypatch, self.parses = warm, monkeypatch, []
+
+    def ready(self, shared: DataRepo, project: str) -> None:
+        decision_cache.clear()  # the fixture's own saves may have kept one
+        real = decision_store.snapshot
+
+        def counted(root: Path, name: str) -> Any:
+            self.parses.append(name)
+            return real(root, name)
+
+        self.monkeypatch.setattr(decision_store, "snapshot", counted)
+        if self.warm:
+            self.monkeypatch.setattr(decision_cache, "RACY_NS", 0)
+            first = decision_store.load(shared, project).snapshot
+            assert decision_store.load(shared, project).snapshot is first  # kept: the second read parsed nothing
+            assert self.parses == [project]
+        self.parses.clear()
+
+    def collected(self, project: str) -> list[str]:
+        """The parses of a read that reached collection: one cold, none warm."""
+        return [] if self.warm else [project]
+
+
+@pytest.fixture(params=["cold", "warm"])
+def warmth(request, monkeypatch) -> Warmth:
+    return Warmth(monkeypatch, warm=request.param == "warm")
 
 
 def _git(cwd: Path, *args: str) -> str:

@@ -17,6 +17,7 @@ from owlbear_decisions import Decision, Link, LinkType, Origin, Scope, State, ne
 from owlbear_delivery_next.local_system.data_repo import DataRepo, DataRepoError
 from owlbear_delivery_next.state_store import (
     decision_batch,
+    decision_cache,
     decision_recovery,
     decision_store,
     decision_sync,
@@ -377,38 +378,45 @@ def test_both_readers_keep_healthy_authority(readable, reader, project) -> None:
     [("rebase-merge", "before"), ("rebase-apply", "before"), ("rebase-merge", "during"), ("rebase-apply", "during")],
 )
 def test_an_active_rebase_before_or_during_collection_refuses_both_readers(
-    readable, monkeypatch, reader, project, transition
+    readable, warmth, reader, project, transition
 ) -> None:
     shared = readable
     marker, when = transition
+    warmth.ready(shared, project)
     path = shared.root / git(shared.root, "rev-parse", "--git-path", marker)
-    real = decision_store.snapshot
     held = []
 
     def started() -> None:
         path.mkdir()
         held.append(checkout_state(shared))
 
-    def collect(root, project):
-        seen = real(root, project)
-        started()
-        return seen
+    def during(target, name):  # a kept snapshot is never parsed: the marker begins at its fingerprint instead
+        real = getattr(target, name)
+
+        def collect(root, project):
+            seen = real(root, project)
+            started()
+            return seen
+
+        warmth.monkeypatch.setattr(target, name, collect)
 
     if when == "before":
         started()
     else:
-        monkeypatch.setattr(decision_store, "snapshot", collect)
+        during(*((decision_cache, "fingerprint") if warmth.warm else (decision_store, "snapshot")))
 
     with pytest.raises(DecisionsUnavailable, match="rebase"):
         reader(shared, project)
 
     assert len(held) == 1
     assert checkout_state(shared) == held[0]  # HEAD is unchanged even when the marker began during collection
+    assert warmth.parses == ([] if when == "before" else warmth.collected(project))
 
 
 @pytest.mark.parametrize("reader", READERS, ids=["load", "file_only"])
 @pytest.mark.parametrize("when", [1, 2], ids=["before", "after_collection"])
-def test_an_unknown_rebase_at_either_probe_refuses_both_readers(readable, monkeypatch, reader, when) -> None:
+def test_an_unknown_rebase_at_either_probe_refuses_both_readers(readable, monkeypatch, warmth, reader, when) -> None:
+    warmth.ready(readable, PROJECT)
     real, calls = DataRepo.rebasing, []
 
     def rebasing(shared, *args, **kwargs):
@@ -425,11 +433,14 @@ def test_an_unknown_rebase_at_either_probe_refuses_both_readers(readable, monkey
     assert raised.value.action == (decision_store.REPAIR if when == 1 else decision_store.READ)
     assert len(calls) == when
     assert checkout_state(readable) == before
+    assert warmth.parses == ([] if when == 1 else warmth.collected(PROJECT))
 
 
 @pytest.mark.parametrize("reader", READERS, ids=["load", "file_only"])
 @pytest.mark.parametrize(("probe", "change"), [("journal", "head"), ("rebase", "head"), ("journal", "rebase")])
-def test_terminal_checks_follow_the_blocking_probes(readable, monkeypatch, reader, probe, change) -> None:
+def test_terminal_checks_follow_the_blocking_probes(readable, warmth, reader, probe, change) -> None:
+    warmth.ready(readable, PROJECT)
+    monkeypatch = warmth.monkeypatch
     target, name = (decision_store, "_stamp") if probe == "journal" else (DataRepo, "rebasing")
     real, calls, moved = getattr(target, name), [], []
 
@@ -449,3 +460,4 @@ def test_terminal_checks_follow_the_blocking_probes(readable, monkeypatch, reade
         reader(readable, PROJECT)
     assert len(moved) == 1
     assert checkout_state(readable) == moved[0]
+    assert warmth.parses == warmth.collected(PROJECT)
