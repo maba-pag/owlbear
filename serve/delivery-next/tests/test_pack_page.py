@@ -14,7 +14,7 @@ import uvicorn
 
 from owlbear_delivery_next.change_contracts.round_records import PACK, RoundFinding, RoundLoop, RoundPolicy
 from owlbear_delivery_next.local_system.codebase import CURRENT
-from owlbear_delivery_next.pack_runs import pack_job, pack_rounds
+from owlbear_delivery_next.pack_runs import pack_job, pack_progress, pack_rounds
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.state_store.store import Store
@@ -148,3 +148,65 @@ def test_the_activation_dialog_lists_the_unreviewed_repair_and_what_was_not_chan
         said.get_by_role("button", name="Keep it waiting").click()
         expect(dialog).to_be_hidden()
     assert job.read()["state"] == "waiting"  # declining activates nothing
+
+
+def history() -> list[dict[str, Any]]:
+    """Two rounds on two candidates: the first round's evidence stale, the second's replay reused, the owner asked."""
+    inv: list[dict[str, Any]] = []
+    prepared = [("notice", "passed"), ("candidate", "passed"), ("diff", "passed"), ("initial-golden", "completed")]
+    for op, result in prepared:
+        pack_progress.closed(inv, pack_progress.opened(inv, op, op), result)
+    for round_, identity, judged in [(1, "a", "findings"), (2, "b", "")]:
+        update = pack_progress.opened(inv, "update", "update", round_=round_)
+        pack_progress.closed(inv, update, "completed", "", identity)
+        if judged:
+            at = pack_progress.opened(inv, "challenger", "full-challenge", round_=round_, identity=identity)
+            pack_progress.closed(inv, at, judged, "2 new finding(s)")
+    pack_progress.opened(inv, "replay", "replay", identity="b", result="reused")
+    pack_progress.asked(inv, "challenger", [{"kind": "dispute"}])
+    return inv
+
+
+@pytest.mark.browser
+def test_the_update_shows_its_phases_with_each_invocation_in_order_and_what_comes_next(served, pds) -> None:
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    job, base = served()
+    job.state["invocations"] = history()
+    job._save()  # noqa: SLF001
+    with opened(base, pds) as page:
+        phases = page.locator("#pack-progress .pack-phase")
+        expect(phases.locator("h3")).to_have_text(["Prepare", "Challenge round 1", "Challenge round 2"])
+        expect(phases.nth(0).locator("li")).to_have_count(4)
+        first, second = phases.nth(1).locator("li"), phases.nth(2).locator("li")
+        expect(first).to_have_count(2)
+        for i in range(2):  # the first candidate's evidence, superseded by the second's
+            expect(first.nth(i)).to_contain_text("stale: superseded by a later run")
+        expect(first.nth(1)).to_contain_text("Challenger on the whole pack: findings")
+        expect(second).to_have_text([
+            "Updater session: session completed", "Calibration replay: reused for this identity",
+            "Your answer: waiting for you dispute",
+        ])  # fmt: skip
+        expect(second.get_by_text("stale", exact=False)).to_have_count(0)
+        options = "; ".join(pack_rounds.LABELS[o] for o in ("fix", "reconsider", "drop"))
+        expect(page.locator("#pack-next")).to_have_text(f"Next: Your answer decides what runs next ({options})")
+        expect(page.locator("#pack-stages")).to_have_count(0)  # no slot per stage beside them
+        job.state |= {"state": "running", "questions": []}
+        pack_progress.opened(job.state["invocations"], "challenger", "full-challenge", round_=2, identity="b")
+        job._save()  # noqa: SLF001
+        page.reload()
+        expect(page.locator("#pack-state")).to_have_text("Now: Challenge round 2, Challenger on the whole pack…")
+        expect(page.locator("#pack-next")).to_contain_text("Next: Decided by the verdict")
+        job.state["state"] = "failed"  # stops the page's polling before the server goes
+
+
+@pytest.mark.browser
+def test_a_record_from_before_invocations_shows_its_stages_without_made_up_history(served, pds) -> None:
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    _job, base = served()
+    with opened(base, pds) as page:
+        expect(page.locator("#pack-stages li")).to_have_count(len(pack_job.STAGES))
+        expect(page.locator("#pack-progress")).to_have_count(0)
+        expect(page.locator("#pack-next")).to_have_count(0)
+        expect(page.locator("#pack-state")).to_contain_text("The update waits for your answers below.")

@@ -24,9 +24,12 @@ export const LOOPS = [["shaper", "Brief challenges (shaper)"], ["planner", "Plan
 export const WRITE = 60000;  // a save commits and pushes the shared settings repository (TD-64): a network round trip
 // TD-101: the design pack update runs in the host; the page starts it and follows its stages.
 export const RESULTS = { pending: "not run", running: "running", passed: "passed", failed: "failed", skipped: "skipped",
-  returned: "findings back to the updater", waiting: "waiting for you" };
+  returned: "findings back to the updater", waiting: "waiting for you", completed: "session completed",
+  findings: "findings", reused: "reused for this identity", answered: "answered by you",
+  discarded: "discarded by you", stopped: "stopped", "not-reached": "not reached" };
 export const TAGS = { pending: "secondary", running: "info", passed: "success", failed: "error", skipped: "secondary",
-  returned: "warning", waiting: "warning" };
+  returned: "warning", waiting: "warning", completed: "info", findings: "warning", reused: "info", answered: "info",
+  discarded: "secondary", stopped: "warning", "not-reached": "secondary" };
 export const ENDINGS = { idle: "Never run.", passed: "Last run passed: its pull request was merged into main.",
   failed: "Last run failed.", "up-to-date": "Last run: already up to date.",
   waiting: "The update waits for your answers below.", discarded: "Last run discarded: nothing changed." };

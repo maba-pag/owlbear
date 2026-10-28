@@ -14,8 +14,11 @@ function packLine(u) {
   if (state.packProblem) return state.packProblem;
   if (!u) return "";
   const at = u.stages.findIndex((s) => s.name === u.stage);
+  const now = u.progress && !u.progress.legacy ? u.progress.now : null;  // what the run does, by its invocations
   let line = ENDINGS[u.state] ?? u.state;
-  if (u.state === "running") {
+  if (u.state === "running" && now) {
+    line = `Now: ${now.phase ? `${now.phase}, ` : ""}${now.label}…`;
+  } else if (u.state === "running") {
     line = at < 0 ? "Starting the update…" : `Running stage ${at + 1} of ${u.stages.length}: ${u.stages[at].label}…`;
   } else if (u.started_at) {
     line += ` Started ${when(u.started_at)}` + (u.ended_at ? `, ended ${when(u.ended_at)}.` : ".");
@@ -136,6 +139,31 @@ async function startUpdate() {
   }
 }
 
+// A run's phases with each invocation in order, an earlier one another superseded marked stale; a record from
+// before invocations shows its stages as they are, with no history made up for it.
+function packProgress(u) {
+  const progress = u?.progress;
+  if (!progress || progress.legacy) {
+    return html`<ol id="pack-stages" aria-label="Update stages">${(u?.stages ?? []).map((s) => html`<li>
+      <p-text size="sm">${s.label}: </p-text><p-tag variant=${TAGS[s.result]} compact="true">${RESULTS[s.result]
+        ?? s.result}</p-tag>${s.detail ? html`<p-text size="xs" color="contrast-medium"> ${s.detail}</p-text>`
+        : nothing}</li>`)}</ol>`;
+  }
+  const next = progress.next;
+  return html`<div id="pack-progress">
+    ${next ? html`<p-text id="pack-next" size="sm">Next: ${next.label}${next.options.length
+      ? ` (${next.options.join("; ")})` : ""}</p-text>` : nothing}
+    ${progress.phases.map((ph) => html`<section class="pack-phase" aria-labelledby=${`pack-phase-${ph.key}`}>
+      <p-heading size="sm"><h3 id=${`pack-phase-${ph.key}`}>${ph.label}</h3></p-heading>
+      <ol aria-labelledby=${`pack-phase-${ph.key}`}>${ph.invocations.map((i) => html`<li>
+        <p-text size="sm">${i.label}${i.attempt > 1 ? ` (attempt ${i.attempt})` : ""}: </p-text><p-tag
+          variant=${TAGS[i.result] ?? "secondary"} compact="true">${i.outcome}</p-tag>${i.stale ? html` <p-tag
+          variant="secondary" compact="true">stale: superseded by a later run</p-tag>` : nothing}${i.detail
+          ? html`<p-text size="xs" color="contrast-medium"> ${i.detail}</p-text>` : nothing}</li>`)}</ol>
+    </section>`)}
+  </div>`;
+}
+
 export function packSection() {
   const u = state.update, pack = state.pack;
   const plain = (t) => String(t).replaceAll(String.fromCharCode(96), "");  // the status is CLI text with code marks
@@ -157,10 +185,7 @@ export function packSection() {
       ${button("Update design pack", startUpdate, { id: "pack-update", icon: "refresh", disabled: busy || elsewhere })}
       <p-text id="pack-state" size="sm" role="status" aria-live="polite">${packLine(u)}</p-text>
     </div>
-    <ol id="pack-stages" aria-label="Update stages">${(u?.stages ?? []).map((s) => html`<li>
-      <p-text size="sm">${s.label}: </p-text><p-tag variant=${TAGS[s.result]} compact="true">${RESULTS[s.result]
-        ?? s.result}</p-tag>${s.detail ? html`<p-text size="xs" color="contrast-medium"> ${s.detail}</p-text>`
-        : nothing}</li>`)}</ol>
+    ${packProgress(u)}
     <p-text id="pack-reason" size="sm">${u && u.state !== "running" ? u.reason : ""}</p-text>
     <p-text id="pack-pushed" size="sm">${p?.commit ? html`Commit ${p.commit.slice(0, 12)} on ${p.branch}${p.url
       ? html`, <a href=${p.url} target="_blank" rel="noopener">pull request #${p.number}</a>` : nothing}${p.merged
