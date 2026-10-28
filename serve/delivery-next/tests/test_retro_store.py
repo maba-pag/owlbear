@@ -1,5 +1,7 @@
 """Retro's judged state (#715): saved answers, findings, grades and the proposals' event log."""
 
+import json
+
 from owlbear_delivery_next.improvement import assumptions
 from owlbear_delivery_next.improvement import retro_proposals as props
 from owlbear_delivery_next.improvement import retro_store as store
@@ -86,6 +88,15 @@ def test_what_rests_on_a_retired_assumption_is_hidden():
     assumptions.reset()
     assert store.findings() == []
     assert len(store.all_findings()) == 1
+
+
+def test_what_rests_on_an_unreadable_assumption_entry_is_hidden_and_the_rest_shown():
+    assumptions.ensure("retro-causes-1")
+    assumptions.ensure("retro-grades-1")
+    marks = assumptions.listed() | {"retro-grades-1": {}}
+    assumptions.path().write_text(json.dumps(marks))
+    store.add_findings([_finding("rf-1"), _finding("rf-2", assumptions=["retro-grades-1"])])
+    assert [f["id"] for f in store.findings()] == ["rf-1"]
 
 
 def test_a_reader_sees_only_real_units_on_live_assumptions_and_synthetic_ones_when_asked():

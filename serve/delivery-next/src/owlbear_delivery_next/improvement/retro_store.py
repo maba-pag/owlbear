@@ -129,8 +129,16 @@ def lines(name: str) -> list[dict[str, Any]]:
 
 
 def retired_ids() -> set[str]:
-    """The marked assumptions retired now."""
-    return {name for name, mark in assumptions.listed().items() if isinstance(mark, dict) and mark.get("retired")}
+    """The marked assumptions retired now, or whose entry cannot be read: nothing resting on those is shown."""
+    gone = set()
+    for name in assumptions.listed():
+        try:
+            live = assumptions.active(name)
+        except ValueError:
+            live = False
+        if not live:
+            gone.add(name)
+    return gone
 
 
 def visible(item: Mapping[str, Any], gone: set[str], *, synthetic: bool) -> bool:
