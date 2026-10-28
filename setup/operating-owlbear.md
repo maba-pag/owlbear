@@ -100,6 +100,8 @@ lookups validate the target's identity, issued proof, quarantine state and exist
 they recheck its named directory after those reads and leave an absent target marker for store open to repair.
 Current lookup, registration and selfcheck keep the retained source descriptor through target validation and
 recheck the source's named directory before accepting its receipt. Unreadable UTF-8 enters the normal diagnostic channel.
+Selfcheck keeps both authority observations through its remaining project-marker and settings reads; a late witness
+change reports a problem instead of a compatibility pass, without opening or migrating the store.
 Source witness images and the held target's proof and marker must stay stable across later validation reads.
 Quarantined target entries are checked again, but ordinary active-store atomic writes remain valid: directory
 timestamps alone are not authority. A witness change refuses without replacing owner state; a newly installed newer

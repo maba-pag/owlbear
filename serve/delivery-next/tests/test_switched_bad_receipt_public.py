@@ -609,8 +609,8 @@ def test_active_payload_atomic_writes_during_source_validation_remain_valid(repo
     edited = json.dumps({"format": 1, "widths": [987]})
     fired = []
 
-    def state(*args):
-        observed = original(*args)
+    def state(*args, **kwargs):
+        observed = original(*args, **kwargs)
         if not fired:
             fired.append(True)
             temporary = target / "active-config-write"
@@ -633,8 +633,8 @@ def test_missing_target_marker_is_not_created_after_initial_source_reads_lose_it
     real_state = project_switch.source_state
     owners, fired = {}, []
 
-    def state(*args):
-        observed = real_state(*args)
+    def state(*args, **kwargs):
+        observed = real_state(*args, **kwargs)
         if not fired:
             fired.append(True)
             (target / project_move.MOVE_PROOF).write_text("owner-replaced-proof\n")
@@ -703,11 +703,11 @@ def test_source_state_rechecks_the_receipt_after_its_other_witness_reads(repo, b
     owner = '{"owner":"receipt changed during source validation"}\n'
     target_before = _snapshot(target)
 
-    def state(*args):
+    def state(*args, **kwargs):
         calls.append(True)
         active.append(len(calls))
         try:
-            return real_state(*args)
+            return real_state(*args, **kwargs)
         finally:
             active.pop()
 
@@ -769,11 +769,11 @@ def _during_terminal_source_receipt(monkeypatch, source, boundary, change):
     held = source.stat()
     calls, active, fired = [], [], []
 
-    def state(*args):
+    def state(*args, **kwargs):
         calls.append(True)
         active.append(len(calls))
         try:
-            return real_state(*args)
+            return real_state(*args, **kwargs)
         finally:
             active.pop()
 
@@ -788,6 +788,86 @@ def _during_terminal_source_receipt(monkeypatch, source, boundary, change):
     monkeypatch.setattr(project_switch, "source_state", state)
     monkeypatch.setattr(fd_tree, "holds_text_at", holds)
     return fired
+
+
+def _during_selfcheck_tail(monkeypatch, target, boundary, change):
+    real_marker, real_text = selfcheck.read_regular, Path.read_text
+    fired = []
+
+    def once():
+        if not fired:
+            fired.append(True)
+            change()
+
+    def marker(path):
+        value = real_marker(path)
+        if path == target / MARKER:
+            once()
+        return value
+
+    def text(path, *args, **kwargs):
+        value = real_text(path, *args, **kwargs)
+        if path == target / "config.json":
+            once()
+        return value
+
+    if boundary == "marker":
+        monkeypatch.setattr(selfcheck, "read_regular", marker)
+    else:
+        monkeypatch.setattr(Path, "read_text", text)
+    return fired
+
+
+@pytest.mark.usefixtures("current_binding")
+@pytest.mark.parametrize("boundary", ["marker", "settings"])
+@pytest.mark.parametrize("witness", ["target-proof", "source-receipt", "source-id", "source-preparation"])
+def test_selfcheck_keeps_original_authority_through_its_remaining_reads(repo, boot, monkeypatch, boundary, witness):
+    target = _finished_move(repo, boot)
+    source = _source(repo)
+    pid = registry.clone_id(source)
+    assert selfcheck._project(pid, repo) == []  # noqa: SLF001 - native valid control before the owner mutation
+    owners = {}
+
+    def change():
+        path, text = {
+            "target-proof": (target / project_move.MOVE_PROOF, "owner-replaced-proof\n"),
+            "source-receipt": (source / project_move.MOVE_RECORD, '{"owner":"concurrent metadata repair"}\n'),
+            "source-id": (source / project_move.CLONE_ID, "owner-rebound\n"),
+            "source-preparation": (
+                source / project_move.PREPARED,
+                json.dumps(json.loads((source / project_move.PREPARED).read_text()) | {"boot": AFTER}),
+            ),
+        }[witness]
+        path.write_text(text)
+        owners.update({source: _snapshot(source), target: _snapshot(target)})
+
+    fired = _during_selfcheck_tail(monkeypatch, target, boundary, change)
+    problems = selfcheck._project(pid, repo)  # noqa: SLF001 - execute the complete per-project selfcheck
+
+    assert fired == [True]
+    assert problems, f"selfcheck accepted {witness} changed during its {boundary} read"
+    assert {path: _snapshot(path) for path in owners} == owners
+
+
+@pytest.mark.usefixtures("current_binding")
+@pytest.mark.parametrize("boundary", ["marker", "settings"])
+def test_selfcheck_tail_keeps_legitimate_atomic_active_payload_writes(repo, boot, monkeypatch, boundary):
+    target = _finished_move(repo, boot)
+    source = _source(repo)
+    pid = registry.clone_id(source)
+    before = _snapshot(source)
+    edited = json.dumps({"format": 1, "widths": [987]})
+
+    def change():
+        temporary = target / "active-config-write"
+        temporary.write_text(edited)
+        temporary.replace(target / "config.json")
+
+    fired = _during_selfcheck_tail(monkeypatch, target, boundary, change)
+    assert selfcheck._project(pid, repo) == []  # noqa: SLF001
+    assert fired == [True]
+    assert (target / "config.json").read_text() == edited
+    assert _snapshot(source) == before
 
 
 @pytest.mark.usefixtures("current_binding")
@@ -867,11 +947,11 @@ def test_later_source_reads_cannot_admit_changed_target_witnesses(repo, boot, mo
         finally:
             publishing.pop()
 
-    def state(*args):
+    def state(*args, **kwargs):
         calls.append(True)
         active.append(len(calls))
         try:
-            return real_state(*args)
+            return real_state(*args, **kwargs)
         finally:
             active.pop()
 

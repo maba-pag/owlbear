@@ -17,8 +17,10 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
-def retained_target(folder: Path, pid: str) -> Path | None:
+def retained_target(folder: Path, pid: str, *, inspect: Callable[[Path], None] | None = None) -> Path | None:
     """The project's store that the SWITCHED receipt in the retained source *folder* names, or None without a receipt.
+
+    *inspect* runs inside the held source and target observations, before their terminal witness checks.
 
     Raises:
         StoreError: The receipt is not SWITCHED to the project's store, or that store is missing, replaced,
@@ -39,8 +41,12 @@ def retained_target(folder: Path, pid: str) -> Path | None:
                 raise StoreError(msg)
             project_switch.prepared_prior(fd)
 
+            def read_more() -> None:
+                if inspect is not None:
+                    inspect(target)
+
             def validate() -> None:
-                admitted = project_switch.source_state((folder, fd), pid, rec)
+                admitted = project_switch.source_state((folder, fd), pid, rec, validate=read_more)
                 if image is None or admitted[2] != image:
                     msg = f"{folder}'s move receipt changed during validation: nothing was changed"
                     raise StoreError(msg)
