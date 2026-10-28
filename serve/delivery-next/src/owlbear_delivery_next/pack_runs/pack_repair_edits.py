@@ -2,12 +2,14 @@
 
 Lint, format, CI workflow, hook or security configuration is held: the owner may push it. A weakened test (a deleted
 test file, an added skip, suppression or early return, a removed assertion or test) and protected pack content only an
-update may change are never pushed. Every other edit of an existing test file waits for the owner's review of its
-diff: the patterns are a quick filter, no proof that a test still checks as much.
+update may change are never pushed. Every other edit of an existing test file, including a Python test only
+reformatted (its syntax tree unchanged), waits for the owner's review of its diff: the patterns are a quick filter,
+no proof that a test still checks as much.
 """
 
 from __future__ import annotations
 
+import ast
 import re
 from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Any
@@ -118,15 +120,29 @@ def held(  # noqa: PLR0913 - the copy, its head, the change, and the package wit
         added = [x[1:] for x in lines if x.startswith("+") and not x.startswith("+++")]
         edited = how.endswith("M") and bool(TESTS.search(path))  # an existing test file: a new one may be pushed
         removed = [x[1:] for x in lines if x.startswith("-") and not x.startswith("---")] if edited else []
+        cut = any(REMOVED.search(x) for x in removed)
+        same = cut and _same_code(run, at, head, path)  # only reformatted: no check went
         if any(WEAKENING.search(x) for x in added):
             refused.append(f"{path} (adds a suppression or skip)")
         elif edited and (any(DISABLING.search(x) for x in added) or _returns_early(at / path, lines)):
             refused.append(f"{path} (disables a test)")
-        elif any(REMOVED.search(x) for x in removed):
+        elif cut and not same:
             refused.append(f"{path} (removes an assertion or test)")
         elif edited:
-            reviewed.append(f"{path} ({'removes lines from' if removed else 'changes'} a test)")
+            what = "reformats" if same else "removes lines from" if removed else "changes"
+            reviewed.append(f"{path} ({what} a test)")
     return held, refused, reviewed
+
+
+def _same_code(run: pack_git.Git, at: Path, head: str, path: str) -> bool:
+    """Whether a Python test file's edit only reformats it: its syntax tree is unchanged, so no check went."""
+    if not path.endswith(".py"):
+        return False
+    try:
+        old, new = run(at, ["show", f"{head}:{path}"]), (at / path).read_text("utf-8")
+        return ast.dump(ast.parse(old)) == ast.dump(ast.parse(new))
+    except SyntaxError, ValueError, OSError:
+        return False
 
 
 def _returns_early(file: Path, diff: list[str]) -> bool:

@@ -1076,6 +1076,8 @@ def test_a_ci_repair_that_changes_configuration_or_weakens_a_check_stops_and_ask
     [
         ((f"LIMIT = 4.5\n\n\n{TESTED}", f"LIMIT = 3.0\n\n\n{TESTED}"), ("removes lines from a test", "-LIMIT = 4.5")),
         ((TESTED, f"import flaky\n\n\n@flaky.off\n{TESTED}"), ("changes a test", "+@flaky.off")),
+        ((TESTED, "def test_contrast():\n    assert (\n        contrast() >= LIMIT\n    )\n"),
+         ("reformats a test", "+    assert (")),  # the same syntax tree: no check went, yet he sees it
     ],
 )  # fmt: skip
 def test_a_repair_that_edits_a_test_is_pushed_only_once_the_owner_reviewed_it(tmp_path, checkout, clone, edit, held):
