@@ -225,6 +225,30 @@ def test_an_empty_answer_at_the_limit_stops_the_run_and_the_button_completes_it_
     assert sorted(g["record"] for g in retro_store.grades()) == ["a", "b"]
 
 
+def test_a_part_carried_into_a_second_batch_for_its_records_yields_its_findings_once():
+    parts = [Part("s1.p1", "s1", 1, 99, "s1.e3 agent: done " + "y" * 55_000, "")]
+    records = [_record(f"r{n:02}", 5) for n in range(30)]
+    found = {"refs": ["s1.e3"], "quotes": ["agent: done"], "what": "it said done untested", "cause": "instruction-gap"}
+    ask = Asked(lambda ev, _a: _graded(ev) | {"findings": [found]})
+
+    retro_judge.judge(_work(ask, records, parts))
+
+    assert len(ask.messages) > 1
+    assert (len(retro_store.all_findings()), len(retro_store.grades())) == (1, 30)
+
+
+def test_a_grade_only_run_proposes_a_case_for_a_late_record_graded_wrong():
+    def said(_ev, agent):
+        if agent == "retro-review":
+            return {"verdict": "survive", "why": "holds", "risks": [], "publishable": {}}
+        return {"findings": [], "grades": [{"record": "late", "grade": "wrong", "call": "lint"}]}
+
+    out = retro_judge.run(_work(Asked(said), [_record("late", 3)], grade_only=True))
+
+    [case] = out["proposals"]
+    assert (props.folded()[case]["kind"], props.folded()[case]["call"]) == ("spotter-case", "lint")
+
+
 SECRET = "ghp_" + "b" * 36
 
 

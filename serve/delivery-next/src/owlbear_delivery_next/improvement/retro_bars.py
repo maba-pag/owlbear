@@ -76,7 +76,8 @@ def _delivery(w: Work, mine: Iterable[Mapping[str, Any]]) -> list[str | None]:
     ]
 
 
-def _cases(w: Work) -> list[str | None]:
+def cases(w: Work) -> list[str | None]:
+    """A Spotter case proposed for each record of this revision graded wrong or missed; a grade-only run's too."""
     if w.provenance != "real":
         return []
     return [
@@ -251,5 +252,5 @@ def propose(w: Work, found: list[str]) -> list[str]:
     """Phase 2: file what this run's evidence and what came before it carry; the proposals touched."""
     every = [f for f in store.all_findings() if f.get("provenance") == w.provenance and f.get("status") == "known"]
     mine = [f for f in every if f["id"] in set(found)]
-    out = [*_delivery(w, mine), *_cases(w), *_lessons(w, every), *_catchable(w, every)]
+    out = [*_delivery(w, mine), *cases(w), *_lessons(w, every), *_catchable(w, every)]
     return list(dict.fromkeys(p for p in out if p))

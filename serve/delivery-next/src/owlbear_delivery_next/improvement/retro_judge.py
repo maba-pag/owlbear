@@ -206,10 +206,15 @@ def judge(w: Work) -> list[str]:
     without += [(r, unseen) for r in open_] if not w.prepared.parts else []
     w.found["grades"] += len(store.add_grades(_grade(w, r, said) for r, said in without))
     ids: list[str] = []
+    seen: set[str] = set()  # the parts judged by an earlier batch: a part carried again yields no finding twice
     for parts, carried, message in judging(w):
         said = paid(w, "judge", message, _valid_judgement)
+        fresh = {ref for p in parts if p.ref not in seen for ref in retro_segments.REF.findall(p.text)}
+        seen |= {p.ref for p in parts}
         if not w.grade_only:
-            found = [_finding(w, key(w, "judge", message), n, f, parts) for n, f in enumerate(said["findings"])]
+            cites = [(n, f, set(f.get("refs") or ())) for n, f in enumerate(said["findings"])]
+            raw = [(n, f) for n, f, refs in cites if fresh & refs or (fresh and not refs)]
+            found = [_finding(w, key(w, "judge", message), n, f, parts) for n, f in raw]
             w.found["findings"] += len(store.add_findings(found))
             ids += [f["id"] for f in found]
         by_id = {g.get("record"): g for g in said["grades"] if isinstance(g, dict)}
@@ -291,5 +296,5 @@ def run(w: Work) -> dict[str, Any]:
         WaitingError: No call may start now; the run waits at its cursor.
     """
     found = judge(w)
-    proposed = [] if w.grade_only else retro_bars.propose(w, found)
+    proposed = [p for p in retro_bars.cases(w) if p] if w.grade_only else retro_bars.propose(w, found)
     return {**w.found, "proposals": proposed, "reviews": review(w)}
