@@ -477,6 +477,15 @@ def test_the_old_common_pointer_moves_to_data_once_and_a_data_pointer_wins(share
     assert (data_repo.locate(), (home / "common.json").exists()) == (data_repo.DataRepo(root), True)
 
 
+def test_the_old_common_pointer_is_read_while_another_writer_holds_the_lock(shared) -> None:
+    root, _ = shared
+    home = data_place.pointer().parent
+    (home / "data.json").rename(home / "common.json")
+    with data_place.pointer_lock():
+        assert data_repo.locate() == data_repo.DataRepo(root)
+    assert (home / "common.json").exists()
+
+
 def test_recording_a_repository_moves_the_old_pointer_away(tmp_path: Path) -> None:
     home, local = data_place.pointer().parent, tmp_path / "local-data"
     git(tmp_path, "init", "-q", "-b", "main", str(local))

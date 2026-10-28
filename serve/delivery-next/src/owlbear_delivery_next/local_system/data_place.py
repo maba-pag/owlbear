@@ -194,7 +194,7 @@ def _configured() -> DataRepo | None:
     """`locate` for this machine as configured, whatever view a process was given."""
     path = pointer()
     _move_old(path)
-    record = _parse(path)
+    record = stored()  # the old pointer still, while another writer holds the lock
     if record is None:
         place = default()
         if not place.exists():
