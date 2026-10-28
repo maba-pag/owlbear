@@ -257,6 +257,35 @@ def test_a_run_whose_host_stopped_after_its_end_before_its_revision_settled_leav
     assert (rev["state"], rev["result"]) == ("judged", "judged")
 
 
+def test_a_button_retry_owns_the_revision_it_takes_again_so_a_stop_before_settling_leaves_it_as_the_retry_ended(
+    said, tmp_path
+):
+    projects, said.retro_after_change = _finished_change(tmp_path), "on"
+
+    def breaks(_n):
+        raise RuntimeError
+
+    _job(Asker(during=breaks), projects=projects).tick(0.0)
+    retro_store.request("owner", change="p1:fix-it")
+    real = retro_units.settle
+
+    def dies_settling_its_end(uid, rev, state, **fields):
+        if state == "judged":
+            raise Dead
+        real(uid, rev, state, **fields)
+
+    with pytest.MonkeyPatch.context() as dying:
+        dying.setattr(retro_units, "settle", dies_settling_its_end)
+        with pytest.raises(Dead):
+            _job(Asker(), projects=projects).tick(1.0)
+    _job(Asker(), restarted=True, projects=projects).tick(2.0)
+
+    first, retry = _runs()
+    assert (first["result"] != "judged", retry["result"]) == (True, "judged")
+    [rev] = retro_store.known()["chg:p1:fix-it"]["revisions"]
+    assert (rev["state"], rev["run"]) == ("judged", retry["id"])
+
+
 def test_a_run_interrupted_between_settled_calls_resumes_on_what_is_left_of_its_limit(said):
     said.limit = 1.5
     first, calls = Asker(), []

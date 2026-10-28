@@ -312,6 +312,8 @@ class RetroJob:
             return self._paid(ctx, batch, message, agent)
 
         projects = self.seams.projects()
+        if ctx.rev and ctx.mode != "grade-only" and self._revision(ctx).get("run") != ctx.id:
+            units.settle(ctx.uid, ctx.rev, "open", run=ctx.id)  # a retry owns the revision it takes again until it ends
         if ctx.provenance == "synthetic":
             spec = syn.specs(ctx.spec)[0]
             if not ctx.rev:
