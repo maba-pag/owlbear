@@ -326,3 +326,34 @@ def test_ruff_runs_through_uv_when_the_repository_locks_it(tmp_path: Path, monke
     linters, skipped = lint.plan(tmp_path, ["a.py"])
     assert skipped == []
     assert [x.command[:6] for x in linters] == [(str(uv), "run", "--locked", "--offline", "--quiet", "ruff")] * 2
+
+
+@pytest.mark.usefixtures("real_ruff")
+def test_names_git_quotes_reach_the_gates_and_lint_as_real_paths(change_repo: Path) -> None:
+    """Non-ASCII names, names with spaces and renames in either status column are read NUL-separated (#672)."""
+    commit(change_repo, {"pyproject.toml": RUFF, "base.py": "import sys\n", "my file.py": "x = 1\n"})
+    since, log = head(change_repo), []
+
+    def git(*args: str) -> None:
+        subprocess.run(["git", *args], cwd=change_repo, check=True, capture_output=True)  # noqa: S603, S607
+
+    def observe() -> tools.Worktree:
+        return worktree.observe(change_repo, "main", since)
+
+    (change_repo / "base.py").rename(change_repo / "Über sicht.py")
+    git("add", "-N", "Über sicht.py")  # a rename in the worktree column: " R new\0old"
+    assert sorted(observe().dirty) == ["base.py", "Über sicht.py"]
+    (change_repo / "my file.py").write_text("x = 2\n")
+    git("add", "-A")  # staged: "R  new\0old" and "M  my file.py"
+    assert sorted(observe().dirty) == ["base.py", "my file.py", "Über sicht.py"]
+    git("commit", "-qm", "work")
+    assert (observe().dirty, sorted(observe().changed)) == ((), ["my file.py", "Über sicht.py"])  # added since base
+    text, ok = submit(gate(change_repo, since, log))
+    assert not ok
+    assert "F401" in text
+    ran = next(e for e in log if e["event"] == "lint")["ran"][0]
+    assert (ran["tool"], sorted(ran["files"]), ran["state"]) == (
+        "ruff check",
+        ["my file.py", "Über sicht.py"],
+        "failed",
+    )
