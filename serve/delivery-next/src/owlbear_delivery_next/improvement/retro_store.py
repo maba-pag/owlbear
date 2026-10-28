@@ -190,8 +190,8 @@ def units(state: str | None = None) -> dict[str, dict[str, Any]]:
 # Button requests (the Improvement page's, or ``owlbear improvement retro run``)
 
 
-def request(by: str, change: str | None = None, chat: str | None = None, *, synthetic: bool = False) -> str:
-    """Queue a run of one Change (``project:slug``), one chat, or the synthetic units; its id. The job takes it.
+def request(by: str, change: str | None = None, chat: str | None = None, *, synthetic: bool | str = False) -> str:
+    """Queue a run of one Change (``project:slug``), one chat, or the synthetic units (all, or the one named); its id.
 
     Raises:
         RetroError: Not exactly one of them is named.
@@ -232,7 +232,7 @@ def take(rid: str) -> bool:
 
 
 def run_event(run: str, event: str, **fields: object) -> None:
-    """Append one event of *run*: ``opened``, ``inflight``, ``settled``, ``waiting``, ``resumed`` or ``ended``."""
+    """One event of *run*: ``opened``, ``frozen``, ``inflight``, ``settled``, ``waiting``, ``resumed`` or ``ended``."""
     with locked():
         append("runs.jsonl", {"run": run, "event": event, "at": now(), **fields})
 
@@ -264,8 +264,11 @@ def run_states() -> dict[str, dict[str, Any]]:
         elif event == "settled" and line["batch"] in snap["unsettled"]:
             snap["unsettled"].remove(line["batch"])
             snap["calls"] += 1
+        elif event == "frozen":
+            snap["rev"] = line.get("rev", "")
         elif event in {"waiting", "resumed"}:
             snap["state"], snap["why"] = ("waiting", line.get("why", "")) if event == "waiting" else ("open", "")
+            snap |= {k: line[k] for k in ("trigger", "by") if k in line}  # the button took it over
         elif event == "ended":
             snap |= {"state": "ended", "result": line.get("result", ""), "ended": line["at"]}
             snap["credits"] = line.get("credits")

@@ -30,7 +30,7 @@ CURRENT_MODULES = (
     ("machine_host/app.py", "168da2c05c434ed59136bb35ff36bd5f303c901da33fd70621810a07b761cc8c"),
     ("machine_host/command.py", "94259c77dd9b75372e3d7fdc0c605ab935d91ee490c783db630a3ab49958c06b"),
     ("machine_host/install.py", "97e0c5cbb230f241695725cf41494f719dce40581bb8409dd6fc4424cbd27577"),
-    ("machine_host/machine.py", "c4669ed42cdd43dcf960b3a751a792861e60b2a491062ba7753c1f6fc6fe8803"),
+    ("machine_host/machine.py", "2bcb0baf15a290b975614006b06b0a9dfa45d9bc2823ec44ec82641033349a39"),
     ("machine_host/project.py", "1e1aca5b919dea4cd33f0380c0a96878385f454780051b18df7eab3ff0784754"),
     ("state_store/registry.py", "b7970abe2c55d35e4da25be9efb75f765a59ddef41efa4b1ad849e7d7ecffcb9"),
     ("machine_host/selfcheck.py", "a245e8526a664828d8d9dde49e7a01292d4ea6af53721c43b2ec6b4dbd12a9df"),

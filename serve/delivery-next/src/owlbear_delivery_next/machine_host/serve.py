@@ -145,6 +145,7 @@ def serve(*, run: bool = False, handing: bool = False) -> int:
     threading.Thread(target=machine.packs.loop, daemon=True, name="released-pack").start()
     threading.Thread(target=machine.curation_loop, daemon=True, name="idle-curation").start()
     machine.cases.start(machine.stopping, time.monotonic)  # drained when the host ends (``Machine.stop_all``)
+    machine.retro.start(machine.stopping, time.monotonic)  # drained when the host ends, too
     machine.chats.start()  # the Spotter's looks at enrolled chats (Improvement design §4)
 
     def ended() -> None:  # the discovery file goes while this process still holds the lock; a handover keeps it

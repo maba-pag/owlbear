@@ -60,7 +60,7 @@ class _Ended:
     runtime_pid: int | None = None
 
 
-def _settings() -> Settings:
+def settings() -> Settings:
     """This machine's settings outside any project."""
     shared = data_repo.locate()
     if shared is not None:
@@ -75,7 +75,7 @@ def limits() -> dict[str, float | None]:
     """
     values = machine_settings.current()
     try:
-        look = _settings().spotter.look_credit_limit
+        look = settings().spotter.look_credit_limit
     except OSError, ValueError, SettingsUnset:
         look = None
     return {"replay": values.replay_run_credit_limit, "retro": values.retro_run_credit_limit, "look": look}
@@ -87,7 +87,7 @@ def role(name: str) -> RoleModel:
     Raises:
         SettingsUnset: The role is unset.
     """
-    agent = _settings().agent(name)
+    agent = settings().agent(name)
     return RoleModel(model=agent.model, effort=agent.effort, context=agent.context)
 
 
