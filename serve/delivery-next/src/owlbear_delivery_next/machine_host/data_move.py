@@ -153,8 +153,9 @@ def _processes() -> list[str]:
         if proc.pid in mine:
             continue
         try:
-            if proc.uids().real != user:
-                continue
+            ids = proc.uids()
+            if ids.real != user or ids.effective != user:
+                continue  # another user's, or one that runs as root, such as a VPN client the owner started
             words = proc.cmdline()
         except psutil.NoSuchProcess, psutil.ZombieProcess:
             continue

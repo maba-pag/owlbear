@@ -248,3 +248,13 @@ def test_a_running_owlbear_process_is_found_and_this_one_is_not() -> None:
         child.wait()
     assert any(line.startswith(f"process {child.pid}: ") for line in found)
     assert not any(line.startswith(f"process {os.getpid()}: ") for line in found)
+
+
+def test_a_process_the_owner_started_that_runs_as_root_is_not_taken_for_a_writer(monkeypatch) -> None:
+    def denied() -> list[str]:
+        raise data_move.psutil.AccessDenied(1133)
+
+    ids = SimpleNamespace(real=os.getuid(), effective=0 if os.getuid() else 1)  # never the test's own user
+    vpn = SimpleNamespace(pid=1133, uids=lambda: ids, cmdline=denied)
+    monkeypatch.setattr(data_move.psutil, "process_iter", lambda: [vpn])
+    assert data_move._processes() == []  # noqa: SLF001
