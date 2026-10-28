@@ -990,6 +990,28 @@ def test_a_curation_admitted_before_a_stop_when_idle_stays_pinned_and_finishes(m
     assert (len(ran), waited, shop["state"], machine.idle_stop()) == (1, False, "done", True)
 
 
+def test_a_rename_is_refused_while_memory_curation_works_in_the_folder_and_passes_after(
+    tmp_path, http, machine, shared_repo, monkeypatch
+):
+    """#678: the folder never moves under a curator; the same rename passes once its run has ended."""
+    monkeypatch.setenv("OWLBEAR_DATA", str(shared_repo[0]))
+    p = add(http, origin(clone(tmp_path / "shop"), "https://github.com/acme/shop.git"))  # its folder: shop
+    gate = threading.Event()
+    ran = _curation_runs(machine, shared_repo, monkeypatch, gate)
+    machine.curation.start("shop")
+    for _ in range(200):
+        if ran:
+            break
+        time.sleep(0.02)
+    busy = http.put(f"/p/{p['id']}/api/next/config/folder", json={"name": "acme-shop"})
+    still = (shared_repo[0] / "shop" / "memory").is_dir()
+    gate.set()
+    _curation_finished(machine)
+    moved = http.put(f"/p/{p['id']}/api/next/config/folder", json={"name": "acme-shop"})
+    assert (busy.status_code, "memory curation of shop" in busy.json()["detail"], still) == (409, True, True)
+    assert (moved.status_code, (shared_repo[0] / "acme-shop" / "memory").is_dir()) == (200, True)
+
+
 @pytest.mark.parametrize(("old", "both"), [(False, "on"), (True, "paused"), ("false", "on"), ("true", "paused")])
 def test_format_4s_one_curation_switch_becomes_a_setting_per_trigger(old, both) -> None:
     raw = {"channel": "minor", "update_when_idle": True, "update_while_paused": True, "curate_while_paused": old,
