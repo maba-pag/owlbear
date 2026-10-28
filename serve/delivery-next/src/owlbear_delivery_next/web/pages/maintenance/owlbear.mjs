@@ -434,6 +434,12 @@ function engine() {
     <div>${button("Update now", runUpdates, { id: "owlbear-update", busy, disabled: busy })}</div>`;
 }
 
+function installed(i) {  // a missing pack is the running version's; one installing or failed names its version
+  const whose = i.version ? `The design pack of OwlBear ${i.version}` : "A design pack";
+  return i.state === "missing" ? "This version's pack is not installed"
+    : `${whose} ${i.state === "installing" ? "is being installed" : "failed to install"}`;
+}
+
 function packed() {
   const pin = own.pinned, bar = machineState(), install = bar?.pack?.install, release = bar?.pack?.release;
   const plain = (t) => String(t).replaceAll(String.fromCharCode(96), "");  // the status is CLI text with code marks
@@ -444,9 +450,8 @@ function packed() {
       pin.identity}. ${plain(pin.status)}.` : ""}</p-text>
     <p-text id="pack-notice" size="xs" color="contrast-medium">${pin ? `Upstream: ${pin.notice.said}${pin.notice
       .checked_at ? `, checked ${when(pin.notice.checked_at)}` : ", not checked yet"}.` : ""}</p-text>
-    ${install ? html`<p-text id="pack-install-state" size="sm">This version's pack ${install.state === "installing"
-      ? "is being installed" : install.state === "failed" ? "failed to install" : "is not installed"} on this
-      machine${install.detail ? `: ${install.detail}` : ""}.</p-text>` : nothing}
+    ${install ? html`<p-text id="pack-install-state" size="sm">${installed(install)} on this machine${install.detail
+      ? `: ${install.detail}` : ""}.</p-text>` : nothing}
     ${release?.state === "newer" ? html`<p-text id="pack-release" size="sm">OwlBear ${release.version} carries the
       newer pack ${release.pack}; this version pins ${release.running_pack}.</p-text>` : nothing}`;
 }

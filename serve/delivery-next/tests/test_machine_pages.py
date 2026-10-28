@@ -330,6 +330,8 @@ def test_maintenance_with_no_project_shows_the_machines_update_read_only_with_it
     }  # fmt: skip
     job._save()  # noqa: SLF001
     machine, server, base = serve()
+    failed = {"state": "failed", "version": "v0.3", "pack": "", "detail": "cannot download", "at": None}
+    machine.packs.read = lambda: {"install": failed, "release": None}  # a newer version's pack, not the running one's
     try:
         with sync_playwright() as pw:
             try:
@@ -347,6 +349,9 @@ def test_maintenance_with_no_project_shows_the_machines_update_read_only_with_it
             expect(page.locator("#pack-discard")).to_have_count(0)
             expect(page.get_by_role("button", name="Update design pack")).to_be_disabled()
             expect(page.locator("#owlbear")).to_contain_text("Choose a project above to start one")
+            expect(page.locator("#pack-install-state")).to_have_text(
+                "The design pack of OwlBear v0.3 failed to install on this machine: cannot download."
+            )
             browser.close()
     finally:
         server.should_exit = True
