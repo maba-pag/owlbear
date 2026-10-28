@@ -6,8 +6,8 @@ pack, to its expected evidence or its code, and each one the challenger is unsur
 The context, the loop and the owner's questions are kept in the job's state file, and the updater's repository and
 the candidate's skills under the store, so a run that waits for the owner survives a host restart. A session that
 fails ends the run, as before. An agent's CI repair of the pull request that changes protected pack content is laid
-into the candidate and checked the same way, from the golden pages on, before Delivery pushes it (``pack_repair``):
-its findings go to the owner, never back to the updater.
+into the candidate, its whole protected content as its commit holds it, and checked the same way, from the golden
+pages on, before Delivery pushes it (``pack_repair``): its findings go to the owner, never back to the updater.
 """
 
 from __future__ import annotations
@@ -155,11 +155,11 @@ def advance(job: Job, c: pack_candidate.Candidate, ctx: Context, lp: RoundLoop) 
         Stopped: An action ended the run.
     """
     while True:
+        if (r := ctx.repair).phase == "checking" and r.laid != r.commit and not _laid(job, c, ctx, lp):
+            return None  # a repair is checked only on its own snapshot, laid out again after a host stop
         match ctx.next:
-            case "update" if ctx.repair.phase == "checking":  # a repair's findings go to the owner, never the updater
-                ctx.next = "wait"
-            case "update":
-                ctx.next = _update(job, c, ctx, lp)
+            case "update":  # a repair's findings go to the owner, never the updater
+                ctx.next = "wait" if ctx.repair.phase == "checking" else _update(job, c, ctx, lp)
             case "golden":  # a CI repair's check: a new round of the repaired candidate
                 ctx.next = _golden(job, c, ctx, lp.round + 1)
             case "replay":
@@ -417,6 +417,8 @@ def _activate(job: Job, c: pack_candidate.Candidate, ctx: Context, lp: RoundLoop
     run waits for the owner (None) when publication stops; trying again goes on from where it got.
     """
     package, at = job.live.package.resolve(), job.workspace
+    if ctx.repair.phase == "checking" and not _alike(job, c, ctx):
+        return None
     edits = _edits(job, ctx)
     expected = ctx.accepted or (lp.head if lp.ended == "clean" else "")
     if not expected or pack_gates.identity(c, edits) != expected:
@@ -495,29 +497,43 @@ def _published(job: Job, ctx: Context, lp: RoundLoop, files: dict[str, str | Non
 
 
 def _rechecked(job: Job, ctx: Context, lp: RoundLoop) -> str | None:
-    """Lay the agent's committed repair of protected pack content into the candidate, then check it as the update was.
+    """Check the agent's committed repair of protected pack content as the update was, from the golden pages on.
 
     Its new identity passes the golden pages, the replay (reused while the skills are unchanged), a challenger round
     on the whole pack and the owner's gates; only an activation of that identity lets the repair be pushed.
     """
-    c, at = rebuilt(job, ctx), job.workspace
+    return advance(job, rebuilt(job, ctx), ctx, lp)  # its snapshot is laid out first
+
+
+def _laid(job: Job, c: pack_candidate.Candidate, ctx: Context, lp: RoundLoop) -> bool:
+    """Lay the repair's whole protected content, as its commit holds it, into the candidate; False when it waits."""
+    r, at = ctx.repair, job.workspace
     try:
-        files = pack_repair.laid(job, ctx)
+        snap = pack_repair.snapshot(job, ctx, c)
     except design_pack.PackError as exc:
-        ctx.repair.phase = "committed"  # trying again lays it out again; nothing was pushed
-        job.hold(ctx, f"the agent's repair {ctx.repair.commit[:12]} could not be read for its check: {exc}")
-        return None
-    for path, data in files.items():
-        if data is None:
-            (at / path).unlink(missing_ok=True)
-        else:
-            (at / path).parent.mkdir(parents=True, exist_ok=True)
-            (at / path).write_bytes(data)
+        job.hold(ctx, f"the agent's repair {r.commit[:12]} could not be laid out for its check: {exc}")
+        return False
+    pack_repair.lay(at, snap)
     pack_updater.taken(at, c)
-    ctx.summary = f"{ctx.summary}\n\nThen an agent repaired the pull request's failed CI: {ctx.repair.summary}"
+    note = f"Then an agent repaired the pull request's failed CI: {r.summary}"
+    ctx.summary = ctx.summary if note in ctx.summary else f"{ctx.summary}\n\n{note}"
     ctx.accepted, lp.ended, ctx.after, ctx.next = "", "", "challenge", "golden"  # no earlier verdict stands for it
+    r.laid = r.commit
     job.keep(ctx, lp)
-    return advance(job, c, ctx, lp)
+    return True
+
+
+def _alike(job: Job, c: pack_candidate.Candidate, ctx: Context) -> bool:
+    """Whether the checked candidate holds exactly the repair's protected content; else it is laid out again."""
+    r = ctx.repair
+    try:
+        differ = pack_repair.unlike(job.workspace, c, pack_repair.snapshot(job, ctx, c))
+    except design_pack.PackError as exc:
+        differ = [str(exc)]
+    if differ:
+        r.laid = ""  # trying again lays it out and checks it again
+        job.hold(ctx, f"the checked candidate is not the agent's repair {r.commit[:12]}: {', '.join(differ[:10])}")
+    return not differ
 
 
 def _repairing(ctx: Context, asked: list[dict[str, Any]]) -> list[dict[str, Any]]:

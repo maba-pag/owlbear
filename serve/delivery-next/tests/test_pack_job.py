@@ -39,7 +39,15 @@ from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.local_system.maintenance import Maintenance
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.local_system.slots import Slots
-from owlbear_delivery_next.pack_runs import pack_gates, pack_job, pack_publish, pack_repair, pack_rounds, pack_updater
+from owlbear_delivery_next.pack_runs import (
+    pack_gates,
+    pack_job,
+    pack_publish,
+    pack_repair,
+    pack_rounds,
+    pack_run,
+    pack_updater,
+)
 from owlbear_delivery_next.project_host import api, session_slots
 from owlbear_delivery_next.project_host.admission import STOPPING
 from owlbear_delivery_next.project_host.host import ENDING, HostRecord
@@ -1139,15 +1147,36 @@ def test_a_host_stop_as_the_repair_was_pushed_pushes_it_no_second_time_and_start
     assert pushes == [("stopped", ""), ("pushed", repair)]  # the one the host stopped, then the push found done
 
 
+@pytest.mark.parametrize("window", ["laying", "golden"])
 def test_a_host_stop_while_a_repair_is_checked_again_checks_it_from_the_start_and_pushes_nothing_before(
-    tmp_path, checkout, clone
+    tmp_path, checkout, clone, monkeypatch, window
 ):
+    """Stopped before its files were laid into the candidate, or as its golden pages ran: Retry lays it out again."""
     fakes, job, state = ci_failed(tmp_path, checkout, clone, {DETECTOR: "# repaired\n"})
-    head, file, kept = pr_head(checkout, state), job.store.root / pack_job.FILE, {}
-    fakes.at_golden = lambda: kept.update(kept or json.loads(file.read_text()))
+    head, file, kept, real = pr_head(checkout, state), job.store.root / pack_job.FILE, {}, pack_repair.snapshot
+    (passed,) = {i["identity"] for i in state["invocations"] if i["operation"] == "full-challenge"}
+
+    def laying(*args):  # the host stops right after the check was recorded, before anything is laid out
+        if not kept:
+            kept.update(json.loads(file.read_text()))
+            for d in (job.workspace, job.store.root / pack_run.CANDIDATE):
+                shutil.copytree(d, tmp_path / "left" / d.name, symlinks=True)
+        return real(*args)
+
+    if window == "laying":
+        monkeypatch.setattr(pack_repair, "snapshot", laying)
+    else:
+        fakes.at_golden = lambda: kept.update(kept or json.loads(file.read_text()))
     fakes.github.checks = ["success"]
     answered(job, "repair")
     file.write_text(json.dumps(kept))  # the record as the host left it, in the middle of the check
+    for d in (job.workspace, job.store.root / pack_run.CANDIDATE) if window == "laying" else ():
+        shutil.rmtree(d)
+        shutil.copytree(tmp_path / "left" / d.name, d, symlinks=True)  # and its files, none laid out yet
+    assert (kept["context"]["repair"]["phase"], bool(kept["context"]["repair"]["laid"])) == (
+        "checking",
+        window != "laying",
+    )
 
     again = pack_job.Job(job.store, fakes.live(checkout))
 
@@ -1157,12 +1186,60 @@ def test_a_host_stop_while_a_repair_is_checked_again_checks_it_from_the_start_an
     calls = len(fakes.calls)
     state = answered(again, "retry")
     assert (state["questions"][0]["kind"], fakes.calls[calls:]) == ("code", ["golden", "challenger"])
+    assert "code/detector.py" in fakes.sessions[-1].changed  # the challenger judged the repair, laid out again
+    (checked,) = {i["identity"] for i in state["invocations"][-3:] if i["operation"] == "full-challenge"}
+    assert checked != passed
     assert (pr_head(checkout, state), state["repair"]["phase"]) == (head, "checking")
     answered(again, "approve")
     state = answered(again, "approve-repair")
     assert state["state"] == "passed", state["reason"]
     assert fakes.calls.count("repair") == 1
     assert git(checkout.parents[1], "show", f"{landed(checkout)}:{DETECTOR}") == "# repaired"
+
+
+def test_a_repair_abandoned_on_a_moved_head_leaves_no_trace_in_a_later_repairs_check(tmp_path, checkout, clone):
+    """Repair B is checked on its own commit's protected content, never on A's, which was laid out and never pushed."""
+    fakes, job, state = ci_failed(tmp_path, checkout, clone, {DETECTOR: "# repaired\n"}, {GOLDEN: "<p>repaired</p>\n"})
+    root, ref = checkout.parents[1], f"refs/heads/{state['published']['branch']}"
+    assert answered(job, "repair")["questions"][0]["kind"] == "code"  # A, checked and waiting for the owner
+    git(root, "fetch", "-q", "origin", ref)
+    theirs = git(root, "commit-tree", "FETCH_HEAD^{tree}", "-p", "FETCH_HEAD", "-m", "theirs")
+    git(root, "push", "-q", "origin", f"{theirs}:{ref}")  # someone pushed meanwhile
+    fakes.github.checks = ["failure"]
+
+    state = answered(job, "approve")  # A finds the branch moved: never pushed; CI fails at their head
+
+    (q,) = state["questions"]
+    assert (q["kind"], pr_head(checkout, state), "repair" in [o["id"] for o in q["options"]]) == (
+        "publish",
+        theirs,
+        True,
+    )
+    state = answered(job, "repair")  # B, made on their head
+    (q,) = state["questions"]
+    made = state["repair"]["commit"]
+    assert (q["kind"], git(root, "rev-parse", f"{made}~1")) == ("evidence", theirs)
+    laid = sorted(
+        p.relative_to(job.workspace).as_posix() for d in ("golden", "code") for p in (job.workspace / d).iterdir()
+    )
+    package = checkout.relative_to(root).as_posix()
+    held = {
+        p.removeprefix(f"{package}/golden/")
+        for p in git(root, "ls-tree", "--name-only", made, f"{package}/golden/").split()
+    }
+    assert laid == sorted([*(f"golden/{p}" for p in held), *pack_gates.GLUE])
+    for ours in laid:
+        assert (job.workspace / ours).read_text().strip() == git(
+            root, "show", f"{made}:{package}/{pack_gates.package_path(ours)}"
+        )
+    assert (job.workspace / "code/detector.py").read_text() != "# repaired\n"  # no trace of A's detector edit
+
+    fakes.github.checks = ["success"]
+    answered(job, "accept")
+    state = answered(job, "approve-repair")
+    assert state["state"] == "passed", state["reason"]
+    assert git(root, "show", f"{landed(checkout)}:{GOLDEN}") == "<p>repaired</p>"
+    assert git(root, "show", f"{landed(checkout)}:{DETECTOR}") != "# repaired"
 
 
 @pytest.mark.parametrize("during", [False, True])

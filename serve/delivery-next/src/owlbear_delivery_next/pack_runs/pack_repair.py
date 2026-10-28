@@ -6,13 +6,14 @@ format, CI workflow, hook or security configuration stops and asks the owner wit
 test (a deleted test file, an added skip or suppression, a removed assertion or test) is never pushed, and any other
 test edit that removes lines waits for the owner's review of its diff, since those patterns are no proof that a test
 still checks as much. A change to the pack's protected content is checked again before it is pushed, as the update was
-(``pack_run``): the detector's glue, golden pages and pinned skills are laid into the candidate, which passes the
-golden pages, the calibration replay, a challenger round on the whole pack and the owner's evidence and code gates for
-its new identity; the pins, the notice and other pack files only an update may change, so such a repair is never
-pushed. Once CI passed, it merges only when the owner approved all the protected changes, so a later one asks again.
-Anything else is pushed, and CI is awaited again. A session that fails or changes nothing gives the owner the CI stop
-again with its summary. The push is a fast-forward from the failed head, so a head someone moved is never overwritten,
-and a commit already on the branch is never pushed twice.
+(``pack_run``): the detector's glue, golden pages and pinned skills, whole as the repair's commit holds them, are laid
+into the candidate, which passes the golden pages, the calibration replay, a challenger round on the whole pack and the
+owner's evidence and code gates for its new identity, and is pushed only while it still holds exactly that commit's
+content; the pins, the notice and other pack files only an update may change, so such a repair is never pushed. Once
+CI passed, it merges only when the owner approved all the protected changes, so a later one asks again. Anything else
+is pushed, and CI is awaited again. A session that fails or changes nothing gives the owner the CI stop again with
+its summary. The push is a fast-forward from the failed head, so a head someone moved is never overwritten, and a
+commit already on the branch is never pushed twice.
 """
 
 from __future__ import annotations
@@ -33,6 +34,7 @@ from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.design_packs import design_pack, pack_git
 from owlbear_delivery_next.github.provider import Check, ProviderError
 from owlbear_delivery_next.pack_runs import pack_gates, pack_publish, pack_rounds, pack_updater
+from owlbear_delivery_next.pack_runs.pack_candidate import MANIFEST, NOTICE
 from owlbear_delivery_next.pack_runs.pack_progress import REPAIR
 from owlbear_delivery_next.pack_runs.pack_state import RUNS
 from owlbear_delivery_next.runtimes import sdk_adapter
@@ -41,6 +43,7 @@ from owlbear_delivery_next.workflow_steps import follow, sessions
 
 if TYPE_CHECKING:
     from owlbear_delivery_next.github.provider import Provider, PullRequest
+    from owlbear_delivery_next.pack_runs.pack_candidate import Candidate
     from owlbear_delivery_next.pack_runs.pack_job import Job
     from owlbear_delivery_next.pack_runs.pack_run import Context
     from owlbear_delivery_next.runtimes.session_result import Run
@@ -61,6 +64,7 @@ WEAKENING = re.compile(
     r"|@ts-(ignore|nocheck|expect-error)|pytest\.mark\.(skip|xfail)|pytest\.(skip|xfail)\(|unittest\.skip"
 )
 REMOVED = re.compile(r"\bassert|\bexpect\(|\bdef test|^\s*(it|test|describe)(\.\w+)?\(")  # a check it took out
+REGULAR = frozenset({"100644", "100755"})
 LINKS = frozenset({"120000", "160000"})  # a symbolic link or a submodule: never pushed without the owner
 TESTS = re.compile(r"(^|/)(tests?/|test_[^/]*\.py$|[^/]*_test\.py$|[^/]*\.test\.[mc]?[jt]sx?$)")
 RULES = (
@@ -115,6 +119,7 @@ class Repair(BaseModel):
     reviewed: list[str] = Field(default_factory=list)  # its other test edits that remove lines, for the owner's review
     diff: str = ""  # its diff, as the owner is shown it
     allowed: str = ""  # the commit the owner had pushed with its configuration change
+    laid: str = ""  # the commit whose whole protected content is laid into the candidate for its check
     checked: str = ""  # the commit whose protected content passed the pack's checks again
     protected: dict[str, str] = Field(default_factory=dict)  # protected path -> its blob as the repairs left it
     shown: str = ""  # the repairs' diffs of protected content, for the owner's approval
@@ -211,6 +216,9 @@ def repaired(job: Job, ctx: Context) -> None:
     """
     r, pub = ctx.repair, ctx.publication
     if r.phase == "checking":  # only the pack's activation of the checked identity comes here (pack_run)
+        if r.laid != r.commit:  # never pushed unless the checks ran on its own snapshot
+            msg = f"the agent's repair {r.commit[:12]} was not laid out for its check; try again to check it"
+            raise pack_publish.Held(msg)
         r.phase, r.checked = "committed", r.commit
     if r.phase not in {"requested", "committed"} or pub is None:
         return
@@ -324,7 +332,7 @@ def _made(job: Job, ctx: Context, src: pack_git.Source, gh: Provider) -> Outcome
     assert r.stop is not None  # noqa: S101 - repaired() saw it
     assert pub is not None  # noqa: S101 - a repair follows publication
     r.phase, r.attempts, r.summary, r.commit = "running", r.attempts + 1, "", ""
-    r.paths, r.held, r.refused, r.reviewed, r.diff, r.checked = [], [], [], [], "", ""
+    r.paths, r.held, r.refused, r.reviewed, r.diff, r.laid, r.checked = [], [], [], [], "", "", ""
     job.keep(ctx)  # before the session: a host stop now reports, and pushes nothing
     at = job.store.root / RUNS / f"{job.state['run']}-ci-repair"
     try:
@@ -375,7 +383,7 @@ def _pushed(job: Job, ctx: Context, src: pack_git.Source) -> Outcome:
             return Outcome("moved", f"the branch moved to {there[:12] or 'nothing'} from {head[:12]}; the agent's "
                                     f"repair {r.commit[:12]} was not pushed")  # fmt: skip
         if not landed and r.checked != r.commit and (checked := [p for p in r.paths if protected(package, p)]):
-            r.phase = "checking"
+            r.phase, r.laid = "checking", ""  # laid out next: a host stop before that lays it out again
             job.keep(ctx)
             return Outcome("checking", f"the agent's repair {r.commit[:12]} changes the pack's {', '.join(checked)}; "
                                        "checked again as the update was before it is pushed")  # fmt: skip
@@ -523,30 +531,71 @@ def _updater_path(package: str, path: str) -> str:
     return glue.get(inner, inner if inner.startswith(("golden/", "skills/")) else "")
 
 
-def laid(job: Job, ctx: Context) -> dict[str, bytes | None]:
-    """The committed repair's protected files as they are in it, by updater path; None for one it deletes.
+def snapshot(job: Job, ctx: Context, c: Candidate) -> dict[str, bytes]:
+    """The committed repair's whole protected content, by updater path: its golden pages, glue and pinned skills.
+
+    Read from the commit itself, never from what an earlier repair left in the candidate.
 
     Raises:
-        design_pack.PackError: Git could not read the commit.
+        design_pack.PackError: Git could not read it, a file is missing or no regular file, or its pins or notice are
+            not the run's.
     """
     r, pub, run = ctx.repair, ctx.publication, job.live.git
     assert pub is not None  # noqa: S101 - a repair follows publication
     src = pack_git.Source(Path(pub.root), pub.repository, pub.base)
     package = _package(job, src)
-    picked = {p: _updater_path(package, p) for p in r.paths if protected(package, p)}
+    wanted = {f"{package}/{theirs}": ours for ours, theirs in pack_gates.GLUE.items()}
+    wanted |= {f"{package}/skills/{n}/SKILL.md": f"skills/{n}/SKILL.md" for n in c.pins["skills"]}
+    for entry in filter(None, run(src.root, ["ls-tree", "-z", r.commit, "--", f"{package}/golden/"]).split("\0")):
+        meta, path = entry.split("\t", 1)
+        mode, kind, _ = meta.split()
+        if kind == "blob" and mode not in REGULAR:
+            msg = f"{path} in the repair {r.commit[:12]} is no regular file"
+            raise design_pack.PackError(msg)
+        if kind == "blob":
+            wanted[path] = f"golden/{PurePosixPath(path).name}"
+    pins = {f"{package}/{MANIFEST}": c.manifest, f"{package}/{NOTICE}": c.notice}
     at = job.store.root / RUNS / f"{job.state['run']}-ci-repair"
     shutil.rmtree(at, ignore_errors=True)
     _quiet(run, src.root, ["worktree", "prune"])
     at.parent.mkdir(parents=True, exist_ok=True)
     run(src.root, ["worktree", "add", "--quiet", "--detach", "--no-checkout", str(at), r.commit])
-    try:
-        there = set(run(at, ["ls-tree", "-r", "--name-only", r.commit, "--", *picked]).splitlines())
-        if there:
-            run(at, ["checkout", r.commit, "--", *sorted(there)])  # the bytes as committed, never git's text output
-        return {ours: (at / p).read_bytes() if p in there else None for p, ours in picked.items()}
+    try:  # the bytes as committed, never git's text output; a missing path fails the checkout
+        run(at, ["checkout", r.commit, "--", *sorted(wanted), *sorted(pins)])
+        moved = [p for p, text in pins.items() if (at / p).read_bytes() != text.encode("utf-8")]
+        if moved:
+            msg = f"the repair {r.commit[:12]} holds pins or a notice the run did not make: {', '.join(moved)}"
+            raise design_pack.PackError(msg)
+        return {ours: (at / p).read_bytes() for p, ours in wanted.items()}
     finally:
         _quiet(run, src.root, ["worktree", "remove", "--force", str(at)])
         shutil.rmtree(at, ignore_errors=True)
+
+
+def lay(at: Path, snap: dict[str, bytes]) -> None:
+    """Make the updater's folder hold exactly *snap*'s golden pages, glue and skills, whatever it held before."""
+    golden = at / pack_gates.GOLDEN
+    if golden.is_symlink():
+        golden.unlink()
+    shutil.rmtree(golden, ignore_errors=True)
+    for path, data in snap.items():
+        (at / path).unlink(missing_ok=True)  # a link at the file is replaced, never written through
+        (at / path).parent.mkdir(parents=True, exist_ok=True)
+        (at / path).write_bytes(data)
+
+
+def unlike(at: Path, c: Candidate, snap: dict[str, bytes]) -> list[str]:
+    """The protected paths whose bytes in the updater's folder or the candidate are not *snap*'s; empty when alike."""
+    golden = {f"{pack_gates.GOLDEN}{p.name}" for p in (at / pack_gates.GOLDEN).glob("*") if p.is_file()}
+    differ = sorted(golden ^ {p for p in snap if p.startswith(pack_gates.GOLDEN)})
+    for path, data in snap.items():
+        here = at / path
+        if here.is_symlink() or not here.is_file() or here.read_bytes() != data:
+            differ.append(path)
+    for name in c.pins["skills"]:
+        if pack_updater.skill(c, name).read_bytes() != snap[f"skills/{name}/SKILL.md"]:
+            differ.append(f"the candidate's {name}")
+    return sorted(set(differ))
 
 
 def _guarded(run: pack_git.Git, src: pack_git.Source, r: Repair, package: str) -> tuple[dict[str, str], str]:
