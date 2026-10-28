@@ -13,10 +13,12 @@ reduction are marked assumption ``retro-segments-1``.
 
 from __future__ import annotations
 
+import contextlib
 import gzip
 import json
 import re
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
@@ -96,6 +98,14 @@ class _Line:
     segment: int
     text: str
     brief: str = ""  # its outcome line, when it says how things went
+    at: float | None = None  # when it happened, if its event says
+
+
+def _at(d: Mapping[str, Any]) -> float | None:
+    with contextlib.suppress(TypeError, ValueError):
+        at = datetime.fromisoformat(str(d.get("timestamp")))
+        return (at if at.tzinfo else at.replace(tzinfo=UTC)).timestamp()
+    return None
 
 
 def _excerpt(session: str, path: str, said: Mapping[str, Any]) -> str:
@@ -169,7 +179,7 @@ def _lines(sessions: Iterable[str], high: int, *, per_turn: bool, gaps: list[str
                     segment, fresh = segment + 1, True  # a requester turn starts the next segment
                 text, brief = _say(d, calls, said, session)
                 if text:
-                    found.append(_Line(n, session, segment, text, brief))
+                    found.append(_Line(n, session, segment, text, brief, _at(d)))
                     fresh = False
         except OSError as exc:
             gaps.append(f"session {session}'s capture cannot be read ({type(exc).__name__})")
@@ -180,18 +190,23 @@ def prepare(sessions: list[str], outcome: str, *, low: int = 0, high: int = 0, p
     """A unit revision's evidence: the events after *low* up to *high* (0: all) of its *sessions*, in parts.
 
     *per_turn* makes each requester turn a segment (a chat); else each session is one (a Change). Events up to *low*
-    were judged before: they are the earlier course, context only.
+    were judged before: they are the earlier course, context only. When every event says when it happened, what came
+    later is told in that order, and a part ends where another session's events came in between (a resumed session).
     """
     out, outcome = Prepared(), cut(outcome, OUTCOME)
     lines = _lines(sessions, high, per_turn=per_turn, gaps=out.gaps)
     before = [x for x in lines if x.n <= low]
     lines = [x for x in lines if x.n > low]
     out.earlier = mask.redact(cut("\n".join(x.brief for x in before if x.brief), LATER))
+    timed = all(x.at is not None for x in lines)
+    order = sorted(range(len(lines)), key=lambda i: (lines[i].at or 0.0, i)) if timed else list(range(len(lines)))
+    pos = {i: k for k, i in enumerate(order)}
     ends: list[int] = []  # each part's last line, by position: event numbers restart with each session
     for i, x in enumerate(lines):
         text = f"s{x.segment}.e{x.n} {x.text}"
         part = out.parts[-1] if out.parts else None
-        if part is None or part.ref.split(".")[0] != f"s{x.segment}" or len(part.text) + len(text) + 1 > PART:
+        apart = part is None or part.ref.split(".")[0] != f"s{x.segment}" or pos[i] != pos[i - 1] + 1
+        if apart or len(part.text) + len(text) + 1 > PART:
             index = sum(p.ref.startswith(f"s{x.segment}.") for p in out.parts) + 1
             part = Part(f"s{x.segment}.p{index}", x.session, x.n, x.n)
             out.parts.append(part)
@@ -199,7 +214,7 @@ def prepare(sessions: list[str], outcome: str, *, low: int = 0, high: int = 0, p
         part.text = f"{part.text}\n{text}" if part.text else text
         part.last, ends[-1] = x.n, i
     for part, end in zip(out.parts, ends, strict=True):
-        after = "\n".join(y.brief for y in lines[end + 1 :] if y.brief)
+        after = "\n".join(lines[j].brief for j in order[pos[end] + 1 :] if lines[j].brief)
         part.text = fit(mask.redact(part.text), PART)
         later = cut(after, LATER - len(outcome) - 20) + f"\noutcome: {outcome}"
         part.later = fit(mask.redact(later), LATER)

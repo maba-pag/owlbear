@@ -77,6 +77,22 @@ def test_a_changes_first_session_sees_what_its_shorter_second_session_did_later_
     assert "step 4" not in second.later
 
 
+def test_a_builder_resumed_after_review_is_told_its_course_in_the_order_it_happened():
+    def said(minute, text):
+        return {"type": "assistant.message", "timestamp": f"2025-01-01T10:{minute:02}:00Z", "data": {"content": text}}
+
+    _captured("s-a", [said(1, "built it"), said(2, "all done"), said(5, "repaired: tests pass now")])
+    _captured("s-b", [said(3, "review: changes requested"), said(4, "the build is broken")])
+
+    built, repaired, review = seg.prepare(["s-a", "s-b"], "the Change ended done").parts
+
+    assert (built.ref, repaired.ref, review.ref) == ("s1.p1", "s1.p2", "s2.p1")
+    assert "repaired" not in built.text
+    assert built.later.index("changes requested") < built.later.index("repaired")
+    assert "changes requested" not in repaired.later
+    assert "repaired: tests pass now" in review.later
+
+
 def test_a_chats_outcome_is_its_main_agents_last_word_never_a_subagents():
     events = [
         _event("assistant.message", content="the main agent is done"),
