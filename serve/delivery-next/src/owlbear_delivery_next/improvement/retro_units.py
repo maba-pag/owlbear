@@ -327,10 +327,10 @@ def due_changes(projects: Projects, *, change: str = "") -> list[dict[str, Any]]
 
 
 def due_chats(enrolled: list[str], now: datetime, *, chat: str = "", logs: Path | None = None) -> list[dict[str, Any]]:
-    """Enrolled chats quiet for a day whose log grew after the watermark and since its last revision.
+    """Enrolled chats quiet for a day whose log grew after the watermark and since their last, judged, revision.
 
-    With *chat*, that one regardless of the watermark, still only when enrolled and quiet; one whose last revision did
-    not end judged and whose log did not grow is taken again in that revision.
+    A chat whose last revision did not end judged waits for the button, which takes it again in that revision, its
+    later growth left to the next; with *chat*, that one despite the watermark, still only when enrolled and quiet.
     """
     logs = logs or chatlogs.state()
     mark, known = _when(retro_store.watermark()), retro_store.units()
@@ -344,12 +344,12 @@ def due_chats(enrolled: list[str], now: datetime, *, chat: str = "", logs: Path 
             continue
         revs = known.get(chat_id(sid), {}).get("revisions") or []
         last = revs[-1] if revs else {}
-        if not chat and (datetime.fromtimestamp(st.st_mtime, UTC) < mark or last.get("state") in OPEN):
+        unfinished = bool(last) and last.get("state") != "judged"
+        if not chat and (datetime.fromtimestamp(st.st_mtime, UTC) < mark or unfinished):
             continue
-        same = (last.get("size"), last.get("mtime")) == (st.st_size, st.st_mtime)
-        if same and (not chat or last.get("state") == "judged"):
+        if not unfinished and (last.get("size"), last.get("mtime")) == (st.st_size, st.st_mtime):
             continue
-        work.append({"unit": chat_id(sid), "rev": last["rev"] if same else "", "mode": "judge"})
+        work.append({"unit": chat_id(sid), "rev": last["rev"] if unfinished else "", "mode": "judge"})
     return work
 
 

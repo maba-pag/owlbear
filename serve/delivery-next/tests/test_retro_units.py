@@ -7,6 +7,8 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 from owlbear_delivery_next.improvement import chatlogs, retro_store, retro_units, spotter
 
 LATER = datetime.now(UTC) + timedelta(days=2)
@@ -162,6 +164,25 @@ def test_a_chat_quiet_since_before_the_watermark_waits_for_the_button(tmp_path):
     assert chat.due() == []
     assert not retro_units.folder("c1").exists()
     assert chat.due(chat="c1") == [{"unit": "chat:c1", "rev": "", "mode": "judge"}]
+
+
+@pytest.mark.parametrize("ended", ["stopped", "failed"])
+def test_a_chat_that_grew_after_its_revision_stopped_waits_for_the_button_which_takes_that_revision_again(
+    tmp_path, ended
+):
+    retro_store.watermark()
+    chat = _Chat(tmp_path)
+    chat.say(_event("user.message", content="go"), _event("assistant.message", content="ok"))
+    [item] = chat.due()
+    r1 = retro_units.freeze(item, {}, [])
+    retro_units.settle("chat:c1", r1["rev"], ended, run="run-x")
+    chat.say(_event("user.message", content="more"))
+
+    assert chat.due() == []
+    assert chat.due(chat="c1") == [{"unit": "chat:c1", "rev": "r1", "mode": "judge"}]
+    _judged(r1)
+    [item] = chat.due()
+    assert retro_units.freeze(item, {}, [])["from_events"] == r1["cutoff_events"]
 
 
 def test_eligibility_refuses_owlbears_own_sessions_unenrolled_chats_and_unfinished_changes(tmp_path):

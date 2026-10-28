@@ -315,6 +315,30 @@ def test_an_enrolled_chat_is_judged_once_owlbear_is_idle(said, tmp_path):
     assert retro_store.units()["chat:c3"]["revisions"][-1]["state"] == "judged"
 
 
+def test_a_late_record_whose_grade_only_run_failed_waits_for_the_button_which_grades_it(said, tmp_path):
+    said.retro_after_change, projects = "on", _finished_change(tmp_path)
+    job = _job(asker := Asker(), projects=projects)
+    job.tick(0.0)
+    late = {"id": "rec-d", "at": "2026-01-01T00:01:00+00:00", "look": "handoff", "call": "d", "cutoff": 2}
+    late |= {"category": "none", "project": "p1", "change": "fix-it", "step": "build", "session": "s-build"}
+    with (spotter.root() / "records-2026-01-01.jsonl").open("a") as out:
+        out.write(json.dumps(late) + "\n")
+
+    def broken(_n):
+        msg = "the session broke"
+        raise RuntimeError(msg)
+
+    asker.during = broken
+    job.tick(1.0)
+    job.tick(2.0)
+    assert [(r["mode"], r["result"].split(":")[0]) for r in _runs()] == [("judge", "judged"), ("grade-only", "stopped")]
+    asker.during = None
+    retro_store.request("owner", change="p1:fix-it")
+    job.tick(3.0)
+    assert [(r["mode"], r["trigger"], r["result"]) for r in _runs()][2:] == [("grade-only", "button", "judged")]
+    assert "rec-d" in retro_store.graded()
+
+
 @pytest.mark.usefixtures("said")
 def test_the_button_runs_while_paused_and_switched_off_but_never_through_the_fence():
     state = SimpleNamespace(paused=True, fence="curation is running", idle=False)

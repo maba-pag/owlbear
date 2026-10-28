@@ -213,13 +213,19 @@ class RetroJob:
         uid = units.change_id(*change.split(":", 1)) if change else units.chat_id(chat)
         if self._took(uid, by):
             return
+        late = [i for i in units.late(units.records(), store.units(), store.graded()) if i["unit"] == uid]
+        for i in late:  # records written after a judged revision, a failed grade-only run's among them
+            self._start(Running(uid, "button", by, rev=i["rev"], mode="grade-only", records=i["records"]))
+            if self.waiting:
+                return
         try:
             item = self._due(uid, request)
         except (store.RetroError, OSError) as exc:
             self._start(Running(uid, "button", by), f"refused: {exc}")
             return
-        if item is None:
-            self._start(Running(uid, "button", by), "refused: it is not due (not finished, quiet or enrolled)")
+        if item is None or item["rev"] in {i["rev"] for i in late}:  # that judged revision is graded now
+            if not late:
+                self._start(Running(uid, "button", by), "refused: it is not due (not finished, quiet or enrolled)")
             return
         self._start(Running(uid, "button", by, rev=item["rev"]))
 
