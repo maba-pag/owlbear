@@ -107,7 +107,8 @@ function folderSection() {
     <div class="row">${input}${button("Rename folder", rename, { id: "rename", icon: "edit", disabled: off })}</div>
     <p-text id="folder-note">${loaded.folder ? "Named after the repository unless renamed. Renaming moves the folder "
       + "with its settings, memory and visual decisions, then commits and pushes the move; it is refused while a "
-      + "step of this project runs." : "No shared settings location is set up, so this project has no folder there."}
+      + "step of this project or its memory curation runs."
+      : "No shared settings location is set up, so this project has no folder there."}
     </p-text>
   </section>`;
 }

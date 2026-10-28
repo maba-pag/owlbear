@@ -41,6 +41,7 @@ from owlbear_delivery_next.workflow_steps import before, check, disposable, engi
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from contextlib import AbstractContextManager
 
     from owlbear_delivery_next.change_contracts.models import Change, Environment
     from owlbear_delivery_next.change_flow.loop import PrState, Seen
@@ -161,6 +162,8 @@ class Host:
         self.closed: Callable[[], bool] = lambda: False  # the machine or this project stops: nothing starts at all
         self.updating: Callable[[], str] = lambda: ""  # the machine's update fence: why nothing starts now
         self.merged: Callable[[], None] = lambda: None  # a Change's pull request merged: the machine may curate memory
+        # the machine's curation holds a folder while it moves; it yields why that folder cannot move now, else ''
+        self.curating: Callable[[str], AbstractContextManager[str]] = lambda _f: contextlib.nullcontext("")
         self.passing: set[str] = set()  # Changes whose next step runs while paused (TD-287, TD-303)
         self.slots, self.wants, self.grants = Slots(lambda: session_slots.ALL), dict[str, int](), dict[str, int]()
         self.maintenance: maintenance.Maintenance | None = None
