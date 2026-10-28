@@ -287,7 +287,7 @@ def _valid_review(said: Mapping[str, Any]) -> bool:
 def _graded(g: Mapping[str, Any]) -> dict[str, Any]:
     """A grade as a review reads it: the look, its moment and call, the grade with its reason and the right call."""
     moment = f"at event {g.get('cutoff')} of session {g.get('session')}"
-    note = f": {cut(str(n), NOTE)}" if (n := g.get("note")) else ""
+    note = f": {cut(mask.redact(str(n)), NOTE)}" if (n := g.get("note")) else ""
     said = f"record {g['record']} ({g.get('look')} look {moment}, it said {g.get('category') or 'nothing'}{note})"
     should = f"; it should have said {s}" if (s := g.get("should")) else ""
     what, why = f"{said} graded {g['grade']}", f"{g.get('reason', '')}{should}"

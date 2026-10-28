@@ -384,6 +384,19 @@ def test_a_review_reads_a_graded_records_moment_reason_and_right_call_and_a_fixe
 SECRET = "ghp_" + "b" * 36
 
 
+def test_a_secret_the_cut_of_a_long_note_splits_never_leaves_in_a_review():
+    token = "ghp_" + "abcDEF123" * 4
+    _capture("s1", ["the tests pass", "lint is clean", "shipping it"])
+    ask = Asked(_wrong)
+    note = "x " * 350 + token + " z" * 130
+    parts = retro_segments.prepare(["s1"], "done").parts
+    retro_judge.run(_work(ask, [_record("w", 3, note=note)], parts=parts, grade_only=True))
+    retro_judge.review(_work(ask, run="run-2"))
+
+    assert [m for m in ask.messages if "## The proposal" in m]
+    assert not [m for m in ask.messages if token[-12:] in m]
+
+
 def test_a_secret_in_a_records_note_or_card_or_in_a_findings_text_never_leaves_in_a_message():
     noted = _record("n", 3, note=f"token {SECRET}")
     carded = _record("c", 4) | {"card": {"env": f"GITHUB_TOKEN={SECRET}"}}
