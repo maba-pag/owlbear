@@ -18,9 +18,9 @@ from typing import Any
 import pytest
 from copilot.generated.session_events import SessionEvent
 
-from owlbear_delivery_next.improvement import credit_meter, spotter
+from owlbear_delivery_next.improvement import chatlogs, credit_meter, spotter
 from owlbear_delivery_next.improvement.credit_meter import Meter
-from owlbear_delivery_next.runtimes import chatlogs, credit_limit, spotter_look
+from owlbear_delivery_next.runtimes import credit_limit, spotter_look
 
 REAL_LOOK = spotter_look.judged  # taken before the suite's fixture replaces it
 REPORT = ("id", "sdk_sessions", "credits", "credits_known", "limit", "stopped", "stopped_by")

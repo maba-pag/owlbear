@@ -22,6 +22,7 @@ from owlbear_delivery_next.machine_host import cases_job, chats
 from owlbear_delivery_next.machine_host.cases_job import CasesJob
 from owlbear_delivery_next.machine_host.curation import Curation
 from owlbear_delivery_next.machine_host.project import Project
+from owlbear_delivery_next.machine_host.retro_job import DRAIN, RetroJob
 from owlbear_delivery_next.project_host import session_slots
 from owlbear_delivery_next.project_host.host import RunnerRecord
 from owlbear_delivery_next.state_store import machine_settings, project_home, registry, settings_carry
@@ -109,6 +110,7 @@ class Machine:
             fenced=self._curation_fence,
             admission=lambda: self.lock,
         )
+        self.retro = RetroJob.attach(self, self._curation_fence)  # Retro's runs, each paid call admitted and leased
 
     def _curation_fence(self) -> str:
         """Why no memory curation starts now: an update's fence, a stop, or a stop when idle, which starts nothing."""
@@ -304,6 +306,7 @@ class Machine:
             + self.curation.working()
             + self.cases.working()
             + self.chats.working()
+            + self.retro.working()
             + self._unproven_packs()
         )
 
@@ -325,6 +328,7 @@ class Machine:
             + self.curation.working()
             + self.cases.working()
             + self.chats.working()
+            + self.retro.working()
             + self._unproven_packs()
         )
 
@@ -392,6 +396,7 @@ class Machine:
         """The machine stops: every gate closes at once, so nothing is admitted or launched from now on."""
         self.stopping.set()
         self.cases.stop()
+        self.retro.stop()
         self.chats.close()  # no chat look is admitted from now on
         for p in list(self.projects.values()):
             p.gate.close(0)
@@ -405,6 +410,8 @@ class Machine:
                     p.stop()
         if not self.cases.drain():  # its running session cancelled, so its result and spend are kept before the exit
             self.say(f"the Spotter cases job did not end within {cases_job.DRAIN:.0f} s")
+        if not self.retro.drain():
+            self.say(f"Retro did not end within {DRAIN:.0f} s")
         if not self.chats.join(chats.CLOSE):  # outside the lock; the follower keeps its own lock until it ends
             self.say("the chats follower is still ending; no other follower starts until it has")
         self.say("stopped: every project closed")

@@ -1,8 +1,9 @@
-"""``owlbear cases`` and ``owlbear improvement``: the narrow local commands for the Spotter cases (design §4).
+"""``owlbear cases`` and ``owlbear improvement``: the narrow local commands for the Spotter cases and Retro (§4, §5).
 
 The Improvement page will call the same functions. A stage move that changes the active examples, a reserve
 comparison and a check of candidates cost credits: the command only queues them, on the owner's word, for the machine
-host's job, which runs them within their run credit limit (D-01M5XCE8ZEX5WPSCBZ5Y9S4K96).
+host's job, which runs them within their run credit limit (D-01M5XCE8ZEX5WPSCBZ5Y9S4K96). A Retro run is queued the
+same way, for the host's Retro job; its plan view reads what a run would ask without asking.
 """
 
 from __future__ import annotations
@@ -12,8 +13,14 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from owlbear_delivery_next.improvement import case_intake, case_replay, cases, pilot_seed
+from owlbear_delivery_next.improvement import case_intake, case_replay, cases, pilot_seed, retro_evidence
+from owlbear_delivery_next.improvement import retro_store as retro
+from owlbear_delivery_next.improvement import retro_synthetic as syn
+from owlbear_delivery_next.improvement import retro_units as units
 from owlbear_delivery_next.improvement.cases import CaseError, Stale
+from owlbear_delivery_next.state_store import registry
+from owlbear_delivery_next.state_store.database import StoreError
+from owlbear_delivery_next.state_store.store import Store
 
 if TYPE_CHECKING:
     import argparse
@@ -52,8 +59,19 @@ def parsers(sub: Any) -> None:  # noqa: ANN401 - argparse's subparsers
     p.add_argument("b", type=int)
     p.add_argument("--release", default="", help="the release; the newest by default")
     cs.add_parser("runs", help="every run's result").add_argument("--last", type=int, default=10)
-    i = sub.add_parser("improvement", help="Improvement's marked assumptions")
-    i.add_subparsers(dest="action", required=True).add_parser("reset", help="retire every marked assumption")
+    i = sub.add_parser("improvement", help="Improvement's marked assumptions and Retro")
+    ia = i.add_subparsers(dest="action", required=True)
+    ia.add_parser("reset", help="retire every marked assumption")
+    rs = ia.add_parser("retro", help="Retro: judge a finished Change or chat (Improvement design §5)")
+    rs = rs.add_subparsers(dest="retro", required=True)
+    one = rs.add_parser("run", help="queue a run of one unit for the host's Retro job (paid)")
+    which = one.add_mutually_exclusive_group(required=True)
+    which.add_argument("--change", metavar="PROJECT/SLUG", help="a finished Change; PROJECT is its folder's name or id")
+    which.add_argument("--chat", metavar="SESSION", help="an enrolled chat, quiet for a day")
+    which.add_argument("--synthetic", nargs="?", const=True, metavar="NAME", help="the synthetic units, or one")
+    st = rs.add_parser("status", help="the latest runs, or with --plan what a run of a unit would ask (not paid)")
+    st.add_argument("--last", type=int, default=10)
+    st.add_argument("--plan", metavar="UNIT", help="a unit id (chg:…, chat:…, syn:…) or PROJECT/SLUG")
 
 
 def _say(text: str) -> None:
@@ -63,14 +81,17 @@ def _say(text: str) -> None:
 def main(a: argparse.Namespace) -> int:
     """Run one ``cases`` or ``improvement`` command; 1 when it was refused."""
     try:
-        if a.command == "improvement":
+        if a.command == "improvement" and a.action == "retro":
+            _retro(a)
+        elif a.command == "improvement":
             retired, n = cases.reset()
             _say(f"retired: {', '.join(retired) or 'nothing'}" + (f"; cases version {n}" if n else ""))
-            return 0
-        return _cases(a)
-    except CaseError as exc:
+        else:
+            return _cases(a)
+    except (CaseError, retro.RetroError, registry.RegistryError, StoreError) as exc:
         _say(f"refused: {exc}")
         return 1
+    return 0
 
 
 def _cases(a: argparse.Namespace) -> int:  # noqa: C901, PLR0912 - one branch per action
@@ -189,3 +210,57 @@ def _newest_release() -> str:
         msg = "no release yet: `owlbear cases release` freezes one"
         raise CaseError(msg)
     return found[-1]["id"]
+
+
+def _retro(a: argparse.Namespace) -> None:
+    if a.retro == "run":
+        change = None
+        if a.change:
+            pid, _ = _project(_slash(a.change)[0])
+            change = f"{pid}:{_slash(a.change)[1]}"
+        if a.synthetic:  # one request per unit: a host that stops loses none still queued
+            named = a.synthetic if isinstance(a.synthetic, str) else ""
+            rids = [retro.request(BY, synthetic=s["name"]) for s in syn.specs(named)]
+        else:
+            rids = [retro.request(BY, change, a.chat)]
+        said = "the machine host's Retro job runs it; `owlbear improvement retro status` shows its result"
+        _say(f"queued {', '.join(rids)}: {said}")
+    elif a.plan:
+        uid, projects = _unit(a.plan)
+        _say(json.dumps(retro_evidence.plan(uid, projects)))
+    else:
+        _say(f"queued: {len(retro.queued())}")
+        keep = ("id", "unit", "trigger", "by", "state", "why", "result", "spent", "known", "calls")
+        for r in retro.runs(a.last, synthetic=True)[::-1]:
+            _say(json.dumps({k: r[k] for k in keep if k in r}))
+
+
+def _slash(text: str) -> tuple[str, str]:
+    name, _, slug = text.partition("/")
+    if not name or not slug:
+        msg = f"{text!r} is not PROJECT/SLUG"
+        raise CaseError(msg)
+    return name, slug
+
+
+def _project(name: str) -> tuple[str, Path]:
+    """The id and folder of the registered project *name* names, by its folder's name or its id."""
+    for p in registry.load().projects:
+        if name in {p.id, Path(p.path).name}:
+            return p.id, Path(p.path)
+    msg = f"no registered project is named {name!r}"
+    raise CaseError(msg)
+
+
+def _unit(text: str) -> tuple[str, units.Projects]:
+    """The unit *text* names (a unit id or ``PROJECT/SLUG``), with the project its Change is in."""
+    if text.startswith(("chat:", "syn:")):
+        return text, {}
+    name, _, slug = text.removeprefix("chg:").partition(":")
+    if not text.startswith("chg:"):
+        name, slug = _slash(text)
+    elif not name or not slug:
+        msg = f"{text!r} is not chg:PROJECT:SLUG"
+        raise CaseError(msg)
+    pid, path = _project(name)  # a folder's name is resolved to its project's id
+    return units.change_id(pid, slug), {pid: (Store.open(path), path)}

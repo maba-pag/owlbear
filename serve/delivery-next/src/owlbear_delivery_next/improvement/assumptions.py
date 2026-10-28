@@ -27,6 +27,12 @@ SYNTHETIC = "synthetic-cases-1"
 PLAN = "chat-plan-1"  # the chats follower's moments (``runtimes.chat_moments``)
 HANDOFF = "chat-hand-off-1"
 STATE_CHANGE = "chat-state-change-1"
+RETRO_SEGMENTS = "retro-segments-1"  # Retro (``improvement.retro_*``)
+RETRO_CAUSES = "retro-causes-1"
+RETRO_LESSON_BAR = "retro-lesson-bar-1"
+RETRO_CATCHABLE = "retro-catchable-1"
+RETRO_GRADES = "retro-grades-1"
+RETRO_SYNTHETIC = "retro-synthetic-1"
 KNOWN = {
     RELEASE: "A release of the Spotter cases is a frozen revision of the case corpus (each reviewed case's card, "
     "expected call and family) and its grading contract; choosing active examples alone makes none",
@@ -40,6 +46,21 @@ KNOWN = {
     STATE_CHANGE: "A chat's state change is a completed call of its agent that writes outside the chat's workspace "
     "folder, or publishes, deletes or changes settings by its shell command's words or its tool's name; a call whose "
     "effect is not known is a candidate too, and known read-only calls are none",
+    RETRO_SEGMENTS: "Retro reads a chat by requester turn and a Delivery step by session, each cut into parts of at "
+    "most 24 000 characters with saved outputs excerpted to 4 000 and the rest of the unit reduced to 6 000 as its "
+    "later course; every cut is marked and the text masked",
+    RETRO_CAUSES: "A Retro finding's cause is one of: misread-task, missing-context, skipped-verification, "
+    "wrong-tool-use, scope-drift, poor-plan, instruction-gap, tool-defect, delivery-logic, other; tool-defect and "
+    "delivery-logic are Delivery's, instruction-gap an agent's, skill's or prompt's, the rest an agent's behaviour",
+    RETRO_LESSON_BAR: "A lesson or agent change needs findings of one confirmed shared mechanism in at least two "
+    "independent real families, with the judged units exposed to its target that show none of it as counterexamples",
+    RETRO_CATCHABLE: "A periodic big-picture look is reconsidered when catchable findings are at least 30 % of the "
+    "real findings over the last 20 judged units",
+    RETRO_GRADES: "Retro grades each Spotter record once against what happened later: worth-it, correct-not-worth-it, "
+    "wrong, missed (only a sampled silent look) or not-assessable with its reason; skipped, failed, "
+    "insufficient-context and gap records are not assessable",
+    RETRO_SYNTHETIC: "Invented Retro units demonstrate the proposal kinds no real unit shows yet; marked synthetic, "
+    "never counted for a grade, a bar or the Spotter's gate",
 }
 
 

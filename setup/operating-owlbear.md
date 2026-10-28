@@ -138,8 +138,17 @@ registration intact when the admitted clone changes.
 after a merge and when idle each has its own setting in **Settings → This machine**: off, on, or on
 even while paused; **Curate now** on the Maintenance page always runs.
 
+Retro looks back at finished work: it grades the Spotter's records against what happened later and
+proposes cases, lessons and fixes, each challenged before you see it. Its two switches sit beside
+curation's and work the same way: `retro_after_change` for a Change that ended, and `retro_when_idle`
+for chats in the folders listed in `enrolled_chats`, once a chat has been quiet for a day and only
+while OwlBear is idle. Each run stops at `retro_run_credit_limit`. `owlbear improvement retro run`
+with `--change PROJECT/SLUG`, `--chat SESSION` or `--synthetic [NAME]` queues a run for the machine
+host (one per synthetic unit), even while paused or switched off; `owlbear improvement retro status` lists the latest runs,
+and `--plan UNIT` shows how many judging calls a run would make, without spending credits.
+
 The **Metrics** page shows every credit OwlBear spent on this Mac: every agent session it ran
-(Delivery's workers, judges, picker and lookups, the curator, design pack runs, Spotter looks),
+(Delivery's workers, judges, picker and lookups, the curator, design pack runs, Spotter looks, Retro),
 summed, split by project, agent (subagents included), model, day, Change or step, and filtered by
 period, project, agent, model, Change, or runs stopped at their credit limit. Each session writes
 its start and end to `~/.owlbear/spend/`, kept for good, even when it is cancelled or fails;

@@ -19,11 +19,12 @@ from copilot.tools import Tool, ToolInvocation, ToolResult
 from owlbear_delivery_next.change_contracts import tool_schema, tools, user_config
 from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.change_contracts.permissions import decide, identities, view
+from owlbear_delivery_next.improvement import chatlogs
+from owlbear_delivery_next.improvement.chatlogs import around as chatlogged
 from owlbear_delivery_next.local_system import preload, processes
 from owlbear_delivery_next.local_system.mask import redact
 from owlbear_delivery_next.local_system.processes import Termination, verdict
 from owlbear_delivery_next.runtimes import (
-    chatlogs,
     lessons,
     sdk_spend,
     sdk_teardown,
@@ -34,7 +35,6 @@ from owlbear_delivery_next.runtimes import (
     tool_workers,
     watch_feed,
 )
-from owlbear_delivery_next.runtimes.chatlogs import around as chatlogged
 from owlbear_delivery_next.runtimes.copilot_cli import cli_path
 from owlbear_delivery_next.runtimes.instruction_scope import applied as own_instructions
 from owlbear_delivery_next.runtimes.model_choices import takes_effort

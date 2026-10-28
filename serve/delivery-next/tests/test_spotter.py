@@ -20,9 +20,9 @@ from copilot.tools import ToolInvocation
 from owlbear_delivery_next.change_contracts.models import Change, Plan, StepKind, Task
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_contracts.tools import Worktree
-from owlbear_delivery_next.improvement import card, cases, credit_meter, events, spotter
+from owlbear_delivery_next.improvement import card, cases, chatlogs, credit_meter, events, spotter
 from owlbear_delivery_next.improvement.events import Kept
-from owlbear_delivery_next.runtimes import chatlogs, sdk_adapter, spend_reconcile, spotter_look, step_decisions
+from owlbear_delivery_next.runtimes import sdk_adapter, spend_reconcile, spotter_look, step_decisions
 from owlbear_delivery_next.settings.config import Layer, SettingsUnset, resolve
 from owlbear_delivery_next.settings.improvement import CATEGORIES, Spotter
 from owlbear_delivery_next.state_store import spend_ledger, spend_shares

@@ -31,9 +31,9 @@ from typing import Any
 from copilot import CopilotClient, RuntimeConnection
 from copilot.rpc import PermissionDecisionReject
 
-from owlbear_delivery_next.improvement import cases, credit_meter, spotter
+from owlbear_delivery_next.improvement import cases, chatlogs, credit_meter, spotter
 from owlbear_delivery_next.improvement.events import as_dict
-from owlbear_delivery_next.runtimes import chatlogs, sdk_usage
+from owlbear_delivery_next.runtimes import sdk_usage
 from owlbear_delivery_next.runtimes.copilot_cli import cli_path
 from owlbear_delivery_next.runtimes.credit_limit import Limit
 from owlbear_delivery_next.runtimes.model_choices import takes_effort

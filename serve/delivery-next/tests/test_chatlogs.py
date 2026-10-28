@@ -12,8 +12,8 @@ from types import SimpleNamespace
 
 import pytest
 
+from owlbear_delivery_next.improvement import chatlogs
 from owlbear_delivery_next.local_system.processes import Termination
-from owlbear_delivery_next.runtimes import chatlogs
 from owlbear_delivery_next.runtimes.session_result import Run
 
 
