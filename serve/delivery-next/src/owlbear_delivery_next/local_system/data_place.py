@@ -375,7 +375,8 @@ def settle() -> str:
     """Move the old pointer, drop a leftover clone, finish or undo a move; the caller holds `pointer_lock`."""
     _move_old(pointer(), held=True)
     for leftover in local_home.root().glob(f"{CLONING}*"):
-        shutil.rmtree(leftover, ignore_errors=True)
+        if not holds_data(leftover):  # an older `owlbear data` accepted any checkout, even one named like this
+            shutil.rmtree(leftover, ignore_errors=True)
     return recover()
 
 

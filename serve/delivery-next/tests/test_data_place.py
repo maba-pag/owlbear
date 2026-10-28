@@ -208,6 +208,16 @@ def test_a_disk_failure_while_cloning_is_said_kept_and_retried(url: str, monkeyp
     assert (seen, done) == ([(kept, [], False)], ["carry", "retry"])
 
 
+def test_a_checkout_named_like_a_clone_leftover_is_kept_when_the_pointer_names_it(url: str) -> None:
+    leftover, named = home() / ".data-clone-gone", home() / ".data-clone-owned"
+    leftover.mkdir(parents=True)
+    git(home(), "clone", "-q", url, str(named))  # an older `owlbear data` accepted any checkout
+    data_place.pointer().write_text(json.dumps({"repository": str(named)}))
+    with data_place.pointer_lock():
+        data_place.settle()
+    assert (leftover.exists(), (named / "config.json").read_text()) == (False, "{}\n")
+
+
 def test_the_inventory_names_all_that_only_this_checkout_holds(tmp_path: Path, url: str) -> None:
     root = tmp_path / "data"
     git(tmp_path, "clone", "-q", url, str(root))
