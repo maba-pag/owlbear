@@ -196,12 +196,16 @@ def _update(job: Job, c: pack_candidate.Candidate, ctx: Context, lp: RoundLoop) 
     keys = (pack_rounds.rejectable(lp), pack_rounds.settled(lp))
     cfg = pack_updater.config(store, at, ctx.sid, ask, resume=resume, fresh=whole, replaced=replaced, keys=keys)
 
-    result = job.do("update", lambda: pack_updater.ended(live.update(store, cfg)), lambda r: r.summary)
+    result = job.do(  # a session that completed, never a verdict on its candidate
+        "update", lambda: pack_updater.ended(live.update(store, cfg)), lambda r: r.summary, round_=lp.round + 1,
+        judged=lambda _r: "completed",
+    )  # fmt: skip
     ctx.sessions, ctx.summary, ctx.reason = ctx.sessions + 1, result.summary, result.evidence
     bad = pack_updater.outside(at, ctx.start, c.pins["skills"])
     if not bad:
         pack_updater.taken(at, c)
     identity = pack_gates.identity(c, _edits(job, ctx))
+    job.identified(identity)
     ctx.after = NEXT[pack_rounds.revised(lp, {r.finding: r.reason for r in result.rejected}, identity)]
     if bad:
         return "wait"  # the owner first: undo or discard (TD-194)
@@ -212,7 +216,7 @@ def _update(job: Job, c: pack_candidate.Candidate, ctx: Context, lp: RoundLoop) 
             raise Stopped(said)
         return said
 
-    ctx.golden = job.do("golden", golden)
+    ctx.golden = job.do("golden", golden, op="candidate-golden", identity=identity)
     return "wait" if _unaccepted(job, ctx) else "replay"
 
 
@@ -224,10 +228,12 @@ def _unaccepted(job: Job, ctx: Context) -> str:
 
 def _replay(job: Job, c: pack_candidate.Candidate, ctx: Context) -> Action:
     """The calibration replay when the skills changed since the last one (TD-177); then what the session led to."""
-    identity = design_pack.identity(c.manifest, c.skills)
+    identity, candidate = design_pack.identity(c.manifest, c.skills), pack_gates.identity(c, _edits(job, ctx))
     if identity != ctx.judged:
-        replayed = job.do("replay", lambda: _replayed(job.live.replay(job.store, c, keep=job.keeps)))
-        ctx.replayed, ctx.judged = replayed, identity
+        replay = lambda: _replayed(job.live.replay(job.store, c, keep=job.keeps))  # noqa: E731
+        ctx.replayed, ctx.judged = job.do("replay", replay, identity=candidate), identity
+    else:  # the skills it judged are unchanged: its result stands for this candidate
+        job.note("replay", "replay", "reused", ctx.replayed, candidate)
     return ctx.after
 
 
@@ -254,18 +260,23 @@ def _challenge(job: Job, c: pack_candidate.Candidate, ctx: Context, lp: RoundLoo
     cap = 0 if recheck else lp.policy.max_findings
     identity = pack_gates.identity(c, edits)
     submit = tools.REVIEW if recheck else pack_tools.REVIEW
+    round_ = lp.round + 1  # a recheck stays in the round of the update whose rejections it judges (TD-330)
 
-    def challenge() -> tuple[list[str], dict[str, tuple[bool, str]], list[pack_tools.Change]]:
+    def challenge() -> tuple[list[str], list[pack_tools.Change], str]:
         run = pack_candidate.challenge(
             job.store, c, job.live.clone, text, job.live.challenge, rechecks=keys, cap=cap, submit=submit,
             changed=tuple(changed or ()), keep=job.keeps,
         )  # fmt: skip
-        return _verdict(run)
+        found, judged, changes = _verdict(run)
+        return found, changes, pack_rounds.counted(lp, found, judged, identity, recheck=recheck)
 
-    found, judged, changes = job.do(
-        "challenger", challenge, lambda v: f"{len(v[0])} new finding(s)" if v[0] else "passed"
-    )
-    then = pack_rounds.counted(lp, found, judged, identity, recheck=recheck)
+    def judgement(v: tuple[list[str], list[pack_tools.Change], str]) -> str:  # the session's, then the candidate's
+        return "passed" if v[2] == "pass" else "findings" if v[0] else "completed"
+
+    _found, changes, then = job.do(
+        "challenger", challenge, lambda v: f"{len(v[0])} new finding(s)" if v[0] else judgement(v),
+        op="rejection-recheck" if recheck else "full-challenge", round_=round_, identity=identity, judged=judgement,
+    )  # fmt: skip
     if not recheck:
         ctx.changes = [f"{x.path}: needed {x.needed}; {x.what}; suspicious: {x.suspicious}" for x in changes]
         ctx.unsure = {
@@ -366,7 +377,10 @@ def _reconsider(job: Job, c: pack_candidate.Candidate, lp: RoundLoop) -> Action:
             raise design_pack.PackError(msg[:600])
         return {r.finding: (r.verdict, r.text if r.verdict == "clarified" else r.reason) for r in p.reconsidered}
 
-    said = job.do("challenger", reconsider, lambda v: f"reconsidered {', '.join(v)}")
+    said = job.do(
+        "challenger", reconsider, lambda v: f"reconsidered {', '.join(v)}", op="reconsideration",
+        judged=lambda _v: "completed",
+    )  # fmt: skip
     pack_rounds.reconsidered(lp, said)
     return NEXT[pack_rounds.after(lp)]
 
@@ -394,7 +408,10 @@ def _activate(job: Job, c: pack_candidate.Candidate, ctx: Context, lp: RoundLoop
     root = Path(ctx.checkout["root"]).resolve()
     edited = [n for n in c.pins["skills"] if _sha(pack_updater.skill(c, n).read_bytes()) != ctx.baseline[_path(n)]]
     if ctx.publication is None:  # the edited files join the one commit, checked against the package just before
-        job.do("commit", lambda: _unchanged(package, ctx), lambda _o: "the package's files are as the update found")
+        job.do(
+            "commit", lambda: _unchanged(package, ctx), lambda _o: "the package's files are as the update found",
+            op="unchanged-check",
+        )  # fmt: skip
         ctx.publication = _publication(job, ctx, lp, root, [*edited, *edits])
         job.keep(ctx, lp)
     files: dict[str, str | None] = {

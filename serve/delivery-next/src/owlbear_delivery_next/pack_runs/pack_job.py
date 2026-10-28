@@ -31,6 +31,7 @@ from owlbear_delivery_next.pack_runs import (
     pack_admission,
     pack_candidate,
     pack_gates,
+    pack_progress,
     pack_publish,
     pack_replay,
     pack_rounds,
@@ -184,7 +185,10 @@ class Job:
             return self._copy()
 
     def _copy(self) -> dict[str, Any]:
-        return json.loads(json.dumps({k: v for k, v in self.state.items() if k != "context"}))
+        shown = {k: v for k, v in self.state.items() if k != "context"} | {
+            "progress": pack_progress.progress(self.state)  # from the context, which the page never gets
+        }
+        return json.loads(json.dumps(shown))
 
     def busy(self) -> bool:
         """Whether an update's thread or a tracked calibration replay runs now."""
@@ -213,7 +217,7 @@ class Job:
             run = uuid.uuid4().hex
             self.state = _blank() | {
                 "state": "running", "started_at": _now(), "run": run,
-                "workspace": str(self.store.root / RUNS / run),
+                "workspace": str(self.store.root / RUNS / run), "invocations": [],
             }  # fmt: skip
             self._save()
             self.thread = threading.Thread(
@@ -255,8 +259,12 @@ class Job:
             self._log(said)
             self.state |= {"loop": lp.model_dump(mode="json"), "context": ctx.model_dump(mode="json")}
             self.state["questions"] = left
+            if self.state.get("invocations") is not None:
+                pack_progress.answered(self.state["invocations"], said, last=not left)
             if not left:
                 self.state["state"] = "running"
+                for s in self.state["stages"]:  # the stop he answered holds nothing any more
+                    s["result"] = "answered" if s["result"] == "waiting" else s["result"]
                 self.thread = threading.Thread(
                     target=self._run, args=(self._resume,), name="design-pack-update", daemon=True
                 )
@@ -290,13 +298,50 @@ class Job:
         self.state["log"] = [*self.state["log"], f"{_now()} {line}"][-LOG:]
 
     def stage(self, name: str, result: str, detail: str = "") -> None:
-        """One stage's result, shown on the page and logged."""
+        """One stage's latest result, shown with a legacy record's stages and logged; invocations keep each run."""
+        self._step(None, name, result, detail)
+
+    def _step(self, inv: dict[str, Any] | None, name: str, result: str, detail: str = "", identity: str = "") -> None:
+        """One stage's result in its slot and, when the run keeps them, in its invocation *inv*; saved, then logged."""
         with self.lock:
+            if inv is not None:
+                pack_progress.closed(self.state["invocations"], inv, result, detail, identity)
             stage = next(s for s in self.state["stages"] if s["name"] == name)
             stage["result"], stage["detail"] = result, detail[:4000]
             self.state["stage"] = name if result == "running" else self.state["stage"]
             self._save()
         self.log(f"{name}: {result}{f': {detail.splitlines()[0][:300]}' if detail else ''}")
+
+    def _begin(self, name: str, op: str, round_: int | None, identity: str) -> dict[str, Any] | None:
+        """A new invocation of *op*, running in stage *name*; None for a legacy run, which invents no history."""
+        with self.lock:
+            invocations = self.state.get("invocations")
+            inv = None
+            if invocations is not None:
+                inv = pack_progress.opened(invocations, name, op, round_=round_, identity=identity)
+            stage = next(s for s in self.state["stages"] if s["name"] == name)
+            stage["result"], stage["detail"], self.state["stage"] = "running", "", name
+            self._save()
+        self.log(f"{name}: running")
+        return inv
+
+    def note(self, name: str, op: str, result: str, detail: str, identity: str = "") -> None:
+        """An invocation that ran nothing, such as a replay reused for an unchanged identity; logged."""
+        with self.lock:
+            invocations = self.state.get("invocations")
+            if invocations is not None:
+                inv = pack_progress.opened(invocations, name, op, identity=identity, result=result)
+                inv["detail"] = detail[:4000]
+                self._save()
+        self.log(f"{name}: {pack_progress.words(op, result)}")
+
+    def identified(self, identity: str) -> None:
+        """The candidate the last invocation made, once known: evidence about an earlier candidate is stale now."""
+        with self.lock:
+            invocations = self.state.get("invocations")
+            if invocations:
+                pack_progress.identified(invocations, invocations[-1], identity)
+                self._save()
 
     def keep(self, ctx: pack_run.Context, lp: RoundLoop) -> None:
         """Keep the run's context and loop, so it goes on from here."""
@@ -313,6 +358,8 @@ class Job:
             self.state |= {"state": "waiting", "stage": "", "questions": questions}
             self.state |= {"context": ctx.model_dump(mode="json"), "loop": lp.model_dump(mode="json")}
             next(s for s in self.state["stages"] if s["name"] == stage)["result"] = "waiting"
+            if self.state.get("invocations") is not None:
+                pack_progress.asked(self.state["invocations"], stage, questions)
             self._log(f"waiting for you: {len(questions)} question(s)")
             self._save()
 
@@ -330,6 +377,9 @@ class Job:
         stage = next((s for s in self.state["stages"] if s["result"] in {"running", "failed"}), None)
         if stage is not None:
             stage["result"], stage["detail"] = "waiting", reason[:4000]
+        if self.state.get("invocations") is not None:
+            pack_progress.stopped(self.state["invocations"], reason)
+            pack_progress.asked(self.state["invocations"], stage["name"] if stage else "merge", [question])
         self.state |= {"state": "waiting", "stage": "", "questions": [question], "reason": reason}
         self.state["context"] = ctx.model_dump(mode="json")
         self._log(f"waiting for you: {reason}")
@@ -451,27 +501,40 @@ class Job:
             if reason is not None:  # None: the run waits for the owner
                 self._end("passed", reason)
 
-    def do[T](
-        self, name: str, work: Callable[[], T], said: Callable[[T], str] = str, hold: type[Exception] | None = None
+    def do[T](  # noqa: PLR0913 - the stage, its work and words, and what the invocation is
+        self,
+        name: str,
+        work: Callable[[], T],
+        said: Callable[[T], str] = str,
+        hold: type[Exception] | None = None,
+        *,
+        op: str = "",
+        round_: int | None = None,
+        identity: str | Callable[[T], str] = "",
+        judged: Callable[[T], str] | None = None,
     ) -> T:
-        """Run one stage's work: its result shown, any failure ending the run with the stage named.
+        """Run one stage's work as a new invocation of its operation: its result shown, any failure ending the run.
 
-        A failure of the *hold* kind is raised as it is, for the owner to decide.
+        The operation *op* is the stage *name* by default; a failure names the stage. *judged* says what the work came
+        to: "passed" by default, "completed" for a session whose candidate it does not judge, "findings" for a verdict
+        with findings. *identity* is the candidate or head it ran on, or reads it from the result. A failure of the
+        *hold* kind is raised as it is, for the owner to decide.
         """
-        self.stage(name, "running")
+        inv = self._begin(name, op or name, round_, identity if isinstance(identity, str) else "")
         try:
             out = work()
         except Stopped as exc:
-            self.stage(name, "passed" if exc.current else "failed", exc.reason)
+            self._step(inv, name, "passed" if exc.current else "failed", exc.reason)
             raise
         except Exception as exc:
             if hold is not None and isinstance(exc, hold):
-                self.stage(name, "failed", str(exc))
+                self._step(inv, name, "failed", str(exc))
                 raise
             reason = f"{name}: {type(exc).__name__}: {exc}"[:2000]  # any failure stops the run, its stage named
-            self.stage(name, "failed", reason)
+            self._step(inv, name, "failed", reason)
             raise Stopped(reason) from exc
-        self.stage(name, "passed", said(out))
+        made = identity(out) if callable(identity) else ""
+        self._step(inv, name, judged(out) if judged else "passed", said(out), made)
         return out
 
     def _stages(self) -> str | None:
@@ -490,7 +553,10 @@ class Job:
 
         src, c = self.do("candidate", candidate, lambda out: _pack(*out))
         diff = self.do("diff", lambda: pack_update.diff(live.clone, tag))
-        golden = self.do("golden", lambda: pack_gates.checked(live.golden(c.installed)))  # the updater's evidence
+        golden = self.do(  # the updater's evidence, never a verdict on the candidate
+            "golden", lambda: pack_gates.checked(live.golden(c.installed)), op="initial-golden",
+            judged=lambda _o: "completed",
+        )  # fmt: skip
         why = f"design pack: {old['pack']} to {c.pins['pack']} (upstream {old['upstream']['tag']} to {tag})"
         return pack_run.begin(self, c, src, diff=diff, golden=golden, why=why)
 

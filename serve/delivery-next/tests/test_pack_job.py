@@ -430,7 +430,7 @@ def test_a_passing_update_runs_every_stage_then_merges_one_commit_through_a_pull
     assert (state["state"], state["reason"]) == (
         "passed", f"activated: merged into main as {pub['merged'][:12]} through {pub['url']}"
     )  # fmt: skip
-    assert results(state) == dict.fromkeys(NAMES, "passed")
+    assert results(state) == dict.fromkeys(NAMES, "passed") | {"update": "completed"}  # a session judges nothing
     here = design_pack.platform_name()
     assert fakes.calls == ["releases", "sync", f"engine {here}", "golden", "update", "golden", "replay", "challenger"]
     # The package's folder comes first, then the candidate's.
@@ -712,7 +712,7 @@ def test_rounds_ending_without_a_pass_wait_and_a_discard_changes_nothing(tmp_pat
     assert (state["state"], state["reason"]) == ("discarded", "discarded by you; nothing changed")
     assert (state["questions"], snapshot(checkout)) == ([], before)
     assert not (store.root / "design-pack-updater").exists()
-    assert results(state)["commit"] == "skipped"
+    assert results(state)["commit"] == "not-reached"
 
 
 def test_activation_publishes_only_the_candidate_the_owner_was_asked_about(tmp_path, checkout, clone):
@@ -725,9 +725,138 @@ def test_activation_publishes_only_the_candidate_the_owner_was_asked_about(tmp_p
 
     state = answered(job, "activate")
 
-    assert (state["state"], results(state)["commit"]) == ("failed", "skipped")
+    assert (state["state"], results(state)["commit"]) == ("failed", "not-reached")
     assert "is not what the challenger passed or you accepted" in state["reason"]
     assert snapshot(checkout) == before
+
+
+def steps(state: dict) -> list[tuple[str, str, int, str, bool]]:
+    """The run's invocations as the page gets them: phase, operation, attempt, outcome in words, and stale."""
+    return [
+        (ph["key"], i["operation"], i["attempt"], i["outcome"], i["stale"])
+        for ph in state["progress"]["phases"]
+        for i in ph["invocations"]
+    ]
+
+
+PREPARED = [
+    ("prepare", op, 1, said, False)
+    for op, said in [("notice", "passed"), ("candidate", "passed"), ("diff", "passed"), ("initial-golden", "done")]
+]
+PUBLISHED = [
+    ("publish", op, 1, "passed", False) for op in ["unchanged-check", "commit", "push", "pull-request", "merge"]
+]
+
+
+def test_two_rounds_keep_each_invocation_and_a_new_candidate_makes_the_first_rounds_evidence_stale(
+    tmp_path, checkout, clone
+):
+    fakes = Fakes(clone)
+    fakes.verdicts, fakes.edits = ["fix", "pass"], [{}, {REVIEW_SKILL: "repaired\n"}]
+    fakes.hold = threading.Event()
+    job = pack_job.Job(rounds(Store(tmp_path / "store"), last_round_at=0, ask_owner_at=1), fakes.live(checkout))
+    job.start()
+    assert fakes.waiting.wait(10)
+
+    progress = job.read()["progress"]  # the first challenger runs: the verdict decides what comes next
+
+    assert (progress["now"]["phase"], progress["now"]["operation"]) == ("Challenge round 1", "full-challenge")
+    assert (progress["next"]["by"], progress["next"]["operation"]) == ("verdict", "")
+    fakes.hold.set()
+    state = settled(job)
+
+    assert state["state"] == "passed", state["reason"]
+    first = [("round-1", op, 1, said, True) for op, said in [
+        ("update", "session completed"), ("candidate-golden", "candidate passed"), ("replay", "candidate passed"),
+        ("full-challenge", "findings")]]  # fmt: skip
+    second = [("round-2", op, 1, said, False) for op, said in [
+        ("update", "session completed"), ("candidate-golden", "candidate passed"), ("replay", "candidate passed"),
+        ("full-challenge", "candidate passed")]]  # fmt: skip
+    assert steps(state) == PREPARED + first + second + PUBLISHED
+    assert [ph["label"] for ph in state["progress"]["phases"]] == [
+        "Prepare", "Challenge round 1", "Challenge round 2", "Publish"
+    ]  # fmt: skip
+    assert (state["progress"]["now"], state["progress"]["next"]) == (None, None)
+    one, two = (i for i in state["invocations"] if i["operation"] == "full-challenge")
+    assert (one["detail"], two["detail"]) == ("1 new finding(s)", "passed")  # never "passed: 1 new finding(s)"
+    assert one["identity"] != two["identity"] == state["loop"]["head"]
+
+
+def test_an_unchanged_candidate_reuses_its_replay_and_a_rejection_recheck_is_its_own_operation(
+    tmp_path, checkout, clone
+):
+    fakes = Fakes(clone)
+    fakes.verdicts, fakes.rejects = ["fix"], [[], ["F1"]]
+
+    state = run(pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout)))
+
+    assert state["state"] == "passed", state["reason"]
+    first = [("round-1", op, 1, said, False) for op, said in [
+        ("update", "session completed"), ("candidate-golden", "candidate passed"), ("replay", "candidate passed"),
+        ("full-challenge", "findings")]]  # fmt: skip
+    second = [("round-2", op, 1, said, False) for op, said in [
+        ("update", "session completed"), ("candidate-golden", "candidate passed"),
+        ("replay", "reused for this identity"), ("rejection-recheck", "candidate passed")]]  # fmt: skip
+    assert steps(state) == PREPARED + first + second + PUBLISHED
+    replays = [i for i in state["invocations"] if i["operation"] == "replay"]
+    assert replays[1]["detail"] == replays[0]["detail"]  # the result it reuses, for the same candidate
+    assert replays[1]["identity"] == replays[0]["identity"]
+    assert fakes.calls.count("replay") == 1
+    assert any(line.endswith("replay: reused for this identity") for line in state["log"])
+
+
+def test_an_owner_stop_shows_his_gate_now_with_its_options_next_and_a_discard_ends_it(tmp_path, checkout, clone):
+    fakes = Fakes(clone, verdict="fix")
+    fakes.edits = [{}, {REVIEW_SKILL: "repaired\n"}]
+    job = pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout))
+
+    state = run(job)
+
+    first = [("round-1", op, 1, said, True) for op, said in [
+        ("update", "session completed"), ("candidate-golden", "candidate passed"), ("replay", "candidate passed"),
+        ("full-challenge", "findings")]]  # fmt: skip
+    second = [("round-2", op, 1, said, False) for op, said in [
+        ("update", "session completed"), ("candidate-golden", "candidate passed"), ("replay", "candidate passed"),
+        ("owner", "waiting for you")]]  # fmt: skip
+    assert steps(state) == PREPARED + first + second  # round 2's update never shows round 1's verdict as its own
+    now, then = state["progress"]["now"], state["progress"]["next"]
+    assert (now["phase"], now["operation"]) == ("Challenge round 2", "owner")
+    assert then == {"operation": "", "by": "owner", "label": "Your answer decides what runs next",
+                    "options": [pack_rounds.LABELS[o] for o in ("activate", "discard")]}  # fmt: skip
+
+    state = answered(job, "discard")
+
+    assert steps(state)[-1] == ("round-2", "owner", 1, "discarded by you", False)
+    assert (state["progress"]["now"], state["progress"]["next"]) == (None, None)
+    assert all(i["ended_at"] for i in state["invocations"])
+
+
+def test_a_ci_retry_runs_push_pull_request_and_merge_again_and_the_old_merge_is_stale(tmp_path, checkout, clone):
+    fakes = Fakes(clone)
+    job = pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout))
+    fakes.github.checks = ["failure"]
+
+    state = run(job)
+
+    held = [("publish", "merge", 1, "failed", False), ("publish", "owner", 1, "waiting for you", False)]
+    assert steps(state)[-6:] == PUBLISHED[:-1] + held
+    assert (state["progress"]["now"]["phase"], state["progress"]["next"]["options"]) == (
+        "Publish", [pack_rounds.LABELS[o] for o in pack_rounds.PUBLISH]
+    )  # fmt: skip
+    fakes.github.checks = ["success"]
+
+    state = answered(job, "retry")
+
+    assert state["state"] == "passed", state["reason"]
+    assert steps(state)[-9:] == [
+        ("publish", "unchanged-check", 1, "passed", False), ("publish", "commit", 1, "passed", False),
+        ("publish", "push", 1, "passed", True), ("publish", "pull-request", 1, "passed", True),
+        ("publish", "merge", 1, "failed", True), ("publish", "owner", 1, "answered by you", False),
+        ("publish", "push", 2, "passed", False), ("publish", "pull-request", 2, "passed", False),
+        ("publish", "merge", 2, "passed", False),
+    ]  # fmt: skip
+    pushed = [i["identity"] for i in state["invocations"] if i["operation"] == "push"]
+    assert pushed == [state["published"]["commit"]] * 2  # the same commit pushed again, never a new one
 
 
 def test_many_findings_in_the_last_allowed_round_offer_another_round(tmp_path, checkout, clone):
@@ -892,7 +1021,7 @@ def test_golden_pages_that_differ_go_to_the_updater_and_still_differing_after_it
 
     state = run(pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout)))
 
-    assert (state["state"], results(state)["golden"], results(state)["update"]) == ("failed", "failed", "passed")
+    assert (state["state"], results(state)["golden"], results(state)["update"]) == ("failed", "failed", "completed")
     assert "golden pages differ: bad.html (source): missing glow" in state["reason"]
     assert "## Golden pages with the package's expectations\ngolden pages differ" in fakes.updates[0].message
     assert fakes.calls[-2:] == ["update", "golden"]
@@ -1143,7 +1272,7 @@ def test_when_upstream_is_not_ahead_the_run_is_up_to_date_and_does_nothing_else(
 
     assert state["state"] == "up-to-date"
     assert f"no skill release newer than {PINNED}" in state["reason"]
-    assert results(state) == {"notice": "passed"} | dict.fromkeys(NAMES[1:], "skipped")
+    assert results(state) == {"notice": "passed"} | dict.fromkeys(NAMES[1:], "not-reached")
     assert fakes.calls == ["releases"]
     assert snapshot(checkout) == before
 
@@ -1165,8 +1294,8 @@ def test_a_failing_stage_stops_before_activation_and_changes_nothing(  # noqa: P
     assert state["state"] == "failed"
     assert said in state["reason"]
     at = NAMES.index(stage)
-    assert results(state) == dict.fromkeys(NAMES[:at], "passed") | {stage: "failed"} | dict.fromkeys(
-        NAMES[at + 1 :], "skipped"
+    assert results(state) == dict.fromkeys(NAMES[:at], "passed") | {"update": "completed", stage: "failed"} | (
+        dict.fromkeys(NAMES[at + 1 :], "not-reached")
     )
     assert fakes.calls[-1] == stage
     assert snapshot(checkout) == before

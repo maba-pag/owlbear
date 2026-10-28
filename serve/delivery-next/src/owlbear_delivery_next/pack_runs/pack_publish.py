@@ -75,13 +75,15 @@ def publish(job: Job, pub: Publication, files: dict[str, str | None], title: str
     if not pub.commit:
         at = job.store.root / WORKTREE
         pub.commit = _held(job, "commit", lambda: pack_git.commit(src, files, f"{title}\n\n{body}", at, live.git),
-                           lambda c: f"{c[:12]} on {pub.branch}")  # fmt: skip
+                           lambda c: f"{c[:12]} on {pub.branch}", lambda c: c)  # fmt: skip
         job.published(pub)
-    _held(job, "push", lambda: pack_git.push(src, pub.commit, pub.branch, live.git), lambda _o: pub.branch)
-    pr = _held(job, "pull-request", lambda: _opened(job, gh, pub, title, body), lambda p: p.url)
+    _held(job, "push", lambda: pack_git.push(src, pub.commit, pub.branch, live.git), lambda _o: pub.branch,
+          lambda _o: pub.commit)  # fmt: skip
+    pr = _held(job, "pull-request", lambda: _opened(job, gh, pub, title, body), lambda p: p.url, lambda p: p.head_sha)
     pub.number, pub.url = pr.number, pr.url
     job.published(pub)
-    merged, head = _held(job, "merge", lambda: _merged(job, gh, pub), lambda landed: f"merged as {landed[0][:12]}")
+    merged, head = _held(job, "merge", lambda: _merged(job, gh, pub), lambda landed: f"merged as {landed[0][:12]}",
+                         lambda landed: landed[1])  # fmt: skip
     return _done(job, gh, pub, merged, head)
 
 
@@ -115,8 +117,8 @@ def preflight(gh: Provider, repository: str) -> str:
     return f"gh may push to {found.repository}"
 
 
-def _held[T](job: Job, name: str, work: Callable[[], T], said: Callable[[T], str]) -> T:
-    """One stage whose failure goes to the owner instead of ending the run."""
+def _held[T](job: Job, name: str, work: Callable[[], T], said: Callable[[T], str], made: Callable[[T], str]) -> T:
+    """One stage whose failure goes to the owner instead of ending the run; *made* is the commit or head it reached."""
 
     def guarded() -> T:
         try:
@@ -126,7 +128,7 @@ def _held[T](job: Job, name: str, work: Callable[[], T], said: Callable[[T], str
         except Exception as exc:
             raise Held(str(exc)) from exc
 
-    return job.do(name, guarded, said, hold=Held)
+    return job.do(name, guarded, said, hold=Held, identity=made)
 
 
 def _opened(job: Job, gh: Provider, pub: Publication, title: str, body: str) -> PullRequest:
