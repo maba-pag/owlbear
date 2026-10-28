@@ -100,6 +100,24 @@ def test_every_start_completes_a_first_migration_a_crash_interrupted():
     assert registry.load().active == "v0.2"
 
 
+def test_a_start_leaves_an_interrupted_legacy_runtime_holding_the_shared_data_in_place(caplog):
+    runtime, folder = legacy(), version("v0.2")
+    new = local_home.root() / alias.NEW
+    new.symlink_to(folder)
+    alias._swap(new, runtime)  # noqa: SLF001 - an older update crashed right after the rename
+    inside = new / "data"
+    git(new, "init", "-q", str(inside))
+    said = json.dumps({"repository": str(inside)})  # an older `owlbear data` accepted any checkout
+    (local_home.root() / "data.json").write_text(said)
+
+    alias.complete()
+
+    assert ((inside / ".git").is_dir(), (local_home.root() / "data.json").read_text()) == (True, said)
+    assert list((local_home.root() / local_home.VERSIONS).glob("legacy-*")) == []
+    assert "holds the shared data" in caplog.text
+    assert registry.load().active == "v0.2"
+
+
 def test_a_link_made_but_never_renamed_is_removed_and_the_old_runtime_stays():
     runtime = legacy()
     (local_home.root() / alias.NEW).symlink_to(version("v0.2"))

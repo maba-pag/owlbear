@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import contextlib
 import ctypes
+import logging
 import os
 import subprocess
 import sys
@@ -23,6 +24,7 @@ from owlbear_delivery_next.state_store import registry
 if TYPE_CHECKING:
     from pathlib import Path
 
+_log = logging.getLogger(__name__)
 NEW = "runtime.new"
 RENAME_SWAP = 0x2  # macOS renamex_np: exchange the two names atomically (APFS; TD-262 Mac first)
 RENAME_EXCHANGE, AT_FDCWD = 0x2, -100  # Linux renameat2, where CI runs the same exchange
@@ -69,9 +71,14 @@ def complete() -> None:
     if new.is_symlink():
         new.unlink()  # made, never renamed: the old version stays
     elif new.is_dir():
-        legacy = home / local_home.VERSIONS / f"legacy-{_commit(new)}"
-        legacy.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-        new.rename(legacy)
+        try:
+            versions.keep_data(new)
+        except versions.VersionError as exc:
+            _log.warning("%s", exc)  # left where the pointer finds it; the host still starts
+        else:
+            legacy = home / local_home.VERSIONS / f"legacy-{_commit(new)}"
+            legacy.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+            new.rename(legacy)
     runtime = home / local_home.RUNTIME
     if runtime.is_symlink():
         with contextlib.suppress(OSError):
