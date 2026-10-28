@@ -160,21 +160,26 @@ def test_two_projects_with_one_slug_stay_apart_in_list_detail_actions_and_links(
             page.get_by_role("button", name="Continue").click()
             pds.answer(page, "Not now")
             expect(page.locator("#choose")).to_have_count(0)  # declined: nothing is left to click
-            page.route(f"**/p/{a.id}/api/next/changes", lambda r: r.fulfill(status=503, json={"detail": "stopping"}))
-            expect(page.locator("#notes")).to_contain_text("alpha: not read just now (stopping)")
-            expect(cards).to_have_count(2)  # its Changes stay as last read; beta's go on
-            page.goto(f"{base}/?change={a.id}%2Fsame")  # a link into the project that does not answer just now
-            expect(page.locator("#notes")).to_contain_text("alpha: not read just now")
-            page.unroute(f"**/p/{a.id}/api/next/changes")
-            expect(page.locator("#detail")).to_contain_text("in alpha")  # kept, and opened once it answers
-            assert page.evaluate("location.search") == f"?change={a.id}%2Fsame"
-            page.route(f"**/p/{a.id}/api/next/changes", lambda _r: None)  # up, yet never answers
-            expect(page.locator("#error")).to_contain_text("slow to answer", timeout=30000)
-            expect(page.locator("#detail")).to_have_class("stale")  # not shown as freshly read
+            _alpha_does_not_answer(page, base, a.id, expect)
             browser.close()
     finally:
         server.should_exit = True
         machine.stop_all()
+
+
+def _alpha_does_not_answer(page, base: str, alpha: str, expect) -> None:
+    changes = f"**/p/{alpha}/api/next/changes"
+    page.route(changes, lambda r: r.fulfill(status=503, json={"detail": "stopping"}))
+    expect(page.locator("#notes")).to_contain_text("alpha: not read just now (stopping)")
+    expect(page.locator("#changes li.card")).to_have_count(2)  # its Changes stay as last read; beta's go on
+    page.goto(f"{base}/?change={alpha}%2Fsame")  # a link into the project that does not answer just now
+    expect(page.locator("#notes")).to_contain_text("alpha: not read just now")
+    page.unroute(changes)
+    expect(page.locator("#detail")).to_contain_text("in alpha")  # kept, and opened once it answers
+    assert page.evaluate("location.search") == f"?change={alpha}%2Fsame"
+    page.route(changes, lambda _r: None)  # up, yet never answers
+    expect(page.locator("#error")).to_contain_text("slow to answer", timeout=30000)
+    expect(page.locator("#detail")).to_have_class("stale")  # not shown as freshly read
 
 
 @pytest.mark.browser
