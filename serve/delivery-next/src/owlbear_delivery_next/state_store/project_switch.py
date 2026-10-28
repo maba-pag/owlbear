@@ -172,11 +172,12 @@ def admission_state(source: tuple[Path, int], target: tuple[Path, int], rec: dic
 
 
 def _guard_target[T](target: Path, tfd: int, rec: dict, validate: Callable[[], T]) -> T:
-    """Keep the held target's proof, format and namespace stable across the later source reads."""
+    """Keep target authority stable through source reads, allowing ordinary active-store namespace writes."""
     try:
-        images = {name: fd_tree.stat_at(tfd, name) for name in (project_move.MOVE_PROOF, format_marker.MARKER, ".")}
+        images = {name: fd_tree.stat_at(tfd, name) for name in (project_move.MOVE_PROOF, format_marker.MARKER)}
         held_switched(target, tfd, rec)
         observed = validate()
+        fd_tree.refuse_quarantined(tfd, target)
         stable = all(fd_tree.same_image_at(tfd, name, before) for name, before in images.items())
         if not stable:
             marker = fd_tree.read_at(tfd, format_marker.MARKER)

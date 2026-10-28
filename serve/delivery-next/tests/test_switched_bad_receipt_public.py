@@ -602,6 +602,30 @@ def test_store_open_keeps_legitimate_active_payload_changes(repo, boot):
 
 
 @pytest.mark.usefixtures("current_binding")
+@pytest.mark.parametrize("consumer", ["current", "open"])
+def test_active_payload_atomic_writes_during_source_validation_remain_valid(repo, boot, monkeypatch, consumer):
+    target = _finished_move(repo, boot)
+    original = project_switch.source_state
+    edited = json.dumps({"format": 1, "widths": [987]})
+    fired = []
+
+    def state(*args):
+        observed = original(*args)
+        if not fired:
+            fired.append(True)
+            temporary = target / "active-config-write"
+            temporary.write_text(edited)
+            temporary.replace(target / "config.json")
+        return observed
+
+    monkeypatch.setattr(project_switch, "source_state", state)
+    found = project_home.current(repo) if consumer == "current" else Store.open(repo).root
+    assert fired == [True]
+    assert found == target
+    assert json.loads((target / "config.json").read_text())["widths"] == [987]
+
+
+@pytest.mark.usefixtures("current_binding")
 def test_missing_target_marker_is_not_created_after_initial_source_reads_lose_its_proof(repo, boot, monkeypatch):
     target = _finished_move(repo, boot)
     source = _source(repo)
