@@ -190,7 +190,8 @@ const STATES = { running: ["running", "info"], waiting: ["waiting for you", "war
 // Each question's heading, by kind; a kind not listed here is named by its own word.
 const KINDS = { end: "The challenge rounds ended without a pass", evidence: "Changed golden evidence",
   code: "A change to the detector's glue", scope: "Changes the updater may not make",
-  publish: "Publication stopped", "repair-config": "The CI repair changes configuration",
+  unsure: "A change the challenger is unsure about",
+  publish: "Publication stopped", "repair-config": "The CI repair was held before its push",
   "repair-approval": "The CI repair changed protected content" };
 
 function runLine(u) {
