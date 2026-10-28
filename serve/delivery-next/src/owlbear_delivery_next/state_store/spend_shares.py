@@ -51,6 +51,7 @@ VOID = "void"  # a Spotter record's ``look`` line imported although no look ran 
 OWNER = "owner"  # a recovered Spotter look session's owner, known after it was recovered (``spend_logs``)
 PLACE = ("project", "name", "clone", "change", "step", "job")
 RECOVERED = ("id", "type", "at", "session", "usage", "source")  # what a recovered line adds to a run its own lines name
+CONTINUED = ("usage", "at", "started", "before", "continued", "source", "settled")  # a continuation's own
 
 type Fields = dict[str, float | None]
 type Cell = tuple[str, str]
@@ -121,8 +122,9 @@ def runs(lines: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
     A Spotter look's session recovered from its runtime's log (``log:<session>``, carrying its ``look``) and its own
     lines, when they come after all, are one run: the recovered lines join the run its own lines name and add their
-    usage and time only, so the place its own lines record stands whichever came first. Until they come, an ``owner``
-    line gives the recovered run its owner's place, known after it was recovered.
+    usage and time only, so the run's id and the place its own lines record stand for every entry of it, its
+    continuations included, whichever came first. Until they come, an ``owner`` line gives the recovered run its
+    owner's place, known after it was recovered.
     """
     alias = _surrogates(lines)
     by: dict[str, dict[str, Any]] = {}
@@ -148,11 +150,24 @@ def runs(lines: list[dict[str, Any]]) -> list[dict[str, Any]]:
             if line.get("source") != LOG and (kept := later.pop(rid, None)):  # its own ending came after all
                 run["usage"] = kept[-1]["usage"]  # it alone dates the run
             _end(run, line)
+    _joined(by, later, owned, alias)
+    return _settled(by, later, void)
+
+
+def _joined(
+    by: dict[str, dict[str, Any]],
+    later: dict[str, list[dict[str, Any]]],
+    owned: dict[str, dict[str, Any]],
+    alias: dict[str, str],
+) -> None:
+    """Place recovered runs: by their owner until their own lines join them; then every entry as those lines say."""
     for rid, fields in owned.items():
         if rid in by:  # a recovered run its own lines never joined: they, once in, say where it ran
             for entry in (by[rid], *later.get(rid, ())):
                 entry.update(fields)
-    return _settled(by, later, void)
+    for rid in set(alias.values()) & later.keys():  # its own lines' run, id and place, whenever they came
+        for entry in later[rid]:
+            entry.update({k: v for k, v in by[rid].items() if k not in CONTINUED})
 
 
 def _surrogates(lines: list[dict[str, Any]]) -> dict[str, str]:

@@ -786,6 +786,22 @@ def test_a_looks_own_lines_written_before_its_recovery_keep_its_place(project, m
     assert spotter_view(lines) == ({"shop"}, 0.3, 1)
 
 
+def test_a_looks_delayed_start_after_two_recovered_checkpoints_is_one_run(project, monkeypatch) -> None:
+    """Sol's counterexample: the second checkpoint's continuation kept the recovered run's id and no place, so a
+    delayed start alone made shop 0.1 in its run and Project unknown 0.2 in log:spotter-a."""
+    written, place = recorded(monkeypatch), Where.of(project)
+    look_session("spotter-a", "L1", checkpoint("2026-10-28T09:00:00Z", 0.1e9),
+                 checkpoint("2026-10-28T09:20:00Z", 0.3e9))  # fmt: skip
+    recovered = spend_logs.found([], {project.root.name: place}, {}, {})
+    assert len(recovered) == 2
+    spend_ledger.started("R", "spotter-a", agent="spotter", job="look", model="m1", before={}, place=place, look="L1")
+    lines = [*recovered, *written]  # its end never came
+    assert spotter_view(lines) == ({"shop"}, 0.3, 1)
+    pieces = sorted((p["run"], p["lo"], p["hi"], round(p["credits"], 6)) for p in spend_shares.derive(lines))
+    assert pieces == [("R", "2026-10-28T09:00:00+00:00", "2026-10-28T09:00:00+00:00", 0.1),
+                      ("R", "2026-10-28T09:00:00+00:00", "2026-10-28T09:20:00+00:00", 0.2)]  # fmt: skip
+
+
 def changed(tmp_path: Path, spend: Spend, *events: dict) -> Store:
     store = Store(tmp_path / "projects" / "fedcba9876543210", None, "shop")
     store.write(Lock("c1"), Change(slug="c1", spend=spend))
