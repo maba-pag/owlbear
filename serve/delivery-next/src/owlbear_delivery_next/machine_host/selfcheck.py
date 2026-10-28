@@ -167,9 +167,9 @@ def _shared(path: Path) -> list[Path]:
     from owlbear_delivery_next.local_system import data_repo  # noqa: PLC0415
 
     with contextlib.suppress(Exception):  # no shared repository, or one that cannot be read: the host says so
-        root = Path(json.loads(data_repo.pointer().read_text())["repository"]).expanduser().resolve()
-        shared = data_repo.DataRepo(root)
-        return [shared.global_path, shared.project_path(data_repo.folder(shared, path))]
+        if (root := data_repo.configured_root()) is not None:
+            shared = data_repo.DataRepo(root)
+            return [shared.global_path, shared.project_path(data_repo.folder(shared, path))]
     return []
 
 

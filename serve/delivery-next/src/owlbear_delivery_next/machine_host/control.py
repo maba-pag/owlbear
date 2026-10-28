@@ -17,7 +17,7 @@ import urllib.request
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from owlbear_delivery_next.local_system import local_home
+from owlbear_delivery_next.local_system import data_repo, local_home
 from owlbear_delivery_next.machine_host import serve
 from owlbear_delivery_next.project_host.api import link
 
@@ -163,6 +163,7 @@ def status(say: Say) -> int:
             say(f"paused: {listed['waiting']} Changes would continue; press Resume on its page")
         for p in listed["projects"]:
             say(f"  {p['name']}: {p['state']}" + (f" · {p['reason']}" if p.get("reason") else "") + f" · {p['path']}")
+    say(data_repo.describe().line)
     say(f"login item: {autostarts()}")
     return 0
 

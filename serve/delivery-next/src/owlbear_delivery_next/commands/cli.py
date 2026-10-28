@@ -52,15 +52,48 @@ from owlbear_delivery_next.state_store.store import Store, StoreError
 START = "run `owlbear start`, then add this project on its page"
 
 
-def show_data(path: Path | None) -> str:
-    """Record the shared settings repository when given, then say which one this machine uses."""
+def show_data(target: str | Path | None) -> tuple[int, str]:
+    """Use the shared data repository *target* names, then say which one this machine uses; 1 on a problem.
+
+    A clone address is adopted from a checkout of it or cloned into ``~/.owlbear/data``; a folder is recorded as the
+    override. Without one it finishes an interrupted move and shows what only this checkout holds.
+    """
+    if target is None:
+        return _shown()
     try:
-        shared = data_repo.point(path) if path else data_repo.locate()
+        if isinstance(target, str) and data_repo.is_url(target):
+            shared, done = data_repo.provision(target, show=True)
+        else:
+            shared, done = data_repo.point(Path(target)), ""
     except data_repo.DataRepoError as exc:
-        return f"Not set: {exc}"
-    if shared is None:
-        return "No shared settings repository; settings stay in each clone. Set one: `owlbear-next data PATH`"
-    return f"Shared data repository: {shared.root} (pointer {data_repo.pointer()}). Run `owlbear restart` to use it."
+        return 1, f"Not set: {exc}"
+    root = shared.root if shared else data_repo.default()
+    said = f"{done[:1].upper()}{done[1:]}. " if done else ""
+    return 0, f"{said}Shared data repository: {root} (pointer {data_repo.pointer()}). Run `owlbear restart` to use it."
+
+
+def _shown() -> tuple[int, str]:
+    finished = ""
+    try:
+        with data_repo.pointer_lock():
+            finished = data_repo.recover()
+    except data_repo.BusyError:
+        pass
+    except data_repo.DataRepoError as exc:
+        return 1, f"Shared data: problem: {exc}"
+    found = data_repo.describe()
+    lines = [f"{finished[:1].upper()}{finished[1:]}."] if finished else []
+    if found.kind == "none":
+        lines.append(
+            "No shared settings repository; settings stay in each clone. Set one: `owlbear data URL` clones it into "
+            f"{data_repo.default()}, `owlbear data PATH` uses a checkout you keep elsewhere"
+        )
+    else:
+        lines.append(found.line.replace("shared data:", "Shared data repository:", 1))
+    if found.root is not None:
+        held = data_repo.inventory(data_repo.DataRepo(found.root))
+        lines += ["Only on this machine, so back it up:", *(f"  {line}" for line in held)] if held else []
+    return (1 if found.kind == "problem" else 0), "\n".join(lines)
 
 
 def show_home() -> str:
@@ -334,7 +367,7 @@ def main(argv: list[str] | None = None) -> int:  # noqa: PLR0911, PLR0915 - one 
     show = sub.add_parser("show", help="print the Change's step, exit and open question")
     show.add_argument("change")
     shared = sub.add_parser("data", help="show or set the shared settings repository (TD-57)")
-    shared.add_argument("path", nargs="?", type=Path)
+    shared.add_argument("target", nargs="?", help="a clone address to clone or adopt, or a checkout's folder to use")
     sub.add_parser("home", help="show OwlBear's folder on this machine (TD-198)")
     sub.add_parser("prepare", help="before a reboot: bind the clone's store id and fence the offline move")
     sub.add_parser("finish", help="after a reboot: prove the preparation and move the store; the source stays in place")
@@ -364,8 +397,9 @@ def main(argv: list[str] | None = None) -> int:  # noqa: PLR0911, PLR0915 - one 
     if a.command == "design-pack" and bool(a.diff) != bool(a.to):
         parser.error("--diff and --to go together")
     if a.command in {"data", "home"}:
-        sys.stdout.write((show_data(a.path) if a.command == "data" else show_home()) + "\n")
-        return 0
+        code, said = show_data(a.target) if a.command == "data" else (0, show_home())
+        sys.stdout.write(said + "\n")
+        return code
     if a.command == "design-pack":
         updating = a.check or a.diff or a.golden or a.replay
         return update_pack(a, a.repo.resolve()) if updating else show_pack(install=a.install)

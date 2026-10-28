@@ -14,7 +14,7 @@ from importlib.resources import files
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from owlbear_delivery_next.local_system import local_home, preload
+from owlbear_delivery_next.local_system import data_repo, local_home, preload
 from owlbear_delivery_next.machine_host import control
 from owlbear_delivery_next.runtimes import copilot_cli, readiness
 from owlbear_delivery_next.state_store import registry
@@ -92,6 +92,13 @@ def uninstall(say: Say) -> int:
             target.unlink()
             say(f"removed {target}")
     (local_home.root() / COMPLETION).unlink(missing_ok=True)
+    found = data_repo.describe()
+    if found.root is not None:
+        say(f"kept: your shared data at {found.root}; uninstalling never removes it")
+        for line in data_repo.inventory(data_repo.DataRepo(found.root)):
+            say(f"  only there: {line}")
+    elif found.kind == "problem":
+        say(f"shared data: {found.problem}; nothing of it was removed")
     return 0
 
 
@@ -141,6 +148,16 @@ def _login_item(say: Say) -> int:
     return len(missing)
 
 
+def _data(say: Say) -> int:
+    """1 when the shared data repository the machine is set to cannot be used; its warning is said either way."""
+    found = data_repo.describe()
+    if found.kind == "problem":
+        say(f"{found.line} · fix: `owlbear data` shows it")
+    elif found.warning:
+        say(f"shared data: {found.warning}")
+    return int(found.kind == "problem")
+
+
 def doctor(say: Say, dropped: list[str]) -> int:
     """What the host's environment cannot do: its tools, gh's login, the login item and each project's readiness."""
     from owlbear_delivery_next.runtimes import readiness  # noqa: PLC0415 - only doctor needs it
@@ -155,6 +172,7 @@ def doctor(say: Say, dropped: list[str]) -> int:
             say("gh: not signed in from this environment · fix: gh auth login")
             failed += 1
     failed += _login_item(say)
+    failed += _data(say)
     for p in registry.load().projects:
         try:
             checks = readiness.ready(Store.open(Path(p.path)), Path(p.path))

@@ -39,6 +39,8 @@ if TYPE_CHECKING:
     from pathlib import Path
     from types import FrameType
 
+PROVISION_RETRY = 600  # seconds between tries to clone the shared repository
+
 
 class Server(uvicorn.Server):
     """Uvicorn, closing every project's gate as soon as a stop is asked for, before requests drain."""
@@ -134,8 +136,11 @@ def serve(*, run: bool = False, handing: bool = False) -> int:
         machine.say(f"removed old versions: {', '.join(pruned)}")
     for line in _retired_index(home):
         machine.say(line)
+    cloning = _provisioned(machine)
     machine.load_all()
     threading.Thread(target=warm, args=(machine,), daemon=True, name="decisions").start()
+    if cloning:
+        threading.Thread(target=_cloning, args=(machine,), daemon=True, name="data-clone").start()
     threading.Thread(target=machine.retry_loop, daemon=True, name="projects").start()
     threading.Thread(target=machine.idle_loop, daemon=True, name="idle-stop").start()
     threading.Thread(target=machine.auto.loop, daemon=True, name="idle-update").start()
@@ -164,6 +169,49 @@ def serve(*, run: bool = False, handing: bool = False) -> int:
     if machine.handover is not None:
         _handed(machine, *machine.handover)
     return 0
+
+
+def _provisioned(machine: Machine) -> bool:
+    """Finish or undo a move and adopt ``~/.owlbear/data``, never cloning; whether a clone is still to be done.
+
+    A failure is said and the projects load without the shared data, each saying why; never fatal.
+    """
+    try:
+        _, done = data_repo.provision(clone=False)
+        if done:
+            machine.say(f"shared data: {done}")
+    except data_repo.DataRepoError as exc:
+        machine.say(f"shared data: {exc}")
+    try:
+        record = data_repo.stored() or {}
+    except data_repo.DataRepoError:
+        return False
+    return bool(record.get("remote")) and not record.get("repository") and not record.get("moving_to")
+
+
+def _cloning(machine: Machine) -> None:
+    """Thread: clone the shared repository the pointer names, then load the projects with it; retried until done.
+
+    While it clones, a project fails to load with the reason, so nothing writes settings elsewhere meanwhile.
+    """
+    said = ""
+    while not machine.stopping.is_set():
+        try:
+            _, done = data_repo.provision()
+        except data_repo.BusyError:
+            pass  # an `owlbear data` clones it now; looked at again later
+        except data_repo.DataRepoError as exc:
+            if str(exc) != said:
+                machine.say(f"shared data: {exc}; tried again every {PROVISION_RETRY // 60} minutes")
+                said = str(exc)
+        else:
+            if done:
+                machine.say(f"shared data: {done}")
+            machine.carry()
+            machine.retry()
+            return
+        if machine.stopping.wait(PROVISION_RETRY):
+            return
 
 
 def _pruned() -> list[str]:
