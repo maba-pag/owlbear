@@ -160,17 +160,19 @@ def prepare(sessions: list[str], outcome: str, *, low: int = 0, high: int = 0, p
     before = [x for x in lines if x.n <= low]
     lines = [x for x in lines if x.n > low]
     out.earlier = mask.redact(cut("\n".join(x.brief for x in before if x.brief), LATER))
-    for x in lines:
+    ends: list[int] = []  # each part's last line, by position: event numbers restart with each session
+    for i, x in enumerate(lines):
         text = f"s{x.segment}.e{x.n} {x.text}"
         part = out.parts[-1] if out.parts else None
         if part is None or part.ref.split(".")[0] != f"s{x.segment}" or len(part.text) + len(text) + 1 > PART:
             index = sum(p.ref.startswith(f"s{x.segment}.") for p in out.parts) + 1
             part = Part(f"s{x.segment}.p{index}", x.session, x.n, x.n)
             out.parts.append(part)
+            ends.append(i)
         part.text = f"{part.text}\n{text}" if part.text else text
-        part.last = x.n
-    for part in out.parts:
-        after = "\n".join(y.brief for y in lines if y.n > part.last and y.brief)
+        part.last, ends[-1] = x.n, i
+    for part, end in zip(out.parts, ends, strict=True):
+        after = "\n".join(y.brief for y in lines[end + 1 :] if y.brief)
         part.text = mask.redact(cut(part.text, PART))
         part.later = mask.redact(cut(after, LATER - len(outcome) - 20) + f"\noutcome: {outcome}")
     return out

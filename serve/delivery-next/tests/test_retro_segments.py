@@ -54,6 +54,17 @@ def test_a_kept_outputs_decisive_result_and_a_later_recovery_reach_the_judge_and
     assert rests["status"] == "unknown"
 
 
+def test_a_changes_first_session_sees_what_its_shorter_second_session_did_later_and_not_the_reverse():
+    _captured("s-a", [_event("assistant.message", content=f"step {i}") for i in range(5)])
+    found = [_event("assistant.message", content="the reviewer found the build broken")]
+    _captured("s-b", [*found, _event("assistant.message", content="fixed")])
+
+    first, second = seg.prepare(["s-a", "s-b"], "the Change ended done").parts
+
+    assert "the reviewer found the build broken" in first.later
+    assert "step 4" not in second.later
+
+
 def test_parts_are_bounded_and_masked_and_only_quotes_found_in_the_cited_text_survive():
     events = [_event("user.message", content="go")]
     for i in range(40):
