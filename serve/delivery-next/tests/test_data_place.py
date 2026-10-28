@@ -3,13 +3,14 @@
 import json
 import os
 import subprocess
+import tempfile
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
 from owlbear_delivery_next.commands import cli
-from owlbear_delivery_next.local_system import data_place, data_repo, local_home
+from owlbear_delivery_next.local_system import data_place, data_repo, git_run, local_home
 from owlbear_delivery_next.local_system.storage_io import open_lock
 from owlbear_delivery_next.machine_host import serve
 
@@ -154,10 +155,57 @@ def test_a_pointer_written_while_cloning_wins_and_the_clone_is_dropped(url: str,
         return done
 
     fake = SimpleNamespace(run=run, DEVNULL=subprocess.DEVNULL, TimeoutExpired=subprocess.TimeoutExpired)
-    monkeypatch.setattr(data_place, "subprocess", fake)
+    monkeypatch.setattr(git_run, "subprocess", fake)
     with pytest.raises(data_repo.DataRepoError, match="changed while cloning"):
         data_place.provision(url)
     assert (record(), clones(), data_place.default().exists()) == ({"repository": "/elsewhere"}, [], False)
+
+
+@pytest.mark.parametrize("where", ["mkdtemp", "rename", "lock"])
+def test_a_disk_failure_while_cloning_is_said_kept_and_retried(url: str, monkeypatch, where: str) -> None:
+    home().mkdir(parents=True, exist_ok=True)
+    data_place.pointer().write_text(json.dumps({"remote": url}))
+    failed, said, seen, done = [], [], [], []
+
+    def once(real):
+        def call(*args, **kwargs):
+            if not failed:
+                failed.append(where)
+                raise PermissionError(13, "denied")
+            return real(*args, **kwargs)
+
+        return call
+
+    if where == "mkdtemp":
+        monkeypatch.setattr(tempfile, "mkdtemp", once(tempfile.mkdtemp))
+    elif where == "rename":
+        monkeypatch.setattr(Path, "rename", once(Path.rename))
+    else:
+        monkeypatch.setattr(data_place, "open_lock", once(open_lock))
+
+    class Stopping:
+        def is_set(self) -> bool:
+            return False
+
+        def wait(self, _seconds: float) -> bool:  # the retry pause: what the failure left
+            seen.append((record(), clones(), data_place.default().exists()))
+            return False
+
+    machine = SimpleNamespace(
+        stopping=Stopping(), say=said.append, carry=lambda: done.append("carry"), retry=lambda: done.append("retry")
+    )
+    serve._cloning(machine)  # noqa: SLF001
+    why = {
+        "mkdtemp": f"no folder to clone into in {home()}: [Errno 13] denied",
+        "rename": f"the clone could not be renamed to {data_place.default()}: [Errno 13] denied",
+    }.get(where)
+    shown = f"cloning {url} failed: {why}" if why else "the shared repository could not be set up: [Errno 13] denied"
+    assert said == [
+        f"shared data: {shown}; tried again every {serve.PROVISION_RETRY // 60} minutes",
+        f"shared data: cloned {url} into {data_place.default()}",
+    ]
+    kept = {"remote": url, "failed": why} if why else {"remote": url}
+    assert (seen, done) == ([(kept, [], False)], ["carry", "retry"])
 
 
 def test_the_inventory_names_all_that_only_this_checkout_holds(tmp_path: Path, url: str) -> None:

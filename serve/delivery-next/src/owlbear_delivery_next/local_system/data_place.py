@@ -15,14 +15,13 @@ import logging
 import os
 import re
 import shutil
-import subprocess
 import tempfile
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NoReturn
 
-from owlbear_delivery_next.local_system import local_home, publication_hold
+from owlbear_delivery_next.local_system import git_run, local_home, publication_hold
 from owlbear_delivery_next.local_system.data_repo import VIEW, DataRepo, DataRepoError, _git, _top, remote_identity
 from owlbear_delivery_next.local_system.storage_io import atomic_write, fsync_dir, open_lock
 
@@ -265,22 +264,26 @@ def provision(url: str | None = None, *, clone: bool = True, show: bool = False)
     cloned beside ``~/.owlbear/data`` and renamed into place (when *clone*; *show* lets git print its progress). What
     it did is said; a failure raises with the reason, and a failed clone is kept in the pointer for the next try.
     """
-    with pointer_lock():
-        settle()
-        record = _parse(pointer()) or {}
-        if record.get("repository"):
-            return _known(record, url)
-        wanted = url or record.get("remote", "")
-        place = default()
-        if place.exists():
-            return _adopt(place, wanted)
-        if not wanted:
-            return None, ""
-        if not clone:
-            return None, f"the shared repository {wanted} is not cloned yet"
-        if record != {"remote": wanted}:
-            _write({"remote": wanted})
-        return _clone(wanted, place, show=show)
+    try:
+        with pointer_lock():
+            settle()
+            record = _parse(pointer()) or {}
+            if record.get("repository"):
+                return _known(record, url)
+            wanted = url or record.get("remote", "")
+            place = default()
+            if place.exists():
+                return _adopt(place, wanted)
+            if not wanted:
+                return None, ""
+            if not clone:
+                return None, f"the shared repository {wanted} is not cloned yet"
+            if record != {"remote": wanted}:
+                _write({"remote": wanted})
+            return _clone(wanted, place, show=show)
+    except OSError as exc:  # a folder or file OwlBear could not use: said like any other failure, never a crash
+        msg = f"the shared repository could not be set up: {exc}"
+        raise DataRepoError(msg) from exc
 
 
 def _known(record: dict[str, str], url: str | None) -> tuple[DataRepo, str]:
@@ -319,29 +322,40 @@ def _adopt(place: Path, wanted: str) -> tuple[DataRepo, str]:
 
 
 def _clone(url: str, place: Path, *, show: bool) -> tuple[DataRepo, str]:
+    """Clone *url* beside *place* and rename it in.
+
+    A failure is kept in the pointer; a rename done before a later error leaves *place* to be adopted at the next try.
+    """
     home = local_home.root()
-    temp = Path(tempfile.mkdtemp(prefix=CLONING, dir=home))
-    quiet = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
     try:
-        done = subprocess.run(  # noqa: S603 - the owner's address, passed after --
-            ["git", "clone", *([] if show else ["--quiet"]), "--", url, str(temp)],  # noqa: S607
-            env=quiet, stdin=subprocess.DEVNULL, capture_output=not show, text=True, timeout=CLONE_SECONDS, check=False,
-        )  # fmt: skip
-        why = "" if done.returncode == 0 else (done.stderr or "").strip()[-300:] or f"git exited {done.returncode}"
-    except (OSError, subprocess.TimeoutExpired) as exc:
-        why = f"{type(exc).__name__}: {exc}"
+        temp = Path(tempfile.mkdtemp(prefix=CLONING, dir=home))
+    except OSError as exc:
+        _failed(url, f"no folder to clone into in {home}: {exc}")
+    done = git_run.run(
+        home, "clone", *([] if show else ["--quiet"]), "--", url, str(temp), until=None, cap=CLONE_SECONDS, show=show
+    )
+    why = "" if done.returncode == 0 else (done.stderr or "").strip()[-300:] or f"git exited {done.returncode}"
     if not why and (place.exists() or _parse(pointer()) != {"remote": url}):
         why = f"{place} or {pointer()} changed while cloning; this clone was discarded"
+    if not why:
+        try:
+            temp.rename(place)
+        except OSError as exc:
+            why = f"the clone could not be renamed to {place}: {exc}"
     if why:
         shutil.rmtree(temp, ignore_errors=True)
-        if _parse(pointer()) == {"remote": url}:
-            _write({"remote": url, "failed": why})
-        msg = f"cloning {url} failed: {why}"
-        raise DataRepoError(msg)
-    temp.rename(place)
+        _failed(url, why)
     fsync_dir(home)
     _write(_final(place.resolve()))
     return DataRepo(place.resolve()), f"cloned {url} into {place}"
+
+
+def _failed(url: str, why: str) -> NoReturn:
+    """Keep *why* in the pointer while it still names only *url*, for the next try to show, then raise it."""
+    if _parse(pointer()) == {"remote": url}:
+        _write({"remote": url, "failed": why})
+    msg = f"cloning {url} failed: {why}"
+    raise DataRepoError(msg)
 
 
 def settle() -> str:
