@@ -10,7 +10,8 @@ Like a Spotter cases run (``machine_host.cases_job``), each chat look holds a le
 whose end teardown could not confirm (``spotter_look.UNENDED``) keeps the lease, and with it a session slot, held
 until the owner recovers it on the Maintenance page after a reboot: meanwhile no chat look starts, and a stop when idle
 or an update waits for it. A restarted host restores the held lease. A lease that cannot be written starts no session,
-and a ledger that cannot be read counts as held.
+and a ledger that cannot be read counts as held. A moment whose rule, a marked assumption, was retired is not admitted
+at all (``retired``).
 """
 
 from __future__ import annotations
@@ -20,7 +21,7 @@ import threading
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from owlbear_delivery_next.improvement import spotter
+from owlbear_delivery_next.improvement import assumptions, spotter
 from owlbear_delivery_next.local_system import maintenance, processes
 from owlbear_delivery_next.runtimes import spotter_look
 
@@ -37,6 +38,20 @@ LOOKS = 1  # chat looks at once on this machine
 CAPACITY = "capacity: a chat look is already running"
 HELD = "held: a chat look's runtime may still run; no chat look starts until Maintenance recovers it"
 FENCED = "fenced: no chat look starts while OwlBear updates or stops"
+
+
+def retired(rule: str) -> str:
+    """Why a chat moment resting on the marked assumption *rule* is not looked at; "" while it holds (or has none).
+
+    The registry is read at each moment, so a reset by the owner's command counts at once, and after a restart.
+    """
+    if not rule:
+        return ""
+    try:
+        held = assumptions.ensure(rule)
+    except (OSError, ValueError) as exc:  # fails closed: the rule may be retired
+        return f"the marked assumptions cannot be read ({type(exc).__name__}), so its rule {rule} may be retired"
+    return "" if held else f"retired: its rule, the marked assumption {rule}, was reset; a decided rule must replace it"
 
 
 @dataclass

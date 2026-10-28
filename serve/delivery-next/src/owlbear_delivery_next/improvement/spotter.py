@@ -270,6 +270,12 @@ class Spotter:
         """A look of kind *look* at *moment*, admitted now with the settings in force now, or recorded as skipped."""
         self._look(look, probability, moment)
 
+    def skip(self, look: str, probability: float, moment: dict[str, Any], why: str) -> None:
+        """No look of kind *look* at *moment*, for *why*: recorded as skipped, with the intake's turn and count now."""
+        moment = {"turn": self.kept.turn, **moment, "cutoff": self.kept.n}
+        skipped = self._record(look, probability, moment, skipped=why)
+        self._track(offload(store, self.folder, skipped, None))
+
     def history(self, events: Iterable[Any]) -> None:
         """A resumed session's transcript, taken in without looks: the task, plan and evidence the agent has."""
         for ev in events:
@@ -314,9 +320,7 @@ class Spotter:
             if look == "sample":  # a burst of samples is one count, not a write each
                 self.crowded[why] = self.crowded.get(why, 0) + 1
             else:
-                moment = {"turn": self.kept.turn, **moment, "cutoff": self.kept.n}
-                skipped = self._record(look, probability, moment, skipped=why)
-                self._track(offload(store, self.folder, skipped, None))
+                self.skip(look, probability, moment, why)
             return
         snapshot = self.kept.snapshot()
         moment = {"turn": snapshot["turn"], **moment, "cutoff": snapshot["n"]}

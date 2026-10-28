@@ -30,7 +30,10 @@ while the machine is paused (D-01M5XCE8ZC030KT2FZ7D6SZCJN), once the follower cl
 holds the machine's stop barrier (one admitted before is counted as running work), or while a look's runtime may
 still run (its lease held); the chats are read all the same. No turn settles while an event is still being written.
 The state-change moment of a completed call is looked at
-instead of a sample of it. Before any moment is settled or admitted, a chat's Spotter gets the settings in force (its
+instead of a sample of it. A moment whose rule (a marked assumption, ``runtimes.chat_moments``) a reset retired is
+recorded as skipped and never looked at; the chat is read, and its other moments and samples go on (a retired
+state-change rule leaves its call's sample to be taken); a look admitted before the reset runs on. Before any
+moment is settled or admitted, a chat's Spotter gets the settings in force (its
 ``look_credit_limit`` among them) and every gap known by then; its prompt and cases' snapshot
 (``cases.snapshot``) is taken when a turn starts (a turn begun before following, at its first live event) and serves
 every look of that turn. An admitted look keeps both, whatever changes before it runs, and its record keeps the turn,
@@ -471,11 +474,18 @@ class Follower:
             c.spot.sample(d)
 
     def _admit(self, c: Chat, moment: dict[str, Any]) -> bool:
-        """Look at *moment* if its kind is a look; whether it is a state change looked at (or skipped as one)."""
-        look = moment.pop("look")
+        """Look at *moment* if its kind is a look; whether it is a state change looked at (or skipped as one).
+
+        A moment whose rule (a marked assumption) was retired is recorded as skipped, never looked at; the call's
+        sample, when it is a completed call, is then taken as if no state change were made of it.
+        """
+        look, rule = moment.pop("look"), moment.pop("assumption", "")
         if c.spot is None or look not in c.spot.ctx.looks:
             return False
         self._fresh(c)
+        if why := chat_looks.retired(rule):
+            c.spot.skip(look, 1.0, moment, why)
+            return False
         c.spot.look(look, 1.0, moment)
         return look == "state-change"
 
