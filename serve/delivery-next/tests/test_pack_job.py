@@ -1143,6 +1143,21 @@ def test_a_held_change_too_large_to_show_whole_is_never_pushed_from_its_question
     assert (pr_head(checkout, state), fakes.github.calls) == (head, ["create"])
 
 
+def test_a_held_binary_test_edit_git_does_not_render_is_never_pushed_even_after_a_restart(tmp_path, checkout, clone):
+    on_main(checkout, "tests/fixture.dat", "\0old\n")
+    fakes, job, state = ci_failed(tmp_path, checkout, clone, {"tests/fixture.dat": "\0new\n"})
+    head = pr_head(checkout, state)
+
+    (q,) = answered(job, "repair")["questions"]
+
+    assert (q["paths"], [o["id"] for o in q["options"]]) == (["tests/fixture.dat (changes a test)"], REFUSED)
+    assert ("Binary files" in q["diff"], "binary content" in q["text"]) == (True, True)
+    again = pack_job.Job(job.store, fakes.live(checkout))
+    with pytest.raises(pack_job.Refused):
+        again.answer(q["id"], "push-reviewed")
+    assert (pr_head(checkout, state), fakes.github.calls) == (head, ["create"])
+
+
 def test_protected_repairs_too_large_to_show_whole_are_never_approved_from_the_question(tmp_path, checkout, clone):
     fakes, job, _ = ci_failed(tmp_path, checkout, clone, {DETECTOR: f"# repaired\n{LONG}"})
     fakes.github.checks = ["success"]

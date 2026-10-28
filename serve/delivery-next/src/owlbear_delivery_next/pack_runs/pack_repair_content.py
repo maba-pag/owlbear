@@ -113,14 +113,20 @@ def unlike(at: Path, c: Candidate, snap: dict[str, bytes]) -> list[str]:
     return sorted(set(differ))
 
 
-def guarded(run: pack_git.Git, src: pack_git.Source, r: Repair, package: str) -> tuple[dict[str, str], str]:
-    """The protected paths the repair changes with their blobs in its commit, and their diff for the owner."""
+def guarded(run: pack_git.Git, src: pack_git.Source, r: Repair, package: str) -> tuple[dict[str, str], str, bool]:
+    """The protected paths the repair changes with their blobs in its commit, their diff, and whether it is binary."""
     picked = [p for p in r.paths if protected(package, p)]
     if not picked:
-        return {}, ""
+        return {}, "", False
     listed = run(src.root, ["ls-tree", r.commit, "--", *picked]).splitlines()
     blobs = dict.fromkeys(picked, "deleted") | {line.split("\t", 1)[1]: line.split()[2] for line in listed}
-    return blobs, run(src.root, ["diff", f"{r.commit}~1", r.commit, "--", *picked])
+    changed = [f"{r.commit}~1", r.commit, "--", *picked]
+    return blobs, run(src.root, ["diff", *changed]), binary(run, src.root, changed)
+
+
+def binary(run: pack_git.Git, cwd: Path, changed: list[str]) -> bool:
+    """Whether the diff of *changed* (git diff's arguments) holds a binary change, which Git does not render."""
+    return any(line.startswith("-\t-\t") for line in run(cwd, ["diff", "--numstat", *changed]).splitlines())
 
 
 def quiet(run: pack_git.Git, cwd: Path, args: list[str]) -> None:

@@ -68,7 +68,8 @@ def config(run: str, r: Repair) -> dict[str, Any]:
         ask = "Push it as it is, try again without it, or discard?"
         options = [pack_rounds.PUSH_CONFIG, pack_rounds.RETRY, pack_rounds.DISCARD]
     if r.diff_cut:  # never pushed unseen
-        text = f"{text} Its diff of these files is too large to review here, so it cannot be pushed from here."
+        why = "holds binary content, which" if r.diff_binary else "is too large to review here, so it"
+        text = f"{text} Its diff of these files {why} cannot be reviewed or pushed from here."
         ask, options = "Try again without it, or discard?", [pack_rounds.RETRY, pack_rounds.DISCARD]
     q = pack_rounds.question(f"{run}:repair-config:{made}", "repair-config", f"{text} {ask} {said}", [],
                              commit=r.commit, paths=[*r.refused, *r.reviewed, *r.held], diff=r.diff)  # fmt: skip
