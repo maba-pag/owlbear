@@ -242,7 +242,7 @@ def render(snap: Mapping[str, Any], findings: Mapping[str, Mapping[str, Any]]) -
             "families": len({f.get("family") for f in mine}),
             "counterexamples": snap["counterexamples"].get("count", 0),
         },
-        "findings": [{k: f.get(k) for k in ("id", "what", "mechanism", "cost", "quotes")} for f in shown],
+        "findings": [{k: f.get(k) for k in ("id", "what", "mechanism", "cost", "steps", "quotes")} for f in shown],
         "counterexamples": list(snap["counterexamples"].get("sample") or ())[:SHOWN],
         "omitted": f"[{max(0, len(snap['findings']) - len(shown))} more findings omitted]",
         "evidence": snap["evidence"],
@@ -269,13 +269,19 @@ def _valid_review(said: Mapping[str, Any]) -> bool:
     )
 
 
+def _graded(g: Mapping[str, Any]) -> dict[str, Any]:
+    """A grade as a review reads it: the look, its moment and call, the grade with its reason and the right call."""
+    moment = f"at event {g.get('cutoff')} of session {g.get('session')}"
+    said = f"record {g['record']} ({g.get('look')} look {moment}, it said {g.get('category') or 'nothing'})"
+    should = f"; it should have said {s}" if (s := g.get("should")) else ""
+    what, why = f"{said} graded {g['grade']}", f"{g.get('reason', '')}{should}"
+    return {"id": g["id"], "what": what, "mechanism": why, "family": g.get("family"), "at": g.get("at")}
+
+
 def review(w: Work) -> int:
     """Phase 3: review each proposal of this run's provenance whose evidence has changed; how many were reviewed."""
     findings = {f["id"]: f for f in store.all_findings()}
-    findings |= {
-        g["id"]: {"id": g["id"], "what": f"record {g['record']} graded {g['grade']}", "family": g.get("family")}
-        for g in store.grades(synthetic=True)
-    }
+    findings |= {g["id"]: _graded(g) for g in store.grades(synthetic=True)}
     n = 0
     for snap in props.due_reviews():
         if snap.get("provenance") != w.provenance:

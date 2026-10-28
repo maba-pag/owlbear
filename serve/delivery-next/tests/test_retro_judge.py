@@ -249,6 +249,26 @@ def test_a_grade_only_run_proposes_a_case_for_a_late_record_graded_wrong():
     assert (props.folded()[case]["kind"], props.folded()[case]["call"]) == ("spotter-case", "lint")
 
 
+def test_a_review_reads_a_graded_records_moment_reason_and_right_call_and_a_fixes_steps():
+    def said(_ev, agent):
+        if agent == "retro-review":
+            return {"verdict": "survive", "why": "holds", "risks": [], "publishable": {}}
+        return {"findings": [], "grades": [{"record": "w", "grade": "wrong", "reason": "it was fine", "call": "none"}]}
+
+    ask = Asked(said)
+    retro_judge.run(_work(ask, [_record("w", 3)], grade_only=True))
+    fix = _finding("f1", "chat:u1", "tool:bash", "tool-defect") | {"steps": "run bash twice", "cost": "an hour"}
+    retro_store.add_findings([fix])
+    retro_bars.propose(_work(ask), ["f1"])
+    retro_judge.review(_work(ask, run="run-2"))
+
+    case, delivery = (_evidence(m) for m in ask.messages if "## The proposal" in m)
+    [graded] = case["findings"]
+    assert "handoff look at event 3 of session s1, it said lint" in graded["what"]
+    assert graded["mechanism"] == "it was fine; it should have said none"
+    assert delivery["findings"][0]["steps"] == "run bash twice"
+
+
 SECRET = "ghp_" + "b" * 36
 
 
