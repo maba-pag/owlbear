@@ -49,6 +49,24 @@ what is wrong (TD-150). In OwlBear also:
   `approved` (`confirmed=true`, `origin="approved"`); details you add stay `autonomous` with their reason.
 - End the session with one check of everything you record (TD-448).
 
+### Challenges Run by Hand
+
+PR reviewers get no decisions; the plan and implementation challenges check them (D-01M5ZE13N37HZAGJ69VWW69X23). So a
+plan or implementation challenge a chat runs by hand in this repository states the applicable decisions
+(D-01M5ZE1JHR9T1VCC9AZ80VATB5); Delivery's own challenges get theirs from Delivery.
+
+- Before the first round, the chat asks `lookup_decisions` which decisions govern the plan or change, in a question
+  that names it and what it touches. The picker reads the complete list; a `find_decisions` search, which returns at
+  most 20, is never the source.
+- The challenger gets the whole answer, untrimmed, checks the work against it and names the decisions the work
+  touches or breaks.
+- Before a later round, the chat asks again when a round changed the work materially or a governing decision changed.
+- Without the tool, the chat asks the host through the installed runtime: `~/.owlbear/runtime/.venv/bin/python`
+  calling `owlbear_delivery_next.commands.chat_client.workspace(Path("<this checkout>")).lookup_decisions(question)`.
+  If that fails too, or the answer says `failed`, the challenge says the decisions are unavailable and why, never that
+  none apply.
+- The list stays in the chat: none of it goes into a commit, pull request or comment on this repository.
+
 ## Directory Structure
 
 | Directory | Purpose |
