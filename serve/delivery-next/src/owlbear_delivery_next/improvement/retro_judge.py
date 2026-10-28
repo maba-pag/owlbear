@@ -310,11 +310,13 @@ def review(w: Work) -> int:
         if snap.get("provenance") != w.provenance:
             continue
         said = dict(paid(w, f"review:{snap['evidence']}", render(snap, findings), _valid_review, "retro-review"))
-        if said["verdict"] == "survive":  # a survivor's publishable is its title and body, within their bounds
-            shown = said["publishable"]
-            said["publishable"] = {"title": shown["title"][:TITLE], "body": shown["body"][:BODY]}
-        if leaked := case_review.leaks(said.get("publishable") or {}):
+        shown = said.get("publishable") or {}
+        if said["verdict"] == "survive":  # a survivor's publishable is its title and body, checked whole, then bounded
+            shown = {"title": shown["title"], "body": shown["body"]}
+        if leaked := case_review.leaks(shown):
             said |= {"verdict": "reject", "why": f"leak: {', '.join(leaked)}", "publishable": {}}
+        elif said["verdict"] == "survive":
+            said["publishable"] = {"title": shown["title"][:TITLE], "body": shown["body"][:BODY]}
         props.reviewed(snap["id"], snap["evidence"], said)
         n += 1
     return n

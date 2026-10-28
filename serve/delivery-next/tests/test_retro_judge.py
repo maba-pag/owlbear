@@ -333,6 +333,19 @@ def test_a_survivor_without_a_title_and_body_is_an_attempt_and_its_retry_keeps_t
     assert (got["state"], got["publishable"]) == ("waiting", {"title": "t" * 120, "body": "b" * 1500})
 
 
+def test_a_survivors_credential_that_its_bound_would_cut_in_two_is_found_before_the_cut():
+    review = {"verdict": "survive", "why": "holds", "risks": [], "publishable": {"title": "a case"}}
+    said = {"retro-review": review, "retro": {"findings": [], "grades": [{"record": "w", "grade": "wrong"} | WRONG]}}
+    ask = Asked(lambda _ev, agent: said[agent])
+    url = "https://ada:" + "s3cretPw" * 3 + "@git.example.com/r"  # its "@" falls past the body's bound
+    review["publishable"]["body"] = "b" * (retro_judge.BODY - 20) + " " + url
+
+    retro_judge.run(_work(ask, [_record("w", 3)], grade_only=True))
+
+    [case] = props.folded().values()
+    assert (case["state"], case["why"], case["publishable"]) == ("rejected", "leak: a credential, an email address", {})
+
+
 def test_a_wrong_grade_of_an_earlier_revision_whose_case_was_never_filed_gets_it_from_a_later_run():
     retro_store.add_grades([retro_units.grade(_record("old", 3), "r0", "wrong", "fine", should="hand-off-fitness")])
     w = _work(Asked(lambda *_: {}))
