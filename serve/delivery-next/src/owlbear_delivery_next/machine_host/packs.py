@@ -30,6 +30,7 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.machine_host.machine import Machine
 
 RELEASED = "released.json"  # beside the installed packs: the last look at the pack of the version to take
+FAILED = "failed.json"  # beside it: the last pack that failed, kept across restarts until it is installed
 STALE, RETRY = timedelta(days=1), timedelta(hours=1)  # a look's age before the next; an unknown one's
 PRESENT = 60.0  # seconds a look whether the running pack is in place holds: it hashes the engine
 TICK = 60.0  # seconds between the loop's looks whether a look is due
@@ -107,22 +108,63 @@ class Packs:
     """The machine's design pack: whether the running one is in place, a failed install, and Install."""
 
     def __init__(self, machine: Machine, mono: Callable[[], float] = time.monotonic) -> None:
-        """Nothing failed yet; whether the pack is in place is looked at on the first read."""
+        """The failure kept before a restart, if any; whether the pack is in place is looked at on the first read."""
         self.machine, self.mono, self.lock = machine, mono, threading.Lock()
         self.thread: threading.Thread | None = None
-        self.failure: dict[str, Any] | None = None  # the last pack that failed: its version, what it said, when
         self.present: tuple[float, bool] | None = None
+        self.failure: dict[str, Any] | None = self._restored()  # the last pack that failed: its version, what, when
+
+    def _restored(self) -> dict[str, Any] | None:
+        """The failure ``failed.json`` keeps; an unreadable one is itself a failure the banner says."""
+        path = local_home.root() / design_pack.PACKS / FAILED
+        try:
+            kept = json.loads(path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            return None
+        except (OSError, ValueError) as exc:
+            kept = exc
+        if not (isinstance(kept, dict) and all(isinstance(kept.get(k), str) for k in ("version", "detail", "at"))):
+            said = f"the kept design pack failure {path} is unreadable: {kept}"[:600]
+            self.machine.say(f"design pack: {said}")
+            return {"version": "", "detail": said, "at": None}
+        return {k: kept[k] for k in ("version", "detail", "at")}
+
+    def _keep(self, failure: dict[str, Any] | None) -> None:
+        """Hold *failure* and write it to ``failed.json``; None ends it and removes the file."""
+        path = local_home.root() / design_pack.PACKS / FAILED
+        with self.lock:
+            self.failure = failure
+            try:
+                if failure is None:
+                    path.unlink(missing_ok=True)
+                else:
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    tmp = path.with_name(f".{FAILED}.tmp")
+                    tmp.write_text(json.dumps(failure) + "\n", encoding="utf-8")
+                    tmp.replace(path)
+            except OSError as exc:  # the banner holds it until the host ends
+                self.machine.say(f"design pack: the failure could not be kept in {path}: {exc}")
 
     def failed(self, tag: str, detail: str) -> None:
-        """Keep a version's pack that could not be installed, for the pages' banner."""
-        with self.lock:
-            self.failure = {"version": tag, "detail": detail[:600], "at": _now()}
+        """Keep a version's pack that could not be installed, for the pages' banner, also across restarts."""
+        self._keep({"version": tag, "detail": detail[:600], "at": _now()})
 
     def ready(self, tag: str) -> None:
         """A version's pack is in place: a failure kept for it ends."""
         with self.lock:
-            if self.failure and self.failure["version"] == tag:
-                self.failure = None
+            ended = self.failure is not None and self.failure["version"] == tag
+        if ended:
+            self._keep(None)
+
+    def _applies(self, failure: dict[str, Any]) -> bool:
+        """Whether a kept failure still wants Install: its version is there, not older, not running with its pack."""
+        tag, running = failure["version"], versions.running()
+        if not tag:
+            return True  # an unreadable record: Install ends it
+        if tag == running:
+            return not self._in_place()
+        older = (versions.number(tag) or (0, 0)) < (versions.number(running) or (-1, -1))
+        return not older and (local_home.root() / local_home.VERSIONS / tag).is_dir()
 
     def _in_place(self) -> bool:
         with self.lock:
@@ -137,6 +179,9 @@ class Packs:
         """What every page shows: ``install`` (None, or missing, failed or installing) and ``release``."""
         with self.lock:
             installing, failure = self.thread is not None and self.thread.is_alive(), self.failure
+        if failure and not installing and not self._applies(failure):
+            self.ready(failure["version"])
+            failure = None
         running, pack = versions.running(), design_pack.manifest()["pack"]
         if installing:
             install = {"state": "installing", "version": running, "pack": pack, "detail": "", "at": None}
@@ -174,8 +219,7 @@ class Packs:
             self.failed(tag, f"{type(exc).__name__}: {exc}")
             self.machine.say(f"design pack: installing failed: {exc}")
         else:
-            with self.lock:
-                self.failure = None
+            self._keep(None)
             self.machine.say("design pack: installed")
         with self.lock:
             self.present = None

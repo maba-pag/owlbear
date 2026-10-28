@@ -20,7 +20,7 @@ from fastapi.testclient import TestClient
 
 from owlbear_delivery_next.design_packs import design_pack
 from owlbear_delivery_next.local_system import leases, local_home, processes
-from owlbear_delivery_next.machine_host import alias, app, control, handover, serve, update, versions
+from owlbear_delivery_next.machine_host import alias, app, control, handover, packs, serve, update, versions
 from owlbear_delivery_next.machine_host.machine import Machine, MachineError
 from owlbear_delivery_next.machine_host.versions import Choice
 from owlbear_delivery_next.project_host.host import HostRecord
@@ -251,7 +251,21 @@ def test_a_standby_that_never_answers_keeps_the_running_version_and_counts_an_at
     assert updating.activated == []
 
 
-def test_a_version_whose_pack_failed_is_not_activated_and_every_page_offers_install(updating, monkeypatch):
+def pinned_pack(monkeypatch) -> None:
+    """The running version pins a pack whose downloads come from here: ``engine`` and ``bundle``."""
+    pins = design_pack.manifest()
+    pins["engine"][design_pack.platform_name()] = hashlib.sha256(b"engine").hexdigest()
+    pins["bundle"]["sha256"] = hashlib.sha256(b"bundle").hexdigest()
+    monkeypatch.setattr(design_pack, "manifest", lambda: json.loads(json.dumps(pins)))
+    monkeypatch.setattr(design_pack, "fetch", lambda url, _s=0: b"engine" if "releases" in url else b"bundle")
+
+
+def test_a_version_whose_pack_failed_is_not_activated_and_every_page_offers_install_also_after_a_restart(
+    updating, monkeypatch
+):
+    pinned_pack(monkeypatch)
+    design_pack.install()  # the running version's own pack stays in place throughout
+
     def install(_choice: Choice) -> Path:
         msg = "v0.2's design pack could not be installed: cannot download"
         raise versions.PackInstallError(msg)
@@ -266,13 +280,23 @@ def test_a_version_whose_pack_failed_is_not_activated_and_every_page_offers_inst
     assert (failed["state"], failed["version"]) == ("failed", "v0.2")
     assert "cannot download" in failed["detail"]
 
+    restarted = Machine(m.record, paused=False)  # a new host over the same home
+    assert restarted.packs.read()["install"] == failed
+    packed: list[Path] = []
+    monkeypatch.setattr(versions, "pack", lambda folder: packed.append(folder) or "")
+    restarted.packs.install()
+    restarted.packs.thread.join(10)
+    assert (packed, restarted.packs.read()["install"]) == ([updating.folder], None)
+    assert Machine(m.record).packs.read()["install"] is None  # ended for good
+
+    (local_home.root() / design_pack.PACKS / packs.FAILED).write_text("{not json")
+    unreadable = Machine(m.record).packs.read()["install"]
+    assert (unreadable["state"], unreadable["version"]) == ("failed", "")
+    assert "is unreadable" in unreadable["detail"]
+
 
 def test_install_puts_a_missing_pack_in_place_with_no_newer_version(updating, monkeypatch):
-    pins = design_pack.manifest()
-    pins["engine"][design_pack.platform_name()] = hashlib.sha256(b"engine").hexdigest()
-    pins["bundle"]["sha256"] = hashlib.sha256(b"bundle").hexdigest()
-    monkeypatch.setattr(design_pack, "manifest", lambda: json.loads(json.dumps(pins)))
-    monkeypatch.setattr(design_pack, "fetch", lambda url, _s=0: b"engine" if "releases" in url else b"bundle")
+    pinned_pack(monkeypatch)
     monkeypatch.setattr(versions, "target", lambda: None)
     m = updating.machine
     client = TestClient(app.create(m), base_url="http://127.0.0.1")
