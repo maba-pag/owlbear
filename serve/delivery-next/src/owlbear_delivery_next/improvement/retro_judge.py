@@ -84,12 +84,17 @@ def _home(record: Mapping[str, Any], parts: list[Part]) -> int:
     return begun[-1] if begun else mine[0] if mine else len(parts) - 1
 
 
+def _shown(p: Part) -> dict[str, str]:
+    """A part as the judge reads it: its session too, as event numbers restart with each one and records name it."""
+    return {"ref": p.ref, "session": p.session, "text": p.text, "later": p.later}
+
+
 def _message(w: Work, parts: Iterable[Part], records: Iterable[Mapping[str, Any]]) -> str:
     evidence = {
         "unit": w.unit.get("kind", ""),
         "gaps": cut("; ".join(w.unit.get("gaps") or ()), GAPS),
         "earlier": w.prepared.earlier,
-        "parts": [{"ref": p.ref, "text": p.text, "later": p.later} for p in parts],
+        "parts": [_shown(p) for p in parts],
         "records": [_entry(r) for r in records],
     } | ({"activity": w.prepared.activity} if w.prepared.activity else {})
     return f"{JUDGE.read_text()}\n\n## The evidence\n\n```json\n{dumps(evidence)}\n```\n"
@@ -108,7 +113,7 @@ def batches(w: Work, records: list[dict[str, Any]]) -> list[tuple[list[Part], li
     room = BATCH - len(_message(w, (), ()))
     pieces: list[tuple[Part, list[dict[str, Any]]]] = []
     for i, part in enumerate(parts):
-        mine, size = held.get(i, []), len(dumps({"ref": part.ref, "text": part.text, "later": part.later}))
+        mine, size = held.get(i, []), len(dumps(_shown(part)))
         if w.grade_only and not mine:
             continue
         chunk: list[dict[str, Any]] = []

@@ -8,7 +8,8 @@ The evidence holds:
 
 - `parts`: the work's events, one line each, starting with a reference such as `s2.e41` (segment 2, event 41). A
   segment is one requester turn of a chat, or one session of a Change. Long texts were cut where `[… n chars
-  omitted]` says; an `[output NAME: STATE]` marker says a saved output could not be read.
+  omitted]` says; an `[output NAME: STATE]` marker says a saved output could not be read. Each part names its
+  `session`: event numbers restart with each session, and a record's `session` and `at` point into the same one.
 - `later`: for each part, what happened after it, then the work's outcome.
 - `earlier`: what happened before, judged already; context only.
 - `gaps`: what is missing from the evidence.

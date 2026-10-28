@@ -285,6 +285,15 @@ def test_a_part_carried_into_a_second_batch_for_its_records_yields_its_findings_
     assert (len(retro_store.all_findings()), len(retro_store.grades())) == (1, 30)
 
 
+def test_each_part_names_its_session_so_a_records_moment_is_found_when_event_numbers_restart():
+    parts = [Part("s1.p1", "s-a", 1, 9, "s1.e3 agent: built", ""), Part("s2.p1", "s-b", 1, 9, "s2.e3 agent: ok", "")]
+    ask = Asked(lambda ev, _a: _graded(ev))
+    retro_judge.judge(_work(ask, [_record("r1", 3, session="s-b")], parts, uid="chg:p1:fix-it"))
+    sent = _evidence(ask.messages[0])
+    assert [(p["ref"], p["session"]) for p in sent["parts"]] == [("s1.p1", "s-a"), ("s2.p1", "s-b")]
+    assert sent["records"][0]["session"] == "s-b"
+
+
 def test_a_grade_only_run_proposes_a_case_for_a_late_record_graded_wrong():
     def said(_ev, agent):
         if agent == "retro-review":
