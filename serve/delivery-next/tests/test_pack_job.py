@@ -44,6 +44,7 @@ from owlbear_delivery_next.pack_runs import (
     pack_job,
     pack_publish,
     pack_repair,
+    pack_repair_content,
     pack_rounds,
     pack_run,
     pack_updater,
@@ -1163,7 +1164,7 @@ def test_a_host_stop_while_a_repair_is_checked_again_checks_it_from_the_start_an
 ):
     """Stopped before its files were laid into the candidate, or as its golden pages ran: Retry lays it out again."""
     fakes, job, state = ci_failed(tmp_path, checkout, clone, {DETECTOR: "# repaired\n"})
-    head, file, kept, real = pr_head(checkout, state), job.store.root / pack_job.FILE, {}, pack_repair.snapshot
+    head, file, kept, real = pr_head(checkout, state), job.store.root / pack_job.FILE, {}, pack_repair_content.snapshot
     (passed,) = {i["identity"] for i in state["invocations"] if i["operation"] == "full-challenge"}
 
     def laying(*args):  # the host stops right after the check was recorded, before anything is laid out
@@ -1174,7 +1175,7 @@ def test_a_host_stop_while_a_repair_is_checked_again_checks_it_from_the_start_an
         return real(*args)
 
     if window == "laying":
-        monkeypatch.setattr(pack_repair, "snapshot", laying)
+        monkeypatch.setattr(pack_repair_content, "snapshot", laying)
     else:
         fakes.at_golden = lambda: kept.update(kept or json.loads(file.read_text()))
     fakes.github.checks = ["success"]

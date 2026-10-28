@@ -15,35 +15,31 @@ import json
 import os
 import shutil
 import threading
-import time
 import uuid
-from dataclasses import dataclass, field
-from importlib.resources import files
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.change_contracts.round_records import RoundLoop
 from owlbear_delivery_next.design_packs import design_pack, pack_git, pack_update
-from owlbear_delivery_next.github.gh import GhProvider
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.local_system.storage_io import atomic_write
 from owlbear_delivery_next.pack_runs import (
+    pack_activation,
     pack_admission,
     pack_candidate,
     pack_gates,
     pack_progress,
     pack_publish,
     pack_repair,
-    pack_replay,
     pack_rounds,
     pack_run,
 )
 from owlbear_delivery_next.pack_runs.machine_lock import HeldError, take
+from owlbear_delivery_next.pack_runs.pack_live import Live
 from owlbear_delivery_next.pack_runs.pack_run import CANDIDATE, UPDATER, Stopped
 from owlbear_delivery_next.pack_runs.pack_state import (
     FILE,
     HOST_STOPPED,
-    LOG,
     MACHINE_LOCK,
     RUNS,
     STAGES,
@@ -70,17 +66,13 @@ from owlbear_delivery_next.pack_runs.pack_state import (
 from owlbear_delivery_next.pack_runs.pack_state import (
     now as _now,
 )
+from owlbear_delivery_next.pack_runs.pack_steps import Steps
 from owlbear_delivery_next.state_store import spend_ledger
-from owlbear_delivery_next.workflow_steps import sessions
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
 
-    from owlbear_delivery_next.design_packs.calibration import Replay
-    from owlbear_delivery_next.github.provider import Provider
     from owlbear_delivery_next.local_system.maintenance import Maintenance
-    from owlbear_delivery_next.runtimes.sdk_adapter import Session
-    from owlbear_delivery_next.runtimes.session_result import Run
     from owlbear_delivery_next.state_store.store import Store
 
 __all__ = ["CANDIDATE", "FILE", "STAGES", "Busy", "Job", "Live", "Refused", "Stale", "Stopped", "last", "running_for"]
@@ -98,44 +90,7 @@ class Refused(Exception):  # noqa: N818 - the route's answer, not a fault
     """The answer cannot be carried out as given."""
 
 
-def _upstream() -> Path:
-    return design_pack.folder().parent / "upstream"  # beside the packs, outside every project
-
-
-class Replays(Protocol):
-    """The calibration replay: its candidate's session runs under *run*, and *keep* holds its scratch directory."""
-
-    def __call__(
-        self,
-        store: Store,
-        candidate: pack_candidate.Candidate | None,
-        run: Callable[[Session], Run] | None = None,
-        *,
-        keep: Callable[[Path], bool] | None = None,
-    ) -> Replay: ...
-
-
-@dataclass
-class Live:
-    """What reaches outside: upstream, downloads, the browser, model sessions and git. Tests replace each."""
-
-    package: Path = field(default_factory=lambda: Path(str(files("owlbear_delivery_next"))))
-    clone: Path = field(default_factory=_upstream)
-    releases: Callable[[str], bytes] | None = None  # the notice's release list; None reads GitHub
-    sync: Callable[[Path, str], None] = pack_candidate.sync
-    download: Callable[[str], bytes] = design_pack.fetch
-    golden: Callable[..., dict[str, dict[str, list[str]]]] = pack_update.golden  # (installed, folder=None)
-    replay: Replays = pack_replay.replay
-    challenge: Callable[[Store, Session], Run] = sessions.run
-    update: Callable[[Store, Session], Run] = sessions.run  # the writing updater (TD-125)
-    git: pack_git.Git = pack_git.git
-    github: Callable[[Path], Provider] = GhProvider
-    sleep: Callable[[float], None] = time.sleep
-    poll: float = 30.0  # seconds between looks at the pull request's checks
-    ci_wait: float = 3600.0  # seconds CI may take at one head before the owner is asked
-
-
-class Job:
+class Job(Steps):
     """The project's design pack update: start one, answer it, read its state."""
 
     def __init__(self, store: Store, live: Live | None = None) -> None:
@@ -256,7 +211,7 @@ class Job:
                 return self._copy()
             ctx = pack_run.Context.model_validate(self.state["context"])
             lp = RoundLoop.model_validate(self.state["loop"])
-            left = _decided(self.state["questions"], q, option, note=note, ctx=ctx, lp=lp)
+            left = pack_run.decided(self.state["questions"], q, option, note=note, ctx=ctx, lp=lp)
             if not left:
                 self._claim(self._resumed)  # before anything changes: a refusal leaves the question open
             self._log(said)
@@ -290,61 +245,6 @@ class Job:
             self._log("you discarded the update")
             self._finish("discarded", "discarded by you; nothing changed")
             return self._copy()
-
-    def log(self, line: str) -> None:
-        """One line of the run's log, kept with its state."""
-        with self.lock:
-            self._log(line)
-            self._save()
-
-    def _log(self, line: str) -> None:
-        self.state["log"] = [*self.state["log"], f"{_now()} {line}"][-LOG:]
-
-    def stage(self, name: str, result: str, detail: str = "") -> None:
-        """One stage's latest result, shown with a legacy record's stages and logged; invocations keep each run."""
-        self._step(None, name, result, detail)
-
-    def _step(self, inv: dict[str, Any] | None, name: str, result: str, detail: str = "", identity: str = "") -> None:
-        """One stage's result in its slot and, when the run keeps them, in its invocation *inv*; saved, then logged."""
-        with self.lock:
-            if inv is not None:
-                pack_progress.closed(self.state["invocations"], inv, result, detail, identity)
-            stage = next(s for s in self.state["stages"] if s["name"] == name)
-            stage["result"], stage["detail"] = result, detail[:4000]
-            self.state["stage"] = name if result == "running" else self.state["stage"]
-            self._save()
-        self.log(f"{name}: {result}{f': {detail.splitlines()[0][:300]}' if detail else ''}")
-
-    def _begin(self, name: str, op: str, round_: int | None, identity: str) -> dict[str, Any] | None:
-        """A new invocation of *op*, running in stage *name*; None for a legacy run, which invents no history."""
-        with self.lock:
-            invocations = self.state.get("invocations")
-            inv = None
-            if invocations is not None:
-                inv = pack_progress.opened(invocations, name, op, round_=round_, identity=identity)
-            stage = next(s for s in self.state["stages"] if s["name"] == name)
-            stage["result"], stage["detail"], self.state["stage"] = "running", "", name
-            self._save()
-        self.log(f"{name}: running")
-        return inv
-
-    def note(self, name: str, op: str, result: str, detail: str, identity: str = "") -> None:
-        """An invocation that ran nothing, such as a replay reused for an unchanged identity; logged."""
-        with self.lock:
-            invocations = self.state.get("invocations")
-            if invocations is not None:
-                inv = pack_progress.opened(invocations, name, op, identity=identity, result=result)
-                inv["detail"] = detail[:4000]
-                self._save()
-        self.log(f"{name}: {pack_progress.words(op, result)}")
-
-    def identified(self, identity: str) -> None:
-        """The candidate the last invocation made, once known: evidence about an earlier candidate is stale now."""
-        with self.lock:
-            invocations = self.state.get("invocations")
-            if invocations:
-                pack_progress.identified(invocations, invocations[-1], identity)
-                self._save()
 
     def keep(self, ctx: pack_run.Context, lp: RoundLoop | None = None) -> None:
         """Keep the run's context and loop (as kept when None), so it goes on from here."""
@@ -510,42 +410,6 @@ class Job:
             if reason is not None:  # None: the run waits for the owner
                 self._end("passed", reason)
 
-    def do[T](  # noqa: PLR0913 - the stage, its work and words, and what the invocation is
-        self,
-        name: str,
-        work: Callable[[], T],
-        said: Callable[[T], str] = str,
-        hold: type[Exception] | None = None,
-        *,
-        op: str = "",
-        round_: int | None = None,
-        identity: str | Callable[[T], str] = "",
-        judged: Callable[[T], str] | None = None,
-    ) -> T:
-        """Run one stage's work as a new invocation of its operation: its result shown, any failure ending the run.
-
-        The operation *op* is the stage *name* by default; a failure names the stage. *judged* says what the work came
-        to: "passed" by default, "completed" for a session whose candidate it does not judge, "findings" for a verdict
-        with findings. *identity* is the candidate or head it ran on, or reads it from the result. A failure of the
-        *hold* kind is raised as it is, for the owner to decide.
-        """
-        inv = self._begin(name, op or name, round_, identity if isinstance(identity, str) else "")
-        try:
-            out = work()
-        except Stopped as exc:
-            self._step(inv, name, "passed" if exc.current else "failed", exc.reason)
-            raise
-        except Exception as exc:
-            if hold is not None and isinstance(exc, hold):
-                self._step(inv, name, getattr(exc, "result", "failed"), str(exc))  # held for the owner, or failed
-                raise
-            reason = f"{name}: {type(exc).__name__}: {exc}"[:2000]  # any failure stops the run, its stage named
-            self._step(inv, name, "failed", reason)
-            raise Stopped(reason) from exc
-        made = identity(out) if callable(identity) else ""
-        self._step(inv, name, judged(out) if judged else "passed", said(out), made)
-        return out
-
     def _stages(self) -> str | None:
         live, store = self.live, self.store
         package = live.package.resolve()
@@ -575,7 +439,7 @@ class Job:
             lp = RoundLoop.model_validate(self.state["loop"])
         checking = ctx.repair.phase == "checking"  # an agent's repair of pack content, checked before it is pushed
         if ctx.publication and ctx.publication.commit and not checking:  # GitHub first: the package may have moved on
-            return pack_run.republish(self, ctx, lp)
+            return pack_activation.republish(self, ctx, lp)
         return pack_run.advance(self, pack_run.rebuilt(self, ctx), ctx, lp)
 
     def _notice(self) -> str:
@@ -587,25 +451,3 @@ class Job:
             msg = f"up to date: no skill release newer than {design_pack.manifest()['upstream']['tag']}"
             raise Stopped(msg, current=True)
         return found[-1]
-
-
-def _decided(  # noqa: PLR0913 - the open questions, the answered one, the answer and what it changes
-    asked: list[dict[str, Any]], q: dict[str, Any], option: str, *, note: str, ctx: pack_run.Context, lp: RoundLoop
-) -> list[dict[str, Any]]:
-    """Record one answer; the questions still open. The last dispute answer sets what the run does next."""
-    if q["kind"] == "dispute":
-        pack_rounds.decided(lp, q["finding"], option, note)
-        left = [x for x in asked if x["id"] != q["id"]]
-        if not left:  # TD-193: the answers are carried out together
-            ctx.next = pack_run.NEXT[pack_rounds.after(lp)]
-        return left
-    if q["kind"] in {"publish", *pack_repair.KINDS}:  # trying again reconciles with GitHub before anything is repeated
-        pack_repair.decided(q, option, ctx)
-        return []
-    if q["kind"] in pack_gates.KINDS:
-        return pack_run.gated(asked, q, option, ctx, lp)
-    if option == pack_rounds.ANOTHER:
-        lp.extra, lp.ended, ctx.next = lp.extra + 1, "", "challenge"
-    else:
-        lp.ended, ctx.accepted, ctx.next = lp.ended, q["identity"], "activate"
-    return []
