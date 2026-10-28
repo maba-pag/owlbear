@@ -824,29 +824,6 @@ def test_a_looks_own_agent_wins_over_the_one_its_recovery_named(project, monkeyp
     assert {p["role"] for p in spend_shares.derive(lines)} == {"retro-review"}
 
 
-@pytest.mark.parametrize("record", ["before recovery", "after recovery"])
-def test_a_recovered_look_keeps_its_records_credit_limit_stop(project, record) -> None:
-    """Copilot's review: the recovered run took the record's place but not its stop, and the record, its sessions
-    covered, counts nothing itself: the look fell out of the stopped-only filter."""
-    folder = local_home.root() / "spotter"
-    folder.mkdir()
-    rec = look_record("L1", credits=0.3, credits_known=True, sdk_sessions=["spotter-a"], limit=0.3,
-                      stopped="reached", stopped_by="look")  # fmt: skip
-    path = folder / "records-2026-10-28.jsonl"
-    if record == "before recovery":
-        path.write_text(json.dumps(rec) + "\n")
-    look_session("spotter-a", "L1", checkpoint("2026-10-28T09:00:00Z", 0.3e9))
-    spend_reconcile.run([(project, None)])
-    if record == "after recovery":
-        path.write_text(json.dumps(rec) + "\n")
-        spend_reconcile.run([(project, None)])
-    assert spend_ledger.WRITER.settled(5)
-    stopped = spend_metrics.query(spend_metrics.pieces(), tz=UTC_ZONE, agent="spotter", stopped=True)["totals"]
-    assert (stopped["credits"], stopped["runs"], stopped["stopped"]) == (0.3, 1, 1)
-    [run] = spend_metrics.query(spend_metrics.pieces(), tz=UTC_ZONE, agent="spotter")["runs"]["items"]
-    assert (run["name"], run["stopped"], run["stopped_by"], run["limit"]) == ("shop", "reached", "look", 0.3)
-
-
 def test_a_record_file_cut_inside_a_character_still_names_the_owners_of_its_whole_lines(project) -> None:
     """CodeRabbit's review: a records file whose last line was cut inside a multibyte character raised out of the
     log source, so no session was recovered that pass."""

@@ -98,38 +98,28 @@ def found(
     return out + _owned(found, owners)
 
 
-type Owner = tuple[Where, str, str, str, str, dict[str, Any]]
-STOP = ("limit", "stopped", "stopped_by")  # a look meter's limit and stop, as its record or cases run keeps them
-
-
-def _stop(said: dict[str, Any]) -> dict[str, Any]:
-    return {"limit": said.get("limit"), "stopped": str(said.get("stopped") or ""),
-            "stopped_by": str(said.get("stopped_by") or "")}  # fmt: skip
-
-
 class Owners:
     """Who owns each Spotter look, by its id: its Spotter record, else the Spotter cases run that replayed it.
 
-    Read once, when first asked: the place, Change, step and job its spend counts under, the source that said so, and
-    its meter's limit and stop (``STOP``), which no other line of a look whose own lines were lost keeps.
+    Read once, when first asked: the place, Change, step and job its spend counts under, and the source that said so.
     """
 
     def __init__(self, places: dict[str, Where]) -> None:
         self.places = places
-        self.found: dict[str, Owner] | None = None
+        self.found: dict[str, tuple[Where, str, str, str, str]] | None = None
 
-    def of(self, look: str) -> Owner | None:
+    def of(self, look: str) -> tuple[Where, str, str, str, str] | None:
         """The owner of *look*, or None while neither its record nor its cases run is written."""
         if self.found is None:
             self.found = self._read()
         return self.found.get(look)
 
-    def _read(self) -> dict[str, Owner]:
-        out: dict[str, Owner] = {}
+    def _read(self) -> dict[str, tuple[Where, str, str, str, str]]:
+        out: dict[str, tuple[Where, str, str, str, str]] = {}
         for run in _lines(cases.place() / "runs.jsonl"):  # a replay is machine-wide work, as its own lines say
             for report in run.get("looks") or ():
                 if isinstance(report, dict) and report.get("id"):
-                    out[str(report["id"])] = (Where(), "", "", "look", "import:cases", _stop(report))
+                    out[str(report["id"])] = (Where(), "", "", "look", "import:cases")
         folder = local_home.root() / "spotter"
         for path in sorted(folder.glob("records-*.jsonl")) if folder.is_dir() else ():
             for rec in _lines(path):
@@ -137,8 +127,7 @@ class Owners:
                     project = str(rec.get("project") or "")
                     place = self.places.get(project, UNKNOWN_PROJECT if project else Where())
                     out[str(rec["id"])] = (place, str(rec.get("change") or ""), str(rec.get("step") or ""),
-                                           f"{rec.get('look') or ''} look".strip(), "import:spotter",
-                                           _stop(rec))  # fmt: skip
+                                           f"{rec.get('look') or ''} look".strip(), "import:spotter")  # fmt: skip
         return out
 
 
@@ -168,17 +157,16 @@ def _look(
     look = str(who.get("look") or "")
     if not look or not (read := _checkpoints(sid, checked, pending)):
         return []
-    place, change, step, job, _, stop = owners.of(look) or (UNKNOWN_PROJECT, "", "", "look", "", {})
+    place, change, step, job, _ = owners.of(look) or (UNKNOWN_PROJECT, "", "", "look", "")
     role = str(who.get("role") or "spotter")
-    return [base(place, change, agent=role, job=job, step=step, ending="", look=look) | stop
+    return [base(place, change, agent=role, job=job, step=step, ending="", look=look)
             | _correction(f"log:{sid}", sid, at, usage, final) for at, usage, final in read]  # fmt: skip
 
 
 def _owned(found: list[dict[str, Any]], owners: Owners) -> list[dict[str, Any]]:
     """An ``owner`` line for each recovered look session still under the unknown project whose owner is now known.
 
-    Its run moves to its owner, and takes its meter's stop, whether or not its log changed since: ``spend_shares.runs``
-    applies the line.
+    Its run moves to its owner whether or not its log changed since: ``spend_shares.runs`` applies the line.
     """
     out = []
     for run in found:
@@ -188,8 +176,8 @@ def _owned(found: list[dict[str, Any]], owners: Owners) -> list[dict[str, Any]]:
         owner = owners.of(look)
         if owner is None or owner[0] == UNKNOWN_PROJECT:
             continue
-        place, change, step, job, source, stop = owner
-        fields = base(place, change, step=step, job=job) | stop
+        place, change, step, job, source = owner
+        fields = base(place, change, step=step, job=job)
         out.append({"id": f"owner:{run['run']}:{ident(fields)}", "type": spend_shares.OWNER, "run": run["run"],
                     "session": sid, "look": look, "source": source} | fields)  # fmt: skip
     return out
