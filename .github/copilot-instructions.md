@@ -10,17 +10,17 @@ OwlBear is a laptop-resident AI development system built around VS Code and GitH
 | --- | --- | --- |
 | `main` | The only long-lived branch and GitHub's default | Full workspace: `share/`, `serve/`, `setup/`, `.owlbear/`, `store/`, `tests/`, `pyproject.toml` |
 
-Uncoordinated repository maintenance reaches `main` through a pull request: its required `CI`
-check must pass on a branch that is up to date with `main`, and it merges with a merge commit
-(TD-278). Once its CI passes, a pull request that changes runtime code or CI workflows gets the `coderabbit` label,
-which buys one CodeRabbit review from a free allowance of about one an hour; it merges only after that review is in
-and handled. If CodeRabbit reports its limit or sends no review within 60 minutes, a Copilot review replaces it and
-the pull request merges once that is handled, said in the pull request. Others merge after CI and Sol's review,
-without the label (`D-01M5WG5KS3N4PK44FTHJTCX7RC`). A chat-authored pull request that changes runtime code gets
-`release:minor`, one that changes only docs or tests none, and `release:major` only on the owner's word (TD-314). Target delivery
-uses the branch, worktree, and
-integration target in its per-change coordination record; never substitute `main` by convention.
-Consumers clone the same branch ("clone = install"); versions will be git tags. There is no
+Uncoordinated repository maintenance reaches `main` through a pull request: its required `CI` check must pass on a
+branch that is up to date with `main`, and it merges with a merge commit (TD-278). Changes come from Delivery or from
+chats run by hand; the Copilot cloud agent doesn't work on this repository (D-01M5ZEKEK1AKGQ726K7KVAC3C9). A pull
+request a chat opens by hand merges after green CI and a Copilot review of its latest commit, every finding fixed or
+answered (D-01M5WWSS2EB4SDWNWSEXWWBGH2). One that changes runtime code or CI workflows also gets the `coderabbit` label
+once its CI passes, which buys one CodeRabbit review from a free allowance of about one an hour, and that review is
+handled before it merges; if CodeRabbit reports its limit or sends no review within 60 minutes, the pull request stops
+waiting for it (D-01M5WWSXMG291D6X2XMKJX4XYB). A chat-authored pull request that changes runtime code gets
+`release:minor`, one that changes only docs or tests none, and `release:major` only on the owner's word (TD-314). Target
+delivery uses the branch, worktree, and integration target in its per-change coordination record; never substitute
+`main` by convention. Consumers clone the same branch ("clone = install"); versions will be git tags. There is no
 generated consumer branch and no sync workflow (TD-203).
 
 ### Plan and Status

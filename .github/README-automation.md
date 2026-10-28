@@ -120,16 +120,16 @@ off (TD-408). pre-commit.ci is not installed, since its hook updates cannot be s
 
 ## Reviews
 
-CodeRabbit reviews a pull request once, when it gets the `coderabbit` label, whoever opened it (TD-413). Those rules
-and the balanced `chill` profile come from the `maba-pag` organisation's CodeRabbit settings, which
-[`.coderabbit.yaml`](../.coderabbit.yaml) inherits; the file adds only owlbear's excluded paths, its path
-instructions and the [review brief](instructions/code-review.instructions.md) as its guideline
-(D-01M5TN7BEVN9YWFEYCHH9GJZG0). Its free open-source allowance is about one review an hour for all of `maba-pag`'s
-pull requests, so agents add the label only to a pull request that changes runtime code or CI workflows, once its CI
-passed, and merge it only after the review is in and handled. If CodeRabbit reports its limit or sends no review within
-60 minutes, they request a Copilot review instead and merge once that is handled, said in the pull request; others
-merge after CI and Sol's review, and only the owner labels them (`D-01M5WG5KS3N4PK44FTHJTCX7RC`). `@coderabbitai review` asks
-again; CodeRabbit never replies on its own (TD-412).
+CodeRabbit reviews a pull request once, when it gets the `coderabbit` label, whoever opened it (TD-413). Those rules and
+the balanced `chill` profile come from the `maba-pag` organisation's CodeRabbit settings, which
+[`.coderabbit.yaml`](../.coderabbit.yaml) inherits; the file adds only owlbear's excluded paths, its path instructions
+and the [review brief](instructions/code-review.instructions.md) as its guideline (D-01M5TN7BEVN9YWFEYCHH9GJZG0). Its
+free open-source allowance is about one review an hour for all of `maba-pag`'s pull requests, so agents add the label
+only to a pull request that changes runtime code or CI workflows, once its CI passed, and handle its review before
+merging; if CodeRabbit reports its limit or sends no review within 60 minutes, the pull request stops waiting for it
+(D-01M5WWSXMG291D6X2XMKJX4XYB). A pull request a chat opens by hand merges after green CI and a Copilot review of its
+latest commit, every finding fixed or answered (D-01M5WWSS2EB4SDWNWSEXWWBGH2). `@coderabbitai review` asks again;
+CodeRabbit never replies on its own (TD-412).
 
 Copilot code review prepares its runner with [Copilot setup steps](workflows/copilot-setup-steps.yml), the file GitHub
 reads for both the review and the Copilot cloud agent; the cloud agent doesn't work on this repository
