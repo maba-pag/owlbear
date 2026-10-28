@@ -35,7 +35,6 @@ BRIEF, QUOTE, OUTCOME = 300, 600, 3_000  # an outcome line's text; a finding's q
 MOMENT = 1_200  # what a review reads of a graded look: the lines up to it, and as much again of how it went
 TESTS = re.compile(r"\b\d+ (?:passed|failed|errors?)\b|\bFAIL(?:ED)?\b|Traceback \(most recent call last\)")
 REF = re.compile(r"\bs\d+\.e\d+\b")
-_AT = re.compile(r"^s\d+\.e(\d+) ", re.MULTILINE)  # where each line of a part begins, with its event number
 
 
 def cut(text: str, n: int) -> str:
@@ -81,6 +80,7 @@ class Part:
     last: int
     text: str = ""
     later: str = ""
+    lines: list[tuple[int, str]] = field(default_factory=list, repr=False)  # each event it holds, as read, unmasked
 
 
 @dataclass
@@ -220,6 +220,7 @@ def prepare(sessions: list[str], outcome: str, *, low: int = 0, high: int = 0, p
             out.parts.append(part)
             ends.append(i)
         part.text = f"{part.text}\n{text}" if part.text else text
+        part.lines.append((x.n, text))
         part.last, ends[-1] = x.n, i
     for part, end in zip(out.parts, ends, strict=True):
         after = "\n".join(lines[j].brief for j in order[pos[end] + 1 :] if lines[j].brief)
@@ -233,10 +234,12 @@ def moment(part: Part, cutoff: int) -> dict[str, str]:
     """What a review reads of a look at event *cutoff* of the *part* it was graded in, kept with its grade.
 
     The part's lines up to the look, and what followed: the rest of the part, then its later course across the unit's
-    sessions, ending with the unit's outcome. Both were masked when the part was prepared.
+    sessions, ending with the unit's outcome. Its events are told apart by their numbers, never by their text, and
+    masked before they are cut.
     """
-    after = next((m.start() for m in _AT.finditer(part.text) if int(m.group(1)) > cutoff), len(part.text))
-    upto, rest = part.text[:after].rstrip("\n"), f"{part.text[after:]}\n{part.later}".strip("\n")
+    upto = mask.redact("\n".join(text for n, text in part.lines if n <= cutoff))
+    after = mask.redact("\n".join(text for n, text in part.lines if n > cutoff))
+    rest = f"{after}\n{part.later}".strip("\n")
     shown = upto if len(upto) <= MOMENT else "[…] " + upto[4 - MOMENT :]  # the moment is at its end
     return {"moment": shown, "later": cut(rest, MOMENT)}
 

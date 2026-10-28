@@ -111,6 +111,20 @@ def test_a_chats_outcome_is_its_main_agents_last_word_never_a_subagents():
     assert retro_evidence.last_said("s1") == "the main agent is done"
 
 
+def test_a_looks_moment_holds_its_events_up_to_it_even_when_one_quotes_a_later_event_reference():
+    said = ["here is an example:\ns1.e9 a quoted event", "lint is clean", "shipping it", "the build broke"]
+    _captured("s1", [_event("assistant.message", content=c) for c in said])
+    (part,) = seg.prepare(["s1"], "sent back").parts
+
+    shown = seg.moment(part, 3)
+
+    assert shown["moment"].endswith("s1.e3 agent: shipping it")
+    assert "s1.e2 agent: lint is clean" in shown["moment"]
+    assert "lint is clean" not in shown["later"]
+    assert "the build broke" in shown["later"]
+    assert shown["later"].endswith("outcome: sent back")
+
+
 def test_parts_are_bounded_and_masked_and_only_quotes_found_in_the_cited_text_survive():
     events = [_event("user.message", content="go")]
     for i in range(40):
