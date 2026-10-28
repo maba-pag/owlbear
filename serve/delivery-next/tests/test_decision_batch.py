@@ -18,6 +18,7 @@ from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.project_host import decision_routes
 from owlbear_delivery_next.state_store import (
     decision_batch,
+    decision_cache,
     decision_recovery,
     decision_store,
     decision_sync,
@@ -174,21 +175,29 @@ def _one_file(project: str) -> tuple[list[str], list[tuple[str, bytes | None, by
     return [decision_id], [(f"{project}/decisions/{decision_id}.md", None, b"raced\n")]
 
 
-@pytest.mark.parametrize("reader", [decision_store.load, decision_store.file_snapshot], ids=["load", "file_only"])
-def test_a_batch_that_begins_and_completes_while_the_decisions_are_read_is_refused(picking, monkeypatch, reader):
-    _seed(picking)
-    real_files = decision_store._files  # noqa: SLF001
+def _race(warmth, shared: DataRepo, message: str) -> None:
+    """Begin and complete a batch once the files are collected; a kept snapshot is never parsed, so once it is found."""
+    target, name = (decision_cache, "fingerprint") if warmth.warm else (decision_store, "_files")
+    real = getattr(target, name)
 
-    def racing(shared, project):
-        seen = real_files(shared, project)
+    def raced(where, project):
+        seen = real(where, project)
         head = decision_store._head(shared)  # noqa: SLF001
-        generation = decision_batch.begin(shared, project, head, "decisions: raced", *_one_file(project))
+        generation = decision_batch.begin(shared, project, head, message, *_one_file(project))
         decision_batch.complete(shared, generation)
         return seen
 
-    monkeypatch.setattr(decision_store, "_files", racing)
+    warmth.monkeypatch.setattr(target, name, raced)
+
+
+@pytest.mark.parametrize("reader", [decision_store.load, decision_store.file_snapshot], ids=["load", "file_only"])
+def test_a_batch_that_begins_and_completes_while_the_decisions_are_read_is_refused(picking, warmth, reader):
+    _seed(picking)
+    warmth.ready(picking.shared, PROJECT)
+    _race(warmth, picking.shared, "decisions: raced")
     with pytest.raises(decision_store.DecisionsUnavailable, match="changed while they were read"):
         reader(picking.shared, PROJECT)
+    assert warmth.parses == warmth.collected(PROJECT)
 
 
 @pytest.fixture
@@ -254,8 +263,9 @@ def test_ambiguous_stale_publish_stays_interrupted(picking, monkeypatch):
         decision_store.load(picking.shared, PROJECT)
 
 
-def test_a_batch_already_pending_at_the_first_stamp_is_refused(picking, monkeypatch):
+def test_a_batch_already_pending_at_the_first_stamp_is_refused(picking, monkeypatch, warmth):
     _seed(picking)
+    warmth.ready(picking.shared, PROJECT)
     real_stamp = decision_store._stamp  # noqa: SLF001
     begun: list[str] = []
 
@@ -270,23 +280,17 @@ def test_a_batch_already_pending_at_the_first_stamp_is_refused(picking, monkeypa
         decision_store.load(picking.shared, PROJECT)
     with pytest.raises(decision_store.DecisionsUnavailable, match="interrupted decision batch"):
         decision_store.file_snapshot(picking.shared, PROJECT)
+    assert warmth.parses == []  # refused before the files were collected
 
 
 @pytest.mark.parametrize("reader", [decision_store.load, decision_store.file_snapshot], ids=["load", "file_only"])
-def test_a_batch_begun_and_completed_while_the_decisions_are_read_is_refused(picking, monkeypatch, reader):
+def test_a_batch_begun_and_completed_while_the_decisions_are_read_is_refused(picking, warmth, reader):
     _seed(picking)
-    real_files = decision_store._files  # noqa: SLF001
-
-    def begun_and_completed(shared, project):
-        seen = real_files(shared, project)
-        head = decision_store._head(shared)  # noqa: SLF001
-        generation = decision_batch.begin(shared, project, head, "decisions: aba", *_one_file(project))
-        decision_batch.complete(shared, generation)
-        return seen
-
-    monkeypatch.setattr(decision_store, "_files", begun_and_completed)
+    warmth.ready(picking.shared, PROJECT)
+    _race(warmth, picking.shared, "decisions: aba")
     with pytest.raises(decision_store.DecisionsUnavailable, match="changed while they were read"):
         reader(picking.shared, PROJECT)
+    assert warmth.parses == warmth.collected(PROJECT)
 
 
 @pytest.mark.parametrize("action", [decision_recovery.abandon, decision_recovery.finish], ids=["abandon", "finish"])
