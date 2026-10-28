@@ -62,6 +62,7 @@ def test_the_current_settlement_read_set_covers_its_receipt_schema_reader_and_ho
         "pack_runs/pack_state.py",
         "state_store/offline_protocol.py",
         "state_store/pack_run_record.py",
+        "state_store/git_images.py",
     }
     assert required <= set(legacy_family.CURRENT_FILES)
     assert required <= dict(legacy_family.CURRENT_MODULES).keys()
@@ -126,6 +127,11 @@ def test_the_registry_move_changes_only_the_current_read_set() -> None:
             "            if self.store and self.host is host and not host.stopped.is_set():",
             "            if self.store:",
         ),
+        (
+            "state_store/git_images.py",
+            "        return fd_tree.same_entry_image(before, after)",
+            "        return True",
+        ),
     ],
     ids=[
         "settle",
@@ -138,6 +144,7 @@ def test_the_registry_move_changes_only_the_current_read_set() -> None:
         "pid-schema",
         "ledger-home",
         "stopped-host",
+        "git-link-referents",
     ],
 )
 def test_a_current_settlement_dependency_change_is_an_unknown_build(

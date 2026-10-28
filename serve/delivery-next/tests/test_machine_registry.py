@@ -182,17 +182,23 @@ def _owner_files(folders):
 
 @pytest.mark.parametrize("action", ["register", "adopt"])
 @pytest.mark.parametrize("field", [project_move.CLONE_ID, project_move.MOVE_RECORD])
+@pytest.mark.parametrize("alias", [False, True], ids=["gitfile", "directory-alias"])
 def test_registry_publication_refuses_a_git_mapping_changed_during_final_source_reads(
-    tmp_path, monkeypatch, action, field
+    tmp_path, monkeypatch, action, field, alias
 ):
     work, other = tmp_path / "work", tmp_path / "other"
     first, second = tmp_path / "first-git", tmp_path / "second-git"
     for path, gitdir in ((work, first), (other, second)):
         subprocess.run(["git", "init", "-q", "--separate-git-dir", str(gitdir), str(path)], check=True)  # noqa: S603, S607
+    link = tmp_path / "git-alias"
+    if alias:
+        link.symlink_to(first, target_is_directory=True)
+        (work / ".git").write_text(f"gitdir: {link}\n")
     store = first / project_home.STORE_DIR
     store.mkdir()
     (store / MARKER).write_text("7\n")
     (store / "clone-id").write_text("old\n" if action == "adopt" else "owned\n")
+    assert registry.canonical(work) == (work.resolve(), store.resolve())
     if action == "adopt":
         old = registry.register(work)
         (store / "clone-id").write_text("owned\n")
@@ -214,7 +220,11 @@ def test_registry_publication_refuses_a_git_mapping_changed_during_final_source_
         value = real_read(dfd, name)
         if enabled and not fired and name == field:
             fired.append(True)
-            (work / ".git").write_text(mapping)
+            if alias:
+                link.unlink()
+                link.symlink_to(second, target_is_directory=True)
+            else:
+                (work / ".git").write_text(mapping)
         return value
 
     monkeypatch.setattr(os, "fsync", synced)
@@ -223,13 +233,16 @@ def test_registry_publication_refuses_a_git_mapping_changed_during_final_source_
     with pytest.raises(registry.RegistryError):
         call()
     assert fired == [True]
-    assert (work / ".git").read_text() == mapping
+    assert (work / ".git").read_text() == (f"gitdir: {link}\n" if alias else mapping)
     assert project_home.clone_dir(work) == second / project_home.STORE_DIR
     assert _owner_files((store,)) == source_before
     assert (machine.read_bytes() if machine.exists() else None) == before
 
 
-def test_registry_publication_refuses_a_linked_worktree_common_dir_redirect_during_source_reads(tmp_path, monkeypatch):
+@pytest.mark.parametrize("referent", [False, True], ids=["control-file", "symlink-referent"])
+def test_registry_publication_refuses_a_linked_worktree_common_dir_redirect_during_source_reads(
+    tmp_path, monkeypatch, referent
+):
     first, second = clone(tmp_path / "first"), clone(tmp_path / "second")
     git = shutil.which("git")
     assert git is not None
@@ -254,9 +267,17 @@ def test_registry_publication_refuses_a_linked_worktree_common_dir_redirect_duri
     subprocess.run([git, "-C", str(first), "worktree", "add", "-q", "-b", "linked", str(work)], check=True)  # noqa: S603
     gitdir = registry._git(work, "rev-parse", "--absolute-git-dir")  # noqa: SLF001 - real linked-worktree metadata
     store = project_home.clone_dir(work)
+    control = gitdir / "commondir"
+    if referent:
+        pointer = tmp_path / "common-pointer"
+        pointer.write_bytes(control.read_bytes())
+        control.unlink()
+        control.symlink_to(pointer)
+        control = pointer
     store.mkdir()
     (store / MARKER).write_text("7\n")
     (store / "clone-id").write_text("owned\n")
+    assert registry.canonical(work) == (work.resolve(), store.resolve())
     machine = local_home.root() / registry.MACHINE
     before = machine.read_bytes() if machine.exists() else None
     real_sync, real_read = os.fsync, fd_tree.read_at
@@ -274,7 +295,7 @@ def test_registry_publication_refuses_a_linked_worktree_common_dir_redirect_duri
         value = real_read(dfd, name)
         if enabled and not fired and name == project_move.MOVE_RECORD:
             fired.append(True)
-            (gitdir / "commondir").write_text(mapping)
+            control.write_text(mapping)
         return value
 
     monkeypatch.setattr(os, "fsync", synced)
@@ -282,7 +303,8 @@ def test_registry_publication_refuses_a_linked_worktree_common_dir_redirect_duri
     with pytest.raises(registry.RegistryError):
         registry.register(work)
     assert fired == [True]
-    assert (gitdir / "commondir").read_text() == mapping
+    assert control.read_text() == mapping
+    assert not referent or (gitdir / "commondir").is_symlink()
     assert project_home.clone_dir(work) == second / ".git" / project_home.STORE_DIR
     assert (machine.read_bytes() if machine.exists() else None) == before
 

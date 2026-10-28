@@ -11,7 +11,6 @@ import contextlib
 import hashlib
 import os
 import shutil
-import stat
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
@@ -25,6 +24,7 @@ from owlbear_delivery_next.local_system.storage_io import atomic_write, open_loc
 from owlbear_delivery_next.settings.config import MachineValues
 from owlbear_delivery_next.state_store import fd_tree, project_home, project_move, switched_authority
 from owlbear_delivery_next.state_store.database import MARKER, STORE_FORMAT, StoreError
+from owlbear_delivery_next.state_store.git_images import GitImages
 from owlbear_delivery_next.state_store.offline_proof import same_folder
 
 if TYPE_CHECKING:
@@ -264,32 +264,26 @@ def _git_images(work: Path) -> Iterator[Path]:
         with contextlib.ExitStack() as held:
             work_fd = os.open(work, fd_tree.DIR_FLAGS)
             held.callback(os.close, work_fd)
-            mapping = fd_tree.stat_at(work_fd, ".git")
+            references = GitImages()
+            references.reference(work, ".git", "gitdir: ")
             gitdir = _git(work, "rev-parse", "--absolute-git-dir")
             git_fd = os.open(gitdir, fd_tree.DIR_FLAGS)
             held.callback(os.close, git_fd)
-            images = [
-                (git_fd, name, fd_tree.stat_at(git_fd, name))
-                for name in ("commondir", "gitdir", "config", "config.worktree")
-            ]
+            references.reference(gitdir, "commondir")
+            for name in ("gitdir", "config", "config.worktree"):
+                references.path(gitdir / name)
             if _git(work, "rev-parse", "--show-toplevel") != work:
                 msg = f"{work}'s Git worktree changed during validation: nothing was registered"
                 raise RegistryError(msg)
             store = store_of(work)
             common_fd = os.open(store.parent, fd_tree.DIR_FLAGS)
             held.callback(os.close, common_fd)
-            images.extend((common_fd, name, fd_tree.stat_at(common_fd, name)) for name in ("config", "config.worktree"))
+            for name in ("config", "config.worktree"):
+                references.path(store.parent / name)
             yield store
-            now = fd_tree.stat_at(work_fd, ".git")
-            same = (
-                now is not None and os.path.samestat(mapping, now)
-                if mapping is not None and stat.S_ISDIR(mapping.st_mode)
-                else fd_tree.same_image_at(work_fd, ".git", mapping)
-            )
+            references.confirm()
             if (
-                not same
-                or not all(fd_tree.same_image_at(dfd, name, before) for dfd, name, before in images)
-                or not same_folder(work, work_fd)
+                not same_folder(work, work_fd)
                 or not same_folder(gitdir, git_fd)
                 or not same_folder(store.parent, common_fd)
             ):

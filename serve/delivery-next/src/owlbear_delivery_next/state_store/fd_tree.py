@@ -163,6 +163,11 @@ def _same_file_image(dfd: int, name: str, fd: int, before: os.stat_result) -> bo
     return _same_entry_image(before, after) and _same_entry_image(after, stat_at(dfd, name))
 
 
+def same_entry_image(before: os.stat_result, after: os.stat_result | None) -> bool:
+    """Compare two named entry observations with the same mutation-sensitive contract as held reads."""
+    return _same_entry_image(before, after)
+
+
 def same_image_at(dfd: int, name: str, before: os.stat_result | None) -> bool:
     """Whether a named entry retains a previously observed image, without another content read."""
     after = stat_at(dfd, name)
