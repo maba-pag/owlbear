@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.improvement import case_intake, case_replay, cases, pilot_seed, retro_evidence
 from owlbear_delivery_next.improvement import retro_store as retro
+from owlbear_delivery_next.improvement import retro_synthetic as syn
 from owlbear_delivery_next.improvement import retro_units as units
 from owlbear_delivery_next.improvement.cases import CaseError, Stale
 from owlbear_delivery_next.state_store import registry
@@ -217,8 +218,13 @@ def _retro(a: argparse.Namespace) -> None:
         if a.change:
             pid, _ = _project(_slash(a.change)[0])
             change = f"{pid}:{_slash(a.change)[1]}"
-        rid = retro.request(BY, change, a.chat, synthetic=a.synthetic or False)
-        _say(f"queued {rid}: the machine host's Retro job runs it; `owlbear improvement retro status` shows its result")
+        if a.synthetic:  # one request per unit: a host that stops loses none still queued
+            named = a.synthetic if isinstance(a.synthetic, str) else ""
+            rids = [retro.request(BY, synthetic=s["name"]) for s in syn.specs(named)]
+        else:
+            rids = [retro.request(BY, change, a.chat)]
+        said = "the machine host's Retro job runs it; `owlbear improvement retro status` shows its result"
+        _say(f"queued {', '.join(rids)}: {said}")
     elif a.plan:
         uid, projects = _unit(a.plan)
         _say(json.dumps(retro_evidence.plan(uid, projects)))

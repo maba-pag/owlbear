@@ -143,8 +143,8 @@ proposes cases, lessons and fixes, each challenged before you see it. Its two sw
 curation's and work the same way: `retro_after_change` for a Change that ended, and `retro_when_idle`
 for chats in the folders listed in `enrolled_chats`, once a chat has been quiet for a day and only
 while OwlBear is idle. Each run stops at `retro_run_credit_limit`. `owlbear improvement retro run`
-with `--change PROJECT/SLUG`, `--chat SESSION` or `--synthetic [NAME]` queues one run for the machine
-host, even while paused or switched off; `owlbear improvement retro status` lists the latest runs,
+with `--change PROJECT/SLUG`, `--chat SESSION` or `--synthetic [NAME]` queues a run for the machine
+host (one per synthetic unit), even while paused or switched off; `owlbear improvement retro status` lists the latest runs,
 and `--plan UNIT` shows how many judging calls a run would make, without spending credits.
 
 The **Metrics** page shows every credit OwlBear spent on this Mac: every agent session it ran

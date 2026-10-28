@@ -204,9 +204,9 @@ class RetroJob:
     def _button(self, request: dict[str, Any]) -> None:
         by = request.get("by", "")
         if named := request.get("synthetic"):
-            for spec in syn.specs(named if isinstance(named, str) else ""):
-                if not self._took(uid := syn.unit_id(spec), by):
-                    self._start(Running(uid, "button", by, provenance="synthetic", spec=spec["name"]))
+            spec = syn.specs(named)[0]
+            if not self._took(uid := syn.unit_id(spec), by):
+                self._start(Running(uid, "button", by, provenance="synthetic", spec=spec["name"]))
             return
         change, chat = request.get("change"), request.get("chat", "")
         uid = units.change_id(*change.split(":", 1)) if change else units.chat_id(chat)

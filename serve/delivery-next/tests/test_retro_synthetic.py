@@ -112,6 +112,10 @@ def test_the_large_unit_needs_two_judging_batches_and_an_unchanged_unit_keeps_it
 def test_the_command_queues_a_run_and_plans_one_without_asking(capsys):
     assert cli.main(["improvement", "retro", "run", "--synthetic", "large"]) == 0
     assert [q["synthetic"] for q in retro_store.queued()] == ["large"]
+    assert cli.main(["improvement", "retro", "run", "--synthetic"]) == 0
+    assert [q["synthetic"] for q in retro_store.queued()][1:] == [s["name"] for s in syn.specs()]
+    for q in retro_store.queued()[1:]:
+        retro_store.take(q["id"])
     assert cli.main(["improvement", "retro", "run", "--change", "nowhere/x"]) == 1
     capsys.readouterr()
 

@@ -206,8 +206,11 @@ def units(state: str | None = None, *, synthetic: bool = False) -> dict[str, dic
 # Button requests (the Improvement page's, or ``owlbear improvement retro run``)
 
 
-def request(by: str, change: str | None = None, chat: str | None = None, *, synthetic: bool | str = False) -> str:
-    """Queue a run of one Change (``project:slug``), one chat, or the synthetic units (all, or the one named); its id.
+def request(by: str, change: str | None = None, chat: str | None = None, *, synthetic: str = "") -> str:
+    """Queue a run of one Change (``project:slug``), one chat, or one synthetic unit (by its name); its id.
+
+    A request is taken before its run opens, so a host that stops in between loses it and never pays twice; the
+    synthetic set is queued one unit per request, so a stop loses none of its units still queued.
 
     Raises:
         RetroError: Not exactly one of them is named.
