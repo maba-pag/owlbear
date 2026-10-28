@@ -763,7 +763,8 @@ def move(dest: Path, writers: Callable[[], list[str]], say: Callable[[str], None
     with shared.locked(wait=0):
         before = inventory(shared)
         say(f"moving {source} to {dest}; only on this machine: " + ("; ".join(before) or "nothing"))
-        _write({**_kept(record), "moving_from": str(source), "moving_to": str(dest)})
+        kept = _kept(record)
+        _write({**kept, "moving_from": str(source), "moving_to": str(dest)})
         try:
             live = writers()
             if not live:
@@ -782,7 +783,7 @@ def move(dest: Path, writers: Callable[[], list[str]], say: Callable[[str], None
         if why := relink(dest):
             say(f"moved to {dest}, but {why}; fix it, then run `owlbear data` to finish")
             return 1
-        _write({**_kept(record), "repository": str(dest), "moved_from": str(source)})
+        _write({**kept, "repository": str(dest), "moved_from": str(source)})
         after = inventory(DataRepo(dest))
     if after != before:
         say("moved, but what only this machine holds differs; check it: " + "; ".join(after))

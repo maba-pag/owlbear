@@ -394,6 +394,50 @@ def test_a_version_goes_once_two_newer_ones_were_active_and_no_lease_holds_it(mo
     assert not (local_home.root() / local_home.VERSIONS / "v0.1").exists()
 
 
+@pytest.mark.parametrize("pointer", ["data.json", "common.json"])
+def test_a_version_holding_the_shared_data_is_never_removed_and_data_beside_the_versions_survives(pointer):
+    home = local_home.root()
+    for tag in ("v0.1", "v0.2", "v0.3", "v0.4"):
+        (version(tag) / versions.ACTIVATED).touch()
+    (home / local_home.RUNTIME).symlink_to(home / local_home.VERSIONS / "v0.4")
+    inside, beside = home / local_home.VERSIONS / "v0.1" / "data", home / local_home.DATA
+    for checkout in (inside, beside):
+        git(home, "init", "-q", str(checkout))
+        (checkout / "note.md").write_text("kept\n")
+    said = json.dumps({"repository": str(inside)})  # an older `owlbear data` accepted any checkout
+    (home / pointer).write_text(said)
+
+    assert versions.prune() == ["v0.2"]
+    assert ((inside / "note.md").read_text(), (beside / "note.md").read_text()) == ("kept\n", "kept\n")
+    assert sorted(p.name for p in (home / local_home.VERSIONS).iterdir()) == ["v0.1", "v0.3", "v0.4"]  # never renamed
+    assert sorted(p.name for p in home.glob("*.json")) == [pointer]
+    assert (home / pointer).read_text() == said
+    with pytest.raises(versions.VersionError, match="holds the shared data"):
+        versions.remove(home / local_home.VERSIONS / "v0.1")
+    assert (inside / "note.md").exists()
+
+
+def test_the_bare_clone_is_never_made_again_over_the_shared_data():
+    home = local_home.root()
+    inside = home / versions.REPO / "data"
+    git(home, "init", "-q", str(inside))
+    (home / "data.json").write_text(json.dumps({"repository": str(inside)}))
+
+    with pytest.raises(versions.VersionError, match="holds the shared data"):
+        versions.repo()
+    assert (inside / ".git").is_dir()
+
+
+def test_an_unreadable_pointer_removes_nothing():
+    home = local_home.root()
+    version("v0.1")
+    (home / "data.json").write_text("{")
+
+    with pytest.raises(versions.VersionError, match="pointer cannot be read"):
+        versions.remove(home / local_home.VERSIONS / "v0.1")
+    assert (home / local_home.VERSIONS / "v0.1").is_dir()
+
+
 def test_the_old_runtime_is_removed_only_on_the_owners_word():
     runtime = legacy()
     alias.activate(version("v0.3"), "v0.3")
