@@ -802,6 +802,28 @@ def test_a_looks_delayed_start_after_two_recovered_checkpoints_is_one_run(projec
                       ("R", "2026-10-28T09:00:00+00:00", "2026-10-28T09:20:00+00:00", 0.2)]  # fmt: skip
 
 
+@pytest.mark.parametrize("order", ["recovered, end", "end, recovered"])
+def test_a_looks_own_end_alone_keeps_the_agent_its_recovery_named(project, monkeypatch, order) -> None:
+    """Sol's counterexample: an own end line names no agent, and the recovered line's was dropped with its place, so
+    the look's 0.3 credits fell out of the spotter agent's metrics."""
+    written, place = recorded(monkeypatch), Where.of(project)
+    look_session("spotter-a", "L1", checkpoint("2026-10-28T09:00:00Z", 0.3e9))
+    recovered = spend_logs.found([], {project.root.name: place}, {}, {})
+    spend_ledger.ended("R", "spotter-a", usage=used(0.3), ending="finished", place=place, look="L1")  # its start lost
+    lines = [*recovered, *written] if order == "recovered, end" else [*written, *recovered]
+    assert spotter_spend(spend_shares.derive(lines)) == ([("shop", 0.3, 1)], 1, 0.3)
+
+
+@pytest.mark.parametrize("order", ["start first", "start last"])
+def test_a_looks_own_agent_wins_over_the_one_its_recovery_named(project, monkeypatch, order) -> None:
+    written, place = recorded(monkeypatch), Where.of(project)
+    look_session("spotter-a", "L1", checkpoint("2026-10-28T09:00:00Z", 0.3e9))
+    recovered = spend_logs.found([], {project.root.name: place}, {}, {})
+    spend_ledger.started("R", "spotter-a", agent="retro-review", job="", model="m1", before={}, place=place, look="L1")
+    lines = [*written, *recovered] if order == "start first" else [*recovered, *written]
+    assert {p["role"] for p in spend_shares.derive(lines)} == {"retro-review"}
+
+
 def changed(tmp_path: Path, spend: Spend, *events: dict) -> Store:
     store = Store(tmp_path / "projects" / "fedcba9876543210", None, "shop")
     store.write(Lock("c1"), Change(slug="c1", spend=spend))

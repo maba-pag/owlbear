@@ -123,8 +123,9 @@ def runs(lines: list[dict[str, Any]]) -> list[dict[str, Any]]:
     A Spotter look's session recovered from its runtime's log (``log:<session>``, carrying its ``look``) and its own
     lines, when they come after all, are one run: the recovered lines join the run its own lines name and add their
     usage and time only, so the run's id and the place its own lines record stand for every entry of it, its
-    continuations included, whichever came first. Until they come, an ``owner`` line gives the recovered run its
-    owner's place, known after it was recovered.
+    continuations included, whichever came first; the agent the recovery named stands only where they name none, as an
+    end alone does. Until they come, an ``owner`` line gives the recovered run its owner's place, known after it was
+    recovered.
     """
     alias = _surrogates(lines)
     by: dict[str, dict[str, Any]] = {}
@@ -138,8 +139,8 @@ def runs(lines: list[dict[str, Any]]) -> list[dict[str, Any]]:
             continue
         rid = str(line.get("run") or line.get("id")) if kind in LIVE else str(line.get("id"))
         if rid in alias:  # a recovered line of a run whose own lines came: its usage only, never its place
-            rid = alias[rid]
-            line = {k: line[k] for k in RECOVERED if k in line} | {"run": rid}  # noqa: PLW2901
+            rid, joined = alias[rid], {"run": alias[rid], "recovered_agent": line.get("agent")}  # its agent: a fallback
+            line = {k: line[k] for k in RECOVERED if k in line} | joined  # noqa: PLW2901
         run = by.setdefault(rid, {"run": rid, "usage": None, "at": None, "started": None, "before": None})
         if kind == "start":
             run |= {k: v for k, v in line.items() if k not in {"id", "type", "at"}} | {"started": line.get("at")}
@@ -165,6 +166,8 @@ def _joined(
         if rid in by:  # a recovered run its own lines never joined: they, once in, say where it ran
             for entry in (by[rid], *later.get(rid, ())):
                 entry.update(fields)
+    for rid in alias.values():  # the agent the manifest named, when its own lines name none (an end names none)
+        by[rid]["agent"] = by[rid].get("agent") or by[rid].get("recovered_agent") or ""
     for rid in set(alias.values()) & later.keys():  # its own lines' run, id and place, whenever they came
         for entry in later[rid]:
             entry.update({k: v for k, v in by[rid].items() if k not in CONTINUED})
