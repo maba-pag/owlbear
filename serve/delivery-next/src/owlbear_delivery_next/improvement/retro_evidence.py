@@ -80,7 +80,7 @@ def plan(uid: str, projects: units.Projects) -> dict[str, Any]:
     Raises:
         RetroError: The unit cannot be described.
     """
-    known = store.units().get(uid) or {}
+    known = store.known().get(uid) or {}
     revs, found = list(known.get("revisions") or []), {r["id"]: r for r in units.records()}
     taken = bool(revs) and revs[-1].get("state") != "judged"
     if uid.startswith(syn.PREFIX):

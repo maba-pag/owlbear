@@ -201,7 +201,7 @@ def test_a_call_interrupted_unsettled_ends_its_run_stopped_on_restore_and_nothin
 
     [run] = _runs()
     assert (run["result"], later.seen) == ("stopped: unknown spend after an interruption", [])
-    [rev] = retro_store.units()[syn.unit_id(_large())]["revisions"]
+    [rev] = retro_store.units(synthetic=True)[syn.unit_id(_large())]["revisions"]
     assert rev["state"] == "stopped"
     assert again.lingering() is (when == "during its session")
     assert again.working() == ([LINGERING] if again.lingering() else [])

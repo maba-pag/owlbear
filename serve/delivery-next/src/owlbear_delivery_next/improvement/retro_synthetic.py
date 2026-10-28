@@ -171,7 +171,7 @@ def install(spec: Mapping[str, Any]) -> dict[str, Any]:
 def work(spec: Mapping[str, Any], rev: Mapping[str, Any], run: str, ask: Ask) -> Work:
     """Run *run*'s work over *spec*'s revision *rev*, asking with *ask*."""
     held = set(rev.get("records") or ())
-    unit = store.units()[unit_id(spec)]
+    unit = store.known()[unit_id(spec)]
     prepared = retro_segments.prepare([session(spec)], spec["outcome"])
     mine = [r for r in records(spec) if r["id"] in held]
     return Work(run, unit_id(spec), rev, unit, mine, prepared, ask, provenance="synthetic")

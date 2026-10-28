@@ -311,7 +311,7 @@ def late(found: Iterable[Mapping[str, Any]], known: Mapping[str, Any], graded: s
 
 def due_changes(projects: Projects, *, change: str = "") -> list[dict[str, Any]]:
     """Changes finished after the watermark and never taken; with *change* (``project:slug``), that one, if finished."""
-    mark, known = _when(retro_store.watermark()), retro_store.units()
+    mark, known = _when(retro_store.watermark()), retro_store.known()
     work = []
     for pid, (st, _repo) in projects.items():
         for slug in st.slugs():
@@ -333,7 +333,7 @@ def due_chats(enrolled: list[str], now: datetime, *, chat: str = "", logs: Path 
     later growth left to the next; with *chat*, that one despite the watermark, still only when enrolled and quiet.
     """
     logs = logs or chatlogs.state()
-    mark, known = _when(retro_store.watermark()), retro_store.units()
+    mark, known = _when(retro_store.watermark()), retro_store.known()
     work = []
     for sid in chatlogs.finished_chats(enrolled, now, logs):
         if chat and sid != chat:
@@ -389,7 +389,7 @@ def freeze(item: Mapping[str, Any], projects: Projects, found: list[dict[str, An
     """
     uid, graded = item["unit"], retro_store.graded()
     kind, _, rest = uid.partition(":")
-    known = retro_store.units().get(uid) or {}
+    known = retro_store.known().get(uid) or {}
     revs = list(known.get("revisions") or [])
     if item.get("rev"):
         return next(r for r in revs if r["rev"] == item["rev"])

@@ -158,7 +158,7 @@ class RetroJob:
         if not self.checked:
             self._restore()
             self.checked = True
-        store.add_grades(units.gap_grades(units.records(), store.units(), store.graded()))  # no call needed
+        store.add_grades(units.gap_grades(units.records(), store.known(), store.graded()))  # no call needed
         for request in store.queued():
             if self._closed():
                 return
@@ -197,7 +197,7 @@ class RetroJob:
                 store.run_event(ctx.id, "waiting", why=ctx.why)
                 self.waiting.append(ctx)
                 live.add((ctx.uid, ctx.rev))
-        for uid, unit in store.units().items():
+        for uid, unit in store.known().items():
             for rev in unit.get("revisions") or ():
                 if rev.get("state") in units.OPEN and (uid, rev["rev"]) not in live:
                     units.settle(uid, rev["rev"], "stopped", result="stopped: its run was interrupted")
@@ -213,7 +213,7 @@ class RetroJob:
         uid = units.change_id(*change.split(":", 1)) if change else units.chat_id(chat)
         if self._took(uid, by):
             return
-        late = [i for i in units.late(units.records(), store.units(), store.graded()) if i["unit"] == uid]
+        late = [i for i in units.late(units.records(), store.known(), store.graded()) if i["unit"] == uid]
         for i in late:  # records written after a judged revision, a failed grade-only run's among them
             self._start(Running(uid, "button", by, rev=i["rev"], mode="grade-only", records=i["records"]))
             if self.waiting:
@@ -321,7 +321,7 @@ class RetroJob:
             return syn.work(spec, self._revision(ctx), ctx.id, ask)
         if not ctx.rev:
             self._frozen(ctx, units.freeze({"unit": ctx.uid, "rev": ""}, projects, units.records())["rev"])
-        unit, rev = store.units()[ctx.uid], self._revision(ctx)
+        unit, rev = store.known()[ctx.uid], self._revision(ctx)
         found = {r["id"]: r for r in units.records()}
         held = [found[i] for i in (ctx.records if ctx.mode == "grade-only" else rev.get("records") or ()) if i in found]
         prepared = evidence(ctx.uid, unit, rev, projects)
@@ -333,7 +333,7 @@ class RetroJob:
         units.settle(ctx.uid, rev, "open", run=ctx.id)
 
     def _revision(self, ctx: Running) -> dict[str, Any]:
-        return next(r for r in store.units()[ctx.uid]["revisions"] if r["rev"] == ctx.rev)
+        return next(r for r in store.known()[ctx.uid]["revisions"] if r["rev"] == ctx.rev)
 
     # Admission and one paid call
 
@@ -480,7 +480,7 @@ class RetroJob:
             for r in store.run_states().values()
             if r.get("mode") == "grade-only" and r["state"] == "ended" and r["result"] != "judged"
         }
-        for item in units.late(units.records(), store.units(), store.graded()):
+        for item in units.late(units.records(), store.known(), store.graded()):
             if item["unit"].startswith(prefix) and (item["unit"], item["rev"]) not in failed:
                 self._start(Running(item["unit"], trigger, rev=item["rev"], mode="grade-only", records=item["records"]))
                 if self.waiting:

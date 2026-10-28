@@ -164,7 +164,7 @@ def counterexamples(provenance: str, target: str, holders: set[str]) -> dict[str
     """The judged units of *provenance* exposed to *target* that hold none of a mechanism's findings."""
     found = sorted(
         uid
-        for uid, u in store.units().items()
+        for uid, u in store.known().items()
         if u.get("provenance", "real") == provenance
         and u.get("judged_at")
         and uid not in holders
@@ -224,7 +224,7 @@ def _catchable(w: Work, every: list[dict[str, Any]]) -> list[str | None]:
     ):
         return []
     judged = sorted(
-        (u for u in store.units().values() if u.get("judged_at") and u.get("provenance", "real") == "real"),
+        (u for u in store.known().values() if u.get("judged_at") and u.get("provenance", "real") == "real"),
         key=lambda u: u["judged_at"],
     )[-WINDOW:]
     window = {u["family"] for u in judged}

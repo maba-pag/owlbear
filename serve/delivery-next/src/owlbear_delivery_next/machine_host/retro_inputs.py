@@ -63,7 +63,7 @@ def _at(text: str) -> datetime:
 def judged_sessions() -> dict[str, datetime]:
     """Each real session whose capture is judged as it is now, with its judgement time: what pruning may remove."""
     out: dict[str, datetime] = {}
-    for unit in store.units().values():
+    for unit in store.known().values():
         revs = unit.get("revisions") or []
         if unit.get("provenance") == "synthetic" or not unit.get("judged_at") or not revs:
             continue
@@ -84,7 +84,7 @@ def pinned() -> set[str]:
         with contextlib.suppress(OSError, ValueError, AttributeError):
             pins.add(json.loads(path.read_text())["provenance"]["record"]["session"])
     owner = {f["id"]: f.get("unit") for f in found} | {g["id"]: g.get("unit") for g in store.grades(synthetic=True)}
-    known = store.units()
+    known = store.known()
     for snap in props.folded().values():
         if snap.get("state") not in props.CLOSED:
             for fid in snap.get("findings") or ():

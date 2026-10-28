@@ -179,12 +179,20 @@ def watermark() -> str:
     return found["watermark"] or update(lambda _t: None)["watermark"]
 
 
-def units(state: str | None = None) -> dict[str, dict[str, Any]]:
-    """Every unit Retro knows, by id; with *state*, those whose latest revision is in it."""
-    found = table()["units"]
-    if state is None:
-        return found
-    return {k: u for k, u in found.items() if (u.get("revisions") or [{}])[-1].get("state") == state}
+def known() -> dict[str, dict[str, Any]]:
+    """Every unit Retro knows, by id, synthetic and retired ones too: what the job itself works from."""
+    return table()["units"]
+
+
+def units(state: str | None = None, *, synthetic: bool = False) -> dict[str, dict[str, Any]]:
+    """The units, by id, as a reader sees them; with *state*, those whose latest revision is in it."""
+    gone = retired_ids()
+    return {
+        k: u
+        for k, u in known().items()
+        if visible(u, gone, synthetic=synthetic)
+        and (state is None or (u.get("revisions") or [{}])[-1].get("state") == state)
+    }
 
 
 # Button requests (the Improvement page's, or ``owlbear improvement retro run``)

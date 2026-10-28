@@ -62,6 +62,18 @@ def test_what_rests_on_a_retired_assumption_is_hidden():
     assert len(store.all_findings()) == 1
 
 
+def test_a_reader_sees_only_real_units_on_live_assumptions_and_synthetic_ones_when_asked():
+    assumptions.ensure("retro-synthetic-1")
+    units = {
+        "chat:s1": {"provenance": "real"},
+        "syn:a": {"provenance": "synthetic", "assumptions": ["retro-synthetic-1"]},
+    }
+    store.update(lambda t: t["units"].update(units))
+    assert (list(store.units()), list(store.units(synthetic=True))) == (["chat:s1"], ["chat:s1", "syn:a"])
+    assumptions.reset()
+    assert (list(store.units(synthetic=True)), list(store.known())) == (["chat:s1"], ["chat:s1", "syn:a"])
+
+
 def test_replaying_every_file_twice_changes_no_snapshot():
     store.request("owner", chat="s1")
     store.run_event("run-1", "opened", unit="chat:s1", rev="r1")
