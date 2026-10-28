@@ -33,7 +33,7 @@ def outcome(uid: str, projects: units.Projects) -> str:
         change = projects[pid][0].read(slug)
     except (*units.UNREADABLE, KeyError):
         return ""
-    cut, said = retro_segments.cut, []
+    said: list[str] = []
     if change.outcome is not None:
         said.append(f"the Change ended {change.outcome.exit}" + (f": {r}" if (r := change.outcome.reason) else ""))
     brief = change.brief
@@ -52,6 +52,11 @@ def outcome(uid: str, projects: units.Projects) -> str:
     return "\n".join(said)
 
 
+def cut(text: str, n: int) -> str:
+    """*text* masked, then within *n* characters: a cut never leaves part of a secret that masking would not know."""
+    return retro_segments.cut(mask.redact(text), n)
+
+
 def activity(uid: str, projects: units.Projects) -> str:
     """A Change's last ``EVENTS`` activity events, masked, one line each, within ``ACTIVITY`` with the newest kept."""
     pid, slug = uid.split(":", 2)[1:]
@@ -61,7 +66,7 @@ def activity(uid: str, projects: units.Projects) -> str:
         return ""
     kept: list[str] = []
     for event in reversed(events):
-        line = retro_segments.cut(mask.redact(json.dumps(event, sort_keys=True, default=str)), retro_segments.BRIEF)
+        line = cut(json.dumps(event, sort_keys=True, default=str), retro_segments.BRIEF)
         if len(dumps("\n".join([line, *kept]))) - 2 > ACTIVITY:
             break
         kept.insert(0, line)

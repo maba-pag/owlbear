@@ -2,7 +2,9 @@
 
 import gzip
 import json
+from types import SimpleNamespace
 
+from owlbear_delivery_next.change_contracts.models import Brief, Change, Criterion, Inputs, Review
 from owlbear_delivery_next.improvement import retro_evidence, retro_units
 from owlbear_delivery_next.improvement import retro_segments as seg
 
@@ -109,6 +111,21 @@ def test_a_chats_outcome_is_its_main_agents_last_word_never_a_subagents():
     ]
     _captured("s1", events)
     assert retro_evidence.last_said("s1") == "the main agent is done"
+
+
+def test_a_secret_a_long_change_field_holds_is_masked_before_the_field_is_cut():
+    long = "x" * 119 + f" {SECRET} " + "y" * 400  # the cut keeps the first 130 characters: the token's first ten
+    change = Change(
+        slug="fix-it",
+        brief=Brief(outcome="a week column", criteria=[Criterion(id="c1", text=long)]),
+        reviews=[Review(commit="abc", inputs=Inputs(), verdict="fix", findings=[long])],
+    )
+    st = SimpleNamespace(read=lambda _slug: change)
+
+    said = retro_evidence.outcome("chg:p1:fix-it", {"p1": (st, None)})
+
+    assert "omitted]" in said
+    assert SECRET[:8] not in said
 
 
 def test_a_looks_moment_holds_its_events_up_to_it_even_when_one_quotes_a_later_event_reference():
