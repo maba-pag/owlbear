@@ -47,28 +47,39 @@ TESTS = re.compile(r"(^|/)(tests?/|test_[^/]*\.py$|[^/]*_test\.py$|[^/]*\.test\.
 
 
 def config(run: str, r: Repair) -> dict[str, Any]:
-    """The owner's question about a held repair: a weakened check is never pushed, other holds he may let through."""
+    """The owner's question about a held repair: a weakened check is never pushed, other holds he may let through.
+
+    He is shown the diff of the paths it asks about; when that is too long to show whole, nothing is pushed from it.
+    """
     made, said = r.commit[:12], f"The agent said: {r.summary}"
     config = f"; it also changes configuration: {', '.join(r.held[:10])}" if r.held else ""
     if r.refused:
         text = (f"The agent's CI repair {made} weakens a check or changes what only an update may: "
-                f"{', '.join(r.refused[:10])}. Delivery pushed nothing and never pushes it. Try again without it, or "
-                f"discard? {said}")  # fmt: skip
-        options = [pack_rounds.RETRY, pack_rounds.DISCARD]
+                f"{', '.join(r.refused[:10])}. Delivery pushed nothing and never pushes it.")  # fmt: skip
+        ask, options = "Try again without it, or discard?", [pack_rounds.RETRY, pack_rounds.DISCARD]
     elif r.reviewed:
         text = (f"The agent's CI repair {made} changes tests: {', '.join(r.reviewed[:10])}{config}. Delivery's "
                 "pattern check found no known weakening, but cannot tell that the tests still check as much: review "
-                f"its diff. Nothing was pushed. Push it, or discard? {said}")  # fmt: skip
-        options = [pack_rounds.PUSH_REVIEWED, pack_rounds.DISCARD]
+                "its diff. Nothing was pushed.")  # fmt: skip
+        ask, options = "Push it, or discard?", [pack_rounds.PUSH_REVIEWED, pack_rounds.DISCARD]
     else:
         text = (f"The agent's CI repair {made} changes {', '.join(r.held[:10])}: lint, format, CI workflow, hook or "
-                f"security configuration. Delivery pushed nothing. Push it as it is, try again without it, or discard? "
-                f"{said}")  # fmt: skip
+                "security configuration. Delivery pushed nothing.")  # fmt: skip
+        ask = "Push it as it is, try again without it, or discard?"
         options = [pack_rounds.PUSH_CONFIG, pack_rounds.RETRY, pack_rounds.DISCARD]
-    q = pack_rounds.question(f"{run}:repair-config:{made}", "repair-config", text, [], commit=r.commit,
-                             paths=[*r.refused, *r.reviewed, *r.held], diff=r.diff)  # fmt: skip
+    if r.diff_cut:  # never pushed unseen
+        text = f"{text} Its diff of these files is too large to review here, so it cannot be pushed from here."
+        ask, options = "Try again without it, or discard?", [pack_rounds.RETRY, pack_rounds.DISCARD]
+    q = pack_rounds.question(f"{run}:repair-config:{made}", "repair-config", f"{text} {ask} {said}", [],
+                             commit=r.commit, paths=[*r.refused, *r.reviewed, *r.held], diff=r.diff)  # fmt: skip
     q["options"] = pack_rounds.published(options, opened=True)
     return q
+
+
+def asked(r: Repair) -> list[str]:
+    """The repository paths the held question asks about: its held, refused and reviewed files, without the reasons."""
+    named = {*r.held, *r.refused, *r.reviewed}
+    return [p for p in r.paths if p in named or any(n.startswith(f"{p} (") for n in named)]
 
 
 def staged(run: pack_git.Git, at: Path, head: str) -> list[tuple[str, str]]:

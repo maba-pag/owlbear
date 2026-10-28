@@ -1102,6 +1102,63 @@ def test_a_repair_that_edits_a_test_is_pushed_only_once_the_owner_reviewed_it(tm
     assert git(checkout.parents[1], "show", f"{landed(checkout)}:tests/test_page.py") == after.strip()
 
 
+PUSHED, LONG = ["push-reviewed", "discard"], "".join(f"VALUE_{i} = {i}\n" for i in range(2000))
+
+
+def test_a_held_question_shows_the_diff_of_what_it_asks_about_whatever_else_the_repair_changes(
+    tmp_path, checkout, clone
+):
+    """PR #745's review: a large unrelated change never pushes the held test edit out of the diff he approves."""
+    edited = f"import flaky\n\n\n@flaky.off\n{TESTED}"
+    on_main(checkout, "tests/test_page.py", TESTED)
+    fakes, job, _ = ci_failed(tmp_path, checkout, clone, {"big.txt": "x\n" * 15000, "tests/test_page.py": edited})
+
+    (q,) = answered(job, "repair")["questions"]
+
+    assert (q["paths"], [o["id"] for o in q["options"]]) == (["tests/test_page.py (changes a test)"], PUSHED)
+    assert ("+@flaky.off" in q["diff"], "big.txt" in q["diff"]) == (True, False)
+    fakes.github.checks = ["success"]
+    assert answered(job, "push-reviewed")["state"] == "passed"
+    assert git(checkout.parents[1], "show", f"{landed(checkout)}:big.txt").count("x") == 15000
+
+
+@pytest.mark.parametrize(
+    "change",
+    [("tests/test_page.py", f"{TESTED}\n{LONG}"), ("biome.json", f'{{"x": "{"a" * 25000}"}}\n')],
+)
+def test_a_held_change_too_large_to_show_whole_is_never_pushed_from_its_question(tmp_path, checkout, clone, change):
+    path, text = change
+    on_main(checkout, "tests/test_page.py", TESTED)
+    fakes, job, state = ci_failed(tmp_path, checkout, clone, {path: text})
+    head = pr_head(checkout, state)
+
+    (q,) = answered(job, "repair")["questions"]
+
+    assert (q["kind"], [o["id"] for o in q["options"]]) == ("repair-config", REFUSED)
+    assert "too large to review here" in q["text"]
+    assert len(q["diff"]) == pack_repair.SHOWN
+    for push in pack_repair.PUSHES:
+        with pytest.raises(pack_job.Refused):
+            job.answer(q["id"], push)
+    assert (pr_head(checkout, state), fakes.github.calls) == (head, ["create"])
+
+
+def test_protected_repairs_too_large_to_show_whole_are_never_approved_from_the_question(tmp_path, checkout, clone):
+    fakes, job, _ = ci_failed(tmp_path, checkout, clone, {DETECTOR: f"# repaired\n{LONG}"})
+    fakes.github.checks = ["success"]
+    answered(job, "repair")
+
+    (q,) = answered(job, "approve")["questions"]
+
+    assert (q["kind"], [(o["id"], o["label"]) for o in q["options"]]) == (
+        "repair-approval", [("discard", pack_rounds.DISCARD_OPEN)]
+    )  # fmt: skip
+    assert "too large to review here" in q["text"]
+    with pytest.raises(pack_job.Refused):
+        job.answer(q["id"], "approve-repair")
+    assert fakes.github.calls == ["create"]
+
+
 def test_a_configuration_repair_the_owner_lets_through_is_pushed_and_merges(tmp_path, checkout, clone):
     fakes, job, _ = ci_failed(tmp_path, checkout, clone, {"biome.json": "{}\n"})
     answered(job, "repair")

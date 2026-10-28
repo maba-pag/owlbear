@@ -38,6 +38,7 @@ from owlbear_delivery_next.pack_runs.pack_repair_content import guarded as _guar
 from owlbear_delivery_next.pack_runs.pack_repair_content import package_at as _package
 from owlbear_delivery_next.pack_runs.pack_repair_content import protected
 from owlbear_delivery_next.pack_runs.pack_repair_content import quiet as _quiet
+from owlbear_delivery_next.pack_runs.pack_repair_edits import asked as _asked
 from owlbear_delivery_next.pack_runs.pack_repair_edits import config as _config
 from owlbear_delivery_next.pack_runs.pack_repair_edits import held as _held
 from owlbear_delivery_next.pack_runs.pack_repair_edits import staged as _staged
@@ -104,12 +105,14 @@ class Repair(BaseModel):
     held: list[str] = Field(default_factory=list)  # its configuration changes, which the owner may let through
     refused: list[str] = Field(default_factory=list)  # never pushed: a weakened check, or what only an update changes
     reviewed: list[str] = Field(default_factory=list)  # its other edits of existing tests, for the owner's review
-    diff: str = ""  # its diff, as the owner is shown it
+    diff: str = ""  # the diff of the paths it is held for, as the owner is shown it
+    diff_cut: bool = False  # that diff is too long to show whole: never pushed from his question
     allowed: str = ""  # the commit the owner had pushed with its configuration change
     laid: str = ""  # the commit whose whole protected content is laid into the candidate for its check
     checked: str = ""  # the commit whose protected content passed the pack's checks again
     protected: dict[str, str] = Field(default_factory=dict)  # protected path -> its blob as the repairs left it
     shown: str = ""  # the repairs' diffs of protected content, for the owner's approval
+    shown_cut: bool = False  # those diffs are too long to show whole: never approved from his question
     approved: str = ""  # the digest of the protected changes the owner approved
 
 
@@ -252,9 +255,14 @@ def gate(job: Job, ctx: Context) -> None:
     again = " again: a later repair changed it after you approved" if r.approved else ""
     text = (f"The agent's CI repairs changed the pack's protected content ({', '.join(paths[:10])}), and CI passed. "
             f"It merges only with your approval{again}. Approve the agent's changes, or discard?")  # fmt: skip
+    options = [pack_rounds.APPROVE_REPAIR, pack_rounds.DISCARD]
+    if r.shown_cut:  # never approved unseen
+        text = (f"The agent's CI repairs changed the pack's protected content ({', '.join(paths[:10])}), and CI "
+                "passed. Their diff is too large to review here, so it cannot be approved here. Discard?")  # fmt: skip
+        options = [pack_rounds.DISCARD]
     q = pack_rounds.question(f"{job.state['run']}:repair-approval:{mark[:12]}", "repair-approval", text, [],
-                             digest=mark, paths=paths, diff=r.shown[-SHOWN:])  # fmt: skip
-    q["options"] = pack_rounds.published([pack_rounds.APPROVE_REPAIR, pack_rounds.DISCARD], opened=True)
+                             digest=mark, paths=paths, diff=r.shown)  # fmt: skip
+    q["options"] = pack_rounds.published(options, opened=True)
     waiting = "waiting for your approval of the agent's protected changes"
     raise Asked(waiting, q)
 
@@ -294,7 +302,7 @@ def _made(job: Job, ctx: Context, src: pack_git.Source, gh: Provider) -> Outcome
     assert r.stop is not None  # noqa: S101 - repaired() saw it
     assert pub is not None  # noqa: S101 - a repair follows publication
     r.phase, r.attempts, r.summary, r.commit = "running", r.attempts + 1, "", ""
-    r.paths, r.held, r.refused, r.reviewed, r.diff, r.laid, r.checked = [], [], [], [], "", "", ""
+    r.paths, r.held, r.refused, r.reviewed, r.diff, r.diff_cut, r.laid, r.checked = [], [], [], [], "", False, "", ""
     job.keep(ctx)  # before the session: a host stop now reports, and pushes nothing
     at = job.store.root / RUNS / f"{job.state['run']}-ci-repair"
     try:
@@ -308,7 +316,9 @@ def _made(job: Job, ctx: Context, src: pack_git.Source, gh: Provider) -> Outcome
         r.paths = [p for p, _ in paths]
         package, skills = _package(job, src), ctx.pins["skills"]
         r.held, r.refused, r.reviewed = _held(run, at, r.stop.head, paths, package=package, skills=skills)
-        r.diff = run(at, ["diff", "--cached", r.stop.head])[:SHOWN]
+        if asked := _asked(r):  # the diff of what he is asked about, whole, or no push from his question
+            diff = run(at, ["diff", "--cached", r.stop.head, "--", *asked])
+            r.diff, r.diff_cut = diff[:SHOWN], len(diff) > SHOWN
         names = ", ".join(c["name"] for c in r.stop.failed)
         message = (f"fix(ci): repair {names} of the design pack update\n\n{r.summary}\n\n"
                    "Repaired by an agent; pushed by Delivery.")  # fmt: skip
@@ -357,7 +367,8 @@ def _pushed(job: Job, ctx: Context, src: pack_git.Source) -> Outcome:
         job.keep(ctx)
         return Outcome("failed", f"the agent's repair {r.commit[:12]} was not pushed: {exc}"[:2000])
     r.protected |= blobs
-    r.shown = f"{r.shown}\n{diff}".strip()[-SHOWN:]
+    shown = f"{r.shown}\n{diff}".strip()
+    r.shown, r.shown_cut = shown[:SHOWN], r.shown_cut or len(shown) > SHOWN
     r.phase, r.stop = "", None
     job.keep(ctx)
     return Outcome("pushed", f"pushed {r.commit[:12]} to {pub.branch}: {r.summary}"[:2000], r.commit)
