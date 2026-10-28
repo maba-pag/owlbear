@@ -171,7 +171,7 @@ def _runners() -> list[str]:
     for project in projects:
         try:
             store = project_home.current(Path(project.path))
-            records = sorted((store / "changes").glob("*/runner.json")) if store else []
+            records = _records(store / "changes") if store else []
         except Exception as exc:  # noqa: BLE001 - any failure to read a store refuses the move
             found.append(f"{project.path}: its store cannot be read: {exc}")
             continue
@@ -179,4 +179,20 @@ def _runners() -> list[str]:
             f"{path}: a runner's record; start OwlBear, let it settle the step, stop it, then try again"
             for path in records
         ]
+    return found
+
+
+def _records(changes: Path) -> list[Path]:
+    """The runner records under *changes*; a folder that cannot be listed or read raises, unlike a glob."""
+    try:
+        folders = sorted(changes.iterdir())
+    except FileNotFoundError:
+        return []
+    found = []
+    for folder in folders:
+        try:
+            (folder / "runner.json").stat()
+        except FileNotFoundError, NotADirectoryError:
+            continue
+        found.append(folder / "runner.json")
     return found

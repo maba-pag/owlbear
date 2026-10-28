@@ -105,6 +105,20 @@ def _retained_runner(tmp: Path, monkeypatch) -> None:
     _projects(monkeypatch, lambda _repo: store)
 
 
+def _unlistable_changes(tmp: Path, monkeypatch) -> None:
+    changes, real = tmp / "store" / "changes", Path.iterdir
+    changes.mkdir(parents=True)
+
+    def iterdir(self: Path):
+        if self == changes:
+            msg = "denied"
+            raise PermissionError(msg)
+        return real(self)
+
+    monkeypatch.setattr(Path, "iterdir", iterdir)
+    _projects(monkeypatch, lambda _repo: tmp / "store")
+
+
 def _dest_exists(_tmp: Path, _monkeypatch) -> None:
     (data_place.default() / "mine").mkdir(parents=True)
 
@@ -132,11 +146,12 @@ def _linked_source(tmp: Path, _monkeypatch) -> None:
         (_live_process, "process 7: python -m owlbear_delivery_next mcp"),
         (_unreadable_store, "/work/shop: its store cannot be read: denied"),
         (_retained_runner, "a runner's record; start OwlBear, let it settle the step"),
+        (_unlistable_changes, "/work/shop: its store cannot be read: denied"),
         (_dest_exists, "exists; choose a new folder"),
         (_other_disk, "is on another disk"),
         (_linked_source, "is a linked worktree; move its main checkout"),
     ],
-    ids=["host", "process", "store", "runner", "dest", "disk", "linked"],
+    ids=["host", "process", "store", "runner", "changes", "dest", "disk", "linked"],
 )
 def test_a_refused_move_changes_nothing(tmp_path: Path, source: Path, monkeypatch, arrange, reason: str) -> None:
     held = arrange(tmp_path, monkeypatch)
