@@ -8,8 +8,8 @@ OwlBear installs once per Mac. Each teammate installs it on their own Mac and ad
 of the project on its pages; there is no packaging step, cloning OwlBear is the installation.
 
 Teammates and machines share one thing: a **shared settings repository**, a Git repository that
-holds project settings, agent memory and the backlog. Each machine points at its own clone of it
-with `owlbear data PATH`; OwlBear commits and pushes every save there.
+holds project settings, agent memory and the backlog. Each machine keeps its own clone of it in
+`~/.owlbear/data`, made by `owlbear data URL`; OwlBear commits and pushes every save there.
 
 ## Prerequisites
 
@@ -42,12 +42,14 @@ Follow the setup guide's [Quick Start](setup-guide.md#quick-start) steps 1 to 3.
 Skip this step if your team does not use one.
 
 ```shell
-git clone https://github.com/OWNER/SETTINGS.git ~/Dev/owlbear-settings
-owlbear data ~/Dev/owlbear-settings
+owlbear data https://github.com/OWNER/SETTINGS.git
 owlbear restart
 ```
 
-**Expected result:** `owlbear data` names the repository and asks for the restart.
+**Expected result:** `owlbear data` clones the repository into `~/.owlbear/data`, names it and asks
+for the restart. To keep the clone elsewhere, clone it yourself and run `owlbear data PATH` instead;
+that folder then wins over `~/.owlbear/data`. See
+[The shared settings repository](operating-owlbear.md#the-shared-settings-repository).
 
 ### 4. Add the project and connect its chats
 
@@ -76,7 +78,7 @@ No further platform-specific configuration is required:
 | --- | --- | --- |
 | OwlBear runtime | `~/.owlbear/runtime` | No — one per Mac; each machine updates itself |
 | Delivery state | `~/.owlbear/projects/<id>/`, one folder per project | No — per machine |
-| Project settings, agent memory, backlog | Shared settings repository | Yes — when one is set |
+| Project settings, agent memory, backlog | Shared settings repository, cloned in `~/.owlbear/data` or the folder `owlbear data PATH` set | Yes — when one is set |
 | Shaping agent and its skill | `~/.copilot/`, linked into `~/.owlbear/runtime` | Yes — every teammate's runtime ships the same ones |
 | MCP server code | `~/.owlbear/versions/<tag>/serve/` | Yes — each server runs from the version it started with, through `~/.owlbear/runtime` |
 | `.github/copilot-instructions.md` | project root | No — per-project |

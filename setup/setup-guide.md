@@ -78,6 +78,17 @@ address; `owlbear status` prints it again. OwlBear listens only on this Mac's lo
 free port it picks at start. If the login item already started it, it runs paused: the bar at the top
 says **Delivery is paused**; press **Resume** so your Changes advance.
 
+If you keep project settings, agent memory and the backlog in a shared settings repository, set it
+now, before adding projects; skip this otherwise:
+
+```shell
+owlbear data https://github.com/OWNER/SETTINGS.git
+owlbear restart
+```
+
+OwlBear clones it into `~/.owlbear/data`, or adopts a checkout of it already there. See
+[The shared settings repository](operating-owlbear.md#the-shared-settings-repository).
+
 ### 4. Add your project
 
 On the page, open **Add project** in the bar at the top, enter the folder of your project's clone
