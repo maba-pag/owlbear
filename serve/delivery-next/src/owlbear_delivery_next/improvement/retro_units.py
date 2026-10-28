@@ -353,11 +353,16 @@ def due_chats(enrolled: list[str], now: datetime, *, chat: str = "", logs: Path 
     return work
 
 
-def eligible(uid: str, enrolled: list[str], projects: Projects, logs: Path | None = None) -> str:
-    """Why *uid* may not be read now; "" when it may. Checked before anything of it is read or sent."""
+def eligible(
+    uid: str, enrolled: list[str], projects: Projects, logs: Path | None = None, *, fresh: bool = False
+) -> str:
+    """Why *uid* may not be read now; "" when it may. Checked before anything of it is read or sent.
+
+    A chat whose revision is not yet taken (*fresh*) must still be quiet: one active again is taken once it is quiet.
+    """
     kind, _, rest = uid.partition(":")
     if kind == "chat":
-        return _chat_refusal(rest, enrolled, logs or chatlogs.state())
+        return _chat_refusal(rest, enrolled, logs or chatlogs.state(), fresh=fresh)
     if kind == "chg":
         pid, _, slug = rest.partition(":")
         if pid not in projects:
@@ -369,13 +374,19 @@ def eligible(uid: str, enrolled: list[str], projects: Projects, logs: Path | Non
     return "it is no unit Retro knows"
 
 
-def _chat_refusal(session: str, enrolled: list[str], logs: Path) -> str:
+def _chat_refusal(session: str, enrolled: list[str], logs: Path, *, fresh: bool) -> str:
     ours = chatlogs.own()
     if ours is None:
         return "Retro's manifest cannot be read, so no chat is told from OwlBear's own sessions"
     if session in ours:
         return "it is one of OwlBear's own sessions"
-    return "" if chatlogs.chat(logs / session, enrolled, ours) else "it is not an enrolled chat"
+    if not chatlogs.chat(logs / session, enrolled, ours):
+        return "it is not an enrolled chat"
+    try:
+        quiet = datetime.now(UTC) - datetime.fromtimestamp((logs / session / "events.jsonl").stat().st_mtime, UTC)
+    except OSError as exc:
+        return f"its log cannot be read ({type(exc).__name__})"
+    return "it is active again; it is taken once it is quiet" if fresh and quiet < chatlogs.QUIET else ""
 
 
 # Taking a revision

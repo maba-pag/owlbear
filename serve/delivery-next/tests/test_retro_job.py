@@ -265,7 +265,13 @@ def test_a_run_interrupted_between_settled_calls_resumes_on_what_is_left_of_its_
 # Eligibility at the call, gate J3
 
 
-def test_a_chat_unenrolled_while_its_button_run_waits_for_a_slot_is_refused_unread(said, tmp_path, monkeypatch):
+@pytest.mark.parametrize(
+    ("change", "why"),
+    [("unenrolled", "it is not an enrolled chat"), ("resumed", "it is active again; it is taken once it is quiet")],
+)
+def test_a_chat_unenrolled_or_resumed_while_its_run_waits_for_a_slot_is_refused_unread(
+    said, tmp_path, monkeypatch, change, why
+):
     said.enrolled_chats = [_chat(tmp_path, "c1")]
     job = _job(asker := Asker())
     assert job.slots.take("retro", "other", 1, 1) == 1
@@ -273,8 +279,11 @@ def test_a_chat_unenrolled_while_its_button_run_waits_for_a_slot_is_refused_unre
 
     def take(share, key, *args, **kwargs):
         got = real(share, key, *args, **kwargs)
-        if key.startswith("retro:open") and not got:  # queued behind "other": unenrolled, then granted
-            said.enrolled_chats = []
+        if key.startswith("retro:open") and not got:  # queued behind "other": changed, then granted
+            if change == "unenrolled":
+                said.enrolled_chats = []
+            else:
+                os.utime(chatlogs.state() / "c1" / "events.jsonl")
             job.slots.give("retro", "other")
         return got
 
@@ -283,8 +292,9 @@ def test_a_chat_unenrolled_while_its_button_run_waits_for_a_slot_is_refused_unre
     job.tick(0.0)
 
     [run] = _runs()
-    assert (run["result"], asker.seen) == ("refused: it is not an enrolled chat", [])
+    assert (run["result"], asker.seen) == (f"refused: {why}", [])
     assert not retro_units.folder("c1").exists()
+    assert "chat:c1" not in retro_store.known()
 
 
 def test_the_button_never_reads_one_of_owlbears_own_sessions(said, tmp_path):

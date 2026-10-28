@@ -375,7 +375,8 @@ class RetroJob:
             with self.seams.admission():
                 if why := self._refusal(ctx):
                     raise WaitingError(why)
-                why = ctx.provenance == "real" and units.eligible(ctx.uid, enrolled(), self.seams.projects())
+                real, fresh = ctx.provenance == "real", not ctx.rev  # a chat's new revision only when it is quiet
+                why = real and units.eligible(ctx.uid, enrolled(), self.seams.projects(), fresh=fresh)
                 if why := ctx.retired() or (f"refused: {why}" if why else ""):
                     raise StoppedError(why)
                 if lease:
