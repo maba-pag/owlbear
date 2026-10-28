@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import os
+import re
 import socket
 import threading
 import time
@@ -16,7 +17,7 @@ import uvicorn
 from owlbear_delivery_next.change_contracts.round_records import PACK, RoundFinding, RoundLoop, RoundPolicy
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.local_system.codebase import CURRENT
-from owlbear_delivery_next.pack_runs import machine_lock, pack_job, pack_progress, pack_rounds, pack_state
+from owlbear_delivery_next.pack_runs import machine_lock, pack_gates, pack_job, pack_progress, pack_rounds, pack_state
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.state_store.store import Store
@@ -123,8 +124,13 @@ def test_the_owner_answers_each_upheld_finding_with_his_note_in_the_owlbear_sect
         expect(page.get_by_role("button", name="Update design pack")).to_be_disabled()
         first, second = ask.locator(".pack-question").first, ask.locator(".pack-question").last
         expect(first).to_contain_text("Updater: upstream dropped it Challenger: upstream still names it")
+        sent: list[str] = []
+        page.on("request", lambda r: sent.append(r.url) if r.url.endswith("/design-pack/update/answer") else None)
         first.get_by_role("button", name="Ask the challenger to reconsider").click()
-        expect(page.locator("#pack-error")).to_have_text("Asking the challenger to reconsider needs your note")
+        note = first.locator("p-textarea")
+        expect(note).to_have_attribute("message", "Asking the challenger to reconsider needs your note.")
+        assert page.evaluate("document.activeElement?.dataset.note") == "r1:dispute:F1"  # the note to give
+        assert sent == []  # checked here, before anything is sent
         second.get_by_label("Your note", exact=False).fill("a draft for F2")
         first.get_by_label("Your note", exact=False).fill("the halo is upstream's own example")
         first.get_by_role("button", name="Drop it").click()
@@ -132,6 +138,7 @@ def test_the_owner_answers_each_upheld_finding_with_his_note_in_the_owlbear_sect
         expect(left).to_have_count(1)  # the other finding still waits; nothing ran yet
         expect(left.get_by_label("Your note", exact=False)).to_have_value("a draft for F2")  # its draft is kept
         expect(page.locator("#pack-findings li").first).to_contain_text("F1 (round 1), you dropped it")
+    assert len(sent) == 1  # only the Drop it went out
     kept = RoundLoop.model_validate(job.read()["loop"])
     assert [(f.id, f.state, f.note) for f in kept.findings] == [
         ("F1", "owner-drop", "the halo is upstream's own example"), ("F2", "escalated", "")
@@ -160,6 +167,64 @@ def test_the_activation_dialog_lists_the_unreviewed_repair_and_what_was_not_chan
         said.get_by_role("button", name="Keep it waiting").click()
         expect(dialog).to_be_hidden()
     assert job.read()["state"] == "waiting"  # declining activates nothing
+
+
+DIFF = "--- a/skills/x.md\n+++ b/skills/x.md\n@@ -1 +1 @@\n-old line\n+new line\n"
+ENDED = RoundLoop(subject=PACK, policy=RoundPolicy(), round=1, unreviewed=["r1"], ended="count", findings=[
+    RoundFinding(id="F1", text="a: b - fix: c", raised=1, state="fixed", repair="r1"),
+    RoundFinding(id="F2", text="d: e - fix: f", raised=1, state="standing", reason="it holds"),
+])  # fmt: skip
+CI_FAILED = {
+    "id": "r1-publish", "kind": "publish", "text": "CI failed on the pull request: unit tests. ",
+    "options": [{"id": "retry", "label": "Try again"}, {"id": "repair", "label": "Have an agent fix CI"},
+                {"id": "discard", "label": "Discard the update (the pull request stays open)"}],
+}  # fmt: skip
+PUBLISHED = {"commit": "c" * 40, "branch": "pack/r1", "url": "https://github.com/maba-pag/owlbear/pull/7",
+             "number": 7, "merged": ""}  # fmt: skip
+# Each stop: its loop, its questions (None: the loop's own), what else the run holds, its Discard, its primaries.
+STOPS: dict[str, tuple[RoundLoop | None, list[dict[str, Any]] | None, dict[str, Any], str, list[str]]] = {
+    "dispute": (None, None, {}, "Discard the update", []),
+    "end": (ENDED, None, {}, "Discard the update", ["Activate the unreviewed repair"]),
+    "evidence": (None, [pack_gates.evidence("r1", DIFF, "upstream renamed it", "as expected", "e" * 64)], {},
+                 "Discard the update", []),
+    "code": (None, [pack_gates.code("r1", DIFF, "c" * 64)], {}, "Discard the update", []),
+    "publish": (None, [CI_FAILED], {"published": PUBLISHED}, "Discard the update (the pull request stays open)", []),
+}  # fmt: skip
+
+
+@pytest.mark.browser
+@pytest.mark.parametrize("kind", list(STOPS))
+def test_each_stop_offers_one_discard_apart_whose_cancel_changes_nothing(served, pds, kind) -> None:
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    lp, questions, more, discard, primary = STOPS[kind]
+    job, base = served(lp)
+    if questions is not None:
+        job.state |= {"questions": questions} | more
+        job._save()  # noqa: SLF001
+    before = (job.store.root / pack_job.FILE).read_bytes()
+    with opened(base, pds) as page:
+        expect(page.locator("#pack-ask").get_by_role("button", name=re.compile("Discard"))).to_have_count(1)
+        expect(page.locator("#pack-discard")).to_have_text(discard)
+        expect(page.locator("#pack-questions p-button[variant=primary]")).to_have_text(primary)  # none invented
+        page.locator("#pack-discard").click()
+        expect(pds.modal(page)).to_contain_text("Nothing is activated")
+        inside = "document.activeElement?.closest('p-modal') !== null"
+        assert page.evaluate(inside)  # the focus moved into the dialog
+        where = []
+        for _ in range(6):  # the page behind is inert: Tab cycles the dialog and the browser's own controls only
+            page.keyboard.press("Tab")
+            where.append(page.evaluate(f"{inside} ? 'dialog' : document.activeElement === document.body ? '' : 'page'"))
+        assert "page" not in where
+        assert where[-1] == "dialog"
+        pds.answer(page, "Keep it waiting")
+        assert page.evaluate("document.activeElement?.id") == "pack-discard"  # back where it was
+        expect(page.locator("#pack-ask")).to_be_visible()
+        assert (job.store.root / pack_job.FILE).read_bytes() == before  # cancel changed nothing
+        page.locator("#pack-discard").click()
+        pds.answer(page, discard)
+        expect(page.locator("#pack-state")).to_contain_text("discarded")
+    assert job.read()["state"] == "discarded"
 
 
 def history() -> list[dict[str, Any]]:

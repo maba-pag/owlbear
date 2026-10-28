@@ -22,7 +22,7 @@ const FOUND = { open: "to fix", fixed: "fixed by the updater", rejected: "reject
   escalated: "rejected by the updater; the challenger upheld it", "owner-fix": "you decided: fix it",
   "owner-drop": "you dropped it", withdrawn: "withdrawn by the challenger" };
 
-const own = { pinned: null, runs: null, unread: { pinned: "", runs: "" }, error: "", notes: new Map(),
+const own = { pinned: null, runs: null, unread: { pinned: "", runs: "" }, error: "", notes: new Map(), missing: "",
   busy: "", polling: null, reading: 0, show: () => {} };
 
 // *show* renders the whole page; the section calls it whenever its state changes.
@@ -79,6 +79,13 @@ async function act(name, work) {
 
 async function answer(run, q, o) {
   const to = reach(run), note = own.notes.get(q.id) ?? "";
+  if (o.id === "reconsider" && !note.trim()) {  // the host refuses it too; said here before anything is sent
+    own.missing = q.id;
+    own.show();
+    document.querySelector(`[data-note="${CSS.escape(q.id)}"]`)?.focus();
+    return;
+  }
+  own.missing = "";
   const left = ["rejected", "standing", "owner-drop"], loop = run.loop;
   const standing = (loop?.findings ?? []).filter((f) => left.includes(f.state));
   const items = [...(loop?.unreviewed ?? []).map((r) => `Repair ${r}: no challenger reviewed it.`),
@@ -99,8 +106,37 @@ async function answer(run, q, o) {
   });
 }
 
-async function discard(run) {
-  await act("discard", () => call("/design-pack/update/discard", { ...reach(run), method: "POST", timeout: WRITE }));
+// The stop's one Discard: the answer its question offers, else the run's own discard while it waits.
+function discarding(run, questions) {
+  const q = questions.find((x) => x.options.some((o) => o.id === "discard"));
+  if (q) return { label: q.options.find((o) => o.id === "discard").label, q };
+  return run.state === "waiting" ? { label: "Discard the update", q: null } : null;
+}
+
+async function discard(run, d) {
+  const p = run.published;
+  const sure = await window.ask({
+    title: "Discard the design pack update?", yes: d.label, no: "Keep it waiting",
+    now: `The update started in ${run.name} ends here as discarded.`,
+    then: "Nothing is activated: the pinned pack stays as it is, and the run's candidate is not used again.",
+    after: p?.url ? `Its pull request #${p.number} stays open; close it on GitHub if you no longer want it.`
+      : "Start a new update when you want one.",
+    instead: "The update keeps waiting for your answer.",
+  });
+  if (!sure) return;
+  if (d.q) {
+    await act(`${d.q.id}:discard`, () => call("/design-pack/update/answer",
+      { ...reach(run), body: { question: d.q.id, option: "discard", note: "" }, timeout: WRITE }));
+  } else {
+    await act("discard", () => call("/design-pack/update/discard", { ...reach(run), method: "POST", timeout: WRITE }));
+  }
+}
+
+// A primary only where one answer has priority: activating at the end, or trying again once a cause is fixed when
+// no repair is offered beside it. Unresolved alternatives keep equal emphasis.
+function emphasis(q, o) {
+  const repair = q.options.some((x) => x.id === "repair");
+  return o.id === "activate" || (o.id === "retry" && !repair) ? "primary" : "secondary";
 }
 
 async function start() {
@@ -154,15 +190,25 @@ function question(run, q, to) {
   let field = nothing;
   if (q.kind === "dispute") {
     const label = "Your note (guides the updater; needed to ask the challenger again)";
-    const note = own.notes.get(q.id) ?? "", keep = (e) => own.notes.set(q.id, e.target.value ?? "");
-    field = html`<p-textarea label=${label} rows="2" max-length="2000" .value=${live(note)} @input=${keep}
-      @change=${keep} ?disabled=${!to}></p-textarea>`;
+    const note = own.notes.get(q.id) ?? "", missing = own.missing === q.id;
+    const keep = (e) => {
+      own.notes.set(q.id, e.target.value ?? "");
+      if (missing && (e.target.value ?? "").trim()) {
+        own.missing = "";
+        own.show();
+      }
+    };
+    field = html`<p-textarea data-note=${q.id} label=${label} rows="2" max-length="2000" .value=${live(note)}
+      state=${missing ? "error" : "none"} message=${missing ? "Asking the challenger to reconsider needs your note."
+        : ""} @input=${keep} @change=${keep} ?disabled=${!to}></p-textarea>`;
   }
+  const answers = q.options.filter((o) => o.id !== "discard");  // the stop's one Discard stands apart
   return html`<div class="pack-question"><p-text>${q.text}</p-text>
     ${q.diff ? html`<pre class="pack-diff" aria-label="The change">${q.diff}</pre>` : nothing}
     ${field}
-    ${to ? html`<div class="row">${q.options.map((o) => button(o.label, () => answer(run, q, o),
-      { busy: own.busy === `${q.id}:${o.id}`, disabled: Boolean(own.busy) }))}</div>` : nothing}</div>`;
+    ${to && answers.length ? html`<div class="row">${answers.map((o) => button(o.label, () => answer(run, q, o),
+      { variant: emphasis(q, o), busy: own.busy === `${q.id}:${o.id}`, disabled: Boolean(own.busy) }))}</div>`
+      : nothing}</div>`;
 }
 
 function progress(u) {
@@ -196,7 +242,7 @@ function unreachable() {
 function runPart(run) {
   if (!run) return html`<p-text id="pack-state" size="sm">No project has run a design pack update yet.</p-text>`;
   const to = reach(run), questions = run.state === "waiting" ? run.questions ?? [] : [];
-  const p = run.published, found = run.loop?.findings ?? [];
+  const p = run.published, found = run.loop?.findings ?? [], d = discarding(run, questions);
   return html`<div id="pack-run">
     <p-text id="pack-project" size="sm">${["running", "waiting"].includes(run.state) ? "Started" : "Last run"} in
       <strong>${run.name}</strong>: it uses that project's labels, calibration and spend${to ? "" : unreachable()}.
@@ -210,8 +256,11 @@ function runPart(run) {
     <div id="pack-ask" ?hidden=${!questions.length}>
       <p-heading size="md"><h4 id="pack-ask-title">The update waits for you</h4></p-heading>
       <div id="pack-questions">${questions.map((q) => question(run, q, to))}</div>
-      ${to ? button("Discard the update", () => discard(run), { id: "pack-discard", icon: "close",
-        busy: own.busy === "discard", disabled: Boolean(own.busy) }) : nothing}
+      ${to && d ? html`<div id="pack-discard-area" class="pack-discard">
+        <p-text size="sm" color="contrast-medium">Or end this update without activating anything.</p-text>
+        ${button(d.label, () => discard(run, d), { id: "pack-discard", icon: "close",
+          busy: own.busy === "discard" || own.busy === `${d.q?.id}:discard`, disabled: Boolean(own.busy) })}
+      </div>` : nothing}
     </div>
     <details id="pack-findings-box" ?hidden=${!found.length}>
       <summary>Findings of the challenge rounds</summary>
