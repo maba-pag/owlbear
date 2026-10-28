@@ -34,6 +34,7 @@ FAILED = "failed.json"  # beside it: the last pack that failed, kept across rest
 STALE, RETRY = timedelta(days=1), timedelta(hours=1)  # a look's age before the next; an unknown one's
 PRESENT = 60.0  # seconds a look whether the running pack is in place holds: it hashes the engine
 TICK = 60.0  # seconds between the loop's looks whether a look is due
+ANY = object()  # _keep without an expected failure
 
 
 def _now() -> str:
@@ -129,10 +130,15 @@ class Packs:
             return {"version": "", "detail": said, "at": None}
         return {k: kept[k] for k in ("version", "detail", "at")}
 
-    def _keep(self, failure: dict[str, Any] | None) -> None:
-        """Hold *failure* and write it to ``failed.json``; None ends it and removes the file."""
+    def _keep(self, failure: dict[str, Any] | None, expected: object = ANY) -> None:
+        """Hold *failure* and write it to ``failed.json``; None ends it and removes the file.
+
+        With *expected*, nothing changes once the held failure is another than that one.
+        """
         path = local_home.root() / design_pack.PACKS / FAILED
         with self.lock:
+            if expected is not ANY and self.failure is not expected:
+                return
             self.failure = failure
             try:
                 if failure is None:
@@ -209,20 +215,24 @@ class Packs:
     def _run(self) -> None:
         with self.lock:
             failure = self.failure
-        tag = failure["version"] if failure else versions.running()
+        tag = (failure["version"] if failure else "") or versions.running()  # an unreadable record names none
         try:
             if not self._installed():
                 design_pack.install()  # this host's own manifest: the running version's pinned pack
-            if failure and tag != versions.running():
+            if tag != versions.running():
                 self._version(tag)
         except Exception as exc:  # noqa: BLE001 - the banner says how it ended
             self.failed(tag, f"{type(exc).__name__}: {exc}")
             self.machine.say(f"design pack: installing failed: {exc}")
         else:
-            self._keep(None)
+            self._resolved(failure)
             self.machine.say("design pack: installed")
         with self.lock:
             self.present = None
+
+    def _resolved(self, failure: dict[str, Any] | None) -> None:
+        """End *failure*, the one this install set out to repair; one an update kept meanwhile stays."""
+        self._keep(None, expected=failure)
 
     def _version(self, tag: str) -> None:
         """A version whose update failed on its pack: that pack, with the version's own interpreter and manifest."""

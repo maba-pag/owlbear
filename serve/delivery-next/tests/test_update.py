@@ -336,9 +336,33 @@ def test_a_version_whose_pack_failed_is_not_activated_and_every_page_offers_inst
     assert Machine(m.record).packs.read()["install"] is None  # ended for good
 
     (local_home.root() / design_pack.PACKS / packs.FAILED).write_text("{not json")
-    unreadable = Machine(m.record).packs.read()["install"]
+    monkeypatch.setattr(versions, "running", lambda: "v0.1")  # a versioned machine: an empty tag is no version
+    broken = Machine(m.record)
+    unreadable = broken.packs.read()["install"]
     assert (unreadable["state"], unreadable["version"]) == ("failed", "")
     assert "is unreadable" in unreadable["detail"]
+    broken.packs.install()  # the record names no version: only the running one's pack, already in place
+    broken.packs.thread.join(10)
+    assert (packed, broken.packs.read()["install"]) == ([updating.folder], None)
+
+
+def test_an_install_ends_only_the_failure_it_set_out_to_repair(updating, monkeypatch):
+    pinned_pack(monkeypatch)
+    design_pack.install()
+    m = updating.machine
+    m.packs.failed("v0.1", "the running pack once failed")
+
+    def meanwhile() -> bool:  # an update keeps a newer version's failure while this install runs
+        m.packs.failed("v0.3", "v0.3's design pack could not be installed")
+        return True
+
+    monkeypatch.setattr(m.packs, "_installed", meanwhile)
+    m.packs.install()
+    m.packs.thread.join(10)
+
+    assert m.packs.failure["version"] == "v0.3"
+    kept = json.loads((local_home.root() / design_pack.PACKS / packs.FAILED).read_text())
+    assert kept["version"] == "v0.3"
 
 
 def test_install_puts_a_missing_pack_in_place_with_no_newer_version(updating, monkeypatch):
