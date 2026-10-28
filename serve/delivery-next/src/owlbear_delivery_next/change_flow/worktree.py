@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -118,18 +119,17 @@ def observe(path: Path, target: str, since: str | None = None) -> Worktree:
     """
     head_ = head(path)
     base = git(path, "merge-base", "HEAD", tracking(path, target)).strip()
-    status = git(path, "status", "--porcelain=v1", "--untracked-files=all").splitlines()
+    status = _status(_fields(path, "status", "--porcelain=v1", "-z", "--untracked-files=all"))
     changed = diff(path, base)
     if since:
         task = set(diff(path, since))
         base, changed = since, [p for p in changed if p in task]
-    return Worktree(head=head_, base=base, dirty=tuple(line[3:] for line in status), changed=tuple(changed))
+    return Worktree(head=head_, base=base, dirty=tuple(status), changed=tuple(changed))
 
 
 def diff(path: Path, base: str, rev: str = "HEAD") -> list[str]:
     """Paths added, modified or deleted from *base* to *rev*, both ends of a rename included (F3)."""
-    lines = git(path, "diff", "--name-status", "-M", f"{base}...{rev}").splitlines()
-    return list(dict.fromkeys(p for line in lines for p in line.split("\t")[1:]))
+    return _name_status(_fields(path, "diff", "--name-status", "-M", "-z", f"{base}...{rev}"))
 
 
 def tree(path: Path, rev: str = "HEAD") -> str:
@@ -147,12 +147,36 @@ def known(path: Path, rev: str) -> bool:
 
 def between(path: Path, old: str, new: str) -> list[str]:
     """Every path that differs between two trees, both rename ends included, read NUL-separated."""
-    fields = git(path, "diff", "--name-status", "-M", "-z", old, new).split("\0")
+    return _name_status(_fields(path, "diff", "--name-status", "-M", "-z", old, new))
+
+
+def _fields(path: Path, *args: str) -> list[str]:
+    """Run one Git command whose output is NUL-separated; its fields as bytes decoded like file names, untranslated."""
+    out = subprocess.run(  # noqa: S603 - fixed Git executable and argument vector.
+        [GIT, *args], cwd=path, capture_output=True, check=True, timeout=60
+    ).stdout
+    return [os.fsdecode(f) for f in out.split(b"\0")]
+
+
+def _name_status(fields: list[str]) -> list[str]:
+    """The paths of ``diff --name-status -z``: a status, then one path, or two for a rename or copy."""
     out, i = [], 0
     while i < len(fields) and fields[i]:
         n = 2 if fields[i][0] in "RC" else 1
         out += fields[i + 1 : i + 1 + n]
         i += 1 + n
+    return list(dict.fromkeys(out))
+
+
+def _status(fields: list[str]) -> list[str]:
+    """The paths of ``status --porcelain=v1 -z``: ``XY path``, then the source of a rename or copy in either column."""
+    out, i = [], 0
+    while i < len(fields) and fields[i]:
+        out.append(fields[i][3:])
+        if {"R", "C"} & set(fields[i][:2]):
+            i += 1
+            out.append(fields[i])
+        i += 1
     return list(dict.fromkeys(out))
 
 
