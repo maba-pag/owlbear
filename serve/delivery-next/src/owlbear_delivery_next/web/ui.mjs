@@ -108,16 +108,15 @@ let asked = 0, applied = 0;
 // a newer one's.
 async function read() {
   const n = ++asked;
-  let data = bar.data, why = "";
+  let data = null, why = "";
   try {
     data = await call("/projects", { machine: true });
   } catch (error) {
-    if (error.status === 404) data = null;
-    else why = error.message;
+    if (error.status !== 404) why = error.message;
   }
   if (n < applied) return;
   applied = n;
-  bar.data = data;
+  if (!why) bar.data = data;  // one that failed keeps what is shown, which a read in the meantime may have changed
   failed = why;
 }
 

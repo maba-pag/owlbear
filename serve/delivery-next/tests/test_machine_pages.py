@@ -634,3 +634,38 @@ def test_an_older_read_of_the_machine_never_replaces_a_newer_one(tmp_path: Path,
         page.evaluate("window.polled")
         assert page.get_by_role("listitem").count() == 1, page.locator("#page").inner_text()
         assert page.locator("#page > [role=alert]").count() == 0
+
+
+@pytest.mark.browser
+def test_a_newer_read_that_fails_keeps_what_an_older_one_read_in_the_meantime(tmp_path: Path, monkeypatch, pds) -> None:
+    """A read that starts while Remove's reread is under way and fails after it leaves the list Remove left, marked as
+    possibly out of date: the failure says nothing about what the older read found."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    registry.register(clone(tmp_path / "alpha"))
+    registry.register(clone(tmp_path / "beta"))
+    held = []
+
+    def hold(route) -> None:
+        if route.request.method == "GET":
+            held.append(route)
+        else:
+            route.fallback()
+
+    with browsing(monkeypatch, pds) as (page, base):
+        page.goto(f"{base}/projects#token=t")
+        expect(page.get_by_role("listitem")).to_have_count(2)
+        page.get_by_role("listitem", name="beta").get_by_role("button", name="Remove project").click()
+        page.route(f"{base}/api/next/projects", hold)
+        pds.answer(page, "Remove project")
+        until(page, lambda: held)  # Remove's reread
+        older = len(held)
+        page.evaluate("() => { import('/assets/ui.mjs').then((ui) => ui.reread()); }")  # the page's own module
+        until(page, lambda: len(held) > older)
+        for route in held[:-1]:
+            route.fulfill(response=route.fetch())  # the list without beta
+        held[-1].abort()
+        expect(page.locator("#page > [role=alert]")).to_have_text(
+            "This list may be out of date: Delivery is not running. Start it, then reload this page."
+        )
+        assert page.get_by_role("listitem").count() == 1, page.locator("#page").inner_text()
