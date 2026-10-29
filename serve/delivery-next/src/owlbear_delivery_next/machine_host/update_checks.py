@@ -5,7 +5,9 @@ only the start's check and the owner's "Search for updates" run (D-01M63CD5PR0D5
 it never installs, and runs whether updating by itself is on and whether the machine is busy.
 
 ``update-checks.json`` keeps, per update, its last success, last attempt, failures in a row and the last reason. A
-failure shows only once two come in a row; until then the last success stands. Offline is unknown, never current.
+failure shows only once two come in a row; until then the last success stands, except that offline is unknown, never
+current. What is shown is read against the version installed now, so an update applied since is no longer offered;
+a newer version stays available through failed checks until a check finds it withdrawn.
 """
 
 from __future__ import annotations
@@ -121,6 +123,27 @@ def impeccable_skill() -> dict[str, Any]:
 
 
 CHECKS: dict[str, Callable[[], dict[str, Any]]] = {"owlbear": owlbear, "pds": pds, "impeccable": impeccable_skill}
+INSTALLED: dict[str, Callable[[], str]] = {
+    "owlbear": versions.running, "pds": pages.pds_version,
+    "impeccable": lambda: pack_files.manifest()["upstream"]["tag"],
+}  # fmt: skip
+ORDER: dict[str, Callable[[str], tuple[int, ...] | None]] = {
+    "owlbear": versions.number, "pds": lambda v: _number(v) or None, "impeccable": lambda v: _number(v) or None,
+}  # fmt: skip
+
+
+def _installed(name: str) -> str:
+    """The version of *name* installed now; empty when it cannot be read, so the last check's word stands."""
+    try:
+        return INSTALLED[name]()
+    except Exception:  # noqa: BLE001 - a hint for the shown state; the check itself reads it again
+        return ""
+
+
+def _ahead(name: str, latest: str, current: str) -> bool:
+    """Whether *latest* is still ahead of *current*; True when either cannot be ordered, as the check found."""
+    a, b = ORDER[name](latest), ORDER[name](current)
+    return a is None or b is None or a > b
 
 
 def _spawn(work: Callable[[], None]) -> None:
@@ -230,26 +253,31 @@ class Checks:
 
     def read(self) -> dict[str, Any]:
         """Each update's state and when it is next checked; ``available`` counts each runnable newer one once."""
-        hours = self._hours()
+        hours, installed = self._hours(), {n: _installed(n) for n in CHECKS}
         with self.lock:
-            shown = [self._shown(n, hours[n]) for n in CHECKS]
-        available = sum(1 for u in shown if u["state"] == "newer" and u["actionable"])
+            shown = [self._shown(n, hours[n], installed[n]) for n in CHECKS]
+        available = sum(1 for u in shown if u["available"])
         return {"updates": shown, "available": available}
 
-    def _shown(self, name: str, hours: int | None) -> dict[str, Any]:
+    def _shown(self, name: str, hours: int | None, installed: str) -> dict[str, Any]:
         kept = self.kept.get(name, {})
         success, failures = kept.get("success"), int(kept.get("failures", 0))
         found = success if isinstance(success, dict) else {}
+        current, latest = installed or found.get("current", ""), found.get("latest", "")
+        offered = bool(found.get("newer")) and _ahead(name, latest, current)  # applied since: no longer offered
         if failures >= SHOWN:
             state = "unknown" if kept.get("offline") else "failed"
-        elif found:
-            state = "newer" if found.get("newer") else "current"
+        elif offered:
+            state = "newer"
+        elif found and not (failures and kept.get("offline")):
+            state = "current"
         else:
-            state = "unknown"
+            state = "unknown"  # never checked, or not reached since: offline is never current
         due = self._next(name, hours)
         return {
             "name": name, "title": TITLES[name], "actionable": ACTIONABLE[name], "state": state,
-            "current": found.get("current", ""), "latest": found.get("latest", ""), "detail": found.get("detail", ""),
+            "available": offered and ACTIONABLE[name],  # until applied or found withdrawn, whatever a failure says
+            "current": current, "latest": latest if offered else current, "detail": found.get("detail", ""),
             "checked_at": found.get("at"), "attempted_at": kept.get("attempt_at"), "failures": failures,
             "reason": kept.get("reason", "") if failures >= SHOWN else "", "checking": name in self.checking,
             "hours": hours, "next_at": _iso(due) if due else None,

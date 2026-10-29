@@ -107,41 +107,80 @@ def test_impeccable_is_one_component_its_notice_kept_for_the_other_pages_and_off
     assert failed.value.offline is True
 
 
-def test_a_failure_shows_after_two_in_a_row_and_offline_is_never_current(monkeypatch):
-    outcomes = iter([
-        Failed("npm was not reached", offline=True), Failed("npm was not reached", offline=True), FOUND,
-        Failed("npm answered 503", offline=False), Failed("npm answered 503", offline=False),
-        FOUND | {"newer": True, "latest": "2"},
-    ])  # fmt: skip
+def outcomes(monkeypatch, name: str, *each: dict | Failed) -> None:
+    """*name*'s check answers *each* in turn; the installed versions are 1.0.0, OwlBear's v1."""
+    for n in CHECKS:
+        monkeypatch.setitem(update_checks.INSTALLED, n, lambda n=n: "v1" if n == "owlbear" else "1.0.0")
+    answers = iter(each)
 
-    def pds() -> dict:
-        outcome = next(outcomes)
+    def check() -> dict:
+        outcome = next(answers)
         if isinstance(outcome, Failed):
             raise outcome
         return outcome
 
-    monkeypatch.setitem(CHECKS, "pds", pds)
-    checks, seen = Checks(stub(), Clock(), lambda work: work()), []
-    for _ in range(6):
-        checks.start("pds")
-        said = shown(checks, "pds")
-        seen.append((said["state"], said["reason"], said["failures"]))
-    assert seen == [
-        ("unknown", "", 1),  # one failure, none found before: unknown, not yet a failure
-        ("unknown", "npm was not reached", 2),  # offline twice: unknown with its reason, never current
-        ("current", "", 0),
-        ("current", "", 1),  # one failure: the last success stands
-        ("failed", "npm answered 503", 2),
-        ("newer", "", 0),
+    monkeypatch.setitem(CHECKS, name, check)
+
+
+UNREACHED, REFUSED = Failed("npm was not reached", offline=True), Failed("npm answered 503", offline=False)
+CURRENT = {"newer": False, "current": "1.0.0", "latest": "1.0.0", "detail": ""}
+NEWER = {"newer": True, "current": "1.0.0", "latest": "2.0.0", "detail": ""}
+
+
+def seen(checks: Checks, name: str, times: int) -> list[tuple]:
+    said = []
+    for _ in range(times):
+        checks.start(name)
+        u = shown(checks, name)
+        said.append((u["state"], u["reason"], u["failures"], u["available"]))
+    return said
+
+
+def test_a_failure_shows_after_two_in_a_row_and_offline_is_never_current(monkeypatch):
+    outcomes(monkeypatch, "impeccable", UNREACHED, UNREACHED, CURRENT, UNREACHED, CURRENT, REFUSED, REFUSED, NEWER)
+    checks = Checks(stub(), Clock(), lambda work: work())
+    assert seen(checks, "impeccable", 8) == [
+        ("unknown", "", 1, False),  # one failure, none found before: unknown, its reason not yet shown
+        ("unknown", "npm was not reached", 2, False),  # offline twice: unknown with its reason
+        ("current", "", 0, False),
+        ("unknown", "", 1, False),  # offline after a success: unknown at once, never current (Sol F1)
+        ("current", "", 0, False),
+        ("current", "", 1, False),  # refused once: the last success stands
+        ("failed", "npm answered 503", 2, False),
+        ("newer", "", 0, True),
     ]
-    assert checks.read()["available"] == 0  # PDS has no update action yet: it counts once it has
-    monkeypatch.setitem(CHECKS, "impeccable", lambda: FOUND | {"newer": True})
-    monkeypatch.setitem(CHECKS, "owlbear", lambda: FOUND | {"newer": True})
+    assert Checks(stub()).read() == checks.read()  # kept across restarts in update-checks.json
+    assert (
+        json.loads((local_home.root() / update_checks.STATE).read_text())["impeccable"]["success"]["latest"] == "2.0.0"
+    )
+
+
+def test_a_newer_version_stays_available_through_failures_until_withdrawn_or_applied(monkeypatch):
+    """Commitment 15: the mark clears when the update is applied or no longer offered; a failed check says neither."""
+    outcomes(monkeypatch, "impeccable", NEWER, REFUSED, REFUSED, UNREACHED, CURRENT)
+    checks = Checks(stub(), Clock(), lambda work: work())
+    assert [s[0::3] for s in seen(checks, "impeccable", 5)] == [
+        ("newer", True), ("newer", True), ("failed", True), ("unknown", True), ("current", False),
+    ]  # Sol F2  # fmt: skip
+
+    outcomes(monkeypatch, "impeccable", NEWER, UNREACHED)
+    seen(checks, "impeccable", 1)
+    monkeypatch.setitem(update_checks.INSTALLED, "impeccable", lambda: "2.0.0")  # applied, then a launch offline
+    said = seen(checks, "impeccable", 1)[0]
+    assert said == ("unknown", "", 1, False)  # Sol F3: never offers what is installed, never says current offline
+    assert (shown(checks, "impeccable")["current"], checks.read()["available"]) == ("2.0.0", 0)
+
+
+def test_available_counts_each_runnable_component_once_and_pds_not_yet(monkeypatch):
+    checks = Checks(stub(), Clock(), lambda work: work())
+    outcomes(monkeypatch, "pds", NEWER)
+    seen(checks, "pds", 1)
+    assert (shown(checks, "pds")["state"], checks.read()["available"]) == ("newer", 0)  # no PDS update action yet
+    outcomes(monkeypatch, "impeccable", NEWER | {"detail": "5 newer releases"})
+    outcomes(monkeypatch, "owlbear", {"newer": True, "current": "v1", "latest": "v3", "detail": ""})
     for name in ("impeccable", "owlbear"):
         checks.start(name)
     assert checks.read()["available"] == 2  # one per component that can be run, whatever its number of releases
-    assert Checks(stub()).read() == checks.read()  # kept across restarts in update-checks.json
-    assert json.loads((local_home.root() / update_checks.STATE).read_text())["pds"]["success"]["latest"] == "2"
 
 
 def test_each_update_is_checked_at_the_start_and_then_only_at_its_own_set_interval(monkeypatch):
