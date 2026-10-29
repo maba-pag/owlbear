@@ -137,7 +137,7 @@ def serve(*, run: bool = False, handing: bool = False) -> int:
     for line in _retired_index(home):
         machine.say(line)
     cloning = _provisioned(machine)
-    machine.load_all()
+    _load(machine, given)
     _fill(machine, cloning=cloning)
     threading.Thread(target=machine.retry_loop, daemon=True, name="projects").start()
     threading.Thread(target=machine.idle_loop, daemon=True, name="idle-stop").start()
@@ -169,6 +169,13 @@ def serve(*, run: bool = False, handing: bool = False) -> int:
     if machine.handover is not None:
         _handed(machine, *machine.handover)
     return 0
+
+
+def _load(machine: Machine, given: handover.Handover | None) -> None:
+    """Load every project; a host taking over then ends the handover, the update's last step."""
+    machine.load_all()
+    if given:
+        machine.updater.took_over(given.loaded)
 
 
 def _fill(machine: Machine, *, cloning: bool) -> None:

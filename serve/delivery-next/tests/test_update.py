@@ -208,7 +208,7 @@ def updating(monkeypatch) -> SimpleNamespace:
     said = SimpleNamespace(activated=[], stopped=0, left=[])
     folder = version("v0.2")
     monkeypatch.setattr(versions, "target", lambda: Choice("v0.2", "c2"))
-    monkeypatch.setattr(versions, "install", lambda _c: folder)
+    monkeypatch.setattr(versions, "install", lambda _c, _report=None: folder)
     monkeypatch.setattr(handover, "Standby", FakeStandby)
     monkeypatch.setattr(alias, "activate", lambda f, t: said.activated.append((f, t)))
     FakeStandby.health, FakeStandby.made = {}, []
@@ -312,7 +312,7 @@ def test_a_version_whose_pack_failed_is_not_activated_and_every_page_offers_inst
     pinned_pack(monkeypatch)
     pack_files.install()  # the running version's own pack stays in place throughout
 
-    def install(_choice: Choice) -> Path:
+    def install(_choice: Choice, _report: object = None) -> Path:
         msg = "v0.2's Impeccable could not be installed: cannot download"
         raise versions.PackInstallError(msg)
 
@@ -480,7 +480,7 @@ def test_run_updates_now_hands_a_running_host_over_to_the_new_version_end_to_end
     python.write_text(f'#!/bin/sh\nexec "{sys.executable}" "$@"\n')
     python.chmod(0o755)
     monkeypatch.setattr(versions, "target", lambda: Choice("v0.2", "c2"))
-    monkeypatch.setattr(versions, "install", lambda _c: folder)
+    monkeypatch.setattr(versions, "install", lambda _c, _report=None: folder)
     old = threading.Thread(target=serve.serve, kwargs={"run": True}, daemon=True)
     old.start()
     try:
@@ -503,6 +503,10 @@ def test_run_updates_now_hands_a_running_host_over_to_the_new_version_end_to_end
         assert (local_home.root() / local_home.RUNTIME).resolve() == folder.resolve()
         assert registry.load().active == "v0.2"
         assert lines[-1] == "OwlBear now runs v0.2"
+        steps = {s["key"]: s["state"] for s in (control._api("update") or {}).get("steps", [])}  # noqa: SLF001
+        assert {k: steps.get(k) for k in ("looking", "standby", "health", "switching", "handover")} == dict.fromkeys(
+            ("looking", "standby", "health", "switching", "handover"), "done"
+        )  # the old host's steps, and the handover the new one ended
     finally:
         control.stop(lambda _s: None)
 
