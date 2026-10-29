@@ -34,6 +34,7 @@ from typing import TYPE_CHECKING, Any, BinaryIO, Protocol
 import yaml
 
 from owlbear_delivery_next.local_system import local_home
+from owlbear_delivery_next.local_system.storage_io import atomic_write
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Iterable, Iterator
@@ -358,11 +359,7 @@ def _switch(folder: Path, session: str, said: dict[str, Any], stage: Path | None
 
 
 def _write(path: Path, data: dict[str, Any]) -> None:
-    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
-    with os.fdopen(fd, "w") as out:
-        json.dump(data, out)
-    Path(tmp).chmod(0o600)
-    Path(tmp).replace(path)
+    atomic_write(path, json.dumps(data))
 
 
 def kept(session: str, ending: str, *, provisional: bool, stop: threading.Event | None = None) -> None:
