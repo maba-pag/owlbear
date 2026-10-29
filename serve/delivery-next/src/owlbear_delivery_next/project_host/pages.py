@@ -100,7 +100,7 @@ def top(current: str) -> str:
         if path in WORK
     )
     row = f'<div id="menu"></div><a class="brand" href="/">OwlBear</a><nav aria-label="Delivery pages">{links}</nav>'
-    return f'<div class="top">{row}<div id="controls"></div></div><script type="module" src="{MENU}"></script>'
+    return f'<div id="top">{row}<div id="controls"></div></div><script type="module" src="{MENU}"></script>'
 
 
 def pages() -> dict[str, str]:

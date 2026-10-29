@@ -3,6 +3,7 @@
 // other way to add one (0ET1A6), will sit beside it.
 
 import { html, nothing, render } from "/assets/lit-html/3.3.3/lit-html.js";
+import { repeat } from "/assets/lit-html/3.3.3/directives/repeat.js";
 import { Slow, call, defined, here, machineState, project, reread, unread } from "/assets/ui.mjs";
 
 const state = { draft: "", busy: "", error: "", said: "" };
@@ -127,7 +128,8 @@ function view() {
     ${state.error ? html`<p-text role="alert">${state.error}</p-text>` : nothing}
     ${state.said ? html`<p-text role="status">${state.said}</p-text>` : nothing}
     ${why ? html`<p-text role="alert">This list may be out of date: ${why}</p-text>` : nothing}
-    ${projects.length ? html`<ul id="projects" aria-label="Projects">${projects.map((p) => entry(p, projects))}</ul>`
+    ${projects.length  // keyed, so a row and its focused button stay with their project when the list changes
+      ? html`<ul id="projects" aria-label="Projects">${repeat(projects, (p) => p.id, (p) => entry(p, projects))}</ul>`
       : html`<p-text class="empty">No project yet: add the folder of a clone below.</p-text>`}
     <section id="add" class="panel" aria-labelledby="add-title">
       <p-heading size="md"><h2 id="add-title">Add a project</h2></p-heading>

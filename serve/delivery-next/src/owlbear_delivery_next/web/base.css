@@ -44,24 +44,24 @@ textarea, input, select, button { font: inherit; }
 }
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
 /* The top row (D-01M63C8375KV9WA6NH8K2MB8PN): Menu, OwlBear, the work pages, then the project and Pause. */
-.top {
+#top {
   display: flex; flex-wrap: wrap; align-items: center; gap: var(--p-spacing-static-sm) var(--p-spacing-static-md);
   padding-block-end: var(--p-spacing-static-sm); border-block-end: 1px solid var(--p-color-contrast-lower);
 }
 #menu { display: flex; min-inline-size: 2.5rem; min-block-size: 2.5rem; align-items: center; }
-.top a { color: var(--p-color-primary); text-decoration: none; text-underline-offset: .35em; }
-.top a:hover { text-decoration: underline; text-decoration-thickness: 1px; }
-.top .brand { font-size: var(--p-typescale-md); font-weight: var(--p-font-weight-bold); }
-.top nav { display: flex; flex-wrap: wrap; gap: 0 var(--p-spacing-static-md); }
-.top nav a { display: inline-flex; align-items: center; min-block-size: 2.5rem; color: var(--p-color-contrast-high); }
-.top nav a[aria-current="page"] {
+#top a { color: var(--p-color-primary); text-decoration: none; text-underline-offset: .35em; }
+#top a:hover { text-decoration: underline; text-decoration-thickness: 1px; }
+#top .brand { font-size: var(--p-typescale-md); font-weight: var(--p-font-weight-bold); }
+#top nav { display: flex; flex-wrap: wrap; gap: 0 var(--p-spacing-static-md); }
+#top nav a { display: inline-flex; align-items: center; min-block-size: 2.5rem; color: var(--p-color-contrast-high); }
+#top nav a[aria-current="page"] {
   color: var(--p-color-primary); font-weight: var(--p-font-weight-semibold);
   text-decoration: underline; text-decoration-thickness: 2px;
 }
 #controls { display: flex; flex-wrap: wrap; align-items: center; gap: var(--p-spacing-static-sm);
   margin-inline-start: auto; }
 #controls p-select { min-inline-size: 12rem; }
-@media (max-width: 47.99rem) { .top nav { display: none; } }  /* on phones the work pages are in the menu only */
+@media (max-width: 47.99rem) { #top nav { display: none; } }  /* on phones the work pages are in the menu only */
 /* Under the top row (TD-242): the shown project's trouble, the pause with Resume, updates and the bar's errors. */
 #machine { gap: var(--p-spacing-static-sm); font-size: var(--p-typescale-sm); }
 #machine .paused {

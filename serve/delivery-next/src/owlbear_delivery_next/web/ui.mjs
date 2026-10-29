@@ -169,12 +169,12 @@ export function unread() {
 export function loaded() {
   return bar.data ? bar.data.projects.filter((p) => p.state === "loaded") : null;
 }
-for (const link of document.querySelectorAll(".top a[href^='/']")) link.href = here({}, link.getAttribute("href"));
+for (const link of document.querySelectorAll("#top a[href^='/']")) link.href = here({}, link.getAttribute("href"));
 // The guard covers every link of the top row, the menu and the notes under it; a link opened in another tab leaves
 // this page as it is.
 document.addEventListener("click", (e) => {
   const away = !e.defaultPrevented && e.button === 0 && !(e.metaKey || e.ctrlKey || e.shiftKey || e.altKey);
-  if (away && e.target.closest?.(".top a[href], #machine a[href]") && held()) e.preventDefault();
+  if (away && e.target.closest?.("#top a[href], #machine a[href]") && held()) e.preventDefault();
 }, { capture: true });
 
 // The machine's state read again after a page changed it (a project added, removed or adopted).
@@ -356,7 +356,7 @@ function showBar() {
   if (!root) {
     root = Object.assign(document.createElement("section"), { id: "machine" });
     root.setAttribute("aria-label", "OwlBear's state");
-    document.querySelector(".top")?.after(root);
+    document.getElementById("top")?.after(root);
   }
   render(notes(), root);
 }

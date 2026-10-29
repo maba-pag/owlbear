@@ -32,7 +32,7 @@ def test_every_page_shares_the_top_row_stylesheet_and_confirmation_and_ignores_a
     source = page_source(c, path)  # with its own modules (C-28)
 
     assert page.status_code == 200
-    row = r'<div class="top"><div id="menu"></div><a class="brand" href="/">OwlBear</a>(.*?)<div id="controls"></div>'
+    row = r'<div id="top"><div id="menu"></div><a class="brand" href="/">OwlBear</a>(.*?)<div id="controls"></div>'
     top = re.search(f'{row}</div><script type="module" src="{pages.MENU}">', page.text)
     assert top, "the top row is missing"
     nav = re.fullmatch(r'<nav aria-label="Delivery pages">(.*)</nav>', top.group(1))

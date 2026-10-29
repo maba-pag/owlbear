@@ -117,9 +117,11 @@ def test_changes_of_all_projects_or_one_the_top_row_switches_and_resumes_and_pro
             expect(page.locator("#changes")).to_contain_text("beta-1")
             expect(page).to_have_url(f"{base}/")
             expect(page.locator("#changes .project")).to_have_text(["alpha", "beta"])
+            head = page.locator("#changes .card .top").first  # a card's header is not styled as the top row
+            assert head.evaluate("e => getComputedStyle(e).borderBottomStyle") == "none"
             expect(page.locator("#machine .paused")).to_contain_text("2 Changes would continue")
             expect(page.locator("#changes")).to_contain_text("Delivery is paused: continues after Resume")
-            top = page.locator(".top")  # the project and Pause; the pause banner sits under it
+            top = page.locator("#top")  # the project and Pause; the pause banner sits under it
             pds.pick(top, "Project", b.id)
             expect(page.locator("#changes")).to_contain_text("beta-1")
             expect(page.locator("#changes")).not_to_contain_text("alpha-1")
@@ -163,7 +165,7 @@ def test_changes_of_all_projects_or_one_the_top_row_switches_and_resumes_and_pro
             expect(page).to_have_url(f"{base}/projects")  # back to All
             assert [p.id for p in registry.load().projects] == [a.id, b.id]
             expect(page.locator("#projects > li")).to_have_count(2)
-            page.locator(".top").get_by_role("link", name="Backlog").click()
+            page.locator("#top").get_by_role("link", name="Backlog").click()
             expect(page).to_have_url(f"{base}/backlog")  # the backlog too shows all projects (TD-241)
             page.get_by_role("button", name="Menu").click()
             page.locator("p-drilldown").get_by_role("link", name="Settings").click()
@@ -443,9 +445,9 @@ def test_the_menu_reaches_every_page_moves_focus_into_each_level_and_back_to_the
         page.goto(f"{base}/config?project={a.id}#token=t")
         burger, menu = page.get_by_role("button", name="Menu"), page.locator("p-drilldown")
         work = ["Changes", "Backlog", "Memory", "Decisions", "Metrics"]
-        expect(page.locator(".top nav a")).to_have_text(work)
+        expect(page.locator("#top nav a")).to_have_text(work)
         expect(burger).to_have_attribute("aria-haspopup", "dialog")
-        assert targets(page.locator(".top nav a, .top .brand, #menu > p-button-pure, #controls > *")) == []
+        assert targets(page.locator("#top nav a, #top .brand, #menu > p-button-pure, #controls > *")) == []
         burger.click()
         expect(menu.get_by_role("link", name="Settings")).to_be_focused()  # this page's link, in its level
         expect(menu.get_by_role("link", name="Settings")).to_have_attribute("aria-current", "page")
@@ -465,7 +467,7 @@ def test_the_menu_reaches_every_page_moves_focus_into_each_level_and_back_to_the
         page.set_viewport_size({"width": 390, "height": 800})  # a phone: the work pages are in the menu only
         page.goto(f"{base}/?project={b.id}&change={b.id}%2Fbeta-1")  # an old link into one Change
         expect(page.locator("#detail")).to_contain_text("beta-1")
-        expect(page.locator(".top nav")).to_be_hidden()
+        expect(page.locator("#top nav")).to_be_hidden()
         assert page.evaluate("document.documentElement.scrollWidth") <= 390
         burger.click()
         expect(menu.get_by_role("link", name="Changes")).to_be_focused()  # opened at the work level
@@ -537,7 +539,7 @@ def test_projects_adopts_removes_and_adds_keeping_focus_and_the_next_folder(tmp_
         expect(page.get_by_label("Folder")).to_be_focused()
         expect(page.locator("#page")).to_contain_text("No project yet")
         assert registry.load().projects == []
-        add = page.locator(".top").get_by_role("link", name="Add project")
+        add = page.locator("#top").get_by_role("link", name="Add project")
         expect(add).to_have_attribute("href", "#add")  # Projects is where it leads, so it goes to the form
         page.get_by_role("button", name="Add", exact=True).click()
         expect(page.locator("#page > [role=alert]")).to_have_text("Name the folder of a clone first.")
@@ -557,9 +559,9 @@ def test_projects_adopts_removes_and_adds_keeping_focus_and_the_next_folder(tmp_
         expect(page.get_by_label("Folder")).to_have_value("~/Projects/next")
         assert len(posted) == 1
         expect(add).to_have_count(0)
-        expect(pds.select(page.locator(".top"), "Project")).to_be_visible()
+        expect(pds.select(page.locator("#top"), "Project")).to_be_visible()
         page.goto(f"{base}/backlog")
-        expect(page.locator(".top").get_by_role("link", name="Add project")).to_have_count(0)
+        expect(page.locator("#top").get_by_role("link", name="Add project")).to_have_count(0)
 
 
 @pytest.mark.browser
@@ -702,3 +704,24 @@ def test_focus_goes_to_the_same_place_after_remove_and_stays_where_the_owner_mov
         held[0].fallback()
         expect(page.locator("#page > [role=status]")).to_contain_text("epsilon now serves the clone at")
         expect(page.get_by_label("Folder")).to_be_focused()
+
+
+@pytest.mark.browser
+def test_a_focused_remove_stays_with_its_project_when_the_list_changes_under_it(
+    tmp_path: Path, monkeypatch, pds
+) -> None:
+    """When the focused Remove's project goes away elsewhere, the next project's Remove does not take its place."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    alpha = registry.register(clone(tmp_path / "alpha"))
+    registry.register(clone(tmp_path / "beta"))
+    with browsing(monkeypatch, pds) as (page, base):
+        page.goto(f"{base}/projects#token=t")
+        page.get_by_role("listitem", name="alpha").get_by_role("button", name="Remove project").focus()
+        gone = page.request.delete(f"{base}/api/next/projects/{alpha.id}", headers={"Authorization": "Bearer t"})
+        assert gone.ok, gone.text()  # another tab removes it
+        page.evaluate("() => { import('/assets/ui.mjs').then((ui) => ui.reread()); }")
+        expect(page.get_by_role("listitem")).to_have_count(1)
+        expect(
+            page.get_by_role("listitem", name="beta").get_by_role("button", name="Remove project")
+        ).not_to_be_focused()
