@@ -9,6 +9,17 @@ if (hash.get("token")) {
   sessionStorage.setItem("token", hash.get("token"));
   history.replaceState(null, "", location.pathname + location.search);  // ?project= and ?change= stay
 }
+// Sections that moved to Menu ▸ Updates (D-01M63C5VGFWJ709X2GA0CE8Q5B): their old addresses open the new pages.
+const MOVED = { "/maintenance#owlbear": "/updates/owlbear", "/config#pack": "/updates/impeccable" };
+const moved = () => MOVED[location.pathname + location.hash];
+function move() {  // the address bar's own fragment change does not load the page again
+  if (moved()) location.replace(moved() + location.search);  // ?project= stays
+}
+addEventListener("hashchange", move);
+if (moved()) {
+  move();
+  await new Promise(() => {});
+}
 export const token = sessionStorage.getItem("token");
 export const project = new URLSearchParams(location.search).get("project") ?? "";
 const scope = document.querySelector('meta[name="owlbear-scope"]')?.content ?? "project";
@@ -126,7 +137,7 @@ const listed = (id) => bar.data.projects.some((p) => p.id === id);
 if (bar.data && !listed(project) && (project || scope !== "all")) {
   const first = bar.data.projects.find((p) => p.state === "loaded") ?? bar.data.projects[0];
   if (first || project) {  // a project page shows one project: the first loaded one when the link named none
-    location.replace(here({ project: first && scope !== "all" ? first.id : "" }));
+    location.replace(here({ project: first && scope !== "all" ? first.id : "" }, location.pathname + location.hash));
     await new Promise(() => {});
   }
 }
@@ -251,7 +262,8 @@ function notes() {
       ${clock(announced())} · ${control("Postpone", () => act("postpone", seen), { busy: bar.busy === "postpone" })}
       </p>` : nothing}
     ${update?.phase && update.phase !== "idle" ? html`<p role="status" id="update-state">Update${update.version
-      ? ` to ${update.version}` : ""}: ${update.phase}${update.detail ? ` · ${update.detail}` : ""}</p>` : nothing}
+      ? ` to ${update.version}` : ""}: ${update.phase}${update.detail ? ` · ${update.detail}` : ""} ·
+      ${updates("owlbear", "OwlBear")}</p>` : nothing}
     ${updated && localStorage.getItem(SEEN) !== updated ? html`<p role="status" id="update-done">OwlBear now runs
       ${updated}. ${control("OK", () => { localStorage.setItem(SEEN, updated); showBar(); })}</p>` : nothing}
     ${banners(bar.data.pack)}
@@ -260,6 +272,10 @@ function notes() {
 
 function when(iso) {
   return iso ? new Date(iso).toLocaleString() : "";
+}
+
+function updates(name, label) {  // the Updates page a note leads to
+  return html`<a href=${here({}, `/updates/${name}`)}>Updates → ${label}</a>`;
 }
 
 // D-01M61GW2EAHFFRFHF014A14K98: every page says when this version's Impeccable is missing or failed to install,
@@ -274,13 +290,14 @@ function banners(pack) {
         ? ` (${when(install.at)})` : ""}${install.detail ? `: ${install.detail}` : "."}`
       : `${named(install.pack)} that this OwlBear version${install.version ? `, ${install.version},` : ""} pins is `
         + "not installed on this machine; the visual rounds use it.";
-    missing = html`<p class="banner" role="status" id="pack-install-banner"><span>${said}</span>
+    missing = html`<p class="banner" role="status" id="pack-install-banner"><span>${said}
+      ${updates("impeccable", "Impeccable")}</span>
       ${control("Install", installPack, { variant: "primary", busy: running || bar.busy === "install" })}</p>`;
   }
   const newer = release?.state === "newer" ? html`<p class="banner" role="status" id="pack-release-banner"><span>
     OwlBear ${release.version} carries a newer ${named(release.pack)}; this version pins ${named(release
       .running_pack)}. ${release.checked_at ? `Checked ${when(release.checked_at)}.`
-      : "When it was checked is unknown."}
+      : "When it was checked is unknown."} ${updates("owlbear", "OwlBear")}
     </span>${control("Update now", runUpdates, { busy: bar.busy === "update" || updating(bar.data.update) })}</p>`
     : nothing;
   const done = bar.packed ? html`<p role="status" id="pack-install-said">${bar.packed}</p>` : nothing;

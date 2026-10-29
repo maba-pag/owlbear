@@ -48,7 +48,13 @@ textarea, input, select, button { font: inherit; }
   display: flex; flex-wrap: wrap; align-items: center; gap: var(--p-spacing-static-sm) var(--p-spacing-static-md);
   padding-block-end: var(--p-spacing-static-sm); border-block-end: 1px solid var(--p-color-contrast-lower);
 }
-#menu { display: flex; min-inline-size: 2.5rem; min-block-size: 2.5rem; align-items: center; }
+#menu { display: flex; min-inline-size: 2.5rem; min-block-size: 2.5rem; align-items: center;
+  position: relative; }
+/* D-01M63CDFXCN5SSCNNYWV2FVFVA: the dot on Menu while an update is available; the button's name says it. */
+#menu .dot { position: absolute; inset-block-start: .35rem; inset-inline-start: 1.6rem; inline-size: .6rem;
+  block-size: .6rem; border-radius: 50%; background: var(--p-color-info);
+  box-shadow: 0 0 0 2px var(--p-color-canvas); pointer-events: none; }
+#menu p-tag.said { margin-inline-start: var(--p-spacing-static-sm); } /* a margin, not a space: not underlined */
 #top a { color: var(--p-color-primary); text-decoration: none; text-underline-offset: .35em; }
 #top a:hover { text-decoration: underline; text-decoration-thickness: 1px; }
 #top .brand { font-size: var(--p-typescale-md); font-weight: var(--p-font-weight-bold); }

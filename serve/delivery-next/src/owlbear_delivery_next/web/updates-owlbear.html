@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en" class="scheme-light-dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- The machine's update, the same in every project: the page opens without one. -->
+<meta name="owlbear-scope" content="all">
+<title>OwlBear Delivery · OwlBear update</title>
+<link rel="stylesheet" href="/assets/pds/4.10.1/index.css">
+<script type="module">
+  import { load } from "/assets/pds/4.10.1/load.mjs";
+  load();
+</script>
+<!-- base -->
+<link rel="stylesheet" href="/assets/page/updates/updates.css">
+<style>
+  #owlbear { gap: var(--p-spacing-static-lg); }
+</style>
+</head>
+<body>
+<main>
+<!-- tabs -->
+<header>
+  <p-heading size="2xl"><h1>OwlBear update</h1></p-heading>
+</header>
+<p-text>OwlBear itself on this machine: the version it runs, the newest one, and its update step by step.</p-text>
+<div id="page"></div>
+</main>
+<!-- ask -->
+<script type="module" src="/assets/page/updates/owlbear.mjs"></script>
+</body>
+</html>

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<!-- The OwlBear section is the machine's: the page opens without a project, its project parts then wait for one. -->
+<!-- Curation and sessions are the machine's: the page opens without a project, its project parts then wait for one. -->
 <meta name="owlbear-scope" content="all">
 <title>OwlBear Delivery · Maintenance</title>
 <link rel="stylesheet" href="/assets/pds/4.10.1/index.css">
@@ -24,44 +24,6 @@
   #use p-table-cell:nth-child(n+2):nth-child(-n+5) { text-align: end; font-variant-numeric: tabular-nums; }
   #tests { display: grid; gap: var(--p-spacing-static-xs); }
   #tests fieldset { display: grid; gap: var(--p-spacing-static-xs); margin: 0; padding: 0; border: 0; }
-  #owlbear .row { align-items: center; }
-  #owlbear { gap: var(--p-spacing-static-lg); }
-  .owlbear-part, .pack-run, .pack-summary, .pack-ask, .pack-steps, #pack-progress {
-    display: grid; gap: var(--p-spacing-static-sm); min-width: 0; }
-  .owlbear-part + .owlbear-part { padding-block-start: var(--p-spacing-static-lg);
-    border-block-start: 1px solid var(--p-color-contrast-lower); }
-  .pack-run { gap: var(--p-spacing-static-md); }
-  .pack-facts { display: grid; grid-template-columns: max-content minmax(0, 1fr);
-    gap: var(--p-spacing-static-xs) var(--p-spacing-static-md); margin: 0; font-size: var(--p-typescale-sm); }
-  .pack-facts > div { display: contents; }
-  .pack-facts dt { color: var(--p-color-contrast-medium); }
-  .pack-facts dd { margin: 0; overflow-wrap: anywhere; }
-  @media (max-width: 30rem) { .pack-facts { grid-template-columns: minmax(0, 1fr); row-gap: 0; }
-    .pack-facts dd + dt { margin-block-start: var(--p-spacing-static-xs); } }
-  .pack-question { display: grid; gap: var(--p-spacing-static-sm); padding: var(--p-spacing-static-md);
-    background: var(--p-color-canvas); border-radius: var(--p-radius-lg); min-width: 0; }
-  .pack-found { display: grid; gap: var(--p-spacing-static-xs); }
-  .pack-discard { display: flex; flex-wrap: wrap; align-items: center; gap: var(--p-spacing-static-sm);
-    padding-block-start: var(--p-spacing-static-md); border-block-start: 1px solid var(--p-color-contrast-low); }
-  .pack-diff { margin: 0; max-block-size: 24rem; overflow: auto; white-space: pre; font-size: var(--p-typescale-xs);
-    padding: var(--p-spacing-static-sm); background: var(--p-color-surface); border-radius: var(--p-radius-md); }
-  .pack-diff .pack-add { color: var(--p-color-success); }
-  .pack-diff .pack-del { color: var(--p-color-error); }
-  .pack-diff .pack-hunk { color: var(--p-color-contrast-medium); }
-  #pack-progress { gap: var(--p-spacing-static-md); }
-  .pack-phase { gap: var(--p-spacing-static-xs); }
-  .pack-phase h5 { margin: 0; font-size: var(--p-typescale-sm); font-weight: var(--p-font-weight-semibold, 600);
-    color: var(--p-color-contrast-high); }
-  .pack-phase ol, #pack-stages { display: grid; gap: var(--p-spacing-static-xs); margin: 0;
-    padding-inline-start: 1.5rem; }
-  .pack-step-head { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--p-spacing-static-sm);
-    min-block-size: 24px; }
-  .pack-step.stale .pack-step-head > span:first-child { color: var(--p-color-contrast-medium); }
-  .pack-step-more { padding-inline-start: var(--p-spacing-static-sm); }
-  .pack-step-more > summary { min-block-size: 24px; display: list-item; }
-  .pack-detail, #pack-log { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere;
-    font-size: var(--p-typescale-xs); }
-  #owlbear details > summary { min-block-size: 24px; }
 </style>
 </head>
 <body>
@@ -76,7 +38,6 @@
 <script type="module">
 import { html, nothing, render } from "/assets/lit-html/3.3.3/lit-html.js";
 import { call, defined, here, project, shown } from "/assets/ui.mjs";
-import { follow, owlbearSection, readOwlbear } from "/assets/page/maintenance/owlbear.mjs";
 
 // Under the machine host with no project chosen, only the machine's parts show: the project's wait for one.
 const none = shown() !== null && !project;
@@ -109,7 +70,6 @@ function action(a) {
     </div>
     <p-text size="sm">${a.note}</p-text>
     ${a.href && !a.href.startsWith("#") ? html`<a href=${here({}, a.href)}>Open ${a.name} in ${a.where}</a>` : nothing}
-    ${a.href === "#owlbear" ? html`<a href="#owlbear">Go to the OwlBear section</a>` : nothing}
     ${a.href === "#tests" ? testsPart() : nothing}
     <div class="title">${lastRun(a)}</div>
   </li>`;
@@ -385,12 +345,12 @@ function view() {
     </p-inline-notification>
     <p-text id="status" role="status" aria-live="polite"></p-text>
     ${none ? html`<p-text id="no-project" size="sm">Choose a project above for its maintenance actions, test review
-      and subagent use. The OwlBear section below is the machine's, the same in every project.</p-text>` : html`
+      and subagent use. Memory curation and the sessions below are the machine's, the same in every
+      project.</p-text>` : html`
     <section aria-labelledby="actions-title">
       <p-heading size="lg"><h2 id="actions-title">Maintenance actions</h2></p-heading>
       <ul id="actions" class="actions">${state.actions.map(action)}</ul>
     </section>`}
-    ${owlbearSection()}
     ${curationSection()}
     ${sessionsSection()}
     ${none ? nothing : useSection()}`;
@@ -402,7 +362,6 @@ function show() {
 
 async function refresh() {
   const generation = ++state.reading;
-  readOwlbear();
   // Keep the established read order, collecting failures without losing another section's data.
   const idle = Promise.resolve([[], []]);
   const [overview] = await Promise.allSettled([
@@ -453,7 +412,6 @@ async function refresh() {
   if (busy) state.again = setTimeout(refresh, 5000);
 }
 
-follow(show);
 show();
 document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh(); });
 await defined(["p-checkbox", "p-button"]);
