@@ -271,6 +271,18 @@ def test_a_release_pinning_the_same_pack_shows_nothing_and_an_unreadable_one_sta
     assert "Impeccable is unreadable" in said["detail"]
 
 
+def test_a_runtime_from_before_the_rename_sees_a_renamed_release_as_unknown_not_failed(origin, monkeypatch):
+    """D-01M63CB9WFXBV3TDXGG295QCST: a reader that knows only design_pack.json shows unknown until it updates once."""
+    at_v0_2(origin)
+    released(origin, "v0.3", '{"pack": "p-new"}')  # the renamed tree: impeccable.json only
+    monkeypatch.setattr(versions, "MANIFEST", versions.OLD_MANIFEST)  # the older runtime's one manifest path
+
+    said = impeccable.look(force=True)
+
+    assert (said["state"], said["version"]) == ("unknown", "v0.3")
+    assert "Impeccable is unreadable" in said["detail"]
+
+
 def test_an_install_waits_while_the_disk_is_nearly_full(origin, installing, monkeypatch):
     monkeypatch.setattr(versions.shutil, "disk_usage", lambda _p: SimpleNamespace(free=versions.FREE - 1))
 

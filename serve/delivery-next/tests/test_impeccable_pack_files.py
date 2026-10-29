@@ -10,6 +10,7 @@ from types import SimpleNamespace
 import pytest
 
 from owlbear_delivery_next.change_contracts.models import StepKind
+from owlbear_delivery_next.commands import dispatch
 from owlbear_delivery_next.impeccable import detector, pack_files
 from owlbear_delivery_next.local_system import local_home, preload
 from owlbear_delivery_next.runtimes import sdk_adapter
@@ -84,6 +85,17 @@ def test_install_keeps_only_files_that_match_their_digests(monkeypatch) -> None:
     found.engine.write_bytes(b"swapped after verification")
     with pytest.raises(pack_files.PackError, match="no longer matches"):
         found.verified_engine()
+
+
+def test_an_older_runtime_installs_impeccable_through_the_hidden_design_pack_command(monkeypatch) -> None:
+    """D-01M63CB9WFXBV3TDXGG295QCST: a version from before the rename installs the new one's pack by its old name."""
+    pinned(monkeypatch, b"engine", b"bundle")
+    monkeypatch.setattr(pack_files, "fetch", lambda url: b"engine" if "releases" in url else b"bundle")
+    assert pack_files.installed() is None
+
+    assert dispatch.main(["design-pack", "--install"]) == 0  # what the older runtime's versions.pack runs
+
+    assert pack_files.installed() is not None
 
 
 def test_the_pack_is_kept_only_in_a_private_folder(monkeypatch, tmp_path) -> None:
