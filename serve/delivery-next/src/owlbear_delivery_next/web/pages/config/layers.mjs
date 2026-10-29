@@ -93,6 +93,11 @@ export function reviewPrefs() {
   return saveLayer(true);
 }
 
+// Whether the edited layer has an edit to save: only then is its Save the bar's primary (D-01M63C7BJZZ7RQV9XS4XVR0DNE).
+export function hasEdits() {
+  return dirty(state.layer).length > 0;
+}
+
 export function pendingLine() {
   const others = Object.keys(drafts).filter((l) => l !== state.layer && dirty(l).length);
   const mine = changes(state.layer), parts = mine.length ? [`Unsaved: ${mine.join("; ")}.`] : ["No unsaved edits."];

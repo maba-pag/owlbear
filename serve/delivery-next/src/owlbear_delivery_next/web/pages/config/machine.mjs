@@ -137,7 +137,7 @@ function machineControls() {
       this machine keeps its own values.</p-text>` : nothing}
     ${keys.map(ownControl)}
     <div class="row">${button("Save machine settings", saveMachine, { busy: state.machineSaving,
-      disabled: !state.machineDraft })}</div>`;
+      variant: state.machineDraft ? "primary" : "secondary", disabled: !state.machineDraft })}</div>`;
 }
 
 async function saveMachine() {

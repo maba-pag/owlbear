@@ -15,6 +15,11 @@
   .row { align-items: end; gap: var(--p-spacing-static-md); }
   #scope { min-width: 16rem; }
   p-table-cell p-input-text, p-table-cell p-select { min-width: 11rem; }
+  /* A number needs a number's width, not the column's or the panel's. */
+  p-table-cell p-input-text:is([inputmode="numeric"], [inputmode="decimal"]) { max-inline-size: 14rem; }
+  :is([id^="machine-"], [id^="global-machine-"]):is(p-input-text, p-select):not([id$="enrolled_chats"]) {
+    max-inline-size: 32rem;
+  }
   details.panel > summary { font-size: var(--p-typescale-md); }
   details.panel[open] { gap: var(--p-spacing-static-md); }
 </style>
