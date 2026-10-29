@@ -321,3 +321,26 @@ def test_an_option_the_question_no_longer_offers_is_not_sent(page_url, left, pds
         form.get_by_role("button", name="Answer").click()
         expect(page.locator("#detail")).not_to_contain_text("Not done")
     assert '"option":null' in sent(store, "greet").replace(" ", "")
+
+
+@pytest.mark.browser
+def test_a_card_names_the_files_its_activity_touches_without_their_paths(page_url, pds) -> None:
+    """The card is a summary: a tool's path shows as its file's name; the detail keeps the whole path."""
+    import json  # noqa: PLC0415
+
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    _, base = page_url
+
+    def doing(route) -> None:
+        rows = route.fetch().json()
+        for row in rows:
+            row |= {"now": "Build 1/2 · view /Users/me/project/README.md", "progress": None, "outcome": None}
+        route.fulfill(content_type="application/json", body=json.dumps(rows))
+
+    with opened(base, "flip", pds) as page:
+        page.route(lambda url: url.endswith("/changes"), doing)
+        page.reload()
+        card = page.locator("#changes .card", has_text="flip")
+        expect(card).to_contain_text("view README.md")
+        expect(card).not_to_contain_text("/Users/me")

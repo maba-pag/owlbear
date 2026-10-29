@@ -31,7 +31,7 @@ function card([c, label, variant]) {
     choose(c.key);
   };
   const bits = [];
-  if (c.now && label !== "Done" && (!step || c.now.includes(" \u00b7 "))) bits.push(split(c.now)[1]);
+  if (c.now && label !== "Done" && (!step || c.now.includes(" \u00b7 "))) bits.push(split(short(c.now))[1]);
   if (c.step_time) bits.push(`step ${c.step_time}`);
   if (c.credits?.change || c.credits?.unknown) {
     const now = c.credits.step ? ` (this step ${c.credits.step.toFixed(2)})` : "";
