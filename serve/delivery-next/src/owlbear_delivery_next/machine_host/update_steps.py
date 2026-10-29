@@ -141,14 +141,26 @@ class Steps:
             self.unwritten = ""
 
 
+def _step(s: object) -> bool:
+    return (
+        isinstance(s, dict) and set(s) == {"key", "label", "state", "started_at", "ended_at", "line"}
+        and s["key"] in LABELS and all(isinstance(s[k], str) for k in ("label", "state", "line"))
+        and all(s[k] is None or isinstance(s[k], str) for k in ("started_at", "ended_at"))
+    )  # fmt: skip
+
+
+def _entry(e: object) -> bool:
+    return isinstance(e, dict) and set(e) == {"at", "step", "line"} and all(isinstance(v, str) for v in e.values())
+
+
 def _record() -> dict[str, Any]:
-    """The record an update kept; empty when there is none, it cannot be read or another producer wrote it."""
+    """The record an update kept; empty when it is missing, unreadable, damaged or from another producer."""
     with contextlib.suppress(OSError, ValueError):
         found = json.loads((local_home.root() / RECORD).read_text())
         if (
             isinstance(found, dict) and found.get("shape") == SHAPE and isinstance(found.get("version"), str)
             and isinstance(found.get("steps"), list) and isinstance(found.get("log"), list)
-            and all(isinstance(s, dict) and s.get("key") in LABELS for s in found["steps"])
+            and all(map(_step, found["steps"])) and all(map(_entry, found["log"]))
         ):  # fmt: skip
             return found
     return {}

@@ -259,3 +259,20 @@ def test_the_new_host_shows_the_old_hosts_steps_plus_its_own_or_only_its_own_wit
         assert [s["key"] for s in got["steps"]] == ["handover"]
         assert [e["line"] for e in got["log"]] == [own["line"]]
     assert got["phase"] == "idle"  # the pages read no update as running
+
+
+@pytest.mark.parametrize(
+    "malformed",
+    [{"steps": [{"key": "handover"}]}, {"log": [{"step": "looking"}]}, {"steps": [{"key": "looking", "line": 7}]}],
+)
+def test_a_malformed_record_is_read_as_absent_and_the_new_host_still_ends_its_handover(malformed):
+    steps = update_steps.Steps(lambda _s: None)
+    steps.begin()
+    steps.about("v0.2")
+    steps.mark("looking", "done", "v0.2 is newer")
+    body = kept() | malformed
+    (local_home.root() / update_steps.RECORD).write_text(json.dumps(body))
+
+    steps.took_over("v0.2", "done", "v0.2 took over")
+
+    assert [(s["key"], s["state"]) for s in steps.read()["steps"]] == [("handover", "done")]
