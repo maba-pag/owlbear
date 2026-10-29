@@ -5,6 +5,7 @@ import hashlib
 import json
 import subprocess
 import threading
+import time
 from datetime import UTC, datetime, timedelta
 from email.message import Message
 from http.client import IncompleteRead
@@ -158,6 +159,30 @@ def test_the_notice_says_known_stale_unknown_or_error_and_a_failed_check_keeps_t
     assert (offline["state"], offline["detail"].startswith("GitHub was not reached")) == ("unknown", True)
     assert json.loads(path.read_text())["behind"] == 2  # the last count stays kept; the next count replaces it
     assert pack_update.notice(refresh=True, fetch=fetch)["state"] == "known"  # due again after a failure
+
+
+@pytest.mark.usefixtures("pinned")
+def test_a_failed_check_overlapping_a_successful_one_never_writes_back_the_older_count() -> None:
+    """Copilot review: readiness's refresh and the update check's forced one can run at once at host start."""
+    counted = threading.Event()
+
+    def failing(url: str) -> bytes:
+        counted.wait(1)  # before the fix the other check counts meanwhile; with it, it waits for this one
+        raise HTTPError(url, 503, "unavailable", Message(), None)
+
+    def counting(url: str) -> bytes:
+        found = releases("skill-v4.6.0", "skill-v4.7.0")(url)
+        counted.set()
+        return found
+
+    first = threading.Thread(target=lambda: pack_update.notice(refresh=True, fetch=failing))
+    first.start()
+    time.sleep(0.1)
+    pack_update.notice(refresh=False, force=True, fetch=counting)
+    first.join()
+
+    said = pack_update.notice(refresh=False)
+    assert (said["state"], said["behind"]) == ("known", 2)
 
 
 def registry(*rules: tuple[str, ...]) -> str:

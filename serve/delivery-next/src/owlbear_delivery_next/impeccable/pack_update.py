@@ -15,6 +15,7 @@ import json
 import re
 import subprocess
 import tempfile
+import threading
 from datetime import UTC, datetime, timedelta
 from http.client import HTTPException
 from importlib.resources import files
@@ -24,6 +25,7 @@ from urllib.error import HTTPError
 
 from owlbear_delivery_next.impeccable import detector, pack_files
 from owlbear_delivery_next.local_system import local_home
+from owlbear_delivery_next.local_system.storage_io import atomic_write
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -34,6 +36,7 @@ if TYPE_CHECKING:
 RELEASES = "https://api.github.com/repos/{repo}/releases?per_page=100"
 NOTICE = "notice.json"  # beside the installed packs
 STALE = timedelta(days=1)
+CHECKING = threading.Lock()  # one check of upstream at a time, so a failed one never writes back an older count
 PAGE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*\.html")  # a golden page: a plain file name in its folder
 SECONDS = 10.0  # the notice's one request: the readiness check at host start never waits long for it
 REGISTRY = "crates/foundation/src/registry.rs"  # upstream's rule registry
@@ -113,24 +116,33 @@ def notice(*, refresh: bool, force: bool = False, fetch: Callable[[str], bytes] 
     """
     pack, tag = pack_files.manifest()["pack"], pack_files.manifest()["upstream"]["tag"]
     path = local_home.root() / pack_files.PACKS / NOTICE
+    kept = _kept(path, tag)
+    if not (force or (refresh and _state(kept)["state"] != "known")):
+        return {"pack": pack, **_state(kept)}
+    with CHECKING:
+        kept = _kept(path, tag)  # as the check before this one left it
+        if force or _state(kept)["state"] != "known":
+            now = datetime.now(UTC).isoformat(timespec="seconds")
+            try:
+                found = releases(fetch)
+                kept = {"tag": tag, "behind": len(found), "latest": found[-1] if found else tag, "checked_at": now}
+            except Unread as exc:
+                kept = kept | {"tag": tag, "failed_at": now, "failure": str(exc)[:400], "offline": exc.offline}
+            try:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                atomic_write(path, json.dumps(kept) + "\n")
+            except OSError:
+                pass  # the notice is a hint; it is checked again next time
+    return {"pack": pack, **_state(kept)}
+
+
+def _kept(path: Path, tag: str) -> dict[str, Any]:
+    """The last check's record for *tag*; empty when there is none, or it counted another pack's."""
     try:
         kept = json.loads(path.read_text(encoding="utf-8"))
     except OSError, ValueError:
-        kept = {}
-    kept = kept if isinstance(kept, dict) and kept.get("tag") == tag else {}  # another pack's count says nothing here
-    if force or (refresh and _state(kept)["state"] != "known"):
-        now = datetime.now(UTC).isoformat(timespec="seconds")
-        try:
-            found = releases(fetch)
-            kept = {"tag": tag, "behind": len(found), "latest": found[-1] if found else tag, "checked_at": now}
-        except Unread as exc:
-            kept = kept | {"tag": tag, "failed_at": now, "failure": str(exc)[:400], "offline": exc.offline}
-        try:
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(json.dumps(kept) + "\n", encoding="utf-8")
-        except OSError:
-            pass  # the notice is a hint; it is checked again next time
-    return {"pack": pack, **_state(kept)}
+        return {}
+    return kept if isinstance(kept, dict) and kept.get("tag") == tag else {}
 
 
 def _time(value: object) -> datetime | None:
