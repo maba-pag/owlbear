@@ -35,6 +35,7 @@ async function decide(action) {
   if (!status?.interrupted || status.corrupt || state.recovery.pending) return;
   const generation = status.generation, verb = TITLE[action];
   const yes = await ask({ title: `${verb} the interrupted decision batch?`, yes: verb,
+    destructive: action === "abandon",
     now: `${EFFECT[action]} Batch ${generation} for project ${status.project}; ${status.ids.length} decision(s).`,
     then: "Nothing in Git or the index is undone.",
     after: "Decisions are read and changed normally again.",

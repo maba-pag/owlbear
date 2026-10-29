@@ -435,6 +435,7 @@ def test_the_deleted_section_removes_entries_deleted_long_ago(shared, pds):
         deleted = page.locator("section", has_text="Deleted (history kept)")
         expect(deleted.locator(".entry")).to_have_count(2)
         deleted.get_by_role("button", name=f"Remove 2 deleted entries older than 30 days from {store.name}").click()
+        expect(pds.modal(page).locator('p-button[variant="primary"]')).to_have_text(["Keep them"])  # never removing
         pds.answer(page, "Remove them")
         expect(page.locator("#status")).to_contain_text(f"Removed 2 deleted entries from {store.name}.")
         expect(deleted.locator(".entry")).to_have_count(1)

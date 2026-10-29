@@ -197,7 +197,7 @@ export function machineSection() {
 }
 
 async function removeLegacy() {
-  if (!(await ask({ title: "Remove the old runtime?", yes: "Remove it", no: "Keep it",
+  if (!(await ask({ title: "Remove the old runtime?", yes: "Remove it", no: "Keep it", destructive: true,
     now: `Delivery deletes ${state.machine.legacy.join(", ")}, the runtime folder from before the first update.`,
     then: "Nothing runs it any more; OwlBear runs from its installed versions.",
     after: "It cannot be brought back; a later version is installed from GitHub as usual.",

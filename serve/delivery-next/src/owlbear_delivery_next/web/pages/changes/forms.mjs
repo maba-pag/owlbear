@@ -123,7 +123,7 @@ export function retryForm(q, r, d) {
 function consequence(o, d) {
   const choices = { yes: o.label, no: "Back to the options", instead: "Choose another option." };
   if (o.next === "abandon") {
-    return { title: "Abandon this Change?", yes: "Abandon", no: "Keep the Change",
+    return { title: "Abandon this Change?", yes: "Abandon", no: "Keep the Change", destructive: true,
       now: "The Change ends here and is marked abandoned. There is no restore.",
       then: `Delivery closes ${d.pr ? `pull request #${d.pr}` : "its pull request if one is open"}, saves work only `
         + "the worktree holds, and removes the worktree. Branches are kept.",
@@ -189,7 +189,7 @@ export function criteriaPanel(d) {
     d.owner_criteria.map((k) => {
       const withdraw = async () => {
         const stop = await ask({
-          title: `Stop checking ${k.id}?`, yes: "Stop checking", no: "Keep it",
+          title: `Stop checking ${k.id}?`, yes: "Stop checking", no: "Keep it", destructive: true,
           now: `“${k.text}” is no longer checked in later visual rounds; it stays in this Change's history.`,
           after: "There is no restore. A comment on a later Fail adds a new criterion.",
           instead: "Every later visual round keeps checking it.",

@@ -126,7 +126,7 @@ async function promote(e) {
 }
 
 async function withdraw(e) {
-  const why = await ask({ title: `Withdraw “${e.title}”?`, yes: "Withdraw", ...redecide(e),
+  const why = await ask({ title: `Withdraw “${e.title}”?`, yes: "Withdraw", ...redecide(e), destructive: true,
     now: "It no longer applies and has no successor; it stays in history, hidden by default.",
     then: e.state === "in_force" ? "A running Change it applied to stops at its next step and asks." : undefined,
     after: "Record a new decision if the rule is needed again.", instead: "It stays as it is.",

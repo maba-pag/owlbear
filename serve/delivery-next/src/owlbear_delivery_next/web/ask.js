@@ -2,8 +2,10 @@
 // The confirmation a consequential button opens (owner 2026-10-15): what happens now, what Delivery then does by
 // itself, what the owner can do afterwards, and the way forward if he declines; true only when he confirms. A *tick*
 // is a statement he must tick before confirming (TD-255). A *reason* is the label of the text he must give before
-// confirming; the dialog then answers with that text.
-function ask({ title, now, items = [], then, after, instead, yes, no = "Cancel", tick = "", reason = "" }) {
+// confirming; the dialog then answers with that text. A *destructive* confirm is never the primary: declining is
+// (D-01M63C7BJZZ7RQV9XS4XVR0DNE); the confirm stays first, so focus does not start on declining.
+function ask({ title, now, items = [], then, after, instead, yes, no = "Cancel", tick = "", reason = "",
+  destructive = false }) {
   const parts = [["Now", now, items], ["Then, by itself", then], ["Afterwards", after], ["If you don't", instead]]
     .filter(([, said]) => said);
   const back = document.activeElement;
@@ -45,7 +47,8 @@ function ask({ title, now, items = [], then, after, instead, yes, no = "Cancel",
       node.addEventListener("click", () => { if (!yes) end(false); else if (checks.every((c) => c())) end(answer()); });
       return node;
     };
-    const decline = choice(no, false, "secondary"), confirm = choice(yes, true, "primary");
+    const decline = choice(no, false, destructive ? "primary" : "secondary"),
+      confirm = choice(yes, true, destructive ? "secondary" : "primary");
     const set = () => { confirm.disabled = !checks.every((c) => c()); };
     if (reason) {
       const why = make("p-textarea", undefined, { label: reason, "max-length": "4000", rows: "3" });

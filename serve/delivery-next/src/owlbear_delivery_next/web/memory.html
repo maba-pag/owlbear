@@ -146,7 +146,7 @@ async function act(m, action, body = {}, of = m.place.of) {
 
 async function remove(m) {
   const sure = await ask({
-    title: `Delete “${m.title}”?`, yes: "Delete", no: "Keep it",
+    title: `Delete “${m.title}”?`, yes: "Delete", no: "Keep it", destructive: true,
     now: m.state === "pending" ? "It was never reviewed, so its file is removed."
       : "It is marked deleted and agents no longer recall it; its history stays in the folder.",
     after: "There is no restore here.",
@@ -210,7 +210,7 @@ function purgeable(deleted) {
 async function purge(old) {
   const place = old[0].place;
   const sure = await ask({
-    title: `Remove ${many(old.length)} from ${place.label}?`, yes: "Remove them", no: "Keep them",
+    title: `Remove ${many(old.length)} from ${place.label}?`, yes: "Remove them", no: "Keep them", destructive: true,
     now: `The files of entries deleted ${PURGE_DAYS} days ago or earlier leave the folder; later ones stay.`,
     after: "The shared repository's Git history keeps them; this page cannot bring them back.",
     instead: "They stay listed as deleted.",
@@ -258,7 +258,7 @@ function editor(m) {
     || state.loaded.categories.some((c) => draft.categories.includes(c) !== m.categories.includes(c));
   const cancel = async () => {
     if (changed() && !(await ask({ title: "Discard your edits?", yes: "Discard", no: "Keep editing",
-      now: "Your changes to this memory are lost.", instead: "You go on editing." }))) return;
+      destructive: true, now: "Your changes to this memory are lost.", instead: "You go on editing." }))) return;
     state.editing = null;
     show();
   };

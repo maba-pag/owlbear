@@ -114,7 +114,7 @@ export function discarding(run, questions) {
 export async function discard(run, d) {
   const p = run.published;
   const sure = await ask({
-    title: "Discard the Impeccable update?", yes: d.label, no: "Keep it waiting",
+    title: "Discard the Impeccable update?", yes: d.label, no: "Keep it waiting", destructive: true,
     now: `The update started in ${run.name} ends here as discarded.`,
     then: "Nothing is activated: the pinned pack stays as it is, and the run's candidate is not used again.",
     after: p?.url ? `Its pull request #${p.number} stays open; close it on GitHub if you no longer want it.`
