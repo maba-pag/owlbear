@@ -133,8 +133,12 @@ LONG = "packages/frontend-components-library"
         (["cd packages/b>cd.log && npm test"], ["npm test", PLACED], ["npm test", PLACED]),  # still packages/b
         (["cd 'p/$b' && npm test", 'cd "p/\\$b" && npm test'], ["npm test", "cd 'p/$b' && npm test"], ["npm test"]),
         ([PLACED, "cd packages/\\\nb && npm test"], ["npm test", PLACED], ["npm test"]),  # both run packages/b
-        (["npm  test "], ["npm test"], []),
+        (["npm  test "], ["npm test"], ["npm test"]),  # the exact text, but for its ends
         (["grep -q 'AC 1' a.txt"], ["grep -q 'AC  1' a.txt"], ["grep -q 'AC  1' a.txt"]),  # tests other text
+        (["sh -c 'exit 1'\ntrue"], ["sh -c 'exit 1' true"], ["sh -c 'exit 1' true"]),  # two commands
+        (['test "$(echo "a b")" = 1'], ['test "$(echo "a  b")" = 1'], ['test "$(echo "a  b")" = 1']),
+        (["cd\npackages/b && npm test"], [PLACED], [PLACED]),  # a bare cd, then packages/b as a command
+        ([" npm test\n"], ["npm test"], []),
         (["cd '#package' && npm test"], ["npm test"], []),
         (["cd packages/app && npm test"], ["npm test"], []),  # run from its package directory
         ([QUOTED], ["npm test"], []),

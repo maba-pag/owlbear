@@ -18,19 +18,15 @@ if TYPE_CHECKING:
 # One literal shell word as shlex.quote writes it: unquoted, only what it leaves bare; quoted, nothing the shell would
 # expand or unescape. So no comment, redirect, expansion or backslash, and shlex.split reads it as the shell does.
 WORD = r"""(?:[\w@%+=:,./-]|'[^']*'|"[^"\\$`]*")+"""
-CD_CHECK = re.compile(rf"cd\s+({WORD})\s*&&\s*(\S.*)", re.DOTALL)
-SPACE = re.compile(r"""('[^']*'|"(?:[^"\\]|\\.)*"|\\.)|\s+""", re.DOTALL)
-
-
-def _squeeze(command: str) -> str:
-    """*command* with each run of whitespace outside quotes and escapes made one space, and none at either end."""
-    ends = (0, len(command))
-    return SPACE.sub(lambda m: m[1] or ("" if m.start() in ends or m.end() in ends else " "), command)
+CD_CHECK = re.compile(rf"cd[ \t]+({WORD})[ \t]*&&\s*(\S.*)", re.DOTALL)
 
 
 def _form(command: str) -> tuple[str | None, str]:
-    """*command* as (directory, command): `cd <dir> && <cmd>` split with its quoting undone; whitespace squeezed."""
-    said = _squeeze(command)
+    """*command* as (directory, command): `cd <dir> && <cmd>` split with its quoting undone; text kept as written.
+
+    Only the ends are trimmed: other whitespace can separate commands or sit inside a substitution.
+    """
+    said = command.strip()
     found = CD_CHECK.fullmatch(said)
     if not found:
         return None, said
@@ -48,9 +44,12 @@ def ran(check: str, command: str, checks: Sequence[str]) -> bool:
 
 
 def alone(check: str, packages: Sequence[tuple[str, str]]) -> str:
-    """For `cd <dir> && <cmd>` where <cmd> is the profile check of the package in <dir>: write <cmd> alone; else ""."""
+    """For `cd <dir> && <cmd>` where <cmd> is the profile check of the package in <dir>: write <cmd> alone; else "".
+
+    Only a hint, so it forgives whitespace; check_plan then admits the profile's command as written and no other.
+    """
     where, command = _form(check)
-    said = [c for p, c in packages if where is not None and (_package(p), _squeeze(c)) == (where, command)]
+    said = [c for p, c in packages if where is not None and (_package(p), c.split()) == (where, command.split())]
     return f'write the command alone: "{said[0]}"; the Builder runs it from that package\'s directory' if said else ""
 
 
