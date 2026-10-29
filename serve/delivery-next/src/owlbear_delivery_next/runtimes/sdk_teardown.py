@@ -207,7 +207,7 @@ async def managed(st: _Step) -> AsyncIterator[None]:
         yield
     except BaseException:
         propagating = True
-        st.stopped = True  # set before teardown awaits: its idle is no wrong choice, and no gate lock is waited on
+        st.gate.stopped = True  # before teardown awaits: its idle is no wrong choice, and no gate lock is waited on
         raise
     finally:
         termination, cancelled = (

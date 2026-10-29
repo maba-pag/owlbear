@@ -16,7 +16,7 @@ import pytest
 
 from owlbear_delivery_next.change_contracts.models import Brief, Change, Exit, Plan, Step, StepKind, Task
 from owlbear_delivery_next.change_contracts.permissions import Policy
-from owlbear_delivery_next.change_contracts.tools import Worktree
+from owlbear_delivery_next.change_contracts.tools import BuildResult, Worktree
 from owlbear_delivery_next.change_flow import loop
 from owlbear_delivery_next.improvement import chatlogs
 from owlbear_delivery_next.local_system import processes
@@ -175,14 +175,16 @@ def test_cancellation_during_start_still_stops_the_owned_client(world):
     assert any(str(ROOT) in event.get("pids", {}) for event in world.events)
 
 
-def test_a_turn_cut_off_by_a_stop_is_no_wrong_choice(world, monkeypatch):
+def test_a_stop_during_a_result_check_waits_on_it_for_nothing_and_counts_no_wrong_choice(world, monkeypatch):
     data = SimpleNamespace(model="gpt-6-luna", parent_tool_call_id=None)
-    held, release = threading.Event(), threading.Event()
+    held, release, released = threading.Event(), threading.Event(), []
 
-    def checking(gate):  # a submitted result's check holds the gate while it reads the worktree
-        with gate._lock:  # noqa: SLF001 - the lock a result check holds
-            held.set()
-            release.wait(2)
+    def observe():  # the submitted result's worktree read, under the gate's lock
+        held.set()
+        released.append(release.wait(5))
+        return Worktree("a" * 40, "b" * 40)
+
+    world.cfg = dataclasses.replace(world.cfg, observe=observe)
 
     async def opened(_client, st):
         world.steps.append(st)
@@ -201,21 +203,24 @@ def test_a_turn_cut_off_by_a_stop_is_no_wrong_choice(world, monkeypatch):
         async with asyncio.timeout(2):
             while not world.steps:  # noqa: ASYNC110 - the open records its step; nothing signals it
                 await asyncio.sleep(0.01)
-        world.steps[0].on_event(SimpleNamespace(type="assistant.turn_start", data=data))
-        await asyncio.sleep(0.01)
-        check = threading.Thread(target=checking, args=(world.steps[0].gate,))
-        check.start()
-        assert held.wait(2)
+        st = world.steps[0]
+        st.on_event(SimpleNamespace(type="assistant.turn_start", data=data))
+        call = SimpleNamespace(tool_call_id="result", arguments=BuildResult(summary="Done", checks=[]).model_dump())
+        submitted = asyncio.create_task(st._submitted(world.cfg.submit, call))  # noqa: SLF001 - the owned worker
+        assert await asyncio.to_thread(held.wait, 2)
         task.cancel()
+        async with asyncio.timeout(2):
+            while not world.stop_calls:  # noqa: ASYNC110 - teardown signals nothing on its way
+                await asyncio.sleep(0.01)
+        stopped_while_checking = (world.disconnects, world.stop_calls, released) == (1, 1, [])
+        release.set()
         with pytest.raises(asyncio.CancelledError):
             await task
-        stopped_while_checking = check.is_alive()
-        release.set()
-        check.join()
-        return stopped_while_checking
+        return stopped_while_checking, (await submitted).result_type
 
-    assert asyncio.run(scenario())  # the stop waited on no result check
-    assert (world.disconnects, world.steps[0].run.wrong) == (1, {})
+    assert asyncio.run(scenario()) == (True, "rejected")  # the stop waited on no check, and the result came too late
+    run = world.steps[0].run
+    assert (run.wrong, run.payload, run.tool_calls[world.cfg.submit.name].get("late")) == ({}, None, 1)
 
 
 def test_repeated_cancellation_during_stop_does_not_cancel_cleanup(world):
