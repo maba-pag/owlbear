@@ -135,6 +135,11 @@ def test_the_registry_move_changes_only_the_current_read_set() -> None:
             "        return fd_tree.same_entry_image(before, after)",
             "        return True",
         ),
+        (
+            "commands/project_commands.py",
+            "        parsed.repo = repo or Path.cwd()",
+            '        parsed.repo = repo or Path("/")',
+        ),
     ],
     ids=[
         "settle",
@@ -148,6 +153,7 @@ def test_the_registry_move_changes_only_the_current_read_set() -> None:
         "ledger-home",
         "stopped-host",
         "git-link-referents",
+        "project-commands-repo",
     ],
 )
 def test_a_current_settlement_dependency_change_is_an_unknown_build(

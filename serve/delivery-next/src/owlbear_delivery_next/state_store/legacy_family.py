@@ -76,11 +76,11 @@ IMPORTS = (
     ("state_store/project_home.py", "c79464a6139fe571efd600903aa848dc67c9673f016d12c093d7d6b94b74a681"),
     ("state_store/store.py", "a3da565feeee931b40d4907f17c46372c000e573e1add938ae3679d175e75de4"),
 )
-CURRENT_FAMILY_AGGREGATE = "d4e1b87550bb678a2a25e3b010242ff25f8830964b665e5ab6973d12e0d77243"
+CURRENT_FAMILY_AGGREGATE = "41abf89092d1832dc772804e743170ecbb529f9ab1b6f4f6a00a6a107b2d19b3"
 CURRENT_FUNCTIONS = (
     ("commands/chat_client.py:Chat.call", "0fc1fdb166ea555741a2aa7796a99a4eb7b71c572ad37fba1ae0a9e37171b584"),
     ("commands/chat_client.py:workspace", "4e1bd94f29805ab94eff49182ba65966b93988ce4a8e3f395576601499a4855d"),
-    ("commands/cli.py:main", "aa077f301c0ff884217213c2e960c9a3469197ff14a9ae49afb27c9312f889dc"),
+    ("commands/cli.py:main", "d2caf9a44987559c1dae20857b7e12d52c3d0fee7efbaa849b104c3c97e079d6"),
     ("commands/cli.py:update_pack", "cff1b987d273ea7bd2cd4dc8d430c9ce1f13b26943b8d1d524f5b2c8c30152b0"),
     ("commands/dispatch.py:main", "8c4117358586bafde31333d442b1c03a1c628b77941bbe9e1f6e95f71a577729"),
     ("commands/mcp_server.py:main", "8240f789d2bf0edce4e41a622998ce99ed379ca72c4dae8a4c18c0ce59cca6d2"),
@@ -124,13 +124,13 @@ CURRENT_FUNCTIONS = (
 )
 CURRENT_IMPORTS = (
     ("commands/chat_client.py", "f1a06d6baaa61da9b3ccd80d563001aa92d0321541189b4977428863f47eb884"),
-    ("commands/cli.py", "cd9e2d48bfa30ff8f4831d56f4722aac558b4328dc32e10f40b72b06cc04f165"),
+    ("commands/cli.py", "94c8238ac1db24296f07ee57df84cef8d5c752498055811e9c4a1f371b9059da"),
     ("commands/dispatch.py", "326c281057f28ebdb70e9ddfb43e62ad0693957ce5cf2305201d67e7d4cba0e4"),
     ("commands/mcp_server.py", "1261ba9b6201136ef0dc75f1bb0f598fdf0a66a24a1f7b6f3f58b97e23b26b6a"),
     ("commands/runner.py", "e50e64901112d3d7e553cab2c8cbb0bdca7ac228b4c91b1ce4d3a44a8e0c9ba9"),
     ("commands/setup.py", "29413fa7fceb179d22c42a3f0104a42554ca62d96df3ec12b1c651b1d6325b33"),
     ("machine_host/app.py", "c5c5e241369bee06eceded570be1b4fab51cc726942022a8fff6000c195a2743"),
-    ("machine_host/command.py", "9fa9ae7ffdfbc3d49c49b4bde8775c2770186e33e5e5f1f0006ffaf1d61d079b"),
+    ("machine_host/command.py", "577ce56b1140fdf075a0e005468cb52ae5ccbab25c6519efa162e2bff05cb714"),
     ("machine_host/install.py", "c3f1613a7098ab70babc320644ed5965e173684f9da1c5fdd5f8653b7fb6d899"),
     ("machine_host/machine.py", "7cff06968e68c7ffc314bb03ca851580467fadc6bedc78744d2f5a1dd8cfb414"),
     ("machine_host/project.py", "d8a347359ed0487e2ada6cc2de722439091e660e1496f034726ec4414e8e63ff"),

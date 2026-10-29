@@ -29,51 +29,6 @@ BY = "owner (command)"
 QUEUED = "queued {}: the machine host runs it once OwlBear runs; `owlbear cases runs` shows its result"
 
 
-def parsers(sub: Any) -> None:  # noqa: ANN401 - argparse's subparsers
-    """Add ``cases`` and ``improvement`` to the command's parser."""
-    c = sub.add_parser("cases", help="the Spotter cases: stages, versions, replays (Improvement design §4)")
-    cs = c.add_subparsers(dest="action", required=True)
-    cs.add_parser("list", help="the newest version's cases").add_argument("--version", type=int)
-    s = cs.add_parser("seed", help="seed candidates: the pilot's moments, the synthetic cases, or both")
-    s.add_argument("--pilot", type=Path, help="the pilot's folder (watcher-replay)")
-    s.add_argument("--calls", type=Path, help="JSON: each should moment's finding category")
-    s.add_argument("--synthetic", action="store_true", help="the synthetic cases (a marked assumption)")
-    a = cs.add_parser("add", help="a candidate from a Spotter record")
-    a.add_argument("record")
-    a.add_argument("--call", required=True, choices=cases.CALLS)
-    a.add_argument("--why", required=True)
-    m = cs.add_parser("move", help="change a case's stage, call, why or example; examples changed: a paid regression")
-    m.add_argument("case")
-    m.add_argument("stage", choices=(*cases.STAGES, "removed"))
-    m.add_argument("--call", default="", choices=("", *cases.CALLS))
-    m.add_argument("--why", default="")
-    m.add_argument("--example", default="", help="the minimised moment the prompt shows (an example)")
-    m.add_argument("--reviewed-by", default="", help="who checked that the frozen card supports the call")
-    m.add_argument("--note", default="")
-    cs.add_parser("rollback", help="a new version copying an earlier one").add_argument("version", type=int)
-    k = cs.add_parser("check", help="retro-review checks candidates' cards against their calls (paid)")
-    k.add_argument("ids", nargs="*", help="cases to check; every candidate when none")
-    cs.add_parser("release", help="freeze the reviewed corpus as a release (a marked assumption)")
-    p = cs.add_parser("compare", help="two versions on a release's reserve, once per release (paid)")
-    p.add_argument("a", type=int)
-    p.add_argument("b", type=int)
-    p.add_argument("--release", default="", help="the release; the newest by default")
-    cs.add_parser("runs", help="every run's result").add_argument("--last", type=int, default=10)
-    i = sub.add_parser("improvement", help="Improvement's marked assumptions and Retro")
-    ia = i.add_subparsers(dest="action", required=True)
-    ia.add_parser("reset", help="retire every marked assumption")
-    rs = ia.add_parser("retro", help="Retro: judge a finished Change or chat (Improvement design §5)")
-    rs = rs.add_subparsers(dest="retro", required=True)
-    one = rs.add_parser("run", help="queue a run of one unit for the host's Retro job (paid)")
-    which = one.add_mutually_exclusive_group(required=True)
-    which.add_argument("--change", metavar="PROJECT/SLUG", help="a finished Change; PROJECT is its folder's name or id")
-    which.add_argument("--chat", metavar="SESSION", help="an enrolled chat, quiet for a day")
-    which.add_argument("--synthetic", nargs="?", const=True, metavar="NAME", help="the synthetic units, or one")
-    st = rs.add_parser("status", help="the latest runs, or with --plan what a run of a unit would ask (not paid)")
-    st.add_argument("--last", type=int, default=10)
-    st.add_argument("--plan", metavar="UNIT", help="a unit id (chg:…, chat:…, syn:…) or PROJECT/SLUG")
-
-
 def _say(text: str) -> None:
     sys.stdout.write(text + "\n")
 
