@@ -65,7 +65,9 @@ def verdict(*, changes: bool = False, why: str = "It settles a detail the brief 
 class Asking:
     """A Change approved on a pick, at its build step, waiting on its builder's question; each worker run recorded."""
 
-    def __init__(self, picking, monkeypatch, *, session: str = "", stub: bool = True, **draft) -> None:
+    def __init__(
+        self, picking, monkeypatch, *, session: str = "", stub: bool = True, options: tuple = (), **draft
+    ) -> None:
         self.p = picking
         first = picking.put(rule())
         picking.save(**draft)
@@ -77,7 +79,8 @@ class Asking:
         c = picking.approved()
         c.plan = Plan(tasks=[Task(id="t1", title="Add farewell", scope=["packages/app"], checks=["true"])])
         c.step = Step(kind=StepKind.BUILD, task="t1", session=session or None)
-        c = loop.apply(c, loop.StepResult(exit=Exit.ASK, question=Question(step=StepKind.BUILD, text=ASKED)), AT)
+        asked = Question(step=StepKind.BUILD, text=ASKED, options=list(options))
+        c = loop.apply(c, loop.StepResult(exit=Exit.ASK, question=asked), AT)
         picking.store.write(Lock(picking.slug), c)
         self.qid = c.outcome.question
         self.held: list[tuple[list[str], Question | None]] = []
@@ -419,6 +422,22 @@ def test_the_cli_answer_needs_the_class_and_a_clarification_its_confirmed_statem
 
     a = run.asked(run.fold()[0]).answer
     assert (a.kind, a.statement, a.text) == ("clarification", SAID, WORDS)
+
+
+def test_the_cli_refuses_an_option_the_question_does_not_offer_and_queues_nothing(picking, monkeypatch, capsys):
+    """#676: the console runs the Changes page's checks before it writes; a refused answer leaves the inbox empty."""
+    run = Asking(picking, monkeypatch, options=(Option(id="en", label="English"),))
+    monkeypatch.setattr(cli.Store, "open", lambda *_a, **_k: picking.store)
+
+    def said(option: str) -> int:
+        return cli.main(["--repo", str(picking.repo), "answer", picking.slug, "--question", run.qid,
+                         "--option", option, "--kind", "event"])  # fmt: skip
+
+    assert (said("de"), inbox(picking)) == (1, 0)
+    assert "option de is not one of ['en']" in capsys.readouterr().err
+    assert (said("en"), inbox(picking)) == (0, 1)
+    shown = capsys.readouterr().out
+    assert (ASKED in shown, f"{run.qid} option en: English" in shown) == (True, True)
 
 
 def test_a_replacement_check_session_is_told_the_owners_pending_answer(tmp_path):
