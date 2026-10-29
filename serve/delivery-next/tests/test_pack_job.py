@@ -2363,20 +2363,24 @@ def test_the_last_run_survives_a_host_restart_and_a_run_cut_short_reads_failed(t
     assert json.loads((store.root / pack_job.FILE).read_text())["state"] == "failed"  # kept on disk
 
 
-def test_maintenance_shows_the_impeccable_section_and_settings_only_links_to_it(tmp_path, page_source):
+def test_updates_impeccable_shows_the_update_and_settings_and_maintenance_only_link_to_it(tmp_path, page_source):
+    """D-01M63C5VGFVT3DVCC888B78K2A: the Impeccable update lives on Updates ▸ Impeccable, the same in every project."""
     c = TestClient(api.create_app(Store(tmp_path), "t", Host()), base_url="http://127.0.0.1", headers=AUTH)
 
-    page = page_source(c, "/maintenance")
+    page = page_source(c, "/updates/impeccable")
 
-    assert '<section id="owlbear" class="panel" aria-labelledby="owlbear-title">' in page  # the global section
-    assert '<h3 id="pack-title">Impeccable</h3>' in page
+    assert '<section id="pack" class="panel" aria-labelledby="pack-title">' in page
+    assert '<h2 id="pack-title">The pack</h2>' in page
     assert 'button("Update Impeccable", start, { id: "pack-update", icon: "refresh"' in page  # lit-html
     assert '<p-text id="pack-state" size="sm" role="status" aria-live="polite">${runLine(u)}</p-text>' in page
     assert '<ol id="pack-stages" aria-label="Update stages">' in page
     assert "commits impeccable.json, skills/NOTICE.md and " in page  # the Update dialog says what it commits
     settings = page_source(c, "/config")
-    assert 'id="pack-update"' not in settings  # the update is OwlBear's maintenance, not a project setting
-    assert 'href=${here({}, "/maintenance#owlbear")}' in settings
+    assert 'id="pack-update"' not in settings  # the update is OwlBear's, not a project setting
+    assert 'href=${here({}, "/updates/impeccable")}' in settings
+    maintenance = page_source(c, "/maintenance")
+    assert 'id="pack-update"' not in maintenance  # Maintenance's overview only links to it
+    assert "owlbear.mjs" not in maintenance
     pinned = c.get("/api/next/maintenance/pack").json()
     assert (pinned["pack"], pinned["upstream"], pinned["identity"]) == (
         OLD["pack"], OLD["upstream"]["tag"], pack_files.identity()
@@ -2402,8 +2406,9 @@ def test_the_maintenance_page_links_each_action_and_shows_what_is_not_built(tmp_
     got = {a["name"]: a for a in c.get("/api/next/maintenance").json()}
     assert list(got) == ["Memory curation", "Impeccable update", "Engine update", "Review Tests", "Backlog triage"]
     assert (got["Memory curation"]["href"], got["Memory curation"]["last"]) == ("/memory", None)
-    assert (got["Impeccable update"]["href"], got["Impeccable update"]["last"]) == ("#owlbear", None)
-    assert (got["Engine update"]["built"], got["Engine update"]["href"]) == (True, "#owlbear")
+    assert (got["Impeccable update"]["href"], got["Impeccable update"]["last"]) == ("/updates/impeccable", None)
+    assert (got["Engine update"]["built"], got["Engine update"]["href"]) == (True, "/updates/owlbear")
+    assert got["Impeccable update"]["where"] == got["Engine update"]["where"] == "Updates"
     assert (got["Review Tests"]["built"], got["Review Tests"]["href"]) == (True, "#tests")  # started on this page
     assert (got["Backlog triage"]["href"], got["Backlog triage"]["recorded"]) == ("/backlog", False)
     (store.root / pack_job.FILE).write_text(

@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en" class="scheme-light-dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- The machine's pages' design system, the same in every project: the page opens without one. -->
+<meta name="owlbear-scope" content="all">
+<title>OwlBear Delivery · Porsche Design System update</title>
+<link rel="stylesheet" href="/assets/pds/4.10.1/index.css">
+<script type="module">
+  import { load } from "/assets/pds/4.10.1/load.mjs";
+  load();
+</script>
+<!-- base -->
+<link rel="stylesheet" href="/assets/page/updates/updates.css">
+<style>
+  #pds-later { max-inline-size: 48rem; }
+</style>
+</head>
+<body>
+<main>
+<!-- tabs -->
+<header>
+  <p-heading size="2xl"><h1>Porsche Design System update</h1></p-heading>
+</header>
+<p-text>The Porsche Design System these pages load: the version in use and the newest one.</p-text>
+<div id="page"></div>
+</main>
+<script type="module" src="/assets/page/updates/pds.mjs"></script>
+</body>
+</html>

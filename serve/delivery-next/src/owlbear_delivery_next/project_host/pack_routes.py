@@ -87,13 +87,13 @@ def overview(store: Store) -> list[dict[str, Any]]:
     return [
         {"name": "Memory curation", "where": "Memory", "href": "/memory", "built": True, "recorded": True,
          "last": memory_last(store), "note": "Approve, edit, resolve or delete agent memory entries."},
-        {"name": "Impeccable update", "where": "Maintenance", "href": "#owlbear", "built": True,
+        {"name": "Impeccable update", "where": "Updates", "href": "/updates/impeccable", "built": True,
          "recorded": True, "last": pack_job.last(store),
          "note": "Detector and design skills together: diff, golden pages, replay, challenger, then commit and push. "
-                 "One runs at a time on this machine; the OwlBear section shows it in every project."},
-        {"name": "Engine update", "where": "Maintenance", "href": "#owlbear", "built": True,
+                 "One runs at a time on this machine; Updates, Impeccable shows it in every project."},
+        {"name": "Engine update", "where": "Updates", "href": "/updates/owlbear", "built": True,
          "recorded": False, "last": None,
-         "note": "OwlBear updates itself when idle, announced on open pages; Update now in the OwlBear section "
+         "note": "OwlBear updates itself when idle, announced on open pages; Start update now on Updates, OwlBear "
                  "updates at once. When it updates is set in Settings, This machine."},
         {"name": "Review Tests", "where": "Maintenance", "href": "#tests", "built": True, "recorded": False,
          "last": None, "note": "Reviewers judge shares of the tests; a curator applies what holds in a Change."},

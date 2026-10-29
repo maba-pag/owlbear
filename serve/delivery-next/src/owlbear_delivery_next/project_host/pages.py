@@ -19,6 +19,9 @@ PAGES = (  # every page the host serves, as path, title and file; the menu links
     ("/projects", "Projects", "projects.html"),
     ("/config", "Settings", "config.html"),
     ("/maintenance", "Maintenance", "maintenance.html"),
+    ("/updates/owlbear", "OwlBear", "updates-owlbear.html"),  # the menu's Updates level (D-01M63C5VGFWJ709X2GA0CE8Q5B)
+    ("/updates/pds", "Porsche Design System", "updates-pds.html"),
+    ("/updates/impeccable", "Impeccable", "updates-impeccable.html"),
 )
 WORK = ("/", "/backlog", "/memory", "/decisions", "/metrics")  # the work pages the top row links to, on wide screens
 MENU = "/assets/page/menu/menu.mjs"  # the burger and its drilldown (D-01M63C8375KV9WA6NH8K2MB8PN)
