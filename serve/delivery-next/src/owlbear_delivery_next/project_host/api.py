@@ -50,7 +50,7 @@ from owlbear_delivery_next.runtimes.vscode_adapter import open_chat
 from owlbear_delivery_next.runtimes.window_files import HARNESS
 from owlbear_delivery_next.settings import profile
 from owlbear_delivery_next.settings.config import SettingsUnset
-from owlbear_delivery_next.state_store import watch_reports
+from owlbear_delivery_next.state_store import spend_ledger, tool_metrics, watch_reports
 from owlbear_delivery_next.state_store.briefs import save_brief, save_visual
 from owlbear_delivery_next.state_store.store import StoreError
 from owlbear_delivery_next.workflow_steps import check, decision, decisions_gate, held, visual
@@ -167,7 +167,7 @@ def summary(store: Store, slug: str, act: Activity, now: datetime) -> dict[str, 
     out |= card(c, act, store.events(slug), now, tool, pending=store.shared.pending if store.shared else None)
     out["progress"] = asdict(progress(c))
     out["spend"] = c.spend.model_dump()
-    out["tool_use"] = c.tool_use.model_dump()
+    out["tool_use"] = tool_metrics.of_change(spend_ledger.Where.of(store).clone, slug).model_dump()
     out["pullback"] = c.pullback.model_dump(mode="json") if c.pullback else None
     out["watcher"] = watch_reports.counts(store.db, slug)  # observed calls writing outside, unresolved ones apart
     if q := loop.open_question(c):

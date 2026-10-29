@@ -1,7 +1,9 @@
 """How agents' calls of each Delivery tool went (C-28 T8), kept on the Change as the activity log drops old events.
 
-A wrong tool choice is a call at the wrong moment (``order``, a part of a tool's refusals), a guard denial that was
-no bypass attempt, a turn ended without a result tool, or a pointless missing-tool report (one of ``WRONG``).
+The Change's page shows the spend ledger's tally instead (``tool_metrics.of_change``), which also holds stopped runs;
+the kept one serves the retro and the Change's data record. A wrong tool choice is a call at the wrong moment
+(``order``, a part of a tool's refusals), a guard denial that was no bypass attempt, a turn ended without a result
+tool, or a pointless missing-tool report (one of ``WRONG``).
 """
 
 from __future__ import annotations

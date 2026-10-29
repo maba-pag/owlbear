@@ -6,6 +6,7 @@ import contextlib
 import socket
 import threading
 import time
+import uuid
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
@@ -21,6 +22,7 @@ from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import HostRecord
+from owlbear_delivery_next.state_store import spend_ledger
 from owlbear_delivery_next.state_store.store import Lock, Store
 
 if TYPE_CHECKING:
@@ -169,14 +171,16 @@ def test_the_changes_tool_calls_show_under_its_spend_most_called_first(page_url,
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     store, base = page_url
-    used = change().model_copy(update={"slug": "used"})
-    old = ToolUse().plus({"ask_question": {"calls": 1}, "submit_result": {"calls": 3, "rejected": 1, "retries": 1}})
-    used.tool_use = old.plus(  # a record kept before refusals were split, then a run counted with the split
-        {"report_wrong_premise": {"calls": 4, "rejected": 1, "invalid": 1, "lint": 1, "late": 1}}, {"denied": 2}
-    )
-    store.write(Lock("used"), used)
-    wrong_only = change().model_copy(update={"slug": "idle", "tool_use": ToolUse().plus({}, {"no_result": 2})})
-    store.write(Lock("idle"), wrong_only)
+    stored = ToolUse().plus({"ask_question": {"calls": 99}})  # the page reads the ledger, never the stored tally
+    store.write(Lock("used"), change().model_copy(update={"slug": "used", "tool_use": stored}))
+    store.write(Lock("idle"), change().model_copy(update={"slug": "idle"}))
+    ran(store, "used", {"ask_question": {"calls": 1}, "submit_result": {"calls": 3, "rejected": 1, "retries": 1}})
+    ran(  # stopped: its run never reached the Change's own accounting, only the ledger
+        store, "used", {"report_wrong_premise": {"calls": 4, "rejected": 1, "invalid": 1, "lint": 1, "late": 1}},
+        {"denied": 2}, ending="interrupted",
+    )  # fmt: skip
+    ran(store, "idle", {}, {"no_result": 2})
+    assert spend_ledger.WRITER.settled(10)
     with opened(base, "used", pds) as page:
         expect(page.get_by_text("Tool calls (8)")).to_be_visible()
         page.get_by_text("Tool calls (8)").click()
@@ -190,6 +194,15 @@ def test_the_changes_tool_calls_show_under_its_spend_most_called_first(page_url,
     with opened(base, "idle", pds) as page:  # no call counted, yet its wrong choices show
         page.get_by_text("Tool calls (0)").click()
         expect(page.get_by_text("Wrong tool choices: 2 turns without a result")).to_be_visible()
+
+
+def ran(store: Store, slug: str, tools: dict, wrong: dict | None = None, ending: str = "result") -> None:
+    """One measured run of *slug* in the test home's spend ledger, as an SDK run's ``metered`` writes it."""
+    run = uuid.uuid4().hex
+    place = spend_ledger.Where.of(store, change=slug, step="build")  # the place the runner enters
+    spend_ledger.started(run, f"s-{run}", agent="builder", job="", model="m1", before={}, place=place)
+    spend_ledger.ended(run, f"s-{run}", usage={"credits": 0.1}, ending=ending, place=place, tools=tools,
+                       wrong=wrong or {})  # fmt: skip
 
 
 def sent(store: Store, slug: str) -> str:
