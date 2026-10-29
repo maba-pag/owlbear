@@ -236,11 +236,6 @@ def channel(name: str) -> None:
 def test_an_owlbear_version_found_on_another_channel_is_unknown_until_checked_again(monkeypatch):
     """A channel change can withdraw the version found; with its interval unset it would otherwise stay offered."""
     channel("minor")
-    monkeypatch.setattr(
-        update_checks.impeccable, "checked", lambda: {"state": "newer", "version": "v1.1", "detail": ""}
-    )
-    monkeypatch.setattr(update_checks.versions, "running", lambda: "v1")
-    assert update_checks.owlbear()["channel"] == "minor"  # kept with what it found
     minor = {"newer": True, "current": "v1", "latest": "v1.1", "detail": "", "channel": "minor"}
     outcomes(monkeypatch, "owlbear", minor, minor | {"newer": False, "latest": "v1", "channel": "major"})
     checks = Checks(stub(), Clock(), lambda work: work())

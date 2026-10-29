@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING, Any
 from owlbear_delivery_next.impeccable import pack_files
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.machine_host import versions
-from owlbear_delivery_next.state_store import registry
+from owlbear_delivery_next.state_store import machine_settings, registry
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -33,6 +33,7 @@ RELEASED = "released.json"  # beside the installed packs: the last look at the p
 FAILED = "failed.json"  # beside it: the last pack that failed, kept across restarts until it is installed
 PRESENT = 60.0  # seconds a look whether the running pack is in place holds: it hashes the engine
 ANY = object()  # _keep without an expected failure
+MOVED = "the update channel changed since the last check"
 
 
 def _now() -> str:
@@ -47,19 +48,28 @@ def _kept() -> dict[str, Any]:
     return kept if isinstance(kept, dict) else {}
 
 
+def _channel() -> str | None:
+    """This machine's update channel as resolved now; None when its settings cannot be read."""
+    try:
+        return machine_settings.current().channel
+    except registry.RegistryError:
+        return None
+
+
 def _found() -> dict[str, Any]:
-    """One look: the version this machine would take and the pack it pins; fetches."""
+    """One look: the version this machine would take on its channel and the pack it pins; fetches."""
+    channel = _channel()
     try:
         choice = versions.target()
     except (versions.VersionError, registry.RegistryError) as exc:
         return {"state": "unknown", "detail": f"the versions could not be read: {exc}"}
     if choice is None or not choice.tag:
-        return {"state": "none", "detail": "; ".join(choice.notes) if choice else ""}
+        return {"state": "none", "detail": "; ".join(choice.notes) if choice else "", "channel": channel}
     try:
         pins = versions.pins(choice.commit)
     except versions.VersionError as exc:
         return {"state": "unknown", "version": choice.tag, "detail": f"{choice.tag}'s Impeccable is unreadable: {exc}"}
-    return {"state": "found", "version": choice.tag, "commit": choice.commit, "pins": pins}
+    return {"state": "found", "version": choice.tag, "commit": choice.commit, "pins": pins, "channel": channel}
 
 
 def checked() -> dict[str, Any]:
@@ -81,12 +91,15 @@ def look() -> dict[str, Any]:
 def release() -> dict[str, Any]:
     """The last look, never fetching: ``newer`` when the version to take pins another pack than the running one.
 
-    ``same`` (that version pins this pack) and ``none`` (no version to take) show nothing; ``unknown`` stays unknown.
+    ``same`` (that version pins this pack) and ``none`` (no version to take) show nothing; ``unknown`` stays unknown,
+    and so does a look on another channel than this machine's now, until the next look.
     """
     kept, running = _kept(), pack_files.manifest()
     said = {"state": "unknown", "version": kept.get("version", ""), "pack": "", "running_pack": running["pack"],
             "checked_at": kept.get("checked_at"), "detail": kept.get("detail", "")}  # fmt: skip
     state, pins = kept.get("state"), kept.get("pins")
+    if state in {"none", "found"} and kept.get("channel") != _channel():
+        return said | {"detail": MOVED}
     if state == "none":
         return said | {"state": "none"}
     if state != "found" or not isinstance(pins, dict):

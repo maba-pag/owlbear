@@ -71,13 +71,12 @@ def owlbear() -> dict[str, Any]:
     Raises:
         Failed: The versions could not be read, or their channel is unset.
     """
-    channel = machine_settings.current().channel
     found, running = impeccable.checked(), versions.running()
     tag = str(found.get("version", ""))
     if found.get("state") == "unknown" and not tag:
         raise Failed(str(found.get("detail", "")))
     newer = bool(tag) and (versions.number(tag) or (0, 0)) > (versions.number(running) or (-1, -1))
-    latest = tag if newer else running
+    latest, channel = tag if newer else running, found.get("channel")
     return {"newer": newer, "current": running, "latest": latest, "detail": found.get("detail", ""), "channel": channel}
 
 
@@ -283,7 +282,7 @@ class Checks:
             "name": name, "title": TITLES[name], "actionable": ACTIONABLE[name], "state": state,
             "available": offered and ACTIONABLE[name],  # until applied or found withdrawn, whatever a failure says
             "current": current, "latest": latest if offered else current,
-            "detail": "the update channel changed since the last check" if moved else found.get("detail", ""),
+            "detail": impeccable.MOVED if moved else found.get("detail", ""),
             "checked_at": found.get("at"), "attempted_at": kept.get("attempt_at"), "failures": failures,
             "reason": kept.get("reason", "") if failures >= SHOWN else "", "checking": name in self.checking,
             "hours": hours, "next_at": _iso(due) if due else None,

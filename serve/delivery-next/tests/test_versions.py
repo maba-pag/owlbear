@@ -277,6 +277,32 @@ def test_the_owlbear_update_check_finds_a_release_with_the_same_pack_while_off_a
     assert git(runtime, "rev-parse", "HEAD") == head
 
 
+def test_a_release_found_on_another_channel_is_unknown_to_the_banner_and_the_update_check_until_looked_at_again(
+    origin,
+):
+    """A channel change can withdraw the version found; with the check's interval unset it would stay offered."""
+    at_v0_2(origin)
+    released(origin, "v0.3", '{"pack": "p-new"}')
+    checks = update_checks.Checks(SimpleNamespace(say=print), spawn=lambda work: work())
+    checks.start("owlbear")
+
+    def owlbear() -> dict:
+        return next(u for u in checks.read()["updates"] if u["name"] == "owlbear")
+
+    assert (impeccable.release()["state"], owlbear()["state"], owlbear()["latest"]) == ("newer", "newer", "v0.3")
+
+    with registry.locked():
+        saved = registry.load()
+        saved.settings = saved.settings.model_copy(update={"channel": "major"})  # v0.1 until v1: v0.3 is not taken
+        registry.save(saved)
+
+    said, row = impeccable.release(), owlbear()
+    assert (said["state"], said["detail"]) == ("unknown", impeccable.MOVED)
+    assert (row["state"], row["detail"], checks.read()["available"]) == ("unknown", impeccable.MOVED, 0)
+    checks.start("owlbear")
+    assert (impeccable.release()["state"], owlbear()["state"]) == ("none", "current")
+
+
 def test_a_release_pinning_the_same_pack_shows_nothing_and_an_unreadable_one_stays_unknown(origin):
     at_v0_2(origin)
     released(origin, "v0.3", json.dumps(pack_files.manifest()))
