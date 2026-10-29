@@ -614,15 +614,18 @@ def test_two_concurrent_new_change_calls_launch_once(tmp_path, monkeypatch):
 def test_the_page_loads_the_vendored_design_system_without_the_token(tmp_path):
     c = TestClient(api.create_app(Store(tmp_path), "t", Host()), base_url="http://127.0.0.1")
     page = c.get("/").text
-    assert all(f"/assets/pds/{n}" in page for n in pages.PDS)
-    css, js = c.get("/assets/pds/index.css"), c.get("/assets/pds/load.mjs")
+    v = pages.pds_version()
+    assert all(f"/assets/pds/{v}/{n}" in page for n in pages.PDS)
+    css, js = c.get(f"/assets/pds/{v}/index.css"), c.get(f"/assets/pds/{v}/load.mjs")
     assert (css.headers["content-type"].split(";")[0], js.headers["content-type"].split(";")[0]) == (
         "text/css",
         "text/javascript",
     )
+    assert f"components-js {v} " in css.text.splitlines()[0]  # the stylesheet and loader are one release
     assert "--p-color-canvas" in css.text
     assert "export" in js.text
-    assert [c.get(f"/assets/pds/{n}").status_code for n in ("x.js", "..%2Fchanges.html")] == [404, 404]
+    refused = [f"{v}/x.js", f"{v}/..%2F..%2Fchanges.html", "4.8.0/load.mjs", "load.mjs"]  # a cached older URL fails
+    assert [c.get(f"/assets/pds/{n}").status_code for n in refused] == [404] * len(refused)
 
 
 def test_yes_confirms_the_profile_but_never_an_unknown_entry():

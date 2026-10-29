@@ -62,7 +62,7 @@ function tick(label, checked, hideLabel = true) {
 }
 
 function pure(label, onclick) {
-  return html`<p-button-pure type="button" size="x-small" icon="reset" @click=${onclick}>${label}</p-button-pure>`;
+  return html`<p-button-pure type="button" size="xs" icon="reset" @click=${onclick}>${label}</p-button-pure>`;
 }
 
 export function button(label, onclick, { id, icon, variant, busy = false, disabled = false } = {}) {

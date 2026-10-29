@@ -1,4 +1,4 @@
-/* @porsche-design-system/components-js 4.8.0 stylesheets/index.css; Apache-2.0, (c) 2022 Dr. Ing. h.c. F. Porsche AG. Fonts load from the PDS CDN under the PDS Assets License. */
+/* @porsche-design-system/components-js 4.10.1 stylesheets/index.css; Apache-2.0, (c) 2022 Dr. Ing. h.c. F. Porsche AG. Fonts load from the PDS CDN under the PDS Assets License. */
 html,
 body {
   margin: 0;
@@ -18,7 +18,7 @@ body {
   -webkit-text-size-adjust: none;
 }
 :root {
-  color-scheme: light;
+  color-scheme: only light;
   --p-color-canvas: light-dark(#fff, hsl(225 66.7% 1.2%));
   --p-color-surface: light-dark(hsl(240 10% 95%), hsl(240 2% 10%));
   --p-color-frosted: light-dark(

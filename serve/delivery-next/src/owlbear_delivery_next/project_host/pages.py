@@ -22,7 +22,7 @@ TABS = (
 MARK = "<!-- tabs -->"  # where each page takes the tab bar
 BASE = "<!-- base -->"  # where each page takes the shared stylesheet, before its own
 ASK = "<!-- ask -->"  # where a page with consequential buttons takes the shared confirmation, before its script
-PDS = {"index.css": "text/css", "load.mjs": "text/javascript"}  # the vendored Porsche Design System 4.8.0 files
+PDS = {"index.css": "text/css", "load.mjs": "text/javascript"}  # the vendored Porsche Design System 4.10.1 files
 LIT = "vendor/lit-html"  # the vendored lit-html release; its SHA256SUMS names every file it serves (TD-264)
 OWN = {"mjs": "text/javascript", "css": "text/css"}  # a page's own modules and styles under web/pages/<page>/ (C-28)
 
@@ -51,13 +51,20 @@ def lit_version() -> str:
     return first.splitlines()[0].removeprefix("lit-html ")
 
 
+def pds_version() -> str:
+    """The vendored PDS release, from its loader's header, as its URLs name it, so an update never hits a cache."""
+    first = files("owlbear_delivery_next").joinpath("web", "pds", "load.mjs").read_text(encoding="utf-8")
+    return first.split(None, 3)[2]
+
+
 def assets(app: FastAPI) -> None:
     """Serve the design system, lit-html and the pages' scripts: fixed names only, never a path from the URL."""
     web, lit, release, own = files("owlbear_delivery_next").joinpath("web"), lit_files(), lit_version(), page_files()
+    pds_release = pds_version()
 
-    @app.get("/assets/pds/{name}")
-    def pds(name: str) -> Response:
-        if name not in PDS:
+    @app.get("/assets/pds/{version}/{name}")
+    def pds(version: str, name: str) -> Response:
+        if version != pds_release or name not in PDS:
             raise HTTPException(404, "no such asset")
         body = web.joinpath("pds", name).read_bytes()
         return Response(body, media_type=PDS[name], headers={"Cache-Control": "max-age=3600"})

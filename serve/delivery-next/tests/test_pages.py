@@ -3,7 +3,7 @@ import re
 import pytest
 from fastapi.testclient import TestClient
 
-from owlbear_delivery_next.project_host import api
+from owlbear_delivery_next.project_host import api, pages
 from owlbear_delivery_next.state_store.store import Store
 
 TABS = [
@@ -40,7 +40,7 @@ def test_every_page_shares_the_tab_bar_stylesheet_and_confirmation_and_ignores_a
 
     assert "<!-- base -->" not in page.text
     shared = page.text.index("Shared by every host page")
-    assert page.text.index('href="/assets/pds/index.css"') < shared < page.text.rindex("<style>")
+    assert page.text.index(f'href="/assets/pds/{pages.pds_version()}/index.css"') < shared < page.text.rindex("<style>")
 
     if path in ASKING:
         assert "<!-- ask -->" not in page.text
