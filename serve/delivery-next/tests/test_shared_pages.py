@@ -345,6 +345,9 @@ def improvement_s_machine_settings_are_typed_and_saved(page, pds) -> None:
     chats = page.get_by_role("textbox", name="Enrolled chats: workspace folders")
     chats.press_sequentially("/w, /p")  # keystrokes: a comma and a space are kept
     expect(chats).to_have_value("/w, /p")
+    pds_hours = "Hours between checks for a newer Porsche Design System (it also checks at launch)"
+    expect(page.get_by_role("region", name="This machine")).to_contain_text("unset: set it here")
+    page.get_by_label(pds_hours, exact=True).fill("3")
     page.get_by_role("region", name="This machine").get_by_role("button", name="Save machine settings").click()
     with page.expect_response(lambda r: r.request.method == "PUT"):  # the status says Saved from before already
         pds.answer(page, "Save machine settings")
@@ -352,6 +355,7 @@ def improvement_s_machine_settings_are_typed_and_saved(page, pds) -> None:
     mine = registry.load().settings
     folders = ["/w", "/p"]
     assert (mine.retro_run_credit_limit, mine.retro_after_change, mine.enrolled_chats) == (20.0, "off", folders)
+    assert (mine.update_check_hours_pds, mine.update_check_hours_owlbear) == (3, None)
     chats.fill("/w,/p")  # the saved list again, written differently: no edit
     save = page.get_by_role("region", name="This machine").get_by_role("button", name="Save machine settings")
     expect(save).to_be_disabled()
@@ -425,12 +429,14 @@ def every_machine_s_settings_are_saved_with_the_global_layer(page, pds, shared: 
     expect(page.locator("#machine-global")).to_be_visible()
     pds.pick(page, "Every machine: Versions this machine takes", "major")
     page.get_by_label("Every machine: Agent sessions at once on this machine, across its projects").fill("5")
+    page.get_by_label("Every machine: Hours between checks for a newer OwlBear (it also checks at launch)").fill("12")
     page.locator(".bar").get_by_role("button", name="Save global defaults").click()
     expect(pds.modal(page)).to_contain_text("machine channel: inherited → major")
     pds.answer(page, "Save global defaults")
     expect(page.locator("#status")).to_have_text("Saved the global settings. They apply to the next session.")
     glob = read_layer(shared.global_path, GlobalLayer).machine
     assert (glob.channel, glob.sessions, glob.update_when_idle) == ("major", 5, None)
+    assert glob.update_check_hours_owlbear == 12  # a number, not a switch
     pds.pick(page, "Layer", "project")
     expect(machine).to_contain_text("in use: Major versions only (v1, v2 …), from global")
     expect(machine).to_contain_text("in use: 3, from this machine")  # its own sessions still override
@@ -594,14 +600,14 @@ def test_with_no_machine_setting_set_anywhere_the_page_names_each_and_a_pending_
             page.goto(f"{base}/config?project={DOCS}#token=t")
             region = page.get_by_role("region", name="This machine")
             expect(page.locator("#machine-pending")).to_contain_text("offline")
-            expect(region.get_by_text("unset: set it here or for every machine")).to_have_count(11)
+            expect(region.get_by_text("unset: set it here or for every machine")).to_have_count(14)  # 3 update checks
             expect(page.locator("#unset")).to_contain_text("machine.channel")
             expect(page.locator("#unset")).to_contain_text("machine.sessions")
             pds.pick(page, "Versions this machine takes", "minor")  # this machine's own: no longer unset
             region.get_by_role("button", name="Save machine settings").click()
             pds.answer(page, "Save machine settings")
             expect(region).to_contain_text("in use: Every minor version (v0.1, v0.2 …), from this machine")
-            expect(region.get_by_text("unset: set it here or for every machine")).to_have_count(10)
+            expect(region.get_by_text("unset: set it here or for every machine")).to_have_count(13)
             browser.close()
     finally:
         server.should_exit = True

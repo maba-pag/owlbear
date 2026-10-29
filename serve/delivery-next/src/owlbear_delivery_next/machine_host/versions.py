@@ -189,9 +189,9 @@ def mark(tag: str) -> Number | None:
     return max(known) if known else None
 
 
-def target() -> Choice | None:
-    """Fetch, then the version this machine would take now; None when it is up to date."""
-    channel = machine_settings.current().channel
+def target(channel: Literal["minor", "major"] | None = None) -> Choice | None:
+    """Fetch, then the version this machine would take now on *channel*, its own unless given; None when up to date."""
+    channel = channel or machine_settings.current().channel
     if channel is None:
         msg = "the versions this machine takes are unset; choose them on the Settings page"
         raise VersionError(msg)

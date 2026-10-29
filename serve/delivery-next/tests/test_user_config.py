@@ -60,7 +60,7 @@ def test_a_format_16_layer_loads_with_both_switches_unset(tmp_path):
     path.write_text(json.dumps({"format": 16, "pr_marker": False, "sessions": 2}))
     for model in (Layer, MachineLayer, GlobalLayer):
         layer = read_layer(path, model)
-        assert (layer.format, layer.pr_marker, layer.sessions) == (17, False, 2)
+        assert (layer.format, layer.pr_marker, layer.sessions) == (18, False, 2)
         assert (layer.load_user_instructions, layer.load_user_skills) == (None, None)
     assert migrations.CONFIG[16] is migrations.user_config_added
     assert migrations.GLOBAL[16] is migrations.user_config_added

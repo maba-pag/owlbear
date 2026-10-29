@@ -31,10 +31,11 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
 
 MACHINE, LOCK = project_home.MACHINE, "machine.lock"
-MACHINE_FORMAT = 8  # 2: the machine's own settings (TD-243, TD-288, TD-300); 3: its sessions (TD-336); 4: `active`;
+MACHINE_FORMAT = 9  # 2: the machine's own settings (TD-243, TD-288, TD-300); 3: its sessions (TD-336); 4: `active`;
 # 5: one curation setting per trigger; 6: settings inherit Global's and were moved there once (the owner, 2026-10-23);
 # 7: Improvement's machine settings: the budgets, Retro's triggers and the enrolled chats (2026-10-25);
-# 8: no daily credit budgets; the Retro and paid replay run credit limits (2026-10-27)
+# 8: no daily credit budgets; the Retro and paid replay run credit limits (2026-10-27);
+# 9: the three update check intervals (D-01M63CCVRK8ZKFENY9F4A2K11A)
 STALE = "the machine settings changed since this page loaded them"
 
 

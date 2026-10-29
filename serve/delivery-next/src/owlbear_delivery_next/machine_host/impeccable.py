@@ -4,10 +4,10 @@ A version counts as installed only once its pack is in place (``versions.install
 running version's pack missing, gives every page a banner with Install. Install puts the running version's pinned
 pack in place even when no newer version exists, and the pack of a version whose update failed on it.
 
-A separate look, at most daily and whatever updating by itself is set to, reads the pack the version this machine
-would take pins (``versions.target``, then its ``impeccable.json`` from ``repo.git``): it never installs or
-activates anything. Pages read only what the last look kept. ``notice.json`` stays upstream's view of Impeccable's
-releases, for whoever updates the pack.
+A separate look, the OwlBear update check's (``update_checks``) whatever updating by itself is set to, reads the
+pack the version this machine would take pins (``versions.target``, then its ``impeccable.json`` from ``repo.git``):
+it never installs or activates anything. Pages read only what the last look kept. ``notice.json`` stays upstream's
+view of Impeccable's releases, for whoever updates the pack.
 """
 
 from __future__ import annotations
@@ -16,13 +16,13 @@ import contextlib
 import json
 import threading
 import time
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.impeccable import pack_files
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.machine_host import versions
-from owlbear_delivery_next.state_store import registry
+from owlbear_delivery_next.state_store import machine_settings, registry
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -31,10 +31,9 @@ if TYPE_CHECKING:
 
 RELEASED = "released.json"  # beside the installed packs: the last look at the pack of the version to take
 FAILED = "failed.json"  # beside it: the last pack that failed, kept across restarts until it is installed
-STALE, RETRY = timedelta(days=1), timedelta(hours=1)  # a look's age before the next; an unknown one's
 PRESENT = 60.0  # seconds a look whether the running pack is in place holds: it hashes the engine
-TICK = 60.0  # seconds between the loop's looks whether a look is due
 ANY = object()  # _keep without an expected failure
+MOVED = "the update channel changed since the last check"
 
 
 def _now() -> str:
@@ -49,52 +48,59 @@ def _kept() -> dict[str, Any]:
     return kept if isinstance(kept, dict) else {}
 
 
-def _due(kept: dict[str, Any]) -> bool:
-    """Whether the last look is too old, unknown for an hour, or was made by another version than the running one."""
+def _channel() -> str | None:
+    """This machine's update channel as resolved now; None when its settings cannot be read."""
     try:
-        checked = datetime.fromisoformat(kept["checked_at"])
-    except KeyError, TypeError, ValueError:
-        return True
-    if kept.get("running") != versions.running() or kept.get("running_pack") != pack_files.manifest()["pack"]:
-        return True
-    return datetime.now(UTC) - checked > (RETRY if kept.get("state") == "unknown" else STALE)
+        return machine_settings.current().channel
+    except registry.RegistryError:
+        return None
 
 
 def _found() -> dict[str, Any]:
-    """One look: the version this machine would take and the pack it pins; fetches."""
+    """One look: the version this machine would take on its channel and the pack it pins; fetches."""
+    channel = _channel()
     try:
-        choice = versions.target()
+        choice = versions.target(channel)  # the channel kept with the look is the one it ran on
     except (versions.VersionError, registry.RegistryError) as exc:
         return {"state": "unknown", "detail": f"the versions could not be read: {exc}"}
     if choice is None or not choice.tag:
-        return {"state": "none", "detail": "; ".join(choice.notes) if choice else ""}
+        return {"state": "none", "detail": "; ".join(choice.notes) if choice else "", "channel": channel}
     try:
         pins = versions.pins(choice.commit)
     except versions.VersionError as exc:
-        return {"state": "unknown", "version": choice.tag, "detail": f"{choice.tag}'s Impeccable is unreadable: {exc}"}
-    return {"state": "found", "version": choice.tag, "commit": choice.commit, "pins": pins}
+        detail = f"{choice.tag}'s Impeccable is unreadable: {exc}"
+        return {"state": "unknown", "version": choice.tag, "detail": detail, "channel": channel}
+    return {"state": "found", "version": choice.tag, "commit": choice.commit, "pins": pins, "channel": channel}
 
 
-def look(*, force: bool = False) -> dict[str, Any]:
-    """Look again when the last look is due, or when *force*d; what the pages show (``release``)."""
-    if force or _due(_kept()):
-        kept = _found() | {"running": versions.running(), "running_pack": pack_files.manifest()["pack"]}
-        path = local_home.root() / pack_files.PACKS / RELEASED
-        with contextlib.suppress(OSError):  # a hint: unwritten, it is looked at again next time
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(json.dumps(kept | {"checked_at": _now()}) + "\n", encoding="utf-8")
+def checked() -> dict[str, Any]:
+    """Look now and keep it for the pages; what was found: ``state``, the ``version`` to take and ``detail``."""
+    kept = _found() | {"running": versions.running(), "running_pack": pack_files.manifest()["pack"]}
+    path = local_home.root() / pack_files.PACKS / RELEASED
+    with contextlib.suppress(OSError):  # a hint: unwritten, it is looked at again by the next check
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(kept | {"checked_at": _now()}) + "\n", encoding="utf-8")
+    return kept
+
+
+def look() -> dict[str, Any]:
+    """Look now; what the pages show (``release``)."""
+    checked()
     return release()
 
 
 def release() -> dict[str, Any]:
     """The last look, never fetching: ``newer`` when the version to take pins another pack than the running one.
 
-    ``same`` (that version pins this pack) and ``none`` (no version to take) show nothing; ``unknown`` stays unknown.
+    ``same`` (that version pins this pack) and ``none`` (no version to take) show nothing; ``unknown`` stays unknown,
+    and so does a look on another channel than this machine's now, until the next look.
     """
     kept, running = _kept(), pack_files.manifest()
     said = {"state": "unknown", "version": kept.get("version", ""), "pack": "", "running_pack": running["pack"],
             "checked_at": kept.get("checked_at"), "detail": kept.get("detail", "")}  # fmt: skip
     state, pins = kept.get("state"), kept.get("pins")
+    if state in {"none", "found"} and kept.get("channel") != _channel():
+        return said | {"detail": MOVED}
     if state == "none":
         return said | {"state": "none"}
     if state != "found" or not isinstance(pins, dict):
@@ -254,13 +260,3 @@ class Impeccable:
         with self.lock:
             self.present = None
         return self._in_place()
-
-    def loop(self) -> None:
-        """Thread: look for a newer pack in a release when the last look is due, until the machine stops."""
-        while True:
-            try:
-                look()
-            except Exception as exc:  # noqa: BLE001 - the loop outlives one failed look
-                self.machine.say(f"looking for a newer Impeccable failed: {type(exc).__name__}: {exc}")
-            if self.machine.stopping.wait(TICK):
-                return

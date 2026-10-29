@@ -87,10 +87,24 @@ def test_each_setting_is_this_machine_s_else_global_s_else_unset():
     assert (got.sources, got.shared["sessions"]) == ({"channel": "global", "sessions": "machine"}, 6)
     assert got.missing == ["update_when_idle", "update_while_paused", "curate_after_merge", "curate_when_idle",
                            "retro_run_credit_limit", "replay_run_credit_limit", "retro_after_change",
-                           "retro_when_idle", "enrolled_chats"]  # fmt: skip
+                           "retro_when_idle", "enrolled_chats", "update_check_hours_owlbear", "update_check_hours_pds",
+                           "update_check_hours_impeccable"]  # fmt: skip
     chats = machine_settings.resolve(registry.Settings(enrolled_chats=[]), None)
     assert (chats.enrolled_chats, "enrolled_chats" in chats.missing) == ([], False)  # none enrolled is set, not unset
     assert machine_settings.resolve(registry.Settings(), None).missing == list(machine_settings.FIELDS)
+
+
+@pytest.mark.usefixtures("no_base")
+def test_each_update_check_interval_resolves_on_its_own_and_an_unset_one_is_listed():
+    """D-01M63CCVRK8ZKFENY9F4A2K11A: three intervals, each this machine's else Global's; none set is unset."""
+    hours = ("update_check_hours_owlbear", "update_check_hours_pds", "update_check_hours_impeccable")
+    glob = MachineValues(update_check_hours_owlbear=6, update_check_hours_pds=12, update_check_hours_impeccable=24)
+    got = machine_settings.resolve(registry.Settings(update_check_hours_pds=3), glob)
+    assert [getattr(got, h) for h in hours] == [6, 3, 24]
+    assert [got.sources[h] for h in hours] == ["global", "machine", "global"]
+    assert not set(hours) & set(got.missing)
+    partial = machine_settings.resolve(registry.Settings(), MachineValues(update_check_hours_pds=12))
+    assert ([h for h in hours if h in partial.missing], partial.update_check_hours_pds) == ([hours[0], hours[2]], 12)
 
 
 @pytest.mark.usefixtures("no_base")
@@ -563,7 +577,7 @@ def test_a_start_writes_the_limits_into_global_and_publishes_them_once(shared_re
     _carry(monkeypatch, shared)
 
     raw = json.loads(shared.global_path.read_text())
-    assert raw["format"] == 17
+    assert raw["format"] == 18
     assert (raw["spotter"]["look_credit_limit"], raw["machine"]["retro_run_credit_limit"],
             raw["machine"]["replay_run_credit_limit"]) == LIMITS  # fmt: skip
     assert not set(registry.DAILY) & set(raw["machine"])
@@ -616,7 +630,7 @@ def test_a_failed_commit_keeps_the_written_global_and_the_next_start_only_publis
         _carry(monkeypatch, shared)
     assert "the commit failed" in registry.load().settings_pending
     written = shared.global_path.read_text()
-    assert json.loads(written)["format"] == 17
+    assert json.loads(written)["format"] == 18
     assert settings_carry.limits_due(shared)
 
     _carry(monkeypatch, shared)

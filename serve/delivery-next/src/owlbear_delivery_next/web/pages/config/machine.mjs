@@ -22,11 +22,15 @@ const MACHINE_LABELS = {
   retro_when_idle: "Retro over finished enrolled chats when idle",
   enrolled_chats: "Enrolled chats: workspace folders whose chats the Spotter and Retro may read, comma-separated; "
     + "none for no chats",
+  update_check_hours_owlbear: "Hours between checks for a newer OwlBear (it also checks at launch)",
+  update_check_hours_pds: "Hours between checks for a newer Porsche Design System (it also checks at launch)",
+  update_check_hours_impeccable: "Hours between checks for a newer Impeccable (it also checks at launch)",
 };
 const CHOICES = { channel: CHANNELS, update_when_idle: SWITCH, update_while_paused: SWITCH,
   curate_after_merge: CURATE, curate_when_idle: CURATE, retro_after_change: CURATE, retro_when_idle: CURATE };
 // Typed, not chosen.
-const TYPED = ["sessions", "retro_run_credit_limit", "replay_run_credit_limit", "enrolled_chats"];
+const TYPED = ["sessions", "retro_run_credit_limit", "replay_run_credit_limit", "enrolled_chats",
+  "update_check_hours_owlbear", "update_check_hours_pds", "update_check_hours_impeccable"];
 
 // A machine setting's value in words; "unset" where none is set.
 function said(key, v) {

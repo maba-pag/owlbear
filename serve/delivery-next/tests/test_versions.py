@@ -8,6 +8,7 @@ import json
 import shutil
 import subprocess
 import sys
+import threading
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -15,7 +16,7 @@ import pytest
 
 from owlbear_delivery_next.impeccable import pack_files
 from owlbear_delivery_next.local_system import codebase, data_place, data_repo, local_home
-from owlbear_delivery_next.machine_host import impeccable, selfcheck, versions
+from owlbear_delivery_next.machine_host import impeccable, selfcheck, update_checks, versions
 from owlbear_delivery_next.machine_host.versions import Choice
 from owlbear_delivery_next.project_host import pages
 from owlbear_delivery_next.settings.config import CONFIG_FORMAT
@@ -245,18 +246,61 @@ def test_a_release_pinning_another_pack_is_newer_with_updating_by_itself_off_and
     head = git(runtime, "rev-parse", "HEAD")
     released(origin, "v0.3", '{"pack": "p-new"}')
     fetched, target = [], versions.target
-    monkeypatch.setattr(versions, "target", lambda: fetched.append(1) or target())
+    monkeypatch.setattr(versions, "target", lambda channel=None: fetched.append(1) or target(channel))
 
     said = impeccable.look()
 
     assert (said["state"], said["version"], said["pack"]) == ("newer", "v0.3", "p-new")
     assert said["running_pack"] == pack_files.manifest()["pack"]
-    assert impeccable.look() == impeccable.release() == said  # within the day: what was kept, nothing fetched
+    assert impeccable.release() == said  # kept for the pages, which never fetch
     assert fetched == [1]
-    assert impeccable.look(force=True)["checked_at"] is not None
+    assert impeccable.look()["checked_at"] is not None  # each look fetches; the update checks say when
     assert fetched == [1, 1]
     assert not (local_home.root() / local_home.VERSIONS).exists()  # nothing installed
     assert git(runtime, "rev-parse", "HEAD") == head
+
+
+def test_the_owlbear_update_check_finds_a_release_with_the_same_pack_while_off_and_busy_and_starts_nothing(origin):
+    """D-01M63CCVRK8ZKFENY9F4A2K11A: newer whatever Impeccable it pins, whether updating by itself is on or busy."""
+    runtime = at_v0_2(origin)  # updating by itself off
+    head = git(runtime, "rev-parse", "HEAD")
+    released(origin, "v0.3", json.dumps(pack_files.manifest()))  # the same pack: the banner says nothing
+    busy = SimpleNamespace(say=print, stopping=threading.Event(), busy=lambda: ["a running step"])
+    checks = update_checks.Checks(busy, spawn=lambda work: work())
+
+    checks.start("owlbear")
+
+    said = next(u for u in checks.read()["updates"] if u["name"] == "owlbear")
+    assert (said["state"], said["latest"], checks.read()["available"]) == ("newer", "v0.3", 1)
+    assert impeccable.release()["state"] == "same"
+    assert not (local_home.root() / local_home.VERSIONS).exists()  # nothing installed
+    assert git(runtime, "rev-parse", "HEAD") == head
+
+
+def test_a_release_found_on_another_channel_is_unknown_to_the_banner_and_the_update_check_until_looked_at_again(
+    origin,
+):
+    """A channel change can withdraw the version found; with the check's interval unset it would stay offered."""
+    at_v0_2(origin)
+    released(origin, "v0.3", '{"pack": "p-new"}')
+    checks = update_checks.Checks(SimpleNamespace(say=print), spawn=lambda work: work())
+    checks.start("owlbear")
+
+    def owlbear() -> dict:
+        return next(u for u in checks.read()["updates"] if u["name"] == "owlbear")
+
+    assert (impeccable.release()["state"], owlbear()["state"], owlbear()["latest"]) == ("newer", "newer", "v0.3")
+
+    with registry.locked():
+        saved = registry.load()
+        saved.settings = saved.settings.model_copy(update={"channel": "major"})  # v0.1 until v1: v0.3 is not taken
+        registry.save(saved)
+
+    said, row = impeccable.release(), owlbear()
+    assert (said["state"], said["detail"]) == ("unknown", impeccable.MOVED)
+    assert (row["state"], row["detail"], checks.read()["available"]) == ("unknown", impeccable.MOVED, 0)
+    checks.start("owlbear")
+    assert (impeccable.release()["state"], owlbear()["state"]) == ("none", "current")
 
 
 def test_a_release_pinning_the_same_pack_shows_nothing_and_an_unreadable_one_stays_unknown(origin):
@@ -266,9 +310,13 @@ def test_a_release_pinning_the_same_pack_shows_nothing_and_an_unreadable_one_sta
     assert impeccable.look()["state"] == "same"
 
     released(origin, "v0.4", None)
-    said = impeccable.look(force=True)
+    said = impeccable.look()
     assert (said["state"], said["version"]) == ("unknown", "v0.4")
     assert "Impeccable is unreadable" in said["detail"]
+    checks = update_checks.Checks(SimpleNamespace(say=print), spawn=lambda work: work())
+    checks.start("owlbear")
+    row = next(u for u in checks.read()["updates"] if u["name"] == "owlbear")
+    assert (row["state"], row["latest"], "Impeccable is unreadable" in row["detail"]) == ("newer", "v0.4", True)
 
 
 def test_a_runtime_from_before_the_rename_sees_a_renamed_release_as_unknown_not_failed(origin, monkeypatch):
@@ -277,7 +325,7 @@ def test_a_runtime_from_before_the_rename_sees_a_renamed_release_as_unknown_not_
     released(origin, "v0.3", '{"pack": "p-new"}')  # the renamed tree: impeccable.json only
     monkeypatch.setattr(versions, "MANIFEST", versions.OLD_MANIFEST)  # the older runtime's one manifest path
 
-    said = impeccable.look(force=True)
+    said = impeccable.look()
 
     assert (said["state"], said["version"]) == ("unknown", "v0.3")
     assert "Impeccable is unreadable" in said["detail"]
@@ -377,16 +425,16 @@ def test_the_selfcheck_refuses_a_clones_unmoved_settings_newer_than_it_reads(tmp
     assert found == [f"{clone}: {said}"]
 
 
-def test_the_selfcheck_reads_settings_in_format_17_and_refuses_the_next_one(tmp_path):
+def test_the_selfcheck_reads_settings_in_format_18_and_refuses_the_next_one(tmp_path):
     clone = registered(tmp_path)
     folder = project_home.clone_dir(clone)
     folder.mkdir(exist_ok=True)
-    switched = {"format": 17, "load_user_instructions": True, "load_user_skills": False}
+    switched = {"format": 18, "load_user_instructions": True, "load_user_skills": False}
     (folder / "config.json").write_text(json.dumps(switched))
     assert selfcheck.problems() == []
 
-    (folder / "config.json").write_text(json.dumps(switched | {"format": 18}))
-    said = f"its settings in {folder / 'config.json'} have format 18, newer than this version's 17"
+    (folder / "config.json").write_text(json.dumps(switched | {"format": 19}))
+    said = f"its settings in {folder / 'config.json'} have format 19, newer than this version's 18"
     assert selfcheck.problems() == [f"{clone}: {said}"]
 
 

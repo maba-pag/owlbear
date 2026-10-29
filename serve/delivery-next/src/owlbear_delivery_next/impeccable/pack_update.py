@@ -1,6 +1,6 @@
 """Updating Impeccable (design skill research §3.5, update procedure; TD-76): the tooling before the first update.
 
-1. Notice: how many skill releases upstream is ahead of the pinned tag; offline is "unknown", never a failure.
+1. Notice: how many skill releases upstream is ahead of the pinned tag; offline is "unknown", a refusal an "error".
 2. Diff: rules added, removed and changed, and skill files changed, between the pinned commit and a candidate, read
    from a local clone of upstream; the owner chooses what to adopt in a direct chat. A tag can move; the commit cannot.
 3. Golden pages: an engine must find exactly the expected rules on Delivery's fixture pages.
@@ -11,19 +11,21 @@
 
 from __future__ import annotations
 
-import contextlib
 import json
 import re
 import subprocess
 import tempfile
+import threading
 from datetime import UTC, datetime, timedelta
 from http.client import HTTPException
 from importlib.resources import files
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+from urllib.error import HTTPError
 
 from owlbear_delivery_next.impeccable import detector, pack_files
 from owlbear_delivery_next.local_system import local_home
+from owlbear_delivery_next.local_system.storage_io import atomic_write
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -34,6 +36,7 @@ if TYPE_CHECKING:
 RELEASES = "https://api.github.com/repos/{repo}/releases?per_page=100"
 NOTICE = "notice.json"  # beside the installed packs
 STALE = timedelta(days=1)
+CHECKING = threading.Lock()  # one check of upstream at a time, so a failed one never writes back an older count
 PAGE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*\.html")  # a golden page: a plain file name in its folder
 SECONDS = 10.0  # the notice's one request: the readiness check at host start never waits long for it
 REGISTRY = "crates/foundation/src/registry.rs"  # upstream's rule registry
@@ -54,47 +57,112 @@ def behind(fetch: Callable[[str], bytes] | None = None) -> int | None:
     return None if found is None else len(found)
 
 
+class Unread(Exception):  # noqa: N818 - it names the outcome, as ``said`` words it
+    """Upstream's releases could not be read; ``offline`` when upstream was not reached at all."""
+
+    def __init__(self, detail: str, *, offline: bool) -> None:
+        """Why, and whether upstream was reached."""
+        super().__init__(detail)
+        self.offline = offline
+
+
 def newer(fetch: Callable[[str], bytes] | None = None) -> list[str] | None:
     """Those releases' tags, oldest first; None when unreadable."""
+    try:
+        return releases(fetch)
+    except Unread:
+        return None
+
+
+def releases(fetch: Callable[[str], bytes] | None = None) -> list[str]:
+    """The skill releases newer than the pinned tag, oldest first.
+
+    Raises:
+        Unread: Upstream was not reached, refused, or answered with no list of releases.
+    """
     upstream = pack_files.manifest()["upstream"]
     url = RELEASES.format(repo=upstream["repository"])
     try:
-        releases = json.loads(fetch(url) if fetch else pack_files.fetch(url, SECONDS))
-    except OSError, ValueError, HTTPException:
-        return None
-    if not isinstance(releases, list):
-        return None
-    tags = [r.get("tag_name") for r in releases if isinstance(r, dict) and not r.get("prerelease")]
+        raw = fetch(url) if fetch else pack_files.fetch(url, SECONDS)
+    except HTTPError as exc:
+        msg = f"GitHub answered {exc.code} {exc.reason}"
+        raise Unread(msg, offline=False) from exc
+    except (OSError, HTTPException) as exc:
+        msg = f"GitHub was not reached: {exc}"
+        raise Unread(msg, offline=True) from exc
+    try:
+        found = json.loads(raw)
+    except ValueError as exc:
+        msg = "GitHub's answer is not JSON"
+        raise Unread(msg, offline=False) from exc
+    if not isinstance(found, list):
+        msg = "GitHub's answer is no list of releases"
+        raise Unread(msg, offline=False)
+    tags = [r.get("tag_name") for r in found if isinstance(r, dict) and not r.get("prerelease")]
     pinned = _version(upstream["tag"])
     return sorted(
         (t for t in tags if isinstance(t, str) and t.startswith("skill-v") and _version(t) > pinned), key=_version
     )
 
 
-def notice(*, refresh: bool, fetch: Callable[[str], bytes] | None = None) -> dict[str, Any]:
-    """The last check of upstream for the pinned tag, refreshed at most daily when asked; reading never goes online."""
+def notice(*, refresh: bool, force: bool = False, fetch: Callable[[str], bytes] | None = None) -> dict[str, Any]:
+    """The last check of upstream for the pinned tag; reading never goes online.
+
+    *refresh* checks when the last count is over a day old, or a check failed since; *force* checks now. ``state`` is
+    ``known`` (counted within a day), ``stale`` (counted longer ago), ``unknown`` (never counted, or upstream not
+    reached since) or ``error`` (upstream refused or answered unreadably since), with ``detail`` saying why. ``latest``
+    is the newest skill release, the pinned tag when none is newer. A failed check keeps the last count in the file;
+    it is shown again only by the next count.
+    """
     pack, tag = pack_files.manifest()["pack"], pack_files.manifest()["upstream"]["tag"]
-    path, unknown = local_home.root() / pack_files.PACKS / NOTICE, {"behind": None, "checked_at": None}
-    kept: Any = unknown
+    path = local_home.root() / pack_files.PACKS / NOTICE
+    kept = _kept(path, tag)
+    if not (force or (refresh and _state(kept)["state"] != "known")):
+        return {"pack": pack, **_state(kept)}
+    with CHECKING:
+        kept = _kept(path, tag)  # as the check before this one left it
+        if force or _state(kept)["state"] != "known":
+            now = datetime.now(UTC).isoformat(timespec="seconds")
+            try:
+                found = releases(fetch)
+                kept = {"tag": tag, "behind": len(found), "latest": found[-1] if found else tag, "checked_at": now}
+            except Unread as exc:
+                kept = kept | {"tag": tag, "failed_at": now, "failure": str(exc)[:400], "offline": exc.offline}
+            try:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                atomic_write(path, json.dumps(kept) + "\n")
+            except OSError:
+                pass  # the notice is a hint; it is checked again next time
+    return {"pack": pack, **_state(kept)}
+
+
+def _kept(path: Path, tag: str) -> dict[str, Any]:
+    """The last check's record for *tag*; empty when there is none, or it counted another pack's."""
     try:
         kept = json.loads(path.read_text(encoding="utf-8"))
-        checked = datetime.fromisoformat(kept["checked_at"]) if kept.get("tag") == tag else None
-    except OSError, ValueError, KeyError, TypeError, AttributeError:
-        checked = None
-    kept = kept if checked else unknown  # another pack's count says nothing about this one
-    if refresh and (checked is None or datetime.now(UTC) - checked > STALE):
-        if (found := behind(fetch)) is None:  # offline: unknown now, also to the settings page, and checked next time
-            with contextlib.suppress(OSError):
-                path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_text(json.dumps({"tag": tag, **unknown}) + "\n", encoding="utf-8")
-            return {"pack": pack, **unknown}
-        kept = {"tag": tag, "behind": found, "checked_at": datetime.now(UTC).isoformat(timespec="seconds")}
-        try:
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(json.dumps(kept) + "\n", encoding="utf-8")
-        except OSError:
-            pass  # the notice is a hint; it is checked again next time
-    return {"pack": pack, "behind": kept["behind"], "checked_at": kept["checked_at"]}
+    except OSError, ValueError:
+        return {}
+    return kept if isinstance(kept, dict) and kept.get("tag") == tag else {}
+
+
+def _time(value: object) -> datetime | None:
+    try:
+        return datetime.fromisoformat(value) if isinstance(value, str) else None
+    except ValueError:
+        return None
+
+
+def _state(kept: dict[str, Any]) -> dict[str, Any]:
+    checked, failed, behind = _time(kept.get("checked_at")), _time(kept.get("failed_at")), kept.get("behind")
+    if failed and (checked is None or failed >= checked):
+        state = "unknown" if kept.get("offline") is not False else "error"
+        detail = str(kept.get("failure", ""))
+        return {"state": state, "behind": None, "latest": "", "checked_at": None, "detail": detail}
+    if checked is None or not isinstance(behind, int):
+        return {"state": "unknown", "behind": None, "latest": "", "checked_at": None, "detail": ""}
+    state = "stale" if datetime.now(UTC) - checked > STALE else "known"
+    return {"state": state, "behind": behind, "latest": str(kept.get("latest", "")), "checked_at": kept["checked_at"],
+            "detail": ""}  # fmt: skip
 
 
 def said(n: dict[str, Any]) -> str:
