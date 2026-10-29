@@ -217,6 +217,7 @@ async def test_curate_memory_routes_cross_process_stale_edit_to_tool_error(
     engine = MemoryEngine(tmp_path, writer_lock_timeout=0.2)
     ctx = _tool_context(engine, tmp_path)
     entry = _create_entry(engine, title="Concurrent curation")
+    _create_approved_entry(engine, title="Witness")  # vouches for test-agent, so only the stale revision refuses
     entry_read = process_context.Event()
     edit_complete = process_context.Event()
     editor = process_context.Process(

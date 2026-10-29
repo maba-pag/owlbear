@@ -86,6 +86,7 @@ _DEFAULT_MEMORY_DIR = Path(".owlbear/memory")
 _WORKSPACE_MARKER = Path(".owlbear")
 MEMORY_DIR_ENV = "OWLBEAR_MEMORY_DIR"  # an explicit store, such as a project's folder in the shared repository
 MEMORY_GLOBAL_ENV = "OWLBEAR_MEMORY_GLOBAL_DIR"  # the shared repository's Global memory, read only (TD-241)
+MEMORY_AGENTS_ENV = "OWLBEAR_MEMORY_AGENTS"  # comma-separated agents a curated scope may name without a reviewed entry
 _Title = Annotated[str, Field(min_length=1)]
 _Content = Annotated[str, Field(max_length=1024)]
 _Confidence = Annotated[float, Field(ge=0.7, le=1.0)]
@@ -119,6 +120,7 @@ class AppContext:
     memory_dir: Path
     global_dir: Path | None = None  # the shared repository's Global memory, read beside the store and never written
     global_engine: MemoryEngine | None = None  # opened once ``global_dir`` exists; Make global may create it later
+    agents: frozenset[str] = frozenset()  # agents curate_memory may scope to without another reviewed entry
 
 
 def memory_dir() -> Path:
@@ -144,6 +146,11 @@ def global_dir() -> Path | None:
     return shared[1] if shared else None
 
 
+def known_agents() -> frozenset[str]:
+    """The agents ``OWLBEAR_MEMORY_AGENTS`` names, as Delivery passes them; none without it, as in a chat."""
+    return frozenset(name for raw in os.environ.get(MEMORY_AGENTS_ENV, "").split(",") if (name := raw.strip()))
+
+
 @asynccontextmanager
 async def app_lifespan(
     _server: MCPServer,
@@ -151,7 +158,7 @@ async def app_lifespan(
     """Construct and expose memory runtime context for this MCP session."""
     store, shared = memory_dir(), global_dir()
     common = shared if shared != store else None
-    yield AppContext(engine=MemoryEngine(memory_dir=store), memory_dir=store, global_dir=common)
+    yield AppContext(engine=MemoryEngine(memory_dir=store), memory_dir=store, global_dir=common, agents=known_agents())
 
 
 mcp = MCPServer("owlbear-memory", lifespan=app_lifespan)
