@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import re
 import sys
 from datetime import UTC, datetime
 from functools import partial
@@ -116,8 +115,32 @@ def user_mcp(home: Path) -> Path:
 
 def _loose_json(text: str) -> object:
     """JSON as VS Code writes its own files: line comments, block comments and trailing commas allowed."""
-    text = re.sub(r'("(?:\\.|[^"\\])*")|//[^\n]*|/\*.*?\*/', lambda m: m[1] or "", text, flags=re.DOTALL)
-    return json.loads(re.sub(r",(\s*[}\]])", r"\1", text))
+    out: list[str] = []
+    i, comma = 0, None  # comma: where in ``out`` the last comma outside a string went, until something follows it
+    while i < len(text):
+        c = text[i]
+        if c == '"':
+            end = i + 1
+            while end < len(text) and text[end] != '"':
+                end += 2 if text[end] == "\\" else 1
+            out.append(text[i : end + 1])
+            i, comma = end + 1, None
+        elif text.startswith("//", i):
+            end = text.find("\n", i)
+            i = len(text) if end < 0 else end
+        elif text.startswith("/*", i):
+            end = text.find("*/", i + 2)
+            if end < 0:
+                raise ValueError("unterminated block comment")  # noqa: EM101, TRY003
+            i = end + 2
+        else:
+            if c in "}]" and comma is not None:
+                out[comma] = ""
+            if not c.isspace():
+                comma = len(out) if c == "," else None
+            out.append(c)
+            i += 1
+    return json.loads("".join(out))
 
 
 def _serves(servers: object, repo: Path, *, own: bool) -> bool:

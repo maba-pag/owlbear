@@ -819,6 +819,25 @@ def test_a_server_entry_naming_its_folder_as_repo_equals_counts_as_setup(tmp_pat
     assert setup.registered(work)
 
 
+@pytest.mark.parametrize(
+    ("text", "parsed"),
+    [
+        ('{"a": "x,}"}', {"a": "x,}"}),  # commas, comment marks and escaped quotes in strings stay
+        ('{"a": ["y,]"]}', {"a": ["y,]"]}),
+        ('{"a": "b\\"//c", "d": "/* e */"}', {"a": 'b"//c', "d": "/* e */"}),
+        ('// top\n{"a": [1, 2, /* two */], /* x */ "b": {"c": 3,\n},\n} // end', {"a": [1, 2], "b": {"c": 3}}),
+        ('{"a": 1} /* open', None),
+    ],
+)
+def test_vs_code_json_drops_comments_and_trailing_commas_only_outside_strings(text, parsed):
+    loose = setup._loose_json  # noqa: SLF001
+    if parsed is None:
+        with pytest.raises(ValueError, match="block comment"):
+            loose(text)
+    else:
+        assert loose(text) == parsed
+
+
 def test_each_project_line_in_the_log_names_its_project(tmp_path, http, machine, capsys):
     p = machine.projects[add(http, clone(tmp_path / "shop"))["id"]]
     p.host.say("c1: runner 7 started")
