@@ -45,6 +45,8 @@ def test_owlbear_next_refuses_a_usage_error_and_takes_the_repo_before_the_comman
     assert (ran[0].command, ran[0].repo) == ("home", Path("/r"))
     assert cli.main(["profile", "--role", "builder=gpt-5:high"]) == 7
     assert (ran[1].role[0][0], ran[1].role[0][1].effort) == ("builder", "high")
+    assert cli.main(["--repo", "/a", "--repo", "/b", "setup", "--yes", "--yes", "--folder", "a", "--folder=b"]) == 7
+    assert (ran[2].repo, ran[2].yes, ran[2].folder) == (Path("/b"), True, "b")
 
 
 @pytest.mark.parametrize(

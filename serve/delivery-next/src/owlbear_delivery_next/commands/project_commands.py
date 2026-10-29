@@ -30,8 +30,18 @@ class _Usage(DefaultFormatter):
             console.print(Text("usage: " + plain.removeprefix("Usage:").strip()))
 
 
+_LAST = Parameter(allow_repeating=True)  # a repeated option keeps its last value, as argparse did
+
+
 def _app(name: str | None = None, said: str | None = None) -> App:
-    group = App(name=name, help=said, version_flags=[], result_action="return_value", help_formatter=_Usage())
+    group = App(
+        name=name,
+        help=said,
+        version_flags=[],
+        result_action="return_value",
+        help_formatter=_Usage(),
+        default_parameter=_LAST,
+    )
     group.default(_missing)
     return group
 
@@ -89,7 +99,8 @@ UNIT = Group("Unit", validator=validators.LimitedChoice(1, 1))  # exactly one, a
 
 @app.meta.default
 def _launch(
-    *tokens: Annotated[str, Parameter(show=False, allow_leading_hyphen=True)], repo: Path | None = None
+    *tokens: Annotated[str, Parameter(show=False, allow_leading_hyphen=True)],
+    repo: Annotated[Path | None, _LAST] = None,
 ) -> Namespace | None:
     """Parse one command; help returns nothing.
 
