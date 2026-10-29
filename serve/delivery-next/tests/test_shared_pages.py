@@ -8,7 +8,7 @@ import socket
 import threading
 import time
 from types import SimpleNamespace
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 import uvicorn
@@ -346,7 +346,8 @@ def improvement_s_machine_settings_are_typed_and_saved(page, pds) -> None:
     chats.press_sequentially("/w, /p")  # keystrokes: a comma and a space are kept
     expect(chats).to_have_value("/w, /p")
     pds_hours = "Hours between checks for a newer Porsche Design System (it also checks at launch)"
-    expect(page.get_by_role("region", name="This machine")).to_contain_text("unset: set it here")
+    named = page.locator("#set-machine-update_check_hours_pds > p-text").first  # GW8RT6: an unset setting's name is red
+    expect(named).to_have_attribute("color", "error")
     page.get_by_label(pds_hours, exact=True).fill("3")
     page.get_by_role("region", name="This machine").get_by_role("button", name="Save machine settings").click()
     with page.expect_response(lambda r: r.request.method == "PUT"):  # the status says Saved from before already
@@ -356,6 +357,7 @@ def improvement_s_machine_settings_are_typed_and_saved(page, pds) -> None:
     folders = ["/w", "/p"]
     assert (mine.retro_run_credit_limit, mine.retro_after_change, mine.enrolled_chats) == (20.0, "off", folders)
     assert (mine.update_check_hours_pds, mine.update_check_hours_owlbear) == (3, None)
+    expect(named).not_to_have_attribute("color", "error")
     chats.fill("/w,/p")  # the saved list again, written differently: no edit
     save = page.get_by_role("region", name="This machine").get_by_role("button", name="Save machine settings")
     expect(save).to_be_disabled()
@@ -478,6 +480,12 @@ def unsaved_edits_keep_the_page(page, here: str, pds) -> None:
     expect(page.locator("p-drilldown").get_by_role("link")).to_have_count(0)  # closed, so the reason shows
     expect(said).to_be_visible()
     expect(page).to_have_url(here)
+    page.get_by_role("button", name="Menu").click()
+    page.locator("p-drilldown").get_by_role("link", name="Agents").click()  # a group of this page: no leaving
+    expect(page).to_have_url(here.replace("#runs", "#agents"))
+    expect(page.locator("#agents-title")).to_be_focused()
+    expect(page.locator("#groups a[href='#runs'] p-tag")).to_have_text("1 unsaved")
+    pds.group(page, "runs")
     expect(page.get_by_label("Rounds at most, builder")).to_have_value("4")
 
 
@@ -485,6 +493,7 @@ def a_role_s_subagents_are_switched_off_and_saved(page, store: Store, pds) -> No
     """TD-376: the per-role choice is saved as a switch, not as its text."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
+    pds.group(page, "agents")
     pds.pick(page, "Built-in subagents, reviewer", "false")
     expect(page.locator("#pending")).to_contain_text("reviewer subagents: inherited → false")
     page.locator(".bar").get_by_role("button", name="Save project settings").click()
@@ -492,12 +501,14 @@ def a_role_s_subagents_are_switched_off_and_saved(page, store: Store, pds) -> No
     expect(page.locator("#pending")).to_have_text("No unsaved edits.")
     assert store.read_config().agents["reviewer"].subagents is False
     pds.pick(page, "Layer", "machine")  # TD-336: this machine's own preferences, kept local
+    pds.group(page, "runs")
     page.get_by_label("Minutes per session, builder").fill("55")
     page.locator(".bar").get_by_role("button", name="Save this machine's preferences").click()
     expect(pds.modal(page)).to_contain_text("These apply to every project on this machine")
     pds.answer(page, "Save this machine's preferences")
     expect(page.locator("#status")).to_have_text("Saved this machine's settings. They apply to the next session.")
     assert store.settings().sources["agents.builder.minutes"] == "machine"
+    pds.group(page, "overview")
     across = page.locator("#across-table p-table-row")
     minutes = across.filter(has_text="agents · builder · minutes")  # both baselines, apart
     cells = ["agents · builder · minutes", "40 (built-in default)", "55", "none"]
@@ -505,6 +516,23 @@ def a_role_s_subagents_are_switched_off_and_saved(page, store: Store, pds) -> No
     rounds = across.filter(has_text="final_review · max_rounds")  # derived from the builder's
     expect(rounds.locator("p-table-cell").nth(2)).to_have_text("same")
     pds.pick(page, "Layer", "project")
+
+
+def the_overview_shows_what_projects_set_apart(page) -> Any:
+    """TD-243, TD-295: the overview's table of what each project sets apart; returns it."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    across = page.locator("#across-table")
+    expect(across).to_contain_text("widths")
+    expect(across).to_contain_text("(built-in default)")
+    expect(across).to_contain_text("shop-site: 1600")  # once, though two clones of it are registered
+    expect(across).not_to_contain_text("docs-site")
+    expect(across).not_to_contain_text("planner · subagents")
+    page.get_by_label("Show all settings").check()  # every setting, those nobody sets apart too (TD-295)
+    expect(across.get_by_text("agents · planner · subagents", exact=True)).to_have_count(1)
+    page.get_by_label("Show all settings").uncheck()
+    expect(across).not_to_contain_text("planner · subagents")
+    return across
 
 
 @pytest.mark.browser
@@ -532,16 +560,8 @@ def test_settings_show_what_each_project_sets_apart_and_ask_where_an_edit_goes(
             page = browser.new_page()
             pds.only(page, base)
             open_with_docs_needing_setup(page, base, f"/config?project={DOCS}#token=t")
-            across = page.locator("#across-table")
-            expect(across).to_contain_text("widths")
-            expect(across).to_contain_text("(built-in default)")
-            expect(across).to_contain_text("shop-site: 1600")  # once, though two clones of it are registered
-            expect(across).not_to_contain_text("docs-site")
-            expect(across).not_to_contain_text("planner · subagents")
-            page.get_by_label("Show all settings").check()  # every setting, those nobody sets apart too (TD-295)
-            expect(across.get_by_text("agents · planner · subagents", exact=True)).to_have_count(1)
-            page.get_by_label("Show all settings").uncheck()
-            expect(across).not_to_contain_text("planner · subagents")
+            across = the_overview_shows_what_projects_set_apart(page)
+            pds.group(page, "this-machine")
             expect(page.locator("#machine-login")).to_contain_text("Start at login: off")
             machine_settings_are_saved_and_a_stale_save_is_refused(page, pds, DataRepo(shared_repo[0]))
             scope = pds.select(page, "Layer")
@@ -549,8 +569,9 @@ def test_settings_show_what_each_project_sets_apart_and_ask_where_an_edit_goes(
                 ["Project docs-site", "This machine (its projects)", "Global (every project)", "Project shop-site (/s)",
                  "Project shop-site (/s2)"]
             )  # fmt: skip
+            pds.group(page, "runs")
             page.get_by_label("Rounds at most, builder").fill("4")
-            unsaved_edits_keep_the_page(page, f"{base}/config?project={DOCS}", pds)
+            unsaved_edits_keep_the_page(page, f"{base}/config?project={DOCS}#runs", pds)
             docs = Store(tmp_path / DOCS, DataRepo(shared_repo[0]), "docs-site")
             off = {"agents": {"planner": Agent(subagents=False)}}
             assert (
@@ -563,6 +584,7 @@ def test_settings_show_what_each_project_sets_apart_and_ask_where_an_edit_goes(
             page.locator(".bar").get_by_role("button", name="Save project settings").click()
             pds.modal(page).get_by_role("button", name="Save project settings").click()
             expect(page.locator("#status")).to_have_text("Saved docs-site's settings. They apply to the next session.")
+            pds.group(page, "overview")
             expect(across).to_contain_text("docs-site: no")  # the overview follows the save
             expect(across.locator("text=final_review · max_rounds")).to_have_count(1)  # the builder's rounds, inherited
             expect(across).to_contain_text("docs-site: 4")
@@ -598,16 +620,18 @@ def test_with_no_machine_setting_set_anywhere_the_page_names_each_and_a_pending_
             page = browser.new_page()
             pds.only(page, base)
             page.goto(f"{base}/config?project={DOCS}#token=t")
-            region = page.get_by_role("region", name="This machine")
-            expect(page.locator("#machine-pending")).to_contain_text("offline")
-            expect(region.get_by_text("unset: set it here or for every machine")).to_have_count(14)  # 3 update checks
             expect(page.locator("#unset")).to_contain_text("machine.channel")
             expect(page.locator("#unset")).to_contain_text("machine.sessions")
+            pds.group(page, "this-machine")
+            region = page.get_by_role("region", name="This machine")
+            expect(page.locator("#machine-pending")).to_contain_text("offline")
+            red = region.locator(".field > p-text[color='error']")  # GW8RT6: each unset setting's name is red
+            expect(red).to_have_count(14)  # 3 update checks
             pds.pick(page, "Versions this machine takes", "minor")  # this machine's own: no longer unset
             region.get_by_role("button", name="Save machine settings").click()
             pds.answer(page, "Save machine settings")
             expect(region).to_contain_text("in use: Every minor version (v0.1, v0.2 …), from this machine")
-            expect(region.get_by_text("unset: set it here or for every machine")).to_have_count(13)
+            expect(red).to_have_count(13)
             browser.close()
     finally:
         server.should_exit = True

@@ -168,8 +168,9 @@ def test_changes_of_all_projects_or_one_the_top_row_switches_and_resumes_and_pro
             page.locator("#top").get_by_role("link", name="Backlog").click()
             expect(page).to_have_url(f"{base}/backlog")  # the backlog too shows all projects (TD-241)
             page.get_by_role("button", name="Menu").click()
-            page.locator("p-drilldown").get_by_role("link", name="Settings").click()
-            expect(page).to_have_url(f"{base}/config?project={a.id}")  # a project page opens the first project
+            page.locator("p-drilldown").get_by_role("button", name="Settings").click()
+            page.locator("p-drilldown").get_by_role("link", name="Overview").click()
+            expect(page).to_have_url(f"{base}/config?project={a.id}#overview")  # a project page opens the first project
             browser.close()
     finally:
         server.should_exit = True
@@ -437,6 +438,21 @@ def targets(scope) -> list[str]:
     return list(small)
 
 
+def a_group_of_the_shown_page_opens_on_it(page, here: str) -> None:
+    """D-01M63C8QQMANY46N8GMNNKH1V9: a Settings group's link, followed from Settings, shows it with the menu closed;
+    the menu then opens on that group."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    burger, menu = page.get_by_role("button", name="Menu"), page.locator("p-drilldown")
+    menu.get_by_role("link", name="Agents").click()
+    expect(menu.get_by_role("link")).to_have_count(0)
+    expect(page).to_have_url(f"{here}#agents")
+    expect(page.locator("#agents-title")).to_be_focused()
+    burger.click()
+    expect(menu.get_by_role("link", name="Agents")).to_be_focused()
+    expect(menu.get_by_role("link", name="Agents")).to_have_attribute("aria-current", "page")
+
+
 @pytest.mark.browser
 def test_the_menu_reaches_every_page_moves_focus_into_each_level_and_back_to_the_burger(
     tmp_path: Path, monkeypatch, pds
@@ -454,12 +470,16 @@ def test_the_menu_reaches_every_page_moves_focus_into_each_level_and_back_to_the
         expect(burger).to_have_attribute("aria-haspopup", "dialog")
         assert targets(page.locator("#top nav a, #top .brand, #menu > p-button-pure, #controls > *")) == []
         burger.click()
-        expect(menu.get_by_role("link", name="Settings")).to_be_focused()  # this page's link, in its level
-        expect(menu.get_by_role("link", name="Settings")).to_have_attribute("aria-current", "page")
-        served = ["/", "/backlog", "/memory", "/decisions", "/metrics", "/projects", "/config", "/maintenance"]
+        overview = menu.get_by_role("link", name="Overview")  # Settings' group shown, in Settings' level
+        expect(overview).to_be_focused()
+        expect(overview).to_have_attribute("aria-current", "page")
+        served = ["/", "/backlog", "/memory", "/decisions", "/metrics", "/projects", "/maintenance"]
         served += ["/updates/owlbear", "/updates/pds", "/updates/impeccable"]
+        groups = ["overview", "agents", "runs", "checks", "project", "this-machine"]  # D-01M63C8QQMANY46N8GMNNKH1V9
         hrefs = menu.locator("a").evaluate_all("as => as.map(a => a.getAttribute('href'))")
-        assert sorted(hrefs) == sorted(f"{path}?project={a.id}" for path in served)
+        assert sorted(hrefs) == sorted([f"{path}?project={a.id}" for path in served]
+                                       + [f"/config?project={a.id}#{group}" for group in groups])  # fmt: skip
+        a_group_of_the_shown_page_opens_on_it(page, f"{base}/config?project={a.id}")
         menu.get_by_role("button", name="Work").click()
         expect(menu.get_by_role("link", name="Changes")).to_be_focused()  # into the level it opened
         assert targets(menu.get_by_role("link")) == []
@@ -933,9 +953,9 @@ def test_old_update_addresses_open_the_updates_pages_and_back_and_reload_keep_th
         expect(page.get_by_role("heading", level=1)).to_have_text("Impeccable update")
         page.goto(f"{base}/config?project={a.id}#pack")
         expect(page).to_have_url(f"{base}/updates/impeccable?project={a.id}")
-        page.goto(f"{base}/config#machine-title")  # stays: a project page names its project and keeps the section
-        expect(page).to_have_url(f"{base}/config?project={a.id}#machine-title")
-        expect(page.locator("#machine-title")).to_be_visible()
+        page.goto(f"{base}/config#machine-title")  # a project page names its project; the section opens its group
+        expect(page).to_have_url(f"{base}/config?project={a.id}#this-machine")
+        expect(page.locator("#machine-title")).to_be_focused()
         page.evaluate("location.hash = 'pack'")  # only the fragment changes: the page is not loaded again
         expect(page).to_have_url(f"{base}/updates/impeccable?project={a.id}")
         page.goto(f"{base}/maintenance?project={a.id}")
