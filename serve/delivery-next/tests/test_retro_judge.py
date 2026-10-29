@@ -306,6 +306,18 @@ def test_each_part_names_its_session_so_a_records_moment_is_found_when_event_num
     assert sent["records"][0]["session"] == "s-b"
 
 
+def test_a_record_whose_own_session_left_nothing_to_read_is_never_judged_on_another_sessions_evidence():
+    parts = [Part("s1.p1", "s-kept", 1, 9, "s1.e3 agent: built", "")]
+    records = [_record("gone", 3, session="s-pruned"), _record("kept", 3, session="s-kept")]
+    ask = Asked(lambda ev, _a: _graded(ev))
+
+    retro_judge.judge(_work(ask, records, parts, uid="chg:p1:fix-it", grade_only=True))
+
+    assert [r["id"] for m in ask.messages for r in _evidence(m)["records"]] == ["kept"]
+    gone = next(g for g in retro_store.grades() if g["record"] == "gone")
+    assert (gone["grade"], gone["reason"], gone.get("moment")) == ("not-assessable", retro_judge.PRUNED, None)
+
+
 def test_a_grade_only_run_proposes_a_case_for_a_late_record_graded_wrong():
     def said(_ev, agent):
         if agent == "retro-review":
