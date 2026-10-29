@@ -15,8 +15,9 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-# One literal shell word: unquoted, only what shlex.quote leaves bare, so no comment, redirect or expansion.
-WORD = r"""(?:\\.|[\w@%+=:,./-]|'[^']*'|"(?:[^"\\$`]|\\.)*")+"""
+# One literal shell word as shlex.quote writes it: unquoted, only what it leaves bare; quoted, nothing the shell would
+# expand or unescape. So no comment, redirect, expansion or backslash, and shlex.split reads it as the shell does.
+WORD = r"""(?:[\w@%+=:,./-]|'[^']*'|"[^"\\$`]*")+"""
 CD_CHECK = re.compile(rf"cd\s+({WORD})\s*&&\s*(\S.*)", re.DOTALL)
 SPACE = re.compile(r"""('[^']*'|"(?:[^"\\]|\\.)*"|\\.)|\s+""", re.DOTALL)
 
