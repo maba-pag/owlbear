@@ -205,7 +205,7 @@ def test_a_turn_cut_off_by_a_stop_is_no_wrong_choice(world, monkeypatch):
         await asyncio.sleep(0.01)
         check = threading.Thread(target=checking, args=(world.steps[0].gate,))
         check.start()
-        held.wait(2)
+        assert held.wait(2)
         task.cancel()
         with pytest.raises(asyncio.CancelledError):
             await task
