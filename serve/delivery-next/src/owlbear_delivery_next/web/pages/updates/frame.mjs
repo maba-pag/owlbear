@@ -50,7 +50,11 @@ function often(u) {
 }
 
 function newest(u) {
-  if (u.state === "newer") return `${u.latest}${u.detail ? ` (${u.detail})` : ""}`;
+  // the host keeps a newer version it found through failed checks, until it is applied or found withdrawn
+  if (u.latest && u.latest !== u.current) {
+    const last = u.state === "newer" ? "" : ", found by the last successful check";
+    return `${u.latest}${u.detail ? ` (${u.detail})` : ""}${last}`;
+  }
   if (u.state === "current") return `${u.latest || u.current}, the one in use`;
   return u.detail || "not known yet";
 }

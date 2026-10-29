@@ -751,7 +751,7 @@ def test_updates_owlbear_marks_the_menu_refuses_start_while_work_runs_and_the_ma
     from owlbear_delivery_next.machine_host.update import Updater  # noqa: PLC0415
 
     found = {"updates": [checked("owlbear", "newer", "v0.2", "v0.3"),
-                         checked("pds", "failed", "4.10.1", failures=2, reason="npm did not answer"),
+                         checked("pds", "failed", "4.10.1", "4.11.0", failures=2, reason="npm did not answer"),
                          checked("impeccable", "current", "4.8.0.1")], "available": 1}  # fmt: skip
     work, searched, started = [""], [], []
     steps = [{"key": k, "label": label, "state": "done" if k == "looking" else "pending", "started_at": None,
@@ -829,6 +829,7 @@ def test_a_run_started_in_one_project_is_answered_from_another_and_from_all_proj
     beta = registry.register(clone(tmp_path / "beta"))
     job = pack_job.Job(Store.open(Path(alpha.path)), pack_job.Live())
     question = pack_rounds.question("r1:end:1", "end", "The rounds ended.", ["activate", "discard"])
+        expect(page.locator("#check-latest")).to_have_text("4.11.0, found by the last successful check")
     job.state = pack_job._blank() | {  # noqa: SLF001 - a run waiting for the owner
         "state": "waiting", "started_at": datetime.now(UTC).isoformat(), "run": "r1", "questions": [question],
     }  # fmt: skip
