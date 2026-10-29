@@ -22,7 +22,7 @@ TABS = (
 MARK = "<!-- tabs -->"  # where each page takes the tab bar
 BASE = "<!-- base -->"  # where each page takes the shared stylesheet, before its own
 ASK = "<!-- ask -->"  # where a page with consequential buttons takes the shared confirmation, before its script
-PDS = {"index.css": "text/css", "load.mjs": "text/javascript"}  # the vendored Porsche Design System 4.8.0 files
+PDS = {"index.css": "text/css", "load.mjs": "text/javascript"}  # the vendored Porsche Design System 4.10.1 files
 LIT = "vendor/lit-html"  # the vendored lit-html release; its SHA256SUMS names every file it serves (TD-264)
 OWN = {"mjs": "text/javascript", "css": "text/css"}  # a page's own modules and styles under web/pages/<page>/ (C-28)
 
