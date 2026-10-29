@@ -669,3 +669,36 @@ def test_a_newer_read_that_fails_keeps_what_an_older_one_read_in_the_meantime(tm
             "This list may be out of date: Delivery is not running. Start it, then reload this page."
         )
         assert page.get_by_role("listitem").count() == 1, page.locator("#page").inner_text()
+
+
+@pytest.mark.browser
+def test_focus_goes_to_the_same_place_after_remove_and_stays_where_the_owner_moved_it(
+    tmp_path: Path, monkeypatch, pds
+) -> None:
+    """Removing the last project focuses the Remove before it; Adopt leaves focus where the owner put it meanwhile."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    replaced(tmp_path / "epsilon")
+    for name in ("alpha", "beta", "gamma"):
+        registry.register(clone(tmp_path / name))
+    held = []
+
+    def hold(route) -> None:  # Adopt, answered once the owner has moved on
+        held.append(route)
+
+    with browsing(monkeypatch, pds) as (page, base):
+        page.goto(f"{base}/projects#token=t")
+        items = page.get_by_role("listitem")
+        expect(items).to_have_count(4)
+        assert items.last.get_attribute("aria-labelledby") == f"p-{registry.load().projects[-1].id}"
+        last = page.get_by_role("listitem", name="gamma")
+        last.get_by_role("button", name="Remove project").click()
+        pds.answer(page, "Remove project")
+        expect(page.get_by_role("listitem", name="beta").get_by_role("button", name="Remove project")).to_be_focused()
+        page.route(f"{base}/api/next/projects/*/adopt", hold)
+        page.get_by_role("listitem", name="epsilon").get_by_role("button", name="Adopt the new clone").click()
+        until(page, lambda: held)
+        page.get_by_label("Folder").focus()  # the owner moves on while Delivery adopts it
+        held[0].fallback()
+        expect(page.locator("#page > [role=status]")).to_contain_text("epsilon now serves the clone at")
+        expect(page.get_by_label("Folder")).to_be_focused()

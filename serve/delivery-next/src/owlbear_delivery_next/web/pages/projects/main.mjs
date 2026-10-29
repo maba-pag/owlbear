@@ -43,22 +43,35 @@ function add() {
   });
 }
 
+// Moves focus to what *pick* finds when an action took it away: its button is gone, or the confirmation still holds it
+// and gives it back only once it has closed. Focus the owner has moved elsewhere in the meantime stays there.
+async function refocus(pick) {
+  for (let tries = 0; tries < 40; tries += 1) {
+    const now = document.activeElement;
+    if (now !== document.body && !now?.closest?.("p-modal")) return;
+    const target = pick();
+    target?.focus();
+    if (!target || document.activeElement === target) return;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+}
+
 async function remove(p) {
+  const at = machineState().projects.findIndex((o) => o.id === p.id);
   const yes = await ask({ title: `Remove ${p.name}?`, now: `OwlBear stops serving ${p.path}.`,
     then: "Its Changes, settings and memory stay in the clone; nothing is deleted.",
     after: "Add the folder again to serve it once more.", instead: "It keeps running.", yes: "Remove project" });
   if (!yes) return;
-  const at = [...document.querySelectorAll("#projects > li")].findIndex((li) => li.contains(document.activeElement));
   await act(`remove ${p.id}`, async () => {
     await call(`/projects/${p.id}`, { method: "DELETE", machine: true });
     if (p.id === project) location.replace(here({ project: "" }));  // the top row no longer has it to show
     return `Removed ${p.name}; nothing in ${p.path} was deleted.`;
   });
-  if (document.activeElement === document.body) {  // its Remove button is gone: the next project's takes focus
+  await refocus(() => {  // the Remove button now in its place takes focus, or Folder when none is left
     const left = document.querySelectorAll("#projects > li");
-    (left.length ? left[Math.max(0, Math.min(at, left.length - 1))].querySelector(".row p-button:last-child")
-      : document.querySelector("#add p-input-text"))?.focus();
-  }
+    return left.length ? left[Math.max(0, Math.min(at, left.length - 1))].querySelector(".row p-button:last-child")
+      : document.querySelector("#add p-input-text");
+  });
 }
 
 async function adopt(p) {
@@ -69,7 +82,8 @@ async function adopt(p) {
     return `${adopted.name} now serves the clone at ${adopted.path}.`;
   });
   if (adopted && p.id !== project) {  // its Adopt button is gone: the adopted project's Remove takes focus
-    document.querySelector(`li[aria-labelledby="p-${CSS.escape(adopted.id)}"] .row p-button:last-child`)?.focus();
+    const row = `li[aria-labelledby="p-${CSS.escape(adopted.id)}"]`;
+    await refocus(() => document.querySelector(`${row} .row p-button:last-child`));
   }
 }
 
