@@ -96,16 +96,18 @@ function acrossSection() {
   </section>`;
 }
 
+// Rename is the panel's primary once a different name is typed, the one thing it then asks.
 function folderSection() {
   const loaded = state.loaded, off = !loaded.folder || state.saving, value = state.folder ?? loaded.folder ?? "";
-  const keep = (e) => { state.folder = e.target.value ?? ""; };
+  const renaming = !off && value.trim() !== "" && value.trim() !== loaded.folder;
+  const keep = (e) => { state.folder = e.target.value ?? ""; show(); };
   const label = "Folder in the shared settings repository";
   const input = html`<p-input-text id="folder" label=${label} ?disabled=${off} .value=${live(value)} @input=${keep}
     @change=${keep}></p-input-text>`;
   return html`<section class="panel" aria-labelledby="folder-title">
     <p-heading size="lg"><h2 id="folder-title">Project folder</h2></p-heading>
-    <div class="row">${input}${button("Rename folder", rename, { id: "rename", icon: "edit", variant: "secondary",
-      disabled: off })}</div>
+    <div class="row">${input}${button("Rename folder", rename, { id: "rename", icon: "edit",
+      variant: renaming ? "primary" : "secondary", disabled: off })}</div>
     <p-text id="folder-note">${loaded.folder ? "Named after the repository unless renamed. Renaming moves the folder "
       + "with its settings, memory and visual decisions, then commits and pushes the move; it is refused while a "
       + "step of this project or its memory curation runs."

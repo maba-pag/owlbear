@@ -341,6 +341,29 @@ def test_the_owner_marks_a_decided_decision_he_never_made_approved(store, pds):
 
 
 @pytest.mark.browser
+def test_the_read_back_queue_asks_with_one_primary_and_withdrawing_is_never_it(store, pds):
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    for title in ("Exports are CSV", "Builds run nightly"):
+        write(make(title=title, statement=f"{title}.", read_back="pending", read_back_why="Asked again.",
+                   read_back_kind="uncertain"), store.shared.root / PROJECT)  # fmt: skip
+    with decisions_page(store, pds) as page:
+        queue = page.locator("#queue")
+        expect(queue.locator(".queued")).to_have_count(2)
+        expect(queue.locator('p-button[variant="primary"]')).to_have_text(["Still right"])  # the lead's only
+        expect(queue.locator(".queued").first.locator('p-button[variant="primary"]')).to_have_count(1)
+        item = queue.locator(".queued").nth(1)
+        item.get_by_role("button", name="Replace or withdraw").click()
+        expect(item.locator("#detail")).to_be_visible()
+        expect(queue.locator('.queued > .row p-button[variant="primary"]')).to_have_count(0)  # its actions lead
+        expect(queue.locator('p-button[variant="primary"]')).to_have_count(1)
+        item.get_by_role("button", name="Withdraw").click()
+        dialog = pds.modal(page)
+        expect(dialog.locator('p-button[variant="primary"]')).to_have_text(["Cancel"])  # declining leads
+        expect(dialog.locator("p-button", has_text="Withdraw")).to_have_attribute("variant", "secondary")
+
+
+@pytest.mark.browser
 def test_the_owner_reads_back_an_open_decision_by_confirming_it_and_sees_no_record_rows(store, pds):
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 

@@ -269,16 +269,16 @@ function editor(m) {
       ${button("Cancel", cancel, { variant: "secondary" })}</div>`;
 }
 
-// A row's actions are secondary: a list asks about many entries, so no row's answer is its section's one primary
-// (D-01M63C7BJZZ7RQV9XS4XVR0DNE).
-function actions(m) {
-  const parts = [];
+// A section that asks has one primary (D-01M63C7BJZZ7RQV9XS4XVR0DNE): the *lead* entry's Approve or Resolve, the
+// first one listed under "Needs your review"; every other row action is secondary.
+function actions(m, lead) {
+  const parts = [], answer = lead ? "primary" : "secondary";
   if (m.state === "curated") {
-    parts.push(button("Approve", () => act(m, "approve"), { variant: "secondary", icon: "check",
+    parts.push(button("Approve", () => act(m, "approve"), { variant: answer, icon: "check",
       busy: busy(m, "approve") }));
   }
   if (["contested", "disputed", "stale"].includes(m.state)) {
-    parts.push(button("Resolve", () => resolve(m), { variant: "secondary", icon: "check", aria: DIALOG,
+    parts.push(button("Resolve", () => resolve(m), { variant: answer, icon: "check", aria: DIALOG,
       busy: busy(m, "resolve") }));
   }
   if (m.state !== "deleted") {
@@ -298,7 +298,7 @@ function actions(m) {
   return parts.length ? html`<div class="row">${parts}</div>` : nothing;
 }
 
-function card(m) {
+function card(m, lead) {
   const scope = m.scope_agents.length ? m.scope_agents.map((a) => (a === "*" ? "all agents" : a)).join(", ")
     : "no agent yet";
   const meta = `From ${m.source_agent} · for ${scope} · confidence ${m.confidence} · updated ${age(m.updated_at)}`;
@@ -310,7 +310,8 @@ function card(m) {
       <p-tag class="place" compact="true">${m.place.label}</p-tag>
       ${m.categories.map((c) => html`<p-tag compact="true">${c}</p-tag>`)}</div>
     <p-text size="xs" color="contrast-medium">${meta}${advice}</p-text>
-    ${state.editing?.id === m.key ? editor(m) : html`<p-text class="said" size="sm">${m.content}</p-text>${actions(m)}`}
+    ${state.editing?.id === m.key ? editor(m)
+      : html`<p-text class="said" size="sm">${m.content}</p-text>${actions(m, lead)}`}
   </li>`;
 }
 
@@ -342,7 +343,8 @@ function entries(shown) {
     return html`<section class=${states.includes("deleted") ? "quiet" : ""}>
       <div><p-heading size="lg"><h2>${title} (${mine.length})</h2></p-heading>${hint ? html`<p-text>${hint}</p-text>`
         : nothing}${states.includes("deleted") ? purges() : nothing}</div>
-      <ul class="entries">${repeat(mine, (m) => m.key, card)}</ul></section>`;
+      <ul class="entries">${repeat(mine, (m) => m.key, (m, i) => card(m, i === 0 && title === GROUPS[0][0]))}</ul>
+      </section>`;
   });
   const empty = state.loaded.entries.length ? "No memory matches these filters."
     : "Agents have not remembered anything yet.";

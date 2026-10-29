@@ -455,9 +455,12 @@ def test_approving_one_memory_leaves_the_next_ones_button_ready(shared, pds):
     with memory_page(store, pds) as page:
         review = page.locator("section", has_text="Needs your review")
         expect(review.locator(".entry")).to_have_count(2)
+        expect(review.locator('p-button[variant="primary"]')).to_have_text(["Approve"])  # the first entry's only
+        expect(review.locator(".entry").first.locator('p-button[variant="primary"]')).to_have_count(1)
         review.locator(".entry").first.get_by_role("button", name="Approve").click()
         expect(review.locator(".entry")).to_have_count(1)
         expect(review.get_by_role("button", name="Approve")).to_be_enabled()
+        expect(review.locator('p-button[variant="primary"]')).to_have_text(["Approve"])  # the next one leads
 
 
 @pytest.mark.browser

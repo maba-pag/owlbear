@@ -28,14 +28,17 @@ async function answer(q, address, action, body = {}) {
   if (failed) notify(failed);
 }
 
-function item(q, address) {
+// The queue asks with one primary (D-01M63C7BJZZ7RQV9XS4XVR0DNE): the *lead* read-back's answer, Still right, or
+// Open to resolve for a derived one; while a read-back is open, its own actions hold the primary instead.
+function item(q, address, lead) {
   const busy = (a) => state.pending === `${a}:${q.id}`,
     opened = state.opened === q.id && state.from === "queue" && sameAddress(state.address, address);
   const choices = [
     q.derived ? nothing : button("Still right", () => answer(q, address, "read-back", { confirmed: true }),
-      { variant: "secondary", busy: busy("read-back") }),
+      { variant: lead ? "primary" : "secondary", busy: busy("read-back") }),
     button(opened ? "Close" : q.derived ? "Open to resolve" : "Replace or withdraw", () => open(q.id,
-      { from: "queue", address }), { variant: "secondary", aria: `{ 'aria-expanded': ${opened} }` }),
+      { from: "queue", address }), { variant: lead && q.derived ? "primary" : "secondary",
+      aria: `{ 'aria-expanded': ${opened} }` }),
     q.ignored ? nothing : button("Ignore for now", () => answer(q, address, "ignore-read-back"),
       { variant: "secondary", busy: busy("ignore-read-back") }),
   ];
@@ -54,12 +57,12 @@ function item(q, address) {
 // The read-backs waiting in this scope, first on the page (TD-427): most urgent first, then oldest; ignoring one
 // leaves its rule in force as recorded.
 export function queue() {
-  const waiting = state.loaded.queue ?? [];
+  const waiting = state.loaded.queue ?? [], reading = state.opened && state.from === "queue";
   return html`<section id="queue" aria-labelledby="queue-heading">
     <p-heading size="lg"><h2 id="queue-heading">Read-backs (${waiting.length})</h2></p-heading>
     ${state.notice ? html`<p-text id="notice" role="status" size="sm">${untagged(state.notice)}</p-text>` : nothing}
     ${waiting.length ? html`<ul class="entries" id="read-backs">${repeat(waiting, (q) => q.id,
-      (q) => item(q, state.loaded.address))}</ul>`
+      (q, i) => item(q, state.loaded.address, i === 0 && !reading))}</ul>`
       : html`<p-text size="sm" color="contrast-medium">No decision waits to be read back.</p-text>`}
   </section>`;
 }
