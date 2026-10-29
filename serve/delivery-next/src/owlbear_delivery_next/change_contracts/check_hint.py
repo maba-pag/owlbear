@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 # One literal shell word as shlex.quote writes it: unquoted, only what it leaves bare; quoted, nothing the shell would
 # expand or unescape. So no comment, redirect, expansion or backslash, and shlex.split reads it as the shell does.
 WORD = r"""(?:[\w@%+=:,./-]|'[^']*'|"[^"\\$`]*")+"""
-CD_CHECK = re.compile(rf"cd[ \t]+({WORD})[ \t]*&&\s*(\S.*)", re.DOTALL)
+CD_CHECK = re.compile(rf"cd[ \t]+({WORD})[ \t]*&&[ \t]*(\S.*)", re.DOTALL)
 
 
 def _form(command: str) -> tuple[str | None, str]:

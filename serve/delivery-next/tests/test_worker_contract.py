@@ -133,6 +133,7 @@ LONG = "packages/frontend-components-library"
         (["cd packages/b>cd.log && npm test"], ["npm test", PLACED], ["npm test", PLACED]),  # still packages/b
         (["cd 'p/$b' && npm test", 'cd "p/\\$b" && npm test'], ["npm test", "cd 'p/$b' && npm test"], ["npm test"]),
         ([PLACED, "cd packages/\\\nb && npm test"], ["npm test", PLACED], ["npm test"]),  # both run packages/b
+        (["cd packages/b &&\r\nnpm test"], [PLACED], [PLACED]),  # the shell runs a stray \r as a command
         (["npm  test "], ["npm test"], ["npm test"]),  # the exact text, but for its ends
         (["grep -q 'AC 1' a.txt"], ["grep -q 'AC  1' a.txt"], ["grep -q 'AC  1' a.txt"]),  # tests other text
         (["sh -c 'exit 1'\ntrue"], ["sh -c 'exit 1' true"], ["sh -c 'exit 1' true"]),  # two commands
