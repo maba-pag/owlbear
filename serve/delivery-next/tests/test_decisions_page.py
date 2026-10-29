@@ -274,6 +274,7 @@ def test_the_owner_resolves_a_three_way_conflict_by_keeping_one(store, pds):
     with decisions_page(store, pds) as page:
         card = page.locator(".entry", has_text="Exports in XML")
         card.get_by_role("button", name="Open").click()
+        expect(card.locator('p-button[variant="primary"]')).to_have_text(["Keep this one"])  # the conflict asks
         card.get_by_role("button", name="Keep this one").click()
         dialog = pds.modal(page)
         expect(dialog).to_contain_text("Withdrawn: Exports in JSON")
@@ -351,6 +352,7 @@ def test_the_owner_reads_back_an_open_decision_by_confirming_it_and_sees_no_reco
         expect(card.locator("#detail")).to_contain_text("autonomous")
         expect(card.locator("#detail")).not_to_contain_text("TD-12")
         expect(card.locator("#detail")).not_to_contain_text("Record rows")
+        expect(card.locator('p-button[variant="primary"]')).to_have_text(["Read back"])  # never Withdraw
         card.get_by_role("button", name="Read back").click()
         dialog = pds.modal(page)
         expect(dialog).to_contain_text("Exports are CSV.")

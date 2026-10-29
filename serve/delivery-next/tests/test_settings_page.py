@@ -150,6 +150,7 @@ def test_each_layer_keeps_its_own_drafts_and_a_save_sends_only_the_shown_layer(s
         rounds.fill("4")
         pds.pick(page, "Layer", "global")
         expect(page.locator("#pending")).to_have_text("No unsaved edits. This project: 1 more unsaved.")
+        expect(page.locator("#save")).to_have_attribute("variant", "secondary")  # nothing of this layer to save
         expect(rounds).to_have_value("")
         page.get_by_label("Minutes per session, builder").fill("60")
         pds.pick(page, "Layer", "project")
@@ -157,6 +158,7 @@ def test_each_layer_keeps_its_own_drafts_and_a_save_sends_only_the_shown_layer(s
         expect(page.locator("#pending")).to_have_text(
             "Unsaved: builder max rounds: inherited → 4. All projects: 1 more unsaved."
         )
+        expect(page.locator("#save")).to_have_attribute("variant", "primary")
         pds.pick(page, "When the design judge fails a change", "back")  # renders the page again
         expect(rounds).to_have_value("4")
         labels = page.get_by_label("Labels, comma-separated; none for no labels")
