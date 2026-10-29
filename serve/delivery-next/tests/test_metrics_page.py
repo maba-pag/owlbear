@@ -102,10 +102,10 @@ def test_the_metrics_page_sums_splits_drills_down_and_lists_runs_with_their_limi
             expect(tools.nth(1)).to_contain_text("All tools")
             for cell in ("10", "10%", "3", "2", "1"):  # calls, success, invalid, failed checks, wrong moment
                 expect(tools.nth(0).locator("p-table-cell", has_text=cell).first).to_be_visible()
-            expect(page.locator("#wrong")).to_contain_text("1 at the wrong moment")
-            expect(page.locator("#wrong")).to_contain_text("2 denied by the guard")
-            expect(page.locator("#wrong")).to_contain_text("1 turns ended without a result")
-            expect(page.locator("#wrong")).to_contain_text("1 pointless missing-tool reports")
+            expect(page.locator("#wrong")).to_contain_text("1 call at the wrong moment")
+            expect(page.locator("#wrong")).to_contain_text("2 denials by the guard")
+            expect(page.locator("#wrong")).to_contain_text("1 turn ended without a result")
+            expect(page.locator("#wrong")).to_contain_text("1 pointless missing-tool report")
             expect(page.locator("#tool-use-coverage")).to_contain_text("Counted for 3 runs")
             assert spend_reconcile.settled(10)
             page.evaluate("document.dispatchEvent(new Event('visibilitychange'))")
@@ -122,14 +122,14 @@ def test_the_metrics_page_sums_splits_drills_down_and_lists_runs_with_their_limi
 
             pds.pick(page, "Agent", "updater")  # its spend shows under an unknown agent, its tool use under its own
             expect(tools).to_have_count(1)
-            expect(page.locator("#wrong")).to_contain_text("1 pointless missing-tool reports")
-            expect(page.locator("#wrong")).to_contain_text("0 denied by the guard")
+            expect(page.locator("#wrong")).to_contain_text("1 pointless missing-tool report")
+            expect(page.locator("#wrong")).to_contain_text("0 denials by the guard")
 
             pds.pick(page, "Agent", "")
             pds.pick(page, "Project", "owlbear")
             expect(page.locator("#total-credits")).to_contain_text("1.00 credits")
             expect(tools.nth(0)).to_contain_text("0%")
-            expect(page.locator("#wrong")).to_contain_text("2 denied by the guard")
+            expect(page.locator("#wrong")).to_contain_text("2 denials by the guard")
             page.locator("#stopped").click()
             expect(page.locator("#runs p-table-row")).to_have_count(1)
             pds.pick(page, "Period", "custom")

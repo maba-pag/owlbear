@@ -186,7 +186,7 @@ def test_the_changes_tool_calls_show_under_its_spend_most_called_first(page_url,
             page.get_by_text("submit_result: 3 calls, 67% succeeded, 33% refused (1 not split), 1 retry")
         ).to_be_visible()
         expect(page.get_by_text("ask_question: 1 call, 100% succeeded, 0% refused, 0 retries")).to_be_visible()
-        expect(page.get_by_text("Wrong tool choices: 2 denied by the guard")).to_be_visible()
+        expect(page.get_by_text("Wrong tool choices: 2 denials by the guard")).to_be_visible()
     with opened(base, "idle", pds) as page:  # no call counted, yet its wrong choices show
         page.get_by_text("Tool calls (0)").click()
         expect(page.get_by_text("Wrong tool choices: 2 turns without a result")).to_be_visible()

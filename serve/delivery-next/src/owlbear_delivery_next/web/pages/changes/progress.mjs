@@ -22,15 +22,16 @@ export function spendLines(spend) {
 
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 const SPLIT = [["invalid", "invalid arguments"], ["checks", "failed checks"], ["order", "at the wrong moment"]];
-const WRONG = [["order", "at the wrong moment"], ["denied", "denied by the guard"],
-  ["no_result", "turns without a result"], ["missing_pointless", "pointless missing-tool reports"]];
+const WRONG = [["order", "call at the wrong moment", "calls at the wrong moment"],
+  ["denied", "denial by the guard", "denials by the guard"], ["no_result", "turn without a result",
+    "turns without a result"], ["missing_pointless", "pointless missing-tool report", "pointless missing-tool reports"]];
 
 // C-28 T8: a line per Delivery tool, most called first: the share accepted, the share refused (lint-only refusals
 // apart) split by cause, older records' refusals unsplit; then the run's wrong tool choices.
 export function toolLines(use) {
   const used = Object.entries(use?.tools ?? {}).filter(([, t]) => t.calls).sort(([, a], [, b]) => b.calls - a.calls);
   const wrong = { ...(use?.wrong ?? {}), order: used.reduce((n, [, t]) => n + (t.order || 0), 0) };
-  const wrongs = WRONG.filter(([k]) => wrong[k]).map(([k, label]) => `${wrong[k]} ${label}`);
+  const wrongs = WRONG.filter(([k]) => wrong[k]).map(([k, one, many]) => plural(wrong[k], one, many));
   if (!used.length && !wrongs.length) return nothing;
   const lines = used.map(([tool, t]) => {
     const pct = (n) => `${Math.round((100 * n) / t.calls)}%`;
