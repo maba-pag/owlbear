@@ -246,7 +246,7 @@ def test_a_release_pinning_another_pack_is_newer_with_updating_by_itself_off_and
     head = git(runtime, "rev-parse", "HEAD")
     released(origin, "v0.3", '{"pack": "p-new"}')
     fetched, target = [], versions.target
-    monkeypatch.setattr(versions, "target", lambda: fetched.append(1) or target())
+    monkeypatch.setattr(versions, "target", lambda channel=None: fetched.append(1) or target(channel))
 
     said = impeccable.look()
 

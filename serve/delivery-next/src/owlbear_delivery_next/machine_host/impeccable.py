@@ -60,7 +60,7 @@ def _found() -> dict[str, Any]:
     """One look: the version this machine would take on its channel and the pack it pins; fetches."""
     channel = _channel()
     try:
-        choice = versions.target()
+        choice = versions.target(channel)  # the channel kept with the look is the one it ran on
     except (versions.VersionError, registry.RegistryError) as exc:
         return {"state": "unknown", "detail": f"the versions could not be read: {exc}"}
     if choice is None or not choice.tag:
