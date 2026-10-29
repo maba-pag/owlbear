@@ -207,6 +207,7 @@ async def managed(st: _Step) -> AsyncIterator[None]:
         yield
     except BaseException:
         propagating = True
+        st.finish("error", detail="interrupted")  # a stop ends the step first: its teardown's idle is no wrong choice
         raise
     finally:
         termination, cancelled = (

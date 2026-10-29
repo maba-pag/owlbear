@@ -174,6 +174,36 @@ def test_cancellation_during_start_still_stops_the_owned_client(world):
     assert any(str(ROOT) in event.get("pids", {}) for event in world.events)
 
 
+def test_a_turn_cut_off_by_a_stop_is_no_wrong_choice(world, monkeypatch):
+    data = SimpleNamespace(model="gpt-6-luna", parent_tool_call_id=None)
+
+    async def opened(_client, st):
+        world.steps.append(st)
+        st.session = world.session
+        return world.session
+
+    async def disconnect():
+        world.disconnects += 1
+        world.steps[0].on_event(SimpleNamespace(type="session.idle", data=data))
+
+    world.session.disconnect = disconnect
+    monkeypatch.setattr(sdk_adapter, "_open", opened)
+
+    async def scenario():
+        task = asyncio.create_task(sdk_adapter.run(world.cfg))
+        async with asyncio.timeout(2):
+            while not world.steps:  # noqa: ASYNC110 - the open records its step; nothing signals it
+                await asyncio.sleep(0.01)
+        world.steps[0].on_event(SimpleNamespace(type="assistant.turn_start", data=data))
+        await asyncio.sleep(0.01)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+    asyncio.run(scenario())
+    assert (world.disconnects, world.steps[0].run.wrong) == (1, {})
+
+
 def test_repeated_cancellation_during_stop_does_not_cancel_cleanup(world):
     world.hold_stop = True
 
