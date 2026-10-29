@@ -353,6 +353,13 @@ def test_the_read_back_queue_asks_with_one_primary_and_withdrawing_is_never_it(s
         expect(queue.locator('p-button[variant="primary"]')).to_have_text(["Still right"])  # the lead's only
         expect(queue.locator(".queued").first.locator('p-button[variant="primary"]')).to_have_count(1)
         item = queue.locator(".queued").nth(1)
+        failing = re.compile(r".*/decisions/D-[^/?]+(\?.*)?$")
+        page.route(failing, lambda route: route.fulfill(status=503, body="down"))
+        with page.expect_response(failing):
+            item.get_by_role("button", name="Replace or withdraw").click()
+        expect(queue.locator('p-button[variant="primary"]')).to_have_text(["Still right"])  # a failed read keeps it
+        page.unroute(failing)
+        item.get_by_role("button", name="Close").click()
         item.get_by_role("button", name="Replace or withdraw").click()
         expect(item.locator("#detail")).to_be_visible()
         expect(queue.locator('.queued > .row p-button[variant="primary"]')).to_have_count(0)  # its actions lead
@@ -361,6 +368,11 @@ def test_the_read_back_queue_asks_with_one_primary_and_withdrawing_is_never_it(s
         dialog = pds.modal(page)
         expect(dialog.locator('p-button[variant="primary"]')).to_have_text(["Cancel"])  # declining leads
         expect(dialog.locator("p-button", has_text="Withdraw")).to_have_attribute("variant", "secondary")
+        dialog.get_by_role("button", name="Cancel").click()
+        item.get_by_role("button", name="Read back").click()
+        pds.modal(page).get_by_role("button", name="Confirm as it reads").click()
+        expect(queue.locator(".queued")).to_have_count(1)
+        expect(queue.locator('p-button[variant="primary"]')).to_have_text(["Still right"])  # the one left leads again
 
 
 @pytest.mark.browser

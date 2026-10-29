@@ -188,6 +188,9 @@ function primary(e) {
   return e.conflict || e.rivals.length ? "keep" : "read-back";
 }
 
+// Whether the open detail holds its panel's primary: an open form's, or the decision's own action.
+export const leads = (e) => Boolean(state.form || primary(e));
+
 export function actions(e) {
   const busy = (a) => state.pending === a, parts = [], first = primary(e);
   const opens = (label, action) => button(label, () => begin(action), { variant: "secondary" });

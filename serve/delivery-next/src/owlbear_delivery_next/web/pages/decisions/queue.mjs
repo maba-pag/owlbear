@@ -1,6 +1,7 @@
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { repeat } from "/assets/lit-html/3.3.3/directives/repeat.js";
 import { call } from "/assets/ui.mjs";
+import { leads } from "./actions.mjs";
 import { detail, open } from "./entry.mjs";
 import { refresh } from "./list.mjs";
 import { at, KINDS, notify, sameAddress, scopeOf, show, state, untagged, WRITE } from "./state.mjs";
@@ -29,10 +30,12 @@ async function answer(q, address, action, body = {}) {
 }
 
 // The queue asks with one primary (D-01M63C7BJZZ7RQV9XS4XVR0DNE): the *lead* read-back's answer, Still right, or
-// Open to resolve for a derived one; while a read-back is open, its own actions hold the primary instead.
+// Open to resolve for a derived one; once a read-back opened in it shows its detail and that asks, its actions hold
+// it instead.
+const isOpen = (q, address) => state.opened === q.id && state.from === "queue" && sameAddress(state.address, address);
+
 function item(q, address, lead) {
-  const busy = (a) => state.pending === `${a}:${q.id}`,
-    opened = state.opened === q.id && state.from === "queue" && sameAddress(state.address, address);
+  const busy = (a) => state.pending === `${a}:${q.id}`, opened = isOpen(q, address);
   const choices = [
     q.derived ? nothing : button("Still right", () => answer(q, address, "read-back", { confirmed: true }),
       { variant: lead ? "primary" : "secondary", busy: busy("read-back") }),
@@ -57,12 +60,13 @@ function item(q, address, lead) {
 // The read-backs waiting in this scope, first on the page (TD-427): most urgent first, then oldest; ignoring one
 // leaves its rule in force as recorded.
 export function queue() {
-  const waiting = state.loaded.queue ?? [], reading = state.opened && state.from === "queue";
+  const waiting = state.loaded.queue ?? [], address = state.loaded.address;
+  const reading = state.entry && waiting.some((q) => isOpen(q, address)) && leads(state.entry);
   return html`<section id="queue" aria-labelledby="queue-heading">
     <p-heading size="lg"><h2 id="queue-heading">Read-backs (${waiting.length})</h2></p-heading>
     ${state.notice ? html`<p-text id="notice" role="status" size="sm">${untagged(state.notice)}</p-text>` : nothing}
     ${waiting.length ? html`<ul class="entries" id="read-backs">${repeat(waiting, (q) => q.id,
-      (q, i) => item(q, state.loaded.address, i === 0 && !reading))}</ul>`
+      (q, i) => item(q, address, i === 0 && !reading))}</ul>`
       : html`<p-text size="sm" color="contrast-medium">No decision waits to be read back.</p-text>`}
   </section>`;
 }
