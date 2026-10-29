@@ -129,7 +129,10 @@ LONG = "packages/frontend-components-library"
         (["cd unrelated && cd packages/b && npm test"], [PLACED], [PLACED]),  # a placed check gets no second cd
         (["cd /packages/b && npm test"], [PLACED], [PLACED]),  # another directory
         (['cd "packages/b\'" && npm test'], [PLACED], [PLACED]),
+        (["cd #package && npm test"], ["npm test"], ["npm test"]),  # the shell comments the test out
+        (["cd packages/b>cd.log && npm test"], ["npm test", PLACED], ["npm test", PLACED]),  # still packages/b
         (["npm  test "], ["npm test"], []),
+        (["cd '#package' && npm test"], ["npm test"], []),
         (["cd packages/app && npm test"], ["npm test"], []),  # run from its package directory
         ([QUOTED], ["npm test"], []),
         (['cd "my app\'s" && npm test'], [QUOTED], []),
