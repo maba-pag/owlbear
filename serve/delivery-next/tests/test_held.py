@@ -17,7 +17,7 @@ from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_contracts.round_records import RoundLoop, RoundPolicy
 from owlbear_delivery_next.change_flow import loop, moves
 from owlbear_delivery_next.change_flow.status import Activity
-from owlbear_delivery_next.commands import runner
+from owlbear_delivery_next.commands import cli, runner
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.project_host import api, pack_routes
 from owlbear_delivery_next.runtimes import session_result
@@ -216,7 +216,7 @@ def test_an_accept_takes_only_the_hold_its_question_offered(gated):
     assert held.take(store, Lock("c1"), c) is None
 
 
-def test_accept_is_offered_and_taken_only_while_the_hold_matches(gated, clone):
+def test_accept_is_offered_and_taken_only_while_the_hold_matches(gated, clone, monkeypatch, capsys):
     store, c = gated
     q = loop.open_question(c)
     assert [o.id for o in held.offered(store, c, q)] == ["accept", "retry"]
@@ -229,9 +229,17 @@ def test_accept_is_offered_and_taken_only_while_the_hold_matches(gated, clone):
     assert [o.id for o in held.offered(store, c, q)] == ["retry"]
     shown = client.get("/api/next/changes/c1").json()["question"]
     assert [o["id"] for o in shown["options"]] == ["retry"]
+    monkeypatch.setattr(cli.Store, "open", lambda *_a, **_k: store)
+    assert cli.main(["--repo", str(clone), "show", "c1"]) == 0  # the console shows what the page shows (#676)
+    printed = capsys.readouterr().out
+    assert (f"{q.id} option retry" in printed, f"{q.id} option accept" in printed) == (True, False)
+    assert cli.main(["--repo", str(clone), "answer", "c1", "--question", q.id, "--option", "accept"]) == 1
+    assert "no longer matches" in capsys.readouterr().err
     refused = client.post("/api/next/changes/c1/answers", json={"question": q.id, "option": "accept"})
     assert (refused.status_code, "no longer matches" in refused.json()["detail"]) == (409, True)
     assert client.post("/api/next/changes/c1/answers", json={"question": q.id, "option": "retry"}).status_code == 200
+    with store.db.read() as db:
+        assert db.execute("SELECT count(*) FROM inbox").fetchone()[0] == 1  # the retry only
 
 
 def test_a_result_whose_commit_is_no_longer_head_is_not_held(tmp_path, clone, monkeypatch):

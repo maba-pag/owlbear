@@ -45,7 +45,7 @@ from owlbear_delivery_next.change_contracts.visual_records import (
 )
 from owlbear_delivery_next.change_flow import brief_tools, loop
 from owlbear_delivery_next.change_flow.status import Activity
-from owlbear_delivery_next.commands import runner
+from owlbear_delivery_next.commands import cli, runner
 from owlbear_delivery_next.design_packs import design_pack, design_tools, detector
 from owlbear_delivery_next.local_system import processes
 from owlbear_delivery_next.project_host import api, host
@@ -693,6 +693,55 @@ def test_the_owner_decides_a_round_with_pass_or_fail_bound_to_its_capture(flow):
     assert (len(flow.review.calls), done.visual.passed, done.step.kind) == (1, True, StepKind.MERGE)
     assert (done.visual_rounds[-1].outcome, done.owner_criteria) == ("merge", [])  # a Pass comment is a note only
     assert merge.visual_ok(done, head, [])
+
+
+def test_the_console_shows_a_round_and_decides_it_bound_to_its_capture(flow, capsys):
+    """#676: the console decides a visual round with the page's checks, bound to what ``show`` printed."""
+    flow.review.verdict = "unsure"
+    runner._visual(flow.store, Lock("c1"), checking(flow.store, flow.clone), flow.clone)  # noqa: SLF001
+    asked = flow.store.read("c1")
+    q, kept = loop.open_question(asked), asked.visual_rounds[-1]
+    made = [
+        JudgeFinding(id="design-1", state="home", width=1280, text="cramped card", severity="P1", introduced=True),
+        JudgeFinding(id="design-2", state="home", width=1280, text="old gap", severity="P3", introduced=False),
+    ]
+    kept.verdicts = [
+        JudgeVerdict(lens="correctness", verdict="unsure", reason="does it wrap?", usage_verified=True),
+        JudgeVerdict(lens="design", verdict="fail", findings=made, usage_verified=True),
+    ]
+    flow.store.write(Lock("c1"), asked)
+    assert decision.proposed(kept) == ["design-1"]  # what the page ticks for the owner
+    flow.mp.setattr(cli.Store, "open", lambda *_a, **_k: flow.store)
+
+    def said(*args: str) -> int:
+        return cli.main(["--repo", str(flow.clone), *args])
+
+    def inbox() -> int:
+        with flow.store.db.read() as db:
+            return db.execute("SELECT count(*) FROM inbox").fetchone()[0]
+
+    assert said("show", "c1") == 0
+    shown = capsys.readouterr().out
+    assert kept.pack
+    bound = ["--round", str(kept.number), "--head", kept.head, "--pack", kept.pack]
+    for line in (
+        f"visual round {kept.number} at {kept.head}, pack {kept.pack}",
+        "correctness unsure: does it wrap?",
+        "[x] design-1 P1 introduced home at 1280px: cramped card",
+        "[ ] design-2 P3 existing home at 1280px: old gap",
+        f"answer with {' '.join(bound)}; a Fail adds --finding ID or --text",
+    ):
+        assert line in shown
+    failing = ["answer", "c1", "--question", q.id, "--option", "fail", *bound]
+    assert (said(*failing), inbox()) == (1, 0)
+    assert "ticks a finding or says what is wrong" in capsys.readouterr().err
+    stale = [*failing[:-1], "older", "--finding", "design-1"]
+    assert (said(*stale), inbox()) == (1, 0)
+    assert "changed since the page was shown" in capsys.readouterr().err
+    assert said(*failing, "--finding", "design-1", "--finding", "design-2", "--text", "More air") == 0
+    c, _ = flow.store.fold(Lock("c1"), "c1", NOW)
+    owner = c.visual_rounds[-1].decision
+    assert (owner.outcome, owner.findings) == ("fail", ["design-1", "design-2"])
 
 
 def test_a_fail_sends_the_ticked_findings_back_and_its_comment_becomes_a_criterion_until_withdrawn(flow):

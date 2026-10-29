@@ -29,7 +29,7 @@ from owlbear_delivery_next.change_contracts.round_records import FINAL, Completi
 from owlbear_delivery_next.change_flow import loop, rebuilds, round_flow
 from owlbear_delivery_next.change_flow.moves import ask
 from owlbear_delivery_next.change_flow.status import Activity
-from owlbear_delivery_next.commands import runner
+from owlbear_delivery_next.commands import cli, runner
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.runtimes import step_input
@@ -195,6 +195,42 @@ def test_the_page_lists_the_plan_tasks_and_a_rebuild_is_bound_to_what_it_showed(
     assert answered(store, "accept", tasks=["t1"]).outcome.exit == Exit.ASK  # tasks belong to Rebuild only
     assert post("/api/next/changes/c1/answers", json=sent | {"tasks": ["t2", "t1"]}).status_code == 200
     c, _ = store.fold(Lock("c1"), "c1", NOW)  # the host's own item, as a runner folds it
+    assert (c.loops[FINAL].rebuild, at(c)) == (["t1", "t2"], (K.REVIEW, None, round_flow.RETRY))
+
+
+def test_the_console_shows_the_task_list_and_rebuilds_only_what_it_was_shown(tmp_path, clone, monkeypatch, capsys):
+    """#676: the console's Rebuild is checked and bound as the page's is, after showing what the page shows."""
+    store = Store(tmp_path / "store")
+    c = asked(clone)
+    c.brief = Brief(version=1, criteria=[Criterion(id="AC-1", text="rule AC-1")])
+    c.loops[FINAL].findings[2].text = "y.txt:2: AC-1 not met - fix: f"  # the open F3 names it
+    store.write(Lock("c1"), c)
+    q, head = loop.open_question(c), git(clone, "rev-parse", "HEAD")
+    assert rebuilds.shown(c, q)["unmet"] == ["AC-1: rule AC-1"]
+    monkeypatch.setattr(cli.Store, "open", lambda *_a, **_k: store)
+
+    def said(*args: str) -> int:
+        return cli.main(["--repo", str(clone), *args])
+
+    def inbox() -> int:
+        with store.db.read() as db:
+            return db.execute("SELECT count(*) FROM inbox").fetchone()[0]
+
+    assert said("show", "c1") == 0
+    shown = capsys.readouterr().out
+    for line in (
+        f"final retry attempt 1 at {head}",
+        "[ ] t1 one (shares files with t2)",
+        "[x] t2 two (shares files with t1)",
+        "unmet: AC-1: rule AC-1",
+        f"answer with --attempt 1 --head {head}; a Rebuild adds --task ID for each task",
+    ):
+        assert line in shown
+    rebuilding = ["answer", "c1", "--question", q.id, "--option", "rebuild", "--attempt", "1"]
+    assert (said(*rebuilding, "--task", "t1", "--head", "b" * 40), inbox()) == (1, 0)
+    assert "moved on since the page was shown" in capsys.readouterr().err
+    assert said(*rebuilding, "--task", "t2", "--task", "t1", "--head", head) == 0
+    c, _ = store.fold(Lock("c1"), "c1", NOW)
     assert (c.loops[FINAL].rebuild, at(c)) == (["t1", "t2"], (K.REVIEW, None, round_flow.RETRY))
 
 
