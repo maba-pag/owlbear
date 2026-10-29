@@ -132,6 +132,7 @@ LONG = "packages/frontend-components-library"
         (["cd #package && npm test"], ["npm test"], ["npm test"]),  # the shell comments the test out
         (["cd packages/b>cd.log && npm test"], ["npm test", PLACED], ["npm test", PLACED]),  # still packages/b
         (["npm  test "], ["npm test"], []),
+        (["grep -q 'AC 1' a.txt"], ["grep -q 'AC  1' a.txt"], ["grep -q 'AC  1' a.txt"]),  # tests other text
         (["cd '#package' && npm test"], ["npm test"], []),
         (["cd packages/app && npm test"], ["npm test"], []),  # run from its package directory
         ([QUOTED], ["npm test"], []),

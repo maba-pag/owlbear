@@ -18,14 +18,22 @@ if TYPE_CHECKING:
 # One literal shell word: unquoted, only what shlex.quote leaves bare, so no comment, redirect or expansion.
 WORD = r"""(?:\\.|[\w@%+=:,./-]|'[^']*'|"(?:[^"\\$`]|\\.)*")+"""
 CD_CHECK = re.compile(rf"cd\s+({WORD})\s*&&\s*(\S.*)", re.DOTALL)
+SPACE = re.compile(r"""('[^']*'|"(?:[^"\\]|\\.)*"|\\.)|\s+""", re.DOTALL)
+
+
+def _squeeze(command: str) -> str:
+    """*command* with each run of whitespace outside quotes and escapes made one space, and none at either end."""
+    ends = (0, len(command))
+    return SPACE.sub(lambda m: m[1] or ("" if m.start() in ends or m.end() in ends else " "), command)
 
 
 def _form(command: str) -> tuple[str | None, str]:
-    """*command* as (directory, command): `cd <dir> && <cmd>` split with its quoting undone; whitespace collapsed."""
-    found = CD_CHECK.fullmatch(command.strip())
+    """*command* as (directory, command): `cd <dir> && <cmd>` split with its quoting undone; whitespace squeezed."""
+    said = _squeeze(command)
+    found = CD_CHECK.fullmatch(said)
     if not found:
-        return None, " ".join(command.split())
-    return PurePosixPath(shlex.split(found[1])[0] or ".").as_posix(), " ".join(found[2].split())
+        return None, said
+    return PurePosixPath(shlex.split(found[1])[0] or ".").as_posix(), found[2]
 
 
 def ran(check: str, command: str, checks: Sequence[str]) -> bool:
@@ -41,7 +49,7 @@ def ran(check: str, command: str, checks: Sequence[str]) -> bool:
 def alone(check: str, packages: Sequence[tuple[str, str]]) -> str:
     """For `cd <dir> && <cmd>` where <cmd> is the profile check of the package in <dir>: write <cmd> alone; else ""."""
     where, command = _form(check)
-    said = [c for p, c in packages if where is not None and (_package(p), " ".join(c.split())) == (where, command)]
+    said = [c for p, c in packages if where is not None and (_package(p), _squeeze(c)) == (where, command)]
     return f'write the command alone: "{said[0]}"; the Builder runs it from that package\'s directory' if said else ""
 
 
