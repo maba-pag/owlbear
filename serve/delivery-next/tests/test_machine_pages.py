@@ -916,6 +916,12 @@ def test_old_update_addresses_open_the_updates_pages_and_back_and_reload_keep_th
         page.goto(f"{base}/config#machine-title")  # stays: a project page names its project and keeps the section
         expect(page).to_have_url(f"{base}/config?project={a.id}#machine-title")
         expect(page.locator("#machine-title")).to_be_visible()
+        page.evaluate("location.hash = 'pack'")  # only the fragment changes: the page is not loaded again
+        expect(page).to_have_url(f"{base}/updates/impeccable?project={a.id}")
+        page.goto(f"{base}/maintenance?project={a.id}")
+        expect(page.get_by_role("heading", level=1)).to_have_text("Maintenance")
+        page.evaluate("location.hash = 'owlbear'")
+        expect(page).to_have_url(f"{base}/updates/owlbear?project={a.id}")
 
         page.route("**/api/next/updates", lambda route: route.abort())
         page.goto(f"{base}/updates/pds?project={a.id}")

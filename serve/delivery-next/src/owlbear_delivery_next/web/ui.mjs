@@ -11,8 +11,13 @@ if (hash.get("token")) {
 }
 // Sections that moved to Menu ▸ Updates (D-01M63C5VGFWJ709X2GA0CE8Q5B): their old addresses open the new pages.
 const MOVED = { "/maintenance#owlbear": "/updates/owlbear", "/config#pack": "/updates/impeccable" };
-if (MOVED[location.pathname + location.hash]) {
-  location.replace(MOVED[location.pathname + location.hash] + location.search);  // ?project= stays
+const moved = () => MOVED[location.pathname + location.hash];
+function move() {  // the address bar's own fragment change does not load the page again
+  if (moved()) location.replace(moved() + location.search);  // ?project= stays
+}
+addEventListener("hashchange", move);
+if (moved()) {
+  move();
   await new Promise(() => {});
 }
 export const token = sessionStorage.getItem("token");
