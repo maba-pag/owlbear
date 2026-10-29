@@ -503,6 +503,10 @@ def test_run_updates_now_hands_a_running_host_over_to_the_new_version_end_to_end
         assert (local_home.root() / local_home.RUNTIME).resolve() == folder.resolve()
         assert registry.load().active == "v0.2"
         assert lines[-1] == "OwlBear now runs v0.2"
+        steps = {s["key"]: s["state"] for s in (control._api("update") or {}).get("steps", [])}  # noqa: SLF001
+        assert {k: steps.get(k) for k in ("looking", "standby", "health", "switching", "handover")} == dict.fromkeys(
+            ("looking", "standby", "health", "switching", "handover"), "done"
+        )  # the old host's steps, and the handover the new one ended
     finally:
         control.stop(lambda _s: None)
 
