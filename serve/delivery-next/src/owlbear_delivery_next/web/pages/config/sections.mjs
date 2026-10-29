@@ -46,11 +46,12 @@ function scopeSection() {
   </section>`;
 }
 
-// Why another project may not open now: edits of either layer or a folder name typed and not saved.
+// Why this page may not be left now (another page or project): edits of either layer or a folder name typed and not
+// saved.
 export function unsaved() {
   const folder = state.folder !== null && state.folder.trim() !== (state.loaded?.folder ?? "");
   return Object.values(drafts).some((d) => Object.keys(d).length) || folder || state.machineDraft
-    ? "Save or discard your edits before you open another project." : "";
+    ? "Save or discard your edits before you leave this page." : "";
 }
 
 // A value in the overview: a list or a record in full, never "[object Object]".

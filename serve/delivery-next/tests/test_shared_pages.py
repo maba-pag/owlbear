@@ -437,19 +437,21 @@ def every_machine_s_settings_are_saved_with_the_global_layer(page, pds, shared: 
 
 
 def unsaved_edits_keep_the_page(page, here: str, pds) -> None:
-    """No project choice, removal or addition leaves a page with unsaved edits."""
+    """No project choice, top-row link or menu link leaves a page with unsaved edits (D-01M63C8DA1D95Z7M9ZYWVYYNF7)."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     pds.pick(page, "Layer", f"go:{SHOP}")
     expect(page.locator("#error")).to_contain_text("Save or discard your edits")
     expect(pds.select(page, "Layer")).to_have_js_property("value", "project")
-    pds.pick(page.locator("#machine"), "Project", SHOP)
-    expect(page.locator("#machine > [role=alert]")).to_contain_text("Save or discard your edits")
-    page.locator("#machine").get_by_role("button", name="Remove project").click()
-    expect(page.get_by_role("dialog")).to_have_count(0)
-    page.locator("#machine summary").click()
-    page.locator("#machine").get_by_label("Folder").fill("/elsewhere")
-    page.locator("#machine").get_by_role("button", name="Add").click()
+    pds.pick(page.locator(".top"), "Project", SHOP)
+    said = page.locator("#machine > [role=alert]")
+    expect(said).to_have_text("Save or discard your edits before you leave this page.")
+    expect(pds.select(page.locator(".top"), "Project")).to_have_js_property("value", DOCS)
+    page.locator(".top nav").get_by_role("link", name="Backlog").click()
+    page.get_by_role("button", name="Menu").click()
+    page.locator("p-drilldown").get_by_role("link", name="Projects").click()
+    expect(page.locator("p-drilldown").get_by_role("link")).to_have_count(0)  # closed, so the reason shows
+    expect(said).to_be_visible()
     expect(page).to_have_url(here)
     expect(page.get_by_label("Rounds at most, builder")).to_have_value("4")
 
