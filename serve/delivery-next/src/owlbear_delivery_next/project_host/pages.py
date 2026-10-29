@@ -51,13 +51,20 @@ def lit_version() -> str:
     return first.splitlines()[0].removeprefix("lit-html ")
 
 
+def pds_version() -> str:
+    """The vendored PDS release, from its loader's header, as its URLs name it, so an update never hits a cache."""
+    first = files("owlbear_delivery_next").joinpath("web", "pds", "load.mjs").read_text(encoding="utf-8")
+    return first.split(None, 3)[2]
+
+
 def assets(app: FastAPI) -> None:
     """Serve the design system, lit-html and the pages' scripts: fixed names only, never a path from the URL."""
     web, lit, release, own = files("owlbear_delivery_next").joinpath("web"), lit_files(), lit_version(), page_files()
+    pds_release = pds_version()
 
-    @app.get("/assets/pds/{name}")
-    def pds(name: str) -> Response:
-        if name not in PDS:
+    @app.get("/assets/pds/{version}/{name}")
+    def pds(version: str, name: str) -> Response:
+        if version != pds_release or name not in PDS:
             raise HTTPException(404, "no such asset")
         body = web.joinpath("pds", name).read_bytes()
         return Response(body, media_type=PDS[name], headers={"Cache-Control": "max-age=3600"})
