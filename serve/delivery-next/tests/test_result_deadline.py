@@ -408,18 +408,23 @@ def test_cleanup_confirms_no_owned_request_remains_before_releasing_termination(
     asyncio.run(scenario())
 
 
+def ended_turn(step):
+    data = SimpleNamespace(model="synthetic-model", parent_tool_call_id=None)
+    for kind in ("assistant.turn_start", "session.idle"):
+        step.on_event(SimpleNamespace(type=kind, data=data))
+
+
 @pytest.mark.usefixtures("clock")
 @pytest.mark.parametrize("answers", [True, False])
 def test_each_turn_ended_without_a_result_is_a_wrong_choice(tmp_path, answers):
     async def scenario():
         step = STEP(dataclasses.replace(configured(tmp_path), limit=100), asyncio.get_running_loop())
-        step.idle = True
+        ended_turn(step)
 
         async def reminding():
             if answers:
                 step.gate.call(step.cfg.submit, PAYLOAD.model_dump())
-            else:
-                step.idle = True
+            ended_turn(step)
 
         async def listing():
             return SimpleNamespace(tasks=[])
@@ -434,9 +439,7 @@ def test_each_turn_ended_without_a_result_is_a_wrong_choice(tmp_path, answers):
 def test_a_turn_ended_without_a_result_counts_when_the_snapshot_crosses_the_deadline(tmp_path, clock):
     async def scenario():
         step = STEP(configured(tmp_path), asyncio.get_running_loop())
-        data = SimpleNamespace(model="synthetic-model", parent_tool_call_id=None)
-        for kind in ("assistant.turn_start", "session.idle"):
-            step.on_event(SimpleNamespace(type=kind, data=data))
+        ended_turn(step)
 
         async def listing():
             clock.now += 1
@@ -447,3 +450,23 @@ def test_a_turn_ended_without_a_result_counts_when_the_snapshot_crosses_the_dead
 
     run = asyncio.run(scenario())
     assert (run.ending, run.wrong) == ("deadline", {"no_result": 1})
+
+
+@pytest.mark.usefixtures("clock")
+def test_a_turn_ended_without_a_result_counts_when_the_step_is_stopped_during_the_snapshot(tmp_path):
+    async def scenario():
+        step = STEP(dataclasses.replace(configured(tmp_path), limit=100), asyncio.get_running_loop())
+        ended_turn(step)
+        listed = asyncio.Event()
+
+        async def listing():
+            listed.set()
+            await asyncio.Event().wait()
+
+        waiting = asyncio.create_task(step.wait(Session(listing)))
+        await asyncio.wait_for(listed.wait(), 1)
+        waiting.cancel()
+        await asyncio.gather(waiting, return_exceptions=True)
+        return step.run
+
+    assert asyncio.run(scenario()).wrong == {"no_result": 1}

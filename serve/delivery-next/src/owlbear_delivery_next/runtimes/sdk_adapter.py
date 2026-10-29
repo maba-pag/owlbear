@@ -189,8 +189,8 @@ class _Step:
         elif kind == "skill.invoked":
             self.skill_seen(ev.data)
         elif kind == "session.idle" and self.turn:
-            self.turn, self.idle = False, True
-            self._wake()
+            self.turn = False
+            step_budget.idled(self)
         elif kind == "tool.execution_start":
             self.now(getattr(ev.data, "tool_name", "") or "tool", getattr(ev.data, "arguments", None))
         elif kind in {"session.quota_observation", "session.error"}:
