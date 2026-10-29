@@ -313,6 +313,10 @@ def test_a_release_pinning_the_same_pack_shows_nothing_and_an_unreadable_one_sta
     said = impeccable.look()
     assert (said["state"], said["version"]) == ("unknown", "v0.4")
     assert "Impeccable is unreadable" in said["detail"]
+    checks = update_checks.Checks(SimpleNamespace(say=print), spawn=lambda work: work())
+    checks.start("owlbear")
+    row = next(u for u in checks.read()["updates"] if u["name"] == "owlbear")
+    assert (row["state"], row["latest"], "Impeccable is unreadable" in row["detail"]) == ("newer", "v0.4", True)
 
 
 def test_a_runtime_from_before_the_rename_sees_a_renamed_release_as_unknown_not_failed(origin, monkeypatch):

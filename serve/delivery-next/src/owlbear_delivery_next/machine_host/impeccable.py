@@ -68,7 +68,8 @@ def _found() -> dict[str, Any]:
     try:
         pins = versions.pins(choice.commit)
     except versions.VersionError as exc:
-        return {"state": "unknown", "version": choice.tag, "detail": f"{choice.tag}'s Impeccable is unreadable: {exc}"}
+        detail = f"{choice.tag}'s Impeccable is unreadable: {exc}"
+        return {"state": "unknown", "version": choice.tag, "detail": detail, "channel": channel}
     return {"state": "found", "version": choice.tag, "commit": choice.commit, "pins": pins, "channel": channel}
 
 
