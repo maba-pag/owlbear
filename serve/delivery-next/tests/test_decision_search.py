@@ -5,6 +5,7 @@ from __future__ import annotations
 import subprocess
 import sys
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from types import SimpleNamespace
@@ -117,31 +118,53 @@ def test_searches_answer_their_own_snapshot_while_a_save_publishes_the_next(shar
     assert built == [old.snapshot]  # the replaced one answers from an index of its own
 
 
+# Its stderr goes to the test's timing log: marks per step and, past 10 s, every thread's stack (#795).
 CHILD = """
-import sys
+import faulthandler, sys, time
+faulthandler.dump_traceback_later(10, repeat=True)
+start = float(sys.argv[3])
+def mark(what):
+    print(f"{time.monotonic() - start:6.2f}s child {what}", file=sys.stderr, flush=True)
+mark("started")
 from pathlib import Path
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.project_host import decision_routes
+mark("imported")
 shared = DataRepo(Path(sys.argv[1]))
 app = FastAPI()
 app.include_router(decision_routes.router(lambda: shared, lambda: sys.argv[2], list))
-got = TestClient(app).get("/decisions", params={"text": sys.argv[3], "where": "project"}).json()
-print(" ".join(sorted(d["id"] for d in got["decisions"])))
+client = TestClient(app)
+for text in sys.argv[4:]:
+    got = client.get("/decisions", params={"text": text, "where": "project"}).json()
+    mark(f"found {text!r}")
+    print(" ".join(sorted(d["id"] for d in got["decisions"])))
 """
 
 
-def test_a_restarted_process_finds_the_committed_text_and_leaves_no_index_file(shared_repo) -> None:
-    shared, notes = DataRepo(shared_repo[0]), make()
-    save(shared, notes, expected_revision=None, message="m")
+def test_a_restarted_process_finds_the_committed_text_and_leaves_no_index_file(shared_repo, tmp_path) -> None:
+    shared, notes, log, start = DataRepo(shared_repo[0]), make(), tmp_path / "timing.log", time.monotonic()
 
-    def found(text: str) -> set[str]:
-        args = [sys.executable, "-c", CHILD, str(shared.root), PROJECT, text]
-        return set(subprocess.run(args, check=True, capture_output=True, text=True).stdout.split())  # noqa: S603
+    def mark(what: str) -> None:
+        with log.open("a") as out:
+            out.write(f"{time.monotonic() - start:6.2f}s test {what}\n")
 
-    assert (found("notes"), found("tags")) == ({notes.id}, set())
-    tags = make(title="Tags are free text", statement="Any tag.")
-    save(shared, tags, expected_revision=None, message="m")
-    assert (found("notes"), found("tags")) == ({notes.id}, {tags.id})
-    assert list(local_home.root().parent.glob("**/decisions.sqlite*")) == []
+    def found(*texts: str) -> list[set[str]]:
+        """A fresh process's answer to each text, in order."""
+        args = [sys.executable, "-c", CHILD, str(shared.root), PROJECT, str(start), *texts]
+        with log.open("a") as err:
+            out = subprocess.run(args, check=True, stdout=subprocess.PIPE, stderr=err, text=True).stdout  # noqa: S603
+        return [set(line.split()) for line in out.splitlines()]
+
+    try:
+        save(shared, notes, expected_revision=None, message="m")
+        mark("saved notes")
+        assert found("notes", "tags") == [{notes.id}, set()]
+        tags = make(title="Tags are free text", statement="Any tag.")
+        save(shared, tags, expected_revision=None, message="m")
+        mark("saved tags")
+        assert found("tags", "notes") == [{tags.id}, {notes.id}]
+        assert list(local_home.root().parent.glob("**/decisions.sqlite*")) == []
+    finally:  # also on pytest-timeout's Failed, a BaseException
+        sys.stderr.write(log.read_text() if log.exists() else "no timing log\n")
