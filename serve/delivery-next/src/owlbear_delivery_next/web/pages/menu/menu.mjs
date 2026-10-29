@@ -19,12 +19,15 @@ export const LINKS = [["/projects", "Projects"], ["/config", "Settings"], ["/mai
 const menu = { open: false, level: undefined, run: null };
 const root = document.getElementById("menu");
 const ENDED = ["idle", "current", "failed", "refused"];  // the OwlBear update's phases once it is not running
-const TONES = { Running: "secondary", "Waiting for you": "warning", Failed: "error", Available: "info" };
+const TONES = { Running: "secondary", "Waiting for you": "warning", "Host stopped": "warning", Failed: "error",
+  Available: "info" };
 
-// What the menu says of an update, in words: running (or waiting for the owner), failed, available.
+// What the menu says of an update, in words: running (or waiting for the owner, or its host stopped), failed,
+// available.
 function words(name) {
   const u = update(name), phase = machineState()?.update?.phase, run = name === "impeccable" ? menu.run : null;
   if (name === "owlbear" && phase && !ENDED.includes(phase)) return ["Running"];
+  if (run?.interrupted) return ["Host stopped"];  // it cannot go on until that project's host starts again
   if (run?.state === "running") return ["Running"];
   if (run?.state === "waiting") return ["Waiting for you"];
   const failed = (name === "owlbear" && phase === "failed") || run?.state === "failed" || Boolean(u?.reason);

@@ -876,6 +876,15 @@ def test_a_run_started_in_one_project_is_answered_from_another_and_from_all_proj
             assert url == f"{base}/p/{alpha.id}/api/next/impeccable/update/answer"
             assert body == {"question": "r1:end:1", "option": "activate", "note": ""}
 
+        def stopped(route) -> None:  # alpha's host stopped while it ran
+            run = route.fetch().json()["run"] | {"state": "running", "interrupted": True}
+            route.fulfill(json={"run": run})
+
+        page.route("**/maintenance/pack/runs", stopped)
+        page.get_by_role("button", name="Menu").click()
+        impeccable = page.locator("p-drilldown").get_by_role("link", name="Impeccable")
+        expect(impeccable.locator("p-tag")).to_have_text(["Host stopped"])
+
 
 @pytest.mark.browser
 def test_old_update_addresses_open_the_updates_pages_and_back_and_reload_keep_them(
