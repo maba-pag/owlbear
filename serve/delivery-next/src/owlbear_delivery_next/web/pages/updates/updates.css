@@ -6,7 +6,7 @@
   gap: var(--p-spacing-static-xs) var(--p-spacing-static-md); margin: 0; font-size: var(--p-typescale-sm); }
 .facts > div { display: contents; }
 .facts dt { color: var(--p-color-contrast-medium); }
-.facts dd { grid-column: -2; margin: 0; overflow-wrap: anywhere; }
+.facts dd { grid-column: -2; margin: 0; overflow-wrap: anywhere; text-wrap: pretty; }
 @media (max-width: 30rem) { .facts { grid-template-columns: minmax(0, 1fr); row-gap: 0; }
   .facts > div + div > dt { margin-block-start: var(--p-spacing-static-sm); } }
 #page a { color: inherit; text-underline-offset: .2em; }

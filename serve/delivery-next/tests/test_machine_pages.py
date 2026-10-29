@@ -731,7 +731,8 @@ def test_a_focused_remove_stays_with_its_project_when_the_list_changes_under_it(
 
 def checked(name: str, state: str, current: str, latest: str = "", **more) -> dict:
     """One update as ``GET /updates`` shows it, last checked successfully on 17 October."""
-    return {"name": name, "title": name, "actionable": True, "state": state, "available": state == "newer",
+    return {"name": name, "title": name, "actionable": name != "pds", "state": state,
+            "available": state == "newer" and name != "pds",
             "current": current, "latest": latest or current, "detail": "", "checked_at": "2026-10-17T04:00:00+00:00",
             "attempted_at": "2026-10-17T04:00:00+00:00", "failures": 0, "reason": "", "checking": False, "hours": 24,
             "next_at": "2026-10-18T04:00:00+00:00"} | more  # fmt: skip
