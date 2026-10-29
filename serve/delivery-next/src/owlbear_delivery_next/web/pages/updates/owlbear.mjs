@@ -40,7 +40,7 @@ async function start() {
     after: "Delivery stays paused or running as it is. A failure before the switch leaves this version running. Once "
       + "switched there is no undo: OwlBear never goes back to an older version; a fix comes with a later one.",
     instead: `OwlBear keeps running ${machineState()?.updated || "this version"}; whether it updates by itself is set `
-      + "in Settings, This machine." });
+      + "in Settings → This machine." });
   if (!yes) return;
   Object.assign(own, { busy: true, error: "" });
   show();

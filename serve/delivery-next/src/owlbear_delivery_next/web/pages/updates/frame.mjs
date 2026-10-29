@@ -38,7 +38,7 @@ async function searching(name) {
   own.show();
 }
 
-export function settingsLink(label = "Settings ▸ This machine") {
+export function settingsLink(label = "Settings → This machine") {
   return html`<a href=${here({}, SETTINGS)}>${label}</a>`;
 }
 

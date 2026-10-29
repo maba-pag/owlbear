@@ -275,7 +275,7 @@ function when(iso) {
 }
 
 function updates(name, label) {  // the Updates page a note leads to
-  return html`<a href=${here({}, `/updates/${name}`)}>Updates ▸ ${label}</a>`;
+  return html`<a href=${here({}, `/updates/${name}`)}>Updates → ${label}</a>`;
 }
 
 // D-01M61GW2EAHFFRFHF014A14K98: every page says when this version's Impeccable is missing or failed to install,

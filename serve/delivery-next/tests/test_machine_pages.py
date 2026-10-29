@@ -361,6 +361,7 @@ def test_every_page_shows_the_impeccable_banners_and_install_says_refused_runnin
             state["release"] = state["release"] | {"checked_at": None}
             page.goto(f"{base}/memory#token=t")  # every page
             expect(newer).to_contain_text("When it was checked is unknown.")
+            expect(newer.get_by_role("link")).to_have_text("Updates → OwlBear")  # the pages' one separator
             newer.get_by_role("button", name="Update now").click()
             expect(pds.modal(page)).to_contain_text("Run updates now?")
             browser.close()
@@ -779,6 +780,7 @@ def test_updates_owlbear_marks_the_menu_refuses_start_while_work_runs_and_the_ma
         expect(page.locator("#owlbear-steps > li")).to_have_count(10)
         expect(page.locator("#owlbear-log-box summary")).to_have_text("Log of the update (1 line)")
         expect(page.locator("#owlbear-log")).to_be_hidden()  # folded
+        expect(page.locator("#check-settings").get_by_role("link")).to_have_text("Settings → This machine")
         page.get_by_role("button", name="Search for updates").click()
         until(page, lambda: searched == ["owlbear"])
         assert targets(page.locator("#page p-button, #page a, #page summary")) == []

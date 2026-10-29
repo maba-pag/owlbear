@@ -190,7 +190,7 @@ export function machineSection() {
       use while nothing runs, announced on open pages 2 minutes ahead; Run updates now on a paused page or
       <code>owlbear update</code> updates at once.</p-text>
     <p-text id="machine-owlbear" size="sm">The updates themselves, with their steps and Search for updates, are in
-      Menu ▸ Updates: <a href=${here({}, "/updates/owlbear")}>OwlBear</a>,
+      Menu → Updates: <a href=${here({}, "/updates/owlbear")}>OwlBear</a>,
       <a href=${here({}, "/updates/pds")}>Porsche Design System</a> and
       <a href=${here({}, "/updates/impeccable")}>Impeccable</a>.</p-text>
   </section>`;
