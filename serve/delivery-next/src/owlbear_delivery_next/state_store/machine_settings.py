@@ -11,7 +11,6 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import Field
 
-from owlbear_delivery_next.change_contracts.models import Record
 from owlbear_delivery_next.local_system import data_repo
 from owlbear_delivery_next.settings.config import GlobalLayer, MachineValues
 from owlbear_delivery_next.state_store import registry
@@ -24,20 +23,9 @@ FIELDS: tuple[str, ...] = tuple(MachineValues.model_fields)
 BASE: MachineValues | None = None  # a layer under Global; empty in production (no code defaults), tests set one
 
 
-class Resolved(Record):
+class Resolved(MachineValues):
     """Each machine setting in force, ``None`` where unset; where it came from; what is unset; Global's own."""
 
-    channel: Literal["minor", "major"] | None = None
-    update_when_idle: bool | None = None
-    update_while_paused: bool | None = None
-    curate_after_merge: Literal["off", "on", "paused"] | None = None
-    curate_when_idle: Literal["off", "on", "paused"] | None = None
-    sessions: int | None = None
-    retro_run_credit_limit: float | None = None
-    replay_run_credit_limit: float | None = None
-    retro_after_change: Literal["off", "on", "paused"] | None = None
-    retro_when_idle: Literal["off", "on", "paused"] | None = None
-    enrolled_chats: list[str] | None = None
     sources: dict[str, Literal["machine", "global", "default"]] = Field(default_factory=dict)
     missing: list[str] = Field(default_factory=list)
     shared: dict[str, Any] = Field(default_factory=dict)  # Global's values, for the page's "inherit (…)"
