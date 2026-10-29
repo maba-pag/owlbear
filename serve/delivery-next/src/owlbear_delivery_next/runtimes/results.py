@@ -32,6 +32,7 @@ class Gate:
         """Bind the step's bounds, its run record, its activity log and the wake-up for its waiter."""
         self.cfg, self.run, self.log, self.ended = cfg, run, log, ended
         self.done = False
+        self.stopped = False  # a stop or error tears the step down: no call settles, and no lock is taken to say so
         self.expired: Callable[[], bool] | None = None
         self.lint = lint.Lint(log)
         self._refused: set[str] = set()  # the tools whose last call was refused, so their next call is a retry
@@ -51,6 +52,8 @@ class Gate:
             self.done, self.run.ending, self.run.payload, self.run.detail = True, ending, payload, detail
 
     def _closed(self) -> bool:
+        if self.stopped:
+            return True
         if not self.done and self.expired is not None and self.expired():
             self._finish("deadline", None, "step deadline")
         return self.done
