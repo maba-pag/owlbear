@@ -368,12 +368,18 @@ def test_maintenance_with_no_project_shows_the_machines_update_read_only_with_it
 
 
 def targets(scope) -> list[str]:
-    """WCAG 2.5.8: each shown control in *scope* that is smaller than 24 by 24 pixels, by its text."""
-    small = scope.evaluate_all(
-        "els => els.filter(e => e.checkVisibility()).filter(e => { const r = e.getBoundingClientRect();"
-        " return r.width < 24 || r.height < 24 })"
-        ".map(e => e.textContent.trim() || e.outerHTML.slice(0, 60))"
-    )
+    """WCAG 2.5.8: each shown control in *scope* still smaller than 24 by 24 pixels once the design system has laid it
+    out (under load that takes a moment), by its text."""
+    small = []
+    for _ in range(20):
+        small = scope.evaluate_all(
+            "els => els.filter(e => e.checkVisibility()).filter(e => { const r = e.getBoundingClientRect();"
+            " return r.width < 24 || r.height < 24 })"
+            ".map(e => e.textContent.trim() || e.outerHTML.slice(0, 60))"
+        )
+        if not small:
+            break
+        scope.page.wait_for_timeout(250)
     return list(small)
 
 
