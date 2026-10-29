@@ -22,7 +22,7 @@ from pydantic import Field
 
 from owlbear_delivery_next.change_contracts import chat_contract
 from owlbear_delivery_next.local_system import codebase, data_repo, leases, local_home
-from owlbear_delivery_next.machine_host import control, packs, versions
+from owlbear_delivery_next.machine_host import control, impeccable, versions
 from owlbear_delivery_next.machine_host.machine import Machine, MachineError
 from owlbear_delivery_next.project_host import (
     api,
@@ -31,6 +31,7 @@ from owlbear_delivery_next.project_host import (
     impact_routes,
     maintenance_routes,
     metrics_routes,
+    pack_routes,
     pages,
 )
 from owlbear_delivery_next.state_store import decision_impact, machine_settings, registry
@@ -164,7 +165,7 @@ def _routes(machine: Machine) -> APIRouter:
             "left": machine.left() if machine.ending else [],
             "update_while_paused": machine_settings.current().update_while_paused is True,
             "update": machine.updater.read(), "updated": machine.updated or versions.running(),
-            "announce": machine.auto.read(), "pack": machine.packs.read(),
+            "announce": machine.auto.read(), "pack": machine.impeccable.read(),
         }  # fmt: skip
 
     @routes.post("/projects")
@@ -338,20 +339,24 @@ def _update_routes(routes: APIRouter, machine: Machine) -> None:
 
 
 def _pack_routes(routes: APIRouter, machine: Machine) -> None:
-    """The design pack every page shows: missing or failed with Install, a newer one released with Update now."""
+    """Impeccable every page shows: missing or failed with Install, a newer one released with Update now."""
 
-    @routes.get("/design-pack")
+    @routes.get("/impeccable")
     def pack_state() -> dict[str, Any]:
         """The pack's banners: the running pack missing or a pack that failed (Install), a newer one released."""
-        return machine.packs.read()
+        return machine.impeccable.read()
 
-    @routes.post("/design-pack/install")
+    @routes.post("/impeccable/install")
+    @routes.post(f"{pack_routes.OLD}/install", include_in_schema=False)
     def install_pack() -> dict[str, Any]:
         """Install: the running version's pinned pack when missing, also with no newer version; a failed one's."""
-        return machine.packs.install()
+        return machine.impeccable.install()
 
-    @routes.post("/design-pack/look")
+    @routes.post("/impeccable/look")
+    @routes.post(f"{pack_routes.OLD}/look", include_in_schema=False)
     def look_pack() -> dict[str, Any]:
         """Look now whether a released version pins a newer pack; it fetches, and never installs anything."""
-        packs.look(force=True)
-        return machine.packs.read()
+        impeccable.look(force=True)
+        return machine.impeccable.read()
+
+    pack_routes.moved(routes, "")

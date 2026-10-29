@@ -1,5 +1,5 @@
 // Maintenance's OwlBear section (D-01M61GW2W73KV0F81W3E279H64, D-01M61GWRQSR2V3P0VWMP137Q32): the same in every
-// project. The running version, the engine update with Update now, the pinned design pack and the one design pack
+// project. The running version, the engine update with Update now, the pinned Impeccable and the one Impeccable
 // update of this machine, kept in the project that started it: its actions go to that project's endpoints.
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { live } from "/assets/lit-html/3.3.3/directives/live.js";
@@ -105,7 +105,7 @@ async function answer(run, q, o) {
     ...standing.map((f) => `${f.id} not changed for (${FOUND[f.state]}): ${f.text}`)];
   if (o.id === "activate" && !(await window.ask({
     title: "Activate the pack without a passing challenge?", yes: "Activate", no: "Keep it waiting",
-    now: "Delivery activates the candidate as it is now: it commits design_pack.json, skills/NOTICE.md and the "
+    now: "Delivery activates the candidate as it is now: it commits impeccable.json, skills/NOTICE.md and the "
       + "files the updater changed, opens a pull request to main and merges it once CI passes. It activates "
       + (items.length ? "with these left as they are:" : "with no repair left unreviewed and no finding left open."),
     items,
@@ -114,7 +114,7 @@ async function answer(run, q, o) {
     instead: "The update keeps waiting; you can still discard it.",
   }))) return;
   await act(`${q.id}:${o.id}`, async () => {
-    await call("/design-pack/update/answer", { ...to, body: { question: q.id, option: o.id, note }, timeout: WRITE });
+    await call("/impeccable/update/answer", { ...to, body: { question: q.id, option: o.id, note }, timeout: WRITE });
     own.notes.delete(q.id);
   });
 }
@@ -129,7 +129,7 @@ function discarding(run, questions) {
 async function discard(run, d) {
   const p = run.published;
   const sure = await window.ask({
-    title: "Discard the design pack update?", yes: d.label, no: "Keep it waiting",
+    title: "Discard the Impeccable update?", yes: d.label, no: "Keep it waiting",
     now: `The update started in ${run.name} ends here as discarded.`,
     then: "Nothing is activated: the pinned pack stays as it is, and the run's candidate is not used again.",
     after: p?.url ? `Its pull request #${p.number} stays open; close it on GitHub if you no longer want it.`
@@ -138,10 +138,10 @@ async function discard(run, d) {
   });
   if (!sure) return;
   if (d.q) {
-    await act(`${d.q.id}:discard`, () => call("/design-pack/update/answer",
+    await act(`${d.q.id}:discard`, () => call("/impeccable/update/answer",
       { ...reach(run), body: { question: d.q.id, option: "discard", note: "" }, timeout: WRITE }));
   } else {
-    await act("discard", () => call("/design-pack/update/discard", { ...reach(run), method: "POST", timeout: WRITE }));
+    await act("discard", () => call("/impeccable/update/discard", { ...reach(run), method: "POST", timeout: WRITE }));
   }
 }
 
@@ -154,12 +154,12 @@ function emphasis(q, o) {
 
 async function start() {
   const sure = await window.ask({
-    title: "Update the design pack?", yes: "Update", no: "Keep the current pack",
+    title: "Update Impeccable?", yes: "Update", no: "Keep the current pack",
     now: "Delivery takes the newest upstream pack, detector pins and design skills together; an updater session "
       + "brings the skills, golden pages and detector glue in line, then the golden pages, calibration replay and a "
       + "challenger check it. The challenger's findings go back to the updater. It runs on this project's labels, "
       + "calibration and AI credits.",
-    then: "Only if every stage passes, it activates the pack: it commits design_pack.json, skills/NOTICE.md and "
+    then: "Only if every stage passes, it activates the pack: it commits impeccable.json, skills/NOTICE.md and "
       + "the files the updater changed, opens a pull request to main and merges it once CI passes. It asks you here "
       + "before changed golden evidence counts and before a glue change goes into the pull request, and when the "
       + "rounds end without a pass or the challenger upholds a finding the updater rejected.",
@@ -171,7 +171,7 @@ async function start() {
   own.lost = false;
   await act("start", async () => {
     try {
-      await call("/design-pack/update", { method: "POST", timeout: 10000 });
+      await call("/impeccable/update", { method: "POST", timeout: 10000 });
     } catch (e) {
       if (!(e instanceof Slow && e.sent)) throw e;
       own.awaiting = { before, until: Date.now() + ADMIT };  // its admission may still be under way
@@ -377,7 +377,7 @@ function unreachable() {
 }
 
 function runPart(run) {
-  if (!run) return html`<p-text id="pack-state" size="sm">No project has run a design pack update yet.</p-text>`;
+  if (!run) return html`<p-text id="pack-state" size="sm">No project has run an Impeccable update yet.</p-text>`;
   const to = reach(run), questions = run.state === "waiting" ? run.questions ?? [] : [];
   const p = run.published, found = run.loop?.findings ?? [], d = discarding(run, questions);
   const why = run.state !== "running" ? run.reason : "";
@@ -414,7 +414,7 @@ function runPart(run) {
 function others(r) {
   const listed = r.runs.filter((x) => x.state !== "idle" || x.error);
   if (listed.length < 2 && !r.registry) return nothing;
-  return html`<details id="pack-runs"><summary>Each project's last design pack run</summary>
+  return html`<details id="pack-runs"><summary>Each project's last Impeccable run</summary>
     ${r.registry ? html`<p-text size="sm">${sentence(r.registry)}.</p-text>` : nothing}
     <ul>${listed.map((x) => html`<li>${x.name}: ${x.error ? sentence(x.error) : `${x.state}${x.started_at
       ? `, started ${when(x.started_at)}` : ""}`}</li>`)}</ul></details>`;
@@ -435,7 +435,7 @@ function engine() {
 }
 
 function installed(i) {  // a missing pack is the running version's; one installing or failed names its version
-  const whose = i.version ? `The design pack of OwlBear ${i.version}` : "A design pack";
+  const whose = i.version ? `Impeccable of OwlBear ${i.version}` : "An Impeccable pack";
   return i.state === "missing" ? "This version's pack is not installed"
     : `${whose} ${i.state === "installing" ? "is being installed" : "failed to install"}`;
 }
@@ -445,7 +445,7 @@ function packed() {
   const plain = (t) => String(t).replaceAll(String.fromCharCode(96), "");  // the status is CLI text with code marks
   return html`
     ${own.unread.pinned ? html`<p-inline-notification id="pack-read-error" state="error" dismiss-button="false">
-      Could not read the design pack: ${own.unread.pinned}.</p-inline-notification>` : nothing}
+      Could not read Impeccable: ${own.unread.pinned}.</p-inline-notification>` : nothing}
     <p-text id="pack-active" size="sm">${pin ? `Pinned: ${pin.pack} from upstream ${pin.upstream}, identity ${
       pin.identity}. ${plain(pin.status)}.` : ""}</p-text>
     <p-text id="pack-notice" size="xs" color="contrast-medium">${pin ? `Upstream: ${pin.notice.said}${pin.notice
@@ -469,20 +469,20 @@ export function owlbearSection() {
       ${engine()}
     </div>
     <div class="owlbear-part">
-      <p-heading size="md"><h3 id="pack-title">Design pack</h3></p-heading>
+      <p-heading size="md"><h3 id="pack-title">Impeccable</h3></p-heading>
       ${packed()}
       <p-text size="sm">An update takes the newest upstream pack and validates it with model requests. Only if every
         stage passes, or if you accept it after its challenge rounds end without a pass, it commits it on its own
         branch, opens a pull request to main and merges it once CI passes. One runs at a time on this machine.</p-text>
       <div class="row">
-        ${button("Update design pack", start, { id: "pack-update", icon: "refresh", variant: "primary",
+        ${button("Update Impeccable", start, { id: "pack-update", icon: "refresh", variant: "primary",
           busy: own.busy === "start" || Boolean(own.awaiting),
         disabled: busy || !canStart || Boolean(own.busy) || Boolean(own.awaiting) })}
         ${canStart ? nothing : html`<p-text size="sm">Choose a project above to start one: it runs on that project's
           labels, calibration and spend.</p-text>`}
       </div>
       ${own.awaiting ? html`<p-inline-notification id="pack-admitting" state="info" dismiss-button="false">
-        Delivery has not answered the start yet; it may still be checking GitHub for an open design pack pull request.
+        Delivery has not answered the start yet; it may still be checking GitHub for an open Impeccable pull request.
         It was not sent again. This section looks for the run until ${new Date(own.awaiting.until)
           .toLocaleTimeString()}.</p-inline-notification>` : nothing}
       ${own.lost ? html`<p-inline-notification id="pack-start-unknown" state="warning" dismiss-button="false">
@@ -492,9 +492,9 @@ export function owlbearSection() {
       ${own.error ? html`<p-inline-notification id="pack-error" state="error" dismiss-button="false">${
         sentence(own.error)}</p-inline-notification>` : nothing}
       ${own.unread.runs ? html`<p-inline-notification id="pack-runs-error" state="error" dismiss-button="false">
-        Could not read the design pack runs: ${own.unread.runs}.</p-inline-notification>` : nothing}
+        Could not read the Impeccable runs: ${own.unread.runs}.</p-inline-notification>` : nothing}
     </div>
     ${r ? html`<div class="owlbear-part">${runPart(run)}${others(r)}</div>` : own.unread.runs ? nothing
-      : html`<p-text size="sm">Reading the design pack runs…</p-text>`}
+      : html`<p-text size="sm">Reading the Impeccable runs…</p-text>`}
   </section>`;
 }

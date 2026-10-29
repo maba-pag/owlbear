@@ -1,4 +1,4 @@
-"""OwlBear's one folder on this machine (TD-198): worktrees, snapshots, shared data and its pointer, design pack.
+"""OwlBear's one folder on this machine (TD-198): worktrees, snapshots, shared data and its pointer, Impeccable.
 
 It is always ``~/.owlbear``, on every system; nothing moves it.
 """
@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+# PACKS keeps its name from before the Impeccable rename: the version an update replaces, or one rolled back to,
+# reads the same folder
 POINTER, OLD_POINTER, PACKS = "data.json", "common.json", "design-pack"
 DATA, DATA_LOCK = "data", "data.lock"  # the shared data repository's own place, kept by updates and uninstalling
 RUNTIME, VERSIONS = "runtime", "versions"  # the alias to the active version, and the versions beside it

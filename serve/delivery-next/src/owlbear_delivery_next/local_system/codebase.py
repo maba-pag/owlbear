@@ -13,7 +13,7 @@ STOP = "MCP: List Servers → owlbear-delivery → Stop Server"
 STOP_START = f"{STOP}, then Start Server"
 SHIPPED = (
     "**/*.py",
-    "design_pack.json",
+    "impeccable.json",
     "agents/*.md",
     "improvement/*.md",
     "improvement/*.json",  # the synthetic Spotter cases

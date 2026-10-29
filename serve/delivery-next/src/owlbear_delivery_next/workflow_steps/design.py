@@ -18,29 +18,29 @@ import psutil
 
 from owlbear_delivery_next.change_contracts import tools
 from owlbear_delivery_next.change_contracts.visual_records import DetectorFinding, DetectorScan
-from owlbear_delivery_next.design_packs import design_pack, detector
+from owlbear_delivery_next.impeccable import detector, pack_files
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from owlbear_delivery_next.change_contracts.models import VisualState
     from owlbear_delivery_next.change_contracts.visual_records import Freshness, VisualResult
-    from owlbear_delivery_next.design_packs.design_pack import Installed
-    from owlbear_delivery_next.design_packs.design_tools import ScanDesign
+    from owlbear_delivery_next.impeccable.design_tools import ScanDesign
+    from owlbear_delivery_next.impeccable.pack_files import Installed
 
 SOURCES = frozenset(  # the UI files the engine reads (its SCANNABLE_EXTENSIONS)
     {".html", ".htm", ".css", ".scss", ".sass", ".less", ".jsx", ".tsx", ".js", ".ts", ".vue", ".svelte", ".astro"}
 )
 SOURCE_STATE = "sources"
-NO_PACK = "not scanned: the design pack is not installed (owlbear-next design-pack --install)"
+NO_PACK = "not scanned: Impeccable is not installed (owlbear-next impeccable --install)"
 DETAIL = 300
 SHOWN = 60  # findings one scan_design reply lists
 PAGE_SECONDS = detector.PAGE_MS / 1000 + 15  # the in-page timer, plus injecting the bundle
 
 
 def pack() -> Installed | None:
-    """The verified design pack on this machine, if installed."""
-    return design_pack.installed()
+    """The verified Impeccable on this machine, if installed."""
+    return pack_files.installed()
 
 
 def builder_scan(root: Path, args: ScanDesign) -> str:

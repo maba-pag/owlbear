@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from owlbear_delivery_next.design_packs import design_pack
+from owlbear_delivery_next.impeccable import pack_files
 from owlbear_delivery_next.project_host import session_slots
 
 
@@ -49,7 +49,7 @@ def test_a_drain_that_starts_while_a_session_waits_for_a_slot_cancels_the_wait(t
     drained = threading.Event()
     slots = Slots(grant_on=0, on_call=lambda n: drained.set() if n == 2 else None)
     host = host_with(slots, tmp_path, drained)
-    with pytest.raises(design_pack.PackError, match="did not get a session slot"):
+    with pytest.raises(pack_files.PackError, match="did not get a session slot"):
         session_slots.admit(host, lambda _msg: None)
     assert slots.calls == 2
     assert [project for project, _key in slots.cancelled] == ["shop"]

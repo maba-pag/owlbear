@@ -1,6 +1,6 @@
 """The Maintenance sessions: unknown work and its owner's explicit reboot recovery (OPS-03, OPS-06).
 
-Beside them, the machine's design pack update as the OwlBear section shows it, the same in every project
+Beside them, the machine's Impeccable update as the OwlBear section shows it, the same in every project
 (``pack_overview``): the machine host serves it without a project, so the section reads it with none chosen.
 """
 

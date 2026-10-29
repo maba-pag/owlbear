@@ -36,7 +36,7 @@ if TYPE_CHECKING:
 RETRY = 60.0  # seconds between loads of a project that failed to load
 IDLE = 2.0  # seconds between looks whether a stop when idle may stop OwlBear
 CURATE_EVERY = 60.0  # seconds between looks whether idle time may curate memory (item 5 slice 4)
-UNPROVEN_PACK = "a design pack session not confirmed ended; the Maintenance page shows it"
+UNPROVEN_PACK = "an Impeccable session not confirmed ended; the Maintenance page shows it"
 
 
 class MachineError(Exception):
@@ -82,12 +82,12 @@ class Machine:
         self.slots = Slots(self._sessions, closed=True)  # opened once every project's live steps are counted
         self.maintenance = maintenance.Maintenance(self.slots)
         from owlbear_delivery_next.machine_host.auto_update import Auto  # noqa: PLC0415 - it names this class
-        from owlbear_delivery_next.machine_host.packs import Packs  # noqa: PLC0415 - it names this class
+        from owlbear_delivery_next.machine_host.impeccable import Impeccable  # noqa: PLC0415 - it names this class
         from owlbear_delivery_next.machine_host.update import Updater  # noqa: PLC0415 - it names this class
 
         self.updater = Updater(self)
         self.auto = Auto(self)
-        self.packs = Packs(self)
+        self.impeccable = Impeccable(self)
         self.curation = Curation(
             self.slots,
             fenced=self._curation_fence,

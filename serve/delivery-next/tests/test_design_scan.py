@@ -18,7 +18,7 @@ from owlbear_delivery_next.change_contracts import tools
 from owlbear_delivery_next.change_contracts.models import Change, Names, StepKind, VisualState, VisualStep
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_contracts.visual_records import DetectorFinding, DetectorScan, VisualResult
-from owlbear_delivery_next.design_packs import design_pack, design_tools, detector
+from owlbear_delivery_next.impeccable import design_tools, detector, pack_files
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.runtimes import sdk_adapter
 from owlbear_delivery_next.runtimes.results import Gate
@@ -26,7 +26,7 @@ from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.workflow_steps import design, visual
 
 NOW = datetime(2026, 10, 14, 12, tzinfo=UTC)
-PACK = design_pack.Installed(Path("/nowhere/impeccable"), "0" * 64, "")
+PACK = pack_files.Installed(Path("/nowhere/impeccable"), "0" * 64, "")
 HOME = VisualState(name="home", path="/", expect="e")
 FORM = VisualState(name="form", path="/f", expect="e", steps=[VisualStep(do="click", target="Open")])
 
@@ -181,9 +181,9 @@ def test_a_real_capture_scans_each_state_in_its_page_and_falls_back_where_csp_re
     tmp_path, monkeypatch, machine_home
 ):
     monkeypatch.setattr(local_home, "root", lambda: machine_home / ".owlbear")  # this machine's pack, read only
-    pack = design_pack.installed()
+    pack = pack_files.installed()
     if pack is None:
-        pytest.skip("the design pack is not installed (owlbear-next design-pack --install)")
+        pytest.skip("Impeccable is not installed (owlbear-next impeccable --install)")
     site = tmp_path / "site"
     site.mkdir()
     (site / "index.html").write_text(BAD)
@@ -220,7 +220,7 @@ def test_a_scan_that_hangs_its_page_is_ended_and_the_screenshot_kept(tmp_path, m
         ("127.0.0.1", 0), functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(site))
     )
     threading.Thread(target=server.serve_forever, daemon=True).start()
-    hang = design_pack.Installed(Path("/nowhere"), "0" * 64, "window.impeccableDetectAsync = () => { for (;;) {} };")
+    hang = pack_files.Installed(Path("/nowhere"), "0" * 64, "window.impeccableDetectAsync = () => { for (;;) {} };")
     monkeypatch.setattr(design, "PAGE_SECONDS", 2)
     start = time.monotonic()
     again = VisualState(name="again", path="/", expect="e")
@@ -305,8 +305,8 @@ def test_the_scan_answers_without_ending_the_builders_step(tmp_path) -> None:
 
 def test_a_real_scan_of_a_builders_page(tmp_path, monkeypatch, machine_home) -> None:
     monkeypatch.setattr(local_home, "root", lambda: machine_home / ".owlbear")  # this machine's pack, read only
-    if design_pack.installed() is None:
-        pytest.skip("the design pack is not installed (owlbear-next design-pack --install)")
+    if pack_files.installed() is None:
+        pytest.skip("Impeccable is not installed (owlbear-next impeccable --install)")
     (tmp_path / "index.html").write_text(BAD)
     reply = design.builder_scan(tmp_path, scan_args(paths=["index.html"]))
     assert "design detector findings" in reply, reply

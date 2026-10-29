@@ -10,7 +10,7 @@ import pytest
 from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_contracts.tools import Worktree
-from owlbear_delivery_next.design_packs import design_pack
+from owlbear_delivery_next.impeccable import pack_files
 from owlbear_delivery_next.improvement import chatlogs
 from owlbear_delivery_next.local_system import preload
 from owlbear_delivery_next.local_system.processes import Termination
@@ -60,7 +60,7 @@ def test_each_role_has_its_skills_in_the_one_skills_folder_and_none_loads_the_ch
         assert preload.missing(role) == []
     shipped = {p.name for p in preload.directory().iterdir() if p.is_dir()}
     roles = {s for r in ROLES for s in preload.required(r, ui=True)}
-    assert shipped == roles | set(design_pack.manifest()["skills"]) | {preload.CHAT}
+    assert shipped == roles | set(pack_files.manifest()["skills"]) | {preload.CHAT}
     assert not any(preload.CHAT in preload.required(r, ui=True) for r in preload.REQUIRED)
     for kind in sdk_adapter.ROLES:
         assert sdk_adapter.agent(kind)["skills"] == list(preload.REQUIRED[sdk_adapter.ROLES[kind]])

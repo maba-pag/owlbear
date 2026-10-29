@@ -159,7 +159,7 @@ function settingsSections() {
     <section class="panel" aria-labelledby="at-once-title">
       <p-heading size="lg"><h2 id="at-once-title">Sessions at once</h2></p-heading>
       <p-text>A step waits for a free slot before it starts. A visual check runs its judges in waves of the slots it
-        gets; a design pack update takes one slot per session. This machine's total holds across its projects.</p-text>
+        gets; an Impeccable update takes one slot per session. This machine's total holds across its projects.</p-text>
       ${table("Sessions at once: they apply to the next step that starts", ["Setting", "Value"], "at-once",
         [row(text("Agent sessions at once in one project"), sessionsAtOnce())])}
       <p-text size="xs" color="contrast-medium">At least 1. Steps running now keep their sessions.</p-text>
@@ -227,7 +227,7 @@ function settingsSections() {
       ${table("Visual check settings: they apply to the next visual check", ["Setting", "Value"], "general",
         [row(text("Screenshot widths"), widths()), row(text("Design failures"), designFailures())])}
       <p-heading size="md"><h3 id="agreement-title">Agreement with your visual decisions</h3></p-heading>
-      <p-text id="design-pack" size="xs">${loaded.design_pack}</p-text>
+      <p-text id="impeccable" size="xs">${loaded.impeccable}</p-text>
       <p-text id="agreement-note" size="xs" color="contrast-medium">${loaded.agreement.length
         ? "From the decided rounds kept in the shared repository; below 20 rounds the numbers only inform."
         : "No decided visual rounds yet, or no shared repository is set up."}</p-text>

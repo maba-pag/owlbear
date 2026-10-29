@@ -19,7 +19,7 @@ from owlbear_delivery_next.change_contracts.models import Change
 from owlbear_delivery_next.change_flow import worktree
 from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.commands import runner
-from owlbear_delivery_next.design_packs import design_pack
+from owlbear_delivery_next.impeccable import pack_files
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.local_system.data_repo import DataRepo
@@ -156,7 +156,7 @@ def _no_shared_settings(tmp_path_factory, monkeypatch):
     home.mkdir()
     monkeypatch.setattr(local_home, "root", lambda: home)  # never the machine's ~/.owlbear
     monkeypatch.delenv("OWLBEAR_DATA", raising=False)
-    monkeypatch.setattr(design_pack, "fetch", _offline)
+    monkeypatch.setattr(pack_files, "fetch", _offline)
     monkeypatch.setattr(model_choices, "_read", lambda: _offline("models.list"))
     monkeypatch.setattr(backlog_issues, "RUNNER", FakeGitHub(down=True))  # never the real backlog issues
     monkeypatch.setattr(backlog, "_cache", {})

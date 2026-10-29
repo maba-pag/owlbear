@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 import truststore
 
 from owlbear_delivery_next.change_contracts.profile_record import Profile
-from owlbear_delivery_next.design_packs import pack_update
+from owlbear_delivery_next.impeccable import pack_update
 from owlbear_delivery_next.local_system import data_repo
 from owlbear_delivery_next.local_system.git_files import probe_in
 from owlbear_delivery_next.runtimes import copilot_cli
@@ -216,7 +216,7 @@ def check(repo: Path, prof: Profile | None) -> list[Check]:
         copilot: str | None = copilot_cli.cli_path()
     except FileNotFoundError:
         copilot = None
-    updates = Check("design pack updates", ok=True, detail=pack_update.said(pack_update.notice(refresh=True)))
+    updates = Check("Impeccable updates", ok=True, detail=pack_update.said(pack_update.notice(refresh=True)))
     return [*readiness(host, probe_in(repo), reach(host), copilot), updates]
 
 

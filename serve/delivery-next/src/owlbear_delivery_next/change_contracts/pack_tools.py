@@ -1,4 +1,4 @@
-"""The design pack challenger's result (TD-194): its verdict, with one judgement for each file the updater changed."""
+"""The Impeccable challenger's result (TD-194): its verdict, with one judgement for each file the updater changed."""
 
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ class Change(tools.Args):
 
 
 class PackReview(tools.ReviewResult):
-    """``submit_result`` for a full round of the design pack challenger."""
+    """``submit_result`` for a full round of the Impeccable challenger."""
 
     changes: list[Change] = Field(
         default_factory=list,

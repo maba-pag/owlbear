@@ -8,8 +8,8 @@ from pathlib import Path
 ROOT = Path(str(files("owlbear_delivery_next")))
 NAME = "owlbear_delivery_next"
 ORDER = [
-    "git", "github", "local_system", "change_contracts", "change_flow", "design_packs", "settings", "state_store",
-    "improvement", "runtimes", "workflow_steps", "pack_runs", "project_host", "commands", "machine_host",
+    "git", "github", "local_system", "change_contracts", "change_flow", "impeccable", "settings", "state_store",
+    "improvement", "runtimes", "workflow_steps", "impeccable_runs", "project_host", "commands", "machine_host",
 ]  # fmt: skip
 MODULES = {
     ".".join(p.relative_to(ROOT).with_suffix("").parts): p for p in ROOT.rglob("*.py") if "__pycache__" not in p.parts

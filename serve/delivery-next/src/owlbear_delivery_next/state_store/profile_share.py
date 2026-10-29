@@ -14,8 +14,8 @@ import os
 from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.change_contracts.profile_record import PROFILE_FORMAT, Profile
-from owlbear_delivery_next.design_packs.detector import DetectorError
 from owlbear_delivery_next.github.provider import ProviderError
+from owlbear_delivery_next.impeccable.detector import DetectorError
 from owlbear_delivery_next.local_system.data_repo import DataRepoError
 from owlbear_delivery_next.local_system.storage_io import atomic_write, open_lock
 from owlbear_delivery_next.settings import migrations, profile

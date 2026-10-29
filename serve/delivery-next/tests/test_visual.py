@@ -46,7 +46,7 @@ from owlbear_delivery_next.change_contracts.visual_records import (
 from owlbear_delivery_next.change_flow import brief_tools, loop
 from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.commands import cli, runner
-from owlbear_delivery_next.design_packs import design_pack, design_tools, detector
+from owlbear_delivery_next.impeccable import design_tools, detector, pack_files
 from owlbear_delivery_next.local_system import processes
 from owlbear_delivery_next.project_host import api, host
 from owlbear_delivery_next.runtimes import sdk_adapter, step_input
@@ -424,7 +424,7 @@ def flow(tmp_path, clone, monkeypatch):
         return shots
 
     monkeypatch.setattr(visual, "CAPTURE", fake)
-    monkeypatch.setattr(runner.design, "pack", lambda: None)  # never this machine's design pack
+    monkeypatch.setattr(runner.design, "pack", lambda: None)  # never this machine's Impeccable
     flow = SimpleNamespace(store=store, review=review, clone=clone, seen=seen, mp=monkeypatch, widths=[])
     return flow
 
@@ -471,7 +471,7 @@ def test_the_detectors_findings_are_recorded_as_evidence_and_never_fail_the_chec
         assert k["pack"] is pack
         return [dataclasses.replace(s, design=scan("old", "fresh")) for s in plain(base, states, out, widths)]
 
-    pack = design_pack.Installed(Path("/nowhere"), "0" * 64, "")
+    pack = pack_files.Installed(Path("/nowhere"), "0" * 64, "")
     flow.mp.setattr(visual, "CAPTURE", scanned)
     flow.mp.setattr(runner.design, "pack", lambda: pack)
     flow.mp.setattr(

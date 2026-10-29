@@ -49,7 +49,7 @@ textarea, input, select, button { font: inherit; }
   display: flex; flex-wrap: wrap; align-items: center; gap: var(--p-spacing-static-md);
 }
 #machine p { margin: 0; }
-/* The design pack banners (D-01M61GW2EAHFFRFHF014A14K98): Install, or Update now. */
+/* The Impeccable banners (D-01M61GW2EAHFFRFHF014A14K98): Install, or Update now. */
 #machine .banner { display: flex; flex-wrap: wrap; align-items: center;
   gap: var(--p-spacing-static-sm) var(--p-spacing-static-md);
   padding: var(--p-spacing-static-sm) var(--p-spacing-static-md); background: var(--p-color-warning-frosted-soft);

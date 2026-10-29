@@ -376,7 +376,7 @@ def _settle_pack_run(folder: Path, folder_fd: int, proof: OfflineProof | None) -
 
     def receipted(digest: str) -> str:
         if clone is None:
-            msg = f"{folder} has no clone id to read its design-pack receipt by: nothing was moved"
+            msg = f"{folder} has no clone id to read its Impeccable receipt by: nothing was moved"
             raise StoreError(msg)
         return Maintenance.lookup_receipt(clone, digest)
 
@@ -392,7 +392,7 @@ def _settle_pack_run(folder: Path, folder_fd: int, proof: OfflineProof | None) -
     try:
         pack_run_record.settle(folder, receipted=receipted, folder_fd=folder_fd, guard=guard)
     except (OSError, ValueError, MaintenanceError) as exc:
-        msg = f"the design-pack run record in {folder} could not be settled: {exc}; nothing was moved"
+        msg = f"the Impeccable run record in {folder} could not be settled: {exc}; nothing was moved"
         raise StoreError(msg) from exc
 
 

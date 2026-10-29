@@ -4,7 +4,7 @@ Every fetch goes through ``~/.owlbear/repo.git``, a bare clone of OwlBear's repo
 tag ``vMAJOR.MINOR`` or ``vMAJOR``, installed beside the others as a detached worktree ``~/.owlbear/versions/<tag>``
 with its own environment, never moved. The machine takes the newest version of its channel above the highest one
 ever active whose commit descends from the active one: never backwards. Preparing a version installs it, runs
-its own ``selfcheck`` and installs its own design pack with its own interpreter: only then is it ready. Nothing here
+its own ``selfcheck`` and installs its own Impeccable with its own interpreter: only then is it ready. Nothing here
 switches the runtime.
 """
 
@@ -33,7 +33,8 @@ REPO = "repo.git"
 TAG = re.compile(r"v(\d+)(?:\.(\d+))?")
 FREE = 2 * 1024**3  # bytes an install needs free (§3)
 FETCH, SYNC, CHECK, PACK = 120, 900, 300, 300  # seconds a fetch, an environment, a selfcheck and a pack may take
-MANIFEST = "serve/delivery-next/src/owlbear_delivery_next/design_pack.json"  # the pack a version pins, in its tree
+MANIFEST = "serve/delivery-next/src/owlbear_delivery_next/impeccable.json"  # the pack a version pins, in its tree
+OLD_MANIFEST = "serve/delivery-next/src/owlbear_delivery_next/design_pack.json"  # its name before the Impeccable rename
 FIRST_MAJOR = "v0.1"  # a major-only machine's version until v1.0 exists (TD-369)
 ACTIVATED = ".activated"  # in a version's folder once the alias named it
 type Number = tuple[int, int]
@@ -47,7 +48,7 @@ class VersionError(Exception):
 
 
 class PackInstallError(VersionError):
-    """A version built and checked whose design pack could not be installed: it is kept, only its pack is retried."""
+    """A version built and checked whose Impeccable could not be installed: it is kept, only its pack is retried."""
 
 
 @dataclass(frozen=True)
@@ -202,7 +203,7 @@ def install(choice: Choice) -> Path:
 
     Raises:
         VersionError: Too little free disk, or its worktree, environment or selfcheck failed.
-        PackInstallError: Its design pack could not be installed; the version is not ready.
+        PackInstallError: Its Impeccable could not be installed; the version is not ready.
     """
     home = local_home.root()
     folder = home / local_home.VERSIONS / choice.tag
@@ -247,7 +248,7 @@ def _build(choice: Choice, folder: Path) -> None:
 
 def _packed(choice: Choice, folder: Path) -> None:
     if said := pack(folder):
-        msg = f"{choice.tag}'s design pack could not be installed: {said}"
+        msg = f"{choice.tag}'s Impeccable could not be installed: {said}"
         raise PackInstallError(msg)
 
 
@@ -284,12 +285,12 @@ def selfcheck(folder: Path) -> str:
 
 
 def pack(folder: Path) -> str:
-    """Install the version's own design pack with its own interpreter, from its own manifest; empty when in place."""
+    """Install the version's own Impeccable with its own interpreter, from its own manifest; empty when in place."""
     python = folder / ".venv" / "bin" / "python"
     try:
         done = subprocess.run(  # noqa: S603 - the version's own interpreter and a fixed module
-            [str(python), "-m", "owlbear_delivery_next", "design-pack", "--install"], cwd=folder, capture_output=True,
-            text=True, check=False, timeout=PACK,
+            [str(python), "-m", "owlbear_delivery_next", _command(folder), "--install"], cwd=folder,
+            capture_output=True, text=True, check=False, timeout=PACK,
         )  # fmt: skip
     except (OSError, subprocess.TimeoutExpired) as exc:
         return f"it could not run: {exc}"
@@ -297,21 +298,37 @@ def pack(folder: Path) -> str:
 
 
 def pins(commit: str) -> dict[str, Any]:
-    """The design pack the version at *commit* pins: its ``design_pack.json`` read from ``repo.git``, never installed.
+    """Impeccable the version at *commit* pins: its ``design_pack.json`` read from ``repo.git``, never installed.
 
     Raises:
         VersionError: The commit or its manifest is missing, or the manifest names no pack.
     """
-    text = _git(_bare(local_home.root() / REPO), "show", f"{commit}:{MANIFEST}")
+    name, text = _manifest(commit)
     try:
         found = json.loads(text)
     except ValueError as exc:
-        msg = f"{MANIFEST} at {commit[:12]} is no JSON: {exc}"
+        msg = f"{name} at {commit[:12]} is no JSON: {exc}"
         raise VersionError(msg) from exc
     if not isinstance(found, dict) or not isinstance(found.get("pack"), str):
-        msg = f"{MANIFEST} at {commit[:12]} names no design pack"
+        msg = f"{name} at {commit[:12]} names no Impeccable pack"
         raise VersionError(msg)
     return found
+
+
+def _manifest(commit: str) -> tuple[str, str]:
+    """The manifest's path and text at *commit*; a version from before the Impeccable rename has the old path."""
+    bare = _bare(local_home.root() / REPO)
+    try:
+        return MANIFEST, _git(bare, "show", f"{commit}:{MANIFEST}")
+    except VersionError:
+        with contextlib.suppress(VersionError):
+            return OLD_MANIFEST, _git(bare, "show", f"{commit}:{OLD_MANIFEST}")
+        raise
+
+
+def _command(folder: Path) -> str:
+    """The command that installs the pack in the version at *folder*: ``design-pack`` before the Impeccable rename."""
+    return "impeccable" if (folder / MANIFEST).is_file() else "design-pack"
 
 
 def _holds_data(path: Path) -> Path | None:

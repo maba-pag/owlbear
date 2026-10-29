@@ -30,7 +30,7 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.change_contracts import tools
     from owlbear_delivery_next.change_contracts.models import Change, VisualState
     from owlbear_delivery_next.change_contracts.visual_records import DetectorScan, VisualRound
-    from owlbear_delivery_next.design_packs.design_pack import Installed
+    from owlbear_delivery_next.impeccable.pack_files import Installed
 
 UI_SUFFIXES = frozenset(
     {".html", ".htm", ".css", ".scss", ".sass", ".less", ".tsx", ".jsx", ".vue", ".svelte", ".astro"}
@@ -82,7 +82,7 @@ def capture(  # noqa: C901, PLR0913 - one finding per failure of the nested shot
 ) -> list[Shot]:
     """Render every state at each width, full page after network idle; an unanswered URL is a failed shot.
 
-    With a design pack, each screenshot's page is then scanned by the design detector (``design.rendered``).
+    With an Impeccable pack, each screenshot's page is then scanned by the design detector (``design.rendered``).
 
     Raises:
         BrowserMissingError: no installed Chrome or Edge, and Playwright's Chromium is not installed.

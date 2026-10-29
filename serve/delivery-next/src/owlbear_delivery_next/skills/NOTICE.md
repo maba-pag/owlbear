@@ -8,4 +8,4 @@ Changes made for OwlBear Delivery: selected rules from `skill/SKILL.src.md`, `re
 `typeset.md`, `colorize.md`, `polish.md`, the mode references and `critique.md` were condensed, reorganised and
 rewritten for unattended workers, merged with OwlBear's own frontend design handbook, and given a two-phase,
 blind before/after judging procedure. No Impeccable code is included here; Delivery downloads Impeccable's
-detector engine and in-page detector unmodified, checked against the digests in `design_pack.json`.
+detector engine and in-page detector unmodified, checked against the digests in `impeccable.json`.

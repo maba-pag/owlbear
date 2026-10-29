@@ -185,7 +185,7 @@ export function machineSection() {
     <p-text id="machine-note" size="xs" color="contrast-medium">OwlBear updates itself after 15 minutes without
       use while nothing runs, announced on open pages 2 minutes ahead; Run updates now on a paused page or
       <code>owlbear update</code> updates at once.</p-text>
-    <p-text id="machine-owlbear" size="sm">The engine update's status with Update now, and the design pack update, are
+    <p-text id="machine-owlbear" size="sm">The engine update's status with Update now, and the Impeccable update, are
       in <a href=${here({}, "/maintenance#owlbear")}>Maintenance, OwlBear</a>.</p-text>
   </section>`;
 }

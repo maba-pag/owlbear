@@ -1,4 +1,4 @@
-"""A design-pack run left by an older host is settled by the public Finish before the store is copied.
+"""An Impeccable run left by an older host is settled by the public Finish before the store is copied.
 
 Each case runs the real ``cli.main`` Prepare and Finish on a real git clone. HOME is a temporary directory, so the
 maintenance ledger is real and local to the test. The reboot is modeled by changing the boot session id, and the
@@ -13,8 +13,8 @@ from pathlib import Path
 import pytest
 
 from owlbear_delivery_next.commands import cli
+from owlbear_delivery_next.impeccable_runs import pack_state
 from owlbear_delivery_next.local_system import local_home, maintenance
-from owlbear_delivery_next.pack_runs import pack_state
 from owlbear_delivery_next.state_store import fd_tree, offline_protocol, pack_run_record, project_home, project_move
 from owlbear_delivery_next.state_store.database import MARKER, StoreError
 from owlbear_delivery_next.state_store.store import Store

@@ -109,7 +109,7 @@ class VisualRound(_Strict):
     owner: list[str] = Field(default_factory=list)  # the owner criteria in force (TD-79)
     before: str = ""  # the before capture's identity the blind pairs came from
     widths: list[int] = Field(default_factory=list)
-    pack: str = ""  # the design pack's identity
+    pack: str = ""  # Impeccable's identity
     blind: dict[str, Literal["before", "after"]] = Field(default_factory=dict)  # the design judge's image names
     design_inputs: list[DesignInput] = Field(default_factory=list)  # each design session's message and images
     design_failures: DesignFailures = "ask"  # the setting in force when the round began

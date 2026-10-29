@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
-from owlbear_delivery_next.design_packs import design_pack
+from owlbear_delivery_next.impeccable import pack_files
 from owlbear_delivery_next.local_system import data_repo, git_files, local_home, preload, text_files
 from owlbear_delivery_next.runtimes import readiness, window_files
 from owlbear_delivery_next.settings import profile, roles
@@ -358,7 +358,7 @@ def run(
         prof = profile.confirm(prof, key, value, datetime.now(UTC))
     say(render(prof))
     say(roles.table(store.settings()))
-    say(design_pack.status())
+    say(pack_files.status())
     for tip in recommendations(prof):
         say(f"TIP {tip}")
     prof, unknown = confirm(prof, ask, yes=yes)

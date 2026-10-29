@@ -110,7 +110,7 @@ class Session:
     rechecks: tuple[str, ...] = ()  # keys of rejected findings a review rechecks or reconsiders (TD-176, TD-193)
     cap: int = 20  # new findings a review may return: the loop's max findings, none in a rejections-only check
     plan_tasks: tuple[str, ...] = ()  # the plan tasks each final-review finding names (TD-216)
-    changed: tuple[str, ...] = ()  # the files a design pack challenger judges one by one (TD-194)
+    changed: tuple[str, ...] = ()  # the files an Impeccable challenger judges one by one (TD-194)
     settled: tuple[str, ...] = ()  # finding keys the owner decided to fix: never rejected (TD-193)
     amendable: tuple[str, ...] = ()  # generated criteria a premise may propose new wording for (TD-179)
     skills: Path | None = None  # the skill folder this session loads instead of the package's: a pack candidate's

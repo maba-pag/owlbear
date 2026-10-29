@@ -138,7 +138,7 @@ function changed() {
   document.dispatchEvent(new CustomEvent("owlbear-machine", { detail: bar.data }));
 }
 
-// The machine host's state as last polled (its version, engine update and design pack); null when none serves the page.
+// The machine host's state as last polled (its version, engine update and Impeccable); null when none serves the page.
 export function machineState() {
   return bar.data;
 }
@@ -253,17 +253,17 @@ function when(iso) {
   return iso ? new Date(iso).toLocaleString() : "";
 }
 
-// D-01M61GW2EAHFFRFHF014A14K98: every page says when this version's design pack is missing or failed to install,
+// D-01M61GW2EAHFFRFHF014A14K98: every page says when this version's Impeccable is missing or failed to install,
 // with Install, and when a released OwlBear version carries a newer pack, with Update now.
 function banners(pack) {
-  const install = pack?.install, release = pack?.release, named = (p) => (p ? `design pack ${p}` : "design pack");
+  const install = pack?.install, release = pack?.release, named = (p) => (p ? `Impeccable (${p})` : "Impeccable");
   let missing = nothing;
   if (install) {
     const running = install.state === "installing", of = install.version ? ` for OwlBear ${install.version}` : "";
-    const said = running ? `Installing the ${named(install.pack)}${of}…`
-      : install.state === "failed" ? `Installing the ${named(install.pack)}${of} failed${install.at
+    const said = running ? `Installing ${named(install.pack)}${of}…`
+      : install.state === "failed" ? `Installing ${named(install.pack)}${of} failed${install.at
         ? ` (${when(install.at)})` : ""}${install.detail ? `: ${install.detail}` : "."}`
-      : `The ${named(install.pack)} that this OwlBear version${install.version ? `, ${install.version},` : ""} pins is `
+      : `${named(install.pack)} that this OwlBear version${install.version ? `, ${install.version},` : ""} pins is `
         + "not installed on this machine; the visual rounds use it.";
     missing = html`<p class="banner" role="status" id="pack-install-banner"><span>${said}</span>
       ${control("Install", installPack, { variant: "primary", busy: running || bar.busy === "install" })}</p>`;
@@ -282,9 +282,9 @@ function banners(pack) {
 async function installPack() {
   bar.packed = "";
   await act("install", async () => {
-    const got = await call("/design-pack/install", { method: "POST", machine: true, timeout: 15000 });
+    const got = await call("/impeccable/install", { method: "POST", machine: true, timeout: 15000 });
     if (got.refused) bar.packed = `Not installed now: ${got.refused}.`;
-    else if (!got.install) bar.packed = "The design pack is installed on this machine.";
+    else if (!got.install) bar.packed = "Impeccable is installed on this machine.";
     else if (got.install.state === "installing") bar.installing = true;
   });
 }
@@ -324,7 +324,7 @@ function updating(update) {
 export async function runUpdates() {
   const yes = await window.ask({ title: "Run updates now?",
     now: "OwlBear installs the newest version of this machine's channel beside the running one and checks it.",
-    then: "Once no step, check environment or design pack update runs, it switches to that version; this page "
+    then: "Once no step, check environment or Impeccable update runs, it switches to that version; this page "
       + "keeps working and says once which version runs.",
     after: "Delivery stays paused or running as it is.", instead: "OwlBear keeps running this version.",
     yes: "Run updates now" });
@@ -361,7 +361,7 @@ if (bar.data) {
     bar.data = await machine().catch(() => bar.data);  // always read: an announcement must reach every page (§7)
     if (bar.installing && bar.data?.pack?.install?.state !== "installing") {  // the Install started here has ended
       bar.installing = false;
-      bar.packed = bar.data.pack.install ? "" : "The design pack is installed on this machine.";
+      bar.packed = bar.data.pack.install ? "" : "Impeccable is installed on this machine.";
       showBar();
     }
     counted();

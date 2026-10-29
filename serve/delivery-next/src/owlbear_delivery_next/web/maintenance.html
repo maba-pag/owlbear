@@ -206,7 +206,7 @@ function useSection() {
   return html`<section aria-labelledby="use-title">
     <p-heading size="lg"><h2 id="use-title">Subagent use per agent</h2></p-heading>
     <p-text size="sm">Built-in subagents the agents started in this project's Change steps, switched per agent in
-      Settings; their credits are part of each step's own. A design pack update keeps no session record.</p-text>
+      Settings; their credits are part of each step's own. An Impeccable update keeps no session record.</p-text>
     ${state.use.length ? html`<p-table id="use" caption="Subagent use per agent"><p-table-head><p-table-head-row>
       ${heads.map((h) => html`<p-table-head-cell>${h}</p-table-head-cell>`)}</p-table-head-row></p-table-head>
       <p-table-body>${state.use.map(useRow)}</p-table-body></p-table>`

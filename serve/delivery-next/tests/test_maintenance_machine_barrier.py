@@ -1,4 +1,4 @@
-"""Review 4373338535: a returned but unconfirmed design pack session keeps the machine's update and stop waiting.
+"""Review 4373338535: a returned but unconfirmed Impeccable session keeps the machine's update and stop waiting.
 
 Its job is no longer busy once the SDK returns, so only the machine's ledger still knows the session: an update, an
 automatic update, a stop when idle and the page's list of what is left must read it there, whether its project is
@@ -15,10 +15,10 @@ from fastapi.testclient import TestClient
 from owlbear_delivery_next.change_contracts import tools
 from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.change_contracts.permissions import Policy
+from owlbear_delivery_next.impeccable_runs import pack_job
 from owlbear_delivery_next.local_system import codebase, processes
 from owlbear_delivery_next.machine_host import app, project
 from owlbear_delivery_next.machine_host.machine import UNPROVEN_PACK, Machine
-from owlbear_delivery_next.pack_runs import pack_job
 from owlbear_delivery_next.project_host import session_slots
 from owlbear_delivery_next.project_host.host import Host, HostRecord
 from owlbear_delivery_next.runtimes import sdk_adapter

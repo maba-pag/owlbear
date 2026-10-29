@@ -1,4 +1,4 @@
-"""A design pack session's slot follows its maintenance ownership, not the return of its runner."""
+"""An Impeccable session's slot follows its maintenance ownership, not the return of its runner."""
 
 import functools
 import json
@@ -14,10 +14,10 @@ from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.github.gh import GhProvider
 from owlbear_delivery_next.github.provider import PullRequest
+from owlbear_delivery_next.impeccable_runs import pack_admission, pack_job, pack_run, pack_state
+from owlbear_delivery_next.impeccable_runs.scratch import scratch
 from owlbear_delivery_next.local_system import maintenance, processes
 from owlbear_delivery_next.local_system.slots import Slots
-from owlbear_delivery_next.pack_runs import pack_admission, pack_job, pack_run, pack_state
-from owlbear_delivery_next.pack_runs.scratch import scratch
 from owlbear_delivery_next.project_host import session_slots
 from owlbear_delivery_next.project_host.host import Host
 from owlbear_delivery_next.runtimes import sdk_adapter
@@ -220,8 +220,8 @@ def pull(number: int, head: str) -> PullRequest:
 
 @pytest.mark.parametrize(
     ("records", "said"),
-    [({"gamma": "{"}, "the design pack run record of gamma cannot be read"),
-     ({"alpha": waiting("a"), "gamma": waiting("g")}, "design pack updates wait in alpha, gamma")],
+    [({"gamma": "{"}, "the Impeccable run record of gamma cannot be read"),
+     ({"alpha": waiting("a"), "gamma": waiting("g")}, "Impeccable updates wait in alpha, gamma")],
     ids=["unreadable", "two-waiting"],
 )  # fmt: skip
 def test_an_unreadable_or_second_waiting_record_elsewhere_refuses_a_fresh_start_by_name(tmp_path, records, said):
@@ -243,7 +243,7 @@ def test_a_waiting_run_goes_on_only_as_itself_alone_and_with_no_pack_pull_reques
     resumed(run="r-alpha", branch="pack/r-alpha")  # its own pull request: it goes on
     with pytest.raises(pack_admission.Refused, match="record changed"):
         resumed(run="r-other", branch="pack/r-alpha")
-    with pytest.raises(pack_admission.Refused, match="another design pack pull request is open"):
+    with pytest.raises(pack_admission.Refused, match="another Impeccable pull request is open"):
         resumed(run="r-alpha", branch="")  # before its publication, any pack pull request competes
     project_home.home("gamma").mkdir(parents=True)
     (project_home.home("gamma") / pack_job.FILE).write_text(waiting("r-gamma"))

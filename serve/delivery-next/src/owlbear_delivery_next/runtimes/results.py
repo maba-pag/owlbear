@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.change_contracts import curation_tools, pack_tools, preparation, tool_schema, tools
 from owlbear_delivery_next.change_flow import disputes
-from owlbear_delivery_next.design_packs import design_tools
+from owlbear_delivery_next.impeccable import design_tools
 from owlbear_delivery_next.local_system import lint
 from owlbear_delivery_next.runtimes import amendments
 

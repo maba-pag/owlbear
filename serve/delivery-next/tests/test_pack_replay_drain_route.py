@@ -11,8 +11,8 @@ from types import SimpleNamespace
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from owlbear_delivery_next.impeccable_runs import pack_job
 from owlbear_delivery_next.local_system.slots import Slots
-from owlbear_delivery_next.pack_runs import pack_job
 from owlbear_delivery_next.project_host import pack_routes, session_slots
 from owlbear_delivery_next.settings import config
 from owlbear_delivery_next.state_store import machine_settings
@@ -83,7 +83,7 @@ def route_waiting_for_a_slot(tmp_path, monkeypatch, *, honours_drain: bool) -> S
     drainer.start()
     started = time.monotonic()
     try:
-        response = TestClient(app).post("/design-pack/replay")
+        response = TestClient(app).post("/impeccable/replay")
     finally:
         rescue.cancel()
         drainer.join(10)

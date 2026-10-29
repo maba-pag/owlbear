@@ -11,13 +11,13 @@ from pathlib import Path
 
 import pytest
 
+from owlbear_delivery_next.impeccable_runs import pack_job, pack_run, pack_state
 from owlbear_delivery_next.local_system import codebase, maintenance
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.local_system.slots import Slots
 from owlbear_delivery_next.local_system.storage_io import atomic_write
 from owlbear_delivery_next.machine_host import project
 from owlbear_delivery_next.machine_host.machine import UNPROVEN_PACK, Machine
-from owlbear_delivery_next.pack_runs import pack_job, pack_run, pack_state
 from owlbear_delivery_next.project_host import session_slots
 from owlbear_delivery_next.project_host.host import Host, HostRecord
 from owlbear_delivery_next.state_store import pack_run_record, project_home, registry
@@ -1101,7 +1101,7 @@ def test_a_modern_owned_runs_own_rewrite_adds_no_hold_beside_it(tmp_path, machin
 PUBLISHING = {  # a run main stopped while it published: the Job's startup returns it to the owner, waiting
     "state": "running", "run": "pub-a", "started_at": STARTED, "stage": "pull-request",
     "context": {
-        "tag": "v9", "why": "design pack: v8 to v9", "diff": "", "golden": "", "pins": {}, "manifest": "",
+        "tag": "v9", "why": "Impeccable: v8 to v9", "diff": "", "golden": "", "pins": {}, "manifest": "",
         "notice": "", "baseline": {}, "checkout": {}, "start": {}, "sid": "s",
         "publication": {"root": "/r", "repository": "o/r", "base": "b", "branch": "pack/v9", "body": "the PR text",
                         "number": 7, "url": "https://example.invalid/pull/7"},

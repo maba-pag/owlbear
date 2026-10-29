@@ -217,7 +217,7 @@ class Project:
         """Close the gate, wait for admitted work, then stop; with *refuse*, keep running while work is left.
 
         Admitted work is requests in flight and what they started in the background (a shaping chat opening, a
-        design pack update). A runner outlives a machine stop and finishes on its own (TD-282); a removal is
+        Impeccable update). A runner outlives a machine stop and finishes on its own (TD-282); a removal is
         refused while one runs.
         """
         until = time.monotonic() + drain

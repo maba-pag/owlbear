@@ -18,7 +18,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ValidationError
 
 from owlbear_delivery_next.change_contracts.round_records import RoundPolicy
-from owlbear_delivery_next.design_packs import calibration, pack_update
+from owlbear_delivery_next.impeccable import calibration, pack_update
 from owlbear_delivery_next.local_system import data_repo
 from owlbear_delivery_next.local_system.data_repo import DataRepoError
 from owlbear_delivery_next.project_host import memory_routes
@@ -146,7 +146,7 @@ def _state(store: Store, notice: str = "") -> dict[str, Any]:
         },
         "applied": APPLIED,
         "agreement": _agreement(store),
-        "design_pack": pack_update.said(pack_update.notice(refresh=False)),  # never online; setup refreshes it
+        "impeccable": pack_update.said(pack_update.notice(refresh=False)),  # never online; setup refreshes it
     }
 
 

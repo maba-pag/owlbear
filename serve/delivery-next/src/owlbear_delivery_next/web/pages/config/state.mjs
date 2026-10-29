@@ -20,7 +20,7 @@ export function typedNumber(field, value) {
 }
 export const LOOPS = [["shaper", "Brief challenges (shaper)"], ["planner", "Plan challenges (planner)"],
   ["builder", "Task reviews (builder)"], ["final_review", "Final review"],
-  ["updater", "Design pack updates (updater)"]];
+  ["updater", "Impeccable updates (updater)"]];
 export const WRITE = 60000;  // a save commits and pushes the shared settings repository (TD-64): a network round trip
 // Everything shown comes from here (TD-264): drafts per layer ("role.field" -> as typed), the folder being typed and
 // the offered models once read.

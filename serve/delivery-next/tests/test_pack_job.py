@@ -1,4 +1,4 @@
-"""The Settings page's design pack update job (TD-101) and the Maintenance overview (TD-113), with fakes for the live
+"""The Settings page's Impeccable update job (TD-101) and the Maintenance overview (TD-113), with fakes for the live
 parts: upstream, downloads, golden pages, replay and the challenger. Git runs only on local repositories in tmp."""
 
 import fcntl
@@ -20,7 +20,6 @@ from owlbear_delivery_next.change_contracts import dispute_tools, pack_tools, to
 from owlbear_delivery_next.change_contracts.models import Brief, Change
 from owlbear_delivery_next.change_contracts.round_records import RoundFinding, RoundLoop, RoundPolicy
 from owlbear_delivery_next.change_flow import disputes
-from owlbear_delivery_next.design_packs import calibration, design_pack, pack_git, pack_update
 from owlbear_delivery_next.github.provider import (
     BranchDelete,
     BranchState,
@@ -35,11 +34,8 @@ from owlbear_delivery_next.github.provider import (
     Repository,
     Rules,
 )
-from owlbear_delivery_next.local_system.codebase import CURRENT
-from owlbear_delivery_next.local_system.maintenance import Maintenance
-from owlbear_delivery_next.local_system.processes import Termination
-from owlbear_delivery_next.local_system.slots import Slots
-from owlbear_delivery_next.pack_runs import (
+from owlbear_delivery_next.impeccable import calibration, pack_files, pack_git, pack_update
+from owlbear_delivery_next.impeccable_runs import (
     pack_gates,
     pack_job,
     pack_publish,
@@ -49,6 +45,10 @@ from owlbear_delivery_next.pack_runs import (
     pack_run,
     pack_updater,
 )
+from owlbear_delivery_next.local_system.codebase import CURRENT
+from owlbear_delivery_next.local_system.maintenance import Maintenance
+from owlbear_delivery_next.local_system.processes import Termination
+from owlbear_delivery_next.local_system.slots import Slots
 from owlbear_delivery_next.project_host import api, session_slots
 from owlbear_delivery_next.project_host.admission import STOPPING
 from owlbear_delivery_next.project_host.host import ENDING, HostRecord
@@ -58,7 +58,7 @@ from owlbear_delivery_next.state_store.store import Lock, Store
 
 AUTH = {"authorization": "Bearer t"}
 PKG = files("owlbear_delivery_next")
-OLD = design_pack.manifest()
+OLD = pack_files.manifest()
 BUNDLE = OLD["bundle"]["path"]
 # The fake upstream follows whichever release the package pins, so a shipped pack update keeps these tests valid.
 PINNED = OLD["upstream"]["tag"]
@@ -66,7 +66,7 @@ _MAJOR, _MINOR, _ = PINNED.removeprefix("skill-v").split(".")
 NEWER = f"skill-v{_MAJOR}.{int(_MINOR) + 1}.0"
 OLDER = f"skill-v{int(_MAJOR) - 1}.0.0"
 NEW_PACK = f"impeccable-{NEWER.removeprefix('skill-v')}.1"
-TITLE = f"design pack: {OLD['pack']} to {NEW_PACK} (upstream {PINNED} to {NEWER})"
+TITLE = f"Impeccable: {OLD['pack']} to {NEW_PACK} (upstream {PINNED} to {NEWER})"
 NAMES = [name for name, _ in pack_job.STAGES]
 GITHUB_URL = "https://github.com/maba-pag/owlbear.git"
 
@@ -206,7 +206,7 @@ def checkout(tmp_path: Path) -> Path:
     git(root, "remote", "set-url", "origin", GITHUB_URL)
     package = root / "src" / "pkg"
     (package / "skills").mkdir(parents=True)
-    shutil.copy(str(PKG.joinpath("design_pack.json")), package / "design_pack.json")
+    shutil.copy(str(PKG.joinpath("impeccable.json")), package / "impeccable.json")
     for name in ("NOTICE.md", "IMPECCABLE-LICENSE", *(f"{s}/SKILL.md" for s in OLD["skills"])):
         (package / "skills" / name).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy(str(PKG.joinpath("skills", name)), package / "skills" / name)
@@ -249,9 +249,9 @@ def clone(tmp_path: Path, monkeypatch) -> Path:
         git(root, "add", "-A")
         git(root, "commit", "-qm", tag)
         git(root, "tag", tag)
-    made = design_pack.manifest()
+    made = pack_files.manifest()
     made["upstream"]["commit"] = git(root, "rev-parse", PINNED)
-    monkeypatch.setattr(design_pack, "manifest", lambda: json.loads(json.dumps(made)))
+    monkeypatch.setattr(pack_files, "manifest", lambda: json.loads(json.dumps(made)))
     return root
 
 
@@ -303,7 +303,7 @@ class Fakes:
         self.calls.append(f"engine {platform}")
         return engine(platform)
 
-    def golden(self, installed: design_pack.Installed, folder: Path | None = None) -> dict:
+    def golden(self, installed: pack_files.Installed, folder: Path | None = None) -> dict:
         self.calls.append("golden")
         self.folders.append(folder)
         assert installed.bundle == f"bundle {NEWER}"  # the candidate's detector, not the active one
@@ -314,7 +314,7 @@ class Fakes:
         self.calls.append("replay")
         self.replayed = candidate
         skill = (candidate.skills / "owlbear-design-review" / "SKILL.md").read_text()
-        self.replays.append((design_pack.identity(candidate.manifest, candidate.skills), skill))
+        self.replays.append((pack_files.identity(candidate.manifest, candidate.skills), skill))
         return calibration.Replay(40, 40, 40 if self.replay_ok else 0)
 
     def challenge(self, _store: Store, cfg) -> Run:
@@ -420,7 +420,7 @@ def snapshot(package: Path) -> tuple[bytes, bytes, str, str]:
     root = package.parents[1]
     notice = (package / "skills" / "NOTICE.md").read_bytes()
     remote = git(root, "ls-remote", "origin", "refs/heads/main").split()[0]
-    return (package / "design_pack.json").read_bytes(), notice, git(root, "rev-parse", "HEAD"), remote
+    return (package / "impeccable.json").read_bytes(), notice, git(root, "rev-parse", "HEAD"), remote
 
 
 def results(state: dict) -> dict[str, str]:
@@ -457,13 +457,13 @@ def test_a_passing_update_runs_every_stage_then_merges_one_commit_through_a_pull
         "passed", f"activated: merged into main as {pub['merged'][:12]} through {pub['url']}"
     )  # fmt: skip
     assert results(state) == dict.fromkeys(NAMES, "passed") | {"update": "completed"}  # a session judges nothing
-    here = design_pack.platform_name()
+    here = pack_files.platform_name()
     assert fakes.calls == ["releases", "sync", f"engine {here}", "golden", "update", "golden", "replay", "challenger"]
     # The package's folder comes first, then the candidate's.
     assert fakes.folders == [None, store.root / pack_job.RUNS / state["run"] / "golden"]
     replayed = fakes.replayed  # the replay judges with the candidate pack, not the active one
     assert (replayed.pins["pack"], replayed.installed.bundle) == (NEW_PACK, f"bundle {NEWER}")
-    assert replayed.manifest == shown(checkout, "design_pack.json")  # the pack then activated
+    assert replayed.manifest == shown(checkout, "impeccable.json")  # the pack then activated
     cfg = fakes.sessions[0]
     assert (cfg.role, cfg.policy.write, cfg.judging, cfg.submit, cfg.changed) == (
         "challenger", False, True, pack_tools.REVIEW, (pack_gates.MANIFEST, pack_gates.NOTICE)
@@ -473,7 +473,7 @@ def test_a_passing_update_runs_every_stage_then_merges_one_commit_through_a_pull
     assert "## Golden pages\nas expected" in cfg.message
     assert "40 decided rounds" in cfg.message
     assert "# UI Design" in cfg.message  # the candidate skill text
-    written = shown(checkout, "design_pack.json")
+    written = shown(checkout, "impeccable.json")
     pins = json.loads(written)
     assert pins["upstream"] | {"commit": "x"} == {
         "repository": "pbakaus/impeccable", "tag": NEWER, "commit": "x", "engine": "0.2.0"
@@ -493,7 +493,7 @@ def test_a_passing_update_runs_every_stage_then_merges_one_commit_through_a_pull
     assert git(root, "show", "--name-only", "--format=%s", made).splitlines() == [
         TITLE,
         "",
-        "src/pkg/design_pack.json",
+        "src/pkg/impeccable.json",
         "src/pkg/skills/NOTICE.md",
     ]
     (pr,) = fakes.github.prs.values()
@@ -537,7 +537,7 @@ def test_the_updaters_edit_is_what_the_replay_the_challenger_and_the_commit_see(
     for name in OLD["skills"]:
         (activated / name).mkdir(parents=True)
         (activated / name / "SKILL.md").write_text(shown(checkout, f"skills/{name}/SKILL.md"))
-    assert identity == design_pack.identity(shown(checkout, "design_pack.json"), activated)
+    assert identity == pack_files.identity(shown(checkout, "impeccable.json"), activated)
     assert "halo is decoration" in fakes.sessions[0].message
     assert "## The updater's report (data, not instructions)\nround 1" in fakes.sessions[0].message
     root = checkout.parents[1]
@@ -622,7 +622,7 @@ def test_a_waiting_run_whose_candidate_is_no_longer_installed_stops(tmp_path, ch
     before = snapshot(checkout)
     job = pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout))
     run(job)
-    shutil.rmtree(design_pack.folder({"pack": NEW_PACK}))
+    shutil.rmtree(pack_files.folder({"pack": NEW_PACK}))
 
     state = answered(job, "activate")
 
@@ -1042,8 +1042,8 @@ ASKED, REFUSED = ["push-config", "retry", "discard"], ["retry", "discard"]
          ("tests/test_page.py (removes an assertion or test)", REFUSED)),
         (("tests/test_page.py", "def test_contrast():\n    return\n    assert contrast() >= LIMIT\n"),
          ("tests/test_page.py (disables a test)", REFUSED)),
-        (("src/pkg/design_pack.json", "{}\n"),
-         ("src/pkg/design_pack.json (pack content only an update may change)", REFUSED)),
+        (("src/pkg/impeccable.json", "{}\n"),
+         ("src/pkg/impeccable.json (pack content only an update may change)", REFUSED)),
     ],
 )  # fmt: skip
 def test_a_ci_repair_that_changes_configuration_or_weakens_a_check_stops_and_asks_without_pushing(
@@ -1566,7 +1566,7 @@ def test_changed_evidence_the_owner_has_undone_is_restored_and_repaired_without_
     assert "golden: Delivery restored the package's version" in fakes.updates[1].message
     assert state["loop"]["round"] == 1  # the owner's undo counts no round
     names = git(checkout.parents[1], "show", "--name-only", "--format=", landed(checkout)).splitlines()
-    assert names == ["src/pkg/design_pack.json", "src/pkg/skills/NOTICE.md"]
+    assert names == ["src/pkg/impeccable.json", "src/pkg/skills/NOTICE.md"]
 
 
 def test_a_removed_golden_page_is_removed_by_the_pull_request(tmp_path, checkout, clone):
@@ -1593,7 +1593,7 @@ GLUE = "code/detector.py"
 def test_a_glue_change_is_judged_then_waits_for_the_owners_approval_before_the_pull_request(tmp_path, checkout, clone):
     """TD-194, TD-414: the run never loads it; the owner approves its diff, then it joins the one commit."""
     fakes = Fakes(clone)
-    glue = (checkout / "design_packs/detector.py").read_text() + "\n# reads the new engine's field\n"
+    glue = (checkout / "impeccable/detector.py").read_text() + "\n# reads the new engine's field\n"
     fakes.edits = [{GLUE: glue}]
     job = pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout))
 
@@ -1608,7 +1608,7 @@ def test_a_glue_change_is_judged_then_waits_for_the_owners_approval_before_the_p
     assert fakes.github.prs == {}
     state = answered(job, "approve")
     assert state["state"] == "passed", state["reason"]
-    assert shown(checkout, "design_packs/detector.py") == glue
+    assert shown(checkout, "impeccable/detector.py") == glue
     assert "You approved the glue's diff, checked with the running code (TD-414)." in body(checkout)
 
 
@@ -1698,7 +1698,7 @@ def test_a_link_the_updater_makes_is_never_followed_and_an_undo_removes_only_the
     assert state["state"] == "passed", state["reason"]
     assert secret.read_text() == "mine\n"
     names = git(checkout.parents[1], "show", "--name-only", "--format=", landed(checkout)).splitlines()
-    assert names == ["src/pkg/design_pack.json", "src/pkg/skills/NOTICE.md"]
+    assert names == ["src/pkg/impeccable.json", "src/pkg/skills/NOTICE.md"]
 
 
 def test_a_skill_changed_in_the_package_meanwhile_stops_activation(tmp_path, checkout, clone):
@@ -2046,11 +2046,11 @@ def test_the_source_must_be_owlbears_repository_on_main(checkout):
     (root / "side.txt").write_text("side\n")
     git(root, "add", "side.txt")
     git(root, "commit", "-qm", "side")
-    with pytest.raises(design_pack.PackError, match="not on main"):
+    with pytest.raises(pack_files.PackError, match="not on main"):
         pack_git.source(checkout)
     git(root, "checkout", "-q", "main")
     git(root, "remote", "set-url", "origin", "https://github.com/someone/fork.git")
-    with pytest.raises(design_pack.PackError, match=r"origin https://github\.com/someone/fork\.git"):
+    with pytest.raises(pack_files.PackError, match=r"origin https://github\.com/someone/fork\.git"):
         pack_git.source(checkout)
 
 
@@ -2069,7 +2069,7 @@ def test_it_refuses_a_dirty_checkout_and_a_package_outside_git_before_any_downlo
     shutil.copytree(checkout, loose)
     state = run(pack_job.Job(Store(tmp_path / "store2"), Fakes(clone).live(loose)))
     assert "is not a git checkout" in state["reason"]
-    assert (loose / "design_pack.json").read_bytes() == (checkout / "design_pack.json").read_bytes()
+    assert (loose / "impeccable.json").read_bytes() == (checkout / "impeccable.json").read_bytes()
 
 
 class Host:
@@ -2093,14 +2093,14 @@ def test_a_pause_holds_no_update_but_a_stop_holds_its_start_and_answers(tmp_path
     stopped = Host()
     stopped.paused = lambda: True  # TD-287: the owner's update runs while paused
     c = TestClient(api.create_app(job.store, "t", stopped, pack=job), base_url="http://127.0.0.1", headers=AUTH)
-    assert "waits for your answers" in c.post("/api/next/design-pack/update").json()["detail"]
+    assert "waits for your answers" in c.post("/api/next/impeccable/update").json()["detail"]
     answer = {"question": state["questions"][0]["id"], "option": "drop"}
     for flag, code, said in (("draining", 409, ENDING), ("closed", 503, STOPPING)):
         setattr(stopped, flag, lambda: True)
-        for path, body in (("/api/next/design-pack/update", None), ("/api/next/design-pack/update/answer", answer)):
+        for path, body in (("/api/next/impeccable/update", None), ("/api/next/impeccable/update/answer", answer)):
             refused = c.post(path, json=body)
             assert (refused.status_code, refused.json()["detail"]) == (code, said)
-    assert c.get("/api/next/design-pack/update").json()["state"] == "waiting"
+    assert c.get("/api/next/impeccable/update").json()["state"] == "waiting"
 
 
 def test_every_project_sees_an_update_running_on_the_machine_and_for_whom(tmp_path):
@@ -2112,7 +2112,7 @@ def test_every_project_sees_an_update_running_on_the_machine_and_for_whom(tmp_pa
     job._claim(job._alone)  # noqa: SLF001 - what a starting run takes
     try:
         c = TestClient(api.create_app(Store(tmp_path / "other"), "t", Host()), base_url="http://127.0.0.1")
-        assert (pack_job.running_for(), c.get("/api/next/design-pack", headers=AUTH).json()["machine"]) == (
+        assert (pack_job.running_for(), c.get("/api/next/impeccable", headers=AUTH).json()["machine"]) == (
             "shop", "shop"
         )  # fmt: skip
     finally:
@@ -2181,7 +2181,7 @@ def test_a_successor_that_passed_the_check_before_an_unconfirmed_release_is_refu
     def unproven(_job: pack_job.Job) -> None:
         checks.append(None)
         if len(checks) == 2:  # the updater released the flock unconfirmed after the first check passed
-            msg = "an earlier design pack session is unproven; recover it on the Maintenance page first"
+            msg = "an earlier Impeccable session is unproven; recover it on the Maintenance page first"
             raise pack_job.Busy(msg)
 
     with monkeypatch.context() as patch:  # only this fault is undone below, never the HOME isolation
@@ -2209,21 +2209,21 @@ def test_one_run_at_a_time_and_the_api_refuses_a_second(tmp_path, checkout, clon
     fakes.hold = threading.Event()
     job = pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout))
     c = TestClient(api.create_app(Store(tmp_path / "store"), "t", Host(), pack=job), base_url="http://127.0.0.1")
-    assert c.post("/api/next/design-pack/update").status_code == 401  # guarded like every route
+    assert c.post("/api/next/impeccable/update").status_code == 401  # guarded like every route
 
-    started = c.post("/api/next/design-pack/update", headers=AUTH)
+    started = c.post("/api/next/impeccable/update", headers=AUTH)
     assert (started.status_code, started.json()["state"]) == (200, "running")
     assert fakes.waiting.wait(10)
-    second = c.post("/api/next/design-pack/update", headers=AUTH)
-    assert (second.status_code, second.json()["detail"]) == (409, "a design pack update is already running")
+    second = c.post("/api/next/impeccable/update", headers=AUTH)
+    assert (second.status_code, second.json()["detail"]) == (409, "an Impeccable update is already running")
     with pytest.raises(pack_job.Busy):
         job.start()
-    now = c.get("/api/next/design-pack/update", headers=AUTH).json()
+    now = c.get("/api/next/impeccable/update", headers=AUTH).json()
     assert (now["state"], now["stage"], results(now)["challenger"]) == ("running", "challenger", "running")
     fakes.hold.set()
     assert job.thread is not None
     job.thread.join(30)
-    assert c.get("/api/next/design-pack", headers=AUTH).json()["update"]["state"] == "passed"
+    assert c.get("/api/next/impeccable", headers=AUTH).json()["update"]["state"] == "passed"
     assert fakes.calls.count("challenger") == 1
 
 
@@ -2266,7 +2266,7 @@ def test_a_run_waiting_in_one_project_refuses_a_fresh_start_in_another_and_goes_
     assert bool(fakes.github.prs) is (phase == "publication")
 
     other = pack_job.Job(beta, fakes.live(checkout))
-    with pytest.raises(pack_job.Busy, match="a design pack update waits for answers in alpha"):
+    with pytest.raises(pack_job.Busy, match="an Impeccable update waits for answers in alpha"):
         other.start()
     assert (other.read()["state"], (beta.root / pack_job.FILE).exists()) == ("idle", False)
 
@@ -2320,7 +2320,7 @@ def test_an_unread_pull_request_list_refuses_a_start_and_leaves_the_waiting_ques
 def test_the_answer_routes_take_only_an_open_questions_options(tmp_path, checkout, clone):
     job, _, state = upheld(tmp_path, checkout, clone)
     c = TestClient(api.create_app(job.store, "t", Host(), pack=job), base_url="http://127.0.0.1", headers=AUTH)
-    qid, url = state["questions"][0]["id"], "/api/next/design-pack/update/answer"
+    qid, url = state["questions"][0]["id"], "/api/next/impeccable/update/answer"
 
     stale = c.post(url, json={"question": "old:dispute:F1", "option": "drop"})
     assert (stale.status_code, stale.json()["detail"]) == (409, "this question is no longer open; reload the page")
@@ -2330,12 +2330,12 @@ def test_the_answer_routes_take_only_an_open_questions_options(tmp_path, checkou
     assert (bare.status_code, bare.json()["detail"]) == (422, "asking the challenger to reconsider needs your note")
     assert c.post(url, json={"question": qid, "option": "drop", "extra": 1}).status_code == 422
     bare_client = TestClient(c.app, base_url="http://127.0.0.1")
-    assert bare_client.post("/api/next/design-pack/update/discard").status_code == 401  # guarded like every route
-    assert c.get("/api/next/design-pack/update").json()["state"] == "waiting"  # nothing above changed it
+    assert bare_client.post("/api/next/impeccable/update/discard").status_code == 401  # guarded like every route
+    assert c.get("/api/next/impeccable/update").json()["state"] == "waiting"  # nothing above changed it
 
-    assert c.post("/api/next/design-pack/update/discard").json()["state"] == "discarded"
-    gone = c.post("/api/next/design-pack/update/discard")
-    assert (gone.status_code, gone.json()["detail"]) == (409, "no design pack update waits for you")
+    assert c.post("/api/next/impeccable/update/discard").json()["state"] == "discarded"
+    gone = c.post("/api/next/impeccable/update/discard")
+    assert (gone.status_code, gone.json()["detail"]) == (409, "no Impeccable update waits for you")
 
 
 def test_the_last_run_survives_a_host_restart_and_a_run_cut_short_reads_failed(tmp_path, checkout, clone):
@@ -2363,28 +2363,28 @@ def test_the_last_run_survives_a_host_restart_and_a_run_cut_short_reads_failed(t
     assert json.loads((store.root / pack_job.FILE).read_text())["state"] == "failed"  # kept on disk
 
 
-def test_maintenance_shows_the_design_pack_section_and_settings_only_links_to_it(tmp_path, page_source):
+def test_maintenance_shows_the_impeccable_section_and_settings_only_links_to_it(tmp_path, page_source):
     c = TestClient(api.create_app(Store(tmp_path), "t", Host()), base_url="http://127.0.0.1", headers=AUTH)
 
     page = page_source(c, "/maintenance")
 
     assert '<section id="owlbear" class="panel" aria-labelledby="owlbear-title">' in page  # the global section
-    assert '<h3 id="pack-title">Design pack</h3>' in page
-    assert 'button("Update design pack", start, { id: "pack-update", icon: "refresh"' in page  # lit-html
+    assert '<h3 id="pack-title">Impeccable</h3>' in page
+    assert 'button("Update Impeccable", start, { id: "pack-update", icon: "refresh"' in page  # lit-html
     assert '<p-text id="pack-state" size="sm" role="status" aria-live="polite">${runLine(u)}</p-text>' in page
     assert '<ol id="pack-stages" aria-label="Update stages">' in page
-    assert "commits design_pack.json, skills/NOTICE.md and " in page  # the Update dialog says what it commits
+    assert "commits impeccable.json, skills/NOTICE.md and " in page  # the Update dialog says what it commits
     settings = page_source(c, "/config")
     assert 'id="pack-update"' not in settings  # the update is OwlBear's maintenance, not a project setting
     assert 'href=${here({}, "/maintenance#owlbear")}' in settings
     pinned = c.get("/api/next/maintenance/pack").json()
     assert (pinned["pack"], pinned["upstream"], pinned["identity"]) == (
-        OLD["pack"], OLD["upstream"]["tag"], design_pack.identity()
+        OLD["pack"], OLD["upstream"]["tag"], pack_files.identity()
     )  # fmt: skip
-    got = c.get("/api/next/design-pack").json()
+    got = c.get("/api/next/impeccable").json()
     assert (got["pack"], got["upstream"]) == (OLD["pack"], OLD["upstream"]["tag"])
-    assert got["identity"] == design_pack.identity()
-    assert got["notice"] == f"design pack {OLD['pack']}: releases upstream unknown"  # never online
+    assert got["identity"] == pack_files.identity()
+    assert got["notice"] == f"Impeccable ({OLD['pack']}): releases upstream unknown"  # never online
     assert got["update"]["state"] == "idle"
     assert [s["name"] for s in got["update"]["stages"]] == NAMES
 
@@ -2400,9 +2400,9 @@ def test_the_maintenance_page_links_each_action_and_shows_what_is_not_built(tmp_
     assert 'from "/assets/lit-html/3.3.3/lit-html.js"' in page.text
 
     got = {a["name"]: a for a in c.get("/api/next/maintenance").json()}
-    assert list(got) == ["Memory curation", "Design pack update", "Engine update", "Review Tests", "Backlog triage"]
+    assert list(got) == ["Memory curation", "Impeccable update", "Engine update", "Review Tests", "Backlog triage"]
     assert (got["Memory curation"]["href"], got["Memory curation"]["last"]) == ("/memory", None)
-    assert (got["Design pack update"]["href"], got["Design pack update"]["last"]) == ("#owlbear", None)
+    assert (got["Impeccable update"]["href"], got["Impeccable update"]["last"]) == ("#owlbear", None)
     assert (got["Engine update"]["built"], got["Engine update"]["href"]) == (True, "#owlbear")
     assert (got["Review Tests"]["built"], got["Review Tests"]["href"]) == (True, "#tests")  # started on this page
     assert (got["Backlog triage"]["href"], got["Backlog triage"]["recorded"]) == ("/backlog", False)
@@ -2410,7 +2410,7 @@ def test_the_maintenance_page_links_each_action_and_shows_what_is_not_built(tmp_
         json.dumps(pack_job._blank() | {"state": "failed", "started_at": "2026-10-15T10:00:00+00:00",  # noqa: SLF001
                                         "ended_at": "2026-10-15T10:05:00+00:00", "reason": "golden pages differ"})
     )  # fmt: skip
-    last = {a["name"]: a for a in c.get("/api/next/maintenance").json()}["Design pack update"]["last"]
+    last = {a["name"]: a for a in c.get("/api/next/maintenance").json()}["Impeccable update"]["last"]
     assert last == {"state": "failed", "started_at": "2026-10-15T10:00:00+00:00",
                     "ended_at": "2026-10-15T10:05:00+00:00", "reason": "golden pages differ"}  # fmt: skip
 
@@ -2466,7 +2466,7 @@ def test_a_record_whose_descriptor_cannot_be_read_as_text_shows_as_unread_on_the
         spy.patch(patch)
         got = c.get("/api/next/maintenance")
     assert got.status_code == 200, got.text
-    assert {a["name"]: a for a in got.json()}["Design pack update"]["last"] is None
+    assert {a["name"]: a for a in got.json()}["Impeccable update"]["last"] is None
     assert spy.closed_once(), (spy.owned, spy.strays)  # the record's descriptor, closed exactly once
 
 

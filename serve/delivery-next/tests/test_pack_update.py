@@ -1,4 +1,4 @@
-"""Design pack update tooling (design skill research §3.5): notice, rule diff, golden pages, calibration replay."""
+"""Impeccable update tooling (design skill research §3.5): notice, rule diff, golden pages, calibration replay."""
 
 import dataclasses
 import hashlib
@@ -18,10 +18,10 @@ from owlbear_delivery_next.change_contracts.chat_contract import HostFound
 from owlbear_delivery_next.change_contracts.visual_records import DesignInput, JudgeVerdict, OwnerDecision, VisualRound
 from owlbear_delivery_next.commands import cli, replay_client
 from owlbear_delivery_next.commands.chat_client import NOT_RUNNING, NOT_SERVED
-from owlbear_delivery_next.design_packs import calibration, design_pack, design_tools, detector, pack_update
+from owlbear_delivery_next.impeccable import calibration, design_tools, detector, pack_files, pack_update
+from owlbear_delivery_next.impeccable_runs import pack_candidate, pack_replay
 from owlbear_delivery_next.local_system import local_home, preload
 from owlbear_delivery_next.local_system.processes import Termination
-from owlbear_delivery_next.pack_runs import pack_candidate, pack_replay
 from owlbear_delivery_next.project_host import config_routes
 from owlbear_delivery_next.runtimes import readiness
 from owlbear_delivery_next.runtimes.session_result import Run
@@ -64,21 +64,21 @@ def releases(*tags: str, prerelease: tuple[str, ...] = ()):
 @pytest.fixture
 def pinned(monkeypatch) -> None:
     """The package pins skill-v4.5.2, whichever release it ships: version logic is tested against known tags."""
-    made = design_pack.manifest()
+    made = pack_files.manifest()
     made["upstream"]["tag"], made["pack"] = "skill-v4.5.2", "impeccable-4.5.2.1"
-    monkeypatch.setattr(design_pack, "manifest", lambda: json.loads(json.dumps(made)))
+    monkeypatch.setattr(pack_files, "manifest", lambda: json.loads(json.dumps(made)))
 
 
 def pin(monkeypatch, commit: str) -> None:
     """The manifest pins *commit* beside its tag, as a pack extracted from a clone does."""
-    made = design_pack.manifest()
+    made = pack_files.manifest()
     made["upstream"]["commit"] = commit
-    monkeypatch.setattr(design_pack, "manifest", lambda: json.loads(json.dumps(made)))
+    monkeypatch.setattr(pack_files, "manifest", lambda: json.loads(json.dumps(made)))
 
 
 @pytest.mark.usefixtures("pinned")
 def test_the_notice_counts_newer_skill_releases_and_offline_is_unknown() -> None:
-    assert design_pack.manifest()["upstream"]["tag"] == "skill-v4.5.2"
+    assert pack_files.manifest()["upstream"]["tag"] == "skill-v4.5.2"
     tags = ("skill-v4.5.1", "skill-v4.5.2", "skill-v4.5.10", "skill-v5.0.0", "skill-v5.1.0-rc1", "engine-v9.0.0")
     assert pack_update.behind(releases(*tags, prerelease=("skill-v5.1.0-rc1",))) == 2  # by version, not by text
     assert pack_update.behind() is None  # offline: tests never go online
@@ -91,8 +91,8 @@ def test_the_notice_counts_newer_skill_releases_and_offline_is_unknown() -> None
         raise IncompleteRead(partial)
 
     assert pack_update.behind(truncated) is None
-    with pytest.raises(design_pack.PackError, match="cannot download"):
-        design_pack.install()  # the default download is offline in tests too
+    with pytest.raises(pack_files.PackError, match="cannot download"):
+        pack_files.install()  # the default download is offline in tests too
 
 
 @pytest.mark.usefixtures("pinned")
@@ -111,13 +111,13 @@ def test_the_notice_is_read_offline_refreshed_at_most_daily_and_shown_by_setup_a
     assert pack_update.notice(refresh=True) == {"pack": "impeccable-4.5.2.1", "behind": None, "checked_at": None}
     assert (pack_update.notice(refresh=True, fetch=fetch)["behind"], len(calls)) == (1, 1)  # offline was not kept
     assert (pack_update.notice(refresh=True, fetch=fetch)["behind"], len(calls)) == (1, 1)  # checked today
-    shown = "design pack impeccable-4.5.2.1: 1 release behind"
+    shown = "Impeccable (impeccable-4.5.2.1): 1 release behind"
     assert pack_update.said(pack_update.notice(refresh=False)) == shown
-    assert config_routes._state(Store.open(repo))["design_pack"] == shown  # noqa: SLF001
+    assert config_routes._state(Store.open(repo))["impeccable"] == shown  # noqa: SLF001
     monkeypatch.setattr(readiness, "readiness", lambda *_a: [])  # the other facts probe the machine and the network
     monkeypatch.setattr(readiness, "reach", lambda *_a: None)  # its argument is evaluated first: no real request
-    assert readiness.check(repo, None) == [readiness.Check("design pack updates", ok=True, detail=shown)]  # host start
-    path = design_pack.folder().parent / pack_update.NOTICE
+    assert readiness.check(repo, None) == [readiness.Check("Impeccable updates", ok=True, detail=shown)]  # host start
+    path = pack_files.folder().parent / pack_update.NOTICE
     path.write_text(json.dumps(json.loads(path.read_text()) | {"tag": "skill-v4.0.0"}))
     assert pack_update.notice(refresh=False)["behind"] is None  # another pinned pack's count
     assert (pack_update.notice(refresh=True, fetch=fetch)["behind"], len(calls)) == (1, 2)
@@ -125,7 +125,7 @@ def test_the_notice_is_read_offline_refreshed_at_most_daily_and_shown_by_setup_a
     path.write_text(json.dumps(json.loads(path.read_text()) | {"checked_at": old}))
     assert (
         pack_update.said(pack_update.notice(refresh=True))
-        == "design pack impeccable-4.5.2.1: releases upstream unknown"
+        == "Impeccable (impeccable-4.5.2.1): releases upstream unknown"
     )
     assert pack_update.notice(refresh=False)["behind"] is None  # the settings page no longer shows the old count
 
@@ -181,7 +181,7 @@ def test_the_diff_reports_rules_added_removed_and_changed_and_skill_files_change
     )
     assert '  - description: "old" -> "new \\"text\\""\n' in report  # every field, not only the ones once read
     assert "## Skill files changed\n- M\tskill/SKILL.md\n- A\tskill/new.md\n" in report
-    assert report.startswith(f"# Design pack update: skill-v4.5.2 ({commit}) to skill-v4.6.0\n")
+    assert report.startswith(f"# Impeccable update: skill-v4.5.2 ({commit}) to skill-v4.6.0\n")
     assert report.endswith(f"Skill text: git -C {clone} diff {commit} skill-v4.6.0 -- skill")
     assert "+++ b/skill/new.md\n" in pack_update.skill_diff(clone, "skill-v4.6.0")  # what that line shows
     (clone / pack_update.REGISTRY).write_text(registry(("side-tab", "x", "y")).replace('        name: "x",\n', ""))
@@ -236,9 +236,9 @@ def test_a_pinned_commit_missing_from_the_clone_fails_visibly(tmp_path, monkeypa
     missing = "1" * 40
     pin(monkeypatch, missing)
     said = f"the pinned commit {missing} \\(skill-v4.5.2\\) is not in the clone {clone}; fetch upstream there first"
-    with pytest.raises(design_pack.PackError, match=said):
+    with pytest.raises(pack_files.PackError, match=said):
         pack_update.diff(clone, "skill-v4.6.0")
-    with pytest.raises(design_pack.PackError, match=said):
+    with pytest.raises(pack_files.PackError, match=said):
         pack_update.skill_diff(clone, "skill-v4.6.0")
 
 
@@ -266,22 +266,22 @@ def test_golden_pages_report_what_an_engine_missed_or_found_unexpectedly(monkeyp
 def test_a_candidates_expectations_name_only_page_files_of_its_own_folder(tmp_path, name) -> None:
     """TD-194: the updater writes expected.json; a name never reaches outside the folders before the owner sees it."""
     (tmp_path / "expected.json").write_text(json.dumps({"source": {name: []}, "page": {}}))
-    with pytest.raises(design_pack.PackError, match="no page file of its folder"):
+    with pytest.raises(pack_files.PackError, match="no page file of its folder"):
         pack_update.golden(object(), tmp_path, pages=False)
 
 
 def test_a_candidates_expectations_cover_only_the_pages_it_scans(tmp_path) -> None:
     (tmp_path / "expected.json").write_text(json.dumps({"source": {"a.html": []}, "page": {"b.html": []}}))
-    with pytest.raises(design_pack.PackError, match=r"does not scan by source: b\.html"):
+    with pytest.raises(pack_files.PackError, match=r"does not scan by source: b\.html"):
         pack_update.golden(object(), tmp_path, pages=False)
 
 
 @pytest.mark.browser
 def test_the_installed_engine_and_bundle_find_exactly_the_golden_rules(monkeypatch, machine_home) -> None:
     monkeypatch.setattr(local_home, "root", lambda: machine_home / ".owlbear")  # this machine's pack, read only
-    pack = design_pack.installed()
+    pack = pack_files.installed()
     if pack is None:
-        pytest.skip("the design pack is not installed (owlbear-next design-pack --install)")
+        pytest.skip("Impeccable is not installed (owlbear-next impeccable --install)")
     assert pack_update.golden(pack) == {}  # by source and in the rendered pages
     blind = dataclasses.replace(pack, bundle="window.impeccableDetectAsync = async () => []")  # a bundle finding none
     assert pack_update.golden(blind)["bad.html (page)"] == {
@@ -292,27 +292,27 @@ def test_the_installed_engine_and_bundle_find_exactly_the_golden_rules(monkeypat
 
 def test_the_manifest_activates_a_pack_in_one_switch_and_a_rollback_needs_no_download(monkeypatch) -> None:
     def pins(name: str, engine: bytes, bundle: bytes) -> dict:
-        made = design_pack.manifest()
+        made = pack_files.manifest()
         made["pack"] = name
-        made["engine"][design_pack.platform_name()] = hashlib.sha256(engine).hexdigest()
+        made["engine"][pack_files.platform_name()] = hashlib.sha256(engine).hexdigest()
         made["bundle"]["sha256"] = hashlib.sha256(bundle).hexdigest()
         return made
 
     old, new = pins("impeccable-1", b"e1", b"b1"), pins("impeccable-2", b"e2", b"b2")
     active = {"pins": old}
-    monkeypatch.setattr(design_pack, "manifest", lambda: json.loads(json.dumps(active["pins"])))
-    design_pack.install(lambda url: b"e1" if "releases" in url else b"b1")
+    monkeypatch.setattr(pack_files, "manifest", lambda: json.loads(json.dumps(active["pins"])))
+    pack_files.install(lambda url: b"e1" if "releases" in url else b"b1")
     active["pins"] = new  # the reviewed commit that switches the manifest, skills with it
-    assert design_pack.installed() is None  # never the old pack under the new name
-    assert design_pack.install(lambda url: b"e2" if "releases" in url else b"b2").bundle == "b2"
+    assert pack_files.installed() is None  # never the old pack under the new name
+    assert pack_files.install(lambda url: b"e2" if "releases" in url else b"b2").bundle == "b2"
     active["pins"] = old  # reverting that commit
 
     def offline(url: str) -> bytes:
         msg = f"a rollback downloads nothing: {url}"
         raise AssertionError(msg)
 
-    assert design_pack.install(offline).bundle == "b1"
-    assert sorted(p.name for p in design_pack.folder().parent.iterdir()) == ["impeccable-1", "impeccable-2"]
+    assert pack_files.install(offline).bundle == "b1"
+    assert sorted(p.name for p in pack_files.folder().parent.iterdir()) == ["impeccable-1", "impeccable-2"]
 
 
 def kept_round(  # noqa: PLR0913 - one round, varied by each case
@@ -394,16 +394,14 @@ def test_a_replay_rejudges_kept_rounds_with_their_exact_messages_and_screenshots
         return Run(cfg.session_id, ending="result", payload=final, first=look, termination=Termination(confirmed=True))
 
     folder = tmp_path / "candidate-skills"  # the candidate's own skills, as the updater left them
-    for name in design_pack.manifest()["skills"]:
+    for name in pack_files.manifest()["skills"]:
         (folder / name).mkdir(parents=True)
         (folder / name / "SKILL.md").write_text(preload.text(name) + "\nedited by the updater\n")
     result = pack_replay.replay(store, candidate(folder), run=run)
     assert (result.rounds, result.agreed_before, result.agreed_after) == (1, 0, 1)  # the after's new problem fails
     assert result.left_out == 6
-    assert (
-        result.pack == design_pack.identity(candidate().manifest, folder) != design_pack.identity()
-    )  # the candidate's
-    assert result.pack != design_pack.identity(candidate().manifest)  # its edited skills count, not the package's
+    assert result.pack == pack_files.identity(candidate().manifest, folder) != pack_files.identity()  # the candidate's
+    assert result.pack != pack_files.identity(candidate().manifest)  # its edited skills count, not the package's
     assert result.pack.startswith("impeccable-4.6.0.1+")
     [cfg] = seen
     assert cfg.skills == folder  # the judge loads the candidate's skills
@@ -438,12 +436,12 @@ def test_a_replay_judge_left_running_stops_the_replay_before_another_starts(repo
 
 
 def candidate(folder: Path | None = None, **pins) -> pack_candidate.Candidate:
-    made = design_pack.manifest() | {"pack": "impeccable-4.6.0.1"} | pins
+    made = pack_files.manifest() | {"pack": "impeccable-4.6.0.1"} | pins
     return pack_candidate.Candidate("skill-v4.6.0", made, json.dumps(made), "notice", None, folder)
 
 
 def test_a_replay_refuses_a_candidate_whose_skills_the_judge_does_not_load(repo) -> None:
-    with pytest.raises(design_pack.PackError, match="names skills the judge does not load"):
+    with pytest.raises(pack_files.PackError, match="names skills the judge does not load"):
         pack_replay.replay(Store.open(repo), candidate(skills=["other"]), run=lambda _cfg: None)
 
 
@@ -453,11 +451,15 @@ class _Answers(BaseHTTPRequestHandler):
     status = 200
     body: ClassVar[dict[str, object]] = {}
     seen: ClassVar[list[str]] = []
+    old = False  # a host from before the Impeccable rename: it serves only the design-pack route
 
     def do_POST(self) -> None:
         type(self).seen.append(f"{self.path} {self.headers.get('Authorization')} {self.headers.get('X-OwlBear-Use')}")
-        raw = json.dumps(type(self).body).encode()
-        self.send_response(type(self).status)
+        status, body = type(self).status, type(self).body
+        if type(self).old and not self.path.endswith("/design-pack/replay"):
+            status, body = 404, {"detail": "Not Found"}
+        raw = json.dumps(body).encode()
+        self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(raw)))
         self.end_headers()
@@ -470,7 +472,7 @@ class _Answers(BaseHTTPRequestHandler):
 @pytest.fixture
 def running_host(monkeypatch):
     """The CLI's project and a loopback host; *serve* sets what the host answers to the replay."""
-    _Answers.seen = []
+    _Answers.seen, _Answers.old = [], False
     server = ThreadingHTTPServer(("127.0.0.1", 0), _Answers)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     record = HostFound(
@@ -500,34 +502,51 @@ def test_the_cli_replay_is_the_running_hosts_managed_job_and_nothing_replays_her
 
     monkeypatch.setattr(pack_replay, "replay", ran_here)
     running_host(200, {"ok": True, "report": "calibration replay: 3 decided rounds, 0 left out"})
-    assert cli.main(["--repo", str(repo), "design-pack", "--replay"]) == 0
+    assert cli.main(["--repo", str(repo), "impeccable", "--replay"]) == 0
     assert capsys.readouterr().out == "calibration replay: 3 decided rounds, 0 left out\n"
-    assert _Answers.seen == ["/p/owlbear/api/next/design-pack/replay Bearer tok cli"]
+    assert _Answers.seen == ["/p/owlbear/api/next/impeccable/replay Bearer tok cli"]
 
 
 def test_the_cli_replay_below_the_margin_and_a_refused_host_both_exit_one(repo, capsys, running_host) -> None:
     running_host(200, {"ok": False, "report": "calibration replay: 9 decided rounds; below the margin"})
-    assert cli.main(["--repo", str(repo), "design-pack", "--replay"]) == 1
+    assert cli.main(["--repo", str(repo), "impeccable", "--replay"]) == 1
     assert capsys.readouterr().out == "calibration replay: 9 decided rounds; below the margin\n"
-    running_host(409, {"detail": "a design pack update is running: wait for it to finish"})
-    assert cli.main(["--repo", str(repo), "design-pack", "--replay"]) == 1
-    assert capsys.readouterr().out == "a design pack update is running: wait for it to finish\n"
+    running_host(409, {"detail": "an Impeccable update is running: wait for it to finish"})
+    assert cli.main(["--repo", str(repo), "impeccable", "--replay"]) == 1
+    assert capsys.readouterr().out == "an Impeccable update is running: wait for it to finish\n"
+
+
+def test_the_cli_replay_reaches_a_host_from_before_the_impeccable_rename_once_by_its_old_route(
+    repo, capsys, running_host
+) -> None:
+    _Answers.old = True
+    running_host(200, {"ok": True, "report": "calibration replay: 1 decided round, 0 left out"})
+    assert cli.main(["--repo", str(repo), "impeccable", "--replay"]) == 0
+    assert capsys.readouterr().out == "calibration replay: 1 decided round, 0 left out\n"
+    assert [seen.split()[0] for seen in _Answers.seen] == [
+        "/p/owlbear/api/next/impeccable/replay",
+        "/p/owlbear/api/next/design-pack/replay",
+    ]
+    _Answers.old, _Answers.seen = False, []
+    running_host(409, {"detail": "an Impeccable update is running: wait for it to finish"})
+    assert cli.main(["--repo", str(repo), "impeccable", "--replay"]) == 1
+    assert len(_Answers.seen) == 1  # only a 404 means the route is missing; a refusal is never sent again
 
 
 def test_the_cli_runs_each_update_tool_and_reports_failures(repo, capsys, monkeypatch) -> None:
-    assert cli.main(["--repo", str(repo), "design-pack", "--check"]) == 0
-    assert capsys.readouterr().out == f"design pack {design_pack.manifest()['pack']}: releases upstream unknown\n"
-    assert cli.main(["--repo", str(repo), "design-pack", "--golden"]) == 1
+    assert cli.main(["--repo", str(repo), "impeccable", "--check"]) == 0
+    assert capsys.readouterr().out == f"Impeccable ({pack_files.manifest()['pack']}): releases upstream unknown\n"
+    assert cli.main(["--repo", str(repo), "impeccable", "--golden"]) == 1
     assert "not installed" in capsys.readouterr().out
-    assert cli.main(["--repo", str(repo), "design-pack", "--replay"]) == 1
+    assert cli.main(["--repo", str(repo), "impeccable", "--replay"]) == 1
     assert capsys.readouterr().out.strip() in {NOT_RUNNING.format(repo=repo), NOT_SERVED.format(repo=repo)}
-    assert cli.main(["--repo", str(repo), "design-pack", "--diff", str(repo), "--to", "skill-v9"]) == 1
+    assert cli.main(["--repo", str(repo), "impeccable", "--diff", str(repo), "--to", "skill-v9"]) == 1
     assert "PackError: the pinned commit" in capsys.readouterr().out
     pin(monkeypatch, git(repo, "rev-parse", "HEAD"))
-    assert cli.main(["--repo", str(repo), "design-pack", "--diff", str(repo), "--to", "skill-v9"]) == 1
+    assert cli.main(["--repo", str(repo), "impeccable", "--diff", str(repo), "--to", "skill-v9"]) == 1
     assert "CalledProcessError" in capsys.readouterr().out
     with pytest.raises(SystemExit):
-        cli.main(["--repo", str(repo), "design-pack", "--diff", str(repo)])
+        cli.main(["--repo", str(repo), "impeccable", "--diff", str(repo)])
 
 
 def test_the_cli_replay_names_the_uncertain_legacy_session_it_is_refused_for(
@@ -538,11 +557,9 @@ def test_the_cli_replay_names_the_uncertain_legacy_session_it_is_refused_for(
         raise AssertionError(msg)
 
     monkeypatch.setattr(pack_replay, "replay", ran_here)
-    running_host(
-        409, {"detail": "an earlier design pack session is unproven; recover it on the Maintenance page first"}
-    )
-    assert cli.main(["--repo", str(repo), "design-pack", "--replay"]) == 1
+    running_host(409, {"detail": "an earlier Impeccable session is unproven; recover it on the Maintenance page first"})
+    assert cli.main(["--repo", str(repo), "impeccable", "--replay"]) == 1
     assert (
         capsys.readouterr().out
-        == "an earlier design pack session is unproven; recover it on the Maintenance page first\n"
+        == "an earlier Impeccable session is unproven; recover it on the Maintenance page first\n"
     )

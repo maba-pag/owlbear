@@ -1,4 +1,4 @@
-"""Admission of a launch the owner starts (a shaping chat, a design pack update) against OwlBear's stop (TD-288).
+"""Admission of a launch the owner starts (a shaping chat, an Impeccable update) against OwlBear's stop (TD-288).
 
 It runs under the host's ``launching`` lock, which a stop when idle takes once as its barrier: a launch admitted before
 the intent is running and counted from then on, and one after it is refused.

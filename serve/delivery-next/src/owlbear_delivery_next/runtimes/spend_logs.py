@@ -2,7 +2,7 @@
 
 The log is ``~/.copilot/session-state/<id>/events.jsonl``, else Retro's copy. It completes a run the ledger left open
 for ``OPEN`` (killed), a run that ended with its usage unread, unknown or a lower bound, and a session only Retro's
-chatlogs manifest names (curator, design pack and lookup runs before the ledger, and a Spotter look whose own lines
+chatlogs manifest names (curator, Impeccable and lookup runs before the ledger, and a Spotter look whose own lines
 and record a crash lost). Every new high of the session's
 cumulative credits counts, at the time it was first reached, the highest of each quarter hour (``QUARTER``), so a
 day's total never depends on when the log was first read and known spend never moves to a later day. Its usage stays

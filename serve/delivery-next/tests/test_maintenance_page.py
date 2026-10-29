@@ -43,7 +43,7 @@ def test_the_maintenance_page_lists_each_action_and_says_when_delivery_stops(tmp
             page.goto(f"{base}/maintenance#token=tok")
             actions = page.locator("#actions > li")
             expect(actions).to_have_count(5)
-            expect(actions.nth(1)).to_contain_text("Design pack update")
+            expect(actions.nth(1)).to_contain_text("Impeccable update")
             expect(page.get_by_role("link", name="Open Memory curation in Memory")).to_have_attribute("href", "/memory")
             expect(actions.nth(2)).to_contain_text("No run record kept.")
             expect(page.locator("#use-none")).to_have_text("No step has run in this project yet.")

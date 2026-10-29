@@ -7,7 +7,7 @@ from types import SimpleNamespace
 from fastapi import APIRouter, FastAPI
 from fastapi.testclient import TestClient
 
-from owlbear_delivery_next.pack_runs import pack_candidate
+from owlbear_delivery_next.impeccable_runs import pack_candidate
 from owlbear_delivery_next.project_host import pack_routes
 
 
@@ -40,7 +40,7 @@ def test_a_replay_runs_outside_the_launch_lock_so_a_tick_can_take_it_meanwhile(m
     http.app.include_router(routes)
 
     result: dict[str, object] = {}
-    worker = threading.Thread(target=lambda: result.update(r=http.post("/design-pack/replay")))
+    worker = threading.Thread(target=lambda: result.update(r=http.post("/impeccable/replay")))
     worker.start()
     try:
         assert running.wait(5)
