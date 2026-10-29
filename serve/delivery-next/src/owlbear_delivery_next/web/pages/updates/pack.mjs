@@ -16,7 +16,8 @@ export const FOUND = { open: "to fix", fixed: "fixed by the updater",
   "owner-drop": "you dropped it", withdrawn: "withdrawn by the challenger" };
 
 export const own = { pinned: null, runs: null, unread: { pinned: "", runs: "" }, error: "", notes: new Map(),
-  missing: "", busy: "", polling: null, reading: 0, awaiting: null, lost: false, show: () => {} };
+  choices: new Map(), unchosen: "", missing: "", busy: "", polling: null, reading: 0, awaiting: null, lost: false,
+  show: () => {} };
 
 // *show* renders the whole page; the panel calls it whenever its state changes.
 export function follow(show) {
@@ -101,6 +102,7 @@ export async function answer(run, q, o) {
   await act(`${q.id}:${o.id}`, async () => {
     await call("/impeccable/update/answer", { ...to, body: { question: q.id, option: o.id, note }, timeout: WRITE });
     own.notes.delete(q.id);
+    own.choices.delete(q.id);
   });
 }
 
@@ -114,7 +116,7 @@ export function discarding(run, questions) {
 export async function discard(run, d) {
   const p = run.published;
   const sure = await ask({
-    title: "Discard the Impeccable update?", yes: d.label, no: "Keep it waiting",
+    title: "Discard the Impeccable update?", yes: d.label, no: "Keep it waiting", destructive: true,
     now: `The update started in ${run.name} ends here as discarded.`,
     then: "Nothing is activated: the pinned pack stays as it is, and the run's candidate is not used again.",
     after: p?.url ? `Its pull request #${p.number} stays open; close it on GitHub if you no longer want it.`
@@ -131,7 +133,7 @@ export async function discard(run, d) {
 }
 
 // A primary only where one answer has priority: activating at the end, or trying again once a cause is fixed when
-// no repair is offered beside it. Unresolved alternatives keep equal emphasis.
+// no repair is offered beside it. Alternatives without one are chosen and sent with one button instead (run.mjs).
 export function emphasis(q, o) {
   const repair = q.options.some((x) => x.id === "repair");
   return o.id === "activate" || (o.id === "retry" && !repair) ? "primary" : "secondary";

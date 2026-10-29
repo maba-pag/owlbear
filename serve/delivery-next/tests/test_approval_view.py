@@ -321,3 +321,41 @@ def test_an_option_the_question_no_longer_offers_is_not_sent(page_url, left, pds
         form.get_by_role("button", name="Answer").click()
         expect(page.locator("#detail")).not_to_contain_text("Not done")
     assert '"option":null' in sent(store, "greet").replace(" ", "")
+
+
+@pytest.mark.browser
+def test_a_card_names_the_files_its_activity_touches_without_their_paths(page_url, pds) -> None:
+    """The card is a summary: a tool's path shows as its file's name; the detail keeps the whole path."""
+    import json  # noqa: PLC0415
+    import re  # noqa: PLC0415
+
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    _, base = page_url
+
+    now = {"now": "", "progress": None, "outcome": None}
+
+    def doing(route) -> None:
+        rows = route.fetch().json()
+        for row in rows if isinstance(rows, list) else [rows]:
+            row.update(now)
+        route.fulfill(content_type="application/json", body=json.dumps(rows))
+
+    with opened(base, "flip", pds) as page:
+        page.route(re.compile(r".*/changes(/flip)?(\?.*)?$"), doing)
+        card = page.locator("#changes .card", has_text="flip")
+        for said, shown in (
+            ("Build 1/2 · view /Users/me/project/README.md", "view README.md"),
+            ("Build · view /Users/Jane Doe/project/README.md 3m ago", "view README.md 3m ago"),
+            ("Build · ran pytest src/x/test_y.py 1m ago", "ran pytest test_y.py 1m ago"),
+            ("Build · stopped: CI/CD failed · 3/4 left", "CI/CD failed"),
+        ):
+            now["now"] = said
+            page.reload()
+            expect(card).to_contain_text(shown)
+            expect(card).not_to_contain_text("/Users/")
+            expect(card).not_to_contain_text("src/")
+        expect(page.locator("#detail")).to_contain_text("CI/CD failed · 3/4 left")
+        now["now"] = said = "Build · view /Users/Jane Doe/project/README.md 3m ago"
+        page.reload()
+        expect(page.locator("#detail")).to_contain_text(said)  # the detail keeps the whole path

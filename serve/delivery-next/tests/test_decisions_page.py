@@ -274,6 +274,7 @@ def test_the_owner_resolves_a_three_way_conflict_by_keeping_one(store, pds):
     with decisions_page(store, pds) as page:
         card = page.locator(".entry", has_text="Exports in XML")
         card.get_by_role("button", name="Open").click()
+        expect(card.locator('p-button[variant="primary"]')).to_have_text(["Keep this one"])  # the conflict asks
         card.get_by_role("button", name="Keep this one").click()
         dialog = pds.modal(page)
         expect(dialog).to_contain_text("Withdrawn: Exports in JSON")
@@ -340,6 +341,41 @@ def test_the_owner_marks_a_decided_decision_he_never_made_approved(store, pds):
 
 
 @pytest.mark.browser
+def test_the_read_back_queue_asks_with_one_primary_and_withdrawing_is_never_it(store, pds):
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    for title in ("Exports are CSV", "Builds run nightly"):
+        write(make(title=title, statement=f"{title}.", read_back="pending", read_back_why="Asked again.",
+                   read_back_kind="uncertain"), store.shared.root / PROJECT)  # fmt: skip
+    with decisions_page(store, pds) as page:
+        queue = page.locator("#queue")
+        expect(queue.locator(".queued")).to_have_count(2)
+        expect(queue.locator('p-button[variant="primary"]')).to_have_text(["Still right"])  # the lead's only
+        expect(queue.locator(".queued").first.locator('p-button[variant="primary"]')).to_have_count(1)
+        item = queue.locator(".queued").nth(1)
+        failing = re.compile(r".*/decisions/D-[^/?]+(\?.*)?$")
+        page.route(failing, lambda route: route.fulfill(status=503, body="down"))
+        with page.expect_response(failing):
+            item.get_by_role("button", name="Replace or withdraw").click()
+        expect(queue.locator('p-button[variant="primary"]')).to_have_text(["Still right"])  # a failed read keeps it
+        page.unroute(failing)
+        item.get_by_role("button", name="Close").click()
+        item.get_by_role("button", name="Replace or withdraw").click()
+        expect(item.locator("#detail")).to_be_visible()
+        expect(queue.locator('.queued > .row p-button[variant="primary"]')).to_have_count(0)  # its actions lead
+        expect(queue.locator('p-button[variant="primary"]')).to_have_count(1)
+        item.get_by_role("button", name="Withdraw").click()
+        dialog = pds.modal(page)
+        expect(dialog.locator('p-button[variant="primary"]')).to_have_text(["Cancel"])  # declining leads
+        expect(dialog.locator("p-button", has_text="Withdraw")).to_have_attribute("variant", "secondary")
+        dialog.get_by_role("button", name="Cancel").click()
+        item.get_by_role("button", name="Read back").click()
+        pds.modal(page).get_by_role("button", name="Confirm as it reads").click()
+        expect(queue.locator(".queued")).to_have_count(1)
+        expect(queue.locator('p-button[variant="primary"]')).to_have_text(["Still right"])  # the one left leads again
+
+
+@pytest.mark.browser
 def test_the_owner_reads_back_an_open_decision_by_confirming_it_and_sees_no_record_rows(store, pds):
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
@@ -351,6 +387,7 @@ def test_the_owner_reads_back_an_open_decision_by_confirming_it_and_sees_no_reco
         expect(card.locator("#detail")).to_contain_text("autonomous")
         expect(card.locator("#detail")).not_to_contain_text("TD-12")
         expect(card.locator("#detail")).not_to_contain_text("Record rows")
+        expect(card.locator('p-button[variant="primary"]')).to_have_text(["Read back"])  # never Withdraw
         card.get_by_role("button", name="Read back").click()
         dialog = pds.modal(page)
         expect(dialog).to_contain_text("Exports are CSV.")

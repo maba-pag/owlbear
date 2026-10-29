@@ -435,6 +435,7 @@ def test_the_deleted_section_removes_entries_deleted_long_ago(shared, pds):
         deleted = page.locator("section", has_text="Deleted (history kept)")
         expect(deleted.locator(".entry")).to_have_count(2)
         deleted.get_by_role("button", name=f"Remove 2 deleted entries older than 30 days from {store.name}").click()
+        expect(pds.modal(page).locator('p-button[variant="primary"]')).to_have_text(["Keep them"])  # never removing
         pds.answer(page, "Remove them")
         expect(page.locator("#status")).to_contain_text(f"Removed 2 deleted entries from {store.name}.")
         expect(deleted.locator(".entry")).to_have_count(1)
@@ -454,9 +455,17 @@ def test_approving_one_memory_leaves_the_next_ones_button_ready(shared, pds):
     with memory_page(store, pds) as page:
         review = page.locator("section", has_text="Needs your review")
         expect(review.locator(".entry")).to_have_count(2)
+        expect(review.locator('p-button[variant="primary"]')).to_have_text(["Approve"])  # the first entry's only
+        expect(review.locator(".entry").first.locator('p-button[variant="primary"]')).to_have_count(1)
+        leading = 'p-button:not([variant]), p-button[variant="primary"]'  # PDS renders a p-button without one primary
+        review.locator(".entry").nth(1).get_by_role("button", name="Edit").click()
+        expect(review.locator(leading)).to_have_text(["Save"])  # the open editor leads, not another entry's Approve
+        review.get_by_role("button", name="Cancel").click()
+        expect(review.locator(leading)).to_have_text(["Approve"])
         review.locator(".entry").first.get_by_role("button", name="Approve").click()
         expect(review.locator(".entry")).to_have_count(1)
         expect(review.get_by_role("button", name="Approve")).to_be_enabled()
+        expect(review.locator('p-button[variant="primary"]')).to_have_text(["Approve"])  # the next one leads
 
 
 @pytest.mark.browser

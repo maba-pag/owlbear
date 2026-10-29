@@ -7,7 +7,7 @@ import {
   curatorThreshold, spotterCell, prefRows, USER_KEYS, userConfig, userConfigLabel,
   contextCell, ratesCell, editable,
 } from "./cells.mjs";
-import { pendingLine, save, rename, reviewPrefs } from "./layers.mjs";
+import { pendingLine, save, rename, reviewPrefs, hasEdits } from "./layers.mjs";
 import { machineSection } from "./machine.mjs";
 
 // The project this page edits, by its name in the machine host's list; "This project" on a clone's own host.
@@ -96,15 +96,18 @@ function acrossSection() {
   </section>`;
 }
 
+// Rename is the panel's primary once a different name is typed, the one thing it then asks.
 function folderSection() {
   const loaded = state.loaded, off = !loaded.folder || state.saving, value = state.folder ?? loaded.folder ?? "";
-  const keep = (e) => { state.folder = e.target.value ?? ""; };
+  const renaming = !off && value.trim() !== "" && value.trim() !== loaded.folder;
+  const keep = (e) => { state.folder = e.target.value ?? ""; show(); };
   const label = "Folder in the shared settings repository";
   const input = html`<p-input-text id="folder" label=${label} ?disabled=${off} .value=${live(value)} @input=${keep}
     @change=${keep}></p-input-text>`;
   return html`<section class="panel" aria-labelledby="folder-title">
     <p-heading size="lg"><h2 id="folder-title">Project folder</h2></p-heading>
-    <div class="row">${input}${button("Rename folder", rename, { id: "rename", icon: "edit", disabled: off })}</div>
+    <div class="row">${input}${button("Rename folder", rename, { id: "rename", icon: "edit",
+      variant: renaming ? "primary" : "secondary", disabled: off })}</div>
     <p-text id="folder-note">${loaded.folder ? "Named after the repository unless renamed. Renaming moves the folder "
       + "with its settings, memory and visual decisions, then commits and pushes the move; it is refused while a "
       + "step of this project or its memory curation runs."
@@ -114,7 +117,7 @@ function folderSection() {
 }
 
 function settingsSections() {
-  const loaded = state.loaded, roles = Object.keys(loaded.settings.agents);
+  const loaded = state.loaded, roles = Object.keys(loaded.settings.agents), edits = hasEdits();
   const share = (n, of) => `${n} (${Math.round((100 * n) / of)}%)`;
   const text = (v) => cell(html`<p-text>${v}</p-text>`);
   const machine = (state.machine?.resolved?.missing ?? []).map((k) => `machine.${k}`);  // this machine's in force
@@ -255,12 +258,13 @@ function settingsSections() {
     <div class="bar" role="region" aria-label="Save settings">
       ${button({ global: "Save global defaults", machine: "Save this machine's preferences" }[state.layer]
         ?? "Save project settings", save,
-        { id: "save", icon: "check", busy: state.saving })}
+        { id: "save", icon: "check", variant: edits ? "primary" : "secondary", busy: state.saving })}
       <p-text id="pending" size="sm" aria-live="polite">${pendingLine()}</p-text>
       ${state.layer === "project" && state.loaded.prefs_pending
         ? button("Confirm merge preferences reviewed", reviewPrefs, {
             id: "review-prefs",
             icon: "check",
+            variant: edits ? "secondary" : "primary",
             busy: state.saving,
           })
         : nothing}

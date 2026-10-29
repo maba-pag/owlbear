@@ -61,7 +61,8 @@ async function remove(p) {
   const at = machineState().projects.findIndex((o) => o.id === p.id);
   const yes = await ask({ title: `Remove ${p.name}?`, now: `OwlBear stops serving ${p.path}.`,
     then: "Its Changes, settings and memory stay in the clone; nothing is deleted.",
-    after: "Add the folder again to serve it once more.", instead: "It keeps running.", yes: "Remove project" });
+    after: "Add the folder again to serve it once more.", instead: "It keeps running.", yes: "Remove project",
+    destructive: true });
   if (!yes) return;
   await act(`remove ${p.id}`, async () => {
     await call(`/projects/${p.id}`, { method: "DELETE", machine: true });

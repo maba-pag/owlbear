@@ -14,7 +14,8 @@
 <style>
   #page > p-text:empty { display: none !important; }
   .row { align-items: end; }
-  #filters > * { flex: 1 1 12rem; }
+  #filters { gap: var(--p-spacing-static-sm) var(--p-spacing-static-md); }
+  #filters > * { flex: 0 1 13rem; min-width: 10rem; }  /* compact: filters narrow the list, they are not the page */
   #entries { display: grid; gap: var(--p-spacing-fluid-sm); }
   .entries { display: grid; gap: var(--p-spacing-static-sm); margin: 0; padding: 0; list-style: none; }
   .entry {
@@ -79,7 +80,7 @@ function button(label, onclick, { variant, icon, aria, busy = false } = {}) {
 
 function select(key, label, options) {
   const changed = (e) => { filter[key] = e.target.value; show(); };
-  return html`<p-select label=${label} .value=${filter[key]} @change=${changed}>
+  return html`<p-select label=${label} compact="true" .value=${filter[key]} @change=${changed}>
     ${options.map(([v, said]) => html`<p-select-option value=${v}>${said}</p-select-option>`)}</p-select>`;
 }
 
@@ -145,7 +146,7 @@ async function act(m, action, body = {}, of = m.place.of) {
 
 async function remove(m) {
   const sure = await ask({
-    title: `Delete “${m.title}”?`, yes: "Delete", no: "Keep it",
+    title: `Delete “${m.title}”?`, yes: "Delete", no: "Keep it", destructive: true,
     now: m.state === "pending" ? "It was never reviewed, so its file is removed."
       : "It is marked deleted and agents no longer recall it; its history stays in the folder.",
     after: "There is no restore here.",
@@ -209,7 +210,7 @@ function purgeable(deleted) {
 async function purge(old) {
   const place = old[0].place;
   const sure = await ask({
-    title: `Remove ${many(old.length)} from ${place.label}?`, yes: "Remove them", no: "Keep them",
+    title: `Remove ${many(old.length)} from ${place.label}?`, yes: "Remove them", no: "Keep them", destructive: true,
     now: `The files of entries deleted ${PURGE_DAYS} days ago or earlier leave the folder; later ones stay.`,
     after: "The shared repository's Git history keeps them; this page cannot bring them back.",
     instead: "They stay listed as deleted.",
@@ -257,7 +258,7 @@ function editor(m) {
     || state.loaded.categories.some((c) => draft.categories.includes(c) !== m.categories.includes(c));
   const cancel = async () => {
     if (changed() && !(await ask({ title: "Discard your edits?", yes: "Discard", no: "Keep editing",
-      now: "Your changes to this memory are lost.", instead: "You go on editing." }))) return;
+      destructive: true, now: "Your changes to this memory are lost.", instead: "You go on editing." }))) return;
     state.editing = null;
     show();
   };
@@ -268,13 +269,18 @@ function editor(m) {
       ${button("Cancel", cancel, { variant: "secondary" })}</div>`;
 }
 
-function actions(m) {
-  const parts = [];
+// A section that asks has one primary (D-01M63C7BJZZ7RQV9XS4XVR0DNE): the *lead* entry's Approve or Resolve, the
+// first one listed under "Needs your review", unless an entry there is being edited: its Save leads then. Every other
+// row action is secondary.
+function actions(m, lead) {
+  const parts = [], answer = lead ? "primary" : "secondary";
   if (m.state === "curated") {
-    parts.push(button("Approve", () => act(m, "approve"), { icon: "check", busy: busy(m, "approve") }));
+    parts.push(button("Approve", () => act(m, "approve"), { variant: answer, icon: "check",
+      busy: busy(m, "approve") }));
   }
   if (["contested", "disputed", "stale"].includes(m.state)) {
-    parts.push(button("Resolve", () => resolve(m), { icon: "check", aria: DIALOG, busy: busy(m, "resolve") }));
+    parts.push(button("Resolve", () => resolve(m), { variant: answer, icon: "check", aria: DIALOG,
+      busy: busy(m, "resolve") }));
   }
   if (m.state !== "deleted") {
     parts.push(button("Edit", () => edit(m), { variant: "secondary", icon: "edit" }),
@@ -293,7 +299,7 @@ function actions(m) {
   return parts.length ? html`<div class="row">${parts}</div>` : nothing;
 }
 
-function card(m) {
+function card(m, lead) {
   const scope = m.scope_agents.length ? m.scope_agents.map((a) => (a === "*" ? "all agents" : a)).join(", ")
     : "no agent yet";
   const meta = `From ${m.source_agent} · for ${scope} · confidence ${m.confidence} · updated ${age(m.updated_at)}`;
@@ -305,7 +311,8 @@ function card(m) {
       <p-tag class="place" compact="true">${m.place.label}</p-tag>
       ${m.categories.map((c) => html`<p-tag compact="true">${c}</p-tag>`)}</div>
     <p-text size="xs" color="contrast-medium">${meta}${advice}</p-text>
-    ${state.editing?.id === m.key ? editor(m) : html`<p-text class="said" size="sm">${m.content}</p-text>${actions(m)}`}
+    ${state.editing?.id === m.key ? editor(m)
+      : html`<p-text class="said" size="sm">${m.content}</p-text>${actions(m, lead)}`}
   </li>`;
 }
 
@@ -334,10 +341,12 @@ function entries(shown) {
   const sections = GROUPS.map(([title, hint, states]) => {
     const mine = shown.filter((m) => states.includes(m.state));
     if (!mine.length) return nothing;
+    const leads = title === GROUPS[0][0] && !mine.some((m) => state.editing?.id === m.key);
     return html`<section class=${states.includes("deleted") ? "quiet" : ""}>
       <div><p-heading size="lg"><h2>${title} (${mine.length})</h2></p-heading>${hint ? html`<p-text>${hint}</p-text>`
         : nothing}${states.includes("deleted") ? purges() : nothing}</div>
-      <ul class="entries">${repeat(mine, (m) => m.key, card)}</ul></section>`;
+      <ul class="entries">${repeat(mine, (m) => m.key, (m, i) => card(m, leads && i === 0))}</ul>
+      </section>`;
   });
   const empty = state.loaded.entries.length ? "No memory matches these filters."
     : "Agents have not remembered anything yet.";

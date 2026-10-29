@@ -20,15 +20,24 @@ function split(line) {  // the stage, then what is happening in it
   return at < 0 ? ["", line] : [line.slice(0, at), line.slice(at + 3)];
 }
 
+// A card names a file by its name; the detail keeps the whole path. A tool's one target may hold spaces; elsewhere a
+// path ends at one, and a relative one counts only with an extension, so counters, "CI/CD" and URLs stay as they are.
+const LAST = String.raw`([^\s,/\u00b7]+)`;
+const short = (said) => said
+  .replace(new RegExp(String.raw`(?<=(?:^|\u00b7 )(?!ran )[\w-]+ )~?\/(?:[^\s,/\u00b7][^,/\u00b7]*?\/)+${LAST}`, "g"),
+    "$1")
+  .replace(new RegExp(String.raw`(?<![^\s(])~?\/(?:[^\s,/\u00b7]+\/)+${LAST}`, "g"), "$1")
+  .replace(/(?<![^\s(])(?![\d./]+(?=[\s,)\u00b7]|$))(?:[\w.-]+\/)+([\w-]*\.[\w.-]+)(?=[\s,)\u00b7]|$)/g, "$1");
+
 function card([c, label, variant]) {
-  const current = c.key === state.selected, [stage, rest] = split(c.line), step = c.progress?.line;
+  const current = c.key === state.selected, [stage, rest] = split(short(c.line)), step = c.progress?.line;
   const open = (event) => {
     if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     event.preventDefault();
     choose(c.key);
   };
   const bits = [];
-  if (c.now && label !== "Done" && (!step || c.now.includes(" \u00b7 "))) bits.push(split(c.now)[1]);
+  if (c.now && label !== "Done" && (!step || c.now.includes(" \u00b7 "))) bits.push(split(short(c.now))[1]);
   if (c.step_time) bits.push(`step ${c.step_time}`);
   if (c.credits?.change || c.credits?.unknown) {
     const now = c.credits.step ? ` (this step ${c.credits.step.toFixed(2)})` : "";
@@ -42,7 +51,8 @@ function card([c, label, variant]) {
       <p-tag variant=${variant} compact="true">${label}</p-tag></div>
     ${several() ? html`<p class="meta project">${c.projectName}</p>` : nothing}
     ${step ? html`<p class="says stage">${step}</p>` : nothing}
-    <p class="says">${stage && !step ? html`<span class="stage">${stage}</span> \u00b7 ` : nothing}${rest}</p>
+    <p class="says">${stage && !step && stage !== label ? html`<span class="stage">${stage}</span> \u00b7 `
+      : nothing}${rest}</p>
     ${c.action && groupOf(label) !== "working" ? html`<p class="next">Next: ${c.action}</p>` : nothing}
     ${bits.length ? html`<p class="meta">${bits.join(" \u00b7 ")}</p>` : nothing}
     ${(c.overlaps || []).map((o) => html`<p class="meta">${o}</p>`)}
@@ -69,7 +79,7 @@ function listView() {
   if (!changes) return nothing;
   const head = !changes.length
     ? html`<p class="empty meta">No Changes yet. New Change opens a chat in VS Code where you shape the first one.</p>`
-    : !groups.you.length ? html`<p class="meta">Nothing needs you right now.</p>` : nothing;
+    : !groups.you.length ? html`<p class="says" id="nothing-yours">Nothing needs you right now.</p>` : nothing;
   const toggled = (e) => { state.doneOpen = e.target.open; };
   return html`${head}${Object.entries(GROUPS).map(([key, title]) => {
     if (!groups[key].length) return nothing;

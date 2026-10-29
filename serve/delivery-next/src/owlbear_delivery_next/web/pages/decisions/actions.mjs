@@ -126,7 +126,7 @@ async function promote(e) {
 }
 
 async function withdraw(e) {
-  const why = await ask({ title: `Withdraw “${e.title}”?`, yes: "Withdraw", ...redecide(e),
+  const why = await ask({ title: `Withdraw “${e.title}”?`, yes: "Withdraw", ...redecide(e), destructive: true,
     now: "It no longer applies and has no successor; it stays in history, hidden by default.",
     then: e.state === "in_force" ? "A running Change it applied to stops at its next step and asks." : undefined,
     after: "Record a new decision if the rule is needed again.", instead: "It stays as it is.",
@@ -180,10 +180,22 @@ async function keep(e) {
   if (why) act(e, "keep", { revisions, reason: why });
 }
 
+// One primary per decision, by its state: a conflict asks which one to keep, a draft whether to activate it, a
+// decision in force whether it is still right; Withdraw is never primary (D-01M63C7BJZZ7RQV9XS4XVR0DNE).
+function primary(e) {
+  if (e.state === "draft") return "activate";
+  if (e.state !== "in_force") return "";
+  return e.conflict || e.rivals.length ? "keep" : "read-back";
+}
+
+// Whether the open detail holds its panel's primary: an open form's, or the decision's own action.
+export const leads = (e) => Boolean(state.form || primary(e));
+
 export function actions(e) {
-  const busy = (a) => state.pending === a, parts = [];
+  const busy = (a) => state.pending === a, parts = [], first = primary(e);
   const opens = (label, action) => button(label, () => begin(action), { variant: "secondary" });
-  const asks = (label, work, action) => button(label, () => work(e), { aria: DIALOG, busy: busy(action) });
+  const asks = (label, work, action) => button(label, () => work(e), { aria: DIALOG, busy: busy(action),
+    variant: action === first ? "primary" : "secondary" });
   if (e.state === "in_force") {
     parts.push(asks("Read back", stillRight, "read-back"), opens("Replace", "replace"),
       asks("Withdraw", withdraw, "withdraw"));

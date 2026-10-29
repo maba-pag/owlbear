@@ -137,7 +137,7 @@ function machineControls() {
       this machine keeps its own values.</p-text>` : nothing}
     ${keys.map(ownControl)}
     <div class="row">${button("Save machine settings", saveMachine, { busy: state.machineSaving,
-      disabled: !state.machineDraft })}</div>`;
+      variant: state.machineDraft ? "primary" : "secondary", disabled: !state.machineDraft })}</div>`;
 }
 
 async function saveMachine() {
@@ -197,7 +197,7 @@ export function machineSection() {
 }
 
 async function removeLegacy() {
-  if (!(await ask({ title: "Remove the old runtime?", yes: "Remove it", no: "Keep it",
+  if (!(await ask({ title: "Remove the old runtime?", yes: "Remove it", no: "Keep it", destructive: true,
     now: `Delivery deletes ${state.machine.legacy.join(", ")}, the runtime folder from before the first update.`,
     then: "Nothing runs it any more; OwlBear runs from its installed versions.",
     after: "It cannot be brought back; a later version is installed from GitHub as usual.",

@@ -25,7 +25,7 @@ export function toolUse(t) {
     <p-heading size="lg"><h2 id="tool-use-title">Tool use</h2></p-heading>
     ${t.runs ? html`<p-table id="tools" caption="Calls of Delivery's tools"><p-table-head><p-table-head-row>
       <p-table-head-cell>Tool</p-table-head-cell>${columns.map(([, h]) =>
-        html`<p-table-head-cell>${h}</p-table-head-cell>`)}</p-table-head-row></p-table-head>
+        html`<p-table-head-cell class="num">${h}</p-table-head-cell>`)}</p-table-head-row></p-table-head>
       <p-table-body>${t.tools.map((r) => row(r.tool, r, columns))}${row("All tools", t.totals, columns)}</p-table-body>
       </p-table>
       <p-heading size="md"><h3 id="wrong-title">Wrong tool choices</h3></p-heading>

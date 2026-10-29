@@ -258,16 +258,22 @@ function notes() {
       ${ending ? nothing : control("Run updates now", runUpdates, { busy: bar.busy === "update" || updating(update) })}
       ${!ending && bar.data.update_while_paused ? control("Pause and stop when idle", stopWhenIdle,
         { busy: bar.busy === "pause-stop", title: STOP_TIP }) : nothing}</p>` : nothing}
-    ${announce ? html`<p role="status" id="update-announce">OwlBear updates to ${announce.version} in
-      ${clock(announced())} · ${control("Postpone", () => act("postpone", seen), { busy: bar.busy === "postpone" })}
-      </p>` : nothing}
-    ${update?.phase && update.phase !== "idle" ? html`<p role="status" id="update-state">Update${update.version
+    ${announce ? note("update-announce", "info", html`OwlBear updates to ${announce.version} in
+      ${clock(announced())}.`, ["Postpone", () => act("postpone", seen), bar.busy === "postpone"]) : nothing}
+    ${update?.phase && update.phase !== "idle" ? note("update-state", "info", html`Update${update.version
       ? ` to ${update.version}` : ""}: ${update.phase}${update.detail ? ` · ${update.detail}` : ""} ·
-      ${updates("owlbear", "OwlBear")}</p>` : nothing}
-    ${updated && localStorage.getItem(SEEN) !== updated ? html`<p role="status" id="update-done">OwlBear now runs
-      ${updated}. ${control("OK", () => { localStorage.setItem(SEEN, updated); showBar(); })}</p>` : nothing}
+      ${updates("owlbear", "OwlBear")}`) : nothing}
+    ${updated && localStorage.getItem(SEEN) !== updated ? note("update-done", "success", `OwlBear now runs
+      ${updated}.`, ["OK", () => { localStorage.setItem(SEEN, updated); showBar(); }]) : nothing}
     ${banners(bar.data.pack)}
     ${bar.error ? html`<p role="alert">${bar.error}</p>` : nothing}`;
+}
+
+// S4: an update's news is a PDS notification, its one answer the notification's own button.
+function note(id, state, said, [label, onaction, busy = false] = []) {
+  return html`<p-inline-notification id=${id} state=${state} dismiss-button="false"
+    action-label=${label ?? nothing} .actionLoading=${busy} @action=${onaction ?? nothing}>${said}
+    </p-inline-notification>`;
 }
 
 function when(iso) {

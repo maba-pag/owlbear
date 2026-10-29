@@ -130,7 +130,29 @@ function diff(text) {
     class=${line(l)}>${l}</span>\n`)}</pre>`;
 }
 
-function question(run, q, to) {
+// Alternatives with no priority among them are chosen, nothing preselected, and sent with one button: the lead
+// question's is the panel's one primary (D-01M63C7BJZZ7RQV9XS4XVR0DNE) without favouring an answer.
+function choose(run, q, answers, lead) {
+  const picked = answers.find((o) => o.id === own.choices.get(q.id)), unset = own.unchosen === q.id && !picked;
+  const pick = (e) => {
+    own.choices.set(q.id, e.target.value);
+    own.unchosen = "";
+    own.show();
+  };
+  const send = () => {
+    if (picked) return answer(run, q, picked);
+    own.unchosen = q.id;
+    own.show();
+  };
+  return html`<p-radio-group name=${`pack-answer-${q.id}`} label="Your answer" .value=${live(picked?.id ?? "")}
+      state=${unset ? "error" : "none"} message=${unset ? "Choose an answer first." : ""} ?disabled=${Boolean(own.busy)}
+      @change=${pick}>${answers.map((o) => html`<p-radio-group-option value=${o.id} label=${o.label}>
+      </p-radio-group-option>`)}</p-radio-group>
+    <div class="row">${button("Send answer", send, { variant: lead ? "primary" : "secondary",
+      busy: own.busy.startsWith(`${q.id}:`), disabled: Boolean(own.busy) })}</div>`;
+}
+
+function question(run, q, to, lead) {
   let field = nothing;
   if (q.kind === "dispute") {
     const label = "Your note (guides the updater; needed to ask the challenger again)";
@@ -147,6 +169,7 @@ function question(run, q, to) {
         : ""} @input=${keep} @change=${keep} ?disabled=${!to}></p-textarea>`;
   }
   const answers = q.options.filter((o) => o.id !== "discard");  // the stop's one Discard stands apart
+  const priority = answers.some((o) => emphasis(q, o) === "primary");
   const f = q.kind === "dispute" ? (run.loop?.findings ?? []).find((x) => x.id === q.finding) : null;
   const title = f ? `Finding ${f.id}, raised in round ${f.raised}` : q.kind === "unsure"
     ? `A change to ${q.path} the challenger could not judge` : KINDS[q.kind] ?? sentence(q.kind);
@@ -156,9 +179,10 @@ function question(run, q, to) {
     ${asked(run, q)}
     ${q.diff ? diff(q.diff) : nothing}
     ${field}
-    ${to && answers.length ? html`<div class="row" role="group" aria-label="Your answer">${answers.map((o) =>
-      button(o.label, () => answer(run, q, o), { variant: emphasis(q, o), busy: own.busy === `${q.id}:${o.id}`,
-        disabled: Boolean(own.busy) }))}</div>` : nothing}
+    ${!to || !answers.length ? nothing : !priority ? choose(run, q, answers, lead) : html`<div class="row"
+      role="group" aria-label="Your answer">${answers.map((o) => button(o.label, () => answer(run, q, o),
+        { variant: lead ? emphasis(q, o) : "secondary", busy: own.busy === `${q.id}:${o.id}`,
+          disabled: Boolean(own.busy) }))}</div>`}
   </article>`;
 }
 
@@ -223,7 +247,7 @@ export function runPart(run) {
       ? `, merged into main as ${p.merged.slice(0, 12)}` : p.url ? ", not merged yet" : ""}.</p-text>` : nothing}
     <div id="pack-ask" class="pack-ask" ?hidden=${!questions.length && !d}>
       <p-heading size="sm"><h4 id="pack-ask-title">Waiting for you</h4></p-heading>
-      <div id="pack-questions">${questions.map((q) => question(run, q, to))}</div>
+      <div id="pack-questions">${questions.map((q, i) => question(run, q, to, i === 0))}</div>
       ${to && d ? html`<div id="pack-discard-area" class="pack-discard">
         <p-text size="sm" color="contrast-medium">Or end this update without activating anything.</p-text>
         ${button(d.label, () => discard(run, d), { id: "pack-discard", icon: "close",
