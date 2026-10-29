@@ -51,8 +51,10 @@ def test_every_page_shares_the_top_row_stylesheet_and_confirmation_and_ignores_a
     shared = page.text.index("Shared by every host page")
     assert page.text.index(f'href="/assets/pds/{pages.pds_version()}/index.css"') < shared < page.text.rindex("<style>")
 
-    if path in ASKING:
+    if path in ASKING or (path, title) in UPDATES:  # an Updates page's top row offers Run updates now, which asks
         assert "<!-- ask -->" not in page.text
+        assert "function ask(" in page.text
+    if path in ASKING:
         assert "window.confirm" not in source
         assert "function confirmed(" not in source
         assert source.index("function ask(") < source.index("await ask(")
