@@ -429,3 +429,21 @@ def test_each_turn_ended_without_a_result_is_a_wrong_choice(tmp_path, answers):
 
     run = asyncio.run(scenario())
     assert (run.ending, run.wrong) == (("result", {"no_result": 1}) if answers else ("no-result", {"no_result": 2}))
+
+
+def test_a_turn_ended_without_a_result_counts_when_the_snapshot_crosses_the_deadline(tmp_path, clock):
+    async def scenario():
+        step = STEP(configured(tmp_path), asyncio.get_running_loop())
+        data = SimpleNamespace(model="synthetic-model", parent_tool_call_id=None)
+        for kind in ("assistant.turn_start", "session.idle"):
+            step.on_event(SimpleNamespace(type=kind, data=data))
+
+        async def listing():
+            clock.now += 1
+            return SimpleNamespace(tasks=[])
+
+        await asyncio.wait_for(step.wait(Session(listing)), 1)
+        return step.run
+
+    run = asyncio.run(scenario())
+    assert (run.ending, run.wrong) == ("deadline", {"no_result": 1})
