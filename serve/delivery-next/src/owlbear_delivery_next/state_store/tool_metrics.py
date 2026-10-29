@@ -7,11 +7,12 @@ and the answer says since when. Tool use belongs to the run's main agent (its ro
 
 from __future__ import annotations
 
+import math
 import threading
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-from owlbear_delivery_next.change_contracts.tool_use import WRONG
+from owlbear_delivery_next.change_contracts.tool_use import WRONG, ToolUse
 from owlbear_delivery_next.state_store import spend_ledger, spend_metrics, spend_shares
 
 if TYPE_CHECKING:
@@ -19,7 +20,7 @@ if TYPE_CHECKING:
     from zoneinfo import ZoneInfo
 
 FIELDS = ("calls", "accepted", "invalid", "checks", "order", "unsplit", "lint", "late", "retries")
-_cache: dict[str, Any] = {"stamp": None, "runs": []}
+_cache: dict[str, Any] = {"stamp": None, "runs": [], "changes": None}
 _lock = threading.Lock()
 
 
@@ -28,8 +29,40 @@ def runs() -> list[dict[str, Any]]:
     stamp = spend_ledger.stamp()
     with _lock:
         if _cache["stamp"] != stamp:
-            _cache["runs"], _cache["stamp"] = spend_shares.runs(spend_ledger.lines()), stamp
+            _cache["runs"], _cache["changes"] = spend_shares.runs(spend_ledger.lines()), None
+            _cache["stamp"] = stamp
         return _cache["runs"]
+
+
+def _measured(run: dict[str, Any]) -> bool:
+    """A run Delivery's gate measured, counted once: its end carries ``tools`` and ``wrong``, it is no continuation."""
+    return not run.get("continued") and "tools" in run and "wrong" in run
+
+
+def by_change(found: list[dict[str, Any]]) -> dict[tuple[str, str], ToolUse]:
+    """Each Change's tool use, by its project and slug: the measured runs' tallies and wrong choices summed."""
+    out: dict[tuple[str, str], ToolUse] = {}
+    for r in found:
+        if not _measured(r) or not r.get("change"):
+            continue
+        key = (str(r.get("project") or ""), str(r["change"]))
+        tools = {t: {k: int(v or 0) for k, v in (n or {}).items()} for t, n in (r.get("tools") or {}).items()}
+        wrong = {k: int(n or 0) for k, n in (r.get("wrong") or {}).items()}
+        out[key] = out.get(key, ToolUse()).plus(tools, wrong)
+    return out
+
+
+def of_change(project: str, slug: str) -> ToolUse:
+    """The tool use the ledger holds for one Change, stopped runs included: what Metrics shows filtered to it."""
+    found = runs()
+    with _lock:
+        if _cache["runs"] is found and _cache["changes"] is not None:
+            return _cache["changes"].get((project, slug), ToolUse())
+    changes = by_change(found)
+    with _lock:
+        if _cache["runs"] is found:
+            _cache["changes"] = changes
+    return changes.get((project, slug), ToolUse())
 
 
 def _time(run: dict[str, Any]) -> datetime | None:
@@ -51,7 +84,8 @@ def _row(tally: dict[str, int]) -> dict[str, Any]:
 
 
 def _rate(row: dict[str, Any]) -> dict[str, Any]:
-    return row | {"success": round(100 * row["accepted"] / row["calls"]) if row["calls"] else None}
+    """Success rounded half up, as the Change's page rounds it, so both show 13% for 1 of 8."""
+    return row | {"success": math.floor(100 * row["accepted"] / row["calls"] + 0.5) if row["calls"] else None}
 
 
 def query(  # noqa: PLR0913 - one value per filter the page offers
@@ -63,7 +97,7 @@ def query(  # noqa: PLR0913 - one value per filter the page offers
     Success is weighted: all accepted calls over all calls, so a tool called often counts as often as it was called.
     """
     since, until = spend_metrics.bounds(start, end, tz)
-    measured = [r for r in found if not r.get("continued") and "tools" in r and "wrong" in r]
+    measured = [r for r in found if _measured(r)]
 
     def key(r: dict[str, Any], field: str) -> str:
         return str(r.get(field) or "") or spend_metrics.UNKNOWN

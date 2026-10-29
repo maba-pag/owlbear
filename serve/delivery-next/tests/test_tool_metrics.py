@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import date
 from zoneinfo import ZoneInfo
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -81,6 +82,47 @@ def test_a_continued_runs_later_checkpoints_are_not_counted_again() -> None:
     entries = spend_shares.runs(lines)
     assert any(e.get("continued") for e in entries)
     assert (used(lines)["runs"], used(lines)["totals"]["calls"]) == (1, 2)
+
+
+def test_a_changes_tool_use_is_what_metrics_shows_filtered_to_it_stopped_runs_included() -> None:
+    checkpoint = {"id": "log:k", "type": "end", "run": "k", "at": "2026-10-01T14:00:00+00:00", "session": "s-k",
+                  "usage": {"credits": 1.0, "models": {}}, "source": "import:runtime-log"}  # fmt: skip
+    later = {"id": "log:k2", "at": "2026-10-01T15:00:00+00:00", "usage": {"credits": 2.0, "models": {}}}
+    lines = [
+        *ran("r1", "2026-10-01T10:00:00+00:00", {"submit_result": {"calls": 8, "rejected": 7, "checks": 7}}),
+        *ran("r2", "2026-10-01T11:00:00+00:00", {"bash": {"calls": 2}}, {"denied": 1}, ending="interrupted"),
+        *ran("r3", "2026-10-01T12:00:00+00:00", {"bash": {"calls": 5}}, project="q"),  # another project's "ch"
+        start("open", "2026-10-01T13:00:00+00:00"),  # never measured
+        start("k", "2026-10-01T13:30:00+00:00"), checkpoint | {"tools": {"bash": {"calls": 1}}, "wrong": {}},
+        checkpoint | later,  # a continuation, counted once
+    ]  # fmt: skip
+    found = spend_shares.runs(lines)
+    mine, metrics = tool_metrics.by_change(found)[("p", "ch")], used(lines, change="p/ch")
+    assert {t: (n.calls, n.rejected, n.checks) for t, n in mine.tools.items()} == {
+        row["tool"]: (row["calls"], row["calls"] - row["accepted"], row["checks"]) for row in metrics["tools"]
+    }  # fmt: skip
+    assert mine.wrong == {k: n for k, n in metrics["wrong"].items() if n and k != "order"} == {"denied": 1}
+    assert next(r["success"] for r in metrics["tools"] if r["tool"] == "submit_result") == 13  # as the page rounds
+    assert tool_metrics.by_change(found)[("q", "ch")].tools["bash"].calls == 5
+
+
+def test_a_changes_tool_use_follows_a_run_that_ended_after_it_was_read(monkeypatch) -> None:
+    place = spend_ledger.Where(project="p", change="ch", step="build")
+
+    def measured(run: str, tools: dict, wrong: dict, ending: str) -> None:
+        spend_ledger.started(run, f"s-{run}", agent="builder", job="", model="m1", before={}, place=place)
+        spend_ledger.ended(run, f"s-{run}", usage=USED, ending=ending, place=place, tools=tools, wrong=wrong)
+        assert spend_ledger.WRITER.settled(10)
+
+    measured("r1", {"bash": {"calls": 1}}, {}, "result")
+    assert tool_metrics.of_change("p", "ch").tools["bash"].calls == 1
+    measured("r2", {"bash": {"calls": 2}}, {"no_result": 1}, "interrupted")
+    found = tool_metrics.runs()  # Metrics reads the new ledger first
+    now = tool_metrics.of_change("p", "ch")
+    assert (now.tools["bash"].calls, now.wrong) == (3, {"no_result": 1})
+    assert tool_metrics.query(found, tz=UTC, change="p/ch")["totals"]["calls"] == 3
+    monkeypatch.setattr(spend_ledger, "lines", lambda: pytest.fail("an unchanged ledger is never read again"))
+    assert tool_metrics.of_change("p", "ch") == now
 
 
 def test_each_filter_picks_the_runs_main_agent_model_place_stop_and_local_period() -> None:
