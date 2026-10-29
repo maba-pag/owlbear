@@ -49,6 +49,16 @@ def test_the_hint_needs_the_profile_s_packages():
     assert errors("npm test") == (["npm test"], [])
 
 
+def test_the_hint_names_the_profile_s_command_as_written():
+    task = {"title": "t", "goal": "AC-1", "scope": ["packages/app"], "checks": ["cd packages/app && npm test"]}
+    plan, _ = tool_schema.parse(PlanResult, {"tasks": [task]})
+    spaced = (("packages/app", "npm  test"),)
+    found = tools.check_plan(plan, Worktree("a", "a"), ["npm  test"], (), spaced)
+    assert found[0].endswith('write the command alone: "npm  test"; the Builder runs it from that package\'s directory')
+    plan.tasks[0].checks = ["npm  test"]  # the hint's command is admitted as written
+    assert tools.check_plan(plan, Worktree("a", "a"), ["npm  test"], (), spaced) == []
+
+
 def test_the_plan_step_says_how_a_task_names_its_checks_and_carries_the_packages():
     entries = {
         "check:.": ProfileEntry(state="known", value="make check"),

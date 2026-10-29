@@ -423,14 +423,9 @@ def check_build(result: BuildResult, tree: Worktree, checks: Sequence[str], item
     errors.extend(
         f'checks: "{cmd}" missing - run it on your commit and report it, e.g. {{"command": "{cmd}", "exit_code": 0}}'
         for cmd in checks
-        if not any(_ran(cmd, c.command, checks) for c in result.checks)
+        if not any(check_hint.ran(cmd, c.command, checks) for c in result.checks)
     )
     return errors
-
-
-def _ran(cmd: str, command: str, checks: Sequence[str]) -> bool:
-    """Whether *command* ran *cmd*; one that ran a package-bound check containing it (`cd <dir> && ...`) did not."""
-    return cmd in command and not any(o != cmd and o.startswith("cd ") and cmd in o and o in command for o in checks)
 
 
 def check_question(question: AskQuestion) -> list[str]:

@@ -1,5 +1,6 @@
 import asyncio
 import dataclasses
+import shlex
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -109,6 +110,36 @@ def test_a_committed_result_must_name_every_passing_check_and_never_its_paths() 
     assert "changed_paths" not in tool_schema.schema(tools.SUBMIT)["properties"]
     assert tool_schema.parse(BuildResult, {**GOOD, "changed_paths": ["a.ts"]})[1] == [
         "changed_paths: Extra inputs are not permitted"  # a new call stays strict; Delivery reads the paths itself
+    ]
+
+
+PLACED, QUOTED = "cd packages/b && npm test", f"cd {shlex.quote("my app's")} && npm test"
+
+
+@pytest.mark.parametrize(
+    ("reported", "required", "missing"),
+    [
+        (["npm test -- --grep x"], ["npm test"], ["npm test"]),  # a narrowed run
+        (["npm test:unit"], ["npm test"], ["npm test"]),  # another script
+        (["echo npm test"], ["npm test"], ["npm test"]),
+        (["cd packages/app && npm test -- --grep x"], ["npm test"], ["npm test"]),
+        (["cd packages/b&&npm test", PLACED], ["npm test", PLACED], ["npm test"]),  # another task's package run
+        (["cd 'packages/b' && npm test"], ["npm test", PLACED], ["npm test"]),
+        (["cd unrelated && cd packages/b && npm test"], [PLACED], [PLACED]),  # a placed check gets no second cd
+        (["cd /packages/b && npm test"], [PLACED], [PLACED]),  # another directory
+        (['cd "packages/b\'" && npm test'], [PLACED], [PLACED]),
+        (["npm  test "], ["npm test"], []),
+        (["cd packages/app && npm test"], ["npm test"], []),  # run from its package directory
+        ([QUOTED], ["npm test"], []),
+        (['cd "my app\'s" && npm test'], [QUOTED], []),
+        (["cd ./packages/b/ && npm test"], [PLACED], []),
+    ],
+)
+def test_a_required_check_counts_only_as_that_command_or_that_command_run_in_a_directory(reported, required, missing):
+    result = build(checks=[{"command": c, "exit_code": 0} for c in reported])
+    assert tools.check_build(result, Worktree(HEAD, BASE), required) == [
+        f'checks: "{c}" missing - run it on your commit and report it, e.g. {{"command": "{c}", "exit_code": 0}}'
+        for c in missing
     ]
 
 
