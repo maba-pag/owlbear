@@ -411,8 +411,14 @@ def rounds(store: Store, **values: int) -> Store:
 
 def answered(job: pack_job.Job, option: str, note: str = "", at: int = 0) -> dict:
     """Answer the waiting run's *at*-th question; when that resumes it, wait for it to settle again."""
-    q = job.read()["questions"][at]
-    state = job.answer(q["id"], option, note)
+    now = job.read()
+    asked = now["questions"][at : at + 1]
+    offered = [o["id"] for o in asked[0]["options"]] if asked else []
+    assert option in offered, (  # names why the run stopped (#805)
+        f"{option!r} is not offered: the run is {now['state']} ({now.get('reason')!r}), "
+        f"asking {asked[0]['id'] if asked else 'nothing'} with {offered}"
+    )
+    state = job.answer(asked[0]["id"], option, note)
     return settled(job) if state["state"] == "running" else state
 
 
