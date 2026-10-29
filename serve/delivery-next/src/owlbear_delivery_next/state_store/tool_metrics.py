@@ -40,29 +40,32 @@ def _measured(run: dict[str, Any]) -> bool:
 
 
 def by_change(found: list[dict[str, Any]]) -> dict[tuple[str, str], ToolUse]:
-    """Each Change's tool use, by its project and slug: the measured runs' tallies and wrong choices summed."""
+    """Each Change's tool use, by its clone's id and its slug: the measured runs' tallies and wrong choices summed.
+
+    The clone's id is where the Change lives and never changes; its project's key changes with a rename.
+    """
     out: dict[tuple[str, str], ToolUse] = {}
     for r in found:
-        if not _measured(r) or not r.get("change"):
+        if not _measured(r) or not r.get("clone") or not r.get("change"):
             continue
-        key = (str(r.get("project") or ""), str(r["change"]))
+        key = (str(r["clone"]), str(r["change"]))
         tools = {t: {k: int(v or 0) for k, v in (n or {}).items()} for t, n in (r.get("tools") or {}).items()}
         wrong = {k: int(n or 0) for k, n in (r.get("wrong") or {}).items()}
         out[key] = out.get(key, ToolUse()).plus(tools, wrong)
     return out
 
 
-def of_change(project: str, slug: str) -> ToolUse:
-    """The tool use the ledger holds for one Change, stopped runs included: what Metrics shows filtered to it."""
+def of_change(clone: str, slug: str) -> ToolUse:
+    """The tool use the ledger holds for one Change, stopped runs included: Metrics filtered to it, renames joined."""
     found = runs()
     with _lock:
         if _cache["runs"] is found and _cache["changes"] is not None:
-            return _cache["changes"].get((project, slug), ToolUse())
+            return _cache["changes"].get((clone, slug), ToolUse())
     changes = by_change(found)
     with _lock:
         if _cache["runs"] is found:
             _cache["changes"] = changes
-    return changes.get((project, slug), ToolUse())
+    return changes.get((clone, slug), ToolUse())
 
 
 def _time(run: dict[str, Any]) -> datetime | None:

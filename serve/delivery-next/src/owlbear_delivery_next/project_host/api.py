@@ -167,7 +167,7 @@ def summary(store: Store, slug: str, act: Activity, now: datetime) -> dict[str, 
     out |= card(c, act, store.events(slug), now, tool, pending=store.shared.pending if store.shared else None)
     out["progress"] = asdict(progress(c))
     out["spend"] = c.spend.model_dump()
-    out["tool_use"] = tool_metrics.of_change(spend_ledger.Where.of(store).project, slug).model_dump()  # as Metrics
+    out["tool_use"] = tool_metrics.of_change(spend_ledger.Where.of(store).clone, slug).model_dump()  # as Metrics
     out["pullback"] = c.pullback.model_dump(mode="json") if c.pullback else None
     out["watcher"] = watch_reports.counts(store.db, slug)  # observed calls writing outside, unresolved ones apart
     if q := loop.open_question(c):
