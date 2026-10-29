@@ -49,13 +49,19 @@ function often(u) {
     How often is set in ${settingsLink()}.</p-text>`;
 }
 
+// The state the page shows: once two failed checks are shown, the check could not answer, so it is never current
+// (a newer version found before stays shown under Newest).
+function standing(u) {
+  return u.reason && !["failed", "unknown"].includes(u.state) ? "failed" : u.state;
+}
+
 function newest(u) {
   // the host keeps a newer version it found through failed checks, until it is applied or found withdrawn
   if (u.latest && u.latest !== u.current) {
-    const last = u.state === "newer" ? "" : ", found by the last successful check";
+    const last = standing(u) === "newer" ? "" : ", found by the last successful check";
     return `${u.latest}${u.detail ? ` (${u.detail})` : ""}${last}`;
   }
-  if (u.state === "current") return `${u.latest || u.current}, the one in use`;
+  if (standing(u) === "current") return `${u.latest || u.current}, the one in use`;
   return u.detail || "not known yet";
 }
 
@@ -72,7 +78,7 @@ export function frame(name, { running = "In use" } = {}) {
       Could not read the update checks: ${checks.unread}.</p-inline-notification>`
       : html`<p-text id="check-reading" size="sm">Reading the update checks…</p-text>`;
   }
-  const [word, tone] = STATES[u.state] ?? [u.state, "secondary"], busy = own.busy || u.checking;
+  const [word, tone] = STATES[standing(u)] ?? [u.state, "secondary"], busy = own.busy || u.checking;
   return html`<section id="check" class="panel" aria-labelledby="check-title">
     <div class="heading-row">
       <p-heading size="lg"><h2 id="check-title">Versions</h2></p-heading>
