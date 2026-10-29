@@ -4,7 +4,6 @@ A Change is shaped, picked and approved through the host API (`picking`), then w
 owner's answer comes from the Changes page or a lead chat as an event, a clarification or a brief change.
 """
 
-import argparse
 import asyncio
 import io
 import urllib.error
@@ -411,14 +410,16 @@ def test_the_check_reads_the_approved_brief_decisions_and_catches_a_clarificatio
 
 def test_the_cli_answer_needs_the_class_and_a_clarification_its_confirmed_statement(picking, monkeypatch, capsys):
     run = Asking(picking, monkeypatch)
+    monkeypatch.setattr(cli.Store, "open", lambda *_a, **_k: picking.store)
 
-    def said(**args) -> int:
-        fields = {"kind": None, "option": None, "text": WORDS, "statement": "", "confirmed": False} | args
-        return cli.answer(picking.store, argparse.Namespace(change=picking.slug, question=run.qid, **fields))
+    def said(*args: str) -> int:
+        asked = ["--repo", str(picking.repo), "answer", picking.slug, "--question", run.qid, "--text", WORDS]
+        return cli.main([*asked, *args])
 
-    assert (said(), said(kind="clarification", statement=SAID), inbox(picking)) == (1, 1, 0)
+    clarified = ("--kind", "clarification", "--statement", SAID)
+    assert (said(), said(*clarified), inbox(picking)) == (1, 1, 0)
     assert answers.UNCLASSED in capsys.readouterr().err
-    assert said(kind="clarification", statement=SAID, confirmed=True) == 0
+    assert said(*clarified, "--confirmed") == 0
 
     a = run.asked(run.fold()[0]).answer
     assert (a.kind, a.statement, a.text) == ("clarification", SAID, WORDS)

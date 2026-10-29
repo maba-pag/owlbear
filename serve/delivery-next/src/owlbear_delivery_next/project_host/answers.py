@@ -1,8 +1,9 @@
-"""The Changes page's and the chat's answer to an open question, and why the host refuses one.
+"""The Changes page's, the chat's and the console's answer to an open question, and why the host refuses one.
 
 A worker's question takes its relayer's class: an event, a clarification or a brief change (TD-461). A clarification
 carries the statement the owner confirmed when it was read back to him; without that confirmation nothing is stored.
-A visual round's decision names what the page showed (TD-79), a final retry its tasks (TD-217).
+A visual round's decision names what the page showed (TD-79), a final retry its tasks (TD-217). The console answers
+with the same checks and binds to what ``show`` printed (#676).
 """
 
 from __future__ import annotations
@@ -70,20 +71,29 @@ def router(store: Store, read: Callable[[str], Change], put: Callable[[str, Inbo
 
     @routes.post("/changes/{slug}/answers")
     def answer(slug: str, body: AnswerBody) -> dict[str, str]:
-        c = read(slug)
-        q = next((q for q in c.questions if q.id == body.question and q.answer is None), None)
-        if q is None:
-            raise HTTPException(409, f"question {body.question} is not open")
-        if why := _checked(store, c, q, body) or refused(c, q, body):
-            raise HTTPException(*why)
-        item = AnswerItem(
-            at=datetime.now(UTC), channel=body.channel, question=q.id, option=body.option, text=body.text,
-            round=body.round, findings=body.findings, tasks=body.tasks, attempt=body.attempt, head=body.head,
-            classed=body.kind, statement=body.statement.strip(),
-        )  # fmt: skip
-        return put(slug, item)
+        got = answer_item(store, read(slug), body)
+        if isinstance(got, tuple):
+            raise HTTPException(*got)
+        return put(slug, got)
 
     return routes
+
+
+def answer_item(store: Store, c: Change, body: AnswerBody) -> AnswerItem | tuple[int, str]:
+    """The item an answer to an open question queues, or the status and reason it is refused with.
+
+    The Changes page and the console both answer through it, so neither queues what the other would refuse (#676).
+    """
+    q = next((q for q in c.questions if q.id == body.question and q.answer is None), None)
+    if q is None:
+        return 409, f"question {body.question} is not open"
+    if why := _checked(store, c, q, body) or refused(c, q, body):
+        return why
+    return AnswerItem(
+        at=datetime.now(UTC), channel=body.channel, question=q.id, option=body.option, text=body.text,
+        round=body.round, findings=body.findings, tasks=body.tasks, attempt=body.attempt, head=body.head,
+        classed=body.kind, statement=body.statement.strip(),
+    )  # fmt: skip
 
 
 def _checked(store: Store, c: Change, q: Question, body: AnswerBody) -> tuple[int, str] | None:  # noqa: PLR0911
