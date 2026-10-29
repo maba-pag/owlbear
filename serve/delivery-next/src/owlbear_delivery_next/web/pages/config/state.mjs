@@ -9,7 +9,8 @@ export const LAYERS = { project: "This project", machine: "This machine", global
 export const ROUNDS = [["max_rounds", "Rounds at most"], ["max_findings", "New findings per round at most"],
   ["last_round_at", "Last round at or below"], ["ask_owner_at", "Ask you at or above"]];  // TD-209
 export const NUMBERS = [...ROUNDS.map(([f]) => f), "minutes", "sessions", "curator_threshold", "steer_share",
-  "intervention_cap", "sample_rate"];  // whole numbers
+  "intervention_cap", "sample_rate", "update_check_hours_owlbear", "update_check_hours_pds",
+  "update_check_hours_impeccable"];  // whole numbers
 // Credit limits (D-01M5XCD49YHHR1NQKKY8TQD0C3): credit amounts, a fraction allowed.
 export const CREDITS = ["look_credit_limit", "retro_run_credit_limit", "replay_run_credit_limit"];
 // A typed number as sent: a whole number for NUMBERS, a decimal one for CREDITS; other text as typed, which the

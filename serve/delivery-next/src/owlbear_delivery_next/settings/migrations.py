@@ -266,6 +266,14 @@ def user_config_added(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+def update_checks_added(data: dict[str, Any]) -> dict[str, Any]:
+    """Settings format 17 to 18: the update check intervals (D-01M63CCVRK8ZKFENY9F4A2K11A).
+
+    All three start unset in every layer; older runtimes refuse format 18.
+    """
+    return data
+
+
 def credit_limits_written(data: dict[str, Any]) -> dict[str, Any]:
     """Global's format 15 to 16: the credit limits are written into Global once (D-01M5XCD49YHHR1NQKKY8TQD0C3).
 
@@ -335,5 +343,6 @@ CONFIG: Migrations = {
     14: window_runtime_dropped,
     15: daily_budgets_dropped,
     16: user_config_added,
+    17: update_checks_added,
 }
 GLOBAL: Migrations = CONFIG | {15: credit_limits_written}  # the Global layer's: only it is written the limits

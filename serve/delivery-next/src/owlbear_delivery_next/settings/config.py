@@ -24,19 +24,21 @@ from owlbear_delivery_next.github.provider import MergeMethod  # noqa: TC001 - p
 from owlbear_delivery_next.settings import improvement
 from owlbear_delivery_next.settings.improvement import Spotter
 
-CONFIG_FORMAT = 17  # 3 renamed the designer to design-judge (TD-169); 4 minutes; 5 PR labels; 6 subagents; 7 sessions;
+CONFIG_FORMAT = 18  # 3 renamed the designer to design-judge (TD-169); 4 minutes; 5 PR labels; 6 subagents; 7 sessions;
 # 8 the test reviewer and curator roles; 9 the watcher's role and switch; 10 no code defaults; 11 Global's machine part;
 # 12 the watcher became the Spotter (role and settings), with the retro roles (2026-10-25);
 # 13 the five unset-by-default preferences and their one-time import marker;
 # 14 the Spotter's on/off switch and its four categories' actions replace its mode (2026-10-26);
 # 15 no window runtime settings: its switches, visibility and tool categories go (2026-10-26);
 # 16 credit limits per look and run replace the daily budgets, written into Global once (2026-10-27);
-# 17 the user-config switches for Delivery steps (2026-10-27)
+# 17 the user-config switches for Delivery steps (2026-10-27);
+# 18 the machine's three update check intervals (D-01M63CCVRK8ZKFENY9F4A2K11A)
 CARRIED_FORMAT = 10  # a Global layer below it has not had the built-in values carried in (``settings_carry.carry``)
 ROLES: tuple[Role, ...] = get_args(Role.__value__)
 type Source = Literal["default", "global", "machine", "project", "builder"]
 type Channel = Literal["minor", "major"]  # every minor version, or major versions only (TD-300)
 type Curate = Literal["off", "on", "paused"]  # an automatic curation trigger: off, on, or on even while paused
+HOURS = 720  # the longest update check interval: 30 days
 WIDTHS = (1280, 2400)  # the allowed screenshot width range (R7)
 MINUTES = (1, 480)  # the allowed session time limit range (TD-286)
 LABEL = 50  # GitHub's longest label name
@@ -181,6 +183,9 @@ class MachineValues(Record):
     retro_after_change: Curate | None = None  # Retro after a Change ends, like curation's triggers
     retro_when_idle: Curate | None = None  # Retro over finished enrolled chats when idle
     enrolled_chats: list[str] | None = None  # workspace folders whose chats the Spotter and Retro may read; [] is none
+    update_check_hours_owlbear: int | None = Field(default=None, ge=1, le=HOURS)  # hours between timed update checks
+    update_check_hours_pds: int | None = Field(default=None, ge=1, le=HOURS)  # unset: only launch and hand checks
+    update_check_hours_impeccable: int | None = Field(default=None, ge=1, le=HOURS)
 
     @field_validator("enrolled_chats")
     @classmethod

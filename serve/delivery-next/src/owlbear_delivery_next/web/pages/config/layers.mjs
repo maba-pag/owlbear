@@ -68,6 +68,7 @@ function prefValue(field, value) {
 
 // A list's text as it is saved: items trimmed, empty ones dropped, joined alike; other text trimmed.
 const LISTS = ["spot.looks", "machine.enrolled_chats"];
+const SWITCHES = ["update_when_idle", "update_while_paused"];  // Global's machine on/off settings
 function canonical(key, text) {
   const value = text.trim();
   if (!LISTS.includes(key) || value === "none") return value;
@@ -143,7 +144,7 @@ function edited(layer) {
     if (role === "machine") {  // Global's machine settings (2026-10-23): "true"/"false" for the switches
       const flag = value === "" ? null : value === "true";
       const list = value === "" ? null : value === "none" ? [] : value.split(",").map((f) => f.trim()).filter(Boolean);
-      const mine = { ...(next.machine ?? {}), [field]: field.startsWith("update_") ? flag
+      const mine = { ...(next.machine ?? {}), [field]: SWITCHES.includes(field) ? flag
         : field === "enrolled_chats" ? list : number ?? (value || null) };
       next.machine = Object.values(mine).some((v) => v !== null) ? mine : null;
       continue;
