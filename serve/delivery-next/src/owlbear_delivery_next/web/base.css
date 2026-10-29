@@ -34,6 +34,8 @@ details > summary { cursor: pointer; font-size: var(--p-typescale-sm); padding-b
 [tabindex="-1"]:focus { outline: none; }
 .field, fieldset { display: grid; gap: var(--p-spacing-static-xs); }
 textarea, input, select, button { font: inherit; }
+/* A column of numbers sits right-aligned under its header, its digits one width. */
+:is(p-table-cell, p-table-head-cell).num { text-align: end; font-variant-numeric: tabular-nums; }
 /* The sticky bar holding a page's one primary action while there is something to act on. */
 .bar {
   position: sticky; bottom: 0; z-index: 1; display: flex; flex-wrap: wrap; align-items: center;

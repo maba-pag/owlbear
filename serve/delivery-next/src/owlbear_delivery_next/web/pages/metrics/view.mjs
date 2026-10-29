@@ -8,6 +8,8 @@ const UNKNOWN = "?";
 const DRILL = { project: "in", agent: "agent", model: "model", change: "change" };  // a row that filters its value
 
 const credits = (n) => n.toFixed(2);
+const NUMBERS = ["Credits", "Runs", "Unknown", "Tokens"];  // columns of numbers, aligned under their headers
+const head = (h) => html`<p-table-head-cell class=${NUMBERS.includes(h) ? "num" : nothing}>${h}</p-table-head-cell>`;
 const count = (n) => n.toLocaleString();
 
 export async function refresh() {
@@ -149,7 +151,7 @@ function split() {
   return html`<section aria-labelledby="split-title">
     <p-heading size="lg"><h2 id="split-title">By ${label.toLowerCase()}</h2></p-heading>
     ${rows.length ? html`<p-table id="split" caption=${`Credits by ${label.toLowerCase()}`}><p-table-head>
-      <p-table-head-row>${heads.map((h) => html`<p-table-head-cell>${h}</p-table-head-cell>`)}</p-table-head-row>
+      <p-table-head-row>${heads.map(head)}</p-table-head-row>
       </p-table-head><p-table-body>${rows.map((r) => splitRow(r, top))}</p-table-body></p-table>`
       : html`<p-text id="split-none" size="sm">Nothing was spent that these filters show.</p-text>`}
   </section>`;
@@ -181,7 +183,7 @@ function runs() {
     <p-text id="runs-count" size="sm">${shown < total ? `The newest ${shown} of ${total} runs.` : `All ${total} runs.`}
       A run counts on the day it ended.</p-text>
     ${shown ? html`<p-table id="runs" caption="Runs"><p-table-head><p-table-head-row>
-      ${heads.map((h) => html`<p-table-head-cell>${h}</p-table-head-cell>`)}</p-table-head-row></p-table-head>
+      ${heads.map(head)}</p-table-head-row></p-table-head>
       <p-table-body>${state.runs.map(runRow)}</p-table-body></p-table>` : nothing}
     ${state.next != null ? html`<div><p-button id="more" type="button" compact="true" variant="secondary"
       .loading=${state.more} @click=${more}>Show more runs</p-button></div>` : nothing}
