@@ -887,3 +887,8 @@ def test_old_update_addresses_open_the_updates_pages_and_back_and_reload_keep_th
         page.goto(f"{base}/updates/pds?project={a.id}")
         expect(page.locator("#check-unread")).to_contain_text("Could not read the update checks")
         expect(page.locator("#pds-later")).to_be_visible()
+        page.goto(f"{base}/config?project={a.id}#pack")
+        expect(page).to_have_url(f"{base}/updates/impeccable?project={a.id}")
+        page.goto(f"{base}/config#machine-title")  # stays: a project page names its project and keeps the section
+        expect(page).to_have_url(f"{base}/config?project={a.id}#machine-title")
+        expect(page.locator("#machine-title")).to_be_visible()
