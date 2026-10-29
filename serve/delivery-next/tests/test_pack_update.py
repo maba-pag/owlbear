@@ -451,11 +451,15 @@ class _Answers(BaseHTTPRequestHandler):
     status = 200
     body: ClassVar[dict[str, object]] = {}
     seen: ClassVar[list[str]] = []
+    old = False  # a host from before the Impeccable rename: it serves only the design-pack route
 
     def do_POST(self) -> None:
         type(self).seen.append(f"{self.path} {self.headers.get('Authorization')} {self.headers.get('X-OwlBear-Use')}")
-        raw = json.dumps(type(self).body).encode()
-        self.send_response(type(self).status)
+        status, body = type(self).status, type(self).body
+        if type(self).old and not self.path.endswith("/design-pack/replay"):
+            status, body = 404, {"detail": "Not Found"}
+        raw = json.dumps(body).encode()
+        self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(raw)))
         self.end_headers()
@@ -468,7 +472,7 @@ class _Answers(BaseHTTPRequestHandler):
 @pytest.fixture
 def running_host(monkeypatch):
     """The CLI's project and a loopback host; *serve* sets what the host answers to the replay."""
-    _Answers.seen = []
+    _Answers.seen, _Answers.old = [], False
     server = ThreadingHTTPServer(("127.0.0.1", 0), _Answers)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     record = HostFound(
@@ -510,6 +514,23 @@ def test_the_cli_replay_below_the_margin_and_a_refused_host_both_exit_one(repo, 
     running_host(409, {"detail": "an Impeccable update is running: wait for it to finish"})
     assert cli.main(["--repo", str(repo), "impeccable", "--replay"]) == 1
     assert capsys.readouterr().out == "an Impeccable update is running: wait for it to finish\n"
+
+
+def test_the_cli_replay_reaches_a_host_from_before_the_impeccable_rename_once_by_its_old_route(
+    repo, capsys, running_host
+) -> None:
+    _Answers.old = True
+    running_host(200, {"ok": True, "report": "calibration replay: 1 decided round, 0 left out"})
+    assert cli.main(["--repo", str(repo), "impeccable", "--replay"]) == 0
+    assert capsys.readouterr().out == "calibration replay: 1 decided round, 0 left out\n"
+    assert [seen.split()[0] for seen in _Answers.seen] == [
+        "/p/owlbear/api/next/impeccable/replay",
+        "/p/owlbear/api/next/design-pack/replay",
+    ]
+    _Answers.old, _Answers.seen = False, []
+    running_host(409, {"detail": "an Impeccable update is running: wait for it to finish"})
+    assert cli.main(["--repo", str(repo), "impeccable", "--replay"]) == 1
+    assert len(_Answers.seen) == 1  # only a 404 means the route is missing; a refusal is never sent again
 
 
 def test_the_cli_runs_each_update_tool_and_reports_failures(repo, capsys, monkeypatch) -> None:

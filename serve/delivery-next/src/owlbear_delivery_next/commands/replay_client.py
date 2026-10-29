@@ -6,6 +6,7 @@ import http.client
 import json
 import urllib.error
 import urllib.request
+from http import HTTPStatus
 from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.change_contracts import chat_contract
@@ -33,17 +34,27 @@ def replay(repo: Path) -> tuple[bool, str]:
     rec = host.running_at(project_home.home(pid), chat_contract.HostFound)
     if rec is None or not rec.token:
         return False, NOT_RUNNING.format(repo=repo)
-    url = f"{rec.url}{f'p/{rec.project}/' if rec.project else ''}api/next/impeccable/replay"
-    headers = {"Authorization": f"Bearer {rec.token}", "Content-Type": "application/json", "X-OwlBear-Use": "cli"}
-    request = urllib.request.Request(url, data=b"{}", method="POST", headers=headers)  # noqa: S310 - loopback
+    base = f"{rec.url}{f'p/{rec.project}/' if rec.project else ''}api/next/"
     try:
-        with _LOCAL.open(request, timeout=TIMEOUT) as response:
-            out = json.load(response)
+        try:
+            out = _post(f"{base}impeccable/replay", rec.token)
+        except urllib.error.HTTPError as exc:
+            if exc.code != HTTPStatus.NOT_FOUND:
+                raise
+            out = _post(f"{base}design-pack/replay", rec.token)  # a host from before the rename; its 404 ran nothing
     except urllib.error.HTTPError as exc:
         return False, _refused(exc)
     except CUT as exc:
         return False, f"{UNKNOWN} ({exc})"
     return bool(out.get("ok")), str(out.get("report", ""))
+
+
+def _post(url: str, token: str) -> dict:
+    """The host's answer to an empty POST at *url*."""
+    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json", "X-OwlBear-Use": "cli"}
+    request = urllib.request.Request(url, data=b"{}", method="POST", headers=headers)  # noqa: S310 - loopback
+    with _LOCAL.open(request, timeout=TIMEOUT) as response:
+        return json.load(response)
 
 
 def _refused(exc: urllib.error.HTTPError) -> str:
