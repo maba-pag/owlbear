@@ -129,7 +129,7 @@ function drill(row) {
 
 function splitRow(row, top) {
   const go = drill(row);
-  const name = go ? html`<p-button-pure size="small" icon="filter" @click=${go}
+  const name = go ? html`<p-button-pure size="sm" icon="filter" @click=${go}
     aria=${`{ 'aria-label': 'Show only ${row.label.replaceAll("'", "")}' }`}>${row.label}</p-button-pure>`
     : row.label;
   const share = top ? Math.round((row.credits / top) * 100) : 0;
