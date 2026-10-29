@@ -46,7 +46,7 @@ def test_only_pinned_lit_html_files_and_the_shared_module_are_served_without_the
 def test_every_page_imports_lit_html_by_the_vendored_release(tmp_path):
     c = TestClient(api.create_app(Store(tmp_path), "t", None), base_url="http://127.0.0.1")
 
-    for path, _, _ in pages.TABS:
+    for path, _, _ in pages.PAGES:
         page = c.get(path).text
         used = set(re.findall(r'"/assets/lit-html/([^/"]+)/', page))
         assert used <= {pages.lit_version()}, path
@@ -55,7 +55,7 @@ def test_every_page_imports_lit_html_by_the_vendored_release(tmp_path):
 def test_every_module_a_page_loads_is_served_and_nothing_else_under_its_folder(tmp_path):
     """C-28: the pages' own modules, followed from each page through every import, relative ones included."""
     c = TestClient(api.create_app(Store(tmp_path), "t", None), base_url="http://127.0.0.1")
-    todo = [m for path, _, _ in pages.TABS for m in re.findall(r'"(/assets/page/[^"]+)"', c.get(path).text)]
+    todo = [m for path, _, _ in pages.PAGES for m in re.findall(r'"(/assets/page/[^"]+)"', c.get(path).text)]
     seen: set[str] = set()
     while todo:
         url = todo.pop()

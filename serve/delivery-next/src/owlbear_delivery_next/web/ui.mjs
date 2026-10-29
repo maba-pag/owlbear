@@ -100,18 +100,28 @@ export function defined(tags) {
   return Promise.all(tags.map((t) => customElements.whenDefined(t)));
 }
 
-// The machine host's projects and pause, or null on a clone's own host (which has no such route) or when down.
-async function machine() {
+let failed = "";  // why the machine host's state could not be read the last time, if it could not
+let asked = 0, applied = 0;
+
+// Reads the machine host's projects and pause into the bar: null on a clone's own host (which has no such route), what
+// it last read when they cannot be read. Reads overlap (a poll and an action's reread): an older answer never replaces
+// a newer one's.
+async function read() {
+  const n = ++asked;
+  let data = null, why = "";
   try {
-    return await call("/projects", { machine: true });
+    data = await call("/projects", { machine: true });
   } catch (error) {
-    if (error.status === 404 || error instanceof HostDown) return null;
-    throw error;
+    if (error.status !== 404) why = error.message;
   }
+  if (n < applied) return;
+  applied = n;
+  if (!why) bar.data = data;  // one that failed keeps what is shown, which a read in the meantime may have changed
+  failed = why;
 }
 
-const bar = { data: token ? await machine().catch(() => null) : null, draft: "", busy: "", error: "", packed: "",
-  installing: false };
+const bar = { data: null, busy: "", error: "", packed: "", installing: false };
+await read();
 const listed = (id) => bar.data.projects.some((p) => p.id === id);
 if (bar.data && !listed(project) && (project || scope !== "all")) {
   const first = bar.data.projects.find((p) => p.state === "loaded") ?? bar.data.projects[0];
@@ -127,10 +137,17 @@ export function shown() {
   return bar.data.projects.filter((p) => p.state === "loaded" && (!project || p.id === project));
 }
 
-// What keeps the page from opening another project: a page with unsaved edits registers it, saying why.
+// What keeps the page from opening another project or page: a page with unsaved edits registers it, saying why.
 let unsaved = () => "";
 export function guard(why) {
   unsaved = why;
+}
+
+// Whether unsaved edits keep the page where it is; the bar says why. Checked before anything changes or opens.
+export function held() {
+  if (!(bar.error = unsaved())) return false;
+  showBar();
+  return true;
 }
 
 // The machine's state changed (Resume, a project added or gone): pages that show it read it again.
@@ -143,11 +160,29 @@ export function machineState() {
   return bar.data;
 }
 
+// Why the machine host's state could not be read the last time, or "": what machineState() shows may be older.
+export function unread() {
+  return failed;
+}
+
 // Every loaded project, whatever the page shows: where an action may go; null when no machine host serves it.
 export function loaded() {
   return bar.data ? bar.data.projects.filter((p) => p.state === "loaded") : null;
 }
-for (const link of document.querySelectorAll("nav a[href^='/']")) link.href = here({}, link.getAttribute("href"));
+for (const link of document.querySelectorAll("#top a[href^='/']")) link.href = here({}, link.getAttribute("href"));
+// The guard covers every link of the top row, the menu and the notes under it; a link opened in another tab leaves
+// this page as it is.
+document.addEventListener("click", (e) => {
+  const away = !e.defaultPrevented && e.button === 0 && !(e.metaKey || e.ctrlKey || e.shiftKey || e.altKey);
+  if (away && e.target.closest?.("#top a[href], #machine a[href]") && held()) e.preventDefault();
+}, { capture: true });
+
+// The machine's state read again after a page changed it (a project added, removed or adopted).
+export async function reread() {
+  await read();
+  if (bar.data) showBar();
+  changed();
+}
 
 // One action of the bar: its button shows it running; an error is said beside the bar until the next action.
 async function act(name, work) {
@@ -160,9 +195,7 @@ async function act(name, work) {
     bar.error = error instanceof Slow ? error.reread : error.message;  // the machine's state is read again below
   }
   bar.busy = "";
-  bar.data = await machine().catch(() => bar.data);
-  showBar();
-  changed();
+  await reread();
 }
 
 function control(label, onclick, { variant = "secondary", busy = false, title } = {}) {
@@ -175,28 +208,10 @@ function chosen(p, all) {
   return `${p.name}${twin ? ` (${p.path})` : ""}${p.state === "loaded" ? "" : ` · ${p.state}`}`;
 }
 
-// Whether unsaved edits keep the page where it is; the bar says why. Checked before anything changes or opens.
-function held() {
-  if (!(bar.error = unsaved())) return false;
-  showBar();
-  return true;
-}
-
-async function remove(p) {
-  if (held()) return;
-  const yes = await window.ask({ title: `Remove ${p.name}?`, now: `OwlBear stops serving ${p.path}.`,
-    then: "Its Changes, settings and memory stay in the clone; nothing is deleted.",
-    after: "Add the folder again to serve it once more.", instead: "It keeps running.", yes: "Remove project" });
-  if (!yes) return;
-  await act("remove", async () => {
-    await call(`/projects/${p.id}`, { method: "DELETE", machine: true });
-    location.replace(here({ project: "" }));
-  });
-}
-
-function view() {
-  const { projects, paused, waiting, ending, left = [], update, updated, announce } = bar.data;
-  const p = projects.find((o) => o.id === project);
+// The top row's end: which project the page shows, or Add project while there is none, and Pause. Adding, removing
+// and adopting live on the Projects page (D-01M63C8DA1D95Z7M9ZYWVYYNF7).
+function controls() {
+  const { projects, paused } = bar.data;
   const go = (e) => {
     if (held()) {
       e.target.value = project;  // the page keeps showing the project being edited
@@ -204,32 +219,26 @@ function view() {
     }
     location.assign(here({ project: e.target.value, change: "" }));
   };
-  const add = () => !held() && act("add", async () => {
-    const added = await call("/projects", { body: { path: bar.draft.trim() }, machine: true });
-    location.assign(here({ project: added.id, change: "" }));
-  });
   return html`
-    <div class="projects">
-      ${projects.length ? html`<p-select label="Project" compact="true" .value=${project} @change=${go}>
-        ${scope === "all" ? html`<p-select-option value="">All projects</p-select-option>` : nothing}
-        ${projects.map((o) => html`<p-select-option value=${o.id}>${chosen(o, projects)}</p-select-option>`)}
-      </p-select>` : html`<span>No project yet: add the folder of a clone.</span>`}
-      ${p ? control("Remove project", () => remove(p), { busy: bar.busy === "remove" }) : nothing}
-      ${p?.state === "replaced" ? control("Adopt the new clone", () => !held() && act("adopt", async () => {
-        const adopted = await call(`/projects/${p.id}/adopt`, { method: "POST", machine: true });
-        location.assign(here({ project: adopted.id }));
-      }), { busy: bar.busy === "adopt" }) : nothing}
-      <details ?open=${!projects.length}><summary>Add project</summary>
-        <p-input-text label="Folder" compact="true" placeholder="~/Projects/my-app" .value=${bar.draft}
-          @input=${(e) => { bar.draft = e.target.value ?? ""; }}></p-input-text>
-        ${control("Add", add, { busy: bar.busy === "add" })}
-      </details>
-      ${paused ? nothing : control("Pause Delivery", () => act("pause", () => call("/pause", { method: "POST",
-        machine: true })), { busy: bar.busy === "pause", title: PAUSE_TIP })}
-    </div>
-    ${p && p.state !== "loaded" ? html`<p role="status">${p.name} is ${p.state}: ${p.reason}</p>` : nothing}
-    ${p?.setup ? html`<p role="status">Setup required: the chats of ${p.name} cannot reach Delivery yet. Run
-      <code>${p.setup}</code> in a terminal, then reload the project's VS Code window.</p>` : nothing}
+    ${projects.length ? html`<p-select label="Project" hide-label="true" compact="true" .value=${project}
+      @change=${go}>
+      ${scope === "all" ? html`<p-select-option value="">All projects</p-select-option>` : nothing}
+      ${projects.map((o) => html`<p-select-option value=${o.id}>${chosen(o, projects)}</p-select-option>`)}
+    </p-select>` : html`<p-link compact="true" variant="primary"><a href=${location.pathname === "/projects" ? "#add"
+      : here({}, "/projects")}>Add project</a></p-link>`}
+    ${paused ? nothing : control("Pause Delivery", () => act("pause", () => call("/pause", { method: "POST",
+      machine: true })), { busy: bar.busy === "pause", title: PAUSE_TIP })}`;
+}
+
+// What the owner should know under the top row: the shown project's trouble, the pause, updates and errors.
+function notes() {
+  if (!bar.data) return bar.error ? html`<p role="alert">${bar.error}</p>` : nothing;
+  const { projects, paused, waiting, ending, left = [], update, updated, announce } = bar.data;
+  const p = projects.find((o) => o.id === project);
+  const trouble = location.pathname !== "/projects" && p && (p.state !== "loaded" ? `${p.name} is ${p.state}: ${
+    p.reason}` : p.setup ? `${p.name} needs setup before its chats reach Delivery.` : "");
+  return html`
+    ${trouble ? html`<p role="status">${trouble} <a href=${here({}, "/projects")}>Open Projects</a></p>` : nothing}
     ${paused ? html`<p class="paused" role="status">${ending
         ? `OwlBear stops once nothing runs${left.length ? `; it waits for ${left.join("; ")}` : ""}.`
         : `Delivery is paused: ${waiting} Change${waiting === 1 ? "" : "s"} would continue.`}
@@ -341,24 +350,26 @@ async function stopWhenIdle() {
 }
 
 function showBar() {
+  const top = document.getElementById("controls");
+  if (top && bar.data) render(controls(), top);
   let root = document.getElementById("machine");
   if (!root) {
     root = Object.assign(document.createElement("section"), { id: "machine" });
-    root.setAttribute("aria-label", "OwlBear projects");
-    document.querySelector("nav")?.after(root);
+    root.setAttribute("aria-label", "OwlBear's state");
+    document.getElementById("top")?.after(root);
   }
-  render(view(), root);
+  render(notes(), root);
 }
 
 if (bar.data) {
-  await defined(["p-select", "p-select-option", "p-input-text", "p-button"]);
+  await defined(["p-select", "p-select-option", "p-link", "p-button"]);
   showBar();
   const counted = () => { until = bar.data?.announce ? Date.now() + bar.data.announce.left * 1000 : 0; };
   counted();
   setInterval(async () => {
     if (bar.busy) return;
     const was = bar.data?.paused, before = Boolean(bar.data?.announce);
-    bar.data = await machine().catch(() => bar.data);  // always read: an announcement must reach every page (§7)
+    await read();  // always read: an announcement must reach every page (§7)
     if (bar.installing && bar.data?.pack?.install?.state !== "installing") {  // the Install started here has ended
       bar.installing = false;
       bar.packed = bar.data.pack.install ? "" : "Impeccable is installed on this machine.";
@@ -366,7 +377,7 @@ if (bar.data) {
     }
     counted();
     // never re-rendered under the owner's typing, unless an announcement starts or runs: its countdown stays true
-    if (!document.activeElement?.closest?.("#machine") || before || bar.data?.announce) showBar();
+    if (!document.activeElement?.closest?.("#machine, #controls") || before || bar.data?.announce) showBar();
     if (bar.data?.paused !== was) changed();
     document.dispatchEvent(new CustomEvent("owlbear-polled", { detail: bar.data }));  // what a page shows of it
   }, 5000);

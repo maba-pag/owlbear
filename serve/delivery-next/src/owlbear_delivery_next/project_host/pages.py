@@ -1,4 +1,4 @@
-"""The host's pages, their tab bar, the base stylesheet and the scripts they share (TD-85, TD-113, TD-264)."""
+"""The host's pages, their top row, the base stylesheet and the scripts they share (TD-85, TD-113, TD-264)."""
 
 from __future__ import annotations
 
@@ -10,16 +10,19 @@ from fastapi import HTTPException, Response
 if TYPE_CHECKING:
     from fastapi import FastAPI
 
-TABS = (
+PAGES = (  # every page the host serves, as path, title and file; the menu links to each of them
     ("/", "Changes", "changes.html"),
     ("/backlog", "Backlog", "backlog.html"),
     ("/memory", "Memory", "memory.html"),
     ("/decisions", "Decisions", "decisions.html"),
     ("/metrics", "Metrics", "metrics.html"),
+    ("/projects", "Projects", "projects.html"),
     ("/config", "Settings", "config.html"),
     ("/maintenance", "Maintenance", "maintenance.html"),
 )
-MARK = "<!-- tabs -->"  # where each page takes the tab bar
+WORK = ("/", "/backlog", "/memory", "/decisions", "/metrics")  # the work pages the top row links to, on wide screens
+MENU = "/assets/page/menu/menu.mjs"  # the burger and its drilldown (D-01M63C8375KV9WA6NH8K2MB8PN)
+MARK = "<!-- tabs -->"  # where each page takes the top row
 BASE = "<!-- base -->"  # where each page takes the shared stylesheet, before its own
 ASK = "<!-- ask -->"  # where a page with consequential buttons takes the shared confirmation, before its script
 PDS = {"index.css": "text/css", "load.mjs": "text/javascript"}  # the vendored Porsche Design System 4.10.1 files
@@ -89,18 +92,19 @@ def assets(app: FastAPI) -> None:
         return Response(body, media_type=own[page, name], headers={"Cache-Control": "no-cache"})
 
 
-def nav(current: int) -> str:
-    """The tab bar with tab ``current`` marked: PDS's tabs bar over plain links."""
+def top(current: str) -> str:
+    """The top row with page ``current`` marked: the menu's place, OwlBear, the work pages, and the bar's place."""
     links = "".join(
-        f'<a href="{path}"{' aria-current="page"' if i == current else ""}>{label}</a>'
-        for i, (path, label, _) in enumerate(TABS)
+        f'<a href="{path}"{' aria-current="page"' if path == current else ""}>{label}</a>'
+        for path, label, _ in PAGES
+        if path in WORK
     )
-    bar = f'<p-tabs-bar active-tab-index="{current}" compact="true">{links}</p-tabs-bar>'
-    return f'<nav aria-label="Delivery pages">{bar}</nav>'
+    row = f'<div id="menu"></div><a class="brand" href="/">OwlBear</a><nav aria-label="Delivery pages">{links}</nav>'
+    return f'<div id="top">{row}<div id="controls"></div></div><script type="module" src="{MENU}"></script>'
 
 
 def pages() -> dict[str, str]:
-    """Each page's path and its HTML with the shared stylesheet, the confirmation and the tab bar in place."""
+    """Each page's path and its HTML with the shared stylesheet, the confirmation and the top row in place."""
     web = files("owlbear_delivery_next").joinpath("web")
     base = f"<style>\n{web.joinpath('base.css').read_text(encoding='utf-8')}</style>"
     ask = f"<script>\n{web.joinpath('ask.js').read_text(encoding='utf-8')}</script>"
@@ -109,6 +113,6 @@ def pages() -> dict[str, str]:
         .read_text(encoding="utf-8")
         .replace(BASE, base, 1)
         .replace(ASK, ask, 1)
-        .replace(MARK, nav(i), 1)
-        for i, (path, _, name) in enumerate(TABS)
+        .replace(MARK, top(path), 1)
+        for path, _, name in PAGES
     }

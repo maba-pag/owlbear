@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en" class="scheme-light-dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- The machine's projects: the page opens without one and lists them all. -->
+<meta name="owlbear-scope" content="all">
+<title>OwlBear Delivery · Projects</title>
+<link rel="stylesheet" href="/assets/pds/4.10.1/index.css">
+<script type="module">
+  import { load } from "/assets/pds/4.10.1/load.mjs";
+  load();
+</script>
+<!-- base -->
+<style>
+  #page > p-text:empty { display: none !important; }
+  #projects { display: grid; gap: var(--p-spacing-static-sm); margin: 0; padding: 0; list-style: none; }
+  .project { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--p-spacing-static-sm);
+    padding: var(--p-spacing-static-md); background: var(--p-color-surface); border-radius: var(--p-radius-lg);
+    min-width: 0; overflow-wrap: anywhere; }
+  .project .path { color: var(--p-color-contrast-high); }
+  #add .row { align-items: end; }
+  #add p-input-text { flex: 1 1 18rem; min-width: 0; }
+</style>
+</head>
+<body>
+<main>
+<!-- tabs -->
+<header>
+  <p-heading size="2xl"><h1>Projects</h1></p-heading>
+</header>
+<p-text>The clones OwlBear serves on this machine. Removing one stops serving it; nothing in it is deleted.</p-text>
+<div id="page"></div>
+</main>
+<!-- ask -->
+<script type="module" src="/assets/page/projects/main.mjs"></script>
+</body>
+</html>

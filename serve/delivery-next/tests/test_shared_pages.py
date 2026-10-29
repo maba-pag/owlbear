@@ -436,20 +436,41 @@ def every_machine_s_settings_are_saved_with_the_global_layer(page, pds, shared: 
     expect(machine).to_contain_text("in use: 3, from this machine")  # its own sessions still override
 
 
+def open_with_docs_needing_setup(page, base: str, path: str) -> None:
+    """Open *path* with the machine's projects as Delivery answers them, but docs-site still needing setup, so the
+    notes under the top row link to Projects."""
+
+    def needs_setup(route) -> None:
+        if route.request.method != "GET":
+            route.fallback()
+            return
+        body = route.fetch().json()
+        for p in body["projects"]:
+            p["setup"] = p.get("setup") or ("owlbear setup" if p["id"] == DOCS else None)
+        route.fulfill(json=body)
+
+    page.route(f"{base}/api/next/projects", needs_setup)
+    page.goto(f"{base}{path}")
+
+
 def unsaved_edits_keep_the_page(page, here: str, pds) -> None:
-    """No project choice, removal or addition leaves a page with unsaved edits."""
+    """No project choice, top-row link, menu link or link of the notes under them leaves a page with unsaved edits
+    (D-01M63C8DA1D95Z7M9ZYWVYYNF7)."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     pds.pick(page, "Layer", f"go:{SHOP}")
     expect(page.locator("#error")).to_contain_text("Save or discard your edits")
     expect(pds.select(page, "Layer")).to_have_js_property("value", "project")
-    pds.pick(page.locator("#machine"), "Project", SHOP)
-    expect(page.locator("#machine > [role=alert]")).to_contain_text("Save or discard your edits")
-    page.locator("#machine").get_by_role("button", name="Remove project").click()
-    expect(page.get_by_role("dialog")).to_have_count(0)
-    page.locator("#machine summary").click()
-    page.locator("#machine").get_by_label("Folder").fill("/elsewhere")
-    page.locator("#machine").get_by_role("button", name="Add").click()
+    pds.pick(page.locator("#top"), "Project", SHOP)
+    said = page.locator("#machine > [role=alert]")
+    expect(said).to_have_text("Save or discard your edits before you leave this page.")
+    expect(pds.select(page.locator("#top"), "Project")).to_have_js_property("value", DOCS)
+    page.locator("#top nav").get_by_role("link", name="Backlog").click()
+    page.locator("#machine").get_by_role("link", name="Open Projects").click()  # the project needs setup
+    page.get_by_role("button", name="Menu").click()
+    page.locator("p-drilldown").get_by_role("link", name="Projects").click()
+    expect(page.locator("p-drilldown").get_by_role("link")).to_have_count(0)  # closed, so the reason shows
+    expect(said).to_be_visible()
     expect(page).to_have_url(here)
     expect(page.get_by_label("Rounds at most, builder")).to_have_value("4")
 
@@ -504,7 +525,7 @@ def test_settings_show_what_each_project_sets_apart_and_ask_where_an_edit_goes(
                 pytest.skip(f"no Playwright Chromium: {exc}")
             page = browser.new_page()
             pds.only(page, base)
-            page.goto(f"{base}/config?project={DOCS}#token=t")
+            open_with_docs_needing_setup(page, base, f"/config?project={DOCS}#token=t")
             across = page.locator("#across-table")
             expect(across).to_contain_text("widths")
             expect(across).to_contain_text("(built-in default)")
