@@ -74,7 +74,8 @@ function starting() {
       stage passes, or if you accept it after its challenge rounds end without a pass, it commits it on its own
       branch, opens a pull request to main and merges it once CI passes. One runs at a time on this machine.</p-text>
     <div class="row">
-      ${button("Update Impeccable", start, { id: "pack-update", icon: "refresh", variant: "primary",
+      ${button("Update Impeccable", start, { id: "pack-update", icon: "refresh",
+        variant: open ? "secondary" : "primary",
         busy: own.busy === "start" || Boolean(own.awaiting),
         disabled: busy || !canStart || Boolean(own.busy) || Boolean(own.awaiting) })}
       ${canStart ? nothing : html`<p-text id="pack-choose" size="sm">Choose a project above to start one: it runs on
@@ -119,7 +120,7 @@ function checked() {
   show();
 }
 
-await defined(["p-heading", "p-text", "p-button", "p-tag", "p-inline-notification", "p-textarea"]);
+await defined(["p-heading", "p-text", "p-button", "p-tag", "p-inline-notification", "p-textarea", "p-radio-group"]);
 follow(show);
 framed(checked);
 document.addEventListener("visibilitychange", () => { if (!document.hidden) readPack(); });

@@ -99,6 +99,13 @@ def holding() -> Iterator[None]:
         os.close(fd)
 
 
+def answers(page: Any) -> list[str]:
+    """The answers the waiting questions offer, as one-click buttons or as choices to send, in page order."""
+    return page.locator("#pack-questions").evaluate("""(el) => [...el.querySelectorAll(
+      "p-button, p-radio-group-option")].map((o) => o.getAttribute("label") ?? o.textContent.trim())
+      .filter((t) => t !== "Send answer")""")
+
+
 @contextlib.contextmanager
 def opened(base: str, pds: Any) -> Iterator[Any]:
     """Updates ▸ Impeccable in a real browser: only the test host and the PDS CDN answer."""
@@ -129,6 +136,7 @@ def test_the_owner_answers_each_upheld_finding_with_his_note_on_the_impeccable_p
         expect(state).to_contain_text("The update waits for your answers below. Started ")
         expect(state).not_to_contain_text("ended")
         expect(page.get_by_role("button", name="Update Impeccable")).to_be_disabled()
+        expect(page.locator("#pack-update")).to_have_attribute("variant", "secondary")  # the answer leads instead
         first, second = ask.locator(".pack-question").first, ask.locator(".pack-question").last
         facts = first.locator(".pack-facts dd")  # from the finding's record, not the host's sentence
         expect(facts).to_have_text(["owlbear-design-review: glow 1 - fix: say so", "upstream dropped it",
@@ -136,7 +144,11 @@ def test_the_owner_answers_each_upheld_finding_with_his_note_on_the_impeccable_p
         expect(page.locator("#pack-todo")).to_have_text("Answer the 2 questions below.")
         sent: list[str] = []
         page.on("request", lambda r: sent.append(r.url) if r.url.endswith("/impeccable/update/answer") else None)
-        first.get_by_role("button", name="Ask the challenger to reconsider").click()
+        expect(page.locator('#pack p-button[variant="primary"]')).to_have_text(["Send answer"])  # the first's
+        first.get_by_role("button", name="Send answer").click()
+        expect(first.locator("p-radio-group")).to_have_attribute("message", "Choose an answer first.")
+        first.get_by_label("Ask the challenger to reconsider").check()  # nothing is preselected for him
+        first.get_by_role("button", name="Send answer").click()
         note = first.locator("p-textarea")
         expect(note).to_have_attribute("message", "Asking the challenger to reconsider needs your note.")
         # the note to give takes focus, once PDS has rendered it
@@ -144,7 +156,8 @@ def test_the_owner_answers_each_upheld_finding_with_his_note_on_the_impeccable_p
         assert sent == []  # checked here, before anything is sent
         second.get_by_label("Your note", exact=False).fill("a draft for F2")
         first.get_by_label("Your note", exact=False).fill("the halo is upstream's own example")
-        first.get_by_role("button", name="Drop it").click()
+        first.get_by_label("Drop it").check()
+        first.get_by_role("button", name="Send answer").click()
         left = ask.locator(".pack-question")
         expect(left).to_have_count(1)  # the other finding still waits; nothing ran yet
         expect(left.get_by_label("Your note", exact=False)).to_have_value("a draft for F2")  # its draft is kept
@@ -194,12 +207,13 @@ PUBLISHED = {"commit": "c" * 40, "branch": "pack/r1", "url": "https://github.com
              "number": 7, "merged": ""}  # fmt: skip
 # Each stop: its loop, its questions (None: the loop's own), what else the run holds, its Discard, its primaries.
 STOPS: dict[str, tuple[RoundLoop | None, list[dict[str, Any]] | None, dict[str, Any], str, list[str]]] = {
-    "dispute": (None, None, {}, "Discard the update", []),
+    "dispute": (None, None, {}, "Discard the update", ["Send answer"]),
     "end": (ENDED, None, {}, "Discard the update", ["Activate the unreviewed repair"]),
     "evidence": (None, [pack_gates.evidence("r1", DIFF, "upstream renamed it", "as expected", "e" * 64)], {},
-                 "Discard the update", []),
-    "code": (None, [pack_gates.code("r1", DIFF, "c" * 64)], {}, "Discard the update", []),
-    "publish": (None, [CI_FAILED], {"published": PUBLISHED}, "Discard the update (the pull request stays open)", []),
+                 "Discard the update", ["Send answer"]),
+    "code": (None, [pack_gates.code("r1", DIFF, "c" * 64)], {}, "Discard the update", ["Send answer"]),
+    "publish": (None, [CI_FAILED], {"published": PUBLISHED}, "Discard the update (the pull request stays open)",
+                ["Send answer"]),
 }  # fmt: skip
 
 
@@ -217,9 +231,10 @@ def test_each_stop_offers_one_discard_apart_whose_cancel_changes_nothing(served,
     with opened(base, pds) as page:
         expect(page.locator("#pack-ask").get_by_role("button", name=re.compile("Discard"))).to_have_count(1)
         expect(page.locator("#pack-discard")).to_have_text(discard)
-        expect(page.locator("#pack-questions p-button[variant=primary]")).to_have_text(primary)  # none invented
+        # one primary: a priority answer, else the sending of a choice that favours none
+        expect(page.locator("#pack-questions p-button[variant=primary]")).to_have_text(primary)
         offered = [o["label"] for q in job.read()["questions"] for o in q["options"] if o["id"] != "discard"]
-        expect(page.locator("#pack-questions p-button")).to_have_text(offered)  # each the payload offers, as it says
+        assert answers(page) == offered  # each the payload offers, as it says
         page.locator("#pack-discard").click()
         expect(pds.modal(page)).to_contain_text("Nothing is activated")
         inside = "document.activeElement?.closest('p-modal') !== null"
@@ -331,7 +346,8 @@ def test_a_ci_failed_publish_stop_fits_a_phone_and_says_no_calibration_evidence_
     job._save()  # noqa: SLF001
     with opened(base, pds) as page:
         page.set_viewport_size({"width": 375, "height": 800})
-        expect(page.locator("#pack-questions p-button")).to_have_text(["Try again", "Have an agent fix CI"])
+        expect(page.locator("#pack-questions p-radio-group-option")).to_have_count(2)
+        assert answers(page) == ["Try again", "Have an agent fix CI"]
         expect(page.locator("#pack-pushed").get_by_role("link")).to_have_text("pull request #7")
         step = page.locator(".pack-step", has_text="Calibration replay").last
         expect(step.locator(".pack-step-head p-tag")).to_have_text("no calibration evidence")
