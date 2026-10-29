@@ -361,6 +361,21 @@ def test_a_survivor_without_a_title_and_body_is_an_attempt_and_its_retry_keeps_t
     assert got["publishable"]["body"] == "b" * (retro_judge.BODY - len(refs)) + refs
 
 
+def test_a_survivors_body_naming_only_longer_ids_still_ends_with_its_own():
+    review = {"verdict": "survive", "why": "holds", "risks": [], "publishable": {"title": "a case"}}
+    said = {"retro-review": review, "retro": {"findings": [], "grades": [{"record": "w", "grade": "wrong"} | WRONG]}}
+    with pytest.raises(StoppedError, match="not valid"):
+        retro_judge.run(_work(Asked(lambda _ev, agent: said[agent]), [_record("w", 3)], grade_only=True))
+    [due] = props.due_reviews()
+    ids = [due["id"], *due["findings"]]
+    review["publishable"]["body"] = "see " + ", ".join(f"{i}0" for i in ids)
+
+    retro_judge.review(_work(Asked(lambda _ev, agent: said[agent]), run="run-2"))
+
+    body = review["publishable"]["body"]
+    assert props.folded()[due["id"]]["publishable"]["body"] == f"{body}\n\nRefs: {', '.join(ids)}"
+
+
 def test_a_survivors_credential_that_its_bound_would_cut_in_two_is_found_before_the_cut():
     review = {"verdict": "survive", "why": "holds", "risks": [], "publishable": {"title": "a case"}}
     said = {"retro-review": review, "retro": {"findings": [], "grades": [{"record": "w", "grade": "wrong"} | WRONG]}}

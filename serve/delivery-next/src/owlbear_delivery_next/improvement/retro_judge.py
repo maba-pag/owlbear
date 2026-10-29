@@ -309,11 +309,9 @@ def _shown_finding(f: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def _bounded(snap: Mapping[str, Any], body: str) -> str:
-    """A survivor's body within ``BODY``, naming its proposal and first finding ids where the judge left them out."""
-    ids = [snap["id"], *snap["findings"][:SAMPLES]]
-    kept = body[: BODY - len(f"\n\nRefs: {', '.join(ids)}")]
-    missing = [i for i in ids if i not in kept]
-    return f"{kept}\n\nRefs: {', '.join(missing)}" if missing else body[:BODY]
+    """A survivor's body within ``BODY``, always ending with its proposal and first finding ids."""
+    refs = f"\n\nRefs: {', '.join([snap['id'], *snap['findings'][:SAMPLES]])}"
+    return f"{body[: BODY - len(refs)]}{refs}"
 
 
 def review(w: Work) -> int:
