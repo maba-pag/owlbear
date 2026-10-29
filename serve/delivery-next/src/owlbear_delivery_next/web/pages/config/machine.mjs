@@ -58,14 +58,19 @@ function machineEdit(key, value) {
   show();
 }
 
-// Where a setting in force comes from, or that it is unset: an error, as nothing that needs it runs (2026-10-23).
+// Where a setting in force comes from; an unset one says nothing here, its name is red (GW8RT6).
 function machineSource(key) {
   const r = state.machine.resolved ?? {}, from = SOURCES[r.sources?.[key]];
-  if (!from) {
-    return html`<p-text size="xs" color="error">unset: set it here or for every machine in the global layer;
-      what needs it does not run until then</p-text>`;
-  }
+  if (!from) return nothing;
   return html`<p-text size="xs" color="contrast-medium">in use: ${said(key, r[key])}, from ${from}</p-text>`;
+}
+
+// One machine setting with its name shown, red while no layer sets it (GW8RT6): a PDS label cannot be coloured, so
+// the control keeps it for assistive technology only. The unset list links to it by its id.
+function machineRow(key, label, control, note = nothing) {
+  const unset = (state.machine.resolved?.missing ?? []).includes(key);
+  return html`<div class="field" id=${`set-machine-${key}`} tabindex="-1"><p-text size="sm" aria-hidden="true"
+    color=${unset ? "error" : nothing}>${label}</p-text>${control}${note}</div>`;
 }
 
 // This machine's own value of one setting: inherit Global's, or its own.
@@ -90,7 +95,7 @@ function ownControl(key) {
     const fresh = value === null || value === undefined ? "" : list ? said(key, value) : String(value);
     const shown = typedText !== undefined && (typedText.trim() === "none" ? Array.isArray(value) && !value.length
       : typedText.trim() === "" ? value === null : same(typedText)) ? typedText : fresh;
-    control = html`<p-input-text id=${`machine-${key}`} label=${MACHINE_LABELS[key]}
+    control = html`<p-input-text id=${`machine-${key}`} label=${MACHINE_LABELS[key]} hide-label="true"
       inputmode=${list ? nothing : CREDITS.includes(key) ? "decimal" : "numeric"} placeholder=${below}
       .value=${live(shown)}
       ?disabled=${common.disabled} @input=${count} @change=${count}></p-input-text>`;
@@ -99,28 +104,27 @@ function ownControl(key) {
       const v = e.target.value;
       machineEdit(key, v === INHERIT ? null : CHOICES[key] === SWITCH ? v === "true" : v);
     };
-    control = html`<p-select id=${`machine-${key}`} label=${MACHINE_LABELS[key]}
+    control = html`<p-select id=${`machine-${key}`} label=${MACHINE_LABELS[key]} hide-label="true"
       .value=${live(value === null || value === undefined ? INHERIT : String(value))} ?disabled=${common.disabled}
       @change=${pick}>${[[INHERIT, below], ...CHOICES[key]].map(([v, text]) =>
         html`<p-select-option value=${v}>${text}</p-select-option>`)}</p-select>`;
   }
-  return html`<div>${control}${machineSource(key)}</div>`;
+  return machineRow(key, MACHINE_LABELS[key], control, machineSource(key));
 }
 
 // Global's value of one setting, edited in the global layer and saved with it.
 function sharedControl(key) {
   const draftKey = `machine.${key}`, value = own(draftKey), label = `Every machine: ${MACHINE_LABELS[key]}`;
   if (TYPED.includes(key)) {
-    return html`<p-input-text id=${`global-machine-${key}`} label=${label} data-key=${draftKey}
-      inputmode=${key === "enrolled_chats" ? nothing : CREDITS.includes(key) ? "decimal" : "numeric"}
-      placeholder="unset" .value=${live(value)}
-      ?disabled=${state.saving}
-      @input=${(e) => edit(draftKey, e.target.value ?? "")}></p-input-text>`;
+    return machineRow(key, label, html`<p-input-text id=${`global-machine-${key}`} label=${label} hide-label="true"
+      data-key=${draftKey} inputmode=${key === "enrolled_chats" ? nothing : CREDITS.includes(key) ? "decimal"
+        : "numeric"} placeholder="unset" .value=${live(value)} ?disabled=${state.saving}
+      @input=${(e) => edit(draftKey, e.target.value ?? "")}></p-input-text>`);
   }
-  return html`<p-select id=${`global-machine-${key}`} label=${label} data-key=${draftKey}
-    .value=${live(value || INHERIT)} ?disabled=${state.saving} @change=${(e) => edit(draftKey, e.target.value)}>
-    ${[[INHERIT, "unset"], ...CHOICES[key]].map(([v, text]) =>
-      html`<p-select-option value=${v}>${text}</p-select-option>`)}</p-select>`;
+  return machineRow(key, label, html`<p-select id=${`global-machine-${key}`} label=${label} hide-label="true"
+    data-key=${draftKey} .value=${live(value || INHERIT)} ?disabled=${state.saving}
+    @change=${(e) => edit(draftKey, e.target.value)}>${[[INHERIT, "unset"], ...CHOICES[key]].map(([v, text]) =>
+      html`<p-select-option value=${v}>${text}</p-select-option>`)}</p-select>`);
 }
 
 function machineControls() {
@@ -172,13 +176,20 @@ async function saveMachine() {
   }
 }
 
+// One template whether or not the machine is read yet, so a heading an address focused keeps the focus once it is.
 export function machineSection() {
-  const m = state.machine;
-  if (!m) return nothing;
-  const since = m.resumed_at ? `, resumed ${new Date(m.resumed_at).toLocaleString()}` : "";
   return html`<section class="panel" aria-labelledby="machine-title">
-    <p-heading size="lg"><h2 id="machine-title">This machine</h2></p-heading>
-    <p-text id="machine-run">Delivery ${m.paused ? "is paused: press Resume above"
+    <p-heading size="lg"><h2 id="machine-title" tabindex="-1">This machine</h2></p-heading>
+    ${state.machine ? machineBody(state.machine) : html`<p-text id="machine-unread" role="status">${!clones()
+      ? "Only the machine host's Settings page shows this machine's settings." : state.machineUnread
+        ? `Could not read this machine's settings: ${state.machineUnread}. The page tries again when the machine's `
+          + "state changes." : "Reading this machine's settings…"}</p-text>`}
+  </section>`;
+}
+
+function machineBody(m) {
+  const since = m.resumed_at ? `, resumed ${new Date(m.resumed_at).toLocaleString()}` : "";
+  return html`<p-text id="machine-run">Delivery ${m.paused ? "is paused: press Resume above"
       : `runs${since}`}.</p-text>
     <p-text id="machine-login">Start at login: ${m.login_item}. Change it in a terminal with
       <code>owlbear autostart on</code> or <code>owlbear autostart off</code>.</p-text>
@@ -192,8 +203,7 @@ export function machineSection() {
     <p-text id="machine-owlbear" size="sm">The updates themselves, with their steps and Search for updates, are in
       Menu → Updates: <a href=${here({}, "/updates/owlbear")}>OwlBear</a>,
       <a href=${here({}, "/updates/pds")}>Porsche Design System</a> and
-      <a href=${here({}, "/updates/impeccable")}>Impeccable</a>.</p-text>
-  </section>`;
+      <a href=${here({}, "/updates/impeccable")}>Impeccable</a>.</p-text>`;
 }
 
 async function removeLegacy() {
@@ -215,9 +225,13 @@ async function removeLegacy() {
 export async function readMachine() {
   const writes = state.machineWrites;
   if (state.machineSaving) return;
-  const read = await call("/machine", { machine: true }).catch(() => undefined);
+  const read = await call("/machine", { machine: true }).catch((e) => {
+    state.machineUnread = e.message;
+    return undefined;
+  });
   if (read !== undefined && !state.machineSaving && writes === state.machineWrites) {
     state.machine = read;  // typed text stays: it shows only while its items are the field's own (ownControl)
+    state.machineUnread = "";
   }
 }
 

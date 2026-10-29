@@ -3,14 +3,11 @@ import { live } from "/assets/lit-html/3.3.3/directives/live.js";
 import { EFFORTS, INHERIT, SOURCES, state, shown } from "./state.mjs";
 import { own, inherited, edit } from "./layers.mjs";
 
-// Code ships no defaults (2026-10-23): a value no layer sets is unset, an error until it is filled in.
+// Code ships no defaults (2026-10-23): a value no layer sets is unset; its row's name says so in red (GW8RT6).
 function source(key, inUse, needed = true) {
   const from = SOURCES[state.loaded.settings.sources[key]];
   if (!from && !needed) return html`<p-text size="xs" color="contrast-medium">unset; nothing applies it yet</p-text>`;
-  if (!from) {
-    return html`<p-text size="xs" color="error">unset: set it here or in a wider layer; steps that need it ask you
-      until then</p-text>`;
-  }
+  if (!from) return nothing;
   const line = inUse === undefined ? `from ${from}` : `in use: ${shown(inUse)}, from ${from}`;
   return html`<p-text size="xs" color="contrast-medium">${line}</p-text>`;
 }
@@ -30,6 +27,13 @@ export function cell(...parts) {
 
 export function row(...cells) {
   return html`<p-table-row>${cells}</p-table-row>`;
+}
+
+// GW8RT6: a setting's row, which the unset list links to by its *id*; its name is red while a key it sets is unset.
+export function setting(id, name, keys, ...cells) {
+  const missing = state.loaded.settings.missing ?? [], unset = keys.some((k) => missing.includes(k));
+  return html`<p-table-row id=${id} tabindex="-1">${cell(html`<p-text color=${unset ? "error" : nothing}>${name}
+    </p-text>`)}${cells}</p-table-row>`;
 }
 
 export function table(caption, heads, body, rows, { id, hidden = false } = {}) {
@@ -119,7 +123,7 @@ function prefCell(field) {
 }
 
 export function prefRows() {
-  return PREFS.map((field) => row(cell(html`<p-text>${PREF_NAMES[field]}</p-text>`), prefCell(field)));
+  return PREFS.map((field) => setting(`set-prefs-${field}`, PREF_NAMES[field], [`prefs.${field}`], prefCell(field)));
 }
 
 export function widths() {

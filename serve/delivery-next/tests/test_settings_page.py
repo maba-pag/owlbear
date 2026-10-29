@@ -78,11 +78,19 @@ def settings_page(store: Store, pds: Any) -> Iterator[Any]:
             page = browser.new_page()
             pds.only(page, base)
             page.goto(f"{base}/config#token=tok")
-            page.locator("#models-note").get_by_text("as this machine's Copilot offers them").wait_for()
+            opened(page, pds)
             yield page
             browser.close()
     finally:
         server.should_exit = True
+
+
+def opened(page, pds, group: str = "agents") -> None:
+    """Settings once this machine's models are read, showing *group*."""
+    pds.group(page, "agents")
+    page.locator("#models-note").get_by_text("as this machine's Copilot offers them").wait_for()
+    if group != "agents":
+        pds.group(page, group)
 
 
 def a_look_s_credit_limit_is_typed_as_an_amount(page) -> None:
@@ -93,6 +101,39 @@ def a_look_s_credit_limit_is_typed_as_an_amount(page) -> None:
     expect(look_limit).to_have_attribute("placeholder", "inherit (0.75)")
     look_limit.press_sequentially("0.05")
     expect(look_limit).to_have_value("0.05")
+
+
+def the_spotter_is_edited(page, pds) -> Any:
+    """The spotter's switch, looks, sample and credit limit, edited in the Agents group; returns the looks field."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    pds.group(page, "agents")
+    expect(page.locator("#spotter")).to_contain_text("inherit (on)")  # the switch, as Global sets it
+    pds.pick(page, "On or off", "off")
+    looks = page.get_by_label("Looks", exact=True)
+    expect(looks).to_have_attribute("placeholder", "inherit (hand-off)")
+    looks.fill("hand-off, sample")
+    page.get_by_label("Sampled actions", exact=True).fill("5")
+    a_look_s_credit_limit_is_typed_as_an_amount(page)
+    return looks
+
+
+def the_global_layer_kept_its_edit_and_takes_one_more(page, pds) -> None:
+    """Global's draft stays through a project save; the curator's threshold is Global's alone (TD-400)."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    pds.pick(page, "Layer", "global")
+    pds.group(page, "runs")
+    expect(page.get_by_label("Minutes per session, builder")).to_have_value("60")
+    pds.group(page, "checks")
+    expect(page.locator("#pr")).to_contain_text("inherit (on)")  # layered since code ships no defaults
+    pds.group(page, "runs")
+    threshold = page.get_by_label("Curator's confidence threshold in percent (50 to 100)")
+    expect(threshold).to_have_attribute("placeholder", "inherit (95)")
+    threshold.fill("90")
+    expect(page.locator("#pending")).to_contain_text("curator threshold: inherited → 90")
+    pds.pick(page, "Layer", "project")
+    expect(page.locator("#curation")).to_contain_text("Set for all projects")  # one value everywhere
 
 
 def a_list_keeps_its_text_as_typed_and_counts_only_new_items(page, looks) -> None:
@@ -113,13 +154,15 @@ def test_a_model_choice_brings_its_efforts_and_an_effort_it_lacks_blocks_the_sav
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     with settings_page(store, pds) as page:
+        pds.group(page, "runs")
         limits = page.locator("#limits")  # TD-286: each worker role's minutes; the shaper's chat has none
         expect(limits).to_contain_text("builder")
         expect(limits).not_to_contain_text("shaper")
         minutes = limits.get_by_label("Minutes per session, builder")
         expect(minutes).to_have_attribute("placeholder", "inherit (40)")
+        pds.group(page, "agents")
         pds.pick(page, "Model for builder", "tiny")
-        expect(page.locator("#agents")).to_contain_text("tiny takes no effort setting")
+        expect(page.locator("#agents-rows")).to_contain_text("tiny takes no effort setting")
         pds.pick(page, "Model for reviewer", "claude-opus-5.5")
         said = "claude-opus-5.5 does not offer effort xhigh (inherited); choose one it offers"
         message = pds.select(page, "Effort for reviewer").get_by_text(said, exact=True)
@@ -128,6 +171,7 @@ def test_a_model_choice_brings_its_efforts_and_an_effort_it_lacks_blocks_the_sav
         expect(page.locator("#error")).to_contain_text("Not saved: claude-opus-5.5 does not offer effort xhigh")
         pds.pick(page, "Effort for reviewer", "high")
         expect(message).to_have_count(0)
+        pds.group(page, "runs")
         minutes.fill("60")
         page.get_by_role("button", name="Save project settings").click()
         expect(pds.modal(page)).to_contain_text("These apply to this project only")  # TD-396
@@ -146,6 +190,7 @@ def test_each_layer_keeps_its_own_drafts_and_a_save_sends_only_the_shown_layer(s
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     with settings_page(store, pds) as page:
+        pds.group(page, "runs")
         rounds = page.get_by_label("Rounds at most, builder")
         rounds.fill("4")
         pds.pick(page, "Layer", "global")
@@ -159,36 +204,27 @@ def test_each_layer_keeps_its_own_drafts_and_a_save_sends_only_the_shown_layer(s
             "Unsaved: builder max rounds: inherited → 4. All projects: 1 more unsaved."
         )
         expect(page.locator("#save")).to_have_attribute("variant", "primary")
-        pds.pick(page, "When the design judge fails a change", "back")  # renders the page again
+        pds.group(page, "checks")
+        pds.pick(page, "When the design judge fails a change", "back")
+        pds.group(page, "runs")  # the draft stays while another group shows
         expect(rounds).to_have_value("4")
+        pds.group(page, "checks")
         labels = page.get_by_label("Labels, comma-separated; none for no labels")
         labels.fill("inherit")  # a label may be named so: typing it never means "inherit"
         expect(labels).to_have_value("inherit")
         labels.fill("release:minor, owlbear")
         pds.pick(page, "The line Opened by OwlBear Delivery", "off")
-        expect(page.locator("#spotter")).to_contain_text("inherit (on)")  # the switch, as Global sets it
-        pds.pick(page, "On or off", "off")
-        looks = page.get_by_label("Looks", exact=True)
-        expect(looks).to_have_attribute("placeholder", "inherit (hand-off)")
-        looks.fill("hand-off, sample")
-        page.get_by_label("Sampled actions", exact=True).fill("5")
-        a_look_s_credit_limit_is_typed_as_an_amount(page)
+        looks = the_spotter_is_edited(page, pds)
+        pds.group(page, "runs")
         at_once = page.get_by_label("Agent sessions at once in one project")  # TD-336
         expect(at_once).to_have_attribute("placeholder", "inherit (2)")
         at_once.fill("3")
         page.get_by_role("button", name="Save project settings").click()
         pds.answer(page, "Save project settings")
         expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
+        pds.group(page, "agents")
         a_list_keeps_its_text_as_typed_and_counts_only_new_items(page, looks)
-        pds.pick(page, "Layer", "global")
-        expect(page.get_by_label("Minutes per session, builder")).to_have_value("60")
-        expect(page.locator("#pr")).to_contain_text("inherit (on)")  # layered since code ships no defaults
-        threshold = page.get_by_label("Curator's confidence threshold in percent (50 to 100)")  # TD-400
-        expect(threshold).to_have_attribute("placeholder", "inherit (95)")
-        threshold.fill("90")
-        expect(page.locator("#pending")).to_contain_text("curator threshold: inherited → 90")
-        pds.pick(page, "Layer", "project")
-        expect(page.locator("#curation")).to_contain_text("Set for all projects")  # one value everywhere
+        the_global_layer_kept_its_edit_and_takes_one_more(page, pds)
     project = store.read_config()
     assert (project.agents["builder"].max_rounds, project.design_failures, project.agents["builder"].minutes) == (
         4, "back", None
@@ -214,17 +250,67 @@ def test_a_save_refused_by_a_newer_save_keeps_the_edits_and_the_next_save_lands(
         got = c.get("/api/next/config").json()
         newer = got["project"] | {"widths": [1600]}
         assert c.put("/api/next/config/project", json={"rev": got["project_rev"], "layer": newer}).status_code == 200
+        pds.group(page, "runs")
         page.get_by_label("Minutes per session, reviewer").fill("25")
+        page.get_by_label("Rounds at most, builder").fill("4")
+        pds.group(page, "checks")  # D-01M63C92B83D61XFXTRXG8JAVB: edits in several groups, each group's counted
+        pds.pick(page, "Merge method", "squash")
+        unsaved = page.locator("#groups p-tag")
+        expect(unsaved).to_have_text(["2 unsaved", "1 unsaved"])
+        expect(page.locator("#groups a[href='#runs'] p-tag")).to_have_text("2 unsaved")
         save = page.get_by_role("region", name="Save settings").get_by_role("button", name="Save project settings")
         save.click()
         pds.answer(page, "Save project settings")
         expect(page.locator("#error")).to_contain_text("kept your unsaved edits; check them and save again.")
+        expect(unsaved).to_have_text(["2 unsaved", "1 unsaved"])
+        expect(pds.select(page, "Merge method")).to_have_js_property("value", "squash")
+        pds.group(page, "runs")
         expect(page.get_by_label("Minutes per session, reviewer")).to_have_value("25")
         save.click()  # the answered confirmation may still be fading out with its own button of this name
         pds.answer(page, "Save project settings")
         expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
+        expect(unsaved).to_have_count(0)
     saved = json.loads(store.config_path.read_text())
     assert (saved["widths"], saved["agents"]["reviewer"]["minutes"]) == ([1600], 25)
+    assert (saved["agents"]["builder"]["max_rounds"], saved["prefs"]["merge_method"]) == (4, "squash")  # one save
+
+
+@pytest.mark.browser
+def test_an_address_opens_its_group_and_an_unset_setting_s_link_its_row(store, pds, monkeypatch) -> None:
+    """D-01M63C8QQMANY46N8GMNNKH1V9: each group has an address, back and forward follow them; an old address of a
+    section or row opens its group there, and the overview's unset list links each setting's row (GW8RT6)."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    from owlbear_delivery_next.settings import config  # noqa: PLC0415
+
+    monkeypatch.setattr(config, "BASE", None)
+    with settings_page(store, pds) as page:
+        url = page.url.split("#")[0]
+        pds.group(page, "overview")
+        expect(page.locator("#set-sessions p-text[color='error']")).to_have_count(0)  # not shown: another group
+        page.locator("#unset").get_by_role("link", name="sessions", exact=True).click()
+        expect(page).to_have_url(f"{url}#runs")
+        at_once = page.get_by_label("Agent sessions at once in one project")
+        expect(at_once).to_be_focused()
+        named = page.locator("#set-sessions p-text[color='error']")
+        expect(named).to_have_text("Agent sessions at once in one project")
+        page.go_back()
+        expect(page).to_have_url(f"{url}#overview")
+        expect(page.locator("#unset")).to_be_visible()
+        expect(at_once).to_have_count(0)
+        page.go_forward()
+        expect(page).to_have_url(f"{url}#runs")
+        expect(page.locator("#rounds-title")).to_be_focused()  # a switch not made in the groups' list: its heading
+        for old, group, focused in (
+            ("set-prefs-merge_method", "checks", pds.select(page, "Merge method").get_by_role("combobox")),
+            ("folder-title", "project", page.locator("#folder-title")),
+            ("machine-title", "this-machine", page.locator("#machine-title")),
+            ("spotter-title", "agents", page.locator("#spotter-title")),
+        ):
+            page.goto(f"{url}#{old}")
+            expect(page).to_have_url(f"{url}#{group}")
+            expect(page.locator(f"#groups a[href='#{group}']")).to_have_attribute("aria-current", "page")
+            expect(focused).to_be_focused()
 
 
 @pytest.mark.browser
@@ -253,6 +339,7 @@ def test_models_arriving_while_a_model_name_is_typed_wait_until_the_field_is_lef
             page = browser.new_page()
             pds.only(page, base)
             page.goto(f"{base}/config#token=tok")
+            pds.group(page, "agents")
             typed = page.locator('p-input-text[label="Model for builder"]').get_by_label("Model for builder")
             typed.click()
             typed.press_sequentially("my-model")
@@ -309,12 +396,14 @@ def test_models_arriving_during_a_save_apply_once_it_ends(store, monkeypatch, pd
             page = browser.new_page()
             pds.only(page, base)
             page.goto(f"{base}/config#token=tok")
+            pds.group(page, "runs")
             page.get_by_label("Minutes per session, builder").fill("50")
             page.get_by_role("button", name="Save project settings").click()
             pds.answer(page, "Save project settings")
             expect(page.locator("#status")).to_have_text(
                 "Saved this project's settings. They apply to the next session.", timeout=10_000
             )
+            pds.group(page, "agents")
             expect(page.locator("#models-note")).to_contain_text("as this machine's Copilot offers them")
             expect(pds.select(page, "Model for builder")).to_be_visible()
             browser.close()
@@ -334,19 +423,24 @@ def test_with_no_layer_setting_anything_the_page_names_every_unset_value_and_a_s
 
     monkeypatch.setattr(config, "BASE", None)
     with settings_page(store, pds) as page:
+        pds.group(page, "overview")
         expect(page.locator("#unset")).to_contain_text("settings are unset")
         expect(page.locator("#unset")).to_contain_text("agents.builder.model")
+        pds.group(page, "runs")
         at_once = page.get_by_label("Agent sessions at once in one project")
         expect(at_once).to_have_attribute("placeholder", "inherit (unset)")
         at_once.fill("3")
+        pds.group(page, "agents")
         pds.pick(page, "Model for spotter", "tiny")  # one tier and no efforts: both still fillable
-        expect(page.locator("#agents")).to_contain_text("no layer sets a context tier")
-        page.locator("#agents").get_by_role("button", name="Use the default tier").click()
+        expect(page.locator("#agents-rows")).to_contain_text("no layer sets a context tier")
+        page.locator("#agents-rows").get_by_role("button", name="Use the default tier").click()
         pds.pick(page, "Effort for spotter", "medium")
         pds.pick(page, "Model for reviewer", "claude-opus-5.5")  # its effort unset: listed, never blocking the save
         page.get_by_role("button", name="Save project settings").click()
         pds.answer(page, "Save project settings")
         expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
+        pds.group(page, "overview")
+        expect(page.locator("#unset")).to_contain_text("agents.builder.model")  # the list shows: the next two mean it
         expect(page.locator("#unset")).not_to_contain_text("sessions,")
         expect(page.locator("#unset")).not_to_contain_text("agents.spotter.")
         expect(page.locator("#unset")).to_contain_text("spotter.switch")  # its settings start unset too
@@ -362,6 +456,7 @@ def test_merge_and_cleanup_preferences_save_reload_and_clear_back_to_inherit(sto
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     with settings_page(store, pds) as page:
+        pds.group(page, "checks")
         pds.pick(page, "Merge method", "squash")
         page.get_by_label("CI poll interval (seconds)").fill("45")
         pds.pick(page, "Ask before merging", "on")
@@ -369,7 +464,7 @@ def test_merge_and_cleanup_preferences_save_reload_and_clear_back_to_inherit(sto
         pds.modal(page).get_by_role("button", name="Save project settings").click()
         expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
         page.reload()
-        page.locator("#models-note").get_by_text("as this machine's Copilot offers them").wait_for()
+        opened(page, pds, "checks")
         expect(page.get_by_label("CI poll interval (seconds)")).to_have_value("45")
         pds.pick(page, "Merge method", "inherit")  # the inherit choice clears the layer's own value
         page.get_by_role("button", name="Save project settings").click()
@@ -403,8 +498,12 @@ def test_the_user_config_switches_save_in_each_layer_reload_and_clear_back_to_in
     monkeypatch.setattr(config, "BASE", config.BASE.model_copy(update=unset))
     with settings_page(store, pds) as page:
         shown = page.locator("#user-config")
+        pds.group(page, "overview")
         expect(page.locator("#unset")).to_contain_text("load_user_instructions, load_user_skills")
-        expect(shown).to_contain_text("unset: set it here or in a wider layer")
+        pds.group(page, "agents")
+        for key in ("load_user_instructions", "load_user_skills"):  # GW8RT6: a red name, no line saying it is unset
+            expect(page.locator(f"#set-{key} p-text[color='error']")).to_have_count(1)
+        expect(shown).not_to_contain_text("unset: set it here")
         pds.pick(page, "Layer", "global")
         expect(shown).to_contain_text("inherit (unset)")
         pds.pick(page, INSTRUCTIONS, "off")
@@ -418,10 +517,13 @@ def test_the_user_config_switches_save_in_each_layer_reload_and_clear_back_to_in
         pds.pick(page, "Layer", "project")
         pds.pick(page, SKILLS, "on")
         _saved(page, pds, "Save project settings", "this project's")
+        expect(page.locator("#user-config p-text[color='error']")).to_have_count(0)
+        pds.group(page, "overview")
         expect(page.locator("#unset")).to_have_count(0)
+        expect(page.locator("#unset-none")).to_be_visible()
 
         page.reload()
-        page.locator("#models-note").get_by_text("as this machine's Copilot offers them").wait_for()
+        opened(page, pds)
         expect(pds.select(page, INSTRUCTIONS)).to_have_js_property("value", "inherit")
         expect(pds.select(page, SKILLS)).to_have_js_property("value", "on")
         expect(shown).to_contain_text("in use: on, from this machine")
@@ -465,7 +567,7 @@ def test_each_category_offers_its_allowed_actions_saves_reloads_and_clears_to_th
         pds.answer(page, "Save project settings")
         expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
         page.reload()
-        page.locator("#models-note").get_by_text("as this machine's Copilot offers them").wait_for()
+        opened(page, pds)
         expect(page.locator("#spotter")).to_contain_text("in use: refuse-hand-off, from this project")
         expect(page.locator("#spotter")).to_contain_text("in use: stop-and-ask, from this project")
         pds.pick(page, "Hand-off fitness", "inherit")  # clears the project's own value
@@ -520,6 +622,7 @@ def test_a_refused_save_of_an_edited_preference_keeps_the_review_until_the_retry
 
     _refuse_config_once(monkeypatch, pending_shared.config_path)
     with settings_page(pending_shared, pds) as page:
+        pds.group(page, "checks")
         pds.pick(page, "Merge method", "squash")
         page.get_by_role("button", name="Save project settings").click()
         pds.modal(page).get_by_role("button", name="Save project settings").click()
@@ -541,6 +644,7 @@ def test_a_refused_save_of_an_already_empty_clear_keeps_the_review_until_the_ret
 
     _refuse_config_once(monkeypatch, pending_shared.config_path)
     with settings_page(pending_shared, pds) as page:
+        pds.group(page, "checks")
         pds.pick(page, "Merge method", "inherit")  # already inherited: no draft, only the review
         page.get_by_role("button", name="Save project settings").click()
         pds.modal(page).get_by_role("button", name="Save project settings").click()
@@ -597,6 +701,7 @@ def test_a_cancelled_review_is_not_sent_with_a_later_unrelated_save(pending_shar
         page.get_by_role("button", name="Confirm merge preferences reviewed").click()
         pds.modal(page).get_by_role("button", name="Keep editing").click()
         expect(page.get_by_role("dialog")).to_have_count(0)  # the page takes edits again once it has closed
+        pds.group(page, "runs")
         page.get_by_label("Rounds at most, builder").fill("4")
         expect(page.locator("#pending")).to_contain_text("builder max rounds: inherited → 4")
         page.locator("#save").click()  # the cancelled confirmation may still be fading out
@@ -616,6 +721,7 @@ def test_an_earlier_preference_edit_stays_a_review_after_a_cancelled_review_butt
 
     with settings_page(pending_shared, pds) as page:
         sent = _project_puts(page)
+        pds.group(page, "checks")
         pds.pick(page, "Merge method", "squash")
         page.get_by_role("button", name="Confirm merge preferences reviewed").click()
         pds.modal(page).get_by_role("button", name="Keep editing").click()
@@ -646,6 +752,7 @@ def test_a_refused_save_offers_its_retry_only_once_it_has_settled(pending_shared
 
         page.route("**/api/next/config/project", hold_first_put)
         expect(page.locator("#error")).to_be_visible()  # the page's standing notice of the pending import
+        pds.group(page, "checks")
         pds.pick(page, "Merge method", "squash")
         page.locator("#save").click()
         pds.modal(page).get_by_role("button", name="Save project settings").click()

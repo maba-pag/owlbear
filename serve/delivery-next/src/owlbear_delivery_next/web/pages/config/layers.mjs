@@ -2,6 +2,7 @@ import { call } from "/assets/ui.mjs";
 import { CREDITS, INHERIT, LAYERS, NUMBERS, WRITE, state, drafts, page, show, showIdle, notify, typedNumber }
   from "./state.mjs";
 import { USER_KEYS, mismatch, tierMismatch } from "./cells.mjs";
+import { draftGroup } from "./groups.mjs";
 import { readAcross } from "./machine.mjs";
 import { named } from "./sections.mjs";
 
@@ -103,6 +104,20 @@ export function pendingLine() {
   const mine = changes(state.layer), parts = mine.length ? [`Unsaved: ${mine.join("; ")}.`] : ["No unsaved edits."];
   for (const other of others) parts.push(`${LAYERS[other]}: ${dirty(other).length} more unsaved.`);
   return parts.join(" ");
+}
+
+// Whether any layer has an edit to save, whichever group shows.
+export function anyEdits() {
+  return Object.keys(drafts).some((layer) => dirty(layer).length);
+}
+
+// A group's unsaved edits (D-01M63C8QQMANY46N8GMNNKH1V9): the edited layer's, This machine's own and a folder name
+// typed.
+export function pendingIn(group) {
+  let n = dirty(state.layer).filter(([key]) => draftGroup(key) === group).length;
+  if (group === "this-machine") n += Object.keys(state.machineDraft ?? {}).length;
+  if (group === "project" && state.folder !== null && state.folder.trim() !== (state.loaded?.folder ?? "")) n += 1;
+  return n;
 }
 
 function edited(layer) {

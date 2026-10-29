@@ -27,22 +27,43 @@ export const WRITE = 60000;  // a save commits and pushes the shared settings re
 // the offered models once read.
 export const state = {
   loaded: null, layer: "project", saving: false, offered: null, modelsNote: "", error: "", status: "",
+  group: "overview",  // the group shown (D-01M63C8QQMANY46N8GMNNKH1V9); drafts of every group stay meanwhile
   folder: null,
   machine: null, others: [], unread: [],  // the machine's values and the other projects' settings (TD-243)
   everything: false,  // the overview shows every setting, not only those a project sets apart (TD-295)
   machineDraft: null, machineSaving: false,  // the machine's settings as edited, before they are saved
   machineText: null,  // a list setting's text as typed, until a save
   machineWrites: 0,  // counts machine saves, so a read that started before one never shows older values
+  machineUnread: "",  // why this machine's settings could not be read, until a read succeeds
   // Owner edited or cleared a project Merge and cleanup preference; kept until a save publishes.
   prefsReview: false,
 };
 export const drafts = { project: {}, machine: {}, global: {} };
-// arrived: models read while a setting held the focus, applied once it leaves; an object since a module cannot
-// reassign another's binding
-export const page = { arrived: null };
+// arrived: models read while a setting held the focus, applied once it leaves; target: a selector of the element an
+// address named (a row, a heading), focused once it shows; an object since a module cannot reassign another's binding
+export const page = { arrived: null, target: null };
 
 export function show() {
   render(view(), document.getElementById("page"));
+  const target = page.target && document.querySelector(page.target);
+  if (target) {
+    page.target = null;
+    reveal(target);
+  }
+}
+
+// Focus *target*, or a row's first control: the menu's dialog puts the focus back on its button as it closes, so the
+// focus is put back until it has stayed a few frames, for at most a second.
+async function reveal(target) {
+  const control = target.matches("p-table-row, div") ? target.querySelector("[data-key], [id^='machine-'], "
+    + "[id^='global-machine-'], p-select, p-input-text, p-segmented-control") : null;
+  const into = control ?? target;
+  into.scrollIntoView({ block: control ? "center" : "start" });
+  for (let frame = 0, kept = 0; frame < 60 && kept < 10; frame++) {
+    if (into.matches(":focus")) kept++;
+    else into.focus({ preventScroll: true });
+    await new Promise(requestAnimationFrame);
+  }
 }
 
 // Render, applying arrived models only once no setting holds the focus, so they never replace the control in use.
