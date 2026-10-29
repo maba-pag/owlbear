@@ -11,31 +11,21 @@ from typing import Annotated, Literal
 
 from cyclopts import App, Parameter
 
-PROJECT = {
-    "setup": "Check readiness, confirm the profile and register the chat server of a clone",
-    "profile": "Detect a clone's project profile",
-    "seed": "Seed a pre-approved one-task Change",
-    "answer": "Write an answer into a Change's inbox",
-    "show": "Print a Change's step, exit and open question",
-    "data": "Show or set the shared data repository: a clone address, a checkout's folder, or --move [DEST]",
-    "home": "Show OwlBear's folder on this machine",
-    "prepare": "Before a reboot: bind a clone's store id and fence the offline move",
-    "finish": "After a reboot: prove the preparation and move the clone's store",
-    "design-pack": "Show, install or update the pinned design pack",
-    "backlog": "The improvement backlog",
-    "cases": "The Spotter cases: stages, versions, replays",
-    "improvement": "Improvement's marked assumptions",
-}
+from owlbear_delivery_next.commands import project_commands
+
+# ``status`` stays the machine's own; its --repo runs the project's.
+PROJECT = tuple(n for n in project_commands.app if not n.startswith("-") and n != "status")
 DROPPED: list[str] = []  # what the environment scrub removed, for doctor
 
 app = App(
     name="owlbear",
-    help="OwlBear on this Mac: with no command it starts OwlBear, else shows its status.",
+    help="OwlBear on this Mac: with no command it starts OwlBear, else shows its status. A project command runs as "
+    "owlbear-next runs it; --repo PATH names the clone.",
     version_flags=[],
     result_action="return_value",
 )
-for _name, _said in PROJECT.items():
-    app.command(App(name=_name, help=f"{_said} (as owlbear-next {_name}; --repo PATH names the clone)"))
+for _name in PROJECT:
+    app.command(project_commands.app[_name], name=_name)
 
 
 def forward(argv: list[str]) -> int:

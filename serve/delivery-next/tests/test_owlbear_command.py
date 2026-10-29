@@ -22,7 +22,42 @@ def test_help_and_completion_load_no_command_module() -> None:
     )
     done = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)  # noqa: S603
     loaded = done.stdout.strip().splitlines()[-1]
-    assert loaded == "['owlbear_delivery_next.machine_host', 'owlbear_delivery_next.machine_host.command']"
+    assert loaded == (
+        "['owlbear_delivery_next.commands', 'owlbear_delivery_next.commands.project_commands', "
+        "'owlbear_delivery_next.machine_host', 'owlbear_delivery_next.machine_host.command']"
+    )
+
+
+def test_owlbear_help_and_completion_show_the_project_commands_options(capsys) -> None:
+    command.app(["setup", "--help"])
+    assert "--local-files" in capsys.readouterr().out
+    script = command.app.generate_completion(shell="zsh")  # noqa: S604 - the script's shell; it is static
+    assert ("--local-files" in script, "--person-check" in script) == (True, True)
+
+
+def test_owlbear_next_refuses_a_usage_error_and_takes_the_repo_before_the_command(monkeypatch, capsys) -> None:
+    with pytest.raises(SystemExit) as exc:
+        cli.main(["setup", "--local-files", "bad"])
+    assert (exc.value.code, "--local-files" in capsys.readouterr().err) == (2, True)
+    ran = []
+    monkeypatch.setattr(cli, "run", lambda a: ran.append(a) or 7)
+    assert cli.main(["--repo=/r", "home"]) == 7
+    assert (ran[0].command, ran[0].repo) == ("home", Path("/r"))
+    assert cli.main(["profile", "--role", "builder=gpt-5:high"]) == 7
+    assert (ran[1].role[0][0], ran[1].role[0][1].effort) == ("builder", "high")
+    assert cli.main(["--repo", "/a", "--repo", "/b", "setup", "--yes", "--yes", "--folder", "a", "--folder=b"]) == 7
+    assert (ran[2].repo, ran[2].yes, ran[2].folder) == (Path("/b"), True, "b")
+
+
+@pytest.mark.parametrize(
+    "argv", [[], ["--repo", "/r"], ["cases"], ["backlog"], ["improvement"], ["improvement", "retro"]]
+)
+def test_owlbear_next_without_a_command_exits_2_and_runs_nothing(monkeypatch, argv) -> None:
+    monkeypatch.setattr(cli, "run", pytest.fail)
+    with pytest.raises(SystemExit) as exc:
+        cli.main(argv)
+    assert exc.value.code == 2
+    assert cli.main([*argv, "--help"]) == 0
 
 
 def test_machine_commands_get_their_options_and_return_their_exit_code(monkeypatch) -> None:

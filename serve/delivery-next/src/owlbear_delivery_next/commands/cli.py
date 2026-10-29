@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import argparse
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
 from subprocess import CalledProcessError
+from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.change_contracts.models import (
     Brief,
@@ -26,7 +26,7 @@ from owlbear_delivery_next.change_contracts.profile_record import (
     RoleModel,
 )
 from owlbear_delivery_next.change_flow.status import status, unloadable
-from owlbear_delivery_next.commands import cases_cli, replay_client, setup
+from owlbear_delivery_next.commands import cases_cli, project_commands, replay_client, setup
 from owlbear_delivery_next.commands.answer_console import answer, describe
 from owlbear_delivery_next.design_packs import design_pack, pack_update
 from owlbear_delivery_next.design_packs.detector import DetectorError
@@ -45,6 +45,9 @@ from owlbear_delivery_next.state_store import (
 from owlbear_delivery_next.state_store.backlog import Backlog, BacklogError
 from owlbear_delivery_next.state_store.config_save import Prepared
 from owlbear_delivery_next.state_store.store import Store, StoreError
+
+if TYPE_CHECKING:
+    import argparse
 
 START = "run `owlbear start`, then add this project on its page"
 
@@ -260,13 +263,6 @@ def _overridden(layer: Layer, overrides: list[tuple[Role, RoleModel]]) -> Layer:
     return layer.model_copy(update={"agents": agents})
 
 
-def _role(text: str) -> tuple[Role, RoleModel]:
-    try:
-        return roles.parse(text)
-    except ValueError as exc:
-        raise argparse.ArgumentTypeError(str(exc)) from exc
-
-
 def prepare_move(repo: Path) -> int:
     """Bind the clone's store id, then record its boot session and fence the move; nothing is copied or switched."""
     try:
@@ -291,79 +287,16 @@ def finish_move(repo: Path) -> int:
     return 0
 
 
-def main(argv: list[str] | None = None) -> int:  # noqa: PLR0911, PLR0915 - one parser and one branch per command
-    """Run one command."""
-    parser = argparse.ArgumentParser(prog="owlbear-next")
-    parser.add_argument("--repo", type=Path, default=Path.cwd())
-    sub = parser.add_subparsers(dest="command", required=True)
-    sub.add_parser("status", help="print every Change's status line and next action")
-    up = sub.add_parser("setup", help="check readiness, confirm the profile, register the chat server")
-    up.add_argument("--yes", action="store_true", help="confirm the profile (only the profile)")
-    choices = ("yes", "no", "ask")
-    up.add_argument("--local-files", choices=choices, default="ask", help="write .mcp.json and .vscode/settings.json")
-    up.add_argument("--confirm", action="append", default=[], type=lambda v: tuple(v.split("=", 1)), help="KEY=VALUE")
-    up.add_argument("--folder", default="", help="the project's folder in the shared settings when its name is taken")
-    p = sub.add_parser("profile", help="detect the project profile; --confirm KEY=VALUE records the owner's answer")
-    p.add_argument("--confirm", action="append", default=[], type=lambda v: tuple(v.split("=", 1)))
-    p.add_argument("--role", action="append", default=[], type=_role, help="ROLE=MODEL:EFFORT model override")
-    s = sub.add_parser("seed", help="seed a pre-approved one-task Change and a minimal profile")
-    s.add_argument("change")
-    s.add_argument("--title", required=True)
-    s.add_argument("--outcome", required=True)
-    s.add_argument("--criterion", action="append", default=[])
-    s.add_argument("--scope", action="append", default=[])
-    s.add_argument("--check", action="append", default=[])
-    s.add_argument("--install", action="append", default=[], type=lambda v: tuple(v.split("=", 1)), help="DIR=CMD")
-    s.add_argument(
-        "--person-check", action="append", default=[], type=lambda v: tuple(v.split("=", 1)), help="ID=STEPS"
-    )
-    s.add_argument("--target", default="main")
-    ans = sub.add_parser("answer", help="write an answer into the Change inbox")
-    ans.add_argument("change")
-    ans.add_argument("--question", required=True)
-    ans.add_argument("--option")
-    ans.add_argument("--text", default="")
-    ans.add_argument("--kind", choices=("event", "clarification", "brief-change"), help="a worker's question's class")
-    ans.add_argument("--statement", default="", help="a clarification's intent the owner confirmed when read back")
-    ans.add_argument("--confirmed", action="store_true", help="the owner confirmed the statement as read back")
-    ans.add_argument("--round", type=int, help="a visual decision: the round `show` printed")
-    ans.add_argument("--head", default="", help="a visual decision or a final retry: the head `show` printed")
-    ans.add_argument("--pack", default="", help="a visual decision: the design pack `show` printed")
-    ans.add_argument("--finding", dest="findings", action="append", default=[], help="a visual finding to send back")
-    ans.add_argument("--task", dest="tasks", action="append", default=[], help="a final retry's plan task to rebuild")
-    ans.add_argument("--attempt", type=int, help="a final retry: the attempt `show` printed")
-    show = sub.add_parser("show", help="print the Change's step, exit and open question")
-    show.add_argument("change")
-    shared = sub.add_parser("data", help="show or set the shared settings repository (TD-57)")
-    shared.add_argument("target", nargs="?", help="a clone address to clone or adopt, or a checkout's folder to use")
-    sub.add_parser("home", help="show OwlBear's folder on this machine (TD-198)")
-    sub.add_parser("prepare", help="before a reboot: bind the clone's store id and fence the offline move")
-    sub.add_parser("finish", help="after a reboot: prove the preparation and move the store; the source stays in place")
-    pack = sub.add_parser("design-pack", help="show, install or update the pinned design pack (TD-76)")
-    pack.add_argument("--install", action="store_true", help="download and verify what is missing")
-    pack.add_argument("--check", action="store_true", help="count upstream releases since the pinned one")
-    pack.add_argument(
-        "--diff", type=Path, metavar="CLONE", help="rules and skill files changed, from an upstream clone"
-    )
-    pack.add_argument("--to", metavar="TAG", help="the candidate tag --diff compares with")
-    pack.add_argument("--golden", action="store_true", help="run the engine and the in-page bundle on the golden pages")
-    pack.add_argument("--replay", action="store_true", help="rerun the design judge on decided rounds (costs requests)")
-    found = sub.add_parser("backlog", help="the improvement backlog: issues in the shared repository (TD-84, TD-103)")
-    found = found.add_subparsers(dest="action", required=True)
-    add = found.add_parser("add", help="add a finding; a repeat counts up its entry")
-    add.add_argument("--title", required=True)
-    add.add_argument("--text", default="")
-    add.add_argument(
-        "--source", choices=("owner", "spotter", "retro", "assistant", "review", "run"), default="assistant"
-    )
-    add.add_argument("--evidence", action="append", default=[], help="a Change, step, session, path or URL")
-    found.add_parser("migrate", help="once: move the file entries into GitHub issues, then delete the files")
-    cases_cli.parsers(sub)
-    a = parser.parse_args(argv)
+def main(argv: list[str] | None = None) -> int:
+    """Run one command; a usage error exits 2."""
+    a = project_commands.app.meta(argv)
+    return 0 if a is None else run(a)
+
+
+def run(a: argparse.Namespace) -> int:  # noqa: PLR0911 - one branch per command
+    """Run the command *a* names, as :mod:`project_commands` parsed it."""
     if a.command in {"cases", "improvement"}:
         return cases_cli.main(a)
-    if a.command == "design-pack" and bool(a.diff) != bool(a.to):
-        parser.error("--diff and --to go together")
     if a.command in {"data", "home"}:
         code, said = show_data(a.target) if a.command == "data" else (0, show_home())
         sys.stdout.write(said + "\n")
