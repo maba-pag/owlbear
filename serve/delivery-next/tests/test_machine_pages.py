@@ -438,6 +438,36 @@ def targets(scope) -> list[str]:
     return list(small)
 
 
+@pytest.mark.browser
+def test_settings_say_this_machine_s_settings_could_not_be_read_and_read_them_again(
+    tmp_path: Path, monkeypatch, pds
+) -> None:
+    """Partial state: the rest of Settings shows while this machine's settings cannot be read, the overview and This
+    machine say why, and the machine's next change reads them again."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    a = registry.register(clone(tmp_path / "alpha"))
+    with browsing(monkeypatch, pds) as (page, base):
+
+        def busy(route) -> None:
+            if route.request.method == "GET":
+                route.fulfill(status=503, json={"detail": "the machine host is busy"})
+            else:
+                route.fallback()
+
+        page.route("**/api/next/machine", busy)
+        page.goto(f"{base}/config?project={a.id}#token=t")
+        expect(page.locator("#unset-machine, #unset-none")).to_contain_text("could not be read")
+        pds.group(page, "this-machine")
+        unread = page.locator("#machine-unread")
+        expect(unread).to_contain_text("Could not read this machine's settings")
+        expect(unread).to_contain_text("tries again when the machine's state changes")
+        page.unroute("**/api/next/machine", busy)
+        page.evaluate("document.dispatchEvent(new Event('owlbear-machine'))")
+        expect(page.locator("#machine-login")).to_contain_text("Start at login")
+        expect(unread).to_have_count(0)
+
+
 def a_group_of_the_shown_page_opens_on_it(page, here: str) -> None:
     """D-01M63C8QQMANY46N8GMNNKH1V9: a Settings group's link, followed from Settings, shows it with the menu closed;
     the menu then opens on that group."""
