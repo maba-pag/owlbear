@@ -14,7 +14,8 @@
 <style>
   #page > p-text:empty { display: none !important; }
   .row { align-items: end; }
-  #filters > * { flex: 1 1 12rem; }
+  #filters { gap: var(--p-spacing-static-sm) var(--p-spacing-static-md); }
+  #filters > * { flex: 0 1 13rem; min-width: 10rem; }  /* compact: filters narrow the list, they are not the page */
   #entries { display: grid; gap: var(--p-spacing-fluid-sm); }
   .entries { display: grid; gap: var(--p-spacing-static-sm); margin: 0; padding: 0; list-style: none; }
   .entry {
@@ -79,7 +80,7 @@ function button(label, onclick, { variant, icon, aria, busy = false } = {}) {
 
 function select(key, label, options) {
   const changed = (e) => { filter[key] = e.target.value; show(); };
-  return html`<p-select label=${label} .value=${filter[key]} @change=${changed}>
+  return html`<p-select label=${label} compact="true" .value=${filter[key]} @change=${changed}>
     ${options.map(([v, said]) => html`<p-select-option value=${v}>${said}</p-select-option>`)}</p-select>`;
 }
 
@@ -268,13 +269,17 @@ function editor(m) {
       ${button("Cancel", cancel, { variant: "secondary" })}</div>`;
 }
 
+// A row's actions are secondary: a list asks about many entries, so no row's answer is its section's one primary
+// (D-01M63C7BJZZ7RQV9XS4XVR0DNE).
 function actions(m) {
   const parts = [];
   if (m.state === "curated") {
-    parts.push(button("Approve", () => act(m, "approve"), { icon: "check", busy: busy(m, "approve") }));
+    parts.push(button("Approve", () => act(m, "approve"), { variant: "secondary", icon: "check",
+      busy: busy(m, "approve") }));
   }
   if (["contested", "disputed", "stale"].includes(m.state)) {
-    parts.push(button("Resolve", () => resolve(m), { icon: "check", aria: DIALOG, busy: busy(m, "resolve") }));
+    parts.push(button("Resolve", () => resolve(m), { variant: "secondary", icon: "check", aria: DIALOG,
+      busy: busy(m, "resolve") }));
   }
   if (m.state !== "deleted") {
     parts.push(button("Edit", () => edit(m), { variant: "secondary", icon: "edit" }),

@@ -21,7 +21,6 @@
   }
   .action .title { display: flex; flex-wrap: wrap; align-items: center; gap: var(--p-spacing-static-sm); }
   .action a { font-size: var(--p-typescale-sm); color: inherit; }
-  #use p-table-cell:nth-child(n+2):nth-child(-n+5) { text-align: end; font-variant-numeric: tabular-nums; }
   #tests { display: grid; gap: var(--p-spacing-static-xs); }
   #tests fieldset { display: grid; gap: var(--p-spacing-static-xs); margin: 0; padding: 0; border: 0; }
 </style>
@@ -117,7 +116,7 @@ function testsBody() {
   return html`<fieldset><legend><p-text size="sm" weight="semibold">Packages to review</p-text></legend>
       ${t.packages.map(box)}</fieldset>
     <p-text id="tests-runs" size="sm">${runs()}</p-text>
-    <div><p-button id="tests-start" type="button" compact="true" .loading=${state.starting}
+    <div><p-button id="tests-start" type="button" compact="true" variant="primary" .loading=${state.starting}
       ?disabled=${!chosen().length} @click=${startReview}>Review tests</p-button></div>`;
 }
 
@@ -156,9 +155,9 @@ async function startReview() {
 function useRow(u) {
   const agents = Object.entries(u.agents).map(([name, n]) => `${name} ${n}`).join(", ") || "none";
   const credits = `${u.credits.toFixed(2)}${u.unknown ? ` (${u.unknown} unknown)` : ""}`;
-  return html`<p-table-row><p-table-cell>${u.role}</p-table-cell><p-table-cell>${u.steps}</p-table-cell>
-    <p-table-cell>${u.with}</p-table-cell><p-table-cell>${u.runs}</p-table-cell><p-table-cell>${credits}</p-table-cell>
-    <p-table-cell>${agents}</p-table-cell></p-table-row>`;
+  return html`<p-table-row><p-table-cell>${u.role}</p-table-cell><p-table-cell class="num">${u.steps}</p-table-cell>
+    <p-table-cell class="num">${u.with}</p-table-cell><p-table-cell class="num">${u.runs}</p-table-cell>
+    <p-table-cell class="num">${credits}</p-table-cell><p-table-cell>${agents}</p-table-cell></p-table-row>`;
 }
 
 function useSection() {
@@ -168,7 +167,8 @@ function useSection() {
     <p-text size="sm">Built-in subagents the agents started in this project's Change steps, switched per agent in
       Settings; their credits are part of each step's own. An Impeccable update keeps no session record.</p-text>
     ${state.use.length ? html`<p-table id="use" caption="Subagent use per agent"><p-table-head><p-table-head-row>
-      ${heads.map((h) => html`<p-table-head-cell>${h}</p-table-head-cell>`)}</p-table-head-row></p-table-head>
+      ${heads.map((h, i) => html`<p-table-head-cell class=${i > 0 && i < 5 ? "num" : nothing}>${h}
+        </p-table-head-cell>`)}</p-table-head-row></p-table-head>
       <p-table-body>${state.use.map(useRow)}</p-table-body></p-table>`
       : html`<p-text id="use-none" size="sm">No step has run in this project yet.</p-text>`}
   </section>`;
@@ -203,7 +203,8 @@ function curationSection() {
       says: off, on, or on even while paused. Each run is one agent session.</p-text>
     ${refusal("curation")}${readError("curation")}
     ${c?.available ? html`<ul id="curation" class="actions">${c.folders.map(folderRun)}</ul>
-      <div><p-button id="curate-all" type="button" compact="true" .loading=${state.curating === "all"}
+      <div><p-button id="curate-all" type="button" compact="true" variant="primary"
+        .loading=${state.curating === "all"}
         @click=${() => curate("all")}>Curate all now</p-button></div>`
       : c ? html`<p-text id="curation-none" size="sm">${sentence(c.reason)}.</p-text>` : nothing}
   </section>`;
