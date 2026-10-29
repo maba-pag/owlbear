@@ -8,8 +8,9 @@ import { Slow, call, defined, here, machineState, project, reread, unread } from
 const state = { draft: "", busy: "", error: "", said: "" };
 const TAG = { loading: "info", failed: "error", replaced: "warning", stopped: "info" };  // loaded needs no tag
 
-// One action: its button shows it running; how it went is said under the page's heading until the next one.
+// One action at a time: its button shows it running; how it went is said under the page's heading until the next one.
 async function act(name, work) {
+  if (state.busy) return;
   Object.assign(state, { busy: name, error: "", said: "" });
   show();
   let failure = null;
@@ -18,8 +19,8 @@ async function act(name, work) {
   } catch (error) {
     failure = error;
   }
-  state.busy = "";
   await reread();  // the top row and this page show what the machine now serves
+  state.busy = "";
   if (failure) state.error = failure instanceof Slow && !unread() ? failure.reread : failure.message;
   show();
 }
@@ -47,11 +48,17 @@ async function remove(p) {
     then: "Its Changes, settings and memory stay in the clone; nothing is deleted.",
     after: "Add the folder again to serve it once more.", instead: "It keeps running.", yes: "Remove project" });
   if (!yes) return;
+  const at = [...document.querySelectorAll("#projects > li")].findIndex((li) => li.contains(document.activeElement));
   await act(`remove ${p.id}`, async () => {
     await call(`/projects/${p.id}`, { method: "DELETE", machine: true });
     if (p.id === project) location.replace(here({ project: "" }));  // the top row no longer has it to show
     return `Removed ${p.name}; nothing in ${p.path} was deleted.`;
   });
+  if (document.activeElement === document.body) {  // its Remove button is gone: the next project's takes focus
+    const left = document.querySelectorAll("#projects > li");
+    (left.length ? left[Math.max(0, Math.min(at, left.length - 1))].querySelector(".row p-button:last-child")
+      : document.querySelector("#add p-input-text"))?.focus();
+  }
 }
 
 function adopt(p) {

@@ -102,7 +102,8 @@ export function defined(tags) {
 
 let failed = "";  // why the machine host's state could not be read the last time, if it could not
 
-// The machine host's projects and pause, or null on a clone's own host (which has no such route) or when down.
+// The machine host's projects and pause, or null on a clone's own host (which has no such route); throws when it
+// cannot be read, so a page read once keeps what it last read.
 async function machine() {
   failed = "";
   try {
@@ -110,7 +111,6 @@ async function machine() {
   } catch (error) {
     if (error.status === 404) return null;
     failed = error.message;
-    if (error instanceof HostDown) return null;
     throw error;
   }
 }
@@ -164,10 +164,11 @@ export function loaded() {
   return bar.data ? bar.data.projects.filter((p) => p.state === "loaded") : null;
 }
 for (const link of document.querySelectorAll(".top a[href^='/']")) link.href = here({}, link.getAttribute("href"));
-// The guard covers every link of the top row and the menu; a link opened in another tab leaves this page as it is.
+// The guard covers every link of the top row, the menu and the notes under it; a link opened in another tab leaves
+// this page as it is.
 document.addEventListener("click", (e) => {
   const away = !e.defaultPrevented && e.button === 0 && !(e.metaKey || e.ctrlKey || e.shiftKey || e.altKey);
-  if (away && e.target.closest?.(".top a[href]") && held()) e.preventDefault();
+  if (away && e.target.closest?.(".top a[href], #machine a[href]") && held()) e.preventDefault();
 }, { capture: true });
 
 // The machine's state read again after a page changed it (a project added, removed or adopted).

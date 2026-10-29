@@ -486,9 +486,14 @@ def test_projects_shows_each_clone_s_state_and_setup_adopts_removes_and_adds(  #
             expect(page).to_have_url(f"{base}/projects?project={adopted.id}")
             delta = page.get_by_role("listitem", name="delta")
             expect(delta.locator("p-tag")).to_have_text("shown now")
-            for name in ("alpha", "delta"):
-                page.get_by_role("listitem", name=name).get_by_role("button", name="Remove project").click()
-                pds.answer(page, "Remove project")
+            page.goto(f"{base}/projects")  # all projects: none is shown, so each Remove stays on the page
+            page.get_by_role("listitem", name="delta").get_by_role("button", name="Remove project").click()
+            pds.answer(page, "Remove project")
+            alpha = page.get_by_role("listitem", name="alpha")
+            expect(alpha.get_by_role("button", name="Remove project")).to_be_focused()  # delta's went with it
+            alpha.get_by_role("button", name="Remove project").click()
+            pds.answer(page, "Remove project")
+            expect(page.get_by_label("Folder")).to_be_focused()
             expect(page.locator("#page")).to_contain_text("No project yet")
             assert registry.load().projects == []
             add = page.locator(".top").get_by_role("link", name="Add project")
@@ -496,8 +501,11 @@ def test_projects_shows_each_clone_s_state_and_setup_adopts_removes_and_adds(  #
             page.get_by_role("button", name="Add", exact=True).click()
             expect(page.locator("#page > [role=alert]")).to_have_text("Name the folder of a clone first.")
             page.get_by_label("Folder").fill(a.path)
-            page.get_by_label("Folder").press("Enter")
+            page.locator("#add p-input-text").evaluate(  # Enter twice before Delivery answers adds it once
+                "e => { for (const _ of [1, 2]) e.dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter'})) }"
+            )
             expect(page.locator("#page > [role=status]")).to_have_text("Added alpha.")
+            expect(page.locator("#page > [role=alert]")).to_have_count(0)
             expect(add).to_have_count(0)
             expect(pds.select(page.locator(".top"), "Project")).to_be_visible()
             page.goto(f"{base}/backlog")
@@ -538,11 +546,16 @@ def test_projects_says_when_the_machine_does_not_answer_and_that_the_list_may_be
             page.unroute(listing)
             page.get_by_role("button", name="Reload").click()
             expect(page.get_by_role("listitem")).to_have_count(2)
-            page.route(listing, refused)  # Remove reaches the machine; reading its projects again does not
+            page.route(  # Remove reaches the machine; reading its projects again finds no host at all
+                listing, lambda r: r.abort() if r.request.method == "GET" else r.fallback()
+            )
             page.get_by_role("listitem", name="beta").get_by_role("button", name="Remove project").click()
             pds.answer(page, "Remove project")
             expect(page.locator("#page > [role=status]")).to_contain_text("Removed beta")
-            expect(page.locator("#page > [role=alert]")).to_have_text("This list may be out of date: busy")
+            expect(page.locator("#page > [role=alert]")).to_have_text(
+                "This list may be out of date: Delivery is not running. Start it, then reload this page."
+            )
+            expect(page.get_by_role("listitem")).to_have_count(2)  # the last list read, kept
             assert registry.load().projects == [a]
             page.unroute(listing)  # the next poll reads it again
             expect(page.locator("#page > [role=alert]")).to_have_count(0, timeout=8000)
