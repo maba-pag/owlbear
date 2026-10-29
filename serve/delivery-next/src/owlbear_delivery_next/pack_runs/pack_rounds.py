@@ -10,8 +10,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Literal
 
-from owlbear_delivery_next.change_contracts.round_records import UNJUDGED
-
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
@@ -134,18 +132,7 @@ def counted(
     lp: RoundLoop, found: list[str], judged: Mapping[str, tuple[bool, str]], identity: str, *, recheck: bool
 ) -> Counted:
     """Count one challenger verdict on the candidate *identity*: its judgements and new findings, then what follows."""
-    if recheck:
-        if identity != lp.head:  # a repair the check judged the rejections of, never its changes
-            lp.leave(f"r{lp.round}")
-    else:
-        lp.reviewed, lp.unreviewed = sorted({f.repair for f in lp.findings if f.repair}), []
-    lp.round, lp.head = lp.round + (not recheck), identity  # a check counts outside the rounds (TD-330)
-    for f in pending(lp):
-        if (j := judged.get(f.id)) is not None:
-            f.state, f.judgement = ("escalated" if j[0] else "standing"), _flat(j[1], 1000)
-        elif recheck:  # a wrong premise instead: the check never runs again for it
-            f.state, f.judgement = "standing", UNJUDGED
-    lp.count(len(lp.raise_findings(found)), recheck=recheck)
+    lp.verdict(found, judged, identity, f"r{lp.round}", recheck=recheck)
     return after(lp)
 
 

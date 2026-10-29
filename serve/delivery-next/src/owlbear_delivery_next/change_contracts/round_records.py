@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Literal, Self
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Mapping, Sequence
 
 type FindingState = Literal[
     "open", "fixed", "rejected", "standing", "escalated", "owner-fix", "owner-drop", "withdrawn"
@@ -130,6 +130,29 @@ class RoundLoop(_Record):
         self.last = (
             recheck or self.found <= self.policy.last_round_at or self.round >= self.policy.max_rounds + self.extra
         )
+
+    def verdict(
+        self, found: Sequence[str], judged: Mapping[str, tuple[bool, str]], head: str, label: str, *, recheck: bool
+    ) -> None:
+        """Count one challenger verdict on *head*: its judgements of the open rejections and its new findings.
+
+        A rejections-only check of a changed *head* leaves its repair, *label*, unreviewed; a full round reviews every
+        reported repair. The check counts outside the rounds (TD-330).
+        """
+        if recheck:
+            if head != self.head:  # a repair the check judged the rejections of, never its changes
+                self.leave(label)
+        else:
+            self.reviewed, self.unreviewed = sorted({f.repair for f in self.findings if f.repair}), []
+        self.round, self.head = self.round + (not recheck), head
+        for f in self.findings:
+            if f.state != "rejected":
+                continue
+            if (j := judged.get(f.id)) is not None:
+                f.state, f.judgement = ("escalated" if j[0] else "standing"), " ".join(j[1].split())[:1000]
+            elif recheck:  # a wrong premise instead: the check never runs again for it
+                f.state, f.judgement = "standing", UNJUDGED
+        self.count(len(self.raise_findings(found)), recheck=recheck)
 
 
 def parse(text: str) -> tuple[str, str] | None:

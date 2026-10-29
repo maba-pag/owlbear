@@ -21,7 +21,7 @@ from owlbear_delivery_next.change_contracts.models import (
     StepKind,
     Waiting,
 )
-from owlbear_delivery_next.change_contracts.round_records import BRIEF, RECHECK, UNJUDGED, RoundLoop
+from owlbear_delivery_next.change_contracts.round_records import BRIEF, RECHECK, RoundLoop
 from owlbear_delivery_next.change_flow import picks
 from owlbear_delivery_next.change_flow.moves import ask
 
@@ -238,20 +238,8 @@ def _ended(c: Change, version: int, ended: Ended, now: datetime) -> None:
 def counted(c: Change, found: list[str], upheld: Mapping[str, tuple[bool, str]], now: datetime) -> None:
     """Count one challenger verdict on the requested version; then the owner, the shaper or the approval."""
     lp, version = c.loops[BRIEF], c.brief.requested or c.brief.version
-    recheck = c.step.mode == RECHECK
-    if recheck:
-        if str(version) != lp.head:  # a revision the check judged the rejections of, never its fixes
-            lp.unreviewed.append(f"v{version}")
-    else:
-        lp.reviewed, lp.unreviewed = sorted({f.repair for f in lp.findings if f.repair}), []
-    lp.round += not recheck  # a rejections-only check counts outside the rounds (TD-330)
-    for f in pending(lp):
-        if (j := upheld.get(f.id)) is not None:
-            f.state, f.judgement = ("escalated" if j[0] else "standing"), _flat(j[1], 1000)
-        elif recheck:  # a wrong premise instead: the check never runs again for it
-            f.state, f.judgement = "standing", UNJUDGED
-    lp.count(len(lp.raise_findings(found)), recheck=recheck)
-    lp.head, lp.reentry = str(version), False
+    lp.verdict(found, upheld, str(version), f"v{version}", recheck=c.step.mode == RECHECK)
+    lp.reentry = False
     _mode(c, None)
     proceed(c, now)
 

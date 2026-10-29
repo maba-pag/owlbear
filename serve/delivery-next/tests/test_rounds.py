@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from owlbear_delivery_next.change_contracts.models import Brief, Change, Task
-from owlbear_delivery_next.change_contracts.round_records import RoundLoop, RoundPolicy, parse
+from owlbear_delivery_next.change_contracts.round_records import UNJUDGED, RoundLoop, RoundPolicy, parse
 from owlbear_delivery_next.change_flow import disputes
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.project_host import api
@@ -97,3 +97,24 @@ def test_finding_ids_continue_across_rounds_and_survive_packing():
     assert keys == [["F3", "F4", "F5"], ["F6"]]
     assert parse("- F12: a.txt:1: p - fix: f") == ("F12", "a.txt:1: p - fix: f")
     assert parse("- a.txt:1: p - fix: f") is None
+
+
+def test_a_verdict_judges_the_open_rejections_counts_new_findings_and_leaves_a_rechecked_repair_once():
+    lp = RoundLoop(subject="plan", policy=RoundPolicy(), round=1, head="h1")
+    lp.raise_findings(["fixed one", "upheld", "never judged"])
+    lp.findings[0].state, lp.findings[0].repair = "fixed", "r1"
+    for f in lp.findings[1:]:
+        f.state = "rejected"
+    lp.verdict(["new"], {"F2": (True, " too\n  vague ")}, "h2", "r1", recheck=False)
+    assert (lp.round, lp.head, lp.reviewed, lp.unreviewed, lp.found) == (2, "h2", ["r1"], [], 1)
+    assert [(f.id, f.state, f.judgement, f.raised) for f in lp.findings[1:]] == [
+        ("F2", "escalated", "too vague", 1),
+        ("F3", "rejected", "", 1),
+        ("F4", "open", "", 2),
+    ]
+    lp.verdict(["ignored count"], {}, "h2", "r2", recheck=True)  # the same head: nothing left unreviewed
+    assert (lp.round, lp.found, lp.unreviewed) == (2, 1, [])
+    assert (lp.findings[2].state, lp.findings[2].judgement) == ("standing", UNJUDGED)
+    lp.verdict([], {}, "h3", "r2", recheck=True)
+    lp.verdict([], {}, "h4", "r2", recheck=True)  # another changed head after the same round shares its label
+    assert (lp.round, lp.head, lp.unreviewed) == (2, "h4", ["r2"])
