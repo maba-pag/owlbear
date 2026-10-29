@@ -9,12 +9,15 @@ from __future__ import annotations
 import uuid
 from typing import TYPE_CHECKING, Any
 
+from owlbear_delivery_next.change_contracts import tools
+from owlbear_delivery_next.runtimes import missing
 from owlbear_delivery_next.runtimes.sdk_usage import unexpected_models
 from owlbear_delivery_next.runtimes.session_result import limit_reached
 from owlbear_delivery_next.state_store import spend_ledger
 
 if TYPE_CHECKING:
     from owlbear_delivery_next.runtimes.sdk_adapter import _Step
+    from owlbear_delivery_next.runtimes.session_result import Run
 
 
 def meter(st: _Step, sid: str, agent: str) -> None:
@@ -58,8 +61,10 @@ def metered(st: _Step, *, interrupted: bool) -> None:
     """The run's ``end`` line in the spend ledger, whatever ended it; queued, so the event loop never waits for it.
 
     Its usage is the one read after its tasks settled (``final``), else the step's own, else unread; an interrupted
-    run's is a lower bound (``incomplete``) until the runtime's log completes it.
+    run's is a lower bound (``incomplete``) until the runtime's log completes it. It also carries the run's tool use;
+    an unmetered run still counts a pointless missing-tool report for its Change.
     """
+    pointless(st.run)
     if not st.metered:
         return
     usage = st.spent or st.run.usage or {"error": "not read"}
@@ -70,4 +75,18 @@ def metered(st: _Step, *, interrupted: bool) -> None:
     children = sum(1 for s in st.watch.report() if s.get("allowed"))
     spend_ledger.ended(st.metered, st.run.session_id, usage=usage, ending=ending, limit=st.cfg.credit_limit,
                        stopped="reached" if reached else "", stopped_by="session" if reached else "",
-                       subagents=children)  # fmt: skip
+                       subagents=children, tools=st.run.tool_calls, wrong=st.run.wrong)  # fmt: skip
+
+
+def pointless(run: Run) -> None:
+    """Count a missing-tool report about a tool Delivery's guard still denies, or one only a VS Code window has.
+
+    The denial is read as Delivery classifies the report (``missing.classify``): a later allowed use of the same
+    program cleared it, and the report may then be about a tool really absent (C-28 T8).
+    """
+    p = run.payload
+    if run.ending != "missing-tool" or not isinstance(p, tools.MissingTool):
+        return
+    found = missing.names(p.tool)
+    if found & run.denied.keys() or missing.window_only(found):
+        run.count("missing_pointless")

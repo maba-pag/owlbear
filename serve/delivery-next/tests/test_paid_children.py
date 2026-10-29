@@ -76,6 +76,7 @@ class Paid:
             self.children.append(cfg.session_id)
             run = Run(cfg.session_id, "result", self.verdicts.pop(0), termination=DONE)
             run.usage, run.tool_calls, run.model_check = dict(CHILD), {"grep": {"calls": 2}}, "verified"
+            run.wrong = {"denied": 1}
             if self.unread_children:
                 self.unread_children -= 1
                 run.usage, run.usage_unread = {"error": "RuntimeError"}, UNREAD
@@ -94,6 +95,7 @@ class Paid:
             payload, _ = tool_schema.parse(tools.WrongPremise, premise())
             run = Run(cfg.session_id, "premise", payload, head=git(self.repo, "rev-parse", "HEAD"), termination=DONE)
         run.usage, run.usage_unread, run.tool_calls = dict(usage), reason, {"bash": {"calls": 3}}
+        run.wrong = {"no_result": 1}
         return run
 
 
@@ -175,6 +177,7 @@ def assert_settled_once(store: Store, parent: str, usage: str, paid: Paid) -> Ch
     assert c.spend.unread == (paid.parents if usage == "unread" else [])
     assert c.spend.models["c"].tokens == 40
     assert (c.tool_use.tools["bash"].calls, c.tool_use.tools["grep"].calls) == (3, 2)
+    assert c.tool_use.wrong == {"no_result": 1, "denied": 1}
     assert len(c.accepted_holds) == len(c.counted_holds) == 1
     assert c.counted_children == paid.children
     assert captures(store) == []
@@ -276,7 +279,7 @@ def test_an_accepted_parent_and_its_paid_child_run_and_count_once_whichever_writ
         (path,) = captures(Store(tmp_path / "store"))
         kept = json.loads(path.read_text())["run"]
         assert (kept["session_id"], kept["usage"]) == (paid.children[0], CHILD)
-        assert kept["tool_calls"] == {"grep": {"calls": 2}}
+        assert (kept["tool_calls"], kept["wrong"]) == ({"grep": {"calls": 2}}, {"denied": 1})
         assert after.spend.credits == pytest.approx(PARENT[usage][2])
     else:
         assert len(after.accepted_holds) == 1  # the receipt is durable: the parent is never processed again
@@ -463,6 +466,7 @@ def test_a_child_whose_own_usage_is_unread_takes_its_own_gate_and_its_retry_reru
     assert (len(paid.parents), len(paid.children), len(paid.next)) == (1, 2, 1)  # the retry reran the child alone
     assert (c.spend.credits, c.spend.unread) == (pytest.approx(2.5 + 3.5), paid.children[:1])
     assert (c.tool_use.tools["bash"].calls, c.tool_use.tools["grep"].calls) == (3, 4)  # each attempt once
+    assert c.tool_use.wrong == {"no_result": 1, "denied": 2}
     assert (c.counted_children, c.pending_child) == (paid.children, None)  # each child's receipt once
     if parent == "plan":
         assert (c.plan.version, c.loops[PLAN].round, c.step.kind) == (1, 1, K.BUILD)

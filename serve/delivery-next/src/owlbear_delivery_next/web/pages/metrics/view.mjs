@@ -2,6 +2,7 @@ import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { live } from "/assets/lit-html/3.3.3/directives/live.js";
 import { call } from "/assets/ui.mjs";
 import { PERIODS, SPLITS, filter, state, show, kept, query, preselect } from "./state.mjs";
+import { toolUse } from "./tools.mjs";
 
 const UNKNOWN = "?";
 const DRILL = { project: "in", agent: "agent", model: "model", change: "change" };  // a row that filters its value
@@ -218,5 +219,5 @@ export function view() {
   const error = state.error ? html`<p-inline-notification id="error" state="error" heading="Not shown"
     description=${state.error} dismiss-button="false"></p-inline-notification>` : nothing;
   if (!state.data) return html`${error}${filters()}<p-text id="loading">Reading the spend…</p-text>`;
-  return html`${error}${filters()}${totals()}${split()}${runs()}${coverage()}`;
+  return html`${error}${filters()}${totals()}${split()}${runs()}${toolUse(state.data.tool_use)}${coverage()}`;
 }

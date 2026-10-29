@@ -18,7 +18,8 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.runtimes.sdk_adapter import Session
     from owlbear_delivery_next.runtimes.session_result import Ending, Run
 
-    Checked = tuple[tools.Args | None, list[str], tools.Worktree | None]  # parsed call, its errors, the tree read
+    # parsed call, its errors, the tree read and what refused it: invalid arguments, failed checks or the wrong order
+    Checked = tuple[tools.Args | None, list[str], tools.Worktree | None, str]
 
 ENDED = "The step has already ended. Stop now."
 ACCEPTED = "Accepted. Your step has ended: stop now and start nothing else."
@@ -114,7 +115,7 @@ class Gate:
                 errors=["the step has already ended"] if closed else errors,
             )
             closed = self._closed()
-            self._tally(spec.name, "late" if closed else "rejected" if errors else "")
+            self._tally(spec.name, "late" if closed else "rejected" if errors else "", "invalid")  # a schema only
         if closed:
             self.ended()
             return ENDED, False
@@ -127,44 +128,49 @@ class Gate:
         with self._lock:
             if self._closed():  # before any check: a late call never touches the accepted head
                 return None
-            args, errors, tree = self._check(spec, arguments)
+            args, errors, tree, kind = self._check(spec, arguments)
         if tree is not None and not errors and isinstance(args, tools.BuildResult):
             with self._linting:
                 errors = self.lint.check(self.cfg.worktree, tree.changed)
-        return args, errors, tree
+        return args, errors, tree, kind
 
     def _check(self, spec: tools.Spec, arguments: Any) -> Checked:  # noqa: ANN401 - the agent's JSON arguments
         args, errors = tool_schema.parse(spec.model, arguments)
         if args is None:
-            return None, errors, None
+            return None, errors, None, "invalid"
         errors, tree = tools.check_question(args) if isinstance(args, tools.AskQuestion) else [], None
         errors += amendments.check(args, self.cfg.amendable)  # a premise's proposed wording (TD-179)
+        order: list[str] = []
         if spec is self.cfg.submit or spec is self.cfg.first_look:
             order = self._order(spec)
             more, tree = (order, None) if order else self._check_result(args)
             errors += more
-        return args, errors, tree
+        return args, errors, tree, "order" if order else "checks"  # the wrong moment outweighs other errors
 
     def _late(self, spec: tools.Spec) -> tuple[str, bool]:
         self.log(event="tool", tool=spec.name, accepted=False, errors=["the step has already ended"])
         self._tally(spec.name, "late")
         return ENDED, False
 
-    def _tally(self, name: str, outcome: str) -> None:
-        """Count one call of *name* in the run: its outcome field, if any, and whether it retries a refusal."""
+    def _tally(self, name: str, outcome: str, kind: str = "") -> None:
+        """Count one call of *name* in the run: its outcome field, if any, and whether it retries a refusal.
+
+        A ``rejected`` call also counts its *kind* (``invalid``, ``checks`` or ``order``), a part of ``rejected``.
+        """
         n = self.run.tool_calls.setdefault(name, {})
         n["calls"] = n.get("calls", 0) + 1
         if name in self._refused:
             n["retries"] = n.get("retries", 0) + 1
-        if outcome:
-            n[outcome] = n.get(outcome, 0) + 1
+        for field in (outcome, kind if outcome == "rejected" else ""):
+            if field:
+                n[field] = n.get(field, 0) + 1
         if outcome in {"rejected", "lint"}:
             self._refused.add(name)
         else:
             self._refused.discard(name)
 
     def _settle(
-        self, spec: tools.Spec, args: tools.Args | None, errors: list[str], tree: tools.Worktree | None
+        self, spec: tools.Spec, args: tools.Args | None, errors: list[str], tree: tools.Worktree | None, kind: str
     ) -> tuple[str, bool]:
         read = list(args.covered_paths) if isinstance(args, tools.ReviewResult) else []  # evidence, not coverage
         self.log(event="tool", tool=spec.name, accepted=not errors, errors=errors, **({"read": read} if read else {}))
@@ -173,7 +179,7 @@ class Gate:
         if tree is not None:
             self.run.head, self.run.changed = (None, []) if errors else (tree.head, list(tree.changed))
         linted = bool(errors) and all(e.startswith("lint: ") for e in errors)
-        self._tally(spec.name, "lint" if linted else "rejected" if errors else "")
+        self._tally(spec.name, "lint" if linted else "rejected" if errors else "", kind)
         if errors:
             self.run.invalid += not linted  # lint has its own limit (TD-87)
             if self.run.invalid >= tools.INVALID_LIMIT:

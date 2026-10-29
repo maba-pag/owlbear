@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
     from pathlib import Path
 
+BYPASS = "which skips hooks or signing or forces history"  # the end of every bypass denial's reason
 _HARMLESS = re.compile(r"\d*>>?\s*/dev/null(?![^\s;&|)])|\d*>&\d+")  # discarded output or a descriptor copy
 _CONFIG_VALUES = frozenset({"-f", "--file", "--blob", "--type", "--default", "--comment"})
 _CONFIG_QUERIES = frozenset(
@@ -321,6 +322,11 @@ def _shell(policy: Policy, req: Request) -> str | None:
     return None
 
 
+def bypass(reason: str) -> bool:
+    """Whether a denial's *reason* refused a bypass of hooks, signing or history, not a choice of tool (C-28 T8)."""
+    return reason.endswith(BYPASS)
+
+
 def _check(policy: Policy, text: str, depth: int = 0) -> str | None:
     """Judge one shell text, and each script it hands to a nested shell or eval the same way."""
     try:
@@ -330,7 +336,7 @@ def _check(policy: Policy, text: str, depth: int = 0) -> str | None:
     if not commands:
         return "the shell request names no command" if depth == 0 else None  # an empty script does nothing
     if flag := next(filter(None, map(_bypass, commands)), None):
-        return f"`{text}` uses {flag}, which skips hooks or signing or forces history"
+        return f"`{text}` uses {flag}, {BYPASS}"
     if not policy.write and (found := _mutation(text, commands)):
         return f"`{text}` uses {found}, which writes in a read-only step"
     return _nested(policy, text, commands, depth)

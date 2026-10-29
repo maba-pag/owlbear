@@ -78,6 +78,7 @@ def dump_run(run: Run) -> HeldRun:
         model_check=run.model_check,
         subagents=run.subagents,
         tool_calls=run.tool_calls,
+        wrong=run.wrong,
         counted=True,
     )
 
@@ -340,6 +341,7 @@ def _with_usage(run: Run, data: HeldRun) -> Run:
         model_check=data.model_check,
         subagents=list(data.subagents),
         tool_calls={k: dict(v) for k, v in data.tool_calls.items()},
+        wrong=dict(data.wrong),
     )
 
 

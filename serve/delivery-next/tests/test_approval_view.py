@@ -170,15 +170,26 @@ def test_the_changes_tool_calls_show_under_its_spend_most_called_first(page_url,
 
     store, base = page_url
     used = change().model_copy(update={"slug": "used"})
-    used.tool_use = ToolUse().plus(
-        {"ask_question": {"calls": 1}, "submit_result": {"calls": 3, "rejected": 1, "retries": 1}}
+    old = ToolUse().plus({"ask_question": {"calls": 1}, "submit_result": {"calls": 3, "rejected": 1, "retries": 1}})
+    used.tool_use = old.plus(  # a record kept before refusals were split, then a run counted with the split
+        {"report_wrong_premise": {"calls": 4, "rejected": 1, "invalid": 1, "lint": 1, "late": 1}}, {"denied": 2}
     )
     store.write(Lock("used"), used)
+    wrong_only = change().model_copy(update={"slug": "idle", "tool_use": ToolUse().plus({}, {"no_result": 2})})
+    store.write(Lock("idle"), wrong_only)
     with opened(base, "used", pds) as page:
-        expect(page.get_by_text("Tool calls (4)")).to_be_visible()
-        page.get_by_text("Tool calls (4)").click()
-        expect(page.get_by_text("submit_result: 3 calls, 33% refused, 1 retry")).to_be_visible()
-        expect(page.get_by_text("ask_question: 1 call, 0% refused, 0 retries")).to_be_visible()
+        expect(page.get_by_text("Tool calls (8)")).to_be_visible()
+        page.get_by_text("Tool calls (8)").click()
+        expect(page.get_by_text("report_wrong_premise: 4 calls, 25% succeeded, 25% refused (1 invalid arguments), "
+                                "1 lint, 1 late, 0 retries")).to_be_visible()  # fmt: skip
+        expect(
+            page.get_by_text("submit_result: 3 calls, 67% succeeded, 33% refused (1 not split), 1 retry")
+        ).to_be_visible()
+        expect(page.get_by_text("ask_question: 1 call, 100% succeeded, 0% refused, 0 retries")).to_be_visible()
+        expect(page.get_by_text("Wrong tool choices: 2 denials by the guard")).to_be_visible()
+    with opened(base, "idle", pds) as page:  # no call counted, yet its wrong choices show
+        page.get_by_text("Tool calls (0)").click()
+        expect(page.get_by_text("Wrong tool choices: 2 turns without a result")).to_be_visible()
 
 
 def sent(store: Store, slug: str) -> str:
