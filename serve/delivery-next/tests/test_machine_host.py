@@ -22,11 +22,11 @@ from owlbear_delivery_next.change_contracts.chat_contract import HostFound
 from owlbear_delivery_next.change_contracts.decision_records import DecisionBaseline
 from owlbear_delivery_next.change_contracts.models import Change, Environment, Step, StepKind
 from owlbear_delivery_next.commands import chat_client, cli, mcp_server, replay_client, setup
+from owlbear_delivery_next.impeccable_runs import pack_job, pack_replay, pack_run
 from owlbear_delivery_next.local_system import codebase, local_home, maintenance
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.machine_host import app, project, serve
 from owlbear_delivery_next.machine_host.machine import Machine
-from owlbear_delivery_next.pack_runs import pack_job, pack_replay, pack_run
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import ENDING, Host, HostRecord, RunnerRecord, running
 from owlbear_delivery_next.state_store import decision_store, profile_share, project_home, registry
@@ -404,9 +404,9 @@ def test_a_manual_replay_of_another_project_waits_for_a_failed_projects_legacy_p
     assert machine.slots.counts(bad.id)[2] == 1  # one slot is held
     assert machine.slots.counts(good.id)[1] == 2  # one slot still free
 
-    refused = http.post(f"/p/{good.id}/api/next/design-pack/replay")
+    refused = http.post(f"/p/{good.id}/api/next/impeccable/replay")
     assert refused.status_code == 409
-    reason = "an earlier design pack session is unproven; recover it on the Maintenance page first"
+    reason = "an earlier Impeccable session is unproven; recover it on the Maintenance page first"
     assert refused.json()["detail"] == reason
 
     monkeypatch.setattr(replay_client.project_home, "clone_id", lambda _dir: good.id)
@@ -414,7 +414,7 @@ def test_a_manual_replay_of_another_project_waits_for_a_failed_projects_legacy_p
     monkeypatch.setattr(replay_client.host, "running_at", lambda _root, _model: record)
     loopback = _LoopbackToApp(TestClient(app.create(machine), base_url="http://127.0.0.1", headers=AUTH))
     monkeypatch.setattr(replay_client, "_LOCAL", loopback)
-    assert cli.main(["--repo", str(good.path), "design-pack", "--replay"]) == 1
+    assert cli.main(["--repo", str(good.path), "impeccable", "--replay"]) == 1
     assert capsys.readouterr().out.splitlines()[-1] == reason  # the host's own log lines come first
 
     assert machine.slots.counts(bad.id)[2] == 1  # the reservation stays
@@ -434,9 +434,16 @@ def test_a_manual_replay_of_a_project_whose_legacy_pack_finished_is_not_refused_
     machine.load_all()
     assert machine.slots.counts(bad.id)[2] == 0
 
-    reached = http.post(f"/p/{good.id}/api/next/design-pack/replay")
+    reached = http.post(f"/p/{good.id}/api/next/impeccable/replay")
     assert reached.status_code == 422  # pack_replay's own check: no shared repository, before any SDK session
     assert "shared repository" in reached.json()["detail"]
+    old = http.post(f"/p/{good.id}/api/next/design-pack/replay")  # its name before the Impeccable rename
+    assert (old.status_code, old.json()) == (reached.status_code, reached.json())
+    moved = http.get(f"/p/{good.id}/api/next/design-pack/update?x=1", follow_redirects=False)
+    assert (moved.status_code, moved.headers["location"]) == (
+        307,
+        f"http://127.0.0.1/p/{good.id}/api/next/impeccable/update?x=1",
+    )
 
 
 def older_failed_pack(folder: Path, reason: str, *, run: str = "legacy-run") -> None:
@@ -452,7 +459,7 @@ def older_failed_pack(folder: Path, reason: str, *, run: str = "legacy-run") -> 
 REPLAY_UNCERTAIN = (
     "replay: ReplayError: the replay judge replay-0123abcd may still be running; stop it before replaying again"
 )
-REFUSED = "an earlier design pack session is unproven; recover it on the Maintenance page first"
+REFUSED = "an earlier Impeccable session is unproven; recover it on the Maintenance page first"
 
 
 def test_a_manual_replay_of_another_project_refuses_an_unloaded_projects_older_failed_uncertain_pack_with_a_free_slot(
@@ -467,7 +474,7 @@ def test_a_manual_replay_of_another_project_refuses_an_unloaded_projects_older_f
     machine.load_all()
     assert (machine.projects[bad.id].state, machine.slots.counts(bad.id)[2]) == ("failed", 1)
 
-    refused = http.post(f"/p/{good.id}/api/next/design-pack/replay")
+    refused = http.post(f"/p/{good.id}/api/next/impeccable/replay")
     assert (refused.status_code, refused.json()["detail"]) == (409, REFUSED)
     assert machine.slots.counts(bad.id)[2] == 1  # the reservation stays
     assert machine.slots.counts(good.id)[2] == 0
@@ -486,7 +493,7 @@ def test_a_loaded_projects_older_failed_uncertain_pack_holds_its_slot_and_refuse
     machine.load_all()
     assert (machine.projects[good.id].state, machine.slots.counts(good.id)[2]) == ("loaded", 1)
 
-    refused = http.post(f"/p/{good.id}/api/next/design-pack/replay")
+    refused = http.post(f"/p/{good.id}/api/next/impeccable/replay")
     assert (refused.status_code, refused.json()["detail"]) == (409, REFUSED)
 
 
@@ -507,7 +514,7 @@ def test_an_empty_legacy_import_receipt_never_suppresses_repair_of_an_older_fail
     machine.maintenance._save(maintenance.Ledger(imported=[f"{project.id}:legacy"]))  # noqa: SLF001
     machine.slots.total = lambda: 2
     machine.load_all()
-    refused = http.post(f"/p/{good.id}/api/next/design-pack/replay")
+    refused = http.post(f"/p/{good.id}/api/next/impeccable/replay")
     assert (refused.status_code, refused.json()["detail"]) == (409, REFUSED)
     assert (machine.slots.counts(project.id)[2], len(machine.maintenance.read()["sessions"])) == (1, 1)
 

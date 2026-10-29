@@ -23,10 +23,10 @@ from owlbear_delivery_next.change_contracts.models import (
 )
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_flow.loop import StepResult, apply
+from owlbear_delivery_next.impeccable_runs import pack_job, pack_replay
 from owlbear_delivery_next.local_system import maintenance, processes
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.local_system.slots import PACK, Slots
-from owlbear_delivery_next.pack_runs import pack_job, pack_replay
 from owlbear_delivery_next.project_host import pack_routes, session_slots
 from owlbear_delivery_next.project_host.admission import admitted
 from owlbear_delivery_next.project_host.host import Host, RunnerRecord
@@ -130,7 +130,7 @@ def test_a_replay_waits_for_the_last_slot_and_a_shared_tick_observes_the_runner_
     http.app.include_router(pack_routes.router(store, job, lambda: admitted(host), host))
 
     result: dict[str, object] = {}
-    post = threading.Thread(target=lambda: result.update(r=http.post("/design-pack/replay")))
+    post = threading.Thread(target=lambda: result.update(r=http.post("/impeccable/replay")))
     post.start()
     try:
         assert wait_for(lambda: any(k[0] == project and k[1].startswith(PACK) for k in slots.waiting)), (
@@ -193,7 +193,7 @@ def test_a_replay_granted_its_slot_as_a_stop_begins_enters_no_sdk_and_gives_the_
     http = TestClient(FastAPI())
     http.app.include_router(pack_routes.router(store, job, lambda: admitted(host), host))
 
-    response = http.post("/design-pack/replay")
+    response = http.post("/impeccable/replay")
 
     assert stopping.is_set()
     assert response.status_code != 200, "a replay granted its slot after the stop began still ran"

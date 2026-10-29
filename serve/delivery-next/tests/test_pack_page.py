@@ -1,4 +1,4 @@
-"""The design pack update in Maintenance's OwlBear section in a real browser (TD-193, TD-220, TD-256)."""
+"""The Impeccable update in Maintenance's OwlBear section in a real browser (TD-193, TD-220, TD-256)."""
 
 from __future__ import annotations
 
@@ -15,9 +15,16 @@ import pytest
 import uvicorn
 
 from owlbear_delivery_next.change_contracts.round_records import PACK, RoundFinding, RoundLoop, RoundPolicy
+from owlbear_delivery_next.impeccable_runs import (
+    machine_lock,
+    pack_gates,
+    pack_job,
+    pack_progress,
+    pack_rounds,
+    pack_state,
+)
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.local_system.codebase import CURRENT
-from owlbear_delivery_next.pack_runs import machine_lock, pack_gates, pack_job, pack_progress, pack_rounds, pack_state
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.state_store.store import Store
@@ -50,7 +57,7 @@ def waiting(store: Store, lp: RoundLoop | None = None) -> pack_job.Job:
     lp = lp or RoundLoop(subject=PACK, policy=RoundPolicy(), round=2, findings=found)
     job = pack_job.Job(store, pack_job.Live())
     context = {
-        "tag": "skill-v4.6.0", "why": "design pack", "diff": "", "golden": "as expected", "pins": {},
+        "tag": "skill-v4.6.0", "why": "Impeccable", "diff": "", "golden": "as expected", "pins": {},
         "manifest": "{}", "notice": "", "baseline": {}, "checkout": {}, "start": {}, "sid": "pack-update-1",
         "next": "wait",
     }  # fmt: skip
@@ -84,7 +91,7 @@ def served(tmp_path: Path) -> Iterator[Callable[[RoundLoop | None], tuple[pack_j
 
 @contextlib.contextmanager
 def holding() -> Iterator[None]:
-    """The machine's design pack lock, as a run's thread holds it while it runs; a running record without it is left."""
+    """The machine's Impeccable lock, as a run's thread holds it while it runs; a running record without it is left."""
     fd = machine_lock.take(local_home.root() / pack_state.MACHINE_LOCK, "tests", lambda: None)
     try:
         yield
@@ -121,14 +128,14 @@ def test_the_owner_answers_each_upheld_finding_with_his_note_in_the_owlbear_sect
         state = page.locator("#pack-state")
         expect(state).to_contain_text("The update waits for your answers below. Started ")
         expect(state).not_to_contain_text("ended")
-        expect(page.get_by_role("button", name="Update design pack")).to_be_disabled()
+        expect(page.get_by_role("button", name="Update Impeccable")).to_be_disabled()
         first, second = ask.locator(".pack-question").first, ask.locator(".pack-question").last
         facts = first.locator(".pack-facts dd")  # from the finding's record, not the host's sentence
         expect(facts).to_have_text(["owlbear-design-review: glow 1 - fix: say so", "upstream dropped it",
                                     "upstream still names it"])  # fmt: skip
         expect(page.locator("#pack-todo")).to_have_text("Answer the 2 questions below.")
         sent: list[str] = []
-        page.on("request", lambda r: sent.append(r.url) if r.url.endswith("/design-pack/update/answer") else None)
+        page.on("request", lambda r: sent.append(r.url) if r.url.endswith("/impeccable/update/answer") else None)
         first.get_by_role("button", name="Ask the challenger to reconsider").click()
         note = first.locator("p-textarea")
         expect(note).to_have_attribute("message", "Asking the challenger to reconsider needs your note.")
@@ -344,9 +351,9 @@ def test_an_unreadable_section_says_what_could_not_be_read(served, pds) -> None:
         page.route("**/maintenance/pack/runs", lambda r: r.fulfill(status=500, json={"detail": "the disk said no"}))
         page.route("**/maintenance/pack", lambda r: r.fulfill(status=500, json={"detail": "no pin today"}))
         page.reload()
-        said = "Could not read the design pack runs: the disk said no"
+        said = "Could not read the Impeccable runs: the disk said no"
         expect(page.locator("#pack-runs-error")).to_contain_text(said)
-        expect(page.locator("#pack-read-error")).to_contain_text("Could not read the design pack: no pin today")
+        expect(page.locator("#pack-read-error")).to_contain_text("Could not read Impeccable: no pin today")
         expect(page.locator("#pack-run")).to_have_count(0)  # nothing made up in its place
 
 
@@ -392,11 +399,11 @@ def test_a_start_admitted_after_its_timeout_shows_its_run_without_a_reload_or_a_
         posts: list[str] = []
         page.on("request", lambda r: posts.append(r.url) if r.method == "POST" else None)
         expect(page.locator("#pack-tag")).to_have_text("passed")
-        page.get_by_role("button", name="Update design pack").click()
+        page.get_by_role("button", name="Update Impeccable").click()
         pds.answer(page, "Update")
         expect(page.locator("#pack-admitting")).to_contain_text("It was not sent again", timeout=15000)
         expect(page.locator("#pack-tag")).to_have_text("waiting for you", timeout=15000)  # read back, no reload
         expect(page.locator("#pack-admitting")).to_have_count(0)
         expect(page.locator("#pack-start-unknown")).to_have_count(0)
         expect(page.locator("#pack-discard")).to_be_visible()
-    assert [u for u in posts if u.endswith("/design-pack/update")] == [f"{base}/api/next/design-pack/update"]
+    assert [u for u in posts if u.endswith("/impeccable/update")] == [f"{base}/api/next/impeccable/update"]

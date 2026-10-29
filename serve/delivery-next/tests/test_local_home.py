@@ -1,4 +1,4 @@
-"""OwlBear's one local folder (TD-198): always ``~/.owlbear``, for the pointer, the design pack and the worktrees."""
+"""OwlBear's one local folder (TD-198): always ``~/.owlbear``, for the pointer, Impeccable and the worktrees."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ import pytest
 
 from owlbear_delivery_next.change_flow import worktree
 from owlbear_delivery_next.commands import cli
-from owlbear_delivery_next.design_packs import design_pack, pack_update
+from owlbear_delivery_next.impeccable import pack_files, pack_update
 from owlbear_delivery_next.local_system import data_place, data_repo, local_home
 
 if TYPE_CHECKING:
@@ -38,7 +38,7 @@ def test_everything_lives_in_dot_owlbear(machine) -> None:
     assert local_home.root() == home
     assert DATA_ROOT() == home / "worktrees"
     assert data_place.pointer() == home / "data.json"
-    assert design_pack.folder({"pack": "p1"}) == home / "design-pack" / "p1"
+    assert pack_files.folder({"pack": "p1"}) == home / "design-pack" / "p1"
     assert cli.show_home() == f"OwlBear's folder: {home}"
 
 

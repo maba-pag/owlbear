@@ -27,7 +27,7 @@ def reached(monkeypatch) -> list[str]:
     monkeypatch.setattr(readiness, "reach", reach)
     monkeypatch.setattr(readiness, "probe_in", lambda _repo: lambda _cmd: (1, "not checked"))
     monkeypatch.setattr(readiness.pack_update, "notice", lambda *_a, **_k: None)
-    monkeypatch.setattr(readiness.pack_update, "said", lambda _n: "design packs not checked")
+    monkeypatch.setattr(readiness.pack_update, "said", lambda _n: "Impeccable packs not checked")
     return hosts
 
 

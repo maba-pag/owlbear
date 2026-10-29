@@ -8,7 +8,7 @@ from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_contracts.tool_use import ToolTally, ToolUse
 from owlbear_delivery_next.change_contracts.tools import Worktree
-from owlbear_delivery_next.design_packs import design_tools
+from owlbear_delivery_next.impeccable import design_tools
 from owlbear_delivery_next.runtimes import sdk_adapter, sdk_spend
 from owlbear_delivery_next.runtimes.results import ACCEPTED, ENDED, Gate
 from owlbear_delivery_next.runtimes.session_result import Run

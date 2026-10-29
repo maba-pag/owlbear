@@ -18,12 +18,12 @@ from owlbear_delivery_next.change_contracts.memory_curation_tools import MemoryC
 from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_contracts.visual_records import DesignInput, JudgeVerdict, OwnerDecision, VisualRound
-from owlbear_delivery_next.design_packs import calibration, design_tools
+from owlbear_delivery_next.impeccable import calibration, design_tools
+from owlbear_delivery_next.impeccable_runs import pack_job, pack_replay
 from owlbear_delivery_next.local_system import local_home, maintenance, processes
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.local_system.slots import Slots
 from owlbear_delivery_next.machine_host import curation
-from owlbear_delivery_next.pack_runs import pack_job, pack_replay
 from owlbear_delivery_next.project_host import session_slots
 from owlbear_delivery_next.project_host.host import Host
 from owlbear_delivery_next.runtimes import loop_owner, maintained, sdk_adapter, sdk_teardown
@@ -407,7 +407,7 @@ def judge_world(make, store, *, resistant, absent):
 
 
 def replay_through_entry(store, host):
-    """The calibration replay as the design pack starts it: owned by a project slot, with the real judge entry."""
+    """The calibration replay as Impeccable starts it: owned by a project slot, with the real judge entry."""
     live = session_slots.pack_live(host, pack_job.Live(), lambda _text: None)
     return live.replay(store, None, keep=lambda path: host.maintenance.retained(str(path)))
 

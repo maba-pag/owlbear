@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from owlbear_delivery_next.design_packs import design_pack, pack_git
+from owlbear_delivery_next.impeccable import pack_files, pack_git
 from owlbear_delivery_next.local_system import codebase, local_home
 from owlbear_delivery_next.machine_host import versions
 
@@ -74,7 +74,7 @@ def test_installed_detached_runtime_on_main_needs_no_tracking_reference(origin, 
 def test_installed_runtime_off_main_is_refused(origin, tmp_path):
     runtime = installed(tmp_path, git(origin, "rev-parse", "HEAD"))
     git(runtime, "commit", "-q", "--allow-empty", "-m", "off main")
-    with pytest.raises(design_pack.PackError):
+    with pytest.raises(pack_files.PackError):
         pack_git.source(runtime)
 
 
@@ -87,7 +87,7 @@ def test_installed_dirty_source_is_refused_before_provider_reads(origin, tmp_pat
             pytest.fail("Dirty source must be refused before provider reads")
         return pack_git.git(cwd, args)
 
-    with pytest.raises(design_pack.PackError):
+    with pytest.raises(pack_files.PackError):
         pack_git.source(runtime, run=guarded)
     assert (runtime / "tracked.txt").read_text() == "uncommitted owner work\n"
 
@@ -101,7 +101,7 @@ def test_installed_wrong_identity_is_refused_before_provider_reads(origin, tmp_p
             pytest.fail("No provider reads are allowed for an untrusted repository identity")
         return pack_git.git(cwd, args)
 
-    with pytest.raises(design_pack.PackError):
+    with pytest.raises(pack_files.PackError):
         pack_git.source(runtime, run=guarded)
 
 
@@ -113,10 +113,10 @@ def test_a_failed_exact_fetch_remains_an_explicit_refusal(origin, tmp_path):
         if args[0] == "fetch":
             attempted.append(args)
             msg = "synthetic fetch failure"
-            raise design_pack.PackError(msg)
+            raise pack_files.PackError(msg)
         return pack_git.git(cwd, args)
 
-    with pytest.raises(design_pack.PackError):
+    with pytest.raises(pack_files.PackError):
         pack_git.source(runtime, run=failed)
     assert len(attempted) == 1
 
@@ -180,5 +180,5 @@ def test_missing_or_malformed_remote_main_is_refused_before_fetch(tmp_path, repl
             pytest.fail("Unverified remote output cannot authorize a fetch")
         return pack_git.git(cwd, args)
 
-    with pytest.raises(design_pack.PackError):
+    with pytest.raises(pack_files.PackError):
         pack_git.source(clone, run=malformed)

@@ -59,7 +59,7 @@ def test_the_current_settlement_read_set_covers_its_receipt_schema_reader_and_ho
         "local_system/local_home.py",
         "local_system/maintenance.py",
         "local_system/storage_io.py",
-        "pack_runs/pack_state.py",
+        "impeccable_runs/pack_state.py",
         "state_store/offline_protocol.py",
         "state_store/pack_run_record.py",
         "state_store/git_images.py",

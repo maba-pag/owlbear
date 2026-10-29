@@ -30,7 +30,7 @@ from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_flow import brief_rounds, loop, picks, rebuilds, round_flow, round_marks
 from owlbear_delivery_next.change_flow.progress import progress
 from owlbear_delivery_next.change_flow.status import card, status, unloadable
-from owlbear_delivery_next.pack_runs import pack_job
+from owlbear_delivery_next.impeccable_runs import pack_job
 from owlbear_delivery_next.project_host import (
     answers,
     backlog_routes,
@@ -483,6 +483,6 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
     app.include_router(router)
     app.state.busy = lambda: [  # work admitted outside a request, which a project's stop waits for (TD-242)
         *(["a shaping chat opening"] if launches.opening else []),
-        *(["a design pack update"] if job.busy() else []),
+        *(["an Impeccable update"] if job.busy() else []),
     ]
     return app

@@ -209,7 +209,7 @@ function coverage() {
       ${c.unknown ? html`<li>${c.unknown} run${c.unknown === 1 ? "" : "s"} whose credits were not reported count as
         unknown, never as zero.</li>` : nothing}
       ${(r.errors ?? []).map((e) => html`<li class="error">Could not read: ${e}</li>`)}
-      <li>Not recoverable: sessions OwlBear ran outside a Change before 2026-10-25 (curator, design pack, lookups),
+      <li>Not recoverable: sessions OwlBear ran outside a Change before 2026-10-25 (curator, Impeccable, lookups),
         and a Change's events dropped from its activity log beyond its totals.</li>
     </ul>
   </section>`;

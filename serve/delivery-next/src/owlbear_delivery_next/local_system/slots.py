@@ -1,6 +1,6 @@
 """Session slots (TD-336, TD-105): how many agent sessions run at once on this machine and in each project.
 
-One arbiter serves the machine host's process: every project host and every design pack update in it. A project host
+One arbiter serves the machine host's process: every project host and every Impeccable update in it. A project host
 reserves a step's sessions before it launches the step's runner and gives them back once the runner's processes are
 confirmed gone; a pack update takes one for each of its sessions. The machine's total and each project's limit hold
 together. A free slot goes round-robin across projects (by project id), first-ready within one. A lowered limit

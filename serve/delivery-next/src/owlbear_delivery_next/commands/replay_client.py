@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 TIMEOUT = 3600.0  # the replay judges every decided round through the SDK, which takes a while
-UNKNOWN = "the host's answer was lost, so the replay may have run: check the design pack page before starting it again"
+UNKNOWN = "the host's answer was lost, so the replay may have run: check the Impeccable page before starting it again"
 CUT = (OSError, ValueError, http.client.HTTPException)
 _LOCAL = urllib.request.build_opener(urllib.request.ProxyHandler({}))  # loopback never goes through a proxy
 
@@ -33,7 +33,7 @@ def replay(repo: Path) -> tuple[bool, str]:
     rec = host.running_at(project_home.home(pid), chat_contract.HostFound)
     if rec is None or not rec.token:
         return False, NOT_RUNNING.format(repo=repo)
-    url = f"{rec.url}{f'p/{rec.project}/' if rec.project else ''}api/next/design-pack/replay"
+    url = f"{rec.url}{f'p/{rec.project}/' if rec.project else ''}api/next/impeccable/replay"
     headers = {"Authorization": f"Bearer {rec.token}", "Content-Type": "application/json", "X-OwlBear-Use": "cli"}
     request = urllib.request.Request(url, data=b"{}", method="POST", headers=headers)  # noqa: S310 - loopback
     try:

@@ -18,9 +18,9 @@ from types import SimpleNamespace
 import pytest
 from fastapi.testclient import TestClient
 
-from owlbear_delivery_next.design_packs import design_pack
+from owlbear_delivery_next.impeccable import pack_files
 from owlbear_delivery_next.local_system import leases, local_home, processes
-from owlbear_delivery_next.machine_host import alias, app, control, handover, packs, serve, update, versions
+from owlbear_delivery_next.machine_host import alias, app, control, handover, impeccable, serve, update, versions
 from owlbear_delivery_next.machine_host.machine import Machine, MachineError
 from owlbear_delivery_next.machine_host.versions import Choice
 from owlbear_delivery_next.project_host.host import HostRecord
@@ -299,21 +299,21 @@ def test_a_standby_that_never_answers_keeps_the_running_version_and_counts_an_at
 
 def pinned_pack(monkeypatch) -> None:
     """The running version pins a pack whose downloads come from here: ``engine`` and ``bundle``."""
-    pins = design_pack.manifest()
-    pins["engine"][design_pack.platform_name()] = hashlib.sha256(b"engine").hexdigest()
+    pins = pack_files.manifest()
+    pins["engine"][pack_files.platform_name()] = hashlib.sha256(b"engine").hexdigest()
     pins["bundle"]["sha256"] = hashlib.sha256(b"bundle").hexdigest()
-    monkeypatch.setattr(design_pack, "manifest", lambda: json.loads(json.dumps(pins)))
-    monkeypatch.setattr(design_pack, "fetch", lambda url, _s=0: b"engine" if "releases" in url else b"bundle")
+    monkeypatch.setattr(pack_files, "manifest", lambda: json.loads(json.dumps(pins)))
+    monkeypatch.setattr(pack_files, "fetch", lambda url, _s=0: b"engine" if "releases" in url else b"bundle")
 
 
 def test_a_version_whose_pack_failed_is_not_activated_and_every_page_offers_install_also_after_a_restart(
     updating, monkeypatch
 ):
     pinned_pack(monkeypatch)
-    design_pack.install()  # the running version's own pack stays in place throughout
+    pack_files.install()  # the running version's own pack stays in place throughout
 
     def install(_choice: Choice) -> Path:
-        msg = "v0.2's design pack could not be installed: cannot download"
+        msg = "v0.2's Impeccable could not be installed: cannot download"
         raise versions.PackInstallError(msg)
 
     monkeypatch.setattr(versions, "install", install)
@@ -322,70 +322,70 @@ def test_a_version_whose_pack_failed_is_not_activated_and_every_page_offers_inst
     m.updater._update()  # noqa: SLF001
 
     assert (updating.activated, m.handover, FakeStandby.made) == ([], None, [])
-    failed = m.packs.read()["install"]
+    failed = m.impeccable.read()["install"]
     assert (failed["state"], failed["version"]) == ("failed", "v0.2")
     assert "cannot download" in failed["detail"]
 
     restarted = Machine(m.record, paused=False)  # a new host over the same home
-    assert restarted.packs.read()["install"] == failed
+    assert restarted.impeccable.read()["install"] == failed
     packed: list[Path] = []
     meanwhile: list[dict] = []  # what the pages say while v0.2's pack is put in place
 
     def pack(folder: Path) -> str:
         packed.append(folder)
-        meanwhile.append(restarted.packs.read()["install"])
+        meanwhile.append(restarted.impeccable.read()["install"])
         return ""
 
     monkeypatch.setattr(versions, "pack", pack)
-    restarted.packs.install()
-    restarted.packs.thread.join(10)
-    assert (packed, restarted.packs.read()["install"]) == ([updating.folder], None)
+    restarted.impeccable.install()
+    restarted.impeccable.thread.join(10)
+    assert (packed, restarted.impeccable.read()["install"]) == ([updating.folder], None)
     assert [(i["state"], i["version"], i["pack"]) for i in meanwhile] == [("installing", "v0.2", "")]
-    assert Machine(m.record).packs.read()["install"] is None  # ended for good
+    assert Machine(m.record).impeccable.read()["install"] is None  # ended for good
 
-    (local_home.root() / design_pack.PACKS / packs.FAILED).write_text("{not json")
+    (local_home.root() / pack_files.PACKS / impeccable.FAILED).write_text("{not json")
     monkeypatch.setattr(versions, "running", lambda: "v0.1")  # a versioned machine: an empty tag is no version
     broken = Machine(m.record)
-    unreadable = broken.packs.read()["install"]
+    unreadable = broken.impeccable.read()["install"]
     assert (unreadable["state"], unreadable["version"]) == ("failed", "")
     assert "is unreadable" in unreadable["detail"]
-    broken.packs.install()  # the record names no version: only the running one's pack, already in place
-    broken.packs.thread.join(10)
-    assert (packed, broken.packs.read()["install"]) == ([updating.folder], None)
+    broken.impeccable.install()  # the record names no version: only the running one's pack, already in place
+    broken.impeccable.thread.join(10)
+    assert (packed, broken.impeccable.read()["install"]) == ([updating.folder], None)
 
 
 def test_an_install_ends_only_the_failure_it_set_out_to_repair(updating, monkeypatch):
     pinned_pack(monkeypatch)
-    design_pack.install()
+    pack_files.install()
     m = updating.machine
-    m.packs.failed("v0.1", "the running pack once failed")
+    m.impeccable.failed("v0.1", "the running pack once failed")
     # an update that failed on v0.3's pack leaves its folder
     (local_home.root() / local_home.VERSIONS / "v0.3").mkdir(parents=True, exist_ok=True)
 
     def meanwhile() -> bool:  # an update keeps a newer version's failure while this install runs
-        m.packs.failed("v0.3", "v0.3's design pack could not be installed")
+        m.impeccable.failed("v0.3", "v0.3's Impeccable could not be installed")
         return True
 
-    monkeypatch.setattr(m.packs, "_installed", meanwhile)
-    m.packs.install()
-    m.packs.thread.join(10)
+    monkeypatch.setattr(m.impeccable, "_installed", meanwhile)
+    m.impeccable.install()
+    m.impeccable.thread.join(10)
 
-    assert m.packs.failure["version"] == "v0.3"
-    kept = json.loads((local_home.root() / design_pack.PACKS / packs.FAILED).read_text())
+    assert m.impeccable.failure["version"] == "v0.3"
+    kept = json.loads((local_home.root() / pack_files.PACKS / impeccable.FAILED).read_text())
     assert kept["version"] == "v0.3"
 
     def fails() -> None:  # nor does this install's own failure replace it
         said = "the running pack failed again"
-        raise design_pack.PackError(said)
+        raise pack_files.PackError(said)
 
-    m.packs.failed("v0.1", "the running pack once failed")
-    monkeypatch.setattr(m.packs, "_installed", lambda: not meanwhile())
-    monkeypatch.setattr(design_pack, "install", fails)
-    m.packs.install()
-    m.packs.thread.join(10)
+    m.impeccable.failed("v0.1", "the running pack once failed")
+    monkeypatch.setattr(m.impeccable, "_installed", lambda: not meanwhile())
+    monkeypatch.setattr(pack_files, "install", fails)
+    m.impeccable.install()
+    m.impeccable.thread.join(10)
 
-    assert m.packs.failure["version"] == "v0.3"
-    kept = json.loads((local_home.root() / design_pack.PACKS / packs.FAILED).read_text())
+    assert m.impeccable.failure["version"] == "v0.3"
+    kept = json.loads((local_home.root() / pack_files.PACKS / impeccable.FAILED).read_text())
     assert kept["version"] == "v0.3"
 
 
@@ -399,11 +399,16 @@ def test_install_puts_a_missing_pack_in_place_with_no_newer_version(updating, mo
     assert m.updater.read()["phase"] == "current"
     assert client.get("/api/next/projects", headers=auth).json()["pack"]["install"]["state"] == "missing"
 
-    assert client.post("/api/next/design-pack/install", headers=auth).status_code == 200
-    m.packs.thread.join(10)
+    assert client.post("/api/next/impeccable/install", headers=auth).status_code == 200
+    m.impeccable.thread.join(10)
 
-    assert client.get("/api/next/design-pack", headers=auth).json()["install"] is None
-    assert design_pack.installed() is not None
+    assert client.get("/api/next/impeccable", headers=auth).json()["install"] is None
+    assert pack_files.installed() is not None
+    old = client.get("/api/next/design-pack?seen=1", headers=auth, follow_redirects=False)  # a page from before
+    assert (old.status_code, old.headers["location"]) == (307, "http://127.0.0.1/api/next/impeccable?seen=1")
+    assert client.post("/api/next/design-pack/install", headers=auth).json()["install"]["state"] == "installing"
+    m.impeccable.thread.join(10)
+    assert client.get(old.headers["location"], headers=auth).json()["install"] is None
 
 
 def test_run_updates_now_is_refused_while_owlbear_stops_when_idle(updating):

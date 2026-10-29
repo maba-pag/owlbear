@@ -32,7 +32,7 @@
   },
   "overrides": [
     {
-      "includes": ["serve/delivery-next/src/owlbear_delivery_next/design_pack.json"],
+      "includes": ["serve/delivery-next/src/owlbear_delivery_next/impeccable.json"],
       "formatter": {
         "enabled": false
       }

@@ -18,9 +18,9 @@ from fastapi.testclient import TestClient
 from owlbear_delivery_next.change_contracts.models import Change, Step, StepKind
 from owlbear_delivery_next.change_contracts.spend import Spend
 from owlbear_delivery_next.commands import runner
+from owlbear_delivery_next.impeccable_runs import pack_job, pack_replay
 from owlbear_delivery_next.improvement import cases, chatlogs, spotter
 from owlbear_delivery_next.local_system import local_home
-from owlbear_delivery_next.pack_runs import pack_job, pack_replay
 from owlbear_delivery_next.project_host import metrics_routes
 from owlbear_delivery_next.runtimes import sdk_spend, spend_logs, spend_reconcile, subagents
 from owlbear_delivery_next.runtimes.session_result import Run
@@ -51,7 +51,7 @@ def test_a_runner_spends_for_its_project_change_and_step(change_repo, monkeypatc
     assert seen == [Where(project=clone, name=change_repo.name, clone=clone, change="c1", step="build")]
 
 
-def test_design_pack_work_spends_for_the_project_that_started_it(tmp_path, monkeypatch) -> None:
+def test_impeccable_work_spends_for_the_project_that_started_it(tmp_path, monkeypatch) -> None:
     store, seen = Store(tmp_path / "abc", None, "shop"), []
     store.shared = SimpleNamespace()  # replay needs one; its work is replaced here
     monkeypatch.setattr(pack_replay, "_replay", lambda *_a: seen.append(spend_ledger.where()))
@@ -61,7 +61,7 @@ def test_design_pack_work_spends_for_the_project_that_started_it(tmp_path, monke
     monkeypatch.setattr(job, "_release", lambda: None)
     job._run(lambda: None)  # noqa: SLF001 - the job thread's own entry
     assert [(w.project, w.clone, w.job) for w in seen] == [
-        ("shop", "abc", "design pack replay"), ("shop", "abc", "design pack update")
+        ("shop", "abc", "Impeccable replay"), ("shop", "abc", "Impeccable update")
     ]  # fmt: skip
 
 

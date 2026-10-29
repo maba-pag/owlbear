@@ -1,4 +1,4 @@
-"""The machine's design pack update as Maintenance's OwlBear section shows it, the same in every project.
+"""The machine's Impeccable update as Maintenance's OwlBear section shows it, the same in every project.
 
 The pack is the machine's, so one update is open at a time across its projects (``pack_admission``); the run is kept in
 the project that started it, whose labels, calibration and spend it uses. This view reads every registered project's
@@ -12,9 +12,9 @@ import os
 from pathlib import Path
 from typing import Any
 
-from owlbear_delivery_next.design_packs import design_pack, pack_update
-from owlbear_delivery_next.pack_runs import pack_progress
-from owlbear_delivery_next.pack_runs.pack_state import running_for
+from owlbear_delivery_next.impeccable import pack_files, pack_update
+from owlbear_delivery_next.impeccable_runs import pack_progress
+from owlbear_delivery_next.impeccable_runs.pack_state import running_for
 from owlbear_delivery_next.state_store import pack_run_record, project_home, registry
 
 OPEN = frozenset({"running", "waiting"})
@@ -23,16 +23,16 @@ TRIES = 3  # reads of a record a writer replaced meanwhile, before it is said to
 
 def pinned() -> dict[str, Any]:
     """The pack this OwlBear version pins, whether it is in place here, and the last look at upstream's releases."""
-    pins, notice = design_pack.manifest(), pack_update.notice(refresh=False)
+    pins, notice = pack_files.manifest(), pack_update.notice(refresh=False)
     return {
-        "pack": pins["pack"], "upstream": pins["upstream"]["tag"], "identity": design_pack.identity(),
-        "status": design_pack.status(),
+        "pack": pins["pack"], "upstream": pins["upstream"]["tag"], "identity": pack_files.identity(),
+        "status": pack_files.status(),
         "notice": {"said": pack_update.said(notice), "behind": notice["behind"], "checked_at": notice["checked_at"]},
     }  # fmt: skip
 
 
 def runs(own: tuple[str, Path] | None = None) -> dict[str, Any]:
-    """Every project's last design pack run, and the one to show: the open one, else the latest started.
+    """Every project's last Impeccable run, and the one to show: the open one, else the latest started.
 
     *own* is the serving project's name and store root, its run marked ``own``; the machine host has none.
     ``holder`` names the project whose update holds the machine's lock now; a record that says running while none

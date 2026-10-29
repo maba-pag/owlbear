@@ -15,7 +15,7 @@ from owlbear_delivery_next.change_contracts.failures import VISUAL_MODEL, cause_
 from owlbear_delivery_next.change_contracts.models import VISUAL, ErrorKind, Exit, Option, StepKind
 from owlbear_delivery_next.change_contracts.visual_records import OwnerCriterion
 from owlbear_delivery_next.change_flow.loop import StepResult
-from owlbear_delivery_next.design_packs import design_pack
+from owlbear_delivery_next.impeccable import pack_files
 from owlbear_delivery_next.workflow_steps import check, engine, review
 
 if TYPE_CHECKING:
@@ -141,7 +141,7 @@ def matches(c: Change, kept: VisualRound, head: str | None, widths: Sequence[int
     """Everything the round's verdicts depend on is still the Change's: capture, brief, owner criteria, pack, widths."""
     states, criteria = {s.name: s.version for s in c.brief.visual}, {k.id: k.version for k in c.brief.criteria}
     owner = [k.id for k in c.owner_criteria if k.withdrawn_at is None]
-    before, pack = c.before.identity() if c.before else "", design_pack.identity()
+    before, pack = c.before.identity() if c.before else "", pack_files.identity()
     now = (head, c.brief.version, states, criteria, owner, before, pack, list(widths))
     return now == (kept.head, kept.brief, kept.states, kept.criteria, kept.owner, kept.before, kept.pack, kept.widths)
 

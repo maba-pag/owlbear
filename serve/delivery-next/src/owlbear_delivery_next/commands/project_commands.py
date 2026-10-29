@@ -231,7 +231,7 @@ def answer(  # noqa: PLR0913 - one parameter per option
         confirmed: The owner confirmed the statement as read back.
         round_: A visual decision: the round `show` printed.
         head: A visual decision or a final retry: the head `show` printed.
-        pack: A visual decision: the design pack `show` printed.
+        pack: A visual decision: Impeccable `show` printed.
         finding: A visual finding to send back.
         task: A final retry's plan task to rebuild.
         attempt: A final retry: the attempt `show` printed.
@@ -293,7 +293,7 @@ def finish() -> Namespace:
 
 
 @app.command
-def design_pack(  # noqa: PLR0913 - one parameter per option
+def impeccable(  # noqa: PLR0913 - one parameter per option
     *,
     install: bool = False,
     check: bool = False,
@@ -302,7 +302,7 @@ def design_pack(  # noqa: PLR0913 - one parameter per option
     golden: bool = False,
     replay: bool = False,
 ) -> Namespace:
-    """Show, install or update the pinned design pack (TD-76).
+    """Show, install or update the pinned Impeccable pack (TD-76).
 
     Args:
         install: Download and verify what is missing.
@@ -314,9 +314,11 @@ def design_pack(  # noqa: PLR0913 - one parameter per option
     """
     if bool(diff) != bool(to):
         _refuse("--diff and --to go together")
-    return Namespace(
-        command="design-pack", install=install, check=check, diff=diff, to=to, golden=golden, replay=replay
-    )
+    return Namespace(command="impeccable", install=install, check=check, diff=diff, to=to, golden=golden, replay=replay)
+
+
+# An older version updating into this one runs its pack install by the old name (D-01M63CB9WFXBV3TDXGG295QCST)
+app.command(impeccable, name="design-pack", show=False)
 
 
 @backlog.command

@@ -258,7 +258,7 @@ PACK = {
 
 
 @pytest.mark.browser
-def test_every_page_shows_the_design_pack_banners_and_install_says_refused_running_and_done(pds) -> None:
+def test_every_page_shows_the_impeccable_banners_and_install_says_refused_running_and_done(pds) -> None:
     """D-01M61GW2EAHFFRFHF014A14K98: Install while this version's pack is missing; Update now for a newer one."""
     from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
 
@@ -272,7 +272,7 @@ def test_every_page_shows_the_design_pack_banners_and_install_says_refused_runni
             state["install"] = state["install"] | {"state": "installing"}
         return dict(state) | said
 
-    machine.packs.read, machine.packs.install = (lambda: dict(state)), install
+    machine.impeccable.read, machine.impeccable.install = (lambda: dict(state)), install
     try:
         with sync_playwright() as pw:
             try:
@@ -283,10 +283,10 @@ def test_every_page_shows_the_design_pack_banners_and_install_says_refused_runni
             pds.only(page, base)
             page.goto(f"{base}/#token=t")
             missing, newer = page.locator("#pack-install-banner"), page.locator("#pack-release-banner")
-            expect(missing).to_contain_text("The design pack impeccable-4.8.0.1 that this OwlBear version, v0.2, pins "
+            expect(missing).to_contain_text("Impeccable (impeccable-4.8.0.1) that this OwlBear version, v0.2, pins "
                                             "is not installed on this machine")  # fmt: skip
-            expect(newer).to_contain_text("OwlBear v0.3 carries a newer design pack impeccable-4.9.0.1; this version "
-                                          "pins design pack impeccable-4.8.0.1. Checked ")  # fmt: skip
+            expect(newer).to_contain_text("OwlBear v0.3 carries a newer Impeccable (impeccable-4.9.0.1); this version "
+                                          "pins Impeccable (impeccable-4.8.0.1). Checked ")  # fmt: skip
             page.set_viewport_size({"width": 375, "height": 800})
             assert page.evaluate("document.documentElement.scrollWidth <= document.documentElement.clientWidth")
             missing.get_by_role("button", name="Install").click()
@@ -294,10 +294,10 @@ def test_every_page_shows_the_design_pack_banners_and_install_says_refused_runni
                 "Not installed now: an update runs; it installs the pack of the version it takes."
             )
             missing.get_by_role("button", name="Install").click()
-            expect(missing).to_contain_text("Installing the design pack impeccable-4.8.0.1 for OwlBear v0.2…")
+            expect(missing).to_contain_text("Installing Impeccable (impeccable-4.8.0.1) for OwlBear v0.2…")
             state["install"] = None
             expect(page.locator("#pack-install-said")).to_have_text(
-                "The design pack is installed on this machine.", timeout=12000
+                "Impeccable is installed on this machine.", timeout=12000
             )  # the poll saw it end
             expect(missing).to_have_count(0)
             state["release"] = state["release"] | {"checked_at": None}
@@ -317,7 +317,7 @@ def test_maintenance_with_no_project_shows_the_machines_update_read_only_with_it
 ) -> None:
     from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
 
-    from owlbear_delivery_next.pack_runs import pack_job, pack_rounds  # noqa: PLC0415
+    from owlbear_delivery_next.impeccable_runs import pack_job, pack_rounds  # noqa: PLC0415
 
     monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
     monkeypatch.setattr(Host, "_launch", lambda _self, _slug: False)
@@ -331,7 +331,7 @@ def test_maintenance_with_no_project_shows_the_machines_update_read_only_with_it
     job._save()  # noqa: SLF001
     machine, server, base = serve()
     failed = {"state": "failed", "version": "v0.3", "pack": "", "detail": "cannot download", "at": None}
-    machine.packs.read = lambda: {"install": failed, "release": None}  # a newer version's pack, not the running one's
+    machine.impeccable.read = lambda: {"install": failed, "release": None}  # a newer version's pack
     try:
         with sync_playwright() as pw:
             try:
@@ -347,10 +347,10 @@ def test_maintenance_with_no_project_shows_the_machines_update_read_only_with_it
             expect(page.locator("#pack-questions .pack-question")).to_have_count(1)  # shown,
             expect(page.locator("#owlbear p-button", has_text="Activate")).to_have_count(0)  # but not answerable
             expect(page.locator("#pack-discard")).to_have_count(0)
-            expect(page.get_by_role("button", name="Update design pack")).to_be_disabled()
+            expect(page.get_by_role("button", name="Update Impeccable")).to_be_disabled()
             expect(page.locator("#owlbear")).to_contain_text("Choose a project above to start one")
             expect(page.locator("#pack-install-state")).to_have_text(
-                "The design pack of OwlBear v0.3 failed to install on this machine: cannot download."
+                "Impeccable of OwlBear v0.3 failed to install on this machine: cannot download."
             )
             browser.close()
     finally:

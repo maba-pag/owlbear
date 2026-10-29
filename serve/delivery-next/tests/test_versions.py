@@ -1,7 +1,7 @@
 """OwlBear's versions on this machine (self-update build §3, §4, §5.1): choosing, fetching, installing, checking.
 
 Git runs on disposable local repositories; the environment step is replaced, the selfcheck runs for real once, and a
-version's interpreter is a script that records how its design pack was installed.
+version's interpreter is a script that records how its Impeccable was installed.
 """
 
 import json
@@ -13,9 +13,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from owlbear_delivery_next.design_packs import design_pack
+from owlbear_delivery_next.impeccable import pack_files
 from owlbear_delivery_next.local_system import codebase, data_place, data_repo, local_home
-from owlbear_delivery_next.machine_host import packs, selfcheck, versions
+from owlbear_delivery_next.machine_host import impeccable, selfcheck, versions
 from owlbear_delivery_next.machine_host.versions import Choice
 from owlbear_delivery_next.project_host import pages
 from owlbear_delivery_next.settings.config import CONFIG_FORMAT
@@ -173,11 +173,12 @@ def test_a_failed_selfcheck_removes_the_install(origin, installing):
     assert "v0.2" not in git(local_home.root() / versions.REPO, "worktree", "list")
 
 
-def released(origin: Path, tag: str, manifest: str | None) -> str:
-    """A commit on main whose design_pack.json is *manifest* (None: it has none), tagged *tag* unless empty."""
-    path = origin / versions.MANIFEST
+def released(origin: Path, tag: str, manifest: str | None, name: str = versions.MANIFEST) -> str:
+    """A commit on main whose manifest at *name* is *manifest* (None: it has none), tagged *tag* unless empty."""
+    for each in (versions.MANIFEST, versions.OLD_MANIFEST):
+        (origin / each).unlink(missing_ok=True)
+    path = origin / name
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.unlink(missing_ok=True)
     if manifest is not None:
         path.write_text(manifest)
     (origin / "f.txt").write_text(f"{tag or 'untagged'}\n")
@@ -195,16 +196,26 @@ def test_a_version_is_ready_only_once_its_own_pack_is_installed_by_its_own_inter
     folder = versions.install(Choice("v0.3", commit))
     versions.install(Choice("v0.3", commit))  # installed and checked before: its pack is installed again
 
-    made = f'{folder.resolve()}|-m owlbear_delivery_next design-pack --install|{{"pack": "p-new"}}'
+    made = f'{folder.resolve()}|-m owlbear_delivery_next impeccable --install|{{"pack": "p-new"}}'
     assert installing.packs() == [made, made]
     assert len(installing.synced) == 1
+
+
+def test_a_version_from_before_the_impeccable_rename_is_read_and_installed_by_its_old_names(origin, installing):
+    commit = released(origin, "v0.3", '{"pack": "p-old"}', versions.OLD_MANIFEST)
+    versions.fetch(versions.repo())
+
+    assert versions.pins(commit) == {"pack": "p-old"}
+    folder = versions.install(Choice("v0.3", commit))
+
+    assert installing.packs() == [f"{folder.resolve()}|-m owlbear_delivery_next design-pack --install|"]
 
 
 def test_a_version_whose_pack_fails_is_kept_unready_and_only_its_pack_is_tried_again(origin, installing):
     commit = git(origin, "rev-parse", "v0.2^{commit}")
     (local_home.root() / "pack-exit").write_text("1")
 
-    with pytest.raises(versions.PackInstallError, match=r"v0\.2's design pack could not be installed"):
+    with pytest.raises(versions.PackInstallError, match=r"v0\.2's Impeccable could not be installed"):
         versions.install(Choice("v0.2", commit))
 
     (local_home.root() / "pack-exit").write_text("0")
@@ -226,7 +237,7 @@ def test_upstream_ahead_without_an_owlbear_release_shows_no_newer_pack(origin):
     at_v0_2(origin)
     released(origin, "", '{"pack": "p-new"}')
 
-    assert packs.look()["state"] == "none"
+    assert impeccable.look()["state"] == "none"
 
 
 def test_a_release_pinning_another_pack_is_newer_with_updating_by_itself_off_and_starts_nothing(origin, monkeypatch):
@@ -236,13 +247,13 @@ def test_a_release_pinning_another_pack_is_newer_with_updating_by_itself_off_and
     fetched, target = [], versions.target
     monkeypatch.setattr(versions, "target", lambda: fetched.append(1) or target())
 
-    said = packs.look()
+    said = impeccable.look()
 
     assert (said["state"], said["version"], said["pack"]) == ("newer", "v0.3", "p-new")
-    assert said["running_pack"] == design_pack.manifest()["pack"]
-    assert packs.look() == packs.release() == said  # within the day: what was kept, nothing fetched
+    assert said["running_pack"] == pack_files.manifest()["pack"]
+    assert impeccable.look() == impeccable.release() == said  # within the day: what was kept, nothing fetched
     assert fetched == [1]
-    assert packs.look(force=True)["checked_at"] is not None
+    assert impeccable.look(force=True)["checked_at"] is not None
     assert fetched == [1, 1]
     assert not (local_home.root() / local_home.VERSIONS).exists()  # nothing installed
     assert git(runtime, "rev-parse", "HEAD") == head
@@ -250,14 +261,14 @@ def test_a_release_pinning_another_pack_is_newer_with_updating_by_itself_off_and
 
 def test_a_release_pinning_the_same_pack_shows_nothing_and_an_unreadable_one_stays_unknown(origin):
     at_v0_2(origin)
-    released(origin, "v0.3", json.dumps(design_pack.manifest()))
+    released(origin, "v0.3", json.dumps(pack_files.manifest()))
 
-    assert packs.look()["state"] == "same"
+    assert impeccable.look()["state"] == "same"
 
     released(origin, "v0.4", None)
-    said = packs.look(force=True)
+    said = impeccable.look(force=True)
     assert (said["state"], said["version"]) == ("unknown", "v0.4")
-    assert "design pack is unreadable" in said["detail"]
+    assert "Impeccable is unreadable" in said["detail"]
 
 
 def test_an_install_waits_while_the_disk_is_nearly_full(origin, installing, monkeypatch):

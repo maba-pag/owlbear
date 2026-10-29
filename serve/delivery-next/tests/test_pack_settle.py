@@ -11,10 +11,10 @@ from pathlib import Path
 
 import pytest
 
+from owlbear_delivery_next.impeccable_runs import pack_job, pack_state
 from owlbear_delivery_next.local_system import maintenance
 from owlbear_delivery_next.local_system.slots import Slots
 from owlbear_delivery_next.local_system.storage_io import atomic_write
-from owlbear_delivery_next.pack_runs import pack_job, pack_state
 from owlbear_delivery_next.project_host import session_slots
 from owlbear_delivery_next.state_store import fd_tree, pack_run_record
 from owlbear_delivery_next.state_store.store import Store
@@ -457,7 +457,7 @@ def test_a_run_written_over_a_record_the_job_could_not_read_is_held_beside_that_
 PUBLISHING = {  # a run stopped while it was published: the Job's startup sets it waiting, with no hold of its own
     "state": "running", "run": "pub-a", "started_at": STARTED, "stage": "pull-request",
     "context": {
-        "tag": "v9", "why": "design pack: v8 to v9", "diff": "", "golden": "", "pins": {}, "manifest": "",
+        "tag": "v9", "why": "Impeccable: v8 to v9", "diff": "", "golden": "", "pins": {}, "manifest": "",
         "notice": "", "baseline": {}, "checkout": {}, "start": {}, "sid": "s",
         "publication": {"root": "/r", "repository": "o/r", "base": "b", "branch": "pack/v9", "body": "the PR text"},
     },

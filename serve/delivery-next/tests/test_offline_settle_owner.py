@@ -1,4 +1,4 @@
-"""An offline move settles the design pack run record through the store's own module, before anything is copied.
+"""An offline move settles the Impeccable run record through the store's own module, before anything is copied.
 
 These controls are direct: no trust binding, no Prepare or Finish and no copy, so they do not depend on the catalog.
 The gated move and its copy are covered by the public offline tests.
@@ -11,8 +11,8 @@ from pathlib import Path
 
 import pytest
 
+from owlbear_delivery_next.impeccable_runs import pack_state
 from owlbear_delivery_next.local_system import maintenance
-from owlbear_delivery_next.pack_runs import pack_state
 from owlbear_delivery_next.state_store import fd_tree, offline_protocol, pack_run_record, project_home, project_move
 from owlbear_delivery_next.state_store.database import StoreError
 

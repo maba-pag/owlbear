@@ -1,6 +1,6 @@
 """Updating by itself when idle (self-update build §7; TD-301, TD-288, TD-352).
 
-Idle is no agent step, check environment, design pack update or admitted work in any project, and no use for 15
+Idle is no agent step, check environment, Impeccable update or admitted work in any project, and no use for 15
 minutes. Use is any request other than a read, a page's word that the owner is at it (at most once a minute) and every
 chat tool call; polls never count. When a newer version of the machine's channel is there and the machine is idle,
 every open page announces the update 2 minutes ahead with Postpone; Postpone is use, and any use cancels it. A clock

@@ -4,7 +4,7 @@ A step's agent sessions are reserved before its runner launches and given back o
 gone. A step reserves none when it never starts an agent session (publish, follow, merge, cleanup) and one once its
 decision pick waits for a session; up to the project's limit for a visual check that captures and judges (its judges
 run in waves of the grant), else one. The grant is written with the runner's record, so a restarted machine host
-counts it again before granting anything. A design pack update takes one slot for each of its sessions while it runs.
+counts it again before granting anything. An Impeccable update takes one slot for each of its sessions while it runs.
 """
 
 from __future__ import annotations
@@ -17,9 +17,9 @@ from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.change_contracts.failures import cause_key
 from owlbear_delivery_next.change_contracts.models import ErrorKind, StepKind
-from owlbear_delivery_next.design_packs import design_pack
+from owlbear_delivery_next.impeccable import pack_files
+from owlbear_delivery_next.impeccable_runs import pack_job, pack_replay, pack_run, pack_state
 from owlbear_delivery_next.local_system.slots import PACK
-from owlbear_delivery_next.pack_runs import pack_job, pack_replay, pack_run, pack_state
 from owlbear_delivery_next.runtimes import maintained
 from owlbear_delivery_next.state_store import project_home
 from owlbear_delivery_next.state_store.store import StoreError
@@ -31,10 +31,10 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from owlbear_delivery_next.change_contracts.models import Change, Step
-    from owlbear_delivery_next.design_packs.calibration import Replay
+    from owlbear_delivery_next.impeccable.calibration import Replay
+    from owlbear_delivery_next.impeccable_runs.pack_candidate import Candidate
+    from owlbear_delivery_next.impeccable_runs.pack_job import Job, Live
     from owlbear_delivery_next.local_system.maintenance import Maintenance
-    from owlbear_delivery_next.pack_runs.pack_candidate import Candidate
-    from owlbear_delivery_next.pack_runs.pack_job import Job, Live
     from owlbear_delivery_next.project_host.host import Host
     from owlbear_delivery_next.runtimes.sdk_adapter import Session
     from owlbear_delivery_next.runtimes.session_result import Run
@@ -134,8 +134,8 @@ def _still_admitted(host: Host) -> None:
     """
     with host.launching:
         if host.closed() or host.draining():
-            msg = "OwlBear stops; the design pack's session did not start"
-            raise design_pack.PackError(msg)
+            msg = "OwlBear stops; Impeccable's session did not start"
+            raise pack_files.PackError(msg)
 
 
 def _queued(host: Host, key: str, note: Callable[[str], None]) -> None:
@@ -143,7 +143,7 @@ def _queued(host: Host, key: str, note: Callable[[str], None]) -> None:
     while not host.slots.take(project(host), key, 1, limit(host), turn.set):
         if host.closed() or host.stopped.is_set() or host.draining():
             msg = "OwlBear stops; the update did not get a session slot"
-            raise design_pack.PackError(msg)
+            raise pack_files.PackError(msg)
         if not said:
             note("waiting for a session slot")
             said = True
@@ -273,8 +273,8 @@ def pack_live(host: Host | None, live: Live, note: Callable[[str], None]) -> Liv
     def owned(work: Callable[[Session], Run]) -> Callable[[Session], Run]:
         def run(cfg: Session) -> Run:
             if host is None or host.maintenance is None:
-                msg = "the machine's maintenance ownership is not bound; the design pack's sessions cannot start"
-                raise design_pack.PackError(msg)
+                msg = "the machine's maintenance ownership is not bound; Impeccable's sessions cannot start"
+                raise pack_files.PackError(msg)
             slot = admit(host, note)
             try:
                 _still_admitted(host)

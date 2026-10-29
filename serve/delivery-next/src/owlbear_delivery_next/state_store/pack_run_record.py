@@ -1,7 +1,7 @@
-"""The design pack run record under the store: read as evidence, identified by its generation, and settled in place.
+"""The Impeccable run record under the store: read as evidence, identified by its generation, and settled in place.
 
 The store's own offline move settles a legacy run's record before it copies the store (``offline_protocol``), and the
-design pack job reads and rewrites the same file through ``pack_state``. This module depends on no higher layer.
+Impeccable job reads and rewrites the same file through ``pack_state``. This module depends on no higher layer.
 """
 
 from __future__ import annotations
@@ -22,7 +22,8 @@ if TYPE_CHECKING:
 
     from owlbear_delivery_next.state_store.store import Store
 
-FILE = "design-pack-update.json"  # the last run, under the store
+# the last run, under the store; named before the Impeccable rename, as older versions read it
+FILE = "design-pack-update.json"
 OPEN = frozenset({"pending", "running", "waiting"})
 # every state Job writes; a record in any other state is damaged, not idle
 STATES = frozenset({"idle", "running", "waiting", "failed", "discarded", "up-to-date", "passed"})

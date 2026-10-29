@@ -28,10 +28,10 @@ from owlbear_delivery_next.change_contracts.profile_record import (
 from owlbear_delivery_next.change_flow.status import status, unloadable
 from owlbear_delivery_next.commands import cases_cli, project_commands, replay_client, setup
 from owlbear_delivery_next.commands.answer_console import answer, describe
-from owlbear_delivery_next.design_packs import design_pack, pack_update
-from owlbear_delivery_next.design_packs.detector import DetectorError
+from owlbear_delivery_next.impeccable import pack_files, pack_update
+from owlbear_delivery_next.impeccable.detector import DetectorError
+from owlbear_delivery_next.impeccable_runs import pack_replay
 from owlbear_delivery_next.local_system import data_place, data_repo, local_home
-from owlbear_delivery_next.pack_runs import pack_replay
 from owlbear_delivery_next.project_host import host
 from owlbear_delivery_next.settings import profile, roles
 from owlbear_delivery_next.settings.config import Agent, Layer
@@ -102,14 +102,14 @@ def show_home() -> str:
 
 
 def show_pack(*, install: bool) -> int:
-    """Print the design pack's state; with ``install``, download and verify what is missing first."""
+    """Print Impeccable's state; with ``install``, download and verify what is missing first."""
     if install:
         try:
-            design_pack.install()
-        except design_pack.PackError as exc:
+            pack_files.install()
+        except pack_files.PackError as exc:
             sys.stdout.write(f"Not installed: {exc}\n")
             return 1
-    sys.stdout.write(design_pack.status() + "\n")
+    sys.stdout.write(pack_files.status() + "\n")
     return 0
 
 
@@ -127,7 +127,7 @@ def update_pack(a: argparse.Namespace, repo: Path) -> int:
             return 0 if ok else 1
         sys.stdout.write(pack_update.said(pack_update.notice(refresh=True)) + "\n")
     except (
-        design_pack.PackError,
+        pack_files.PackError,
         pack_replay.ReplayError,
         DetectorError,
         data_repo.DataRepoError,
@@ -135,15 +135,15 @@ def update_pack(a: argparse.Namespace, repo: Path) -> int:
         OSError,
         ValueError,
     ) as exc:
-        sys.stdout.write(f"design pack: {type(exc).__name__}: {exc}\n")
+        sys.stdout.write(f"Impeccable: {type(exc).__name__}: {exc}\n")
         return 1
     return 0
 
 
 def _golden() -> int:
-    pack = design_pack.installed()
+    pack = pack_files.installed()
     if pack is None:
-        sys.stdout.write("design pack not installed: run `owlbear-next design-pack --install`\n")
+        sys.stdout.write("Impeccable not installed: run `owlbear-next impeccable --install`\n")
         return 1
     wrong = pack_update.golden(pack)
     for page, w in wrong.items():
@@ -301,7 +301,7 @@ def run(a: argparse.Namespace) -> int:  # noqa: PLR0911 - one branch per command
         code, said = show_data(a.target) if a.command == "data" else (0, show_home())
         sys.stdout.write(said + "\n")
         return code
-    if a.command == "design-pack":
+    if a.command == "impeccable":
         updating = a.check or a.diff or a.golden or a.replay
         return update_pack(a, a.repo.resolve()) if updating else show_pack(install=a.install)
     if a.command == "setup":

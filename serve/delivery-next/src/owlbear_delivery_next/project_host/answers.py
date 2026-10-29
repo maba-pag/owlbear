@@ -142,7 +142,7 @@ def _visual(c: Change, body: AnswerBody) -> tuple[int, str] | None:
     kept = c.visual_rounds[-1] if c.visual_rounds else None
     shown = (body.round, body.head, body.pack)
     if kept is None or kept.outcome != "ask" or kept.decision or shown != (kept.number, kept.head, kept.pack):
-        return 409, "the capture or the design pack changed since the page was shown; reload"
+        return 409, "the capture or Impeccable changed since the page was shown; reload"
     if unknown := sorted(set(body.findings) - {f.id for v in kept.verdicts for f in v.findings}):
         return 422, f"findings {unknown} are not in round {kept.number}"
     if body.option == "fail" and not body.findings and not body.text.strip():

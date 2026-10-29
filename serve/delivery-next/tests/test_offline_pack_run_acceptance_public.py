@@ -1,4 +1,4 @@
-"""A held design-pack run survives the public Prepare and Finish move, and Finish never writes the ledger.
+"""A held Impeccable run survives the public Prepare and Finish move, and Finish never writes the ledger.
 
 Each case runs the real ``cli.main`` Prepare and Finish on a real git clone with a temporary HOME. The reboot is
 modeled by changing the boot session id. The Finish move copies the store into a different target root, so the
@@ -13,8 +13,8 @@ from pathlib import Path
 import pytest
 
 from owlbear_delivery_next.commands import cli
+from owlbear_delivery_next.impeccable_runs import pack_state
 from owlbear_delivery_next.local_system import local_home, maintenance
-from owlbear_delivery_next.pack_runs import pack_state
 from owlbear_delivery_next.state_store import offline_protocol, project_home, project_move
 from owlbear_delivery_next.state_store.database import MARKER, StoreError
 from owlbear_delivery_next.state_store.store import Store

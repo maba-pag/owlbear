@@ -1,4 +1,4 @@
-"""Maintenance's OwlBear section reads every project's design pack run without settling any (P5)."""
+"""Maintenance's OwlBear section reads every project's Impeccable run without settling any (P5)."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 
 from fastapi.testclient import TestClient
 
-from owlbear_delivery_next.pack_runs import pack_job, pack_state
+from owlbear_delivery_next.impeccable_runs import pack_job, pack_state
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.state_store import project_home, registry
 from owlbear_delivery_next.state_store.store import Store
