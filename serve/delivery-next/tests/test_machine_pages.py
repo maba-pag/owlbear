@@ -780,6 +780,22 @@ def test_updates_owlbear_marks_the_menu_refuses_start_while_work_runs_and_the_ma
         until(page, lambda: searched == ["owlbear"])
         assert targets(page.locator("#page p-button, #page a, #page summary")) == []
 
+        posts = []
+        page.on("request", lambda r: r.method == "POST" and "/update/start" in r.url and posts.append(r.url))
+        page.locator("#owlbear-start").click()
+        expect(pds.modal(page)).to_contain_text("Once switched there is no undo")  # D-01M5DW3X0084A25NSE99H3H6QM
+        inside = "document.activeElement?.closest('p-modal') !== null"
+        assert page.evaluate(inside)
+        where = []
+        for _ in range(6):  # the page behind is inert
+            page.keyboard.press("Tab")
+            where.append(page.evaluate(f"{inside} ? 'dialog' : document.activeElement === document.body ? '' : 'page'"))
+        assert "page" not in where
+        page.keyboard.press("Escape")
+        expect(pds.modal(page)).to_have_count(0)
+        page.wait_for_function("document.activeElement?.id === 'owlbear-start'", timeout=5000)
+        assert (posts, started) == ([], [])  # Escape sent nothing
+
         page.get_by_role("button", name="Start update now").click()
         expect(pds.modal(page)).to_contain_text("Start the OwlBear update now?")
         work[0] = "Work runs now: alpha: alpha-1: a running step"  # started after the page read
@@ -813,6 +829,7 @@ def test_updates_owlbear_marks_the_menu_refuses_start_while_work_runs_and_the_ma
         page.goto(f"{base}/updates/pds")
         expect(page.locator("#check-failure")).to_contain_text("The last 2 checks failed")
         expect(page.locator("#check-failure")).to_contain_text("npm did not answer.")
+        expect(page.locator("#check-latest")).to_have_text("4.11.0, found by the last successful check")
 
 
 @pytest.mark.browser
@@ -829,7 +846,6 @@ def test_a_run_started_in_one_project_is_answered_from_another_and_from_all_proj
     beta = registry.register(clone(tmp_path / "beta"))
     job = pack_job.Job(Store.open(Path(alpha.path)), pack_job.Live())
     question = pack_rounds.question("r1:end:1", "end", "The rounds ended.", ["activate", "discard"])
-        expect(page.locator("#check-latest")).to_have_text("4.11.0, found by the last successful check")
     job.state = pack_job._blank() | {  # noqa: SLF001 - a run waiting for the owner
         "state": "waiting", "started_at": datetime.now(UTC).isoformat(), "run": "r1", "questions": [question],
     }  # fmt: skip
@@ -883,13 +899,13 @@ def test_old_update_addresses_open_the_updates_pages_and_back_and_reload_keep_th
         page.goto(f"{base}/config#pack")
         expect(page).to_have_url(f"{base}/updates/impeccable")
         expect(page.get_by_role("heading", level=1)).to_have_text("Impeccable update")
-
-        page.route("**/api/next/updates", lambda route: route.abort())
-        page.goto(f"{base}/updates/pds?project={a.id}")
-        expect(page.locator("#check-unread")).to_contain_text("Could not read the update checks")
-        expect(page.locator("#pds-later")).to_be_visible()
         page.goto(f"{base}/config?project={a.id}#pack")
         expect(page).to_have_url(f"{base}/updates/impeccable?project={a.id}")
         page.goto(f"{base}/config#machine-title")  # stays: a project page names its project and keeps the section
         expect(page).to_have_url(f"{base}/config?project={a.id}#machine-title")
         expect(page.locator("#machine-title")).to_be_visible()
+
+        page.route("**/api/next/updates", lambda route: route.abort())
+        page.goto(f"{base}/updates/pds?project={a.id}")
+        expect(page.locator("#check-unread")).to_contain_text("Could not read the update checks")
+        expect(page.locator("#pds-later")).to_be_visible()

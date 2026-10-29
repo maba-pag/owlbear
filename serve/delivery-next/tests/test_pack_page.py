@@ -235,6 +235,12 @@ def test_each_stop_offers_one_discard_apart_whose_cancel_changes_nothing(served,
         expect(page.locator("#pack-ask")).to_be_visible()
         assert (job.store.root / pack_job.FILE).read_bytes() == before  # cancel changed nothing
         page.locator("#pack-discard").click()
+        expect(pds.modal(page)).to_contain_text("Nothing is activated")
+        page.keyboard.press("Escape")
+        expect(pds.modal(page)).to_have_count(0)
+        page.wait_for_function("document.activeElement?.id === 'pack-discard'", timeout=5000)
+        assert (job.store.root / pack_job.FILE).read_bytes() == before  # Escape changed nothing
+        page.locator("#pack-discard").click()
         pds.answer(page, discard)
         expect(page.locator("#pack-state")).to_contain_text("discarded")
     assert job.read()["state"] == "discarded"

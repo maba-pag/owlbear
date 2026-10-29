@@ -37,7 +37,8 @@ async function start() {
       + "installs its Impeccable. Each of the ten steps below shows how far it got.",
     then: "It switches to the new version once no step, check environment or Impeccable update runs; work that starts "
       + "meanwhile makes it wait. This page keeps working and says once which version runs.",
-    after: "Delivery stays paused or running as it is. A failure before the switch leaves this version running.",
+    after: "Delivery stays paused or running as it is. A failure before the switch leaves this version running. Once "
+      + "switched there is no undo: OwlBear never goes back to an older version; a fix comes with a later one.",
     instead: `OwlBear keeps running ${machineState()?.updated || "this version"}; whether it updates by itself is set `
       + "in Settings, This machine." });
   if (!yes) return;
