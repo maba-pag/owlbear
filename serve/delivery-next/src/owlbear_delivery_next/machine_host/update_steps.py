@@ -144,13 +144,16 @@ class Steps:
 def _step(s: object) -> bool:
     return (
         isinstance(s, dict) and set(s) == {"key", "label", "state", "started_at", "ended_at", "line"}
-        and s["key"] in LABELS and all(isinstance(s[k], str) for k in ("label", "state", "line"))
+        and all(isinstance(s[k], str) for k in ("key", "label", "state", "line")) and s["key"] in LABELS
         and all(s[k] is None or isinstance(s[k], str) for k in ("started_at", "ended_at"))
     )  # fmt: skip
 
 
 def _entry(e: object) -> bool:
-    return isinstance(e, dict) and set(e) == {"at", "step", "line"} and all(isinstance(v, str) for v in e.values())
+    return (
+        isinstance(e, dict) and set(e) == {"at", "step", "line"} and all(isinstance(v, str) for v in e.values())
+        and e["step"] in LABELS
+    )  # fmt: skip
 
 
 def _record() -> dict[str, Any]:

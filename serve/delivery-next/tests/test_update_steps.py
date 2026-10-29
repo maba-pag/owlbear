@@ -22,6 +22,7 @@ from owlbear_delivery_next.machine_host.versions import Choice
 from owlbear_delivery_next.project_host.host import HostRecord
 
 URL, TOKEN = "http://127.0.0.1:4321/", "t"  # the host's address and token
+WHOLE = {"key": "looking", "label": "", "state": "done", "started_at": None, "ended_at": None, "line": ""}  # a step
 RAW = "error: Failed to download `numpy==9.9`\n  Caused by: uv's own words"  # what uv says; never a step's line
 
 
@@ -263,7 +264,14 @@ def test_the_new_host_shows_the_old_hosts_steps_plus_its_own_or_only_its_own_wit
 
 @pytest.mark.parametrize(
     "malformed",
-    [{"steps": [{"key": "handover"}]}, {"log": [{"step": "looking"}]}, {"steps": [{"key": "looking", "line": 7}]}],
+    [
+        {"steps": [{"key": "handover"}]},
+        {"log": [{"step": "looking"}]},
+        {"steps": [{"key": "looking", "line": 7}]},
+        {"steps": [WHOLE | {"key": ["handover"]}]},
+        {"steps": [WHOLE | {"key": {"handover": 1}}]},
+        {"log": [{"at": "2026-10-29T12:00:00+00:00", "step": "nowhere", "line": "a line"}]},
+    ],
 )
 def test_a_malformed_record_is_read_as_absent_and_the_new_host_still_ends_its_handover(malformed):
     steps = update_steps.Steps(lambda _s: None)
