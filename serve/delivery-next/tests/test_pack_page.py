@@ -139,7 +139,8 @@ def test_the_owner_answers_each_upheld_finding_with_his_note_in_the_owlbear_sect
         first.get_by_role("button", name="Ask the challenger to reconsider").click()
         note = first.locator("p-textarea")
         expect(note).to_have_attribute("message", "Asking the challenger to reconsider needs your note.")
-        assert page.evaluate("document.activeElement?.dataset.note") == "r1:dispute:F1"  # the note to give
+        # the note to give takes focus, once PDS has rendered it
+        page.wait_for_function("document.activeElement?.dataset.note === 'r1:dispute:F1'", timeout=5000)
         assert sent == []  # checked here, before anything is sent
         second.get_by_label("Your note", exact=False).fill("a draft for F2")
         first.get_by_label("Your note", exact=False).fill("the halo is upstream's own example")

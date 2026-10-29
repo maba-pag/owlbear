@@ -95,8 +95,8 @@ async function answer(run, q, o) {
   if (o.id === "reconsider" && !note.trim()) {  // the host refuses it too; said here before anything is sent
     own.missing = q.id;
     own.show();
-    document.querySelector(`[data-note="${CSS.escape(q.id)}"]`)?.focus();
-    return;
+    const field = document.querySelector(`[data-note="${CSS.escape(q.id)}"]`);  // focused once PDS has rendered it
+    return Promise.resolve(field?.componentOnReady?.()).then(() => field?.isConnected && field.focus());
   }
   own.missing = "";
   const left = ["rejected", "standing", "owner-drop"], loop = run.loop;
