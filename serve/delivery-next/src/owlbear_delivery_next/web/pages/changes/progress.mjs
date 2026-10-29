@@ -20,16 +20,30 @@ export function spendLines(spend) {
   return toggle("spend", `Spent ${spentText(spend.credits, (spend.unread || []).length)}`, lines);
 }
 
-// C-28 T8: a line per Delivery tool, most called first; the share refused leaves out lint-only refusals.
+const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+const SPLIT = [["invalid", "invalid arguments"], ["checks", "failed checks"], ["order", "at the wrong moment"]];
+const WRONG = [["order", "at the wrong moment"], ["denied", "denied by the guard"],
+  ["no_result", "turns without a result"], ["missing_pointless", "pointless missing-tool reports"]];
+
+// C-28 T8: a line per Delivery tool, most called first: the share accepted, the share refused (lint-only refusals
+// apart) split by cause, older records' refusals unsplit; then the run's wrong tool choices.
 export function toolLines(use) {
   const used = Object.entries(use?.tools ?? {}).filter(([, t]) => t.calls).sort(([, a], [, b]) => b.calls - a.calls);
-  if (!used.length) return nothing;
+  const wrong = { ...(use?.wrong ?? {}), order: used.reduce((n, [, t]) => n + (t.order || 0), 0) };
+  const wrongs = WRONG.filter(([k]) => wrong[k]).map(([k, label]) => `${wrong[k]} ${label}`);
+  if (!used.length && !wrongs.length) return nothing;
   const lines = used.map(([tool, t]) => {
+    const pct = (n) => `${Math.round((100 * n) / t.calls)}%`;
+    const accepted = Math.max(0, t.calls - t.rejected - (t.lint || 0) - (t.late || 0));
+    const unsplit = t.rejected - SPLIT.reduce((n, [k]) => n + (t[k] || 0), 0);
+    const why = [...SPLIT.filter(([k]) => t[k]).map(([k, label]) => `${t[k]} ${label}`),
+      ...(unsplit > 0 ? [`${unsplit} not split`] : [])];
     const also = [t.lint && `${t.lint} lint`, t.late && `${t.late} late`].filter(Boolean).map((s) => `, ${s}`);
-    const said = `${tool}: ${t.calls} call${t.calls === 1 ? "" : "s"}, ${Math.round((100 * t.rejected) / t.calls)}% `
-      + `refused${also.join("")}, ${t.retries} ${t.retries === 1 ? "retry" : "retries"}`;
+    const said = `${tool}: ${plural(t.calls, "call", "calls")}, ${pct(accepted)} succeeded, ${pct(t.rejected)} `
+      + `refused${why.length ? ` (${why.join(", ")})` : ""}${also.join("")}, ${plural(t.retries, "retry", "retries")}`;
     return text(said, { size: "xs", color: "contrast-medium" });
   });
+  if (wrongs.length) lines.push(text(`Wrong tool choices: ${wrongs.join(", ")}`, { size: "xs", color: "contrast-medium" }));
   return toggle("tool-use", `Tool calls (${used.reduce((n, [, t]) => n + t.calls, 0)})`, lines);
 }
 

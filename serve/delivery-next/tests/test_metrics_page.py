@@ -37,12 +37,15 @@ def seeded() -> None:
     shop = {"project": "shop", "name": "shop", "change": "c1", "step": "build", "agent": "builder"}
     owlbear = {"project": "owlbear", "name": "owlbear", "change": "c2", "agent": "reviewer"}
     spent = {"credits": 1.0, "models": {"m1": {"credits": 1.0, "input": 10, "output": 1}}}
+    refused = {"calls": 9, "rejected": 7, "invalid": 3, "checks": 2, "order": 1, "lint": 1, "late": 1, "retries": 6}
     spend_ledger.append([
-        *run("a", now, split, shop),
-        *run("b", now + timedelta(minutes=1), spent, owlbear, stopped="reached", stopped_by="session", limit=1.0),
+        *run("a", now, split, shop, tools={"submit_result": {"calls": 1}}, wrong={}),
+        *run("b", now + timedelta(minutes=1), spent, owlbear, stopped="reached", stopped_by="session", limit=1.0,
+             tools={"submit_result": refused}, wrong={"denied": 2, "no_result": 1}),
         *run("c", now + timedelta(minutes=2), {"error": "TimeoutError"}, {"project": "", "name": "", "change": "",
                                                                            "agent": "updater"},
-             stopped="unknown", stopped_by="session", limit=0.5),
+             stopped="unknown", stopped_by="session", limit=0.5, subagents=1,  # its spend is not split from theirs
+             tools={}, wrong={"missing_pointless": 1}),
     ])  # fmt: skip
 
 
@@ -93,6 +96,17 @@ def test_the_metrics_page_sums_splits_drills_down_and_lists_runs_with_their_limi
             )
             expect(page.locator("#runs p-table-row").nth(0)).to_contain_text("not all reported")
             expect(page.locator("#runs p-table-row").nth(0)).to_contain_text("may have reached its credit limit of 0.5")
+            tools = page.locator("#tools p-table-row")  # C-28: weighted, 1 of 1 and 0 of 9 calls accepted
+            expect(tools).to_have_count(2)
+            expect(tools.nth(0)).to_contain_text("submit_result")
+            expect(tools.nth(1)).to_contain_text("All tools")
+            for cell in ("10", "10%", "3", "2", "1"):  # calls, success, invalid, failed checks, wrong moment
+                expect(tools.nth(0).locator("p-table-cell", has_text=cell).first).to_be_visible()
+            expect(page.locator("#wrong")).to_contain_text("1 at the wrong moment")
+            expect(page.locator("#wrong")).to_contain_text("2 denied by the guard")
+            expect(page.locator("#wrong")).to_contain_text("1 turns ended without a result")
+            expect(page.locator("#wrong")).to_contain_text("1 pointless missing-tool reports")
+            expect(page.locator("#tool-use-coverage")).to_contain_text("Counted for 3 runs")
             assert spend_reconcile.settled(10)
             page.evaluate("document.dispatchEvent(new Event('visibilitychange'))")
             expect(page.locator("#reconcile")).to_contain_text("Earlier records last read")
@@ -104,10 +118,18 @@ def test_the_metrics_page_sums_splits_drills_down_and_lists_runs_with_their_limi
             expect(page.locator("#total-credits")).to_contain_text("2.00 credits")
             assert "agent=builder" in page.url
             assert "by=model" in page.url
+            expect(tools.nth(0)).to_contain_text("100%")
+
+            pds.pick(page, "Agent", "updater")  # its spend shows under an unknown agent, its tool use under its own
+            expect(tools).to_have_count(1)
+            expect(page.locator("#wrong")).to_contain_text("1 pointless missing-tool reports")
+            expect(page.locator("#wrong")).to_contain_text("0 denied by the guard")
 
             pds.pick(page, "Agent", "")
             pds.pick(page, "Project", "owlbear")
             expect(page.locator("#total-credits")).to_contain_text("1.00 credits")
+            expect(tools.nth(0)).to_contain_text("0%")
+            expect(page.locator("#wrong")).to_contain_text("2 denied by the guard")
             page.locator("#stopped").click()
             expect(page.locator("#runs p-table-row")).to_have_count(1)
             pds.pick(page, "Period", "custom")
@@ -116,6 +138,7 @@ def test_the_metrics_page_sums_splits_drills_down_and_lists_runs_with_their_limi
             page.locator("#to input").fill("2020-01-31")
             page.locator("#to input").press("Enter")
             expect(page.locator("#split-none")).to_have_text("Nothing was spent that these filters show.")
+            expect(page.locator("#tool-use-none")).to_have_text("No tool use was measured for these filters.")
             page.reload()  # the filters stay in the address
             expect(page.locator("#split-none")).to_be_visible()
             expect(page.locator("#error")).to_have_count(0)
