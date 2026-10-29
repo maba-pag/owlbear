@@ -6,6 +6,7 @@ import os
 import signal
 import subprocess
 import sys
+import threading
 import time
 from datetime import UTC, datetime
 from types import SimpleNamespace
@@ -176,6 +177,12 @@ def test_cancellation_during_start_still_stops_the_owned_client(world):
 
 def test_a_turn_cut_off_by_a_stop_is_no_wrong_choice(world, monkeypatch):
     data = SimpleNamespace(model="gpt-6-luna", parent_tool_call_id=None)
+    held, release = threading.Event(), threading.Event()
+
+    def checking(gate):  # a submitted result's check holds the gate while it reads the worktree
+        with gate._lock:  # noqa: SLF001 - the lock a result check holds
+            held.set()
+            release.wait(2)
 
     async def opened(_client, st):
         world.steps.append(st)
@@ -196,11 +203,18 @@ def test_a_turn_cut_off_by_a_stop_is_no_wrong_choice(world, monkeypatch):
                 await asyncio.sleep(0.01)
         world.steps[0].on_event(SimpleNamespace(type="assistant.turn_start", data=data))
         await asyncio.sleep(0.01)
+        check = threading.Thread(target=checking, args=(world.steps[0].gate,))
+        check.start()
+        held.wait(2)
         task.cancel()
         with pytest.raises(asyncio.CancelledError):
             await task
+        stopped_while_checking = check.is_alive()
+        release.set()
+        check.join()
+        return stopped_while_checking
 
-    asyncio.run(scenario())
+    assert asyncio.run(scenario())  # the stop waited on no result check
     assert (world.disconnects, world.steps[0].run.wrong) == (1, {})
 
 

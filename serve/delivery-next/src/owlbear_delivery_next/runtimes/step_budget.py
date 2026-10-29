@@ -68,7 +68,7 @@ class Budget:
 
 def idled(st: _Step) -> None:
     """A turn ended without a result: a wrong choice, counted as it ends so no later stop can lose it (C-28)."""
-    if not st.done:
+    if not (st.done or st.stopped):
         st.run.count("no_result")
     st.idle = True
     st._wake()  # noqa: SLF001 - the step's own wake-up, called from its event handler

@@ -147,7 +147,7 @@ class _Step:
     def __init__(self, cfg: Session, loop: asyncio.AbstractEventLoop) -> None:
         self.cfg, self.loop, self.run, self.proc = cfg, loop, Run(cfg.session_id), None
         self.client: CopilotClient | None = None
-        self.turn = self.idle = False
+        self.turn = self.idle = self.stopped = False  # stopped: a stop or error is tearing the step down
         self.billed: dict[str, Any] = {"error": "not read"}  # usage before this invocation's first send
         self.session: CopilotSession | None = None  # kept as soon as it opens, even if the first send fails
         self.sending = False  # a first message was sent or attempted, so a model may have run
