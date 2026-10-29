@@ -1,4 +1,4 @@
-"""Maintenance's OwlBear section reads every project's Impeccable run without settling any (P5)."""
+"""Updates ▸ Impeccable reads every project's Impeccable run without settling any (P5)."""
 
 from __future__ import annotations
 

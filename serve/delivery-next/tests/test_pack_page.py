@@ -1,4 +1,4 @@
-"""The Impeccable update in Maintenance's OwlBear section in a real browser (TD-193, TD-220, TD-256)."""
+"""The Impeccable update on Updates ▸ Impeccable in a real browser (TD-193, TD-220, TD-256)."""
 
 from __future__ import annotations
 
@@ -101,7 +101,7 @@ def holding() -> Iterator[None]:
 
 @contextlib.contextmanager
 def opened(base: str, pds: Any) -> Iterator[Any]:
-    """The Maintenance page in a real browser: only the test host and the PDS CDN answer."""
+    """Updates ▸ Impeccable in a real browser: only the test host and the PDS CDN answer."""
     from playwright.sync_api import Error, sync_playwright  # noqa: PLC0415 - the optional browser runtime
 
     with sync_playwright() as pw:
@@ -112,13 +112,13 @@ def opened(base: str, pds: Any) -> Iterator[Any]:
         page = browser.new_page()
         pds.only(page, base)
         page.add_init_script("sessionStorage.setItem('token', 'tok');")
-        page.goto(f"{base}/maintenance")
+        page.goto(f"{base}/updates/impeccable")
         yield page
         browser.close()
 
 
 @pytest.mark.browser
-def test_the_owner_answers_each_upheld_finding_with_his_note_in_the_owlbear_section(served, pds) -> None:
+def test_the_owner_answers_each_upheld_finding_with_his_note_on_the_impeccable_page(served, pds) -> None:
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     job, base = served()
@@ -336,7 +336,7 @@ def test_a_ci_failed_publish_stop_fits_a_phone_and_says_no_calibration_evidence_
         expect(ci.locator("pre.pack-detail")).to_be_visible()
         expect(page.locator(".pack-diff .pack-add").first).to_have_text("+new line")  # its markers kept
         assert page.evaluate("document.documentElement.scrollWidth <= document.documentElement.clientWidth")
-        small = page.evaluate("""[...document.querySelectorAll('#owlbear p-button, #owlbear summary')]
+        small = page.evaluate("""[...document.querySelectorAll('#pack p-button, #pack summary')]
             .filter((b) => b.offsetParent).map((b) => b.getBoundingClientRect()).filter((r) => r.height < 24
               || r.width < 24).length""")
         assert small == 0  # every target at least 24px

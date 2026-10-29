@@ -370,9 +370,11 @@ def test_every_page_shows_the_impeccable_banners_and_install_says_refused_runnin
 
 
 @pytest.mark.browser
-def test_maintenance_with_no_project_shows_the_machines_update_read_only_with_its_project_named(
+def test_updates_impeccable_with_no_project_answers_a_loaded_projects_run_with_its_project_named(
     tmp_path: Path, monkeypatch, pds
 ) -> None:
+    """D-01M63C5VGFVT3DVCC888B78K2A: the page is the same in every project; on the machine host a run whose project is
+    loaded is answered from All projects too, while starting one still needs a project."""
     from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
 
     from owlbear_delivery_next.impeccable_runs import pack_job, pack_rounds  # noqa: PLC0415
@@ -398,15 +400,14 @@ def test_maintenance_with_no_project_shows_the_machines_update_read_only_with_it
                 pytest.skip(f"no Playwright Chromium: {exc}")
             page = browser.new_page()
             pds.only(page, base)
-            page.goto(f"{base}/maintenance#token=t")
+            page.goto(f"{base}/updates/impeccable#token=t")
             assert "project=" not in page.url  # no project picked for the owner
             expect(page.locator("#pack-project")).to_contain_text("Started in alpha")
-            expect(page.locator("#pack-project")).to_contain_text("choose a project above to act on it")
+            expect(page.locator("#pack-project")).not_to_contain_text("choose a project above")
             expect(page.locator("#pack-questions .pack-question")).to_have_count(1)  # shown,
-            expect(page.locator("#owlbear p-button", has_text="Activate")).to_have_count(0)  # but not answerable
-            expect(page.locator("#pack-discard")).to_have_count(0)
+            expect(page.locator("#pack p-button", has_text="Activate")).to_have_count(1)  # and answerable here
             expect(page.get_by_role("button", name="Update Impeccable")).to_be_disabled()
-            expect(page.locator("#owlbear")).to_contain_text("Choose a project above to start one")
+            expect(page.locator("#pack")).to_contain_text("Choose a project above to start one")
             expect(page.locator("#pack-install-state")).to_have_text(
                 "Impeccable of OwlBear v0.3 failed to install on this machine: cannot download."
             )
@@ -452,6 +453,7 @@ def test_the_menu_reaches_every_page_moves_focus_into_each_level_and_back_to_the
         expect(menu.get_by_role("link", name="Settings")).to_be_focused()  # this page's link, in its level
         expect(menu.get_by_role("link", name="Settings")).to_have_attribute("aria-current", "page")
         served = ["/", "/backlog", "/memory", "/decisions", "/metrics", "/projects", "/config", "/maintenance"]
+        served += ["/updates/owlbear", "/updates/pds", "/updates/impeccable"]
         hrefs = menu.locator("a").evaluate_all("as => as.map(a => a.getAttribute('href'))")
         assert sorted(hrefs) == sorted(f"{path}?project={a.id}" for path in served)
         menu.get_by_role("button", name="Work").click()
@@ -725,3 +727,162 @@ def test_a_focused_remove_stays_with_its_project_when_the_list_changes_under_it(
         expect(
             page.get_by_role("listitem", name="beta").get_by_role("button", name="Remove project")
         ).not_to_be_focused()
+
+
+def checked(name: str, state: str, current: str, latest: str = "", **more) -> dict:
+    """One update as ``GET /updates`` shows it, last checked successfully on 17 October."""
+    return {"name": name, "title": name, "actionable": True, "state": state, "available": state == "newer",
+            "current": current, "latest": latest or current, "detail": "", "checked_at": "2026-10-17T04:00:00+00:00",
+            "attempted_at": "2026-10-17T04:00:00+00:00", "failures": 0, "reason": "", "checking": False, "hours": 24,
+            "next_at": "2026-10-18T04:00:00+00:00"} | more  # fmt: skip
+
+
+@pytest.mark.browser
+def test_updates_owlbear_marks_the_menu_refuses_start_while_work_runs_and_the_mark_clears_once_applied(  # noqa: PLR0915 - a journey
+    monkeypatch, pds
+) -> None:
+    """D-01M63CDFXCN5SSCNNYWV2FVFVA, D-01M63CC7CYSMN156SJEBVFAXTQ, D-01M63CBWYPQZF3WBZ915YY3Q28: an available update
+    marks the menu; Start update now refuses with its reason while work runs, also when work started after the page
+    read; a check's failure shows once two came in a row; the mark clears once the update is applied."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    from owlbear_delivery_next.machine_host import update_checks, update_steps  # noqa: PLC0415
+    from owlbear_delivery_next.machine_host.update import Updater  # noqa: PLC0415
+
+    found = {"updates": [checked("owlbear", "newer", "v0.2", "v0.3"),
+                         checked("pds", "failed", "4.10.1", failures=2, reason="npm did not answer"),
+                         checked("impeccable", "current", "4.8.0.1")], "available": 1}  # fmt: skip
+    work, searched, started = [""], [], []
+    steps = [{"key": k, "label": label, "state": "done" if k == "looking" else "pending", "started_at": None,
+              "ended_at": None, "line": ""} for k, label in update_steps.STEPS]  # fmt: skip
+    log = [{"at": "2026-10-17T04:00:00+00:00", "step": "looking", "line": "v0.3 is the newest"}]
+    monkeypatch.setattr(update_checks.Checks, "read", lambda _self: found)
+    monkeypatch.setattr(update_checks.Checks, "start", lambda _self, name: searched.append(name) or True)
+    monkeypatch.setattr(Updater, "unstartable", lambda _self: work[0])
+    monkeypatch.setattr(Updater, "report", lambda _self: {"phase": "current", "detail": "", "version": "", "at": None,
+                                                          "steps": steps, "log": log, "startable": not work[0],
+                                                          "reason": work[0]})  # fmt: skip
+    monkeypatch.setattr(Updater, "run_now", lambda _self: started.append(True) or {})
+    with browsing(monkeypatch, pds) as (page, base):
+        page.goto(f"{base}/updates/owlbear#token=t")
+        burger = page.get_by_role("button", name="Menu, updates available")
+        expect(burger).to_be_visible()
+        expect(page.locator("#menu-dot")).to_be_visible()
+        expect(page.locator("#check-state")).to_have_text("newer version")
+        expect(page.locator("#check-current")).to_have_text("v0.2")
+        expect(page.locator("#check-latest")).to_have_text("v0.3")
+        expect(page.locator("#check-failure")).to_have_count(0)
+        expect(page.locator("#owlbear-steps > li")).to_have_count(10)
+        expect(page.locator("#owlbear-log-box summary")).to_have_text("Log of the update (1 line)")
+        expect(page.locator("#owlbear-log")).to_be_hidden()  # folded
+        page.get_by_role("button", name="Search for updates").click()
+        until(page, lambda: searched == ["owlbear"])
+        assert targets(page.locator("#page p-button, #page a, #page summary")) == []
+
+        page.get_by_role("button", name="Start update now").click()
+        expect(pds.modal(page)).to_contain_text("Start the OwlBear update now?")
+        work[0] = "Work runs now: alpha: alpha-1: a running step"  # started after the page read
+        pds.answer(page, "Start update now")
+        expect(page.locator("#owlbear-error")).to_have_text(
+            "Not started: Work runs now: alpha: alpha-1: a running step."
+        )
+        expect(page.get_by_role("button", name="Start update now")).to_be_disabled()
+        expect(page.locator("#owlbear-refused")).to_have_text("Not now: Work runs now: alpha: alpha-1: a running step.")
+        refused = page.request.post(f"{base}/api/next/update/start", headers={"Authorization": "Bearer t"})
+        assert (refused.status, refused.json()["detail"]) == (409, work[0])
+        assert started == []
+
+        burger.click()
+        menu = page.locator("p-drilldown")
+        expect(menu.get_by_role("link", name="OwlBear")).to_be_focused()  # opened at the Updates level
+        expect(page.locator('p-drilldown-item[identifier="updates"]')).to_have_attribute(
+            "label", "Updates, 1 available"
+        )
+        expect(menu.get_by_role("link", name="OwlBear").locator("p-tag")).to_have_text(["Available"])
+        expect(menu.get_by_role("link", name="Porsche Design System").locator("p-tag")).to_have_text(["Failed"])
+        expect(menu.get_by_role("link", name="Impeccable").locator("p-tag")).to_have_count(0)
+        page.keyboard.press("Escape")
+        expect(burger).to_be_focused()  # back on the burger
+
+        found["updates"][0] = checked("owlbear", "current", "v0.3")  # applied
+        found["available"] = 0
+        expect(page.locator("#menu-dot")).to_have_count(0, timeout=12000)  # the next poll
+        expect(page.get_by_role("button", name="Menu", exact=True)).to_be_visible()
+        expect(page.locator("#check-state")).to_have_text("up to date")
+        page.goto(f"{base}/updates/pds")
+        expect(page.locator("#check-failure")).to_contain_text("The last 2 checks failed")
+        expect(page.locator("#check-failure")).to_contain_text("npm did not answer.")
+
+
+@pytest.mark.browser
+def test_a_run_started_in_one_project_is_answered_from_another_and_from_all_projects(
+    tmp_path: Path, monkeypatch, pds
+) -> None:
+    """D-01M63C5VGFVT3DVCC888B78K2A: Updates ▸ Impeccable is the same in every project: a run alpha started waits for
+    the owner on beta's page and under All projects, and his answer goes to alpha."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    from owlbear_delivery_next.impeccable_runs import pack_job, pack_rounds  # noqa: PLC0415
+
+    alpha = registry.register(clone(tmp_path / "alpha"))
+    beta = registry.register(clone(tmp_path / "beta"))
+    job = pack_job.Job(Store.open(Path(alpha.path)), pack_job.Live())
+    question = pack_rounds.question("r1:end:1", "end", "The rounds ended.", ["activate", "discard"])
+    job.state = pack_job._blank() | {  # noqa: SLF001 - a run waiting for the owner
+        "state": "waiting", "started_at": datetime.now(UTC).isoformat(), "run": "r1", "questions": [question],
+    }  # fmt: skip
+    job._save()  # noqa: SLF001
+    answered: list[tuple[str, dict]] = []
+
+    def answering(route) -> None:
+        answered.append((route.request.url, route.request.post_data_json))
+        route.fulfill(json={})
+
+    with browsing(monkeypatch, pds) as (page, base):
+        page.route("**/impeccable/update/answer", answering)
+        for shown in (f"?project={beta.id}", ""):
+            answered.clear()
+            page.goto(f"{base}/updates/impeccable{shown}#token=t")
+            expect(page.locator("#pack-project")).to_contain_text("Started in alpha")
+            page.get_by_role("button", name="Menu").click()
+            impeccable = page.locator("p-drilldown").get_by_role("link", name="Impeccable")
+            expect(impeccable.locator("p-tag")).to_have_text(["Waiting for you"])
+            page.keyboard.press("Escape")
+            page.locator("#pack").get_by_role("button", name="Activate").click()
+            pds.answer(page, "Activate")
+            until(page, lambda: answered)
+            [(url, body)] = answered
+            assert url == f"{base}/p/{alpha.id}/api/next/impeccable/update/answer"
+            assert body == {"question": "r1:end:1", "option": "activate", "note": ""}
+
+
+@pytest.mark.browser
+def test_old_update_addresses_open_the_updates_pages_and_back_and_reload_keep_them(
+    tmp_path: Path, monkeypatch, pds
+) -> None:
+    """D-01M63C5VGFWJ709X2GA0CE8Q5B: Maintenance's OwlBear section and Settings' Impeccable section moved to Menu ▸
+    Updates; their old addresses open the new pages, with the project kept, and replace themselves in the history.
+    A page whose checks cannot be read says so and still shows the rest."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    a = registry.register(clone(tmp_path / "alpha"))
+    with browsing(monkeypatch, pds) as (page, base):
+        page.goto(f"{base}/memory?project={a.id}#token=t")
+        page.goto(f"{base}/maintenance?project={a.id}#owlbear")
+        expect(page).to_have_url(f"{base}/updates/owlbear?project={a.id}")
+        expect(page.get_by_role("heading", level=1)).to_have_text("OwlBear update")
+        page.reload()
+        expect(page).to_have_url(f"{base}/updates/owlbear?project={a.id}")
+        expect(page.locator("#check-title, #check-unread")).to_have_count(1)
+        page.go_back()
+        expect(page).to_have_url(f"{base}/memory?project={a.id}")  # the old address left no entry
+        page.go_forward()
+        expect(page).to_have_url(f"{base}/updates/owlbear?project={a.id}")
+        page.goto(f"{base}/config#pack")
+        expect(page).to_have_url(f"{base}/updates/impeccable")
+        expect(page.get_by_role("heading", level=1)).to_have_text("Impeccable update")
+
+        page.route("**/api/next/updates", lambda route: route.abort())
+        page.goto(f"{base}/updates/pds?project={a.id}")
+        expect(page.locator("#check-unread")).to_contain_text("Could not read the update checks")
+        expect(page.locator("#pds-later")).to_be_visible()
