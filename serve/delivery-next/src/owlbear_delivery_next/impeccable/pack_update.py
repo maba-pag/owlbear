@@ -107,8 +107,9 @@ def notice(*, refresh: bool, force: bool = False, fetch: Callable[[str], bytes] 
 
     *refresh* checks when the last count is over a day old, or a check failed since; *force* checks now. ``state`` is
     ``known`` (counted within a day), ``stale`` (counted longer ago), ``unknown`` (never counted, or upstream not
-    reached since) or ``error`` (upstream refused or answered unreadably since), with ``detail`` saying why. A failed
-    check keeps the last count in the file; it is shown again only by the next count.
+    reached since) or ``error`` (upstream refused or answered unreadably since), with ``detail`` saying why. ``latest``
+    is the newest skill release, the pinned tag when none is newer. A failed check keeps the last count in the file;
+    it is shown again only by the next count.
     """
     pack, tag = pack_files.manifest()["pack"], pack_files.manifest()["upstream"]["tag"]
     path = local_home.root() / pack_files.PACKS / NOTICE
@@ -120,7 +121,8 @@ def notice(*, refresh: bool, force: bool = False, fetch: Callable[[str], bytes] 
     if force or (refresh and _state(kept)["state"] != "known"):
         now = datetime.now(UTC).isoformat(timespec="seconds")
         try:
-            kept = {"tag": tag, "behind": len(releases(fetch)), "checked_at": now}
+            found = releases(fetch)
+            kept = {"tag": tag, "behind": len(found), "latest": found[-1] if found else tag, "checked_at": now}
         except Unread as exc:
             kept = kept | {"tag": tag, "failed_at": now, "failure": str(exc)[:400], "offline": exc.offline}
         try:
@@ -142,11 +144,13 @@ def _state(kept: dict[str, Any]) -> dict[str, Any]:
     checked, failed, behind = _time(kept.get("checked_at")), _time(kept.get("failed_at")), kept.get("behind")
     if failed and (checked is None or failed >= checked):
         state = "unknown" if kept.get("offline") is not False else "error"
-        return {"state": state, "behind": None, "checked_at": None, "detail": str(kept.get("failure", ""))}
+        detail = str(kept.get("failure", ""))
+        return {"state": state, "behind": None, "latest": "", "checked_at": None, "detail": detail}
     if checked is None or not isinstance(behind, int):
-        return {"state": "unknown", "behind": None, "checked_at": None, "detail": ""}
+        return {"state": "unknown", "behind": None, "latest": "", "checked_at": None, "detail": ""}
     state = "stale" if datetime.now(UTC) - checked > STALE else "known"
-    return {"state": state, "behind": behind, "checked_at": kept["checked_at"], "detail": ""}
+    return {"state": state, "behind": behind, "latest": str(kept.get("latest", "")), "checked_at": kept["checked_at"],
+            "detail": ""}  # fmt: skip
 
 
 def said(n: dict[str, Any]) -> str:

@@ -105,7 +105,8 @@ def test_the_notice_is_read_offline_refreshed_at_most_daily_and_shown_by_setup_a
         calls.append(url)
         return releases("skill-v4.6.0")(url)
 
-    unknown = {"pack": "impeccable-4.5.2.1", "state": "unknown", "behind": None, "checked_at": None, "detail": ""}
+    unknown = {"pack": "impeccable-4.5.2.1", "state": "unknown", "behind": None, "latest": "", "checked_at": None,
+               "detail": ""}  # fmt: skip
     assert pack_update.notice(refresh=False, fetch=fetch) == unknown
     assert pack_update.notice(refresh=True) | {"detail": ""} == unknown
     assert (pack_update.notice(refresh=True, fetch=fetch)["behind"], len(calls)) == (1, 1)  # offline was not kept
@@ -141,7 +142,7 @@ def test_the_notice_says_known_stale_unknown_or_error_and_a_failed_check_keeps_t
         raise HTTPError(url, 403, "rate limited", Message(), None)
 
     known = pack_update.notice(refresh=False, force=True, fetch=fetch)
-    assert (known["state"], known["behind"], len(calls)) == ("known", 2, 1)
+    assert (known["state"], known["behind"], known["latest"], len(calls)) == ("known", 2, "skill-v4.7.0", 1)
     assert pack_update.notice(refresh=False, force=True, fetch=fetch)["state"] == "known"
     assert len(calls) == 2  # forced: checked again although counted today
     path = pack_files.folder().parent / pack_update.NOTICE

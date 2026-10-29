@@ -251,9 +251,9 @@ def test_a_release_pinning_another_pack_is_newer_with_updating_by_itself_off_and
 
     assert (said["state"], said["version"], said["pack"]) == ("newer", "v0.3", "p-new")
     assert said["running_pack"] == pack_files.manifest()["pack"]
-    assert impeccable.look() == impeccable.release() == said  # within the day: what was kept, nothing fetched
+    assert impeccable.release() == said  # kept for the pages, which never fetch
     assert fetched == [1]
-    assert impeccable.look(force=True)["checked_at"] is not None
+    assert impeccable.look()["checked_at"] is not None  # each look fetches; the update checks say when
     assert fetched == [1, 1]
     assert not (local_home.root() / local_home.VERSIONS).exists()  # nothing installed
     assert git(runtime, "rev-parse", "HEAD") == head
@@ -266,7 +266,7 @@ def test_a_release_pinning_the_same_pack_shows_nothing_and_an_unreadable_one_sta
     assert impeccable.look()["state"] == "same"
 
     released(origin, "v0.4", None)
-    said = impeccable.look(force=True)
+    said = impeccable.look()
     assert (said["state"], said["version"]) == ("unknown", "v0.4")
     assert "Impeccable is unreadable" in said["detail"]
 
@@ -277,7 +277,7 @@ def test_a_runtime_from_before_the_rename_sees_a_renamed_release_as_unknown_not_
     released(origin, "v0.3", '{"pack": "p-new"}')  # the renamed tree: impeccable.json only
     monkeypatch.setattr(versions, "MANIFEST", versions.OLD_MANIFEST)  # the older runtime's one manifest path
 
-    said = impeccable.look(force=True)
+    said = impeccable.look()
 
     assert (said["state"], said["version"]) == ("unknown", "v0.3")
     assert "Impeccable is unreadable" in said["detail"]
@@ -377,16 +377,16 @@ def test_the_selfcheck_refuses_a_clones_unmoved_settings_newer_than_it_reads(tmp
     assert found == [f"{clone}: {said}"]
 
 
-def test_the_selfcheck_reads_settings_in_format_17_and_refuses_the_next_one(tmp_path):
+def test_the_selfcheck_reads_settings_in_format_18_and_refuses_the_next_one(tmp_path):
     clone = registered(tmp_path)
     folder = project_home.clone_dir(clone)
     folder.mkdir(exist_ok=True)
-    switched = {"format": 17, "load_user_instructions": True, "load_user_skills": False}
+    switched = {"format": 18, "load_user_instructions": True, "load_user_skills": False}
     (folder / "config.json").write_text(json.dumps(switched))
     assert selfcheck.problems() == []
 
-    (folder / "config.json").write_text(json.dumps(switched | {"format": 18}))
-    said = f"its settings in {folder / 'config.json'} have format 18, newer than this version's 17"
+    (folder / "config.json").write_text(json.dumps(switched | {"format": 19}))
+    said = f"its settings in {folder / 'config.json'} have format 19, newer than this version's 18"
     assert selfcheck.problems() == [f"{clone}: {said}"]
 
 

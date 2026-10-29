@@ -22,7 +22,7 @@ from pydantic import Field
 
 from owlbear_delivery_next.change_contracts import chat_contract
 from owlbear_delivery_next.local_system import codebase, data_repo, leases, local_home
-from owlbear_delivery_next.machine_host import control, impeccable, versions
+from owlbear_delivery_next.machine_host import control, impeccable, update_routes, versions
 from owlbear_delivery_next.machine_host.machine import Machine, MachineError
 from owlbear_delivery_next.project_host import (
     api,
@@ -207,6 +207,7 @@ def _routes(machine: Machine) -> APIRouter:
     routes.include_router(metrics_routes.router(lambda: _stores(machine)))  # every project's spend
     _curation_routes(routes, machine)
     _update_routes(routes, machine)
+    routes.include_router(update_routes.router(machine))  # the update checks (D-01M63CCVRK8ZKFENY9F4A2K11A)
     _pack_routes(routes, machine)
     return routes
 
@@ -370,7 +371,7 @@ def _pack_routes(routes: APIRouter, machine: Machine) -> None:
     @routes.post(f"{pack_routes.OLD}/look", include_in_schema=False)
     def look_pack() -> dict[str, Any]:
         """Look now whether a released version pins a newer pack; it fetches, and never installs anything."""
-        impeccable.look(force=True)
+        impeccable.look()
         return machine.impeccable.read()
 
     pack_routes.moved(routes, "")

@@ -129,7 +129,7 @@ CURRENT_IMPORTS = (
     ("commands/mcp_server.py", "1261ba9b6201136ef0dc75f1bb0f598fdf0a66a24a1f7b6f3f58b97e23b26b6a"),
     ("commands/runner.py", "9517d47b155392050d29fffa74e89d77e7c3443d670e361bb4124a3903ad0439"),
     ("commands/setup.py", "96aa2c960a9bb502ba98a0abc4b363204a3cb01038438492c5327cdacc5b4bc4"),
-    ("machine_host/app.py", "f3ff91f9651c4094a102669ac993843debc9f87a8d9c680f67dc4323a0af115e"),
+    ("machine_host/app.py", "9abb7304b20e2eed7886329c562168cd329cdf235f778de9f7d5b08ca4d8b3cc"),
     ("machine_host/command.py", "577ce56b1140fdf075a0e005468cb52ae5ccbab25c6519efa162e2bff05cb714"),
     ("machine_host/install.py", "c3f1613a7098ab70babc320644ed5965e173684f9da1c5fdd5f8653b7fb6d899"),
     ("machine_host/machine.py", "7cff06968e68c7ffc314bb03ca851580467fadc6bedc78744d2f5a1dd8cfb414"),

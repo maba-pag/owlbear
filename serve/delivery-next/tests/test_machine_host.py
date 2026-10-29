@@ -880,7 +880,9 @@ def test_the_machine_s_settings_are_saved_against_the_revision_the_page_read(htt
         None, "minor", "default"
     )  # fmt: skip
     unset = dict.fromkeys(("retro_run_credit_limit", "replay_run_credit_limit", "retro_after_change",
-                           "retro_when_idle", "enrolled_chats"))  # Improvement's: none chosen here  # fmt: skip
+                           "retro_when_idle", "enrolled_chats",  # Improvement's: none chosen here
+                           "update_check_hours_owlbear", "update_check_hours_pds",
+                           "update_check_hours_impeccable"))  # fmt: skip
     assert (saved.json()["settings"], registry.load().settings.channel) == (chosen | unset, "major")
     assert saved.json()["resolved"]["sources"]["channel"] == "machine"
     assert (stale.status_code, "changed since" in stale.json()["detail"], wrong.status_code) == (409, True, 422)

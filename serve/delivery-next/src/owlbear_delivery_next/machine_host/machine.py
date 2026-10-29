@@ -84,10 +84,12 @@ class Machine:
         from owlbear_delivery_next.machine_host.auto_update import Auto  # noqa: PLC0415 - it names this class
         from owlbear_delivery_next.machine_host.impeccable import Impeccable  # noqa: PLC0415 - it names this class
         from owlbear_delivery_next.machine_host.update import Updater  # noqa: PLC0415 - it names this class
+        from owlbear_delivery_next.machine_host.update_checks import Checks  # noqa: PLC0415 - it names this class
 
         self.updater = Updater(self)
         self.auto = Auto(self)
         self.impeccable = Impeccable(self)
+        self.checks = Checks(self)  # OwlBear's, PDS's and Impeccable's update checks (D-01M63CCVRK8ZKFENY9F4A2K11A)
         self.curation = Curation(
             self.slots,
             fenced=self._curation_fence,

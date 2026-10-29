@@ -4,10 +4,10 @@ A version counts as installed only once its pack is in place (``versions.install
 running version's pack missing, gives every page a banner with Install. Install puts the running version's pinned
 pack in place even when no newer version exists, and the pack of a version whose update failed on it.
 
-A separate look, at most daily and whatever updating by itself is set to, reads the pack the version this machine
-would take pins (``versions.target``, then its ``impeccable.json`` from ``repo.git``): it never installs or
-activates anything. Pages read only what the last look kept. ``notice.json`` stays upstream's view of Impeccable's
-releases, for whoever updates the pack.
+A separate look, the OwlBear update check's (``update_checks``) whatever updating by itself is set to, reads the
+pack the version this machine would take pins (``versions.target``, then its ``impeccable.json`` from ``repo.git``):
+it never installs or activates anything. Pages read only what the last look kept. ``notice.json`` stays upstream's
+view of Impeccable's releases, for whoever updates the pack.
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ import contextlib
 import json
 import threading
 import time
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.impeccable import pack_files
@@ -31,9 +31,7 @@ if TYPE_CHECKING:
 
 RELEASED = "released.json"  # beside the installed packs: the last look at the pack of the version to take
 FAILED = "failed.json"  # beside it: the last pack that failed, kept across restarts until it is installed
-STALE, RETRY = timedelta(days=1), timedelta(hours=1)  # a look's age before the next; an unknown one's
 PRESENT = 60.0  # seconds a look whether the running pack is in place holds: it hashes the engine
-TICK = 60.0  # seconds between the loop's looks whether a look is due
 ANY = object()  # _keep without an expected failure
 
 
@@ -47,17 +45,6 @@ def _kept() -> dict[str, Any]:
     except OSError, ValueError:
         return {}
     return kept if isinstance(kept, dict) else {}
-
-
-def _due(kept: dict[str, Any]) -> bool:
-    """Whether the last look is too old, unknown for an hour, or was made by another version than the running one."""
-    try:
-        checked = datetime.fromisoformat(kept["checked_at"])
-    except KeyError, TypeError, ValueError:
-        return True
-    if kept.get("running") != versions.running() or kept.get("running_pack") != pack_files.manifest()["pack"]:
-        return True
-    return datetime.now(UTC) - checked > (RETRY if kept.get("state") == "unknown" else STALE)
 
 
 def _found() -> dict[str, Any]:
@@ -75,14 +62,19 @@ def _found() -> dict[str, Any]:
     return {"state": "found", "version": choice.tag, "commit": choice.commit, "pins": pins}
 
 
-def look(*, force: bool = False) -> dict[str, Any]:
-    """Look again when the last look is due, or when *force*d; what the pages show (``release``)."""
-    if force or _due(_kept()):
-        kept = _found() | {"running": versions.running(), "running_pack": pack_files.manifest()["pack"]}
-        path = local_home.root() / pack_files.PACKS / RELEASED
-        with contextlib.suppress(OSError):  # a hint: unwritten, it is looked at again next time
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(json.dumps(kept | {"checked_at": _now()}) + "\n", encoding="utf-8")
+def checked() -> dict[str, Any]:
+    """Look now and keep it for the pages; what was found: ``state``, the ``version`` to take and ``detail``."""
+    kept = _found() | {"running": versions.running(), "running_pack": pack_files.manifest()["pack"]}
+    path = local_home.root() / pack_files.PACKS / RELEASED
+    with contextlib.suppress(OSError):  # a hint: unwritten, it is looked at again by the next check
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(kept | {"checked_at": _now()}) + "\n", encoding="utf-8")
+    return kept
+
+
+def look() -> dict[str, Any]:
+    """Look now; what the pages show (``release``)."""
+    checked()
     return release()
 
 
@@ -254,13 +246,3 @@ class Impeccable:
         with self.lock:
             self.present = None
         return self._in_place()
-
-    def loop(self) -> None:
-        """Thread: look for a newer pack in a release when the last look is due, until the machine stops."""
-        while True:
-            try:
-                look()
-            except Exception as exc:  # noqa: BLE001 - the loop outlives one failed look
-                self.machine.say(f"looking for a newer Impeccable failed: {type(exc).__name__}: {exc}")
-            if self.machine.stopping.wait(TICK):
-                return
