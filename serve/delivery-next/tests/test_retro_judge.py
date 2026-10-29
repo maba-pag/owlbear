@@ -162,6 +162,19 @@ def _sorting(groups):
     return answer
 
 
+@pytest.mark.parametrize(("before", "now", "opens"), [((), (True,), True), ((True,), (False,) * 4, False)])
+def test_the_catchable_share_counts_the_findings_of_the_unit_being_judged(before, now, opens):
+    if before:
+        _judged("chat:u1")
+    found = [_finding(f"b{i}", "chat:u1", target="") | {"catchable": c} for i, c in enumerate(before)]
+    mine = [_finding(f"n{i}", "chat:s1", target="") | {"catchable": c} for i, c in enumerate(now)]
+    retro_store.add_findings([*found, *mine])
+
+    out = retro_bars.propose(_work(Asked(lambda _ev, _a: {})), [f["id"] for f in mine])
+
+    assert ("look-reconsider" in [props.folded()[p]["kind"] for p in out]) is opens
+
+
 def test_three_families_sharing_one_confirmed_mechanism_make_one_proposal_and_another_target_stays_apart():
     retro_store.add_findings([_finding(f"f{i}", f"chat:u{i}") for i in range(1, 4)])
     retro_store.add_findings([_finding("f4", "chat:u1", target="agent:reviewer")])
@@ -306,6 +319,18 @@ def test_each_part_names_its_session_so_a_records_moment_is_found_when_event_num
     assert sent["records"][0]["session"] == "s-b"
 
 
+def test_a_record_whose_own_session_left_nothing_to_read_is_never_judged_on_another_sessions_evidence():
+    parts = [Part("s1.p1", "s-kept", 1, 9, "s1.e3 agent: built", "")]
+    records = [_record("gone", 3, session="s-pruned"), _record("kept", 3, session="s-kept")]
+    ask = Asked(lambda ev, _a: _graded(ev))
+
+    retro_judge.judge(_work(ask, records, parts, uid="chg:p1:fix-it", grade_only=True))
+
+    assert [r["id"] for m in ask.messages for r in _evidence(m)["records"]] == ["kept"]
+    gone = next(g for g in retro_store.grades() if g["record"] == "gone")
+    assert (gone["grade"], gone["reason"], gone.get("moment")) == ("not-assessable", retro_judge.PRUNED, None)
+
+
 def test_a_grade_only_run_proposes_a_case_for_a_late_record_graded_wrong():
     def said(_ev, agent):
         if agent == "retro-review":
@@ -331,7 +356,24 @@ def test_a_survivor_without_a_title_and_body_is_an_attempt_and_its_retry_keeps_t
     retro_judge.review(_work(ask, run="run-2"))
 
     got = props.folded()[due["id"]]
-    assert (got["state"], got["publishable"]) == ("waiting", {"title": "t" * 120, "body": "b" * 1500})
+    refs = f"\n\nRefs: {', '.join([due['id'], *due['findings']])}"
+    assert (got["state"], got["publishable"]["title"]) == ("waiting", "t" * 120)
+    assert got["publishable"]["body"] == "b" * (retro_judge.BODY - len(refs)) + refs
+
+
+def test_a_survivors_body_naming_only_longer_ids_still_ends_with_its_own():
+    review = {"verdict": "survive", "why": "holds", "risks": [], "publishable": {"title": "a case"}}
+    said = {"retro-review": review, "retro": {"findings": [], "grades": [{"record": "w", "grade": "wrong"} | WRONG]}}
+    with pytest.raises(StoppedError, match="not valid"):
+        retro_judge.run(_work(Asked(lambda _ev, agent: said[agent]), [_record("w", 3)], grade_only=True))
+    [due] = props.due_reviews()
+    ids = [due["id"], *due["findings"]]
+    review["publishable"]["body"] = "see " + ", ".join(f"{i}0" for i in ids)
+
+    retro_judge.review(_work(Asked(lambda _ev, agent: said[agent]), run="run-2"))
+
+    body = review["publishable"]["body"]
+    assert props.folded()[due["id"]]["publishable"]["body"] == f"{body}\n\nRefs: {', '.join(ids)}"
 
 
 def test_a_survivors_credential_that_its_bound_would_cut_in_two_is_found_before_the_cut():

@@ -34,6 +34,7 @@ SAMPLES, SHOWN = 8, 3  # representative findings and counterexamples a review sh
 JUDGE = Path(__file__).with_name("retro_judge_prompt.md")
 REVIEWING = Path(__file__).with_name("retro_review_prompt.md")
 UNASSESSABLE = frozenset({"failed", "insufficient-context", ""})
+UNSEEN, PRUNED = "no evidence of the unit could be read", "evidence pruned: nothing of its session is left to read"
 NEEDS = (assumptions.RETRO_SEGMENTS, assumptions.RETRO_CAUSES, assumptions.RETRO_GRADES)
 
 
@@ -78,10 +79,16 @@ def _unassessable(record: Mapping[str, Any]) -> str:
 
 
 def _home(record: Mapping[str, Any], parts: list[Part]) -> int:
-    """The part a record's moment falls in: its session's last part begun by then, else its first; else the last."""
+    """The part a record's moment falls in: its session's last part begun by then, else its first."""
     mine = [i for i, p in enumerate(parts) if p.session == record.get("session")]
     begun = [i for i in mine if parts[i].first <= int(record.get("cutoff") or 0)]
-    return begun[-1] if begun else mine[0] if mine else len(parts) - 1
+    return begun[-1] if begun else mine[0]
+
+
+def _open(w: Work) -> list[dict[str, Any]]:
+    """The records a judge grades: assessable, with something of their own session to read."""
+    read = {p.session for p in w.prepared.parts}
+    return [r for r in w.records if assessable(r) and r.get("session") in read]
 
 
 def _shown(p: Part) -> dict[str, str]:
@@ -209,15 +216,15 @@ def judging(w: Work) -> list[tuple[list[Part], list[dict[str, Any]], str]]:
     """The judging batches of *w*'s assessable records, each with its message; none when no evidence was read."""
     if not w.prepared.parts:
         return []
-    return [(p, c, _message(w, p, c)) for p, c in batches(w, [r for r in w.records if assessable(r)])]
+    return [(p, c, _message(w, p, c)) for p, c in batches(w, _open(w))]
 
 
 def judge(w: Work) -> list[str]:
     """Phase 1: grade every record of the revision once and keep the findings; the ids of the findings."""
-    open_ = [r for r in w.records if assessable(r)]
-    unseen = {"grade": "not-assessable", "reason": "no evidence of the unit could be read"}
+    judged = {r["id"] for r in _open(w)}
+    gone = {"grade": "not-assessable", "reason": PRUNED if w.prepared.parts else UNSEEN}
     without = [(r, {"grade": "not-assessable", "reason": _unassessable(r)}) for r in w.records if not assessable(r)]
-    without += [(r, unseen) for r in open_] if not w.prepared.parts else []
+    without += [(r, gone) for r in w.records if assessable(r) and r["id"] not in judged]
     w.found["grades"] += len(store.add_grades(_grade(w, r, said) for r, said in without))
     ids: list[str] = []
     seen: set[str] = set()  # the parts judged by an earlier batch: a part carried again yields no finding twice
@@ -301,6 +308,12 @@ def _shown_finding(f: Mapping[str, Any]) -> dict[str, Any]:
     return shown | {k: f[k] for k in ("moment", "later") if f.get(k)}
 
 
+def _bounded(snap: Mapping[str, Any], body: str) -> str:
+    """A survivor's body within ``BODY``, always ending with its proposal and first finding ids."""
+    refs = f"\n\nRefs: {', '.join([snap['id'], *snap['findings'][:SAMPLES]])}"
+    return f"{body[: BODY - len(refs)]}{refs}"
+
+
 def review(w: Work) -> int:
     """Phase 3: review each proposal of this run's provenance whose evidence has changed; how many were reviewed."""
     findings = {f["id"]: f for f in store.all_findings()}
@@ -316,7 +329,7 @@ def review(w: Work) -> int:
         if leaked := case_review.leaks(shown):
             said |= {"verdict": "reject", "why": f"leak: {', '.join(leaked)}", "publishable": {}}
         elif said["verdict"] == "survive":
-            said["publishable"] = {"title": shown["title"][:TITLE], "body": shown["body"][:BODY]}
+            said["publishable"] = {"title": shown["title"][:TITLE], "body": _bounded(snap, shown["body"])}
         props.reviewed(snap["id"], snap["evidence"], said)
         n += 1
     return n

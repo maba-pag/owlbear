@@ -258,11 +258,15 @@ def _catchable(w: Work, every: list[dict[str, Any]]) -> list[str | None]:
     same = [p for p in props.folded().values() if p.get("provenance", "real") == w.provenance]
     if any(p["state"] not in props.CLOSED for p in same if p.get("kind") == "look-reconsider"):
         return []
-    judged = sorted(
-        (u for u in store.known().values() if u.get("judged_at") and u.get("provenance", "real") == w.provenance),
+    judged = sorted(  # the unit being judged is the newest; its judgement is settled only after this phase
+        (
+            u
+            for uid, u in store.known().items()
+            if uid != w.uid and u.get("judged_at") and u.get("provenance", "real") == w.provenance
+        ),
         key=lambda u: u["judged_at"],
-    )[-WINDOW:]
-    window = {u["family"] for u in judged}
+    )[-(WINDOW - 1) :]
+    window = {u["family"] for u in judged} | {w.unit.get("family", w.uid)}
     inside = [f for f in every if f["family"] in window]
     caught = [f["id"] for f in inside if f.get("catchable")]
     if not inside or len(caught) / len(inside) < CATCHABLE:
@@ -276,7 +280,7 @@ def _catchable(w: Work, every: list[dict[str, Any]]) -> list[str | None]:
             target="spotter:looks",
             provenance=w.provenance,
             assumptions=[assumptions.RETRO_CATCHABLE, *_synthetic(w)],
-            mechanism=f"{len(caught)} of {len(inside)} findings over the last {len(judged)} judged units "
+            mechanism=f"{len(caught)} of {len(inside)} findings over the last {len(judged) + 1} judged units "
             "were catchable at their moment",
             bar=f"at least {CATCHABLE:.0%} catchable findings",
         )
