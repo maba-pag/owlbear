@@ -7,6 +7,7 @@ import pytest
 
 from owlbear_delivery_next.improvement import (
     assumptions,
+    cases,
     retro_bars,
     retro_calls,
     retro_judge,
@@ -465,6 +466,13 @@ def test_a_malformed_judgement_stops_the_run_kept_as_an_attempt_with_nothing_der
 
     assert (retro_store.grades(), retro_store.all_findings()) == ([], [])
     assert retro_store.attempts(retro_store.lines("batches.jsonl")[-1]["key"])
+
+
+def test_a_judging_message_names_every_call_a_wrong_or_missed_grade_may_give():
+    w = _work(Asked(_graded), [_record("a", 3)])
+    [(_, _, message)] = retro_judge.judging(w)
+
+    assert [c for c in cases.CALLS if f"`{c}`" not in message] == []
 
 
 def test_a_saved_answer_no_longer_valid_stops_the_run_instead_of_being_derived_from():
