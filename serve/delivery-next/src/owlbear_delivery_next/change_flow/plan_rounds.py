@@ -24,7 +24,7 @@ from owlbear_delivery_next.change_contracts.models import (
     Step,
     StepKind,
 )
-from owlbear_delivery_next.change_contracts.round_records import BRIEF, FINAL, PLAN, RECHECK, UNJUDGED, RoundLoop
+from owlbear_delivery_next.change_contracts.round_records import BRIEF, FINAL, PLAN, RECHECK, RoundLoop
 from owlbear_delivery_next.change_flow.moves import ask
 
 if TYPE_CHECKING:
@@ -197,18 +197,7 @@ def counted(c: Change, found: list[str], judged: Mapping[str, tuple[bool, str]])
     """Count one challenger verdict: its judgements and new findings; then the owner, the planner or the end."""
     lp = c.loops[PLAN]
     recheck = c.step.mode == RECHECK
-    if recheck:
-        if identity(c.plan) != lp.head:  # a revision the check judged the rejections of, never its changes
-            lp.leave(f"r{lp.round}")
-    else:
-        lp.reviewed, lp.unreviewed = sorted({f.repair for f in lp.findings if f.repair}), []
-    lp.round, lp.head = lp.round + (not recheck), identity(c.plan)  # a check counts outside the rounds (TD-330)
-    for f in pending(lp):
-        if (j := judged.get(f.id)) is not None:
-            f.state, f.judgement = ("escalated" if j[0] else "standing"), _flat(j[1], 1000)
-        elif recheck:  # a wrong premise instead: the check never runs again for it
-            f.state, f.judgement = "standing", UNJUDGED
-    lp.count(len(lp.raise_findings(found)), recheck=recheck)
+    lp.verdict(found, judged, identity(c.plan), f"r{lp.round}", recheck=recheck)
     if _undecided(lp) is not None:
         return "ask"
     if addressing(c):
