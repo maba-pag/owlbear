@@ -20,7 +20,8 @@ function released(bar) {
   if (r?.state === "newer") {
     return `OwlBear ${r.version} carries the newer pack ${r.pack}; this version pins ${r.running_pack}.`;
   }
-  return "No released OwlBear version carries a newer pack.";
+  if (["none", "same"].includes(r?.state)) return "No released OwlBear version carries a newer pack.";
+  return `Not known yet${r?.detail ? `: ${r.detail}` : ""}.`;  // never looked, unreadable, or another channel's look
 }
 
 function published(run) {

@@ -391,7 +391,9 @@ def test_updates_impeccable_with_no_project_answers_a_loaded_projects_run_with_i
     job._save()  # noqa: SLF001
     machine, server, base = serve()
     failed = {"state": "failed", "version": "v0.3", "pack": "", "detail": "cannot download", "at": None}
-    machine.impeccable.read = lambda: {"install": failed, "release": None}  # a newer version's pack
+    unread = {"state": "unknown", "version": "", "pack": "", "running_pack": "impeccable-4.8.0.1", "checked_at": None,
+              "detail": "GitHub did not answer"}  # fmt: skip
+    machine.impeccable.read = lambda: {"install": failed, "release": unread}  # a newer version's pack
     try:
         with sync_playwright() as pw:
             try:
@@ -411,6 +413,7 @@ def test_updates_impeccable_with_no_project_answers_a_loaded_projects_run_with_i
             expect(page.locator("#pack-install-state")).to_have_text(
                 "Impeccable of OwlBear v0.3 failed to install on this machine: cannot download."
             )
+            expect(page.locator("#pack-release")).to_have_text("Not known yet: GitHub did not answer.")
             browser.close()
     finally:
         server.should_exit = True
