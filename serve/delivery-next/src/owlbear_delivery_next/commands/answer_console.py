@@ -7,18 +7,20 @@ refuses. Its answer binds to what ``show`` printed, as the page's binds to what 
 from __future__ import annotations
 
 import sys
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 
 from pydantic import ValidationError
 
 from owlbear_delivery_next.change_contracts.models import Exit
+from owlbear_delivery_next.change_flow import rebuilds
 from owlbear_delivery_next.project_host import answers
-from owlbear_delivery_next.workflow_steps import held
+from owlbear_delivery_next.workflow_steps import decision, held
 
 if TYPE_CHECKING:
     import argparse
 
     from owlbear_delivery_next.change_contracts.models import Change, Question
+    from owlbear_delivery_next.change_contracts.visual_records import JudgeFinding
     from owlbear_delivery_next.state_store.store import Store
 
 
@@ -59,6 +61,40 @@ def describe(change: Change, store: Store | None = None) -> str:
 
 
 def _asked(store: Store, c: Change, q: Question) -> list[str]:
-    """The question's text and the options it offers now, as the page lists them."""
+    """The question's text and the options it offers now, and the round or task list the page shows beside it."""
     said = q.text.replace("\n", "\n    ")
-    return [f"{q.id}: {said}", *(f"{q.id} option {o.id}: {o.label}" for o in held.offered(store, c, q))]
+    offered = [f"{q.id} option {o.id}: {o.label}" for o in held.offered(store, c, q)]
+    return [f"{q.id}: {said}", *offered, *_round(c, q), *_retry(c, q)]
+
+
+def _round(c: Change, q: Question) -> list[str]:
+    """A visual decision's round (TD-79): its verdicts, its findings, and the ones the page ticks for a Fail."""
+    if q.cause != decision.CAUSE or not c.visual_rounds:
+        return []
+    kept = c.visual_rounds[-1]
+    ticked = set(decision.proposed(kept))
+    lines = [f"visual round {kept.number} at {kept.head}, pack {kept.pack or 'none'}"]
+    for v in kept.verdicts:
+        lines.append(f"  {v.lens} {v.verdict or 'no verdict'}{f': {v.reason}' if v.reason else ''}")
+        lines += [f"    [{'x' if f.id in ticked else ' '}] {_finding(f)}" for f in v.findings]
+    pack = f" --pack {kept.pack}" if kept.pack else ""
+    return [*lines, f"answer with --round {kept.number} --head {kept.head}{pack}; a Fail adds --finding ID or --text"]
+
+
+def _finding(f: JudgeFinding) -> str:
+    where = f"{f.state} at {f.width}px" if f.width else f.state
+    made = "existing" if f.introduced is False else "introduced"  # as the page groups them
+    return f"{f.id} {f.severity or '-'} {made} {where}: {f.text}".replace("\n", "\n      ")
+
+
+def _retry(c: Change, q: Question) -> list[str]:
+    """A final retry's plan tasks (TD-217), the ones the page ticks, and the criteria Accept as done leaves unmet."""
+    if (shown := rebuilds.shown(c, q)) is None:
+        return []
+    attempt, head = shown["attempt"], shown["head"]
+    lines = [f"final retry attempt {attempt} at {head}"]
+    for t in cast("list[dict[str, Any]]", shown["tasks"]):
+        shares = f" (shares files with {', '.join(t['shares'])})" if t["shares"] else ""
+        lines.append(f"  [{'x' if t['ticked'] else ' '}] {t['id']} {t['title']}{shares}")
+    lines += [f"  unmet: {u}" for u in cast("list[str]", shown["unmet"])]
+    return [*lines, f"answer with --attempt {attempt} --head {head}; a Rebuild adds --task ID for each task"]
