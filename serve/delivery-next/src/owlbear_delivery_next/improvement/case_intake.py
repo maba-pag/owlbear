@@ -15,6 +15,7 @@ import json
 from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.improvement.cases import CALLS, CaseError, commit, current, freeze, locked, place, ready
+from owlbear_delivery_next.local_system.storage_io import atomic_write
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -47,11 +48,7 @@ def assign(given: Mapping[str, tuple[str, str]]) -> dict[str, str]:
         added = {f: {"side": side, "how": how} for f, (side, how) in given.items() if f not in found}
         if added:
             found |= added
-            path = ready() / "families.json"
-            tmp = path.with_suffix(".tmp")
-            tmp.write_text(json.dumps(found, indent=1, sort_keys=True) + "\n")
-            tmp.chmod(0o600)
-            tmp.replace(path)
+            atomic_write(ready() / "families.json", json.dumps(found, indent=1, sort_keys=True) + "\n")
         return {f: v["side"] for f, v in found.items()}
 
 
