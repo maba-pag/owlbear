@@ -148,6 +148,44 @@ def test_the_metrics_page_sums_splits_drills_down_and_lists_runs_with_their_limi
         machine.stop_all()
 
 
+@pytest.mark.browser
+def test_a_ledger_whose_step_events_list_their_models_renders(pds) -> None:
+    """The owner's ledger: older step events list their models' names, and Metrics answered 500 on every read."""
+    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+
+    at = (datetime.now(UTC) - timedelta(hours=1)).isoformat(timespec="seconds")
+    place = {"project": "shop", "name": "shop", "clone": "", "change": "c1", "step": "build", "job": "",
+             "agent": "builder", "source": "import:activity"}  # fmt: skip
+    spend_ledger.append([
+        place | {"id": f"event:{n}", "type": "event", "at": at, "session": f"s{n}",
+                 "usage": {"credits": spent, "model_mismatch": False, "models": names}}
+        for n, (spent, names) in enumerate([(1.5, ["m1"]), (0.5, ["m1", "m2"])])
+    ])  # fmt: skip
+    machine, server, base = serve()
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except Error as exc:
+                pytest.skip(f"no Playwright Chromium: {exc}")
+            page = browser.new_page(timezone_id="Europe/Berlin")
+            pds.only(page, base)
+            page.goto(f"{base}/metrics?by=model#token=t")
+            expect(page.locator("#total-credits")).to_contain_text("2.00 credits")
+            rows = page.locator("#split p-table-row")
+            expect(rows).to_have_count(2)
+            expect(rows.nth(0)).to_contain_text("m1")
+            expect(rows.nth(0)).to_contain_text("1.50")
+            expect(rows.nth(1)).to_contain_text("Model unknown")
+            expect(rows.nth(1)).to_contain_text("0.50")
+            expect(page.locator("#runs p-table-row")).to_have_count(2)
+            expect(page.locator("#error")).to_have_count(0)
+            browser.close()
+    finally:
+        server.should_exit = True
+        machine.stop_all()
+
+
 HOLD = """
 window.__held = [];
 const real = window.fetch;

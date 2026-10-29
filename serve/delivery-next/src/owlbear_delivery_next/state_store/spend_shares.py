@@ -63,6 +63,18 @@ def _fields(m: dict[str, Any]) -> Fields:
     return {"credits": None if c is None else float(c)} | {f: float(m.get(f) or 0) for f in FIELDS[1:]}
 
 
+def _reported(usage: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """Each model's totals as reported; older step events list only their models' names (D-01M63C6PMQD4TXK6HN5YANP5DN).
+
+    A one-name list counts the usage's credits as that model's; any other list reports no model, so its total
+    credits stand alone.
+    """
+    found = usage.get("models") or {}
+    if isinstance(found, list):
+        return {found[0]: {"credits": usage.get("credits")}} if len(found) == 1 else {}
+    return found
+
+
 def cells(usage: dict[str, Any], model: str) -> dict[Cell, tuple[str, Fields]]:
     """A cumulative usage as cells: (agent instance, model) to (subagent name, "" for the main agent; fields)."""
     out: dict[Cell, tuple[str, Fields]] = {}
@@ -72,7 +84,7 @@ def cells(usage: dict[str, Any], model: str) -> dict[Cell, tuple[str, Fields]]:
             for m, mm in (a.get("models") or {}).items():
                 out[key, m] = (name, _fields(mm))
     else:
-        for m, mm in (usage.get("models") or {}).items():
+        for m, mm in _reported(usage).items():
             out["main", m] = ("", _fields(mm))
     if not out and (total := usage.get("credits")) is not None:
         return {("main", model): ("", _fields({"credits": total}))}
@@ -81,7 +93,7 @@ def cells(usage: dict[str, Any], model: str) -> dict[Cell, tuple[str, Fields]]:
 
 def models(usage: dict[str, Any], split: dict[Cell, tuple[str, Fields]]) -> dict[str, Fields]:
     """Each model's cumulative totals: as the runtime reported them per model, else the sum of its cells."""
-    if reported := usage.get("models"):
+    if reported := _reported(usage):
         return {m: _fields(mm) for m, mm in reported.items()}
     out: dict[str, Fields] = {}
     for (_, m), (_, v) in split.items():

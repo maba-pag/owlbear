@@ -344,3 +344,20 @@ def test_an_imported_checkpoint_repeating_a_runs_totals_adds_no_run(event_at) ->
              event]  # fmt: skip
     found = spend_metrics.query(spend_shares.derive(lines), tz=UTC)
     assert (found["totals"]["runs"], found["totals"]["credits"], found["runs"]["items"][0]["run"]) == (1, 3.0, "r1")
+
+
+@pytest.mark.parametrize(("names", "model"), [(["m1"], "m1"), (["m1", "m2"], ""), ([], "")])
+def test_a_step_event_listing_its_models_counts_for_its_one_model_else_by_its_total(names, model) -> None:
+    """The owner's ledger: older step events list their models' names, with no totals per model."""
+    listed = {"credits": 1.5, "model_mismatch": False, "models": names}
+    event = {"id": "event:e", "type": "event", "at": "2026-10-01T09:00:00+00:00", "session": "s1", "usage": listed,
+             "agent": "builder", "project": "p", "change": "ch", "source": "import:activity"}  # fmt: skip
+    lines = [event, start("r2", "2026-10-02T10:00:00+00:00", before=usage(1.5)),
+             end("r2", "2026-10-02T11:00:00+00:00", usage(2.0))]  # fmt: skip
+    pieces = spend_shares.derive(lines)
+    assert [(p["run"], p["model"], p["credits"]) for p in pieces if p["credits"]] == [("event:e", model, 1.5),
+                                                                                     ("r2", "m1", 0.5)]  # fmt: skip
+    found = spend_metrics.query(pieces, tz=UTC, by="model")
+    assert found["totals"]["credits"] == 2.0
+    assert {r["label"]: r["credits"] for r in found["rows"]} == ({"m1": 2.0} if model else {"Model unknown": 1.5,
+                                                                                           "m1": 0.5})  # fmt: skip
