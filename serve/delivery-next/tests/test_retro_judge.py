@@ -162,6 +162,19 @@ def _sorting(groups):
     return answer
 
 
+@pytest.mark.parametrize(("before", "now", "opens"), [((), (True,), True), ((True,), (False,) * 4, False)])
+def test_the_catchable_share_counts_the_findings_of_the_unit_being_judged(before, now, opens):
+    if before:
+        _judged("chat:u1")
+    found = [_finding(f"b{i}", "chat:u1", target="") | {"catchable": c} for i, c in enumerate(before)]
+    mine = [_finding(f"n{i}", "chat:s1", target="") | {"catchable": c} for i, c in enumerate(now)]
+    retro_store.add_findings([*found, *mine])
+
+    out = retro_bars.propose(_work(Asked(lambda _ev, _a: {})), [f["id"] for f in mine])
+
+    assert ("look-reconsider" in [props.folded()[p]["kind"] for p in out]) is opens
+
+
 def test_three_families_sharing_one_confirmed_mechanism_make_one_proposal_and_another_target_stays_apart():
     retro_store.add_findings([_finding(f"f{i}", f"chat:u{i}") for i in range(1, 4)])
     retro_store.add_findings([_finding("f4", "chat:u1", target="agent:reviewer")])
