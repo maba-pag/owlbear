@@ -873,6 +873,9 @@ def test_a_run_started_in_one_project_is_answered_from_another_and_from_all_proj
             page.get_by_role("button", name="Menu").click()
             impeccable = page.locator("p-drilldown").get_by_role("link", name="Impeccable")
             expect(impeccable.locator("p-tag")).to_have_text(["Waiting for you"])
+            expect(impeccable).to_have_accessible_name("Impeccable Waiting for you")
+            text = "a => [...a.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent).join('')"
+            assert impeccable.evaluate(text) == "Impeccable"  # no space after it for the current item's underline
             page.keyboard.press("Escape")
             page.locator("#pack").get_by_role("button", name="Activate").click()
             pds.answer(page, "Activate")

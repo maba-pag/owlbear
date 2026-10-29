@@ -37,7 +37,7 @@ function words(name) {
 function link([path, label]) {
   const current = path === location.pathname, said = path.startsWith("/updates/") ? words(path.slice(9)) : [];
   return html`<p-drilldown-link ?active=${current}><a href=${here({}, path)}
-    aria-current=${current ? "page" : nothing}>${label}${said.map((w) => html` <p-tag compact="true"
+    aria-current=${current ? "page" : nothing}>${label}${said.map((w) => html`<p-tag class="said" compact="true"
       variant=${TONES[w]}>${w}</p-tag>`)}</a></p-drilldown-link>`;
 }
 

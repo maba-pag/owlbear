@@ -54,6 +54,7 @@ textarea, input, select, button { font: inherit; }
 #menu .dot { position: absolute; inset-block-start: .35rem; inset-inline-start: 1.6rem; inline-size: .6rem;
   block-size: .6rem; border-radius: 50%; background: var(--p-color-info);
   box-shadow: 0 0 0 2px var(--p-color-canvas); pointer-events: none; }
+#menu p-tag.said { margin-inline-start: var(--p-spacing-static-sm); } /* a margin, not a space: not underlined */
 #top a { color: var(--p-color-primary); text-decoration: none; text-underline-offset: .35em; }
 #top a:hover { text-decoration: underline; text-decoration-thickness: 1px; }
 #top .brand { font-size: var(--p-typescale-md); font-weight: var(--p-font-weight-bold); }
