@@ -66,12 +66,19 @@ class Budget:
         raise TimeoutError(msg)
 
 
+def idled(st: _Step) -> None:
+    """A turn ended without a result: a wrong choice, counted as it ends so no later stop can lose it (C-28)."""
+    if not st.done:
+        st.run.count("no_result")
+    st.idle = True
+    st._wake()  # noqa: SLF001 - the step's own wake-up, called from its event handler
+
+
 def _ended(st: _Step) -> bool:
-    """Take an observed turn that ended without a result; each one is a wrong choice, even at the deadline (C-28)."""
+    """Take the waiting notice of a turn that ended without a result; it was counted when it ended."""
     if not st.idle or st.done:
         return False
     st.idle = False
-    st.run.count("no_result")
     return True
 
 
@@ -83,7 +90,6 @@ async def wait(st: _Step, session: CopilotSession, seconds: float, clock: Callab
     st.gate.expired = budget.expired
     while not st.done:
         if budget.expired():
-            _ended(st)
             st.finish("deadline", detail="step deadline")
             break
         with contextlib.suppress(TimeoutError):
