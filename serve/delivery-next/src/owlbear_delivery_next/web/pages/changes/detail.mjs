@@ -59,6 +59,7 @@ export function detailView(d) {
   }
   return html`${detailHead(d)}
     ${row(html`<p-tag variant=${variant} compact="true">${label}</p-tag>`, text(d.line))}
+    ${d.now && label !== "Done" ? text(d.now, { size: "sm", color: "contrast-medium" }) : nothing}
     ${refusedTop}
     ${d.settings_fault ? notice("error", "Settings could not be read", d.settings_fault,
       "Delivery assumes nothing from them; Pause and the other controls still work.") : nothing}

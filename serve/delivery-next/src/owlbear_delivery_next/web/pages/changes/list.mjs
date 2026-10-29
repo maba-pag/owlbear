@@ -20,8 +20,14 @@ function split(line) {  // the stage, then what is happening in it
   return at < 0 ? ["", line] : [line.slice(0, at), line.slice(at + 3)];
 }
 
-// A card names a file by its name; the detail keeps the whole path, where it can be acted on.
-const short = (said) => said.replace(/(?<![^\s(])(?:~|\/)[^\s,]*\/([^\s,/]+)/g, "$1");
+// A card names a file by its name; the detail keeps the whole path. A tool's one target may hold spaces; elsewhere a
+// path ends at one, and a relative one counts only with an extension, so counters, "CI/CD" and URLs stay as they are.
+const LAST = String.raw`([^\s,/\u00b7]+)`;
+const short = (said) => said
+  .replace(new RegExp(String.raw`(?<=(?:^|\u00b7 )(?!ran )[\w-]+ )~?\/(?:[^\s,/\u00b7][^,/\u00b7]*?\/)+${LAST}`, "g"),
+    "$1")
+  .replace(new RegExp(String.raw`(?<![^\s(])~?\/(?:[^\s,/\u00b7]+\/)+${LAST}`, "g"), "$1")
+  .replace(/(?<![^\s(])(?![\d./]+(?=[\s,)\u00b7]|$))(?:[\w.-]+\/)+([\w-]*\.[\w.-]+)(?=[\s,)\u00b7]|$)/g, "$1");
 
 function card([c, label, variant]) {
   const current = c.key === state.selected, [stage, rest] = split(short(c.line)), step = c.progress?.line;
