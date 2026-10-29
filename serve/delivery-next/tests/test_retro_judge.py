@@ -343,7 +343,9 @@ def test_a_survivor_without_a_title_and_body_is_an_attempt_and_its_retry_keeps_t
     retro_judge.review(_work(ask, run="run-2"))
 
     got = props.folded()[due["id"]]
-    assert (got["state"], got["publishable"]) == ("waiting", {"title": "t" * 120, "body": "b" * 1500})
+    refs = f"\n\nRefs: {', '.join([due['id'], *due['findings']])}"
+    assert (got["state"], got["publishable"]["title"]) == ("waiting", "t" * 120)
+    assert got["publishable"]["body"] == "b" * (retro_judge.BODY - len(refs)) + refs
 
 
 def test_a_survivors_credential_that_its_bound_would_cut_in_two_is_found_before_the_cut():

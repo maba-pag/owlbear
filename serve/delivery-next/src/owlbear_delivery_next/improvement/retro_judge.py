@@ -308,6 +308,14 @@ def _shown_finding(f: Mapping[str, Any]) -> dict[str, Any]:
     return shown | {k: f[k] for k in ("moment", "later") if f.get(k)}
 
 
+def _bounded(snap: Mapping[str, Any], body: str) -> str:
+    """A survivor's body within ``BODY``, naming its proposal and first finding ids where the judge left them out."""
+    ids = [snap["id"], *snap["findings"][:SAMPLES]]
+    kept = body[: BODY - len(f"\n\nRefs: {', '.join(ids)}")]
+    missing = [i for i in ids if i not in kept]
+    return f"{kept}\n\nRefs: {', '.join(missing)}" if missing else body[:BODY]
+
+
 def review(w: Work) -> int:
     """Phase 3: review each proposal of this run's provenance whose evidence has changed; how many were reviewed."""
     findings = {f["id"]: f for f in store.all_findings()}
@@ -323,7 +331,7 @@ def review(w: Work) -> int:
         if leaked := case_review.leaks(shown):
             said |= {"verdict": "reject", "why": f"leak: {', '.join(leaked)}", "publishable": {}}
         elif said["verdict"] == "survive":
-            said["publishable"] = {"title": shown["title"][:TITLE], "body": shown["body"][:BODY]}
+            said["publishable"] = {"title": shown["title"][:TITLE], "body": _bounded(snap, shown["body"])}
         props.reviewed(snap["id"], snap["evidence"], said)
         n += 1
     return n
