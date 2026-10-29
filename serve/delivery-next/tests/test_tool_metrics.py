@@ -108,6 +108,8 @@ def test_a_changes_tool_use_is_what_metrics_shows_filtered_to_it_stopped_runs_an
     ]  # fmt: skip
     changes = tool_metrics.by_change(spend_shares.runs(lines))
     assert (changes[("c", "ch")].tools["bash"].calls, changes[("other", "ch")].tools["bash"].calls) == (7, 5)
+    bash = {row["tool"]: row["calls"] for row in used(lines, change="p/ch")["tools"]}["bash"]
+    assert bash == 7 - 4 + 5  # Metrics splits off the rename and joins the other clone
 
 
 def test_a_changes_tool_use_follows_a_run_that_ended_after_it_was_read(monkeypatch) -> None:

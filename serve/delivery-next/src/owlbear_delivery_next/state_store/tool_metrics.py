@@ -56,7 +56,11 @@ def by_change(found: list[dict[str, Any]]) -> dict[tuple[str, str], ToolUse]:
 
 
 def of_change(clone: str, slug: str) -> ToolUse:
-    """The tool use the ledger holds for one Change, stopped runs included: Metrics filtered to it, renames joined."""
+    """The tool use the ledger holds for one Change, stopped runs included.
+
+    Metrics filtered to the Change shows the same, except that it splits a renamed project's runs and joins another
+    clone's Change of the same slug.
+    """
     found = runs()
     with _lock:
         if _cache["runs"] is found and _cache["changes"] is not None:
