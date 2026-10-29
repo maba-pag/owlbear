@@ -71,12 +71,14 @@ def owlbear() -> dict[str, Any]:
     Raises:
         Failed: The versions could not be read, or their channel is unset.
     """
+    channel = machine_settings.current().channel
     found, running = impeccable.checked(), versions.running()
     tag = str(found.get("version", ""))
     if found.get("state") == "unknown" and not tag:
         raise Failed(str(found.get("detail", "")))
     newer = bool(tag) and (versions.number(tag) or (0, 0)) > (versions.number(running) or (-1, -1))
-    return {"newer": newer, "current": running, "latest": tag if newer else running, "detail": found.get("detail", "")}
+    latest = tag if newer else running
+    return {"newer": newer, "current": running, "latest": latest, "detail": found.get("detail", ""), "channel": channel}
 
 
 def pds(fetch: Callable[[str, float], bytes] | None = None) -> dict[str, Any]:
@@ -214,13 +216,14 @@ class Checks:
         if failure is not None:
             self.machine.say(f"update check of {TITLES[name]} failed: {failure}")
 
-    def _hours(self) -> dict[str, int | None]:
+    def _settings(self) -> tuple[dict[str, int | None], str | None]:
+        """Each check's interval and the machine's update channel, as resolved now."""
         try:
             resolved = machine_settings.current()
         except Exception as exc:  # noqa: BLE001 - unreadable settings: no timed check; the start's and by hand run
             self.machine.say(f"update checks: the machine settings could not be read: {exc}")
-            return dict.fromkeys(CHECKS)
-        return {n: getattr(resolved, f"update_check_hours_{n}") for n in CHECKS}
+            return dict.fromkeys(CHECKS), None
+        return {n: getattr(resolved, f"update_check_hours_{n}") for n in CHECKS}, resolved.channel
 
     def _next(self, name: str, hours: int | None) -> datetime | None:
         """When the timed check of *name* is due; None while its interval is unset."""
@@ -235,7 +238,7 @@ class Checks:
 
     def tick(self) -> None:
         """Start each check whose interval has passed; one whose interval is unset waits."""
-        hours, now = self._hours(), self.now()
+        hours, now = self._settings()[0], self.now()
         for name in CHECKS:
             due = self._next(name, hours[name])
             if due is not None and due <= now:
@@ -253,23 +256,25 @@ class Checks:
 
     def read(self) -> dict[str, Any]:
         """Each update's state and when it is next checked; ``available`` counts each runnable newer one once."""
-        hours, installed = self._hours(), {n: _installed(n) for n in CHECKS}
+        (hours, channel), installed = self._settings(), {n: _installed(n) for n in CHECKS}
         with self.lock:
-            shown = [self._shown(n, hours[n], installed[n]) for n in CHECKS]
+            shown = [self._shown(n, hours[n], installed[n], channel) for n in CHECKS]
         available = sum(1 for u in shown if u["available"])
         return {"updates": shown, "available": available}
 
-    def _shown(self, name: str, hours: int | None, installed: str) -> dict[str, Any]:
+    def _shown(self, name: str, hours: int | None, installed: str, channel: str | None) -> dict[str, Any]:
         kept = self.kept.get(name, {})
         success, failures = kept.get("success"), int(kept.get("failures", 0))
         found = success if isinstance(success, dict) else {}
+        # OwlBear's version to take depends on the channel: one found on another channel is unknown until checked again
+        moved = name == "owlbear" and bool(found) and found.get("channel") != channel
         current, latest = installed or found.get("current", ""), found.get("latest", "")
-        offered = bool(found.get("newer")) and _ahead(name, latest, current)  # applied since: no longer offered
+        offered = not moved and bool(found.get("newer")) and _ahead(name, latest, current)  # applied: not offered
         if failures >= SHOWN:
             state = "unknown" if kept.get("offline") else "failed"
         elif offered:
             state = "newer"
-        elif found and not (failures and kept.get("offline")):
+        elif found and not moved and not (failures and kept.get("offline")):
             state = "current"
         else:
             state = "unknown"  # never checked, or not reached since: offline is never current
@@ -277,7 +282,8 @@ class Checks:
         return {
             "name": name, "title": TITLES[name], "actionable": ACTIONABLE[name], "state": state,
             "available": offered and ACTIONABLE[name],  # until applied or found withdrawn, whatever a failure says
-            "current": current, "latest": latest if offered else current, "detail": found.get("detail", ""),
+            "current": current, "latest": latest if offered else current,
+            "detail": "the update channel changed since the last check" if moved else found.get("detail", ""),
             "checked_at": found.get("at"), "attempted_at": kept.get("attempt_at"), "failures": failures,
             "reason": kept.get("reason", "") if failures >= SHOWN else "", "checking": name in self.checking,
             "hours": hours, "next_at": _iso(due) if due else None,

@@ -177,7 +177,7 @@ def test_available_counts_each_runnable_component_once_and_pds_not_yet(monkeypat
     seen(checks, "pds", 1)
     assert (shown(checks, "pds")["state"], checks.read()["available"]) == ("newer", 0)  # no PDS update action yet
     outcomes(monkeypatch, "impeccable", NEWER | {"detail": "5 newer releases"})
-    outcomes(monkeypatch, "owlbear", {"newer": True, "current": "v1", "latest": "v3", "detail": ""})
+    outcomes(monkeypatch, "owlbear", {"newer": True, "current": "v1", "latest": "v3", "detail": "", "channel": "minor"})
     for name in ("impeccable", "owlbear"):
         checks.start(name)
     assert checks.read()["available"] == 2  # one per component that can be run, whatever its number of releases
@@ -224,6 +224,35 @@ def test_each_update_is_checked_at_the_start_and_then_only_at_its_own_set_interv
     clock.passes(1)  # after a failure: again within the hour, not the interval
     checks.tick()
     assert ran == ["owlbear", "pds failed", "pds failed"]
+
+
+def channel(name: str) -> None:
+    with registry.locked():
+        saved = registry.load()
+        saved.settings = saved.settings.model_copy(update={"channel": name})
+        registry.save(saved)
+
+
+def test_an_owlbear_version_found_on_another_channel_is_unknown_until_checked_again(monkeypatch):
+    """A channel change can withdraw the version found; with its interval unset it would otherwise stay offered."""
+    channel("minor")
+    monkeypatch.setattr(
+        update_checks.impeccable, "checked", lambda: {"state": "newer", "version": "v1.1", "detail": ""}
+    )
+    monkeypatch.setattr(update_checks.versions, "running", lambda: "v1")
+    assert update_checks.owlbear()["channel"] == "minor"  # kept with what it found
+    minor = {"newer": True, "current": "v1", "latest": "v1.1", "detail": "", "channel": "minor"}
+    outcomes(monkeypatch, "owlbear", minor, minor | {"newer": False, "latest": "v1", "channel": "major"})
+    checks = Checks(stub(), Clock(), lambda work: work())
+    checks.start("owlbear")
+    assert (shown(checks, "owlbear")["state"], checks.read()["available"]) == ("newer", 1)
+    channel("major")
+    said = shown(checks, "owlbear")
+    assert (said["state"], said["latest"], said["detail"], checks.read()["available"]) == (
+        "unknown", "v1", "the update channel changed since the last check", 0,
+    )  # fmt: skip
+    checks.start("owlbear")
+    assert (shown(checks, "owlbear")["state"], checks.read()["available"]) == ("current", 0)
 
 
 def test_with_its_versions_unset_the_owlbear_check_fails_with_why(monkeypatch):
