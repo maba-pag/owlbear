@@ -308,12 +308,15 @@ def _update_routes(routes: APIRouter, machine: Machine) -> None:
 
     @routes.get("/update")
     def update_state() -> dict[str, Any]:
-        return machine.updater.read()
+        """The update's state, its ten steps and log, and whether Start update now may start one, or why not."""
+        return machine.updater.report()
 
     @routes.post("/update")
     def update_now() -> dict[str, Any]:
         """Run updates now (TD-352, TD-353): no waiting for idle time; it still waits for running steps."""
         return machine.updater.run_now()
+
+    _start_route(routes, machine)
 
     @routes.post("/seen")
     def seen() -> dict[str, bool]:
@@ -336,6 +339,17 @@ def _update_routes(routes: APIRouter, machine: Machine) -> None:
                 raise HTTPException(409, str(exc)) from exc
             shutil.rmtree(path)
         return machine_values(machine)
+
+
+def _start_route(routes: APIRouter, machine: Machine) -> None:
+    """Start update now on Updates ▸ OwlBear (D-01M63CC7CYSMN156SJEBVFAXTQ)."""
+
+    @routes.post("/update/start")
+    def start_update() -> dict[str, Any]:
+        """Refused with its reason while work runs, never waiting; work starting after this still makes it wait."""
+        if why := machine.updater.unstartable():
+            raise HTTPException(409, why)
+        return machine.updater.run_now()
 
 
 def _pack_routes(routes: APIRouter, machine: Machine) -> None:
