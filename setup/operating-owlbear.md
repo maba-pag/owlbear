@@ -28,7 +28,7 @@ OwlBear keeps everything it runs and records under `~/.owlbear/` on your Mac:
 | `versions/<tag>/`, `repo.git` | Installed versions, each with its own environment, and the clone they are fetched from |
 | `projects/<id>/` | Each registered project's Delivery state |
 | `worktrees/` | The worktrees OwlBear's agents work in |
-| `design-pack/` | The pinned design pack Delivery's design checks use |
+| `design-pack/` | Impeccable, the pinned design skills and detector Delivery's design checks use; the folder keeps its name from before the rename |
 | `machine.json` | The registered projects and the machine's settings |
 | `data/` | The [shared settings repository](#the-shared-settings-repository)'s checkout, unless you set one elsewhere; updates and uninstalling never delete it |
 | `data.json`, `data.lock` | Which shared settings repository OwlBear uses and where it is cloned from, and the lock held while that changes |
@@ -71,6 +71,7 @@ project's Changes while that project's VS Code window is closed.
 | `owlbear doctor` | Checks Git, the GitHub CLI and its sign-in, uv, the Copilot CLI, whether the login item's saved PATH and `COPILOT_CLI_PATH` find them, whether the shared settings repository can be used, and each project's readiness, with the fix |
 | `owlbear update` | Runs updates now |
 | `owlbear versions [--prepare]` | The version it runs and the one it would take next; `--prepare` installs and checks that one without switching |
+| `owlbear impeccable [--install]` | Shows the Impeccable this version pins; `--install` downloads and verifies what is missing. `owlbear design-pack` is its old name, kept so versions from before the rename can install it |
 | `owlbear autostart on` or `off` | Starts OwlBear at login, or not; `on` saves this shell's PATH and `COPILOT_CLI_PATH` as they are now, so run it again after adding or removing a tool or Node version |
 | `owlbear setup --repo PATH` | Checks a project's readiness, confirms its profile and registers its chat server |
 | `owlbear data` | Shows the shared settings repository and what only this Mac's checkout of it holds |
@@ -148,7 +149,7 @@ host (one per synthetic unit), even while paused or switched off; `owlbear impro
 and `--plan UNIT` shows how many judging calls a run would make, without spending credits.
 
 The **Metrics** page shows every credit OwlBear spent on this Mac: every agent session it ran
-(Delivery's workers, judges, picker and lookups, the curator, design pack runs, Spotter looks, Retro),
+(Delivery's workers, judges, picker and lookups, the curator, Impeccable runs, Spotter looks, Retro),
 summed, split by project, agent (subagents included), model, day, Change or step, and filtered by
 period, project, agent, model, Change, or runs stopped at their credit limit. Each session writes
 its start and end to `~/.owlbear/spend/`, kept for good, even when it is cancelled or fails;
@@ -208,7 +209,7 @@ steps** offers each skill in `skills/` beside the step's own; none is preloaded,
 Delivery skill or as the shaping skill is left out. Off, a step reads only its worktree's
 instruction files and Delivery's skills. A plugin's instructions, any other instruction source
 outside the worktree and your agents stay off either way. Neither has a default: while one is
-unset, a Change's step asks you to set it before its session starts, and a design pack update or
+unset, a Change's step asks you to set it before its session starts, and an Impeccable update or
 automatic memory curation ends without starting one; the shaping chat and the Spotter do not need
 them. Right after the first install of the version that adds them, choose the Global layer, set
 both (off keeps steps as they were), and save.
