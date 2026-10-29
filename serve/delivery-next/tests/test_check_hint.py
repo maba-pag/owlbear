@@ -38,6 +38,7 @@ def errors(check: str, packages=APP) -> tuple[list[str], list[str]]:
         ("cd packages/app && npm run test", PROFILE),
         ("cd packages/app && npm test && rm -rf x", PROFILE),
         ("cd packages/app; npm test", PROFILE),
+        ("cd packages/frontend-components-library; npm test", PROFILE),  # answered at once, however long
     ],
 )
 def test_a_check_with_its_package_directory_is_refused_with_what_to_write(check, said):

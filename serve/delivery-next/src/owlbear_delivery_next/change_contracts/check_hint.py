@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-WORD = r"""(?:\\.|[^\s'"\\&;|]+|'[^']*'|"(?:[^"\\]|\\.)*")+"""  # one shell word, quoted as shlex.quote writes it
+WORD = r"""(?:\\.|[^\s'"\\&;|]|'[^']*'|"(?:[^"\\]|\\.)*")+"""  # one shell word, quoted as shlex.quote writes it
 CD_CHECK = re.compile(rf"cd\s+({WORD})\s*&&\s*(\S.*)", re.DOTALL)
 
 

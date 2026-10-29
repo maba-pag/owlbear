@@ -114,6 +114,7 @@ def test_a_committed_result_must_name_every_passing_check_and_never_its_paths() 
 
 
 PLACED, QUOTED = "cd packages/b && npm test", f"cd {shlex.quote("my app's")} && npm test"
+LONG = "packages/frontend-components-library"
 
 
 @pytest.mark.parametrize(
@@ -133,6 +134,7 @@ PLACED, QUOTED = "cd packages/b && npm test", f"cd {shlex.quote("my app's")} && 
         ([QUOTED], ["npm test"], []),
         (['cd "my app\'s" && npm test'], [QUOTED], []),
         (["cd ./packages/b/ && npm test"], [PLACED], []),
+        ([f"cd {LONG}; npm test"], ["npm test"], ["npm test"]),  # answered at once, however long the directory
     ],
 )
 def test_a_required_check_counts_only_as_that_command_or_that_command_run_in_a_directory(reported, required, missing):
