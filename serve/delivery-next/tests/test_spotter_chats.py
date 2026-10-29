@@ -610,11 +610,15 @@ def test_a_follower_keeps_its_lock_while_its_looks_still_drain(world):
         await asyncio.sleep(3600)
         return ""
 
-    world.chat("c", [])
+    log = world.chat("c", [])
     f = chats.Follower(lambda: False, lambda _t: None, read=world.read, judge=stuck, poll=0.02, sessions=world.state)
     f.start()
-    time.sleep(0.2)
-    world.chat("c", [asked("go"), ev("assistant.turn_start"), reply("plan", tools=1)])
+    deadline = time.monotonic() + 5
+    while "c" not in f.chats and time.monotonic() < deadline:
+        time.sleep(0.02)
+    assert "c" in f.chats  # found at its empty end, so the turn written next is live
+    with log.open("a") as out:  # the log alone: its metadata is never rewritten while the follower reads
+        out.writelines(json.dumps(d) + "\n" for d in [asked("go"), ev("assistant.turn_start"), reply("plan", tools=1)])
     assert gate.wait(5)
     f.close()
     lock = spotter.root() / chats.LOCK
