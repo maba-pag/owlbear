@@ -62,11 +62,23 @@ def test_the_sdk_agent_is_offered_its_own_tools_and_the_result_tools() -> None:
     assert options(kind=StepKind.REVIEW)["custom_agents"][0]["tools"] == reviewer
 
 
-def test_the_projects_memory_folder_and_global_memory_are_given_to_the_memory_server(tmp_path) -> None:
+def test_the_projects_memory_folder_and_global_memory_are_given_to_the_memory_server(tmp_path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)  # the agent list comes from the package, not the folder the host runs in
     mine = tmp_path / "shop-site" / "memory"
     server = options(memory=mine)["mcp_servers"][preload.MEMORY]
+    agents = set(server["env"].pop(preload.MEMORY_AGENTS).split(","))
     assert server["args"] == ["-m", preload.MEMORY_MODULE]
     assert server["env"] == {preload.MEMORY_DIR: str(mine), preload.MEMORY_GLOBAL: str(tmp_path / "memory")}
+    assert {
+        "builder",
+        "curator",
+        "challenger",
+        "shaper",
+        "spotter",
+        "knowledge-ingestor",
+        "knowledge-enricher",
+    } <= agents
+    assert not any(name.startswith("owlbear-") for name in agents)
 
 
 def test_without_a_memory_folder_or_the_memory_server_the_agents_go_on_without_memory(tmp_path, monkeypatch) -> None:

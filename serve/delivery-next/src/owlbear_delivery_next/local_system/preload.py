@@ -42,6 +42,7 @@ MEMORY = "owlbear-memory"  # the memory server's name; agent files name its tool
 MEMORY_MODULE = "owlbear_memory_mcp"  # run as the workspace's .vscode/mcp.json runs it
 MEMORY_DIR = "OWLBEAR_MEMORY_DIR"  # the memory server's store folder
 MEMORY_GLOBAL = "OWLBEAR_MEMORY_GLOBAL_DIR"  # the shared repository's Global memory, read beside it (TD-241)
+MEMORY_AGENTS = "OWLBEAR_MEMORY_AGENTS"  # the agents a curated memory may be scoped to without a reviewed witness
 COPILOT_HOME = "COPILOT_HOME"  # the Copilot runtime's user folder, when not ~/.copilot
 
 
@@ -80,8 +81,20 @@ def memory(store: Path | None) -> dict[str, Any] | None:
     if store is None or find_spec(MEMORY_MODULE) is None:
         return None
     command = {"command": sys.executable, "args": ["-m", MEMORY_MODULE]}
-    env = {MEMORY_DIR: str(store), MEMORY_GLOBAL: str(global_memory(store))}
+    env = {MEMORY_DIR: str(store), MEMORY_GLOBAL: str(global_memory(store)), MEMORY_AGENTS: memory_agents()}
     return command | {"env": env, "tools": ["*"]}
+
+
+def memory_agents() -> str:
+    """Delivery's roles and OwlBear's agent files, comma-separated: the agents the memory server knows.
+
+    The repository's ``share/agents`` is found from the package, never from the working folder; an install without
+    it passes the package's own.
+    """
+    package = Path(str(files("owlbear_delivery_next")))  # <repo>/serve/delivery-next/src/owlbear_delivery_next
+    own = {path.name.removesuffix(".agent.md").removeprefix("owlbear-") for path in package.glob("agents/*.agent.md")}
+    shared = {path.name.removesuffix(".agent.md") for path in package.parents[3].glob("share/agents/*.agent.md")}
+    return ",".join(sorted({*REQUIRED, *own, *shared}))
 
 
 def global_memory(store: Path) -> Path:
