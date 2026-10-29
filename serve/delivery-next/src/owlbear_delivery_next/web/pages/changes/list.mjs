@@ -20,8 +20,11 @@ function split(line) {  // the stage, then what is happening in it
   return at < 0 ? ["", line] : [line.slice(0, at), line.slice(at + 3)];
 }
 
+// A card names a file by its name; the detail keeps the whole path, where it can be acted on.
+const short = (said) => said.replace(/(?<![^\s(])(?:~|\/)[^\s,]*\/([^\s,/]+)/g, "$1");
+
 function card([c, label, variant]) {
-  const current = c.key === state.selected, [stage, rest] = split(c.line), step = c.progress?.line;
+  const current = c.key === state.selected, [stage, rest] = split(short(c.line)), step = c.progress?.line;
   const open = (event) => {
     if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     event.preventDefault();
@@ -42,7 +45,8 @@ function card([c, label, variant]) {
       <p-tag variant=${variant} compact="true">${label}</p-tag></div>
     ${several() ? html`<p class="meta project">${c.projectName}</p>` : nothing}
     ${step ? html`<p class="says stage">${step}</p>` : nothing}
-    <p class="says">${stage && !step ? html`<span class="stage">${stage}</span> \u00b7 ` : nothing}${rest}</p>
+    <p class="says">${stage && !step && stage !== label ? html`<span class="stage">${stage}</span> \u00b7 `
+      : nothing}${rest}</p>
     ${c.action && groupOf(label) !== "working" ? html`<p class="next">Next: ${c.action}</p>` : nothing}
     ${bits.length ? html`<p class="meta">${bits.join(" \u00b7 ")}</p>` : nothing}
     ${(c.overlaps || []).map((o) => html`<p class="meta">${o}</p>`)}
@@ -69,7 +73,7 @@ function listView() {
   if (!changes) return nothing;
   const head = !changes.length
     ? html`<p class="empty meta">No Changes yet. New Change opens a chat in VS Code where you shape the first one.</p>`
-    : !groups.you.length ? html`<p class="meta">Nothing needs you right now.</p>` : nothing;
+    : !groups.you.length ? html`<p class="says" id="nothing-yours">Nothing needs you right now.</p>` : nothing;
   const toggled = (e) => { state.doneOpen = e.target.open; };
   return html`${head}${Object.entries(GROUPS).map(([key, title]) => {
     if (!groups[key].length) return nothing;
