@@ -62,6 +62,7 @@ GLOBAL = "memory"  # Global memory: the shared repository's own memory folder (T
 FOLDER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$")  # a project folder's name in the shared repository
 CONFIG = "config.json"  # the global settings, which hold the curator's threshold (TD-400)
 UNSET_THRESHOLD = "the curator's confidence threshold is unset; the owner sets it on the Settings page"
+_WITNESSES = frozenset({MemoryState.CURATED, MemoryState.APPROVED})  # entries whose scope vouches for a named agent
 AssessmentTaskId = Annotated[StrictStr, Field(pattern=r"^[\x21-\x7e]{1,128}$")]
 
 
@@ -146,7 +147,7 @@ def _in_folder(ctx: Context, folder: str | None) -> Context:
     base = ctx.request_context.lifespan_context
     swapped = SimpleNamespace(
         engine=MemoryEngine(path), memory_dir=path, global_dir=base.global_dir,
-        global_engine=getattr(base, "global_engine", None),
+        global_engine=getattr(base, "global_engine", None), agents=getattr(base, "agents", frozenset()),
     )  # fmt: skip
     return cast("Context", SimpleNamespace(request_context=SimpleNamespace(lifespan_context=swapped)))
 
@@ -169,6 +170,27 @@ def _validate_scope(agents: list[str]) -> None:
         validate_scope_agents(agents)
     except ValueError as exc:
         raise ToolError(str(exc)) from exc
+
+
+def _uncorroborated(ctx: Context, current: MemoryEntry, scope: list[str]) -> list[str]:
+    """Named members a pending entry's scope keeps, or a reviewed entry's scope adds, that nothing vouches for.
+
+    A member is vouched for by the server's known agents or by another curated or approved entry, here or in Global
+    memory, that has it in scope; provenance never vouches, and neither does a pending or exceptional entry.
+    """
+    named = {agent for agent in scope if agent != "*"}
+    if current.state != MemoryState.PENDING:
+        named -= set(current.scope_agents)
+    if not named:
+        return []
+    known = getattr(ctx.request_context.lifespan_context, "agents", frozenset())
+    vouched = {
+        agent
+        for entry in _readable(ctx)
+        if entry.state in _WITNESSES and entry.id != current.id
+        for agent in entry.scope_agents
+    }
+    return sorted(named - known - vouched)
 
 
 def _recognized_agent_names(entries: list[MemoryEntry]) -> list[str]:
@@ -554,6 +576,13 @@ async def _update_entry(  # noqa: C901, PLR0912, PLR0913
         raise ToolError(msg)
     if current.state != MemoryState.PENDING and scope_agents is not None and not scope_agents:
         msg = "scope_agents cannot be blanked on curated or approved entries"
+        raise ToolError(msg)
+    if missing := _uncorroborated(ctx, current, next_scope_agents):
+        names = ", ".join(repr(agent) for agent in missing)
+        msg = (
+            f"No agent this memory server knows and no other curated or approved entry here or in Global memory has "
+            f"{names} in scope; scope the entry to known agents or '*', or skip it. Nothing was changed."
+        )
         raise ToolError(msg)
 
     payload: dict[str, Any] = {}

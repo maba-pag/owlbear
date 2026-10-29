@@ -29,10 +29,13 @@ def root(tmp_path: Path) -> Path:
     return data
 
 
-def bound(root: Path, project: str = "shop", *, shared: bool = True) -> SimpleNamespace:
+def bound(
+    root: Path, project: str = "shop", *, shared: bool = True, agents: frozenset[str] = frozenset()
+) -> SimpleNamespace:
     store = root / project / "memory"
+    shared_dir = root / "memory" if shared else None
     context = SimpleNamespace(
-        engine=MemoryEngine(store), memory_dir=store, global_dir=root / "memory" if shared else None, global_engine=None
+        engine=MemoryEngine(store), memory_dir=store, global_dir=shared_dir, global_engine=None, agents=agents
     )
     return SimpleNamespace(request_context=SimpleNamespace(lifespan_context=context))
 
@@ -49,7 +52,7 @@ def saved(folder: Path, title: str, *, curated: bool = False):
 @pytest.mark.asyncio
 async def test_the_curator_works_on_another_project_folder_and_never_on_global_by_name(root: Path) -> None:
     pending = saved(root / "docs" / "memory", "Pin the runtime")
-    ctx = bound(root)
+    ctx = bound(root, agents=frozenset({"builder"}))  # known only: no entry in either folder vouches for builder
 
     listed = await tools.list_memories(ctx, folder="docs")
     curated = await tools.curate_memory(

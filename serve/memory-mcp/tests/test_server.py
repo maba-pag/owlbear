@@ -185,6 +185,7 @@ async def test_live_server_mutations_accept_fresh_revisions(
     to_hard_delete = _create_entry(memory_dir, title="Delete pending", state=MemoryState.PENDING)
     to_soft_delete = _create_entry(memory_dir, title="Delete curated", state=MemoryState.CURATED)
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("OWLBEAR_MEMORY_AGENTS", "planner, builder,reviewer")  # as Delivery passes them; no witness
 
     async with mcp.Client(memory_mcp) as client:
 

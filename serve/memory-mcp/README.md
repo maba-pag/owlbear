@@ -66,7 +66,7 @@ stale     ──[resolve*]──► approved    [delete: soft → deleted]
 | `list_memories` | List metadata sorted by curation priority, including each entry's `revision`; filters: `states`, `categories`, `scope_agents` |
 | `read_memory` | Read one full entry by `entry_id`, including its `revision`; errors on deleted entries |
 | `recall_memory` | Identity-bearing markdown blocks scoped to one agent (`## title`, `Entry ID`, `Revision` immediately after the ID, then optional contested state/challenge lines and body; contested entries add one `Challenge task:` line per record); three-pool slot allocation (explore, challenge, regular) with final sort by `(state_rank, -score, id)`; constants `SLOT_EXPLORE=2`, `SLOT_CHALLENGE=2`; default limit 20 |
-| `curate_memory` | Requires `revision`; mutates fields, promotes `pending→curated` when scope is provided, or downgrades `approved→curated`; raises `TransitionError` for contested/disputed/stale |
+| `curate_memory` | Requires `revision`; mutates fields, promotes `pending→curated` when scope is provided, or downgrades `approved→curated`; raises `TransitionError` for contested/disputed/stale; refuses a named scope agent nothing vouches for (see Agent Identity) |
 | `delete_memory` | Requires `revision`; hard-deletes pending entries and soft-deletes curated/approved/contested/disputed/stale entries |
 | `make_global` | Curator: moves a curated or approved entry into Global memory, records its project as `origin`, and commits both paths |
 | `curation_threshold` | Curator: the confidence threshold in percent from the shared repository's global settings, else 95 |
@@ -133,15 +133,16 @@ remove receipts for the previous revision.
 
 ## Agent Identity
 
-The server accepts every non-blank provenance label at intake. Local `.agent.md` definitions are
-readable corroboration for a named identity or scope, not an active-agent runtime validation gate.
+The server accepts every non-blank provenance label at intake, without active-agent runtime validation.
 Identity is self-reported and immutable historical provenance; scope controls relevance filtering
-only. `*` provenance is anonymous and requires no source corroboration, but it does not establish
-the scope of an entry.
+only. `*` provenance is anonymous, and it does not establish the scope of an entry.
 
-Curators classify content before provenance or scope. A candidate cannot corroborate its own named
-identity or scope: named provenance needs another reviewed non-pending entry or a readable local
-definition, and named scope needs that evidence or explicit user confirmation during manual review.
+`curate_memory` gives an entry a named scope agent only when the server knows that agent
+(`OWLBEAR_MEMORY_AGENTS`) or another curated or approved entry, in the folder or in Global memory, has it in scope;
+otherwise it raises `ToolError` naming the agents and changes nothing. A pending entry's whole named scope is
+checked, also when the call leaves the scope as it is; an edit of a curated or approved entry checks only the names
+it adds. Provenance never vouches, and neither does the entry itself or a pending, contested, disputed, stale or
+deleted entry; `*` always passes. An agent outside the known list therefore needs such a reviewed entry first.
 
 Rename memory references with `rename_agent_memories`. When deleting an agent,
 `delete_agent_memories` preserves immutable source provenance, removes the retired identity from
@@ -153,7 +154,8 @@ remain in active relevance scope.
 
 Delivery's steps name the store in `OWLBEAR_MEMORY_DIR` (the project's folder in the shared data repository) and
 Global memory in `OWLBEAR_MEMORY_GLOBAL_DIR`, read beside it and never written; the working folder then needs no
-initialized workspace.
+initialized workspace. They also pass `OWLBEAR_MEMORY_AGENTS`, Delivery's roles and OwlBear's agent files
+comma-separated; without it, as in a chat, the server knows no agents.
 
 Without them, as in a chat, the server finds the shared data repository as Delivery does: `OWLBEAR_DATA` when set
 (empty means none), else the machine's pointer `~/.owlbear/data.json`, else `~/.owlbear/data` when it exists. The folder whose `repository` file holds the

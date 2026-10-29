@@ -114,8 +114,9 @@ assessment counters but remove receipts for the previous revision.
 curator or the owner decides. At creation, `source_agent` must be non-blank;
 it is a self-reported immutable historical provenance marker, not active-agent runtime validation.
 Stored provenance remains historical when that agent is later retired. Curators classify content
-before provenance or scope. `*` is anonymous provenance and needs no source corroboration, but it
-does not establish a named scope. A candidate cannot corroborate its own named identity or scope.
+before provenance or scope. `*` is anonymous provenance and does not establish a named scope; a
+named scope comes only from `curate_memory`, which never takes the candidate's own text as proof
+(`h-mcp-memory` has the rule).
 Ordinary writers do not need `list_memories` or `read_memory` authority and must not attempt
 store-wide deduplication before saving. Avoid a duplicate only when the same insight is already
 visible in the current context. The memory curator performs cross-store comparison, conflict
@@ -134,9 +135,8 @@ An entry **fails** if any of the following are true:
 
 - Generic: "always write tests", "use type hints", "be careful with async"
 - No citation: no task ID, file, or tool mentioned
-- Uncorroborated named identity or scope: candidate text cannot self-prove either; use another
- reviewed non-pending entry, a readable local definition, or explicit user confirmation for manual
- named rescoping
+- Unvouched named scope: an agent the memory server does not know and no other curated or approved
+  entry is scoped to; `curate_memory` refuses it
 - Duplicate: substantially the same as an existing approved entry
 
 **Confidence calibration:**

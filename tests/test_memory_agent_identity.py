@@ -170,6 +170,7 @@ async def test_scope_syntax_accepts_mixed_values_and_rejects_blank_members(tmp_p
     engine = MemoryEngine(tmp_path / ".owlbear/memory")
     entry_id = _save(engine, source="writer", scope=[])
     ctx = _make_ctx(engine)
+    ctx.request_context.lifespan_context.agents = frozenset({"builder"})
     revision = (await read_memory(ctx, entry_id=entry_id))["revision"]
 
     updated = await curate_memory(

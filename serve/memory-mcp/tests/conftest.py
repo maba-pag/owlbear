@@ -11,3 +11,4 @@ def _no_shared_repository(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("OWLBEAR_DATA", "")  # empty means none, so the real pointer is never read
     monkeypatch.delenv("OWLBEAR_MEMORY_DIR", raising=False)
     monkeypatch.delenv("OWLBEAR_MEMORY_GLOBAL_DIR", raising=False)
+    monkeypatch.delenv("OWLBEAR_MEMORY_AGENTS", raising=False)
