@@ -1,4 +1,4 @@
-"""The Metrics page's data (D-01M5XCDF6G60VG5GHTWF5QSSDE): every project's spend, from the machine's spend ledger.
+"""The Metrics page's data (D-01M5XCDF6G60VG5GHTWF5QSSDE): every project's spend and tool use, from the spend ledger.
 
 A read also starts a reconciling pass over OwlBear's other records when one is due; it runs on its own thread, so
 the answer never waits for it, and says how far it got: "running" from the moment it is started, so the page reads
@@ -14,7 +14,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from fastapi import APIRouter, HTTPException, Query
 
 from owlbear_delivery_next.runtimes import spend_reconcile
-from owlbear_delivery_next.state_store import spend_metrics
+from owlbear_delivery_next.state_store import spend_metrics, tool_metrics
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -42,7 +42,7 @@ def _date(text: str, what: str) -> date | None:
 
 
 def router(projects: Projects) -> APIRouter:
-    """``GET /metrics``: totals, one split, the runs and the coverage for the filters given."""
+    """``GET /metrics``: totals, one split, the runs, the coverage and the tool use for the filters given."""
     routes = APIRouter()
 
     @routes.get("/metrics")
@@ -72,6 +72,13 @@ def router(projects: Projects) -> APIRouter:
         )  # fmt: skip
         found["coverage"]["reconcile"] = {k: said.get(k) for k in ("state", "started", "finished", "sources", "done",
                                                                    "imported", "errors")}  # fmt: skip
+        used = tool_metrics.query(
+            tool_metrics.runs(), tz=zone, start=since, end=until, project=project, agent=agent, model=model,
+            change=change, stopped=stopped,
+        )  # fmt: skip
+        for k in ("agents", "models"):  # a main agent whose spend shows only as an unsplit subagent's is still chosen
+            found["choices"][k] = sorted(set(found["choices"][k]) | set(used["choices"][k]))
+        found["tool_use"] = used
         return found
 
     return routes
