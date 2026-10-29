@@ -15,6 +15,8 @@ header {
   gap: var(--p-spacing-static-md);
 }
 section { display: grid; gap: var(--p-spacing-static-md); }
+/* A section heading sits closer to what it heads than to the block before it (B2). */
+:is(main, #page) > :is(section, details) + :is(section, details) { margin-block-start: var(--p-spacing-fluid-md); }
 .panel {
   display: grid; gap: var(--p-spacing-static-md); padding: var(--p-spacing-fluid-sm);
   background: var(--p-color-surface); border-radius: var(--p-radius-lg);
