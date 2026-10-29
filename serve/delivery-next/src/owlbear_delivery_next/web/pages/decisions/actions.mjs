@@ -180,10 +180,19 @@ async function keep(e) {
   if (why) act(e, "keep", { revisions, reason: why });
 }
 
+// One primary per decision, by its state: a conflict asks which one to keep, a draft whether to activate it, a
+// decision in force whether it is still right; Withdraw is never primary (D-01M63C7BJZZ7RQV9XS4XVR0DNE).
+function primary(e) {
+  if (e.state === "draft") return "activate";
+  if (e.state !== "in_force") return "";
+  return e.conflict || e.rivals.length ? "keep" : "read-back";
+}
+
 export function actions(e) {
-  const busy = (a) => state.pending === a, parts = [];
+  const busy = (a) => state.pending === a, parts = [], first = primary(e);
   const opens = (label, action) => button(label, () => begin(action), { variant: "secondary" });
-  const asks = (label, work, action) => button(label, () => work(e), { aria: DIALOG, busy: busy(action) });
+  const asks = (label, work, action) => button(label, () => work(e), { aria: DIALOG, busy: busy(action),
+    variant: action === first ? "primary" : "secondary" });
   if (e.state === "in_force") {
     parts.push(asks("Read back", stillRight, "read-back"), opens("Replace", "replace"),
       asks("Withdraw", withdraw, "withdraw"));

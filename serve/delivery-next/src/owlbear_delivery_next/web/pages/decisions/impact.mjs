@@ -109,8 +109,8 @@ function report(e, got) {
     </dl>
     <p-text size="sm" class="divergence">${untagged(r.divergence)}</p-text>
     <ul class="impacts">${r.projects.map((p) => place(p, e, r))}</ul>
-    ${r.fixes ? html`<div class="row">${button("Schedule fixes", () => schedule(e, got), { aria: DIALOG,
-      busy: state.pending === "schedule" })}</div>` : nothing}
+    ${r.fixes ? html`<div class="row">${button("Schedule fixes", () => schedule(e, got), {
+      variant: "secondary", aria: DIALOG, busy: state.pending === "schedule" })}</div>` : nothing}
     ${made ? listed("Backlog entries", made, (x) =>
       `#${x.id} ${untagged(x.title)} · ${x.project}${x.new ? "" : ` · updated, ${x.added} new item(s)`}`) : nothing}`;
 }

@@ -33,7 +33,7 @@ function item(q, address) {
     opened = state.opened === q.id && state.from === "queue" && sameAddress(state.address, address);
   const choices = [
     q.derived ? nothing : button("Still right", () => answer(q, address, "read-back", { confirmed: true }),
-      { busy: busy("read-back") }),
+      { variant: "secondary", busy: busy("read-back") }),
     button(opened ? "Close" : q.derived ? "Open to resolve" : "Replace or withdraw", () => open(q.id,
       { from: "queue", address }), { variant: "secondary", aria: `{ 'aria-expanded': ${opened} }` }),
     q.ignored ? nothing : button("Ignore for now", () => answer(q, address, "ignore-read-back"),
