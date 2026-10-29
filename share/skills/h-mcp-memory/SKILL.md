@@ -58,7 +58,7 @@ States: `pending -> curated -> approved`, plus the exceptional `contested`, `dis
 
 1. Producers call `save_memory`. Pending entries are unreviewed and invisible to recall.
 2. The curator lists pending entries (`list_memories(states=["pending"])`), reads each, and either curates it with a
-   non-empty `scope_agents` (`pending -> curated`) or deletes it.
+   non-empty `scope_agents` (`pending -> curated`) or deletes it. Its named agents must be vouched for, as below.
 3. The owner approves curated entries on the Memory page. Approved entries are the highest-trust recall candidates.
 4. Assessment can move an entry to `contested`, `disputed` or `stale`. The Memory page lists these first; the owner
    resolves them to `approved` or retires them there. No MCP tool resolves them: `curate_memory` rejects them, and
@@ -68,6 +68,13 @@ States: `pending -> curated -> approved`, plus the exceptional `contested`, `dis
 downgrades it to `curated` (re-approve after review), and other transitions are refused. Its `hint` says what
 happened, for example `Promoted from pending to curated with explicit scope.` or `Downgraded from approved to
 curated; re-approve after review.`
+
+`curate_memory` also refuses, with a `ToolError` naming them and nothing changed, scope agents nothing vouches for. A
+named agent is vouched for when the server knows it (`OWLBEAR_MEMORY_AGENTS`, see Configuration) or another curated
+or approved entry, in the folder or in Global memory, has it in scope. A pending entry's whole named scope is
+checked, also when the call leaves the scope as it is; an edit of a curated or approved entry checks only the names
+it adds. Provenance never vouches, and neither does the entry itself or a pending, contested, disputed, stale or
+deleted entry; `*` always passes. An agent outside the known list therefore needs such a reviewed entry first.
 
 ## Revision-bound mutations
 
@@ -251,8 +258,7 @@ does not implement F01-F10 or F13-F15.
 ### save_memory
 
 `confidence` must be within `[0.7, 1.0]` and `content` at most 1,024 characters. `source_agent` is a non-blank,
-immutable provenance label, accepted without active-agent runtime validation; a readable local `.agent.md` is
-corroboration the curator may use later, not an authorization boundary. `where` (`project` or `global`, TD-293) is
+immutable provenance label, accepted without active-agent runtime validation. `where` (`project` or `global`, TD-293) is
 stored as `recommended`; the entry stays an unscoped pending entry in this project until the curator or the owner
 decides. Scope members must be non-blank strings; an empty list is valid for a pending entry, and `*` is universal
 scope, not authorization.
@@ -313,8 +319,8 @@ approved`, refuses any other state with a `ToolError`, and sets `approved_at`.
 
 ### Agent lifecycle
 
-Agent files and memory references change together; no compatibility aliases are kept. Named scope is syntax-only at
-the tool boundary; curation requires independent corroboration before using it, while `*` is anonymous provenance.
+Agent files and memory references change together; no compatibility aliases are kept. `*` is anonymous provenance;
+`curate_memory` checks a named scope as Lifecycle says.
 
 - After renaming an agent definition, call `rename_agent_memories(old_name="old", new_name="new")`. The new name
   must already resolve from the active agent locations. Provenance and every matching scope are rewritten.
@@ -347,8 +353,9 @@ For post-task reflection: problems faced and workarounds are `domain-knowledge`,
 
 The store is the project's folder in the shared data repository (`<folder>/memory`), Global memory beside it at the
 repository's `memory`, read and never written; Delivery's steps name both with `OWLBEAR_MEMORY_DIR` and
-`OWLBEAR_MEMORY_GLOBAL_DIR`. A workspace no folder claims keeps `.owlbear/memory`. Active agent identities are
-discovered from workspace agent locations.
+`OWLBEAR_MEMORY_GLOBAL_DIR`. A workspace no folder claims keeps `.owlbear/memory`. Delivery also passes
+`OWLBEAR_MEMORY_AGENTS`, its roles and OwlBear's agent files comma-separated: the agents `curate_memory` may scope to
+without another reviewed entry. A chat's server gets none, so there only reviewed entries vouch.
 
 ## Errors
 

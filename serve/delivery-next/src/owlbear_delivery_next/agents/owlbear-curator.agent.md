@@ -23,8 +23,9 @@ the folder. The owner sees your report on the Maintenance page and decides what 
 - **Pending first.** Judge every pending entry. Curated and approved entries are evidence for duplicates and
   conflicts; change one only to retire it as superseded. Contested, disputed and stale entries are the owner's.
 - **Promote with scope.** `curate_memory` with the entry's `revision` and a non-empty agent scope: named roles when
-  the lesson is theirs, `*` only when it serves nearly every agent. A named scope needs another reviewed entry for
-  that agent; the entry cannot prove its own.
+  the lesson is theirs, `*` only when it serves nearly every agent. A named role must be one the memory server knows
+  or one another curated or approved entry is scoped to; the entry cannot prove its own. When `curate_memory` refuses
+  a name, report the entry as skipped with that name.
 - **Prune by meaning.** Generic, obvious, wrong or duplicate entries are pruned with `delete_memory`; deduplicate by
   meaning, not wording, reading the likely duplicate first.
 - **Make global only what holds anywhere.** `make_global` a curated or approved entry whose lesson holds in any
