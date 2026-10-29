@@ -406,8 +406,11 @@ def test_install_puts_a_missing_pack_in_place_with_no_newer_version(updating, mo
     assert pack_files.installed() is not None
     old = client.get("/api/next/design-pack?seen=1", headers=auth, follow_redirects=False)  # a page from before
     assert (old.status_code, old.headers["location"]) == (307, "http://127.0.0.1/api/next/impeccable?seen=1")
-    assert client.post("/api/next/design-pack/install", headers=auth).json()["install"]["state"] == "installing"
+    first = m.impeccable.thread
+    assert client.post("/api/next/design-pack/install", headers=auth).status_code == 200
+    assert m.impeccable.thread is not first  # the old route started an install of its own
     m.impeccable.thread.join(10)
+    assert not m.impeccable.thread.is_alive()
     assert client.get(old.headers["location"], headers=auth).json()["install"] is None
 
 
