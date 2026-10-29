@@ -3,7 +3,7 @@
 // other way to add one (0ET1A6), will sit beside it.
 
 import { html, nothing, render } from "/assets/lit-html/3.3.3/lit-html.js";
-import { Slow, call, defined, here, machineState, project, reread } from "/assets/ui.mjs";
+import { Slow, call, defined, here, machineState, project, reread, unread } from "/assets/ui.mjs";
 
 const state = { draft: "", busy: "", error: "", said: "" };
 const TAG = { loading: "info", failed: "error", replaced: "warning", stopped: "info" };  // loaded needs no tag
@@ -12,16 +12,19 @@ const TAG = { loading: "info", failed: "error", replaced: "warning", stopped: "i
 async function act(name, work) {
   Object.assign(state, { busy: name, error: "", said: "" });
   show();
+  let failure = null;
   try {
     state.said = await work();
   } catch (error) {
-    state.error = error instanceof Slow ? error.reread : error.message;  // the machine's state is read again below
+    failure = error;
   }
   state.busy = "";
   await reread();  // the top row and this page show what the machine now serves
+  if (failure) state.error = failure instanceof Slow && !unread() ? failure.reread : failure.message;
+  show();
 }
 
-function button(label, onclick, { variant = "secondary", busy = "" } = {}) {
+function button(label, onclick, { variant = "secondary", busy = null } = {}) {
   return html`<p-button type="button" compact="true" variant=${variant} .loading=${state.busy === busy}
     @click=${onclick}>${label}</p-button>`;
 }
@@ -83,7 +86,12 @@ function entry(p, all) {
 }
 
 function view() {
-  const machine = machineState();
+  const machine = machineState(), why = unread();
+  if (!machine && why) {  // the machine host did not answer, which says nothing about which host this is
+    return html`<p-inline-notification state="error" dismiss-button="false" heading="Projects could not be read"
+      heading-tag="h2">${why}</p-inline-notification>
+      <div class="row">${button("Reload", () => location.reload())}</div>`;
+  }
   if (!machine) {
     return html`<p-inline-notification state="info" dismiss-button="false" heading="Projects are the machine host's"
       heading-tag="h2" description="This page is served by one project's own host, which serves only that project.
@@ -93,6 +101,7 @@ function view() {
   return html`
     ${state.error ? html`<p-text role="alert">${state.error}</p-text>` : nothing}
     ${state.said ? html`<p-text role="status">${state.said}</p-text>` : nothing}
+    ${why ? html`<p-text role="alert">This list may be out of date: ${why}</p-text>` : nothing}
     ${projects.length ? html`<ul id="projects" aria-label="Projects">${projects.map((p) => entry(p, projects))}</ul>`
       : html`<p-text class="empty">No project yet: add the folder of a clone below.</p-text>`}
     <section id="add" class="panel" aria-labelledby="add-title">

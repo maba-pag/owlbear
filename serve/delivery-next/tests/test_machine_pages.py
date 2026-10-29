@@ -506,3 +506,48 @@ def test_projects_shows_each_clone_s_state_and_setup_adopts_removes_and_adds(  #
     finally:
         server.should_exit = True
         machine.stop_all()
+
+
+@pytest.mark.browser
+def test_projects_says_when_the_machine_does_not_answer_and_that_the_list_may_be_out_of_date(
+    tmp_path: Path, monkeypatch, pds
+) -> None:
+    """A failed read of the machine's projects is said as such, never as a project's own host; after an action whose
+    reread failed, the list shown says it may be out of date until a read succeeds again."""
+    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+
+    monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
+    monkeypatch.setattr(Host, "_launch", lambda _self, _slug: False)
+    a = registry.register(clone(tmp_path / "alpha"))
+    registry.register(clone(tmp_path / "beta"))
+    machine, server, base = serve()
+    listing = f"{base}/api/next/projects"
+    refused = lambda r: r.fulfill(status=503, json={"detail": "busy"}) if r.request.method == "GET" else r.fallback()  # noqa: E731
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except Error as exc:
+                pytest.skip(f"no Playwright Chromium: {exc}")
+            page = browser.new_page()
+            pds.only(page, base)
+            page.route(listing, refused)
+            page.goto(f"{base}/projects#token=t")
+            expect(page.locator("#page p-inline-notification")).to_contain_text("busy")
+            expect(page.locator("#page")).not_to_contain_text("one project's own host")
+            page.unroute(listing)
+            page.get_by_role("button", name="Reload").click()
+            expect(page.get_by_role("listitem")).to_have_count(2)
+            page.route(listing, refused)  # Remove reaches the machine; reading its projects again does not
+            page.get_by_role("listitem", name="beta").get_by_role("button", name="Remove project").click()
+            pds.answer(page, "Remove project")
+            expect(page.locator("#page > [role=status]")).to_contain_text("Removed beta")
+            expect(page.locator("#page > [role=alert]")).to_have_text("This list may be out of date: busy")
+            assert registry.load().projects == [a]
+            page.unroute(listing)  # the next poll reads it again
+            expect(page.locator("#page > [role=alert]")).to_have_count(0, timeout=8000)
+            expect(page.get_by_role("listitem")).to_have_count(1)
+            browser.close()
+    finally:
+        server.should_exit = True
+        machine.stop_all()

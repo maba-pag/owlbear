@@ -100,18 +100,22 @@ export function defined(tags) {
   return Promise.all(tags.map((t) => customElements.whenDefined(t)));
 }
 
+let failed = "";  // why the machine host's state could not be read the last time, if it could not
+
 // The machine host's projects and pause, or null on a clone's own host (which has no such route) or when down.
 async function machine() {
+  failed = "";
   try {
     return await call("/projects", { machine: true });
   } catch (error) {
-    if (error.status === 404 || error instanceof HostDown) return null;
+    if (error.status === 404) return null;
+    failed = error.message;
+    if (error instanceof HostDown) return null;
     throw error;
   }
 }
 
-const bar = { data: token ? await machine().catch(() => null) : null, busy: "", error: "", packed: "",
-  installing: false };
+const bar = { data: await machine().catch(() => null), busy: "", error: "", packed: "", installing: false };
 const listed = (id) => bar.data.projects.some((p) => p.id === id);
 if (bar.data && !listed(project) && (project || scope !== "all")) {
   const first = bar.data.projects.find((p) => p.state === "loaded") ?? bar.data.projects[0];
@@ -148,6 +152,11 @@ function changed() {
 // The machine host's state as last polled (its version, engine update and Impeccable); null when none serves the page.
 export function machineState() {
   return bar.data;
+}
+
+// Why the machine host's state could not be read the last time, or "": what machineState() shows may be older.
+export function unread() {
+  return failed;
 }
 
 // Every loaded project, whatever the page shows: where an action may go; null when no machine host serves it.
