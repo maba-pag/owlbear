@@ -22,14 +22,19 @@ export function spendLines(spend) {
 
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 const SPLIT = [["invalid", "invalid arguments"], ["checks", "failed checks"], ["order", "at the wrong moment"]];
-const WRONG = [["order", "call at the wrong moment", "calls at the wrong moment"],
-  ["denied", "denial by the guard", "denials by the guard"], ["no_result", "turn without a result",
-    "turns without a result"], ["missing_pointless", "pointless missing-tool report", "pointless missing-tool reports"]];
+const WRONG = [
+  ["order", "call at the wrong moment", "calls at the wrong moment"],
+  ["denied", "denial by the guard", "denials by the guard"],
+  ["no_result", "turn without a result", "turns without a result"],
+  ["missing_pointless", "pointless missing-tool report", "pointless missing-tool reports"],
+];
 
 // C-28 T8: a line per Delivery tool, most called first: the share accepted, the share refused (lint-only refusals
 // apart) split by cause, older records' refusals unsplit; then the run's wrong tool choices.
 export function toolLines(use) {
-  const used = Object.entries(use?.tools ?? {}).filter(([, t]) => t.calls).sort(([, a], [, b]) => b.calls - a.calls);
+  const used = Object.entries(use?.tools ?? {})
+    .filter(([, t]) => t.calls)
+    .sort(([, a], [, b]) => b.calls - a.calls);
   const wrong = { ...(use?.wrong ?? {}), order: used.reduce((n, [, t]) => n + (t.order || 0), 0) };
   const wrongs = WRONG.filter(([k]) => wrong[k]).map(([k, one, many]) => plural(wrong[k], one, many));
   if (!used.length && !wrongs.length) return nothing;
@@ -44,7 +49,9 @@ export function toolLines(use) {
       + `refused${why.length ? ` (${why.join(", ")})` : ""}${also.join("")}, ${plural(t.retries, "retry", "retries")}`;
     return text(said, { size: "xs", color: "contrast-medium" });
   });
-  if (wrongs.length) lines.push(text(`Wrong tool choices: ${wrongs.join(", ")}`, { size: "xs", color: "contrast-medium" }));
+  if (wrongs.length) {
+    lines.push(text(`Wrong tool choices: ${wrongs.join(", ")}`, { size: "xs", color: "contrast-medium" }));
+  }
   return toggle("tool-use", `Tool calls (${used.reduce((n, [, t]) => n + t.calls, 0)})`, lines);
 }
 
