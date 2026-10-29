@@ -28,9 +28,10 @@ def _form(command: str) -> tuple[str | None, str]:
     """
     said = command.strip()
     found = CD_CHECK.fullmatch(said)
-    if not found:
+    where = found and PurePosixPath(shlex.split(found[1])[0] or ".")
+    if not found or ".." in where.parts:  # a parent step can name a directory another way
         return None, said
-    return PurePosixPath(shlex.split(found[1])[0] or ".").as_posix(), found[2]
+    return where.as_posix(), found[2]
 
 
 def ran(check: str, command: str, checks: Sequence[str]) -> bool:
