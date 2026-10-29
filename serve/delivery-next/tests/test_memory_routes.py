@@ -457,6 +457,11 @@ def test_approving_one_memory_leaves_the_next_ones_button_ready(shared, pds):
         expect(review.locator(".entry")).to_have_count(2)
         expect(review.locator('p-button[variant="primary"]')).to_have_text(["Approve"])  # the first entry's only
         expect(review.locator(".entry").first.locator('p-button[variant="primary"]')).to_have_count(1)
+        leading = 'p-button:not([variant]), p-button[variant="primary"]'  # PDS renders a p-button without one primary
+        review.locator(".entry").nth(1).get_by_role("button", name="Edit").click()
+        expect(review.locator(leading)).to_have_text(["Save"])  # the open editor leads, not another entry's Approve
+        review.get_by_role("button", name="Cancel").click()
+        expect(review.locator(leading)).to_have_text(["Approve"])
         review.locator(".entry").first.get_by_role("button", name="Approve").click()
         expect(review.locator(".entry")).to_have_count(1)
         expect(review.get_by_role("button", name="Approve")).to_be_enabled()

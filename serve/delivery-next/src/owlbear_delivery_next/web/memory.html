@@ -270,7 +270,8 @@ function editor(m) {
 }
 
 // A section that asks has one primary (D-01M63C7BJZZ7RQV9XS4XVR0DNE): the *lead* entry's Approve or Resolve, the
-// first one listed under "Needs your review"; every other row action is secondary.
+// first one listed under "Needs your review", unless an entry there is being edited: its Save leads then. Every other
+// row action is secondary.
 function actions(m, lead) {
   const parts = [], answer = lead ? "primary" : "secondary";
   if (m.state === "curated") {
@@ -340,10 +341,11 @@ function entries(shown) {
   const sections = GROUPS.map(([title, hint, states]) => {
     const mine = shown.filter((m) => states.includes(m.state));
     if (!mine.length) return nothing;
+    const leads = title === GROUPS[0][0] && !mine.some((m) => state.editing?.id === m.key);
     return html`<section class=${states.includes("deleted") ? "quiet" : ""}>
       <div><p-heading size="lg"><h2>${title} (${mine.length})</h2></p-heading>${hint ? html`<p-text>${hint}</p-text>`
         : nothing}${states.includes("deleted") ? purges() : nothing}</div>
-      <ul class="entries">${repeat(mine, (m) => m.key, (m, i) => card(m, i === 0 && title === GROUPS[0][0]))}</ul>
+      <ul class="entries">${repeat(mine, (m) => m.key, (m, i) => card(m, leads && i === 0))}</ul>
       </section>`;
   });
   const empty = state.loaded.entries.length ? "No memory matches these filters."
