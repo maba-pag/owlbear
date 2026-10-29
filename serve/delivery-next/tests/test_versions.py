@@ -8,6 +8,7 @@ import json
 import shutil
 import subprocess
 import sys
+import threading
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -15,7 +16,7 @@ import pytest
 
 from owlbear_delivery_next.impeccable import pack_files
 from owlbear_delivery_next.local_system import codebase, data_place, data_repo, local_home
-from owlbear_delivery_next.machine_host import impeccable, selfcheck, versions
+from owlbear_delivery_next.machine_host import impeccable, selfcheck, update_checks, versions
 from owlbear_delivery_next.machine_host.versions import Choice
 from owlbear_delivery_next.project_host import pages
 from owlbear_delivery_next.settings.config import CONFIG_FORMAT
@@ -255,6 +256,23 @@ def test_a_release_pinning_another_pack_is_newer_with_updating_by_itself_off_and
     assert fetched == [1]
     assert impeccable.look()["checked_at"] is not None  # each look fetches; the update checks say when
     assert fetched == [1, 1]
+    assert not (local_home.root() / local_home.VERSIONS).exists()  # nothing installed
+    assert git(runtime, "rev-parse", "HEAD") == head
+
+
+def test_the_owlbear_update_check_finds_a_release_with_the_same_pack_while_off_and_busy_and_starts_nothing(origin):
+    """D-01M63CCVRK8ZKFENY9F4A2K11A: newer whatever Impeccable it pins, whether updating by itself is on or busy."""
+    runtime = at_v0_2(origin)  # updating by itself off
+    head = git(runtime, "rev-parse", "HEAD")
+    released(origin, "v0.3", json.dumps(pack_files.manifest()))  # the same pack: the banner says nothing
+    busy = SimpleNamespace(say=print, stopping=threading.Event(), busy=lambda: ["a running step"])
+    checks = update_checks.Checks(busy, spawn=lambda work: work())
+
+    checks.start("owlbear")
+
+    said = next(u for u in checks.read()["updates"] if u["name"] == "owlbear")
+    assert (said["state"], said["latest"], checks.read()["available"]) == ("newer", "v0.3", 1)
+    assert impeccable.release()["state"] == "same"
     assert not (local_home.root() / local_home.VERSIONS).exists()  # nothing installed
     assert git(runtime, "rev-parse", "HEAD") == head
 
