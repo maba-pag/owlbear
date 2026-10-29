@@ -28,6 +28,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     type Descends = Callable[[str, str], bool]  # (older, newer): whether newer descends from older
+    type Report = Callable[[str, str, str], None]  # (step, state, line): an update's progress
 
 REPO = "repo.git"
 TAG = re.compile(r"v(\d+)(?:\.(\d+))?")
@@ -41,6 +42,10 @@ type Number = tuple[int, int]
 
 
 _log = logging.getLogger(__name__)
+
+
+def _quiet(_step: str, _state: str, _line: str) -> None:
+    """No one follows the install's steps."""
 
 
 class VersionError(Exception):
@@ -196,10 +201,12 @@ def target() -> Choice | None:
     return choose(tags, channel, mark(tag), commit, descends(path))
 
 
-def install(choice: Choice) -> Path:
+def install(choice: Choice, report: Report = _quiet) -> Path:
     """Install *choice* beside the others with its own environment, check it and install its pack; its folder.
 
     A failure removes what it made, except a failed pack: the version stays so only its pack is tried again.
+    *report* hears each step's state and its line (an update's progress); a failed step's line is never a tool's
+    raw output.
 
     Raises:
         VersionError: Too little free disk, or its worktree, environment or selfcheck failed.
@@ -207,16 +214,21 @@ def install(choice: Choice) -> Path:
     """
     home = local_home.root()
     folder = home / local_home.VERSIONS / choice.tag
-    if _installed(folder, choice.commit) and selfcheck(folder) == "":
-        _packed(choice, folder)  # installed and checked before: ready once its pack is in place too
-        return folder
+    if _installed(folder, choice.commit):
+        report("getting", "done", f"{choice.tag} was fetched before")
+        report("building", "done", "its environment was built before")
+        if _checked(choice, folder, report, keep=True):  # installed and checked before: ready once its pack is too
+            _packed(choice, folder, report)
+            return folder
+    report("getting", "running", f"fetching {choice.tag} at {choice.commit[:12]}")
     remove(folder)  # a partial or other install first, so it never holds the disk an install needs
     if shutil.disk_usage(home).free < FREE:
         msg = f"an update needs {FREE // 1024**3} GB free on {home}; it waits until there is"
+        report("getting", "failed", msg)
         raise VersionError(msg)
     folder.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     try:
-        _build(choice, folder)
+        _build(choice, folder, report)
     except PackInstallError:
         raise
     except VersionError:
@@ -237,19 +249,48 @@ def _installed(folder: Path, commit: str) -> bool:
     return head == commit and f"worktree {folder.resolve()}" in listed.splitlines()
 
 
-def _build(choice: Choice, folder: Path) -> None:
-    _git(_bare(repo()), "worktree", "add", "--quiet", "--detach", str(folder), choice.commit)
-    _sync(folder)
+def _build(choice: Choice, folder: Path, report: Report) -> None:
+    try:
+        _git(_bare(repo()), "worktree", "add", "--quiet", "--detach", str(folder), choice.commit)
+    except VersionError as exc:
+        report("getting", "failed", str(exc))
+        raise
+    report("getting", "done", f"{choice.tag} at {choice.commit[:12]}")
+    report("building", "running", "uv sync --locked")
+    try:
+        _sync(folder)
+    except VersionError:
+        report("building", "failed", "its environment could not be made; the host log says why")
+        raise
+    report("building", "done", "its environment is in place")
+    _checked(choice, folder, report)
+    _packed(choice, folder, report)
+
+
+def _checked(choice: Choice, folder: Path, report: Report, *, keep: bool = False) -> bool:
+    """Run its selfcheck, reported; whether it passed. A failure raises, unless *keep* (an install made before).
+
+    Raises:
+        VersionError: The selfcheck failed and *keep* is not set.
+    """
+    report("selfcheck", "running", f"{choice.tag} checks itself")
     if said := selfcheck(folder):
+        report("selfcheck", "failed", said)
+        if keep:
+            return False
         msg = f"{choice.tag} failed its selfcheck: {said}"
         raise VersionError(msg)
-    _packed(choice, folder)
+    report("selfcheck", "done", "it passed")
+    return True
 
 
-def _packed(choice: Choice, folder: Path) -> None:
+def _packed(choice: Choice, folder: Path, report: Report) -> None:
+    report("impeccable", "running", f"installing the Impeccable {choice.tag} pins")
     if said := pack(folder):
+        report("impeccable", "failed", said)
         msg = f"{choice.tag}'s Impeccable could not be installed: {said}"
         raise PackInstallError(msg)
+    report("impeccable", "done", "its Impeccable is in place")
 
 
 def _sync(folder: Path) -> None:
