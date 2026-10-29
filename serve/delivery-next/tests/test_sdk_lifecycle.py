@@ -406,6 +406,7 @@ def test_a_finished_run_records_its_start_and_end_where_it_ran(world, monkeypatc
         "start", "builder", "gpt-6-luna", {}, "fix-it"
     )  # fmt: skip
     assert (end["run"], end["usage"], end["ending"], end["project"]) == (start["run"], used, run.ending, "owlbear")
+    assert (end["tools"], end["wrong"]) == ({}, {})  # measured though nothing was called (C-28)
 
 
 @pytest.mark.parametrize("read", ["read", "failed"])

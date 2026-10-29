@@ -406,3 +406,26 @@ def test_cleanup_confirms_no_owned_request_remains_before_releasing_termination(
             await asyncio.gather(task, return_exceptions=True)
 
     asyncio.run(scenario())
+
+
+@pytest.mark.usefixtures("clock")
+@pytest.mark.parametrize("answers", [True, False])
+def test_each_turn_ended_without_a_result_is_a_wrong_choice(tmp_path, answers):
+    async def scenario():
+        step = STEP(dataclasses.replace(configured(tmp_path), limit=100), asyncio.get_running_loop())
+        step.idle = True
+
+        async def reminding():
+            if answers:
+                step.gate.call(step.cfg.submit, PAYLOAD.model_dump())
+            else:
+                step.idle = True
+
+        async def listing():
+            return SimpleNamespace(tasks=[])
+
+        await asyncio.wait_for(step.wait(Session(listing, reminding)), 1)
+        return step.run
+
+    run = asyncio.run(scenario())
+    assert (run.ending, run.wrong) == (("result", {"no_result": 1}) if answers else ("no-result", {"no_result": 2}))

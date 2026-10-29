@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
-from owlbear_delivery_next.change_contracts import curation_tools, dispute_tools, tools
+from owlbear_delivery_next.change_contracts import curation_tools, dispute_tools, permissions, tools
 from owlbear_delivery_next.change_contracts.failures import (
     QUOTA,
     READ_ONLY,
@@ -32,6 +32,9 @@ from owlbear_delivery_next.change_flow.loop import StepResult
 from owlbear_delivery_next.design_packs import design_tools
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.runtimes import missing
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
 
 type Ending = Literal[
     "result",
@@ -78,6 +81,18 @@ class Run:
     subagents: list[dict[str, Any]] = field(default_factory=list)  # each subagent's record, a breakdown (TD-129)
     model_check: ModelCheck = "unknown"  # only usage metrics prove the model; a mismatch reruns once after a wait
     tool_calls: dict[str, dict[str, int]] = field(default_factory=dict)  # each tool's tally fields (C-28 T8)
+    wrong: dict[str, int] = field(default_factory=dict)  # its wrong tool choices by kind (``tool_use.WRONG``)
+
+    def count(self, kind: str) -> None:
+        """Count one wrong tool choice of *kind*."""
+        self.wrong[kind] = self.wrong.get(kind, 0) + 1
+
+    def deny(self, names: Iterable[str], reason: str) -> None:
+        """Keep the guard's denial of the programs *names*; one that is no bypass attempt is a wrong choice."""
+        self.denials.append(reason)
+        self.denied |= dict.fromkeys(names, reason)
+        if not permissions.bypass(reason):
+            self.count("denied")
 
 
 class ReturnedRunError(Exception):

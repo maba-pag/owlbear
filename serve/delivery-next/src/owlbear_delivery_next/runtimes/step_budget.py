@@ -87,6 +87,7 @@ async def wait(st: _Step, session: CopilotSession, seconds: float, clock: Callab
             break
         if st.idle and not st.done:
             st.idle = False
+            st.run.count("no_result")  # a turn ended without a result tool: a wrong choice, reminded or not (C-28)
             if reminded:
                 st.finish("no-result")
             else:

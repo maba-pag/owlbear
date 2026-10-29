@@ -32,6 +32,7 @@ class HeldRun(BaseModel):
     model_check: Literal["verified", "mismatch", "unknown"] = "unknown"
     subagents: list[dict[str, Any]] = []
     tool_calls: dict[str, dict[str, int]] = {}
+    wrong: dict[str, int] = {}  # its wrong tool choices (C-28 T8); an older record kept none
     counted: bool = False  # the usage and tool calls above were kept with the hold; an older build kept none
 
 

@@ -161,7 +161,7 @@ def account(change: Change, done: session_result.Run, fields: dict[str, object])
     step["termination"] = dataclasses.asdict(done.termination) if done.termination else None
     if done.usage.get("error") != "held":
         change.spend = change.spend.plus(done.usage, done.session_id)
-        change.tool_use = change.tool_use.plus(done.tool_calls)
+        change.tool_use = change.tool_use.plus(done.tool_calls, done.wrong)
     return step
 
 
