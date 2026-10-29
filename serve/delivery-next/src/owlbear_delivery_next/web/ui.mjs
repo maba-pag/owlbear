@@ -101,21 +101,28 @@ export function defined(tags) {
 }
 
 let failed = "";  // why the machine host's state could not be read the last time, if it could not
+let asked = 0, applied = 0;
 
-// The machine host's projects and pause, or null on a clone's own host (which has no such route); throws when it
-// cannot be read, so a page read once keeps what it last read.
-async function machine() {
-  failed = "";
+// Reads the machine host's projects and pause into the bar: null on a clone's own host (which has no such route), what
+// it last read when they cannot be read. Reads overlap (a poll and an action's reread): an older answer never replaces
+// a newer one's.
+async function read() {
+  const n = ++asked;
+  let data = bar.data, why = "";
   try {
-    return await call("/projects", { machine: true });
+    data = await call("/projects", { machine: true });
   } catch (error) {
-    if (error.status === 404) return null;
-    failed = error.message;
-    throw error;
+    if (error.status === 404) data = null;
+    else why = error.message;
   }
+  if (n < applied) return;
+  applied = n;
+  bar.data = data;
+  failed = why;
 }
 
-const bar = { data: await machine().catch(() => null), busy: "", error: "", packed: "", installing: false };
+const bar = { data: null, busy: "", error: "", packed: "", installing: false };
+await read();
 const listed = (id) => bar.data.projects.some((p) => p.id === id);
 if (bar.data && !listed(project) && (project || scope !== "all")) {
   const first = bar.data.projects.find((p) => p.state === "loaded") ?? bar.data.projects[0];
@@ -173,7 +180,7 @@ document.addEventListener("click", (e) => {
 
 // The machine's state read again after a page changed it (a project added, removed or adopted).
 export async function reread() {
-  bar.data = await machine().catch(() => bar.data);
+  await read();
   if (bar.data) showBar();
   changed();
 }
@@ -363,7 +370,7 @@ if (bar.data) {
   setInterval(async () => {
     if (bar.busy) return;
     const was = bar.data?.paused, before = Boolean(bar.data?.announce);
-    bar.data = await machine().catch(() => bar.data);  // always read: an announcement must reach every page (§7)
+    await read();  // always read: an announcement must reach every page (§7)
     if (bar.installing && bar.data?.pack?.install?.state !== "installing") {  // the Install started here has ended
       bar.installing = false;
       bar.packed = bar.data.pack.install ? "" : "Impeccable is installed on this machine.";

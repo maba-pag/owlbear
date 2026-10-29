@@ -38,7 +38,7 @@ function add() {
   }
   return act("add", async () => {
     const added = await call("/projects", { body: { path }, machine: true });
-    state.draft = "";
+    if (state.draft.trim() === path) state.draft = "";  // a folder typed in the meantime stays for the next Add
     return `Added ${added.name}.`;
   });
 }
@@ -61,12 +61,16 @@ async function remove(p) {
   }
 }
 
-function adopt(p) {
-  return act(`adopt ${p.id}`, async () => {
-    const adopted = await call(`/projects/${p.id}/adopt`, { method: "POST", machine: true });
+async function adopt(p) {
+  let adopted = null;
+  await act(`adopt ${p.id}`, async () => {
+    adopted = await call(`/projects/${p.id}/adopt`, { method: "POST", machine: true });
     if (p.id === project) location.replace(here({ project: adopted.id }));
     return `${adopted.name} now serves the clone at ${adopted.path}.`;
   });
+  if (adopted && p.id !== project) {  // its Adopt button is gone: the adopted project's Remove takes focus
+    document.querySelector(`li[aria-labelledby="p-${CSS.escape(adopted.id)}"] .row p-button:last-child`)?.focus();
+  }
 }
 
 // One project: its name, folder and state; a replaced clone asks to be adopted, so Adopt is its one primary.

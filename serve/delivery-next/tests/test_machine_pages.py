@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 import re
+import shutil
 import socket
 import subprocess
 import threading
 import time
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 import uvicorn
@@ -20,6 +24,9 @@ from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.project_host.host import Host, HostRecord
 from owlbear_delivery_next.state_store import registry
 from owlbear_delivery_next.state_store.store import Store
+
+if TYPE_CHECKING:
+    from playwright.sync_api import Page
 
 
 def clone(path: Path, slug: str = "") -> Path:
@@ -44,6 +51,46 @@ def serve() -> tuple[Machine, uvicorn.Server, str]:
     while not server.started:
         time.sleep(0.05)
     return machine, server, base
+
+
+@contextmanager
+def browsing(monkeypatch, pds, width: int = 1280) -> Iterator[tuple[Page, str]]:
+    """A Chromium page at *width* that reaches only a machine host serving the registered projects and the PDS CDN, and
+    the host's address; the scheduler runs, no runner starts."""
+    from playwright.sync_api import Error, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+
+    monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
+    monkeypatch.setattr(Host, "_launch", lambda _self, _slug: False)
+    machine, server, base = serve()
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except Error as exc:
+                pytest.skip(f"no Playwright Chromium: {exc}")
+            page = browser.new_page(viewport={"width": width, "height": 800})
+            pds.only(page, base)
+            yield page, base
+            browser.close()
+    finally:
+        server.should_exit = True
+        machine.stop_all()
+
+
+def until(page: Page, done: Callable[[], object], seconds: float = 8) -> None:
+    """Let *page* run, its routes included, until *done* holds; within *seconds*."""
+    end = time.monotonic() + seconds
+    while not done():
+        assert time.monotonic() < end, "never happened"
+        page.wait_for_timeout(100)
+
+
+def replaced(path: Path) -> registry.Project:
+    """A project whose clone at *path* was deleted and cloned again: the registered one, now replaced."""
+    old = registry.register(clone(path))
+    shutil.rmtree(path)
+    clone(path)
+    return old
 
 
 @pytest.mark.browser
@@ -384,142 +431,135 @@ def targets(scope) -> list[str]:
 
 
 @pytest.mark.browser
-def test_the_menu_reaches_every_page_moves_focus_into_each_level_and_back_to_the_burger(  # noqa: PLR0915 - a journey
+def test_the_menu_reaches_every_page_moves_focus_into_each_level_and_back_to_the_burger(
     tmp_path: Path, monkeypatch, pds
 ) -> None:
     """D-01M63C8375KV9WA6NH8K2MB8PN: the burger's drilldown holds every page; the top row holds the work pages but on
     a phone; focus moves into each level, and Escape returns it to the burger. Old links keep working."""
-    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
-    monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
-    monkeypatch.setattr(Host, "_launch", lambda _self, _slug: False)
     a, b = (registry.register(clone(tmp_path / n)) for n in ("alpha", "beta"))
-    machine, server, base = serve()
-    try:
-        with sync_playwright() as pw:
-            try:
-                browser = pw.chromium.launch()
-            except Error as exc:
-                pytest.skip(f"no Playwright Chromium: {exc}")
-            page = browser.new_page(viewport={"width": 1280, "height": 800})
-            pds.only(page, base)
-            page.goto(f"{base}/config?project={a.id}#token=t")
-            burger, menu = page.get_by_role("button", name="Menu"), page.locator("p-drilldown")
-            work = ["Changes", "Backlog", "Memory", "Decisions", "Metrics"]
-            expect(page.locator(".top nav a")).to_have_text(work)
-            expect(burger).to_have_attribute("aria-haspopup", "dialog")
-            assert targets(page.locator(".top nav a, .top .brand, #menu p-button-pure, #controls > *")) == []
-            burger.click()
-            expect(menu.get_by_role("link", name="Settings")).to_be_focused()  # this page's link, in its level
-            expect(menu.get_by_role("link", name="Settings")).to_have_attribute("aria-current", "page")
-            served = ["/", "/backlog", "/memory", "/decisions", "/metrics", "/projects", "/config", "/maintenance"]
-            hrefs = menu.locator("a").evaluate_all("as => as.map(a => a.getAttribute('href'))")
-            assert sorted(hrefs) == sorted(f"{path}?project={a.id}" for path in served)
-            menu.get_by_role("button", name="Work").click()
-            expect(menu.get_by_role("link", name="Changes")).to_be_focused()  # into the level it opened
-            assert targets(menu.get_by_role("link")) == []
-            page.keyboard.press("Escape")
-            expect(menu.get_by_role("link")).to_have_count(0)
-            expect(burger).to_be_focused()
-            burger.click()
-            menu.get_by_role("link", name="Maintenance").click()
-            expect(page).to_have_url(f"{base}/maintenance?project={a.id}")
+    with browsing(monkeypatch, pds) as (page, base):
+        page.goto(f"{base}/config?project={a.id}#token=t")
+        burger, menu = page.get_by_role("button", name="Menu"), page.locator("p-drilldown")
+        work = ["Changes", "Backlog", "Memory", "Decisions", "Metrics"]
+        expect(page.locator(".top nav a")).to_have_text(work)
+        expect(burger).to_have_attribute("aria-haspopup", "dialog")
+        assert targets(page.locator(".top nav a, .top .brand, #menu > p-button-pure, #controls > *")) == []
+        burger.click()
+        expect(menu.get_by_role("link", name="Settings")).to_be_focused()  # this page's link, in its level
+        expect(menu.get_by_role("link", name="Settings")).to_have_attribute("aria-current", "page")
+        served = ["/", "/backlog", "/memory", "/decisions", "/metrics", "/projects", "/config", "/maintenance"]
+        hrefs = menu.locator("a").evaluate_all("as => as.map(a => a.getAttribute('href'))")
+        assert sorted(hrefs) == sorted(f"{path}?project={a.id}" for path in served)
+        menu.get_by_role("button", name="Work").click()
+        expect(menu.get_by_role("link", name="Changes")).to_be_focused()  # into the level it opened
+        assert targets(menu.get_by_role("link")) == []
+        page.keyboard.press("Escape")
+        expect(menu.get_by_role("link")).to_have_count(0)
+        expect(burger).to_be_focused()
+        burger.click()
+        menu.get_by_role("link", name="Maintenance").click()
+        expect(page).to_have_url(f"{base}/maintenance?project={a.id}")
 
-            page.set_viewport_size({"width": 390, "height": 800})  # a phone: the work pages are in the menu only
-            page.goto(f"{base}/?project={b.id}&change={b.id}%2Fbeta-1")  # an old link into one Change
-            expect(page.locator("#detail")).to_contain_text("beta-1")
-            expect(page.locator(".top nav")).to_be_hidden()
-            assert page.evaluate("document.documentElement.scrollWidth") <= 390
-            burger.click()
-            expect(menu.get_by_role("link", name="Changes")).to_be_focused()  # opened at the work level
-            expect(menu.get_by_role("link", name="Projects")).to_be_hidden()
-            menu.get_by_role("button", name="Back").click()
-            expect(menu.locator("p-drilldown-item").get_by_role("button", name="Work")).to_be_focused()
-            expect(menu.get_by_role("link", name="Projects")).to_be_visible()
-            page.keyboard.press("Escape")
-            expect(burger).to_be_focused()
-            burger.click()  # it opens at the work level again
-            menu.get_by_role("link", name="Backlog").click()
-            expect(page).to_have_url(f"{base}/backlog?project={b.id}")
-            page.goto(f"{base}/config")  # an old link without a project opens the first one, as before
-            expect(page).to_have_url(f"{base}/config?project={a.id}")
-            browser.close()
-    finally:
-        server.should_exit = True
-        machine.stop_all()
+        page.set_viewport_size({"width": 390, "height": 800})  # a phone: the work pages are in the menu only
+        page.goto(f"{base}/?project={b.id}&change={b.id}%2Fbeta-1")  # an old link into one Change
+        expect(page.locator("#detail")).to_contain_text("beta-1")
+        expect(page.locator(".top nav")).to_be_hidden()
+        assert page.evaluate("document.documentElement.scrollWidth") <= 390
+        burger.click()
+        expect(menu.get_by_role("link", name="Changes")).to_be_focused()  # opened at the work level
+        expect(menu.get_by_role("link", name="Projects")).to_be_hidden()
+        menu.get_by_role("button", name="Back").click()
+        expect(menu.locator("p-drilldown-item").get_by_role("button", name="Work")).to_be_focused()
+        expect(menu.get_by_role("link", name="Projects")).to_be_visible()
+        page.keyboard.press("Escape")
+        expect(burger).to_be_focused()
+        burger.click()  # it opens at the work level again
+        menu.get_by_role("link", name="Backlog").click()
+        expect(page).to_have_url(f"{base}/backlog?project={b.id}")
+        page.goto(f"{base}/config")  # an old link without a project opens the first one, as before
+        expect(page).to_have_url(f"{base}/config?project={a.id}")
 
 
 @pytest.mark.browser
-def test_projects_shows_each_clone_s_state_and_setup_adopts_removes_and_adds(  # noqa: PLR0915 - a journey
+def test_projects_shows_each_clone_s_state_and_setup_and_adopting_the_shown_one_shows_the_adopted_one(
     tmp_path: Path, monkeypatch, pds
 ) -> None:
-    """D-01M63C8DA1D95Z7M9ZYWVYYNF7: Projects holds Add, Remove, Adopt and the setup notes; a replaced clone shows
-    beside a loaded one; with no project left, the top row offers Add project."""
-    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+    """D-01M63C8DA1D95Z7M9ZYWVYYNF7: Projects holds the setup notes; a replaced clone shows beside a loaded one, and
+    another page says where to fix it."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
-    monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
-    monkeypatch.setattr(Host, "_launch", lambda _self, _slug: False)
     a = registry.register(clone(tmp_path / "alpha"))
-    work = clone(tmp_path / "delta")
-    old = registry.register(work)
-    subprocess.run(["rm", "-rf", str(work)], check=True)  # noqa: S603, S607 - re-cloned at the same path
-    clone(work)
-    machine, server, base = serve()
-    try:
-        with sync_playwright() as pw:
-            try:
-                browser = pw.chromium.launch()
-            except Error as exc:
-                pytest.skip(f"no Playwright Chromium: {exc}")
-            page = browser.new_page(viewport={"width": 390, "height": 800})
-            pds.only(page, base)
-            page.goto(f"{base}/?project={old.id}#token=t")  # another page says what is wrong and where to fix it
-            trouble = page.locator("#machine > [role=status]").first
-            expect(trouble).to_contain_text("delta is replaced: the clone at")
-            trouble.get_by_role("link", name="Open Projects").click()
-            expect(page).to_have_url(f"{base}/projects?project={old.id}")
-            alpha, delta = page.get_by_role("listitem", name="alpha"), page.get_by_role("listitem", name="delta")
-            expect(alpha.locator("p-tag")).to_have_count(0)  # loaded
-            expect(alpha.locator("p-inline-notification")).to_contain_text(f"owlbear setup --repo {a.path}")
-            expect(delta.locator("p-tag")).to_have_text(["replaced", "shown now"])
-            expect(delta).to_contain_text("is not the one registered; Remove or Adopt it")
-            expect(alpha.get_by_role("button", name="Adopt the new clone")).to_have_count(0)
-            assert targets(page.locator("#page p-button, #page p-input-text input")) == []
-            assert page.evaluate("document.documentElement.scrollWidth") <= 390
-            delta.get_by_role("button", name="Adopt the new clone").click()
-            expect(page).not_to_have_url(f"{base}/projects?project={old.id}")
-            adopted = next(p for p in registry.load().projects if p.path == old.path and p.id != old.id)
-            expect(page).to_have_url(f"{base}/projects?project={adopted.id}")
-            delta = page.get_by_role("listitem", name="delta")
-            expect(delta.locator("p-tag")).to_have_text("shown now")
-            page.goto(f"{base}/projects")  # all projects: none is shown, so each Remove stays on the page
-            page.get_by_role("listitem", name="delta").get_by_role("button", name="Remove project").click()
-            pds.answer(page, "Remove project")
-            alpha = page.get_by_role("listitem", name="alpha")
-            expect(alpha.get_by_role("button", name="Remove project")).to_be_focused()  # delta's went with it
-            alpha.get_by_role("button", name="Remove project").click()
-            pds.answer(page, "Remove project")
-            expect(page.get_by_label("Folder")).to_be_focused()
-            expect(page.locator("#page")).to_contain_text("No project yet")
-            assert registry.load().projects == []
-            add = page.locator(".top").get_by_role("link", name="Add project")
-            expect(add).to_have_attribute("href", "#add")  # Projects is where it leads, so it goes to the form
-            page.get_by_role("button", name="Add", exact=True).click()
-            expect(page.locator("#page > [role=alert]")).to_have_text("Name the folder of a clone first.")
-            page.get_by_label("Folder").fill(a.path)
-            page.locator("#add p-input-text").evaluate(  # Enter twice before Delivery answers adds it once
-                "e => { for (const _ of [1, 2]) e.dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter'})) }"
-            )
-            expect(page.locator("#page > [role=status]")).to_have_text("Added alpha.")
-            expect(page.locator("#page > [role=alert]")).to_have_count(0)
-            expect(add).to_have_count(0)
-            expect(pds.select(page.locator(".top"), "Project")).to_be_visible()
-            page.goto(f"{base}/backlog")
-            expect(page.locator(".top").get_by_role("link", name="Add project")).to_have_count(0)
-            browser.close()
-    finally:
-        server.should_exit = True
-        machine.stop_all()
+    old = replaced(tmp_path / "delta")
+    with browsing(monkeypatch, pds, width=390) as (page, base):
+        page.goto(f"{base}/?project={old.id}#token=t")  # another page says what is wrong and where to fix it
+        trouble = page.locator("#machine > [role=status]").first
+        expect(trouble).to_contain_text("delta is replaced: the clone at")
+        trouble.get_by_role("link", name="Open Projects").click()
+        expect(page).to_have_url(f"{base}/projects?project={old.id}")
+        alpha, delta = page.get_by_role("listitem", name="alpha"), page.get_by_role("listitem", name="delta")
+        expect(alpha.locator("p-tag")).to_have_count(0)  # loaded
+        expect(alpha.locator("p-inline-notification")).to_contain_text(f"owlbear setup --repo {a.path}")
+        expect(delta.locator("p-tag")).to_have_text(["replaced", "shown now"])
+        expect(delta).to_contain_text("is not the one registered; Remove or Adopt it")
+        expect(alpha.get_by_role("button", name="Adopt the new clone")).to_have_count(0)
+        assert targets(page.locator("#page p-button, #page p-input-text input")) == []
+        assert page.evaluate("document.documentElement.scrollWidth") <= 390
+        delta.get_by_role("button", name="Adopt the new clone").click()
+        expect(page).not_to_have_url(f"{base}/projects?project={old.id}")
+        adopted = next(p for p in registry.load().projects if p.path == old.path and p.id != old.id)
+        expect(page).to_have_url(f"{base}/projects?project={adopted.id}")
+        expect(page.get_by_role("listitem", name="delta").locator("p-tag")).to_have_text("shown now")
+
+
+@pytest.mark.browser
+def test_projects_adopts_removes_and_adds_keeping_focus_and_the_next_folder(tmp_path: Path, monkeypatch, pds) -> None:
+    """D-01M63C8DA1D95Z7M9ZYWVYYNF7: with no project shown each action stays on Projects, and focus stays on it; one
+    action runs at a time; with no project left, the top row offers Add project."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    a = registry.register(clone(tmp_path / "alpha"))
+    replaced(tmp_path / "delta")
+    with browsing(monkeypatch, pds) as (page, base):
+        page.goto(f"{base}/projects#token=t")  # all projects: none is shown
+        page.get_by_role("listitem", name="delta").get_by_role("button", name="Adopt the new clone").click()
+        expect(page.locator("#page > [role=status]")).to_contain_text("delta now serves the clone at")
+        delta = page.get_by_role("listitem", name="delta")
+        expect(delta.get_by_role("button", name="Remove project")).to_be_focused()  # its Adopt went with it
+        assert "project=" not in page.url
+        delta.get_by_role("button", name="Remove project").click()
+        pds.answer(page, "Remove project")
+        alpha = page.get_by_role("listitem", name="alpha")
+        expect(alpha.get_by_role("button", name="Remove project")).to_be_focused()  # delta's went with it
+        alpha.get_by_role("button", name="Remove project").click()
+        pds.answer(page, "Remove project")
+        expect(page.get_by_label("Folder")).to_be_focused()
+        expect(page.locator("#page")).to_contain_text("No project yet")
+        assert registry.load().projects == []
+        add = page.locator(".top").get_by_role("link", name="Add project")
+        expect(add).to_have_attribute("href", "#add")  # Projects is where it leads, so it goes to the form
+        page.get_by_role("button", name="Add", exact=True).click()
+        expect(page.locator("#page > [role=alert]")).to_have_text("Name the folder of a clone first.")
+        posted = []
+        page.route(
+            f"{base}/api/next/projects", lambda r: posted.append(r) if r.request.method == "POST" else r.fallback()
+        )
+        page.get_by_label("Folder").fill(a.path)
+        page.locator("#add p-input-text").evaluate(  # Enter twice before Delivery answers adds it once
+            "e => { for (const _ of [1, 2]) e.dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter'})) }"
+        )
+        until(page, lambda: posted)
+        page.get_by_label("Folder").fill("~/Projects/next")  # typed while Delivery adds the first
+        posted[0].fallback()
+        expect(page.locator("#page > [role=status]")).to_have_text("Added alpha.")
+        expect(page.locator("#page > [role=alert]")).to_have_count(0)
+        expect(page.get_by_label("Folder")).to_have_value("~/Projects/next")
+        assert len(posted) == 1
+        expect(add).to_have_count(0)
+        expect(pds.select(page.locator(".top"), "Project")).to_be_visible()
+        page.goto(f"{base}/backlog")
+        expect(page.locator(".top").get_by_role("link", name="Add project")).to_have_count(0)
 
 
 @pytest.mark.browser
@@ -528,45 +568,69 @@ def test_projects_says_when_the_machine_does_not_answer_and_that_the_list_may_be
 ) -> None:
     """A failed read of the machine's projects is said as such, never as a project's own host; after an action whose
     reread failed, the list shown says it may be out of date until a read succeeds again."""
-    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
-    monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
-    monkeypatch.setattr(Host, "_launch", lambda _self, _slug: False)
     a = registry.register(clone(tmp_path / "alpha"))
     registry.register(clone(tmp_path / "beta"))
-    machine, server, base = serve()
-    listing = f"{base}/api/next/projects"
-    refused = lambda r: r.fulfill(status=503, json={"detail": "busy"}) if r.request.method == "GET" else r.fallback()  # noqa: E731
-    try:
-        with sync_playwright() as pw:
-            try:
-                browser = pw.chromium.launch()
-            except Error as exc:
-                pytest.skip(f"no Playwright Chromium: {exc}")
-            page = browser.new_page()
-            pds.only(page, base)
-            page.route(listing, refused)
-            page.goto(f"{base}/projects#token=t")
-            expect(page.locator("#page p-inline-notification")).to_contain_text("busy")
-            expect(page.locator("#page")).not_to_contain_text("one project's own host")
-            page.unroute(listing)
-            page.get_by_role("button", name="Reload").click()
-            expect(page.get_by_role("listitem")).to_have_count(2)
-            page.route(  # Remove reaches the machine; reading its projects again finds no host at all
-                listing, lambda r: r.abort() if r.request.method == "GET" else r.fallback()
-            )
-            page.get_by_role("listitem", name="beta").get_by_role("button", name="Remove project").click()
-            pds.answer(page, "Remove project")
-            expect(page.locator("#page > [role=status]")).to_contain_text("Removed beta")
-            expect(page.locator("#page > [role=alert]")).to_have_text(
-                "This list may be out of date: Delivery is not running. Start it, then reload this page."
-            )
-            expect(page.get_by_role("listitem")).to_have_count(2)  # the last list read, kept
-            assert registry.load().projects == [a]
-            page.unroute(listing)  # the next poll reads it again
-            expect(page.locator("#page > [role=alert]")).to_have_count(0, timeout=8000)
-            expect(page.get_by_role("listitem")).to_have_count(1)
-            browser.close()
-    finally:
-        server.should_exit = True
-        machine.stop_all()
+
+    def refused(route) -> None:
+        if route.request.method == "GET":
+            route.fulfill(status=503, json={"detail": "busy"})
+        else:
+            route.fallback()
+
+    with browsing(monkeypatch, pds) as (page, base):
+        listing = f"{base}/api/next/projects"
+        page.route(listing, refused)
+        page.goto(f"{base}/projects#token=t")
+        expect(page.locator("#page p-inline-notification")).to_contain_text("busy")
+        expect(page.locator("#page")).not_to_contain_text("one project's own host")
+        page.unroute(listing)
+        page.get_by_role("button", name="Reload").click()
+        expect(page.get_by_role("listitem")).to_have_count(2)
+        page.route(  # Remove reaches the machine; reading its projects again finds no host at all
+            listing, lambda r: r.abort() if r.request.method == "GET" else r.fallback()
+        )
+        page.get_by_role("listitem", name="beta").get_by_role("button", name="Remove project").click()
+        pds.answer(page, "Remove project")
+        expect(page.locator("#page > [role=status]")).to_contain_text("Removed beta")
+        expect(page.locator("#page > [role=alert]")).to_have_text(
+            "This list may be out of date: Delivery is not running. Start it, then reload this page."
+        )
+        expect(page.get_by_role("listitem")).to_have_count(2)  # the last list read, kept
+        assert registry.load().projects == [a]
+        page.unroute(listing)  # the next poll reads it again
+        expect(page.locator("#page > [role=alert]")).to_have_count(0, timeout=8000)
+        expect(page.get_by_role("listitem")).to_have_count(1)
+
+
+@pytest.mark.browser
+def test_an_older_read_of_the_machine_never_replaces_a_newer_one(tmp_path: Path, monkeypatch, pds) -> None:
+    """A poll that started before Remove and is answered after Remove's reread leaves the list Remove left."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    registry.register(clone(tmp_path / "alpha"))
+    registry.register(clone(tmp_path / "beta"))
+    held = []
+
+    def hold_one_read(route) -> None:  # the next poll's read, answered later with the list as it is now
+        if route.request.method == "GET" and not held:
+            held.append((route, route.fetch()))
+        else:
+            route.fallback()
+
+    with browsing(monkeypatch, pds) as (page, base):
+        page.goto(f"{base}/projects#token=t")
+        expect(page.get_by_role("listitem")).to_have_count(2)
+        page.route(f"{base}/api/next/projects", hold_one_read)
+        page.get_by_role("listitem", name="beta").get_by_role("button", name="Remove project").click()
+        until(page, lambda: held)  # a poll is under way while Remove is asked
+        pds.answer(page, "Remove project")
+        expect(page.locator("#page > [role=status]")).to_contain_text("Removed beta")
+        expect(page.get_by_role("listitem")).to_have_count(1)
+        page.evaluate("() => { window.polled = new Promise(r => document.addEventListener('owlbear-polled', r)); }")
+        route, answer = held[0]
+        route.fulfill(response=answer)  # within the read's 5 s: the list before Remove
+        page.evaluate("window.polled")
+        assert page.get_by_role("listitem").count() == 1, page.locator("#page").inner_text()
+        assert page.locator("#page > [role=alert]").count() == 0
