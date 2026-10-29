@@ -6,11 +6,13 @@ import json
 import subprocess
 import threading
 from datetime import UTC, datetime, timedelta
+from email.message import Message
 from http.client import IncompleteRead
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib.resources import files
 from pathlib import Path
 from typing import ClassVar
+from urllib.error import HTTPError
 
 import pytest
 
@@ -103,12 +105,9 @@ def test_the_notice_is_read_offline_refreshed_at_most_daily_and_shown_by_setup_a
         calls.append(url)
         return releases("skill-v4.6.0")(url)
 
-    assert pack_update.notice(refresh=False, fetch=fetch) == {
-        "pack": "impeccable-4.5.2.1",
-        "behind": None,
-        "checked_at": None,
-    }
-    assert pack_update.notice(refresh=True) == {"pack": "impeccable-4.5.2.1", "behind": None, "checked_at": None}
+    unknown = {"pack": "impeccable-4.5.2.1", "state": "unknown", "behind": None, "checked_at": None, "detail": ""}
+    assert pack_update.notice(refresh=False, fetch=fetch) == unknown
+    assert pack_update.notice(refresh=True) | {"detail": ""} == unknown
     assert (pack_update.notice(refresh=True, fetch=fetch)["behind"], len(calls)) == (1, 1)  # offline was not kept
     assert (pack_update.notice(refresh=True, fetch=fetch)["behind"], len(calls)) == (1, 1)  # checked today
     shown = "Impeccable (impeccable-4.5.2.1): 1 release behind"
@@ -128,6 +127,36 @@ def test_the_notice_is_read_offline_refreshed_at_most_daily_and_shown_by_setup_a
         == "Impeccable (impeccable-4.5.2.1): releases upstream unknown"
     )
     assert pack_update.notice(refresh=False)["behind"] is None  # the settings page no longer shows the old count
+
+
+@pytest.mark.usefixtures("pinned")
+def test_the_notice_says_known_stale_unknown_or_error_and_a_failed_check_keeps_the_last_count() -> None:
+    calls = []
+
+    def fetch(url: str) -> bytes:
+        calls.append(url)
+        return releases("skill-v4.6.0", "skill-v4.7.0")(url)
+
+    def refused(url: str) -> bytes:
+        raise HTTPError(url, 403, "rate limited", Message(), None)
+
+    known = pack_update.notice(refresh=False, force=True, fetch=fetch)
+    assert (known["state"], known["behind"], len(calls)) == ("known", 2, 1)
+    assert pack_update.notice(refresh=False, force=True, fetch=fetch)["state"] == "known"
+    assert len(calls) == 2  # forced: checked again although counted today
+    path = pack_files.folder().parent / pack_update.NOTICE
+    old = (datetime.now(UTC) - timedelta(days=2)).isoformat()
+    path.write_text(json.dumps(json.loads(path.read_text()) | {"checked_at": old}))
+    stale = pack_update.notice(refresh=False)
+    assert (stale["state"], stale["behind"], stale["checked_at"]) == ("stale", 2, old)
+    error = pack_update.notice(refresh=True, fetch=refused)
+    assert (error["state"], error["behind"], error["detail"]) == ("error", None, "GitHub answered 403 rate limited")
+    assert pack_update.said(error) == "Impeccable (impeccable-4.5.2.1): releases upstream unknown"
+    assert pack_update.notice(refresh=False, force=True, fetch=lambda _u: b"{}")["state"] == "error"
+    offline = pack_update.notice(refresh=False, force=True)
+    assert (offline["state"], offline["detail"].startswith("GitHub was not reached")) == ("unknown", True)
+    assert json.loads(path.read_text())["behind"] == 2  # the last count stays kept; the next count replaces it
+    assert pack_update.notice(refresh=True, fetch=fetch)["state"] == "known"  # due again after a failure
 
 
 def registry(*rules: tuple[str, ...]) -> str:
