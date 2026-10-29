@@ -24,10 +24,13 @@ export function follow(show) {
   for (const kind of ["owlbear-machine", "owlbear-polled"]) document.addEventListener(kind, () => own.show());
 }
 
+// The pack and its runs are the machine's: read from the host itself, so a shown project that is not loaded (failed,
+// replaced, removed meanwhile) hides neither.
 export async function readPack() {
   const generation = ++own.reading;
   const [pinned, runs] = await Promise.allSettled([
-    call("/maintenance/pack", { timeout: 15000 }), call("/maintenance/pack/runs", { timeout: 15000 }),
+    call("/maintenance/pack", { timeout: 15000, machine: true }),
+    call("/maintenance/pack/runs", { timeout: 15000, machine: true }),
   ]);
   if (generation !== own.reading) return;  // a later read is under way; it shows the newer state
   if (pinned.status === "fulfilled") [own.pinned, own.unread.pinned] = [pinned.value, ""];

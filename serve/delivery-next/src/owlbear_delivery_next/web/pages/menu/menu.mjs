@@ -49,7 +49,7 @@ function label(l) {
 // Whether the Impeccable update runs, waits or failed: read when the menu opens, so no page polls it for the menu.
 async function readRun() {
   try {
-    menu.run = (await call("/maintenance/pack/runs", { timeout: 15000 })).run;
+    menu.run = (await call("/maintenance/pack/runs", { timeout: 15000, machine: true })).run;  // as pack.mjs reads it
   } catch {
     menu.run = null;  // unknown: the entry says nothing of a run rather than something stale
   }

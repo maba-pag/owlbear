@@ -847,13 +847,14 @@ def test_a_run_started_in_one_project_is_answered_from_another_and_from_all_proj
     tmp_path: Path, monkeypatch, pds
 ) -> None:
     """D-01M63C5VGFVT3DVCC888B78K2A: Updates ▸ Impeccable is the same in every project: a run alpha started waits for
-    the owner on beta's page and under All projects, and his answer goes to alpha."""
+    the owner on beta's page, on a replaced project's page and under All projects, and his answer goes to alpha."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     from owlbear_delivery_next.impeccable_runs import pack_job, pack_rounds  # noqa: PLC0415
 
     alpha = registry.register(clone(tmp_path / "alpha"))
     beta = registry.register(clone(tmp_path / "beta"))
+    old = replaced(tmp_path / "delta")  # not loaded: its own API answers nothing
     job = pack_job.Job(Store.open(Path(alpha.path)), pack_job.Live())
     question = pack_rounds.question("r1:end:1", "end", "The rounds ended.", ["activate", "discard"])
     job.state = pack_job._blank() | {  # noqa: SLF001 - a run waiting for the owner
@@ -868,7 +869,7 @@ def test_a_run_started_in_one_project_is_answered_from_another_and_from_all_proj
 
     with browsing(monkeypatch, pds) as (page, base):
         page.route("**/impeccable/update/answer", answering)
-        for shown in (f"?project={beta.id}", ""):
+        for shown in (f"?project={beta.id}", f"?project={old.id}", ""):
             answered.clear()
             page.goto(f"{base}/updates/impeccable{shown}#token=t")
             expect(page.locator("#pack-project")).to_contain_text("Started in alpha")
