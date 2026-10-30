@@ -310,7 +310,7 @@ function card(m, lead) {
       <p-tag variant=${TAGS[m.state]} compact="true">${m.state}</p-tag>
       <p-tag class="place" compact="true">${m.place.label}</p-tag>
       ${m.categories.map((c) => html`<p-tag compact="true">${c}</p-tag>`)}</div>
-    <p-text size="xs" color="contrast-medium">${meta}${advice}</p-text>
+    <p-text size="xs" color="contrast-medium" class="meta">${meta}${advice}</p-text>
     ${state.editing?.id === m.key ? editor(m)
       : html`<p-text class="said" size="sm">${m.content}</p-text>${actions(m, lead)}`}
   </li>`;
