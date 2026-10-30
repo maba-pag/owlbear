@@ -115,6 +115,7 @@ def test_the_import_runs_once_and_marks_the_profile_done():
     assert store.layer.prefs.ci_poll_seconds == 45
     assert store.layer.prefs_imported is True
     assert store.prof.prefs_import == "done"
+    assert profile.POLL in store.prof.entries  # the source entry is kept, not moved
     prefs_import.run(store)
     assert store.fills == 1
 
@@ -276,38 +277,6 @@ def test_a_cloned_repo_whose_config_already_carries_the_import_is_not_refilled()
     assert store.prof.prefs_import == "done"
 
 
-def test_the_source_profile_entries_are_kept_after_the_import():
-    store = FakeStore()
-    prefs_import.run(store)
-    assert profile.POLL in store.prof.entries
-
-
-def test_an_older_settings_file_migrates_forward_with_every_preference_unset():
-    import json  # noqa: PLC0415
-
-    from owlbear_delivery_next.settings import migrations  # noqa: PLC0415
-    from owlbear_delivery_next.settings.config import CONFIG_FORMAT  # noqa: PLC0415
-    from owlbear_delivery_next.state_store.store import _parse  # noqa: PLC0415
-
-    old = json.dumps({"format": CONFIG_FORMAT - 1})
-    got = _parse(old, "config", Layer, CONFIG_FORMAT, migrations.CONFIG)
-    assert got.format == CONFIG_FORMAT
-    assert got.prefs is None
-    assert got.prefs_imported is False
-
-
-def test_a_newer_settings_file_is_refused_not_read():
-    import json  # noqa: PLC0415
-
-    from owlbear_delivery_next.settings import migrations  # noqa: PLC0415
-    from owlbear_delivery_next.settings.config import CONFIG_FORMAT  # noqa: PLC0415
-    from owlbear_delivery_next.state_store.database import FormatTooNewError  # noqa: PLC0415
-    from owlbear_delivery_next.state_store.store import _parse  # noqa: PLC0415
-
-    with pytest.raises(FormatTooNewError):
-        _parse(json.dumps({"format": CONFIG_FORMAT + 1}), "config", Layer, CONFIG_FORMAT, migrations.CONFIG)
-
-
 def test_an_older_profile_migrates_forward_unmarked():
     import json  # noqa: PLC0415
 
@@ -332,13 +301,6 @@ def test_every_merge_method_round_trips_through_the_real_writer_and_reader(tmp_p
     path = tmp_path / "config.json"
     update_layer(path, Layer, lambda cur: cur.model_copy(update={"prefs": Prefs(merge_method=method)}))
     assert read_layer(path, Layer).prefs.merge_method is method
-
-
-@pytest.mark.parametrize("method", list(MergeMethod))
-def test_every_merge_method_parses_from_the_written_json(method):
-    raw = Layer(prefs=Prefs(merge_method=method)).model_dump_json()
-    got = _parse(raw, "config", Layer, CONFIG_FORMAT, migrations.CONFIG)
-    assert got.prefs.merge_method is method
 
 
 def test_a_retry_after_a_failed_config_publication_publishes_the_current_config():
@@ -441,8 +403,10 @@ def test_a_newer_settings_or_profile_format_is_refused_by_the_previous_reader():
 def test_an_older_settings_file_keeps_its_data_when_it_migrates_forward():
     old = json.dumps({"format": CONFIG_FORMAT - 1, "widths": [1280, 1600]})
     got = _parse(old, "config", Layer, CONFIG_FORMAT, migrations.CONFIG)
+    assert got.format == CONFIG_FORMAT
     assert got.widths == [1280, 1600]
     assert got.prefs is None
+    assert got.prefs_imported is False
 
 
 def test_a_refused_config_publication_is_published_on_retry_so_a_fresh_clone_gets_the_import(
