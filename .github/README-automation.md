@@ -48,7 +48,7 @@ Within a suite every job starts immediately (no `needs`) and installs only what 
 
 | Workflow | Jobs | Runs when the PR touches |
 | --- | --- | --- |
-| [Python](workflows/python.yml) | 4 test jobs (6 `worksteal` workers in each); [`ci_shard.py`](scripts/ci_shard.py) packs whole test files by [`ci-durations.json`](ci-durations.json) and skips other shards' files before import, a file it doesn't name by a hash of its path; refresh it by hand with [`ci_durations.py`](scripts/ci_durations.py) | Python sources, tests, manifests, locks |
+| [Python](workflows/python.yml) | 4 test jobs (6 `worksteal` workers in each); [`ci_shard.py`](scripts/ci_shard.py) packs whole test files by their run times and skips other shards' files before import, a file without one by a hash of its path. Scope hands every shard the same run times from the Actions cache; the first passing Python run on `main` each week averages its own into them with [`ci_durations.py`](scripts/ci_durations.py) | Python sources, tests, manifests, locks |
 | [Python browser](workflows/python-browser.yml) | Browser-marked tests with Chromium; Delivery-next's in 2 hash-sharded jobs | `serve/browser*`, `serve/web-content`, `serve/delivery-next`, `serve/decisions`, `serve/memory`, manifests, locks |
 | [Static checks](workflows/static.yml) | `uv run lint --no-fix` and `uv run format --no-fix`, as locally: every hook in `.pre-commit-config.yaml` (the three validators in Agent ecosystem), each fixer through its check, plus Biome | Every change |
 | [Tooling](workflows/tooling.yml) | Lock, toolchain, workflow, hook, and diagram proofs, selected per changed surface | Manifests, locks, workflows, tool configuration, diagrams |
@@ -58,7 +58,8 @@ Within a suite every job starts immediately (no `needs`) and installs only what 
 The scope evaluates the whole PR diff, so a follow-up push reruns every suite the PR ever
 touched. To avoid repeating identical proofs, each job fingerprints its inputs with
 `git ls-files -s` and stores a marker cache entry after it passes. A later run in the same PR with
-the same fingerprint reports the reused result and skips its work; a sharded job keys it per shard. Python and static fingerprints
+the same fingerprint reports the reused result and skips its work; a sharded job keys it per shard, and Python's
+fingerprint also covers the run times its shards split by. Python and static fingerprints
 cover the whole tree except `.owlbear/research`; the others cover their own inputs. Bump the
 `ci-pass-v1` key prefix when a job's commands change meaning without changing those inputs.
 
