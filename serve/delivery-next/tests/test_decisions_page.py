@@ -92,9 +92,23 @@ def in_force(store: Store, project: str = PROJECT) -> dict[str, Decision]:
     return {e.decision.statement: e.decision for e in view.entries if e.decision.state is State.IN_FORCE}
 
 
-def open_entry(card: Any) -> None:
-    """Open a listed decision as a person does: by its summary, the accordion's own button."""
+def open_entry(pds: Any, card: Any) -> None:
+    """Open a listed decision as a person does: by its summary, the accordion's own button; then wait, as he does,
+    until its detail has slid into place."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
     card.locator("summary").click()
+    expect(card.locator("#detail")).to_be_visible()
+    pds.settled(card.page)
+
+
+def begin(pds: Any, card: Any, action: str) -> None:
+    """Open the form of *action* on an open decision, then wait until the entry has grown into place around it."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    card.get_by_role("button", name=action).click()
+    expect(card.locator(".form")).to_be_visible()
+    pds.settled(card.page)
 
 
 def held_once(page: Any, held: list[Any]) -> Any:
@@ -124,8 +138,8 @@ def test_a_late_global_list_cannot_name_or_retarget_the_owlbear_list(store, pds)
         page.wait_for_load_state("networkidle")
         expect(page.locator(".entry", has_text="Lint once")).to_have_count(1)
         card = page.locator(".entry", has_text="Pages are plain HTML")
-        open_entry(card)
-        card.get_by_role("button", name="Record an exception").click()
+        open_entry(pds, card)
+        begin(pds, card, "Record an exception")
         page.get_by_label("New rule").fill("Pages may use a build step in OwlBear.")
         card.get_by_role("button", name="Record the exception").click()
         dialog = pds.modal(page)
@@ -147,14 +161,15 @@ def test_a_form_opened_in_one_scope_stays_in_it_when_the_owner_switches_scope(st
           store.shared.root / "owlbear")  # fmt: skip
     with decisions_page(store, pds) as page:
         card = page.locator(".entry", has_text="Pages are plain HTML")
-        open_entry(card)
-        card.get_by_role("button", name="Record an exception").click()
+        open_entry(pds, card)
+        begin(pds, card, "Record an exception")
         page.get_by_label("New rule").fill("Pages may use a build step here.")
         pds.pick(page, "Show", "owlbear")
         expect(page.locator(".entry", has_text="Lint once")).to_have_count(1)
         expect(page.get_by_label("New rule")).to_have_count(0)
         pds.pick(page, "Show", "all")
         expect(page.get_by_label("New rule")).to_have_count(1)
+        pds.settled(page)
         card = page.locator(".entry", has_text="Pages are plain HTML")
         card.get_by_role("button", name="Record the exception").click()
         dialog = pds.modal(page)
@@ -178,8 +193,8 @@ def test_a_confirmed_write_still_in_flight_keeps_the_scope_it_was_confirmed_in(s
         held: list[Any] = []
         page.route(lambda url: url.endswith("/exception"), lambda route, _request: held.append(route))
         card = page.locator(".entry", has_text="Pages are plain HTML")
-        open_entry(card)
-        card.get_by_role("button", name="Record an exception").click()
+        open_entry(pds, card)
+        begin(pds, card, "Record an exception")
         page.get_by_label("New rule").fill("Pages may use a build step here.")
         card.get_by_role("button", name="Record the exception").click()
         pds.answer(page, "Record the exception")
@@ -217,12 +232,12 @@ def test_the_owner_filters_opens_and_replaces_a_decision_and_sees_its_receipt(st
         page.get_by_label("Search").press("Enter")
         expect(page.locator("#shown")).to_have_text("1 of 2 shown")
         card = page.locator(".entry", has_text="Notes live in SQLite")
-        open_entry(card)
+        open_entry(pds, card)
         expect(card.locator("#detail")).to_contain_text("autonomous")
         expect(card.locator("#detail")).to_contain_text("changed")  # its file's history, by action only
         expect(card.locator("#detail")).not_to_contain_text("seed")
         expect(card.locator("#detail")).not_to_contain_text(AN_ID)
-        card.get_by_role("button", name="Replace").click()
+        begin(pds, card, "Replace")
         page.get_by_label("New rule").fill("Notes live in Postgres.")
         expect(page.get_by_label("Your words")).to_have_count(0)
         card.get_by_role("button", name="Replace").click()
@@ -256,8 +271,8 @@ def test_a_decided_decision_is_replaced_only_once_the_owner_ticks_that_he_re_dec
     with decisions_page(store, pds) as page:
         card = page.locator(".entry", has_text="Tags are free text")
         expect(card.locator(".read-back")).to_have_text("Confirmed 2026-10-20")
-        open_entry(card)
-        card.get_by_role("button", name="Replace").click()
+        open_entry(pds, card)
+        begin(pds, card, "Replace")
         page.get_by_label("New rule").fill("Tags come from a list.")
         card.get_by_role("button", name="Replace").click()
         dialog = pds.modal(page)
@@ -285,7 +300,7 @@ def test_the_owner_resolves_a_three_way_conflict_by_keeping_one(store, pds):
               store.shared.root / PROJECT)  # fmt: skip
     with decisions_page(store, pds) as page:
         card = page.locator(".entry", has_text="Exports in XML")
-        open_entry(card)
+        open_entry(pds, card)
         expect(card.locator('p-button[variant="primary"]')).to_have_text(["Keep this one"])  # the conflict asks
         expect(card.get_by_role("group", name="Actions").locator("p-button")).to_have_text(
             ["Keep this one", "Read back", "Replace", "Promote", "Queue a read-back", "Withdraw"])  # fmt: skip
@@ -334,7 +349,7 @@ def test_a_draft_leads_with_activate_and_withdrawing_stands_apart_and_asks_first
     write(draft, store.shared.root / PROJECT)
     with decisions_page(store, pds) as page:
         card = page.locator(".entry", has_text="Exports go nightly")
-        open_entry(card)
+        open_entry(pds, card)
         row = card.get_by_role("group", name="Actions")
         expect(row.locator("p-button")).to_have_text(["Activate", "Queue a read-back", "Withdraw"])
         expect(row.locator('p-button[variant="primary"]')).to_have_text(["Activate"])
@@ -395,7 +410,7 @@ def test_the_owner_marks_a_decided_decision_he_never_made_approved(store, pds):
     write(rule, store.shared.root / PROJECT)
     with decisions_page(store, pds) as page:
         card = page.locator(".entry", has_text="Windows stay paused")
-        open_entry(card)
+        open_entry(pds, card)
         card.get_by_role("button", name="Mark approved").click()
         dialog = pds.modal(page)
         expect(dialog).to_contain_text("an agent's proposal you accepted")
@@ -454,7 +469,7 @@ def test_the_owner_reads_back_an_open_decision_by_confirming_it_and_sees_no_reco
     write(rule, store.shared.root / PROJECT)
     with decisions_page(store, pds) as page:
         card = page.locator(".entry", has_text="Exports are CSV")
-        open_entry(card)
+        open_entry(pds, card)
         expect(card.locator("#detail")).to_contain_text("autonomous")
         expect(card.locator("#detail")).not_to_contain_text("TD-12")
         expect(card.locator("#detail")).not_to_contain_text("Record rows")
@@ -486,7 +501,7 @@ def test_the_owner_checks_a_replacements_impact_and_schedules_its_fixes(store, p
     (store.shared.root / PROJECT / "changes" / "20261020-090000-c1.json").write_text(json.dumps(record))
     with decisions_page(store, pds) as page:
         card = page.locator(".entry", has_text="Exports are JSON")
-        open_entry(card)
+        open_entry(pds, card)
         failing = re.compile(r".*/impact(\?.*)?$")
         page.route(failing, lambda route: route.fulfill(status=503, body="down"))
         card.get_by_role("button", name="Check the impact").click()
