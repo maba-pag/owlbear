@@ -1075,9 +1075,9 @@ def test_decisions_under_all_projects_sum_up_each_scope_and_open_its_view_even_w
     """D-01M63C6PMT4FX370W6B2VS9HAM, D-01M5ZGHDMEG897N2SD1XNEXYNQ: All projects shows Global, OwlBear and one summary
     per project, each opening its view; a project that cannot be read says why, never left out, the rest still
     showing as each is read."""
-    from owlbear_decisions import State  # noqa: PLC0415 - the decisions' own
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
+    from owlbear_decisions import State  # noqa: PLC0415 - the decisions' own
     from owlbear_delivery_next.local_system import data_place  # noqa: PLC0415
 
     shared = shared_repo[0]
@@ -1090,13 +1090,18 @@ def test_decisions_under_all_projects_sum_up_each_scope_and_open_its_view_even_w
     decided(shared, "alpha", "Notes sync nightly.", state=State.DRAFT)
     with browsing(monkeypatch, pds, 390) as (page, base):
         held: list = []
-        page.route(f"**/p/{b.id}/api/next/decisions?*", lambda route: held.append(route))
+
+        def hold(route) -> None:  # a builtin's bound method cannot be a Playwright handler
+            held.append(route)
+
+        page.route(f"**/p/{b.id}/api/next/decisions?*", hold)
         page.goto(f"{base}/decisions#token=t")
         expect(page).to_have_url(f"{base}/decisions")  # no project is chosen for the owner
         rows = page.locator("#scopes .scope")
         expect(rows.locator("h3")).to_have_text(["Global", "OwlBear", "alpha", "beta", "gone"])
-        row = {key: page.locator(f'#scopes .scope[data-key="{key}"]') for key in ("global", "owlbear", a.id, b.id,
-                                                                                    gone.id)}
+        row = {
+            key: page.locator(f'#scopes .scope[data-key="{key}"]') for key in ("global", "owlbear", a.id, b.id, gone.id)
+        }
         expect(row[a.id]).to_contain_text("1 in force · 1 draft")  # read while beta's read is held
         expect(row[b.id]).to_have_attribute("aria-busy", "true")
         expect(row[b.id]).to_contain_text("Reading…")
@@ -1113,26 +1118,33 @@ def test_decisions_under_all_projects_sum_up_each_scope_and_open_its_view_even_w
         expect(row[b.id]).to_contain_text("0 in force · 0 drafts")
         assert targets(page.locator("#scopes a, #scopes button")) == []
         assert page.evaluate("document.documentElement.scrollWidth") <= 390
+        each_scope_opens_its_view_and_leads_back(page, pds, base, row, a)
 
-        row["global"].get_by_role("link", name="Global").click()
-        expect(page).to_have_url(f"{base}/decisions?view=global")
-        expect(page.locator("#shown")).to_have_text("Global · 2 shown")
-        expect(page.locator(".entry")).to_have_count(2)
-        expect(pds.select(page, "Show")).to_have_count(0)
-        page.locator(".entry", has_text="Pages are plain HTML.").locator("summary").click()
-        expect(page.locator("#detail")).to_contain_text("Origin")
-        expect(page.get_by_role("button", name="Record an exception")).to_have_count(0)  # no project to own one
-        page.get_by_role("link", name="All projects").click()
-        expect(page).to_have_url(f"{base}/decisions")
-        row["owlbear"].get_by_role("link", name="OwlBear").click()
-        expect(page.locator("#shown")).to_have_text("OwlBear · 1 shown")
-        expect(page.locator(".entry")).to_have_text([re.compile("Lint once")])
-        page.goto(f"{base}/decisions")
-        row[a.id].get_by_role("link", name="alpha").click()
-        expect(page).to_have_url(f"{base}/decisions?project={a.id}")
-        expect(page.locator(".entry", has_text="Notes live in SQLite.")).to_have_count(1)
-        page.goto(f"{base}/decisions?project=nobody")  # a project no longer listed opens the overview
-        expect(page).to_have_url(f"{base}/decisions")
+
+def each_scope_opens_its_view_and_leads_back(page, pds, base: str, row: dict, a: registry.Project) -> None:
+    """Global's and OwlBear's views hold only theirs and lead back; a project's opens its page; an unlisted project
+    opens the overview."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    row["global"].get_by_role("link", name="Global").click()
+    expect(page).to_have_url(f"{base}/decisions?view=global")
+    expect(page.locator("#shown")).to_have_text("Global · 2 shown")
+    expect(page.locator(".entry")).to_have_count(2)
+    expect(pds.select(page, "Show")).to_have_count(0)
+    page.locator(".entry", has_text="Pages are plain HTML.").locator("summary").click()
+    expect(page.locator("#detail")).to_contain_text("Origin")
+    expect(page.get_by_role("button", name="Record an exception")).to_have_count(0)  # no project to own one
+    page.get_by_role("link", name="All projects").click()
+    expect(page).to_have_url(f"{base}/decisions")
+    row["owlbear"].get_by_role("link", name="OwlBear").click()
+    expect(page.locator("#shown")).to_have_text("OwlBear · 1 shown")
+    expect(page.locator(".entry")).to_have_text([re.compile("Lint once")])
+    page.goto(f"{base}/decisions")
+    row[a.id].get_by_role("link", name="alpha").click()
+    expect(page).to_have_url(f"{base}/decisions?project={a.id}")
+    expect(page.locator(".entry", has_text="Notes live in SQLite.")).to_have_count(1)
+    page.goto(f"{base}/decisions?project=nobody")  # a project no longer listed opens the overview
+    expect(page).to_have_url(f"{base}/decisions")
 
 
 @pytest.mark.browser

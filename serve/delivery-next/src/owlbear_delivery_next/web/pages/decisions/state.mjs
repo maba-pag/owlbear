@@ -12,8 +12,8 @@ export const TAGS = { draft: "info", in_force: "success", replaced: "secondary",
 export const KINDS = { safety: "Safety or irreversible", blocked: "Blocks work", uncertain: "Uncertain",
   improvement: "Improvement" };
 // Under All projects (D-01M63C6PMT4FX370W6B2VS9HAM) the page shows one summary per scope (""), or the Global or
-// OwlBear view one opens; null on a project's page or a clone's own host. Its reads go to the machine host's routes over
-// OwlBear's own folder, which hold Global too (D-01M5ZGHDMEG897N2SD1XNEXYNQ).
+// OwlBear view one opens; null on a project's page or a clone's own host. Its reads go to the machine host's routes
+// over OwlBear's own folder, which hold Global too (D-01M5ZGHDMEG897N2SD1XNEXYNQ).
 export const VIEWS = { global: { where: "global", name: "Global" }, owlbear: { where: "project", name: "OwlBear" } };
 const asked = new URLSearchParams(location.search).get("view") ?? "";
 export const wide = shown() !== null && !project ? (Object.hasOwn(VIEWS, asked) ? asked : "") : null;
@@ -33,7 +33,8 @@ export const state = {
   recovery: { status: null, error: "", notice: "", pending: "" },  // the interrupted batch, read apart from the list
 };
 // where: project | global | all | owlbear; state: "" (in force and drafts), a state, or "all" (retired included)
-export const filter = { where: wide ? VIEWS[wide].where : "all", topic: "", origin: "", state: "", read_back: "", text: "" };
+export const filter = { where: wide ? VIEWS[wide].where : "all", topic: "", origin: "", state: "", read_back: "",
+  text: "" };
 
 // Capture the list's address so a later filter cannot retarget its reads, confirmations or writes.
 export function addressOf(where, folder = "") {
