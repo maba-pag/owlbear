@@ -115,7 +115,8 @@ def test_ci_reruns_once_only_tests_whose_issue_is_open_and_reports_every_attempt
     monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary))
     monkeypatch.setenv("GITHUB_REPOSITORY", "owner/repo")
 
-    suite.runpytest_subprocess("-p", "owlbear_tools.flaky", "-n", "2", "--dist", "worksteal")
+    # one worker: with two, worksteal can send a steal to a worker that crashed but isn't reaped yet, which aborts xdist
+    suite.runpytest_subprocess("-p", "owlbear_tools.flaky", "-n", "1", "--dist", "worksteal")
 
     assert _runs(suite.path) == {name: 1 if name in {"closed_issue", "unmarked"} else 2 for name in _NAMES}
     rows = {row["nodeid"].split("::")[1]: row for row in json.loads(report.read_text())}
