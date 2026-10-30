@@ -16,12 +16,15 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
 
-_MARK = re.compile(r"\bflaky\(\s*issue\s*=\s*(\d+)\s*,?\s*\)")
+_MARK = re.compile(r"\bflaky\(\s*(?:#[^\n]*\n\s*)*issue\s*=\s*(\d[\d_]*)")
 _TIMEOUT_SECONDS = 10
 
 
 def marked_issues(root: Path) -> list[int]:
-    """Issue numbers named by flaky marks in the repository's tracked Python files."""
+    """Issue numbers named by flaky marks in the repository's tracked Python files.
+
+    A match inside a string only adds an issue to look up; the plugin re-runs only tests whose mark names it.
+    """
     listed = subprocess.run(
         ["git", "ls-files", "-z", "--", "*.py"],  # noqa: S607
         cwd=root,
@@ -30,7 +33,8 @@ def marked_issues(root: Path) -> list[int]:
     ).stdout.decode()
     found: set[int] = set()
     for name in filter(None, listed.split("\0")):
-        found.update(int(number) for number in _MARK.findall((root / name).read_text(encoding="utf-8")))
+        text = (root / name).read_text(encoding="utf-8", errors="replace")
+        found.update(int(number.replace("_", "")) for number in _MARK.findall(text))
     return sorted(found)
 
 

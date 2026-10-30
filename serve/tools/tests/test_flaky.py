@@ -48,6 +48,19 @@ def test_crashes_once():
 
 
 @pytest.mark.flaky(issue=11)
+def test_fails_then_crashes():
+    if _run("fails_then_crashes") > 1:
+        os._exit(1)
+    assert False
+
+
+@pytest.mark.flaky(issue=11)
+def test_crashes_twice():
+    _run("crashes_twice")
+    os._exit(1)
+
+
+@pytest.mark.flaky(issue=11)
 def test_skips_on_rerun():
     if _run("skips") > 1:
         pytest.skip("not today")
@@ -67,7 +80,17 @@ def test_closed_issue():
 def test_unmarked():
     assert _run("unmarked") > 1
 """
-_NAMES = ("recovers", "keeps_failing", "crashes", "skips", "teardown", "closed_issue", "unmarked")
+_NAMES = (
+    "recovers",
+    "keeps_failing",
+    "crashes",
+    "fails_then_crashes",
+    "crashes_twice",
+    "skips",
+    "teardown",
+    "closed_issue",
+    "unmarked",
+)
 _ENV = ("OWLBEAR_FLAKY_OPEN_ISSUES", "OWLBEAR_FLAKY_REPORT", "GITHUB_STEP_SUMMARY", "GITHUB_REPOSITORY")
 
 
@@ -100,9 +123,12 @@ def test_ci_reruns_once_only_tests_whose_issue_is_open_and_reports_every_attempt
         "test_recovers": (11, 1, "passed"),
         "test_keeps_failing": (11, 1, "failed"),
         "test_crashes_once": (11, 1, "passed"),
+        "test_fails_then_crashes": (11, 1, "failed"),
+        "test_crashes_twice": (11, 1, "failed"),
         "test_skips_on_rerun": (11, 1, "skipped"),
         "test_fails_in_call_and_teardown": (11, 1, "passed"),
     }
+    assert [a["outcome"] for a in rows["test_crashes_twice"]["attempts"]] == ["rerun", "failed"]
     first = rows["test_recovers"]["attempts"][0]
     assert (first["attempt"], first["outcome"], first["phase"]) == (1, "rerun", "call")
     assert "first attempt broke" in first["message"]

@@ -73,6 +73,11 @@ def _message(report: pytest.TestReport) -> str:
     return text[:1000]
 
 
+def _issue_key(nodeid: str) -> str:
+    """The key under which pytest-rerunfailures' shared counters carry a test's issue to the xdist controller."""
+    return f"{nodeid}\0owlbear-flaky-issue"
+
+
 class _Reruns:
     """Collects every attempt of a re-run test; under xdist the controller sees every worker's reports.
 
@@ -90,7 +95,7 @@ class _Reruns:
         issue = dict(report.user_properties).get(_ISSUE_PROPERTY)
         if issue is not None:
             self.issues[report.nodeid] = issue
-        elif report.nodeid not in self.issues and report.outcome != "rerun":
+        elif report.nodeid not in self.issues and report.nodeid not in self.attempts and report.outcome != "rerun":
             return
         if report.outcome == "rerun":
             self.rerun.add(report.nodeid)
@@ -101,6 +106,23 @@ class _Reruns:
         attempt["duration"] = round(float(attempt["duration"]) + report.duration, 3)
         if _PRECEDENCE.index(report.outcome) < _PRECEDENCE.index(str(attempt["outcome"])):
             attempt.update(outcome=report.outcome, phase=report.when, message=_message(report))
+
+    @pytest.hookimpl(tryfirst=True)
+    def pytest_runtest_protocol(self, item: pytest.Item) -> None:
+        """Tell the xdist controller a marked test's issue before it runs, since a crash loses its reports."""
+        issue = dict(item.user_properties).get(_ISSUE_PROPERTY)
+        if issue is not None and hasattr(item.config, "workerinput"):
+            item.config.failures_db.set_test_reruns(_issue_key(item.nodeid), issue)  # type: ignore[attr-defined]
+
+    @pytest.hookimpl(optionalhook=True, tryfirst=True)
+    def pytest_handlecrashitem(self, crashitem: str, report: pytest.TestReport, sched: object) -> None:  # noqa: ARG002
+        """Count re-runs after ordinary failures toward the crash budget, which pytest-rerunfailures keeps apart."""
+        failures = sched.config.failures_db  # type: ignore[attr-defined]
+        if crashitem not in self.issues and failures.get_test_reruns(_issue_key(crashitem)):
+            self.issues[crashitem] = failures.get_test_reruns(_issue_key(crashitem))
+        used = sum(attempt["outcome"] == "rerun" for attempt in self.attempts.get(crashitem, {}).values())
+        while failures.get_test_failures(crashitem) < used:
+            failures.add_test_failure(crashitem)
 
     def rows(self) -> list[dict[str, object]]:
         """One row per re-run test: its issue, every attempt, and how its last attempt ended."""
