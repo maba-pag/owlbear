@@ -21,6 +21,7 @@ from owlbear_delivery_next.state_store.decision_store import DecisionsUnavailabl
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from pathlib import Path
 
 AT = datetime(2026, 10, 21, 9, tzinfo=UTC)
 PROJECT, OTHER = "shop-site", "other-site"
@@ -127,12 +128,37 @@ TRANSITIONS: dict[str, Callable[[Seeded], None]] = {
 }  # fmt: skip
 
 
+class Plain(Seeded):
+    """The same three decisions written into a plain folder: what the fingerprint walks, with no Git around it."""
+
+    def __init__(self, root: Path) -> None:
+        self.root = root
+        self.rule = make(title="Lint once", statement="Code is linted once.", scope=Scope.GLOBAL, project="")
+        self.notes = make()
+        self.other = make(project=OTHER, title="Other notes")
+        for decision, folder in ((self.rule, root), (self.notes, root / PROJECT), (self.other, root / OTHER)):
+            write(decision, folder, None)
+
+
 @pytest.mark.parametrize("transition", TRANSITIONS.values(), ids=TRANSITIONS.keys())
-def test_an_uncommitted_change_is_read_as_an_uncached_read_sees_it(seeded, transition) -> None:
+def test_every_uncommitted_change_a_read_would_see_moves_the_fingerprint(tmp_path, transition) -> None:
+    plain = Plain(tmp_path)
+    before = decision_cache.fingerprint(plain.root, PROJECT)
+    assert before is not None
+
+    transition(plain)
+
+    after = decision_cache.fingerprint(plain.root, PROJECT)
+    assert after is not None
+    assert after[0] != before[0]  # the cache keeps its snapshot while the mark alone stays the same
+
+
+def test_an_uncommitted_change_is_read_as_an_uncached_read_sees_it(seeded) -> None:
+    """The cache rebuilds on a moved fingerprint; the test above moves it with every kind of change."""
     before = outcome(seeded.shared)
     assert outcome(seeded.shared) is before  # kept
 
-    transition(seeded)
+    _edit(seeded)
     after = outcome(seeded.shared)
     decision_cache.clear()
 
