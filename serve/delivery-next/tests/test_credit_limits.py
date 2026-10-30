@@ -200,6 +200,7 @@ class Session:
     def __init__(self, made: dict[str, Any], script: list[Any], *, abort: str = "ends", metrics: Any = 0.0) -> None:
         self.made, self.script, self.abort_mode, self.metrics = made, script, abort, metrics
         self.session_id, self.aborted, self.asked = "look-x", asyncio.Event(), asyncio.Event()
+        self.hanging = asyncio.Event()
         self.rpc = SimpleNamespace(usage=SimpleNamespace(get_metrics=self._metrics))
 
     async def send_and_wait(self, *_a: Any, **_kw: Any) -> None:
@@ -208,6 +209,7 @@ class Session:
                 await self.aborted.wait()
                 return
             if step == "hang":
+                self.hanging.set()
                 await asyncio.sleep(30)
             if step in ("raise-after-abort", "idle-raise-after-abort"):  # the transport fails once abort was asked
                 await self.asked.wait()
@@ -365,8 +367,8 @@ def test_a_cancelled_turn_reads_its_total_as_provisional(monkeypatch) -> None:
 
     async def main() -> None:
         task = asyncio.ensure_future(REAL_LOOK({}, ctx(), look))
-        await asyncio.sleep(0.05)
-        task.cancel()  # the step ends while the look runs
+        await asyncio.wait_for(session.hanging.wait(), 5)
+        task.cancel()  # the step ends while the look's turn runs
         await asyncio.wait({task})
 
     asyncio.run(main())
