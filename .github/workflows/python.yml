@@ -6,7 +6,7 @@ name: Python
   workflow_dispatch:
     inputs:
       workers:
-        description: xdist workers per shard, to benchmark a worker count; empty keeps the default
+        description: xdist workers per shard, to benchmark a worker count; empty keeps 6
         type: string
         default: ""
 
@@ -95,6 +95,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: python3 .github/scripts/flaky_issues.py
 
+      # 6 workers per 4-vCPU runner: in a benchmark, 10 spent ~53 s collecting and 4 ran the tests ~25 s slower.
       - name: Run test shard
         if: steps.reuse.outputs.cache-hit != 'true'
         env:
@@ -110,7 +111,7 @@ jobs:
           mkdir -p "$plugin_dir"
           cp .github/scripts/ci_shard.py "$plugin_dir/"
           PYTHONPATH="$plugin_dir" uv run --no-sync pytest tests serve -p ci_shard \
-            -m "not e2e and not model and not browser" -n "${CI_WORKERS:-auto}" --dist worksteal \
+            -m "not e2e and not model and not browser" -n "${CI_WORKERS:-6}" --dist worksteal \
             --junitxml="$RUNNER_TEMP/test-results/junit.xml"
 
       - name: Upload test results

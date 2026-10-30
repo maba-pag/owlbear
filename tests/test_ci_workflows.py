@@ -281,7 +281,7 @@ def test_python_tests_are_sharded_without_the_model_stack() -> None:
     assert job["name"] == f"Python tests ${{{{ matrix.shard }}}}/{len(shards)}"
     assert job["strategy"]["fail-fast"] is False
     assert 'uv sync --locked --all-packages --all-groups "${skipped[@]}"' in runs
-    assert '-m "not e2e and not model and not browser" -n "${CI_WORKERS:-auto}" --dist worksteal' in runs
+    assert '-m "not e2e and not model and not browser" -n "${CI_WORKERS:-6}" --dist worksteal' in runs
     assert job["steps"][[s.get("name") for s in job["steps"]].index("Run test shard")]["env"]["CI_WORKERS"] == (
         "${{ inputs.workers }}"
     )
