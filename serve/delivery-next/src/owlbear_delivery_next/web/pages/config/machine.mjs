@@ -176,10 +176,14 @@ async function saveMachine() {
   }
 }
 
-// One template whether or not the machine is read yet, so a heading an address focused keeps the focus once it is.
+// One template whether or not the machine is read yet, so a heading an address focused keeps the focus once it is. A
+// read that fails after one succeeded leaves the values read before, saying so.
 export function machineSection() {
   return html`<section class="panel" aria-labelledby="machine-title">
     <p-heading size="lg"><h2 id="machine-title" tabindex="-1">This machine</h2></p-heading>
+    ${state.machine && state.machineUnread ? html`<p-text id="machine-stale" role="status">Could not read this
+      machine's settings again: ${state.machineUnread}. These are the ones read before; the page tries again when the
+      machine's state changes.</p-text>` : nothing}
     ${state.machine ? machineBody(state.machine) : html`<p-text id="machine-unread" role="status">${!clones()
       ? "Only the machine host's Settings page shows this machine's settings." : state.machineUnread
         ? `Could not read this machine's settings: ${state.machineUnread}. The page tries again when the machine's `

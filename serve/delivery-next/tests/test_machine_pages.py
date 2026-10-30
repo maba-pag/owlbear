@@ -466,6 +466,15 @@ def test_settings_say_this_machine_s_settings_could_not_be_read_and_read_them_ag
         page.evaluate("document.dispatchEvent(new Event('owlbear-machine'))")
         expect(page.locator("#machine-login")).to_contain_text("Start at login")
         expect(unread).to_have_count(0)
+        # CodeRabbit on #813: a later failed read keeps what was read, saying so
+        page.route("**/api/next/machine", busy)
+        page.evaluate("document.dispatchEvent(new Event('owlbear-machine'))")
+        stale = page.locator("#machine-stale")
+        expect(stale).to_contain_text("Could not read this machine's settings again")
+        expect(page.locator("#machine-login")).to_contain_text("Start at login")
+        page.unroute("**/api/next/machine", busy)
+        page.evaluate("document.dispatchEvent(new Event('owlbear-machine'))")
+        expect(stale).to_have_count(0)
 
 
 def a_group_of_the_shown_page_opens_on_it(page, here: str) -> None:
