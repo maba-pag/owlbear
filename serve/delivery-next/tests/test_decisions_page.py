@@ -200,6 +200,13 @@ def test_the_owner_filters_opens_and_replaces_a_decision_and_sees_its_receipt(st
 
     with decisions_page(store, pds) as page:
         expect(page.locator("#shown")).to_have_text("2 of 2 shown")
+        boxes = page.locator("#filters > *").evaluate_all(
+            "els => els.map(e => [e.localName, e.getBoundingClientRect().top, e.getBoundingClientRect().bottom])"
+        )
+        selects, [search] = (b for b in boxes if b[0] != "p-input-text"), [b for b in boxes if b[0] == "p-input-text"]
+        tops, bottoms = zip(*((round(top), bottom) for _, top, bottom in selects), strict=True)
+        assert len(set(tops)) == 1  # one row of selects at 1280 pixels, their labels level
+        assert search[1] >= max(bottoms)  # Search, taller with its hint, on a line of its own below them
         expect(page.get_by_role("navigation").get_by_role("link", name="Decisions")).to_have_attribute(
             "aria-current", re.compile(r"page|true"))  # fmt: skip
         pds.pick(page, "Show", "global")
