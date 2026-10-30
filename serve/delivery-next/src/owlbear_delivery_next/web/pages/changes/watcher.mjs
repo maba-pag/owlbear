@@ -34,9 +34,9 @@ export function watcherSection(w) {
     : w.on === true ? "Report only: nothing is judged or stopped yet." : "The watcher's switch could not be read.";
   const counted = `${plural(w.outside, "call")} observed writing outside the worktree \u00b7 `
     + `${plural(w.unresolved, "call")} whose shell effects are not classified yet`;
-  return info("Watcher", text(state, { size: "xs", color: "contrast-medium" }), text(counted),
+  return info("Watcher", text(state, { color: "contrast-medium" }), text(counted),
     outside.length ? entries(outside) : nothing,
     open.length ? toggle("watcher-open", `Not classified yet (${open.length})`, text("Shell effects are not "
-      + "classified yet: every shell command that may write is listed here.", { size: "xs" }), entries(open)) : nothing,
+      + "classified yet: every shell command that may write is listed here."), entries(open)) : nothing,
     lost.map((r) => text(r.verdict, { size: "xs", color: "contrast-medium" })));
 }
