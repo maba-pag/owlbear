@@ -84,22 +84,6 @@ def _host_json(p) -> Path:
     return p.store.root / "host.json"
 
 
-def test_a_healthy_project_publishes_its_discovery_file_on_load_and_removes_it_on_stop(
-    machine, repo, monkeypatch, thread_errors
-):
-    ready_go = threading.Event()
-    ready_go.set()
-    p = _loaded(machine, repo, monkeypatch, ready_go)
-    assert p.scheduler is not None
-    for t in [t for t in threading.enumerate() if t.name == f"readiness-{p.entry.id}"]:
-        t.join(WAIT)
-    assert json.loads(_host_json(p).read_text())["project"] == p.entry.id
-    assert p.stop(drain=0) == []
-    assert not _host_json(p).exists()
-    assert p.state == "stopped"
-    assert thread_errors == []
-
-
 def test_a_stop_during_a_publish_paused_after_the_write_leaves_no_discovery_file_and_no_thread_error(
     machine, repo, monkeypatch, thread_errors
 ):
@@ -154,14 +138,19 @@ def test_a_stop_during_a_publish_paused_after_the_write_leaves_no_discovery_file
     assert p.state == "stopped"
 
 
-def test_a_late_publish_after_the_stop_writes_nothing(machine, repo, monkeypatch, thread_errors):
+def test_a_healthy_load_publishes_its_discovery_file_a_stop_removes_it_and_a_late_publish_writes_nothing(
+    machine, repo, monkeypatch, thread_errors
+):
     ready_go = threading.Event()
     ready_go.set()
     p = _loaded(machine, repo, monkeypatch, ready_go)
+    assert p.scheduler is not None
     for t in [t for t in threading.enumerate() if t.name == f"readiness-{p.entry.id}"]:
         t.join(WAIT)
+    assert json.loads(_host_json(p).read_text())["project"] == p.entry.id
     assert p.stop(drain=0) == []
     assert not _host_json(p).exists()
+    assert p.state == "stopped"
 
     late = threading.Thread(target=p._ready, daemon=True)  # noqa: SLF001
     late.start()
