@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="owlbear-scope" content="all">
 <title>OwlBear Delivery · Decisions</title>
 <link rel="stylesheet" href="/assets/pds/4.10.1/index.css">
 <script type="module">
@@ -15,11 +16,22 @@
   .row { align-items: end; }
   #filters > * { flex: 1 1 11rem; }
   .entries { display: grid; gap: var(--p-spacing-static-sm); margin: 0; padding: 0; list-style: none; }
-  .entry, .queued {
+  .queued {
     display: grid; gap: var(--p-spacing-static-sm); padding: var(--p-spacing-static-sm) var(--p-spacing-static-md);
     background: var(--p-color-surface); border-radius: var(--p-radius-lg);
   }
-  :is(.entry, .queued) .title { display: flex; flex-wrap: wrap; align-items: center; gap: var(--p-spacing-static-sm); }
+  :is(.queued .title, .entry .tags) {
+    display: flex; flex-wrap: wrap; align-items: center; gap: var(--p-spacing-static-sm);
+  }
+  .entry .summary {
+    display: flex; flex-wrap: wrap; align-items: center; gap: var(--p-spacing-static-sm) var(--p-spacing-static-md);
+    width: 100%;
+  }
+  .entry .named {
+    display: grid; flex: 1 1 20rem; gap: var(--p-spacing-static-xs); min-width: 0; overflow-wrap: anywhere;
+  }
+  #decisions { display: grid; gap: var(--p-spacing-static-md); }
+  .row > .apart { margin-inline-start: auto; }
   :is(.entry, .queued) :is(.title, li, dd) { overflow-wrap: anywhere; }
   :is(.entry, .queued) :is(.detail, .form) { display: grid; gap: var(--p-spacing-static-md); min-width: 0; }
   :is(.entry, .queued) .detail {

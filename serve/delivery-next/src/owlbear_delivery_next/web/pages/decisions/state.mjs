@@ -1,4 +1,5 @@
 import { render } from "/assets/lit-html/3.3.3/lit-html.js";
+import { project, shown } from "/assets/ui.mjs";
 import { view } from "./list.mjs";
 
 export const WRITE = 60000;  // a write commits and pushes to the shared data repository
@@ -10,6 +11,13 @@ export const TAGS = { draft: "info", in_force: "success", replaced: "secondary",
 // The read-back queue's kinds, most urgent first (TD-427).
 export const KINDS = { safety: "Safety or irreversible", blocked: "Blocks work", uncertain: "Uncertain",
   improvement: "Improvement" };
+// Under All projects (D-01M63C6PMT4FX370W6B2VS9HAM) the page shows one summary per scope (""), or the Global or
+// OwlBear view one opens; null on a project's page or a clone's own host. Its reads go to the machine host's routes
+// over OwlBear's own folder, which hold Global too (D-01M5ZGHDMEG897N2SD1XNEXYNQ).
+export const VIEWS = { global: { where: "global", name: "Global" }, owlbear: { where: "project", name: "OwlBear" } };
+const asked = new URLSearchParams(location.search).get("view") ?? "";
+export const wide = shown() !== null && !project ? (Object.hasOwn(VIEWS, asked) ? asked : "") : null;
+export const ROOT = wide === null ? "" : "/owlbear";
 // Everything the page shows comes from here, so a re-render never loses what the owner typed or opened.
 export const state = {
   loaded: null, error: "", receipts: [], notice: "",
@@ -17,6 +25,7 @@ export const state = {
   from: "list",  // where it is shown: under its read-back in the queue, or in the list
   address: null,
   entry: null,  // its details as last read
+  unread: false,  // whether reading them failed, so the opened decision says so instead of "Reading…"
   form: null,  // { action, draft } of the opened decision's form
   pending: "",  // the action whose request is under way
   impact: null,  // { id, address, report | error | busy, scheduled } of the opened decision's impact (TD-428)
@@ -24,15 +33,16 @@ export const state = {
   recovery: { status: null, error: "", notice: "", pending: "" },  // the interrupted batch, read apart from the list
 };
 // where: project | global | all | owlbear; state: "" (in force and drafts), a state, or "all" (retired included)
-export const filter = { where: "all", topic: "", origin: "", state: "", read_back: "", text: "" };
+export const filter = { where: wide ? VIEWS[wide].where : "all", topic: "", origin: "", state: "", read_back: "",
+  text: "" };
 
 // Capture the list's address so a later filter cannot retarget its reads, confirmations or writes.
-export function addressOf(where, project = "") {
-  return { where: where === "owlbear" ? "owlbear" : "", project };
+export function addressOf(where, folder = "") {
+  return { where: where === "owlbear" || wide !== null ? "owlbear" : "", project: folder };
 }
 
 export function at(path, address) {
-  return address.where ? `${path}?where=${address.where}` : path;
+  return address.where ? `${ROOT}${path}?where=${address.where}` : `${ROOT}${path}`;
 }
 
 export function sameAddress(a, b) {
@@ -59,6 +69,16 @@ export function scopeOf(d) {
   if (d.scope === "global") return "Global";
   const project = d.project === "owlbear" ? "OwlBear" : d.project;
   return d.change ? `${project} · Change ${d.change}` : project;
+}
+
+// Whether the title is only the statement cut off (shortened with "…", or its first clause): the statement then
+// shows once, as the heading (D-01M63CEE5C9K50RXGCYBSP64VK).
+export function cutOff(d) {
+  const flat = (text) => text.split(/\s+/).join(" ").trim();
+  const whole = flat(d.title), said = flat(d.statement);
+  const title = whole.replace(/\s*(…|\.\.\.)$/, ""), marked = title !== whole;
+  // An unmarked prefix must end at a word boundary; one marked with "…" may be cut mid-word.
+  return title !== "" && said.startsWith(title) && (marked || !/[\p{L}\p{N}]/u.test(said.charAt(title.length)));
 }
 
 // When the owner last confirmed the statement (TD-449), or that it was inherited and never read back (TD-454).

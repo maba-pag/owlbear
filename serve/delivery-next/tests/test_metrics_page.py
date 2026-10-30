@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import socket
 import threading
 import time
@@ -94,7 +95,13 @@ def test_the_metrics_page_sums_splits_drills_down_and_lists_runs_with_their_limi
             expect(page.locator("#runs p-table-row").nth(1)).to_contain_text(
                 "stopped at its credit limit of 1 (session)"
             )
-            expect(page.locator("#runs p-table-row").nth(0)).to_contain_text("not all reported")
+            expect(page.locator("#runs p-table-row").nth(0)).to_contain_text("lower bound")  # its credits unreported
+            expect(page.locator("#runs p-table-row").nth(0)).to_contain_text("Outside a Change")
+            expect(page.locator("#runs p-table-row").nth(1)).not_to_contain_text("lower bound")
+            expect(page.locator("#runs .lower")).to_have_count(1)
+            expect(page.locator("#lower-bound")).to_contain_text("spent at least this")
+            expect(page.locator("#exact li")).to_have_text([re.compile(r"^1 run did not report its credits")])
+            expect(rows.locator(".share")).to_have_text(["57%", "29%", "14%", "0%"])  # of the 3.50 credits
             expect(page.locator("#runs p-table-row").nth(0)).to_contain_text("may have reached its credit limit of 0.5")
             tools = page.locator("#tools p-table-row")  # C-28: weighted, 1 of 1 and 0 of 9 calls accepted
             expect(tools).to_have_count(2)
@@ -157,9 +164,9 @@ def test_a_ledger_whose_step_events_list_their_models_renders(pds) -> None:
     place = {"project": "shop", "name": "shop", "clone": "", "change": "c1", "step": "build", "job": "",
              "agent": "builder", "source": "import:activity"}  # fmt: skip
     spend_ledger.append([
-        place | {"id": f"event:{n}", "type": "event", "at": at, "session": f"s{n}",
+        place | {"id": f"event:{n}", "type": "event", "at": at, "session": f"s{n}", "step": step,
                  "usage": {"credits": spent, "model_mismatch": False, "models": names}}
-        for n, (spent, names) in enumerate([(1.5, ["m1"]), (0.5, ["m1", "m2"])])
+        for n, (spent, names, step) in enumerate([(1.5, ["m1"], "build"), (0.5, ["m1", "m2"], "amend")])
     ])  # fmt: skip
     machine, server, base = serve()
     try:
@@ -178,8 +185,103 @@ def test_a_ledger_whose_step_events_list_their_models_renders(pds) -> None:
             expect(rows.nth(0)).to_contain_text("1.50")
             expect(rows.nth(1)).to_contain_text("Model unknown")
             expect(rows.nth(1)).to_contain_text("0.50")
-            expect(page.locator("#runs p-table-row")).to_have_count(2)
+            fold = page.locator("#runs p-table-row")  # one builder's consecutive runs share a row that opens
+            expect(fold).to_have_count(1)
+            expect(fold).to_have_attribute("data-runs", "2")
+            expect(fold).to_contain_text("2.00")
+            expect(fold.locator("p-table-cell").nth(2)).to_have_text("c1 · 2 steps")  # one Change, not "2 Changes"
+            button = fold.get_by_role("button", name="builder · 2 runs")
+            expect(button).to_have_attribute("aria-expanded", "false")
+            button.focus()
+            page.keyboard.press("Enter")
+            expect(button).to_have_attribute("aria-expanded", "true")
+            expect(page.locator("#runs .member")).to_have_count(2)
+            expect(page.locator("#runs .member .num")).to_have_text(["1.50", "0.50"])
+            expect(page.locator("#runs .member p-table-cell:nth-child(3)")).to_have_text(["c1 · build", "c1 · amend"])
+            page.keyboard.press("Enter")
+            expect(page.locator("#runs .member")).to_have_count(0)
             expect(page.locator("#error")).to_have_count(0)
+            browser.close()
+    finally:
+        server.should_exit = True
+        machine.stop_all()
+
+
+@pytest.mark.browser
+def test_a_fold_counts_changes_by_project_apart_from_runs_outside_one_and_its_rows_name_theirs(pds) -> None:
+    """Copilot's counterexamples: two projects' curation runs read as "2 Changes"; one slug in two projects read as
+    "2 Changes" while the opened rows left their Change blank; and two projects sharing a name read as one Change."""
+    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+
+    now, spent = datetime.now(UTC) - timedelta(hours=1), {"credits": 1.0, "models": {"m1": {"credits": 1.0}}}
+    seeds = [("curator", "shop", "shop", ""), ("curator", "docs", "docs", ""), ("builder", "p", "web", "ch"),
+             ("builder", "q", "web", "ch"),  # two projects that share a name
+             ("reviewer", "shop", "shop", ""), ("reviewer", "shop", "shop", "c9")]  # fmt: skip
+    spend_ledger.append([
+        line for n, (agent, pid, name, change) in enumerate(seeds)
+        for line in run(f"r{n}", now + timedelta(minutes=n), spent, {"project": pid, "name": name, "change": change,
+                                                                     "step": "build" if change else "", "agent": agent})
+    ])  # fmt: skip
+    machine, server, base = serve()
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except Error as exc:
+                pytest.skip(f"no Playwright Chromium: {exc}")
+            page = browser.new_page()
+            pds.only(page, base)
+            page.goto(f"{base}/metrics#token=t")
+            folds = page.locator("#runs p-table-row.fold p-table-cell:nth-child(3)")
+            expect(folds).to_have_text(["1 Change and outside a Change", "2 Changes", "Outside a Change"])
+            page.get_by_role("button", name="builder · 2 runs").click()
+            expect(page.locator("#runs .member p-table-cell:nth-child(3)")).to_have_text(["ch · build", "ch · build"])
+            browser.close()
+    finally:
+        server.should_exit = True
+        machine.stop_all()
+
+
+@pytest.mark.browser
+def test_spend_said_apart_from_the_period_never_reads_unknown_as_zero_or_a_counted_run_as_left_out(pds) -> None:
+    """Sol's and Copilot's counterexamples: a run with only its start said "0.00 more"; one carrying known credits too
+    said "credits not known"; and a resumed run, counted with its own spend, was called one more run not counted."""
+    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+
+    at = (datetime.now(UTC) - timedelta(hours=1)).isoformat(timespec="seconds")
+    place = {"clone": "", "step": "", "job": "", "project": "shop", "name": "shop", "change": "c1", "agent": "builder"}
+
+    def started(rid: str, before: dict) -> dict:
+        return place | {"run": rid, "session": f"s-{rid}", "id": f"start:{rid}", "type": "start", "at": at,
+                        "model": "m1", "before": before}  # fmt: skip
+
+    def used(spent: float) -> dict:
+        return {"credits": spent, "models": {"m1": {"credits": spent, "input": 10, "output": 1}}}
+
+    spend_ledger.append([started("o", {})])
+    machine, server, base = serve()
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except Error as exc:
+                pytest.skip(f"no Playwright Chromium: {exc}")
+            page = browser.new_page(timezone_id="Europe/Berlin")
+            pds.only(page, base)
+            page.goto(f"{base}/metrics#token=t")
+            said = page.locator("#exact li").last
+            expect(said).to_contain_text("Spend of 1 run may also lie in this period (credits not known):")
+            expect(page.locator("#exact")).not_to_contain_text("0.00")
+            spend_ledger.append([started("p", used(3.0))])  # a resumed run whose end is not recorded yet
+            page.reload()
+            expect(said).to_contain_text("Spend of 2 runs may also lie in this period (3.00 or more credits):")
+            spend_ledger.append([started("r", used(3.0)), place | {  # resumed and ended: 1.00 of its own counts
+                "run": "r", "session": "s-r", "id": "end:r", "type": "end", "at": at, "usage": used(4.0),
+                "ending": "result", "limit": None, "stopped": ""}])  # fmt: skip
+            page.reload()
+            expect(page.locator("#total-runs")).to_have_text("1 run")
+            expect(said).to_contain_text("Spend of 3 runs may also lie in this period (6.00 or more credits):")
+            expect(said).to_contain_text("so it is not counted")
             browser.close()
     finally:
         server.should_exit = True
@@ -231,7 +333,8 @@ def test_a_show_more_answered_after_the_filters_changed_is_dropped(pds) -> None:
             expect(page.locator("#runs-count")).to_contain_text("All 3 runs.")
             page.evaluate("window.__held.forEach((go) => go())")  # the old answer arrives last
             page.wait_for_timeout(500)
-            expect(page.locator("#runs p-table-row")).to_have_count(3)
+            expect(page.locator("#runs p-table-row")).to_have_count(1)  # the three reviewer runs fold
+            expect(page.locator("#runs p-table-row")).to_have_attribute("data-runs", "3")
             expect(page.locator("#runs-count")).to_contain_text("All 3 runs.")
             expect(page.locator("#more")).to_have_count(0)
             expect(page.locator("#error")).to_have_count(0)

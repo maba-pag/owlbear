@@ -37,9 +37,12 @@
 <script type="module">
 import { html, nothing, render } from "/assets/lit-html/3.3.3/lit-html.js";
 import { call, defined, here, project, shown } from "/assets/ui.mjs";
+import { lastSaid, maintained } from "/assets/page/maintenance/overview.mjs";
 
-// Under the machine host with no project chosen, only the machine's parts show: the project's wait for one.
+// Under the machine host with no project chosen, each project shows as a summary that opens it, beside the machine's
+// own parts.
 const none = shown() !== null && !project;
+const projects = none ? maintained(() => show()) : null;
 
 const RESULTS = { passed: "success", "up-to-date": "success", failed: "error", running: "info" };
 const state = {
@@ -53,10 +56,9 @@ function lastRun(a) {
   if (!a.built) return html`<p-tag variant="secondary" compact="true">not built yet</p-tag>`;
   if (!a.recorded) return html`<p-text size="xs" color="contrast-medium">No run record kept.</p-text>`;
   if (!a.last) return html`<p-text size="sm">Never run.</p-text>`;
-  const at = a.last.ended_at || a.last.started_at;
-  const when = at ? `, ${new Date(at).toLocaleString()}` : "";
+  const [by, what] = lastSaid(a.last);
   const tag = RESULTS[a.last.state];
-  return html`<p-text size="sm">Last run: ${a.last.state}${when}</p-text>
+  return html`<p-text size="sm">Last run${by}: ${what}</p-text>
     ${tag ? html`<p-tag variant=${tag} compact="true">${a.last.state}</p-tag>` : nothing}
     ${a.last.reason ? html`<p-text size="xs" color="contrast-medium">${a.last.reason}</p-text>` : nothing}`;
 }
@@ -345,9 +347,9 @@ function view() {
     <p-inline-notification id="error" state="error" dismiss-button="false" ?hidden=${!error}>${error}
     </p-inline-notification>
     <p-text id="status" role="status" aria-live="polite"></p-text>
-    ${none ? html`<p-text id="no-project" size="sm">Choose a project above for its maintenance actions, test review
-      and subagent use. Memory curation and the sessions below are the machine's, the same in every
-      project.</p-text>` : html`
+    ${none ? projects.view({ id: "projects", heading: "Maintenance by project", intro: "Open a project for its "
+      + "maintenance actions, test review and subagent use. Memory curation and the sessions below are the machine's, "
+      + "the same in every project." }) : html`
     <section aria-labelledby="actions-title">
       <p-heading size="lg"><h2 id="actions-title">Maintenance actions</h2></p-heading>
       <ul id="actions" class="actions">${state.actions.map(action)}</ul>
@@ -361,8 +363,11 @@ function show() {
   render(view(), document.getElementById("page"));
 }
 
-async function refresh() {
+// *all* reads each project's summary again too; a look at a running curation does not, so a project slower to
+// answer than its five seconds still shows.
+async function refresh(all = true) {
   const generation = ++state.reading;
+  if (all) projects?.refresh();  // each project's summary shows as it is read, apart from the machine's parts
   // Keep the established read order, collecting failures without losing another section's data.
   const idle = Promise.resolve([[], []]);
   const [overview] = await Promise.allSettled([
@@ -410,7 +415,7 @@ async function refresh() {
   show();
   clearTimeout(state.again);  // a run in progress: look again until its report is in
   const busy = (state.curation?.folders ?? []).some((f) => ["waiting", "running"].includes(f.state));
-  if (busy) state.again = setTimeout(refresh, 5000);
+  if (busy) state.again = setTimeout(() => refresh(false), 5000);
 }
 
 show();

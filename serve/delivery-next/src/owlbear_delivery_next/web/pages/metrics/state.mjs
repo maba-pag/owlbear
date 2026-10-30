@@ -17,7 +17,8 @@ export const filter = {
   agent: q.get("agent") || "", model: q.get("model") || "", change: q.get("change") || "",
   stopped: q.get("stopped") === "1", by: q.get("by") || "agent",
 };
-export const state = { data: null, error: "", reading: 0, runs: [], next: null, more: false, picked: q.has("in") };
+export const state = { data: null, error: "", reading: 0, runs: [], next: null, more: false, picked: q.has("in"),
+  unfolded: new Set() };  // the folds of runs opened, by their newest run
 
 export function show() {
   render(view(), document.getElementById("page"));

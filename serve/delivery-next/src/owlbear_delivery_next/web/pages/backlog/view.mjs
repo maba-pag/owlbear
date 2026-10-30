@@ -85,7 +85,7 @@ export function view() {
       loaded.unreadable.length ? `Issues without a readable entry: ${loaded.unreadable.join(", ")}.` : "",
       ...loaded.failed.map((f) => `Not read just now: ${f}.`)];
     const ticked = chosen().length;
-    body.push(html`<p-text id="where" size="xs" color="contrast-medium">${notes.filter(Boolean).join(" ")}</p-text>
+    body.push(html`<p-text id="where" color="contrast-medium">${notes.filter(Boolean).join(" ")}</p-text>
       ${head}
       ${addForm()}
       <section aria-labelledby="inbox-title">
