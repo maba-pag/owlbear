@@ -73,9 +73,11 @@ function linkPart(e, byId) {
   </div>`;
 }
 
-function dropButton(e) {
+// In the inbox Drop is a text button beside the kind, named with its entry for a screen reader's list of buttons.
+function dropButton(e, pure = false) {
   const drop = () => patch(e, { status: "dropped" }, `Dropped "${e.title}"; Reopen brings it back.`);
-  return button("Drop", drop, { variant: "secondary", icon: "close" });
+  return pure ? html`<p-button-pure type="button" icon="close" .aria=${{ "aria-label": `Drop ${e.title}` }}
+    @click=${drop}>Drop</p-button-pure>` : button("Drop", drop, { variant: "secondary", icon: "close" });
 }
 
 function statusPart(e, drop = true) {
@@ -136,8 +138,10 @@ function details(e, byId) {
   </details>`;
 }
 
+// An inbox entry is one compact row: its kind to choose and Drop beside its title, the select naming the kind.
 export function card(e, byId) {
   const choosable = (e.status === "inbox" || e.status === "open") && !e.opening;
+  const triage = e.status === "inbox" && !e.opening;
   const seen = e.count > 1 ? `seen ${e.count} times, last ${age(e.last_seen)}` : `seen ${age(e.last_seen)}`;
   const choose = (on) => {
     if (on) state.selected.add(e.key);
@@ -147,15 +151,14 @@ export function card(e, byId) {
   return html`<li class=${choosable ? "entry" : "entry unselectable"}>
     ${choosable ? tick(`Select ${e.title}`, state.selected.has(e.key), choose) : nothing}
     <div class="body">
-      <div class="title"><p-text weight="semibold">${e.title}</p-text>
-        <p-tag variant=${TAGS[e.kind]} compact="true">${e.kind}</p-tag>
+      <div class="head"><div class="title"><p-text weight="semibold">${e.title}</p-text>
+        ${triage ? nothing : html`<p-tag variant=${TAGS[e.kind]} compact="true">${e.kind}</p-tag>`}
         ${e.status !== "inbox" && e.status !== "open" ? html`<p-tag compact="true">${e.status}</p-tag>` : nothing}
         ${e.opening ? html`<p-tag variant="info" compact="true">chat opening</p-tag>` : nothing}</div>
+        ${triage ? html`<div class="row triage">${kindPicker(e, true)}${dropButton(e, true)}</div>` : nothing}</div>
       <p-text size="xs" color="contrast-medium">From ${SOURCES[e.source] ?? e.source} · ${seen}${changeLink(e)}
         · <span class="concerns">${concerns(e)}</span> ·
         ${e.url ? html`<a href=${e.url} rel="noopener">#${e.id}</a>` : `#${e.id}`}</p-text>
-      ${e.status === "inbox" && !e.opening ? html`<div class="row triage">${kindPicker(e, true)}${dropButton(e)}</div>`
-        : nothing}
       ${details(e, byId)}
     </div>
   </li>`;

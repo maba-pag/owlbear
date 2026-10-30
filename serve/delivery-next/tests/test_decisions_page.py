@@ -92,6 +92,11 @@ def in_force(store: Store, project: str = PROJECT) -> dict[str, Decision]:
     return {e.decision.statement: e.decision for e in view.entries if e.decision.state is State.IN_FORCE}
 
 
+def open_entry(card: Any) -> None:
+    """Open a listed decision as a person does: by its summary, the accordion's own button."""
+    card.locator("summary").click()
+
+
 def held_once(page: Any, held: list[Any]) -> Any:
     """The first request the test holds, once the page has sent it."""
     for _ in range(100):
@@ -119,7 +124,7 @@ def test_a_late_global_list_cannot_name_or_retarget_the_owlbear_list(store, pds)
         page.wait_for_load_state("networkidle")
         expect(page.locator(".entry", has_text="Lint once")).to_have_count(1)
         card = page.locator(".entry", has_text="Pages are plain HTML")
-        card.get_by_role("button", name="Open").click()
+        open_entry(card)
         card.get_by_role("button", name="Record an exception").click()
         page.get_by_label("New rule").fill("Pages may use a build step in OwlBear.")
         card.get_by_role("button", name="Record the exception").click()
@@ -142,7 +147,7 @@ def test_a_form_opened_in_one_scope_stays_in_it_when_the_owner_switches_scope(st
           store.shared.root / "owlbear")  # fmt: skip
     with decisions_page(store, pds) as page:
         card = page.locator(".entry", has_text="Pages are plain HTML")
-        card.get_by_role("button", name="Open").click()
+        open_entry(card)
         card.get_by_role("button", name="Record an exception").click()
         page.get_by_label("New rule").fill("Pages may use a build step here.")
         pds.pick(page, "Show", "owlbear")
@@ -173,7 +178,7 @@ def test_a_confirmed_write_still_in_flight_keeps_the_scope_it_was_confirmed_in(s
         held: list[Any] = []
         page.route(lambda url: url.endswith("/exception"), lambda route, _request: held.append(route))
         card = page.locator(".entry", has_text="Pages are plain HTML")
-        card.get_by_role("button", name="Open").click()
+        open_entry(card)
         card.get_by_role("button", name="Record an exception").click()
         page.get_by_label("New rule").fill("Pages may use a build step here.")
         card.get_by_role("button", name="Record the exception").click()
@@ -195,6 +200,13 @@ def test_the_owner_filters_opens_and_replaces_a_decision_and_sees_its_receipt(st
 
     with decisions_page(store, pds) as page:
         expect(page.locator("#shown")).to_have_text("2 of 2 shown")
+        boxes = page.locator("#filters > *").evaluate_all(
+            "els => els.map(e => [e.localName, e.getBoundingClientRect().top, e.getBoundingClientRect().bottom])"
+        )
+        selects, [search] = (b for b in boxes if b[0] != "p-input-text"), [b for b in boxes if b[0] == "p-input-text"]
+        tops, bottoms = zip(*((round(top), bottom) for _, top, bottom in selects), strict=True)
+        assert len(set(tops)) == 1  # one row of selects at 1280 pixels, their labels level
+        assert search[1] >= max(bottoms)  # Search, taller with its hint, on a line of its own below them
         expect(page.get_by_role("navigation").get_by_role("link", name="Decisions")).to_have_attribute(
             "aria-current", re.compile(r"page|true"))  # fmt: skip
         pds.pick(page, "Show", "global")
@@ -205,7 +217,7 @@ def test_the_owner_filters_opens_and_replaces_a_decision_and_sees_its_receipt(st
         page.get_by_label("Search").press("Enter")
         expect(page.locator("#shown")).to_have_text("1 of 2 shown")
         card = page.locator(".entry", has_text="Notes live in SQLite")
-        card.get_by_role("button", name="Open").click()
+        open_entry(card)
         expect(card.locator("#detail")).to_contain_text("autonomous")
         expect(card.locator("#detail")).to_contain_text("changed")  # its file's history, by action only
         expect(card.locator("#detail")).not_to_contain_text("seed")
@@ -244,7 +256,7 @@ def test_a_decided_decision_is_replaced_only_once_the_owner_ticks_that_he_re_dec
     with decisions_page(store, pds) as page:
         card = page.locator(".entry", has_text="Tags are free text")
         expect(card.locator(".read-back")).to_have_text("Confirmed 2026-10-20")
-        card.get_by_role("button", name="Open").click()
+        open_entry(card)
         card.get_by_role("button", name="Replace").click()
         page.get_by_label("New rule").fill("Tags come from a list.")
         card.get_by_role("button", name="Replace").click()
@@ -273,8 +285,10 @@ def test_the_owner_resolves_a_three_way_conflict_by_keeping_one(store, pds):
               store.shared.root / PROJECT)  # fmt: skip
     with decisions_page(store, pds) as page:
         card = page.locator(".entry", has_text="Exports in XML")
-        card.get_by_role("button", name="Open").click()
+        open_entry(card)
         expect(card.locator('p-button[variant="primary"]')).to_have_text(["Keep this one"])  # the conflict asks
+        expect(card.get_by_role("group", name="Actions").locator("p-button")).to_have_text(
+            ["Keep this one", "Read back", "Replace", "Promote", "Queue a read-back", "Withdraw"])  # fmt: skip
         card.get_by_role("button", name="Keep this one").click()
         dialog = pds.modal(page)
         expect(dialog).to_contain_text("Withdrawn: Exports in JSON")
@@ -283,6 +297,62 @@ def test_the_owner_resolves_a_three_way_conflict_by_keeping_one(store, pds):
         expect(page.locator("#receipts")).to_contain_text("saved · committed · published · active")
         expect(page.locator("#error")).to_be_hidden()
     assert sorted(in_force(store)) == ["Exports are XML.", "No build step.", "Notes live in one SQLite table."]
+
+
+@pytest.mark.browser
+def test_an_entry_shows_a_cut_off_statement_once_and_opens_from_the_keyboard(store, pds):
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    said = "Builds run nightly at 01:00 on the shared runner."
+    write(make(title="Builds run night…", statement=said, read_back="pending", read_back_why="Asked again.",
+               read_back_kind="uncertain"), store.shared.root / PROJECT)  # fmt: skip
+    with decisions_page(store, pds) as page:
+        item = page.locator("#queue .queued", has_text=said)
+        expect(item.locator(".said")).to_have_count(0)  # the title only cut the statement off: it shows once
+        card = page.locator(".entry", has_text=said)
+        expect(card.get_by_role("heading", level=3)).to_have_accessible_name(said)
+        expect(card.locator(".said")).to_have_count(0)
+        named = page.locator(".entry", has_text="Notes live in SQLite")
+        expect(named.get_by_role("heading", level=3)).to_have_accessible_name("Notes live in SQLite")
+        expect(named.locator(".said")).to_have_text("Notes live in one SQLite table.")
+        summary = card.locator("summary")
+        summary.focus()
+        page.keyboard.press("Enter")
+        expect(card.locator("#detail")).to_contain_text("autonomous")
+        expect(card.locator("details")).to_have_attribute("open", "")
+        page.keyboard.press("Space")
+        expect(card.locator("#detail")).to_have_count(0)
+        expect(card.locator("details")).not_to_have_attribute("open", "")
+        expect(summary).to_be_focused()
+
+
+@pytest.mark.browser
+def test_a_draft_leads_with_activate_and_withdrawing_stands_apart_and_asks_first(store, pds):
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    draft = make(title="Exports go nightly", statement="Exports run at 02:00.", state=State.DRAFT)
+    write(draft, store.shared.root / PROJECT)
+    with decisions_page(store, pds) as page:
+        card = page.locator(".entry", has_text="Exports go nightly")
+        open_entry(card)
+        row = card.get_by_role("group", name="Actions")
+        expect(row.locator("p-button")).to_have_text(["Activate", "Queue a read-back", "Withdraw"])
+        expect(row.locator('p-button[variant="primary"]')).to_have_text(["Activate"])
+        withdraw = row.locator(".apart p-button")
+        expect(withdraw).to_have_text("Withdraw")
+        before, apart, whole = (x.bounding_box() for x in (row.locator("p-button").nth(1), withdraw, row))
+        assert apart["x"] + apart["width"] == pytest.approx(whole["x"] + whole["width"], abs=1)  # at the row's end
+        assert apart["x"] - (before["x"] + before["width"]) > 100  # set apart from the rest
+        row.get_by_role("button", name="Withdraw").click()
+        dialog = pds.modal(page)
+        expect(dialog.locator('p-button[variant="primary"]')).to_have_text(["Cancel"])  # destructive: declining leads
+        page.keyboard.press("Escape")
+        expect(page.get_by_role("dialog")).to_have_count(0)
+        page.wait_for_function("() => Boolean(document.activeElement?.closest('.apart'))")  # back on Withdraw
+    [kept] = [
+        e.decision for e in decision_store.load(store.shared, PROJECT).snapshot.entries if e.decision.id == draft.id
+    ]
+    assert kept.state is State.DRAFT
 
 
 @pytest.mark.browser
@@ -301,8 +371,8 @@ def test_the_owner_reads_back_a_queued_decision_and_shows_owlbears_own_decisions
         expect(item).to_contain_text("Uncertain")
         item.get_by_role("button", name="Still right").click()
         expect(page.locator("#receipts")).to_contain_text("saved · committed · published · active")
-        expect(queue.locator(".queued")).to_have_count(0)
-        expect(queue).to_contain_text("No decision waits to be read back.")
+        expect(queue).to_have_count(0)  # an empty queue leaves the page; the list leads
+        expect(page.get_by_role("heading", level=2)).to_have_text(["What the last action did", "Recorded decisions"])
         expect(page.locator(".entry", has_text="Exports are CSV").locator(".read-back")).to_have_text(
             f"Confirmed {datetime.now(UTC).date().isoformat()}")  # fmt: skip
         pds.pick(page, "Show", "owlbear")
@@ -325,7 +395,7 @@ def test_the_owner_marks_a_decided_decision_he_never_made_approved(store, pds):
     write(rule, store.shared.root / PROJECT)
     with decisions_page(store, pds) as page:
         card = page.locator(".entry", has_text="Windows stay paused")
-        card.get_by_role("button", name="Open").click()
+        open_entry(card)
         card.get_by_role("button", name="Mark approved").click()
         dialog = pds.modal(page)
         expect(dialog).to_contain_text("an agent's proposal you accepted")
@@ -358,6 +428,7 @@ def test_the_read_back_queue_asks_with_one_primary_and_withdrawing_is_never_it(s
         with page.expect_response(failing):
             item.get_by_role("button", name="Replace or withdraw").click()
         expect(queue.locator('p-button[variant="primary"]')).to_have_text(["Still right"])  # a failed read keeps it
+        expect(item).to_contain_text("This decision could not be read.")  # not "Reading…" forever
         page.unroute(failing)
         item.get_by_role("button", name="Close").click()
         item.get_by_role("button", name="Replace or withdraw").click()
@@ -383,7 +454,7 @@ def test_the_owner_reads_back_an_open_decision_by_confirming_it_and_sees_no_reco
     write(rule, store.shared.root / PROJECT)
     with decisions_page(store, pds) as page:
         card = page.locator(".entry", has_text="Exports are CSV")
-        card.get_by_role("button", name="Open").click()
+        open_entry(card)
         expect(card.locator("#detail")).to_contain_text("autonomous")
         expect(card.locator("#detail")).not_to_contain_text("TD-12")
         expect(card.locator("#detail")).not_to_contain_text("Record rows")
@@ -415,9 +486,17 @@ def test_the_owner_checks_a_replacements_impact_and_schedules_its_fixes(store, p
     (store.shared.root / PROJECT / "changes" / "20261020-090000-c1.json").write_text(json.dumps(record))
     with decisions_page(store, pds) as page:
         card = page.locator(".entry", has_text="Exports are JSON")
-        card.get_by_role("button", name="Open").click()
+        open_entry(card)
+        failing = re.compile(r".*/impact(\?.*)?$")
+        page.route(failing, lambda route: route.fulfill(status=503, body="down"))
+        card.get_by_role("button", name="Check the impact").click()
+        failed = card.locator('#impact p-inline-notification[state="error"]')
+        expect(failed).to_have_attribute("heading", "The impact could not be checked")
+        expect(failed).not_to_be_empty()  # the reason the host gave
+        page.unroute(failing)
         card.get_by_role("button", name="Check the impact").click()
         impact = card.locator("#impact")
+        expect(failed).to_have_count(0)
         expect(impact.locator(".old")).to_contain_text("Exports are CSV.")
         expect(impact.locator(".divergence")).to_contain_text("forbids existing behaviour")
         expect(impact.locator(".impact-project")).to_contain_text("https://github.com/acme/shop-site/pull/7")

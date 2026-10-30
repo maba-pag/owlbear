@@ -311,3 +311,62 @@ def test_notes_being_typed_and_an_open_card_survive_a_refresh_with_new_entries(s
         page.get_by_role("button", name="Clear selection").click()
         expect(page.locator("#selection")).to_be_hidden()
     assert Backlog.of(store).read()[0][entry.id].notes == "only on the Changes page"
+
+
+@pytest.mark.browser
+def test_an_inbox_entry_is_one_compact_row_triaged_with_the_keyboard_alone(store, pds):
+    """B1: the kind and a text-style Drop share the title's line; tick, kind and Drop are reached and used by key."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    Backlog.of(store).add("Wider status line")
+    Backlog.of(store).add("Faster first paint")  # listed first
+    with backlog_page(store, pds) as page:
+        page.set_viewport_size({"width": 1280, "height": 900})
+        rows = page.locator("#inbox > li.entry")
+        expect(rows).to_have_count(2)
+        first = rows.first
+        expect(first.get_by_role("combobox")).to_be_visible()  # PDS renders its parts after the hosts; measure after
+        expect(first.get_by_role("button", name="Drop Faster first paint")).to_be_visible()
+        expect(first.locator("> p-checkbox input")).to_be_attached()
+        plain = page.locator('p-checkbox[label="shop-site"]').first
+        expect(plain.locator("input")).to_be_attached()
+        page.evaluate("document.fonts.ready.then(() => true)")
+        title, triage = first.locator(".title").bounding_box(), first.locator(".triage").bounding_box()
+        assert title
+        assert triage
+        assert triage["y"] < title["y"] + title["height"]  # on the title's line, right of it
+        assert triage["x"] > title["x"] + title["width"] - 1
+        expect(first.locator(".title p-tag")).to_have_count(0)  # the select names the kind
+        alpha = (
+            "e => parseFloat((getComputedStyle(e.shadowRoot.querySelector('input')).borderColor.split(',')[3]) ?? 1)"
+        )
+        assert first.locator("> p-checkbox").evaluate(alpha) > 1.5 * plain.evaluate(
+            alpha
+        )  # PDS's faint edge read as disabled
+
+        first.get_by_role("checkbox", name="Select Faster first paint").focus()
+        page.keyboard.press("Space")
+        expect(page.locator("#chosen")).to_have_text("1 selected")
+        page.keyboard.press("Tab")
+        expect(first.get_by_role("combobox")).to_be_focused()
+        page.keyboard.press("Tab")
+        expect(first.get_by_role("button", name="Drop Faster first paint")).to_be_focused()
+        page.keyboard.press("Enter")
+        expect(page.locator("#status")).to_have_text('Dropped "Faster first paint"; Reopen brings it back.')
+
+        expect(rows).to_have_count(1)
+        rows.first.get_by_role("combobox").focus()
+        page.keyboard.press("ArrowDown")
+        expect(rows.first.get_by_role("listbox")).to_be_visible()
+        page.keyboard.press("Escape")  # closes the list, keeps the focus and the entry where they were
+        expect(rows.first.get_by_role("listbox")).to_be_hidden()
+        expect(rows.first.get_by_role("combobox")).to_be_focused()
+        expect(rows).to_have_count(1)
+        page.keyboard.press("ArrowDown")
+        for _ in range(3):  # untriaged, defect, improvement, then idea
+            page.keyboard.press("ArrowDown")
+        page.keyboard.press("Enter")
+        expect(page.locator("#open > li.entry")).to_have_count(1)
+        expect(page.locator("#inbox-title")).to_have_text("Inbox (0)")
+    kinds = {e.title: (e.kind, e.status) for e in Backlog.of(store).read()[0].values()}
+    assert kinds == {"Wider status line": ("idea", "open"), "Faster first paint": ("untriaged", "dropped")}

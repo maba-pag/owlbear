@@ -3,7 +3,7 @@ import json
 import subprocess
 import threading
 from collections.abc import Iterator
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -14,6 +14,7 @@ from owlbear_memory import MemoryBusyError, MemoryCategory, MemoryEngine, storag
 
 from owlbear_delivery_next.local_system import data_repo, local_home
 from owlbear_delivery_next.local_system.codebase import CURRENT
+from owlbear_delivery_next.machine_host import curation
 from owlbear_delivery_next.project_host import api, memory_routes
 from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.state_store.store import Store
@@ -136,6 +137,43 @@ def test_purge_removes_only_old_deleted_entries_and_publishes_their_removal(shar
     assert [p.stem for p in folder.glob("*.md")] == [kept.id]
     assert git(remote, "log", "-1", "--format=%s", "main") == f"memory {store.name}: purge 1 deleted"
     assert c.post("/api/next/memory/purge", json={"min_age_days": -1}).status_code == 422
+
+
+def curated(name: str, state: str, at: datetime) -> None:
+    run = curation.FolderRun(
+        state=state, started_at=at - timedelta(minutes=1), ended_at=at if state == "done" else None
+    )
+    (local_home.root() / curation.STATE).write_text(curation.Runs(folders={name: run}).model_dump_json())
+
+
+def test_memorys_last_run_is_the_later_of_a_curation_run_and_the_owners_action(shared):
+    """N1 (D-01M63CF1XKCCF6TP60734BTMWD): Maintenance read only the owner's actions, so it said "Never run" after a
+    curation run, and it never said which of the two it showed."""
+    root, _, repo = shared
+    store = Store.open(repo)
+    entry = seed(root / store.name / "memory", "Run ruff first", curated=True)
+    c = client(store)
+
+    def last() -> dict | None:
+        return {a["name"]: a for a in c.get("/api/next/maintenance").json()}["Memory curation"]["last"]
+
+    assert last() is None
+    ran = datetime.now(UTC) - timedelta(hours=1)
+    curated(store.name, "done", ran)
+    assert last() == {"by": "curation", "state": "done", "started_at": (ran - timedelta(minutes=1)).isoformat(),
+                      "ended_at": ran.isoformat(), "reason": ""}  # fmt: skip
+    c.post(f"/api/next/memory/{entry.id}/approve", json={"updated_at": entry.updated_at}).raise_for_status()
+    got = last()
+    assert (got["by"], got["state"], got["action"]) == ("owner", "done", "approve Run ruff first")
+    assert datetime.fromisoformat(got["ended_at"]) > ran
+    curated(store.name, "running", datetime.now(UTC) + timedelta(minutes=2))  # started after the action
+    assert (last()["by"], last()["state"]) == ("curation", "running")
+    curated("another-project", "done", datetime.now(UTC) + timedelta(hours=1))  # another folder's run never counts
+    assert last()["by"] == "owner"
+    (local_home.root() / curation.STATE).write_text("{")
+    got = last()
+    assert (got["by"], got["action"]) == ("owner", "approve Run ruff first")
+    assert got["reason"].startswith("memory curation's runs could not be read, so they are not counted")
 
 
 def test_refused_memory_actions_say_why(shared):

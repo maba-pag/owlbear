@@ -88,7 +88,7 @@ async def test_make_global_records_the_project_and_commits_both_paths(root: Path
     moved = await tools.make_global(ctx, entry_id=entry.id, revision=entry.revision, folder="docs")
 
     assert (moved["origin"], moved["commit_sha"]) == ("docs", git(root, "rev-parse", "HEAD"))
-    assert git(root, "log", "-1", "--format=%s") == "memory docs: make global Pin the runtime"
+    assert git(root, "log", "-1", "--format=%s") == "chore: memory make global Pin the runtime from docs (memory-mcp)"
     assert sorted(git(root, "show", "--no-renames", "--name-only", "--format=", "HEAD").splitlines()) == sorted(
         [f"docs/memory/{entry.id}.md", f"memory/{entry.id}.md"]
     )  # fmt: skip

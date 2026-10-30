@@ -85,16 +85,16 @@ export function view() {
       loaded.unreadable.length ? `Issues without a readable entry: ${loaded.unreadable.join(", ")}.` : "",
       ...loaded.failed.map((f) => `Not read just now: ${f}.`)];
     const ticked = chosen().length;
-    body.push(html`<p-text id="where" size="xs" color="contrast-medium">${notes.filter(Boolean).join(" ")}</p-text>
+    body.push(html`<p-text id="where" color="contrast-medium">${notes.filter(Boolean).join(" ")}</p-text>
       ${head}
       ${addForm()}
       <section aria-labelledby="inbox-title">
-        <div><p-heading size="xl"><h2 id="inbox-title">Inbox (${lists.inbox.length})</h2></p-heading>
+        <div><p-heading size="lg"><h2 id="inbox-title">Inbox (${lists.inbox.length})</h2></p-heading>
           <p-text>Choose a kind to move an entry to Open, or drop it.</p-text></div>
         ${list("inbox", lists.inbox, byId, "Nothing new to triage.")}
       </section>
       <section aria-labelledby="open-title">
-        <div><p-heading size="xl"><h2 id="open-title">Open (${lists.open.length})</h2></p-heading>
+        <div><p-heading size="lg"><h2 id="open-title">Open (${lists.open.length})</h2></p-heading>
           <p-text>Tick entries to shape a Change from them.</p-text></div>
         ${list("open", lists.open, byId, "No open entries.")}
       </section>

@@ -64,7 +64,7 @@ def test_cleanup_resume_uses_actual_completion_not_the_displayed_done_label(  # 
                 with page.expect_response(lambda r: r.url.endswith("/api/next/changes/c1")) as detail:
                     page.goto(f"{base}/?change=c1#token=tok")
                 assert detail.value.json()["finished"] is finished
-                expect(page.get_by_role("heading", name="c1", exact=True)).to_be_visible()
+                expect(page.get_by_role("heading", name="Preserve remote work", exact=True)).to_be_visible()
                 expect(page.get_by_text(q.text, exact=True)).to_have_count(0)
                 resume = page.get_by_role("button", name="Resume", exact=True)
                 if finished:

@@ -62,45 +62,6 @@ export function spentText(credits, unknown) {
   return credits ? `${credits.toFixed(2)}+ credits (${sessions})` : `credits ${sessions}`;
 }
 
-function ago(iso) {
-  const seconds = Math.round((Date.now() - Date.parse(iso)) / 1000);
-  if (Number.isNaN(seconds)) return "";
-  if (seconds < 60) return "just now";
-  const minutes = Math.round(seconds / 60), hours = Math.round(minutes / 60);
-  return minutes < 60 ? `${minutes} min ago` : hours < 48 ? `${hours} h ago` : `${Math.round(hours / 24)} d ago`;
-}
-
-const BOOKKEEPING = new Set(["pids", "inventory", "skill", "tasks", "preserved"]);
-const CLASSES = { event: "an event", clarification: "a clarification", brief_change: "a brief change" };  // TD-461
-const SAID = {
-  step: (e) => `${e.kind} step ${e.exit}${e.reason ? `: ${e.reason}` : ""}`,
-  tool: (e) => e.summary || `Called ${e.tool}${e.accepted === false ? " (rejected)" : ""}`,
-  session: (e) => (e.resumed ? "Session resumed" : `Session started${e.role ? ` (${e.role})` : ""}`),
-  denied: (e) => `Denied: ${e.reason || e.kind}`,
-  publish: (e) => `Published PR #${e.pr}`,
-  labels: (e) => `Labelled PR #${e.pr}: ${e.labels.join(", ")}`,
-  "labels-failed": (e) => `Could not label PR #${e.pr} with ${e.labels.join(", ")}: ${e.reason}`,
-  ci: (e) => (e.failed?.length ? `CI failed: ${e.failed.join(", ")}`
-    : `CI passed${e.passed?.length ? `: ${e.passed.join(", ")}` : ""}`),
-  "merge-offer": (e) => `Merge offered for ${String(e.head || "").slice(0, 7)}`,
-  "merge-request": (e) => e.message || `Merge requested (${e.status})`,
-  merged: (e) => `Merged PR #${e.pr}`,
-  pullback: (e) => `Pull-back ${e.state}${e.reason ? `: ${e.reason}` : ""}`,
-  "ro-install": (e) => `${e.command} in ${e.package}${e.ok ? "" : " failed"}`,
-  "fix-drafted": (e) => `Drafted fix Change ${e.fix}`,
-  brief: (e) => `Brief v${e.version} saved`,
-  answer: (e) => `Answered ${e.question} as ${CLASSES[e.class] ?? e.class}`,
-};
-
-// Newest first, in words; process and inventory bookkeeping stays in the activity file.
-export function activityLog(events) {
-  const kept = events.filter((e) => e.event && !BOOKKEEPING.has(e.event)).slice(-12).reverse();
-  if (!kept.length) return text("Nothing yet.", { size: "xs", color: "contrast-medium" });
-  return html`<ol class="log">${kept.map((e) => html`<li>${e.at ? html`<time datetime=${e.at}
-    title=${new Date(e.at).toLocaleString()}>${ago(e.at)}</time>` : html`<span></span>`}
-    <span>${(SAID[e.event] ?? ((x) => x.event))(e)}</span></li>`)}</ol>`;
-}
-
 export function planList(d) {
   const working = ["build", "review", "integrate"].includes(d.step) && !d.line.startsWith("Done");
   const now = working ? d.plan.find((t) => !t.done) : null;

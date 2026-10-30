@@ -74,7 +74,7 @@ def _label(p: dict[str, Any], by: str, key: str, names: dict[str, str]) -> str:
     if by == "agent":
         return "Agent unknown" if key == UNKNOWN else f"{key} (subagent)" if p["under"] else key
     if by == "change":
-        return f"{names.get(p['project']) or p['project']}: {p['change']}" if key else "No Change"
+        return f"{names.get(p['project']) or p['project']}: {p['change']}" if key else "Outside a Change"
     if by == "step":
         return key or "No step"
     return "Time unknown" if key == UNKNOWN and by == "day" else "Model unknown" if key == UNKNOWN else key

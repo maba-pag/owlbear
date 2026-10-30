@@ -16,8 +16,14 @@
   #filters > p-input-text { flex: 0 1 9rem; }
   #totals { display: flex; flex-wrap: wrap; gap: var(--p-spacing-static-sm) var(--p-spacing-static-lg); }
   #totals strong { font-size: var(--p-typescale-lg); }
-  .share { display: inline-block; height: .5rem; background: var(--p-color-contrast-medium);
-    border-radius: var(--p-radius-sm); vertical-align: middle; }
+  .share { display: inline-flex; align-items: center; gap: var(--p-spacing-static-sm); white-space: nowrap; }
+  .share-track { display: inline-block; inline-size: 6rem; block-size: .5rem; border-radius: var(--p-radius-sm);
+    background: var(--p-color-contrast-lower); overflow: hidden; }
+  .share-fill { display: block; block-size: 100%; background: var(--p-color-contrast-high); }
+  @media (forced-colors: active) {
+    .share-track { border: 1px solid CanvasText; }
+    .share-fill { forced-color-adjust: none; background: CanvasText; }
+  }
   .notes { margin: 0; }
 </style>
 </head>

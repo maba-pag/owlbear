@@ -4,6 +4,7 @@ import { here, HostDown, project, Restarted, Slow, shown } from "/assets/ui.mjs"
 import { KEY, state, page, show, call, keyOf, parts, several, failed } from "./state.mjs";
 import { hd, text } from "./widgets.mjs";
 import { spentText } from "./progress.mjs";
+import { short, split } from "./activity.mjs";
 import { badge, detailView } from "./detail.mjs";
 import { startedView } from "./shaping.mjs";
 
@@ -15,20 +16,6 @@ function groupOf(label) {
   return ["Done", "Abandoned"].includes(label) ? "done" : "working";
 }
 
-function split(line) {  // the stage, then what is happening in it
-  const at = line.indexOf(" \u00b7 ");
-  return at < 0 ? ["", line] : [line.slice(0, at), line.slice(at + 3)];
-}
-
-// A card names a file by its name; the detail keeps the whole path. A tool's one target may hold spaces; elsewhere a
-// path ends at one, and a relative one counts only with an extension, so counters, "CI/CD" and URLs stay as they are.
-const LAST = String.raw`([^\s,/\u00b7]+)`;
-const short = (said) => said
-  .replace(new RegExp(String.raw`(?<=(?:^|\u00b7 )(?!ran )[\w-]+ )~?\/(?:[^\s,/\u00b7][^,/\u00b7]*?\/)+${LAST}`, "g"),
-    "$1")
-  .replace(new RegExp(String.raw`(?<![^\s(])~?\/(?:[^\s,/\u00b7]+\/)+${LAST}`, "g"), "$1")
-  .replace(/(?<![^\s(])(?![\d./]+(?=[\s,)\u00b7]|$))(?:[\w.-]+\/)+([\w-]*\.[\w.-]+)(?=[\s,)\u00b7]|$)/g, "$1");
-
 function card([c, label, variant]) {
   const current = c.key === state.selected, [stage, rest] = split(short(c.line)), step = c.progress?.line;
   const open = (event) => {
@@ -37,7 +24,7 @@ function card([c, label, variant]) {
     choose(c.key);
   };
   const bits = [];
-  if (c.now && label !== "Done" && (!step || c.now.includes(" \u00b7 "))) bits.push(split(short(c.now))[1]);
+  if (c.now && groupOf(label) === "working" && (!step || c.now.includes(" \u00b7 "))) bits.push(split(short(c.now))[1]);
   if (c.step_time) bits.push(`step ${c.step_time}`);
   if (c.credits?.change || c.credits?.unknown) {
     const now = c.credits.step ? ` (this step ${c.credits.step.toFixed(2)})` : "";
@@ -47,9 +34,10 @@ function card([c, label, variant]) {
   if (c.watcher?.outside) bits.push(`${c.watcher.outside} outside write${c.watcher.outside === 1 ? "" : "s"} observed`);
   return html`<li class=${current ? "card current" : "card"}>
     <div class="top"><a href=${here({ change: c.key })} class="open" data-key=${c.key}
-      aria-current=${current ? "true" : nothing} @click=${open}>${c.slug}</a>
+      aria-current=${current ? "true" : nothing} @click=${open}>${c.title || c.slug}</a>
       <p-tag variant=${variant} compact="true">${label}</p-tag></div>
-    ${several() ? html`<p class="meta project">${c.projectName}</p>` : nothing}
+    ${c.title || several() ? html`<p class="meta">${c.title ? c.slug : ""}${c.title && several() ? " \u00b7 " : ""}${
+      several() ? html`<span class="project">${c.projectName}</span>` : nothing}</p>` : nothing}
     ${step ? html`<p class="says stage">${step}</p>` : nothing}
     <p class="says">${stage && !step && stage !== label ? html`<span class="stage">${stage}</span> \u00b7 `
       : nothing}${rest}</p>
@@ -99,7 +87,7 @@ export function view() {
       ?? ""}</p-inline-notification>
     <p-text id="seen" color="contrast-medium" size="xs">${state.seen}</p-text>
     <section id="notes" class="panel" aria-label="Repository settings" ?hidden=${!state.notes.length}>
-      ${state.notes.map((n) => text(n, { size: "xs" }))}</section>
+      ${state.notes.map((n) => text(n))}</section>
     <div id="board" class=${state.selected ? "open" : ""}>
       <section id="list" aria-label="Changes" class=${state.stale ? "stale" : ""}>
         <div id="changes">${listView()}</div>

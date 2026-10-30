@@ -6,12 +6,15 @@ import socket
 import subprocess
 import threading
 import time
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 import pytest
 import uvicorn
 
 from owlbear_delivery_next.change_contracts.models import Brief, Change, StepKind
+from owlbear_delivery_next.local_system import local_home
+from owlbear_delivery_next.machine_host import curation
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import Host
 from owlbear_delivery_next.state_store.store import Lock, Store
@@ -84,6 +87,50 @@ def test_the_maintenance_page_lists_each_action_and_says_when_delivery_stops(tmp
             page.evaluate("document.dispatchEvent(new Event('visibilitychange'))")
             expect(page.locator("#error")).to_have_text("Delivery is not running. Start it, then reload this page.")
             expect(actions).to_have_count(5)  # what it showed stays
+            browser.close()
+    finally:
+        server.should_exit = True
+
+
+@pytest.mark.browser
+def test_memory_curation_says_whether_its_last_run_was_the_curator_or_the_owner(tmp_path: Path, pds) -> None:
+    """N1 (D-01M63CF1XKCCF6TP60734BTMWD): it said "Never run." after a curation run, and never said who ran it."""
+    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+
+    ran = datetime.now(UTC) - timedelta(hours=1)
+    run = curation.FolderRun(state="done", started_at=ran - timedelta(minutes=1), ended_at=ran)
+    (local_home.root() / curation.STATE).write_text(curation.Runs(folders={"shop": run}).model_dump_json())
+    sock = socket.socket()
+    sock.bind(("127.0.0.1", 0))
+    server = uvicorn.Server(
+        uvicorn.Config(api.create_app(Store(tmp_path, name="shop"), "tok", None), log_level="warning")
+    )
+    threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True).start()
+    while not server.started:
+        time.sleep(0.05)
+    base = f"http://127.0.0.1:{sock.getsockname()[1]}"
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except Error as exc:
+                pytest.skip(f"no Playwright Chromium: {exc}")
+            page = browser.new_page()
+            pds.only(page, base)
+            page.goto(f"{base}/maintenance#token=tok")
+            memory = page.locator("#actions > li", has_text="Memory curation")
+            expect(memory).to_contain_text("Last run (memory curator): done, ")
+            expect(memory).not_to_contain_text("Never run.")
+            action = {"by": "owner", "state": "done", "action": "approve Run ruff first", "ended_at": ran.isoformat()}
+
+            def owned(route) -> None:
+                body = route.fetch().json()
+                route.fulfill(json=[a | {"last": action} if a["name"] == "Memory curation" else a for a in body])
+
+            page.route("**/api/next/maintenance", owned)
+            page.evaluate("document.dispatchEvent(new Event('visibilitychange'))")
+            expect(memory).to_contain_text("Last run (your memory action): approve Run ruff first, ")
+            expect(memory).not_to_contain_text("memory curator")
             browser.close()
     finally:
         server.should_exit = True
