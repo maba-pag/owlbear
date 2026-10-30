@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 # A holder check takes the flock shared for an instant, and a child forked by another thread holds a copy until its
-# exec: both end well within this, while an update holds the lock for minutes (#805).
+# exec: both are brief, while an update holds the lock for minutes (#805).
 SETTLE = 0.5
 STEP = 0.01
 
