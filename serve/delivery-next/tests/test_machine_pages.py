@@ -1014,6 +1014,43 @@ def test_a_run_started_in_one_project_is_answered_from_another_and_from_all_proj
 
 
 @pytest.mark.browser
+@pytest.mark.parametrize("options", [["activate", "discard"], None], ids=["answered", "alone"])
+def test_a_discard_confirmed_after_its_project_unloaded_never_goes_to_the_shown_project(
+    tmp_path: Path, monkeypatch, pds, options
+) -> None:
+    """Discard's destination is fixed before its dialog: alpha unloading while it is open sends the confirmed discard
+    to alpha, which answers for itself, never to beta, the project the page shows, whose run it is not."""
+    from owlbear_delivery_next.impeccable_runs import pack_job, pack_rounds  # noqa: PLC0415
+
+    alpha = registry.register(clone(tmp_path / "alpha"))
+    beta = registry.register(clone(tmp_path / "beta"))
+    job = pack_job.Job(Store.open(Path(alpha.path)), pack_job.Live())
+    questions = [pack_rounds.question("r1:end:1", "end", "The rounds ended.", options)] if options else []
+    job.state = pack_job._blank() | {  # noqa: SLF001 - a run waiting for the owner
+        "state": "waiting", "started_at": datetime.now(UTC).isoformat(), "run": "r1", "questions": questions,
+    }  # fmt: skip
+    job._save()  # noqa: SLF001
+    sent: list[str] = []
+
+    def sending(route) -> None:
+        sent.append(route.request.url)
+        route.fulfill(json={})
+
+    with browsing(monkeypatch, pds) as (page, base):
+        page.route(re.compile(r".*/impeccable/update/(answer|discard)$"), sending)
+        page.goto(f"{base}/updates/impeccable?project={beta.id}#token=t")
+        label = page.locator("#pack-discard").inner_text()
+        page.locator("#pack-discard").click()
+        pds.modal(page).wait_for()
+        unload = "async id => (await import('/assets/ui.mjs')).machineState().projects.find(p => p.id === id).state"
+        page.evaluate(f"{unload} = 'failed'", alpha.id)  # what the next poll shows once alpha's host fails
+        pds.answer(page, label)
+        until(page, lambda: sent)
+    end = "answer" if options else "discard"
+    assert sent == [f"{base}/p/{alpha.id}/api/next/impeccable/update/{end}"]
+
+
+@pytest.mark.browser
 def test_old_update_addresses_open_the_updates_pages_and_back_and_reload_keep_them(
     tmp_path: Path, monkeypatch, pds
 ) -> None:

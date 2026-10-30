@@ -114,7 +114,9 @@ export function discarding(run, questions) {
 }
 
 export async function discard(run, d) {
-  const p = run.published;
+  // Where it goes is fixed before asking: should the run's project unload meanwhile, it must not fall to this page's.
+  const to = reach(run), p = run.published;
+  if (!to) return;
   const sure = await ask({
     title: "Discard the Impeccable update?", yes: d.label, no: "Keep it waiting", destructive: true,
     now: `The update started in ${run.name} ends here as discarded.`,
@@ -126,9 +128,9 @@ export async function discard(run, d) {
   if (!sure) return;
   if (d.q) {
     await act(`${d.q.id}:discard`, () => call("/impeccable/update/answer",
-      { ...reach(run), body: { question: d.q.id, option: "discard", note: "" }, timeout: WRITE }));
+      { ...to, body: { question: d.q.id, option: "discard", note: "" }, timeout: WRITE }));
   } else {
-    await act("discard", () => call("/impeccable/update/discard", { ...reach(run), method: "POST", timeout: WRITE }));
+    await act("discard", () => call("/impeccable/update/discard", { ...to, method: "POST", timeout: WRITE }));
   }
 }
 
