@@ -37,7 +37,7 @@
 <script type="module">
 import { html, nothing, render } from "/assets/lit-html/3.3.3/lit-html.js";
 import { call, defined, here, project, shown } from "/assets/ui.mjs";
-import { maintained } from "/assets/page/maintenance/overview.mjs";
+import { lastSaid, maintained } from "/assets/page/maintenance/overview.mjs";
 
 // Under the machine host with no project chosen, each project shows as a summary that opens it, beside the machine's
 // own parts.
@@ -56,10 +56,9 @@ function lastRun(a) {
   if (!a.built) return html`<p-tag variant="secondary" compact="true">not built yet</p-tag>`;
   if (!a.recorded) return html`<p-text size="xs" color="contrast-medium">No run record kept.</p-text>`;
   if (!a.last) return html`<p-text size="sm">Never run.</p-text>`;
-  const at = a.last.ended_at || a.last.started_at;
-  const when = at ? `, ${new Date(at).toLocaleString()}` : "";
+  const [by, what] = lastSaid(a.last);
   const tag = RESULTS[a.last.state];
-  return html`<p-text size="sm">Last run: ${a.last.state}${when}</p-text>
+  return html`<p-text size="sm">Last run${by}: ${what}</p-text>
     ${tag ? html`<p-tag variant=${tag} compact="true">${a.last.state}</p-tag>` : nothing}
     ${a.last.reason ? html`<p-text size="xs" color="contrast-medium">${a.last.reason}</p-text>` : nothing}`;
 }

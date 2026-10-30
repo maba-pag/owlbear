@@ -18,11 +18,9 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Literal
 
 from owlbear_memory import MemoryEngine, MemoryState
-from pydantic import Field
 
 from owlbear_delivery_next.change_contracts import memory_curation_tools, tools
-from owlbear_delivery_next.change_contracts.memory_curation_tools import Judged  # noqa: TC001 - a field's type
-from owlbear_delivery_next.change_contracts.models import Record, StepKind
+from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.local_system import data_repo, local_home, maintenance
 from owlbear_delivery_next.local_system.storage_io import atomic_write
@@ -31,6 +29,7 @@ from owlbear_delivery_next.runtimes import loop_owner, maintained, sdk_adapter
 from owlbear_delivery_next.settings import roles
 from owlbear_delivery_next.settings.config import Settings, SettingsUnset
 from owlbear_delivery_next.state_store import machine_settings, registry, spend_ledger
+from owlbear_delivery_next.state_store.curation_runs import STATE, FolderRun, Runs
 from owlbear_delivery_next.workflow_steps import lookup
 
 if TYPE_CHECKING:
@@ -41,7 +40,6 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.runtimes.session_result import Run
 
 LABEL = "memory-curation"
-STATE = "curation.json"
 SLOT = "memory"  # curation's own share of the machine's slots
 ALL = "all"
 type Trigger = Literal["merge", "idle"]  # each has its own machine setting (the owner, 2026-10-23)
@@ -56,28 +54,6 @@ CURATING = "memory curation of {folder} runs or waits; rename once it has finish
 LEFT_RENAME = "the last memory curation's processes may still run; rename once they are gone"
 MOVED = "its folder is being renamed or is gone; curate it again under its new name"  # in curation_snapshots.REFUSALS
 UNKNOWN = "its processes could not be identified, so none could be confirmed gone; check for a stray copilot process"
-
-
-class FolderRun(Record):
-    """One folder's last run: its state, when, the curator's report and what it left as it was."""
-
-    state: str = "never"  # waiting, running, done, failed
-    started_at: datetime | None = None
-    ended_at: datetime | None = None
-    summary: str = ""
-    reason: str = ""
-    key: str = ""  # the ledger's source for an uncertain run; empty when an older host ended it before the ledger
-    entries: list[Judged] = Field(default_factory=list)
-    skipped: dict[str, str] = Field(default_factory=dict)  # entry id: its revision when the curator skipped it
-    seen: dict[str, str] = Field(default_factory=dict)  # every entry still pending after the run: id to revision
-
-
-class Runs(Record):
-    """Every folder's last run, kept in ``~/.owlbear`` because it is this machine's work."""
-
-    folders: dict[str, FolderRun] = Field(default_factory=dict)
-    left: dict[int, float | None] = Field(default_factory=dict)  # a run's processes not yet confirmed gone
-    left_key: str = ""  # the run whose lease records those processes; empty when none does
 
 
 def message(folder: str) -> str:

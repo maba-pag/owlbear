@@ -1179,9 +1179,37 @@ def test_maintenance_under_all_projects_sums_up_each_project_and_opens_it_even_w
         expect(page.locator("#curation-title, #curation-error")).not_to_have_count(0)  # the machine's parts stay
         assert targets(page.locator("#projects a, #projects button")) == []
         alpha_answers_while_curation_runs(page, row[a.id], a)
+        alpha_says_who_ran_memory_curation_last(page, row[a.id], a)
         row[a.id].get_by_role("link", name="alpha").click()
         expect(page).to_have_url(f"{base}/maintenance?project={a.id}")
         expect(page.locator("#actions")).to_contain_text("Memory curation")
+
+
+def telling(last: dict):
+    """A route handler answering with the real maintenance actions, Memory curation's last run replaced by *last*."""
+
+    def told(route) -> None:  # one parameter: Playwright hands a two-parameter handler the request too
+        body = route.fetch().json()
+        route.fulfill(json=[x | {"last": last} if x["name"] == "Memory curation" else x for x in body])
+
+    return told
+
+
+def alpha_says_who_ran_memory_curation_last(page, row, a: registry.Project) -> None:
+    """N1 (D-01M63CF1XKCCF6TP60734BTMWD): the summary says whether the curator or the owner ran Memory curation."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    at = "2026-01-02T03:04:05+00:00"
+    for last, said in [
+        ({"by": "curation", "state": "done", "started_at": None, "ended_at": at, "reason": ""},
+         "Memory curation (memory curator): done, "),
+        ({"by": "owner", "state": "done", "action": "approve Run ruff first", "ended_at": at},
+         "Memory curation (your memory action): approve Run ruff first, "),
+    ]:  # fmt: skip
+        page.route(f"**/p/{a.id}/api/next/maintenance", telling(last))
+        page.evaluate("document.dispatchEvent(new Event('visibilitychange'))")
+        expect(row).to_contain_text(said)
+        page.unroute(f"**/p/{a.id}/api/next/maintenance")
 
 
 def alpha_answers_while_curation_runs(page, row, a: registry.Project) -> None:
