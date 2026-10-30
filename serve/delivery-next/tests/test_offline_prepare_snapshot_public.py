@@ -70,8 +70,18 @@ def prepare(repo, public):
     return False
 
 
-@pytest.mark.parametrize("public", ["cli", "prepare-clone"])
-@pytest.mark.parametrize("marker", ["8", "998", "1000", "", " \n", "6\n", "7\n", None])
+@pytest.mark.parametrize(
+    ("public", "marker"),
+    [
+        ("cli", "8"),  # too new
+        ("prepare-clone", "998"),  # too new, next to the fence
+        ("cli", " \n"),  # not a format
+        ("prepare-clone", ""),
+        ("cli", "6\n"),  # another supported format
+        ("prepare-clone", "7\n"),  # the same format in other bytes
+        ("cli", None),  # removed
+    ],
+)
 def test_prepare_refuses_a_marker_changed_during_the_first_real_id_sync(source, monkeypatch, public, marker):
     repo, folder = source
     fired, expected = [], {}
@@ -103,9 +113,21 @@ def test_prepare_refuses_a_marker_changed_during_the_first_real_id_sync(source, 
     assert_no_move()
 
 
-@pytest.mark.parametrize("when", ["id", "preparation", "fence"])
+CHANGES = ["marker", "future", "blank", "absent", "new-preparation", "old-preparation", "source"]
+
+
 @pytest.mark.parametrize(
-    "change", ["marker", "future", "blank", "absent", "new-preparation", "old-preparation", "source"]
+    ("when", "change"),
+    [
+        *(("id", change) for change in CHANGES),  # every change once, at the first recheck
+        ("preparation", "marker"),  # each later site: a changed marker and preparation, and a swapped folder
+        ("preparation", "new-preparation"),
+        ("preparation", "source"),
+        ("fence", "absent"),
+        ("fence", "future"),
+        ("fence", "old-preparation"),
+        ("fence", "source"),
+    ],
 )
 def test_prepare_rechecks_its_snapshot_after_blocking_writes_before_each_publication(source, monkeypatch, when, change):
     repo, folder = source

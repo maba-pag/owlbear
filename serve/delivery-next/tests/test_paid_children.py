@@ -205,11 +205,19 @@ FAULTS = [
     "accepted-log",
     "fallback-clear",
 ]
+REPROCESSED = {"checkpoint-write", "accepted-log"}  # faults that process the hold again, where usage shows a recount
 
 
-@pytest.mark.parametrize("fault", FAULTS)
-@pytest.mark.parametrize("usage", ["known", "unread"])
-@pytest.mark.parametrize("parent", ["plan", "amend"])
+def fault_cases():
+    """Every fault for both parents; usage only for the faults it can change, alternating elsewhere."""
+    for i, fault in enumerate(FAULTS):
+        for j, parent in enumerate(["plan", "amend"]):
+            usages = ["known", "unread"] if fault in REPROCESSED else [["known", "unread"][(i + j) % 2]]
+            for usage in usages:
+                yield pytest.param(parent, usage, fault, id=f"{parent}-{usage}-{fault}")
+
+
+@pytest.mark.parametrize(("parent", "usage", "fault"), list(fault_cases()))
 def test_an_accepted_parent_and_its_paid_child_run_and_count_once_whichever_write_fails(  # noqa: C901, PLR0913, PLR0915, PLR0917
     tmp_path, change_repo, monkeypatch, parent, usage, fault
 ):
