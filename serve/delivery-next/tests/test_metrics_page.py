@@ -164,9 +164,9 @@ def test_a_ledger_whose_step_events_list_their_models_renders(pds) -> None:
     place = {"project": "shop", "name": "shop", "clone": "", "change": "c1", "step": "build", "job": "",
              "agent": "builder", "source": "import:activity"}  # fmt: skip
     spend_ledger.append([
-        place | {"id": f"event:{n}", "type": "event", "at": at, "session": f"s{n}",
+        place | {"id": f"event:{n}", "type": "event", "at": at, "session": f"s{n}", "step": step,
                  "usage": {"credits": spent, "model_mismatch": False, "models": names}}
-        for n, (spent, names) in enumerate([(1.5, ["m1"]), (0.5, ["m1", "m2"])])
+        for n, (spent, names, step) in enumerate([(1.5, ["m1"], "build"), (0.5, ["m1", "m2"], "amend")])
     ])  # fmt: skip
     machine, server, base = serve()
     try:
@@ -189,6 +189,7 @@ def test_a_ledger_whose_step_events_list_their_models_renders(pds) -> None:
             expect(fold).to_have_count(1)
             expect(fold).to_have_attribute("data-runs", "2")
             expect(fold).to_contain_text("2.00")
+            expect(fold.locator("p-table-cell").nth(2)).to_have_text("c1 · 2 steps")  # one Change, not "2 Changes"
             button = fold.get_by_role("button", name="builder · 2 runs")
             expect(button).to_have_attribute("aria-expanded", "false")
             button.focus()
@@ -196,6 +197,7 @@ def test_a_ledger_whose_step_events_list_their_models_renders(pds) -> None:
             expect(button).to_have_attribute("aria-expanded", "true")
             expect(page.locator("#runs .member")).to_have_count(2)
             expect(page.locator("#runs .member .num")).to_have_text(["1.50", "0.50"])
+            expect(page.locator("#runs .member p-table-cell:nth-child(3)")).to_have_text(["c1 · build", "c1 · amend"])
             page.keyboard.press("Enter")
             expect(page.locator("#runs .member")).to_have_count(0)
             expect(page.locator("#error")).to_have_count(0)

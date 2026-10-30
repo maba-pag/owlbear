@@ -49,6 +49,14 @@ const one = (rows, said, many) => {
   return kinds.length === 1 ? kinds[0] : `${kinds.length} ${many}`;
 };
 
+// A Change is its project's: a fold at one Change's several steps names it once, and its opened rows name each step.
+function changes(rows) {
+  const ids = new Set(rows.map((r) => `${project(r)}\u0000${r.change}`));
+  if (ids.size > 1) return plural(ids.size, "Change");
+  const steps = new Set(rows.map((r) => r.step));
+  return steps.size === 1 ? where(rows[0]) : `${rows[0].change || "Outside a Change"} · ${plural(steps.size, "step")}`;
+}
+
 function stops(rows) {
   const limits = [...new Set(rows.filter((r) => r.stopped).map((r) => `${r.limit != null ? ` of ${r.limit}` : ""}${
     r.stopped_by ? ` (${r.stopped_by})` : ""}`))];
@@ -108,7 +116,7 @@ function foldRow(rows) {
     <p-table-cell>${when(newest.at)}<br><p-text size="xs" color="contrast-medium">from ${when(oldest.at)}</p-text>
     </p-table-cell>
     <p-table-cell>${one(rows, project, "projects")}</p-table-cell>
-    <p-table-cell>${one(rows, where, "Changes")}</p-table-cell>
+    <p-table-cell>${changes(rows)}</p-table-cell>
     <p-table-cell multiline="true"><p-button-pure size="sm" @click=${toggle}
       icon=${open ? "arrow-head-down" : "arrow-head-right"} aria=${`{ 'aria-expanded': ${open} }`}>${
         who(newest.agent, newest.job)} · ${plural(rows.length, "run")}
