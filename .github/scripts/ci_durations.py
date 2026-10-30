@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import re
 import sys
@@ -34,7 +35,8 @@ def load(text: str) -> dict[str, float]:
     """Return the run times ``text`` holds; raise ValueError unless it maps test file paths to seconds."""
     found = json.loads(text)
     if not isinstance(found, dict) or not all(
-        isinstance(path, str) and type(seconds) in (int, float) and seconds >= 0 for path, seconds in found.items()
+        isinstance(path, str) and type(seconds) in (int, float) and math.isfinite(seconds) and seconds >= 0
+        for path, seconds in found.items()
     ):
         msg = "run times must be a JSON object of test file paths to seconds"
         raise ValueError(msg)

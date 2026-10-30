@@ -506,15 +506,28 @@ def test_scope_hands_over_the_restored_run_times_or_none(tmp_path: Path, capsys)
     assert snapshot("ci-durations-v1-2026-W44").endswith("current=true\n")
 
 
-@pytest.mark.parametrize("copy", ["", "[]", '{"tests/test_a.py": "1"}', '{"tests/test_a.py": true}', "{"])
+@pytest.mark.parametrize(
+    "copy",
+    [
+        '{"tests/test_a.py": 1.5}',
+        "",
+        "[]",
+        '{"tests/test_a.py": "1"}',
+        '{"tests/test_a.py": true}',
+        '{"t.py": 1e999}',
+        "{",
+    ],
+)
 def test_a_shard_fails_on_a_copy_that_is_no_run_times(tmp_path: Path, copy: str) -> None:
     step = _python_step("Write the run times this run splits by")
-    env = {"PATH": os.environ["PATH"], "DURATIONS": copy, "RUNNER_TEMP": str(tmp_path), "GITHUB_OUTPUT": "/dev/null"}
+    # The step's python3 must be one that runs the script, or every copy fails, the good one too.
+    path = f"{Path(sys.executable).parent}{os.pathsep}{os.environ['PATH']}"
+    env = {"PATH": path, "DURATIONS": copy, "RUNNER_TEMP": str(tmp_path), "GITHUB_OUTPUT": "/dev/null"}
     done = subprocess.run(
         ["/bin/bash", "-e"], input=step["run"], cwd=ROOT, env=env, capture_output=True, text=True, check=False
     )
 
-    assert done.returncode != 0
+    assert (done.returncode == 0) == (copy == '{"tests/test_a.py": 1.5}'), done.stderr
 
 
 def test_a_cached_pass_holds_only_for_the_run_times_its_shards_split_by(tmp_path: Path) -> None:
