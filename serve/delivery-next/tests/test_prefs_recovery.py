@@ -1866,11 +1866,13 @@ def test_a_receipt_read_failure_closes_its_descriptor_once_and_names_the_receipt
         msg = "disk fault"
         raise OSError(msg)
 
-    monkeypatch.setattr(os, "open", spy_open)
-    monkeypatch.setattr(os, "close", spy_close)
-    monkeypatch.setattr(os, failing, fault)
-    with pytest.raises(StoreError) as caught:
-        profile_repair._read(store)  # noqa: SLF001 - the descriptor lifetime is the probe's subject
+    # Patched only around the read: pytest's own output capture calls os.fstat once the test body ends.
+    with monkeypatch.context() as patch:
+        patch.setattr(os, "open", spy_open)
+        patch.setattr(os, "close", spy_close)
+        patch.setattr(os, failing, fault)
+        with pytest.raises(StoreError) as caught:
+            profile_repair._read(store)  # noqa: SLF001 - the descriptor lifetime is the probe's subject
     assert str(receipt) in str(caught.value)
     assert len(opened) == 1
     assert closed.count(opened[0]) == 1

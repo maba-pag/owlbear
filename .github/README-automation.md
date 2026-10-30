@@ -65,7 +65,7 @@ cover the whole tree except `.owlbear/research`; the others cover their own inpu
 
 uv caches are scoped per install profile (`python-tests`, `python-browser`, `delivery-next-browser`, `static`,
 `dev-tools`). Python
-test environments skip the torch/CUDA model stack that only the deselected `model` tests import;
+test environments skip the torch model stack that only the deselected `model` tests import;
 keep the `CI_SKIPPED_PACKAGES` lists in the Python workflow and Copilot setup identical.
 [`test_ci_workflows.py`](../tests/test_ci_workflows.py) owns these workflow-shape contracts.
 
