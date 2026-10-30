@@ -155,11 +155,6 @@ def answered(argv: list[str], workspace: Path, held: Path | None = None) -> None
 
 
 @pytest.mark.timeout(60)
-def test_the_real_memory_server_answers_over_stdio_with_protocol_only_output(tmp_path):
-    answered([sys.executable, "-m", "owlbear_delivery_next", "serve", "memory"], tmp_path)
-
-
-@pytest.mark.timeout(60)
 def test_the_workspace_starts_each_server_exactly_as_configured_from_the_installed_version(tmp_path):
     """``.mcp.json`` names the runtime's python through ``${HOME}``, which every client expands, and no repository."""
     configured = json.loads((Path(__file__).parents[3] / ".mcp.json").read_text())["mcpServers"]
