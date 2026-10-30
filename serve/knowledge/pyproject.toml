@@ -9,7 +9,7 @@ dependencies = [
 
 [project.optional-dependencies]
 qdrant = ["qdrant-client>=1.18.0"]
-embedding = ["accelerate>=1.15.0", "FlagEmbedding>=1.4.0"]
+embedding = ["accelerate>=1.15.0", "FlagEmbedding>=1.4.0", "torch>=2.14.1"]
 intake = [
     "httpx>=0.28.1",
     "owlbear-web-content",
@@ -18,12 +18,20 @@ full = [
     "accelerate>=1.15.0",
     "qdrant-client>=1.18.0",
     "FlagEmbedding>=1.4.0",
+    "torch>=2.14.1",
     "httpx>=0.28.1",
     "owlbear-web-content",
 ]
 
 [tool.uv.sources]
 owlbear-web-content = { workspace = true }
+# Torch is listed only to take this source: the embedder runs on the CPU, so Linux skips the CUDA build.
+torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
 
 [build-system]
 requires = ["hatchling"]

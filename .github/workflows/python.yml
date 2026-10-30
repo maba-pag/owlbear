@@ -27,12 +27,9 @@ permissions:
   contents: read
 
 env:
-  # Only the deselected `model` tests import this stack; it is 96% of the workspace download.
+  # Only the deselected `model` tests import this stack; it is about two thirds of the workspace download.
   CI_SKIPPED_PACKAGES: >-
-    torch triton nvidia-cublas nvidia-cuda-cupti nvidia-cuda-nvrtc nvidia-cuda-runtime
-    nvidia-cudnn-cu13 nvidia-cufft nvidia-cufile nvidia-curand nvidia-cusolver nvidia-cusparse
-    nvidia-cusparselt-cu13 nvidia-nccl-cu13 nvidia-nvjitlink nvidia-nvshmem-cu13 nvidia-nvtx
-    cuda-bindings cuda-pathfinder cuda-toolkit flagembedding accelerate transformers
+    torch flagembedding accelerate transformers
     sentence-transformers peft datasets ir-datasets pyarrow pandas scipy scikit-learn sympy
     tokenizers safetensors sentencepiece hf-xet huggingface-hub
   CI_SHARDS: 4
