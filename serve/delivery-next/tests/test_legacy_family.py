@@ -105,21 +105,7 @@ def test_the_registry_move_changes_only_the_current_read_set() -> None:
             '            return next((s[len(prefix) :] for s in ledger.imported if s.startswith(prefix)), "")',
             '            return ""',
         ),
-        (
-            "local_system/maintenance.py",
-            "    if missing := set(Ledger.model_fields) - ledger.model_fields_set:",
-            "    if False:",
-        ),
-        (
-            "local_system/maintenance.py",
-            '    model_config = ConfigDict(extra="forbid")',
-            '    model_config = ConfigDict(extra="ignore")',
-        ),
-        (
-            "local_system/maintenance.py",
-            "            if isinstance(pid, bool) or not str(pid).isdigit() or int(str(pid)) <= 0:",
-            "            if False:",
-        ),
+        # `_current` digests whole modules, so one edit per module proves it is read; maintenance.py's is above
         (
             "local_system/local_home.py",
             '    return Path.home() / ".owlbear"',
@@ -147,9 +133,6 @@ def test_the_registry_move_changes_only_the_current_read_set() -> None:
         "shared-data",
         "git-directory",
         "receipt-lookup",
-        "strict-reader",
-        "record-schema",
-        "pid-schema",
         "ledger-home",
         "stopped-host",
         "git-link-referents",

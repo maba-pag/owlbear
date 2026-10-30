@@ -85,8 +85,16 @@ def _rewrite_journal(shared: DataRepo, edit) -> None:
     path.write_bytes(json.dumps(record).encode("utf-8"))
 
 
-@pytest.mark.parametrize("damage", ["null-after", "corrupt"])
-@pytest.mark.parametrize("action", ["pending", "finish", "abandon", "save"])
+@pytest.mark.parametrize(
+    ("action", "damage"),
+    [
+        ("pending", "null-after"),
+        ("finish", "null-after"),
+        ("abandon", "null-after"),
+        ("save", "null-after"),
+        ("pending", "corrupt"),  # every action reads the journal through `pending`'s one decode
+    ],
+)
 def test_a_journal_with_a_null_after_or_corrupt_text_refuses_every_action_and_changes_nothing(
     picking, monkeypatch, damage, action
 ):
@@ -137,35 +145,45 @@ def test_a_null_before_image_for_a_new_file_is_accepted_and_finishes(picking, mo
     assert (shared.root / PROJECT / "decisions" / f"{new.id}.md").exists()
 
 
-@pytest.mark.parametrize(
-    "edit",
-    [
-        lambda record: record["files"][0].__setitem__("path", 7),
-        lambda record: record.__setitem__("files", {"path": "decisions/x.md"}),
-        lambda record: record.__setitem__("files", ["decisions/x.md"]),
-        lambda record: record.__setitem__("files", []),  # ids without the files they name
-        lambda record: record.__setitem__("ids", []),  # files without the ids that name them
-        lambda record: record.__setitem__("ids", ["another-decision"]),  # an id that is not its file's name
+WRONG_FILE_LISTS = [
+    pytest.param(lambda record: record["files"][0].__setitem__("path", 7), id="path-not-string"),
+    pytest.param(lambda record: record.__setitem__("files", {"path": "decisions/x.md"}), id="files-not-list"),
+    pytest.param(lambda record: record.__setitem__("files", ["decisions/x.md"]), id="file-entry-not-object"),
+    pytest.param(lambda record: record.__setitem__("files", []), id="ids-without-files"),
+    pytest.param(lambda record: record.__setitem__("ids", []), id="files-without-ids"),
+    pytest.param(lambda record: record.__setitem__("ids", ["another-decision"]), id="id-not-its-file"),
+    pytest.param(
         lambda record: record.__setitem__("files", record["files"] * 2) or record["ids"].append(record["ids"][0]),
-        lambda record: record.update(ids=[], files=[]),  # no file and no id: nothing of the batch could be proved
-    ],
-    ids=[
-        "path-not-string",
-        "files-not-list",
-        "file-entry-not-object",
-        "ids-without-files",
-        "files-without-ids",
-        "id-not-its-file",
-        "one-file-twice",
-        "no-file-and-no-id",
-    ],
-)
-def test_a_journal_with_a_wrongly_typed_file_list_raises_journal_error_and_keeps_its_bytes(picking, monkeypatch, edit):
+        id="one-file-twice",
+    ),
+    pytest.param(lambda record: record.update(ids=[], files=[]), id="no-file-and-no-id"),  # nothing could be proved
+]
+
+
+def _journal_record() -> dict:
+    """A journal as `begin` writes it for one new decision file."""
+    return {
+        "generation": "a" * 32, "project": PROJECT, "head": "c" * 40, "message": "decisions: one", "ids": ["a1"],
+        "files": [{"path": f"{PROJECT}/decisions/a1.md", "before": None, "after": base64.b64encode(b"x\n").decode()}],
+    }  # fmt: skip
+
+
+@pytest.mark.parametrize("edit", WRONG_FILE_LISTS)
+def test_a_journal_with_a_wrongly_typed_or_unpaired_file_list_is_not_decoded(edit):
+    record = _journal_record()
+    assert batch_journal.decode(json.dumps(record).encode("utf-8")).ids == ("a1",)
+    edit(record)
+
+    with pytest.raises(batch_journal.JournalError):
+        batch_journal.decode(json.dumps(record).encode("utf-8"))
+
+
+def test_a_journal_with_an_id_that_is_not_its_files_name_keeps_its_bytes_and_finishes_nothing(picking, monkeypatch):
     _seed(picking)
     shared = picking.shared
     _interrupt(picking, monkeypatch, [make(title="Notes use UTC", statement="All note timestamps use UTC.")])
     assert decision_batch.pending(shared) is not None
-    _rewrite_journal(shared, edit)
+    _rewrite_journal(shared, lambda record: record.__setitem__("ids", ["another-decision"]))
     journal = decision_batch.journal_path(shared).read_bytes()
 
     with pytest.raises(decision_batch.JournalError):
@@ -775,7 +793,6 @@ def test_each_producer_shaped_journal_still_decodes(picking, rel):
     ("ids", "files"),
     [
         ([], []),
-        (["a1"], []),
         (["other"], [(f"{PROJECT}/decisions/a1.md", None, b"after\n")]),
         (["config"], [(".git/config", None, b"after\n")]),
         (
@@ -787,7 +804,7 @@ def test_each_producer_shaped_journal_still_decodes(picking, rel):
             [(f"{PROJECT}/decisions/a1.md", None, b"x\n"), (f"{PROJECT}/Decisions/A1.md", b"x\n", b"y\n")],
         ),
     ],
-    ids=["no-file-and-no-id", "id-without-file", "id-not-its-file", "git-folder", "dot-alias", "case-alias"],
+    ids=["no-file-and-no-id", "id-not-its-file", "git-folder", "dot-alias", "case-alias"],
 )
 def test_a_batch_a_reader_could_not_decode_is_never_journalled(picking, ids, files):
     shared = picking.shared
@@ -961,13 +978,15 @@ def _record_checkout_writes(m: pytest.MonkeyPatch, shared: DataRepo, seen: list[
     m.setattr(DataRepo, "git", recording_git)
 
 
-@pytest.mark.parametrize("image", ["third", "after", "none"])
+@pytest.mark.parametrize("image", ["third", "after"])
 @pytest.mark.parametrize("parent", ["missing", "existing"])
 def test_an_owner_commit_while_finish_makes_the_folder_is_never_overwritten(picking, monkeypatch, parent, image):
     """The owner writes and commits the file during the folder's final fsync, after Finish's first epoch check.
 
     `third`: an image of the owner's own stays as committed. `after`: the owner landed the batch exactly; the next
-    Finish completes it from that commit without a commit of its own. `none`: the healthy Finish publishes.
+    Finish completes it from that commit without a commit of its own. The healthy Finish is proved by
+    `test_finish_creates_a_missing_decisions_folder_after_the_whole_batch_is_checked` and
+    `test_a_null_before_image_for_a_new_file_is_accepted_and_finishes`.
     """
     _seed(picking)
     shared = picking.shared
@@ -976,13 +995,13 @@ def test_an_owner_commit_while_finish_makes_the_folder_is_never_overwritten(pick
     rel = f"{project}/decisions/{new.id}.md"
     folder = shared.root / project / "decisions"
     assert folder.exists() == (parent == "existing")
-    owned = {"third": b"the owner's own third image\n", "after": serialize(new).encode("utf-8")}.get(image)
+    owned = {"third": b"the owner's own third image\n", "after": serialize(new).encode("utf-8")}[image]
     seen: list[str] = []
     real_sync = storage_io._sync_held  # noqa: SLF001 - make_dirs' own sync of the folder it holds open
 
     def final_fsync_then_owner_commits(fd, path):
         real_sync(fd, path)
-        if owned is not None and not seen and Path(path) == folder.parent:  # make_dirs' last fsync, both cases
+        if not seen and Path(path) == folder.parent:  # make_dirs' last fsync, both cases
             seen.append("owner")
             (shared.root / rel).write_bytes(owned)
             _commit_file(shared, rel)
@@ -990,16 +1009,10 @@ def test_an_owner_commit_while_finish_makes_the_folder_is_never_overwritten(pick
     with monkeypatch.context() as m:
         m.setattr(storage_io, "_sync_held", final_fsync_then_owner_commits)
         _record_checkout_writes(m, shared, seen)
-        if owned is None:
-            assert decision_recovery.finish(shared, generation).done
-        else:  # the owner's file holds neither image for the batch's head now, or HEAD moved: either refuses
-            with pytest.raises(decision_store.DecisionsUnavailable, match=r"moved|edited"):
-                decision_recovery.finish(shared, generation)
+        # the owner's file holds neither image for the batch's head now, or HEAD moved: either refuses
+        with pytest.raises(decision_store.DecisionsUnavailable, match=r"moved|edited"):
+            decision_recovery.finish(shared, generation)
 
-    if owned is None:
-        assert "replace" in seen
-        assert decision_batch.pending(shared) is None
-        return
     assert seen == ["owner", "commit"]  # the owner's own commit only: no write, commit or push by Finish after it
     owner_head = shared.git("rev-parse", "HEAD").stdout
     assert shared.git("log", "-1", "--format=%s").stdout.strip() == f"owner commits {rel}"
@@ -1234,8 +1247,13 @@ def _one_update(picking, monkeypatch, surface: str) -> tuple[Path, bytes, bytes,
     return path, before, after, lambda: decision_recovery.abandon(shared, generation)
 
 
-@pytest.mark.parametrize("owner", ["edit", "commit", "landing"])
-@pytest.mark.parametrize("surface", ["finish", "abandon", "store", "generic"])
+@pytest.mark.parametrize(
+    ("surface", "owner"),
+    [
+        *((surface, owner) for owner in ("edit", "landing") for surface in ("finish", "abandon", "store", "generic")),
+        ("finish", "commit"),  # a committed third image is refused on its bytes, as `edit` is, before HEAD is read
+    ],
+)
 def test_an_owner_change_while_the_temporary_file_syncs_is_never_overwritten(picking, monkeypatch, surface, owner):
     """The owner changes the destination while the new bytes' temporary file is fsynced, after every earlier check.
 
@@ -2266,15 +2284,15 @@ def test_a_folder_swapped_during_the_fences_head_probe_never_loses_a_file_to_a_r
     _no_authority(picking)
 
 
-@pytest.mark.parametrize("swap", [True, False], ids=["project-linked-back-during-head-probe", "healthy"])
 @pytest.mark.parametrize("surface", ["abandon", "store-put-back", "generic-put-back"])
 def test_a_project_folder_linked_back_to_itself_during_the_fences_head_probe_changes_nothing(
-    picking, monkeypatch, tmp_path, surface, swap
+    picking, monkeypatch, tmp_path, surface
 ):
     """While a removal's fence reads HEAD, the owner moves the project folder aside and links its name back to it. The
     file's own folder is still the one held open, but a folder above it is now a link: the removal must change
     nothing. The owner's moved project keeps every byte, Git is as at the swap, the batch stays pending and no reader
-    gets authority. Without the swap it completes.
+    gets authority. Without the swap it completes, as the healthy cases of
+    `test_a_folder_swapped_during_the_fences_head_probe_never_loses_a_file_to_a_removal` prove.
     """
     _seed(picking)
     shared = picking.shared
@@ -2292,7 +2310,7 @@ def test_a_project_folder_linked_back_to_itself_during_the_fences_head_probe_cha
 
     def head_probe_then_owner_links_back(self, *args, **kwargs):
         said = real_git(self, *args, **kwargs)
-        if swap and removing[0] and not fired and args[:2] == ("rev-parse", "--verify"):
+        if removing[0] and not fired and args[:2] == ("rev-parse", "--verify"):
             project.rename(moved)
             project.symlink_to(moved, target_is_directory=True)  # back to the owner's own project, same folders below
             fired.update(tree=_files_below(moved), git=_git_state(shared))
@@ -2308,10 +2326,6 @@ def test_a_project_folder_linked_back_to_itself_during_the_fences_head_probe_cha
             refused = str(exc)
 
     assert bool(refused) <= bool(fired), refused  # a refusal is only ever this swap's
-    if not swap:
-        assert not target.exists()
-        assert decision_batch.pending(shared) is None
-        return
     assert fired
     assert target.relative_to(project).as_posix() in fired["tree"]  # the file the removal was for, in the moved project
     assert _files_below(moved) == fired["tree"]  # the owner's moved project keeps every byte
@@ -2431,18 +2445,31 @@ def _completed_list(shared: DataRepo) -> Path:
     return decision_batch.journal_path(shared).parent / decision_batch.COMPLETED
 
 
-@pytest.mark.parametrize(
-    "listed",
-    [b"{not json", b'{"a": 1}', b'["not-a-generation"]', b"[null]", b'["ABCDEF12"]'],
-    ids=["not-json", "object", "not-hex", "null", "upper-case"],
-)
+DAMAGED_COMPLETED_LISTS = [
+    pytest.param(b"{not json", id="not-json"),
+    pytest.param(b'{"a": 1}', id="object"),
+    pytest.param(b'["not-a-generation"]', id="not-hex"),
+    pytest.param(b"[null]", id="null"),
+    pytest.param(b'["ABCDEF12"]', id="upper-case"),
+]
+
+
+@pytest.mark.parametrize("listed", DAMAGED_COMPLETED_LISTS)
+def test_a_damaged_completed_list_is_never_read_as_generations(listed):
+    assert batch_journal.generations(b'["abcdef12"]') == {"abcdef12"}
+
+    with pytest.raises(batch_journal.JournalError, match="completed decision batches"):
+        batch_journal.generations(listed)
+
+
 @pytest.mark.parametrize("writer", ["save", "transaction"])
 def test_a_damaged_completed_list_with_no_journal_refuses_every_writer_before_it_changes_anything(
-    picking, monkeypatch, writer, listed
+    picking, monkeypatch, writer
 ):
     _seed(picking)
     shared = picking.shared
     completed = _completed_list(shared)
+    listed = b"{not json"  # every damaged shape is refused by the one `generations` read
     completed.write_bytes(listed)
     new = make(title="Use UTC", statement="All timestamps use UTC.")
     target = shared.root / PROJECT / "changes" / "record.json"
@@ -2493,11 +2520,20 @@ def test_a_missing_or_empty_completed_list_still_lets_a_save_through(picking, li
 
 
 @pytest.mark.parametrize("value", [None, "not-a-generation", "ABCDEF12", "a" * 7, "a" * 65, 12345678])
-def test_a_journal_whose_generation_cannot_be_named_is_corrupt_and_offers_no_action(picking, monkeypatch, value):
+def test_a_journal_generation_that_is_not_8_to_64_lowercase_hex_is_not_decoded(value):
+    record = _journal_record()
+    assert batch_journal.decode(json.dumps(record).encode("utf-8")).generation == "a" * 32
+    record["generation"] = value
+
+    with pytest.raises(batch_journal.JournalError, match="generation"):
+        batch_journal.decode(json.dumps(record).encode("utf-8"))
+
+
+def test_a_journal_whose_generation_cannot_be_named_is_corrupt_and_offers_no_action(picking, monkeypatch):
     _seed(picking)
     shared = picking.shared
     _interrupt(picking, monkeypatch, [make(title="Use UTC", statement="All timestamps use UTC.")])
-    _rewrite_journal(shared, lambda record: record.__setitem__("generation", value))
+    _rewrite_journal(shared, lambda record: record.__setitem__("generation", None))
     journal = decision_batch.journal_path(shared).read_bytes()
 
     shown = decision_recovery_routes.diagnosis(shared)
@@ -2575,8 +2611,17 @@ def _successor_and_update(picking, monkeypatch, surface: str) -> tuple[Path, byt
     return added, after, updated, before, abandon
 
 
-@pytest.mark.parametrize("recreate", [True, False], ids=["owner-recreates-during-the-final-probe", "healthy"])
-@pytest.mark.parametrize("surface", ["store", "generic", "abandon"])
+@pytest.mark.parametrize(
+    ("surface", "recreate"),
+    [
+        *(
+            pytest.param(s, True, id=f"{s}-owner-recreates-during-the-final-probe")
+            for s in ("store", "generic", "abandon")
+        ),
+        # Abandon's healthy put-back is `test_abandon_completes_only_when_every_file_holds_exactly_its_before_image`
+        *(pytest.param(s, False, id=f"{s}-healthy") for s in ("store", "generic")),
+    ],
+)
 def test_a_successor_recreated_during_the_final_git_probe_of_a_put_back_keeps_the_batch(
     picking, monkeypatch, surface, recreate
 ):
@@ -2614,11 +2659,7 @@ def test_a_successor_recreated_during_the_final_git_probe_of_a_put_back_keeps_th
         m.setattr(decision_batch, "restored", restored)
         m.setattr(DataRepo, "git", git)
         m.setattr(DataRepo, "rebasing", rebasing)
-        if surface == "abandon" and not recreate:
-            generation = decision_batch.pending(shared).generation
-            assert decision_recovery.abandon(shared, generation).done
-        else:
-            run()
+        run()
 
     assert _git_state(shared) == git_state  # nothing committed, staged or undone either way
     assert updated.read_bytes() == before
@@ -2656,12 +2697,10 @@ def _update_and_successor(picking) -> tuple[list[tuple[Decision, str | None]], P
     return [(update, old.revision), (successor, None)], path, path.read_bytes()
 
 
-@pytest.mark.parametrize("owner", [True, False], ids=["first-file-back-to-before", "healthy"])
-def test_a_batch_whose_earlier_file_is_put_back_before_the_commit_is_never_committed(
-    picking, shared_repo, monkeypatch, owner
-):
+def test_a_batch_whose_earlier_file_is_put_back_before_the_commit_is_never_committed(picking, shared_repo, monkeypatch):
     """While the later file is written, the owner puts the earlier one back to its before image: the fence allows
-    either image, but nothing incomplete may be committed or pushed, so the batch stays interrupted."""
+    either image, but nothing incomplete may be committed or pushed, so the batch stays interrupted. The healthy save
+    of the same batch is `test_a_commit_that_does_not_hold_the_batch_is_never_pushed[store-healthy]`."""
     _seed(picking)
     shared, remote = picking.shared, shared_repo[1]
     items, first, before = _update_and_successor(picking)
@@ -2670,7 +2709,7 @@ def test_a_batch_whose_earlier_file_is_put_back_before_the_commit_is_never_commi
 
     def second_write_after_the_owner(decision, folder, expected=None, **kwargs):
         calls.append(decision.id)
-        if owner and len(calls) == 2:
+        if len(calls) == 2:
             first.write_bytes(before)
         return real_write(decision, folder, expected, **kwargs)
 
@@ -2678,11 +2717,6 @@ def test_a_batch_whose_earlier_file_is_put_back_before_the_commit_is_never_commi
         m.setattr(decision_store, "write", second_write_after_the_owner)
         receipts = decision_store.save_all(shared, items, message="decisions: two")
 
-    if not owner:
-        assert all(r.published for r in receipts)
-        assert _remote_main(remote) != published
-        assert decision_batch.pending(shared) is None
-        return
     assert not any(r.saved for r in receipts)
     assert "journalled image" in receipts[0].notice
     assert (shared.git("rev-parse", "HEAD").stdout, _remote_main(remote)) == (local, published)  # nothing committed
@@ -3473,18 +3507,25 @@ def _unrelated_commit_of_the_after_images(shared: DataRepo, files) -> str:
     "value", ["HEAD", "refs/heads/main", "abc1234", "A" * 40, 1234567, None],
     ids=["HEAD", "ref", "short", "upper-case", "number", "null"],
 )  # fmt: skip
-def test_a_journal_whose_head_is_no_full_commit_id_is_corrupt_and_finishes_nothing(
-    picking, shared_repo, monkeypatch, value
-):
-    """A journal naming its head as a ref, a short or upper-case id, a number or nothing is damage: a Finish on an
-    unrelated owner commit with the batch's very tree completes nothing, and neither Abandon, a save nor a reader
-    goes on as if the batch were known."""
+def test_a_journal_head_that_is_no_full_lowercase_commit_id_is_not_decoded(value):
+    record = _journal_record()
+    assert batch_journal.decode(json.dumps(record).encode("utf-8")).head == "c" * 40
+    record["head"] = value
+
+    with pytest.raises(batch_journal.JournalError, match="head"):
+        batch_journal.decode(json.dumps(record).encode("utf-8"))
+
+
+def test_a_journal_whose_head_is_no_full_commit_id_is_corrupt_and_finishes_nothing(picking, shared_repo, monkeypatch):
+    """A journal naming its head as a ref (here `HEAD`) is damage: a Finish on an unrelated owner commit with the
+    batch's very tree completes nothing, and neither Abandon, a save nor a reader goes on as if the batch were known.
+    Every other shape a head can't take is refused by the same `decode`, unit-tested above."""
     _seed(picking)
     shared, remote = picking.shared, shared_repo[1]
     items, _, _ = _update_and_successor(picking)
     generation = _interrupt_at(picking, monkeypatch, items)
     files = decision_batch.pending(shared).files
-    _rewrite_journal(shared, lambda record: record.__setitem__("head", value))
+    _rewrite_journal(shared, lambda record: record.__setitem__("head", "HEAD"))
     orphan = _unrelated_commit_of_the_after_images(shared, files)
     journal, published = decision_batch.journal_path(shared).read_bytes(), _remote_main(remote)
 
@@ -3620,8 +3661,15 @@ class _Holder:
 DEADLINE_CASES = ["held-past-the-deadline", "released-within-the-deadline", "freed-only-after-it", "expired-before"]
 
 
-@pytest.mark.parametrize("case", DEADLINE_CASES)
-@pytest.mark.parametrize("op", ["push", "pull"])
+# Pull enters through the same `DataRepo._decision_batch_held(until)` as push, so it runs the two cases that tell its
+# own wiring apart (refused while held, goes on once freed); the deadline edges are push's.
+@pytest.mark.parametrize(
+    ("op", "case"),
+    [
+        *(pytest.param("push", c, id=f"push-{c}") for c in DEADLINE_CASES),
+        *(pytest.param("pull", c, id=f"pull-{c}") for c in DEADLINE_CASES[:2]),
+    ],
+)
 def test_an_ordinary_push_or_pull_reads_the_batch_journal_within_its_own_deadline(  # noqa: PLR0915 - one matrix
     picking, shared_repo, monkeypatch, op, case
 ):
