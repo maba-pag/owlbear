@@ -258,7 +258,9 @@ def _rebase_state_fault(scoped, root: Path, state: str, seen: dict[str, str]) ->
 
 
 @pytest.mark.parametrize("path", ["store", "finish"])
-@pytest.mark.parametrize("state", ["healthy", "active", "unknown"])
+# the healthy store and finish are proven by test_a_remote_that_moves_between_catch_up_and_proof_is_caught_up_again
+# and test_a_committed_generation_completes_offline_without_fetch_push_or_rebase
+@pytest.mark.parametrize("state", ["active", "unknown"])
 def test_a_rebase_state_change_after_ancestry_never_completes_a_committed_batch(
     shared_repo, lost_ack, monkeypatch, path, state
 ) -> None:
@@ -274,8 +276,7 @@ def test_a_rebase_state_change_after_ancestry_never_completes_a_committed_batch(
     receipt = done = None
     refused = False
     with monkeypatch.context() as scoped:
-        if state != "healthy":
-            _rebase_state_fault(scoped, root, state, seen)
+        _rebase_state_fault(scoped, root, state, seen)
         if path == "store":
             receipt = save(shared, make(), expected_revision=None, message="decisions: notes")
         else:
@@ -285,13 +286,6 @@ def test_a_rebase_state_change_after_ancestry_never_completes_a_committed_batch(
                 refused = "not proved now" in str(failure)
 
     assert (root / OWNER).read_text() == "owner words\n"
-    if state == "healthy":
-        assert decision_batch.pending(shared) is None
-        if path == "store":
-            assert receipt.saved
-        else:
-            assert done.done
-        return
     assert "commit" in seen  # the rebase state changed after ancestry, so the fault really ran
     assert git(root, "rev-parse", "HEAD") == seen["commit"]
     assert decision_batch.pending(shared) is not None
@@ -449,31 +443,10 @@ def test_a_record_refuses_an_interrupted_uncommitted_batch_before_any_remote_wor
     notice = change_record.save(Store(root), finished(), MERGED, AT)
 
     assert "finished or abandoned" in notice
-    assert not {"fetch", "push", "pull", "rebase"} & set(commands)
-    assert git(root, "rev-parse", "HEAD") == head
-    assert git(remote, "rev-parse", "main") == remote_head
-    assert tree_bytes(root) == before
-    assert decision_batch.pending(shared).generation == pending.generation
-
-
-@pytest.mark.usefixtures("lost_before_commit")
-def test_a_refused_record_with_no_writes_publishes_nothing(shared_repo, tmp_path, monkeypatch) -> None:
-    root, remote = shared_repo
-    owner_commit(root, "owner words\n")
-    shared = DataRepo(root)
-    save(shared, make(), expected_revision=None, message="decisions: notes")
-    pending = decision_batch.pending(shared)
-    assert pending is not None
-    advance_remote(tmp_path, remote, "elsewhere.txt")
-    head, remote_head = git(root, "rev-parse", "HEAD"), git(remote, "rev-parse", "main")
-    commands = recorded_git(monkeypatch)
-
-    notice = change_record.save(Store(root), finished(), MERGED, AT)
-
-    assert "finished or abandoned" in notice
     assert not {"fetch", "push", "pull", "rebase", "commit"} & set(commands)
     assert git(root, "rev-parse", "HEAD") == head
     assert git(remote, "rev-parse", "main") == remote_head
+    assert tree_bytes(root) == before
     assert decision_batch.pending(shared).generation == pending.generation
 
 

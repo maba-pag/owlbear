@@ -1188,15 +1188,42 @@ def test_the_installed_browser_is_tried_first_and_only_missing_browsers_fall_thr
     assert pw.tried == ["chrome"]
 
 
+class Preview(http.server.SimpleHTTPRequestHandler):
+    """Serves the site folder, except /away, which redirects to another origin."""
+
+    away = ""
+
+    def do_GET(self):
+        if self.path != "/away":
+            super().do_GET()
+            return
+        self.send_response(302)
+        self.send_header("Location", self.away)
+        self.end_headers()
+
+
 @pytest.mark.browser
 def test_a_real_capture_of_a_local_page(tmp_path):
-    site = tmp_path / "site"
+    site, elsewhere = tmp_path / "site", tmp_path / "elsewhere"
     site.mkdir()
+    elsewhere.mkdir()
     (site / "index.html").write_text("<!doctype html><title>t</title><h1>Hallo, Ada!</h1>")
-    handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(site))
+    (site / "long.html").write_text('<!doctype html><div style="height:7000px">long</div>')
+    (elsewhere / "index.html").write_text("<!doctype html><h1>elsewhere</h1>")
+    other = http.server.ThreadingHTTPServer(
+        ("127.0.0.1", 0), functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(elsewhere))
+    )
+    away = f"http://127.0.0.1:{other.server_port}"
+    handler = functools.partial(type("P", (Preview,), {"away": f"{away}/"}), directory=str(site))
     server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
-    threading.Thread(target=server.serve_forever, daemon=True).start()
-    states = [HOME, VisualState(name="gone", path="/missing", expect="nothing")]
+    for each in (other, server):
+        threading.Thread(target=each.serve_forever, daemon=True).start()
+    states = [
+        HOME,
+        VisualState(name="gone", path="/missing", expect="nothing"),
+        VisualState(name="away", path="/away", expect="nothing"),
+        VisualState(name="long", path="/long.html", expect="nothing"),
+    ]
     try:
         shots = visual.capture(
             f"http://127.0.0.1:{server.server_port}", states, tmp_path / "out", (1280, 1920), timeout_ms=5000
@@ -1205,14 +1232,23 @@ def test_a_real_capture_of_a_local_page(tmp_path):
         pytest.skip(f"no Chrome, Edge or Playwright Chromium: {exc}")
     finally:
         server.shutdown()
+        other.shutdown()
     assert [(s.state, s.width, bool(s.file)) for s in shots] == [
         ("home", 1280, True),
         ("home", 1920, True),
         ("gone", 1280, False),
         ("gone", 1920, False),
+        ("away", 1280, False),
+        ("away", 1920, False),
+        ("long", 1280, False),
+        ("long", 1920, False),
     ]
     assert (tmp_path / "out" / "home-1920.png").read_bytes().startswith(b"\x89PNG")
     assert shots[2].error == "/missing answered 404"
+    assert {s.error for s in shots[4:6]} == {
+        f"state away left the preview ({away})"
+    }  # a state that leaves is a finding
+    assert all("over the 6000px cap" in s.error for s in shots[6:]), shots  # a page over the height cap is a finding
 
 
 @pytest.mark.browser
@@ -1240,58 +1276,3 @@ def test_a_real_capture_records_console_and_page_errors_and_only_new_ones_fail(t
     assert [(e.kind, e.text) for e in old] == [("console", "old warning")]
     assert [e.kind for e in new] == ["page"]
     assert "undefined_call" in new[0].text
-
-
-class Redirect(http.server.BaseHTTPRequestHandler):
-    target = ""
-
-    def do_GET(self):
-        self.send_response(302)
-        self.send_header("Location", self.target)
-        self.end_headers()
-
-    def log_message(self, *_a):
-        pass
-
-
-@pytest.mark.browser
-def test_a_state_that_leaves_the_preview_is_a_finding(tmp_path):
-    site = tmp_path / "site"
-    site.mkdir()
-    (site / "index.html").write_text("<!doctype html><h1>elsewhere</h1>")
-    other = http.server.ThreadingHTTPServer(
-        ("127.0.0.1", 0), functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(site))
-    )
-    handler = type("R", (Redirect,), {"target": f"http://127.0.0.1:{other.server_port}/"})
-    preview = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
-    for server in (other, preview):
-        threading.Thread(target=server.serve_forever, daemon=True).start()
-    try:
-        shots = visual.capture(
-            f"http://127.0.0.1:{preview.server_port}", [HOME], tmp_path / "out", (1280,), timeout_ms=5000
-        )
-    except visual.BrowserMissingError as exc:
-        pytest.skip(f"Chromium is not installed: {exc}")
-    finally:
-        preview.shutdown()
-        other.shutdown()
-    assert {s.error for s in shots} == {f"state home left the preview (http://127.0.0.1:{other.server_port})"}
-
-
-@pytest.mark.browser
-def test_a_page_over_the_height_cap_is_a_finding(tmp_path):
-    site = tmp_path / "site"
-    site.mkdir()
-    (site / "index.html").write_text('<!doctype html><div style="height:7000px">long</div>')
-    handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(site))
-    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
-    threading.Thread(target=server.serve_forever, daemon=True).start()
-    try:
-        shots = visual.capture(
-            f"http://127.0.0.1:{server.server_port}", [HOME], tmp_path / "out", (1280,), timeout_ms=5000
-        )
-    except visual.BrowserMissingError as exc:
-        pytest.skip(f"Chromium is not installed: {exc}")
-    finally:
-        server.shutdown()
-    assert all(not s.file and "over the 6000px cap" in s.error for s in shots), shots

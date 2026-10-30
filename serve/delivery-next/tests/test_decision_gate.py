@@ -157,7 +157,9 @@ def test_a_change_approved_without_a_pick_gives_every_role_every_decision_in_for
     assert "do not apply" not in message
 
 
-@pytest.mark.parametrize("kind", [K.BUILD, K.PUBLISH, K.MERGE])
+# MERGE takes the same gate as PUBLISH; test_a_failed_refresh_stops_before_publish_and_merge_but_not_before_build
+# still runs it
+@pytest.mark.parametrize("kind", [K.BUILD, K.PUBLISH])
 def test_an_applicable_change_after_approval_asks_before_the_next_step_and_continue_repins(tmp_path, shared, ran, kind):
     rule = put(shared, make())
     store = stored(tmp_path, shared, change(kind))
