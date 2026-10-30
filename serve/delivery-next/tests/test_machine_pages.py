@@ -1205,6 +1205,9 @@ def alpha_says_who_ran_memory_curation_last(page, row, a: registry.Project) -> N
          "Memory curation (memory curator): done, "),
         ({"by": "owner", "state": "done", "action": "approve Run ruff first", "ended_at": at},
          "Memory curation (your memory action): approve Run ruff first, "),
+        ({"by": "owner", "state": "done", "action": "approve Run ruff first", "ended_at": at,
+          "reason": "memory curation's runs could not be read, so they are not counted: bad JSON"},
+         " — memory curation's runs could not be read, so they are not counted: bad JSON"),  # a qualification stays
     ]:  # fmt: skip
         page.route(f"**/p/{a.id}/api/next/maintenance", telling(last))
         page.evaluate("document.dispatchEvent(new Event('visibilitychange'))")

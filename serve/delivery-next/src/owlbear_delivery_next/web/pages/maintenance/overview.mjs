@@ -20,7 +20,9 @@ function said(actions) {
   const run = (a) => {
     if (!a.last) return `${a.name}: never run`;
     const [by, what] = lastSaid(a.last);
-    return `${a.name}${by}: ${what}`;
+    // A qualification of what it shows stays; a tagged run's reason waits on the project's own page.
+    const note = a.last.reason && !TAGS[a.last.state] ? ` — ${a.last.reason}` : "";
+    return `${a.name}${by}: ${what}${note}`;
   };
   return [tags.length ? tags : nothing, html`<ul class="runs">${recorded.map((a) => html`<li>${run(a)}</li>`)}</ul>`];
 }
