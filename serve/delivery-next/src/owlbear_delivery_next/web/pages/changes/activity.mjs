@@ -44,6 +44,13 @@ const words = (name) => {
 };
 const METHOD = { queue: "merge queue" };
 
+// A lint event records the linters that ran and the ones skipped; "passed" alone is true when none ran.
+function linted(e) {
+  const ran = (e.ran || []).map((r) => r.tool), skipped = (e.skipped || []).join("; ");
+  if (!ran.length) return `Lint not run${why(skipped)}`;
+  return `Lint ${e.passed ? "passed" : "found problems"} (${ran.join(", ")})${skipped ? `; skipped: ${skipped}` : ""}`;
+}
+
 // Each recorded event in plain words; an event this page does not know reads as its name, with its reason if any.
 const SAID = {
   step: (e) => `${STEPS[e.kind] ?? words(e.kind ?? "step")} ${EXITS[e.exit] ?? "ended"}${why(e.reason)}`,
@@ -80,12 +87,14 @@ const SAID = {
   answer: (e) => `Answered ${e.question} as ${CLASSES[e.class] ?? e.class}`,
   reply: () => "Replied on the pull request",
   reopen: (e) => `Could not reopen${pr(e)}${why(e.error)}`,
-  undo: (e) => `Undid task ${e.task}, attempt ${e.attempt}`,
+  undo: (e) => `${e.error ? "Could not undo" : "Undid"} ${e.task === "final" ? "the work rejected at final review"
+    : `task ${e.task}`}, attempt ${e.attempt}${why(e.error)}`,
   wave: (e) => `Judges started${e.left ? `, ${e.left} left` : ""}`,
   snapshot: () => "Check environment saved",
-  "prepared-end": (e) => `Check environment ready${e.cleanup && e.cleanup !== "ok" ? `: ${e.cleanup}` : ""}`,
+  "prepared-end": (e) => (e.cleanup && e.cleanup !== "ok" ? `Check ${e.check} not fully cleaned up: ${e.cleanup}`
+    : `Check ${e.check} cleaned up`),
   "prepared-stray": () => "Stray files from preparing discarded",
-  lint: (e) => (e.passed ? "Lint passed" : "Lint found problems"),
+  lint: linted,
   "lint-skipped": (e) => `Lint ${e.tool} skipped${why(e.reason)}`,
   "lint-unresolved": () => "Lint problems left unresolved",
   "subagent-started": (e) => `Subagent ${e.agent || ""} started${e.allowed === false ? " (not allowed)" : ""}`,
