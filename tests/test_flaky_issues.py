@@ -26,10 +26,27 @@ def test_only_issues_github_reports_open_get_reruns() -> None:
     assert [note.split()[0] for note in notes] == ["#2", "#3", "#4:"]
 
 
+def test_an_issue_is_read_through_gh_and_its_error_kept(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[list[str]] = []
+
+    def run(argv: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+        calls.append(argv)
+        if argv[-1].endswith("/2"):
+            raise subprocess.CalledProcessError(1, argv, stderr="HTTP 403: Resource not accessible\n")
+        return subprocess.CompletedProcess(argv, 0, stdout='{"state": "open"}')
+
+    monkeypatch.setattr(flaky_issues.subprocess, "run", run)
+
+    assert flaky_issues.fetch_issue("owner/repo", 1) == {"state": "open"}
+    with pytest.raises(RuntimeError, match="HTTP 403: Resource not accessible"):
+        flaky_issues.fetch_issue("owner/repo", 2)
+    assert calls[0] == ["gh", "api", "repos/owner/repo/issues/1"]
+
+
 def test_ci_env_lists_the_open_issues_named_by_tracked_flaky_marks(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    (tmp_path / "test_a.py").write_text("@pytest.mark.flaky(issue=795)\n@pytest.mark.flaky( issue = 742 )\n")
+    (tmp_path / "test_a.py").write_text("@pytest.mark.flaky(issue=795)\n@pytest.mark.flaky(\n    issue=742,\n)\n")
     (tmp_path / "test_b.py").write_text("@pytest.mark.flaky(issue=805)\n")  # untracked
     subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)  # noqa: S607
     subprocess.run(["git", "add", "test_a.py"], cwd=tmp_path, check=True)  # noqa: S607

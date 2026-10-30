@@ -10,14 +10,13 @@ import json
 import os
 import re
 import subprocess
-import urllib.request
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
 
-_MARK = re.compile(r"\bflaky\(\s*issue\s*=\s*(\d+)\s*\)")
+_MARK = re.compile(r"\bflaky\(\s*issue\s*=\s*(\d+)\s*,?\s*\)")
 _TIMEOUT_SECONDS = 10
 
 
@@ -36,17 +35,18 @@ def marked_issues(root: Path) -> list[int]:
 
 
 def fetch_issue(repository: str, number: int) -> dict[str, object]:
-    """One issue from the GitHub API, read with the job's token."""
-    request = urllib.request.Request(
-        f"https://api.github.com/repos/{repository}/issues/{number}",
-        headers={
-            "Accept": "application/vnd.github+json",
-            "Authorization": f"Bearer {os.environ['GH_TOKEN']}",
-            "X-GitHub-Api-Version": "2022-11-28",
-        },
-    )
-    with urllib.request.urlopen(request, timeout=_TIMEOUT_SECONDS) as response:  # noqa: S310
-        return json.load(response)
+    """One issue from the GitHub API through the gh CLI, read with the job's token."""
+    try:
+        done = subprocess.run(  # noqa: S603
+            ["gh", "api", f"repos/{repository}/issues/{number}"],  # noqa: S607
+            capture_output=True,
+            check=True,
+            text=True,
+            timeout=_TIMEOUT_SECONDS,
+        )
+    except subprocess.CalledProcessError as error:
+        raise RuntimeError(error.stderr.strip() or f"gh exited with {error.returncode}") from error
+    return json.loads(done.stdout)
 
 
 def open_issues(numbers: Iterable[int], fetch: Callable[[int], dict[str, object]]) -> tuple[list[int], list[str]]:
