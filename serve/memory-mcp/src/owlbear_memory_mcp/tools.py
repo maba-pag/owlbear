@@ -850,7 +850,8 @@ async def make_global(ctx: Context, *, entry_id: str, revision: str, folder: str
                 msg = f"{entry.title} could not move: {exc.strerror or exc}; try again"
                 raise ToolError(msg) from exc
             try:
-                sha = commit_move([path, moved], f"memory {project}: make global {entry.title}")
+                # Not the Memory page's "memory <project>: " subject: Maintenance reads that as the owner's action.
+                sha = commit_move([path, moved], f"chore: memory make global {entry.title} from {project} (memory-mcp)")
             except subprocess.CalledProcessError as exc:
                 moved.replace(path)
                 storage.write_entry(path, entry, memory_dir=source)  # back where it was, so it can be tried again

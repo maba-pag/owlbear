@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from datetime import datetime
 
     from owlbear_delivery_next.local_system import maintenance
-    from owlbear_delivery_next.machine_host.curation import FolderRun, Runs
+    from owlbear_delivery_next.state_store.curation_runs import FolderRun, Runs
 
 STATES = frozenset({"never", "waiting", "running", "done", "failed"})  # every state a folder's row is written in
 REFUSALS = frozenset({  # the fixed reasons main's ``_one`` writes when it refuses before any session

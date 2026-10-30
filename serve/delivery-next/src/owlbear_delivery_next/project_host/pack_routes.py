@@ -9,6 +9,7 @@ from __future__ import annotations
 import contextlib
 import os
 import subprocess
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, HTTPException, Request
@@ -18,10 +19,12 @@ from pydantic import BaseModel, ConfigDict, Field
 from owlbear_delivery_next.impeccable import pack_files, pack_update
 from owlbear_delivery_next.impeccable.detector import DetectorError
 from owlbear_delivery_next.impeccable_runs import pack_candidate, pack_job, pack_replay
-from owlbear_delivery_next.local_system import data_repo
+from owlbear_delivery_next.local_system import data_repo, local_home
 from owlbear_delivery_next.project_host import curation_routes, maintenance_routes
 from owlbear_delivery_next.settings import roles
+from owlbear_delivery_next.state_store import curation_runs
 
+EARLIEST = datetime.min.replace(tzinfo=UTC)
 OLD = "/design-pack"  # the routes' prefix before the Impeccable rename
 REPLAY_FAILURES = (
     pack_files.PackError,
@@ -64,7 +67,7 @@ def pack(job: pack_job.Job) -> dict[str, Any]:
     }
 
 
-def memory_last(store: Store) -> dict[str, Any] | None:
+def owner_last(store: Store) -> dict[str, Any] | None:
     """The owner's last memory action, from the shared repository's history; none without one."""
     if store.shared is None:
         return None
@@ -79,7 +82,49 @@ def memory_last(store: Store) -> dict[str, Any] | None:
     except OSError, subprocess.TimeoutExpired:
         return None
     at, _, subject = done.stdout.strip().partition("\0")
-    return {"state": subject.removeprefix(marker), "ended_at": at} if done.returncode == 0 and at else None
+    if done.returncode != 0 or not at:
+        return None
+    return {"by": "owner", "state": "done", "action": subject.removeprefix(marker), "ended_at": at}
+
+
+def curation_last(name: str) -> dict[str, Any] | None:
+    """This project folder's last memory curation on this machine; none before its first.
+
+    Raises ``OSError`` or ``ValueError`` when the machine's record of curation runs cannot be read.
+    """
+    try:
+        text = (local_home.root() / curation_runs.STATE).read_text()
+    except FileNotFoundError:
+        return None
+    run = curation_runs.Runs.model_validate_json(text).folders.get(name)
+    if run is None or run.state == "never":
+        return None
+    at = {k: v.isoformat() if v else None for k, v in (("started_at", run.started_at), ("ended_at", run.ended_at))}
+    return {"by": "curation", "state": run.state, **at, "reason": run.reason}
+
+
+def _when(last: dict[str, Any]) -> datetime | None:
+    at = last.get("ended_at") or last.get("started_at")
+    try:
+        return datetime.fromisoformat(at) if at else None
+    except ValueError:
+        return None
+
+
+def memory_last(store: Store) -> dict[str, Any] | None:
+    """The later of the folder's last curation run and the owner's last memory action, saying which (``by``).
+
+    A run or action without a time loses to one with a time. A curation record that cannot be read leaves the owner's
+    action, its reason saying the curation's runs are not counted.
+    """
+    owner = owner_last(store)
+    try:
+        run = curation_last(store.name) if store.name else None
+    except (OSError, ValueError) as exc:
+        unread = f"memory curation's runs could not be read, so they are not counted: {exc}"
+        return (owner or {"by": "curation", "state": "unknown"}) | {"reason": unread}
+    found = [last for last in (owner, run) if last]
+    return max(found, key=lambda last: _when(last) or EARLIEST) if found else None
 
 
 def overview(store: Store) -> list[dict[str, Any]]:
