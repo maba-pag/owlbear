@@ -83,10 +83,10 @@ def owner_save(store: Store, edit) -> None:
     assert r.status_code == 200, r.text
 
 
-def fresh_clone(remote: Path, tmp_path: Path) -> Store:
-    second = tmp_path / "fresh"
+def fresh_clone(remote: Path, tmp_path: Path, name: str = "fresh") -> Store:
+    second = tmp_path / name
     subprocess.run(["git", "clone", "-q", str(remote), str(second)], check=True, capture_output=True)  # noqa: S603, S607
-    return Store(tmp_path / "fresh-store", DataRepo(second), "shop-site")
+    return Store(tmp_path / f"{name}-store", DataRepo(second), "shop-site")
 
 
 @pytest.mark.usefixtures("no_network")
@@ -108,7 +108,7 @@ def test_a_format_12_project_upgrades_and_carries_each_legacy_value_once(shared_
 
 
 @pytest.mark.usefixtures("no_network")
-def test_an_owner_save_and_a_restart_keep_the_new_values_and_an_owner_null_stays_null(shared_repo, tmp_path):
+def test_an_owner_save_and_a_restart_keep_the_new_values_and_an_owner_null_or_clear_stays_null(shared_repo, tmp_path):
     root, remote = shared_repo
     store = seeded(root, tmp_path)
     started(store, root)
@@ -131,17 +131,8 @@ def test_an_owner_save_and_a_restart_keep_the_new_values_and_an_owner_null_stays
     fresh = fresh_clone(remote, tmp_path).read_config()
     assert (fresh.format, fresh.spotter.switch, fresh.prefs.ci_poll_seconds) == (F, "off", None)
 
-
-@pytest.mark.usefixtures("no_network")
-def test_an_owner_clear_after_the_import_is_published_and_never_refilled(shared_repo, tmp_path):
-    root, remote = shared_repo
-    store = seeded(root, tmp_path)
-    started(store, root)
-
-    owner_save(store, lambda project: project | {"prefs": None})
+    owner_save(restarted, lambda project: project | {"prefs": None})  # an owner clear of all of them
     started(reopen(root, tmp_path), root)
-
-    restarted = reopen(root, tmp_path).read_config()
-    assert restarted.prefs is None
-    assert restarted.prefs_imported is True
-    assert fresh_clone(remote, tmp_path).read_config().prefs is None
+    cleared = reopen(root, tmp_path).read_config()
+    assert (cleared.prefs, cleared.prefs_imported) == (None, True)
+    assert fresh_clone(remote, tmp_path, "cleared").read_config().prefs is None

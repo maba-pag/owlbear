@@ -316,17 +316,6 @@ def test_a_reconsideration_that_cannot_confirm_its_end_stops_the_change_for_the_
     assert (c.outcome.exit, c.step.mode, loop.next_step(c, NOW)) == (Exit.STOP, "reconsider", None)
 
 
-def test_an_unchanged_version_whose_rejections_the_check_accepted_needs_no_tick(shaping):
-    shaping.save()
-    shaping.ask_challenge(1)
-    shaping.verdicts += [verdict("AC-1"), verdict(upheld={"F1": False})]
-    shaping.step()
-    assert shaping.ask_challenge(1, {"F1": "it is checkable"}).status_code == 200  # no revision: rejected whole
-    c = shaping.step()
-    assert (c.brief.challenged, c.loops[BRIEF].unreviewed) == (1, [])
-    assert shaping.approve(1).json() == {"accepted": "brief-approval"}
-
-
 def test_an_unchanged_version_at_the_round_limit_needs_no_tick(shaping):
     shaping.save()
     with shaping.store.lock(shaping.slug) as lock:

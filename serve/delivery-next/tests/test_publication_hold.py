@@ -719,34 +719,55 @@ def mutate(record: dict, case: str) -> bytes:
     return json.dumps(changed).encode()
 
 
-@pytest.mark.parametrize(
-    "case",
-    [
-        "watch null",
-        "watch number",
-        "watch escapes",
-        "watch absolute",
-        "watch in git",
-        "watch dot",
-        "watch nul",
-        "watch doubled slash",
-        "watch leading dot",
-        "file nul",
-        "file null",
-        "base shape",
-        "base number",
-        "since null",
-        "since short",
-        "fields list",
-        "field number",
-        "fields empty",
-        "what null",
-        "refused null",
-        "missing key",
-        "extra key",
-        "not json",
-    ],
-)
+MALFORMED = [
+    "watch null",
+    "watch number",
+    "watch escapes",
+    "watch absolute",
+    "watch in git",
+    "watch dot",
+    "watch nul",
+    "watch doubled slash",
+    "watch leading dot",
+    "file nul",
+    "file null",
+    "base shape",
+    "base number",
+    "since null",
+    "since short",
+    "fields list",
+    "field number",
+    "fields empty",
+    "what null",
+    "refused null",
+    "missing key",
+    "extra key",
+    "not json",
+]
+VALID = {
+    "watch": f"{PROJECT}/config.json",
+    "base": publication_hold.ABSENT,
+    "since": "0" * 40,
+    "file": f"{PROJECT}/{profile_share.PROFILE}",
+    "fields": {"prefs_import": "pending"},
+    "what": "a claim",
+    "refused": "the remote changed",
+}
+
+
+@pytest.mark.parametrize("case", MALFORMED)
+def test_a_malformed_held_record_is_refused_and_kept_as_it_is(tmp_path, case):
+    record = tmp_path / publication_hold.RECORD
+    record.write_text(json.dumps(VALID))
+    assert publication_hold._load(record) == VALID  # noqa: SLF001 - the record's reader is the unit
+    raw = mutate(VALID, case)
+    record.write_bytes(raw)
+    with pytest.raises(publication_hold._UnknownError, match="held publication record"):  # noqa: SLF001
+        publication_hold._load(record)  # noqa: SLF001
+    assert record.read_bytes() == raw
+
+
+@pytest.mark.parametrize("case", ["watch escapes", "missing key", "not json"])
 def test_a_malformed_held_record_stays_held_with_its_bytes_and_never_lapses(held, case):
     import json  # noqa: PLC0415
 

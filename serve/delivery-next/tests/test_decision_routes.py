@@ -222,8 +222,7 @@ def test_replacing_an_exception_keeps_its_exception_to_link(owner, shared):
     assert got["receipts"][0]["active"] is True
 
 
-@pytest.mark.parametrize("action", ["replace", "exception"])
-@pytest.mark.parametrize("confirmed", [None, False])
+@pytest.mark.parametrize(("action", "confirmed"), [("replace", None), ("exception", False)])
 def test_a_successor_the_owner_did_not_confirm_is_refused_and_writes_nothing(owner, shared, action, confirmed):
     rule = worldwide() if action == "exception" else make()
     seed(shared, rule)

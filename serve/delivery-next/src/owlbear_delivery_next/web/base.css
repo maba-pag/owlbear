@@ -31,6 +31,13 @@ p-inline-notification { overflow-wrap: anywhere; }
 }
 ul, ol { margin: 0; padding-inline-start: var(--p-spacing-static-lg); }
 li { font-size: var(--p-typescale-sm); }
+/* Running text stops at about 75 characters a line (D-01M66D205WV75ZGAPVVYHCTADY). ch is Porsche Next's "0", wider
+   than its average letter: 47ch holds about 75. Tables, notices, banners, the sticky bar, the notices under the top
+   row, a line of facts (.meta), a path (.path) and the lists of cards or timed rows keep their width; the text in a
+   card is capped as text. Its last line keeps more than one word. */
+:is(p, p-text, dd, li):not(:is(p-table, p-inline-notification, p-banner, .bar, #machine) *, .meta, .path):not(
+  :is(.scopes, .cards, .entries, .actions, .log, #projects) > li) { max-inline-size: 47ch; text-wrap: pretty; }
+p-text[size="xs"] { font-size: var(--p-typescale-xs); }  /* its ch follows its smaller text; PDS sizes the text */
 details > summary { cursor: pointer; font-size: var(--p-typescale-sm); padding-block: var(--p-spacing-static-xs); }
 :is(a, button, summary, input, select, textarea, [tabindex]):focus-visible {
   outline: 2px solid var(--p-color-focus); outline-offset: 2px;

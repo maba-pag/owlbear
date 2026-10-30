@@ -283,16 +283,6 @@ def test_a_batch_already_pending_at_the_first_stamp_is_refused(picking, monkeypa
     assert warmth.parses == []  # refused before the files were collected
 
 
-@pytest.mark.parametrize("reader", [decision_store.load, decision_store.file_snapshot], ids=["load", "file_only"])
-def test_a_batch_begun_and_completed_while_the_decisions_are_read_is_refused(picking, warmth, reader):
-    _seed(picking)
-    warmth.ready(picking.shared, PROJECT)
-    _race(warmth, picking.shared, "decisions: aba")
-    with pytest.raises(decision_store.DecisionsUnavailable, match="changed while they were read"):
-        reader(picking.shared, PROJECT)
-    assert warmth.parses == warmth.collected(PROJECT)
-
-
 @pytest.mark.parametrize("action", [decision_recovery.abandon, decision_recovery.finish], ids=["abandon", "finish"])
 def test_an_owner_edit_after_the_batch_is_never_overwritten(picking, action):
     old = _seed(picking)

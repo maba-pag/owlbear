@@ -298,10 +298,7 @@ def test_python_tests_are_sharded_without_the_model_stack() -> None:
         "${{ inputs.workers }}"
     )
     assert workflow["on"]["workflow_dispatch"]["inputs"]["workers"]["default"] == ""
-    durations = job["steps"][[s.get("name") for s in job["steps"]].index("Run test shard")]["env"]["CI_SHARD_DURATIONS"]
-    assert durations == ".github/ci-durations.json"
-    assert {durations, ".github/scripts/ci_durations.py"} <= set(ci_scope.SUITES["python"])  # their tests run there
-    assert json.loads((ROOT / durations).read_text(encoding="utf-8"))
+    assert ".github/scripts/ci_durations.py" in ci_scope.SUITES["python"]  # its tests run there
     assert "playwright install" not in runs
     assert "ruff" not in runs
 
@@ -398,7 +395,8 @@ def test_the_shard_plugin_runs_every_collected_test_in_exactly_one_shard(tmp_pat
     assert first | second == {f"test_x.py::test_n[{n}]" for n in range(40)}
 
 
-def test_file_shards_run_every_test_once_and_import_only_their_own_files(tmp_path: Path) -> None:
+@pytest.mark.parametrize("cache", ["run-times", "none-cached"])
+def test_file_shards_run_every_test_once_and_import_only_their_own_files(tmp_path: Path, cache: str) -> None:
     """Files the durations name are packed by them, others go by path; a shard never imports another's test file."""
     (tmp_path / "pytest.ini").write_text("[pytest]\n")
     log = tmp_path / "imported.log"
@@ -417,6 +415,8 @@ def test_file_shards_run_every_test_once_and_import_only_their_own_files(tmp_pat
         "a/test_two.py": 20.0,
         "a/b/test_three.py": 9.0,
     }
+    if cache == "none-cached":
+        durations = {}  # Scope found no run times in the cache: every shard still splits whole files, by path
     (tmp_path / "durations.json").write_text(json.dumps(durations))
 
     def run(index: int) -> tuple[set[str], set[str]]:
@@ -440,7 +440,7 @@ def test_file_shards_run_every_test_once_and_import_only_their_own_files(tmp_pat
     shards = [run(index) for index in (1, 2, 3)]
 
     packed = ci_shard.pack(durations, 3)
-    assert packed == {
+    assert cache == "none-cached" or packed == {
         "gone/test_deleted.py": 1,
         "test_heavy.py": 2,
         "a/test_one.py": 3,
@@ -453,26 +453,130 @@ def test_file_shards_run_every_test_once_and_import_only_their_own_files(tmp_pat
     assert sorted(name for collected, _ in shards for name in collected) == sorted(files)
 
 
-def test_the_durations_script_averages_each_files_seconds_over_runs_from_the_latest_attempts(tmp_path: Path) -> None:
-    (tmp_path / "tests").mkdir()
-    (tmp_path / "tests/test_x.py").write_text("")
-    (tmp_path / "serve/my-pkg/tests").mkdir(parents=True)
-    (tmp_path / "serve/my-pkg/tests/test_y.py").write_text("")
+def _python_step(name: str) -> dict[str, object]:
+    return next(s for s in _jobs("python.yml")["tests"]["steps"] if s.get("name") == name)
 
-    def junit(path: Path, *cases: tuple[str, float]) -> None:
+
+def test_scope_hands_every_python_shard_one_copy_of_the_cached_run_times() -> None:
+    """Shards splitting by different run times could each skip the files the other now runs."""
+    jobs = _jobs("ci.yml")
+    steps = {s.get("id"): s for s in jobs["scope"]["steps"]}
+    restore, refresh = steps["restore"], jobs["durations"]
+    save = refresh["steps"][-1]
+    python = _workflow("python.yml")
+    tests = _jobs("python.yml")["tests"]
+    names = [s.get("name") for s in tests["steps"]]
+    written = _python_step("Write the run times this run splits by")
+    reuse = next(s for s in tests["steps"] if s.get("id") == "reuse")
+
+    assert "%G-W%V" in steps["week"]["run"]  # one key per ISO week, so the weekly refresh writes it once
+    assert restore["uses"].startswith("actions/cache/restore@")
+    assert (restore["with"]["key"], restore["with"]["restore-keys"]) == (
+        "${{ steps.week.outputs.key }}",
+        "ci-durations-v1-",
+    )
+    assert "ci_durations.py snapshot" in steps["durations"]["run"]
+    assert jobs["scope"]["outputs"]["durations"] == "${{ steps.durations.outputs.value }}"
+    assert jobs["python"]["with"] == {"durations": "${{ needs.scope.outputs.durations }}"}
+    assert python["on"]["workflow_call"]["inputs"]["durations"]["required"] is True
+    assert python["on"]["workflow_dispatch"]["inputs"]["durations"]["default"] == "{}"
+    assert "if" not in written
+    assert names.index(written["name"]) < names.index("Look up passing result for identical inputs")
+    assert written["env"]["DURATIONS"] == "${{ inputs.durations }}"
+    assert _python_step("Run test shard")["env"]["CI_SHARD_DURATIONS"] == "${{ runner.temp }}/ci-durations.json"
+    assert "steps.fingerprint.outputs.value" in reuse["with"]["key"]
+    assert refresh["needs"] == ["scope", "python"]
+    assert refresh["continue-on-error"] is True  # release tagging stops at a merge whose CI run failed
+    assert refresh["if"] == "github.event_name == 'push' && needs.scope.outputs.durations-current == 'false'"
+    assert str(refresh["steps"][2]["env"]["CI_SHARDS"]) == str(python["env"]["CI_SHARDS"])
+    assert (save["uses"], save["with"]["path"]) == (restore["uses"].replace("restore", "save"), restore["with"]["path"])
+    assert save["with"]["key"] == "${{ needs.scope.outputs.durations-key }}"
+    assert ".github/scripts/ci_durations.py" in ci_scope.SUITES["python"]
+
+
+def test_scope_hands_over_the_restored_run_times_or_none(tmp_path: Path, capsys) -> None:
+    def snapshot(matched: str) -> str:
+        assert ci_durations.main(["snapshot", "ci-durations-v1-2026-W44", matched], tmp_path) == 0
+        return capsys.readouterr().out
+
+    assert snapshot("") == "value={}\ncurrent=false\n"
+    (tmp_path / ".ci-durations").mkdir()
+    (tmp_path / ".ci-durations/durations.json").write_text('{"tests/test_b.py": 2.5, "tests/test_a.py": 1}\n')
+    assert snapshot("ci-durations-v1-2026-W43") == 'value={"tests/test_a.py":1,"tests/test_b.py":2.5}\ncurrent=false\n'
+    assert snapshot("ci-durations-v1-2026-W44").endswith("current=true\n")
+
+
+@pytest.mark.parametrize(
+    "copy",
+    [
+        '{"tests/test_a.py": 1.5}',
+        "",
+        "[]",
+        '{"tests/test_a.py": "1"}',
+        '{"tests/test_a.py": true}',
+        '{"t.py": 1e999}',
+        "{",
+    ],
+)
+def test_a_shard_fails_on_a_copy_that_is_no_run_times(tmp_path: Path, copy: str) -> None:
+    step = _python_step("Write the run times this run splits by")
+    # The step's python3 must be one that runs the script, or every copy fails, the good one too.
+    path = f"{Path(sys.executable).parent}{os.pathsep}{os.environ['PATH']}"
+    env = {"PATH": path, "DURATIONS": copy, "RUNNER_TEMP": str(tmp_path), "GITHUB_OUTPUT": "/dev/null"}
+    done = subprocess.run(
+        ["/bin/bash", "-e"], input=step["run"], cwd=ROOT, env=env, capture_output=True, text=True, check=False
+    )
+
+    assert (done.returncode == 0) == (copy == '{"tests/test_a.py": 1.5}'), done.stderr
+
+
+def test_a_cached_pass_holds_only_for_the_run_times_its_shards_split_by(tmp_path: Path) -> None:
+    """A pass under one split must not let a shard skip under another, where it may own a failing file."""
+    step = _python_step("Fingerprint inputs")
+
+    def fingerprint(copy: str) -> str:
+        (tmp_path / "ci-durations.json").write_text(copy)
+        output = tmp_path / "output"
+        output.write_text("")
+        env = {"PATH": os.environ["PATH"], "RUNNER_TEMP": str(tmp_path), "GITHUB_OUTPUT": str(output)}
+        subprocess.run(["/bin/bash", "-e"], input=step["run"], cwd=ROOT, env=env, text=True, check=True)
+        return output.read_text()
+
+    values = {fingerprint(copy) for copy in ("{}", '{"tests/test_a.py":1}', '{"tests/test_a.py":2}')}
+
+    assert len(values) == 3
+    assert fingerprint("{}") in values
+
+
+def test_main_averages_the_run_times_with_each_shards_latest_results(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    for name in ("tests/test_x.py", "tests/test_new.py", "serve/my-pkg/tests/test_y.py"):
+        (tmp_path / name).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / name).write_text("")
+
+    def junit(artifact: str, *cases: tuple[str, float]) -> None:
+        path = tmp_path / "results" / artifact / "junit.xml"
         path.parent.mkdir(parents=True, exist_ok=True)
         rows = "".join(f'<testcase classname="{name}" name="t" time="{seconds}"/>' for name, seconds in cases)
         path.write_text(f"<testsuites><testsuite>{rows}</testsuite></testsuites>")
 
-    first, second = tmp_path / "run1", tmp_path / "run2"
-    junit(first / "test-results-python-shard-1-attempt-1/junit.xml", ("tests.test_x", 100.0))
-    junit(first / "test-results-python-shard-1-attempt-2/junit.xml", ("tests.test_x", 2.0), ("tests.test_x.T", 1.0))
-    junit(first / "test-results-python-shard-2-attempt-1/junit.xml", ("serve.my-pkg.tests.test_y", 4.0))
-    junit(second / "test-results-python-shard-1-attempt-1/junit.xml", ("tests.test_x", 5.0), ("tests.gone", 7.0))
+    junit("test-results-python-shard-1-attempt-1", ("tests.test_x", 100.0))
+    junit("test-results-python-shard-1-attempt-2", ("tests.test_x", 2.0), ("tests.test_x.T", 1.0), ("tests.gone", 7.0))
+    junit("test-results-python-shard-2-attempt-1", ("serve.my-pkg.tests.test_y", 4.0), ("tests.test_new", 3.0))
+    previous = {"tests/test_x.py": 7.0, "serve/my-pkg/tests/test_y.py": 2.0, "tests/test_deleted.py": 9.0}
+    monkeypatch.setenv("DURATIONS", json.dumps(previous))
+    cached = tmp_path / ci_durations.CACHED
 
-    assert ci_durations.durations([first, second], tmp_path) == {
-        "serve/my-pkg/tests/test_y.py": 4.0,
-        "tests/test_x.py": 4.0,
+    monkeypatch.setenv("CI_SHARDS", "3")
+    assert ci_durations.main(["refresh", str(tmp_path / "results")], tmp_path) == 1  # shard 3's results are missing
+    assert not cached.exists()
+    monkeypatch.setenv("CI_SHARDS", "2")
+    assert ci_durations.main(["refresh", str(tmp_path / "results")], tmp_path) == 0
+    assert json.loads(cached.read_text()) == {
+        "serve/my-pkg/tests/test_y.py": 3.0,
+        "tests/test_new.py": 3.0,
+        "tests/test_x.py": 5.0,
     }
 
 

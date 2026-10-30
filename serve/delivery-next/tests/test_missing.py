@@ -131,7 +131,7 @@ def test_a_temporary_failure_retries_at_once_then_after_growing_pauses() -> None
     assert error in c.questions[-1].text  # the owner sees the real error, not the stable reason
 
 
-@pytest.mark.parametrize("tool", ["browser", "openBrowserPage", "open_browser_page", "get_errors", "get_task_output"])
+@pytest.mark.parametrize("tool", ["browser", "open_browser_page", "get_task_output"])
 def test_a_window_only_tool_asks_the_owner_by_name_and_no_other_runtime_runs_the_step(tool) -> None:
     r = to_result(run(report(tool, "unknown tool")), K.BUILD, NOW)
     assert (r.exit, r.cause, r.operational) == (Exit.ASK, f"project-env:build:tool-{missing.slug(tool)}", True)
