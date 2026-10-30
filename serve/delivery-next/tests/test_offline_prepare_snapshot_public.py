@@ -120,12 +120,13 @@ CHANGES = ["marker", "future", "blank", "absent", "new-preparation", "old-prepar
     ("when", "change"),
     [
         *(("id", change) for change in CHANGES),  # every change once, at the first recheck
-        ("preparation", "marker"),  # each later site: a changed marker and preparation, the first a swapped folder too
+        ("preparation", "marker"),  # each later site: a changed marker and preparation, and a swapped folder
         ("preparation", "new-preparation"),
         ("preparation", "source"),
         ("fence", "absent"),
         ("fence", "future"),
         ("fence", "old-preparation"),
+        ("fence", "source"),
     ],
 )
 def test_prepare_rechecks_its_snapshot_after_blocking_writes_before_each_publication(source, monkeypatch, when, change):
