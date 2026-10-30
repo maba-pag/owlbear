@@ -93,6 +93,12 @@ def opened(page, pds, group: str = "agents") -> None:
         pds.group(page, group)
 
 
+def _unset_count(page, group: str) -> int:
+    """How many settings the overview's unset list counts in *group* ("Agents, 70 unset: …")."""
+    page.locator(f"#unset-{group}").wait_for()
+    return int(page.locator(f"#unset-{group}").inner_text().split(", ", 1)[1].split(" ", 1)[0])
+
+
 def a_look_s_credit_limit_is_typed_as_an_amount(page) -> None:
     """D-01M5XCD49YHHR1NQKKY8TQD0C3: it inherits Global's, and keystrokes keep a fraction as typed."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
@@ -278,15 +284,17 @@ def test_a_save_refused_by_a_newer_save_keeps_the_edits_and_the_next_save_lands(
 @pytest.mark.browser
 def test_an_address_opens_its_group_and_an_unset_setting_s_link_its_row(store, pds, monkeypatch) -> None:
     """D-01M63C8QQMANY46N8GMNNKH1V9: each group has an address, back and forward follow them; an old address of a
-    section or row opens its group there, and the overview's unset list links each setting's row (GW8RT6)."""
+    section or row opens its group there, and the overview's unset list links each setting's row (GW8RT6); a group
+    with three or fewer unset names them all (D-01M66B6GS0HKACV9C4R4QKFX7T)."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     from owlbear_delivery_next.settings import config  # noqa: PLC0415
 
-    monkeypatch.setattr(config, "BASE", None)
+    monkeypatch.setattr(config, "BASE", config.BASE.model_copy(update={"sessions": None}))
     with settings_page(store, pds) as page:
         url = page.url.split("#")[0]
         pds.group(page, "overview")
+        expect(page.locator("#unset-runs")).to_have_text("Runs, 1 unset: sessions")
         expect(page.locator("#set-sessions p-text[color='error']")).to_have_count(0)  # not shown: another group
         page.locator("#unset").get_by_role("link", name="sessions", exact=True).click()
         expect(page).to_have_url(f"{url}#runs")
@@ -324,13 +332,81 @@ def test_an_address_opens_its_group_and_an_unset_setting_s_link_its_row(store, p
 
 
 @pytest.mark.browser
+def test_the_overview_counts_each_group_s_unset_names_its_first_three_and_opens_the_group_for_more(
+    store, pds, monkeypatch
+) -> None:
+    """D-01M66B6GS0HKACV9C4R4QKFX7T: the unset settings by group, each with its count and its first three, each linking
+    its row, then "and N more" opening the group; a group with none is left out."""
+    import re  # noqa: PLC0415
+
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    from owlbear_delivery_next.settings import config  # noqa: PLC0415
+
+    monkeypatch.setattr(config, "BASE", None)
+    with settings_page(store, pds) as page:
+        url = page.url.split("#")[0]
+        pds.group(page, "overview")
+        groups = page.locator("#unset-groups > li")
+        expect(groups).to_have_count(3)  # this machine's are set; the project's folder needs no setting
+        expect(page.locator("#unset-project, #unset-this-machine, #unset-overview")).to_have_count(0)
+        agents = page.locator("#unset-agents")
+        expect(agents).to_have_text(
+            re.compile(
+                r"^Agents, (\d+) unset: agents\.planner\.model, agents\.planner\.effort, "
+                r"agents\.planner\.context and \d+ more$"
+            )
+        )
+        total = sum(_unset_count(page, group) for group in ("agents", "runs", "checks"))
+        expect(page.locator("#unset > p-text").first).to_contain_text(f"{total} settings are unset.")
+        for group in ("agents", "runs", "checks"):
+            links = page.locator(f"#unset-{group} a")
+            expect(links).to_have_count(4)
+            expect(links.last).to_have_text(f"and {_unset_count(page, group) - 3} more")
+            expect(links.last).to_have_attribute("href", f"#{group}")
+        expect(agents.locator("a").first).to_have_attribute("href", "#set-agents-planner")
+        page.locator("#unset-runs").get_by_role("link", name=re.compile(r"^and \d+ more$")).click()
+        expect(page).to_have_url(f"{url}#runs")
+        expect(page.locator("#groups a[href='#runs']")).to_have_attribute("aria-current", "page")
+        expect(page.locator("#rounds-title")).to_be_focused()
+        expect(page.locator("#set-sessions p-text[color='error']")).to_have_count(1)  # the group names every one red
+
+
+# The most characters on one rendered line of an element's text, counted one character at a time.
+LONGEST_LINE = """(el) => {
+  const lines = new Map(), range = document.createRange(), walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    for (let i = 0; i < n.length; i++) {
+      range.setStart(n, i);
+      range.setEnd(n, i + 1);
+      const r = range.getClientRects()[0];
+      if (r && r.height > 1) lines.set(Math.round(r.top), (lines.get(Math.round(r.top)) ?? 0) + 1);
+    }
+  }
+  return Math.max(...lines.values());
+}"""
+
+
+@pytest.mark.browser
+def test_running_text_stops_at_about_75_characters_a_line_and_a_table_keeps_its_width(store, pds) -> None:
+    """D-01M66D205WV75ZGAPVVYHCTADY: on a wide window a paragraph wraps at about 75 characters; a table does not."""
+    with settings_page(store, pds) as page:
+        text = page.get_by_role("region", name="Where you edit").locator("p-text", has_text="A blank project value")
+        table = page.locator("p-table").first
+        for width in (1280, 2400):
+            page.set_viewport_size({"width": width, "height": 900})
+            assert 65 <= text.evaluate(LONGEST_LINE) <= 80, width
+            assert table.bounding_box()["width"] > 2 * text.bounding_box()["width"], width
+
+
+@pytest.mark.browser
 def test_the_owner_s_own_tab_after_an_unset_link_keeps_its_focus(store, pds, monkeypatch) -> None:
     """Copilot review of #813: the focus put on a linked row's control is never put back after the owner moves it."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     from owlbear_delivery_next.settings import config  # noqa: PLC0415
 
-    monkeypatch.setattr(config, "BASE", None)
+    monkeypatch.setattr(config, "BASE", config.BASE.model_copy(update={"sessions": None}))
     with settings_page(store, pds) as page:
         pds.group(page, "overview")
         # slow frames widen the time the page keeps the focus on the control, so a Tab lands inside it
@@ -455,7 +531,7 @@ def test_with_no_layer_setting_anything_the_page_names_every_unset_value_and_a_s
     with settings_page(store, pds) as page:
         pds.group(page, "overview")
         expect(page.locator("#unset")).to_contain_text("settings are unset")
-        expect(page.locator("#unset")).to_contain_text("agents.builder.model")
+        agents, runs = _unset_count(page, "agents"), _unset_count(page, "runs")
         pds.group(page, "runs")
         at_once = page.get_by_label("Agent sessions at once in one project")
         expect(at_once).to_have_attribute("placeholder", "inherit (unset)")
@@ -470,11 +546,14 @@ def test_with_no_layer_setting_anything_the_page_names_every_unset_value_and_a_s
         pds.answer(page, "Save project settings")
         expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
         pds.group(page, "overview")
-        expect(page.locator("#unset")).to_contain_text("agents.builder.model")  # the list shows: the next two mean it
-        expect(page.locator("#unset")).not_to_contain_text("sessions,")
-        expect(page.locator("#unset")).not_to_contain_text("agents.spotter.")
-        expect(page.locator("#unset")).to_contain_text("spotter.switch")  # its settings start unset too
-        expect(page.locator("#unset")).to_contain_text("spotter.irreversible_harm")
+        expect(page.locator("#unset-runs")).to_contain_text(f"Runs, {runs - 1} unset:")  # sessions
+        expect(page.locator("#unset-agents")).to_contain_text(
+            f"Agents, {agents - 4} unset:"
+        )  # spotter's three, a model
+        pds.group(page, "agents")
+        for key in ("switch", "irreversible_harm"):  # its settings start unset too: their names stay red
+            expect(page.locator(f"#set-spotter-{key} p-text[color='error']")).to_have_count(1)
+        expect(page.locator("#set-agents-spotter p-text[color='error']")).to_have_count(0)
     assert store.read_config().sessions == 3
     spotter = store.settings().agent("spotter")  # a look needs only its model, effort and context
     assert (spotter.model, spotter.effort, spotter.context) == ("tiny", "medium", "default")
