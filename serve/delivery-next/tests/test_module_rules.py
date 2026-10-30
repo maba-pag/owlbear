@@ -7,8 +7,6 @@ import warnings
 from pathlib import Path
 from typing import Any
 
-import pytest
-
 from owlbear_delivery_next.change_contracts import tools
 from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, StepKind
 from owlbear_delivery_next.commands import mcp_server
@@ -27,10 +25,12 @@ OWNED = [  # C-28: pages, scripts and styles count like modules
 ]
 
 
-@pytest.mark.parametrize("path", sorted([*SRC.rglob("*.py"), *OWNED]), ids=lambda p: str(p.relative_to(SRC)))
-def test_module_within_limit(path: Path) -> None:
-    count = len(path.read_text(encoding="utf-8").splitlines())
-    assert count <= LIMIT, f"{path.relative_to(SRC)} has {count} lines; split it by use case"
+def test_every_module_is_within_the_limit() -> None:
+    files = [*SRC.rglob("*.py"), *OWNED]
+    counts = {str(p.relative_to(SRC)): len(p.read_text(encoding="utf-8").splitlines()) for p in files}
+    over = sorted(f"{name} has {count} lines; split it by use case" for name, count in counts.items() if count > LIMIT)
+    assert any(p.suffix == ".py" for p in files)  # the source tree was found: an empty one would pass vacuously
+    assert over == []
 
 
 def test_vocabularies_stay_small() -> None:
