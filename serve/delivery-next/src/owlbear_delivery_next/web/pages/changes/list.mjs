@@ -36,8 +36,8 @@ function card([c, label, variant]) {
     <div class="top"><a href=${here({ change: c.key })} class="open" data-key=${c.key}
       aria-current=${current ? "true" : nothing} @click=${open}>${c.title || c.slug}</a>
       <p-tag variant=${variant} compact="true">${label}</p-tag></div>
-    ${c.title || several() ? html`<p class="meta">${[c.title && c.slug, several() && c.projectName].filter(Boolean)
-      .join(" \u00b7 ")}</p>` : nothing}
+    ${c.title || several() ? html`<p class="meta">${c.title ? c.slug : ""}${c.title && several() ? " \u00b7 " : ""}${
+      several() ? html`<span class="project">${c.projectName}</span>` : nothing}</p>` : nothing}
     ${step ? html`<p class="says stage">${step}</p>` : nothing}
     <p class="says">${stage && !step && stage !== label ? html`<span class="stage">${stage}</span> \u00b7 `
       : nothing}${rest}</p>
