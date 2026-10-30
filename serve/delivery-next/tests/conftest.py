@@ -2,6 +2,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 from collections.abc import Callable
@@ -323,36 +324,77 @@ def _git(cwd: Path, *args: str) -> str:
     return subprocess.run(["git", *who, *args], cwd=cwd, check=True, capture_output=True, text=True).stdout.strip()  # noqa: S603, S607
 
 
-@pytest.fixture
-def shared_repo(tmp_path: Path) -> tuple[Path, Path]:
-    """A shared repository clone whose origin names ``github.com/acme/owlbear-data``; git pushes to a local bare one."""
-    remote, root, url = tmp_path / "remote.git", tmp_path / "owlbear-data", "https://github.com/acme/owlbear-data.git"
-    _git(tmp_path, "init", "-q", "--bare", "-b", "main", str(remote))
-    _git(tmp_path, "clone", "-q", str(remote), str(root))
+_RUN = subprocess.run  # templates are built once per worker: a test's patched subprocess must not build them
+_CHANGE_ENV = {"GIT_CONFIG_NOSYSTEM": "1"} | {
+    f"GIT_{who}_{key}": value for who in ("AUTHOR", "COMMITTER") for key, value in (("NAME", "t"), ("EMAIL", "t@t"))
+}
+
+
+def _template_git(cwd: Path, *args: str, env: dict[str, str], home: Path) -> None:
+    """Run git for a template. It is built before any test isolates HOME, so it gets an empty one of its own: the
+    machine's Git settings, its ignore file included, never reach it."""
+    clean = {k: v for k, v in os.environ.items() if not k.startswith("GIT_") and k != "XDG_CONFIG_HOME"}
+    _RUN(["git", *args], cwd=cwd, check=True, capture_output=True, env=clean | env | {"HOME": str(home)})
+
+
+def _copy(template: Path, tmp_path: Path, *names: str) -> None:
+    """Copy *names* from *template* into *tmp_path*, pointing Git's config and reflogs at the copies."""
+    for name in names:
+        shutil.copytree(template / name, tmp_path / name, symlinks=True, dirs_exist_ok=True)
+    for git in (tmp_path / name / ".git" for name in names):
+        for path in (git / "config", *(git / "logs").rglob("*")) if git.is_dir() else ():
+            if path.is_file():
+                path.write_text(path.read_text().replace(str(template), str(tmp_path)))
+
+
+@pytest.fixture(scope="session")
+def _shared_template(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    base = tmp_path_factory.mktemp("shared-repo-template")
+    remote, root, url = base / "remote.git", base / "owlbear-data", "https://github.com/acme/owlbear-data.git"
+    env, home = {"GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}, tmp_path_factory.mktemp("home")
+    _template_git(base, "init", "-q", "--bare", "-b", "main", str(remote), env=env, home=home)
+    _template_git(base, "clone", "-q", str(remote), str(root), env=env, home=home)
     for key, value in (("user.name", "t"), ("user.email", "t@example.com"), (f"url.{remote}.insteadOf", url)):
-        _git(root, "config", key, value)
-    _git(root, "remote", "set-url", "origin", url)
-    _git(root, "commit", "-q", "--allow-empty", "-m", "start")
-    _git(root, "push", "-q", "-u", "origin", "HEAD")
-    return root, remote
+        _template_git(root, "config", key, value, env=env, home=home)
+    _template_git(root, "remote", "set-url", "origin", url, env=env, home=home)
+    _template_git(root, "commit", "-q", "--allow-empty", "-m", "start", env=env, home=home)
+    _template_git(root, "push", "-q", "-u", "origin", "HEAD", env=env, home=home)
+    return base
 
 
 @pytest.fixture
-def change_repo(tmp_path, monkeypatch) -> Path:
+def shared_repo(tmp_path: Path, _shared_template: Path) -> tuple[Path, Path]:
+    """A shared repository clone whose origin names ``github.com/acme/owlbear-data``; git pushes to a local bare one."""
+    _copy(_shared_template, tmp_path, "remote.git", "owlbear-data")
+    return tmp_path / "owlbear-data", tmp_path / "remote.git"
+
+
+@pytest.fixture(scope="session")
+def _change_template(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    base = tmp_path_factory.mktemp("change-repo-template").resolve()
+    (base / "gitconfig").write_text("")
+    env, work, home = _CHANGE_ENV | {"GIT_CONFIG_GLOBAL": str(base / "gitconfig")}, base / "work", base / "home"
+    work.mkdir()
+    home.mkdir()
+    for args in (("init", "-q", "-b", "main"), ("commit", "-q", "--allow-empty", "-m", "base")):
+        _template_git(work, *args, env=env, home=home)
+    (work / "a.txt").write_text("a\n")
+    for args in (("checkout", "-q", "-b", "owlbear/c1"), ("add", "-A"), ("commit", "-qm", "a")):
+        _template_git(work, *args, env=env, home=home)
+    return base
+
+
+@pytest.fixture
+def change_repo(tmp_path, monkeypatch, _change_template: Path) -> Path:
     """A temporary Change worktree: ``main`` with one commit and ``owlbear/c1`` one commit ahead, checked out."""
     (tmp_path / "gitconfig").write_text("")
     monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(tmp_path / "gitconfig"))
-    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
-    for who in ("AUTHOR", "COMMITTER"):
-        monkeypatch.setenv(f"GIT_{who}_NAME", "t")
-        monkeypatch.setenv(f"GIT_{who}_EMAIL", "t@t")
+    for key, value in _CHANGE_ENV.items():
+        monkeypatch.setenv(key, value)
     work = (tmp_path / "work").resolve()
-    work.mkdir()
-    for args in (("init", "-q", "-b", "main"), ("commit", "-q", "--allow-empty", "-m", "base")):
-        subprocess.run(["git", *args], cwd=work, check=True, capture_output=True)  # noqa: S603, S607
-    (work / "a.txt").write_text("a\n")
-    for args in (("checkout", "-q", "-b", "owlbear/c1"), ("add", "-A"), ("commit", "-qm", "a")):
-        subprocess.run(["git", *args], cwd=work, check=True, capture_output=True)  # noqa: S603, S607
+    _copy(_change_template, tmp_path, "work")
+    # the copies have new inodes; without a refresh, plumbing such as diff-index sees a.txt as changed
+    _RUN(["git", "update-index", "-q", "--refresh"], cwd=work, check=True, capture_output=True)
     return work
 
 
