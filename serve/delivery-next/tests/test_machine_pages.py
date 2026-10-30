@@ -913,7 +913,7 @@ def test_updates_owlbear_marks_the_menu_refuses_start_while_work_runs_and_the_ma
             where.append(page.evaluate(f"{inside} ? 'dialog' : document.activeElement === document.body ? '' : 'page'"))
         assert "page" not in where
         page.keyboard.press("Escape")
-        expect(pds.modal(page)).to_have_count(0)
+        expect(page.get_by_role("dialog")).to_have_count(0)
         page.wait_for_function("document.activeElement?.id === 'owlbear-start'", timeout=5000)
         assert (posts, started) == ([], [])  # Escape sent nothing
 
