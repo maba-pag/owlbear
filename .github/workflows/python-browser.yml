@@ -115,9 +115,13 @@ jobs:
           key: ci-pass-v1-python-browser-${{ steps.fingerprint.outputs.value }}
 
   delivery-next-browser:
-    name: Delivery-next browser tests
+    name: Delivery-next browser tests ${{ matrix.shard }}/2
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     steps:
       - name: Checkout requested revision
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
@@ -129,17 +133,18 @@ jobs:
         id: fingerprint
         run: |
           value="$(git ls-files -s -- .github/workflows/python-browser.yml .github/scripts/flaky_issues.py \
-            .python-version conftest.py serve/tools/src/owlbear_tools/flaky.py \
+            .github/scripts/ci_shard.py .python-version conftest.py serve/tools/src/owlbear_tools/flaky.py \
             pyproject.toml uv.lock serve/delivery-next serve/decisions serve/memory | sha256sum | cut -c1-40)"
           echo "value=$value" >> "$GITHUB_OUTPUT"
 
+      # Each shard has its own key: one shard's pass must never let the other skip its tests.
       - name: Look up passing result for identical inputs
         id: reuse
         if: github.event_name == 'pull_request'
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
           path: ${{ runner.temp }}/ci-pass
-          key: ci-pass-v1-delivery-next-browser-${{ steps.fingerprint.outputs.value }}
+          key: ci-pass-v1-delivery-next-browser-${{ matrix.shard }}-${{ steps.fingerprint.outputs.value }}
           lookup-only: true
 
       - name: Report reused result
@@ -184,20 +189,26 @@ jobs:
       - name: Run browser-marked tests
         if: steps.reuse.outputs.cache-hit != 'true'
         env:
+          CI_SHARD_INDEX: ${{ matrix.shard }}
+          CI_SHARDS: 2
           OWLBEAR_FLAKY_REPORT: ${{ runner.temp }}/test-results/flaky.json
           # Agent shells set safe.bareRepository=explicit; a test relying on finding a bare repository fails here too.
           GIT_CONFIG_COUNT: 1
           GIT_CONFIG_KEY_0: safe.bareRepository
           GIT_CONFIG_VALUE_0: explicit
-        run: >-
-          uv run --no-sync pytest serve/delivery-next -m browser -n 4 --dist worksteal -v
-          -o timeout_method=thread --timeout 180 --junitxml="$RUNNER_TEMP/test-results/junit.xml"
+        run: |
+          plugin_dir="$RUNNER_TEMP/ci-plugins"
+          mkdir -p "$plugin_dir"
+          cp .github/scripts/ci_shard.py "$plugin_dir/"
+          PYTHONPATH="$plugin_dir" uv run --no-sync pytest serve/delivery-next -m browser -p ci_shard \
+            -n 4 --dist worksteal -v -o timeout_method=thread --timeout 180 \
+            --junitxml="$RUNNER_TEMP/test-results/junit.xml"
 
       - name: Upload test results
         if: ${{ !cancelled() && steps.reuse.outputs.cache-hit != 'true' }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
-          name: test-results-delivery-next-browser-attempt-${{ github.run_attempt }}
+          name: test-results-delivery-next-browser-${{ matrix.shard }}-attempt-${{ github.run_attempt }}
           path: ${{ runner.temp }}/test-results/
           if-no-files-found: warn
 
@@ -214,4 +225,4 @@ jobs:
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
           path: ${{ runner.temp }}/ci-pass
-          key: ci-pass-v1-delivery-next-browser-${{ steps.fingerprint.outputs.value }}
+          key: ci-pass-v1-delivery-next-browser-${{ matrix.shard }}-${{ steps.fingerprint.outputs.value }}

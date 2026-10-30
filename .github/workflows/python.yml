@@ -108,20 +108,7 @@ jobs:
         run: |
           plugin_dir="$RUNNER_TEMP/ci-plugins"
           mkdir -p "$plugin_dir"
-          cat > "$plugin_dir/ci_shard.py" <<'PY'
-          import os
-          import zlib
-
-
-          def pytest_collection_modifyitems(config, items):
-              index = int(os.environ["CI_SHARD_INDEX"]) - 1
-              total = int(os.environ["CI_SHARDS"])
-              keep = [item for item in items if zlib.crc32(item.nodeid.encode()) % total == index]
-              drop = [item for item in items if zlib.crc32(item.nodeid.encode()) % total != index]
-              if drop:
-                  config.hook.pytest_deselected(items=drop)
-                  items[:] = keep
-          PY
+          cp .github/scripts/ci_shard.py "$plugin_dir/"
           PYTHONPATH="$plugin_dir" uv run --no-sync pytest tests serve -p ci_shard \
             -m "not e2e and not model and not browser" -n "${CI_WORKERS:-auto}" --dist worksteal \
             --junitxml="$RUNNER_TEMP/test-results/junit.xml"

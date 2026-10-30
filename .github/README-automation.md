@@ -48,8 +48,8 @@ Within a suite every job starts immediately (no `needs`) and installs only what 
 
 | Workflow | Jobs | Runs when the PR touches |
 | --- | --- | --- |
-| [Python](workflows/python.yml) | 4 hash-sharded test jobs (`worksteal` inside each) | Python sources, tests, manifests, locks |
-| [Python browser](workflows/python-browser.yml) | Browser-marked tests with Chromium | `serve/browser*`, `serve/web-content`, manifests, locks |
+| [Python](workflows/python.yml) | 4 hash-sharded test jobs (`worksteal` inside each; [`ci_shard.py`](scripts/ci_shard.py) splits by node ID) | Python sources, tests, manifests, locks |
+| [Python browser](workflows/python-browser.yml) | Browser-marked tests with Chromium; Delivery-next's in 2 hash-sharded jobs | `serve/browser*`, `serve/web-content`, `serve/delivery-next`, `serve/decisions`, `serve/memory`, manifests, locks |
 | [Static checks](workflows/static.yml) | `uv run lint --no-fix` and `uv run format --no-fix`, as locally: every hook in `.pre-commit-config.yaml` (the three validators in Agent ecosystem), each fixer through its check, plus Biome | Every change |
 | [Tooling](workflows/tooling.yml) | Lock, toolchain, workflow, hook, and diagram proofs, selected per changed surface | Manifests, locks, workflows, tool configuration, diagrams |
 | [Agent ecosystem](workflows/agent-ecosystem.yml) | Agent, skill, prompt, hook, and knowledge contracts | Agent ecosystem paths |
@@ -58,11 +58,12 @@ Within a suite every job starts immediately (no `needs`) and installs only what 
 The scope evaluates the whole PR diff, so a follow-up push reruns every suite the PR ever
 touched. To avoid repeating identical proofs, each job fingerprints its inputs with
 `git ls-files -s` and stores a marker cache entry after it passes. A later run in the same PR with
-the same fingerprint reports the reused result and skips its work. Python and static fingerprints
+the same fingerprint reports the reused result and skips its work; a sharded job keys it per shard. Python and static fingerprints
 cover the whole tree except `.owlbear/research`; the others cover their own inputs. Bump the
 `ci-pass-v1` key prefix when a job's commands change meaning without changing those inputs.
 
-uv caches are scoped per install profile (`python-tests`, `python-browser`, `dev-tools`). Python
+uv caches are scoped per install profile (`python-tests`, `python-browser`, `delivery-next-browser`,
+`dev-tools`). Python
 test environments skip the torch/CUDA model stack that only the deselected `model` tests import;
 keep the `CI_SKIPPED_PACKAGES` lists in the Python workflow and Copilot setup identical.
 [`test_ci_workflows.py`](../tests/test_ci_workflows.py) owns these workflow-shape contracts.

@@ -4,6 +4,7 @@ import importlib.util
 import os
 import re
 import subprocess
+import sys
 import tomllib
 from pathlib import Path
 
@@ -285,7 +286,6 @@ def test_python_tests_are_sharded_without_the_model_stack() -> None:
         "${{ inputs.workers }}"
     )
     assert workflow["on"]["workflow_dispatch"]["inputs"]["workers"]["default"] == ""
-    assert "zlib.crc32(item.nodeid.encode()) % total == index" in runs
     assert "playwright install" not in runs
     assert "ruff" not in runs
 
@@ -325,6 +325,73 @@ def test_delivery_next_browser_tests_run_in_their_own_job_with_chromium() -> Non
     assert "uv run --no-sync playwright install chromium" in runs
     assert "--with-deps" not in runs  # apt on the runner stalls; the image has what headless Chromium needs
     assert "pytest serve/delivery-next -m browser" in runs
+
+
+@pytest.mark.parametrize(
+    ("workflow", "job_name", "step_name"),
+    [
+        ("python.yml", "tests", "Run test shard"),
+        ("python-browser.yml", "delivery-next-browser", "Run browser-marked tests"),
+    ],
+)
+def test_sharded_jobs_load_the_shared_shard_plugin_once_per_matrix_shard(workflow, job_name, step_name) -> None:
+    job = _jobs(workflow)[job_name]
+    step = next(s for s in job["steps"] if s.get("name") == step_name)
+    env = {**(_workflow(workflow).get("env") or {}), **step["env"]}
+    shards = job["strategy"]["matrix"]["shard"]
+    fingerprint = next(s["run"] for s in job["steps"] if s.get("id") == "fingerprint")
+
+    assert shards == list(range(1, int(env["CI_SHARDS"]) + 1))
+    assert job["name"].endswith(f"${{{{ matrix.shard }}}}/{len(shards)}")
+    assert job["strategy"]["fail-fast"] is False
+    assert env["CI_SHARD_INDEX"] == "${{ matrix.shard }}"
+    assert 'cp .github/scripts/ci_shard.py "$plugin_dir/"' in step["run"]
+    assert re.search(r'PYTHONPATH="\$plugin_dir" uv run --no-sync pytest [^\n]* -p ci_shard\b', step["run"])
+    assert ".github/scripts/ci_shard.py" in ci_scope.SUITES[workflow.removesuffix(".yml")]
+    assert ".github/scripts/ci_shard.py" in fingerprint or "git ls-files -s -- . " in fingerprint
+
+
+def test_the_shard_plugin_runs_every_collected_test_in_exactly_one_shard(tmp_path: Path) -> None:
+    (tmp_path / "pytest.ini").write_text("[pytest]\n")
+    (tmp_path / "test_x.py").write_text(
+        "import pytest\n\n\n@pytest.mark.parametrize('n', range(40))\ndef test_n(n):\n    pass\n"
+    )
+
+    def selected(index: int) -> set[str]:
+        done = subprocess.run(
+            [sys.executable, "-m", "pytest", "--collect-only", "-q", "-p", "no:cacheprovider", "-p", "ci_shard"],
+            cwd=tmp_path,
+            env=os.environ
+            | {"PYTHONPATH": str(ROOT / ".github/scripts"), "CI_SHARD_INDEX": str(index), "CI_SHARDS": "2"},
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return {line for line in done.stdout.splitlines() if "::" in line}
+
+    first, second = selected(1), selected(2)
+
+    assert first
+    assert second
+    assert not first & second
+    assert first | second == {f"test_x.py::test_n[{n}]" for n in range(40)}
+
+
+@pytest.mark.parametrize("name", REUSING_WORKFLOWS)
+def test_each_matrix_shard_keeps_its_own_cached_pass_and_results(name: str) -> None:
+    """One shard's cached pass must never let another shard skip its tests, nor its upload replace another's."""
+    for job_name, job in _jobs(name).items():
+        steps = job["steps"]
+        templates = [
+            next(s for s in steps if s.get("id") == "reuse")["with"]["key"],
+            steps[-1]["with"]["key"],
+            *(s["with"]["name"] for s in steps if str(s.get("uses", "")).startswith("actions/upload-artifact@")),
+        ]
+        for variable, values in ((job.get("strategy") or {}).get("matrix") or {}).items():
+            placeholder = f"${{{{ matrix.{variable} }}}}"
+            for template in templates:
+                rendered = {template.replace(placeholder, str(value)) for value in values}
+                assert len(rendered) == len(values), f"{name}:{job_name}: {template}"
 
 
 @pytest.mark.parametrize(
@@ -390,7 +457,12 @@ def test_uv_setups_use_scoped_caches_and_check_the_runtime_first(name: str) -> N
             continue
         setup = steps[setups[0]]["with"]
         if name != "copilot-setup-steps.yml" and setup.get("enable-cache") is not False:
-            assert setup["cache-suffix"] in {"python-tests", "python-browser", "delivery-next-browser", "dev-tools"}
+            assert setup["cache-suffix"] in {
+                "python-tests",
+                "python-browser",
+                "delivery-next-browser",
+                "dev-tools",
+            }
         check = next(index for index, step in enumerate(steps) if "check_uv_version.py" in str(step.get("run", "")))
         first_uv = next(
             (
