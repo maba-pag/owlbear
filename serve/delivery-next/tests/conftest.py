@@ -525,9 +525,11 @@ class Pds:
 
     @staticmethod
     def modal(page):
-        """The newest open ``p-modal`` (one just answered fades out for a moment): its content is slotted, so its text
-        and buttons are found from it, not from its dialog."""
-        return page.locator("p-modal").filter(has=page.get_by_role("dialog")).last
+        """The newest open ``p-modal``: its content is slotted, so its text and buttons are found from it, not from its
+        dialog. Open means its dialog is shown (``[open]``): PDS renders the dialog visible first and shows it only once
+        the components inside have loaded, and a key pressed before then reaches the page behind and is lost. One just
+        closed fades out still visible, so a test waiting for it to go counts ``get_by_role("dialog")`` instead."""
+        return page.locator("p-modal").filter(has=page.locator("dialog[open]")).last
 
     @classmethod
     def answer(cls, page, button: str) -> None:
