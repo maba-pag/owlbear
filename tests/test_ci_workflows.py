@@ -486,6 +486,7 @@ def test_scope_hands_every_python_shard_one_copy_of_the_cached_run_times() -> No
     assert _python_step("Run test shard")["env"]["CI_SHARD_DURATIONS"] == "${{ runner.temp }}/ci-durations.json"
     assert "steps.fingerprint.outputs.value" in reuse["with"]["key"]
     assert refresh["needs"] == ["scope", "python"]
+    assert refresh["continue-on-error"] is True  # release tagging stops at a merge whose CI run failed
     assert refresh["if"] == "github.event_name == 'push' && needs.scope.outputs.durations-current == 'false'"
     assert str(refresh["steps"][2]["env"]["CI_SHARDS"]) == str(python["env"]["CI_SHARDS"])
     assert (save["uses"], save["with"]["path"]) == (restore["uses"].replace("restore", "save"), restore["with"]["path"])

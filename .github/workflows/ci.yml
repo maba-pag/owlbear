@@ -79,11 +79,13 @@ jobs:
     with:
       durations: ${{ needs.scope.outputs.durations }}
 
-  # The first passing Python run on main in a week averages its run times into the cache.
+  # The first passing Python run on main in a week averages its run times into the cache. A failed refresh shows red
+  # and saves nothing, but leaves the run's conclusion alone: release tagging reads it.
   durations:
     name: Refresh test run times
     needs: [scope, python]
     if: github.event_name == 'push' && needs.scope.outputs.durations-current == 'false'
+    continue-on-error: true
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
