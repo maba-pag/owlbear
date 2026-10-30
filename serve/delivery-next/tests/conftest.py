@@ -36,6 +36,15 @@ MACHINE_HOME = Path.home()  # read before any test replaces HOME
 CHAT_REPLIES = json.loads((Path(__file__).parent / "fixtures" / "chat_contract_1.json").read_text())["replies"]
 
 
+def pytest_configure() -> None:
+    """Give every Playwright ``expect`` 15 s: a git-backed save can take 9 s on a loaded worker; the default is 5 s."""
+    try:
+        from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+    except ImportError:
+        return
+    expect.set_options(timeout=15_000)
+
+
 def has(out: object, field: str) -> bool:
     """Whether *out* has *field*: dotted, ``[]`` for each item of a list (and a list, when it is the last)."""
     head, _, rest = field.partition(".")
