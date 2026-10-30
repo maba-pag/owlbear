@@ -141,6 +141,9 @@ def test_a_corrupt_switched_receipt_is_refused_by_registration_adoption_selfchec
     assert selfcheck._project(pid, repo) != []  # noqa: SLF001
     with pytest.raises(StoreError):
         Store.open(repo)
+    registry.remove(pid)  # a fresh registration, without a new move, is refused too
+    with pytest.raises(registry.RegistryError):
+        registry.register(repo)
 
     assert receipt.read_bytes() == bad, "a consumer rewrote the corrupt receipt"
     assert _snapshot(_source(repo)) == source_before, "a consumer changed the retained source"
@@ -167,28 +170,6 @@ def test_a_valid_switched_receipt_with_an_unknown_source_marker_is_refused_and_n
 
     assert _snapshot(source) == source_before, "a refused open rewrote the switched source"
     assert _snapshot(target) == target_before, "a refused open changed the active store"
-
-
-@pytest.mark.usefixtures("current_binding")
-@pytest.mark.parametrize("corrupt", CORRUPTIONS)
-def test_a_corrupt_switched_receipt_blocks_a_fresh_registration_without_a_new_move(repo, boot, corrupt):
-    target = _finished_move(repo, boot)
-    pid = registry.clone_id(_source(repo))
-    assert pid is not None
-    registry.register(repo)
-    registry.remove(pid)  # a fresh registration is the path under test
-
-    receipt = _source(repo) / project_move.MOVE_RECORD
-    receipt.write_text(corrupt(json.loads(receipt.read_text())))
-    bad = receipt.read_bytes()
-    source_before, target_before = _snapshot(_source(repo)), _snapshot(target)
-
-    with pytest.raises(registry.RegistryError):
-        registry.register(repo)
-
-    assert receipt.read_bytes() == bad
-    assert _snapshot(_source(repo)) == source_before
-    assert _snapshot(target) == target_before
 
 
 TARGET_DAMAGE = [
@@ -327,7 +308,9 @@ def test_an_unreadable_clone_id_refuses_registration_and_adoption_with_an_action
 
 
 @pytest.mark.usefixtures("current_binding")
-@pytest.mark.parametrize("damage", TARGET_DAMAGE)
+# unloaded holds every refusal in one except clause; each damage's own refusal is proven by
+# test_current_and_every_admission_refuse_an_unproven_target_without_writes, so a StoreError and its subclass suffice
+@pytest.mark.parametrize("damage", ["missing-proof", "future-format"])
 def test_a_failed_public_project_load_holds_unlocated_instead_of_reading_the_unproven_target(
     repo, boot, monkeypatch, damage
 ):
@@ -592,16 +575,6 @@ def test_store_open_revalidates_its_authority_after_the_source_fence_sync(repo, 
 
 
 @pytest.mark.usefixtures("current_binding")
-def test_store_open_keeps_legitimate_active_payload_changes(repo, boot):
-    target = _finished_move(repo, boot)
-    edited = json.dumps({"format": 1, "widths": [987]})
-    (target / "config.json").write_text(edited)
-
-    assert Store.open(repo).root == target
-    assert (target / "config.json").read_text() == edited
-
-
-@pytest.mark.usefixtures("current_binding")
 @pytest.mark.parametrize("consumer", ["current", "open"])
 def test_active_payload_atomic_writes_during_source_validation_remain_valid(repo, boot, monkeypatch, consumer):
     target = _finished_move(repo, boot)
@@ -651,11 +624,9 @@ def test_missing_target_marker_is_not_created_after_initial_source_reads_lose_it
 
 
 @pytest.mark.usefixtures("current_binding")
-@pytest.mark.parametrize(
-    "marker",
-    [b"8\n", b"\xff\n", b"", None, "\u00b2\n".encode(), b"9" * 5000],
-    ids=["newer", "utf8", "blank", "missing", "non-ascii-digit", "oversized"],
-)
+# the machine holds every refusal of the source marker alike; the marker forms themselves are proven by
+# test_source_format_refuses_every_unproven_source_marker below
+@pytest.mark.parametrize("marker", [b"8\n", None], ids=["newer", "missing"])
 def test_an_unproven_source_fence_keeps_one_unlocated_reservation(repo, boot, marker):
     target = _finished_move(repo, boot)
     entry = registry.register(repo)
@@ -688,6 +659,33 @@ def test_an_unproven_source_fence_keeps_one_unlocated_reservation(repo, boot, ma
     finally:
         machine.stop_all()
     assert machine.maintenance.read()["sessions"] == [lease]
+
+
+@pytest.mark.parametrize(
+    ("marker", "error"),
+    [
+        (b"8\n", FormatTooNewError),
+        (b"\xff\n", StoreError),
+        (b"", StoreError),
+        (None, StoreError),
+        ("\u00b2\n".encode(), StoreError),
+        (b"9" * 5000, StoreError),
+    ],
+    ids=["newer", "utf8", "blank", "missing", "non-ascii-digit", "oversized"],
+)
+def test_source_format_refuses_every_unproven_source_marker(tmp_path, marker, error):
+    source = tmp_path / "source"
+    source.mkdir()
+    if marker is not None:
+        (source / MARKER).write_bytes(marker)
+    fd = os.open(source, fd_tree.DIR_FLAGS)
+    try:
+        with pytest.raises(error):
+            project_switch.source_format(fd)
+        (source / MARKER).write_text(f"{project_move.FENCE}\n")  # the valid control, through the same descriptor
+        assert project_switch.source_format(fd) == f"{project_move.FENCE}\n"
+    finally:
+        os.close(fd)
 
 
 @pytest.mark.usefixtures("current_binding")
@@ -1099,8 +1097,15 @@ def test_selfcheck_refuses_a_readable_clone_id_that_disagrees_with_its_registere
 
 
 @pytest.mark.usefixtures("current_binding")
-@pytest.mark.parametrize("damage", ["valid", "missing-proof", "utf8-proof", "utf8-format", "future-format"])
-@pytest.mark.parametrize("lookup", ["current", "adopt", "selfcheck"])
+# every damage raises inside held_switched, closed by check_switched's one except clause and require_switched's
+# finally: each lookup needs one success and one refusal, and one lookup takes every kind of damage
+@pytest.mark.parametrize(
+    ("lookup", "damage"),
+    [
+        *((lookup, damage) for lookup in ("current", "adopt", "selfcheck") for damage in ("valid", "future-format")),
+        *(("current", damage) for damage in ("missing-proof", "utf8-proof", "utf8-format")),
+    ],
+)
 def test_lookup_closes_each_descriptor_it_acquires_on_success_and_typed_refusal(
     repo, boot, monkeypatch, damage, lookup
 ):

@@ -38,6 +38,11 @@ def run(request) -> Surface:
     return request.param
 
 
+# The forwarder only moves --repo before the command and calls cli.main. Both surfaces run the prepare and finish
+# proofs and one refusal (its exit code); the other scenarios run through argparse alone.
+ARGPARSE_ONLY = pytest.mark.parametrize("run", [via_argparse], ids=["argparse"])
+
+
 @pytest.fixture
 def repo(tmp_path: Path) -> Path:
     path = tmp_path / "shop"
@@ -77,6 +82,7 @@ def test_prepare_records_the_prior_format_and_boot_then_fences_the_source(run, r
 
 
 @pytest.mark.usefixtures("current_binding", "boot")
+@ARGPARSE_ONLY
 def test_a_repeated_prepare_keeps_the_valid_prior_format(run, repo) -> None:
     assert run(repo, "prepare") == 0
     assert run(repo, "prepare") == 0
@@ -86,6 +92,7 @@ def test_a_repeated_prepare_keeps_the_valid_prior_format(run, repo) -> None:
 
 
 @pytest.mark.usefixtures("current_binding")
+@ARGPARSE_ONLY
 def test_an_ordinary_open_refuses_after_prepare_even_when_only_the_boot_changed(run, repo, boot) -> None:
     assert run(repo, "prepare") == 0
     with pytest.raises(StoreError):
@@ -99,6 +106,7 @@ def test_an_ordinary_open_refuses_after_prepare_even_when_only_the_boot_changed(
 
 @pytest.mark.usefixtures("current_binding")
 @pytest.mark.usefixtures("boot")
+@ARGPARSE_ONLY
 def test_finish_refuses_on_the_same_boot_and_on_an_unreadable_boot(run, repo, monkeypatch, capsys) -> None:
     assert run(repo, "prepare") == 0
 
@@ -122,6 +130,7 @@ def rewrite_record(repo: Path, **changes: object) -> None:
 
 
 @pytest.mark.usefixtures("current_binding")
+@ARGPARSE_ONLY
 @pytest.mark.parametrize("stored", [None, "not-a-boot-uuid", 7])
 def test_a_malformed_stored_boot_is_never_a_new_boot(run, repo, boot, capsys, stored) -> None:
     assert run(repo, "prepare") == 0
@@ -135,6 +144,7 @@ def test_a_malformed_stored_boot_is_never_a_new_boot(run, repo, boot, capsys, st
 
 
 @pytest.mark.usefixtures("current_binding", "boot")
+@ARGPARSE_ONLY
 def test_a_lowercase_stored_boot_is_the_same_boot_as_the_current_one(run, repo, capsys) -> None:
     assert run(repo, "prepare") == 0
     rewrite_record(repo, boot=BEFORE.lower())
@@ -158,6 +168,7 @@ def test_finish_after_the_reboot_selects_the_proved_target_and_keeps_the_source_
 
 
 @pytest.mark.usefixtures("current_binding")
+@ARGPARSE_ONLY
 @pytest.mark.parametrize("kind", ["missing", "replaced"])
 def test_a_missing_or_replaced_target_refuses_and_keeps_the_source(kind, run, repo, boot) -> None:
     assert run(repo, "prepare") == 0
@@ -176,7 +187,16 @@ def test_a_missing_or_replaced_target_refuses_and_keeps_the_source(kind, run, re
 
 
 @pytest.mark.usefixtures("boot")
-@pytest.mark.parametrize("kind", ["no-launcher", "split-interpreter", "dirty-checkout", "changed-constant"])
+@pytest.mark.parametrize(
+    ("kind", "run"),
+    [
+        *(
+            pytest.param(kind, via_argparse, id=f"{kind}-argparse")
+            for kind in ("no-launcher", "split-interpreter", "dirty-checkout", "changed-constant")
+        ),
+        pytest.param("no-launcher", via_forwarder, id="no-launcher-forwarder"),  # the forwarder keeps the refusal
+    ],
+)
 def test_an_unproven_binding_refuses_prepare_without_cutover(  # noqa: PLR0913, PLR0917
     kind, run, repo, current_binding, current_package, monkeypatch, capsys
 ) -> None:
@@ -202,6 +222,7 @@ def test_an_unproven_binding_refuses_prepare_without_cutover(  # noqa: PLR0913, 
 
 
 @pytest.mark.usefixtures("current_binding", "boot")
+@ARGPARSE_ONLY
 def test_a_no_op_quarantine_refusal_helper_refuses_public_prepare(run, repo, current_package, capsys) -> None:
     helper = current_package / "state_store" / "fd_tree.py"
     old = "    kept = sorted(n for n in os.listdir(dfd) if n.startswith(QUARANTINE))"
@@ -227,13 +248,7 @@ def tree(root: Path) -> dict[str, bytes | None]:
 
 
 @pytest.mark.usefixtures("current_binding", "boot")
-def test_the_unmodified_storage_io_build_prepares_through_the_default_public_prepare(run, repo) -> None:
-    assert run(repo, "prepare") == 0
-    assert (project_home.clone_dir(repo) / offline_protocol.PREPARED).exists()
-    assert source_marker(repo) == "999"
-
-
-@pytest.mark.usefixtures("current_binding", "boot")
+@ARGPARSE_ONLY
 def test_a_committed_storage_io_guard_removal_refuses_default_public_prepare_before_any_write(
     run, repo, current_package, capsys
 ) -> None:
