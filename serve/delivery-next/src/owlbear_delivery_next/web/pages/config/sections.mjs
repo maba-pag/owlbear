@@ -114,8 +114,11 @@ function folderSection() {
   </section>`;
 }
 
-// The unset settings, each linking to the row that sets it (GW8RT6), by group; or that every setting is set, unless
-// this machine's are not read yet (its own, in force, can be unset too).
+// The unset settings by group (D-01M66B6GS0HKACV9C4R4QKFX7T): each group's count and its first three, each linking to
+// the row that sets it, then "and N more" opening the group, whose view shows every unset name red. Or that every
+// setting is set, unless this machine's are not read yet (its own, in force, can be unset too).
+const FIRST = 3;
+
 function unsetSection() {
   const machine = (state.machine?.resolved?.missing ?? []).map((k) => `machine.${k}`);
   const unset = [...(state.loaded.settings.missing ?? []), ...machine];
@@ -128,13 +131,16 @@ function unsetSection() {
         : "Every project setting is set; this machine's are being read."}</p-text></section>`;
   }
   const link = (key, i) => html`${i ? ", " : ""}<a href=${`#${rowOf(key)}`}>${key}</a>`;
+  const more = (id, keys) => keys.length > FIRST
+    ? html` <a href=${`#${id}`}>and ${keys.length - FIRST} more</a>` : nothing;
+  const item = ([id, label], keys) => html`<li id=${`unset-${id}`}><strong>${label}</strong>, ${
+    keys.length} unset: ${keys.slice(0, FIRST).map(link)}${more(id, keys)}</li>`;
   return html`<section class="panel" id="unset" aria-labelledby="unset-title">${heading}
     <p-text color="error">${unset.length} setting${unset.length === 1 ? " is" : "s are"} unset. Code ships no
       defaults: set ${unset.length === 1 ? "it" : "each"} in its group, best in the global layer; a step that needs one
       asks you until then. Each name below opens its setting.</p-text>
-    ${GROUPS.map(([id, label]) => [label, unset.filter((key) => groupOf(rowOf(key)) === id)])
-      .filter(([, keys]) => keys.length)
-      .map(([label, keys]) => html`<p-text size="sm" class="unset-group">${label}: ${keys.map(link)}</p-text>`)}
+    <ul id="unset-groups">${GROUPS.map((g) => [g, unset.filter((key) => groupOf(rowOf(key)) === g[0])])
+      .filter(([, keys]) => keys.length).map(([g, keys]) => item(g, keys))}</ul>
     ${unread ? html`<p-text size="xs" id="unset-machine">${state.machineUnread ? "This machine's settings could not "
       + `be read (${state.machineUnread}), so they are not listed.` : "This machine's settings are being read."}
       </p-text>` : nothing}
