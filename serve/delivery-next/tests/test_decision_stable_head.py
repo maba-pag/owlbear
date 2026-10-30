@@ -299,9 +299,13 @@ def checkout_state(shared: DataRepo) -> tuple:
 
 
 @pytest.fixture
-def readable(shared_repo) -> DataRepo:
+def readable(shared_repo, seed_once) -> DataRepo:
     shared = DataRepo(shared_repo[0])
-    assert save(shared, make(), expected_revision=None, message="decisions: seed").published
+
+    def seed() -> None:
+        assert save(shared, make(), expected_revision=None, message="decisions: seed").published
+
+    seed_once("stable-head", seed)
     return shared
 
 
