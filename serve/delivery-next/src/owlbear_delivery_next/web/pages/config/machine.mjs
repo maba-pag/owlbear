@@ -225,17 +225,19 @@ async function removeLegacy() {
   show();
 }
 
-// The machine's values, unless a machine save ran during this read; then the save's answer stands.
+// The machine's values, or why they could not be read, unless a machine save ran during this read; then the save's
+// answer stands.
 export async function readMachine() {
   const writes = state.machineWrites;
   if (state.machineSaving) return;
+  let failed = "";
   const read = await call("/machine", { machine: true }).catch((e) => {
-    state.machineUnread = e.message;
+    failed = e.message;
     return undefined;
   });
-  if (read !== undefined && !state.machineSaving && writes === state.machineWrites) {
-    accept(read);  // typed text stays: it shows only while its items are the field's own (ownControl)
-  }
+  if (state.machineSaving || writes !== state.machineWrites) return;
+  if (read === undefined) state.machineUnread = failed;
+  else accept(read);  // typed text stays: it shows only while its items are the field's own (ownControl)
 }
 
 // The machine's values as the host answered them, so a read that failed before no longer speaks for them.

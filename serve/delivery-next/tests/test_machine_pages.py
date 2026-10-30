@@ -466,22 +466,62 @@ def test_settings_say_this_machine_s_settings_could_not_be_read_and_read_them_ag
         page.evaluate("document.dispatchEvent(new Event('owlbear-machine'))")
         expect(page.locator("#machine-login")).to_contain_text("Start at login")
         expect(unread).to_have_count(0)
-        # CodeRabbit on #813: a later failed read keeps what was read, saying so
-        page.route("**/api/next/machine", busy)
-        page.evaluate("document.dispatchEvent(new Event('owlbear-machine'))")
-        stale = page.locator("#machine-stale")
-        expect(stale).to_contain_text("Could not read this machine's settings again")
-        expect(page.locator("#machine-login")).to_contain_text("Start at login")
-        pds.pick(page, "Versions this machine takes", "major")  # Copilot on #813: a save's answer is read, not stale
-        page.get_by_role("region", name="This machine").get_by_role("button", name="Save machine settings").click()
-        pds.answer(page, "Save machine settings")
-        expect(page.locator("#status")).to_have_text("Saved this machine's settings.")
-        expect(stale).to_have_count(0)
-        page.evaluate("document.dispatchEvent(new Event('owlbear-machine'))")
-        expect(stale).to_be_visible()  # a failed read after the save warns again
-        page.unroute("**/api/next/machine", busy)
-        page.evaluate("document.dispatchEvent(new Event('owlbear-machine'))")
-        expect(stale).to_have_count(0)
+        this_machine_says_a_later_failed_read_until_one_succeeds(page, pds, busy)
+        a_read_failing_after_a_save_during_it_leaves_the_save_s_answer_unwarned(page, pds)
+
+
+def machine_saved(page, pds, channel: str) -> None:
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    pds.pick(page, "Versions this machine takes", channel)
+    page.get_by_role("region", name="This machine").get_by_role("button", name="Save machine settings").click()
+    pds.answer(page, "Save machine settings")
+    expect(page.locator("#status")).to_have_text("Saved this machine's settings.")
+
+
+def this_machine_says_a_later_failed_read_until_one_succeeds(page, pds, busy) -> None:
+    """CodeRabbit on #813: a later failed read keeps what was read, saying so; Copilot on #813: a save's answer is
+    read, not stale."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    page.route("**/api/next/machine", busy)
+    page.evaluate("document.dispatchEvent(new Event('owlbear-machine'))")
+    stale = page.locator("#machine-stale")
+    expect(stale).to_contain_text("Could not read this machine's settings again")
+    expect(page.locator("#machine-login")).to_contain_text("Start at login")
+    machine_saved(page, pds, "major")
+    expect(stale).to_have_count(0)
+    page.evaluate("document.dispatchEvent(new Event('owlbear-machine'))")
+    expect(stale).to_be_visible()  # a failed read after the save warns again
+    page.unroute("**/api/next/machine", busy)
+    page.evaluate("document.dispatchEvent(new Event('owlbear-machine'))")
+    expect(stale).to_have_count(0)
+
+
+def a_read_failing_after_a_save_during_it_leaves_the_save_s_answer_unwarned(page, pds) -> None:
+    """Copilot on #813: a read that a save overtook says nothing about the save's answer, even when it fails."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    held = []
+
+    def hold(route) -> None:
+        if route.request.method == "GET":
+            held.append(route)
+        else:
+            route.fallback()
+
+    page.route("**/api/next/machine", hold)
+    page.evaluate("document.dispatchEvent(new Event('owlbear-machine'))")
+    until(page, lambda: held)
+    older = len(held)
+    machine_saved(page, pds, "minor")
+    for route in held[:older]:
+        route.abort()
+    page.unroute("**/api/next/machine", hold)
+    for route in held[older:]:
+        route.fallback()
+    page.wait_for_timeout(500)  # the aborted read's failure has been handled by now
+    expect(page.locator("#machine-stale")).to_have_count(0)
 
 
 def a_group_of_the_shown_page_opens_on_it(page, here: str) -> None:
