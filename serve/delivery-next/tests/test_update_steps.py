@@ -232,12 +232,9 @@ def old_host_kept(version: str) -> dict:
 
 
 @pytest.mark.timeout(60)  # a real host starts and stops
-@pytest.mark.parametrize("record", ["v0.2", "v0.1", None])
-def test_the_new_host_shows_the_old_hosts_steps_plus_its_own_or_only_its_own_without_them(record):
-    """Through ``serve``'s start of the new host: a record about another version, or none, is absent."""
-    before = old_host_kept(record) if record else None
-    if record is None:
-        (local_home.root() / update_steps.RECORD).unlink(missing_ok=True)
+def test_the_new_host_shows_the_old_hosts_steps_plus_its_own():
+    """Through ``serve``'s start of the new host, which reads the record its old host kept about it."""
+    before = old_host_kept("v0.2")
     handover.write(handover.Handover(port=free_port(), token=TOKEN, paused=True, ending=False, version="v0.2",
                                      loaded=[]))  # fmt: skip
     host = threading.Thread(target=serve.serve, kwargs={"handing": True}, daemon=True)
@@ -253,13 +250,26 @@ def test_the_new_host_shows_the_old_hosts_steps_plus_its_own_or_only_its_own_wit
     own = {"state": "done", "line": "v0.2 took over at the same address; 0 of 0 projects loaded"}
     last = got["steps"][-1]
     assert (last["key"], {k: last[k] for k in own}) == ("handover", own)
-    if record == "v0.2":
-        assert got["steps"][:-1] == before["steps"][:-1]
-        assert got["log"] == [*before["log"], {"at": got["log"][-1]["at"], "step": "handover", "line": own["line"]}]
-    else:
-        assert [s["key"] for s in got["steps"]] == ["handover"]
-        assert [e["line"] for e in got["log"]] == [own["line"]]
+    assert got["steps"][:-1] == before["steps"][:-1]
+    assert got["log"] == [*before["log"], {"at": got["log"][-1]["at"], "step": "handover", "line": own["line"]}]
     assert got["phase"] == "idle"  # the pages read no update as running
+
+
+@pytest.mark.parametrize("record", ["v0.1", None])
+def test_a_record_about_another_version_or_none_leaves_the_new_hosts_handover_alone(record):
+    if record:
+        old_host_kept(record)
+    else:
+        (local_home.root() / update_steps.RECORD).unlink(missing_ok=True)
+    updater = update.Updater(SimpleNamespace(say=lambda _s: None, updated="v0.2", projects={}))
+
+    updater.took_over([])  # what serve calls once the new host is up
+
+    got = updater.read() | updater.steps.read()
+    line = "v0.2 took over at the same address; 0 of 0 projects loaded"
+    assert [(s["key"], s["state"], s["line"]) for s in got["steps"]] == [("handover", "done", line)]
+    assert [e["line"] for e in got["log"]] == [line]
+    assert got["phase"] == "idle"
 
 
 @pytest.mark.parametrize(

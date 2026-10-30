@@ -559,21 +559,10 @@ def test_an_owner_clear_after_an_applied_role_move_survives_a_lost_marker(repo, 
     assert (fresh.root / profile_share.ROLES_MOVED).exists()
 
 
-@pytest.mark.parametrize(
-    "bad",
-    [
-        {"builder": {"model": "auto", "effort": "low"}},
-        {"boss": {"model": "m", "effort": "low"}},
-        {"builder": {"model": "m", "effort": "low", "extra": 1}},
-        None,
-        [],
-        False,
-        0,
-        "",
-    ],
-)
+@pytest.mark.parametrize("bad", [{"builder": {"model": "auto", "effort": "low"}}, None])  # a bad role, not a mapping
 @pytest.mark.usefixtures("current_binding")
 def test_invalid_old_roles_are_refused_and_never_copied(repo, boot, bad, capsys):
+    """The manual move refuses through the same check as ``Store.open``, where the other invalid shapes are proved."""
     root = repo / ".git" / "owlbear-delivery"
     _old_profile(root, bad)
     original = (root / "profile.json").read_bytes()
@@ -611,12 +600,26 @@ def test_a_damaged_old_profile_is_not_marked_moved_and_its_roles_come_back_once_
     assert (root / profile_share.ROLES_MOVED).exists()
 
 
-def test_an_old_profile_with_an_invalid_role_is_not_marked_moved_and_restores_once_repaired(repo):
+@pytest.mark.parametrize(
+    "bad",
+    [
+        {"reviewer": {"model": "r-1"}},  # no effort
+        {"boss": {"model": "m", "effort": "low"}},
+        {"builder": {"model": "m", "effort": "low", "extra": 1}},
+        [],
+        False,
+        0,
+        "",
+    ],
+)
+def test_an_old_profile_with_an_invalid_role_is_not_marked_moved_and_restores_once_repaired(repo, bad):
     root = Store.open(repo).root
-    _old_profile(root, {"reviewer": {"model": "r-1"}})  # no effort: the role is invalid
+    _old_profile(root, bad)
+    original = (root / "profile.json").read_bytes()
     with pytest.raises(StoreError, match="role overrides are invalid"):
         Store.open(repo)
     root = project_home.located(repo)
+    assert (root / "profile.json").read_bytes() == original
     assert not (root / profile_share.ROLES_MOVED).exists()
     assert not (root / "config.json").exists()
 

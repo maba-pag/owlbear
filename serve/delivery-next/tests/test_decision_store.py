@@ -206,26 +206,6 @@ def test_an_expected_revision_is_checked_against_the_remotes_file(shared_repo, s
     assert load(second, PROJECT).snapshot.get(decision.id).decision == withdrawn
 
 
-def test_a_save_the_remote_overtook_is_taken_back_never_merged(shared_repo, shared, tmp_path, monkeypatch) -> None:
-    decision, second = held(shared, shared_repo[1], tmp_path / "second")
-    withdrawn = decision.model_copy(update={"state": State.WITHDRAWN})
-    assert save(shared, withdrawn, expected_revision=decision.revision, message="decisions: withdrawn").published
-    monkeypatch.setattr(decision_sync, "catch_up", lambda *_: "")  # the remote moves after the check
-
-    edited = decision.model_copy(update={"rationale": EDITED})
-    said = save(second, edited, expected_revision=decision.revision, message="decisions: edited")
-
-    assert (said.saved, said.committed, said.published, said.active) == (False, False, False, False)
-    assert f"changed {decision.id} first" in said.notice
-    # Accepted policy: the stale commit stays unpublished in Git, nothing is taken back, and the batch is interrupted.
-    assert git(second.root, "log", "-1", "--format=%s") == "decisions: edited"
-    assert git(second.root, "rev-parse", "HEAD") != git(shared_repo[1], "rev-parse", "main")
-    assert git(second.root, "status", "--porcelain") == ""
-    assert decision_batch.pending(second) is not None
-    with pytest.raises(DecisionsUnavailable):  # authority reads are refused while the batch is in flight
-        load(second, PROJECT)
-
-
 @pytest.mark.parametrize("moved", ["before", "during"])
 def test_a_save_of_several_files_writes_all_or_none(shared_repo, shared, tmp_path, monkeypatch, moved) -> None:
     decision, second = held(shared, shared_repo[1], tmp_path / "second")
@@ -240,14 +220,16 @@ def test_a_save_of_several_files_writes_all_or_none(shared_repo, shared, tmp_pat
         second, [(successor, None), (retired, decision.revision)], message="decisions: replace"
     )
 
-    assert [(r.id, r.saved, r.committed, r.published) for r in said] == [
-        (successor.id, False, False, False), (decision.id, False, False, False)]  # fmt: skip
+    assert [(r.id, r.saved, r.committed, r.published, r.active) for r in said] == [
+        (successor.id, False, False, False, False), (decision.id, False, False, False, False)]  # fmt: skip
     assert git(second.root, "status", "--porcelain", "--untracked-files=all") == ""
     if moved == "before":
         assert git(second.root, "rev-parse", "HEAD") == git(shared_repo[1], "rev-parse", "main")
         seen = load(second, PROJECT).snapshot
         assert [e.decision for e in seen.entries] == [withdrawn]  # no successor, the remote's version kept
     else:  # accepted policy: the local commit stays unpublished and HEAD is not restored behind the owner
+        assert all(f"changed {decision.id} first" in r.notice for r in said)
+        assert git(second.root, "log", "-1", "--format=%s") == "decisions: replace"  # never merged or rebased
         assert git(second.root, "rev-parse", "HEAD") != git(shared_repo[1], "rev-parse", "main")
         pending = decision_batch.pending(second)
         assert pending is not None

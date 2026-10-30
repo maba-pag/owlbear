@@ -709,42 +709,6 @@ def test_a_stale_hold_retires_its_fallback_durably_and_keeps_a_later_one(tmp_pat
     assert store.read("c1").held_fallback == later
 
 
-def test_a_failed_count_write_keeps_the_owners_pause_when_the_hold_is_counted_later(tmp_path, clone, monkeypatch):
-    store = Store(tmp_path / "store")
-    names = Names(branch="owlbear/c1", target="main", worktree=str(clone))
-    plan = Plan(tasks=[Task(id="t1", title="one", scope=["b.txt"])])
-    change = Change(slug="c1", brief=Brief(version=1), plan=plan, step=Step(kind=K.BUILD, task="t1"), names=names)
-    store.write(Lock("c1"), change)
-
-    async def unread(cfg):
-        return built(cfg, commit(clone, "b.txt"), unread=True)
-
-    real_write = Store.write
-
-    def count_fails(self, lock, c):
-        if c.counted_holds:
-            msg = "disk full"
-            raise OSError(msg)
-        return real_write(self, lock, c)
-
-    monkeypatch.setattr(Store, "write", count_fails)
-    monkeypatch.setattr(runner.sdk_adapter, "run", unread)
-    with pytest.raises(OSError, match="disk full"):
-        runner._step(store, Lock("c1"), change, change.step, clone)  # noqa: SLF001
-
-    monkeypatch.setattr(Store, "write", real_write)
-    store.put_inbox("c1", IntentItem(at=NOW, intent="pause"))
-    paused, _ = store.fold(Lock("c1"), "c1", NOW)
-    assert paused.intent.paused_at is not None
-    monkeypatch.setattr(runner.sdk_adapter, "run", lambda _cfg: pytest.fail("a held session is counted, not run"))
-    runner._step(store, Lock("c1"), paused, paused.step, clone)  # noqa: SLF001
-    recovered = store.read("c1")
-    assert recovered.intent.paused_at == paused.intent.paused_at
-    assert len(recovered.counted_holds) == 1
-    assert recovered.outcome is not None
-    assert [q.id for q in recovered.questions] == [recovered.outcome.question]
-
-
 @pytest.mark.parametrize("intent", ["pause", "abandon", "change"])
 def test_an_owner_intent_queued_during_a_failed_count_survives_the_real_fold_and_the_recovery(
     tmp_path, clone, monkeypatch, intent
@@ -788,6 +752,8 @@ def test_an_owner_intent_queued_during_a_failed_count_survives_the_real_fold_and
     if intent == "pause":  # the step is still the hold's: its gate goes back, with the hold's question id and span
         assert gate is not None
         assert (gate.id, [o.id for o in gate.options]) == (hold.question, ["accept", "retry"])
+        assert recovered.outcome is not None
+        assert [q.id for q in recovered.questions] == [recovered.outcome.question]  # put back once, never twice
         assert recovered.plan.tasks[0].spans == hold.change.plan.tasks[0].spans
         assert recovered.step.kind == K.BUILD
         assert [o.id for o in held.offered(store, recovered, gate)] == ["accept", "retry"]

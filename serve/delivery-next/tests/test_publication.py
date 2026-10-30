@@ -2950,7 +2950,7 @@ def run_merge_step(store, capsys):
 
 
 @pytest.mark.parametrize("uncertainty", ["provider_error", "still_queued"])
-def test_an_uncertain_withdrawal_with_both_prefs_unset_stays_pending_and_asks_nothing(
+def test_an_uncertain_withdrawal_with_both_prefs_unset_waits_and_a_later_confirmed_removal_asks_the_owner(
     both_prefs_unset, capsys, uncertainty
 ):
     store, gh = both_prefs_unset
@@ -2959,22 +2959,11 @@ def test_an_uncertain_withdrawal_with_both_prefs_unset_stays_pending_and_asks_no
     else:
         gh.dequeue = lambda pull: gh.dequeued.append(pull.number)  # the call returns, GitHub still shows the entry
     event = run_merge_step(store, capsys)
-    assert (event["exit"], store.read("c1").queue is not None, gh.state.entry is not None) == (
-        "pending",
-        True,
-        True,
-    ), event["reason"]
-    assert store.read("c1").stop is None
-
-
-@pytest.mark.parametrize("uncertainty", ["provider_error", "still_queued"])
-def test_a_later_confirmed_removal_then_asks_the_owner_for_the_unset_setting(both_prefs_unset, capsys, uncertainty):
-    store, gh = both_prefs_unset
-    if uncertainty == "provider_error":
-        gh.dequeue_fails = True
-    else:
-        gh.dequeue = lambda pull: gh.dequeued.append(pull.number)
-    run_merge_step(store, capsys)
+    first = store.read("c1")
+    assert (event["exit"], first.queue is not None, gh.state.entry is not None) == ("pending", True, True), event[
+        "reason"
+    ]
+    assert (first.stop, first.questions) == (None, [])
     gh.__dict__.pop("dequeue", None)  # the next pass reaches GitHub normally and reads back the removal
     gh.dequeue_fails = False
     with store.lock("c1") as lock:

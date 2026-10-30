@@ -419,13 +419,26 @@ def test_the_owner_s_own_tab_after_an_unset_link_keeps_its_focus(store, pds, mon
         expect(at_once).not_to_be_focused()
 
 
+# Set one task after the page read the offered models' body: its own handling of them, a chain of microtasks, has run.
+MODELS_HANDLED = """
+const json = Response.prototype.json;
+Response.prototype.json = function () {
+  const read = json.call(this);
+  if (this.url.includes("/config/models")) read.then(() => setTimeout(() => { window.modelsHandled = true; }));
+  return read;
+};
+"""
+
+
 @pytest.mark.browser
 def test_models_arriving_while_a_model_name_is_typed_wait_until_the_field_is_left(store, monkeypatch, pds) -> None:
     """Sol, TD-264: the offered models replace the typed field only once the owner leaves it."""
     from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
 
+    arrive = threading.Event()
+
     def slow(_self: object) -> dict[str, Any]:
-        time.sleep(2.5)
+        arrive.wait()  # released by the test once the field is in use, or by its cleanup
         return MODELS
 
     monkeypatch.setattr(model_choices.Offered, "__call__", slow)
@@ -443,6 +456,7 @@ def test_models_arriving_while_a_model_name_is_typed_wait_until_the_field_is_lef
             except Error as exc:
                 pytest.skip(f"no Playwright Chromium: {exc}")
             page = browser.new_page()
+            page.add_init_script(MODELS_HANDLED)
             pds.only(page, base)
             page.goto(f"{base}/config#token=tok")
             pds.group(page, "agents")
@@ -450,7 +464,8 @@ def test_models_arriving_while_a_model_name_is_typed_wait_until_the_field_is_lef
             typed.click()
             typed.press_sequentially("my-model")
             expect(page.locator("#models-note")).to_contain_text("Reading the models")
-            time.sleep(3.5)  # the models arrived meanwhile
+            arrive.set()
+            page.wait_for_function("window.modelsHandled === true")  # the models arrived while the field is in use
             typed.press_sequentially("-2")
             expect(typed).to_be_focused()
             expect(typed).to_have_value("my-model-2")
@@ -462,6 +477,7 @@ def test_models_arriving_while_a_model_name_is_typed_wait_until_the_field_is_lef
             expect(chosen.get_by_role("option", name=said, selected=True, include_hidden=True)).to_have_count(1)
             browser.close()
     finally:
+        arrive.set()
         server.should_exit = True
 
 
