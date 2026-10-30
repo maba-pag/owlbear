@@ -2,15 +2,12 @@ import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { live } from "/assets/lit-html/3.3.3/directives/live.js";
 import { call } from "/assets/ui.mjs";
 import { PERIODS, SPLITS, filter, state, show, kept, query, preselect } from "./state.mjs";
+import { credits, count, head, runs } from "./runs.mjs";
 import { toolUse } from "./tools.mjs";
 
 const UNKNOWN = "?";
 const DRILL = { project: "in", agent: "agent", model: "model", change: "change" };  // a row that filters its value
 
-const credits = (n) => n.toFixed(2);
-const NUMBERS = ["Credits", "Runs", "Unknown", "Tokens"];  // columns of numbers, aligned under their headers
-const head = (h) => html`<p-table-head-cell class=${NUMBERS.includes(h) ? "num" : nothing}>${h}</p-table-head-cell>`;
-const count = (n) => n.toLocaleString();
 
 export async function refresh() {
   const reading = ++state.reading;  // a new list: an older answer, or a "Show more" still pending, is dropped
@@ -32,23 +29,6 @@ export async function refresh() {
   show();
   clearTimeout(state.again);  // a reconciling pass is running: look again until it is done
   if (state.data?.coverage.reconcile?.state === "running") state.again = setTimeout(refresh, 3000);
-}
-
-async function more() {
-  const reading = state.reading, asked = query(state.next);  // the list it continues
-  state.more = true;
-  show();
-  try {
-    const data = await call(asked, { machine: true, timeout: 30000 });
-    if (reading !== state.reading) return;  // the filters changed meanwhile: it continues a list no longer shown
-    state.runs = [...state.runs, ...data.runs.items];
-    state.next = data.runs.next;
-  } catch (error) {
-    if (reading !== state.reading) return;
-    state.error = error.message;
-  }
-  state.more = false;
-  show();
 }
 
 function changed(apply) {
@@ -94,14 +74,39 @@ function filters() {
   </div>`;
 }
 
+// What the runs left out of the period spent: unknown credits are never shown as zero, a partial sum as at least.
+function outside(u) {
+  if (u.unknown === u.runs) return "credits not known";
+  const known = `${credits(u.credits)}${u.unknown || u.open || u.incomplete ? " or more" : ""} credits`;
+  return u.unknown ? `${known}, ${count(u.unknown)} of them not reporting theirs` : known;
+}
+
+// How exact the totals are, each way they may be off said once (D-01M63CEQYQ64VYQHFKCDGX7W9F).
+function exactness(t, undated) {
+  const runs = (n) => `${count(n)} run${n === 1 ? "" : "s"}`;
+  const items = [
+    t.unknown ? `${runs(t.unknown)} did not report ${t.unknown === 1 ? "its" : "their"} credits: they count as unknown,
+      never as zero, so the total is a lower bound.` : "",
+    t.incomplete ? `${runs(t.incomplete)} count only up to an earlier read, as ${t.incomplete === 1 ? "its" : "their"}
+      last read failed: a lower bound.` : "",
+    t.open ? `${runs(t.open)} started with no end recorded yet: ${t.open === 1 ? "its" : "their"} credits so far
+      count.` : "",
+    t.uncertain_time ? `${credits(t.uncertain_time)} credits were spent at a time known only roughly, so they may
+      belong to a neighbouring day.` : "",
+    t.uncertain_agent ? `${credits(t.uncertain_agent)} credits are not split between an agent and its subagents.` : "",
+    undated ? `${count(undated.runs)} more run${undated.runs === 1 ? "" : "s"} may lie in this period,
+      ${outside(undated)}: when ${undated.runs === 1 ? "it" : "they"} ran is not known closely enough to say, so
+      ${undated.runs === 1 ? "it is" : "they are"} not counted.` : "",
+  ].filter(Boolean);
+  return html`<p-heading size="md"><h3 id="exact-title">How exact these totals are</h3></p-heading>
+    <ul id="exact" class="notes" aria-labelledby="exact-title">${items.length ? items.map((i) => html`<li>${i}</li>`)
+      : html`<li>Exact: every run reported its credits, at a known time and for a known agent.</li>`}</ul>`;
+}
+
 function totals() {
   const { totals: t, undated } = state.data;
   const unknown = t.unknown ? html` <p-text size="sm" color="contrast-medium">plus ${t.unknown} run${
     t.unknown === 1 ? "" : "s"} whose credits were not reported</p-text>` : nothing;
-  const uncertain = [];
-  if (t.uncertain_time) uncertain.push(`${credits(t.uncertain_time)} of them at a time known only roughly`);
-  if (t.uncertain_agent) uncertain.push(`${credits(t.uncertain_agent)} not split between an agent and its subagents`);
-  if (t.incomplete) uncertain.push(`${t.incomplete} run${t.incomplete === 1 ? "" : "s"} counted up to an earlier read`);
   return html`<section aria-labelledby="totals-title">
     <p-heading size="lg"><h2 id="totals-title">Totals</h2></p-heading>
     <div id="totals">
@@ -111,9 +116,7 @@ function totals() {
       <p-text id="total-stopped">${count(t.stopped)} stopped at their credit limit${t.stopped_unknown
         ? `, ${count(t.stopped_unknown)} more may have been` : ""}</p-text>
     </div>
-    ${uncertain.length ? html`<p-text id="uncertain" size="sm">${uncertain.join("; ")}.</p-text>` : nothing}
-    ${undated ? html`<p-text id="undated" size="sm">${credits(undated.credits)} more credits may lie in this period:
-      when they were spent is not known closely enough to say.</p-text>` : nothing}
+    ${exactness(t, undated)}
   </section>`;
 }
 
@@ -129,16 +132,23 @@ function drill(row) {
   })();
 }
 
-function splitRow(row, top) {
+// A row's share of the total as a bar and in words: the bar alone would say nothing to a screen reader or in print.
+function share(part, total) {
+  if (!total) return "–";
+  const pct = (part / total) * 100;
+  const said = pct > 0 && pct < 1 ? "<1%" : `${Math.round(pct)}%`;
+  return html`<span class="share"><span class="share-track" aria-hidden="true"><span class="share-fill"
+    style=${`width: ${Math.min(100, pct)}%`}></span></span>${said}</span>`;
+}
+
+function splitRow(row, total) {
   const go = drill(row);
   const name = go ? html`<p-button-pure size="sm" icon="filter" @click=${go}
     aria=${`{ 'aria-label': 'Show only ${row.label.replaceAll("'", "")}' }`}>${row.label}</p-button-pure>`
     : row.label;
-  const share = top ? Math.round((row.credits / top) * 100) : 0;
   return html`<p-table-row><p-table-cell>${name}</p-table-cell>
     <p-table-cell class="num">${credits(row.credits)}</p-table-cell>
-    <p-table-cell><span class="share" style="width: ${share}%; max-width: 8rem"
-      aria-hidden="true"></span></p-table-cell>
+    <p-table-cell class="num">${share(row.credits, total)}</p-table-cell>
     <p-table-cell class="num">${count(row.runs)}</p-table-cell>
     <p-table-cell class="num">${row.unknown || ""}</p-table-cell>
     <p-table-cell class="num">${count(row.tokens)}</p-table-cell></p-table-row>`;
@@ -146,47 +156,14 @@ function splitRow(row, top) {
 
 function split() {
   const rows = state.data.rows, label = SPLITS.find(([v]) => v === filter.by)?.[1] ?? filter.by;
-  const top = Math.max(0, ...rows.map((r) => r.credits));
-  const heads = [label, "Credits", "", "Runs", "Unknown", "Tokens"];
+  const total = state.data.totals.credits;
+  const heads = [label, "Credits", "Share", "Runs", "Unknown", "Tokens"];
   return html`<section aria-labelledby="split-title">
     <p-heading size="lg"><h2 id="split-title">By ${label.toLowerCase()}</h2></p-heading>
     ${rows.length ? html`<p-table id="split" caption=${`Credits by ${label.toLowerCase()}`}><p-table-head>
       <p-table-head-row>${heads.map(head)}</p-table-head-row>
-      </p-table-head><p-table-body>${rows.map((r) => splitRow(r, top))}</p-table-body></p-table>`
+      </p-table-head><p-table-body>${rows.map((r) => splitRow(r, total))}</p-table-body></p-table>`
       : html`<p-text id="split-none" size="sm">Nothing was spent that these filters show.</p-text>`}
-  </section>`;
-}
-
-function runRow(r) {
-  const when = r.at ? new Date(r.at).toLocaleString() : "Time unknown";
-  const who = `${r.agent || "Agent unknown"}${r.job ? ` (${r.job})` : ""}${r.subagents.length
-    ? ` with ${r.subagents.join(", ")}` : ""}`;
-  const spent = r.open ? "open: no end recorded" : r.unknown ? `${credits(r.credits)}+ (not all reported)`
-    : r.incomplete ? `${credits(r.credits)}+ (its last read failed)` : credits(r.credits);
-  const of = `${r.limit != null ? ` of ${r.limit}` : ""}${r.stopped_by ? ` (${r.stopped_by})` : ""}`;
-  const stop = r.stopped === "reached" ? html`<p-tag color="notification-warning-soft" compact="true">stopped at its
-    credit limit${of}</p-tag>` : r.stopped === "unknown" ? html`<p-tag color="background-surface" compact="true">may
-    have reached its credit limit${of}: not known</p-tag>` : nothing;
-  const unsure = r.uncertain.length ? html`<p-tag color="background-surface" compact="true">${r.uncertain
-    .map((u) => (u === "at" ? "time uncertain" : "agent uncertain")).join(", ")}</p-tag>` : nothing;
-  return html`<p-table-row><p-table-cell>${when}</p-table-cell><p-table-cell>${r.name || "No project"}</p-table-cell>
-    <p-table-cell>${r.change || ""}${r.step ? ` · ${r.step}` : ""}</p-table-cell><p-table-cell>${who}</p-table-cell>
-    <p-table-cell>${r.models.join(", ")}</p-table-cell><p-table-cell class="num">${spent}</p-table-cell>
-    <p-table-cell>${r.ending || ""} ${stop} ${unsure}</p-table-cell></p-table-row>`;
-}
-
-function runs() {
-  const total = state.data.runs.total, heads = ["When", "Project", "Change", "Agent", "Models", "Credits", "Ended"];
-  const shown = state.runs.length;
-  return html`<section aria-labelledby="runs-title">
-    <p-heading size="lg"><h2 id="runs-title">Runs, newest first</h2></p-heading>
-    <p-text id="runs-count" size="sm">${shown < total ? `The newest ${shown} of ${total} runs.` : `All ${total} runs.`}
-      A run counts on the day it ended.</p-text>
-    ${shown ? html`<p-table id="runs" caption="Runs"><p-table-head><p-table-head-row>
-      ${heads.map(head)}</p-table-head-row></p-table-head>
-      <p-table-body>${state.runs.map(runRow)}</p-table-body></p-table>` : nothing}
-    ${state.next != null ? html`<div><p-button id="more" type="button" compact="true" variant="secondary"
-      .loading=${state.more} @click=${more}>Show more runs</p-button></div>` : nothing}
   </section>`;
 }
 

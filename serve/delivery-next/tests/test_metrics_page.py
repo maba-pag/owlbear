@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import socket
 import threading
 import time
@@ -94,7 +95,13 @@ def test_the_metrics_page_sums_splits_drills_down_and_lists_runs_with_their_limi
             expect(page.locator("#runs p-table-row").nth(1)).to_contain_text(
                 "stopped at its credit limit of 1 (session)"
             )
-            expect(page.locator("#runs p-table-row").nth(0)).to_contain_text("not all reported")
+            expect(page.locator("#runs p-table-row").nth(0)).to_contain_text("lower bound")  # its credits unreported
+            expect(page.locator("#runs p-table-row").nth(0)).to_contain_text("Outside a Change")
+            expect(page.locator("#runs p-table-row").nth(1)).not_to_contain_text("lower bound")
+            expect(page.locator("#runs .lower")).to_have_count(1)
+            expect(page.locator("#lower-bound")).to_contain_text("spent at least this")
+            expect(page.locator("#exact li")).to_have_text([re.compile(r"^1 run did not report its credits")])
+            expect(rows.locator(".share")).to_have_text(["57%", "29%", "14%", "0%"])  # of the 3.50 credits
             expect(page.locator("#runs p-table-row").nth(0)).to_contain_text("may have reached its credit limit of 0.5")
             tools = page.locator("#tools p-table-row")  # C-28: weighted, 1 of 1 and 0 of 9 calls accepted
             expect(tools).to_have_count(2)
@@ -178,8 +185,48 @@ def test_a_ledger_whose_step_events_list_their_models_renders(pds) -> None:
             expect(rows.nth(0)).to_contain_text("1.50")
             expect(rows.nth(1)).to_contain_text("Model unknown")
             expect(rows.nth(1)).to_contain_text("0.50")
-            expect(page.locator("#runs p-table-row")).to_have_count(2)
+            fold = page.locator("#runs p-table-row")  # one builder's consecutive runs share a row that opens
+            expect(fold).to_have_count(1)
+            expect(fold).to_have_attribute("data-runs", "2")
+            expect(fold).to_contain_text("2.00")
+            button = fold.get_by_role("button", name="builder · 2 runs")
+            expect(button).to_have_attribute("aria-expanded", "false")
+            button.focus()
+            page.keyboard.press("Enter")
+            expect(button).to_have_attribute("aria-expanded", "true")
+            expect(page.locator("#runs .member")).to_have_count(2)
+            expect(page.locator("#runs .member .num")).to_have_text(["1.50", "0.50"])
+            page.keyboard.press("Enter")
+            expect(page.locator("#runs .member")).to_have_count(0)
             expect(page.locator("#error")).to_have_count(0)
+            browser.close()
+    finally:
+        server.should_exit = True
+        machine.stop_all()
+
+
+@pytest.mark.browser
+def test_a_run_not_yet_ended_is_said_apart_with_its_credits_unknown_not_as_zero(pds) -> None:
+    """Sol's counterexample: a run with only its start sits outside a dated period, and Metrics said "0.00 more"."""
+    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+
+    at = (datetime.now(UTC) - timedelta(hours=1)).isoformat(timespec="seconds")
+    place = {"run": "o", "session": "s-o", "clone": "", "step": "", "job": "", "project": "shop", "name": "shop",
+             "change": "c1", "agent": "builder"}  # fmt: skip
+    spend_ledger.append([place | {"id": "start:o", "type": "start", "at": at, "model": "m1", "before": {}}])
+    machine, server, base = serve()
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except Error as exc:
+                pytest.skip(f"no Playwright Chromium: {exc}")
+            page = browser.new_page(timezone_id="Europe/Berlin")
+            pds.only(page, base)
+            page.goto(f"{base}/metrics#token=t")
+            expect(page.locator("#exact li")).to_have_count(1)
+            expect(page.locator("#exact li")).to_contain_text("1 more run may lie in this period, credits not known:")
+            expect(page.locator("#exact")).not_to_contain_text("0.00")
             browser.close()
     finally:
         server.should_exit = True
@@ -231,7 +278,8 @@ def test_a_show_more_answered_after_the_filters_changed_is_dropped(pds) -> None:
             expect(page.locator("#runs-count")).to_contain_text("All 3 runs.")
             page.evaluate("window.__held.forEach((go) => go())")  # the old answer arrives last
             page.wait_for_timeout(500)
-            expect(page.locator("#runs p-table-row")).to_have_count(3)
+            expect(page.locator("#runs p-table-row")).to_have_count(1)  # the three reviewer runs fold
+            expect(page.locator("#runs p-table-row")).to_have_attribute("data-runs", "3")
             expect(page.locator("#runs-count")).to_contain_text("All 3 runs.")
             expect(page.locator("#more")).to_have_count(0)
             expect(page.locator("#error")).to_have_count(0)
