@@ -1,11 +1,13 @@
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { repeat } from "/assets/lit-html/3.3.3/directives/repeat.js";
-import { call } from "/assets/ui.mjs";
+import { call, here } from "/assets/ui.mjs";
 import { receipts } from "./actions.mjs";
 import { detail, open } from "./entry.mjs";
+import { scopes, scopesView } from "./overview.mjs";
 import { queue } from "./queue.mjs";
 import { loadRecovery, recoveryView } from "./recovery.mjs";
-import { addressOf, cutOff, filter, readBack, sameAddress, STATES, scopeOf, show, state, TAGS } from "./state.mjs";
+import { addressOf, cutOff, filter, readBack, ROOT, sameAddress, STATES, scopeOf, show, state, TAGS, VIEWS, wide }
+  from "./state.mjs";
 import { field, select } from "./widgets.mjs";
 
 const WHERE = [["all", "This project and Global"], ["project", "This project"], ["global", "Global"],
@@ -27,8 +29,12 @@ let listTurn = 0;
 export async function refresh() {
   const turn = ++listTurn, where = filter.where;
   await loadRecovery();
+  if (wide === "") {
+    show();
+    return scopes.refresh();
+  }
   try {
-    const list = await call(`/decisions?${query()}`);
+    const list = await call(`${ROOT}/decisions?${query()}`);
     if (turn !== listTurn) return;
     state.loaded = { ...list, address: addressOf(where, list.project) };
     state.error = "";
@@ -51,7 +57,7 @@ function filters() {
   const topics = [["", "Any"], ...state.loaded.topics.map((t) => [t, t])];
   if (!topics.some(([t]) => t === filter.topic)) filter.topic = "";
   return html`<section id="filters" class="row" aria-label="Filters">
-    ${select("Show", WHERE, filter.where, chose("where"))}
+    ${wide ? nothing : select("Show", WHERE, filter.where, chose("where"))}
     ${select("State", SHOWN, filter.state, chose("state"))}
     ${select("Topic", topics, filter.topic, chose("topic"))}
     ${select("Origin", ORIGINS, filter.origin, chose("origin"))}
@@ -97,11 +103,20 @@ function listView(loaded) {
   </section>`;
 }
 
+// Under All projects, a view of Global or OwlBear opened from the overview says which and leads back to it.
+function back() {
+  return wide ? html`<p-link-pure id="back" icon="arrow-left" size="sm">
+    <a href=${here({ view: "" })}>All projects</a></p-link-pure>` : nothing;
+}
+
 export function view() {
-  const loaded = state.loaded, available = loaded?.available;
-  document.getElementById("shown").textContent = available ? `${loaded.decisions.length} of ${loaded.total} shown`
-    : "";
+  const loaded = state.loaded, available = loaded?.available && wide !== "";
+  // The total counts every decision the host reads, which for Global's or OwlBear's view holds the other's too.
+  const shown = !available ? "" : wide ? `${VIEWS[wide].name} · ${loaded.decisions.length} shown`
+    : `${loaded.decisions.length} of ${loaded.total} shown`;
+  document.getElementById("shown").textContent = shown;
   return html`
+    ${back()}
     ${recoveryView()}
     <p-inline-notification id="error" state="error" dismiss-button="false" ?hidden=${!state.error}>${state.error}
     </p-inline-notification>
@@ -110,5 +125,6 @@ export function view() {
     </p-inline-notification>
     ${receipts()}
     ${available ? queue() : nothing}
-    ${available ? listView(loaded) : nothing}`;
+    ${available ? listView(loaded) : nothing}
+    ${wide === "" ? scopesView() : nothing}`;
 }

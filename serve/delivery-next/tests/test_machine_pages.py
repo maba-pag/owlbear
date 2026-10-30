@@ -1053,3 +1053,156 @@ def test_old_update_addresses_open_the_updates_pages_and_back_and_reload_keep_th
         page.goto(f"{base}/updates/pds?project={a.id}")
         expect(page.locator("#check-unread")).to_contain_text("Could not read the update checks")
         expect(page.locator("#pds-later")).to_be_visible()
+
+
+def decided(shared: Path, folder: str, *statements: str, **more) -> None:
+    """In force in *folder* of the shared repository (Global's when empty), committed and published; *more* sets other
+    fields."""
+    from owlbear_decisions import Decision, Origin, Scope, State, new_id, write  # noqa: PLC0415 - the decisions' own
+
+    scope = Scope.PROJECT if folder else Scope.GLOBAL
+    for said in statements:
+        write(Decision(id=new_id(), title=said, statement=said, scope=scope, project=folder, origin=Origin.AUTONOMOUS,
+                       actor="shaper", created_at=datetime.now(UTC), **{"state": State.IN_FORCE} | more),
+              shared / folder if folder else shared)  # fmt: skip
+    for args in (("add", "-A"), ("commit", "-qm", "seed"), ("push", "-q", "origin", "HEAD")):
+        subprocess.run(["git", *args], cwd=shared, check=True, capture_output=True)  # noqa: S603, S607
+
+
+@pytest.mark.browser
+def test_decisions_under_all_projects_sum_up_each_scope_and_open_its_view_even_with_a_project_unread(
+    tmp_path: Path, monkeypatch, pds, shared_repo
+) -> None:
+    """D-01M63C6PMT4FX370W6B2VS9HAM, D-01M5ZGHDMEG897N2SD1XNEXYNQ: All projects shows Global, OwlBear and one summary
+    per project, each opening its view; a project that cannot be read says why, never left out, the rest still
+    showing as each is read."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    from owlbear_decisions import State  # noqa: PLC0415 - the decisions' own
+    from owlbear_delivery_next.local_system import data_place  # noqa: PLC0415
+
+    shared = shared_repo[0]
+    monkeypatch.setenv(data_place.VIEW, str(shared))
+    a, b, gone = (registry.register(clone(tmp_path / n)) for n in ("alpha", "beta", "gone"))
+    shutil.rmtree(tmp_path / "gone")
+    decided(shared, "", "Pages are plain HTML.")
+    decided(shared, "", "Every page has one primary.", read_back="pending", read_back_why="Asked again.",
+            read_back_kind="uncertain")  # fmt: skip
+    decided(shared, "owlbear", "Lint once.")
+    decided(shared, "alpha", "Notes live in SQLite.")
+    decided(shared, "alpha", "Notes sync nightly.", state=State.DRAFT)
+    with browsing(monkeypatch, pds, 390) as (page, base):
+        held: list = []
+
+        def hold(route) -> None:  # a builtin's bound method cannot be a Playwright handler
+            held.append(route)
+
+        page.route(f"**/p/{b.id}/api/next/decisions?*", hold)
+        page.goto(f"{base}/decisions#token=t")
+        expect(page).to_have_url(f"{base}/decisions")  # no project is chosen for the owner
+        rows = page.locator("#scopes .scope")
+        expect(rows.locator("h3")).to_have_text(["Global", "OwlBear", "alpha", "beta", "gone"])
+        row = {
+            key: page.locator(f'#scopes .scope[data-key="{key}"]') for key in ("global", "owlbear", a.id, b.id, gone.id)
+        }
+        expect(row[a.id]).to_contain_text("1 in force · 1 draft")  # read while beta's read is held
+        expect(row[b.id]).to_have_attribute("aria-busy", "true")
+        expect(row[b.id]).to_contain_text("Reading…")
+        expect(row["global"]).to_contain_text("2 in force · 0 drafts")
+        expect(row["global"]).to_contain_text("1 read-back waiting")
+        expect(row["owlbear"]).to_contain_text("1 in force · 0 drafts")
+        expect(row[gone.id]).to_contain_text("gone is replaced: ")
+        expect(row[gone.id].get_by_role("link", name="Open Projects")).to_have_attribute("href", "/projects")
+        until(page, lambda: held)
+        held.pop().fulfill(status=503, json={"detail": "beta's host is busy"})
+        expect(row[b.id]).to_contain_text("Could not read it: beta's host is busy")
+        expect(row[b.id]).to_have_attribute("aria-busy", "false")
+        row[b.id].get_by_role("button", name="Read beta again").click()
+        until(page, lambda: held)
+        held.pop().fulfill(json={"available": False, "reason": "beta's data is behind", "decisions": []})
+        expect(row[b.id]).to_contain_text("Could not read it: beta's data is behind")  # answered, yet unread: retried
+        page.unroute(f"**/p/{b.id}/api/next/decisions?*")
+        row[b.id].get_by_role("button", name="Read beta again").click()
+        expect(row[b.id]).to_contain_text("0 in force · 0 drafts")
+        assert targets(page.locator("#scopes a, #scopes button")) == []
+        assert page.evaluate("document.documentElement.scrollWidth") <= 390
+        each_scope_opens_its_view_and_leads_back(page, pds, base, row, a)
+
+
+def each_scope_opens_its_view_and_leads_back(page, pds, base: str, row: dict, a: registry.Project) -> None:
+    """Global's and OwlBear's views hold only theirs and lead back; a project's opens its page; an unlisted project
+    opens the overview."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    row["global"].get_by_role("link", name="Global").click()
+    expect(page).to_have_url(f"{base}/decisions?view=global")
+    expect(page.locator("#shown")).to_have_text("Global · 2 shown")
+    expect(page.locator(".entry")).to_have_count(2)
+    expect(pds.select(page, "Show")).to_have_count(0)
+    page.locator(".entry", has_text="Pages are plain HTML.").locator("summary").click()
+    expect(page.locator("#detail")).to_contain_text("Origin")
+    expect(page.get_by_role("button", name="Record an exception")).to_have_count(0)  # no project to own one
+    queued = page.locator("#queue .queued")
+    expect(queued.get_by_role("button", name="Still right")).to_have_count(1)
+    expect(queued.get_by_role("button", name="Ignore for now")).to_have_count(0)  # its mark lives in a project's store
+    page.get_by_role("link", name="All projects").click()
+    expect(page).to_have_url(f"{base}/decisions")
+    row["owlbear"].get_by_role("link", name="OwlBear").click()
+    expect(page.locator("#shown")).to_have_text("OwlBear · 1 shown")
+    expect(page.locator(".entry")).to_have_text([re.compile("Lint once")])
+    page.goto(f"{base}/decisions")
+    row[a.id].get_by_role("link", name="alpha").click()
+    expect(page).to_have_url(f"{base}/decisions?project={a.id}")
+    expect(page.locator(".entry", has_text="Notes live in SQLite.")).to_have_count(1)
+    expect(page.locator("#queue .queued").get_by_role("button", name="Ignore for now")).to_have_count(1)
+    page.goto(f"{base}/decisions?project=nobody")  # a project no longer listed opens the overview
+    expect(page).to_have_url(f"{base}/decisions")
+
+
+@pytest.mark.browser
+def test_maintenance_under_all_projects_sums_up_each_project_and_opens_it_even_with_a_project_unread(
+    tmp_path: Path, monkeypatch, pds
+) -> None:
+    """D-01M63C6PMT4FX370W6B2VS9HAM: All projects shows one maintenance summary per project, each opening it; a
+    project that cannot be read says why and the rest still shows."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    a, b = (registry.register(clone(tmp_path / n)) for n in ("alpha", "beta"))
+    with browsing(monkeypatch, pds) as (page, base):
+        page.route(f"**/p/{b.id}/api/next/maintenance", lambda route: route.abort())
+        page.goto(f"{base}/maintenance#token=t")
+        row = {p.id: page.locator(f'#projects .scope[data-key="{p.id}"]') for p in (a, b)}
+        expect(page.locator("#projects h3")).to_have_text(["alpha", "beta"])
+        expect(row[a.id]).to_contain_text("Memory curation: never run")
+        expect(row[b.id]).to_contain_text("Could not read it: Delivery is not running")
+        expect(row[b.id].get_by_role("button", name="Read beta again")).to_be_visible()
+        expect(page.locator("#curation-title, #curation-error")).not_to_have_count(0)  # the machine's parts stay
+        assert targets(page.locator("#projects a, #projects button")) == []
+        alpha_answers_while_curation_runs(page, row[a.id], a)
+        row[a.id].get_by_role("link", name="alpha").click()
+        expect(page).to_have_url(f"{base}/maintenance?project={a.id}")
+        expect(page.locator("#actions")).to_contain_text("Memory curation")
+
+
+def alpha_answers_while_curation_runs(page, row, a: registry.Project) -> None:
+    """While curation runs the page looks again every five seconds; a project read slower than that still shows."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    running = {"available": True, "folders": [{"folder": "alpha", "state": "running", "entries": []}]}
+    page.route("**/api/next/curation", lambda route: route.fulfill(json=running))
+    held: list = []
+
+    def hold(route) -> None:  # a builtin's bound method cannot be a Playwright handler
+        held.append(route)
+
+    page.route(f"**/p/{a.id}/api/next/maintenance", hold)
+    with page.expect_request("**/api/next/curation"):
+        page.evaluate("document.dispatchEvent(new Event('visibilitychange'))")  # reads all again, curation running
+    until(page, lambda: held)
+    with page.expect_request("**/api/next/curation", timeout=10000):
+        pass  # the look again five seconds later
+    held[0].continue_()
+    expect(row).to_contain_text("Memory curation: never run")
+    expect(row).to_have_attribute("aria-busy", "false")
+    page.unroute(f"**/p/{a.id}/api/next/maintenance")
+    page.unroute("**/api/next/curation")

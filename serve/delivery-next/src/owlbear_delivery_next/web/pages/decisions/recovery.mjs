@@ -1,7 +1,7 @@
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { call } from "/assets/ui.mjs";
 import { refresh } from "./list.mjs";
-import { show, state, WRITE } from "./state.mjs";
+import { ROOT, show, state, WRITE } from "./state.mjs";
 import { button } from "./widgets.mjs";
 
 // The owner's own recovery of an interrupted decision batch. It reads the journal directly, so it stays reachable
@@ -19,7 +19,7 @@ let recoveryTurn = 0;
 export async function loadRecovery() {
   const turn = ++recoveryTurn;
   try {
-    const status = await call("/decisions/recovery");
+    const status = await call(`${ROOT}/decisions/recovery`);
     if (turn !== recoveryTurn) return;
     state.recovery.status = status;
     state.recovery.error = "";
@@ -46,7 +46,8 @@ async function decide(action) {
   show();
   let notice = "", failure = "";
   try {
-    const r = await call(`/decisions/recovery/${action}`, { body: { generation, confirmed: true }, timeout: WRITE });
+    const r = await call(`${ROOT}/decisions/recovery/${action}`, { body: { generation, confirmed: true },
+      timeout: WRITE });
     notice = r.done ? `${DONE[action]} batch ${generation}. ${r.notice}`.trim() : `Not ${action}ed: ${r.notice}`;
   } catch (error) {
     failure = error.message;

@@ -38,6 +38,15 @@ details > summary { cursor: pointer; font-size: var(--p-typescale-sm); padding-b
 textarea, input, select, button { font: inherit; }
 /* A column of numbers sits right-aligned under its header, its digits one width. */
 :is(p-table-cell, p-table-head-cell).num { text-align: end; font-variant-numeric: tabular-nums; }
+/* Under All projects, one summary per scope, each opening its own view (D-01M63C6PMT4FX370W6B2VS9HAM). */
+.scopes { display: grid; gap: var(--p-spacing-static-sm); margin: 0; padding: 0; list-style: none; }
+.scopes .scope {
+  display: grid; gap: var(--p-spacing-static-xs); padding: var(--p-spacing-static-sm) var(--p-spacing-static-md);
+  background: var(--p-color-surface); border-radius: var(--p-radius-lg); overflow-wrap: anywhere;
+}
+.scopes .title { display: flex; flex-wrap: wrap; align-items: center; gap: var(--p-spacing-static-sm); }
+.scopes .title h3 { margin: 0; }
+.scopes .scope ul { padding: 0; list-style: none; }
 /* The sticky bar holding a page's one primary action while there is something to act on. */
 .bar {
   position: sticky; bottom: 0; z-index: 1; display: flex; flex-wrap: wrap; align-items: center;
