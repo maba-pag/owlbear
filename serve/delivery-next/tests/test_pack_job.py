@@ -36,6 +36,7 @@ from owlbear_delivery_next.github.provider import (
 )
 from owlbear_delivery_next.impeccable import calibration, pack_files, pack_git, pack_update
 from owlbear_delivery_next.impeccable_runs import (
+    machine_lock,
     pack_gates,
     pack_job,
     pack_publish,
@@ -2124,6 +2125,28 @@ def test_every_project_sees_an_update_running_on_the_machine_and_for_whom(tmp_pa
     finally:
         os.close(job.held)
     assert pack_job.running_for() is None
+
+
+def test_a_claim_waits_out_a_brief_reading_of_the_lock_instead_of_naming_itself_busy(tmp_path, monkeypatch):
+    """#805: the pages' holder check takes the flock shared for a moment; a claim then is not refused as Busy."""
+    job = pack_job.Job(Store(tmp_path / "store"))
+    job._claim(job._alone)  # noqa: SLF001 - an earlier claim names this project as the file's last holder
+    job._release()  # noqa: SLF001
+    reading = os.open(pack_job.local_home.root() / pack_job.MACHINE_LOCK, os.O_RDONLY)
+    fcntl.flock(reading, fcntl.LOCK_SH | fcntl.LOCK_NB)  # running_for() mid-check, as a page's poll does
+    waits = []
+
+    def wait(seconds: float) -> None:  # the reading ends while the claim waits
+        waits.append(seconds)
+        os.close(reading)
+
+    monkeypatch.setattr(machine_lock.time, "sleep", wait)
+    job._claim(job._alone)  # noqa: SLF001
+    try:
+        assert job.held is not None
+        assert len(waits) == 1
+    finally:
+        job._release()  # noqa: SLF001
 
 
 def test_a_successor_claim_is_never_erased_by_a_release_paused_after_its_close(tmp_path, monkeypatch):
