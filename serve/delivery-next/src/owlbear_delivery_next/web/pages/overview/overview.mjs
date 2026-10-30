@@ -6,9 +6,11 @@ import { repeat } from "/assets/lit-html/3.3.3/directives/repeat.js";
 import { call, here, machineState } from "/assets/ui.mjs";
 
 // *fixed* scopes ({ key, name, href, path }) come first, then every registered project, loaded or not, read at its own
-// API's *path*. *said* turns what was read into [tags, text]; *show* renders the page again. While *live()* says the
-// overview shows, *again()* reads the page again when a project is added, removed, or loaded or stopped.
-export function overview({ fixed = [], path, said, show, live = () => true, again: reread, timeout = 15000 }) {
+// API's *path*. *said* turns what was read into [tags, text]; *unread* says why an answer holds nothing, which then
+// fails the read as an error would; *show* renders the page again. While *live()* says the overview shows, *again()*
+// reads the page again when a project is added, removed, or loaded or stopped.
+export function overview({ fixed = [], path, said, unread = () => "", show, live = () => true, again: reread,
+  timeout = 15000 }) {
   const rows = new Map();
   let turn = 0, known = "";
   const projects = () => machineState()?.projects ?? [];
@@ -16,8 +18,8 @@ export function overview({ fixed = [], path, said, show, live = () => true, agai
 
   async function readOne(row, n) {
     try {
-      const got = await call(row.path ?? path, { of: row.of ?? "", timeout });
-      if (n === turn) Object.assign(row, { state: "read", got, why: "" });
+      const got = await call(row.path ?? path, { of: row.of ?? "", timeout }), why = unread(got);
+      if (n === turn) Object.assign(row, why ? { state: "failed", why } : { state: "read", got, why: "" });
     } catch (error) {
       if (n === turn) Object.assign(row, { state: "failed", why: error.message });
     }

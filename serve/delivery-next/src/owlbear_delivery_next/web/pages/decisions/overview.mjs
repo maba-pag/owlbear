@@ -7,10 +7,6 @@ const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
 // What a scope's list says at a glance: what is in force and drafted, and what waits on the owner.
 function said(got) {
-  if (!got.available) {
-    return [html`<p-tag compact="true" variant="warning">cannot be read</p-tag>`,
-      html`<p-text size="sm" class="why">${got.reason}</p-text>`];
-  }
   const count = (test) => got.decisions.filter(test).length;
   const waiting = got.queue?.length ?? 0, conflicts = count((d) => d.conflict);
   const problems = count((d) => d.findings && !d.conflict);
@@ -28,7 +24,8 @@ export const scopes = overview({
     { key: "global", name: "Global", href: here({ view: "global" }), path: "/owlbear/decisions?where=global" },
     { key: "owlbear", name: "OwlBear", href: here({ view: "owlbear" }), path: "/owlbear/decisions?where=project" },
   ],
-  path: "/decisions?where=project", said, show: () => show(), live: () => wide === "",
+  path: "/decisions?where=project", said, unread: (got) => (got.available ? "" : got.reason || "it is unavailable"),
+  show: () => show(), live: () => wide === "",
 });
 
 export function scopesView() {

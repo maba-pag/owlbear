@@ -1117,6 +1117,10 @@ def test_decisions_under_all_projects_sum_up_each_scope_and_open_its_view_even_w
         held.pop().fulfill(status=503, json={"detail": "beta's host is busy"})
         expect(row[b.id]).to_contain_text("Could not read it: beta's host is busy")
         expect(row[b.id]).to_have_attribute("aria-busy", "false")
+        row[b.id].get_by_role("button", name="Read beta again").click()
+        until(page, lambda: held)
+        held.pop().fulfill(json={"available": False, "reason": "beta's data is behind", "decisions": []})
+        expect(row[b.id]).to_contain_text("Could not read it: beta's data is behind")  # answered, yet unread: retried
         page.unroute(f"**/p/{b.id}/api/next/decisions?*")
         row[b.id].get_by_role("button", name="Read beta again").click()
         expect(row[b.id]).to_contain_text("0 in force · 0 drafts")
