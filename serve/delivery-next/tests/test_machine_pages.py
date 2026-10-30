@@ -1106,7 +1106,7 @@ def test_decisions_under_all_projects_sum_up_each_scope_and_open_its_view_even_w
         expect(row[gone.id].get_by_role("link", name="Open Projects")).to_have_attribute("href", "/projects")
         until(page, lambda: held)
         held.pop().fulfill(status=503, json={"detail": "beta's host is busy"})
-        expect(row[b.id]).to_contain_text("Could not read it: Beta's host is busy")
+        expect(row[b.id]).to_contain_text("Could not read it: beta's host is busy")
         expect(row[b.id]).to_have_attribute("aria-busy", "false")
         page.unroute(f"**/p/{b.id}/api/next/decisions?*")
         row[b.id].get_by_role("button", name="Read beta again").click()

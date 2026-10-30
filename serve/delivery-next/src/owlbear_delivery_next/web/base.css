@@ -46,6 +46,7 @@ textarea, input, select, button { font: inherit; }
 }
 .scopes .title { display: flex; flex-wrap: wrap; align-items: center; gap: var(--p-spacing-static-sm); }
 .scopes .title h3 { margin: 0; }
+.scopes .scope ul { padding: 0; list-style: none; }
 /* The sticky bar holding a page's one primary action while there is something to act on. */
 .bar {
   position: sticky; bottom: 0; z-index: 1; display: flex; flex-wrap: wrap; align-items: center;

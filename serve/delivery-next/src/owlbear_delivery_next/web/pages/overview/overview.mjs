@@ -67,10 +67,6 @@ function project(p, all) {
     tag: p.state };
 }
 
-function sentence(text) {
-  return text.charAt(0).toUpperCase() + text.slice(1);
-}
-
 function item(r, said, again) {
   const [tags, text] = r.state === "read" ? said(r.got) : [nothing, nothing];
   const name = r.down ? r.name : html`<p-link-pure icon="arrow-right" align-label="start" size="inherit">
@@ -83,7 +79,7 @@ function item(r, said, again) {
     ${r.state === "read" ? text : nothing}
     ${r.down ? html`<p-text size="sm" class="why">${r.down} <a href=${here({}, "/projects")}>Open Projects</a>
       </p-text>` : nothing}
-    ${r.state === "failed" ? html`<p-text size="sm" class="why">Could not read it: ${sentence(r.why)}</p-text>
+    ${r.state === "failed" ? html`<p-text size="sm" class="why">Could not read it: ${r.why}</p-text>
       <div><p-button type="button" compact="true" variant="secondary" .aria=${{ "aria-label": `Read ${r.name} again` }}
         @click=${() => again(r)}>Read again</p-button></div>` : nothing}
   </li>`;

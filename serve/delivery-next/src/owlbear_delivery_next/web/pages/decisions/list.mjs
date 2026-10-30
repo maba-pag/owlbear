@@ -105,7 +105,7 @@ function listView(loaded) {
 
 // Under All projects, a view of Global or OwlBear opened from the overview says which and leads back to it.
 function back() {
-  return wide ? html`<p-link-pure id="back" icon="arrow-left" align-label="start" size="sm">
+  return wide ? html`<p-link-pure id="back" icon="arrow-left" size="sm">
     <a href=${here({ view: "" })}>All projects</a></p-link-pure>` : nothing;
 }
 
