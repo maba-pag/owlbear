@@ -1115,18 +1115,28 @@ def test_a_ci_repair_that_changes_configuration_or_weakens_a_check_stops_and_ask
     assert (state["questions"][0]["kind"], pr_head(checkout, state)) == ("publish", before)
 
 
-def test_a_repair_that_edits_a_test_is_pushed_only_once_the_owner_reviewed_it(tmp_path, checkout, clone):
-    """No pattern proves a test still checks as much: an unknown decorator is held regardless (classes above)."""
-    on_main(checkout, "tests/test_page.py", TESTED)
-    fakes, job, state = ci_failed(tmp_path, checkout, clone, {"tests/test_page.py": FLAKY})
+@pytest.mark.parametrize(
+    ("edit", "held"),
+    [
+        ((f"LIMIT = 4.5\n\n\n{TESTED}", f"LIMIT = 3.0\n\n\n{TESTED}"), ("removes lines from a test", "-LIMIT = 4.5")),
+        ((TESTED, FLAKY), ("changes a test", "+@flaky.off")),
+    ],
+    ids=["lowered-limit", "decorator"],
+)  # fmt: skip
+def test_a_repair_that_edits_a_test_is_pushed_only_once_the_owner_reviewed_it(tmp_path, checkout, clone, edit, held):
+    """No pattern proves a test still checks as much: a lowered threshold or an unknown decorator is held regardless.
+    The classes are checked above; these show he sees what goes, its deleted lines too, before it is pushed."""
+    (before, after), (held, shown) = edit, held
+    on_main(checkout, "tests/test_page.py", before)
+    fakes, job, state = ci_failed(tmp_path, checkout, clone, {"tests/test_page.py": after})
     head = pr_head(checkout, state)
 
     state = answered(job, "repair")
 
     (q,) = state["questions"]
-    assert (q["kind"], q["paths"]) == ("repair-config", ["tests/test_page.py (changes a test)"])
+    assert (q["kind"], q["paths"]) == ("repair-config", [f"tests/test_page.py ({held})"])
     assert [o["id"] for o in q["options"]] == ["push-reviewed", "discard"]
-    assert "+@flaky.off" in q["diff"]
+    assert shown in q["diff"]
     assert (pr_head(checkout, state), fakes.github.calls) == (head, ["create"])
     with pytest.raises(pack_job.Refused):
         job.answer(q["id"], "push-config")
@@ -1135,7 +1145,7 @@ def test_a_repair_that_edits_a_test_is_pushed_only_once_the_owner_reviewed_it(tm
     state = answered(job, "push-reviewed")
 
     assert state["state"] == "passed", state["reason"]
-    assert git(checkout.parents[1], "show", f"{landed(checkout)}:tests/test_page.py") == FLAKY.strip()
+    assert git(checkout.parents[1], "show", f"{landed(checkout)}:tests/test_page.py") == after.strip()
 
 
 PUSHED, LONG = ["push-reviewed", "discard"], "".join(f"VALUE_{i} = {i}\n" for i in range(2000))
