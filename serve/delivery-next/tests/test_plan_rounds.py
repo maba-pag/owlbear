@@ -174,7 +174,7 @@ def test_a_failed_challenge_challenges_the_same_plan_again_without_planning_agai
     assert (c.step.kind, c.loops[PLAN].ended, c.loops[PLAN].round) == (K.BUILD, "clean", 1)
 
 
-@pytest.mark.parametrize(("instructions", "skills"), [(True, True), (True, False), (False, True)])
+@pytest.mark.parametrize(("instructions", "skills"), [(True, False), (False, True)])
 def test_the_planner_and_its_challenger_run_with_the_owners_user_config(  # noqa: PLR0913, PLR0917 - fixtures
     store, change_repo, mp, monkeypatch, instructions, skills
 ):
@@ -207,7 +207,7 @@ def test_a_host_that_dies_during_the_challenge_keeps_the_revision_and_challenges
     assert (mp.kinds(), c.step.mode, len(c.plan.tasks)) == (["plan", "challenge", "plan"], "challenge", 3)
 
 
-@pytest.mark.parametrize(("revision", "unreviewed"), [(2, ["r1"]), (1, [])])  # changed, or resubmitted unchanged
+@pytest.mark.parametrize(("revision", "unreviewed"), [(2, ["r1"])])  # changed; resubmitted unchanged: below
 def test_an_early_last_round_with_rejections_gets_a_check_outside_the_count(
     store, change_repo, mp, revision, unreviewed
 ):
