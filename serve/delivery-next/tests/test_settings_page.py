@@ -311,6 +311,16 @@ def test_an_address_opens_its_group_and_an_unset_setting_s_link_its_row(store, p
             expect(page).to_have_url(f"{url}#{group}")
             expect(page.locator(f"#groups a[href='#{group}']")).to_have_attribute("aria-current", "page")
             expect(focused).to_be_focused()
+        for bad in ("%", "%E0%A4%A"):  # Sol R1-1: an address that doesn't decode opens the overview, loaded or not
+            page.goto(f"{url}#runs")
+            page.goto(f"{url}#{bad}")
+            expect(page).to_have_url(f"{url}#overview")
+            expect(page.locator("#unset")).to_be_visible()
+            page.goto(f"{url}#{bad}")
+            page.reload()
+            expect(page).to_have_url(f"{url}#overview")
+            expect(page.locator("#groups a[href='#overview']")).to_have_attribute("aria-current", "page")
+            expect(page.locator("#unset")).to_be_visible()
 
 
 @pytest.mark.browser

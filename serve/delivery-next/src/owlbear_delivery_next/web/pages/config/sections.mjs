@@ -183,12 +183,22 @@ function saveBar() {
   </div>`;
 }
 
+// The id the address names; one that doesn't decode (#%) is replaced by the overview's.
+function addressed() {
+  try {
+    return decodeURIComponent(location.hash.slice(1));
+  } catch {
+    history.replaceState(history.state, "", `${location.pathname}${location.search}#overview`);
+    return "overview";
+  }
+}
+
 // Show the group the address names (D-01M63C8QQMANY46N8GMNNKH1V9): a group's own, or an older one naming a section or
 // a row (#machine-title, #set-prefs-merge_method), which then gets the focus. A switch from elsewhere than the groups'
 // links (the menu, the back button) puts the focus on the group's first heading; *initial* is the page's first view.
 export function route(initial = false) {
   if (moved()) return;  // ui.mjs opens the page it moved to
-  const id = decodeURIComponent(location.hash.slice(1)), group = id ? groupOf(id) : "overview";
+  const id = addressed(), group = id ? groupOf(id) : "overview";
   if (id && id !== group) history.replaceState(history.state, "", `${location.pathname}${location.search}#${group}`);
   const switched = group !== state.group, nav = document.activeElement?.closest?.("#groups");
   state.group = group;
