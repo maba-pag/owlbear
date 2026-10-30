@@ -121,7 +121,8 @@ def machine(tmp_path: Path, shared: Path) -> tuple[Starlette, dict[str, Launch]]
 def serving(app: Starlette) -> tuple[uvicorn.Server, str]:
     sock = socket.socket()
     sock.bind(("127.0.0.1", 0))
-    server = uvicorn.Server(uvicorn.Config(app, log_level="warning"))
+    # longer than the pages' polls: route.fetch() reuses a pooled socket, which uvicorn's 5 s default closes
+    server = uvicorn.Server(uvicorn.Config(app, log_level="warning", timeout_keep_alive=60))
     threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True).start()
     while not server.started:
         time.sleep(0.05)

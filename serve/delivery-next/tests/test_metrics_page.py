@@ -55,7 +55,8 @@ def serve() -> tuple[Machine, uvicorn.Server, str]:
     base = f"http://127.0.0.1:{sock.getsockname()[1]}"
     record = HostRecord(url=f"{base}/", token="t", pid=1, started_at=datetime.now(UTC), code=codebase.CURRENT)  # noqa: S106
     machine = Machine(record)
-    server = uvicorn.Server(uvicorn.Config(app.create(machine), log_level="warning"))
+    # longer than the pages' polls: route.fetch() reuses a pooled socket, which uvicorn's 5 s default closes
+    server = uvicorn.Server(uvicorn.Config(app.create(machine), log_level="warning", timeout_keep_alive=60))
     threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True).start()
     while not server.started:
         time.sleep(0.05)

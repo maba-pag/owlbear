@@ -46,7 +46,8 @@ def serve() -> tuple[Machine, uvicorn.Server, str]:
     now = datetime.now(UTC)
     machine = Machine(HostRecord(url=f"{base}/", token="t", pid=1, started_at=now, code=codebase.CURRENT))  # noqa: S106
     machine.load_all()
-    server = uvicorn.Server(uvicorn.Config(app.create(machine), log_level="warning"))
+    # longer than the pages' polls: route.fetch() reuses a pooled socket, which uvicorn's 5 s default closes
+    server = uvicorn.Server(uvicorn.Config(app.create(machine), log_level="warning", timeout_keep_alive=60))
     threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True).start()
     while not server.started:
         time.sleep(0.05)
