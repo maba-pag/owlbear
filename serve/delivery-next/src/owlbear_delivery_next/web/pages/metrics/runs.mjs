@@ -49,12 +49,16 @@ const one = (rows, said, many) => {
   return kinds.length === 1 ? kinds[0] : `${kinds.length} ${many}`;
 };
 
-// A Change is its project's: a fold at one Change's several steps names it once, and its opened rows name each step.
+// A Change is its project's, and runs outside one are no Change: a fold at one Change's several steps names it once.
 function changes(rows) {
-  const ids = new Set(rows.map((r) => `${project(r)}\u0000${r.change}`));
-  if (ids.size > 1) return plural(ids.size, "Change");
-  const steps = new Set(rows.map((r) => r.step));
-  return steps.size === 1 ? where(rows[0]) : `${rows[0].change || "Outside a Change"} · ${plural(steps.size, "step")}`;
+  const inside = rows.filter((r) => r.change), outside = inside.length < rows.length;
+  const ids = new Set(inside.map((r) => `${project(r)}\u0000${r.change}`));
+  if (ids.size + (outside ? 1 : 0) === 1) {
+    const steps = new Set(rows.map((r) => r.step));
+    if (steps.size === 1) return where(rows[0]);
+    return `${rows[0].change || "Outside a Change"} · ${plural(steps.size, "step")}`;
+  }
+  return `${plural(ids.size, "Change")}${outside ? " and outside a Change" : ""}`;
 }
 
 function stops(rows) {
@@ -95,7 +99,8 @@ function runRow(r, fold) {
   const agent = fold ? helpers : `${who(r.agent, r.job)}${helpers ? ` ${helpers}` : ""}`;
   return html`<p-table-row class=${fold ? "member" : nothing} data-run=${r.run}>
     <p-table-cell>${when(r.at)}</p-table-cell>
-    <p-table-cell>${same(project) ? "" : project(r)}</p-table-cell><p-table-cell>${same(where) ? "" : where(r)}
+    <p-table-cell>${same(project) ? "" : project(r)}</p-table-cell><p-table-cell>${fold && changes(fold) === where(r)
+      ? "" : where(r)}
     </p-table-cell><p-table-cell multiline="true">${agent}</p-table-cell>
     <p-table-cell>${same(models) ? "" : models(r)}</p-table-cell>
     <p-table-cell class="num">${spent([r], !fold)}</p-table-cell>

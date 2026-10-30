@@ -208,6 +208,39 @@ def test_a_ledger_whose_step_events_list_their_models_renders(pds) -> None:
 
 
 @pytest.mark.browser
+def test_a_fold_counts_changes_by_project_apart_from_runs_outside_one_and_its_rows_name_theirs(pds) -> None:
+    """Copilot's counterexamples: two projects' curation runs read as "2 Changes", and one slug in two projects read as
+    "2 Changes" while the opened rows left their Change blank."""
+    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+
+    now, spent = datetime.now(UTC) - timedelta(hours=1), {"credits": 1.0, "models": {"m1": {"credits": 1.0}}}
+    seeds = [("curator", "shop", ""), ("curator", "docs", ""), ("builder", "p", "ch"), ("builder", "q", "ch"),
+             ("reviewer", "shop", ""), ("reviewer", "shop", "c9")]  # fmt: skip
+    spend_ledger.append([
+        line for n, (agent, name, change) in enumerate(seeds)
+        for line in run(f"r{n}", now + timedelta(minutes=n), spent, {"project": name, "name": name, "change": change,
+                                                                     "step": "build" if change else "", "agent": agent})
+    ])  # fmt: skip
+    machine, server, base = serve()
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except Error as exc:
+                pytest.skip(f"no Playwright Chromium: {exc}")
+            page = browser.new_page()
+            pds.only(page, base)
+            page.goto(f"{base}/metrics#token=t")
+            folds = page.locator("#runs p-table-row.fold p-table-cell:nth-child(3)")
+            expect(folds).to_have_text(["1 Change and outside a Change", "2 Changes", "Outside a Change"])
+            page.get_by_role("button", name="builder · 2 runs").click()
+            expect(page.locator("#runs .member p-table-cell:nth-child(3)")).to_have_text(["ch · build", "ch · build"])
+            browser.close()
+    finally:
+        server.should_exit = True
+        machine.stop_all()
+
+
 def test_spend_said_apart_from_the_period_never_reads_unknown_as_zero_or_a_counted_run_as_left_out(pds) -> None:
     """Sol's and Copilot's counterexamples: a run with only its start said "0.00 more"; one carrying known credits too
     said "credits not known"; and a resumed run, counted with its own spend, was called one more run not counted."""
