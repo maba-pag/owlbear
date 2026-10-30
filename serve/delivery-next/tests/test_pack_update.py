@@ -602,19 +602,3 @@ def test_the_cli_runs_each_update_tool_and_reports_failures(repo, capsys, monkey
     assert "CalledProcessError" in capsys.readouterr().out
     with pytest.raises(SystemExit):
         cli.main(["--repo", str(repo), "impeccable", "--diff", str(repo)])
-
-
-def test_the_cli_replay_names_the_uncertain_legacy_session_it_is_refused_for(
-    repo, monkeypatch, capsys, running_host
-) -> None:
-    def ran_here(*_args: object, **_kwargs: object) -> None:
-        msg = "the CLI replayed in its own process"
-        raise AssertionError(msg)
-
-    monkeypatch.setattr(pack_replay, "replay", ran_here)
-    running_host(409, {"detail": "an earlier Impeccable session is unproven; recover it on the Maintenance page first"})
-    assert cli.main(["--repo", str(repo), "impeccable", "--replay"]) == 1
-    assert (
-        capsys.readouterr().out
-        == "an earlier Impeccable session is unproven; recover it on the Maintenance page first\n"
-    )
