@@ -3,7 +3,8 @@ import { state, show, several, formsOf, send } from "./state.mjs";
 import { toggle, button, hd, text, row, info, notice, refusal } from "./widgets.mjs";
 import { questionForm, retryForm, criteriaPanel, checkForm, mergeForm, restartButton, pullbackNote } from "./forms.mjs";
 import { decisionForm, visualSection, beforeSection } from "./visual.mjs";
-import { spendLines, toolLines, activityLog, planList, roundsInfo, stepper } from "./progress.mjs";
+import { spendLines, toolLines, planList, roundsInfo, stepper } from "./progress.mjs";
+import { activityLog, split } from "./activity.mjs";
 import { approval, briefInfo } from "./brief.mjs";
 import { choose } from "./list.mjs";
 import { watcherSection } from "./watcher.mjs";
@@ -25,9 +26,15 @@ function detailHead(d) {
     intent = button(d.paused ? "Resume" : "Pause", go, d.paused ? { icon: "play" }
       : { variant: "secondary", icon: "pause" });
   }
-  return html`<div class="detail-head">${back}<div>${hd(2, d.slug, "xl", { tabindex: "-1" })}${d.brief.title
-    ? text(d.brief.title, { color: "contrast-medium" }) : nothing}${several()
-    ? text(`in ${d.projectName}`, { size: "xs", color: "contrast-medium" }) : nothing}</div>${intent}</div>`;
+  const under = [d.brief.title && d.slug, several() && `in ${d.projectName}`].filter(Boolean).join(" \u00b7 ");
+  return html`<div class="detail-head">${back}<div>${hd(2, d.brief.title || d.slug, "xl", { tabindex: "-1" })}${under
+    ? text(under, { size: "sm", color: "contrast-medium" }) : nothing}</div>${intent}</div>`;
+}
+
+// The tag says the status; the line keeps its stage only where the stage says more than the tag.
+function said(line, label) {
+  const [stage, rest] = split(line);
+  return stage && stage !== label ? line : rest;
 }
 
 const PAUSED = /· paused by you/;
@@ -58,7 +65,7 @@ export function detailView(d) {
       : d.retry ? retryForm(d.question, d.retry, d) : questionForm(d.question, d);
   }
   return html`${detailHead(d)}
-    ${row(html`<p-tag variant=${variant} compact="true">${label}</p-tag>`, text(d.line))}
+    ${row(html`<p-tag variant=${variant} compact="true">${label}</p-tag>`, text(said(d.line, label)))}
     ${d.now && label !== "Done" ? text(d.now, { size: "sm", color: "contrast-medium" }) : nothing}
     ${refusedTop}
     ${d.settings_fault ? notice("error", "Settings could not be read", d.settings_fault,

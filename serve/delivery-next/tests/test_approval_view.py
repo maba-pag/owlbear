@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import re
 import socket
 import threading
 import time
@@ -287,13 +288,13 @@ def test_choosing_another_change_and_going_back_keeps_the_address_and_the_list(p
     store, base = page_url
     store.write(Lock("greet"), asking())
     with opened(base, "flip", pds) as page:
-        expect(page.locator("#detail h2")).to_have_text("flip")
+        expect(page.locator("#detail h2")).to_have_text("Flip the hero")
         expect(page.locator("#changes")).to_contain_text("Needs you (")
         page.locator("#changes a[data-key='greet']").click()
         expect(page.locator("#detail h2")).to_have_text("greet")
         assert page.evaluate("location.search") == "?change=greet"
         page.go_back()
-        expect(page.locator("#detail h2")).to_have_text("flip")
+        expect(page.locator("#detail h2")).to_have_text("Flip the hero")
         page.get_by_role("button", name="All Changes").click()
         expect(page.locator("#board")).not_to_have_class("open")
         assert page.evaluate("location.search") == ""
@@ -359,3 +360,63 @@ def test_a_card_names_the_files_its_activity_touches_without_their_paths(page_ur
         now["now"] = said = "Build · view /Users/Jane Doe/project/README.md 3m ago"
         page.reload()
         expect(page.locator("#detail")).to_contain_text(said)  # the detail keeps the whole path
+
+
+@pytest.mark.browser
+def test_a_change_reads_by_its_title_and_its_slug_stands_in_while_it_has_none(page_url, pds) -> None:
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    store, base = page_url
+    store.write(Lock("greet"), asking())  # no title yet
+    with opened(base, "flip", pds) as page:
+        flip, greet = (page.locator(f"#changes .card:has(a[data-key='{k}'])") for k in ("flip", "greet"))
+        expect(flip.locator("a.open")).to_have_text("Flip the hero")
+        expect(flip.locator(".meta").first).to_have_text("flip")  # the slug below it
+        expect(greet.locator("a.open")).to_have_text("greet")
+        expect(greet.locator(".meta", has_text="greet")).to_have_count(0)  # said once
+        head = page.locator("#detail .detail-head")
+        expect(head.locator("h2")).to_have_text("Flip the hero")
+        expect(head).to_contain_text("flip")
+        greet.locator("a.open").click()
+        expect(head.locator("h2")).to_have_text("greet")
+        expect(head.locator("p-text")).to_have_count(0)
+
+
+@pytest.mark.browser
+def test_recent_activity_reads_in_words_with_one_line_per_merge_and_repeats_counted(page_url, pds) -> None:
+    """C4: the display only; the activity file keeps every event as recorded."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    store, base = page_url
+    events = [
+        {"event": "tool", "tool": "submit_result", "accepted": True, "at": "2026-10-16T01:00:00+00:00"},
+        {"event": "tool", "tool": "submit_result", "accepted": True, "at": "2026-10-16T01:01:00+00:00"},
+        {"event": "tool", "tool": "submit_result", "accepted": True, "at": "2026-10-16T01:02:00+00:00"},
+        {"event": "prepared-end", "check": "feel", "cleanup": "ok", "at": "2026-10-16T01:03:00+00:00"},
+        {"event": "merge-request", "pr": 20, "head": "abc", "status": "merged",
+         "message": "Pull Request successfully merged", "at": "2026-10-16T01:04:00+00:00"},
+        {"event": "merged", "pr": 20, "head": "abc", "sha": "77541c4e9", "method": "squash",
+         "at": "2026-10-16T01:04:01+00:00"},
+        {"event": "step", "kind": "merge", "exit": "done", "reason": "merged PR #20 as 77541c4 (squash)",
+         "at": "2026-10-16T01:04:02+00:00"},
+        {"event": "workspace-kept", "path": "/Users/me/.owlbear/wt/flip", "reason": "large ignored files",
+         "at": "2026-10-16T01:05:00+00:00"},
+        {"event": "step", "kind": "cleanup", "exit": "pending", "reason": "waiting for checks",
+         "at": "2026-10-16T01:06:00+00:00"},
+    ]  # fmt: skip
+    for e in events:
+        store.log(Lock("flip"), "flip", e)
+    with opened(base, "flip", pds) as page:
+        lines = page.locator("#detail .log li")
+        expect(lines).to_have_count(5)
+        expect(lines.nth(0)).to_contain_text("Clean-up waiting: waiting for checks")
+        expect(lines.nth(1)).to_contain_text("Workspace flip kept: large ignored files")
+        expect(lines.nth(2)).to_contain_text("Merged PR #20 as 77541c4 (squash)")
+        expect(lines.nth(3)).to_contain_text("Check environment ready")
+        expect(lines.nth(4)).to_have_text(re.compile(r"Called submit_result\s*\u00d73, 3 times$"))
+        expect(page.locator("#detail .log")).not_to_contain_text("/Users/")
+        exact = page.evaluate(
+            "(at) => at.map((iso) => new Date(iso).toLocaleString())", [events[0]["at"], events[2]["at"]]
+        )
+        expect(lines.nth(4).locator("time")).to_have_attribute("title", " to ".join(exact))  # the exact times on hover
+    assert [e["event"] for e in store.events("flip")][-len(events) :] == [e["event"] for e in events]
