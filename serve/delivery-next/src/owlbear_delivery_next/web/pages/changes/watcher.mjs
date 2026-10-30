@@ -37,6 +37,6 @@ export function watcherSection(w) {
   return info("Watcher", text(state, { size: "xs", color: "contrast-medium" }), text(counted),
     outside.length ? entries(outside) : nothing,
     open.length ? toggle("watcher-open", `Not classified yet (${open.length})`, text("Shell effects are not "
-      + "classified yet: every shell command that may write is listed here.", { size: "xs" }), entries(open)) : nothing,
+      + "classified yet: every shell command that may write is listed here."), entries(open)) : nothing,
     lost.map((r) => text(r.verdict, { size: "xs", color: "contrast-medium" })));
 }

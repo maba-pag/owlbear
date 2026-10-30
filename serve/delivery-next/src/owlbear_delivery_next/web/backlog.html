@@ -28,8 +28,17 @@
   .entry .title { display: flex; flex-wrap: wrap; align-items: center; gap: var(--p-spacing-static-sm); }
   .entry .title, .entry li { overflow-wrap: anywhere; }
   .entry .more { padding-top: var(--p-spacing-static-sm); }
-  .entry .triage { flex-wrap: nowrap; }
-  .entry .triage p-select { flex: 0 1 14rem; min-width: 0; }
+  /* An inbox entry's title shares its line with the kind to choose and Drop; they wrap below it when narrow. */
+  .entry .head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+    gap: var(--p-spacing-static-xs) var(--p-spacing-static-md); }
+  .entry .head .title { flex: 1 1 20rem; min-width: 0; }
+  .entry .triage { flex: 0 1 auto; flex-wrap: nowrap; align-items: center; gap: var(--p-spacing-static-md); }
+  /* PDS draws an unticked box with a faint edge that reads as disabled on a surface: this one is drawn as active. */
+  .entry > p-checkbox {
+    --p-checkbox-background-color: var(--p-color-canvas); --p-checkbox-border-color: var(--p-color-contrast-medium);
+  }
+  .entry > p-checkbox:hover { --p-checkbox-border-color: var(--p-color-contrast-high); }
+  .entry .triage p-select { width: 11rem; min-width: 0; }
   .said { white-space: pre-wrap; }
   .later > summary { font-size: var(--p-typescale-lg); }
   .later[open] > summary { margin-bottom: var(--p-spacing-static-sm); }

@@ -87,7 +87,7 @@ export function view() {
       ?? ""}</p-inline-notification>
     <p-text id="seen" color="contrast-medium" size="xs">${state.seen}</p-text>
     <section id="notes" class="panel" aria-label="Repository settings" ?hidden=${!state.notes.length}>
-      ${state.notes.map((n) => text(n, { size: "xs" }))}</section>
+      ${state.notes.map((n) => text(n))}</section>
     <div id="board" class=${state.selected ? "open" : ""}>
       <section id="list" aria-label="Changes" class=${state.stale ? "stale" : ""}>
         <div id="changes">${listView()}</div>
