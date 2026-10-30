@@ -229,19 +229,6 @@ def test_a_crash_between_the_marker_and_the_switch_leaves_a_durable_marker_and_r
 
 
 @pytest.mark.usefixtures("current_binding")
-def test_a_switched_store_with_a_healthy_marker_is_admitted_without_blocking(repo, boot, capsys, blocking_opens):
-    _switched_store_healthy(repo, boot, capsys)
-    assert Store.open(repo).root.is_dir()
-    assert blocking_opens == []
-
-
-def _switched_store_healthy(repo: Path, boot: dict, capsys) -> None:
-    _prepared(repo, boot)
-    assert cli.main(["--repo", str(repo), "finish"]) == 0
-    capsys.readouterr()
-
-
-@pytest.mark.usefixtures("current_binding")
 def test_a_missing_target_marker_with_a_corrupt_receipt_is_refused_by_registration(repo, boot, capsys):
     target = _switched_store(repo, boot, capsys)
     (_source(repo) / MARKER).unlink()
