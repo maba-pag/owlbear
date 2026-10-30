@@ -61,6 +61,14 @@ export function scopeOf(d) {
   return d.change ? `${project} · Change ${d.change}` : project;
 }
 
+// Whether the title is only the statement cut off (shortened with "…", or its first clause): the statement then
+// shows once, as the heading (D-01M63CEE5C9K50RXGCYBSP64VK).
+export function cutOff(d) {
+  const flat = (text) => text.split(/\s+/).join(" ").trim();
+  const title = flat(d.title).replace(/\s*(…|\.\.\.)$/, ""), said = flat(d.statement);
+  return title !== "" && said.startsWith(title) && !/[\p{L}\p{N}]/u.test(said.charAt(title.length));
+}
+
 // When the owner last confirmed the statement (TD-449), or that it was inherited and never read back (TD-454).
 export function readBack(d) {
   if (/^\d{4}-\d{2}-\d{2}$/.test(d.read_back)) return `Confirmed ${d.read_back}`;
