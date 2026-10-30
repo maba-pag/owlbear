@@ -237,8 +237,6 @@ def test_each_stop_offers_one_discard_apart_whose_cancel_changes_nothing(served,
         expect(page.locator("#pack-questions p-button[variant=primary]")).to_have_text(primary)
         offered = [o["label"] for q in job.read()["questions"] for o in q["options"] if o["id"] != "discard"]
         assert answers(page) == offered  # each the payload offers, as it says
-        if kind not in ("dispute", "publish"):  # the dialog is one; its discard is sent as an answer or, here, alone
-            return
         page.locator("#pack-discard").click()
         expect(pds.modal(page)).to_contain_text("Nothing is activated")
         inside = "document.activeElement?.closest('p-modal') !== null"
@@ -259,6 +257,8 @@ def test_each_stop_offers_one_discard_apart_whose_cancel_changes_nothing(served,
         expect(pds.modal(page)).to_have_count(0)
         page.wait_for_function("document.activeElement?.id === 'pack-discard'", timeout=5000)
         assert (job.store.root / pack_job.FILE).read_bytes() == before  # Escape changed nothing
+        if kind not in ("dispute", "publish"):  # the dialog is one; its discard is sent as an answer or, here, alone
+            return
         page.locator("#pack-discard").click()
         pds.answer(page, discard)
         expect(page.locator("#pack-state")).to_contain_text("discarded")
