@@ -289,10 +289,13 @@ def test_start_runs_one_detached_host_and_stop_ends_it() -> None:
     assert ("· running" in logged, "stopped: every project closed" in logged) == (True, True)
 
 
-@pytest.mark.timeout(120)  # six real hosts start and stop in turn; a loaded CI runner needs more than 30 s
+# TD-350: only a login start, a start after a crash and one asked for paused wait for Resume. Each of the next three
+# tests starts real hosts in turn, so they stay apart to run in parallel; a loaded CI runner needs more than 30 s.
+
+
+@pytest.mark.timeout(60)
 @pytest.mark.usefixtures("no_host_left")
-def test_a_start_asked_for_paused_or_after_a_crash_is_paused_and_a_restart_keeps_the_state(monkeypatch) -> None:
-    """TD-350: only a login start, a start after a crash and one asked for paused wait for Resume."""
+def test_a_start_asked_for_paused_is_paused_and_a_restart_keeps_it(monkeypatch) -> None:
     said = []
     monkeypatch.setattr(command, "say", said.append)
     assert control.start(said.append, paused=True) == 0
@@ -301,8 +304,16 @@ def test_a_start_asked_for_paused_or_after_a_crash_is_paused_and_a_restart_keeps
     )  # fmt: skip
     assert command.restart() == 0
     assert control.projects()["paused"] is True
-    rec = control.serve.running()
-    os.kill(rec.pid, signal.SIGKILL)
+    assert control.stop(said.append) == 0
+
+
+@pytest.mark.timeout(60)
+@pytest.mark.usefixtures("no_host_left")
+def test_a_start_after_a_crash_is_paused_and_one_after_a_stop_is_not(monkeypatch) -> None:
+    said = []
+    monkeypatch.setattr(command, "say", said.append)
+    assert control.start(said.append) == 0
+    os.kill(control.serve.running().pid, signal.SIGKILL)
     while control.serve.running() is not None:
         time.sleep(0.05)
     assert control.start(said.append) == 0
@@ -310,6 +321,15 @@ def test_a_start_asked_for_paused_or_after_a_crash_is_paused_and_a_restart_keeps
     assert "(the last run crashed)" in (local_home.root() / control.LOG).read_text()
     assert control.stop(said.append) == 0
     assert "Z stopping: SIGTERM received\n" in (local_home.root() / control.LOG).read_text()  # `owlbear stop`'s signal
+    assert (control.start(said.append), control.projects()["paused"]) == (0, False)
+    assert control.stop(said.append) == 0
+
+
+@pytest.mark.timeout(60)
+@pytest.mark.usefixtures("no_host_left")
+def test_a_restart_keeps_a_running_host_running_unless_asked_for_paused(monkeypatch) -> None:
+    said = []
+    monkeypatch.setattr(command, "say", said.append)
     assert (control.start(said.append), control.projects()["paused"]) == (0, False)
     assert (command.restart(), control.projects()["paused"]) == (0, False)
     assert (command.restart(paused=True), control.projects()["paused"]) == (0, True)
