@@ -324,6 +324,26 @@ def test_an_address_opens_its_group_and_an_unset_setting_s_link_its_row(store, p
 
 
 @pytest.mark.browser
+def test_the_owner_s_own_tab_after_an_unset_link_keeps_its_focus(store, pds, monkeypatch) -> None:
+    """Copilot review of #813: the focus put on a linked row's control is never put back after the owner moves it."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    from owlbear_delivery_next.settings import config  # noqa: PLC0415
+
+    monkeypatch.setattr(config, "BASE", None)
+    with settings_page(store, pds) as page:
+        pds.group(page, "overview")
+        # slow frames widen the time the page keeps the focus on the control, so a Tab lands inside it
+        page.evaluate("window.requestAnimationFrame = (f) => setTimeout(() => f(performance.now()), 100)")
+        page.locator("#unset").get_by_role("link", name="sessions", exact=True).click()
+        at_once = page.get_by_label("Agent sessions at once in one project")
+        expect(at_once).to_be_focused()
+        page.keyboard.press("Tab")
+        page.wait_for_timeout(1500)  # past every frame the page could still put the focus back in
+        expect(at_once).not_to_be_focused()
+
+
+@pytest.mark.browser
 def test_models_arriving_while_a_model_name_is_typed_wait_until_the_field_is_left(store, monkeypatch, pds) -> None:
     """Sol, TD-264: the offered models replace the typed field only once the owner leaves it."""
     from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime

@@ -53,17 +53,23 @@ export function show() {
 }
 
 // Focus *target*, or a row's first control: the menu's dialog puts the focus back on its button as it closes, so the
-// focus is put back until it has stayed a few frames, for at most a second.
+// focus is put back until it has stayed a few frames, for at most a second, and never after the owner's next key or
+// pointer press, which moves it himself.
 async function reveal(target) {
   const control = target.matches("p-table-row, div") ? target.querySelector("[data-key], [id^='machine-'], "
     + "[id^='global-machine-'], p-select, p-input-text, p-segmented-control") : null;
   const into = control ?? target;
   into.scrollIntoView({ block: control ? "center" : "start" });
-  for (let frame = 0, kept = 0; frame < 60 && kept < 10; frame++) {
+  const owner = new AbortController();
+  for (const type of ["keydown", "pointerdown"]) {
+    addEventListener(type, () => owner.abort(), { capture: true, signal: owner.signal });
+  }
+  for (let frame = 0, kept = 0; frame < 60 && kept < 10 && !owner.signal.aborted; frame++) {
     if (into.matches(":focus")) kept++;
     else into.focus({ preventScroll: true });
     await new Promise(requestAnimationFrame);
   }
+  owner.abort();
 }
 
 // Render, applying arrived models only once no setting holds the focus, so they never replace the control in use.
