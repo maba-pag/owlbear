@@ -17,6 +17,7 @@ dev = [
   "ruff==0.17.1",
   "ruamel.yaml>=0.18.0",
   "pytest-testmon>=2.2.0",
+  "pytest-rerunfailures>=16.7",
 ]
 
 [tool.pytest.ini_options]

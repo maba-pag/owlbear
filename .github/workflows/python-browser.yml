@@ -27,7 +27,8 @@ jobs:
       - name: Fingerprint inputs
         id: fingerprint
         run: |
-          value="$(git ls-files -s -- .github/workflows/python-browser.yml .python-version conftest.py \
+          value="$(git ls-files -s -- .github/workflows/python-browser.yml .github/scripts/flaky_issues.py \
+            .python-version conftest.py serve/tools/src/owlbear_tools/flaky.py \
             pyproject.toml uv.lock serve/browser serve/browser-mcp serve/web-content | sha256sum | cut -c1-40)"
           echo "value=$value" >> "$GITHUB_OUTPUT"
 
@@ -71,14 +72,32 @@ jobs:
         if: steps.reuse.outputs.cache-hit != 'true'
         run: uv run --no-sync playwright install chromium
 
+      # Only tests marked flaky with an issue found open here get one re-run; the token stays out of the tests.
+      - name: Find open flaky issues
+        if: steps.reuse.outputs.cache-hit != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 .github/scripts/flaky_issues.py
+
       - name: Run browser-marked tests
         if: steps.reuse.outputs.cache-hit != 'true'
         env:
+          OWLBEAR_FLAKY_REPORT: ${{ runner.temp }}/test-results/flaky.json
           # Agent shells set safe.bareRepository=explicit; a test relying on finding a bare repository fails here too.
           GIT_CONFIG_COUNT: 1
           GIT_CONFIG_KEY_0: safe.bareRepository
           GIT_CONFIG_VALUE_0: explicit
-        run: uv run --no-sync pytest serve/browser serve/browser-mcp -m browser -n 4 --dist worksteal
+        run: >-
+          uv run --no-sync pytest serve/browser serve/browser-mcp -m browser -n 4 --dist worksteal
+          --junitxml="$RUNNER_TEMP/test-results/junit.xml"
+
+      - name: Upload test results
+        if: ${{ !cancelled() && steps.reuse.outputs.cache-hit != 'true' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: test-results-python-browser-attempt-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/test-results/
+          if-no-files-found: warn
 
       - name: Record passing result
         if: github.event_name == 'pull_request' && steps.reuse.outputs.cache-hit != 'true'
@@ -109,7 +128,8 @@ jobs:
       - name: Fingerprint inputs
         id: fingerprint
         run: |
-          value="$(git ls-files -s -- .github/workflows/python-browser.yml .python-version conftest.py \
+          value="$(git ls-files -s -- .github/workflows/python-browser.yml .github/scripts/flaky_issues.py \
+            .python-version conftest.py serve/tools/src/owlbear_tools/flaky.py \
             pyproject.toml uv.lock serve/delivery-next serve/decisions serve/memory | sha256sum | cut -c1-40)"
           echo "value=$value" >> "$GITHUB_OUTPUT"
 
@@ -153,17 +173,33 @@ jobs:
         if: steps.reuse.outputs.cache-hit != 'true'
         run: uv run --no-sync playwright install chromium
 
+      # Only tests marked flaky with an issue found open here get one re-run; the token stays out of the tests.
+      - name: Find open flaky issues
+        if: steps.reuse.outputs.cache-hit != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 .github/scripts/flaky_issues.py
+
       # One line per test and a thread timeout that prints every stack, so a hang names its test.
       - name: Run browser-marked tests
         if: steps.reuse.outputs.cache-hit != 'true'
         env:
+          OWLBEAR_FLAKY_REPORT: ${{ runner.temp }}/test-results/flaky.json
           # Agent shells set safe.bareRepository=explicit; a test relying on finding a bare repository fails here too.
           GIT_CONFIG_COUNT: 1
           GIT_CONFIG_KEY_0: safe.bareRepository
           GIT_CONFIG_VALUE_0: explicit
         run: >-
           uv run --no-sync pytest serve/delivery-next -m browser -n 4 --dist worksteal -v
-          -o timeout_method=thread --timeout 180
+          -o timeout_method=thread --timeout 180 --junitxml="$RUNNER_TEMP/test-results/junit.xml"
+
+      - name: Upload test results
+        if: ${{ !cancelled() && steps.reuse.outputs.cache-hit != 'true' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: test-results-delivery-next-browser-attempt-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/test-results/
+          if-no-files-found: warn
 
       - name: Record passing result
         if: github.event_name == 'pull_request' && steps.reuse.outputs.cache-hit != 'true'
