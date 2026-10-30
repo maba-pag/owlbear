@@ -531,6 +531,23 @@ class Pds:
         closed fades out still visible, so a test waiting for it to go counts ``get_by_role("dialog")`` instead."""
         return page.locator("p-modal").filter(has=page.locator("dialog[open]")).last
 
+    @staticmethod
+    def settled(page) -> None:
+        """Wait until the page's PDS components have loaded and stopped moving. A component takes its full size only
+        once loaded, and an accordion slides its content into place when it opens or its content grows: a click on a
+        button there meanwhile can land where the button was, on its container, and is lost without an error."""
+        page.wait_for_function("""() => {
+            const roots = [document];
+            for (let i = 0; i < roots.length; i++) {
+                for (const n of roots[i].querySelectorAll("*")) {
+                    if (n.localName.startsWith("p-") && !n.classList.contains("hydrated")) return false;
+                    if (n.shadowRoot) roots.push(n.shadowRoot);
+                }
+            }
+            return !roots.some((r) => r.getAnimations().some((a) => a.playState === "running"
+                && Number.isFinite(a.effect?.getComputedTiming().endTime)));
+        }""")
+
     @classmethod
     def answer(cls, page, button: str) -> None:
         """Click *button* in the newest open ``p-modal``, then wait until its dialog has closed: while it fades out the
