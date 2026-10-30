@@ -138,10 +138,20 @@ def test_ci_reruns_once_only_tests_whose_issue_is_open_and_reports_every_attempt
     assert f"| `test_suite.py::test_keeps_failing` | {issue} | failed after its re-run |" in text
 
 
-def test_marked_tests_run_strict_without_the_ci_issue_list(suite: pytest.Pytester) -> None:
-    suite.runpytest_subprocess("-p", "owlbear_tools.flaky", "-n", "2")
+@pytest.mark.parametrize(
+    ("open_issues", "options"),
+    [("", ()), ("11", ("-p", "no:rerunfailures"))],
+    ids=["without the ci issue list", "with pytest-rerunfailures disabled"],
+)
+def test_marked_tests_run_strict(
+    suite: pytest.Pytester, monkeypatch: pytest.MonkeyPatch, open_issues: str, options: tuple[str, ...]
+) -> None:
+    monkeypatch.setenv("OWLBEAR_FLAKY_OPEN_ISSUES", open_issues)
+
+    result = suite.runpytest_subprocess("-p", "owlbear_tools.flaky", *options, "-n", "2")
 
     assert _runs(suite.path) == dict.fromkeys(_NAMES, 1)
+    assert "INTERNALERROR" not in result.stdout.str() + result.stderr.str()
 
 
 @pytest.mark.parametrize(

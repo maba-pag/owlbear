@@ -111,13 +111,16 @@ class _Reruns:
     def pytest_runtest_protocol(self, item: pytest.Item) -> None:
         """Tell the xdist controller a marked test's issue before it runs, since a crash loses its reports."""
         issue = dict(item.user_properties).get(_ISSUE_PROPERTY)
-        if issue is not None and hasattr(item.config, "workerinput"):
-            item.config.failures_db.set_test_reruns(_issue_key(item.nodeid), issue)  # type: ignore[attr-defined]
+        failures = getattr(item.config, "failures_db", None)  # absent when pytest-rerunfailures is disabled
+        if issue is not None and failures is not None and hasattr(item.config, "workerinput"):
+            failures.set_test_reruns(_issue_key(item.nodeid), issue)
 
     @pytest.hookimpl(optionalhook=True, tryfirst=True)
     def pytest_handlecrashitem(self, crashitem: str, report: pytest.TestReport, sched: object) -> None:  # noqa: ARG002
         """Count re-runs after ordinary failures toward the crash budget, which pytest-rerunfailures keeps apart."""
-        failures = sched.config.failures_db  # type: ignore[attr-defined]
+        failures = getattr(sched.config, "failures_db", None)  # type: ignore[attr-defined]
+        if failures is None:
+            return
         if crashitem not in self.issues and failures.get_test_reruns(_issue_key(crashitem)):
             self.issues[crashitem] = failures.get_test_reruns(_issue_key(crashitem))
         used = sum(attempt["outcome"] == "rerun" for attempt in self.attempts.get(crashitem, {}).values())
