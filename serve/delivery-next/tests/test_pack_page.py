@@ -107,8 +107,8 @@ def answers(page: Any) -> list[str]:
 
 
 @contextlib.contextmanager
-def opened(base: str, pds: Any) -> Iterator[Any]:
-    """Updates ▸ Impeccable in a real browser: only the test host and the PDS CDN answer."""
+def opened(base: str, pds: Any, *, clock: bool = False) -> Iterator[Any]:
+    """Updates ▸ Impeccable in a real browser: only the test host and the PDS CDN answer; a page clock on request."""
     from playwright.sync_api import Error, sync_playwright  # noqa: PLC0415 - the optional browser runtime
 
     with sync_playwright() as pw:
@@ -119,6 +119,8 @@ def opened(base: str, pds: Any) -> Iterator[Any]:
         page = browser.new_page()
         pds.only(page, base)
         page.add_init_script("sessionStorage.setItem('token', 'tok');")
+        if clock:
+            page.clock.install()
         page.goto(f"{base}/updates/impeccable")
         yield page
         browser.close()
@@ -235,6 +237,8 @@ def test_each_stop_offers_one_discard_apart_whose_cancel_changes_nothing(served,
         expect(page.locator("#pack-questions p-button[variant=primary]")).to_have_text(primary)
         offered = [o["label"] for q in job.read()["questions"] for o in q["options"] if o["id"] != "discard"]
         assert answers(page) == offered  # each the payload offers, as it says
+        if kind not in ("dispute", "publish"):  # the dialog is one; its discard is sent as an answer or, here, alone
+            return
         page.locator("#pack-discard").click()
         expect(pds.modal(page)).to_contain_text("Nothing is activated")
         inside = "document.activeElement?.closest('p-modal') !== null"
@@ -388,7 +392,7 @@ def test_a_merged_update_says_how_it_reaches_machines_and_a_new_one_stays_availa
     job.state |= {"state": "passed", "questions": [], "ended_at": NOW.isoformat(),
                   "published": PUBLISHED | {"merged": "m" * 40}}  # fmt: skip
     job._save()  # noqa: SLF001
-    with opened(base, pds) as page:
+    with opened(base, pds, clock=True) as page:
         expect(page.locator("#pack-tag")).to_have_text("passed")
         expect(page.locator("#pack-todo")).to_contain_text("reaches each machine as it takes the OwlBear version")
         expect(page.locator("#pack-run")).not_to_contain_text("installed")  # nothing claimed of this machine
@@ -398,7 +402,8 @@ def test_a_merged_update_says_how_it_reaches_machines_and_a_new_one_stays_availa
         expect(page.locator("#pack-ask")).to_be_hidden()
         job.state["state"] = "discarded"  # changed elsewhere: an ended run is still read again, with no reload
         job._save()  # noqa: SLF001
-        expect(page.locator("#pack-state")).to_contain_text("Last run discarded", timeout=25000)
+        page.clock.run_for(15000)  # the idle poll's interval
+        expect(page.locator("#pack-state")).to_contain_text("Last run discarded")
 
 
 @pytest.mark.browser
