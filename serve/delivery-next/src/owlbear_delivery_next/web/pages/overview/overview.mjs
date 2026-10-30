@@ -14,7 +14,7 @@ export function overview({ fixed = [], path, said, unread = () => "", show, live
   const rows = new Map();
   let turn = 0, known = "";
   const projects = () => machineState()?.projects ?? [];
-  const states = () => projects().map((p) => `${p.id}:${p.state}`).join(" ");
+  const states = () => JSON.stringify(projects().map((p) => [p.id, p.state, p.reason, p.name, p.path]));
 
   async function readOne(row, n) {
     try {

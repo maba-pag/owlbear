@@ -1178,6 +1178,31 @@ def test_maintenance_under_all_projects_sums_up_each_project_and_opens_it_even_w
         expect(row[b.id].get_by_role("button", name="Read beta again")).to_be_visible()
         expect(page.locator("#curation-title, #curation-error")).not_to_have_count(0)  # the machine's parts stay
         assert targets(page.locator("#projects a, #projects button")) == []
+        alpha_answers_while_curation_runs(page, row[a.id], a)
         row[a.id].get_by_role("link", name="alpha").click()
         expect(page).to_have_url(f"{base}/maintenance?project={a.id}")
         expect(page.locator("#actions")).to_contain_text("Memory curation")
+
+
+def alpha_answers_while_curation_runs(page, row, a: registry.Project) -> None:
+    """While curation runs the page looks again every five seconds; a project read slower than that still shows."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    running = {"available": True, "folders": [{"folder": "alpha", "state": "running", "entries": []}]}
+    page.route("**/api/next/curation", lambda route: route.fulfill(json=running))
+    held: list = []
+
+    def hold(route) -> None:  # a builtin's bound method cannot be a Playwright handler
+        held.append(route)
+
+    page.route(f"**/p/{a.id}/api/next/maintenance", hold)
+    with page.expect_request("**/api/next/curation"):
+        page.evaluate("document.dispatchEvent(new Event('visibilitychange'))")  # reads all again, curation running
+    until(page, lambda: held)
+    with page.expect_request("**/api/next/curation", timeout=10000):
+        pass  # the look again five seconds later
+    held[0].continue_()
+    expect(row).to_contain_text("Memory curation: never run")
+    expect(row).to_have_attribute("aria-busy", "false")
+    page.unroute(f"**/p/{a.id}/api/next/maintenance")
+    page.unroute("**/api/next/curation")

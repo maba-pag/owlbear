@@ -364,9 +364,11 @@ function show() {
   render(view(), document.getElementById("page"));
 }
 
-async function refresh() {
+// *all* reads each project's summary again too; a look at a running curation does not, so a project slower to
+// answer than its five seconds still shows.
+async function refresh(all = true) {
   const generation = ++state.reading;
-  projects?.refresh();  // each project's summary shows as it is read, apart from the machine's parts
+  if (all) projects?.refresh();  // each project's summary shows as it is read, apart from the machine's parts
   // Keep the established read order, collecting failures without losing another section's data.
   const idle = Promise.resolve([[], []]);
   const [overview] = await Promise.allSettled([
@@ -414,7 +416,7 @@ async function refresh() {
   show();
   clearTimeout(state.again);  // a run in progress: look again until its report is in
   const busy = (state.curation?.folders ?? []).some((f) => ["waiting", "running"].includes(f.state));
-  if (busy) state.again = setTimeout(refresh, 5000);
+  if (busy) state.again = setTimeout(() => refresh(false), 5000);
 }
 
 show();
