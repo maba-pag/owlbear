@@ -67,7 +67,10 @@ def page_url(tmp_path) -> Iterator[tuple[Store, str]]:
     store.write(Lock("flip"), change())
     sock = socket.socket()
     sock.bind(("127.0.0.1", 0))
-    server = uvicorn.Server(uvicorn.Config(api.create_app(store, "tok", Host()), log_level="warning"))
+    # longer than the pages' polls: route.fetch() reuses a pooled socket, which uvicorn's 5 s default closes
+    server = uvicorn.Server(
+        uvicorn.Config(api.create_app(store, "tok", Host()), log_level="warning", timeout_keep_alive=60)
+    )
     threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True).start()
     while not server.started:
         time.sleep(0.05)
@@ -360,6 +363,11 @@ def test_a_card_names_the_files_its_activity_touches_without_their_paths(page_ur
         now["now"] = said = "Build · view /Users/Jane Doe/project/README.md 3m ago"
         page.reload()
         expect(page.locator("#detail")).to_contain_text(said)  # the detail keeps the whole path
+        now |= {"now": "Build · submitted its result 1 min ago", "actor": "you"}
+        page.reload()
+        expect(card.locator("p-tag")).to_have_text("Your turn")
+        expect(card).not_to_contain_text("submitted its result")  # its status and next action say it all
+        expect(page.locator("#detail")).to_contain_text("submitted its result 1 min ago")
 
 
 @pytest.mark.browser
@@ -429,7 +437,7 @@ def test_recent_activity_reads_in_words_with_one_line_per_merge_and_repeats_coun
         expect(lines.nth(6)).to_contain_text("Workspace flip kept: large ignored files")
         expect(lines.nth(7)).to_contain_text("Merged PR #20 as 77541c4 (squash)")
         expect(lines.nth(8)).to_have_text(re.compile(r"Check feel ended; its cleanup ran$"))
-        expect(lines.nth(9)).to_have_text(re.compile(r"Called submit_result\s*\u00d73, 3 times$"))
+        expect(lines.nth(9)).to_have_text(re.compile(r"Submitted its result\s*\u00d73, 3 times$"))
         kept = r"Clean-up finished: workspace kept: large ignored files \(flip\)$"  # a spaced path in parentheses
         expect(lines.nth(10)).to_have_text(re.compile(kept))
         expect(page.locator("#detail .log")).not_to_contain_text("/Users/")

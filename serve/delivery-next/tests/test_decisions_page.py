@@ -200,6 +200,13 @@ def test_the_owner_filters_opens_and_replaces_a_decision_and_sees_its_receipt(st
 
     with decisions_page(store, pds) as page:
         expect(page.locator("#shown")).to_have_text("2 of 2 shown")
+        boxes = page.locator("#filters > *").evaluate_all(
+            "els => els.map(e => [e.localName, e.getBoundingClientRect().top, e.getBoundingClientRect().bottom])"
+        )
+        selects, [search] = (b for b in boxes if b[0] != "p-input-text"), [b for b in boxes if b[0] == "p-input-text"]
+        tops, bottoms = zip(*((round(top), bottom) for _, top, bottom in selects), strict=True)
+        assert len(set(tops)) == 1  # one row of selects at 1280 pixels, their labels level
+        assert search[1] >= max(bottoms)  # Search, taller with its hint, on a line of its own below them
         expect(page.get_by_role("navigation").get_by_role("link", name="Decisions")).to_have_attribute(
             "aria-current", re.compile(r"page|true"))  # fmt: skip
         pds.pick(page, "Show", "global")
@@ -480,8 +487,16 @@ def test_the_owner_checks_a_replacements_impact_and_schedules_its_fixes(store, p
     with decisions_page(store, pds) as page:
         card = page.locator(".entry", has_text="Exports are JSON")
         open_entry(card)
+        failing = re.compile(r".*/impact(\?.*)?$")
+        page.route(failing, lambda route: route.fulfill(status=503, body="down"))
+        card.get_by_role("button", name="Check the impact").click()
+        failed = card.locator('#impact p-inline-notification[state="error"]')
+        expect(failed).to_have_attribute("heading", "The impact could not be checked")
+        expect(failed).not_to_be_empty()  # the reason the host gave
+        page.unroute(failing)
         card.get_by_role("button", name="Check the impact").click()
         impact = card.locator("#impact")
+        expect(failed).to_have_count(0)
         expect(impact.locator(".old")).to_contain_text("Exports are CSV.")
         expect(impact.locator(".divergence")).to_contain_text("forbids existing behaviour")
         expect(impact.locator(".impact-project")).to_contain_text("https://github.com/acme/shop-site/pull/7")

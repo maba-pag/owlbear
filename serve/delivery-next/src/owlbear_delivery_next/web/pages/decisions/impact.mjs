@@ -119,7 +119,8 @@ export function impact(e) {
   if (!reported(e)) return nothing;
   const got = state.impact?.id === e.id && sameAddress(state.impact.address, e.address) ? state.impact : null;
   return html`<section id="impact" aria-label="Impact"><p-heading size="sm"><h3>Impact</h3></p-heading>
-    ${got?.error ? html`<p-text size="sm" color="notification-error">${got.error}</p-text>` : nothing}
+    ${got?.error ? html`<p-inline-notification state="error" heading="The impact could not be checked"
+      heading-tag="h4" dismiss-button="false">${got.error}</p-inline-notification>` : nothing}
     ${got?.report ? report(e, got) : button("Check the impact", () => check(e), { variant: "secondary",
       busy: Boolean(got?.busy) })}
   </section>`;

@@ -46,7 +46,8 @@ def serve() -> tuple[Machine, uvicorn.Server, str]:
     now = datetime.now(UTC)
     machine = Machine(HostRecord(url=f"{base}/", token="t", pid=1, started_at=now, code=codebase.CURRENT))  # noqa: S106
     machine.load_all()
-    server = uvicorn.Server(uvicorn.Config(app.create(machine), log_level="warning"))
+    # longer than the pages' polls: route.fetch() reuses a pooled socket, which uvicorn's 5 s default closes
+    server = uvicorn.Server(uvicorn.Config(app.create(machine), log_level="warning", timeout_keep_alive=60))
     threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True).start()
     while not server.started:
         time.sleep(0.05)
@@ -1127,6 +1128,23 @@ def test_decisions_under_all_projects_sum_up_each_scope_and_open_its_view_even_w
         assert targets(page.locator("#scopes a, #scopes button")) == []
         assert page.evaluate("document.documentElement.scrollWidth") <= 390
         each_scope_opens_its_view_and_leads_back(page, pds, base, row, a)
+
+
+@pytest.mark.browser
+def test_a_view_that_cannot_be_read_says_why_without_widening_a_phone(tmp_path: Path, monkeypatch, pds) -> None:
+    """A long path in a notice's reason wraps: the page never scrolls sideways at 390 pixels."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    registry.register(clone(tmp_path / "alpha"))
+    reason = (
+        "the project owlbear has no folder in /private/var/folders/8w/3kzhj2010nz0gn9k7hz3byp/T/tmp.x/.owlbear/data"
+    )
+    with browsing(monkeypatch, pds, 390) as (page, base):
+        page.route("**/owlbear/decisions?*", lambda route: route.fulfill(json={
+            "available": False, "reason": reason, "decisions": [], "topics": [], "total": 0}))  # fmt: skip
+        page.goto(f"{base}/decisions?view=global#token=t")
+        expect(page.locator("#unavailable")).to_contain_text(reason)
+        assert page.evaluate("document.documentElement.scrollWidth") <= 390
 
 
 def each_scope_opens_its_view_and_leads_back(page, pds, base: str, row: dict, a: registry.Project) -> None:
