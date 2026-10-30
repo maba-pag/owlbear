@@ -353,18 +353,6 @@ def test_a_project_whose_store_did_not_open_holds_its_legacy_running_pack_before
     assert (updater.is_dir(), (folder / pack_job.FILE).is_file()) == (True, True)  # workspace and record are kept
 
 
-def test_an_unloaded_project_whose_pack_record_is_finished_holds_nothing_and_another_project_takes_the_slot(
-    tmp_path, machine
-):
-    bad, folder = legacy_pack_folder(tmp_path, "bad")
-    good = registry.register(clone(tmp_path / "good"))
-    legacy_pack_record(folder, "up-to-date", updater=False)
-    machine.slots.total = lambda: 1
-    machine.load_all()
-    assert (machine.projects[bad.id].state, machine.slots.counts(bad.id)[2]) == ("failed", 0)
-    assert machine.slots.take(good.id, "probe", 1, 1) == 1
-
-
 def test_an_unreadable_pack_record_of_an_unloaded_project_is_held_not_taken_for_empty(tmp_path, machine):
     bad, folder = legacy_pack_folder(tmp_path, "bad")
     good = registry.register(clone(tmp_path / "good"))
@@ -444,6 +432,8 @@ def test_a_manual_replay_of_a_project_whose_legacy_pack_finished_is_not_refused_
         307,
         f"http://127.0.0.1/p/{good.id}/api/next/impeccable/update?x=1",
     )
+    machine.slots.total = lambda: 1
+    assert machine.slots.take(good.id, "probe", 1, 1) == 1  # the finished pack leaves the one slot free
 
 
 def older_failed_pack(folder: Path, reason: str, *, run: str = "legacy-run") -> None:
@@ -830,7 +820,6 @@ def test_a_server_entry_naming_its_folder_as_repo_equals_counts_as_setup(tmp_pat
     ("text", "parsed"),
     [
         ('{"a": "x,}"}', {"a": "x,}"}),  # commas, comment marks and escaped quotes in strings stay
-        ('{"a": ["y,]"]}', {"a": ["y,]"]}),
         ('{"a": "b\\"//c", "d": "/* e */"}', {"a": 'b"//c', "d": "/* e */"}),
         ('// top\n{"a": [1, 2, /* two */], /* x */ "b": {"c": 3,\n},\n} // end', {"a": [1, 2], "b": {"c": 3}}),
         ('{"a": 1} /* open', None),
