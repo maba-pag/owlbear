@@ -330,9 +330,11 @@ _CHANGE_ENV = {"GIT_CONFIG_NOSYSTEM": "1"} | {
 }
 
 
-def _template_git(cwd: Path, *args: str, env: dict[str, str]) -> None:
-    clean = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
-    _RUN(["git", *args], cwd=cwd, check=True, capture_output=True, env=clean | env)
+def _template_git(cwd: Path, *args: str, env: dict[str, str], home: Path) -> None:
+    """Run git for a template. It is built before any test isolates HOME, so it gets an empty one of its own: the
+    machine's Git settings, its ignore file included, never reach it."""
+    clean = {k: v for k, v in os.environ.items() if not k.startswith("GIT_") and k != "XDG_CONFIG_HOME"}
+    _RUN(["git", *args], cwd=cwd, check=True, capture_output=True, env=clean | env | {"HOME": str(home)})
 
 
 def _copy(template: Path, tmp_path: Path, *names: str) -> None:
@@ -349,14 +351,14 @@ def _copy(template: Path, tmp_path: Path, *names: str) -> None:
 def _shared_template(tmp_path_factory: pytest.TempPathFactory) -> Path:
     base = tmp_path_factory.mktemp("shared-repo-template")
     remote, root, url = base / "remote.git", base / "owlbear-data", "https://github.com/acme/owlbear-data.git"
-    env = {"GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
-    _template_git(base, "init", "-q", "--bare", "-b", "main", str(remote), env=env)
-    _template_git(base, "clone", "-q", str(remote), str(root), env=env)
+    env, home = {"GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}, tmp_path_factory.mktemp("home")
+    _template_git(base, "init", "-q", "--bare", "-b", "main", str(remote), env=env, home=home)
+    _template_git(base, "clone", "-q", str(remote), str(root), env=env, home=home)
     for key, value in (("user.name", "t"), ("user.email", "t@example.com"), (f"url.{remote}.insteadOf", url)):
-        _template_git(root, "config", key, value, env=env)
-    _template_git(root, "remote", "set-url", "origin", url, env=env)
-    _template_git(root, "commit", "-q", "--allow-empty", "-m", "start", env=env)
-    _template_git(root, "push", "-q", "-u", "origin", "HEAD", env=env)
+        _template_git(root, "config", key, value, env=env, home=home)
+    _template_git(root, "remote", "set-url", "origin", url, env=env, home=home)
+    _template_git(root, "commit", "-q", "--allow-empty", "-m", "start", env=env, home=home)
+    _template_git(root, "push", "-q", "-u", "origin", "HEAD", env=env, home=home)
     return base
 
 
@@ -371,13 +373,14 @@ def shared_repo(tmp_path: Path, _shared_template: Path) -> tuple[Path, Path]:
 def _change_template(tmp_path_factory: pytest.TempPathFactory) -> Path:
     base = tmp_path_factory.mktemp("change-repo-template").resolve()
     (base / "gitconfig").write_text("")
-    env, work = _CHANGE_ENV | {"GIT_CONFIG_GLOBAL": str(base / "gitconfig")}, base / "work"
+    env, work, home = _CHANGE_ENV | {"GIT_CONFIG_GLOBAL": str(base / "gitconfig")}, base / "work", base / "home"
     work.mkdir()
+    home.mkdir()
     for args in (("init", "-q", "-b", "main"), ("commit", "-q", "--allow-empty", "-m", "base")):
-        _template_git(work, *args, env=env)
+        _template_git(work, *args, env=env, home=home)
     (work / "a.txt").write_text("a\n")
     for args in (("checkout", "-q", "-b", "owlbear/c1"), ("add", "-A"), ("commit", "-qm", "a")):
-        _template_git(work, *args, env=env)
+        _template_git(work, *args, env=env, home=home)
     return base
 
 
