@@ -400,7 +400,9 @@ def run(job: pack_job.Job) -> dict:
 def settled(job: pack_job.Job) -> dict:
     assert job.thread is not None
     job.thread.join(30)
-    return job.read()
+    state = job.read()
+    assert not job.thread.is_alive(), f"the run still works after 30 s: {state['state']} ({state.get('reason')!r})"
+    return state
 
 
 def rounds(store: Store, **values: int) -> Store:
