@@ -2,7 +2,7 @@ import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { call } from "/assets/ui.mjs";
 import { refresh } from "./list.mjs";
 import { EFFECTS } from "./impact.mjs";
-import { at, DIALOG, KINDS, notify, projectName, readBack, show, state, untagged, WRITE } from "./state.mjs";
+import { at, DIALOG, KINDS, notify, projectName, readBack, show, state, untagged, wide, WRITE } from "./state.mjs";
 import { button, field, select } from "./widgets.mjs";
 
 const SUBMIT = { replace: "Replace", exception: "Record the exception", "queue-read-back": "Queue the read-back" };
@@ -200,7 +200,9 @@ export function actions(e) {
     variant: action === first ? "primary" : "secondary" })];
   if (e.state === "in_force") {
     parts.push(asks("Read back", stillRight, "read-back"), opens("Replace", "replace"));
-    parts.push(e.scope === "global" ? opens("Record an exception", "exception") : asks("Promote", promote, "promote"));
+    // An exception is a project's own; under All projects there is no project to record it for.
+    if (e.scope !== "global") parts.push(asks("Promote", promote, "promote"));
+    else if (wide === null) parts.push(opens("Record an exception", "exception"));
     if (e.conflict || e.rivals.length) parts.push(asks("Keep this one", keep, "keep"));
   }
   if (e.state === "draft") parts.push(asks("Activate", activate, "activate"));
