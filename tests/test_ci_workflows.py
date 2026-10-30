@@ -341,6 +341,31 @@ def test_tests_run_with_bare_repositories_named_explicitly_as_in_agent_shells(wo
     }
 
 
+@pytest.mark.parametrize(
+    ("workflow", "job", "step"),
+    [
+        ("python.yml", "tests", "Run test shard"),
+        ("python-browser.yml", "browser", "Run browser-marked tests"),
+        ("python-browser.yml", "delivery-next-browser", "Run browser-marked tests"),
+    ],
+)
+def test_test_jobs_rerun_only_open_flaky_issues_and_upload_results_even_on_failure(workflow, job, step) -> None:
+    steps = _jobs(workflow)[job]["steps"]
+    names = [s.get("name") for s in steps]
+    lookup, tests, upload = (steps[names.index(n)] for n in ("Find open flaky issues", step, "Upload test results"))
+
+    assert names.index("Find open flaky issues") < names.index(step) < names.index("Upload test results")
+    assert lookup["run"] == "python3 .github/scripts/flaky_issues.py"
+    assert lookup["env"] == {"GH_TOKEN": "${{ github.token }}"}
+    assert "GH_TOKEN" not in tests["env"]
+    assert tests["env"]["OWLBEAR_FLAKY_REPORT"] == "${{ runner.temp }}/test-results/flaky.json"
+    assert '--junitxml="$RUNNER_TEMP/test-results/junit.xml"' in tests["run"]
+    assert upload["uses"].startswith("actions/upload-artifact@")
+    assert upload["if"].startswith("${{ !cancelled() && ")
+    assert upload["with"]["path"] == "${{ runner.temp }}/test-results/"
+    assert upload["with"]["name"].endswith("-attempt-${{ github.run_attempt }}")
+
+
 def test_static_runs_the_workspace_lint_on_every_change() -> None:
     """CI runs what `uv run lint` and `uv run format` run locally; EditorConfig reads every text file (TD-409)."""
     runs = _runs(_jobs("static.yml")["lint"])

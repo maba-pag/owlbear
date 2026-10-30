@@ -83,10 +83,18 @@ jobs:
           for package in $CI_SKIPPED_PACKAGES; do skipped+=(--no-install-package "$package"); done
           uv sync --locked --all-packages --all-groups "${skipped[@]}"
 
+      # Only tests marked flaky with an issue found open here get one re-run; the token stays out of the tests.
+      - name: Find open flaky issues
+        if: steps.reuse.outputs.cache-hit != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 .github/scripts/flaky_issues.py
+
       - name: Run test shard
         if: steps.reuse.outputs.cache-hit != 'true'
         env:
           CI_SHARD_INDEX: ${{ matrix.shard }}
+          OWLBEAR_FLAKY_REPORT: ${{ runner.temp }}/test-results/flaky.json
           # Agent shells set safe.bareRepository=explicit; a test relying on finding a bare repository fails here too.
           GIT_CONFIG_COUNT: 1
           GIT_CONFIG_KEY_0: safe.bareRepository
@@ -109,7 +117,16 @@ jobs:
                   items[:] = keep
           PY
           PYTHONPATH="$plugin_dir" uv run --no-sync pytest tests serve -p ci_shard \
-            -m "not e2e and not model and not browser" --dist worksteal
+            -m "not e2e and not model and not browser" --dist worksteal \
+            --junitxml="$RUNNER_TEMP/test-results/junit.xml"
+
+      - name: Upload test results
+        if: ${{ !cancelled() && steps.reuse.outputs.cache-hit != 'true' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: test-results-python-shard-${{ matrix.shard }}-attempt-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/test-results/
+          if-no-files-found: warn
 
       - name: Record passing result
         if: github.event_name == 'pull_request' && steps.reuse.outputs.cache-hit != 'true'
