@@ -421,6 +421,7 @@ def test_the_read_back_queue_asks_with_one_primary_and_withdrawing_is_never_it(s
         with page.expect_response(failing):
             item.get_by_role("button", name="Replace or withdraw").click()
         expect(queue.locator('p-button[variant="primary"]')).to_have_text(["Still right"])  # a failed read keeps it
+        expect(item).to_contain_text("This decision could not be read.")  # not "Reading…" forever
         page.unroute(failing)
         item.get_by_role("button", name="Close").click()
         item.get_by_role("button", name="Replace or withdraw").click()

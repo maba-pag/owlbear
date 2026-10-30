@@ -17,6 +17,7 @@ export const state = {
   from: "list",  // where it is shown: under its read-back in the queue, or in the list
   address: null,
   entry: null,  // its details as last read
+  unread: false,  // whether reading them failed, so the opened decision says so instead of "Reading…"
   form: null,  // { action, draft } of the opened decision's form
   pending: "",  // the action whose request is under way
   impact: null,  // { id, address, report | error | busy, scheduled } of the opened decision's impact (TD-428)

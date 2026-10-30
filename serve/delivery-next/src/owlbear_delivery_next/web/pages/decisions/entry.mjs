@@ -10,11 +10,11 @@ let detailTurn = 0;
 export async function open(id, { again = false, from = "list", address = null } = {}) {
   if (!again && state.opened === id && state.from === from && sameAddress(state.address, address)) {
     detailTurn++;
-    Object.assign(state, { opened: null, entry: null, form: null, address: null });
+    Object.assign(state, { opened: null, entry: null, unread: false, form: null, address: null });
     return show();
   }
   const turn = ++detailTurn, reading = again ? state.address : address;
-  if (!again) Object.assign(state, { opened: id, from, address, entry: null, form: null, effect: "" });
+  if (!again) Object.assign(state, { opened: id, from, address, entry: null, unread: false, form: null, effect: "" });
   show();
   const path = `/decisions/${encodeURIComponent(id)}`;
   try {
@@ -22,7 +22,7 @@ export async function open(id, { again = false, from = "list", address = null } 
     if (loaded()) entry.changes = (await call(`${path}/changes`, { machine: true })).changes;  // every project's
     if (turn === detailTurn && state.opened === id) state.entry = { ...entry, address: reading };
   } catch (error) {
-    if (turn === detailTurn) state.error = error.message;
+    if (turn === detailTurn) Object.assign(state, { error: error.message, unread: state.opened === id });
   }
   show();
 }
@@ -39,7 +39,10 @@ function change(c) {
 
 export function detail() {
   const e = state.entry;
-  if (!e) return html`<p-text size="sm" color="contrast-medium" role="status">Reading the decision…</p-text>`;
+  if (!e) {
+    return html`<p-text size="sm" color="contrast-medium" role="status">${state.unread
+      ? "This decision could not be read. Close it and open it again to retry." : "Reading the decision…"}</p-text>`;
+  }
   return html`<div class="detail" id="detail">
     <dl class="facts">
       <dt>Origin</dt><dd>${e.origin}</dd>
