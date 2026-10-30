@@ -28,18 +28,18 @@ def held(root: Path) -> list[int]:
     for path in (root, root / pack_state.FILE):
         for follow in (False, True):
             try:
-                st = os.stat(path, follow_symlinks=follow)
+                st = path.stat(follow_symlinks=follow)
             except FileNotFoundError:
                 continue
             files.add((st.st_dev, st.st_ino))
     fds = []
-    for name in os.listdir("/dev/fd"):
+    for entry in Path("/dev/fd").iterdir():
         try:
-            st = os.fstat(int(name))
+            st = os.fstat(int(entry.name))
         except OSError:  # closed since it was listed, the listing's own descriptor among them
             continue
         if (st.st_dev, st.st_ino) in files:
-            fds.append(int(name))
+            fds.append(int(entry.name))
     return fds
 
 
