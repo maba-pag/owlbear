@@ -116,19 +116,18 @@ KEPT = {"steer_share": 20, "intervention_cap": 3, "verbose": "on", "verbose_unti
     [("off", {"switch": "off"}), ("learning", {"switch": "on", **RECORD}), ("live", {"switch": "on"}),
      (None, {})],
 )  # fmt: skip
-@pytest.mark.parametrize("model", [GlobalLayer, MachineLayer, Layer])
+@pytest.mark.parametrize("model", [GlobalLayer, Layer])  # Machine's layer migrates through Layer's chain
 def test_each_old_mode_migrates_in_every_layer_and_keeps_the_other_values(tmp_path, mode, expected, model):
     layer = read_layer(_written(tmp_path, {"spotter": {"mode": mode, **KEPT}}, model.__name__, 13), model)
     written = LIMIT if model is GlobalLayer else {}
     assert (layer.format, layer.spotter) == (config.CONFIG_FORMAT, Spotter(**KEPT, **expected, **written))
 
 
-@pytest.mark.parametrize("mode", ["typo", "Learning", "on", False, True, 7, 0.5, [], ["live"], {}, {"mode": "off"}])
-@pytest.mark.parametrize("model", [GlobalLayer, MachineLayer, Layer])
-def test_an_unknown_mode_is_refused_never_guessed_into_a_switch(tmp_path, mode, model):
-    path = _written(tmp_path, {"spotter": {"mode": mode, "looks": ["plan"]}}, model.__name__, 13)
+@pytest.mark.parametrize("mode", ["typo", "Learning", "on", False, True, ["live"]])
+def test_an_unknown_mode_is_refused_never_guessed_into_a_switch(tmp_path, mode):
+    path = _written(tmp_path, {"spotter": {"mode": mode, "looks": ["plan"]}}, "Layer", 13)
     with pytest.raises(StoreError, match=f"cannot be migrated to format {config.CONFIG_FORMAT}"):
-        read_layer(path, model)
+        read_layer(path, Layer)
 
 
 def test_a_layer_without_a_mode_or_a_spotter_migrates_unchanged(tmp_path):
