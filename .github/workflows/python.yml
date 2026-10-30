@@ -96,10 +96,12 @@ jobs:
         run: python3 .github/scripts/flaky_issues.py
 
       # 6 workers per 4-vCPU runner: in a benchmark, 10 spent ~53 s collecting and 4 ran the tests ~25 s slower.
+      # Shards take whole test files, packed by ci-durations.json; refresh it with .github/scripts/ci_durations.py.
       - name: Run test shard
         if: steps.reuse.outputs.cache-hit != 'true'
         env:
           CI_SHARD_INDEX: ${{ matrix.shard }}
+          CI_SHARD_DURATIONS: .github/ci-durations.json
           CI_WORKERS: ${{ inputs.workers }}
           OWLBEAR_FLAKY_REPORT: ${{ runner.temp }}/test-results/flaky.json
           # Agent shells set safe.bareRepository=explicit; a test relying on finding a bare repository fails here too.

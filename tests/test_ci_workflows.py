@@ -298,6 +298,10 @@ def test_python_tests_are_sharded_without_the_model_stack() -> None:
         "${{ inputs.workers }}"
     )
     assert workflow["on"]["workflow_dispatch"]["inputs"]["workers"]["default"] == ""
+    durations = job["steps"][[s.get("name") for s in job["steps"]].index("Run test shard")]["env"]["CI_SHARD_DURATIONS"]
+    assert durations == ".github/ci-durations.json"
+    assert durations in ci_scope.SUITES["python"]
+    assert json.loads((ROOT / durations).read_text(encoding="utf-8"))
     assert "playwright install" not in runs
     assert "ruff" not in runs
 
