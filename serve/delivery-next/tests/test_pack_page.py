@@ -254,7 +254,7 @@ def test_each_stop_offers_one_discard_apart_whose_cancel_changes_nothing(served,
         page.locator("#pack-discard").click()
         expect(pds.modal(page)).to_contain_text("Nothing is activated")
         page.keyboard.press("Escape")
-        expect(pds.modal(page)).to_have_count(0)
+        expect(page.get_by_role("dialog")).to_have_count(0)
         page.wait_for_function("document.activeElement?.id === 'pack-discard'", timeout=5000)
         assert (job.store.root / pack_job.FILE).read_bytes() == before  # Escape changed nothing
         if kind not in ("dispute", "publish"):  # the dialog is one; its discard is sent as an answer or, here, alone
