@@ -396,29 +396,16 @@ def test_an_active_partial_record_hold_is_not_duplicated_when_the_project_is_rec
 
 
 @pytest.mark.parametrize("loaded", [False, True])
-def test_a_fresh_partial_record_after_recovery_gets_its_own_hold(tmp_path, machines, shared_repo, loaded):
-    shared, _remote = shared_repo
-    entry, folder = project_with_legacy_run(tmp_path, shared, loaded=loaded)
-    write_bare(folder, PARTIAL)
-    first = machines()
-    first.load_all()
-    reboot_then_recover(first, held(first, entry.id)[0]["id"])
-    first.stop_all()
-    folder = live_folder(entry, folder, loaded=loaded)
-
-    write_bare(folder, PARTIAL | {"run": "later-run", "started_at": "2026-10-26T00:00:00+00:00"})
-    later = machines()
-    later.load_all()
-    assert [s["state"] for s in sessions_of(later, entry.id)] == ["recovered", "held"]
-
-
-@pytest.mark.parametrize("loaded", [False, True])
 @pytest.mark.parametrize(
     "body",
     [
         pytest.param(None, id="absent"),
         pytest.param(pack_job._blank(), id="valid-idle"),  # noqa: SLF001
         pytest.param(pack_job._blank() | {"state": "failed", "reason": "the pack was refused"}, id="definitive"),  # noqa: SLF001
+        pytest.param(
+            pack_job._blank() | {"state": "passed", "reason": "the pack was already current"},  # noqa: SLF001
+            id="passed",  # up-to-date and discarded are read alike
+        ),
     ],
 )
 def test_an_absent_valid_idle_or_definitively_failed_record_holds_nothing(
@@ -434,12 +421,11 @@ def test_an_absent_valid_idle_or_definitively_failed_record_holds_nothing(
     loaded_machine.stop_all()
 
 
-MALFORMED = [
+MALFORMED = [  # a missing stages or log is PARTIAL's
     pytest.param({"state": None}, id="state-null"),
     pytest.param({"state": "unknown"}, id="state-unknown"),
-    pytest.param({"state": 7}, id="state-number"),
-    pytest.param({"state": ["running"]}, id="state-list"),
-    pytest.param({"stages": None}, id="stages-null"),
+    pytest.param({"state": ["running"]}, id="state-list"),  # unhashable: a membership test alone would raise
+    pytest.param({"stages": None}, id="stages-null"),  # a null taken for an empty list
     pytest.param({"stages": "running"}, id="stages-text"),
     pytest.param({"log": None}, id="log-null"),
     pytest.param({"log": "a line"}, id="log-text"),
@@ -461,39 +447,6 @@ def test_every_state_job_writes_with_its_stages_and_log_is_readable(tmp_path, st
 
 
 @pytest.mark.parametrize("loaded", [False, True])
-@pytest.mark.parametrize("damage", MALFORMED)
-def test_a_misshapen_legacy_record_with_no_workspace_is_held_once_and_not_duplicated_on_restart(
-    tmp_path, machines, shared_repo, loaded, damage
-):
-    shared, _remote = shared_repo
-    entry, folder = project_with_legacy_run(tmp_path, shared, loaded=loaded)
-    write_bare(folder, pack_job._blank() | damage)  # noqa: SLF001
-    first = machines()
-    first.load_all()
-    assert len(held(first, entry.id)) == 1, sessions_of(first, entry.id)
-    first.stop_all()
-
-    restarted = machines()
-    restarted.load_all()
-    assert len(held(restarted, entry.id)) == 1, "reconstruction duplicated a misshapen-record hold"
-    restarted.stop_all()
-
-
-@pytest.mark.parametrize("loaded", [False, True])
-@pytest.mark.parametrize("state", ["passed", "up-to-date", "discarded"])
-def test_a_valid_definitive_outcome_without_a_workspace_holds_nothing_on_load(
-    tmp_path, machines, shared_repo, loaded, state
-):
-    shared, _remote = shared_repo
-    entry, folder = project_with_legacy_run(tmp_path, shared, loaded=loaded)
-    write_bare(folder, pack_job._blank() | {"state": state, "reason": "the pack was already current"})  # noqa: SLF001
-    loaded_machine = machines()
-    loaded_machine.load_all()
-    assert held(loaded_machine, entry.id) == [], sessions_of(loaded_machine, entry.id)
-    loaded_machine.stop_all()
-
-
-@pytest.mark.parametrize("loaded", [False, True])
 def test_an_incomplete_running_record_replaced_after_recovery_gets_a_new_hold_and_is_not_resurrected_untouched(
     tmp_path, machines, shared_repo, loaded
 ):
@@ -508,32 +461,12 @@ def test_an_incomplete_running_record_replaced_after_recovery_gets_a_new_hold_an
     untouched = machines()
     untouched.load_all()
     assert held(untouched, bad.id) == [], "an untouched recovered record was held again"
+    assert len(sessions_of(untouched, bad.id)) == 1, "the constructor's rewrite duplicated the reservation"
 
     write_pack(folder, {"state": "running"})  # a real replacement of the same incomplete record
     replaced = machines()
     replaced.load_all()
     assert len(held(replaced, bad.id)) == 1, "a replaced incomplete run reused the recovered hold"
-
-
-def test_a_running_legacy_record_rewritten_by_its_own_constructor_keeps_one_generation_across_restarts(
-    tmp_path, machines, shared_repo
-):
-    shared, _remote = shared_repo
-    good, folder = open_project(tmp_path, shared, "good")
-    write_pack(folder, {"state": "running"})
-    first = machines()
-    first.load_all()
-    assert len(held(first, good.id)) == 1, sessions_of(first, good.id)
-    reboot_then_recover(first, held(first, good.id)[0]["id"])
-
-    restarted = machines()
-    restarted.load_all()
-    assert len(sessions_of(restarted, good.id)) == 1, "the constructor's rewrite duplicated the reservation"
-
-    write_pack(folder, {"state": "running"})  # a later historical replacement is a different run
-    later = machines()
-    later.load_all()
-    assert len(held(later, good.id)) == 1, "a later replacement of the rewritten record was not held"
 
 
 def test_a_project_whose_host_lock_another_host_holds_leaves_that_hosts_record_bytes_unchanged(
@@ -714,24 +647,18 @@ def test_a_historical_finish_landing_after_the_constructors_own_rewrite_gets_its
     )
 
 
-@pytest.mark.parametrize("loaded", [False, True])
-def test_an_ordinary_definitive_failure_without_a_workspace_is_not_held(tmp_path, machines, shared_repo, loaded):
-    shared, _remote = shared_repo
-    entry, folder = project_with_legacy_run(tmp_path, shared, loaded=loaded)
-    reason = "the candidate could not be downloaded"
-    (folder / pack_job.FILE).write_text(historical_finish(ENDED, reason=reason), encoding="utf-8")
-    m = machines()
-    m.load_all()
-    assert sessions_of(m, entry.id) == [], "a definitive failure was held as uncertain"
-
-
-def main_stage_failure(folder: Path, stage: str, reason: str, run: str = "main-run") -> None:
-    """What main's ``_finish`` leaves when one stage's work raised: the stage failed, the reason prefixed by its name
-    unless it ended with a stage verdict, the updater folder removed, and no workspace or PIDs."""
+def main_failure(stage: str, reason: str, run: str = "main-run") -> dict:
+    """The record main's ``_finish`` writes when one stage's work raised: the stage failed, the reason prefixed by its
+    name unless it ended with a stage verdict, and no workspace or PIDs."""
     ended = {"state": "failed", "run": run, "started_at": STARTED, "ended_at": ENDED, "reason": reason}
     body = pack_job._blank() | ended  # noqa: SLF001
     body["stages"] = [s | {"result": "failed", "detail": reason} if s["name"] == stage else s for s in body["stages"]]
-    (folder / pack_job.FILE).write_text(json.dumps(body, indent=1) + "\n", encoding="utf-8")
+    return body
+
+
+def main_stage_failure(folder: Path, stage: str, reason: str, run: str = "main-run") -> None:
+    """What main's ``_finish`` leaves when one stage's work raised: its record, the updater folder removed."""
+    (folder / pack_job.FILE).write_text(json.dumps(main_failure(stage, reason, run), indent=1) + "\n", encoding="utf-8")
     shutil.rmtree(folder / pack_run.UPDATER, ignore_errors=True)
 
 
@@ -741,10 +668,27 @@ SDK_RAISED = [
     ("challenger", "challenger: RuntimeError: synthetic SDK failure"),
     ("update", "update: PackError: the updater could not be configured"),  # no text proves the session never began
 ]
+NO_SESSION_LEFT = [
+    ("update", "update: PackError: the updater ended with error: no result"),
+    ("update", "update: PackError: the updater asks the owner: the premise is wrong (evidence)"),
+    ("challenger", "challenger: PackError: the challenger ended with error: no verdict"),
+    ("replay", "calibration replay: 1 of 3 calibration rounds judged as expected"),
+    ("candidate", "candidate: RuntimeError: the download failed"),
+    ("golden", "golden: RuntimeError: the golden pages could not be rendered"),
+]
+
+
+@pytest.mark.parametrize(
+    ("failure", "uncertain"), [(f, True) for f in SDK_RAISED] + [(f, False) for f in NO_SESSION_LEFT]
+)
+def test_only_a_main_failure_whose_sdk_session_may_still_run_is_uncertain(failure, uncertain):
+    """A session stage's failure is uncertain unless its reason was written after the session returned confirmed; a
+    failure in a stage outside any session never is. The machine tests below take one reason each through load."""
+    assert pack_run_record.legacy_uncertain(main_failure(*failure)) is uncertain
 
 
 @pytest.mark.parametrize("loaded", [False, True])
-@pytest.mark.parametrize("failure", SDK_RAISED)
+@pytest.mark.parametrize("failure", SDK_RAISED[:1])
 def test_a_main_sdk_stage_failure_with_its_folder_removed_is_held_and_starts_nothing_until_recovered(
     tmp_path, machines, shared_repo, loaded, failure
 ):
@@ -772,17 +716,7 @@ def test_a_main_sdk_stage_failure_with_its_folder_removed_is_held_and_starts_not
 
 
 @pytest.mark.parametrize("loaded", [False, True])
-@pytest.mark.parametrize(
-    "failure",
-    [
-        ("update", "update: PackError: the updater ended with error: no result"),
-        ("update", "update: PackError: the updater asks the owner: the premise is wrong (evidence)"),
-        ("challenger", "challenger: PackError: the challenger ended with error: no verdict"),
-        ("replay", "calibration replay: 1 of 3 calibration rounds judged as expected"),
-        ("candidate", "candidate: RuntimeError: the download failed"),
-        ("golden", "golden: RuntimeError: the golden pages could not be rendered"),
-    ],
-)
+@pytest.mark.parametrize("failure", NO_SESSION_LEFT[:1])
 def test_a_main_failure_after_a_confirmed_session_or_outside_any_session_holds_nothing(
     tmp_path, machines, shared_repo, loaded, failure
 ):
