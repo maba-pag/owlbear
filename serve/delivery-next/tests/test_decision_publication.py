@@ -468,9 +468,9 @@ def reviewed_legacy_decisions(picking, field: str, value: str, count: int) -> Ch
     return picking.change()
 
 
-@pytest.mark.parametrize(("field", "value"), [("question", "   "), ("answer", "\t\n")])
-@pytest.mark.parametrize("count", [1, 2])
+@pytest.mark.parametrize(("field", "value", "count"), [("question", "   ", 1), ("answer", "\t\n", 2)])
 def test_unbuildable_stored_project_decisions_refuse_the_entire_approval(picking, shared_repo, field, value, count):
+    """The last decision is unbuildable: alone, and after a valid one that a check of only the first would pass."""
     root, remote = shared_repo
     c = reviewed_legacy_decisions(picking, field, value, count)
     before = commits(remote)

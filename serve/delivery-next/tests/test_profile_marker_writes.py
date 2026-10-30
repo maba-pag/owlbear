@@ -48,17 +48,6 @@ def test_a_stale_ordinary_save_keeps_a_done_marker(local):
     assert (prof.prefs_import, prof.prefs_basis) == ("done", "")
 
 
-def test_an_ordinary_save_keeps_its_other_new_facts(local):
-    local.write_profile(Profile())
-    stale = local.read_profile()
-    local.mark_prefs_import("", "done")
-
-    local.write_profile(stale)
-
-    prof = local.read_profile()
-    assert prof.prefs_import == "done"
-
-
 def shared_store(root: Path, tmp_path: Path, name: str) -> Store:
     return Store(tmp_path / name, DataRepo(root), "shop-site")
 
