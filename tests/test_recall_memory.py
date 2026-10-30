@@ -641,27 +641,6 @@ class TestFromAC_LimitParameter:
         assert heading_count == 2
 
     @pytest.mark.asyncio
-    async def test_default_limit_is_20(self, tmp_path: Path) -> None:
-        """Without explicit limit, at most 20 entries are returned by default."""
-        engine = MemoryEngine(memory_dir=tmp_path)
-        for i in range(1, 26):  # 25 entries
-            _seed_entry(
-                engine,
-                _make_entry(
-                    id=_uuid(i),
-                    title=f"Entry {i:02d}",
-                    state="curated",
-                    scope_agents=["builder"],
-                ),
-            )
-        ctx = _make_ctx(engine)
-
-        result = await _recall(ctx, agent="builder")
-
-        heading_count = result.count("\n## ") + (1 if result.startswith("## ") else 0)
-        assert heading_count <= 20
-
-    @pytest.mark.asyncio
     async def test_default_limit_is_exactly_20(self, tmp_path: Path) -> None:
         """Default limit returns exactly 20 entries — a broken default of 5 or 12
         must fail (AC7-fix: exact equality check, not <= 20)."""
