@@ -117,7 +117,10 @@ async (status) => {
 @pytest.mark.browser
 @pytest.mark.parametrize(
     ("page_url", "ask", "delete"),
-    [pytest.param((a, d), a, d, id=f"merge-{a}-branch-{d}") for a in SETTINGS for d in SETTINGS],
+    [  # only an automatic merge words the branch setting
+        pytest.param((a, d), a, d, id=f"merge-{a}-branch-{d}")
+        for a, d in [(False, d) for d in SETTINGS] + [(True, True), (None, True)]
+    ],
     indirect=["page_url"],
 )
 def test_the_changes_page_words_each_merge_and_branch_setting_as_it_is_set(page_url, pds, ask, delete) -> None:
