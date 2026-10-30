@@ -66,8 +66,10 @@ export function scopeOf(d) {
 // shows once, as the heading (D-01M63CEE5C9K50RXGCYBSP64VK).
 export function cutOff(d) {
   const flat = (text) => text.split(/\s+/).join(" ").trim();
-  const title = flat(d.title).replace(/\s*(…|\.\.\.)$/, ""), said = flat(d.statement);
-  return title !== "" && said.startsWith(title) && !/[\p{L}\p{N}]/u.test(said.charAt(title.length));
+  const whole = flat(d.title), said = flat(d.statement);
+  const title = whole.replace(/\s*(…|\.\.\.)$/, ""), marked = title !== whole;
+  // An unmarked prefix must end at a word boundary; one marked with "…" may be cut mid-word.
+  return title !== "" && said.startsWith(title) && (marked || !/[\p{L}\p{N}]/u.test(said.charAt(title.length)));
 }
 
 // When the owner last confirmed the statement (TD-449), or that it was inherited and never read back (TD-454).

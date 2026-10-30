@@ -297,7 +297,7 @@ def test_an_entry_shows_a_cut_off_statement_once_and_opens_from_the_keyboard(sto
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     said = "Builds run nightly at 01:00 on the shared runner."
-    write(make(title="Builds run nightly…", statement=said, read_back="pending", read_back_why="Asked again.",
+    write(make(title="Builds run night…", statement=said, read_back="pending", read_back_why="Asked again.",
                read_back_kind="uncertain"), store.shared.root / PROJECT)  # fmt: skip
     with decisions_page(store, pds) as page:
         item = page.locator("#queue .queued", has_text=said)
