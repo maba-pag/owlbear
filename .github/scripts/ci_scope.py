@@ -17,6 +17,7 @@ HOME = "maba-pag/owlbear"  # Snyk's token reaches only changes from OwlBear's ow
 SUITES: dict[str, tuple[str, ...]] = {
     "python": (
         ".github/workflows/python.yml",
+        ".github/scripts/ci_shard.py",
         ".github/scripts/flaky_issues.py",
         ".python-version",
         "conftest.py",
@@ -29,6 +30,7 @@ SUITES: dict[str, tuple[str, ...]] = {
     ),
     "python-browser": (
         ".github/workflows/python-browser.yml",
+        ".github/scripts/ci_shard.py",
         ".github/scripts/flaky_issues.py",
         ".python-version",
         "conftest.py",

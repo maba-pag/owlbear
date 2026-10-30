@@ -4,6 +4,11 @@ name: Python
 "on":
   workflow_call:
   workflow_dispatch:
+    inputs:
+      workers:
+        description: xdist workers per shard, to benchmark a worker count; empty keeps 6
+        type: string
+        default: ""
 
 concurrency:
   group: python-${{ github.event.pull_request.number || github.sha }}
@@ -90,10 +95,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: python3 .github/scripts/flaky_issues.py
 
+      # 6 workers per 4-vCPU runner: in a benchmark, 10 spent ~53 s collecting and 4 ran the tests ~25 s slower.
       - name: Run test shard
         if: steps.reuse.outputs.cache-hit != 'true'
         env:
           CI_SHARD_INDEX: ${{ matrix.shard }}
+          CI_WORKERS: ${{ inputs.workers }}
           OWLBEAR_FLAKY_REPORT: ${{ runner.temp }}/test-results/flaky.json
           # Agent shells set safe.bareRepository=explicit; a test relying on finding a bare repository fails here too.
           GIT_CONFIG_COUNT: 1
@@ -102,22 +109,9 @@ jobs:
         run: |
           plugin_dir="$RUNNER_TEMP/ci-plugins"
           mkdir -p "$plugin_dir"
-          cat > "$plugin_dir/ci_shard.py" <<'PY'
-          import os
-          import zlib
-
-
-          def pytest_collection_modifyitems(config, items):
-              index = int(os.environ["CI_SHARD_INDEX"]) - 1
-              total = int(os.environ["CI_SHARDS"])
-              keep = [item for item in items if zlib.crc32(item.nodeid.encode()) % total == index]
-              drop = [item for item in items if zlib.crc32(item.nodeid.encode()) % total != index]
-              if drop:
-                  config.hook.pytest_deselected(items=drop)
-                  items[:] = keep
-          PY
+          cp .github/scripts/ci_shard.py "$plugin_dir/"
           PYTHONPATH="$plugin_dir" uv run --no-sync pytest tests serve -p ci_shard \
-            -m "not e2e and not model and not browser" --dist worksteal \
+            -m "not e2e and not model and not browser" -n "${CI_WORKERS:-6}" --dist worksteal \
             --junitxml="$RUNNER_TEMP/test-results/junit.xml"
 
       - name: Upload test results
