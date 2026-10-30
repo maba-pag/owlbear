@@ -241,6 +241,7 @@ def test_a_fold_counts_changes_by_project_apart_from_runs_outside_one_and_its_ro
         machine.stop_all()
 
 
+@pytest.mark.browser
 def test_spend_said_apart_from_the_period_never_reads_unknown_as_zero_or_a_counted_run_as_left_out(pds) -> None:
     """Sol's and Copilot's counterexamples: a run with only its start said "0.00 more"; one carrying known credits too
     said "credits not known"; and a resumed run, counted with its own spend, was called one more run not counted."""
