@@ -4,6 +4,11 @@ name: Python
 "on":
   workflow_call:
   workflow_dispatch:
+    inputs:
+      workers:
+        description: xdist workers per shard, to benchmark a worker count; empty keeps the default
+        type: string
+        default: ""
 
 concurrency:
   group: python-${{ github.event.pull_request.number || github.sha }}
@@ -94,6 +99,7 @@ jobs:
         if: steps.reuse.outputs.cache-hit != 'true'
         env:
           CI_SHARD_INDEX: ${{ matrix.shard }}
+          CI_WORKERS: ${{ inputs.workers }}
           OWLBEAR_FLAKY_REPORT: ${{ runner.temp }}/test-results/flaky.json
           # Agent shells set safe.bareRepository=explicit; a test relying on finding a bare repository fails here too.
           GIT_CONFIG_COUNT: 1
@@ -117,7 +123,7 @@ jobs:
                   items[:] = keep
           PY
           PYTHONPATH="$plugin_dir" uv run --no-sync pytest tests serve -p ci_shard \
-            -m "not e2e and not model and not browser" --dist worksteal \
+            -m "not e2e and not model and not browser" -n "${CI_WORKERS:-auto}" --dist worksteal \
             --junitxml="$RUNNER_TEMP/test-results/junit.xml"
 
       - name: Upload test results
