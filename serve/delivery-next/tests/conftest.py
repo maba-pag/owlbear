@@ -1,3 +1,4 @@
+import hashlib
 import json
 import os
 import re
@@ -439,13 +440,18 @@ class Pds:
     """The pages' Porsche Design System controls in Playwright, with the PDS CDN reachable (TD-39, TD-398)."""
 
     CDN = "https://cdn.ui.porsche.com/"
+    FETCH_MS = 10_000  # one CDN answer may not use up a test's 30 s (#742)
+    TRIES = 2
     _fetched: ClassVar[dict[str, tuple[int, dict[str, str], bytes]]] = {}  # CDN URL -> its answer, per test worker
+    shared: ClassVar[Path | None] = None  # the run's folder of CDN answers, read by every worker; set by ``pds``
 
     @classmethod
     def only(cls, page, base: str) -> None:
         """Let *page* reach the test host and the PDS CDN only; anything else is refused. Routing turns the browser's
-        cache off, so each CDN file is fetched once and then answered from memory, as that cache would: a page a click
-        opens then loads as fast as a browser loads it, not at the CDN's speed of the moment."""
+        cache off, so each CDN file is fetched about once a run and then answered from there, as that cache would: a
+        page a click opens then loads as fast as a browser loads it, not at the CDN's speed of the moment. A CDN file
+        that cannot be fetched is aborted, so the page settles and the test fails where it needs it, naming the error.
+        Nothing here waits for another request: Playwright runs a page's route handlers on one thread, nested."""
 
         def route(r) -> None:
             url = r.request.url
@@ -454,15 +460,59 @@ class Pds:
             if not url.startswith(cls.CDN):
                 return r.abort()
             if url not in cls._fetched:
-                got = r.fetch()
-                if not got.ok:
-                    return r.fulfill(response=got)
-                kept = {k: v for k, v in got.headers.items() if k not in ("content-encoding", "content-length")}
-                cls._fetched[url] = (got.status, kept, got.body())
+                kept = cls._kept(url)
+                if kept is not None:
+                    cls._fetched[url] = kept
+                else:
+                    got = cls._fetch(r)
+                    if got is None:
+                        return r.abort("failed")
+                    if not got.ok:
+                        return r.fulfill(response=got)
+                    headers = {k: v for k, v in got.headers.items() if k not in ("content-encoding", "content-length")}
+                    cls._fetched[url] = (got.status, headers, got.body())
+                    cls._keep(url, *cls._fetched[url])
             status, headers, body = cls._fetched[url]
             return r.fulfill(status=status, headers=headers, body=body)
 
         page.route("**/*", route)
+
+    @classmethod
+    def _fetch(cls, r):
+        """The CDN's answer to *r*, fetched up to ``TRIES`` times; None, with each error printed, if none came."""
+        from playwright.sync_api import Error  # noqa: PLC0415 - the optional browser runtime
+
+        for _ in range(cls.TRIES):
+            try:
+                return r.fetch(timeout=cls.FETCH_MS)
+            except Error as exc:
+                print(f"PDS CDN fetch of {r.request.url} failed: {exc}")  # noqa: T201 - shown with the failed test
+        return None
+
+    @classmethod
+    def _file(cls, url: str) -> Path | None:
+        return cls.shared / hashlib.sha256(url.encode()).hexdigest() if cls.shared is not None else None
+
+    @classmethod
+    def _kept(cls, url: str) -> tuple[int, dict[str, str], bytes] | None:
+        """The answer to *url* a worker of this run kept, if one did."""
+        file = cls._file(url)
+        if file is None or not file.exists():
+            return None
+        meta, body = file.read_bytes().split(b"\n", 1)
+        head = json.loads(meta)
+        return head["status"], head["headers"], body
+
+    @classmethod
+    def _keep(cls, url: str, status: int, headers: dict[str, str], body: bytes) -> None:
+        """Keep the answer for the run's other workers, whole or not at all: workers fetching it at once both write."""
+        file = cls._file(url)
+        if file is None:
+            return
+        file.parent.mkdir(parents=True, exist_ok=True)
+        part = file.with_name(f"{file.name}.{os.getpid()}")
+        part.write_bytes(json.dumps({"status": status, "headers": headers}).encode() + b"\n" + body)
+        part.replace(file)
 
     @staticmethod
     def modal(page):
@@ -505,8 +555,10 @@ class Pds:
 
 
 @pytest.fixture
-def pds() -> type[Pds]:
-    """Helpers for pages on PDS components in a real browser."""
+def pds(tmp_path_factory) -> type[Pds]:
+    """Helpers for pages on PDS components in a real browser; the CDN's answers are kept once for the run's workers."""
+    root = tmp_path_factory.getbasetemp()
+    Pds.shared = (root.parent if os.environ.get("PYTEST_XDIST_WORKER") else root) / "pds-cdn"
     return Pds
 
 
