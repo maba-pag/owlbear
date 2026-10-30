@@ -22,6 +22,19 @@
   }
   details.panel > summary { font-size: var(--p-typescale-md); }
   details.panel[open] { gap: var(--p-spacing-static-md); }
+  /* The groups (D-01M63C8QQMANY46N8GMNNKH1V9), like the top row's pages: the one shown underlined. */
+  #groups { display: flex; flex-wrap: wrap; gap: 0 var(--p-spacing-static-lg); }
+  #groups a {
+    display: inline-flex; align-items: center; gap: var(--p-spacing-static-sm); min-block-size: 2.5rem;
+    color: var(--p-color-contrast-high); text-decoration: none; text-underline-offset: .35em;
+  }
+  #groups a:hover { text-decoration: underline; text-decoration-thickness: 1px; }
+  #groups a[aria-current="page"] {
+    color: var(--p-color-primary); font-weight: var(--p-font-weight-semibold);
+    text-decoration: underline; text-decoration-thickness: 2px;
+  }
+  #unset a { color: var(--p-color-primary); text-underline-offset: .2em; }
+  .field { display: grid; gap: var(--p-spacing-static-xs); }
 </style>
 </head>
 <body>
