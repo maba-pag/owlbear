@@ -448,7 +448,8 @@ def test_delivery_is_not_effect_and_a_delivered_answer_is_found_in_the_transcrip
     assert not session_result.effect_seen(Run("s", ending="result"))
 
 
-def test_a_resumed_answer_is_read_back_before_any_send_and_an_unread_transcript_sends_nothing() -> None:
+def test_a_resumed_answer_is_read_back_before_any_send_and_an_unread_transcript_sends_nothing(monkeypatch) -> None:
+    monkeypatch.setattr(sdk_usage, "USAGE_PAUSE", 0)
     sends: list[str] = []
     user = SimpleNamespace(type=SimpleNamespace(value="user.message"), data=SimpleNamespace(content="m"))
 
@@ -473,7 +474,9 @@ def test_a_resumed_answer_is_read_back_before_any_send_and_an_unread_transcript_
 
 
 @pytest.mark.parametrize("earlier", ["another question's", "a repair context holding it", "its own"])
-def test_a_new_identical_answer_to_another_question_is_sent_and_an_interrupted_one_is_not(earlier) -> None:
+def test_a_new_identical_answer_to_another_question_is_sent_and_an_interrupted_one_is_not(earlier, monkeypatch) -> None:
+    monkeypatch.setattr(sdk_usage, "USAGE_PAUSE", 0)
+
     def delivery(qid: str) -> str:
         answer = Answer(text="Done", kind="event", at=NOW)
         asked = Question(id=qid, step=StepKind.BUILD, text="Proceed?", answer=answer)
