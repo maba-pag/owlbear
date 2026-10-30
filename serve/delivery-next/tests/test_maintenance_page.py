@@ -102,8 +102,11 @@ def test_memory_curation_says_whether_its_last_run_was_the_curator_or_the_owner(
     (local_home.root() / curation.STATE).write_text(curation.Runs(folders={"shop": run}).model_dump_json())
     sock = socket.socket()
     sock.bind(("127.0.0.1", 0))
+    # longer than the pages' polls: route.fetch() reuses a pooled socket, which uvicorn's 5 s default closes
     server = uvicorn.Server(
-        uvicorn.Config(api.create_app(Store(tmp_path, name="shop"), "tok", None), log_level="warning")
+        uvicorn.Config(
+            api.create_app(Store(tmp_path, name="shop"), "tok", None), log_level="warning", timeout_keep_alive=60
+        )
     )
     threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True).start()
     while not server.started:
