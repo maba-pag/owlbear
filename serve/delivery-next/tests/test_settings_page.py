@@ -372,6 +372,33 @@ def test_the_overview_counts_each_group_s_unset_names_its_first_three_and_opens_
         expect(page.locator("#set-sessions p-text[color='error']")).to_have_count(1)  # the group names every one red
 
 
+# The most characters on one rendered line of an element's text, counted one character at a time.
+LONGEST_LINE = """(el) => {
+  const lines = new Map(), range = document.createRange(), walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    for (let i = 0; i < n.length; i++) {
+      range.setStart(n, i);
+      range.setEnd(n, i + 1);
+      const r = range.getClientRects()[0];
+      if (r && r.height > 1) lines.set(Math.round(r.top), (lines.get(Math.round(r.top)) ?? 0) + 1);
+    }
+  }
+  return Math.max(...lines.values());
+}"""
+
+
+@pytest.mark.browser
+def test_running_text_stops_at_about_75_characters_a_line_and_a_table_keeps_its_width(store, pds) -> None:
+    """D-01M66D205WV75ZGAPVVYHCTADY: on a wide window a paragraph wraps at about 75 characters; a table does not."""
+    with settings_page(store, pds) as page:
+        text = page.get_by_role("region", name="Where you edit").locator("p-text", has_text="A blank project value")
+        table = page.locator("p-table").first
+        for width in (1280, 2400):
+            page.set_viewport_size({"width": width, "height": 900})
+            assert 65 <= text.evaluate(LONGEST_LINE) <= 80, width
+            assert table.bounding_box()["width"] > 2 * text.bounding_box()["width"], width
+
+
 @pytest.mark.browser
 def test_the_owner_s_own_tab_after_an_unset_link_keeps_its_focus(store, pds, monkeypatch) -> None:
     """Copilot review of #813: the focus put on a linked row's control is never put back after the owner moves it."""

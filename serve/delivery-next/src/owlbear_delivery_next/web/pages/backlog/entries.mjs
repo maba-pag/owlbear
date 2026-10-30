@@ -156,8 +156,8 @@ export function card(e, byId) {
         ${e.status !== "inbox" && e.status !== "open" ? html`<p-tag compact="true">${e.status}</p-tag>` : nothing}
         ${e.opening ? html`<p-tag variant="info" compact="true">chat opening</p-tag>` : nothing}</div>
         ${triage ? html`<div class="row triage">${kindPicker(e, true)}${dropButton(e, true)}</div>` : nothing}</div>
-      <p-text size="xs" color="contrast-medium">From ${SOURCES[e.source] ?? e.source} · ${seen}${changeLink(e)}
-        · <span class="concerns">${concerns(e)}</span> ·
+      <p-text size="xs" color="contrast-medium" class="meta">From ${SOURCES[e.source] ?? e.source} · ${seen}${
+        changeLink(e)} · <span class="concerns">${concerns(e)}</span> ·
         ${e.url ? html`<a href=${e.url} rel="noopener">#${e.id}</a>` : `#${e.id}`}</p-text>
       ${details(e, byId)}
     </div>
