@@ -1129,6 +1129,23 @@ def test_decisions_under_all_projects_sum_up_each_scope_and_open_its_view_even_w
         each_scope_opens_its_view_and_leads_back(page, pds, base, row, a)
 
 
+@pytest.mark.browser
+def test_a_view_that_cannot_be_read_says_why_without_widening_a_phone(tmp_path: Path, monkeypatch, pds) -> None:
+    """A long path in a notice's reason wraps: the page never scrolls sideways at 390 pixels."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    registry.register(clone(tmp_path / "alpha"))
+    reason = (
+        "the project owlbear has no folder in /private/var/folders/8w/3kzhj2010nz0gn9k7hz3byp/T/tmp.x/.owlbear/data"
+    )
+    with browsing(monkeypatch, pds, 390) as (page, base):
+        page.route("**/owlbear/decisions?*", lambda route: route.fulfill(json={
+            "available": False, "reason": reason, "decisions": [], "topics": [], "total": 0}))  # fmt: skip
+        page.goto(f"{base}/decisions?view=global#token=t")
+        expect(page.locator("#unavailable")).to_contain_text(reason)
+        assert page.evaluate("document.documentElement.scrollWidth") <= 390
+
+
 def each_scope_opens_its_view_and_leads_back(page, pds, base: str, row: dict, a: registry.Project) -> None:
     """Global's and OwlBear's views hold only theirs and lead back; a project's opens its page; an unlisted project
     opens the overview."""
