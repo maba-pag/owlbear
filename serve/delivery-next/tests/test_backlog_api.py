@@ -353,6 +353,11 @@ def test_an_inbox_entry_is_one_compact_row_triaged_with_the_keyboard_alone(store
         rows.first.get_by_role("combobox").focus()
         page.keyboard.press("ArrowDown")
         expect(rows.first.get_by_role("listbox")).to_be_visible()
+        page.keyboard.press("Escape")  # closes the list, keeps the focus and the entry where they were
+        expect(rows.first.get_by_role("listbox")).to_be_hidden()
+        expect(rows.first.get_by_role("combobox")).to_be_focused()
+        expect(rows).to_have_count(1)
+        page.keyboard.press("ArrowDown")
         for _ in range(3):  # untriaged, defect, improvement, then idea
             page.keyboard.press("ArrowDown")
         page.keyboard.press("Enter")
