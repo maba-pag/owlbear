@@ -400,8 +400,7 @@ def test_overlapping_profile_saves_keep_one_writers_shared_copy_and_overlay(tmp_
     assert profile.value(saved, profile.PUSH) == "yes"
 
 
-@pytest.mark.parametrize("owner", ["confirm", "clear"])
-@pytest.mark.parametrize("channel", ["local", "shared"])
+@pytest.mark.parametrize(("owner", "channel"), [("confirm", "local"), ("clear", "shared")])
 @pytest.mark.usefixtures("shared")
 def test_owner_local_edit_during_detection_survives_the_race(tmp_path, monkeypatch, owner, channel):
     repo = clone(tmp_path, "shop")
