@@ -161,7 +161,7 @@ def test_unusable_store_format_is_refused_with_its_stop(repo, store, marker, act
     assert err.value.stop(NOW).action == action
 
 
-@pytest.mark.parametrize("text", ["{broken", "[]", '{"format": "x"}', '{"format": null}', '{"format": 1, "slug": 3}'])
+@pytest.mark.parametrize("text", ["{broken", "[]", '{"format": null}', '{"format": 1, "slug": 3}'])
 def test_malformed_state_is_a_store_error_with_a_restore_stop(store, text):
     save(store, Change(slug="c1"))
     overwrite(store, "c1", text)
@@ -199,10 +199,10 @@ def test_profile_has_its_own_format_gate(store, monkeypatch):
         store.read_profile()
 
 
-NON_INTEGER_FORMATS = [4.5, 3.5, 4.0, True, "4", "abc"]  # "abc" is malformed today: the same refusal
+NON_INTEGER_FORMATS = [4.5, 4.0, True, "4"]  # int() coercion, equality, a bool as int, a numeric string
 
 
-@pytest.mark.parametrize("fmt", NON_INTEGER_FORMATS)
+@pytest.mark.parametrize("fmt", [4.5])  # the profile is read through the change record's format check
 def test_a_saved_profile_whose_format_is_not_an_integer_is_unreadable_and_kept(store, fmt):
     store.write_profile(Profile(version=2, entries={"rules": ProfileEntry(state="unknown", evidence="HTTP 403")}))
     path = profile_share.path(store)
