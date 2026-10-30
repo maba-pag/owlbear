@@ -460,10 +460,20 @@ class Stalled:
 
     async def start(self) -> None:
         if self.start_fails:
+            self.begun()
             raise RuntimeError(self.made.setdefault("why", "protocol mismatch"))
 
     async def create_session(self, **_kw: Any) -> Any:
-        return SimpleNamespace(session_id="look-2", send_and_wait=self.hang, disconnect=self.hang)
+        return SimpleNamespace(session_id="look-2", send_and_wait=self.asked, disconnect=self.hang)
+
+    async def asked(self, *_a: Any, **_kw: Any) -> None:
+        self.begun()
+        await self.hang()
+
+    def begun(self) -> None:
+        """Tell a test that waits that the look's turn began, or its start failed: what it tears down is in place."""
+        if (it := self.made.get("begun")) is not None:
+            it.set()
 
     async def hang(self, *_a: Any, **_kw: Any) -> None:
         await asyncio.sleep(30)
@@ -493,9 +503,10 @@ def test_a_stalled_or_failed_runtime_is_torn_down_within_its_bounds(
 
     async def main() -> float:
         loop = asyncio.get_running_loop()
-        began = loop.time()
+        made["begun"] = asyncio.Event()
         look = asyncio.ensure_future(REAL_LOOK({}, ctx(), meter()))
-        await asyncio.sleep(0.05)
+        await asyncio.wait_for(made["begun"].wait(), 5)  # its turn waits, or its failed start is being torn down
+        began = loop.time()
         for _ in range(2):  # cancelled twice while it tears down
             look.cancel()
             await asyncio.sleep(0.01)
