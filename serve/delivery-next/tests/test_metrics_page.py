@@ -206,14 +206,22 @@ def test_a_ledger_whose_step_events_list_their_models_renders(pds) -> None:
 
 
 @pytest.mark.browser
-def test_a_run_not_yet_ended_is_said_apart_with_its_credits_unknown_not_as_zero(pds) -> None:
-    """Sol's counterexample: a run with only its start sits outside a dated period, and Metrics said "0.00 more"."""
+def test_spend_said_apart_from_the_period_never_reads_unknown_as_zero_or_a_counted_run_as_left_out(pds) -> None:
+    """Sol's and Copilot's counterexamples: a run with only its start said "0.00 more"; one carrying known credits too
+    said "credits not known"; and a resumed run, counted with its own spend, was called one more run not counted."""
     from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
 
     at = (datetime.now(UTC) - timedelta(hours=1)).isoformat(timespec="seconds")
-    place = {"run": "o", "session": "s-o", "clone": "", "step": "", "job": "", "project": "shop", "name": "shop",
-             "change": "c1", "agent": "builder"}  # fmt: skip
-    spend_ledger.append([place | {"id": "start:o", "type": "start", "at": at, "model": "m1", "before": {}}])
+    place = {"clone": "", "step": "", "job": "", "project": "shop", "name": "shop", "change": "c1", "agent": "builder"}
+
+    def started(rid: str, before: dict) -> dict:
+        return place | {"run": rid, "session": f"s-{rid}", "id": f"start:{rid}", "type": "start", "at": at,
+                        "model": "m1", "before": before}  # fmt: skip
+
+    def used(spent: float) -> dict:
+        return {"credits": spent, "models": {"m1": {"credits": spent, "input": 10, "output": 1}}}
+
+    spend_ledger.append([started("o", {})])
     machine, server, base = serve()
     try:
         with sync_playwright() as pw:
@@ -224,9 +232,19 @@ def test_a_run_not_yet_ended_is_said_apart_with_its_credits_unknown_not_as_zero(
             page = browser.new_page(timezone_id="Europe/Berlin")
             pds.only(page, base)
             page.goto(f"{base}/metrics#token=t")
-            expect(page.locator("#exact li")).to_have_count(1)
-            expect(page.locator("#exact li")).to_contain_text("1 more run may lie in this period, credits not known:")
+            said = page.locator("#exact li").last
+            expect(said).to_contain_text("Spend of 1 run may also lie in this period (credits not known):")
             expect(page.locator("#exact")).not_to_contain_text("0.00")
+            spend_ledger.append([started("p", used(3.0))])  # a resumed run whose end is not recorded yet
+            page.reload()
+            expect(said).to_contain_text("Spend of 2 runs may also lie in this period (3.00 or more credits):")
+            spend_ledger.append([started("r", used(3.0)), place | {  # resumed and ended: 1.00 of its own counts
+                "run": "r", "session": "s-r", "id": "end:r", "type": "end", "at": at, "usage": used(4.0),
+                "ending": "result", "limit": None, "stopped": ""}])  # fmt: skip
+            page.reload()
+            expect(page.locator("#total-runs")).to_have_text("1 run")
+            expect(said).to_contain_text("Spend of 3 runs may also lie in this period (6.00 or more credits):")
+            expect(said).to_contain_text("so it is not counted")
             browser.close()
     finally:
         server.should_exit = True

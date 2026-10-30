@@ -74,11 +74,11 @@ function filters() {
   </div>`;
 }
 
-// What the runs left out of the period spent: unknown credits are never shown as zero, a partial sum as at least.
+// Spend said apart from the period: unknown credits never read as zero, a partial sum as "or more". A run may have
+// spend both inside the period and outside it, so this counts the runs it came from, not runs left out.
 function outside(u) {
-  if (u.unknown === u.runs) return "credits not known";
-  const known = `${credits(u.credits)}${u.unknown || u.open || u.incomplete ? " or more" : ""} credits`;
-  return u.unknown ? `${known}, ${count(u.unknown)} of them not reporting theirs` : known;
+  if (!u.credits && u.unknown) return "credits not known";
+  return `${credits(u.credits)}${u.unknown || u.open || u.incomplete ? " or more" : ""} credits`;
 }
 
 // How exact the totals are, each way they may be off said once (D-01M63CEQYQ64VYQHFKCDGX7W9F).
@@ -94,9 +94,8 @@ function exactness(t, undated) {
     t.uncertain_time ? `${credits(t.uncertain_time)} credits were spent at a time known only roughly, so they may
       belong to a neighbouring day.` : "",
     t.uncertain_agent ? `${credits(t.uncertain_agent)} credits are not split between an agent and its subagents.` : "",
-    undated ? `${count(undated.runs)} more run${undated.runs === 1 ? "" : "s"} may lie in this period,
-      ${outside(undated)}: when ${undated.runs === 1 ? "it" : "they"} ran is not known closely enough to say, so
-      ${undated.runs === 1 ? "it is" : "they are"} not counted.` : "",
+    undated ? `Spend of ${runs(undated.runs)} may also lie in this period (${outside(undated)}): when it was spent is
+      not known closely enough to say, so it is not counted.` : "",
   ].filter(Boolean);
   return html`<p-heading size="md"><h3 id="exact-title">How exact these totals are</h3></p-heading>
     <ul id="exact" class="notes" aria-labelledby="exact-title">${items.length ? items.map((i) => html`<li>${i}</li>`)
