@@ -89,12 +89,12 @@ export function view() {
       ${head}
       ${addForm()}
       <section aria-labelledby="inbox-title">
-        <div><p-heading size="xl"><h2 id="inbox-title">Inbox (${lists.inbox.length})</h2></p-heading>
+        <div><p-heading size="lg"><h2 id="inbox-title">Inbox (${lists.inbox.length})</h2></p-heading>
           <p-text>Choose a kind to move an entry to Open, or drop it.</p-text></div>
         ${list("inbox", lists.inbox, byId, "Nothing new to triage.")}
       </section>
       <section aria-labelledby="open-title">
-        <div><p-heading size="xl"><h2 id="open-title">Open (${lists.open.length})</h2></p-heading>
+        <div><p-heading size="lg"><h2 id="open-title">Open (${lists.open.length})</h2></p-heading>
           <p-text>Tick entries to shape a Change from them.</p-text></div>
         ${list("open", lists.open, byId, "No open entries.")}
       </section>

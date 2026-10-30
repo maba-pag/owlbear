@@ -37,6 +37,12 @@ const STEPS = {
 };
 const EXITS = { done: "finished", retry: "will try again", ask: "asks you", back: "went back", stop: "stopped",
   pending: "waiting" };
+const TOOLS = {  // Delivery's own tools; change_flow/status.py says them the same way on the card
+  submit_result: "Submitted its result", ask_question: "Asked a question",
+  report_wrong_premise: "Reported a wrong premise", report_missing_tool: "Reported a missing tool",
+  lookup_decisions: "Looked up decisions", submit_first_look: "Submitted its first look",
+  scan_design: "Scanned the design",
+};
 const pr = (e) => (e.pr ? ` PR #${e.pr}` : "");
 const why = (said) => (said ? `: ${said}` : "");
 const sha = (s) => String(s || "").slice(0, 7);
@@ -60,7 +66,8 @@ function linted(e) {
 // Each recorded event in plain words; an event this page does not know reads as its name, with its reason if any.
 const SAID = {
   step: (e) => `${STEPS[e.kind] ?? words(e.kind ?? "step")} ${EXITS[e.exit] ?? "ended"}${why(e.reason)}`,
-  tool: (e) => e.summary || `Called ${e.tool}${e.accepted === false ? " (refused)" : ""}`,
+  tool: (e) => (e.summary && e.summary !== e.tool ? e.summary
+    : `${TOOLS[e.tool] ?? `Called ${e.tool}`}${e.accepted === false ? " (refused)" : ""}`),
   session: (e) => (e.resumed ? "Session resumed" : `Session started${e.role ? ` (${e.role})` : ""}`),
   started: () => "Session started",
   ended: (e) => `Session ended${e.ending ? ` (${e.ending})` : ""}`,

@@ -173,13 +173,30 @@ def test_card_shows_the_last_event_step_time_and_credits():
     alive = Activity(host_up=True, runner_alive=True, last_event_at=NOW - timedelta(seconds=40))
     out = card(running(NOW - timedelta(minutes=5)), alive, events, NOW)
     assert out == {
-        "now": "Build 2/2 · called `submit_result` 40 s ago",
+        "now": "Build 2/2 · submitted its result 40 s ago",
         "step_time": "5 min",
         "quiet": False,
         "credits": {"change": 3.0, "step": 0.75, "unknown": 0},
         "overlaps": [],
         "decisions": [],
     }
+
+
+@pytest.mark.parametrize(
+    ("event", "tool", "said"),
+    [
+        ({"event": "step", "kind": "build", "exit": "stop"}, None, "building stopped"),
+        ({"event": "step", "kind": "plan-challenge", "exit": "odd"}, None, "plan challenge ended"),
+        ({"event": "tool", "tool": "edit", "accepted": False}, None, "called edit (refused)"),
+        (None, {"tool": "submit_result", "summary": "submit_result"}, "submitted its result"),
+        (None, {"tool": "edit", "summary": "edit hero.css"}, "edit hero.css"),
+    ],
+)
+def test_the_card_names_its_last_event_in_plain_words(event, tool, said):
+    at = (NOW - timedelta(seconds=40)).isoformat()
+    events, live = ([event | {"at": at}] if event else []), (tool | {"at": at} if tool else None)
+    out = card(running(NOW - timedelta(minutes=5)), Activity(host_up=True), events, NOW, live)
+    assert out["now"] == f"Build 2/2 · {said} 40 s ago"
 
 
 def test_a_recent_now_line_of_the_current_step_keeps_the_card_from_turning_quiet():

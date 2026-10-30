@@ -33,11 +33,36 @@ QUIET: dict[StepKind, timedelta] = {
     StepKind.MERGE: _ENGINE,
     StepKind.CLEANUP: _ENGINE,
 }  # a pending wait has no runner, so it is never quiet
+# The card's words for a logged event match the activity log's (web/pages/changes/activity.mjs), in lower case.
+_STEP_SAID = {
+    "shape": "shaping", "plan": "planning", "tests": "test review", "build": "building", "review": "review",
+    "integrate": "update with the target", "publish": "publishing", "follow": "following the pull request",
+    "check": "check preparation", "merge": "merge", "cleanup": "clean-up",
+}  # fmt: skip
+_EXIT_SAID = {
+    "done": "finished", "retry": "will try again", "ask": "asks you", "back": "went back", "stop": "stopped",
+    "pending": "waiting",
+}  # fmt: skip
+TOOL_SAID = {
+    "submit_result": "submitted its result", "ask_question": "asked a question",
+    "report_wrong_premise": "reported a wrong premise", "report_missing_tool": "reported a missing tool",
+    "lookup_decisions": "looked up decisions", "submit_first_look": "submitted its first look",
+    "scan_design": "scanned the design",
+}  # fmt: skip
+
+
+def _tool_said(tool: object) -> str:
+    return TOOL_SAID.get(str(tool), f"called {tool}")
+
+
 _SAID: dict[str, Callable[[dict[str, Any]], str]] = {
-    "tool": lambda e: f"called `{e.get('tool')}`" + ("" if e.get("accepted", True) else " (rejected)"),
-    "denied": lambda e: f"denied `{redact(str((e.get('request') or [''])[0]))[:60]}`",
+    "tool": lambda e: _tool_said(e.get("tool")) + ("" if e.get("accepted", True) else " (refused)"),
+    "denied": lambda e: f'denied "{redact(str((e.get("request") or [""])[0]))[:60]}"',
     "session": lambda e: "session resumed" if e.get("resumed") else "session started",
-    "step": lambda e: f"{e.get('kind')} ended: {e.get('exit')}",
+    "step": lambda e: (
+        f"{_STEP_SAID.get(str(e.get('kind')), str(e.get('kind')).replace('-', ' '))} "
+        + _EXIT_SAID.get(str(e.get("exit")), "ended")
+    ),
     "pids": lambda _e: "started a process",
     "force-stop": lambda _e: "stopped the session",
     "wave": lambda _e: "started judges",
@@ -149,7 +174,8 @@ def card(  # noqa: PLR0913 - the data repository's push state is observed apart 
     last = next((e for e in reversed(events) if "at" in e and "event" in e), None)
     shown = _tool_at(c, tool)
     if shown and tool and (not last or shown > datetime.fromisoformat(last["at"])):
-        line += f" · {tool.get('summary') or tool.get('tool')} {_age(now - shown)} ago"
+        said = tool.get("summary") if tool.get("summary") not in {None, "", tool.get("tool")} else None
+        line += f" · {said or _tool_said(tool.get('tool'))} {_age(now - shown)} ago"
     elif last:
         said = _SAID.get(last["event"], lambda e: str(e["event"]))(last)
         line += f" · {said} {_age(now - datetime.fromisoformat(last['at']))} ago"
