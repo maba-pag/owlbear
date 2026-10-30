@@ -428,7 +428,7 @@ def test_recent_activity_reads_in_words_with_one_line_per_merge_and_repeats_coun
         expect(lines.nth(5)).to_contain_text("Lint not run: ruff: no configuration for new.py")
         expect(lines.nth(6)).to_contain_text("Workspace flip kept: large ignored files")
         expect(lines.nth(7)).to_contain_text("Merged PR #20 as 77541c4 (squash)")
-        expect(lines.nth(8)).to_contain_text("Check feel cleaned up")
+        expect(lines.nth(8)).to_have_text(re.compile(r"Check feel ended; its cleanup ran$"))
         expect(lines.nth(9)).to_have_text(re.compile(r"Called submit_result\s*\u00d73, 3 times$"))
         kept = r"Clean-up finished: workspace kept: large ignored files \(flip\)$"  # a spaced path in parentheses
         expect(lines.nth(10)).to_have_text(re.compile(kept))

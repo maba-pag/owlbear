@@ -325,6 +325,12 @@ def test_an_inbox_entry_is_one_compact_row_triaged_with_the_keyboard_alone(store
         rows = page.locator("#inbox > li.entry")
         expect(rows).to_have_count(2)
         first = rows.first
+        expect(first.get_by_role("combobox")).to_be_visible()  # PDS renders its parts after the hosts; measure after
+        expect(first.get_by_role("button", name="Drop Faster first paint")).to_be_visible()
+        expect(first.locator("> p-checkbox input")).to_be_attached()
+        plain = page.locator('p-checkbox[label="shop-site"]').first
+        expect(plain.locator("input")).to_be_attached()
+        page.evaluate("document.fonts.ready.then(() => true)")
         title, triage = first.locator(".title").bounding_box(), first.locator(".triage").bounding_box()
         assert title
         assert triage
@@ -334,9 +340,6 @@ def test_an_inbox_entry_is_one_compact_row_triaged_with_the_keyboard_alone(store
         alpha = (
             "e => parseFloat((getComputedStyle(e.shadowRoot.querySelector('input')).borderColor.split(',')[3]) ?? 1)"
         )
-        plain = page.locator('p-checkbox[label="shop-site"]').first
-        expect(first.locator("> p-checkbox input")).to_be_attached()  # PDS renders the input after the host
-        expect(plain.locator("input")).to_be_attached()
         assert first.locator("> p-checkbox").evaluate(alpha) > 1.5 * plain.evaluate(
             alpha
         )  # PDS's faint edge read as disabled

@@ -97,8 +97,9 @@ const SAID = {
     : `task ${e.task}`}, attempt ${e.attempt}${why(e.error)}`,
   wave: (e) => `Judges started${e.left ? `, ${e.left} left` : ""}`,
   snapshot: () => "Check environment saved",
-  "prepared-end": (e) => (e.cleanup && e.cleanup !== "ok" ? `Check ${e.check} not fully cleaned up: ${e.cleanup}`
-    : `Check ${e.check} cleaned up`),
+  // "ok" covers the cleanup command and the snapshot; setup edits that cannot be discarded stop the step after it.
+  "prepared-end": (e) => `Check ${e.check} ended; ${e.cleanup && e.cleanup !== "ok" ? `cleanup incomplete: ${e.cleanup}`
+    : "its cleanup ran"}`,
   "prepared-stray": () => "Stray files from preparing discarded",
   lint: linted,
   "lint-skipped": (e) => `Lint ${e.tool} skipped${why(e.reason)}`,
