@@ -472,6 +472,13 @@ def test_settings_say_this_machine_s_settings_could_not_be_read_and_read_them_ag
         stale = page.locator("#machine-stale")
         expect(stale).to_contain_text("Could not read this machine's settings again")
         expect(page.locator("#machine-login")).to_contain_text("Start at login")
+        pds.pick(page, "Versions this machine takes", "major")  # Copilot on #813: a save's answer is read, not stale
+        page.get_by_role("region", name="This machine").get_by_role("button", name="Save machine settings").click()
+        pds.answer(page, "Save machine settings")
+        expect(page.locator("#status")).to_have_text("Saved this machine's settings.")
+        expect(stale).to_have_count(0)
+        page.evaluate("document.dispatchEvent(new Event('owlbear-machine'))")
+        expect(stale).to_be_visible()  # a failed read after the save warns again
         page.unroute("**/api/next/machine", busy)
         page.evaluate("document.dispatchEvent(new Event('owlbear-machine'))")
         expect(stale).to_have_count(0)

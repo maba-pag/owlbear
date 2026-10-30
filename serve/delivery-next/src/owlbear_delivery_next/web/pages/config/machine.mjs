@@ -159,14 +159,14 @@ async function saveMachine() {
   state.machineWrites += 1;
   show();
   try {
-    state.machine = await call("/machine/settings", { method: "PUT", machine: true, timeout: WRITE,
+    accept(await call("/machine/settings", { method: "PUT", machine: true, timeout: WRITE,
       body: { rev: state.machine.settings_rev, settings: { ...state.machine.settings, ...Object.fromEntries(
-        Object.entries(state.machineDraft).map(([key, v]) => [key, sent(key, v)])) } } });
+        Object.entries(state.machineDraft).map(([key, v]) => [key, sent(key, v)])) } } }));
     state.machineDraft = null;
     state.machineText = null;
     state.status = "Saved this machine's settings.";
   } catch (e) {
-    if (e.status === 409) state.machine = await call("/machine", { machine: true }).catch(() => state.machine);
+    if (e.status === 409) await call("/machine", { machine: true }).then(accept, () => undefined);
     notify(e.status === 409 ? `${e.message}. The page loaded them again and kept your edits; check them and save `
       + "again." : e.message);
   } finally {
@@ -217,7 +217,7 @@ async function removeLegacy() {
     after: "It cannot be brought back; a later version is installed from GitHub as usual.",
     instead: "It stays where it is." }))) return;
   try {
-    state.machine = await call("/machine/legacy/remove", { method: "POST", machine: true, timeout: WRITE });
+    accept(await call("/machine/legacy/remove", { method: "POST", machine: true, timeout: WRITE }));
     state.status = "Removed the old runtime.";
   } catch (e) {
     notify(e.message);
@@ -234,9 +234,14 @@ export async function readMachine() {
     return undefined;
   });
   if (read !== undefined && !state.machineSaving && writes === state.machineWrites) {
-    state.machine = read;  // typed text stays: it shows only while its items are the field's own (ownControl)
-    state.machineUnread = "";
+    accept(read);  // typed text stays: it shows only while its items are the field's own (ownControl)
   }
+}
+
+// The machine's values as the host answered them, so a read that failed before no longer speaks for them.
+function accept(machine) {
+  state.machine = machine;
+  state.machineUnread = "";
 }
 
 // The machine host's values and every other project's settings, each shared folder once (twin clones share one).
