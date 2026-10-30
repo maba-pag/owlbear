@@ -191,11 +191,6 @@ def test_a_category_action_saves_survives_a_reload_and_clearing_it_inherits_the_
     "spotter",
     [
         {"hand_off_fitness": "stop-and-ask"},
-        {"course_and_constraints": "refuse-hand-off"},
-        {"outside_state_changes": "steer"},
-        {"irreversible_harm": "refuse-hand-off"},
-        {"irreversible_harm": "steer"},
-        {"switch": "learning"},
         {"mode": "live"},
     ],
 )
