@@ -408,23 +408,29 @@ def test_recent_activity_reads_in_words_with_one_line_per_merge_and_repeats_coun
         {"event": "undo", "task": "t1", "attempt": 2, "at": "2026-10-16T01:05:30+00:00"},
         {"event": "step", "kind": "cleanup", "exit": "pending", "reason": "waiting for checks",
          "at": "2026-10-16T01:06:00+00:00"},
+        {"event": "lint", "ran": [{"tool": "ruff", "files": ["a.py"], "state": "passed"},
+                                  {"tool": "mypy", "files": ["a.py"], "state": "broken"}],
+         "skipped": [], "passed": True, "at": "2026-10-16T01:06:10+00:00"},  # a repeat break no longer blocks
+        {"event": "force-stop", "reason": "stop timed out", "runtime_pid": 41, "at": "2026-10-16T01:06:20+00:00"},
     ]  # fmt: skip
     for e in events:
         store.log(Lock("flip"), "flip", e)
     with opened(base, "flip", pds) as page:
         lines = page.locator("#detail .log li")
-        expect(lines).to_have_count(8)
-        expect(lines.nth(0)).to_contain_text("Clean-up waiting: waiting for checks")
-        expect(lines.nth(1)).to_have_text(re.compile(r"Undid task t1, attempt 2$"))  # not counted with the failure
-        expect(lines.nth(2)).to_contain_text("Could not undo task t1, attempt 2: conflict in hero.css")
-        expect(lines.nth(3)).to_contain_text("Lint not run: ruff: no configuration for new.py")
-        expect(lines.nth(4)).to_contain_text("Workspace flip kept: large ignored files")
-        expect(lines.nth(5)).to_contain_text("Merged PR #20 as 77541c4 (squash)")
-        expect(lines.nth(6)).to_contain_text("Check feel cleaned up")
-        expect(lines.nth(7)).to_have_text(re.compile(r"Called submit_result\s*\u00d73, 3 times$"))
+        expect(lines).to_have_count(10)
+        expect(lines.nth(0)).to_contain_text("Tried to force the session to stop: stop timed out")
+        expect(lines.nth(1)).to_contain_text("Lint incomplete (ruff, mypy could not run)")
+        expect(lines.nth(2)).to_contain_text("Clean-up waiting: waiting for checks")
+        expect(lines.nth(3)).to_have_text(re.compile(r"Undid task t1, attempt 2$"))  # not counted with the failure
+        expect(lines.nth(4)).to_contain_text("Could not undo task t1, attempt 2: conflict in hero.css")
+        expect(lines.nth(5)).to_contain_text("Lint not run: ruff: no configuration for new.py")
+        expect(lines.nth(6)).to_contain_text("Workspace flip kept: large ignored files")
+        expect(lines.nth(7)).to_contain_text("Merged PR #20 as 77541c4 (squash)")
+        expect(lines.nth(8)).to_contain_text("Check feel cleaned up")
+        expect(lines.nth(9)).to_have_text(re.compile(r"Called submit_result\s*\u00d73, 3 times$"))
         expect(page.locator("#detail .log")).not_to_contain_text("/Users/")
         exact = page.evaluate(
             "(at) => at.map((iso) => new Date(iso).toLocaleString())", [events[0]["at"], events[2]["at"]]
         )
-        expect(lines.nth(7).locator("time")).to_have_attribute("title", " to ".join(exact))  # the exact times on hover
+        expect(lines.nth(9).locator("time")).to_have_attribute("title", " to ".join(exact))  # the exact times on hover
     assert [e["event"] for e in store.events("flip")][-len(events) :] == [e["event"] for e in events]

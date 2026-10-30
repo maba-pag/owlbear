@@ -44,11 +44,15 @@ const words = (name) => {
 };
 const METHOD = { queue: "merge queue" };
 
-// A lint event records the linters that ran and the ones skipped; "passed" alone is true when none ran.
+// A lint event records each linter's run state; "passed" stays true when none ran, or when a repeat break is skipped.
 function linted(e) {
-  const ran = (e.ran || []).map((r) => r.tool), skipped = (e.skipped || []).join("; ");
+  const ran = e.ran || [], skipped = (e.skipped || []).join("; ");
   if (!ran.length) return `Lint not run${why(skipped)}`;
-  return `Lint ${e.passed ? "passed" : "found problems"} (${ran.join(", ")})${skipped ? `; skipped: ${skipped}` : ""}`;
+  const broken = ran.some((r) => r.state === "broken");
+  const verdict = ran.some((r) => r.state === "failed") || (e.passed === false && !broken) ? "found problems"
+    : broken ? "incomplete" : "passed";
+  const tools = ran.map((r) => (r.state === "broken" ? `${r.tool} could not run` : r.tool)).join(", ");
+  return `Lint ${verdict} (${tools})${skipped ? `; skipped: ${skipped}` : ""}`;
 }
 
 // Each recorded event in plain words; an event this page does not know reads as its name, with its reason if any.
@@ -99,7 +103,7 @@ const SAID = {
   "lint-unresolved": () => "Lint problems left unresolved",
   "subagent-started": (e) => `Subagent ${e.agent || ""} started${e.allowed === false ? " (not allowed)" : ""}`,
   subagent: (e) => `Subagent ${e.name || e.agent || ""} ${e.outcome || "ended"}`,
-  "force-stop": () => "Session stopped",
+  "force-stop": (e) => `Tried to force the session to stop${why(e.reason)}`,
   reminder: () => "Agent reminded to finish",
   shelved: () => "Shelved",
   "profile-confirmed": (e) => `Profile ${e.key} confirmed`,
