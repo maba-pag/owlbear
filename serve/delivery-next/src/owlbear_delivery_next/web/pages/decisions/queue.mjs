@@ -4,13 +4,14 @@ import { call } from "/assets/ui.mjs";
 import { leads } from "./actions.mjs";
 import { detail, open } from "./entry.mjs";
 import { refresh } from "./list.mjs";
-import { at, cutOff, KINDS, notify, sameAddress, scopeOf, show, state, untagged, WRITE } from "./state.mjs";
+import { at, cutOff, KINDS, notify, sameAddress, scopeOf, show, state, untagged, WRITE, wide } from "./state.mjs";
 import { button } from "./widgets.mjs";
 
 const VARIANT = { safety: "error", blocked: "warning", uncertain: "info", improvement: "secondary" };
 
 // One answer to a waiting read-back, at the revision the queue shows: "still right" records the read-back with its
-// receipt; "ignore for now" writes nothing to the decision and moves the item to the bottom.
+// receipt; "ignore for now" writes nothing to the decision and moves the item to the bottom. Its mark lives in a
+// project's store, so the All projects views, which have none, don't offer it.
 async function answer(q, address, action, body = {}) {
   state.pending = `${action}:${q.id}`;
   show();
@@ -42,7 +43,7 @@ function item(q, address, lead) {
     button(opened ? "Close" : q.derived ? "Open to resolve" : "Replace or withdraw", () => open(q.id,
       { from: "queue", address }), { variant: lead && q.derived ? "primary" : "secondary",
       aria: `{ 'aria-expanded': ${opened} }` }),
-    q.ignored ? nothing : button("Ignore for now", () => answer(q, address, "ignore-read-back"),
+    q.ignored || wide !== null ? nothing : button("Ignore for now", () => answer(q, address, "ignore-read-back"),
       { variant: "secondary", busy: busy("ignore-read-back") }),
   ];
   const once = cutOff(q);

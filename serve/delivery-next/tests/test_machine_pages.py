@@ -1056,13 +1056,14 @@ def test_old_update_addresses_open_the_updates_pages_and_back_and_reload_keep_th
 
 
 def decided(shared: Path, folder: str, *statements: str, **more) -> None:
-    """In force in *folder* of the shared repository (Global's when empty), committed and published."""
+    """In force in *folder* of the shared repository (Global's when empty), committed and published; *more* sets other
+    fields."""
     from owlbear_decisions import Decision, Origin, Scope, State, new_id, write  # noqa: PLC0415 - the decisions' own
 
     scope = Scope.PROJECT if folder else Scope.GLOBAL
     for said in statements:
         write(Decision(id=new_id(), title=said, statement=said, scope=scope, project=folder, origin=Origin.AUTONOMOUS,
-                       actor="shaper", state=more.get("state", State.IN_FORCE), created_at=datetime.now(UTC)),
+                       actor="shaper", created_at=datetime.now(UTC), **{"state": State.IN_FORCE} | more),
               shared / folder if folder else shared)  # fmt: skip
     for args in (("add", "-A"), ("commit", "-qm", "seed"), ("push", "-q", "origin", "HEAD")):
         subprocess.run(["git", *args], cwd=shared, check=True, capture_output=True)  # noqa: S603, S607
@@ -1084,7 +1085,9 @@ def test_decisions_under_all_projects_sum_up_each_scope_and_open_its_view_even_w
     monkeypatch.setenv(data_place.VIEW, str(shared))
     a, b, gone = (registry.register(clone(tmp_path / n)) for n in ("alpha", "beta", "gone"))
     shutil.rmtree(tmp_path / "gone")
-    decided(shared, "", "Pages are plain HTML.", "Every page has one primary.")
+    decided(shared, "", "Pages are plain HTML.")
+    decided(shared, "", "Every page has one primary.", read_back="pending", read_back_why="Asked again.",
+            read_back_kind="uncertain")  # fmt: skip
     decided(shared, "owlbear", "Lint once.")
     decided(shared, "alpha", "Notes live in SQLite.")
     decided(shared, "alpha", "Notes sync nightly.", state=State.DRAFT)
@@ -1106,6 +1109,7 @@ def test_decisions_under_all_projects_sum_up_each_scope_and_open_its_view_even_w
         expect(row[b.id]).to_have_attribute("aria-busy", "true")
         expect(row[b.id]).to_contain_text("Reading…")
         expect(row["global"]).to_contain_text("2 in force · 0 drafts")
+        expect(row["global"]).to_contain_text("1 read-back waiting")
         expect(row["owlbear"]).to_contain_text("1 in force · 0 drafts")
         expect(row[gone.id]).to_contain_text("gone is replaced: ")
         expect(row[gone.id].get_by_role("link", name="Open Projects")).to_have_attribute("href", "/projects")
@@ -1134,6 +1138,9 @@ def each_scope_opens_its_view_and_leads_back(page, pds, base: str, row: dict, a:
     page.locator(".entry", has_text="Pages are plain HTML.").locator("summary").click()
     expect(page.locator("#detail")).to_contain_text("Origin")
     expect(page.get_by_role("button", name="Record an exception")).to_have_count(0)  # no project to own one
+    queued = page.locator("#queue .queued")
+    expect(queued.get_by_role("button", name="Still right")).to_have_count(1)
+    expect(queued.get_by_role("button", name="Ignore for now")).to_have_count(0)  # its mark lives in a project's store
     page.get_by_role("link", name="All projects").click()
     expect(page).to_have_url(f"{base}/decisions")
     row["owlbear"].get_by_role("link", name="OwlBear").click()
@@ -1143,6 +1150,7 @@ def each_scope_opens_its_view_and_leads_back(page, pds, base: str, row: dict, a:
     row[a.id].get_by_role("link", name="alpha").click()
     expect(page).to_have_url(f"{base}/decisions?project={a.id}")
     expect(page.locator(".entry", has_text="Notes live in SQLite.")).to_have_count(1)
+    expect(page.locator("#queue .queued").get_by_role("button", name="Ignore for now")).to_have_count(1)
     page.goto(f"{base}/decisions?project=nobody")  # a project no longer listed opens the overview
     expect(page).to_have_url(f"{base}/decisions")
 
