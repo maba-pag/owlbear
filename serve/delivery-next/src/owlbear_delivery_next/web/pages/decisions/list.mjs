@@ -5,8 +5,8 @@ import { receipts } from "./actions.mjs";
 import { detail, open } from "./entry.mjs";
 import { queue } from "./queue.mjs";
 import { loadRecovery, recoveryView } from "./recovery.mjs";
-import { addressOf, filter, readBack, sameAddress, STATES, scopeOf, show, state, TAGS } from "./state.mjs";
-import { button, field, select } from "./widgets.mjs";
+import { addressOf, cutOff, filter, readBack, sameAddress, STATES, scopeOf, show, state, TAGS } from "./state.mjs";
+import { field, select } from "./widgets.mjs";
 
 const WHERE = [["all", "This project and Global"], ["project", "This project"], ["global", "Global"],
   ["owlbear", "OwlBear"]];
@@ -61,29 +61,46 @@ function filters() {
   </section>`;
 }
 
+function tags(d) {
+  return html`<div class="tags">
+    <p-tag compact="true" class="scope">${scopeOf(d)}</p-tag>
+    <p-tag compact="true" class="origin">${d.origin}</p-tag>
+    <p-tag compact="true" variant=${TAGS[d.state]} class="state">${STATES[d.state]}</p-tag>
+    ${d.conflict ? html`<p-tag compact="true" variant="error" class="conflict">conflict</p-tag>` : nothing}
+    ${d.findings && !d.conflict ? html`<p-tag compact="true" variant="warning">problem</p-tag>` : nothing}
+    ${d.read_back === "none" && !d.inherited ? nothing : html`<p-tag compact="true" class="read-back">${readBack(d)}
+      </p-tag>`}</div>`;
+}
+
+// One decision as PDS's accordion: its heading and statement stay visible, its detail opens below them.
 function card(d, address) {
   const opened = state.opened === d.id && state.from === "list" && sameAddress(state.address, address);
+  const once = cutOff(d);
   return html`<li class="entry" data-id=${d.id}>
-    <div class="title"><p-text weight="semibold">${d.title}</p-text>
-      <p-tag compact="true" class="scope">${scopeOf(d)}</p-tag>
-      <p-tag compact="true" class="origin">${d.origin}</p-tag>
-      <p-tag compact="true" variant=${TAGS[d.state]} class="state">${STATES[d.state]}</p-tag>
-      ${d.conflict ? html`<p-tag compact="true" variant="error" class="conflict">conflict</p-tag>` : nothing}
-      ${d.findings && !d.conflict ? html`<p-tag compact="true" variant="warning">problem</p-tag>` : nothing}
-      ${d.read_back === "none" && !d.inherited ? nothing : html`<p-tag compact="true" class="read-back">${readBack(d)}
-        </p-tag>`}</div>
-    <p-text class="said" size="sm">${d.statement}</p-text>
-    <div class="row">${button(opened ? "Close" : "Open", () => open(d.id, { address }), { variant: "secondary",
-      aria: `{ 'aria-expanded': ${opened} }` })}</div>
-    ${opened ? detail() : nothing}
+    <p-accordion compact="true" background="surface" .open=${opened} @update=${() => open(d.id, { address })}>
+      <div slot="summary" class="summary"><div class="named"><p-heading tag="h3" size="sm" weight="semibold"
+        class="heading">${once ? d.statement : d.title}</p-heading>
+        ${once ? nothing : html`<p-text class="said" size="sm">${d.statement}</p-text>`}</div>${tags(d)}</div>
+      ${opened ? detail() : nothing}
+    </p-accordion>
   </li>`;
+}
+
+function listView(loaded) {
+  const rows = loaded.decisions;
+  const empty = loaded.total ? "No decision matches these filters." : "No decision is recorded yet.";
+  return html`<section id="decisions" aria-labelledby="decisions-heading">
+    <p-heading size="lg"><h2 id="decisions-heading">Recorded decisions</h2></p-heading>
+    ${filters()}
+    ${rows.length ? html`<ul class="entries" id="entries">${repeat(rows, (d) => d.id, (d) => card(d, loaded.address))}
+      </ul>` : html`<p-text class="empty" color="contrast-medium">${empty}</p-text>`}
+  </section>`;
 }
 
 export function view() {
   const loaded = state.loaded, available = loaded?.available;
-  const rows = available ? loaded.decisions : [];
-  document.getElementById("shown").textContent = available ? `${rows.length} of ${loaded.total} shown` : "";
-  const empty = loaded?.total ? "No decision matches these filters." : "No decision is recorded yet.";
+  document.getElementById("shown").textContent = available ? `${loaded.decisions.length} of ${loaded.total} shown`
+    : "";
   return html`
     ${recoveryView()}
     <p-inline-notification id="error" state="error" dismiss-button="false" ?hidden=${!state.error}>${state.error}
@@ -93,8 +110,5 @@ export function view() {
     </p-inline-notification>
     ${receipts()}
     ${available ? queue() : nothing}
-    ${available ? filters() : nothing}
-    ${available && rows.length ? html`<ul class="entries" id="entries">${repeat(rows, (d) => d.id,
-      (d) => card(d, loaded.address))}</ul>` : nothing}
-    ${available && !rows.length ? html`<p-text class="empty" color="contrast-medium">${empty}</p-text>` : nothing}`;
+    ${available ? listView(loaded) : nothing}`;
 }

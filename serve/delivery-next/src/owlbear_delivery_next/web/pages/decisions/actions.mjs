@@ -191,27 +191,27 @@ function primary(e) {
 // Whether the open detail holds its panel's primary: an open form's, or the decision's own action.
 export const leads = (e) => Boolean(state.form || primary(e));
 
+// The primary leads the row, the rest keep their order, Withdraw stands apart at its end
+// (D-01M63C7BJZZ7RQV9XS4XVR0DNE).
 export function actions(e) {
   const busy = (a) => state.pending === a, parts = [], first = primary(e);
-  const opens = (label, action) => button(label, () => begin(action), { variant: "secondary" });
-  const asks = (label, work, action) => button(label, () => work(e), { aria: DIALOG, busy: busy(action),
-    variant: action === first ? "primary" : "secondary" });
+  const opens = (label, action) => [action, button(label, () => begin(action), { variant: "secondary" })];
+  const asks = (label, work, action) => [action, button(label, () => work(e), { aria: DIALOG, busy: busy(action),
+    variant: action === first ? "primary" : "secondary" })];
   if (e.state === "in_force") {
-    parts.push(asks("Read back", stillRight, "read-back"), opens("Replace", "replace"),
-      asks("Withdraw", withdraw, "withdraw"));
+    parts.push(asks("Read back", stillRight, "read-back"), opens("Replace", "replace"));
     parts.push(e.scope === "global" ? opens("Record an exception", "exception") : asks("Promote", promote, "promote"));
     if (e.conflict || e.rivals.length) parts.push(asks("Keep this one", keep, "keep"));
   }
-  if (e.state === "draft") {
-    if (e.links.some((l) => l.type === "replaces")) {
-      parts.push(select("Effect on existing work", EFFECTS, state.effect, (v) => { state.effect = v; show(); }));
-    }
-    parts.push(asks("Activate", activate, "activate"), asks("Withdraw", withdraw, "withdraw"));
-  }
+  if (e.state === "draft") parts.push(asks("Activate", activate, "activate"));
   if (["in_force", "draft"].includes(e.state)) parts.push(opens("Queue a read-back", "queue-read-back"));
   if (["in_force", "draft"].includes(e.state) && LOWER[e.origin]) {
     parts.push(asks(`Mark ${LOWER[e.origin]}`, correct, "correct-origin"));
   }
-  return parts.length && !state.form ? html`<div class="row" role="group" aria-label="Actions">${parts}</div>`
-    : nothing;
+  if (!parts.length || state.form) return nothing;
+  const effect = e.state === "draft" && e.links.some((l) => l.type === "replaces")
+    ? select("Effect on existing work", EFFECTS, state.effect, (v) => { state.effect = v; show(); }) : nothing;
+  const ordered = [...parts.filter(([a]) => a === first), ...parts.filter(([a]) => a !== first)];
+  return html`<div class="row" role="group" aria-label="Actions">${effect}${ordered.map(([, b]) => b)}
+    <span class="apart">${asks("Withdraw", withdraw, "withdraw")[1]}</span></div>`;
 }
