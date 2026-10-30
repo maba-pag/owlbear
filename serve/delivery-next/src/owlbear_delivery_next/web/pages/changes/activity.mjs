@@ -7,14 +7,16 @@ export function split(line) {  // the stage, then what is happening in it
 }
 
 // A card and the activity log name a file by its name; the current activity in the detail keeps the whole path. A
-// tool's one target may hold spaces; elsewhere a path ends at one, and a relative one counts only with an extension,
-// so counters, "CI/CD" and URLs stay as they are.
-const LAST = String.raw`([^\s,/\u00b7]+)`;
+// tool's one target, or a path quoted or in parentheses, may hold spaces; elsewhere a path ends at one, and a relative
+// one counts only with an extension, so counters, "CI/CD" and URLs stay as they are.
+const LAST = String.raw`([^\s,/\u00b7'"]+)`;
+const PART = String.raw`[^/()'",\u00b7\n]`;
 export const short = (said) => said
   .replace(new RegExp(String.raw`(?<=(?:^|\u00b7 )(?!ran )[\w-]+ )~?\/(?:[^\s,/\u00b7][^,/\u00b7]*?\/)+${LAST}`, "g"),
     "$1")
-  .replace(new RegExp(String.raw`(?<![^\s(])~?\/(?:[^\s,/\u00b7]+\/)+${LAST}`, "g"), "$1")
-  .replace(/(?<![^\s(])(?![\d./]+(?=[\s,)\u00b7]|$))(?:[\w.-]+\/)+([\w-]*\.[\w.-]+)(?=[\s,)\u00b7]|$)/g, "$1");
+  .replace(new RegExp(String.raw`(?<=[('"])~?\/(?:${PART}+\/)+(${PART}+)(?=[)'"])`, "g"), "$1")
+  .replace(new RegExp(String.raw`(?<![^\s('"])~?\/(?:[^\s,/\u00b7]+\/)+${LAST}`, "g"), "$1")
+  .replace(/(?<![^\s('"])(?![\d./]+(?=[\s,)\u00b7'"]|$))(?:[\w.-]+\/)+([\w-]*\.[\w.-]+)(?=[\s,)\u00b7'"]|$)/g, "$1");
 
 function ago(iso) {
   const seconds = Math.round((Date.now() - Date.parse(iso)) / 1000);

@@ -335,6 +335,8 @@ def test_an_inbox_entry_is_one_compact_row_triaged_with_the_keyboard_alone(store
             "e => parseFloat((getComputedStyle(e.shadowRoot.querySelector('input')).borderColor.split(',')[3]) ?? 1)"
         )
         plain = page.locator('p-checkbox[label="shop-site"]').first
+        expect(first.locator("> p-checkbox input")).to_be_attached()  # PDS renders the input after the host
+        expect(plain.locator("input")).to_be_attached()
         assert first.locator("> p-checkbox").evaluate(alpha) > 1.5 * plain.evaluate(
             alpha
         )  # PDS's faint edge read as disabled
