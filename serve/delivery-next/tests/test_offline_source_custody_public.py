@@ -16,6 +16,7 @@ from owlbear_delivery_next.local_system import local_home, maintenance
 from owlbear_delivery_next.machine_host import selfcheck
 from owlbear_delivery_next.state_store import (
     fd_tree,
+    offline_proof,
     offline_protocol,
     pack_run_record,
     project_home,
@@ -270,9 +271,41 @@ def completed(prepared):
     return repo, folder, target, pid
 
 
+def damaged(record: dict, damage: str) -> str:
+    """The preparation text *damage* leaves in place of *record*."""
+    if damage == "truncated":
+        return "{"
+    if damage == "boot-type":
+        record["boot"] = 7
+    elif damage == "boot-uuid":
+        record["boot"] = "not-a-uuid"
+    elif damage == "extra-key":
+        record["extra"] = True
+    elif damage == "missing-key":
+        del record["boot"]
+    elif damage == "folder-type":
+        record["folder"] = [True, record["folder"][1]]
+    elif damage == "folder-id":
+        record["folder"][1] += 1
+    return json.dumps(record)
+
+
 @pytest.mark.parametrize(
-    "damage", ["truncated", "boot-type", "boot-uuid", "extra-key", "missing-key", "folder-type", "folder-id", "copied"]
+    "damage", ["truncated", "boot-type", "boot-uuid", "extra-key", "missing-key", "folder-type", "folder-id"]
 )
+def test_the_preparation_witness_refuses_an_incomplete_or_foreign_record(tmp_path, damage):
+    """The one validator every switched consumer calls; below, the consumers are proved on one damage per branch."""
+    fd = os.open(tmp_path, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        record = {"boot": BEFORE, "folder": fd_tree.ident(os.fstat(fd)), "marker": "7"}
+        assert offline_proof.preparation(json.dumps(record), fd) == record
+        with pytest.raises(StoreError, match="refusing it; nothing was changed"):
+            offline_proof.preparation(damaged(record, damage), fd)
+    finally:
+        os.close(fd)
+
+
+@pytest.mark.parametrize("damage", ["truncated", "extra-key", "copied"])  # unreadable, malformed, another folder
 def test_all_switched_consumers_refuse_incomplete_or_foreign_preparation_before_marker_repair(prepared, damage):
     repo, folder, target, pid = completed(prepared)
     aside = folder.with_name("original")
@@ -282,22 +315,8 @@ def test_all_switched_consumers_refuse_incomplete_or_foreign_preparation_before_
         folder.rename(aside)
         shutil.copytree(aside, folder)
         assert not os.path.samestat(folder.stat(), aside.stat())
-    elif damage == "truncated":
-        path.write_text("{")
     else:
-        if damage == "boot-type":
-            record["boot"] = 7
-        elif damage == "boot-uuid":
-            record["boot"] = "not-a-uuid"
-        elif damage == "extra-key":
-            record["extra"] = True
-        elif damage == "missing-key":
-            del record["boot"]
-        elif damage == "folder-type":
-            record["folder"] = [True, record["folder"][1]]
-        elif damage == "folder-id":
-            record["folder"][1] += 1
-        path.write_text(json.dumps(record))
+        path.write_text(damaged(record, damage))
     (target / MARKER).unlink()
     before, target_before = snapshot(folder), snapshot(target)
     old_before = snapshot(aside) if aside.exists() else None
