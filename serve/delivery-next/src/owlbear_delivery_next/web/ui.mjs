@@ -112,11 +112,11 @@ export function defined(tags) {
 }
 
 let failed = "";  // why the machine host's state could not be read the last time, if it could not
-let asked = 0, applied = 0;
+let asked = 0, applied = 0, settled = 0;
 
 // Reads the machine host's projects and pause into the bar: null on a clone's own host (which has no such route), what
-// it last read when they cannot be read. Reads overlap (a poll and an action's reread): an older answer never replaces
-// a newer one's.
+// it last read when they cannot be read. Reads overlap (a poll and an action's reread) and settle in any order: an
+// older answer never replaces a newer one's, and a newer read that failed never discards what an older one found.
 async function read() {
   const n = ++asked;
   let data = null, why = "";
@@ -125,10 +125,14 @@ async function read() {
   } catch (error) {
     if (error.status !== 404) why = error.message;
   }
-  if (n < applied) return;
-  applied = n;
-  if (!why) bar.data = data;  // one that failed keeps what is shown, which a read in the meantime may have changed
-  failed = why;
+  if (!why && n > applied) {
+    applied = n;
+    bar.data = data;
+  }
+  if (n > settled) {
+    settled = n;
+    failed = why;
+  }
 }
 
 const bar = { data: null, busy: "", error: "", packed: "", installing: false };
