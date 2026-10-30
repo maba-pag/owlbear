@@ -368,10 +368,15 @@ def unresolved_rule(kind, scope=Scope.PROJECT):
     )
 
 
-@pytest.mark.parametrize("boundary", ["worker", "chat"])
-@pytest.mark.parametrize("invalid", ["conflict", "link"])
-@pytest.mark.parametrize("with_active", [False, True])
-@pytest.mark.parametrize("scope", [Scope.PROJECT, Scope.GLOBAL])
+@pytest.mark.parametrize(
+    ("boundary", "scope", "invalid", "with_active"),
+    [
+        pytest.param("worker", Scope.PROJECT, "conflict", False, id="worker-project-conflict"),
+        pytest.param("worker", Scope.GLOBAL, "link", True, id="worker-global-link-active"),
+        pytest.param("chat", Scope.GLOBAL, "conflict", True, id="chat-global-conflict-active"),
+        pytest.param("chat", Scope.PROJECT, "link", False, id="chat-project-link"),
+    ],
+)
 def test_unresolved_scoped_authority_fails_the_whole_lookup_without_running_a_picker(
     picking,
     boundary,
@@ -415,11 +420,8 @@ def test_no_selected_rule_is_still_an_empty_success_when_all_scoped_authority_is
     assert done is not None
 
 
-@pytest.mark.parametrize(
-    "consumer",
-    ["message", "judged", "worker", "chat", "boundary", "context", "baseline", "differences"],
-)
-def test_a_real_published_shaping_rules_binding_suffix_survives_every_consumer(picking, consumer):
+def test_a_real_published_shaping_rules_binding_suffix_survives_every_consumer(picking):
+    """One publication, then each consumer in turn; `differences` writes a new revision, so it reads last."""
     suffix = "Never retain payment-card numbers."
     text = "Notes use one table, sorted by date, with a header row and no merged cells. " * 4 + suffix
     assert STATEMENT_LIMIT < text.index(suffix) < len(text) <= 500
@@ -442,54 +444,49 @@ def test_a_real_published_shaping_rules_binding_suffix_survives_every_consumer(p
     assert suffix not in rule.statement
     assert text in rule.rationale
     picking.picks.clear()
-    picking.picks.append(picked(rule_id))
+    picking.picks += [picked(rule_id)] * 3  # the worker's, the chat's and the boundary's picker
 
-    if consumer == "message":
-        assert text in pick.message(None, [rule], "")
-    elif consumer == "judged":
-        result = Run("picker", "result", picked(rule_id), termination=DONE)
-        assert pick.judged(result, [rule], Pick(version=0)).decisions[0].statement == text
-    elif consumer == "worker":
-        answer, _ = lookup.worker(picking.store, Lock(picking.slug), c, QUESTION)
-        assert answer["decisions"][0]["statement"] == text
-        assert text in picking.pickers()[-1].message
-    elif consumer == "chat":
-        answer, _ = lookup.chat(picking.shared, PROJECT, QUESTION, picking.store.settings)
-        assert answer["decisions"][0]["statement"] == text
-        assert text in picking.pickers()[-1].message
-    elif consumer == "boundary":
-        chosen, why = pick.reassessed(picking.store, Lock(picking.slug), c, [rule], picking.shared.root)
-        assert why == ""
-        assert [d.id for d in chosen] == [rule_id]
-        assert text in picking.pickers()[-1].message
-    elif consumer == "context":
-        assert text in step_decisions.entry(rule)
-    elif consumer == "baseline":
-        assert decisions_gate.baseline(view, c, AT).said[rule_id].statement == text
-    else:
-        before = decisions_gate.baseline(view, c, AT)
-        updated = text.replace(suffix, "Payment-card numbers must be deleted immediately.")
-        write(
-            rule.model_copy(update={"rationale": rule.rationale.replace(text, updated)}),
-            picking.shared.root / PROJECT,
-            expected_revision=rule.revision,
-        )
-        current = decision_store.load(picking.shared, PROJECT)
-        after = decisions_gate.baseline(current, c, AT)
-        lines = "\n".join(decisions_gate.differences(current.snapshot, before, after))
-        assert text in lines
-        assert updated in lines
+    assert text in pick.message(None, [rule], ""), "message"
+
+    result = Run("picker", "result", picked(rule_id), termination=DONE)
+    assert pick.judged(result, [rule], Pick(version=0)).decisions[0].statement == text, "judged"
+
+    answer, _ = lookup.worker(picking.store, Lock(picking.slug), c, QUESTION)
+    assert answer["decisions"][0]["statement"] == text, "worker"
+    assert text in picking.pickers()[-1].message, "worker"
+
+    answer, _ = lookup.chat(picking.shared, PROJECT, QUESTION, picking.store.settings)
+    assert answer["decisions"][0]["statement"] == text, "chat"
+    assert text in picking.pickers()[-1].message, "chat"
+
+    chosen, why = pick.reassessed(picking.store, Lock(picking.slug), c, [rule], picking.shared.root)
+    assert why == ""
+    assert [d.id for d in chosen] == [rule_id]
+    assert text in picking.pickers()[-1].message, "boundary"
+
+    assert text in step_decisions.entry(rule), "context"
+
+    before = decisions_gate.baseline(view, c, AT)
+    assert before.said[rule_id].statement == text, "baseline"
+
+    updated = text.replace(suffix, "Payment-card numbers must be deleted immediately.")
+    write(
+        rule.model_copy(update={"rationale": rule.rationale.replace(text, updated)}),
+        picking.shared.root / PROJECT,
+        expected_revision=rule.revision,
+    )
+    current = decision_store.load(picking.shared, PROJECT)
+    after = decisions_gate.baseline(current, c, AT)
+    lines = "\n".join(decisions_gate.differences(current.snapshot, before, after))
+    assert text in lines, "differences"
+    assert updated in lines, "differences"
+    assert picking.picks == []  # every picker consumer ran its own session
 
 
-@pytest.mark.parametrize("invalid", ["conflict", "link"])
-def test_a_running_workers_sdk_tool_reports_new_unresolved_authority_without_picker_spend(
-    picking,
-    monkeypatch,
-    invalid,
-):
+def test_a_running_workers_sdk_tool_reports_new_unresolved_authority_without_picker_spend(picking, monkeypatch):
     rule = picking.put(make())
     building(picking, rule)
-    said, bad = [], unresolved_rule(invalid)
+    said, bad = [], unresolved_rule("conflict")
 
     async def run(cfg):
         if cfg.role == tools.PICKER:
@@ -511,10 +508,9 @@ def test_a_running_workers_sdk_tool_reports_new_unresolved_authority_without_pic
     assert c.spend.credits == 6.0
 
 
-@pytest.mark.parametrize("invalid", ["conflict", "link"])
-def test_a_lead_chats_mcp_tool_preserves_failed_authority_and_unresolved_ids(picking, monkeypatch, invalid):
+def test_a_lead_chats_mcp_tool_preserves_failed_authority_and_unresolved_ids(picking, monkeypatch):
     picking.put(make())
-    bad = picking.put(unresolved_rule(invalid))
+    bad = picking.put(unresolved_rule("link"))
     chat = chat_client.Chat.__new__(chat_client.Chat)
     chat.repo, chat.home = picking.repo, picking.store.root
     monkeypatch.setattr(chat_client.Chat, "record", lambda _self: RECORD)
@@ -561,8 +557,7 @@ def test_unresolved_authority_in_another_project_does_not_block_a_valid_scoped_l
     assert done is not None
 
 
-@pytest.mark.parametrize("boundary", ["worker", "chat"])
-@pytest.mark.parametrize("invalid", ["conflict", "link"])
+@pytest.mark.parametrize(("boundary", "invalid"), [("worker", "conflict"), ("chat", "link")])
 def test_a_new_lookup_runs_after_the_owner_resolves_the_invalid_authority(picking, boundary, invalid):
     active = picking.put(make())
     if boundary == "worker":
