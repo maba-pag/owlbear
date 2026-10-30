@@ -642,6 +642,14 @@ def wt(tmp_path: Path, monkeypatch) -> Path:
     return path
 
 
+@pytest.fixture
+def plain(tmp_path: Path) -> Path:
+    """An owner's folder for a step that runs no Git in it."""
+    path = tmp_path / "wt"
+    path.mkdir()
+    return path
+
+
 SHAPER = carried.layer().agents["shaper"]  # module level runs before the carried-settings fixture
 SIZES = {"enum": [200000, 1000000], "enumDescriptions": ["Default", "Longer sessions"], "default": 1000000}
 
@@ -704,40 +712,40 @@ def test_the_shaping_chat_runs_on_the_shaper_role_and_is_left_to_the_owner(wt: P
     assert (git(wt, "status", "--porcelain", "--ignored"), untouched_git(wt)) == ("", before)
 
 
-def test_a_symlinked_shaper_is_selected_by_the_link_path_the_session_lists(wt: Path, tmp_path: Path) -> None:
+def test_a_symlinked_shaper_is_selected_by_the_link_path_the_session_lists(plain: Path, tmp_path: Path) -> None:
     target = tmp_path / "runtime" / "owlbear-shaper.agent.md"
     target.parent.mkdir()
     target.write_text("---\nname: owlbear-shaper\n---\n")
     agent = readiness.shaper_path(tmp_path)
     agent.parent.mkdir(parents=True)
     agent.symlink_to(target)  # TD-165: ~/.copilot/agents links into the runtime checkout
-    host = shaping_host(wt)
+    host = shaping_host(plain)
     host.listed = [agent.as_uri()]  # the host lists the link, not its target
 
-    out, warning = shape(wt, shaping_env(host, shaper=agent))
+    out, warning = shape(plain, shaping_env(host, shaper=agent))
 
     assert (out.end, warning) == ("started", "")
     ((_, started),) = host.actions("chat/turnStarted")
     assert started["message"]["agent"] == {"uri": agent.as_uri()}
     assert host.launched[0][:4] == ["code", "chat", "-m", "owlbear-shaper"]  # typed messages keep the shaper
-    assert not (wt / ".github").exists()  # no project agent file
+    assert not (plain / ".github").exists()  # no project agent file
 
 
-def test_a_shaper_agent_the_session_does_not_list_starts_no_turn(wt: Path, tmp_path: Path) -> None:
+def test_a_shaper_agent_the_session_does_not_list_starts_no_turn(plain: Path, tmp_path: Path) -> None:
     agent = readiness.shaper_path(tmp_path)
     agent.parent.mkdir(parents=True)
     agent.write_text("---\nname: owlbear-shaper\n---\n")
-    host = shaping_host(wt)
+    host = shaping_host(plain)
 
-    out, _ = shape(wt, shaping_env(host, shaper=agent))
+    out, _ = shape(plain, shaping_env(host, shaper=agent))
 
     assert (out.end, out.detail) == ("no-agent", f"the session does not list {agent.resolve().as_uri()}")
     assert host.actions("chat/turnStarted") == []
 
 
-def test_without_the_installed_shaper_agent_the_chat_never_opens_with_every_tool(wt: Path, tmp_path: Path) -> None:
-    host = shaping_host(wt)
-    out, warning = shape(wt, shaping_env(host, shaper=readiness.shaper_path(tmp_path)))
+def test_without_the_installed_shaper_agent_the_chat_never_opens_with_every_tool(plain: Path, tmp_path: Path) -> None:
+    host = shaping_host(plain)
+    out, warning = shape(plain, shaping_env(host, shaper=readiness.shaper_path(tmp_path)))
     assert (out.end, warning) == ("no-agent", "")
     assert out.detail.startswith("the shaper agent is not installed at")
     assert out.detail.endswith("run `owlbear install`")
@@ -767,28 +775,28 @@ def test_only_the_harness_key_is_added_and_removed_and_the_owners_edits_meanwhil
     assert untouched_git(wt) == before
 
 
-def test_a_settings_file_delivery_made_keeps_what_the_owner_added_meanwhile(wt: Path) -> None:
-    settings = wt / ".vscode" / "settings.json"
+def test_a_settings_file_delivery_made_keeps_what_the_owner_added_meanwhile(plain: Path) -> None:
+    settings = plain / ".vscode" / "settings.json"
 
     def owner_adds() -> None:
         settings.write_text(settings.read_text().replace("true\n", 'true,\n  "a": 1\n'))
 
-    out, warning = shape(wt, shaping_env(shaping_host(wt), owner_adds))
+    out, warning = shape(plain, shaping_env(shaping_host(plain), owner_adds))
     assert (out.end, warning, settings.read_text()) == ("started", "", '{\n  "a": 1\n}\n')
 
 
 @pytest.mark.parametrize("theirs", ['{"chat.defaultToCopilotHarness": false}', "// x\n{}\n"])
-def test_the_owners_own_harness_setting_or_an_empty_object_is_kept_byte_for_byte(wt: Path, theirs: str) -> None:
-    settings = wt / ".vscode" / "settings.json"
+def test_the_owners_own_harness_setting_or_an_empty_object_is_kept_byte_for_byte(plain: Path, theirs: str) -> None:
+    settings = plain / ".vscode" / "settings.json"
     settings.parent.mkdir()
     settings.write_text(theirs)
-    out, warning = shape(wt, shaping_env(shaping_host(wt)))
+    out, warning = shape(plain, shaping_env(shaping_host(plain)))
     assert (out.end, warning, settings.read_text()) == ("started", "", theirs)
 
 
-def test_a_cleanup_failure_is_a_warning_and_the_chat_still_started(wt: Path) -> None:
-    folder = wt / ".vscode"
-    out, warning = shape(wt, shaping_env(shaping_host(wt), lambda: folder.chmod(0o555)))
+def test_a_cleanup_failure_is_a_warning_and_the_chat_still_started(plain: Path) -> None:
+    folder = plain / ".vscode"
+    out, warning = shape(plain, shaping_env(shaping_host(plain), lambda: folder.chmod(0o555)))
     folder.chmod(0o755)
     assert out.end == "started"
     assert warning.startswith("could not remove chat.defaultToCopilotHarness from .vscode/settings.json")
@@ -796,20 +804,20 @@ def test_a_cleanup_failure_is_a_warning_and_the_chat_still_started(wt: Path) -> 
     assert json.loads((folder / "settings.json").read_text()) == {HARNESS: True}
 
 
-def test_settings_that_are_not_an_object_refuse_the_shaping_chat_before_launch(wt: Path) -> None:
-    settings = wt / ".vscode" / "settings.json"
+def test_settings_that_are_not_an_object_refuse_the_shaping_chat_before_launch(plain: Path) -> None:
+    settings = plain / ".vscode" / "settings.json"
     settings.parent.mkdir()
     settings.write_text("[]\n")
-    host = shaping_host(wt)
-    out, warning = shape(wt, shaping_env(host))
+    host = shaping_host(plain)
+    out, warning = shape(plain, shaping_env(host))
     assert (out.end, warning, host.launched, settings.read_text()) == ("settings-refused", "", [], "[]\n")
 
 
-def test_a_shaping_turn_the_host_never_starts_is_reported(wt: Path) -> None:
-    host = shaping_host(wt)
+def test_a_shaping_turn_the_host_never_starts_is_reported(plain: Path) -> None:
+    host = shaping_host(plain)
     dispatch = host.dispatch
     host.dispatch = lambda channel, action: None if action["type"] == "chat/turnStarted" else dispatch(channel, action)
-    out, _ = shape(wt, shaping_env(host))
+    out, _ = shape(plain, shaping_env(host))
     assert (out.end, out.detail) == ("unstarted", "the host did not start the prompt's turn")
 
 

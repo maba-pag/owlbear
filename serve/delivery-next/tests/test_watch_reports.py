@@ -193,31 +193,17 @@ def test_a_migration_fence_held_through_the_deadline_stops_the_writer_and_the_lo
     assert watch_reports.reports(store.db, "c1") == []  # nothing written after the deadline, the summary neither
 
 
-@pytest.mark.usefixtures("fast")
-def test_a_sqlite_write_lock_held_through_the_deadline_stops_the_writer_and_the_log_says_what_was_lost(store) -> None:
-    notes: list[str] = []
-    other = sqlite3.connect(store.db.path, isolation_level=None)
-    other.execute("BEGIN IMMEDIATE")
-    try:
-        w = writer(store, notes)
-        w.put(watch_reports.put("c1", report(0)))
-        until = time.monotonic() + 5
-        while w.queue.qsize() and time.monotonic() < until:
-            time.sleep(0.01)
-        w.close(summary, deadline=0.3)
-        assert not w.thread.is_alive()
-        assert not threads()
-    finally:
-        other.execute("ROLLBACK")
-        other.close()
-    assert len(notes) == 1  # the one in progress at the deadline is failed or not written, whichever saw it first
-    assert (notes[0].startswith("watcher c1: "), lost(notes[0])) == (True, 1)
-    assert watch_reports.reports(store.db, "c1") == []
-
-
 def test_a_bounded_write_gives_up_as_busy_and_needs_an_open_database(store, tmp_path) -> None:
     with store.db.fenced(), pytest.raises(BusyError, match="being migrated"), store.db.write(wait=0.05):
         pass
+    other = sqlite3.connect(store.db.path, isolation_level=None)
+    other.execute("BEGIN IMMEDIATE")  # another connection holds SQLite's write lock: busy, never a failure
+    try:
+        with pytest.raises(BusyError, match="locked"), store.db.write(wait=0.05):
+            pass
+    finally:
+        other.execute("ROLLBACK")
+        other.close()
     with pytest.raises(BusyError, match="not open yet"), Store(tmp_path / "new").db.write(wait=0.05):
         pass
 

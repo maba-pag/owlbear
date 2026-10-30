@@ -22,7 +22,7 @@ from owlbear_decisions import Decision, Origin, Scope, State, new_id
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import HostRecord
-from owlbear_delivery_next.state_store import decision_batch, decision_recovery
+from owlbear_delivery_next.state_store import decision_actions, decision_batch, decision_recovery, decision_store
 from owlbear_delivery_next.state_store.store import Store
 
 if TYPE_CHECKING:
@@ -135,12 +135,33 @@ def _interrupt(picking: Any) -> tuple[Any, str]:
     return old, decision_batch.pending(picking.shared).generation
 
 
+def _interrupted_here(picking: Any) -> str:
+    """The same interruption within this process: the replacement stops after its first write; its generation."""
+    old = _seed(picking)
+    real_write = decision_store.write
+
+    def first_then_crash(*args, **kwargs):
+        real_write(*args, **kwargs)
+        msg = "power cut after the first write"
+        raise RuntimeError(msg)
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(decision_store, "write", first_then_crash)
+        with pytest.raises(RuntimeError, match="power cut"):
+            decision_actions.replace(
+                picking.shared, PROJECT, old.id, old.revision,
+                title="Notes store", statement="Notes live in Postgres.", rationale="",
+                reason="SQLite no longer meets the requirement.", redecided=False,
+            )  # fmt: skip
+    return decision_batch.pending(picking.shared).generation
+
+
 def _store(picking: Any, tmp_path: Path) -> Store:
     return Store(tmp_path / "store", picking.shared, PROJECT)
 
 
 def test_recovery_is_served_while_the_decision_list_is_blocked(picking, tmp_path):
-    _, generation = _interrupt(picking)
+    generation = _interrupted_here(picking)
     client = TestClient(
         api.create_app(_store(picking, tmp_path), "tok", Host()),
         base_url="http://127.0.0.1",
@@ -154,7 +175,8 @@ def test_recovery_is_served_while_the_decision_list_is_blocked(picking, tmp_path
 
 
 @pytest.mark.browser
-def test_the_interrupted_batch_is_reachable_while_the_list_is_blocked(picking, tmp_path, pds):
+def test_finish_publishes_only_after_the_owner_confirms_the_generation(picking, tmp_path, pds):
+    """The interrupted batch is reachable while the list is blocked, and Finish needs the owner's confirmation."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     _, generation = _interrupt(picking)
@@ -163,17 +185,7 @@ def test_the_interrupted_batch_is_reachable_while_the_list_is_blocked(picking, t
         expect(page.locator(".recovery-project")).to_have_text(PROJECT)
         expect(page.locator(".recovery-generation")).to_have_text(generation)
         expect(page.locator("#unavailable")).to_be_visible()
-        expect(page.get_by_role("button", name="Finish batch")).to_be_visible()
         expect(page.get_by_role("button", name="Abandon batch")).to_be_visible()
-
-
-@pytest.mark.browser
-def test_finish_publishes_only_after_the_owner_confirms_the_generation(picking, tmp_path, pds):
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    _, generation = _interrupt(picking)
-    with decisions_page(_store(picking, tmp_path), pds) as page:
-        expect(page.locator(".recovery-generation")).to_have_text(generation)
         page.get_by_role("button", name="Finish batch").click()
         dialog = pds.modal(page)
         expect(dialog).to_contain_text("Finish the interrupted decision batch?")
@@ -247,7 +259,7 @@ def test_a_corrupt_journal_is_diagnosed_and_offers_no_action(picking, tmp_path, 
 
 
 def test_a_recovery_request_refused_by_validation_never_echoes_what_was_sent(picking, tmp_path):
-    _, generation = _interrupt(picking)
+    generation = _interrupted_here(picking)
     client = TestClient(
         api.create_app(_store(picking, tmp_path), "tok", Host()),
         base_url="http://127.0.0.1",

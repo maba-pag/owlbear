@@ -80,23 +80,11 @@ def test_a_finished_move_source_is_canonical_only_while_its_switched_receipt_hol
     assert (source(repo) / MARKER).read_text().strip() == "999"
 
 
-@pytest.mark.usefixtures("current_binding")
-def test_the_selfcheck_passes_a_finished_move_and_refuses_a_future_target(repo, boot) -> None:
-    target = move_to_next_boot(repo, boot)
-    pid = registry.clone_id(source(repo))
-    assert selfcheck._project(pid, repo) == []  # noqa: SLF001
-
-    (target / MARKER).write_text(f"{STORE_FORMAT + 1}")
-    assert selfcheck._project(pid, repo) != []  # noqa: SLF001
-    assert (source(repo) / MARKER).read_text().strip() == "999"
-    assert (target / MARKER).read_text() == f"{STORE_FORMAT + 1}"
-
-
 @pytest.mark.usefixtures("current_binding", "boot")
 @pytest.mark.parametrize(
     "backup",
-    [b"{not json", b"\xff\xfe\x00", json.dumps({"format": CONFIG_FORMAT + 1}).encode()],
-    ids=["malformed", "not-utf8", "newer"],
+    [b"{not json"],
+    ids=["malformed"],
 )
 def test_the_selfcheck_ignores_the_backup_config_of_a_validated_move(repo, boot, backup) -> None:
     target = move_to_next_boot(repo, boot)

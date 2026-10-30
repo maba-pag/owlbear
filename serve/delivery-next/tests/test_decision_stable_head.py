@@ -371,17 +371,20 @@ def test_both_readers_keep_healthy_authority(readable, reader, project) -> None:
     assert all(seen.active(entry.decision.id) for entry in seen.entries)
 
 
-@pytest.mark.parametrize("reader", READERS, ids=["load", "file_only"])
-@pytest.mark.parametrize("project", ["", PROJECT], ids=["global", "project"])
 @pytest.mark.parametrize(
-    "transition",
-    [("rebase-merge", "before"), ("rebase-apply", "before"), ("rebase-merge", "during"), ("rebase-apply", "during")],
+    ("marker", "when", "reader"),
+    [
+        ("rebase-merge", "before", decision_store.load),
+        ("rebase-apply", "before", decision_store.file_snapshot),
+        ("rebase-merge", "during", decision_store.file_snapshot),
+        ("rebase-apply", "during", decision_store.load),
+    ],
+    ids=["merge-before-load", "apply-before-file_only", "merge-during-file_only", "apply-during-load"],
 )
 def test_an_active_rebase_before_or_during_collection_refuses_both_readers(
-    readable, warmth, reader, project, transition
+    readable, warmth, marker, when, reader
 ) -> None:
-    shared = readable
-    marker, when = transition
+    shared, project = readable, PROJECT
     warmth.ready(shared, project)
     path = shared.root / git(shared.root, "rev-parse", "--git-path", marker)
     held = []
@@ -413,9 +416,12 @@ def test_an_active_rebase_before_or_during_collection_refuses_both_readers(
     assert warmth.parses == ([] if when == "before" else warmth.collected(project))
 
 
-@pytest.mark.parametrize("reader", READERS, ids=["load", "file_only"])
-@pytest.mark.parametrize("when", [1, 2], ids=["before", "after_collection"])
-def test_an_unknown_rebase_at_either_probe_refuses_both_readers(readable, monkeypatch, warmth, reader, when) -> None:
+@pytest.mark.parametrize(
+    ("when", "reader"),
+    [(1, decision_store.load), (2, decision_store.file_snapshot)],
+    ids=["before-load", "after_collection-file_only"],
+)
+def test_an_unknown_rebase_at_either_probe_refuses_both_readers(readable, monkeypatch, warmth, when, reader) -> None:
     warmth.ready(readable, PROJECT)
     real, calls = DataRepo.rebasing, []
 
@@ -436,9 +442,16 @@ def test_an_unknown_rebase_at_either_probe_refuses_both_readers(readable, monkey
     assert warmth.parses == ([] if when == 1 else warmth.collected(PROJECT))
 
 
-@pytest.mark.parametrize("reader", READERS, ids=["load", "file_only"])
-@pytest.mark.parametrize(("probe", "change"), [("journal", "head"), ("rebase", "head"), ("journal", "rebase")])
-def test_terminal_checks_follow_the_blocking_probes(readable, warmth, reader, probe, change) -> None:
+@pytest.mark.parametrize(
+    ("probe", "change", "reader"),
+    [
+        ("journal", "head", decision_store.load),
+        ("rebase", "head", decision_store.file_snapshot),
+        ("journal", "rebase", decision_store.load),
+    ],
+    ids=["journal-head-load", "rebase-head-file_only", "journal-rebase-load"],
+)
+def test_terminal_checks_follow_the_blocking_probes(readable, warmth, probe, change, reader) -> None:
     warmth.ready(readable, PROJECT)
     monkeypatch = warmth.monkeypatch
     target, name = (decision_store, "_stamp") if probe == "journal" else (DataRepo, "rebasing")

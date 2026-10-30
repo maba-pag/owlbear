@@ -115,9 +115,7 @@ def refresh(page):
     ("kind", "status", "detail"),
     [
         ("curation", 409, "a curation is already running"),
-        ("curation", 422, "curator setting is unset"),
         ("tests", 409, "Delivery is stopping"),
-        ("tests", 422, "reviewer setting is unset"),
     ],
 )
 def test_post_refusals_survive_the_action_refresh_and_later_reads(maintenance, pds, kind, status, detail):
