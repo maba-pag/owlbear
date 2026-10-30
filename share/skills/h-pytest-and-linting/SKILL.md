@@ -133,6 +133,7 @@ whenever unsafe fixes are enabled. Full aggregates are listed by `uv run help qu
 | `integration` | Requires the `kanban-md` binary |
 | `e2e` | Excluded by default through `addopts`; include explicitly with `-m e2e` |
 | `model` | Requires installed embedding/vector prerequisites and a real model runtime; excluded by default |
+| `flaky(issue=N)` | Runs strict locally; CI re-runs a failure once while GitHub issue N is open and lists that test in the job summary. Use it only for a confirmed flake awaiting its repair; the repair removes the mark |
 
 Explicit routine `-m` expressions must include `not model` because they replace the default `addopts` marker selection.
 

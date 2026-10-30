@@ -10,6 +10,8 @@ import pytest
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+pytest_plugins = ("owlbear_tools.flaky",)
+
 _FOCUSED_WORKERS = 4
 _FULL_SUITE_WORKERS = 10
 
