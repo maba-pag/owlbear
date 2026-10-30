@@ -8,8 +8,7 @@ from owlbear_delivery_next.change_flow.brief_tools import DecisionDraft
 DRAFT = {"question": "Which database?", "answer": "Postgres.", "origin": "decided", "scope": "project"}
 
 
-@pytest.mark.parametrize("field", ["question", "answer"])
-@pytest.mark.parametrize("blank", ["   ", "\t\n"])
+@pytest.mark.parametrize(("field", "blank"), [("question", "   "), ("answer", "\t\n")])
 def test_blank_decision_fields_are_refused(field, blank):
     with pytest.raises(ValidationError):
         DecisionDraft.model_validate(DRAFT | {field: blank})

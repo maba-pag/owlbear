@@ -1,7 +1,6 @@
 import importlib.util
 import os
 import subprocess
-import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -47,22 +46,6 @@ from owlbear_delivery_next.state_store.store import Store
 from owlbear_delivery_next.workflow_steps import check, disposable, prepare
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
-HOLD = """\
-import os, sys
-from pathlib import Path
-from owlbear_delivery_next.local_system.codebase import CURRENT
-from owlbear_delivery_next.project_host.host import HostRecord
-from owlbear_delivery_next.local_system.storage_io import open_lock
-from owlbear_delivery_next.state_store.store import Store
-root = Store.open(Path(sys.argv[1])).root
-fd = open_lock(os.open(root, os.O_RDONLY), blocking=False, name="host.lock")
-record = HostRecord(
-    url="http://127.0.0.1:9/", token="t", pid=os.getpid(), started_at="2026-10-10T12:00:00Z", code=CURRENT
-)
-(root / "host.json").write_text(record.model_dump_json())
-print("held", flush=True)
-sys.stdin.read()
-"""
 
 
 @pytest.fixture
@@ -177,18 +160,24 @@ def test_a_merged_pr_is_observed_before_a_paused_waiting_change_is_skipped(store
     assert store.read("c1").step.kind == StepKind.CLEANUP
 
 
-def test_status_reads_the_host_lock_and_shows_host_down(store, tmp_path):
+def test_status_reads_the_host_lock_and_shows_host_down(store):
     save(store, Change(slug="c1", step=Step(kind=StepKind.BUILD)))
-    child = subprocess.Popen(  # noqa: S603
-        [sys.executable, "-c", HOLD, str(tmp_path)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True
+    record = host.HostRecord(
+        url="http://127.0.0.1:9/",
+        token="t",  # noqa: S106
+        pid=os.getpid(),
+        started_at=NOW,
+        code=codebase.CURRENT,
     )
+    (store.root / "host.json").write_text(record.model_dump_json())
+    dir_fd = os.open(store.root, os.O_RDONLY)
+    lock_fd = open_lock(dir_fd, blocking=False, name="host.lock")  # flock conflicts across open files in one process
+    os.close(dir_fd)
     try:
-        assert child.stdout.readline().strip() == "held"
-        assert host.running(store).pid == child.pid
+        assert host.running(store).pid == os.getpid()
         assert "Delivery is not running" not in cli.show_status(store, NOW)
     finally:
-        child.kill()
-        child.wait()
+        os.close(lock_fd)
     assert host.running(store) is None
     assert cli.show_status(store, NOW).splitlines() == [
         f"Delivery is not running — {cli.START}",
