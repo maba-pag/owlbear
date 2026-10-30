@@ -164,9 +164,9 @@ def test_an_unreviewed_last_revision_is_approved_only_once_the_owner_ticks_that_
         expect(confirm).to_be_disabled()  # TD-255
         dialog.get_by_label("no challenger reviewed that revision", exact=False).check()
         expect(confirm).to_be_enabled()
-        confirm.click()
+        with replied(page, "/approve-brief"):
+            confirm.click()
         expect(page.get_by_role("dialog")).to_be_hidden()
-        page.wait_for_timeout(500)
     assert store.fold(Lock("tail"), "tail", NOW)[0].brief.approved_version == 2
 
 
@@ -210,15 +210,23 @@ def ran(store: Store, slug: str, tools: dict, wrong: dict | None = None, ending:
 
 
 def sent(store: Store, slug: str) -> str:
-    """The one inbox item the page sent; the answer may still be on its way when the page shows it."""
-    until = time.monotonic() + 5
-    while True:
-        with store.db.read() as db:
-            rows = db.execute("SELECT item FROM inbox WHERE slug = ?", (slug,)).fetchall()
-        if rows or time.monotonic() > until:
-            [(item,)] = rows
-            return item
-        time.sleep(0.05)
+    """The one inbox item the page sent; the host stores it before it replies."""
+    with store.db.read() as db:
+        [(item,)] = db.execute("SELECT item FROM inbox WHERE slug = ?", (slug,)).fetchall()
+    return item
+
+
+def replied(page: Any, path: str) -> Any:
+    """Wait, around a click, for the host's reply to the page's POST to *path*. The call can still be pending when the
+    click returns, and every call of the page goes through a route handler that runs only while the test waits on
+    Playwright: without this wait the call can still be held there when the browser closes."""
+    return page.expect_response(lambda r: r.request.method == "POST" and r.url.split("?")[0].endswith(path))
+
+
+def answer(page: Any, form: Any) -> None:
+    """Click Answer and wait for the host's reply."""
+    with replied(page, "/answers"):
+        form.get_by_role("button", name="Answer").click()
 
 
 def asking() -> m.Change:
@@ -248,7 +256,7 @@ def test_an_answer_being_typed_survives_polls_that_bring_new_activity_and_is_sen
         expect(form.get_by_label("English")).to_be_checked()
         expect(page.locator("#changes .card.current")).to_contain_text("greet")
         form.get_by_label("It only settles how the work goes on").check()
-        form.get_by_role("button", name="Answer").click()
+        answer(page, form)
         expect(page.locator("#detail")).not_to_contain_text("Not done")
     item = sent(store, "greet")
     assert '"option":"en"' in item.replace(" ", "")
@@ -277,7 +285,7 @@ def test_a_clarification_is_sent_only_with_the_owners_confirmed_statement(page_u
         with store.db.read() as db:
             assert db.execute("SELECT count(*) FROM inbox").fetchone() == (0,)  # nothing unconfirmed is sent
         form.get_by_label("This statement is my intent").check()
-        form.get_by_role("button", name="Answer").click()
+        answer(page, form)
         expect(page.locator("#detail")).not_to_contain_text("Not done")
     item = sent(store, "greet").replace(" ", "")
     assert '"classed":"clarification"' in item
@@ -322,7 +330,7 @@ def test_an_option_the_question_no_longer_offers_is_not_sent(page_url, left, pds
         expect(offered).to_have_count(len(left), timeout=10_000)
         expect(offered.and_(form.get_by_role("radio", checked=True))).to_have_count(0)
         form.get_by_label("It only settles how the work goes on").check()
-        form.get_by_role("button", name="Answer").click()
+        answer(page, form)
         expect(page.locator("#detail")).not_to_contain_text("Not done")
     assert '"option":null' in sent(store, "greet").replace(" ", "")
 
