@@ -18,6 +18,7 @@ SUITES: dict[str, tuple[str, ...]] = {
     "python": (
         ".github/workflows/python.yml",
         ".github/ci-durations.json",
+        ".github/scripts/ci_durations.py",
         ".github/scripts/ci_shard.py",
         ".github/scripts/flaky_issues.py",
         ".python-version",
