@@ -1,14 +1,12 @@
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { live } from "/assets/lit-html/3.3.3/directives/live.js";
-import { here, loaded as clones, project as current } from "/assets/ui.mjs";
-import { SOURCES, ROUNDS, LOOPS, state, drafts, show, notify, shown } from "./state.mjs";
-import {
-  cell, row, table, button, numberCell, designFailures, widths, sessionsAtOnce, prLabels, prMarker, subagentsCell,
-  curatorThreshold, spotterCell, prefRows, USER_KEYS, userConfig, userConfigLabel,
-  contextCell, ratesCell, editable,
-} from "./cells.mjs";
-import { pendingLine, save, rename, reviewPrefs, hasEdits } from "./layers.mjs";
+import { here, moved, loaded as clones, project as current } from "/assets/ui.mjs";
+import { SOURCES, state, drafts, page, show, notify, shown } from "./state.mjs";
+import { cell, row, table, button } from "./cells.mjs";
+import { pendingLine, save, rename, reviewPrefs, hasEdits, anyEdits, pendingIn } from "./layers.mjs";
 import { machineSection } from "./machine.mjs";
+import { agentsGroup, runsGroup, checksGroup } from "./panels.mjs";
+import { GROUPS, groupOf, rowOf } from "./groups.mjs";
 
 // The project this page edits, by its name in the machine host's list; "This project" on a clone's own host.
 export function named(id = current) {
@@ -37,7 +35,7 @@ function scopeSection() {
     @change=${(e) => pick(e.target.value)}>${options.map(([v, said]) => html`<p-select-option value=${v}
     ?disabled=${v === "global" && !loaded.global_location}>${said}</p-select-option>`)}</p-select>`;
   return html`<section class="panel" aria-labelledby="scope-title">
-    <p-heading size="lg"><h2 id="scope-title">Where you edit</h2></p-heading>
+    <p-heading size="lg"><h2 id="scope-title" tabindex="-1">Where you edit</h2></p-heading>
     <div class="row">${control}<p-text id="scope-note" size="xs" color="contrast-medium">${loaded.global_location ? ""
       : "No shared settings location is set up (run owlbear-next data PATH), so only this project's and this "
         + "machine's settings can be saved, locally."}</p-text></div>
@@ -85,7 +83,7 @@ function acrossSection() {
     @change=${flip}></p-checkbox>`;
   const unread = state.unread.length ? `Not read: ${state.unread.join("; ")}.` : "";
   return html`<section class="panel" aria-labelledby="across-title">
-    <p-heading size="lg"><h2 id="across-title">Across projects</h2></p-heading>
+    <p-heading size="lg"><h2 id="across-title" tabindex="-1">Across projects</h2></p-heading>
     ${showAll}
     ${rows.length ? table(state.everything ? "Every setting, with the projects that set it apart"
       : "Settings a project or this machine sets apart from the global value",
@@ -105,7 +103,7 @@ function folderSection() {
   const input = html`<p-input-text id="folder" label=${label} ?disabled=${off} .value=${live(value)} @input=${keep}
     @change=${keep}></p-input-text>`;
   return html`<section class="panel" aria-labelledby="folder-title">
-    <p-heading size="lg"><h2 id="folder-title">Project folder</h2></p-heading>
+    <p-heading size="lg"><h2 id="folder-title" tabindex="-1">Project folder</h2></p-heading>
     <div class="row">${input}${button("Rename folder", rename, { id: "rename", icon: "edit",
       variant: renaming ? "primary" : "secondary", disabled: off })}</div>
     <p-text id="folder-note">${loaded.folder ? "Named after the repository unless renamed. Renaming moves the folder "
@@ -116,159 +114,97 @@ function folderSection() {
   </section>`;
 }
 
-function settingsSections() {
-  const loaded = state.loaded, roles = Object.keys(loaded.settings.agents), edits = hasEdits();
-  const share = (n, of) => `${n} (${Math.round((100 * n) / of)}%)`;
-  const text = (v) => cell(html`<p-text>${v}</p-text>`);
-  const machine = (state.machine?.resolved?.missing ?? []).map((k) => `machine.${k}`);  // this machine's in force
-  const unset = [...(loaded.settings.missing ?? []), ...machine];
-  return html`
-    ${unset.length ? html`<section class="panel" id="unset" aria-labelledby="unset-title">
-      <p-heading size="lg"><h2 id="unset-title">Unset settings</h2></p-heading>
-      <p-text color="error">${unset.length} setting${unset.length === 1 ? " is" : "s are"} unset. Code ships no
-        defaults: set ${unset.length === 1 ? "it" : "them"} below, best in the global layer; a step that needs one asks
-        you until then.</p-text>
-      <p-text size="xs">${unset.join(", ")}</p-text></section>` : nothing}
-    <section class="panel" aria-labelledby="agents-title">
-      <p-heading size="lg"><h2 id="agents-title">Agents</h2></p-heading>
-      ${table("Agents: model, effort and context apply to the next session",
-        ["Agent", "Model", "Effort", "Context", "AI credits per 1M tokens"], "agents",
-        roles.map((role) => row(text(role === "shaper" ? "shaper (a recommendation)" : role), editable(role, "model"),
-          editable(role, "effort"), contextCell(role), ratesCell(role))))}
-      <p-text id="shaper-note" size="xs" color="contrast-medium">The shaper's model and effort are a recommendation
-        (TD-328): Delivery's own turns in the shaping chat use them; what you type there runs on the chat's model
-        picker, which the chat reminds you of once.</p-text>
-      <p-text id="models-note" size="xs" color="contrast-medium" aria-live="polite">${state.modelsNote}</p-text>
-    </section>
-    <section class="panel" aria-labelledby="rounds-title">
-      <p-heading size="lg"><h2 id="rounds-title">Challenge rounds</h2></p-heading>
-      <p-text>A reviewer and the worker go back and forth in rounds. A round with few new findings is the last; after
-        the last allowed round with many, Delivery asks you. A loop keeps the values it started with.</p-text>
-      ${table("Challenge rounds: they apply to loops that start after a save", ["Loop", ...ROUNDS.map(([, l]) => l)],
-        "rounds", LOOPS.map(([owner, said]) => row(text(said),
-          ...ROUNDS.map(([field, label]) => numberCell(owner, field, label)))))}
-      <p-text size="xs" color="contrast-medium">Findings per round: 1 to 20. "Last round at or below" must be lower
-        than "ask you at or above", which may not exceed the findings per round. The final review inherits the
-        builder's values.</p-text>
-    </section>
-    <section class="panel" aria-labelledby="limits-title">
-      <p-heading size="lg"><h2 id="limits-title">Session time limits</h2></p-heading>
-      <p-text>An agent session ends after this many minutes in total; its step then counts as a failed attempt and
-        runs again. The shaper's chat has no limit.</p-text>
-      ${table("Session time limits: they apply to the next session", ["Agent", "Minutes per session"], "limits",
-        roles.filter((role) => !["shaper", "spotter"].includes(role)).map((role) => row(text(role),
-          numberCell(role, "minutes", "Minutes per session"))))}
-      <p-text size="xs" color="contrast-medium">1 to 480 minutes.</p-text>
-    </section>
-    <section class="panel" aria-labelledby="at-once-title">
-      <p-heading size="lg"><h2 id="at-once-title">Sessions at once</h2></p-heading>
-      <p-text>A step waits for a free slot before it starts. A visual check runs its judges in waves of the slots it
-        gets; an Impeccable update takes one slot per session. This machine's total holds across its projects.</p-text>
-      ${table("Sessions at once: they apply to the next step that starts", ["Setting", "Value"], "at-once",
-        [row(text("Agent sessions at once in one project"), sessionsAtOnce())])}
-      <p-text size="xs" color="contrast-medium">At least 1. Steps running now keep their sessions.</p-text>
-    </section>
-    <section class="panel" aria-labelledby="curation-title">
-      <p-heading size="lg"><h2 id="curation-title">Memory curation</h2></p-heading>
-      <p-text>The memory curator states its confidence in everything it would do to an entry. At or above this
-        threshold it acts alone, Make global included; below it, it asks you in an interactive session and leaves the
-        entry as it is in an automatic run.</p-text>
-      ${table("Memory curation: it applies to the next curation", ["Setting", "Value"], "curation",
-        [row(text("Curator's confidence threshold (%)"), curatorThreshold())])}
-      <p-text size="xs" color="contrast-medium">50 to 100; one value for every project and machine.</p-text>
-    </section>
-    <section class="panel" aria-labelledby="spotter-title">
-      <p-heading size="lg"><h2 id="spotter-title">Spotter</h2></p-heading>
-      <p-text>The Spotter looks at an agent's work beside it: at hand-offs, plans, state changes and a sample of
-        actions. It files each finding under one of four categories, each set to an action its category allows; so
-        far every look only records its finding with that action, and Retro grades those records. Steering,
-        refusing and stopping come with live delivery, discretionary ones only after a steered-versus-silent test.
-        Its model, effort and context are the spotter row under Agents; the enrolled chats are a machine setting.
-        Each look stops at its own credit limit, also when replayed: once the spend the runtime reports reaches it, the
-        look is stopped and its record says so; a call already under way still finishes, so a look may pass its limit
-        a little. There is no daily budget. Off stops its looks and the recording of new outside writes for each
-        Change's page; the reports already recorded stay, and steps no longer need its other settings.</p-text>
-      ${table("Spotter: it applies to the next look", ["Setting", "Value"], "spotter", [
-        row(text("On or off"), spotterCell("switch", "On or off")),
-        row(text("Hand-off fitness: the result should not be accepted as it stands"),
-          spotterCell("hand_off_fitness", "Hand-off fitness")),
-        row(text("Course and constraints: recoverable work heading materially wrong"),
-          spotterCell("course_and_constraints", "Course and constraints")),
-        row(text("Outside-state changes: a consequential change beyond the task's files"),
-          spotterCell("outside_state_changes", "Outside-state changes")),
-        row(text("Irreversible harm, in the Spotter's own judgement; it takes precedence"),
-          spotterCell("irreversible_harm", "Irreversible harm")),
-        row(text("Steered share (%)"), spotterCell("steer_share", "Steered share")),
-        row(text("Steering notes at most, per step or chat turn"), spotterCell("intervention_cap", "Notes at most")),
-        row(text("Verbose"), spotterCell("verbose", "Verbose")),
-        row(text("Verbose until (YYYY-MM-DD; empty: no end)"), spotterCell("verbose_until", "Verbose until")),
-        row(text("Looks (hand-off, plan, state-change, sample)"), spotterCell("looks", "Looks")),
-        row(text("Sampled actions (%)"), spotterCell("sample_rate", "Sampled actions")),
-        row(text("Credit limit per look (credits)"), spotterCell("look_credit_limit", "Credit limit per look")),
-      ])}
-    </section>
-    <section class="panel" aria-labelledby="subagents-title">
-      <p-heading size="lg"><h2 id="subagents-title">Subagents</h2></p-heading>
-      <p-text>An agent may start the runtime's built-in subagents, such as explore or code-review, for side
-        questions. They work under the step's own permissions, and Delivery records each one; Maintenance shows their
-        use per agent.</p-text>
-      ${table("Subagents: they apply to the next session", ["Agent", "Built-in subagents"], "subagents",
-        roles.filter((role) => !["shaper", "spotter"].includes(role)).map((role) =>
-          row(text(role), subagentsCell(role))))}
-    </section>
-    <section class="panel" aria-labelledby="user-config-title">
-      <p-heading size="lg"><h2 id="user-config-title">Your instructions and skills</h2></p-heading>
-      <p-text>A Delivery step reads its repository's instructions and Delivery's own skills. Switched on, it also
-        reads your own instruction files in your Copilot folder (instructions/ and copilot-instructions.md, links
-        followed), and is offered your own skills there (skills/), never one named as Delivery's. A plugin's files and
-        your agents stay off either way. Neither has a default: until both are set, a step asks you to set them
-        instead of starting its session.</p-text>
-      ${table("Your instructions and skills: they apply to the next session", ["Setting", "Value"], "user-config",
-        USER_KEYS.map((key) => row(text(userConfigLabel(key)), userConfig(key))))}
-    </section>
-    <section class="panel" aria-labelledby="general-title">
-      <p-heading size="lg"><h2 id="general-title">Visual checks</h2></p-heading>
-      ${table("Visual check settings: they apply to the next visual check", ["Setting", "Value"], "general",
-        [row(text("Screenshot widths"), widths()), row(text("Design failures"), designFailures())])}
-      <p-heading size="md"><h3 id="agreement-title">Agreement with your visual decisions</h3></p-heading>
-      <p-text id="impeccable" size="xs">${loaded.impeccable}</p-text>
-      <p-text id="agreement-note" size="xs" color="contrast-medium">${loaded.agreement.length
-        ? "From the decided rounds kept in the shared repository; below 20 rounds the numbers only inform."
-        : "No decided visual rounds yet, or no shared repository is set up."}</p-text>
-      ${table("How often each judge's verdict matched your Pass or Fail, per model",
-        ["Judge", "Model", "Decided", "Agreed", "Disagreed", "Unsure"], "agreement",
-        loaded.agreement.map((a) => row(...[a.judge, a.model, String(a.decided), share(a.agreed, a.decided),
-          share(a.disagreed, a.decided), share(a.unsure, a.decided)].map(text))),
-        { id: "agreement-table", hidden: !loaded.agreement.length })}
-    </section>
-    <section class="panel" aria-labelledby="merge-title">
-      <p-heading size="lg"><h2 id="merge-title">Merge and cleanup</h2></p-heading>
-      <p-text>How OwlBear merges a pull request, cleans up its branch and waits for CI. Each setting is set in this
-        project, on this machine or globally; the project's value wins, then this machine's, then the global one. None
-        has a built-in default: a step that needs one asks you until it is set.</p-text>
-      ${table("Merge and cleanup: they apply to the next merge", ["Setting", "Value"], "prefs", prefRows())}
-      <p-text size="xs" color="contrast-medium">Seconds are whole numbers; blank inherits.</p-text>
-    </section>
-    <section class="panel" aria-labelledby="pr-title">
-      <p-heading size="lg"><h2 id="pr-title">Pull requests</h2></p-heading>
-      <p-text>What OwlBear adds to each pull request it opens.</p-text>
-      ${table("Pull request settings: they apply to the next pull request", ["Setting", "Value"], "pr",
-        [row(text("Labels"), prLabels()), row(text("Marker line"), prMarker())])}
-    </section>
-    <div class="bar" role="region" aria-label="Save settings">
-      ${button({ global: "Save global defaults", machine: "Save this machine's preferences" }[state.layer]
-        ?? "Save project settings", save,
-        { id: "save", icon: "check", variant: edits ? "primary" : "secondary", busy: state.saving })}
-      <p-text id="pending" size="sm" aria-live="polite">${pendingLine()}</p-text>
-      ${state.layer === "project" && state.loaded.prefs_pending
-        ? button("Confirm merge preferences reviewed", reviewPrefs, {
-            id: "review-prefs",
-            icon: "check",
-            variant: edits ? "secondary" : "primary",
-            busy: state.saving,
-          })
-        : nothing}
-    </div>`;
+// The unset settings, each linking to the row that sets it (GW8RT6), by group; or that every setting is set, unless
+// this machine's are not read yet (its own, in force, can be unset too).
+function unsetSection() {
+  const machine = (state.machine?.resolved?.missing ?? []).map((k) => `machine.${k}`);
+  const unset = [...(state.loaded.settings.missing ?? []), ...machine];
+  const heading = html`<p-heading size="lg"><h2 id="unset-title" tabindex="-1">Unset settings</h2></p-heading>`;
+  const unread = clones() && !state.machine;
+  if (!unset.length) {
+    return html`<section class="panel" id="unset-none" aria-labelledby="unset-title">${heading}
+      <p-text>${!unread ? "Every setting is set." : state.machineUnread ? "Every project setting is set; this "
+        + `machine's could not be read (${state.machineUnread}), so whether they are is not known.`
+        : "Every project setting is set; this machine's are being read."}</p-text></section>`;
+  }
+  const link = (key, i) => html`${i ? ", " : ""}<a href=${`#${rowOf(key)}`}>${key}</a>`;
+  return html`<section class="panel" id="unset" aria-labelledby="unset-title">${heading}
+    <p-text color="error">${unset.length} setting${unset.length === 1 ? " is" : "s are"} unset. Code ships no
+      defaults: set ${unset.length === 1 ? "it" : "each"} in its group, best in the global layer; a step that needs one
+      asks you until then. Each name below opens its setting.</p-text>
+    ${GROUPS.map(([id, label]) => [label, unset.filter((key) => groupOf(rowOf(key)) === id)])
+      .filter(([, keys]) => keys.length)
+      .map(([label, keys]) => html`<p-text size="sm" class="unset-group">${label}: ${keys.map(link)}</p-text>`)}
+    ${unread ? html`<p-text size="xs" id="unset-machine">${state.machineUnread ? "This machine's settings could not "
+      + `be read (${state.machineUnread}), so they are not listed.` : "This machine's settings are being read."}
+      </p-text>` : nothing}
+  </section>`;
+}
+
+// The groups, each with its unsaved edits counted; their links change the address, which shows the group (route).
+function groupNav() {
+  const link = ([id, label]) => {
+    const n = id === "overview" ? 0 : pendingIn(id);
+    return html`<a href=${`#${id}`} aria-current=${state.group === id ? "page" : nothing}>${label}${n
+      ? html` <p-tag compact="true" variant="warning">${n} unsaved</p-tag>` : nothing}</a>`;
+  };
+  return html`<nav id="groups" aria-label="Settings groups">${GROUPS.map(link)}</nav>`;
+}
+
+const GROUP_VIEWS = {
+  overview: () => html`${unsetSection()}${acrossSection()}`,
+  agents: agentsGroup,
+  runs: runsGroup,
+  checks: checksGroup,
+  project: folderSection,
+  "this-machine": machineSection,
+};
+
+// One Save for the layered settings, whichever group holds them (D-01M63C92B83D61XFXTRXG8JAVB): shown with a group
+// of them, and anywhere while a layer has edits to save. This machine's own settings keep their own Save.
+function saveBar() {
+  const layered = ["agents", "runs", "checks"].includes(state.group)
+    || (state.group === "this-machine" && state.layer === "global");
+  if (!layered && !anyEdits()) return nothing;
+  const edits = hasEdits();
+  return html`<div class="bar" role="region" aria-label="Save settings">
+    ${button({ global: "Save global defaults", machine: "Save this machine's preferences" }[state.layer]
+      ?? "Save project settings", save,
+      { id: "save", icon: "check", variant: edits ? "primary" : "secondary", busy: state.saving })}
+    <p-text id="pending" size="sm" aria-live="polite">${pendingLine()}</p-text>
+    ${state.layer === "project" && state.loaded.prefs_pending
+      ? button("Confirm merge preferences reviewed", reviewPrefs, {
+          id: "review-prefs",
+          icon: "check",
+          variant: edits ? "secondary" : "primary",
+          busy: state.saving,
+        })
+      : nothing}
+  </div>`;
+}
+
+// The id the address names; one that doesn't decode (#%) is replaced by the overview's.
+function addressed() {
+  try {
+    return decodeURIComponent(location.hash.slice(1));
+  } catch {
+    history.replaceState(history.state, "", `${location.pathname}${location.search}#overview`);
+    return "overview";
+  }
+}
+
+// Show the group the address names (D-01M63C8QQMANY46N8GMNNKH1V9): a group's own, or an older one naming a section or
+// a row (#machine-title, #set-prefs-merge_method), which then gets the focus. A switch from elsewhere than the groups'
+// links (the menu, the back button) puts the focus on the group's first heading; *initial* is the page's first view.
+export function route(initial = false) {
+  if (moved()) return;  // ui.mjs opens the page it moved to
+  const id = addressed(), group = id ? groupOf(id) : "overview";
+  if (id && id !== group) history.replaceState(history.state, "", `${location.pathname}${location.search}#${group}`);
+  const switched = group !== state.group, nav = document.activeElement?.closest?.("#groups");
+  state.group = group;
+  if (id && id !== group) page.target = `#${CSS.escape(id)}`;
+  else if (switched && !initial && !nav) page.target = "#groups ~ section h2";
+  show();
 }
 
 export function view() {
@@ -278,6 +214,5 @@ export function view() {
     <p-inline-notification id="error" state="error" dismiss-button="false" ?hidden=${!state.error}>${state.error}
     </p-inline-notification>
     <p-text id="status" role="status" aria-live="polite">${state.status}</p-text>
-    ${loaded ? html`${scopeSection()}${folderSection()}${settingsSections()}${acrossSection()}${machineSection()}`
-      : nothing}`;
+    ${loaded ? html`${scopeSection()}${groupNav()}${GROUP_VIEWS[state.group]()}${saveBar()}` : nothing}`;
 }

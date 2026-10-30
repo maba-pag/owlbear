@@ -1,20 +1,25 @@
 // The menu (D-01M63C8375KV9WA6NH8K2MB8PN): the top row's burger opens PDS's drilldown with every page. The work
 // pages have their own level and on phones are only here; ui.mjs's guard covers its links
 // (D-01M63C8DA1D95Z7M9ZYWVYYNF7). Updates have theirs too (D-01M63C5VGFWJ709X2GA0CE8Q5B), marked when one is
-// available, running or failed (D-01M63CDFXCN5SSCNNYWV2FVFVA).
+// available, running or failed (D-01M63CDFXCN5SSCNNYWV2FVFVA). Settings' groups have theirs
+// (D-01M63C8QQMANY46N8GMNNKH1V9).
 
 import { html, nothing, render } from "/assets/lit-html/3.3.3/lit-html.js";
 import { call, defined, here, machineState } from "/assets/ui.mjs";
 import { checks, listen, update } from "/assets/page/updates/checks.mjs";
+import { GROUPS } from "/assets/page/config/groups.mjs";
 
-// The levels and the links beside them, in the menu's order.
-export const LEVELS = [
+// The menu in its order: levels, each with its links, and links to a page beside them.
+const MENU = [
   { id: "work", label: "Work", links: [["/", "Changes"], ["/backlog", "Backlog"], ["/memory", "Memory"],
     ["/decisions", "Decisions"], ["/metrics", "Metrics"]] },
   { id: "updates", label: "Updates", links: [["/updates/owlbear", "OwlBear"],
     ["/updates/pds", "Porsche Design System"], ["/updates/impeccable", "Impeccable"]] },
+  ["/projects", "Projects"],
+  { id: "settings", label: "Settings", links: GROUPS.map(([id, said]) => [`/config#${id}`, said]) },
+  ["/maintenance", "Maintenance"],
 ];
-export const LINKS = [["/projects", "Projects"], ["/config", "Settings"], ["/maintenance", "Maintenance"]];
+const LEVELS = MENU.filter((entry) => !Array.isArray(entry));
 
 const menu = { open: false, level: undefined, run: null };
 const root = document.getElementById("menu");
@@ -34,8 +39,14 @@ function words(name) {
   return [failed && "Failed", u?.available && "Available"].filter(Boolean);
 }
 
+// Whether *to* is this page: its path, and the Settings group shown (Overview when the address names none).
+function isHere(to) {
+  const [path, part] = to.split("#");
+  return path === location.pathname && (!part || (location.hash || "#overview") === `#${part}`);
+}
+
 function link([path, label]) {
-  const current = path === location.pathname, said = path.startsWith("/updates/") ? words(path.slice(9)) : [];
+  const current = isHere(path), said = path.startsWith("/updates/") ? words(path.slice(9)) : [];
   return html`<p-drilldown-link ?active=${current}><a href=${here({}, path)}
     aria-current=${current ? "page" : nothing}>${label}${said.map((w) => html`<p-tag class="said" compact="true"
       variant=${TONES[w]}>${w}</p-tag>`)}</a></p-drilldown-link>`;
@@ -73,7 +84,7 @@ async function focus(find) {
 // The menu opens at the level that holds this page, so its siblings are one step away, with focus on this page's link.
 function open() {
   menu.open = true;
-  menu.level = LEVELS.find((l) => l.links.some(([path]) => path === location.pathname))?.id;
+  menu.level = LEVELS.find((l) => l.links.some(([path]) => isHere(path)))?.id;
   show();
   readRun();
   focus(() => root.querySelector("p-drilldown a[aria-current]") ?? root.querySelector("p-drilldown a[href]"));
@@ -93,9 +104,13 @@ function moved(e) {
     : item(left)?.shadowRoot?.querySelector("p-button-pure.button"));
 }
 
-// A link the guard held (ui.mjs) leaves the page as it is; the menu closes so its reason shows under the top row.
+// A link the guard held (ui.mjs) leaves the page as it is; the menu closes so its reason shows under the top row. One
+// to a part of this page (a Settings group on Settings) shows it, so the menu closes too.
 function clicked(e) {
-  if (e.defaultPrevented && e.target.closest?.("a[href]")) close();
+  const to = e.target.closest?.("a[href]");
+  if (!to) return;
+  const url = new URL(to.href, location.href);
+  if (e.defaultPrevented || (url.hash && url.pathname === location.pathname && url.search === location.search)) close();
 }
 
 function show() {
@@ -106,9 +121,8 @@ function show() {
     ${marked ? html`<span class="dot" id="menu-dot" aria-hidden="true"></span>` : nothing}
     <p-drilldown .open=${menu.open} .activeIdentifier=${menu.level} .aria=${{ "aria-label": "OwlBear pages" }}
       @update=${moved} @dismiss=${close} @click=${clicked}>
-      ${LEVELS.map((l) => html`<p-drilldown-item identifier=${l.id} label=${label(l)}>${l.links.map(link)}
-        </p-drilldown-item>`)}
-      ${LINKS.map(link)}
+      ${MENU.map((e) => Array.isArray(e) ? link(e) : html`<p-drilldown-item identifier=${e.id}
+        label=${label(e)}>${e.links.map(link)}</p-drilldown-item>`)}
     </p-drilldown>`, root);
 }
 

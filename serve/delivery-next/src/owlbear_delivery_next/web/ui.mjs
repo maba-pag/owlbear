@@ -11,7 +11,7 @@ if (hash.get("token")) {
 }
 // Sections that moved to Menu ▸ Updates (D-01M63C5VGFWJ709X2GA0CE8Q5B): their old addresses open the new pages.
 const MOVED = { "/maintenance#owlbear": "/updates/owlbear", "/config#pack": "/updates/impeccable" };
-const moved = () => MOVED[location.pathname + location.hash];
+export const moved = () => MOVED[location.pathname + location.hash];
 function move() {  // the address bar's own fragment change does not load the page again
   if (moved()) location.replace(moved() + location.search);  // ?project= stays
 }
@@ -112,11 +112,11 @@ export function defined(tags) {
 }
 
 let failed = "";  // why the machine host's state could not be read the last time, if it could not
-let asked = 0, applied = 0;
+let asked = 0, applied = 0, settled = 0;
 
 // Reads the machine host's projects and pause into the bar: null on a clone's own host (which has no such route), what
-// it last read when they cannot be read. Reads overlap (a poll and an action's reread): an older answer never replaces
-// a newer one's.
+// it last read when they cannot be read. Reads overlap (a poll and an action's reread) and settle in any order: an
+// older answer never replaces a newer one's, and a newer read that failed never discards what an older one found.
 async function read() {
   const n = ++asked;
   let data = null, why = "";
@@ -125,10 +125,14 @@ async function read() {
   } catch (error) {
     if (error.status !== 404) why = error.message;
   }
-  if (n < applied) return;
-  applied = n;
-  if (!why) bar.data = data;  // one that failed keeps what is shown, which a read in the meantime may have changed
-  failed = why;
+  if (!why && n > applied) {
+    applied = n;
+    bar.data = data;
+  }
+  if (n > settled) {
+    settled = n;
+    failed = why;
+  }
 }
 
 const bar = { data: null, busy: "", error: "", packed: "", installing: false };
@@ -182,10 +186,16 @@ export function loaded() {
 }
 for (const link of document.querySelectorAll("#top a[href^='/']")) link.href = here({}, link.getAttribute("href"));
 // The guard covers every link of the top row, the menu and the notes under it; a link opened in another tab leaves
-// this page as it is.
+// this page as it is, and one to a part of this page (Settings ▸ Agents on Settings) does not leave it.
 document.addEventListener("click", (e) => {
   const away = !e.defaultPrevented && e.button === 0 && !(e.metaKey || e.ctrlKey || e.shiftKey || e.altKey);
-  if (away && e.target.closest?.("#top a[href], #machine a[href]") && held()) e.preventDefault();
+  const link = away && e.target.closest?.("#top a[href], #machine a[href]");
+  if (!link) return;
+  const to = new URL(link.href, location.href);
+  if (to.hash && to.origin === location.origin && to.pathname === location.pathname && to.search === location.search) {
+    return;
+  }
+  if (held()) e.preventDefault();
 }, { capture: true });
 
 // The machine's state read again after a page changed it (a project added, removed or adopted).
