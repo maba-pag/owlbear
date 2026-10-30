@@ -175,16 +175,6 @@ def test_a_standby_answers_its_health_and_takes_over_with_the_old_address_token_
             standby.proc.kill()
 
 
-def test_a_standby_told_to_quit_ends_and_takes_nothing_over():
-    standby = handover.Standby(Path(sys.executable), Path.cwd(), "v9.9", local_home.root() / "host.log")
-    assert standby.healthy(30) is not None
-
-    standby.stop()
-
-    assert standby.proc.returncode == 0
-    assert control.serve.running() is None
-
-
 class FakeStandby:
     """A standby that answers as told, recording how it was treated."""
 
@@ -471,6 +461,7 @@ def test_the_standby_file_names_only_a_loopback_address_and_is_the_owners_alone(
         assert os.environ.get(handover.SECRET) is None  # the secret went to the child only
     finally:
         standby.stop()
+    assert (standby.proc.returncode, control.serve.running()) == (0, None)  # told to quit, it ends and takes nothing
     assert wait_for(lambda: not (local_home.root() / handover.STANDBY).exists())
 
 

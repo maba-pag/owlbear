@@ -29,6 +29,9 @@ jobs:
     timeout-minutes: 5
     outputs:
       suites: ${{ steps.scope.outputs.suites }}
+      durations: ${{ steps.durations.outputs.value }}
+      durations-current: ${{ steps.durations.outputs.current }}
+      durations-key: ${{ steps.week.outputs.key }}
     steps:
       - name: Checkout requested revision
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
@@ -47,11 +50,64 @@ jobs:
           base="$BASE_SHA"
           if [ "$EVENT" = push ]; then base="$(git rev-parse "$HEAD_SHA^1")"; fi  # a merge against its first parent
           python3 .github/scripts/ci_scope.py "$base" "$HEAD_SHA" >> "$GITHUB_OUTPUT"
+      # The Python shards split whole test files by run times main's CI keeps in the Actions cache. Scope reads them
+      # once, so every shard of the run, a re-run one included, splits by the same copy.
+      - name: Name this week's run times
+        id: week
+        if: contains(fromJSON(steps.scope.outputs.suites), 'python')
+        run: echo "key=ci-durations-v1-$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
+      - name: Restore the latest run times
+        id: restore
+        if: contains(fromJSON(steps.scope.outputs.suites), 'python')
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: .ci-durations
+          key: ${{ steps.week.outputs.key }}
+          restore-keys: ci-durations-v1-
+      - name: Hand the run times to the Python shards
+        id: durations
+        if: contains(fromJSON(steps.scope.outputs.suites), 'python')
+        env:
+          WEEK: ${{ steps.week.outputs.key }}
+          MATCHED: ${{ steps.restore.outputs.cache-matched-key }}
+        run: python3 .github/scripts/ci_durations.py snapshot "$WEEK" "$MATCHED" >> "$GITHUB_OUTPUT"
 
   python:
     needs: scope
     if: contains(fromJSON(needs.scope.outputs.suites), 'python')
     uses: ./.github/workflows/python.yml
+    with:
+      durations: ${{ needs.scope.outputs.durations }}
+
+  # The first passing Python run on main in a week averages its run times into the cache. A failed refresh shows red
+  # and saves nothing, but leaves the run's conclusion alone: release tagging reads it.
+  durations:
+    name: Refresh test run times
+    needs: [scope, python]
+    if: github.event_name == 'push' && needs.scope.outputs.durations-current == 'false'
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout requested revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Download the shards' test results
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
+        with:
+          pattern: test-results-python-shard-*
+          path: ${{ runner.temp }}/test-results
+      - name: Average them with the run times this run was split by
+        env:
+          DURATIONS: ${{ needs.scope.outputs.durations }}
+          CI_SHARDS: 4
+        run: python3 .github/scripts/ci_durations.py refresh "$RUNNER_TEMP/test-results"
+      - name: Save this week's run times
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: .ci-durations
+          key: ${{ needs.scope.outputs.durations-key }}
 
   python-browser:
     needs: scope
