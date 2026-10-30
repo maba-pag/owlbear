@@ -37,9 +37,12 @@
 <script type="module">
 import { html, nothing, render } from "/assets/lit-html/3.3.3/lit-html.js";
 import { call, defined, here, project, shown } from "/assets/ui.mjs";
+import { maintained } from "/assets/page/maintenance/overview.mjs";
 
-// Under the machine host with no project chosen, only the machine's parts show: the project's wait for one.
+// Under the machine host with no project chosen, each project shows as a summary that opens it, beside the machine's
+// own parts.
 const none = shown() !== null && !project;
+const projects = none ? maintained(() => show()) : null;
 
 const RESULTS = { passed: "success", "up-to-date": "success", failed: "error", running: "info" };
 const state = {
@@ -345,9 +348,9 @@ function view() {
     <p-inline-notification id="error" state="error" dismiss-button="false" ?hidden=${!error}>${error}
     </p-inline-notification>
     <p-text id="status" role="status" aria-live="polite"></p-text>
-    ${none ? html`<p-text id="no-project" size="sm">Choose a project above for its maintenance actions, test review
-      and subagent use. Memory curation and the sessions below are the machine's, the same in every
-      project.</p-text>` : html`
+    ${none ? projects.view({ id: "projects", heading: "Maintenance by project", intro: "Open a project for its "
+      + "maintenance actions, test review and subagent use. Memory curation and the sessions below are the machine's, "
+      + "the same in every project." }) : html`
     <section aria-labelledby="actions-title">
       <p-heading size="lg"><h2 id="actions-title">Maintenance actions</h2></p-heading>
       <ul id="actions" class="actions">${state.actions.map(action)}</ul>
@@ -363,6 +366,7 @@ function show() {
 
 async function refresh() {
   const generation = ++state.reading;
+  projects?.refresh();  // each project's summary shows as it is read, apart from the machine's parts
   // Keep the established read order, collecting failures without losing another section's data.
   const idle = Promise.resolve([[], []]);
   const [overview] = await Promise.allSettled([

@@ -1134,3 +1134,26 @@ def test_decisions_under_all_projects_sum_up_each_scope_and_open_its_view_even_w
         page.goto(f"{base}/decisions?project=nobody")  # a project no longer listed opens the overview
         expect(page).to_have_url(f"{base}/decisions")
 
+
+@pytest.mark.browser
+def test_maintenance_under_all_projects_sums_up_each_project_and_opens_it_even_with_a_project_unread(
+    tmp_path: Path, monkeypatch, pds
+) -> None:
+    """D-01M63C6PMT4FX370W6B2VS9HAM: All projects shows one maintenance summary per project, each opening it; a
+    project that cannot be read says why and the rest still shows."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    a, b = (registry.register(clone(tmp_path / n)) for n in ("alpha", "beta"))
+    with browsing(monkeypatch, pds) as (page, base):
+        page.route(f"**/p/{b.id}/api/next/maintenance", lambda route: route.abort())
+        page.goto(f"{base}/maintenance#token=t")
+        row = {p.id: page.locator(f'#projects .scope[data-key="{p.id}"]') for p in (a, b)}
+        expect(page.locator("#projects h3")).to_have_text(["alpha", "beta"])
+        expect(row[a.id]).to_contain_text("Memory curation: never run")
+        expect(row[b.id]).to_contain_text("Could not read it: Delivery is not running")
+        expect(row[b.id].get_by_role("button", name="Read beta again")).to_be_visible()
+        expect(page.locator("#curation-title, #curation-error")).not_to_have_count(0)  # the machine's parts stay
+        assert targets(page.locator("#projects a, #projects button")) == []
+        row[a.id].get_by_role("link", name="alpha").click()
+        expect(page).to_have_url(f"{base}/maintenance?project={a.id}")
+        expect(page.locator("#actions")).to_contain_text("Memory curation")
