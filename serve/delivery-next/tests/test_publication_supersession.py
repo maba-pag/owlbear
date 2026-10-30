@@ -107,9 +107,8 @@ def no_network(monkeypatch) -> None:
 
 
 @pytest.mark.usefixtures("no_network")
-@pytest.mark.parametrize("automatic", ["success", "notice", "raise"])
 def test_an_automatic_config_change_waits_behind_another_clones_pending_owner_intent(
-    shared_repo, tmp_path, refusing, config_publishes, automatic
+    shared_repo, tmp_path, refusing, config_publishes
 ):
     root, remote = shared_repo
     a = Store(tmp_path / "a-store", DataRepo(root), "shop-site")
@@ -122,8 +121,9 @@ def test_an_automatic_config_change_waits_behind_another_clones_pending_owner_in
     before = remote_bytes(remote, SHARED_CONFIG)
     assert b"1600" not in before
 
-    # B's automatic change is held before any write, whatever the remote would do with it
-    refusing[0] = {"success": None, "notice": "notice", "raise": "raise"}[automatic]
+    # B's automatic change is held before any write, even with a remote that would accept it: config_publishes
+    # records every attempt before the remote answers, so a refused or raising remote adds nothing here
+    refusing[0] = None
     config_publishes.clear()
     assert b.save(b.config_path, Layer, widths(1300), "automatic", owner=False) == CONFIG_WAITING
     assert config_publishes == []

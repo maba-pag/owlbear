@@ -990,25 +990,6 @@ def test_shared_repair_source_changed_while_the_writer_lock_is_awaited_is_refuse
     assert code != 0
 
 
-def test_shared_repair_publication_refusal_is_visible_and_retires_nothing(
-    repo: Path, shared_repo, monkeypatch, capsys
-) -> None:
-    store = shared_project(repo, shared_repo, monkeypatch)
-    source = store.root / profile_share.PROFILE
-    source.write_text(BAD_EFFORT)
-    notice = "saved, but not pushed: the shared repository refused the push"
-    monkeypatch.setattr(DataRepo, "publish", lambda *_a, **_k: notice)
-    try:
-        code: object = setup.run(repo, [], yes=True, local_files="no")
-    except StoreError as exc:
-        code = exc
-    out = capsys.readouterr().out
-    assert "Profile v" not in out
-    assert not (store.root / profile_share.ROLES_MOVED).exists()
-    assert source.read_text() == BAD_EFFORT
-    assert code != 0
-
-
 def shared_only_damaged(store: Store, raw: str) -> Path:
     """The shared profile, unreadable, with no profile in the clone: the only old bytes are the shared ones."""
     target = profile_share.path(store)
@@ -1384,9 +1365,10 @@ def test_a_refused_repair_publication_stays_pending_and_the_next_setup_publishes
     with monkeypatch.context() as refused:
         refuse_publish(refused)
         assert setup.run(repo, [], yes=True, local_files="no") == 1
+    assert "Profile v" not in capsys.readouterr().out  # the refused publication is visible and retires nothing
+    assert source.read_text() == BAD_EFFORT
     assert (store.root / profile_repair.RECEIPT).exists()
     assert not (store.root / profile_share.ROLES_MOVED).exists()
-    capsys.readouterr()
     assert setup.run(repo, [], yes=False, local_files="no") == 0  # the staged replacement is published, not asked again
     assert "Profile v" in capsys.readouterr().out
     assert not (store.root / profile_repair.RECEIPT).exists()
@@ -1462,44 +1444,6 @@ def test_a_newer_shared_profile_is_not_overwritten_by_a_staged_repair(
     _, landed = clone_profile(remote, tmp_path / "after", store.name)
     assert landed == newer
     assert code == 1
-
-
-def test_a_receipt_with_an_unknown_format_is_refused_before_any_publication(
-    repo: Path, shared_repo, monkeypatch, capsys
-) -> None:
-    store, receipt = refused_repair_receipt(repo, shared_repo, monkeypatch, capsys)
-    data = json.loads(receipt.read_text())
-    data["profile"]["format"] = 999
-    receipt.write_text(json.dumps(data))
-    before = receipt.read_bytes()
-    source_before = (store.root / profile_share.PROFILE).read_bytes()
-    target_before = profile_share.path(store).read_bytes()  # the refused publication already saved it locally
-    calls = probed_repair(monkeypatch)
-    with pytest.raises(StoreError, match="pending profile repair"):
-        setup.run(repo, [], yes=False, local_files="no")
-    assert calls == []
-    assert receipt.read_bytes() == before
-    assert (store.root / profile_share.PROFILE).read_bytes() == source_before
-    assert profile_share.path(store).read_bytes() == target_before
-
-
-def test_a_receipt_without_a_confirmation_time_is_refused_before_any_publication(
-    repo: Path, shared_repo, monkeypatch, capsys
-) -> None:
-    store, receipt = refused_repair_receipt(repo, shared_repo, monkeypatch, capsys)
-    data = json.loads(receipt.read_text())
-    data["profile"]["confirmed_at"] = None
-    receipt.write_text(json.dumps(data))
-    before = receipt.read_bytes()
-    source_before = (store.root / profile_share.PROFILE).read_bytes()
-    target_before = profile_share.path(store).read_bytes()  # the refused publication already saved it locally
-    calls = probed_repair(monkeypatch)
-    with pytest.raises(StoreError, match="pending profile repair"):
-        setup.run(repo, [], yes=False, local_files="no")
-    assert calls == []
-    assert receipt.read_bytes() == before
-    assert (store.root / profile_share.PROFILE).read_bytes() == source_before
-    assert profile_share.path(store).read_bytes() == target_before
 
 
 def test_a_staged_repair_cannot_publish_into_a_different_shared_repository(

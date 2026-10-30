@@ -45,14 +45,6 @@ def fold(store, intent):
         return store.fold(lock, "c1", NOW)
 
 
-def test_an_unreadable_machine_layer_still_folds_an_owner_pause(store):
-    seed(store)
-    store.machine_path.parent.mkdir(parents=True, exist_ok=True)
-    store.machine_path.write_text("{not json")
-    change_after, _ = fold(store, "pause")
-    assert (change_after.intent.paused_at, store.read("c1").intent.paused_at) == (NOW, NOW)
-
-
 def test_an_invalid_cross_layer_policy_still_folds_an_owner_abandon(store):
     seed(store)
     bad = config.Agent(max_rounds=3, max_findings=10, last_round_at=8, ask_owner_at=7)  # rounds do not hold together
@@ -75,7 +67,8 @@ def test_the_execution_boundary_reports_the_settings_fault_after_the_owner_pause
     store.machine_path.parent.mkdir(parents=True, exist_ok=True)
     store.machine_path.write_text("{not json")
     monkeypatch.setattr(runner, "_run", lambda *_a, **_k: pytest.fail("paid work must not start"))
-    change_after, _ = fold(store, "pause")
+    change_after, _ = fold(store, "pause")  # an unreadable machine layer still folds the owner's pause
+    assert (change_after.intent.paused_at, store.read("c1").intent.paused_at) == (NOW, NOW)
     with store.lock("c1") as lock:
         runner._step(store, lock, change_after, Step(kind=StepKind.BUILD, task="t1"), store.root)  # noqa: SLF001
     stopped = store.read("c1")

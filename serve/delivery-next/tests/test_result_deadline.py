@@ -2,7 +2,6 @@
 
 import asyncio
 import dataclasses
-import time
 from types import SimpleNamespace
 
 import pytest
@@ -151,11 +150,16 @@ def test_deadline_returns_without_waiting_for_a_cancel_resistant_rpc(tmp_path, c
         session = Session(blocked if operation == "snapshot" else listed, blocked if operation == "reminder" else None)
         waiter = asyncio.create_task(step.wait(session))
         try:
-            done, _ = await asyncio.wait({waiter}, timeout=0.5)
-            assert waiter in done, "the result deadline must not await RPC cancellation cooperation"
+            # Loop turns, not wall time, so a stalled worker can't fail it. release is unset until finally, so
+            # a step that waited for the RPC's cooperation can't be done here.
+            await asyncio.wait_for(cancelled.wait(), 30)
+            for _ in range(100):
+                if waiter.done():
+                    break
+                await asyncio.sleep(0)
+            assert waiter.done(), "the result deadline must not await RPC cancellation cooperation"
             assert step.run.ending == "deadline"
             assert step.run.payload is None
-            await asyncio.wait_for(cancelled.wait(), 0.5)
             assert step.requests
             if operation == "reminder":
                 assert len(session.sent) == 1
@@ -166,9 +170,7 @@ def test_deadline_returns_without_waiting_for_a_cancel_resistant_rpc(tmp_path, c
             if requests := getattr(step, "requests", ()):
                 await asyncio.gather(*tuple(requests), return_exceptions=True)
 
-    started = time.monotonic()
     asyncio.run(scenario())
-    assert time.monotonic() - started < 2
 
 
 def test_a_late_helper_cannot_launch_more_work_after_the_result_deadline(tmp_path, clock):
