@@ -21,8 +21,26 @@ from owlbear_delivery_next.state_store.store import Store
 KINDS = ["fifo", "directory", "link"]
 
 
-def open_fds() -> set[str]:
-    return {p.name for p in Path("/dev/fd").iterdir()}
+def held(root: Path) -> list[int]:
+    """This process's descriptors open on *root*, its record or what a link there names. Not all descriptors: other
+    tests' threads and finalisers in this worker open and close their own while a test runs."""
+    files = set()
+    for path in (root, root / pack_state.FILE):
+        for follow in (False, True):
+            try:
+                st = os.stat(path, follow_symlinks=follow)
+            except FileNotFoundError:
+                continue
+            files.add((st.st_dev, st.st_ino))
+    fds = []
+    for name in os.listdir("/dev/fd"):
+        try:
+            st = os.fstat(int(name))
+        except OSError:  # closed since it was listed, the listing's own descriptor among them
+            continue
+        if (st.st_dev, st.st_ino) in files:
+            fds.append(int(name))
+    return fds
 
 
 def regular(root: Path) -> Path:
@@ -64,14 +82,13 @@ def test_every_reader_refuses_a_record_that_is_not_a_regular_file_at_once_and_cl
     root = tmp_path / "store"
     root.mkdir()
     unsafe(root, kind, tmp_path)
-    fds = open_fds()
     [opened] = bounded(lambda: pack_run_record.open_record(root / pack_state.FILE))
     assert isinstance(opened, (OSError, ValueError)), opened
     [seen] = bounded(lambda: pack_state.observed(root))
     assert isinstance(seen, (OSError, ValueError)), seen  # unreadable, never taken for no record
     assert bounded(lambda: pack_state.read_version(root / pack_state.FILE)) == [(pack_state.blank(), "")]
     assert bounded(lambda: pack_state.last(Store(root))) == [None]
-    assert open_fds() == fds
+    assert held(root) == []
 
 
 def test_a_regular_record_still_reads_and_a_missing_one_is_absent(tmp_path):
@@ -88,7 +105,6 @@ def test_a_fault_after_the_open_closes_the_descriptor(tmp_path, fault):
     root = tmp_path / "store"
     root.mkdir()
     regular(root)
-    fds = open_fds()
 
     def broken(*_args: object, **_kwargs: object) -> None:
         msg = f"synthetic {fault} failure"
@@ -102,7 +118,7 @@ def test_a_fault_after_the_open_closes_the_descriptor(tmp_path, fault):
         with pytest.raises(OSError, match=f"synthetic {fault} failure"):
             pack_state.observed(root)
         assert pack_state.read_version(root / pack_state.FILE) == (pack_state.blank(), "")
-    assert open_fds() == fds
+    assert held(root) == []
 
 
 @pytest.mark.parametrize("kind", KINDS)
@@ -127,7 +143,6 @@ def test_the_pages_reader_shows_a_failed_handover_as_unread_and_lets_a_cancellat
     root = tmp_path / "store"
     root.mkdir()
     (root / pack_state.FILE).write_text(json.dumps(pack_job._blank() | {"started_at": "2026-10-15T10:00:00+00:00"}))  # noqa: SLF001
-    fds = open_fds()
 
     def handover(*_args: object, **_kwargs: object) -> None:
         msg = "synthetic handover failure"
@@ -140,7 +155,7 @@ def test_the_pages_reader_shows_a_failed_handover_as_unread_and_lets_a_cancellat
                 pack_state.last(Store(root))
         else:
             assert pack_state.last(Store(root)) is None
-    assert open_fds() == fds
+    assert held(root) == []
     assert pack_state.last(Store(root))["started_at"] == "2026-10-15T10:00:00+00:00"  # control: it reads again
 
 
