@@ -209,16 +209,17 @@ def test_a_ledger_whose_step_events_list_their_models_renders(pds) -> None:
 
 @pytest.mark.browser
 def test_a_fold_counts_changes_by_project_apart_from_runs_outside_one_and_its_rows_name_theirs(pds) -> None:
-    """Copilot's counterexamples: two projects' curation runs read as "2 Changes", and one slug in two projects read as
-    "2 Changes" while the opened rows left their Change blank."""
+    """Copilot's counterexamples: two projects' curation runs read as "2 Changes"; one slug in two projects read as
+    "2 Changes" while the opened rows left their Change blank; and two projects sharing a name read as one Change."""
     from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
 
     now, spent = datetime.now(UTC) - timedelta(hours=1), {"credits": 1.0, "models": {"m1": {"credits": 1.0}}}
-    seeds = [("curator", "shop", ""), ("curator", "docs", ""), ("builder", "p", "ch"), ("builder", "q", "ch"),
-             ("reviewer", "shop", ""), ("reviewer", "shop", "c9")]  # fmt: skip
+    seeds = [("curator", "shop", "shop", ""), ("curator", "docs", "docs", ""), ("builder", "p", "web", "ch"),
+             ("builder", "q", "web", "ch"),  # two projects that share a name
+             ("reviewer", "shop", "shop", ""), ("reviewer", "shop", "shop", "c9")]  # fmt: skip
     spend_ledger.append([
-        line for n, (agent, name, change) in enumerate(seeds)
-        for line in run(f"r{n}", now + timedelta(minutes=n), spent, {"project": name, "name": name, "change": change,
+        line for n, (agent, pid, name, change) in enumerate(seeds)
+        for line in run(f"r{n}", now + timedelta(minutes=n), spent, {"project": pid, "name": name, "change": change,
                                                                      "step": "build" if change else "", "agent": agent})
     ])  # fmt: skip
     machine, server, base = serve()

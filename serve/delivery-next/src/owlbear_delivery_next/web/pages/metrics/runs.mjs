@@ -52,7 +52,7 @@ const one = (rows, said, many) => {
 // A Change is its project's, and runs outside one are no Change: a fold at one Change's several steps names it once.
 function changes(rows) {
   const inside = rows.filter((r) => r.change), outside = inside.length < rows.length;
-  const ids = new Set(inside.map((r) => `${project(r)}\u0000${r.change}`));
+  const ids = new Set(inside.map((r) => `${r.project}/${r.change}`));  // as the split by Change keys it
   if (ids.size + (outside ? 1 : 0) === 1) {
     const steps = new Set(rows.map((r) => r.step));
     if (steps.size === 1) return where(rows[0]);
