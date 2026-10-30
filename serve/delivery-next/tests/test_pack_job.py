@@ -42,6 +42,7 @@ from owlbear_delivery_next.impeccable_runs import (
     pack_publish,
     pack_repair,
     pack_repair_content,
+    pack_repair_edits,
     pack_rounds,
     pack_run,
     pack_updater,
@@ -1038,19 +1039,53 @@ def on_main(package: Path, path: str, text: str) -> None:
 
 
 ASKED, REFUSED = ["push-config", "retry", "discard"], ["retry", "discard"]
+FLAKY = f"import flaky\n\n\n@flaky.off\n{TESTED}"
+
+
+@pytest.mark.parametrize(
+    ("before", "change", "expected"),
+    [
+        (TESTED, ("biome.json", "{}\n"), (["biome.json"], [], [])),
+        (TESTED, (".github/workflows/ci.yml", "on: push\n"), ([".github/workflows/ci.yml"], [], [])),
+        (TESTED, ("tests/test_page.py", f"import pytest\n\n@pytest.mark.skip\n{TESTED}"),
+         ([], ["tests/test_page.py (adds a suppression or skip)"], [])),
+        (TESTED, ("tests/test_page.py", "def test_contrast():\n    pass\n"),
+         ([], ["tests/test_page.py (removes an assertion or test)"], [])),
+        (TESTED, ("tests/test_page.py", "def test_contrast():\n    return\n    assert contrast() >= LIMIT\n"),
+         ([], ["tests/test_page.py (disables a test)"], [])),
+        (TESTED, ("src/pkg/impeccable.json", "{}\n"),
+         ([], ["src/pkg/impeccable.json (pack content only an update may change)"], [])),
+        (f"LIMIT = 4.5\n\n\n{TESTED}", ("tests/test_page.py", f"LIMIT = 3.0\n\n\n{TESTED}"),
+         ([], [], ["tests/test_page.py (removes lines from a test)"])),
+        (TESTED, ("tests/test_page.py", FLAKY), ([], [], ["tests/test_page.py (changes a test)"])),
+        (TESTED, ("tests/test_page.py", "def test_contrast():\n    assert (\n        contrast() >= LIMIT\n    )\n"),
+         ([], [], ["tests/test_page.py (reformats a test)"])),  # the same syntax tree: no check went, yet he sees it
+    ],
+    ids=["biome", "workflow", "skip", "pass", "early-return", "pack-content", "lowered-limit", "decorator", "reformat"],
+)  # fmt: skip
+def test_a_ci_repairs_change_is_held_refused_or_reviewed_by_what_it_edits(tmp_path, before, change, expected):
+    """The classification the repair question rests on, below the job: config is his call, a weakened test never."""
+    (path, text), repo = change, tmp_path / "copy"
+    (repo / "tests").mkdir(parents=True)
+    (repo / "tests" / "test_page.py").write_text(before, encoding="utf-8")
+    git(repo, "init", "-q")
+    git(repo, "add", "--all")
+    git(repo, "commit", "-qm", "the failed head")
+    head = git(repo, "rev-parse", "HEAD")
+    (repo / path).parent.mkdir(parents=True, exist_ok=True)
+    (repo / path).write_text(text, encoding="utf-8")
+
+    changed = pack_repair_edits.staged(pack_git.git, repo, head)
+
+    assert pack_repair_edits.held(pack_git.git, repo, head, changed, package="src/pkg", skills=[]) == expected
 
 
 @pytest.mark.parametrize(
     ("change", "asked"),
     [
         (("biome.json", "{}\n"), ("biome.json", ASKED)),
-        ((".github/workflows/ci.yml", "on: push\n"), (".github/workflows/ci.yml", ASKED)),
         (("tests/test_page.py", f"import pytest\n\n@pytest.mark.skip\n{TESTED}"),
          ("tests/test_page.py (adds a suppression or skip)", REFUSED)),
-        (("tests/test_page.py", "def test_contrast():\n    pass\n"),
-         ("tests/test_page.py (removes an assertion or test)", REFUSED)),
-        (("tests/test_page.py", "def test_contrast():\n    return\n    assert contrast() >= LIMIT\n"),
-         ("tests/test_page.py (disables a test)", REFUSED)),
         (("src/pkg/impeccable.json", "{}\n"),
          ("src/pkg/impeccable.json (pack content only an update may change)", REFUSED)),
     ],
@@ -1084,13 +1119,13 @@ def test_a_ci_repair_that_changes_configuration_or_weakens_a_check_stops_and_ask
     ("edit", "held"),
     [
         ((f"LIMIT = 4.5\n\n\n{TESTED}", f"LIMIT = 3.0\n\n\n{TESTED}"), ("removes lines from a test", "-LIMIT = 4.5")),
-        ((TESTED, f"import flaky\n\n\n@flaky.off\n{TESTED}"), ("changes a test", "+@flaky.off")),
-        ((TESTED, "def test_contrast():\n    assert (\n        contrast() >= LIMIT\n    )\n"),
-         ("reformats a test", "+    assert (")),  # the same syntax tree: no check went, yet he sees it
+        ((TESTED, FLAKY), ("changes a test", "+@flaky.off")),
     ],
+    ids=["lowered-limit", "decorator"],
 )  # fmt: skip
 def test_a_repair_that_edits_a_test_is_pushed_only_once_the_owner_reviewed_it(tmp_path, checkout, clone, edit, held):
-    """No pattern proves a test still checks as much: a lowered threshold or an unknown decorator is held regardless."""
+    """No pattern proves a test still checks as much: a lowered threshold or an unknown decorator is held regardless.
+    The classes are checked above; these show he sees what goes, its deleted lines too, before it is pushed."""
     (before, after), (held, shown) = edit, held
     on_main(checkout, "tests/test_page.py", before)
     fakes, job, state = ci_failed(tmp_path, checkout, clone, {"tests/test_page.py": after})
@@ -1983,8 +2018,9 @@ def test_the_final_merge_readback_after_a_lost_last_round_answer_carries_the_mer
     assert "delete" in fakes.github.calls
 
 
-@pytest.mark.parametrize("read_back", [False, True])
-@pytest.mark.parametrize("retirement", ["advanced", "error"])
+@pytest.mark.parametrize(
+    ("read_back", "retirement"), [(False, "advanced"), (False, "error"), (True, "advanced")]
+)  # read back, only the head passed in differs: the advanced case proves it; the error path is the same _done
 def test_pack_retirement_retains_other_work_and_durably_reports_incomplete_cleanup(  # noqa: PLR0913, PLR0917
     tmp_path, checkout, clone, monkeypatch, read_back, retirement
 ):
