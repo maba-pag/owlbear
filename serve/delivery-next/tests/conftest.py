@@ -370,6 +370,35 @@ def shared_repo(tmp_path: Path, _shared_template: Path) -> tuple[Path, Path]:
 
 
 @pytest.fixture(scope="session")
+def _seeded() -> dict[str, Path]:
+    return {}
+
+
+@pytest.fixture
+def seed_once(tmp_path: Path, tmp_path_factory, shared_repo, _seeded) -> Callable[[str, Callable[[], None]], None]:
+    """Seed ``shared_repo`` once per worker and *key*; later tests get a copy of the seeded repositories.
+
+    The first test runs *seed* in its own isolated ``tmp_path``, and its repositories become the template. *seed* must
+    leave no in-process state about them, such as a warm decision cache, which a copy would lack.
+    """
+    names = ("remote.git", "owlbear-data")
+
+    def once(key: str, seed: Callable[[], None]) -> None:
+        if key not in _seeded:
+            seed()
+            _seeded[key] = tmp_path_factory.mktemp(f"seeded-{key}")
+            _copy(tmp_path, _seeded[key], *names)
+            return
+        for name in names:
+            shutil.rmtree(tmp_path / name)
+        _copy(_seeded[key], tmp_path, *names)
+        # the copies have new inodes; without a refresh, plumbing such as diff-index sees the seeded files as changed
+        _RUN(["git", "update-index", "-q", "--refresh"], cwd=shared_repo[0], check=True, capture_output=True)
+
+    return once
+
+
+@pytest.fixture(scope="session")
 def _change_template(tmp_path_factory: pytest.TempPathFactory) -> Path:
     base = tmp_path_factory.mktemp("change-repo-template").resolve()
     (base / "gitconfig").write_text("")
