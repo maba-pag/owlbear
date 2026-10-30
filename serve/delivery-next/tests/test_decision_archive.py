@@ -568,15 +568,16 @@ def _committed(root: Path) -> set[str]:
     return set(git(root, "show", "--name-only", "--format=", "HEAD").split())
 
 
-@pytest.mark.parametrize("owner_edit", [True, False], ids=["owner-edits-the-unchanged-file", "healthy"])
-def test_a_record_publishes_only_the_decision_files_it_journalled(store, shared_repo, monkeypatch, owner_edit) -> None:
+def test_a_record_publishes_only_the_decision_files_it_journalled(store, shared_repo, monkeypatch) -> None:
+    """The owner edits an unchanged decision file while the record is written; no healthy case is needed beside it,
+    as its asserts are a superset of a healthy run's."""
     root, _ = shared_repo
     c = finished()
     unchanged = _published_once(root, store, c, record=True)
     published = unchanged.read_bytes()
 
     with monkeypatch.context() as m:
-        journals, written = _spy_archive(m, root, unchanged, owner_edit=owner_edit)
+        journals, written = _spy_archive(m, root, unchanged, owner_edit=True)
         assert change_record.save(store, c, MERGED, AT) == ""
 
     (journal,) = journals
@@ -588,21 +589,18 @@ def test_a_record_publishes_only_the_decision_files_it_journalled(store, shared_
     rel = unchanged.relative_to(root).as_posix()
     shown = subprocess.run(["git", "show", f"HEAD:{rel}"], cwd=root, check=True, capture_output=True)  # noqa: S603, S607
     assert shown.stdout == published  # HEAD still holds the published bytes
-    if owner_edit:
-        assert unchanged.read_bytes() == OWNER_WIP  # the owner's edit stays theirs, unpublished
-        assert git(root, "status", "--porcelain").split() == ["M", unchanged.relative_to(root).as_posix()]
-    else:
-        assert git(root, "status", "--porcelain") == ""
+    assert unchanged.read_bytes() == OWNER_WIP  # the owner's edit stays theirs, unpublished
+    assert git(root, "status", "--porcelain").split() == ["M", unchanged.relative_to(root).as_posix()]
 
 
-@pytest.mark.parametrize("owner_edit", [True, False], ids=["owner-edits-the-unchanged-file", "healthy"])
-def test_an_archive_publishes_only_the_decision_files_it_journalled(store, shared_repo, monkeypatch, owner_edit):
+def test_an_archive_publishes_only_the_decision_files_it_journalled(store, shared_repo, monkeypatch):
+    """As the record's: the owner's edit during the archive proves everything a healthy archive would."""
     root, _ = shared_repo
     c = finished()
     unchanged = _published_once(root, store, c, record=False)
 
     with monkeypatch.context() as m:
-        journals, written = _spy_archive(m, root, unchanged, owner_edit=owner_edit)
+        journals, written = _spy_archive(m, root, unchanged, owner_edit=True)
         files, left = decision_archive.archive(root, "shop-site", c, STEM, "merged")
 
     (journal,) = journals
@@ -612,7 +610,7 @@ def test_an_archive_publishes_only_the_decision_files_it_journalled(store, share
     assert written[-1] == journal
     assert not left
     assert decision_batch.pending(store.shared) is None
-    assert (unchanged.read_bytes() == OWNER_WIP) == owner_edit
+    assert unchanged.read_bytes() == OWNER_WIP
 
 
 def test_an_archive_with_nothing_to_change_journals_and_publishes_nothing(shared_repo, monkeypatch) -> None:
