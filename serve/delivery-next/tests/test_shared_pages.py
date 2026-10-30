@@ -621,8 +621,9 @@ def test_with_no_machine_setting_set_anywhere_the_page_names_each_and_a_pending_
             page = browser.new_page()
             pds.only(page, base)
             page.goto(f"{base}/config?project={DOCS}#token=t")
-            expect(page.locator("#unset")).to_contain_text("machine.channel")
-            expect(page.locator("#unset")).to_contain_text("machine.sessions")
+            listed = page.locator("#unset-this-machine")  # D-01M66B6GS0HKACV9C4R4QKFX7T: its count, its first three
+            expect(listed).to_contain_text("This machine, 14 unset: machine.channel")
+            expect(listed.get_by_role("link", name="and 11 more")).to_have_attribute("href", "#this-machine")
             pds.group(page, "this-machine")
             region = page.get_by_role("region", name="This machine")
             expect(page.locator("#machine-pending")).to_contain_text("offline")
