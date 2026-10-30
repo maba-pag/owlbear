@@ -3,12 +3,21 @@ name: Python
 
 "on":
   workflow_call:
+    inputs:
+      durations:
+        description: The run times, a JSON object of test file path to seconds, that every shard splits by
+        type: string
+        required: true
   workflow_dispatch:
     inputs:
       workers:
         description: xdist workers per shard, to benchmark a worker count; empty keeps 6
         type: string
         default: ""
+      durations:
+        description: Run times, a JSON object of test file path to seconds; {} splits files by a hash of their path
+        type: string
+        default: "{}"
 
 concurrency:
   group: python-${{ github.event.pull_request.number || github.sha }}
@@ -45,10 +54,20 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Write the run times this run splits by
+        id: durations
+        env:
+          DURATIONS: ${{ inputs.durations }}
+        run: |
+          printf '%s' "$DURATIONS" > "$RUNNER_TEMP/ci-durations.json"
+          python3 .github/scripts/ci_durations.py check "$RUNNER_TEMP/ci-durations.json"
+
+      # A pass holds only for the run times it split by: under others, a skipped shard could own another's failure.
       - name: Fingerprint inputs
         id: fingerprint
         run: |
-          value="$(git ls-files -s -- . ':!:.owlbear/research' | sha256sum | cut -c1-40)"
+          value="$({ git ls-files -s -- . ':!:.owlbear/research'; cat "$RUNNER_TEMP/ci-durations.json"; } \
+            | sha256sum | cut -c1-40)"
           echo "value=$value" >> "$GITHUB_OUTPUT"
 
       - name: Look up passing result for identical inputs
@@ -96,10 +115,12 @@ jobs:
         run: python3 .github/scripts/flaky_issues.py
 
       # 6 workers per 4-vCPU runner: in a benchmark, 10 spent ~53 s collecting and 4 ran the tests ~25 s slower.
+      # Shards take whole test files, packed by the run times Scope handed over; main's CI refreshes them weekly.
       - name: Run test shard
         if: steps.reuse.outputs.cache-hit != 'true'
         env:
           CI_SHARD_INDEX: ${{ matrix.shard }}
+          CI_SHARD_DURATIONS: ${{ runner.temp }}/ci-durations.json
           CI_WORKERS: ${{ inputs.workers }}
           OWLBEAR_FLAKY_REPORT: ${{ runner.temp }}/test-results/flaky.json
           # Agent shells set safe.bareRepository=explicit; a test relying on finding a bare repository fails here too.

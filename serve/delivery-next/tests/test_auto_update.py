@@ -78,7 +78,7 @@ def test_postpone_or_any_use_cancels_the_announcement_and_starts_the_idle_time_a
     assert (idle.auto.read(), idle.started) == (None, [])
 
 
-def test_a_sleep_during_the_announcement_restarts_it(idle):
+def test_a_sleep_or_the_clock_set_back_during_the_announcement_restarts_it(idle):
     idle.clock.step(auto_update.IDLE_FOR)
     idle.auto.tick()
     idle.clock.step(60)
@@ -87,6 +87,12 @@ def test_a_sleep_during_the_announcement_restarts_it(idle):
 
     idle.auto.tick()
 
+    assert (idle.auto.read(), idle.started) == ({"version": "v0.2", "left": 120}, [])
+    idle.clock.step(60)
+    idle.auto.tick()
+    assert idle.auto.read() == {"version": "v0.2", "left": 60}
+    idle.clock.wall -= 600  # the wall clock corrected backwards
+    idle.auto.tick()
     assert (idle.auto.read(), idle.started) == ({"version": "v0.2", "left": 120}, [])
 
 
@@ -156,18 +162,6 @@ def test_the_machines_answer_carries_the_announcement(idle):
     listed = client.get("/api/next/projects", headers={"authorization": f"Bearer {TOKEN}"}).json()
 
     assert listed["announce"] == {"version": "v0.2", "left": 120}
-
-
-def test_the_clock_set_back_restarts_the_announcement_too(idle):
-    idle.clock.step(auto_update.IDLE_FOR)
-    idle.auto.tick()
-    idle.clock.step(60)
-    idle.auto.tick()
-    idle.clock.wall -= 600  # the wall clock corrected backwards
-
-    idle.auto.tick()
-
-    assert idle.auto.read() == {"version": "v0.2", "left": 120}
 
 
 def test_a_version_that_failed_its_tries_is_not_announced_again(idle):

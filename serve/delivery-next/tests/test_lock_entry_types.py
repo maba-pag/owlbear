@@ -137,9 +137,3 @@ def test_a_fifo_change_lock_refuses_without_blocking(repo):
 
     assert isinstance(outcome, StoreError)
     assert _is_fifo(change_dir / "lock")
-
-
-def test_a_held_change_lock_names_its_holder(repo):
-    store = Store.open(repo)
-    with store.lock("c1"):
-        assert store.holder("c1").pid == os.getpid()

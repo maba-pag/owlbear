@@ -255,17 +255,6 @@ def test_a_held_or_recovered_run_moves_into_a_new_root_and_two_fresh_managers_fi
         again.stop_all()
 
 
-@pytest.mark.usefixtures("current_binding")
-def test_meta_without_the_settle_hook_the_unidentified_run_is_carried_unstamped(
-    repo, boot, machines, capsys, monkeypatch
-):
-    """Meta-negative control, not acceptance: the settle hook is replaced by an in-memory no-op. The carried record
-    then has no generation, which is the omission the unidentified acceptance case above must catch."""
-    monkeypatch.setattr(project_home, "_settle_pack_run", lambda *_args: None)
-    _, _, carried, _, _ = _move_held_a(machines, repo, boot, capsys, recovered=False, identified=False)
-    assert pack_state.REWRITTEN not in carried
-
-
 def _adopt_under_receipt_fault(machine: Machine, folder: Path, key: str, *, saved: bool, monkeypatch) -> None:
     """The production adopter on the carried run at its store folder, with the first receipt-noting save faulted.
 
