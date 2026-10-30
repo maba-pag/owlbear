@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import os
 import re
 import subprocess
@@ -27,6 +28,17 @@ PR_ONLY = "${{ github.event_name == 'pull_request' }}"
 _SPEC = importlib.util.spec_from_file_location("ci_scope", ROOT / ".github/scripts/ci_scope.py")
 ci_scope = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(ci_scope)
+
+
+def _script(name: str) -> object:
+    spec = importlib.util.spec_from_file_location(name, ROOT / f".github/scripts/{name}.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+ci_shard = _script("ci_shard")
+ci_durations = _script("ci_durations")
 
 
 def _workflow(name: str) -> dict[str, object]:
@@ -286,6 +298,10 @@ def test_python_tests_are_sharded_without_the_model_stack() -> None:
         "${{ inputs.workers }}"
     )
     assert workflow["on"]["workflow_dispatch"]["inputs"]["workers"]["default"] == ""
+    durations = job["steps"][[s.get("name") for s in job["steps"]].index("Run test shard")]["env"]["CI_SHARD_DURATIONS"]
+    assert durations == ".github/ci-durations.json"
+    assert {durations, ".github/scripts/ci_durations.py"} <= set(ci_scope.SUITES["python"])  # their tests run there
+    assert json.loads((ROOT / durations).read_text(encoding="utf-8"))
     assert "playwright install" not in runs
     assert "ruff" not in runs
 
@@ -351,6 +367,12 @@ def test_sharded_jobs_load_the_shared_shard_plugin_once_per_matrix_shard(workflo
     assert ".github/scripts/ci_shard.py" in fingerprint or "git ls-files -s -- . " in fingerprint
 
 
+def _shard_env(index: int, total: int, **extra: str) -> dict[str, str]:
+    inherited = {k: v for k, v in os.environ.items() if not k.startswith("CI_SHARD")}  # CI's own shard settings
+    shard = {"CI_SHARD_INDEX": str(index), "CI_SHARDS": str(total)}
+    return inherited | {"PYTHONPATH": str(ROOT / ".github/scripts")} | shard | extra
+
+
 def test_the_shard_plugin_runs_every_collected_test_in_exactly_one_shard(tmp_path: Path) -> None:
     (tmp_path / "pytest.ini").write_text("[pytest]\n")
     (tmp_path / "test_x.py").write_text(
@@ -361,8 +383,7 @@ def test_the_shard_plugin_runs_every_collected_test_in_exactly_one_shard(tmp_pat
         done = subprocess.run(
             [sys.executable, "-m", "pytest", "--collect-only", "-q", "-p", "no:cacheprovider", "-p", "ci_shard"],
             cwd=tmp_path,
-            env=os.environ
-            | {"PYTHONPATH": str(ROOT / ".github/scripts"), "CI_SHARD_INDEX": str(index), "CI_SHARDS": "2"},
+            env=_shard_env(index, 2),
             capture_output=True,
             text=True,
             check=True,
@@ -375,6 +396,84 @@ def test_the_shard_plugin_runs_every_collected_test_in_exactly_one_shard(tmp_pat
     assert second
     assert not first & second
     assert first | second == {f"test_x.py::test_n[{n}]" for n in range(40)}
+
+
+def test_file_shards_run_every_test_once_and_import_only_their_own_files(tmp_path: Path) -> None:
+    """Files the durations name are packed by them, others go by path; a shard never imports another's test file."""
+    (tmp_path / "pytest.ini").write_text("[pytest]\n")
+    log = tmp_path / "imported.log"
+    files = ["test_heavy.py", "a/test_one.py", "a/test_two.py", "a/b/test_three.py", "b/test_new.py", "b/four_test.py"]
+    for name in files:
+        path = tmp_path / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            f"with open({str(log)!r}, 'a') as log:\n    log.write({name!r} + '\\n')\n\n\n"
+            "def test_a():\n    pass\n\n\ndef test_b():\n    pass\n"
+        )
+    durations = {
+        "gone/test_deleted.py": 99.0,
+        "test_heavy.py": 50.0,
+        "a/test_one.py": 20.0,
+        "a/test_two.py": 20.0,
+        "a/b/test_three.py": 9.0,
+    }
+    (tmp_path / "durations.json").write_text(json.dumps(durations))
+
+    def run(index: int) -> tuple[set[str], set[str]]:
+        log.unlink(missing_ok=True)
+        log.touch()
+        done = subprocess.run(
+            [sys.executable, "-m", "pytest", "--collect-only", "-q", "-p", "no:cacheprovider", "-p", "ci_shard"],
+            cwd=tmp_path,
+            env=_shard_env(index, 3, CI_SHARD_DURATIONS="durations.json"),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert done.returncode in (0, 5), done.stdout + done.stderr  # 5: this shard collected no test
+        collected = {line.split("::")[0] for line in done.stdout.splitlines() if "::" in line}
+        assert {line for line in done.stdout.splitlines() if "::" in line} == {
+            f"{name}::{test}" for name in collected for test in ("test_a", "test_b")
+        }
+        return collected, set(log.read_text().split())
+
+    shards = [run(index) for index in (1, 2, 3)]
+
+    packed = ci_shard.pack(durations, 3)
+    assert packed == {
+        "gone/test_deleted.py": 1,
+        "test_heavy.py": 2,
+        "a/test_one.py": 3,
+        "a/test_two.py": 3,
+        "a/b/test_three.py": 3,
+    }
+    for index, (collected, imported) in enumerate(shards, start=1):
+        assert collected == imported
+        assert collected == {name for name in files if (packed.get(name) or ci_shard.shard_of(name, 3)) == index}
+    assert sorted(name for collected, _ in shards for name in collected) == sorted(files)
+
+
+def test_the_durations_script_averages_each_files_seconds_over_runs_from_the_latest_attempts(tmp_path: Path) -> None:
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests/test_x.py").write_text("")
+    (tmp_path / "serve/my-pkg/tests").mkdir(parents=True)
+    (tmp_path / "serve/my-pkg/tests/test_y.py").write_text("")
+
+    def junit(path: Path, *cases: tuple[str, float]) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        rows = "".join(f'<testcase classname="{name}" name="t" time="{seconds}"/>' for name, seconds in cases)
+        path.write_text(f"<testsuites><testsuite>{rows}</testsuite></testsuites>")
+
+    first, second = tmp_path / "run1", tmp_path / "run2"
+    junit(first / "test-results-python-shard-1-attempt-1/junit.xml", ("tests.test_x", 100.0))
+    junit(first / "test-results-python-shard-1-attempt-2/junit.xml", ("tests.test_x", 2.0), ("tests.test_x.T", 1.0))
+    junit(first / "test-results-python-shard-2-attempt-1/junit.xml", ("serve.my-pkg.tests.test_y", 4.0))
+    junit(second / "test-results-python-shard-1-attempt-1/junit.xml", ("tests.test_x", 5.0), ("tests.gone", 7.0))
+
+    assert ci_durations.durations([first, second], tmp_path) == {
+        "serve/my-pkg/tests/test_y.py": 4.0,
+        "tests/test_x.py": 4.0,
+    }
 
 
 @pytest.mark.parametrize("name", REUSING_WORKFLOWS)
