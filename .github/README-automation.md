@@ -62,7 +62,7 @@ the same fingerprint reports the reused result and skips its work; a sharded job
 cover the whole tree except `.owlbear/research`; the others cover their own inputs. Bump the
 `ci-pass-v1` key prefix when a job's commands change meaning without changing those inputs.
 
-uv caches are scoped per install profile (`python-tests`, `python-browser`, `delivery-next-browser`,
+uv caches are scoped per install profile (`python-tests`, `python-browser`, `delivery-next-browser`, `static`,
 `dev-tools`). Python
 test environments skip the torch/CUDA model stack that only the deselected `model` tests import;
 keep the `CI_SKIPPED_PACKAGES` lists in the Python workflow and Copilot setup identical.

@@ -446,6 +446,8 @@ def test_static_runs_the_workspace_lint_on_every_change() -> None:
     assert "uv run --no-sync lint --no-fix" in runs
     assert "uv run --no-sync format --no-fix" in runs
     assert "npm ci --engine-strict --no-audit --no-fund" in runs
+    setup = next(s for s in _jobs("static.yml")["lint"]["steps"] if "astral-sh/setup-uv@" in str(s.get("uses", "")))
+    assert setup["with"]["cache-suffix"] == "static"  # lint installs only owlbear-tools; dev-tools' cache is ~2.9 GB
 
 
 @pytest.mark.parametrize("name", [*SUITE_WORKFLOWS, "copilot-setup-steps.yml"])
@@ -462,6 +464,7 @@ def test_uv_setups_use_scoped_caches_and_check_the_runtime_first(name: str) -> N
                 "python-browser",
                 "delivery-next-browser",
                 "dev-tools",
+                "static",
             }
         check = next(index for index, step in enumerate(steps) if "check_uv_version.py" in str(step.get("run", "")))
         first_uv = next(
