@@ -544,6 +544,15 @@ class Pds:
         select.get_by_role("combobox").click()
         select.locator(f'p-select-option[value="{value}"]').click()
 
+    @staticmethod
+    def group(page, group: str) -> None:
+        """Show Settings' group *group* (D-01M63C8QQMANY46N8GMNNKH1V9) by its link, as a person does."""
+        from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+        link = page.locator(f"#groups a[href='#{group}']")
+        link.click()
+        expect(link).to_have_attribute("aria-current", "page")
+
 
 @pytest.fixture
 def pds(tmp_path_factory) -> type[Pds]:
