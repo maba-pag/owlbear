@@ -6,7 +6,9 @@ and only the chat launch is recorded instead of opening VS Code.
 
 from __future__ import annotations
 
+import contextlib
 import subprocess
+import threading
 import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -25,6 +27,7 @@ from owlbear_delivery_next.settings import config
 from owlbear_delivery_next.settings.config import Layer, Prefs
 from owlbear_delivery_next.state_store import machine_settings, registry
 from owlbear_delivery_next.state_store.backlog import Backlog
+from owlbear_delivery_next.workflow_steps import curation
 
 if TYPE_CHECKING:
     from owlbear_delivery_next.state_store.store import Store
@@ -100,6 +103,11 @@ def a_b(tmp_path, monkeypatch, shared_repo, host) -> tuple[str, str]:
     return ids[0], ids[1]
 
 
+def _unset(store: Store) -> None:
+    said = store.save(store.config_path, Layer, lambda la: la.model_copy(update={"prefs": Prefs()}), "t", owner=True)
+    assert said == ""  # the CI poll interval is unset again
+
+
 def _listed(client: TestClient) -> dict[str, dict]:
     r = client.get("/api/next/projects")
     assert r.status_code == 200, r.text
@@ -161,3 +169,36 @@ def test_a_test_review_for_a_blocked_project_is_refused_before_any_change_exists
     started = client.post(f"/p/{b}/api/next/maintenance/test-review", json={"packages": ["."]})
     assert started.status_code == 200, started.text
     assert [c["slug"] for c in client.get(f"/p/{b}/api/next/changes").json()] == [started.json()["slug"]]
+
+
+@pytest.mark.usefixtures("github")
+def test_a_setting_unset_while_new_change_waits_for_the_launch_lock_opens_no_chat(host, a_b, monkeypatch) -> None:
+    b, admitted = a_b[1], api.admitted
+
+    @contextlib.contextmanager
+    def late(h):  # the owner unsets it after the first check, while the request waits for the lock
+        _unset(host.store(b))
+        with admitted(h):
+            yield
+
+    monkeypatch.setattr(api, "admitted", late)
+    assert host.client.post(f"/p/{b}/api/next/new-change").json() == {"started": False, "reason": UNSET}
+    time.sleep(0.2)
+    assert host.launched == []
+
+
+def test_a_setting_unset_while_a_test_review_waits_for_its_turn_starts_no_change(host, a_b, monkeypatch) -> None:
+    b, lock = a_b[1], threading.Lock()
+
+    class Late:
+        def __enter__(self) -> None:  # the owner unsets it while the start waits for the one before it
+            _unset(host.store(b))
+            lock.acquire()
+
+        def __exit__(self, *_: object) -> None:
+            lock.release()
+
+    monkeypatch.setattr(curation, "STARTING", Late())
+    refused = host.client.post(f"/p/{b}/api/next/maintenance/test-review", json={"packages": ["."]})
+    assert (refused.status_code, refused.json()["detail"]) == (409, UNSET)
+    assert host.client.get(f"/p/{b}/api/next/changes").json() == []

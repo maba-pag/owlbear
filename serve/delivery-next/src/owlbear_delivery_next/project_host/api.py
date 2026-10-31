@@ -291,18 +291,17 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
         try:
             shaper = store.settings().agent("shaper")
         except (SettingsUnset, StoreError) as exc:  # unset or broken just after the check
-            return {"started": False, "reason": work_block.of_store(store).text() or str(exc)}
+            return {"started": False, "reason": str(exc)}
         prompt += PICKER_NOTE.format(model=shaper.model, effort=shaper.effort)
         command = by_hand(prompt)
         if not which("code"):
             return {"started": False, "command": command, "reason": f"`code` is not on PATH; run this in {host.repo}"}
-
-        def work() -> dict[str, str]:
-            return launch(host.repo, shaper, prompt)
-
         try:
             with admitted(host):
-                return {"started": True, "launch": launches.start(work, command, done)}
+                if why := work_block.of_store(store).text():  # again under the lock: unset while it waited for it
+                    return {"started": False, "reason": why}
+                started = launches.start(lambda: launch(host.repo, shaper, prompt), command, done)
+                return {"started": True, "launch": started}
         except Refused as exc:
             raise HTTPException(exc.status, exc.text) from exc
 
