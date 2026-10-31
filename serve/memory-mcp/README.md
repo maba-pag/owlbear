@@ -73,7 +73,7 @@ stale     ──[resolve*]──► approved    [delete: soft → deleted]
 | `rename_agent_memories` | Rewrite every matching `source_agent` and `scope_agents` reference after an agent rename |
 | `delete_agent_memories` | Preserve historical provenance and remove the retired role from scopes; hard-delete pending orphans and tombstone reviewed orphans for the normal commit/purge flow |
 | `approve_memory` | Requires `revision` to promote `curated→approved`; user-initiated only (not exposed to any agent) |
-| `assess_memories` | Process revision-bound batch assessments, applying counters or the factually-wrong confirmation cycle; each result includes `success`, `already_applied`, and `recorded_bucket` (plus `state` and `challenges` for a challenged entry), or `success=False` with `error` |
+| `assess_memories` | Process revision-bound batch assessments, applying counters or the factually-wrong confirmation cycle; each result includes `success`, `already_applied`, and `recorded_bucket` (plus `state` and `challenges` for a challenged entry), or `success=False` with `error`. Bound to the shared repository, it commits the receipts it wrote to entry files committed before the batch, locally and never pushed; Delivery's next publication pushes them |
 | `commit_memory_batch` | Commit non-pending memory entries for one explicit `curation` or `review` session; return the commit SHA or a no-op result, and any deferred duplicate deletions |
 
 All mutating tools return a `hint` field describing the transition or action taken.
