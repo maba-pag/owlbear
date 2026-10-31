@@ -162,12 +162,7 @@ def _no_shared_settings(tmp_path_factory, monkeypatch):
     """
     fake = tmp_path_factory.mktemp("home")
     monkeypatch.setenv("HOME", str(fake))
-    # git never reaches GitHub (#804): a fixture's own GIT_CONFIG_GLOBAL hides HOME's .gitconfig but not this
-    # environment's rule; the host's start drops the environment's, but every git it runs reads HOME's .gitconfig
     offline, github = "/nonexistent/offline-in-tests/", "https://github.com/"
-    monkeypatch.setenv("GIT_CONFIG_COUNT", "1")
-    monkeypatch.setenv("GIT_CONFIG_KEY_0", f"url.{offline}.insteadOf")
-    monkeypatch.setenv("GIT_CONFIG_VALUE_0", github)
     (fake / ".gitconfig").write_text(f'[url "{offline}"]\n\tinsteadOf = {github}\n')
     monkeypatch.delenv("COPILOT_HOME", raising=False)  # nor the owner's Copilot folder: his skills and instructions
     browsers = MACHINE_HOME / ("Library/Caches" if sys.platform == "darwin" else ".cache") / "ms-playwright"
@@ -188,6 +183,14 @@ def _no_shared_settings(tmp_path_factory, monkeypatch):
     monkeypatch.setattr(sdk_adapter, "CopilotClient", _no_runtime)  # never a real model session; fakes replace it
     monkeypatch.setattr(spotter_look, "judged", _silent_look)  # nor a real Spotter look
     monkeypatch.setattr(sdk_adapter, "own_instructions", _no_instructions)  # fakes list no instruction sources
+    # git never reaches GitHub (#804): a fixture's own GIT_CONFIG_GLOBAL hides HOME's .gitconfig but not this
+    # environment's rule; the host's start drops the environment's, but every git it runs reads HOME's .gitconfig.
+    # Its own patcher, so a test's monkeypatch.undo(), which also puts the real HOME back, leaves it in place.
+    with pytest.MonkeyPatch.context() as rule:
+        rule.setenv("GIT_CONFIG_COUNT", "1")
+        rule.setenv("GIT_CONFIG_KEY_0", f"url.{offline}.insteadOf")
+        rule.setenv("GIT_CONFIG_VALUE_0", github)
+        yield
 
 
 @pytest.fixture(autouse=True)

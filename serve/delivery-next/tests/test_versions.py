@@ -483,17 +483,26 @@ def test_a_format_3_machine_json_reads_with_no_version_ever_active():
     assert registry.load().active == ""
 
 
-@pytest.mark.parametrize("route", ["the host's start scrubbed git's settings", "a fixture's own global git config"])
+@pytest.mark.parametrize(
+    "route", ["the host's start scrubbed git's settings", "a fixture's own global git config", "a test's undo()"]
+)
 def test_a_tests_git_never_reaches_github(route, tmp_path, monkeypatch):
-    """#804: neither the host start dropping GIT_CONFIG_* nor a fixture's own global config lets git reach GitHub."""
-    with monkeypatch.context() as patched:
-        if route.startswith("the host"):
-            for name in environment.scrub(dict(os.environ)):
-                patched.delenv(name)
-        else:
-            patched.setenv("GIT_CONFIG_GLOBAL", str(tmp_path / "gitconfig"))
-            patched.setenv("GIT_CONFIG_NOSYSTEM", "1")
-        began = time.monotonic()
-        with pytest.raises(versions.VersionError, match="/nonexistent/offline-in-tests/"):
-            versions.repo()  # codebase.URL, OwlBear's GitHub repository
-        assert time.monotonic() - began < 5
+    """#804: no route a test takes around the offline rule (the host start dropping GIT_CONFIG_*, a fixture's own
+    global config, a test's monkeypatch.undo() putting the real HOME back) lets git reach GitHub."""
+    if route.startswith("the host"):
+        for name in environment.scrub(dict(os.environ)):
+            monkeypatch.delenv(name)
+    elif route.startswith("a fixture"):
+        monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(tmp_path / "gitconfig"))
+        monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+    else:
+        monkeypatch.undo()
+        monkeypatch.setenv("HOME", str(tmp_path))  # one with no .gitconfig, never the machine's
+        monkeypatch.setattr(local_home, "root", lambda: tmp_path / ".owlbear")
+    url = ["git", "ls-remote", "--get-url", codebase.URL]  # resolves the URL offline
+    resolved = subprocess.run(url, capture_output=True, text=True, check=True).stdout  # noqa: S603 - fixed arguments
+    assert resolved.startswith("/nonexistent/offline-in-tests/"), resolved
+    began = time.monotonic()
+    with pytest.raises(versions.VersionError, match="/nonexistent/offline-in-tests/"):
+        versions.repo()  # codebase.URL, OwlBear's GitHub repository
+    assert time.monotonic() - began < 5
