@@ -9,6 +9,7 @@ or not, are kept in a local ref that no push names.
 from __future__ import annotations
 
 import contextlib
+import logging
 import os
 import shutil
 import subprocess
@@ -28,6 +29,8 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.local_system.data_repo import DataRepo
 
 NO_EDITS = "the run changed no memory, so nothing is held"
+
+_log = logging.getLogger(__name__)
 
 
 def _git(cwd: Path, *args: str, index: Path | None = None) -> str:
@@ -164,12 +167,13 @@ def seed(shared: DataRepo, at: Path, folders: Sequence[str]) -> Tree:
 def prune(shared: DataRepo) -> str:
     """Forget the worktrees whose folder is gone, so the checkout lists none of a finished run; why that failed.
 
-    A failure changes nothing a run did, and the next run's seed prunes again, so its row only says so.
+    A failure changes nothing a run did, and the next run's seed prunes again, so it is logged and its row says so.
     """
     try:
         with shared.locked():
             _git(shared.root, "worktree", "prune")
     except DataRepoError as exc:
+        _log.warning("%s still lists a finished curation run's worktree: %s", shared.root, exc)
         return f"its worktree is still listed: {exc}"
     return ""
 

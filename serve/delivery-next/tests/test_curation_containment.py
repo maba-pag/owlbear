@@ -14,7 +14,7 @@ from owlbear_delivery_next.local_system import data_place, preload
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.local_system.slots import Slots
-from owlbear_delivery_next.machine_host import curation
+from owlbear_delivery_next.machine_host import curation, curation_tree
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_memory_mcp.git import commit_batch
 
@@ -325,6 +325,33 @@ def test_an_accepted_run_never_publishes_a_deletion_the_memory_batch_deferred(re
     assert drained(later).state == "done"
     listed = bare(remote, "ls-tree", "-r", "--name-only", "main", "--", "shop/memory").stdout.decode().split()
     assert listed == ["shop/memory/newer-copy.md"]  # the original's deletion published with its curated copy
+
+
+LOCKED = "git worktree failed: locked"
+
+
+def test_a_finished_runs_worktree_left_listed_is_logged_and_named_in_its_row(repo, monkeypatch, caplog) -> None:
+    real = curation_tree._git  # noqa: SLF001
+    failing = []
+
+    def git_(cwd, *args, **kw):
+        if failing and args == ("worktree", "prune"):
+            raise curation_tree.DataRepoError(LOCKED)
+        return real(cwd, *args, **kw)
+
+    def run(cfg) -> Run:
+        failing.append(True)  # the seed's own prune ran
+        return Run(cfg.session_id, termination=Termination(confirmed=True), **REFUSALS["unread"])
+
+    monkeypatch.setattr(curation_tree, "_git", git_)
+    job = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(repo), run=run)
+    job.start("shop")
+
+    row = drained(job)
+    assert (row.state, row.reason.endswith(f"its worktree is still listed: {LOCKED}")) == ("failed", True)
+    assert [r.getMessage() for r in caplog.records if r.name == curation_tree.__name__] == [
+        f"{repo} still lists a finished curation run's worktree: {LOCKED}"
+    ]
 
 
 def test_the_checkout_lists_held_runs_as_its_own_and_no_finished_runs_worktree(repo) -> None:
