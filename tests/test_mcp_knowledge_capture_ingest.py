@@ -471,6 +471,37 @@ async def test_capture_provenance_is_redacted_oversize_is_refused_and_delete_pur
 
 
 @pytest.mark.asyncio
+async def test_delete_without_the_vector_backend_refuses_before_dropping_an_indexed_source(tmp_path: Path) -> None:
+    tool_context, app_context = _assembled_context(tmp_path)
+    source_id = await _register_browser_source(tool_context, [_URL_A], scope="no-backend")
+    await server.knowledge_ingest(tool_context, source_id=source_id, captures=[_captured(_URL_A, "indexed text")])
+    app_context.conn.close()
+    app_context = server.build_app_context(
+        workspace_root=tmp_path,
+        conn=sqlite3.connect(tmp_path / ".owlbear" / "knowledge" / "local.db"),
+        factories=server.KnowledgeRuntimeFactories(
+            http_response_fetcher_factory=HttpxContentFetcher,
+            embedding_provider_factory=_DeterministicEmbeddingProvider,
+            vector_store_factory=lambda _location: server.MissingVectorStore(),
+        ),
+    )
+    tool_context = SimpleNamespace(request_context=SimpleNamespace(lifespan_context=app_context))
+    try:
+        before = await _source_snapshot(tool_context, app_context, source_id)
+        assert before[0] == 1
+
+        with pytest.raises(ToolError, match=r"owlbear-knowledge\[embedding,qdrant\]"):
+            await server.delete_knowledge_source(tool_context, source_id)
+
+        assert await _source_snapshot(tool_context, app_context, source_id) == before
+        empty_id = await _register_browser_source(tool_context, [_URL_B], scope="no-backend-empty")
+        deleted = await server.delete_knowledge_source(tool_context, empty_id)
+        assert deleted["status"] == "complete"
+    finally:
+        app_context.conn.close()
+
+
+@pytest.mark.asyncio
 async def test_http_refresh_search_source_has_identity_without_capture_provenance(tmp_path: Path) -> None:
     response_fetcher = _FixedHttpResponseFetcher()
     tool_context, app_context = _assembled_context(

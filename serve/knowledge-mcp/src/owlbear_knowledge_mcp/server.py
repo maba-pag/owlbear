@@ -1173,6 +1173,18 @@ async def delete_knowledge_source(ctx: Context, source_id: str) -> dict[str, Any
         msg = "ingest coordinator not available"
         raise ToolError(msg)
 
+    # The cascade drops the registry row before it deletes vectors, so refuse here rather than strand the content.
+    if (
+        isinstance(app_ctx.vector_store, MissingVectorStore)
+        and app_ctx.conn.execute(
+            "SELECT 1 FROM content_documents WHERE source_id = ? UNION ALL "
+            "SELECT 1 FROM content_chunks WHERE source_id = ? LIMIT 1",
+            (source_id, source_id),
+        ).fetchone()
+    ):
+        msg = f"Source '{source_id}' has indexed content. {_EMBEDDINGS_MISSING} to delete it."
+        raise ToolError(msg)
+
     purge_result = await coordinator.delete_source(source_id)
     return {
         "status": purge_result.status.value,
