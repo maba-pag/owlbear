@@ -15,7 +15,7 @@ from datetime import UTC, datetime
 from functools import partial
 from pathlib import Path
 from types import SimpleNamespace
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import httpx
 import pytest
@@ -1643,6 +1643,57 @@ def test_read_again_updates_every_surface_and_keeps_drafts(tmp_path: Path, monke
         pds.group(page, "this-machine")
         expect(versions).to_have_js_property("value", channel)
         assert said == []
+
+
+@pytest.mark.browser
+@pytest.mark.usefixtures("outside")  # every source reads
+@pytest.mark.timeout(120)  # a real browser and a host pulling a shared repository: a loaded runner needs more than 30 s
+def test_a_read_s_layers_answered_while_a_save_reads_across_never_replace_the_saved(
+    tmp_path: Path, monkeypatch, pds
+) -> None:
+    """#810: a read's refresh begun while a save runs, its layers answered after the save's but before the save has
+    read the machine and the other projects, never shows the older layers."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    a = registry.register(clone(tmp_path / "alpha"))
+    with browsing(monkeypatch, pds) as (page, base):
+        page.goto(f"{base}/config?project={a.id}#token=t")
+        expect(page.locator("#reads-status")).to_contain_text("all sources", timeout=READS_TIME * 1000)
+        held: dict[str, Any] = {}
+
+        def hold(name: str, method: str = "GET") -> Callable[[Any], None]:
+            def handle(route: Any) -> None:
+                if name in held or route.request.method != method:
+                    route.continue_()
+                    return
+                held[name] = (route, None if method == "PUT" else route.fetch())  # a held save is not yet made
+
+            return handle
+
+        page.route("**/api/next/config/read", hold("read", "POST"))
+        pds.group(page, "overview")
+        page.locator("#read-again").click()
+        until(page, lambda: "read" in held, READS_TIME)
+        page.route(f"**/p/{a.id}/api/next/config/project", hold("save", "PUT"))
+        pds.group(page, "runs")
+        page.get_by_label("Minutes per session, builder").fill("50")
+        page.get_by_role("button", name="Save project settings").click()
+        pds.answer(page, "Save project settings")
+        until(page, lambda: "save" in held)  # the save has started; the host has not written it yet
+        page.route(f"**/p/{a.id}/api/next/config", hold("layers"))
+        route, answer = held["read"]
+        route.fulfill(response=answer)
+        until(page, lambda: "layers" in held)  # the layers as they are before the save writes
+        page.route("**/api/next/machine", hold("machine"))
+        held["save"][0].continue_()
+        until(page, lambda: "machine" in held)  # the save is answered and now reads across
+        route, before = held["layers"]
+        with page.expect_request("**/api/next/machine"):  # the read's refresh goes on past the layers it read
+            route.fulfill(response=before)
+        route, machine = held["machine"]
+        route.fulfill(response=machine)
+        expect(page.locator("#status")).to_contain_text("Saved alpha's settings")
+        expect(page.get_by_label("Minutes per session, builder")).to_have_value("50")
 
 
 @pytest.mark.browser

@@ -22,6 +22,7 @@ from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.project_host import api, config_routes
 from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.runtimes import model_choices
+from owlbear_delivery_next.settings.config import CONFIG_FORMAT
 from owlbear_delivery_next.settings.improvement import ALLOWED, CATEGORIES
 from owlbear_delivery_next.state_store.store import Store
 
@@ -622,6 +623,40 @@ def test_a_refresh_begun_during_a_save_keeps_the_saved_values(store, pds, monkey
         with page.expect_response("**/config/models"):  # the refresh goes on past the layers it read
             route.fulfill(response=before)
         expect(page.get_by_label("Minutes per session, builder")).to_have_value("50")
+
+
+@pytest.mark.browser
+def test_an_older_read_s_layers_answered_last_never_replace_a_newer_read_s(store, pds) -> None:
+    """#810: two reads' refreshes overlap; the first one's layers, answered after the second's, are not shown."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    with settings_page(store, pds) as page:
+        pds.group(page, "overview")
+        expect(page.locator("#reads-status")).to_contain_text("Last read")
+        held: list[tuple[Any, Any]] = []
+
+        def hold(route: Any) -> None:
+            if route.request.method != "GET" or held:
+                route.continue_()
+                return
+            held.append((route, route.fetch()))  # the layers before the change below
+
+        page.route("**/api/next/config", hold)
+        page.locator("#read-again").click()
+        for _ in range(400):
+            if held:
+                break
+            page.wait_for_timeout(50)
+        assert held
+        store.config_path.parent.mkdir(parents=True, exist_ok=True)
+        store.config_path.write_text(json.dumps({"format": CONFIG_FORMAT, "agents": {"builder": {"minutes": 45}}}))
+        page.locator("#read-again").click()  # the second read's refresh shows the change
+        pds.group(page, "runs")
+        expect(page.get_by_label("Minutes per session, builder")).to_have_value("45")
+        route, before = held[0]
+        with page.expect_response("**/config/models"):  # the first refresh goes on past the layers it read
+            route.fulfill(response=before)
+        expect(page.get_by_label("Minutes per session, builder")).to_have_value("45")
 
 
 @pytest.mark.browser

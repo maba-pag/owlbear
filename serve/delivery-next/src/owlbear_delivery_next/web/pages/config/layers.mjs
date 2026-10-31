@@ -213,12 +213,13 @@ function walk(path, as) {
   return value === null ? null : { value, from: as ?? base.sources[path] };
 }
 
-// The layers as the host has them now, unless a save or rename started during this read: then its answer stands.
+// The layers as the host has them now, unless a later reload began or a save or rename answered meanwhile: then that
+// newer answer stands.
 export async function reload() {
-  const writes = state.layerWrites;
+  const turn = ++state.layerTurn;
   try {
     const loaded = await call("/config");
-    if (writes !== state.layerWrites) return false;
+    if (turn !== state.layerTurn) return false;
     state.loaded = loaded;
     state.error = state.loaded.notice ? state.loaded.notice.charAt(0).toUpperCase() + state.loaded.notice.slice(1) : "";
     return true;
@@ -267,7 +268,6 @@ async function saveLayer(review) {
   // this save's outcome. The outcome is shown once it is settled, together with the save button taking a retry.
   let error = "", status = "";
   state.saving = true;
-  state.layerWrites += 1;
   state.error = "";
   state.status = "Saving…";
   show();
@@ -275,6 +275,7 @@ async function saveLayer(review) {
     state.loaded = await call(`/config/${layer}`,
       { method: "PUT", body: { rev: state.loaded[`${layer}_rev`], layer: edited(layer),
         prefs_reviewed: layer === "project" && state.prefsReview }, timeout: WRITE });
+    state.layerTurn += 1;
     if (layer === "project" && !state.loaded.unpublished) state.prefsReview = false;  // kept until published
     for (const [key, value] of Object.entries(sent)) if (drafts[layer][key] === value) delete drafts[layer][key];
     error = state.loaded.notice ?? "";
@@ -291,7 +292,6 @@ async function saveLayer(review) {
     }
   } finally {
     state.saving = false;
-    state.layerWrites += 1;  // and a reload begun during it is older than its answer too
     state.error = error ? error.charAt(0).toUpperCase() + error.slice(1) : "";
     state.status = status;
     showIdle();  // models that arrived during it apply now
@@ -311,11 +311,11 @@ export async function rename() {
   });
   if (!sure) return;
   state.saving = true;
-  state.layerWrites += 1;
   state.status = "Renaming…";
   show();
   try {
     state.loaded = await call("/config/folder", { method: "PUT", body: { name }, timeout: WRITE });
+    state.layerTurn += 1;
     state.folder = null;
     state.error = state.loaded.notice ? state.loaded.notice.charAt(0).toUpperCase() + state.loaded.notice.slice(1) : "";
     state.status = `This project's folder is now ${state.loaded.folder}.`;
@@ -324,7 +324,6 @@ export async function rename() {
     state.error = e.message.charAt(0).toUpperCase() + e.message.slice(1);
   } finally {
     state.saving = false;
-    state.layerWrites += 1;
     showIdle();  // models that arrived during it apply now
   }
 }
