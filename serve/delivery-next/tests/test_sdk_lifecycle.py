@@ -13,6 +13,7 @@ from types import SimpleNamespace
 
 import psutil
 import pytest
+from copilot._jsonrpc import JsonRpcError
 
 from owlbear_delivery_next.change_contracts.models import Brief, Change, Exit, Plan, Step, StepKind, Task
 from owlbear_delivery_next.change_contracts.permissions import Policy
@@ -472,19 +473,25 @@ def test_a_finished_run_records_its_start_and_end_where_it_ran(world, monkeypatc
     assert (start["cli"], "cli_error" in start) == ("1.0.105-test", False)  # the CLI the runtime said it is (#849)
 
 
-@pytest.mark.parametrize("unread", ["error", "hang"])
+@pytest.mark.parametrize("unread", ["error", "rpc", "hang"])
 def test_an_unread_cli_version_is_recorded_whole_and_the_step_goes_on(world, monkeypatch, unread):
     """#849: the version read is a request of its own; its failure or silence is journalled and recorded whole."""
     _metered(world, monkeypatch)
     detail = "the runtime refused the status request: " + "x" * 400
     if unread == "error":
         world.status_error = RuntimeError(detail)
+    elif unread == "rpc":
+        world.status_error = JsonRpcError(-32603, "status failed", {"detail": detail})
     else:
         world.status_hang = True
         monkeypatch.setattr(sdk_teardown, "CALL", 0.05)
     asyncio.run(sdk_adapter.run(world.cfg))
     start = [line for line in _spend() if line["type"] == "start"][-1]
-    want = f"RuntimeError: {detail}" if unread == "error" else "TimeoutError: CLI status read did not answer within 0 s"
+    want = {
+        "error": f"RuntimeError: {detail}",
+        "rpc": f"JsonRpcError: JSON-RPC Error -32603: status failed {{'detail': {detail!r}}}",
+        "hang": "TimeoutError: CLI status read did not answer within 0 s",
+    }[unread]
     assert (start["cli"], start["cli_error"]) == ("", want)
     assert {"event": "request-failed", "operation": "CLI status read", "error": want} in [
         {k: e.get(k) for k in ("event", "operation", "error")} for e in world.events

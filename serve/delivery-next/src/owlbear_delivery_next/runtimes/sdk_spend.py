@@ -34,7 +34,7 @@ async def meter(client: CopilotClient, st: _Step, sid: str, agent: str) -> None:
     try:
         cli = (await sdk_teardown.call(client.get_status(), "CLI status read", sdk_teardown.CALL)).version
     except Exception as exc:  # noqa: BLE001 - any failure of the read is shown and recorded; the step goes on
-        error = f"{type(exc).__name__}: {exc}"
+        error = f"{type(exc).__name__}: {exc}" + (f" {data!r}" if (data := getattr(exc, "data", None)) else "")
         st.log(event="request-failed", operation="CLI status read", error=error)
     st.metered = uuid.uuid4().hex
     before = None if "error" in st.billed else st.billed
