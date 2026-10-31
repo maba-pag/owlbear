@@ -24,8 +24,18 @@ from owlbear_decisions.validate import collect, layers, project_folders
 from owlbear_delivery_next.local_system import storage_io
 from owlbear_delivery_next.local_system.data_repo import SAVE_SECONDS, DataRepoError
 from owlbear_delivery_next.state_store import decision_batch, decision_cache, decision_sync, decision_transaction
-from owlbear_delivery_next.state_store.database import StoreError
 from owlbear_delivery_next.state_store.decision_competitors import competitors
+from owlbear_delivery_next.state_store.decision_errors import (  # noqa: F401 - the store's errors, read through it
+    READ,
+    RECOVER,
+    REPAIR,
+    SAVING,
+    SET_UP,
+    SET_UP_PROJECT,
+    DecisionsUnavailable,
+    Unsettled,
+    settled,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -36,23 +46,7 @@ if TYPE_CHECKING:
 
     type Placed = tuple[Decision, Path, str | None]  # a decision, its layer's folder and its expected revision
 
-SET_UP = "Set the shared data repository: `owlbear-next data PATH`"
-SET_UP_PROJECT = "Set up the project so the shared data repository holds its folder: `owlbear-next setup`"
-REPAIR = "Repair the shared data repository's checkout so Git can read it"
-READ = "Make the decision folders and files in the shared data repository readable and valid"
-RECOVER = "Finish or abandon the interrupted decision batch by its generation (owner's explicit choice)"
 ROUNDS = 3  # flag-and-publish rounds before a conflict is reported unresolved
-
-
-class DecisionsUnavailable(StoreError):  # noqa: N818 - the design's name for it
-    """The decisions cannot be read, so no work may run as if there were none."""
-
-    action = REPAIR
-    resume = "The decisions load"
-
-    def __init__(self, reason: str, action: str = REPAIR) -> None:
-        super().__init__(reason)
-        self.action = action
 
 
 @dataclass(frozen=True)
@@ -142,16 +136,20 @@ def _usable(seen: Snapshot, project: str) -> Snapshot:
 
 
 def _interrupted(shared: DataRepo) -> None:
-    """Refuse every read and write while a batch is in flight: its files are not yet a settled rule set."""
+    """Refuse every read and write while a batch is in flight: its files are not yet a settled rule set.
+
+    It is `Unsettled`: a reader tells a save in progress from an interrupted batch (`settled`); a writer, holding the
+    lock, meets only the interrupted one.
+    """
     _head(shared)  # the journal lives in the checkout's Git folder, so the checkout is read first
     try:
         batch = decision_batch.pending(shared)
     except decision_batch.JournalError as exc:
-        raise DecisionsUnavailable(str(exc)[:600], RECOVER) from exc
+        raise Unsettled(str(exc)[:600], RECOVER) from exc
     if batch is not None:
         ids = ", ".join(batch.ids)
         msg = f"the interrupted decision batch {batch.generation} ({ids}) must be finished or abandoned"
-        raise DecisionsUnavailable(msg[:600], RECOVER)
+        raise Unsettled(msg[:600], RECOVER)
 
 
 def _open(shared: DataRepo | None) -> DataRepo:
@@ -170,41 +168,43 @@ def _stamp(shared: DataRepo) -> tuple[bytes | None, bytes | None]:
     try:
         return decision_batch.stamp(shared)
     except decision_batch.JournalError as exc:
-        raise DecisionsUnavailable(str(exc)[:600], RECOVER) from exc
+        raise Unsettled(str(exc)[:600], RECOVER) from exc
 
 
 def _paired(shared: DataRepo, project: str) -> DataView:
     """Pair files with HEAD and journal, refusing active or unknown rebases; HEAD is checked after the final probes."""
     if not decision_transaction.operation_idle(shared):
         msg = "a rebase is active or unknown, so the decisions are unavailable; resolve it in Git first"
-        raise DecisionsUnavailable(msg)
+        raise Unsettled(msg)
     first = _stamp(shared)
     commit = _head(shared)
     seen = decision_cache.files(shared, project, commit, _files)
     if _stamp(shared) != first or not decision_transaction.operation_idle(shared) or _head(shared) != commit:
         msg = "the decisions or rebase state changed while they were read, so they are not settled; read them again"
-        raise DecisionsUnavailable(msg, READ)
+        raise Unsettled(msg, READ)
     return DataView(seen, commit)
 
 
 def file_snapshot(shared: DataRepo | None, project: str) -> Snapshot:
     """A readable file-only view, with the same checkout, project and unreadable-file checks as `load`."""
-    return _usable(_paired(_open(shared), project).snapshot, project)
-
-
-def _view(shared: DataRepo, project: str) -> DataView:
-    return _paired(shared, project)
+    return load(shared, project).snapshot
 
 
 def load(shared: DataRepo | None, project: str) -> DataView:
     """The Global layer and *project*'s layers as the checkout holds them, with its commit; never pulls.
 
     A file in those layers that is not a usable decision raises `DecisionsUnavailable`: the rules it holds are
-    unknown, so nothing may run as if it were absent. Findings stay in the snapshot for the caller to judge.
+    unknown, so nothing may run as if it were absent. Findings stay in the snapshot for the caller to judge. A read
+    that meets a save's unsettled state says the save is in progress while its writer holds the lock (`settled`).
     """
-    view = _view(_open(shared), project)
-    _usable(view.snapshot, project)
-    return view
+    root = _checkout(shared)
+
+    def read() -> DataView:
+        view = _paired(_open(root), project)
+        _usable(view.snapshot, project)
+        return view
+
+    return settled(root, read)
 
 
 def refresh(shared: DataRepo | None) -> str:
@@ -410,7 +410,7 @@ def _reconcile(
         found = whole(shared)
         competing = {e.decision.id: e for d in decisions for e in competitors(found, d)}
         if not competing:
-            return _view(shared, project)
+            return _paired(shared, project)
         entries = [e for _, e in sorted(competing.items())]
         files = [(e.path, serialize(e.decision.model_copy(update={"conflict": True})).encode("utf-8")) for e in entries]
 
@@ -428,7 +428,7 @@ def _reconcile(
         said.append(notice)
         if decision_batch.pending(shared) is not None:  # the journal decides: a flag batch left pending halts the loop
             return None  # authority cannot be read until the owner settles it
-    return _view(shared, project)
+    return _paired(shared, project)
 
 
 def whole(shared: DataRepo) -> tuple[dict[str, Entry], list[Finding]]:

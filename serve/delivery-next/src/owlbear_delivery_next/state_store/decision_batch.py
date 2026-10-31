@@ -2,8 +2,10 @@
 
 A save of several decision files writes them, commits them as one commit and reads them back. Before the first file,
 the journal records the project, Git's head, the decision ids and each file's bytes before and after the batch, under
-a fresh generation. A journal that stays after a crash is an interrupted batch: `decision_store` then refuses every
-read and write of the decisions until the owner finishes or abandons it by that generation (`decision_recovery`).
+a fresh generation. A pending journal is a batch in flight: while its writer holds the repository-wide lock, a read of
+the decisions says a save is in progress (`decision_errors.settled`). One that stays once no writer holds the lock is
+an interrupted batch: `decision_store` then refuses every read and write of the decisions until the owner finishes or
+abandons it by that generation (`decision_recovery`).
 Completing a batch records its generation in a list that is never pruned, so a copy of an old journal cannot be
 replayed (ABA).
 """
