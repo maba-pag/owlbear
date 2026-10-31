@@ -16,15 +16,30 @@ from owlbear_delivery_next.runtimes.session_result import limit_reached
 from owlbear_delivery_next.state_store import spend_ledger
 
 if TYPE_CHECKING:
+    from copilot import CopilotClient
+
     from owlbear_delivery_next.runtimes.sdk_adapter import _Step
     from owlbear_delivery_next.runtimes.session_result import Run
 
 
-def meter(st: _Step, sid: str, agent: str) -> None:
-    """The run's ``start`` line in the spend ledger, before its first send: from here it may spend credits."""
+async def meter(client: CopilotClient, st: _Step, sid: str, agent: str) -> None:
+    """The run's ``start`` line in the spend ledger, before its first send: from here it may spend credits.
+
+    It names the Copilot CLI the session runs, read from the runtime itself. That read is a request of its own, so
+    its failure says nothing of the session: it is journalled and recorded whole, and the step goes on.
+    """
+    from owlbear_delivery_next.runtimes import sdk_teardown  # noqa: PLC0415 - sdk_teardown imports this module
+
+    cli = error = ""
+    try:
+        cli = (await sdk_teardown.call(client.get_status(), "CLI status read", sdk_teardown.CALL)).version
+    except Exception as exc:  # noqa: BLE001 - any failure of the read is shown and recorded; the step goes on
+        error = f"{type(exc).__name__}: {exc}" + (f" {data!r}" if (data := getattr(exc, "data", None)) else "")
+        st.log(event="request-failed", operation="CLI status read", error=error)
     st.metered = uuid.uuid4().hex
     before = None if "error" in st.billed else st.billed
-    spend_ledger.started(st.metered, sid, agent=agent, job=st.cfg.job, model=st.cfg.model, before=before)
+    spend_ledger.started(st.metered, sid, agent=agent, job=st.cfg.job, model=st.cfg.model, before=before, cli=cli,
+                         cli_error=error)  # fmt: skip
 
 
 def final(st: _Step, usage: dict[str, Any], *, settled: bool = True) -> None:

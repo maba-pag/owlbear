@@ -417,7 +417,7 @@ async def _open(client: CopilotClient, st: _Step) -> CopilotSession | None:
     await own_instructions(session, cfg.worktree, cfg.user, st.log)  # D-01M5YE55W7P4A6PS8YZV8K7J6A
     st.log(event="session", id=sid, resumed=resumed, resent=resent, runtime=st.run.runtime_pid)
     st.billed = await usage_read(session, cfg.model) if resumed else {}
-    sdk_spend.meter(st, sid, role_of(cfg))
+    await sdk_spend.meter(client, st, sid, role_of(cfg))
     extra = {"attachments": list(cfg.attachments)} if cfg.attachments else {}  # e.g. visual screenshots
     st.sending = True
     await _call(session.send(message, **extra), "send")

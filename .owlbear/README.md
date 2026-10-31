@@ -8,7 +8,7 @@ copied into a consumer project.
 
 | Area | Role |
 | --- | --- |
-| `instructions/` and `skills/` | Project-local operational customizations loaded alongside the portable shared ecosystem; project workflows such as `doc-audit` and `w-agent-audit` are skills invoked by name |
+| `instructions/` and `skills/` | Project-local operational customizations loaded alongside the portable shared ecosystem; project workflows such as `doc-audit`, `w-agent-audit` and `owlbear-release-analysis` are skills invoked by name |
 | `scripts/` | Development validators and operational helper scripts |
 | `memory/` | Agent memory entries written by the `owlbear-memory` server; host-local memory databases are ignored |
 | `knowledge/` | Local Knowledge database and placeholders; databases and vectors are ignored |

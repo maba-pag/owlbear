@@ -640,6 +640,19 @@ def test_renovate_policy_keeps_maturity_and_lockfile_controls() -> None:
     assert all("Renovate CLI" not in manager.get("description", "") for manager in renovate.get("customManagers", []))
 
 
+def test_renovate_opens_the_copilot_sdk_in_its_own_pull_request() -> None:
+    """Each SDK release is analysed before it merges, so it leaves the weekly group and inherits everything else."""
+    rules = json.loads((ROOT / "renovate.json").read_text(encoding="utf-8"))["packageRules"]
+    sdk = [rule for rule in rules if "github-copilot-sdk" in rule.get("matchPackageNames", [])]
+    weekly = [rule.get("groupName") for rule in rules].index("{{datasource}} minor/patch updates")
+    majors = [rule.get("matchUpdateTypes") for rule in rules].index(["major"])
+
+    assert len(sdk) == 1
+    assert sdk[0]["groupName"] is None
+    assert weekly < rules.index(sdk[0]) < majors
+    assert not {"schedule", "automerge", "labels", "addLabels", "minimumReleaseAge"} & sdk[0].keys()
+
+
 def test_renovate_updates_the_lint_toolchain_in_one_pull_request() -> None:
     """Ruff's pin and every hook move together, majors in their own Sunday PR, so the Ruff parity holds (TD-409)."""
     renovate = json.loads((ROOT / "renovate.json").read_text(encoding="utf-8"))

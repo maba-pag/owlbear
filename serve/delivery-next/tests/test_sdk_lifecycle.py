@@ -13,6 +13,7 @@ from types import SimpleNamespace
 
 import psutil
 import pytest
+from copilot._jsonrpc import JsonRpcError
 
 from owlbear_delivery_next.change_contracts.models import Brief, Change, Exit, Plan, Step, StepKind, Task
 from owlbear_delivery_next.change_contracts.permissions import Policy
@@ -42,6 +43,9 @@ class _World:
         self.has_pid = True
         self.stop_error = self.usage_error = None
         self.fail_event = None
+        self.status_error = None
+        self.status_hang = False
+        self.status_calls = 0
         self.journal_error = OSError("synthetic journal failure")
         self.entered_start = asyncio.Event()
         self.entered_stop = asyncio.Event()
@@ -58,6 +62,14 @@ class _World:
             rpc=SimpleNamespace(tasks=SimpleNamespace(list=self.tasks, cancel=self.cancel)),
             disconnect=self.disconnect,
         )
+
+    async def get_status(self):
+        self.status_calls += 1
+        if self.status_error:
+            raise self.status_error
+        if self.status_hang:
+            await asyncio.Event().wait()
+        return SimpleNamespace(version="1.0.105-test")
 
     async def start(self):
         if self.has_pid:
@@ -425,10 +437,10 @@ def test_escaped_teardown_failure_still_forces_and_observes_unconfirmed(world, m
 def _metered(world, monkeypatch, *, hold=False):
     """The session opens and its run is metered, as ``_open`` does just before its first send; *hold* never sends."""
 
-    async def opened(_client, st):
+    async def opened(client, st):
         world.steps.append(st)
         st.session, st.billed = world.session, {}
-        sdk_spend.meter(st, "synthetic", "builder")
+        await sdk_spend.meter(client, st, "synthetic", "builder")
         if hold:
             await asyncio.Event().wait()
 
@@ -458,6 +470,32 @@ def test_a_finished_run_records_its_start_and_end_where_it_ran(world, monkeypatc
     )  # fmt: skip
     assert (end["run"], end["usage"], end["ending"], end["project"]) == (start["run"], used, run.ending, "owlbear")
     assert (end["tools"], end["wrong"]) == ({}, {})  # measured though nothing was called (C-28)
+    assert (start["cli"], "cli_error" in start) == ("1.0.105-test", False)  # the CLI the runtime said it is (#849)
+
+
+@pytest.mark.parametrize("unread", ["error", "rpc", "hang"])
+def test_an_unread_cli_version_is_recorded_whole_and_the_step_goes_on(world, monkeypatch, unread):
+    """#849: the version read is a request of its own; its failure or silence is journalled and recorded whole."""
+    _metered(world, monkeypatch)
+    detail = "the runtime refused the status request: " + "x" * 400
+    if unread == "error":
+        world.status_error = RuntimeError(detail)
+    elif unread == "rpc":
+        world.status_error = JsonRpcError(-32603, "status failed", {"detail": detail})
+    else:
+        world.status_hang = True
+        monkeypatch.setattr(sdk_teardown, "CALL", 0.05)
+    asyncio.run(sdk_adapter.run(world.cfg))
+    start = [line for line in _spend() if line["type"] == "start"][-1]
+    want = {
+        "error": f"RuntimeError: {detail}",
+        "rpc": f"JsonRpcError: JSON-RPC Error -32603: status failed {{'detail': {detail!r}}}",
+        "hang": "TimeoutError: CLI status read did not answer within 0 s",
+    }[unread]
+    assert (start["cli"], start["cli_error"]) == ("", want)
+    assert {"event": "request-failed", "operation": "CLI status read", "error": want} in [
+        {k: e.get(k) for k in ("event", "operation", "error")} for e in world.events
+    ]  # fmt: skip
 
 
 @pytest.mark.parametrize("read", ["read", "failed"])
@@ -569,10 +607,10 @@ def _waited(world, monkeypatch):
     """A metered session the real wait runs on, ended by the step itself; its worktree reads as one commit."""
     world.cfg = dataclasses.replace(world.cfg, observe=lambda: Worktree("a" * 40, "b" * 40))
 
-    async def opened(_client, st):
+    async def opened(client, st):
         world.steps.append(st)
         st.session, st.billed = world.session, {}
-        sdk_spend.meter(st, "synthetic", "builder")
+        await sdk_spend.meter(client, st, "synthetic", "builder")
         return world.session
 
     monkeypatch.setattr(sdk_adapter, "_open", opened)
@@ -700,6 +738,36 @@ def test_a_session_that_cannot_be_noted_as_ours_is_never_created(world, monkeypa
     run = asyncio.run(sdk_adapter.run(world.cfg))
     assert created == []
     assert (run.ending, run.detail) == ("error", f"UnnotedError: {chatlogs.UNNOTED}")
+
+
+@pytest.mark.parametrize("status", ["read", "error", "hang"])
+def test_the_real_open_records_the_cli_version_before_its_first_send(world, monkeypatch, status):
+    """#849: the start line, with the CLI the runtime said it is, is written before the step's first send; an unread
+    version is recorded as such and the send still happens."""
+    seen = []
+
+    async def send(*_args, **_kwargs):
+        seen.append([line for line in _spend() if line["type"] == "start"])
+        msg = "stop here"
+        raise RuntimeError(msg)
+
+    async def create_session(**_kw):
+        world.session.send = send
+        return world.session
+
+    async def nothing(*_args):
+        return None
+
+    world.create_session = create_session
+    world.status_error = RuntimeError("no status") if status == "error" else None
+    world.status_hang = status == "hang"
+    monkeypatch.setattr(sdk_teardown, "CALL", 0.05)
+    monkeypatch.setattr(sdk_adapter, "_open", REAL_OPEN)
+    monkeypatch.setattr(sdk_adapter, "own_instructions", nothing)
+    asyncio.run(sdk_adapter.run(world.cfg))
+    assert [[start["cli"] for start in starts] for starts in seen] == [["1.0.105-test" if status == "read" else ""]]
+    assert ("cli_error" in seen[0][0]) == (status != "read")
+    assert world.status_calls == 1
 
 
 def test_a_new_session_is_noted_as_ours_before_it_is_created(world, monkeypatch):
