@@ -105,17 +105,19 @@ def releases(fetch: Callable[[str], bytes] | None = None) -> list[str]:
     )
 
 
-def notice(*, refresh: bool, force: bool = False, fetch: Callable[[str], bytes] | None = None) -> dict[str, Any]:
+def notice(
+    *, refresh: bool, force: bool = False, fetch: Callable[[str], bytes] | None = None, home: Path | None = None
+) -> dict[str, Any]:
     """The last check of upstream for the pinned tag; reading never goes online.
 
     *refresh* checks when the last count is over a day old, or a check failed since; *force* checks now. ``state`` is
     ``known`` (counted within a day), ``stale`` (counted longer ago), ``unknown`` (never counted, or upstream not
     reached since) or ``error`` (upstream refused or answered unreadably since), with ``detail`` saying why. ``latest``
     is the newest skill release, the pinned tag when none is newer. A failed check keeps the last count in the file;
-    it is shown again only by the next count.
+    it is shown again only by the next count. *home* is the ``~/.owlbear`` it keeps that in, by default this one.
     """
     pack, tag = pack_files.manifest()["pack"], pack_files.manifest()["upstream"]["tag"]
-    path = local_home.root() / pack_files.PACKS / NOTICE
+    path = (home or local_home.root()) / pack_files.PACKS / NOTICE
     kept = _kept(path, tag)
     if not (force or (refresh and _state(kept)["state"] != "known")):
         return {"pack": pack, **_state(kept)}
