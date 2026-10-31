@@ -3,6 +3,7 @@ and each at its own interval; a failure shows after two in a row; offline is unk
 
 import json
 import threading
+import time
 from datetime import UTC, datetime, timedelta
 from email.message import Message
 from pathlib import Path
@@ -190,7 +191,7 @@ def test_each_update_is_checked_at_the_start_and_then_only_at_its_own_set_interv
         monkeypatch.setitem(CHECKS, name, lambda name=name: ran.append(name) or FOUND)
     clock, machine = Clock(), stub()
     checks = Checks(machine, clock, lambda work: work())
-    machine.stopping.set()  # the loop's start only
+    monkeypatch.setattr(machine.stopping, "wait", lambda _seconds: True)  # the loop's start only
     checks.loop()
     assert ran == ["owlbear", "pds", "impeccable"]  # at the start, all three intervals unset
     clock.passes(24 * 30)
@@ -301,6 +302,48 @@ def test_a_check_ending_after_its_home_moved_writes_only_in_the_home_its_host_st
     released = Path(pack_files.PACKS) / impeccable.RELEASED
     assert [(home / f).exists() for home in (b, a) for f in (update_checks.STATE, released)] == [False] * 2 + [True] * 2
     assert json.loads((a / update_checks.STATE).read_text())["owlbear"]["failures"] == 1
+
+
+def test_the_hosts_stop_waits_a_while_for_its_checks_and_then_starts_none(tmp_path, monkeypatch):
+    """#804: the stop waits up to DRAIN for the checks, says when one did not end, and starts no check after it."""
+    _a, b = homes(tmp_path, monkeypatch)
+    release, entered, ran = threading.Event(), {n: threading.Event() for n in ("pds", "impeccable")}, []
+
+    def blocked(name: str):
+        def check() -> dict:
+            ran.append(name)
+            entered[name].set()
+            release.wait(10)
+            return FOUND
+
+        return check
+
+    for name in CHECKS:
+        monkeypatch.setitem(CHECKS, name, blocked(name))
+    monkeypatch.setattr(update_checks, "DRAIN", 1.0)
+    now = datetime.now(UTC)
+    machine = Machine(HostRecord(url="http://127.0.0.1:9/", token="t", pid=1, started_at=now, code=codebase.CURRENT))  # noqa: S106
+    said: list[str] = []
+    machine.say = said.append
+    try:
+        assert (machine.checks.start("pds"), machine.checks.start("impeccable")) == (True, True)
+        assert all(e.wait(5) for e in entered.values())
+        assert not machine.checks.start("pds")  # being checked
+        began = time.monotonic()
+        machine.stop_all()
+        took = time.monotonic() - began
+        assert 0.9 <= took < 1.8, took
+        assert any("the update checks did not end within 1 s" in line for line in said)
+        assert not machine.checks.start("owlbear")  # stopping
+        move(monkeypatch, b)
+        release.set()
+        assert machine.checks.drain(5)
+        assert sorted(ran) == ["impeccable", "pds"]  # once each; OwlBear's never started
+        assert not (b / update_checks.STATE).exists()
+    finally:
+        release.set()
+        for t in workers():
+            t.join(10)
 
 
 def test_a_check_whose_record_cannot_be_written_still_ends_and_says_why(monkeypatch):

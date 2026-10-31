@@ -416,6 +416,7 @@ class Machine:
             self.say(f"Retro did not end within {DRAIN:.0f} s")
         if not self.chats.join(chats.CLOSE):  # outside the lock; the follower keeps its own lock until it ends
             self.say("the chats follower is still ending; no other follower starts until it has")
+        self.checks.drain()  # says itself when a check did not end
         self.say("stopped: every project closed")
 
 

@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import re
 import threading
+import time
 from datetime import UTC, datetime, timedelta
 from http.client import HTTPException
 from typing import TYPE_CHECKING, Any
@@ -38,6 +39,7 @@ ACTIONABLE = {"owlbear": True, "pds": False, "impeccable": True}  # PDS counts o
 SHOWN = 2  # failures in a row before a failure shows
 RETRY = timedelta(hours=1)  # after a failure, the next timed check comes this soon, unless the interval is shorter
 TICK = 60.0  # seconds between the loop's looks whether a check is due
+DRAIN = 5.0  # seconds the host's stop waits for the checks still running
 PDS = "https://registry.npmjs.org/@porsche-design-system/components-js/latest"  # npm's latest release
 SECONDS = 10.0  # the PDS request's limit
 VERSION = re.compile(r"\d+\.\d+\.\d+")
@@ -147,10 +149,6 @@ def _ahead(name: str, latest: str, current: str) -> bool:
     return a is None or b is None or a > b
 
 
-def _spawn(work: Callable[[], None]) -> None:
-    threading.Thread(target=work, daemon=True, name="update-check").start()
-
-
 class Checks:
     """The machine's update checks: at the start, at each interval, and by hand; what each found."""
 
@@ -158,11 +156,12 @@ class Checks:
         self,
         machine: Machine,
         now: Callable[[], datetime] = lambda: datetime.now(UTC),
-        spawn: Callable[[Callable[[], None]], None] = _spawn,
+        spawn: Callable[[Callable[[], None]], None] | None = None,
     ) -> None:
-        """What the last checks kept; nothing runs until ``loop`` or ``start``."""
+        """What the last checks kept; nothing runs until ``loop`` or ``start``; without *spawn*, each has a thread."""
         self.machine, self.now, self.spawn, self.lock = machine, now, spawn, threading.Lock()
         self.checking: set[str] = set()
+        self.workers: list[threading.Thread] = []  # the threads ``drain`` waits for
         self.path = local_home.root() / STATE  # a check ending after the home moved (a test's teardown) keeps it here
         self.kept: dict[str, dict[str, Any]] = self._restored()
 
@@ -186,12 +185,30 @@ class Checks:
             self.machine.say(f"update checks: {path} could not be written: {exc}")
 
     def start(self, name: str) -> bool:
-        """Check *name* now, unless it is being checked; whether a check started."""
-        with self.lock:
-            if name in self.checking:
+        """Check *name* now, unless it is being checked or the machine is stopping; whether a check started."""
+        with self.lock:  # its thread starts under the lock, so a drain from now on waits for it
+            if name in self.checking or self.machine.stopping.is_set():
                 return False
             self.checking.add(name)
+            if self.spawn is None:
+                worker = threading.Thread(target=self._run, args=(name,), daemon=True, name="update-check")
+                self.workers = [t for t in self.workers if t.is_alive()] + [worker]
+                worker.start()
+                return True
         self.spawn(lambda: self._run(name))
+        return True
+
+    def drain(self, timeout: float | None = None) -> bool:
+        """Wait up to *timeout* (``DRAIN``) seconds for the checks running; whether all ended, said when not."""
+        timeout = DRAIN if timeout is None else timeout
+        with self.lock:
+            running = list(self.workers)
+        deadline = time.monotonic() + timeout
+        for worker in running:
+            worker.join(max(0.0, deadline - time.monotonic()))
+        if any(worker.is_alive() for worker in running):
+            self.machine.say(f"the update checks did not end within {timeout:.0f} s")
+            return False
         return True
 
     def _run(self, name: str) -> None:

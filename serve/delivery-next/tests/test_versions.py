@@ -283,7 +283,7 @@ def test_a_release_found_on_another_channel_is_unknown_to_the_banner_and_the_upd
     """A channel change can withdraw the version found; with the check's interval unset it would stay offered."""
     at_v0_2(origin)
     released(origin, "v0.3", '{"pack": "p-new"}')
-    checks = update_checks.Checks(SimpleNamespace(say=print), spawn=lambda work: work())
+    checks = update_checks.Checks(SimpleNamespace(say=print, stopping=threading.Event()), spawn=lambda work: work())
     checks.start("owlbear")
 
     def owlbear() -> dict:
@@ -313,7 +313,7 @@ def test_a_release_pinning_the_same_pack_shows_nothing_and_an_unreadable_one_sta
     said = impeccable.look()
     assert (said["state"], said["version"]) == ("unknown", "v0.4")
     assert "Impeccable is unreadable" in said["detail"]
-    checks = update_checks.Checks(SimpleNamespace(say=print), spawn=lambda work: work())
+    checks = update_checks.Checks(SimpleNamespace(say=print, stopping=threading.Event()), spawn=lambda work: work())
     checks.start("owlbear")
     row = next(u for u in checks.read()["updates"] if u["name"] == "owlbear")
     assert (row["state"], row["latest"], "Impeccable is unreadable" in row["detail"]) == ("newer", "v0.4", True)
