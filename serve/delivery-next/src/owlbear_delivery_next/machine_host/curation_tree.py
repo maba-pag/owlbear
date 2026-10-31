@@ -47,7 +47,7 @@ def _git(cwd: Path, *args: str, index: Path | None = None) -> str:
         msg = f"git {args[0]} failed: {exc}"
         raise DataRepoError(msg) from exc
     if done.returncode:
-        msg = f"git {args[0]} failed: {done.stderr.strip()[:200]}"
+        msg = f"git {args[0]} failed: {done.stderr.strip()}"
         raise DataRepoError(msg)
     return done.stdout.strip()
 
@@ -190,9 +190,18 @@ def forgetting(shared: DataRepo) -> Iterator[None]:
         yield
     except Exception as exc:
         if pruned := prune(shared):
-            msg = f"{pruned}; {type(exc).__name__}: {exc}"  # first: a row keeps the reason's start
+            msg = f"{pruned}; {type(exc).__name__}: {exc}"
             raise RuntimeError(msg) from exc
         raise
+
+
+def held(tree: Tree, folder: str, key: str, ran: str) -> str:
+    """Where a failed run's edits are held; a failed hold raises, led by the run's own failure *ran*."""
+    try:
+        return tree.hold(folder, key)
+    except (OSError, DataRepoError) as failed:
+        msg = f"{ran}; its edits are not held in a curation ref: {type(failed).__name__}: {failed}"
+        raise RuntimeError(msg) from failed
 
 
 @contextlib.contextmanager
@@ -201,14 +210,8 @@ def holding(tree: Tree, folder: str, key: str) -> Iterator[None]:
     try:
         yield
     except Exception as exc:
-        try:
-            held = tree.hold(folder, key)
-        except (OSError, DataRepoError) as failed:  # the run's own failure leads its row, which keeps 300 characters
-            ran, why = f"{type(exc).__name__}: {exc}", f"{type(failed).__name__}: {failed}"
-            _log.error("%s: %s; its edits are not held in a curation ref: %s", tree.shared.root, ran, why)
-            msg = f"{ran[:120]}; its edits are not held in a curation ref: {why}"
-            raise RuntimeError(msg) from exc
-        if held == NO_EDITS:
+        where = held(tree, folder, key, f"{type(exc).__name__}: {exc}")
+        if where == NO_EDITS:
             raise
-        msg = f"{held}; {type(exc).__name__}: {exc}"
+        msg = f"{where}; {type(exc).__name__}: {exc}"
         raise RuntimeError(msg) from exc

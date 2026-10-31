@@ -117,13 +117,15 @@ def held(repo: Path, reason: str, path: str) -> bytes:
 REFUSALS = {
     "unread": {"ending": "result", "payload": REPORT, "usage_unread": "no tokens"},
     "no-report": {"ending": "result"},
-    "error-with-report": {"ending": "error", "payload": REPORT, "detail": "model unavailable"},
+    "error-with-report": {"ending": "error", "payload": REPORT, "detail": "model unavailable " * 30},
     "unconfirmed": {"ending": "result", "payload": REPORT},
 }
 
 
 @pytest.mark.parametrize("refusal", list(REFUSALS))
-def test_a_refused_runs_commit_never_reaches_the_remote_while_another_writers_does(repo, remote, refusal) -> None:
+def test_a_refused_runs_commit_never_reaches_the_remote_while_another_writers_does(
+    repo, remote, refusal, caplog
+) -> None:
     entry = curated(repo / "shop" / "memory", "Lesson")
     pushed(repo, "a curated entry")
     before = (repo / rel(entry)).read_bytes()
@@ -159,6 +161,8 @@ def test_a_refused_runs_commit_never_reaches_the_remote_while_another_writers_do
     assert bare(remote, "for-each-ref", "refs/owlbear").stdout == b""
     assert row.state == "failed"
     assert held(repo, row.reason, rel(entry)) == made["bytes"]
+    (logged,) = [r.getMessage() for r in caplog.records if r.name == curation.__name__]
+    assert row.reason in logged
 
 
 def test_a_publication_during_a_run_never_carries_its_commit(repo, remote) -> None:
@@ -183,7 +187,7 @@ def test_a_publication_during_a_run_never_carries_its_commit(repo, remote) -> No
 
 
 @pytest.mark.parametrize("commits", [True, False], ids=["committed", "uncommitted"])
-def test_an_exception_after_an_edit_holds_it_and_the_failed_row_names_where(repo, remote, commits) -> None:
+def test_an_exception_after_an_edit_holds_it_and_the_failed_row_names_where(repo, remote, commits, caplog) -> None:
     entry = curated(repo / "shop" / "memory", "Lesson")
     pushed(repo, "a curated entry")
     before = (repo / rel(entry)).read_bytes()
@@ -204,38 +208,46 @@ def test_an_exception_after_an_edit_holds_it_and_the_failed_row_names_where(repo
     assert remote_has(remote, other)
     assert not commits or not remote_has(remote, made["curator"])
     assert (remote_bytes(remote, rel(entry)), (repo / rel(entry)).read_bytes()) == (before, before)
-    assert (row.state, len(row.reason) <= 300, "RuntimeError: xxx" in row.reason) == ("failed", True, True)
+    assert (row.state, f"RuntimeError: {'x' * 400}" in row.reason) == ("failed", True)
     assert held(repo, row.reason, rel(entry)) == made["bytes"]
+    (logged,) = [r for r in caplog.records if r.name == curation.__name__]
+    assert "x" * 400 in caplog.text
+    assert logged.exc_info is not None
 
 
-def test_a_run_that_raises_and_cannot_be_held_names_both_failures_in_its_row(repo, monkeypatch, caplog) -> None:
+@pytest.mark.parametrize("ends", ["raised", "returned"])
+def test_a_failed_run_that_cannot_be_held_shows_both_failures_in_full_in_its_row_and_log(
+    repo, monkeypatch, caplog, ends
+) -> None:
     entry = curated(repo / "shop" / "memory", "Lesson")
-    pushed(repo, "a curated entry")
-    real = curation_tree._git  # noqa: SLF001
-    said = f"git update-ref failed: {f'{FULL} ' * 9}"[:222]  # _git keeps 200 characters of stderr
+    real = subprocess.run
+    said = f"fatal: {FULL} " * 9
 
-    def git_(cwd, *args, **kw):
-        if args[0] == "update-ref":
-            raise curation_tree.DataRepoError(said)
-        return real(cwd, *args, **kw)
+    def run_(argv, *args, **kw):
+        if argv[:2] == ["git", "update-ref"]:
+            return subprocess.CompletedProcess(argv, 1, "", said)
+        return real(argv, *args, **kw)
+
+    broke = f"the session broke{' and said more' * 30}"
 
     def run(cfg) -> Run:
         reword(cfg.memory, entry.id, "Lesson: the curator's version")
-        msg = f"the session broke{' and said more' * 30}"
-        raise RuntimeError(msg)
+        if ends == "returned":  # an SDK failure comes back as the run's result
+            return Run(cfg.session_id, ending="error", detail=broke, termination=Termination(confirmed=True))
+        raise RuntimeError(broke)
 
-    monkeypatch.setattr(curation_tree, "_git", git_)
+    monkeypatch.setattr(curation_tree.subprocess, "run", run_)
     job = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(repo), run=run)
     job.start("shop")
     row = drained(job)
 
+    ran = f"RuntimeError: {broke}" if ends == "raised" else f"ended error: {broke}"
     assert row.state == "failed"
-    assert "RuntimeError: the session broke" in row.reason
-    assert "its edits are not held in a curation ref: DataRepoError: git update-ref failed" in row.reason
-    logged = [r.getMessage() for r in caplog.records if r.name == curation_tree.__name__]
-    assert len(logged) == 1
-    assert f"{' and said more' * 30}" in logged[0]
-    assert said in logged[0]
+    assert f"{ran}; its edits are not held in a curation ref: DataRepoError: git update-ref failed: {said.strip()}" in (
+        row.reason
+    )
+    (logged,) = [r for r in caplog.records if r.name == curation.__name__]
+    assert (ran in caplog.text, said.strip() in caplog.text, logged.exc_info is not None) == (True, True, True)
 
 
 def test_a_run_whose_entry_changed_meanwhile_is_refused_whole_and_the_other_change_is_published(repo, remote) -> None:
