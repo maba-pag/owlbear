@@ -11,6 +11,7 @@ from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
 import pytest
+from fastapi.testclient import TestClient
 
 from owlbear_decisions import Decision, Link, LinkType, Origin, Scope, State, new_id, read, write
 from owlbear_delivery_next.change_contracts.curation_records import Share, TestReview
@@ -36,7 +37,8 @@ from owlbear_delivery_next.change_contracts.preparation import Preparation
 from owlbear_delivery_next.change_flow import loop, worktree
 from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.local_system.data_repo import DataRepo
-from owlbear_delivery_next.project_host import environment
+from owlbear_delivery_next.project_host import api, environment
+from owlbear_delivery_next.project_host.host import Host
 from owlbear_delivery_next.runtimes import sdk_adapter, step_answers, step_decisions, step_input
 from owlbear_delivery_next.state_store import decision_archive, read_backs
 from owlbear_delivery_next.state_store.store import Lock, Store
@@ -345,16 +347,33 @@ def test_another_checkouts_replacement_reaches_an_idle_checkouts_next_gated_step
 
 
 @pytest.mark.parametrize("kind", [K.PUBLISH, K.MERGE])
-def test_a_failed_refresh_stops_before_publish_and_merge_but_not_before_build(tmp_path, shared, ran, kind):
+def test_a_failed_refresh_stops_publish_and_merge_until_the_owner_clears_it_once_the_refresh_works(
+    tmp_path, shared, ran, kind
+):
     put(shared, make())
+    origin = git(shared.root, "remote", "get-url", "origin").strip()
     git(shared.root, "remote", "set-url", "origin", str(tmp_path / "offline.git"))
 
     assert step(stored(tmp_path / "build", shared, change()), tmp_path).outcome is None
-    c = step(stored(tmp_path / "last", shared, change(kind)), tmp_path)
+    store = stored(tmp_path / "last", shared, change(kind))
+    c = step(store, tmp_path)
 
     assert ran == [K.BUILD]
     assert (c.outcome.exit, c.stop.kind, c.stop.action) == (Exit.STOP, ErrorKind.STATE, decisions_gate.STALE)
     assert f"not refreshed before {kind}, which cannot be undone: not refreshed from the remote" in c.stop.reason
+
+    # #754: the owner's recovery reruns the gate, which stops again while the remote is still unreachable
+    page = TestClient(api.create_app(store, "tok", Host(store, tmp_path)), base_url="http://127.0.0.1",
+                      headers={"authorization": "Bearer tok"})  # fmt: skip
+
+    def recover() -> Change:
+        assert page.post("/api/next/changes/c1/recovery", json={"action": c.stop.action}).status_code == 200
+        store.fold(Lock("c1"), "c1", AT)
+        return step(store, tmp_path)
+
+    assert (recover().outcome.exit, ran) == (Exit.STOP, [K.BUILD])
+    git(shared.root, "remote", "set-url", "origin", origin)
+    assert (recover().outcome, ran) == (None, [K.BUILD, kind])
 
 
 def test_a_long_answer_reaches_the_step_whole(shared):

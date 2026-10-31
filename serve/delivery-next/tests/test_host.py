@@ -1,10 +1,12 @@
 import importlib.util
+import json
 import os
 import subprocess
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
+from fastapi.testclient import TestClient
 
 from owlbear_delivery_next.change_contracts.evidence import check_inputs, next_check
 from owlbear_delivery_next.change_contracts.inbox import AnswerItem, CheckResult, IntentItem
@@ -25,6 +27,7 @@ from owlbear_delivery_next.change_contracts.models import (
     Recipe,
     Step,
     StepKind,
+    Stop,
     Task,
     VisualState,
 )
@@ -38,7 +41,7 @@ from owlbear_delivery_next.commands import cli, runner
 from owlbear_delivery_next.local_system import codebase
 from owlbear_delivery_next.local_system.process_probe import WorktreeProcessScanError
 from owlbear_delivery_next.local_system.storage_io import open_lock
-from owlbear_delivery_next.project_host import host
+from owlbear_delivery_next.project_host import api, host
 from owlbear_delivery_next.project_host.host import Host, RunnerRecord
 from owlbear_delivery_next.settings.config import Layer
 from owlbear_delivery_next.state_store.database import put_record
@@ -902,3 +905,109 @@ def test_no_check_environment_starts_once_the_host_pauses_during_its_pass(store,
     fake.host.paused = paused
     assert fake.host.tick(NOW) == []
     assert (calls["start"], store.read("c1").env.launched_at, asked[0]) == ([], None, 3)
+
+
+def client(store, fake, **headers):
+    auth = {"authorization": "Bearer tok"} | headers
+    return TestClient(api.create_app(store, "tok", fake.host), base_url="http://127.0.0.1", headers=auth)
+
+
+def queued(store):
+    with store.db.read() as db:
+        return [item for (item,) in db.execute("SELECT item FROM inbox WHERE slug = 'c1'").fetchall()]
+
+
+def stopped(fake, kind=StepKind.BUILD, stop=None):
+    c = asking(fake).model_copy(update={"step": Step(kind=kind, task="t1")})
+    stop = stop or Stop(kind=ErrorKind.STATE, reason="GitHub refused", action="Resolve it in GitHub",
+                        resume="GitHub agrees", at=NOW)  # fmt: skip
+    return apply(c, StepResult(exit=Exit.STOP, reason=stop.reason, stop=stop), NOW)
+
+
+def test_resume_leaves_a_stop_and_the_owners_recovery_reruns_its_step(store, tmp_path):
+    """#754: Resume clears only a pause; the owner's recovery on the Changes page clears the stop."""
+    fake = Fake(store, tmp_path)
+    save(store, stopped(fake))
+    api_ = client(store, fake)
+    assert api_.post("/api/next/changes/c1/intent", json={"intent": "resume"}).status_code == 200
+    assert fake.host.tick(NOW) == []
+    assert store.read("c1").outcome.exit == Exit.STOP
+    assert api_.get("/api/next/changes/c1").json()["recovery"] == {"reason": "GitHub refused",
+                                                                   "action": "Resolve it in GitHub"}  # fmt: skip
+    answer = api_.post("/api/next/changes/c1/recovery", json={"action": "Resolve it in GitHub"})
+    assert (answer.status_code, answer.json()) == (200, {"accepted": "recovery"})
+    assert [(i["kind"], i["action"]) for i in map(json.loads, queued(store))] == [("recovery", "Resolve it in GitHub")]
+    assert fake.host.tick(NOW) == ["c1"]
+    assert (store.read("c1").stop, store.read("c1").outcome) == (None, None)
+
+
+@pytest.mark.parametrize("kind", [StepKind.BUILD, StepKind.CLEANUP])
+@pytest.mark.parametrize("pause", ["change", "delivery"])
+def test_a_recovery_while_paused_clears_the_stop_and_only_a_cleanup_runs_before_resume(store, tmp_path, pause, kind):
+    fake, flag = Fake(store, tmp_path), [pause == "delivery"]
+    paused(fake, flag)
+    c = stopped(fake, kind)
+    save(store, c.model_copy(update={"intent": c.intent.model_copy(update={"paused_at": NOW})}) if pause == "change"
+         else c)  # fmt: skip
+    api_ = client(store, fake)
+    assert api_.post("/api/next/changes/c1/recovery", json={"action": "Resolve it in GitHub"}).status_code == 200
+    runs = ["c1"] if kind == StepKind.CLEANUP else []
+    assert fake.host.tick(NOW) == runs
+    after = store.read("c1")
+    assert (after.stop, after.intent.paused_at is not None, fake.host.paused()) == (None, pause == "change",
+                                                                                   pause == "delivery")  # fmt: skip
+    if runs:
+        return
+    if pause == "change":
+        api_.post("/api/next/changes/c1/intent", json={"intent": "resume"})
+    flag[0] = False
+    fake.host.observe_pr = lambda _slug: (None, False)
+    assert fake.host.tick(NOW) == ["c1"]
+
+
+def wrong_merge(fake, store):
+    c = asking(fake).model_copy(update={"outcome": None})
+    delivery_target.halt(c, "PR #7 merged into release, not main", NOW)
+    save(store, c)
+    store.put_inbox("c1", AnswerItem(at=NOW, question=loop.open_question(c).id, option="pause"))
+    with store.lock("c1") as lock:
+        return store.fold(lock, "c1", NOW)[0]
+
+
+NOT_STOPPED, STALE = "This Change is not stopped", "The stop changed since the page showed it; reload"
+LIVENESS = Stop(kind=ErrorKind.LIVENESS, reason="processes still present: 7", action="End processes 7",
+                resume="The host sees none of them", at=NOW)  # fmt: skip
+
+
+@pytest.mark.parametrize(
+    ("case", "why"),
+    [("asking", NOT_STOPPED), ("finished", "This Change has finished"), ("wrong merge", NOT_STOPPED),
+     ("held", "This stop ends only when you abandon or pause the Change; answer its question"),
+     ("liveness", "This stop clears itself once the host sees none of the step's processes"), ("stale", STALE)],
+)  # fmt: skip
+def test_a_stop_the_owner_cannot_clear_is_refused_and_nothing_is_queued(store, tmp_path, case, why):
+    fake = Fake(store, tmp_path)
+    held = delivery_target.stop(asking(fake), "PR #7 merged into release, not main", NOW)
+    c = {
+        "asking": lambda: asking(fake), "finished": lambda: stopped(fake).model_copy(update={"finished_at": NOW}),
+        "wrong merge": lambda: wrong_merge(fake, store), "held": lambda: stopped(fake, stop=held),
+        "liveness": lambda: stopped(fake, stop=LIVENESS), "stale": lambda: stopped(fake),
+    }[case]()  # fmt: skip
+    save(store, c)
+    api_ = client(store, fake)
+    answer = api_.post("/api/next/changes/c1/recovery", json={"action": c.stop.action if c.stop else "x"} |
+                       ({"action": "Resolve it elsewhere"} if case == "stale" else {}))  # fmt: skip
+    assert (answer.status_code, answer.json()["detail"], queued(store)) == (409, why, [])
+    assert (api_.get("/api/next/changes/c1").json()["recovery"] is None) is (case != "stale")
+    with store.lock("c1") as lock:
+        assert store.fold(lock, "c1", NOW)[0].stop == c.stop
+
+
+def test_a_chat_cannot_clear_a_stop(store, tmp_path):
+    fake = Fake(store, tmp_path)
+    save(store, stopped(fake))
+    answer = client(store, fake, **{"x-owlbear-use": "chat"}).post(
+        "/api/next/changes/c1/recovery", json={"action": "Resolve it in GitHub"}
+    )
+    refused = "Only the owner clears a stop, on the Changes page"
+    assert (answer.status_code, answer.json()["detail"], queued(store)) == (403, refused, [])
