@@ -355,6 +355,7 @@ class _Step:
             "enable_file_hooks": False,  # a project's agent hooks never run in a step (TD-142)
             "enable_config_discovery": False,  # nor its or the user's agents and skills (TD-167, TD-274)
             "included_builtin_skills": [],  # nor the runtime's bundled skills: only the role's own (TD-134)
+            "memory": {"enabled": self.cfg.user.memory},  # D-01M69EBRBBW97001KZ43C0BJM1: never the runtime's default
             "working_directory": str(self.cfg.worktree),
             "model": self.cfg.model,
             "reasoning_effort": self.cfg.effort,

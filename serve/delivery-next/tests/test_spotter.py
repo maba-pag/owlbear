@@ -408,8 +408,10 @@ def test_a_look_is_one_toolless_session_noted_in_the_chatlogs_manifest(monkeypat
     assert made["noted"]
     assert spend.report()["sdk_sessions"] == [sid]
     assert Path(made["working_directory"]).parent == spotter.place() / "looks"  # in OwlBear's own folder: never a chat
-    chosen = ("available_tools", "mcp_servers", "enable_config_discovery", "model", "reasoning_effort", "timeout")
-    assert [made[k] for k in chosen] == [[], {}, False, "gpt-6-luna", "medium", spotter.LOOK]
+    chosen = (
+        "available_tools", "mcp_servers", "enable_config_discovery", "memory", "model", "reasoning_effort", "timeout"
+    )  # fmt: skip
+    assert [made[k] for k in chosen] == [[], {}, False, {"enabled": False}, "gpt-6-luna", "medium", spotter.LOOK]
     assert "session_limits" not in made  # no SDK credit cap: a look is bounded by its deadline and teardown
     assert "rationale" in made["message"]
     assert made["message"].startswith(cases.snapshot(verbose=True).text + "\n\n## The card")  # exactly the bytes hashed

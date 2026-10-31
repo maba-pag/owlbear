@@ -85,6 +85,7 @@ async def judged(the_card: dict[str, Any], ctx: spotter.Context, meter: credit_m
                 context_tier="long_context" if ctx.context == "long" else None, available_tools=[], mcp_servers={},
                 enable_config_discovery=False, included_builtin_skills=[], enable_file_hooks=False,
                 skip_custom_instructions=True, working_directory=empty, on_event=heard,
+                memory={"enabled": False},  # D-01M69ECTAZ93Z2P7DWP47ER8FF
                 on_permission_request=lambda *_: PermissionDecisionReject(feedback="a look has no tools"),
             )  # fmt: skip
             limit.part.started(sid)
