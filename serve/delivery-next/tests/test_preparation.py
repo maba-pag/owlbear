@@ -445,7 +445,7 @@ def rename(repo: Path, how: str) -> list[str]:
     return sorted({OLD, NEW} | ({THIRD} if how == "chained" else set()))
 
 
-@pytest.mark.parametrize("how", ["worktree", "index"])
+@pytest.mark.parametrize("how", ["worktree", "index", "chained"])
 def test_a_preparer_s_rename_is_kept_as_its_setup_patch_and_undone(env, how):
     repo, store, _log, tmp = env
     c, s = change(repo, "pc1"), settings(option(tmp, "data-only", id="fixtures"))
@@ -464,6 +464,25 @@ def test_a_preparer_s_rename_is_kept_as_its_setup_patch_and_undone(env, how):
     c.env = None
     assert prepare.end(store, c, repo, s, lambda _e: None) is None
     assert (prepare.edits(repo), (repo / OLD).read_text()) == ([], "[]\n")
+
+
+def test_a_setup_file_added_then_deleted_leaves_an_empty_patch(env):
+    repo, store, _log, tmp = env
+    c, s = change(repo, "pc1"), settings(option(tmp, "data-only", id="fixtures"))
+    (repo / "src" / "left.py").write_text("found before the session\n")
+    ctx = prepare.context(store, c, s, repo)
+    (repo / "fixtures" / "tmp.json").write_text("{}\n")
+    git(repo, "add", "fixtures/tmp.json")
+    (repo / "fixtures" / "tmp.json").unlink()  # "AD": only in the index, nothing to keep against HEAD
+    accepted = loop.StepResult(exit=Exit.PENDING, waiting=Waiting.PERSON_CHECK)
+
+    assert prepare.chosen(store, c, repo, recipe("fixtures"), ctx, accepted) is accepted
+    assert prepare.read(store, "c1", "pc1").paths == []  # no pathless capture of the edit it found
+    assert prepare.launch(store, c, s, lambda _e: None).exit == Exit.PENDING
+    assert (prepare.edits(repo), (repo / "src" / "left.py").read_text()) == (
+        ["src/left.py"],
+        "found before the session\n",
+    )
 
 
 def test_a_session_that_ends_without_a_recipe_keeps_none_of_its_edits(env):
