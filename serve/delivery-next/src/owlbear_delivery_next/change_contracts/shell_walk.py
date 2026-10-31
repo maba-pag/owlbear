@@ -10,6 +10,7 @@ now may not be the one that runs) and a relative path once the folder is unknown
 from __future__ import annotations
 
 import os
+import stat
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -86,12 +87,13 @@ class Walk:
         runs = shell_programs.runs(command.words)
         checked: set[str] = set()
         for run in runs if runs or head is None else [shell_programs.Run(words=[head])]:
+            before = state.effects.wrote  # the program starts before its own script writes
             if runs and (reason := self._run(command, run, state)):  # its script first: a bypass is named as one
                 return reason
             for word in (*run.launchers, run.words[0]):  # a launcher by path is checked even with nothing to run
                 if "/" in word and word not in checked and not _built(run, word):
                     checked.add(word)
-                    if reason := self._by_path(command, run, word, state):
+                    if reason := self._by_path(command, run, word, state, wrote=before):
                         return reason
             if self.writes(replace(command, words=run.words, raw=" ".join(run.words))):  # find's next action sees it
                 state.effects.wrote = True
@@ -130,9 +132,9 @@ class Walk:
                 return self._current(state, command, run, self._eval)
         return None
 
-    def _by_path(self, command: Command, run: Run, word: Word, state: State) -> str | None:
+    def _by_path(self, command: Command, run: Run, word: Word, state: State, *, wrote: bool) -> str | None:
         """A program run by path: refused after a write, read when it is a shell script."""
-        if state.effects.wrote:
+        if wrote:
             return self._written(word)
         path, reason = self._locate(run, word, state)
         if path is None:
@@ -150,8 +152,8 @@ class Walk:
             if _built(sub, sub.words[0]):
                 return f"`{self.name}` runs `{word}`, whose interpreter is built at run time (`{sub.words[0]}`)"
             for program in (*sub.launchers, sub.words[0]):
-                if "/" in program and _script(Path(program)):
-                    return f"`{self.name}` runs `{word}`, whose interpreter `{program}` is itself a script"
+                if "/" in program and (what := _unrun(Path(program))):
+                    return f"`{self.name}` runs `{word}`, whose interpreter `{program}` is {what}"
             if reason := self.bypass(self.name, sub):
                 return reason
             if shell_programs.name(sub.words[0]) in shell_programs.SHELLS and (
@@ -176,6 +178,10 @@ class Walk:
         plain = state.plain() and not command.opaque_stdin and not run.from_input
         child = state.child(plain=plain and command.stdin() is None)
         child.home_moved = child.home_moved or "HOME" in run.env or bool(run.removed & {"HOME", "*"})
+        child.startup = {
+            **{k: v for k, v in child.startup.items() if "*" not in run.removed and k not in run.removed},
+            **{k: run.env[k] for k in _STARTUP if k in run.env},
+        }
         if run.chdir:  # env -C, find -execdir: it starts in another folder
             child.at = None
         for file in [*_startup(run, state), *args.startup]:
@@ -305,13 +311,15 @@ def _system(path: Path) -> bool:
     return any(part.is_symlink() and str(part.readlink()).startswith(_SYSTEM) for part in (path, *path.parents))
 
 
-def _script(path: Path) -> bool:
-    """Whether the program file at *path* is a script with a #! line, not a binary."""
+def _unrun(path: Path) -> str | None:
+    """Why an interpreter file at *path* can't be taken as a binary: a script itself, or not a regular file."""
     try:
+        if not stat.S_ISREG(path.stat().st_mode):  # a FIFO would block the read
+            return "not a regular file"
         with path.open("rb") as file:
-            return file.read(2) == b"#!"
+            return "itself a script" if file.read(2) == b"#!" else None
     except OSError:
-        return False
+        return None  # missing: the system can't run it either
 
 
 def _home(word: Word, state: State) -> Path | None:

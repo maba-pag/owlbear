@@ -188,21 +188,41 @@ class _Lexer:
         """
         text = self.text
         if text.startswith("$((", i):
-            return self._arithmetic(s, i + 3)
+            return self._arithmetic(s, i + 3) if self._arithmetic_closes(i + 3) else self._substitution(s, i)
         if text.startswith("$[", i):
             return self._arithmetic(s, i + 2, close="]")
         if text.startswith("${", i):
             return self._braced(s, i)
         if text[i] == "`" or text.startswith("$(", i):
-            s.add("$")  # the substitution's commands are checked on their own
-            s.expanded = True
-            depth = s.depth + 1
-            return self.level(i + 1, "`", depth) if text[i] == "`" else self.level(i + 2, ")", depth)
+            return self._substitution(s, i)
         nxt = text[i + 1 : i + 2]
         named = bool(nxt) and (nxt in "{_" or nxt.isalnum() or nxt in _SPECIAL)
         if named or (nxt and nxt in "'\"" and not s.quote):  # $'...' and $"...": decoded or translated by the shell
             s.expanded = True
         return None
+
+    def _substitution(self, s: _Level, i: int) -> int:
+        """A $(...) or backquoted substitution: its commands are checked on their own, with their command's input."""
+        s.add("$")
+        s.expanded = True
+        opaque = s.opaque or s.piped or any(o for _, o in self.blocks)
+        if self.text[i] == "`":
+            return self.level(i + 1, "`", s.depth + 1, opaque=opaque)
+        return self.level(i + 2, ")", s.depth + 1, opaque=opaque)
+
+    def _arithmetic_closes(self, i: int) -> bool:
+        """Whether the $(( before *i* closes with )) as arithmetic; else it is $( ( ... ) ...), as bash reads it."""
+        depth = 0
+        while i < len(self.text):
+            ch = self.text[i]
+            if ch == "(":
+                depth += 1
+            elif ch == ")":
+                if depth == 0:
+                    return self.text[i + 1 : i + 2] == ")"
+                depth -= 1
+            i += 1
+        return False
 
     def _arithmetic(self, s: _Level, i: int, close: str = ")") -> int:
         """Skip an arithmetic expansion's operators, where < and > never redirect, but lex its substitutions."""
@@ -223,23 +243,25 @@ class _Lexer:
 
     def _braced(self, s: _Level, i: int) -> int:
         """A ${...} expansion: < and > in it never redirect; its substitutions are lexed."""
-        text, j, depth = self.text, i + 2, 1
+        text, j, depth, quoted = self.text, i + 2, 1, False
         while j < len(text) and depth:
             if text[j] == "\\":
                 j += 2
-            elif text.startswith("$((", j):
+            elif text.startswith("$((", j) and self._arithmetic_closes(j + 3):
                 j = self._arithmetic(_Level(s.depth, s.opaque), j + 3)
-            elif text[j] == "'" and s.quote != '"':  # in "${x:-'...'}" a single quote is a character
+            elif text[j] == "'" and s.quote != '"' and not quoted:  # in "${x:-'...'}" a single quote is a character
                 if (end := text.find("'", j + 1)) < 0:
                     raise ValueError
                 j = end + 1
+            elif text[j] == '"':  # a quote inside ${...}: a } in it doesn't close the expansion
+                quoted, j = not quoted, j + 1
             elif text.startswith("$(", j) or text[j] == "`":
                 j = self.level(j + 2, ")", s.depth + 1) if text[j] == "$" else self.level(j + 1, "`", s.depth + 1)
             elif text.startswith("${", j):
                 depth, j = depth + 1, j + 2
             else:
-                depth, j = depth - (text[j] == "}"), j + 1
-        if depth:
+                depth, j = depth - (text[j] == "}" and not quoted), j + 1
+        if depth or quoted:
             raise ValueError
         s.add(text[i:j])
         s.expanded = True
@@ -388,6 +410,8 @@ class _Lexer:
                 lines.append(line)
                 i = stop + 1
             body = "".join(f"{line}\n" for line in lines)
+            if not literal and "\\\n" in self.text[start:end]:  # its substitutions span joined lines: not read
+                raise ValueError
             if not literal:  # the shell removes these backslashes before handing the body on
                 body = _BODY_ESCAPE.sub(lambda m: m[1] if m[1] != "\n" else "", body)
             found = len(self.commands)

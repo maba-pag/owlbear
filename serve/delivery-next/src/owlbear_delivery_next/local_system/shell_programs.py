@@ -334,7 +334,9 @@ def operand(words: Sequence[Word], i: int) -> int:
         if w == "--":
             k += 1
             break
-        if w.startswith("--"):
+        if w == "-" and program == "env":  # env -: an empty environment
+            k += 1
+        elif w.startswith("--"):
             k += 2 if w in longs else 1  # --name=value is one word
         elif w.startswith("-") and len(w) > 1:
             at = next((j for j, ch in enumerate(w[1:], 1) if ch in values), None)
@@ -434,7 +436,7 @@ def shebang(path: Path) -> list[Word] | None:
         head = file.read(_HEAD)
     if head.startswith(b"#!"):
         line = head[2:].split(b"\n", 1)[0].decode("utf-8", "replace").split(None, 1)
-        return [Word(w.strip()) for w in line]
+        return [Word(w.strip()) for w in line] or [Word("sh")]  # an empty #!: the shell runs it
     if b"\0" in head:
         return None
     try:

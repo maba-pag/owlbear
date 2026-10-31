@@ -1177,3 +1177,53 @@ def test_a_here_document_delimiter_joined_by_a_continuation_ends_the_body(script
 
     assert decide(Policy(scripts), shell("bash joined.sh")).endswith(BYPASS)
     assert decide(WRITE, shell("cat <<'EOF'\nEO\\\nF\nEOF")) is None  # a quoted body joins nothing
+
+
+@pytest.mark.parametrize(
+    "text", ['echo ${x:-"}"}; git push -f #"', "unset x; echo ${x:-\"'$(git commit --no-verify -m x)'\"}"]
+)
+def test_quotes_inside_a_parameter_expansion_nest(text: str) -> None:
+    assert decide(WRITE, shell(text)).endswith(BYPASS)
+
+
+def test_a_subshell_in_a_command_substitution_is_not_arithmetic() -> None:
+    assert decide(WRITE, shell("echo $((git push -f) )")).endswith(BYPASS)
+    assert decide(WRITE, shell("echo $((1 + (2 * 3)))")) is None
+
+
+def test_a_command_substitution_reads_its_commands_input() -> None:
+    assert decide(WRITE, shell("printf 'git push -f\\n' | echo \"$(sh)\"")).endswith(PIPED)
+
+
+def test_an_unquoted_here_document_with_a_line_continuation_is_not_read() -> None:
+    assert decide(WRITE, shell("bash <<EOF\n$\\\n(git commit --no-verify -m x)\nEOF")).endswith("cannot be parsed")
+    assert decide(WRITE, shell("cat <<'EOF'\na \\\nb\nEOF")) is None
+
+
+def test_env_dash_clears_the_environment_and_runs_the_rest(scripts: Path) -> None:
+    assert decide(Policy(scripts), shell("env - bash bad.sh")) == f"`bad.sh` uses --no-verify, {BYPASS}"
+
+
+def test_an_empty_shebang_runs_the_file_as_a_shell_script(scripts: Path) -> None:
+    shebang(scripts / "tool", "#!", BAD)
+
+    assert decide(Policy(scripts), shell("./tool")).endswith(BYPASS)
+
+
+def test_an_interpreter_that_is_no_regular_file_is_refused_without_blocking(scripts: Path) -> None:
+    os.mkfifo(scripts / "fifo")
+    shebang(scripts / "tool", f"#!{scripts}/fifo")
+
+    assert decide(Policy(scripts), shell("./tool")).endswith("is not a regular file")
+
+
+def test_a_shell_passes_its_startup_file_to_the_shells_it_starts(scripts: Path) -> None:
+    (scripts / "sub" / "good.sh").write_text(BAD)
+    text = f"BASH_ENV=./good.sh bash -c 'cd {scripts}/sub; bash -c true'"
+
+    assert decide(Policy(scripts), shell(text)) == f"`./good.sh` uses --no-verify, {BYPASS}"
+
+
+def test_a_shell_run_by_path_starts_before_its_script_writes() -> None:
+    assert decide(WRITE, shell("/bin/bash -c 'touch x'")) is None
+    assert decide(WRITE, shell("/usr/bin/env touch x")) is None
