@@ -1,21 +1,46 @@
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { live } from "/assets/lit-html/3.3.3/directives/live.js";
 import { EFFORTS, INHERIT, SOURCES, state, shown } from "./state.mjs";
-import { own, inherited, edit } from "./layers.mjs";
+import { own, inherited, edit, layerValue, preview } from "./layers.mjs";
 import { levels, arrows } from "./cost.mjs";
 
-// Code ships no defaults (2026-10-23): a value no layer sets is unset; its row's name says so in red (GW8RT6).
-function source(key, inUse, needed = true) {
-  const from = SOURCES[state.loaded.settings.sources[key]];
-  if (!from && !needed) return html`<p-text size="xs" color="contrast-medium">unset; nothing applies it yet</p-text>`;
-  if (!from) return nothing;
-  const line = inUse === undefined ? `from ${from}` : `in use: ${shown(inUse)}, from ${from}`;
-  return html`<p-text size="xs" color="contrast-medium">${line}</p-text>`;
+// Code ships no defaults (2026-10-23): a value no layer sets is unset; its row's name says so in red (GW8RT6). While
+// the edited layer has an unsaved edit of it, the line says what the save would give (#809).
+function source(key, inUse, needed = true, format = (v) => v) {
+  const next = preview(key), from = SOURCES[next ? next.from : state.loaded.settings.sources[key]];
+  const said = (text) => html`<p-text size="xs" color="contrast-medium">${text}</p-text>`;
+  const line = next ? said(from ? `in use: ${shown(format(next.value))}, from ${from}` : "in use: unset")
+    : !from && !needed ? said("unset; nothing applies it yet")
+      : !from ? nothing : said(inUse === undefined ? `from ${from}` : `in use: ${shown(format(inUse))}, from ${from}`);
+  return html`${line}${unsetWarning(key)}`;
+}
+
+// D-01M61SEXPFT9MXZGQHYVYFQ77C: what an unset Global value leaves to the layers below, while Global's own is unset.
+function unsetWarning(key) {
+  if (state.layer !== "global" || layerValue("global", key) !== null || !required(key)) return nothing;
+  const text = key === "curator_threshold" ? "Unset: no machine or project can set it, so it stays unset"
+    : key.startsWith("final_review.") ? "Unset: it then takes the builder's value"
+      : "Unset: every machine or project must then set its own";
+  return html`<p-text size="sm" color="warning">${text}</p-text>`;
+}
+
+// Whether a step needs *key* set, as the server's unset list says (improvement.resolve): every setting, except the
+// Spotter's "verbose until" and its sample rate while the looks in use take no sample.
+function required(key) {
+  if (key === "spotter.verbose_until") return false;
+  if (key !== "spotter.sample_rate") return true;
+  const next = preview("spotter.looks");
+  return ((next ? next.value : state.loaded.settings.spotter?.looks) ?? []).includes("sample");
 }
 
 // What a blank field inherits, in words; "unset" where no layer below sets it.
 function said(value) {
   return value === null || value === undefined ? "unset" : value;
+}
+
+// The option or placeholder that clears the edited layer's value: on Global it leaves the value unset (SEXPFT).
+function clear(below) {
+  return state.layer === "global" ? "Unset" : `inherit (${said(below)})`;
 }
 
 function onOff(value) {
@@ -81,7 +106,7 @@ export function numberCell(owner, field, label) {
   const below = final ? finalBelow(field) : inherited().agents[owner][field];
   const inUse = final ? state.loaded.settings.final_review?.[field] : state.loaded.settings.agents[owner][field];
   return cell(typed(`${label}, ${owner.replace("_", " ")}`, own(key), (v) => edit(key, v),
-    { key, placeholder: `inherit (${said(below)})`, inputmode: "numeric", disabled: state.saving }),
+    { key, placeholder: clear(below), inputmode: "numeric", disabled: state.saving }),
   source(final ? key : `agents.${key}`, inUse));
 }
 
@@ -96,7 +121,7 @@ function finalBelow(field) {
 // TD-78: a design judge's fail goes back to the build, or to the owner's decision page.
 export function designFailures() {
   const key = "design_failures", below = inherited()[key];
-  return cell(choose("When the design judge fails a change", [[INHERIT, `inherit (${said(below)})`],
+  return cell(choose("When the design judge fails a change", [[INHERIT, clear(below)],
     ["back", "back: send it back to the build"], ["ask", "ask: show it to me first"]], own(key) || INHERIT,
   (v) => edit(key, v), { key, disabled: state.saving }), source(key, state.loaded.settings.design_failures));
 }
@@ -116,10 +141,10 @@ function prefCell(field) {
   const shownBelow = typeof below === "boolean" ? (below ? "on" : "off") : (below ?? "unset");
   const choices = PREF_CHOICES[field];
   const control = choices
-    ? choose(PREF_NAMES[field], [[INHERIT, `inherit (${shownBelow})`], ...choices], own(key) || INHERIT,
+    ? choose(PREF_NAMES[field], [[INHERIT, clear(shownBelow)], ...choices], own(key) || INHERIT,
       (v) => edit(key, v), { key, disabled: state.saving })
     : typed(PREF_NAMES[field], own(key), (v) => edit(key, v),
-      { key, placeholder: `inherit (${shownBelow})`, inputmode: "numeric", disabled: state.saving });
+      { key, placeholder: clear(shownBelow), inputmode: "numeric", disabled: state.saving });
   return cell(control, source(key, state.loaded.settings.prefs[field]));
 }
 
@@ -130,26 +155,31 @@ export function prefRows() {
 export function widths() {
   const below = inherited().widths?.join(", ");
   return cell(typed("Screenshot widths in px, comma-separated (1280 to 2400)", own("widths"),
-    (v) => edit("widths", v), { key: "widths", placeholder: `inherit (${said(below)})`, disabled: state.saving }),
-  source("widths", state.loaded.settings.widths));
+    (v) => edit("widths", v), { key: "widths", placeholder: clear(below), disabled: state.saving }),
+  source("widths", state.loaded.settings.widths, true,
+    (v) => (Array.isArray(v) && v.some(Number.isNaN) ? own("widths") : v)));
 }
 
 // TD-336: how many agent sessions of one project run at once; the machine's total holds as well.
 export function sessionsAtOnce() {
   const key = "sessions", below = inherited()[key];
   return cell(typed("Agent sessions at once in one project", own(key), (v) => edit(key, v),
-    { key, placeholder: `inherit (${said(below)})`, inputmode: "numeric", disabled: state.saving }),
+    { key, placeholder: clear(below), inputmode: "numeric", disabled: state.saving }),
   source(key, state.loaded.settings[key]));
 }
 
-// TD-400: the curator decides alone at or above this confidence; one value for every machine and project.
+// TD-400: the curator decides alone at or above this confidence; one value for every machine and project, so
+// another layer shows it read-only with where it is set (#809).
 export function curatorThreshold() {
-  const key = "curator_threshold";
+  const key = "curator_threshold", label = "Curator's confidence threshold in percent (50 to 100)";
   if (state.layer !== "global") {
-    return cell(html`<p-text>Set for all projects</p-text>`, source(key, state.loaded.settings[key]));
+    const inUse = state.loaded.settings[key];
+    return cell(typed(label, String(inUse ?? ""), () => undefined,
+      { placeholder: "unset", inputmode: "numeric", disabled: true }), source(key, inUse),
+    html`<p-text size="sm" color="contrast-medium">set on Global</p-text>`);
   }
-  return cell(typed("Curator's confidence threshold in percent (50 to 100)", own(key), (v) => edit(key, v),
-    { key, placeholder: `inherit (${said(inherited()[key])})`, inputmode: "numeric", disabled: state.saving }),
+  return cell(typed(label, own(key), (v) => edit(key, v),
+    { key, placeholder: clear(inherited()[key]), inputmode: "numeric", disabled: state.saving }),
   source(key, state.loaded.settings[key]));
 }
 
@@ -174,25 +204,25 @@ export function spotterCell(field, label) {
   const needed = (state.loaded.settings.missing ?? []).includes(`spotter.${field}`);  // the server's rule
   const choices = spotChoices(field);
   const control = choices
-    ? choose(label, [[INHERIT, `inherit (${said(below)})`], ...choices], value || INHERIT,
+    ? choose(label, [[INHERIT, clear(below)], ...choices], value || INHERIT,
       (v) => edit(key, v), { key, disabled: state.saving })
-    : typed(label, value, (v) => edit(key, v, true), { key, placeholder: `inherit (${said(words(below))})`,
+    : typed(label, value, (v) => edit(key, v, true), { key, placeholder: clear(words(below)),
       inputmode: ["looks", "verbose_until"].includes(field) ? undefined
         : field === "look_credit_limit" ? "decimal" : "numeric", disabled: state.saving });
-  return cell(control, source(`spotter.${field}`, words(state.loaded.settings.spotter?.[field]), needed));
+  return cell(control, source(`spotter.${field}`, state.loaded.settings.spotter?.[field], needed, words));
 }
 
 // TD-308: the labels on every pull request OwlBear opens; a project's list replaces the global one.
 export function prLabels() {
   const key = "pr_labels", below = inherited()[key] && (inherited()[key].join(", ") || "none");
   return cell(typed("Labels, comma-separated; none for no labels", own(key), (v) => edit(key, v, true),
-    { key, placeholder: `inherit (${said(below)})`, disabled: state.saving }), source(key, state.loaded.settings[key]));
+    { key, placeholder: clear(below), disabled: state.saving }), source(key, state.loaded.settings[key]));
 }
 
 // TD-308: the line "Opened by OwlBear Delivery for …" at the end of a pull request's text; layered (2026-10-23).
 export function prMarker() {
   const key = "pr_marker", below = onOff(inherited()[key]);
-  return cell(choose("The line Opened by OwlBear Delivery", [[INHERIT, `inherit (${said(below)})`],
+  return cell(choose("The line Opened by OwlBear Delivery", [[INHERIT, clear(below)],
     ["on", "on: end with the line"], ["off", "off: leave it out"]], own(key) || INHERIT, (v) => edit(key, v),
   { key, disabled: state.saving }), source(key, state.loaded.settings[key]));
 }
@@ -212,8 +242,8 @@ export function userConfigLabel(key) {
 
 export function userConfig(key) {
   const [label, on, off] = USER_CONFIG[key], below = onOff(inherited()[key]);
-  return cell(choose(label, [[INHERIT, `inherit (${said(below)})`], ["on", on], ["off", off]], own(key) || INHERIT,
-    (v) => edit(key, v), { key, disabled: state.saving }), source(key, onOff(state.loaded.settings[key])));
+  return cell(choose(label, [[INHERIT, clear(below)], ["on", on], ["off", off]], own(key) || INHERIT,
+    (v) => edit(key, v), { key, disabled: state.saving }), source(key, state.loaded.settings[key], true, onOff));
 }
 
 function tokens(n) {
@@ -223,7 +253,7 @@ function tokens(n) {
 // TD-376: whether a role's sessions may start the runtime's built-in subagents; on unless a layer says off.
 export function subagentsCell(role) {
   const key = `${role}.subagents`, below = onOff(inherited().agents[role].subagents);
-  return cell(choose(`Built-in subagents, ${role}`, [[INHERIT, `inherit (${said(below)})`],
+  return cell(choose(`Built-in subagents, ${role}`, [[INHERIT, clear(below)],
     ["true", "on: may start them"], ["false", "off: none"]], own(key) || INHERIT, (v) => edit(key, v),
     { key, disabled: state.saving }),
   source(`agents.${key}`, state.loaded.settings.agents[role].subagents));
@@ -275,10 +305,11 @@ export function contextCell(role) {
       : nothing}`;  // the default tier fills an unset one and overrides an inherited long one
   } else {
     const below = inherited().agents[role].context;
-    control = choose(label, [[INHERIT, `inherit (${said(below)})`], ["default", "default"], ["long", "long"]],
+    control = choose(label, [[INHERIT, clear(below)], ["default", "default"], ["long", "long"]],
       mine || INHERIT, (v) => edit(key, v), { key, disabled: state.saving });
   }
-  const reset = model && mine ? pure("Use inherited", () => edit(key, "")) : nothing;
+  const reset = model && mine
+    ? pure(state.layer === "global" ? "Unset" : "Use inherited", () => edit(key, "")) : nothing;
   return cell(control, reset, source(`agents.${key}`, state.loaded.settings.agents[role].context));
 }
 
@@ -305,7 +336,7 @@ export function editable(role, field) {
   let control, note = nothing;
   if (field === "effort") {
     const efforts = model?.efforts.length ? model.efforts : EFFORTS;  // a model without efforts ignores the value
-    const options = [[INHERIT, `inherit (${said(below)})`],
+    const options = [[INHERIT, clear(below)],
       ...efforts.map((e) => [e, e === model?.default_effort ? `${e} (model default)` : e])];
     if (value && !efforts.includes(value)) {
       options.push([value, `${value} (not offered by ${model?.id ?? "this model"})`]);
@@ -316,7 +347,7 @@ export function editable(role, field) {
         this one</p-text>`;
     }
   } else if (state.offered?.length) {
-    const options = [[INHERIT, `inherit (${said(below)})`], ...state.offered.map((m) => {
+    const options = [[INHERIT, clear(below)], ...state.offered.map((m) => {
       const long = m.long ? ` / ${tokens(m.long.context)} long` : "";
       const sizes = m.context ? ` \u00b7 ${tokens(m.context)}${long} context` : "";
       return [m.id, `${m.name} (${m.id})${sizes}`];
@@ -324,7 +355,7 @@ export function editable(role, field) {
     if (value && !state.offered.some((m) => m.id === value)) options.push([value, `${value} (not offered here)`]);
     control = choose(label, options, value || INHERIT, set, { ...common, filter: true });
   } else {
-    control = typed(label, value, set, { ...common, placeholder: `inherit (${said(below)})` });
+    control = typed(label, value, set, { ...common, placeholder: clear(below) });
   }
   return cell(control, note, source(`agents.${key}`, state.loaded.settings.agents[role][field]));
 }

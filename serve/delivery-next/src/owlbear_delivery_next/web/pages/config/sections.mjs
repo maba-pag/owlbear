@@ -59,7 +59,7 @@ function plain(value) {
     !== "object")) ? JSON.stringify(value) : shown(value);
 }
 
-function at(value, key) {
+export function at(value, key) {
   return key.split(".").reduce((o, k) => o?.[k], value);
 }
 

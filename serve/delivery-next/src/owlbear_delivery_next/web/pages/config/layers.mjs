@@ -4,7 +4,7 @@ import { CREDITS, INHERIT, LAYERS, NUMBERS, WRITE, state, drafts, page, show, sh
 import { USER_KEYS, mismatch, tierMismatch } from "./cells.mjs";
 import { draftGroup } from "./groups.mjs";
 import { readAcross } from "./machine.mjs";
-import { named } from "./sections.mjs";
+import { at, named } from "./sections.mjs";
 
 function saved(layer, key) {
   const loaded = state.loaded;
@@ -81,9 +81,10 @@ function dirty(layer) {
   return Object.entries(drafts[layer]).filter(([key, value]) => canonical(key, value) !== saved(layer, key));
 }
 
-// Each unsaved edit of *layer* as "field: saved → new"; a blank value inherits.
+// Each unsaved edit of *layer* as "field: saved → new"; a blank value inherits, on Global it is unset.
 function changes(layer) {
-  const said = (v) => (v === "" || v === null || v === undefined ? "inherited" : v);
+  const blank = layer === "global" ? "unset" : "inherited";
+  const said = (v) => (v === "" || v === null || v === undefined ? blank : v);
   return dirty(layer).map(([key, value]) =>
     `${key.replace(".", " ").replaceAll("_", " ")}: ${said(saved(layer, key))} → ${said(value.trim())}`);
 }
@@ -180,6 +181,36 @@ function edited(layer) {
     else delete next.agents[role];
   }
   return next;
+}
+
+// *layer*'s own value at a settings *path* ("agents.builder.model"), its unsaved edits applied; null where unset. A
+// render asks per cell, so the edited layer is built once per draft state.
+const built = {};
+export function layerValue(layer, path) {
+  const key = JSON.stringify(drafts[layer]), memo = built[layer];
+  if (memo?.loaded !== state.loaded || memo.key !== key) {
+    built[layer] = { loaded: state.loaded, key, value: dirty(layer).length ? edited(layer) : state.loaded[layer] };
+  }
+  return at(built[layer].value, path) ?? null;
+}
+
+// What *path* resolves to once the edited layer's unsaved edits are saved, as { value, from }; null while they leave
+// it as saved. The final review's values fall back to the builder's, as the server resolves them.
+export function preview(path) {
+  const layer = state.layer, saved = state.loaded[layer];
+  const moved = (p) => JSON.stringify(layerValue(layer, p)) !== JSON.stringify(at(saved, p) ?? null);
+  const builder = path.startsWith("final_review.") ? `agents.builder.${path.slice("final_review.".length)}` : null;
+  if (!moved(path) && !(builder && moved(builder))) return null;
+  return walk(path) ?? (builder && walk(builder, "builder")) ?? { value: null };
+}
+
+function walk(path, as) {
+  for (const layer of ["project", "machine", "global"]) {
+    const value = layer === state.layer ? layerValue(layer, path) : at(state.loaded[layer], path) ?? null;
+    if (value !== null) return { value, from: as ?? layer };
+  }
+  const base = state.loaded.inherited.global, value = at(base, path) ?? null;  // a built-in layer, in tests only
+  return value === null ? null : { value, from: as ?? base.sources[path] };
 }
 
 export async function reload() {
