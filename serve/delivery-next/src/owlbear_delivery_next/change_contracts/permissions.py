@@ -17,7 +17,6 @@ import functools
 import re
 import shlex
 from dataclasses import dataclass
-from pathlib import PurePath
 from typing import TYPE_CHECKING, Any, NamedTuple
 
 from owlbear_delivery_next.change_contracts import shell_walk, tools
@@ -250,7 +249,7 @@ def _environment(words: Sequence[str]) -> dict[str, str]:
     """The variables one command sets for what it runs: leading assignments, env's, and export's."""
     i = next((i for i, w in enumerate(words) if not shell_programs.ASSIGNMENT.match(w)), len(words))
     found = list(words[:i])
-    if i < len(words) and PurePath(words[i]).name == "env":
+    if i < len(words) and shell_programs.name(words[i]) == "env":
         found += [w for w in words[i + 1 : shell_programs.operand(words, i)] if shell_programs.ASSIGNMENT.match(w)]
     elif i < len(words) and words[i] == "export":
         found += [w for w in words[i + 1 :] if shell_programs.ASSIGNMENT.match(w)]
@@ -353,10 +352,15 @@ def _check(
             return f"`{name}` uses {flag}, {BYPASS}"
         if not policy.write and (found := _mutation(text, [c.words for c in commands])):
             return f"`{name}` uses {found}, which writes in a read-only step"
-        walk = shell_walk.Walk(name, depth, functools.partial(_check, policy), _writes)
+        walk = shell_walk.Walk(name, depth, functools.partial(_check, policy), _writes, _run_bypass)
         return walk.commands(commands, state or shell_walk.State(policy.root))
     except shell_programs.UnreadableError as error:
         return f"`{name}` {error}"
+
+
+def _run_bypass(name: str, run: shell_programs.Run) -> str | None:
+    """The refusal of a program's environment that turns hooks or signing off, as a shebang's env -S sets it."""
+    return f"`{name}` uses environment setting {setting}, {BYPASS}" if (setting := _env_setting(run.env)) else None
 
 
 def _writes(command: shell_parse.Command) -> bool:

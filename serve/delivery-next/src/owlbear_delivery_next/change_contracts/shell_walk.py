@@ -9,7 +9,7 @@ now may not be the one that runs) and a relative path once the folder is unknown
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -69,6 +69,7 @@ class Walk:
     depth: int
     judge: Judge
     writes: Callable[[Command], bool]
+    bypass: Callable[[str, Run], str | None]  # the refusal of a run's environment that turns hooks or signing off
 
     def commands(self, commands: Sequence[Command], state: State) -> str | None:
         """Read *commands* in order and return the first refusal."""
@@ -81,23 +82,30 @@ class Walk:
         return None
 
     def _command(self, command: Command, state: State) -> str | None:
-        runs = shell_programs.runs(command.words)
+        """Each program a command runs, in order: its launchers by path, then the program; a write marks the rest."""
         head = next((w for w in command.words if not shell_programs.ASSIGNMENT.match(w)), None)
+        runs = shell_programs.runs(command.words)
         checked: set[str] = set()
-        for run in [*runs, shell_programs.Run(words=[head])] if head is not None else runs:
+        for run in runs if runs or head is None else [shell_programs.Run(words=[head])]:
             for word in (*run.launchers, run.words[0]):  # a launcher by path is checked even with nothing to run
                 if "/" in word and word not in checked and not _built(run, word):
                     checked.add(word)
                     if reason := self._by_path(command, run, word, state):
                         return reason
-        return next(filter(None, (self._run(command, run, state) for run in runs)), None)
+            if runs and (reason := self._run(command, run, state)):
+                return reason
+            if self.writes(replace(command, words=run.words, raw=" ".join(run.words))):  # find's next action sees it
+                state.effects.wrote = True
+        return None
 
     def _environment(self, command: Command, state: State) -> None:
         """Note startup variables a command sets for later shells, and an exec that redirects this shell's input."""
         words = command.words
         i = next((i for i, w in enumerate(words) if not shell_programs.ASSIGNMENT.match(w)), len(words))
-        while i < len(words) - 1 and words[i] in _PREFIXES:
+        while i < len(words) - 1 and words[i] in _PREFIXES:  # command -p -- exec ...: the builtin after its options
             i += 1
+            while i < len(words) - 1 and words[i].startswith("-"):
+                i += 1
         first = words[i] if i < len(words) else None
         if first is None or first == "export":
             assigned = shell_programs.assignments(words[:i] if first is None else words[i + 1 :])
@@ -135,8 +143,10 @@ class Walk:
             interpreter = shell_programs.shebang(path)
         except OSError as error:
             return self._unreadable(word, error)
-        context = shell_programs.Run(env=dict(run.env))  # the variables it is started with reach its interpreter
+        context = shell_programs.Run(env=dict(run.env), chdir=run.chdir)  # its interpreter starts as it was started
         for sub in shell_programs.runs([*interpreter, Word(str(path))], context=context) if interpreter else ():
+            if reason := self.bypass(self.name, sub):
+                return reason
             if shell_programs.name(sub.words[0]) in shell_programs.SHELLS and (
                 reason := self._shell(command, sub, state)
             ):
@@ -268,13 +278,9 @@ class Walk:
         return f"`{self.name}` runs `{word}`, which can't be read: {why}"
 
 
-def _replaced(run: Run, word: str) -> bool:
-    """Whether xargs or find fills *word* in at run time."""
-    return run.replaced is not None and run.replaced in word
-
-
 def _built(run: Run, word: Word) -> bool:
-    return word.expanded or _replaced(run, word)
+    """Whether the shell, xargs or find fills *word* in at run time."""
+    return word.expanded or (run.replaced is not None and run.replaced in word)
 
 
 def _startup(run: Run, state: State) -> list[Word | None]:

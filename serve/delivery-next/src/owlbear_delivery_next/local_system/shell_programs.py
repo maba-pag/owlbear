@@ -52,6 +52,7 @@ _HEAD = 4096  # bytes of a program file read to tell a script from a binary
 _ESCAPES = {"t": "\t", "n": "\n", "v": "\v", "f": "\f", "r": "\r", "'": "'", '"': '"', "\\": "\\", "$": "$", "#": "#"}
 _VARIABLE = re.compile(r"\$\{[A-Za-z_]\w*\}")
 _SPLIT_UNREAD = "uses env -S with text the guard can't read"
+_SPLIT_BUILT = "uses env -S with text built at run time; write it out"
 
 
 class UnreadableError(ValueError):
@@ -108,9 +109,8 @@ def _found(words: Sequence[Word], i: int, depth: int, context: Run) -> list[Run]
     found = []
     for j in starts:
         k = next((k for k in range(j, len(words)) if words[k] in {";", "+"}), len(words))
-        if k > j:
-            sub = replace(context, launchers=(*context.launchers, words[i]), replaced="{}")
-            found += runs(words[j:k], depth + 1, replace(sub, chdir=sub.chdir or words[j - 1] in _IN_PLACE))
+        sub = replace(context, launchers=(*context.launchers, words[i]), replaced="{}")
+        found += runs(words[j:k], depth + 1, replace(sub, chdir=sub.chdir or words[j - 1] in _IN_PLACE))
     return found
 
 
@@ -135,14 +135,16 @@ def _env_split(words: Sequence[Word], i: int, k: int) -> list[Word] | None:
     while j < k:
         w, value = words[j], None
         if w.startswith("--split-string"):
-            value, j = (w.partition("=")[2], j + 1) if "=" in w else (_at(words, j + 1), j + 2)
+            value, j = (_part(w, w.partition("=")[2]), j + 1) if "=" in w else (_at(words, j + 1), j + 2)
         elif w.startswith("-") and not w.startswith("--") and (at := _valued(w)):
-            rest = w[at + 1 :]
+            rest = _part(w, w[at + 1 :])
             given, j = (rest, j + 1) if rest else (_at(words, j + 1), j + 2)
             value = given if w[at] == "S" else None
         else:
             j += 1
         if value is not None:
+            if value.expanded:  # the outer shell filled it in: what env splits is built at run time
+                raise UnreadableError(_SPLIT_BUILT)
             found = [*(found or []), *split_string(value)]
     return found
 
@@ -150,6 +152,11 @@ def _env_split(words: Sequence[Word], i: int, k: int) -> list[Word] | None:
 def _valued(cluster: str) -> int | None:
     """The index of the first option taking a value in an env option cluster (-u, -C, -S), if any."""
     return next((p for p, ch in enumerate(cluster[1:], 1) if ch in "uCS"), None)
+
+
+def _part(word: Word, text: str) -> Word:
+    """Part of a word, still marked as the shell expands the word."""
+    return Word(text, expanded=getattr(word, "expanded", False))
 
 
 def _at(words: Sequence[Word], j: int) -> Word:
@@ -355,9 +362,8 @@ def shebang(path: Path) -> list[Word] | None:
     with path.open("rb") as file:
         head = file.read(_HEAD)
     if head.startswith(b"#!"):
-        line = head[2:].split(b"\n", 1)[0].decode("utf-8", "replace").strip()
-        interpreter, _, rest = line.partition(" ")
-        return [Word(w) for w in (interpreter, rest.strip()) if w]
+        line = head[2:].split(b"\n", 1)[0].decode("utf-8", "replace").split(None, 1)
+        return [Word(w.strip()) for w in line]
     if b"\0" in head:
         return None
     try:

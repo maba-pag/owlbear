@@ -858,3 +858,71 @@ def test_a_launcher_run_by_path_is_checked_with_nothing_for_it_to_run(scripts: P
 @pytest.mark.parametrize("text", ["source -", ". -", "source - <<< 'echo hi'"])
 def test_source_reads_a_file_named_dash_not_its_input(text: str) -> None:
     assert decide(WRITE, shell(text)).endswith("through PATH; write `./-`")
+
+
+@pytest.mark.parametrize("text", ["env -S \"'$CMD' hi\"", "env -S \"bash -c 'echo $CMD'\"", 'env --split-string="$X"'])
+def test_an_env_split_string_the_outer_shell_filled_in_is_refused(text: str) -> None:
+    assert decide(WRITE, shell(text)) == f"`{text}` uses env -S with text built at run time; write it out"
+
+
+def test_a_function_body_is_not_the_shells_own_folder(scripts: Path) -> None:
+    for text in (f"function f {{\ncd {scripts}/sub\n}}\nbash ./x.sh", f"f() {{\ncd {scripts}/sub\n}}\nbash ./x.sh"):
+        assert decide(Policy(scripts), shell(text)).endswith("use an absolute path")
+    assert decide(Policy(scripts), shell(f"function f {{\ncd {scripts}/sub\n}}\nbash {scripts}/good.sh")) is None
+
+
+@pytest.mark.parametrize("first", ["#!/bin/sh\t-e", "#!/usr/bin/env\tbash", "#! /bin/sh"])
+def test_a_shebang_separated_by_tabs_or_spaces_names_the_same_shell(scripts: Path, first: str) -> None:
+    shebang(scripts / "tool", first, BAD)
+    shebang(scripts / "fine", first)
+
+    assert decide(Policy(scripts), shell("./tool")).endswith(BYPASS)
+    assert decide(Policy(scripts), shell("./fine")) is None
+
+
+@pytest.mark.parametrize("prefix", ["command -- ", "command -p ", "builtin -- "])
+def test_exec_or_export_behind_command_options_still_changes_the_shell(scripts: Path, prefix: str) -> None:
+    assert decide(WRITE, shell(f"{prefix}exec <<< 'echo hi'\nbash")).endswith(PIPED)
+    assert decide(Policy(scripts), shell(f"{prefix}export BASH_ENV=./bad.sh\nbash -c true")) == (
+        f"`./bad.sh` uses --no-verify, {BYPASS}"
+    )
+
+
+def test_a_shebangs_environment_is_judged_like_a_typed_one(scripts: Path) -> None:
+    first = "#!/usr/bin/env -S GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.hooksPath GIT_CONFIG_VALUE_0=/x bash"
+    shebang(scripts / "tool", first, "git commit -m x\n")
+
+    assert decide(Policy(scripts), shell("./tool")) == (
+        f"`./tool` uses environment setting core.hooksPath=/x, {BYPASS}"
+    )
+
+
+def test_a_script_run_by_path_in_another_folder_reads_relative_scripts_nowhere(scripts: Path) -> None:
+    shebang(scripts / "tool", "#!/bin/sh", "bash ./x.sh\n")
+
+    assert decide(Policy(scripts), shell(f"env -C sub {scripts}/tool")).endswith("use an absolute path")
+    assert decide(Policy(scripts), shell(f"{scripts}/tool")) is None
+
+
+def test_a_write_in_a_here_documents_substitution_comes_before_the_command_that_reads_it(scripts: Path) -> None:
+    assert decide(Policy(scripts), shell("bash good.sh <<EOF\n$(cp bad.sh good.sh)\nEOF")).endswith(
+        "run it in the next"
+    )
+    assert decide(Policy(scripts), shell("bash good.sh <<'EOF'\n$(cp bad.sh good.sh)\nEOF")) is None
+
+
+def test_a_write_by_one_find_action_comes_before_the_next(scripts: Path) -> None:
+    text = "find . -maxdepth 0 -exec cp bad.sh good.sh \\; -exec bash good.sh \\;"
+
+    assert decide(Policy(scripts), shell(text)).endswith("run it in the next")
+    assert decide(Policy(scripts), shell("find . -maxdepth 0 -exec bash good.sh \\;")) is None
+
+
+@pytest.mark.parametrize(("text", "shown"), [("$'bash' bad.sh", "$bash"), ("bash $'bad.sh'", None)])
+def test_ansi_c_quoting_is_not_decoded_but_refused(scripts: Path, text: str, shown: str | None) -> None:
+    reason = decide(Policy(scripts), shell(text))
+
+    if shown:
+        assert reason == f"`{text}` builds a command at run time (`{shown}`); write the program and its script out"
+    else:
+        assert reason.endswith("a path built at run time; write the path out")

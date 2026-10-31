@@ -12,7 +12,9 @@ from dataclasses import dataclass, field
 from typing import Self
 
 _REDIRECTION = re.compile(r"&?[<>]+[&|]?")
-_OPENERS = frozenset({"{", "case", "for", "if", "select", "until", "while"})  # words that start a compound command
+_OPENERS = frozenset(
+    {"{", "case", "for", "function", "if", "select", "until", "while"}
+)  # words that start a compound command
 _CLOSERS = frozenset({"}", "done", "esac", "fi"})
 _SPECIAL = frozenset("@*#?$!-0123456789")  # $@, $1, ...: parameters without a name
 _BLANK = " \t\n;&|<>()"  # what ends a here-document's delimiter word
@@ -175,7 +177,7 @@ class _Lexer:
             s.expanded = True
             depth = s.depth + 1
             return self.level(i + 1, "`", depth) if ch == "`" else self.level(i + 2, ")", depth)
-        if ch == "$" and (nxt := text[i + 1 : i + 2]) and (nxt in "{_" or nxt.isalnum() or nxt in _SPECIAL):
+        if ch == "$" and (nxt := text[i + 1 : i + 2]) and (nxt in "{_'" or nxt.isalnum() or nxt in _SPECIAL):
             s.expanded = True
         if s.quote:
             s.add(ch)
@@ -328,8 +330,18 @@ class _Lexer:
             body = "".join(f"{line}\n" for line in lines)
             if not literal:  # the shell removes these backslashes before handing the body on
                 body = _BODY_ESCAPE.sub(lambda m: m[1] if m[1] != "\n" else "", body)
+            found = len(self.commands)
             given.word = Word(body, expanded=not literal and self._expansions(start, end))
+            self._before(given, found)
         return min(i, len(self.text))
+
+    def _before(self, given: Input, found: int) -> None:
+        """Move a here-document body's substituted commands, listed from *found* on, before the command it feeds."""
+        owner = next((k for k, c in enumerate(self.commands[:found]) if any(i is given for i in c.inputs)), None)
+        if owner is not None:
+            moved = self.commands[found:]
+            self.commands[owner:owner] = moved
+            del self.commands[found + len(moved) :]
 
     def _expansions(self, i: int, end: int) -> bool:
         """Lex the substitutions in text[i:end] as commands; return whether it holds any expansion."""
