@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Literal
 from owlbear_delivery_next.git.git_executable import resolve_git_executable
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Callable, Mapping, Sequence
     from pathlib import Path
 
 RemoteGitKind = Literal["read", "write"]
@@ -31,6 +31,7 @@ _COMMIT_PATTERN = re.compile(r"[0-9a-f]{40}")
 _REPOSITORY_VARIABLES = ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE")
 _BATCH_SSH_OPTION = "-o BatchMode=yes"
 _BATCH_SSH_COMMAND = f"ssh {_BATCH_SSH_OPTION}"
+launched: Callable[[int], None] | None = None  # the runner's journal of each remote Git leader; unset elsewhere
 _CONFIG_UNSET = 1
 # Git global options that take their value as the next argument.
 _GLOBAL_OPTIONS_WITH_VALUE = frozenset({"-c", "-C", "--config-env", "--git-dir", "--work-tree", "--namespace"})
@@ -207,6 +208,8 @@ def run_remote_git(
         raise error from exc
     finished = False
     try:
+        if launched is not None:
+            launched(process.pid)
         stdout, stderr = process.communicate(timeout=bound)
         finished = True
     except subprocess.TimeoutExpired as exc:

@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from types import SimpleNamespace
 
 import pytest
-from copilot.rpc import InstructionLocation
+from copilot.rpc import InstructionLocation, ShellInitScriptShell
 
 from owlbear_delivery_next.change_contracts.models import (
     Answer,
@@ -21,7 +21,7 @@ from owlbear_delivery_next.change_contracts.models import (
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_contracts.tools import Worktree
-from owlbear_delivery_next.runtimes import instruction_scope, sdk_adapter, step_input
+from owlbear_delivery_next.runtimes import command_marks, sdk_adapter, step_input
 from owlbear_delivery_next.settings.roles import UserConfig
 
 AT = datetime(2026, 10, 24, tzinfo=UTC)
@@ -121,7 +121,7 @@ def test_the_sources_outside_the_worktree_are_off_before_the_first_message(tmp_p
     async def scoped(_session, worktree, _user, _log):
         order.append(("scoped", worktree))
 
-    monkeypatch.setattr(sdk_adapter, "own_instructions", scoped)
+    monkeypatch.setattr(sdk_adapter, "session_options", scoped)
     _open(tmp_path, _Session(order), order, monkeypatch)
 
     assert [step[0] for step in order] == ["scoped", "send", "delivered"]
@@ -129,10 +129,11 @@ def test_the_sources_outside_the_worktree_are_off_before_the_first_message(tmp_p
 
 
 class _Listing(_Session):
-    """A session whose runtime lists instruction sources and records what Delivery switches off before the send."""
+    """A session whose runtime lists instruction sources and records what Delivery sets before the send."""
 
-    def __init__(self, order, sources):
+    def __init__(self, order, sources, *, answer=True):
         super().__init__(order)
+        self.answer = answer
         self.sources = [SimpleNamespace(id=i, source_path=p, location=at) for i, p, at in sources]
         self.rpc = SimpleNamespace(instructions=SimpleNamespace(get_sources=self._listed),
                                    options=SimpleNamespace(update=self._update))  # fmt: skip
@@ -141,8 +142,13 @@ class _Listing(_Session):
         return SimpleNamespace(sources=self.sources)
 
     async def _update(self, params):
-        self.order.append(("off", params.disabled_instruction_sources))
-        return SimpleNamespace(success=True)
+        if params.shell is None:
+            self.order.append(("off", params.disabled_instruction_sources))
+            return SimpleNamespace(success=True)
+        self.order.append(("shell", [(s.path, s.shell) for s in params.shell.init_scripts]))
+        if isinstance(self.answer, Exception):
+            raise self.answer
+        return SimpleNamespace(success=self.answer)
 
     async def get_events(self):
         return []
@@ -175,38 +181,56 @@ def _user_home(tmp_path):
     ]
 
 
-@pytest.mark.parametrize("resume", [False, True])
-@pytest.mark.parametrize("on", [True, False])
-def test_the_real_scope_keeps_the_owners_files_only_with_his_switch_on_before_the_first_message(
-    tmp_path, monkeypatch, resume, on
-):
-    home, sources = _user_home(tmp_path)
+def _opened(tmp_path, monkeypatch, session, *, resume=False, on=False, events=None):  # noqa: PLR0913 - fixtures and scenario
+    """The real opening of *session* inside a runner's marking, with the real instruction scope and command marks."""
     work = tmp_path / "work"
     work.mkdir()
-    monkeypatch.setenv("COPILOT_HOME", str(home))
-    monkeypatch.setattr(sdk_adapter, "own_instructions", instruction_scope.applied)  # undo conftest's no-op
+    monkeypatch.setattr(sdk_adapter, "session_options", command_marks.opened)  # undo conftest's no-op
     monkeypatch.setattr(sdk_adapter, "usage_read", lambda *_a: asyncio.sleep(0, {}))
     monkeypatch.setattr(sdk_adapter.preload, "missing", lambda *_a, **_k: [])
-    order, events = [], []
-    session = _Listing(order, sources)
     cfg = sdk_adapter.Session(
         kind=StepKind.CHECK, worktree=work, session_id="sid", message="check", resume=resume, policy=Policy(work),
         observe=Worktree, checks=(), model="gpt-6-luna", user=UserConfig(instructions=on, skills=False, memory=not on),
-        journal=sdk_adapter.Journal(event=events.append, delivered=lambda: order.append(("delivered",))),
+        journal=sdk_adapter.Journal(event=(events if events is not None else []).append,
+                                    delivered=lambda: session.order.append(("delivered",))),
     )  # fmt: skip
+    store = SimpleNamespace(root=tmp_path / "data", log=lambda *_a: None)
     client = (_Resuming if resume else _Client)(session)
 
     async def scenario():
         st = sdk_adapter._Step(cfg, asyncio.get_running_loop())  # noqa: SLF001 - the real opening under test
         return await sdk_adapter._open(client, st)  # noqa: SLF001
 
-    asyncio.run(scenario())
+    with command_marks.marking(store, object(), "c1"):
+        asyncio.run(scenario())
+    return store.root / "changes" / "c1" / command_marks.SCRIPT, client
+
+
+@pytest.mark.parametrize("resume", [False, True])
+@pytest.mark.parametrize("on", [True, False])
+def test_the_real_scope_keeps_the_owners_files_only_with_his_switch_on_before_the_first_message(
+    tmp_path, monkeypatch, resume, on
+):
+    home, sources = _user_home(tmp_path)
+    monkeypatch.setenv("COPILOT_HOME", str(home))
+    order, events = [], []
+    script, client = _opened(tmp_path, monkeypatch, _Listing(order, sources), resume=resume, on=on, events=events)
 
     assert client.opts["memory"] == {"enabled": not on}  # the owner's switch, never the runtime's default
 
     off = ["plugin"] if on else ["linked", "root", "plugin"]
-    assert [step[0] for step in order] == ["off", "send", "delivered"]
+    assert [step[0] for step in order] == ["off", "shell", "send", "delivered"]
     assert order[0][1] == off
+    assert order[1][1] == [(str(script), ShellInitScriptShell.BASH)]  # every command marks its group (#752)
     logged = {e["event"]: e["sources"] for e in events if e["event"].startswith("instructions-")}
     assert logged == ({"instructions-off": off, "instructions-user": ["linked", "root"]} if on
                       else {"instructions-off": off})  # fmt: skip
+
+
+@pytest.mark.parametrize("answer", [False, RuntimeError("the runtime is gone")])
+def test_a_refused_or_failed_update_sends_nothing(tmp_path, monkeypatch, answer):
+    order = []
+    with pytest.raises(RuntimeError, match=r"refused the shell init script|the runtime is gone"):
+        _opened(tmp_path, monkeypatch, _Listing(order, [], answer=answer))
+
+    assert [step[0] for step in order] == ["shell"]  # _run ends the step with this error, before any message

@@ -195,7 +195,7 @@ def _no_shared_settings(tmp_path_factory, monkeypatch):
     monkeypatch.setattr(worktree, "data_root", lambda: root)  # never the machine's worktrees
     monkeypatch.setattr(sdk_adapter, "CopilotClient", _no_runtime)  # never a real model session; fakes replace it
     monkeypatch.setattr(spotter_look, "judged", _silent_look)  # nor a real Spotter look
-    monkeypatch.setattr(sdk_adapter, "own_instructions", _no_instructions)  # fakes list no instruction sources
+    monkeypatch.setattr(sdk_adapter, "session_options", _no_instructions)  # fakes list no instruction sources
     # git never reaches GitHub (#804): a fixture's own GIT_CONFIG_GLOBAL hides HOME's .gitconfig but not this
     # environment's rule; the host's start drops the environment's, but every git it runs reads HOME's .gitconfig.
     # Its own patcher, so a test's monkeypatch.undo(), which also puts the real HOME back, leaves it in place.

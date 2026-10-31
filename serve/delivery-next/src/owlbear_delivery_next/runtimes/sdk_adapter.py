@@ -35,8 +35,8 @@ from owlbear_delivery_next.runtimes import (
     tool_workers,
     watch_feed,
 )
+from owlbear_delivery_next.runtimes.command_marks import opened as session_options
 from owlbear_delivery_next.runtimes.copilot_cli import cli_path
-from owlbear_delivery_next.runtimes.instruction_scope import applied as own_instructions
 from owlbear_delivery_next.runtimes.model_choices import takes_effort
 from owlbear_delivery_next.runtimes.results import ENDED, Gate
 from owlbear_delivery_next.runtimes.sdk_teardown import CALL
@@ -415,7 +415,7 @@ async def _open(client: CopilotClient, st: _Step) -> CopilotSession | None:
         session = await _call(client.create_session(session_id=sid, **opts), "session create", START)
         st.session, st.created = session, True
         message, exposure = lessons.opening(role_of(cfg), cfg.memory, message, st.log)  # once per new conversation
-    await own_instructions(session, cfg.worktree, cfg.user, st.log)  # D-01M5YE55W7P4A6PS8YZV8K7J6A
+    await session_options(session, cfg.worktree, cfg.user, st.log)  # D-01M5YE55W7P4A6PS8YZV8K7J6A
     st.log(event="session", id=sid, resumed=resumed, resent=resent, runtime=st.run.runtime_pid)
     st.billed = await usage_read(session, cfg.model) if resumed else {}
     await sdk_spend.meter(client, st, sid, role_of(cfg))

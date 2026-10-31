@@ -23,6 +23,7 @@ from owlbear_delivery_next.local_system.git_files import git_common_dir
 from owlbear_delivery_next.project_host import host
 from owlbear_delivery_next.runtimes import (
     amendments,
+    command_marks,
     readiness,
     sdk_adapter,
     session_result,
@@ -399,7 +400,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     store = Store.open(repo)
     try:
-        with store.lock(args.change) as lock:
+        with store.lock(args.change) as lock, command_marks.marking(store, lock, args.change):
             state, moved = engine.observe(store, repo, args.change)
             leave = queue.barrier(store, repo)
             change, step = store.fold(lock, args.change, datetime.now(UTC), state, moved=moved, leave=leave)

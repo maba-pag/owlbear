@@ -775,7 +775,7 @@ def test_the_real_open_records_the_cli_version_before_its_first_send(world, monk
     world.status_hang = status == "hang"
     monkeypatch.setattr(sdk_teardown, "CALL", 0.05)
     monkeypatch.setattr(sdk_adapter, "_open", REAL_OPEN)
-    monkeypatch.setattr(sdk_adapter, "own_instructions", nothing)
+    monkeypatch.setattr(sdk_adapter, "session_options", nothing)
     asyncio.run(sdk_adapter.run(world.cfg))
     assert [[start["cli"] for start in starts] for starts in seen] == [["1.0.105-test" if status == "read" else ""]]
     assert ("cli_error" in seen[0][0]) == (status != "read")
