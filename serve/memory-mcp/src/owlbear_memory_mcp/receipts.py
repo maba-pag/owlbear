@@ -67,10 +67,11 @@ def _commit(clean: list[Path], memory_dir: Path, task_id: str) -> None:
                 (p.parent.resolve() / p.name).relative_to(repo).as_posix(): (storage.read_entry(p), p.read_bytes())
                 for p in written
             }
-            before = _git_object_id(repo, "HEAD")
             after = commit_move(written, f"chore: memory assessments ({task_id}, memory-mcp)")
-            try:  # a hook may have swept other files in: pending memory must never pass as a receipt
-                _verify_committed_change_set(repo, before, after, set(receipts), receipts)
+            # A hook may have swept other files in: pending memory must never pass as a receipt. Only this commit is
+            # checked, since curation commits other folders without the repository lock.
+            try:
+                _verify_committed_change_set(repo, _git_object_id(repo, f"{after}^"), after, set(receipts), receipts)
             except ValueError as exc:
                 msg = f"the receipt commit {after[:9]} holds more than the receipts: {exc}"
                 raise ToolError(msg) from exc

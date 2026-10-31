@@ -17,7 +17,7 @@ from owlbear_memory import MemoryEngine, MemoryEntry, MemoryState, storage
 
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.state_store import decision_store
-from owlbear_memory_mcp import tools
+from owlbear_memory_mcp import receipts, tools
 from owlbear_memory_mcp.server import AppContext
 
 _TS = "2026-10-01T10:00:00+00:00"
@@ -216,3 +216,31 @@ async def test_a_hook_that_sweeps_other_files_into_the_receipt_commit_is_reporte
 
     assert all(part in str(raised.value) for part in ("proj/memory/c.md", "proj/memory/notes.txt"))
     assert "a.md" not in str(raised.value)  # the receipt itself is as written
+
+
+@pytest.mark.asyncio
+async def test_a_commit_landing_just_before_the_receipt_commit_is_not_mistaken_for_swept_files(
+    shared: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Curation commits another folder without the repository lock; only the receipt commit itself is checked."""
+    kept = "550e8400-e29b-41d4-a716-446655447539"
+    seed(shared.folder, "a.md", entry(kept, MemoryState.APPROVED))
+    publish(shared)
+    commit_move = receipts.commit_move
+
+    def curation_first(paths: list[Path], message: str) -> str:
+        other = shared.data / "other" / "memory"
+        other.mkdir(parents=True)
+        (other / "x.md").write_text("curated elsewhere\n")
+        git(shared.data, "add", "other/memory/x.md")
+        git(shared.data, "commit", "-qm", "curation", "--", "other/memory/x.md")
+        return commit_move(paths, message)
+
+    monkeypatch.setattr(receipts, "commit_move", curation_first)
+
+    [result] = await assess(shared, (kept, "outstanding"))
+
+    assert result["success"] is True
+    assert git(shared.data, "show", "--name-only", "--format=%s", "HEAD").splitlines() == [
+        _SUBJECT, "", "proj/memory/a.md"
+    ]  # fmt: skip
