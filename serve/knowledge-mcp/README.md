@@ -109,14 +109,18 @@ initialized OwlBear workspace and exposes its complete tool set.
 
 The server's private composition root assembles the SQLite stores, content and query facades,
 ingest coordinator, and composite source fetcher. Production lifespan wiring supplies zero-argument
-HTTP response-fetcher and BGE-M3 embedding factories plus a filesystem Qdrant factory. The default
+HTTP response-fetcher and BGE-M3 embedding factories plus a filesystem Qdrant factory. Without the
+opt-in `embedding` and `qdrant` extras, which the runtime install leaves out, storing, deleting or
+searching embeddings fails with `embedding_dependency_missing`, naming
+`owlbear-knowledge[embedding,qdrant]`. The default
 assembled proof is deterministic and replaces the HTTP response-fetcher, embedding, and vector-store
 factories with test adapters, while keeping source registration, SSRF validation, SQLite persistence,
 and MCP tool calls on the same path as production.
 
 ### Opt-in model proof
 
-The opt-in smoke proof requires installed `owlbear-knowledge[full]`, an available BGE-M3 model, and
+The opt-in smoke proof requires installed `owlbear-knowledge[full]` (`uv sync --locked --all-packages --all-extras`
+from the repository root), an available BGE-M3 model, and
 writable filesystem-Qdrant state. The model may download approximately 2.3 GB on first use. Model
 tests are excluded by default; from the repository root, opt in with:
 
@@ -134,4 +138,4 @@ deselected model test is not support evidence.
 | Package | Purpose |
 | --- | --- |
 | `mcp` | MCPServer framework |
-| `owlbear-knowledge[full]` | Knowledge engine with Qdrant, BGE-M3 embeddings, and HTTP intake (workspace package) |
+| `owlbear-knowledge[intake]` | Knowledge engine with HTTP intake (workspace package); its `embedding` and `qdrant` extras are opt-in |

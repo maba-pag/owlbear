@@ -34,19 +34,7 @@ def run_init_without_test_surface() -> Callable[..., None]:
 
 
 def pytest_configure(config: pytest.Config) -> None:
-    """Register project-wide markers."""
-    config.addinivalue_line(
-        "markers",
-        "api: tests that require API integrations or network services",
-    )
-    config.addinivalue_line(
-        "markers",
-        "slow: tests that are long-running (subprocess-heavy tests)",
-    )
-    config.addinivalue_line(
-        "markers",
-        "benchmark: latency benchmarks — run with -v -s to see results",
-    )
+    """Silence pluggy's teardown warning project-wide."""
     config.addinivalue_line(
         "filterwarnings",
         "ignore::pluggy.PluggyTeardownRaisedWarning",

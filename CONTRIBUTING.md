@@ -28,7 +28,7 @@ Homebrew rather than `npm install -g`, whose copy is hidden when the Node versio
 ```shell
 git clone https://github.com/maba-pag/owlbear.git
 cd owlbear
-uv sync --locked --all-packages --all-extras --all-groups
+uv sync --locked --all-packages --all-groups
 uv run dep-sync
 ```
 

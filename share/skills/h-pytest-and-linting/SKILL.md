@@ -128,10 +128,8 @@ whenever unsafe fixes are enabled. Full aggregates are listed by `uv run help qu
 
 | Marker | Local meaning |
 | --- | --- |
-| `api` | Requires live network; routine local runs exclude it with `-m "not api"` |
-| `slow` | Long-running |
-| `integration` | Requires the `kanban-md` binary |
-| `e2e` | Excluded by default through `addopts`; include explicitly with `-m e2e` |
+| `browser` | Requires an installed Playwright browser; CI runs these in its browser job |
+| `biome` | Requires the root Node dependencies (Biome) |
 | `model` | Requires installed embedding/vector prerequisites and a real model runtime; excluded by default |
 | `flaky(issue=N)` | Runs strict locally; CI re-runs a failure once while GitHub issue N is open and lists that test in the job summary. Use it only for a confirmed flake awaiting its repair; the repair removes the mark |
 

@@ -103,7 +103,6 @@ def test_lint_runs_the_normal_local_suite() -> None:
         ["pre-commit", "run", "ruff-fix", *manual],
         ["pre-commit", "run", "markdownlint-fix", *manual],
         ["pre-commit", "run", "yamllint", *manual],
-        ["pre-commit", "run", "shellcheck", *manual],
         ["pre-commit", "run", "actionlint", *manual],
         ["pre-commit", "run", "zizmor", *manual],
         ["pre-commit", "run", "editorconfig-checker", *manual],
@@ -210,7 +209,6 @@ def test_quality_executes_todo_last() -> None:
     with patch("owlbear_tools.quality._run_leaf", side_effect=record):
         assert _run_named("quality", staged=False, fix_mode=FixMode.SAFE) == 0
 
-    assert executed[-1] == "todo"
     assert executed == [
         "format-python",
         "format-biome",
@@ -219,7 +217,6 @@ def test_quality_executes_todo_last() -> None:
         "lint-python",
         "lint-markdown",
         "lint-yaml",
-        "lint-shell",
         "lint-actionlint",
         "lint-zizmor",
         "lint-editorconfig",

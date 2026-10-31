@@ -64,9 +64,8 @@ cover the whole tree except `.owlbear/research`; the others cover their own inpu
 `ci-pass-v1` key prefix when a job's commands change meaning without changing those inputs.
 
 uv caches are scoped per install profile (`python-tests`, `python-browser`, `delivery-next-browser`, `static`,
-`dev-tools`). Python
-test environments skip the torch model stack that only the deselected `model` tests import;
-keep the `CI_SKIPPED_PACKAGES` lists in the Python workflow and Copilot setup identical.
+`dev-tools`). The knowledge embedding stack (torch, BGE-M3, Qdrant) is an opt-in extra that only the deselected
+`model` tests import, so no workflow installs it.
 [`test_ci_workflows.py`](../tests/test_ci_workflows.py) owns these workflow-shape contracts.
 
 ## Snyk

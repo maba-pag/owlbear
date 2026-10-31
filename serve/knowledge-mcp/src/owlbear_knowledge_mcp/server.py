@@ -18,6 +18,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
 from pydantic import ValidationError
 
+from owlbear_knowledge import qdrant
 from owlbear_knowledge.chunker import TextChunker
 from owlbear_knowledge.embeddings import BgeM3EmbeddingProvider, EmbeddingProvider
 from owlbear_knowledge.fetcher import HttpResponseFetcher, HttpxContentFetcher
@@ -445,13 +446,17 @@ class RefreshToolResult(TypedDict):
     errors: list[RefreshErrorResult]
 
 
-def _serialize_knowledge_failure(failure: KnowledgeFailure) -> KnowledgeFailureResult:
-    """Project a core failure without reclassifying or exposing exception text."""
+_EMBEDDINGS_MISSING = "Embeddings are not installed: install owlbear-knowledge[embedding,qdrant]"
+
+
+def _serialize_knowledge_failure(failure: KnowledgeFailure, *, query: bool = False) -> KnowledgeFailureResult:
+    """Project a core failure without exposing exception text; a missing embedding stack names its install."""
+    missing = failure.code == "embedding_dependency_missing"
     return {
-        "stage": failure.stage.value,
+        "stage": KnowledgeFailureStage.QUERY.value if missing and query else failure.stage.value,
         "code": failure.code,
         "retryable": failure.retryable,
-        "message": failure.message,
+        "message": _EMBEDDINGS_MISSING if missing else failure.message,
     }
 
 
@@ -480,6 +485,34 @@ def _serialize_refresh_error(error: RefreshError) -> RefreshErrorResult:
     }
 
 
+class MissingVectorStore:
+    """Stands in for Qdrant when the opt-in embedding extras are not installed."""
+
+    @staticmethod
+    def _missing(stage: KnowledgeFailureStage) -> KnowledgeOperationError:
+        return KnowledgeOperationError(
+            KnowledgeFailure(
+                stage=stage,
+                code="embedding_dependency_missing",
+                retryable=False,
+                message=_EMBEDDINGS_MISSING,
+            ),
+        )
+
+    def store_embedding(self, *_args: object, **_kwargs: object) -> None:
+        raise self._missing(KnowledgeFailureStage.INDEXING)
+
+    def delete_embedding(self, *_args: object, **_kwargs: object) -> bool:
+        raise self._missing(KnowledgeFailureStage.INDEXING)
+
+    def search_similar(self, *_args: object, **_kwargs: object) -> list[tuple[str, float]]:
+        raise self._missing(KnowledgeFailureStage.QUERY)
+
+
+def _vector_store(location: str) -> object:
+    return MissingVectorStore() if qdrant.QdrantClient is None else QdrantVectorStore(location=location)
+
+
 @asynccontextmanager
 async def app_lifespan(_server: MCPServer) -> AsyncGenerator[AppContext]:
     """Initialise knowledge-base services; close the DB connection on exit."""
@@ -497,7 +530,7 @@ async def app_lifespan(_server: MCPServer) -> AsyncGenerator[AppContext]:
             factories=KnowledgeRuntimeFactories(
                 http_response_fetcher_factory=HttpxContentFetcher,
                 embedding_provider_factory=BgeM3EmbeddingProvider,
-                vector_store_factory=lambda location: QdrantVectorStore(location=location),
+                vector_store_factory=_vector_store,
             ),
         )
         yield ctx
@@ -637,7 +670,7 @@ async def knowledge_search(
         )
         result = await query_facade.search(request)
     except KnowledgeOperationError as exc:
-        return _serialize_knowledge_failure(exc.failure)
+        return _serialize_knowledge_failure(exc.failure, query=True)
     except ValueError as exc:
         msg = "invalid search request"
         raise ToolError(msg) from exc
@@ -1138,6 +1171,18 @@ async def delete_knowledge_source(ctx: Context, source_id: str) -> dict[str, Any
     coordinator = app_ctx.ingest_coordinator
     if coordinator is None:
         msg = "ingest coordinator not available"
+        raise ToolError(msg)
+
+    # The cascade drops the registry row before it deletes vectors, so refuse here rather than strand the content.
+    if (
+        isinstance(app_ctx.vector_store, MissingVectorStore)
+        and app_ctx.conn.execute(
+            "SELECT 1 FROM content_documents WHERE source_id = ? UNION ALL "
+            "SELECT 1 FROM content_chunks WHERE source_id = ? LIMIT 1",
+            (source_id, source_id),
+        ).fetchone()
+    ):
+        msg = f"Source '{source_id}' has indexed content. {_EMBEDDINGS_MISSING} to delete it."
         raise ToolError(msg)
 
     purge_result = await coordinator.delete_source(source_id)

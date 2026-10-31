@@ -27,11 +27,6 @@ permissions:
   contents: read
 
 env:
-  # Only the deselected `model` tests import this stack; it is about two thirds of the workspace download.
-  CI_SKIPPED_PACKAGES: >-
-    torch flagembedding accelerate transformers
-    sentence-transformers peft datasets ir-datasets pyarrow pandas scipy scikit-learn sympy
-    tokenizers safetensors sentencepiece hf-xet huggingface-hub
   CI_SHARDS: 4
 
 jobs:
@@ -97,12 +92,9 @@ jobs:
         if: steps.reuse.outputs.cache-hit != 'true'
         run: uv python install
 
-      - name: Install locked workspace without the model stack
+      - name: Install locked workspace
         if: steps.reuse.outputs.cache-hit != 'true'
-        run: |
-          skipped=()
-          for package in $CI_SKIPPED_PACKAGES; do skipped+=(--no-install-package "$package"); done
-          uv sync --locked --all-packages --all-groups "${skipped[@]}"
+        run: uv sync --locked --all-packages --all-groups
 
       # Only tests marked flaky with an issue found open here get one re-run; the token stays out of the tests.
       - name: Find open flaky issues
@@ -129,7 +121,7 @@ jobs:
           mkdir -p "$plugin_dir"
           cp .github/scripts/ci_shard.py "$plugin_dir/"
           PYTHONPATH="$plugin_dir" uv run --no-sync pytest tests serve -p ci_shard \
-            -m "not e2e and not model and not browser" -n "${CI_WORKERS:-6}" --dist worksteal \
+            -m "not model and not browser" -n "${CI_WORKERS:-6}" --dist worksteal \
             --junitxml="$RUNNER_TEMP/test-results/junit.xml"
 
       - name: Upload test results

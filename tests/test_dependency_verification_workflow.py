@@ -26,11 +26,7 @@ RUFF_TOOLCHAIN_SCRIPT = ROOT / ".github/scripts/check_ruff_toolchain.py"
 _SCOPE_SPEC = importlib.util.spec_from_file_location("ci_scope_dependency_test", ROOT / ".github/scripts/ci_scope.py")
 ci_scope = importlib.util.module_from_spec(_SCOPE_SPEC)
 _SCOPE_SPEC.loader.exec_module(ci_scope)
-COPILOT_UV_SYNC = (
-    "skipped=()\n"
-    'for package in $CI_SKIPPED_PACKAGES; do skipped+=(--no-install-package "$package"); done\n'
-    'uv sync --locked --all-packages --group dev "${skipped[@]}"\n'
-)
+COPILOT_UV_SYNC = "uv sync --locked --all-packages --group dev"
 
 
 def _workflow(path: Path) -> dict[str, object]:
@@ -637,10 +633,6 @@ def test_renovate_policy_keeps_maturity_and_lockfile_controls() -> None:
     assert renovate["lockFileMaintenance"]["automerge"] is False
     assert renovate["vulnerabilityAlerts"]["minimumReleaseAge"] == "6 hours"
     assert "schedule" not in renovate["vulnerabilityAlerts"]  # Renovate ignores schedules for security fixes
-    assert any(
-        rule.get("minimumReleaseAge") == "24 hours" and rule.get("matchDatasources") == ["docker"]
-        for rule in renovate["packageRules"]
-    )
     assert any(
         rule.get("minimumReleaseAge") == "72 hours" and rule.get("matchUpdateTypes") == ["major"]
         for rule in renovate["packageRules"]

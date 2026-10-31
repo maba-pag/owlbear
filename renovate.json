@@ -64,12 +64,6 @@
       "automerge": false
     },
     {
-      "description": "Give Docker routine updates a one-day maturity floor",
-      "matchDatasources": ["docker"],
-      "matchUpdateTypes": ["minor", "patch"],
-      "minimumReleaseAge": "24 hours"
-    },
-    {
       "description": "Lint toolchain: every pre-commit hook in one weekly pull request",
       "matchManagers": ["pre-commit"],
       "groupName": "lint toolchain",
