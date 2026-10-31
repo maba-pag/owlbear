@@ -138,6 +138,7 @@ def seen(checks: Checks, name: str, times: int) -> list[tuple]:
     return said
 
 
+@pytest.mark.usefixtures("intervals_unset")
 def test_a_failure_shows_after_two_in_a_row_and_offline_is_never_current(monkeypatch):
     outcomes(monkeypatch, "impeccable", UNREACHED, UNREACHED, CURRENT, UNREACHED, CURRENT, REFUSED, REFUSED, NEWER)
     checks = Checks(stub(), Clock(), lambda work: work())
@@ -185,6 +186,7 @@ def test_available_counts_each_runnable_component_once_and_pds_not_yet(monkeypat
     assert checks.read()["available"] == 2  # one per component that can be run, whatever its number of releases
 
 
+@pytest.mark.usefixtures("intervals_unset")
 def test_each_update_is_checked_at_the_start_and_then_only_at_its_own_set_interval(monkeypatch):
     ran: list[str] = []
     for name in CHECKS:
@@ -386,6 +388,7 @@ def http():
     machine.stop_all()
 
 
+@pytest.mark.usefixtures("intervals_unset")
 def test_search_for_updates_runs_by_hand_while_its_interval_is_unset_and_get_reads_all_three(http):
     assert [(u["name"], u["state"], u["hours"]) for u in http.get("/api/next/updates").json()["updates"]] == [
         ("owlbear", "unknown", None), ("pds", "unknown", None), ("impeccable", "unknown", None),

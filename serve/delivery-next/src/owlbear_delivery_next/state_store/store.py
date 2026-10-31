@@ -21,9 +21,8 @@ from owlbear_delivery_next.change_contracts.models import FORMAT, Change, Record
 from owlbear_delivery_next.change_flow import answer_kinds, loop
 from owlbear_delivery_next.local_system import data_repo, local_home
 from owlbear_delivery_next.local_system.storage_io import atomic_write, open_lock
-from owlbear_delivery_next.settings import config as settings_config
 from owlbear_delivery_next.settings import migrations
-from owlbear_delivery_next.settings.config import GlobalLayer, Layer, MachineLayer, Settings
+from owlbear_delivery_next.settings.config import Layer, Settings
 from owlbear_delivery_next.state_store import config_save, profile_share, project_home, roles_move
 from owlbear_delivery_next.state_store.database import (
     STORE_FORMAT,
@@ -37,6 +36,7 @@ from owlbear_delivery_next.state_store.database import (
 from owlbear_delivery_next.state_store.layers import (  # noqa: F401 - re-exported for callers and tests
     _DIR_FLAGS,
     _parse,
+    layered,
     read_layer,
     read_layer_bytes,
     update_layer,
@@ -230,12 +230,7 @@ class Store:
 
     def settings(self) -> Settings:
         """The resolved settings: the project layer over this machine's over the global one; no code defaults (R15)."""
-        glob = read_layer(self.global_path, GlobalLayer) if self.global_path else None
-        try:
-            return settings_config.resolve(glob, self.read_config(), read_layer(self.machine_path, MachineLayer))
-        except ValidationError as exc:  # each layer is valid, their combination is not (TD-209)
-            msg = f"the settings do not combine: {exc.errors()[0]['msg']}"
-            raise StoreError(msg) from exc
+        return layered(self.global_path, self.config_path, self.machine_path)
 
     def _dir(self, slug: str) -> Path:
         """The Change's folder of run locks and artifacts."""

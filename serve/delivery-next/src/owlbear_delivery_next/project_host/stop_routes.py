@@ -11,8 +11,7 @@ from owlbear_delivery_next.change_contracts.inbox import Recovery
 from owlbear_delivery_next.change_contracts.models import Exit, Record
 from owlbear_delivery_next.change_flow import delivery_target
 from owlbear_delivery_next.project_host import runner_end
-from owlbear_delivery_next.state_store import machine_settings
-from owlbear_delivery_next.state_store.registry import RegistryError
+from owlbear_delivery_next.state_store import work_block
 from owlbear_delivery_next.state_store.store import LockHeldError, StoreError
 
 if TYPE_CHECKING:
@@ -44,12 +43,10 @@ def clearable(c: Change) -> str | None:
 
 def unset(store: Store) -> str | None:
     """Why no work may start for want of settings, this machine's included (D-01M61SBWK4VE4MNTD35TR0VPS8), or None."""
-    try:  # until #808, an unset update-check interval stops only its timed check (D-01M63ZYZT2RGZ0AFZW775FV16E)
-        machine = [n for n in machine_settings.current().missing if not n.startswith("update_check_hours_")]
-        missing = [*store.settings().missing, *machine]
-    except (StoreError, RegistryError) as exc:
-        return f"The settings can't be read ({exc}); fix them on the Settings page to run the step again"
-    if missing:
+    block = work_block.of_store(store)
+    if block.reason:
+        return f"The settings can't be read ({block.reason}); fix them on the Settings page to run the step again"
+    if missing := block.keys:
         more = " and others" if missing[1:] else ""
         return f"Settings unset: {missing[0]}{more}; fill them in on the Settings page to run the step again"
     return None

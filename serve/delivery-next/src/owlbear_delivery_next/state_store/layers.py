@@ -10,14 +10,16 @@ from pydantic import ValidationError
 
 from owlbear_delivery_next.change_contracts.models import Record
 from owlbear_delivery_next.local_system.storage_io import atomic_write, open_lock
+from owlbear_delivery_next.settings import config as settings_config
 from owlbear_delivery_next.settings import migrations
-from owlbear_delivery_next.settings.config import CONFIG_FORMAT, GlobalLayer, Layer
+from owlbear_delivery_next.settings.config import CONFIG_FORMAT, GlobalLayer, Layer, MachineLayer
 from owlbear_delivery_next.state_store.database import FormatTooNewError, StoreError
 
 if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
 
+    from owlbear_delivery_next.settings.config import Settings
     from owlbear_delivery_next.settings.migrations import Migrations
 
 _DIR_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
@@ -58,6 +60,17 @@ def _first(exc: ValidationError) -> str:
     error = exc.errors()[0]
     said = {"extra_forbidden": "unknown field", "missing": "missing field"}.get(error["type"], "invalid field")
     return f"{said} {'.'.join(map(str, error['loc']))}"
+
+
+def layered(global_path: Path | None, config_path: Path | None, machine_path: Path) -> Settings:
+    """The resolved settings: a project layer over this machine's over the global one; no code defaults (R15)."""
+    glob = read_layer(global_path, GlobalLayer) if global_path else None
+    project = read_layer(config_path, Layer) if config_path else Layer()
+    try:
+        return settings_config.resolve(glob, project, read_layer(machine_path, MachineLayer))
+    except ValidationError as exc:  # each layer is valid, their combination is not (TD-209)
+        msg = f"the settings do not combine: {exc.errors()[0]['msg']}"
+        raise StoreError(msg) from exc
 
 
 def read_layer[T: Layer](path: Path, model: type[T]) -> T:
