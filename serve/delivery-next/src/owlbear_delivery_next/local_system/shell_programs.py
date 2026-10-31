@@ -6,7 +6,9 @@ the environment, launchers and context it runs with, which decide what a shell a
 
 from __future__ import annotations
 
+import codecs
 import re
+import stat
 from dataclasses import dataclass, field, replace
 from pathlib import PurePath
 from typing import TYPE_CHECKING
@@ -15,6 +17,7 @@ from owlbear_delivery_next.local_system.shell_parse import Word
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
+    from pathlib import Path
 
 _PREFIX_WORDS = frozenset({"!", "{", "do", "elif", "else", "if", "then", "time", "until", "while"})
 ASSIGNMENT = re.compile(r"[A-Za-z_]\w*=")
@@ -45,6 +48,7 @@ _WRAPPERS: dict[str, tuple[str, frozenset[str], int]] = {
                                       "--process-slot-var"}), 0),
 }  # fmt: skip
 _LOOKUP = frozenset({"-v", "-V"})  # command -v names a program without running it
+_HEAD = 4096  # bytes of a program file read to tell a script from a binary
 
 
 @dataclass(frozen=True)
@@ -193,3 +197,49 @@ def shell_args(words: Sequence[Word]) -> ShellArgs:
     if stdin or not rest:
         return ShellArgs(reads_stdin=True, startup=tuple(startup))
     return ShellArgs(operand=rest[0], startup=tuple(startup))
+
+
+def _regular(path: Path) -> None:
+    """Refuse anything but a regular file before opening it: a FIFO or a device would block or never end.
+
+    Raises:
+        OSError: The path is missing or not a regular file.
+    """
+    if not stat.S_ISREG(path.stat().st_mode):
+        raise OSError(0, "it is not a regular file", str(path))
+
+
+def read_script(path: Path) -> str:
+    """The text of the script file at *path*.
+
+    Raises:
+        OSError: It is missing, unreadable or not a regular file.
+        UnicodeDecodeError: It is not UTF-8 text.
+    """
+    _regular(path)
+    return path.read_bytes().decode("utf-8")
+
+
+def shebang(path: Path) -> list[Word] | None:
+    """The interpreter a program file runs with, as the words before its path; None for a binary.
+
+    A text file without #! runs as a shell script, as the shell does when the system can't run it. The rest of a #!
+    line after the interpreter is one argument, as Linux passes it.
+
+    Raises:
+        OSError: It is missing, unreadable or not a regular file.
+    """
+    _regular(path)
+    with path.open("rb") as file:
+        head = file.read(_HEAD)
+    if head.startswith(b"#!"):
+        line = head[2:].split(b"\n", 1)[0].decode("utf-8", "replace").strip()
+        interpreter, _, rest = line.partition(" ")
+        return [Word(w) for w in (interpreter, rest.strip()) if w]
+    if b"\0" in head:
+        return None
+    try:
+        codecs.getincrementaldecoder("utf-8")().decode(head, final=False)  # a character cut at the end is fine
+    except UnicodeDecodeError:
+        return None
+    return [Word("sh")]

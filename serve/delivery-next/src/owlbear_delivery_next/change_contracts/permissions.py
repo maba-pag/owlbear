@@ -9,13 +9,14 @@ shell runs, a shell's standard input (pipes, here-strings), env -S, and commands
 
 from __future__ import annotations
 
+import functools
 import re
 import shlex
 from dataclasses import dataclass
 from pathlib import PurePath
 from typing import TYPE_CHECKING, Any, NamedTuple
 
-from owlbear_delivery_next.change_contracts import tools
+from owlbear_delivery_next.change_contracts import shell_walk, tools
 from owlbear_delivery_next.local_system import shell_parse, shell_programs
 
 if TYPE_CHECKING:
@@ -328,46 +329,32 @@ def bypass(reason: str) -> bool:
     return reason.endswith(BYPASS)
 
 
-def _check(policy: Policy, text: str, depth: int = 0) -> str | None:
-    """Judge one shell text, and each script it hands to a nested shell or eval the same way."""
+def _check(
+    policy: Policy, text: str, depth: int = 0, state: shell_walk.State | None = None, label: str = ""
+) -> str | None:
+    """Judge one shell text, and each script it runs, the same way; *label* names a script file in reasons."""
+    name = label or text
     try:
         commands = shell_parse.parse(text)
     except ValueError:
-        return f"`{text}` cannot be parsed"
+        return f"`{name}` cannot be parsed"
     if not commands:
         return "the shell request names no command" if depth == 0 else None  # an empty script does nothing
     if flag := next(filter(None, (_bypass(c.words) for c in commands)), None):
-        return f"`{text}` uses {flag}, {BYPASS}"
+        return f"`{name}` uses {flag}, {BYPASS}"
     if not policy.write and (found := _mutation(text, [c.words for c in commands])):
-        return f"`{text}` uses {found}, which writes in a read-only step"
-    return _nested(policy, text, commands, depth)
+        return f"`{name}` uses {found}, which writes in a read-only step"
+    judge = functools.partial(_judge, policy)
+    return shell_walk.Walk(name, depth, judge, _writes).commands(commands, state or shell_walk.State(policy.root))
 
 
-def _nested(policy: Policy, text: str, commands: Sequence[shell_parse.Command], depth: int) -> str | None:
-    for script in (s for command in commands for s in _scripts(command)):
-        if depth >= shell_programs.NESTING:
-            return f"`{text}` nests scripts more than {shell_programs.NESTING} deep"
-        if reason := _check(policy, script, depth + 1):
-            return reason
-    return None
+def _judge(policy: Policy, text: str, depth: int, state: shell_walk.State, label: str) -> str | None:
+    return _check(policy, text, depth, state, label)
 
 
-def _scripts(command: shell_parse.Command) -> list[str]:
-    """The shell text a command hands on: each shell's -c script or here-document, and eval's arguments."""
-    found = []
-    given = command.stdin()
-    for run in shell_programs.runs(command.words):
-        program = shell_programs.name(run.words[0])
-        if program == "eval":
-            rest = list(run.words[1:])
-            found.append(" ".join(rest[1:] if rest[:1] == ["--"] else rest))
-        elif program in shell_programs.SHELLS:
-            args = shell_programs.shell_args(run.words)
-            if args.script is not None:
-                found.append(args.script)
-            elif args.reads_stdin and given and given.kind in {"here", "string"}:
-                found.append(given.word)
-    return found
+def _writes(command: shell_parse.Command) -> bool:
+    """Whether one command writes files or changes Git state, as the read-only rule sees it."""
+    return _mutation(command.raw, [command.words]) is not None
 
 
 def decide(policy: Policy, req: Request, offered: frozenset[str] = frozenset()) -> str | None:
