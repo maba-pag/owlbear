@@ -530,7 +530,8 @@ def test_the_offline_rule_ends_with_the_test_that_changed_it(parent, tmp_path):
     (tmp_path / "after_teardown.py").write_text(AFTER_TEARDOWN)
     seen = tmp_path / "seen.jsonl"
     names = ("GIT_CONFIG_COUNT", "GIT_CONFIG_KEY_0", "GIT_CONFIG_VALUE_0")
-    env = {k: v for k, v in os.environ.items() if k not in names} | parent
+    skip = {*names, "OWLBEAR_FLAKY_REPORT"}  # the CI job's re-run report and summary are the outer run's
+    env = {k: v for k, v in os.environ.items() if k not in skip} | parent
     env |= {"AFTER_TEARDOWN": str(seen), "PYTHONPATH": os.pathsep.join([str(tmp_path), env.get("PYTHONPATH", "")])}
     probe = f"{Path(__file__).resolve()}::test_a_tests_git_never_reaches_github"
     run = [sys.executable, "-m", "pytest", "-q", "-n", "0", "-p", "no:cacheprovider", "-p", "after_teardown", probe]
