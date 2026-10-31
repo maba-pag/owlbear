@@ -473,8 +473,16 @@ def test_terminal_checks_follow_the_blocking_probes(readable, warmth, probe, cha
         return result
 
     monkeypatch.setattr(target, name, checked)
-    with pytest.raises(DecisionsUnavailable, match="changed while they were read"):
-        reader(readable, PROJECT)
+    if change == "rebase":  # caught at the end of the first read; the read made again meets the rebase at its start
+        with pytest.raises(DecisionsUnavailable, match="a rebase is active") as raised:
+            reader(readable, PROJECT)
+        assert raised.value.action == decision_store.REPAIR
+        parses = warmth.collected(PROJECT)
+    else:  # caught at the end of the first read, so it is read again with no writer, parsed at the moved HEAD
+        got = reader(readable, PROJECT)
+        if reader is decision_store.load:
+            assert got.commit == git(readable.root, "rev-parse", "HEAD")
+        parses = [*warmth.collected(PROJECT), PROJECT]
     assert len(moved) == 1
     assert checkout_state(readable) == moved[0]
-    assert warmth.parses == warmth.collected(PROJECT)
+    assert warmth.parses == parses
