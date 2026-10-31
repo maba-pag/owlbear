@@ -3,11 +3,12 @@
 import re
 import shutil
 import subprocess
+import threading
 import time
 from pathlib import Path
 
 import pytest
-from owlbear_memory import MemoryCategory, MemoryEngine, MemoryState, storage
+from owlbear_memory import MemoryBusyError, MemoryCategory, MemoryEngine, MemoryState, storage, writer_lock
 
 from owlbear_delivery_next.change_contracts.memory_curation_tools import MemoryCurationResult
 from owlbear_delivery_next.change_flow.worktree import git
@@ -497,6 +498,35 @@ def test_a_finished_runs_worktree_left_listed_is_logged_and_named_in_its_row(rep
     assert [r.getMessage() for r in caplog.records if r.name == curation_tree.__name__] == [
         f"{repo} still lists a finished curation run's worktree: {LOCKED}"
     ]
+
+
+def test_a_seed_reads_the_checkout_under_its_memory_writer_locks(repo, monkeypatch) -> None:
+    curated(repo / "shop" / "memory", "Lesson")
+    pushed(repo, "a curated entry")
+    real, busy = curation_tree._files, []  # noqa: SLF001
+
+    def files(root, dirs):
+        if root == repo:
+
+            def save() -> None:  # a memory save from another thread
+                try:
+                    with writer_lock(repo / "shop" / "memory", timeout=0.05):
+                        busy.append(False)
+                except MemoryBusyError:
+                    busy.append(True)
+
+            other = threading.Thread(target=save)
+            other.start()
+            other.join()
+        return real(root, dirs)
+
+    monkeypatch.setattr(curation_tree, "_files", files)
+    job = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(repo), run=lambda cfg: Run(
+        cfg.session_id, termination=Termination(confirmed=True), **REFUSALS["unread"]
+    ))  # fmt: skip
+    job.start("shop")
+    drained(job)
+    assert busy == [True]
 
 
 def test_the_checkout_lists_held_runs_as_its_own_and_no_finished_runs_worktree(repo) -> None:

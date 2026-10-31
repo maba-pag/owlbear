@@ -192,7 +192,10 @@ def seed(shared: DataRepo, at: Path, folders: Sequence[str]) -> Tree:
     with shared.locked():
         _git(shared.root, "worktree", "prune")  # the worktrees of runs whose workspace is gone
         _git(shared.root, "worktree", "add", "-q", "--detach", str(at), "HEAD")
-        base = _files(shared.root, dirs)
+        with contextlib.ExitStack() as locks:  # a save renames its temp into place under its folder's lock
+            for d in sorted(d for d in dirs if (shared.root / d).is_dir()):
+                locks.enter_context(writer_lock(shared.root / d))
+            base = _files(shared.root, dirs)
         for rel in _files(at, dirs).keys() - base.keys():
             (at / rel).unlink()
         for d in dirs:
