@@ -9,6 +9,7 @@ now may not be the one that runs) and a relative path once the folder is unknown
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -28,6 +29,7 @@ _FOLDER = frozenset({"cd", "pushd", "popd"})
 _STARTUP = ("BASH_ENV", "ENV")  # variables naming a file a shell runs before its script
 _DECLARE = frozenset({"declare", "typeset", "readonly", "local"})
 _SHOWN = 60  # characters of a script built at run time shown in a reason
+_SYSTEM = ("/dev/", "/proc/")  # files the guard would open in its own process, not the shell's
 
 
 @dataclass
@@ -46,11 +48,12 @@ class State:
     stdin_plain: bool = True  # its standard input is the step's own: no pipe and no redirection
     exec_in: bool = False  # an exec redirected its standard input
     startup: dict[str, Word | None] = field(default_factory=dict)  # BASH_ENV, ENV as set; None when not followable
+    home_moved: bool = False  # the text set or unset HOME, so ~ is not the guard's home folder
     current: int = 0  # above 0 while sourced or eval text runs in this shell
 
     def child(self, *, plain: bool) -> State:
         """The state a shell this one starts begins with: writes are shared, folder and variables copied."""
-        return State(self.at, self.effects, plain, startup=dict(self.startup))
+        return State(self.at, self.effects, plain, startup=dict(self.startup), home_moved=self.home_moved)
 
     def plain(self) -> bool:
         """Whether this shell's standard input is still the step's own."""
@@ -104,6 +107,9 @@ class Walk:
             for key in _STARTUP:
                 if key in assigned:
                     state.startup[key] = assigned[key] if command.top_level else None
+            state.home_moved = state.home_moved or "HOME" in assigned
+        if first in {"unset", *_DECLARE} and any(w.partition("=")[0] == "HOME" for w in words[i + 1 :]):
+            state.home_moved = True
         elif first in _DECLARE:
             state.startup |= {k: None for k in _STARTUP if any(w.partition("=")[0] == k for w in words[i + 1 :])}
         if first == "exec" and command.stdin() is not None:
@@ -154,6 +160,16 @@ class Walk:
     def _shell(self, command: Command, run: Run, state: State) -> str | None:
         """A shell: its startup files first, then its -c script, script file or standard input, in one child state."""
         args = shell_programs.shell_args(run.words)
+        if reason := self._shell_reads(command, run, state, args):
+            return reason
+        if args.own_startup:  # judged last, so a bypass in its script is refused as one
+            return (
+                f"`{self.name}` starts `{shell_programs.name(run.words[0])}`, which reads startup files of its own;"
+                " use bash or sh without -i or -l, or zsh -f, fish --no-config, bash --norc --noprofile"
+            )
+        return None
+
+    def _shell_reads(self, command: Command, run: Run, state: State, args: shell_programs.ShellArgs) -> str | None:
         plain = state.plain() and not command.opaque_stdin and not run.from_input
         child = state.child(plain=plain and command.stdin() is None)
         if run.chdir:  # env -C, find -execdir: it starts in another folder
@@ -216,7 +232,7 @@ class Walk:
         """Follow a cd to a plain absolute path; any other change of folder leaves the folder unknown."""
         operands = run.words[1:]
         word = operands[0] if len(operands) == 1 else Word("-")
-        path = Path(word).expanduser() if word.tilde else Path(word)
+        path = _home(word, state) or Path(word)
         followed = shell_programs.name(run.words[0]) == "cd" and command.top_level and not state.current
         # cd fails into anything but an existing folder, and the shell stays where it was
         plain = not word.expanded and path.is_absolute() and ".." not in path.parts and path.is_dir()
@@ -238,9 +254,11 @@ class Walk:
         return self.judge(text, self.depth + 1, state, str(word))
 
     def _locate(self, run: Run, word: Word, state: State) -> tuple[Path | None, str]:
-        if _built(run, word):
+        if _built(run, word) or (word.tilde and not _home(word, state)):
             return None, f"`{self.name}` runs `{word}`, a path built at run time; write the path out"
-        path = Path(word).expanduser() if word.tilde else Path(word)
+        path = _home(word, state) or Path(word)
+        if str(path).startswith(_SYSTEM) or os.path.realpath(path).startswith(_SYSTEM):
+            return None, f"`{self.name}` runs `{word}`, a device or process file the guard doesn't read"
         if path.is_absolute():
             return path, ""
         if state.at is None or run.chdir:
@@ -274,6 +292,13 @@ class Walk:
     def _unreadable(self, word: str, error: OSError | UnicodeDecodeError) -> str:
         why = "it is not UTF-8 text" if isinstance(error, UnicodeDecodeError) else error.strerror or str(error)
         return f"`{self.name}` runs `{word}`, which can't be read: {why}"
+
+
+def _home(word: Word, state: State) -> Path | None:
+    """The path a word starting with an unquoted ~ names, if the guard knows it: ~ or ~/... with HOME unchanged."""
+    if not word.tilde or state.home_moved or not (word == "~" or word.startswith("~/")):
+        return None
+    return Path(word).expanduser()
 
 
 def _built(run: Run, word: Word) -> bool:

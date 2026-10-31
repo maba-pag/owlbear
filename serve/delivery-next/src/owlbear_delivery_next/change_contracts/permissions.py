@@ -327,6 +327,13 @@ def _shell(policy: Policy, req: Request) -> str | None:
     for text in (req.text,) if req.text else req.commands or ("",):
         if reason := _check(policy, text):
             return reason
+    for text in req.commands if req.text else ():  # the runtime's own reading too, should the text be misread
+        try:
+            flag = next(filter(None, (_bypass(c.words) for c in shell_parse.parse(text))), None)
+        except ValueError:  # the whole text was judged already
+            continue
+        if flag:
+            return f"`{text}` uses {flag}, {BYPASS}"
     return None
 
 

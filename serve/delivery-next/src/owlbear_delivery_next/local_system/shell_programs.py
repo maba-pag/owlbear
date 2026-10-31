@@ -353,12 +353,14 @@ class ShellArgs:
     script: Word | None = None
     operand: Word | None = None  # None with no script: it reads its standard input
     startup: tuple[Word, ...] = ()
+    own_startup: bool = False  # it reads startup files of its own: zsh, fish, an interactive or login bash or sh
 
 
 def shell_args(words: Sequence[Word]) -> ShellArgs:
     """Read a shell's options (its program first): its -c script, its script operand, or -s and no operand."""
     command = stdin = False
     startup: list[Word] = []
+    flags: set[str] = set()  # short option letters and long options given
     i = 1
     while i < len(words):
         w = words[i]
@@ -371,15 +373,30 @@ def shell_args(words: Sequence[Word]) -> ShellArgs:
         elif w in _SHELL_VALUES:
             i += 2
         elif w.startswith(("-", "+")) and w not in {"-", "+"}:
+            flags |= {w} if w.startswith("--") else set(w[1:]) if w.startswith("-") else set()
             command = command or (not w.startswith("--") and "c" in w[1:])
             stdin = stdin or (not w.startswith("--") and "s" in w[1:])
             i += 1
         else:
             break
     rest = words[i:]
+    own = _own_startup(name(words[0]), flags | ({"--rcfile"} if startup else set()))
     if command:
-        return ShellArgs(script=rest[0] if rest else None, startup=tuple(startup))
-    return ShellArgs(operand=None if stdin or not rest else rest[0], startup=tuple(startup))
+        return ShellArgs(script=rest[0] if rest else None, startup=tuple(startup), own_startup=own)
+    return ShellArgs(operand=None if stdin or not rest else rest[0], startup=tuple(startup), own_startup=own)
+
+
+def _own_startup(shell: str, flags: set[str]) -> bool:
+    """Whether a shell started with *flags* reads startup files from the home folder that no option names."""
+    match shell:
+        case "zsh":  # .zshenv always, unless -f
+            return "f" not in flags and "--no-rcs" not in flags
+        case "fish":
+            return "N" not in flags and "--no-config" not in flags
+        case "bash":
+            interactive = "i" in flags and not flags & {"--norc", "--rcfile"}
+            return interactive or (("l" in flags or "--login" in flags) and "--noprofile" not in flags)
+    return "l" in flags or "--login" in flags  # a login sh, dash, ksh reads ~/.profile
 
 
 def _regular(path: Path) -> None:

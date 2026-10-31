@@ -65,6 +65,7 @@ class _Level:
 
     depth: int
     opaque: bool  # its commands read input from outside the text: a pipe or an output process substitution
+    arith: bool = False  # inside (( )): < and > are operators, never redirections
     words: list[Word] = field(default_factory=list)
     inputs: list[Input] = field(default_factory=list)
     word: str | None = None
@@ -113,13 +114,13 @@ class _Lexer:
         self.group: tuple[int, int] | None = None  # the commands of the subshell that just closed
         self.defined = False  # an empty () just closed: a function's body may follow
 
-    def level(self, i: int, close: str = "", depth: int = 0, *, opaque: bool = False) -> int:
+    def level(self, i: int, close: str = "", depth: int = 0, *, opaque: bool = False, arith: bool = False) -> int:
         """Read text[i:] up to the unquoted *close*, or to the end without one; return the index after it.
 
         Raises:
             ValueError: A quote, subshell or substitution is not closed.
         """
-        s = _Level(depth, opaque)
+        s = _Level(depth, opaque, arith)
         while i < len(self.text) and (s.quote or self.text[i] != close):
             i = self._step(s, i)
         if s.quote or (close and i >= len(self.text)):
@@ -173,36 +174,72 @@ class _Lexer:
             if nxt != "\n":
                 s.add(nxt if not s.quote or nxt in '"\\`$' else ch + nxt)
             return i + 2
-        if text.startswith("$((", i):
-            return self._arithmetic(s, i + 3)
-        if ch == "`" or text.startswith("$(", i):
-            s.add("$")  # the substitution's commands are checked on their own
-            s.expanded = True
-            depth = s.depth + 1
-            return self.level(i + 1, "`", depth) if ch == "`" else self.level(i + 2, ")", depth)
-        if ch == "$" and (nxt := text[i + 1 : i + 2]) and (nxt in "{_'" or nxt.isalnum() or nxt in _SPECIAL):
-            s.expanded = True
+        if ch in {"$", "`"} and (end := self._expansion(s, i)) is not None:
+            return end
         if s.quote:
             s.add(ch)
             return i + 1
         return self._unquoted(s, i)
 
-    def _arithmetic(self, s: _Level, i: int) -> int:
+    def _expansion(self, s: _Level, i: int) -> int | None:
+        """Lex the expansion at *i* and return the index after it, or None for $name, only marked expanded.
+
+        $((, $[, ${, $( and backquotes are lexed whole; $name's characters are added as usual.
+        """
+        text = self.text
+        if text.startswith("$((", i):
+            return self._arithmetic(s, i + 3)
+        if text.startswith("$[", i):
+            return self._arithmetic(s, i + 2, close="]")
+        if text.startswith("${", i):
+            return self._braced(s, i)
+        if text[i] == "`" or text.startswith("$(", i):
+            s.add("$")  # the substitution's commands are checked on their own
+            s.expanded = True
+            depth = s.depth + 1
+            return self.level(i + 1, "`", depth) if text[i] == "`" else self.level(i + 2, ")", depth)
+        if (nxt := text[i + 1 : i + 2]) and (nxt in "{_'" or nxt.isalnum() or nxt in _SPECIAL):
+            s.expanded = True
+        return None
+
+    def _arithmetic(self, s: _Level, i: int, close: str = ")") -> int:
         """Skip an arithmetic expansion's operators, where < and > never redirect, but lex its substitutions."""
         s.add("$")
         s.expanded = True
-        depth = 2
+        opener, depth = ("(", 2) if close == ")" else ("[", 1)
         while i < len(self.text):
             if self.text.startswith("$((", i):
                 i = self._arithmetic(s, i + 3)
             elif self.text.startswith("$(", i) or self.text[i] == "`":
                 i = self.level(i + 2, ")", s.depth + 1) if self.text[i] == "$" else self.level(i + 1, "`", s.depth + 1)
             else:
-                depth += {"(": 1, ")": -1}.get(self.text[i], 0)
+                depth += {opener: 1, close: -1}.get(self.text[i], 0)
                 i += 1
                 if depth == 0:
                     return i
         raise ValueError
+
+    def _braced(self, s: _Level, i: int) -> int:
+        """A ${...} expansion: < and > in it never redirect; its substitutions are lexed."""
+        text, j, depth = self.text, i + 2, 1
+        while j < len(text) and depth:
+            if text[j] == "\\":
+                j += 2
+            elif text[j] == "'":
+                if (end := text.find("'", j + 1)) < 0:
+                    raise ValueError
+                j = end + 1
+            elif text.startswith("$(", j) or text[j] == "`":
+                j = self.level(j + 2, ")", s.depth + 1) if text[j] == "$" else self.level(j + 1, "`", s.depth + 1)
+            elif text.startswith("${", j):
+                depth, j = depth + 1, j + 2
+            else:
+                depth, j = depth - (text[j] == "}"), j + 1
+        if depth:
+            raise ValueError
+        s.add(text[i:j])
+        s.expanded = True
+        return j
 
     def _unquoted(self, s: _Level, i: int) -> int:  # noqa: C901, PLR0911 - one branch per shell operator
         text, ch = self.text, self.text[i]
@@ -212,6 +249,8 @@ class _Lexer:
         elif ch == "#" and s.word is None:
             end = text.find("\n", i)
             return len(text) if end < 0 else end
+        elif s.arith and ch in "<>":  # (( 1 << x )): an operator
+            s.add(ch)
         elif text.startswith(("<(", ">("), i):
             return self._process(s, i)
         elif text.startswith("<<", i):
@@ -264,7 +303,8 @@ class _Lexer:
         self.close(s, i)
         s.piped = False
         start = len(self.commands)
-        end = self.level(i + 1, ")", s.depth + 1, opaque=opaque)
+        arith = s.arith or self.text.startswith("((", i)  # an arithmetic command, also in for ((...))
+        end = self.level(i + 1, ")", s.depth + 1, opaque=opaque, arith=arith)
         self.group = (start, len(self.commands))
         self.defined = start == len(self.commands)
         return end

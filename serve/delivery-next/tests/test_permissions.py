@@ -1038,3 +1038,88 @@ def test_a_startup_file_set_again_after_env_removes_one_is_read(scripts: Path) -
     assert decide(Policy(scripts), shell("BASH_ENV=/missing env -u BASH_ENV BASH_ENV=./bad.sh bash -c true")) == (
         f"`./bad.sh` uses --no-verify, {BYPASS}"
     )
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "((1<<x))\ngit commit --no-verify -m wip\nx",
+        "for ((i=0; i<<x; i++)); do :; done\ngit commit --no-verify -m wip\nx",
+        "echo $[1<<x]\ngit commit --no-verify -m wip\nx",
+        "echo ${a:-<<x}\ngit commit --no-verify -m wip\nx}",
+        "((git push -f); true)",
+    ],
+)
+def test_a_shift_in_arithmetic_or_a_parameter_is_no_here_document(text: str) -> None:
+    for policy in (READ, WRITE):
+        assert decide(policy, shell(text)).endswith(BYPASS)
+
+
+@pytest.mark.parametrize("text", ["echo $((1<<2))", "for ((i=0;i<3;i++)); do echo $i; done", "echo ${HOME:-x}"])
+def test_ordinary_arithmetic_and_parameters_run(text: str) -> None:
+    assert decide(WRITE, shell(text)) is None
+
+
+def test_the_runtimes_segments_are_checked_for_a_bypass_too() -> None:
+    misread = view(
+        cli_shell("((1<<x))\ngit commit --no-verify -m x\nx", "((1<<x))", "git commit --no-verify -m x", "x")
+    )
+
+    assert misread.commands[1] == "git commit --no-verify -m x"
+    assert decide(WRITE, misread).endswith(BYPASS)
+
+
+STARTUP = (
+    "reads startup files of its own; use bash or sh without -i or -l, or zsh -f, fish --no-config, bash --norc"
+    " --noprofile"
+)
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["zsh -c true", "ZDOTDIR=/tmp/x zsh -c true", "fish -c true", "bash -ic true", "bash -l -c true", "sh -l -c true"],
+)
+def test_a_shell_that_reads_startup_files_of_its_own_is_refused(text: str) -> None:
+    assert decide(WRITE, shell(text)).endswith(STARTUP)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "zsh -f -c true",
+        "fish --no-config -c true",
+        "bash --norc -ic true",
+        "bash --noprofile -l -c true",
+        "bash -c true",
+    ],
+)
+def test_a_shell_told_not_to_read_its_own_startup_files_runs(text: str) -> None:
+    assert decide(WRITE, shell(text)) is None
+
+
+def test_a_bypass_in_a_startup_reading_shells_script_is_still_a_bypass() -> None:
+    assert decide(WRITE, shell("zsh -c 'git push -f'")) == f"`git push -f` uses -f, {BYPASS}"
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["HOME=/tmp/elsewhere; bash ~/good.sh", "export HOME=/tmp/elsewhere; . ~/good.sh", "unset HOME; bash ~/good.sh"],
+)
+def test_a_tilde_after_home_changed_is_refused(scripts: Path, text: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("HOME", str(scripts))
+
+    assert decide(Policy(scripts), shell(text)).endswith("a path built at run time; write the path out")
+    assert decide(Policy(scripts), shell("bash ~/good.sh")) is None
+
+
+@pytest.mark.parametrize("text", ["bash ~+/good.sh", "bash ~-/good.sh", "bash ~root/x.sh"])
+def test_a_tilde_form_the_guard_doesnt_expand_is_refused(scripts: Path, text: str) -> None:
+    assert decide(Policy(scripts), shell(text)).endswith("a path built at run time; write the path out")
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["bash /dev/fd/3 3<<'E'\ngit commit --no-verify -m wip\nE", "source /proc/self/fd/0", "bash /dev/tty"],
+)
+def test_a_device_or_process_file_is_not_read_by_the_guard(text: str) -> None:
+    assert decide(WRITE, shell(text)).endswith("a device or process file the guard doesn't read")
