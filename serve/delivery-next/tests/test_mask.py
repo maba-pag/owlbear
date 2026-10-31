@@ -101,6 +101,6 @@ def test_redact_matches_the_old_patterns_on_edge_cases(text):
 @pytest.mark.parametrize("tail", ["", "=x", "://u@h"])
 def test_redact_takes_linear_time_on_repeated_units(unit, tail):
     text = (unit * (65_536 // len(unit) + 1))[:65_536] + tail
-    start = time.perf_counter()
+    start = time.thread_time()  # this thread's CPU time: a loaded machine's waiting doesn't count
     redact(text)
-    assert time.perf_counter() - start < 0.5
+    assert time.thread_time() - start < 0.5
