@@ -178,12 +178,17 @@ def test_a_read_that_may_be_short_is_a_lower_bound_and_only_a_failed_one_says_it
         end("timeout", "2026-10-01T11:01:00+00:00", usage(9.73) | {"incomplete": "TimeoutError"}, session="s2"),
         event,
         mark,
+        start("exact", "2026-10-01T12:00:00+00:00", session="s4", before={}),
+        end("exact", "2026-10-01T12:01:00+00:00", usage(5.0), session="s4"),
+        start("resumed", "2026-10-01T13:00:00+00:00", session="s4", before=usage(5.0)),
+        end("resumed", "2026-10-01T13:01:00+00:00", usage(5.0) | {"incomplete": "TimeoutError"}, session="s4"),
     ]
     pieces = spend_shares.derive(lines)
-    flags = {p["run"]: (p["incomplete"], p["failed"]) for p in pieces if p["credits"]}
-    assert flags == {"turn": (True, False), "timeout": (True, True), "event:e": (True, True)}
+    flags = {p["run"]: (p["incomplete"], p["failed"]) for p in pieces}
+    assert flags == {"turn": (True, False), "timeout": (True, True), "event:e": (True, True),
+                     "exact": (True, False), "resumed": (True, True)}  # fmt: skip
     totals = spend_metrics.query(pieces, tz=UTC)["totals"]
-    assert (totals["incomplete"], totals["failed"], totals["credits"]) == (3, 2, 29.06)
+    assert (totals["incomplete"], totals["failed"], totals["credits"]) == (5, 3, 34.06)
 
 
 def test_a_killed_run_stays_open_and_unknown_until_reconciled() -> None:

@@ -458,11 +458,12 @@ def _session(group: list[dict[str, Any]]) -> list[dict[str, Any]]:
         window = (run["at"], run["at"]) if exact else (last, run.get("at"))  # unread baseline: since the last report
         grown, known = marks.grow(usage, model)
         found = _pieces(run, "run", grown, window, [] if exact else ["at"])
+        own = _invocation(run) and not run.get("continued")  # a run with a piece of its own, holding its read
         if not found and (bound := _base(run))["incomplete"]:
             for piece in credited:  # a lower bound repeating what they credited: they are lower bounds too
                 piece["incomplete"] = True
-                piece["failed"] = piece["failed"] or bound["failed"]
-        if not found and _invocation(run) and not run.get("continued"):
+                piece["failed"] = piece["failed"] or (bound["failed"] and not own)
+        if not found and own:
             # nothing spent, or nothing known: still a run, with its ending and stop
             zero = {f: (0.0 if known else None) if f == "credits" else 0.0 for f in FIELDS}
             found = [_piece(run, "run" if known else "unknown", "", model, zero, window, [] if exact else ["at"])]
