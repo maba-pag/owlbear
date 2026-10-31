@@ -64,8 +64,8 @@
       "automerge": false
     },
     {
-      "description": "Copilot SDK: its own pull request, so each release is analysed before it merges",
-      "matchPackageNames": ["github-copilot-sdk"],
+      "description": "Copilot SDK and AHP spec: each its own pull request, analysed before it merges",
+      "matchPackageNames": ["github-copilot-sdk", "microsoft/agent-host-protocol"],
       "groupName": null
     },
     {
@@ -94,6 +94,19 @@
       "minimumReleaseAge": "72 hours",
       "prCreation": "immediate",
       "automerge": false
+    }
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "The AHP spec version the shaping chat offers",
+      "managerFilePatterns": ["/^serve/delivery-next/src/owlbear_delivery_next/runtimes/ahp\\.py$/"],
+      "matchStrings": ["\\nPROTOCOL = \"(?<currentValue>\\d+\\.\\d+\\.\\d+)\"\\n"],
+      "depNameTemplate": "agent-host-protocol",
+      "packageNameTemplate": "microsoft/agent-host-protocol",
+      "datasourceTemplate": "github-tags",
+      "extractVersionTemplate": "^spec/v(?<version>.+)$",
+      "versioningTemplate": "semver"
     }
   ],
   "pre-commit": {

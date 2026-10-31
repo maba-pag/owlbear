@@ -13,6 +13,7 @@ from types import ModuleType
 import pytest
 import yaml
 
+from owlbear_delivery_next.runtimes import ahp
 from owlbear_tools.dependency_ci import classify_dependency_change
 
 ROOT = Path(__file__).parents[1]
@@ -651,6 +652,27 @@ def test_renovate_opens_the_copilot_sdk_in_its_own_pull_request() -> None:
     assert sdk[0]["groupName"] is None
     assert weekly < rules.index(sdk[0]) < majors
     assert not {"schedule", "automerge", "labels", "addLabels", "minimumReleaseAge"} & sdk[0].keys()
+
+
+def test_renovate_tracks_the_ahp_version_the_shaping_chat_offers() -> None:
+    """The AHP spec's releases arrive as their own pull request, bumping ahp.py's PROTOCOL from its spec/v* tags."""
+    renovate = json.loads((ROOT / "renovate.json").read_text(encoding="utf-8"))
+    (manager,) = [m for m in renovate["customManagers"] if m.get("depNameTemplate") == "agent-host-protocol"]
+    path = "serve/delivery-next/src/owlbear_delivery_next/runtimes/ahp.py"
+    files = [re.compile(p.strip("/")) for p in manager["managerFilePatterns"]]
+    found = [
+        re.findall(m.replace("(?<", "(?P<"), (ROOT / path).read_text(encoding="utf-8")) for m in manager["matchStrings"]
+    ]
+    sdk = [rule for rule in renovate["packageRules"] if "github-copilot-sdk" in rule.get("matchPackageNames", [])]
+
+    assert any(f.search(path) for f in files)
+    assert found == [[ahp.PROTOCOL]]
+    assert (manager["datasourceTemplate"], manager["packageNameTemplate"]) == (
+        "github-tags",
+        "microsoft/agent-host-protocol",
+    )
+    assert re.fullmatch(manager["extractVersionTemplate"].replace("(?<", "(?P<"), "spec/v1.0.0")["version"] == "1.0.0"
+    assert "microsoft/agent-host-protocol" in sdk[0]["matchPackageNames"]  # its own PR, not the weekly tags group
 
 
 def test_renovate_updates_the_lint_toolchain_in_one_pull_request() -> None:
