@@ -427,6 +427,45 @@ def test_setup_edits_become_a_patch_applied_for_the_check_and_discarded_after(en
     assert prepare.read(store, "c1", "pc1").paths  # kept with the recipe for its next check
 
 
+OLD, NEW, THIRD = "fixtures/users.json", "fixtures/néw users.json", "fixtures/third.json"
+FIRST = {"worktree": " R ", "index": "R  ", "chained": "R  "}  # the first status record as Git writes it
+
+
+def rename(repo: Path, how: str) -> list[str]:
+    """Rename the fixture as a preparer could; every name the worktree's status then holds (#744)."""
+    if how == "worktree":
+        (repo / OLD).rename(repo / NEW)
+        git(repo, "add", "-N", NEW)  # " R new\0old": a rename in the worktree column
+    else:
+        git(repo, "mv", OLD, NEW)
+    if how == "chained":
+        (repo / NEW).rename(repo / THIRD)
+        git(repo, "add", "-N", THIRD)  # "R  new\0old\0 R third\0new"
+    assert git(repo, "status", "--porcelain=v1", "-z").startswith(FIRST[how] + NEW)
+    return sorted({OLD, NEW} | ({THIRD} if how == "chained" else set()))
+
+
+@pytest.mark.parametrize("how", ["worktree", "index"])
+def test_a_preparer_s_rename_is_kept_as_its_setup_patch_and_undone(env, how):
+    repo, store, _log, tmp = env
+    c, s = change(repo, "pc1"), settings(option(tmp, "data-only", id="fixtures"))
+    ctx = prepare.context(store, c, s, repo)
+    names = rename(repo, how)
+    assert sorted(prepare.edits(repo)) == names  # both real ends, each once
+    accepted = loop.StepResult(exit=Exit.PENDING, waiting=Waiting.PERSON_CHECK)
+
+    assert prepare.chosen(store, c, repo, recipe("fixtures"), ctx, accepted) is accepted
+    assert (prepare.edits(repo), (repo / OLD).read_text()) == ([], "[]\n")
+    assert sorted(prepare.read(store, "c1", "pc1").paths) == names
+
+    assert prepare.launch(store, c, s, lambda _e: None).exit == Exit.PENDING
+    last = THIRD if how == "chained" else NEW
+    assert (not (repo / OLD).exists(), (repo / last).read_text()) == (True, "[]\n")  # applied
+    c.env = None
+    assert prepare.end(store, c, repo, s, lambda _e: None) is None
+    assert (prepare.edits(repo), (repo / OLD).read_text()) == ([], "[]\n")
+
+
 def test_a_session_that_ends_without_a_recipe_keeps_none_of_its_edits(env):
     repo, store, _log, tmp = env
     c, s = change(repo, "pc1"), settings(option(tmp))

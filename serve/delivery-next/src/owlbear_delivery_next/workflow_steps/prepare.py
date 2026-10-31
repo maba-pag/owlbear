@@ -116,16 +116,9 @@ def _git(root: Path, *args: str, env: Mapping[str, str] | None = None) -> bytes:
 
 
 def edits(root: Path) -> list[str]:
-    """Every uncommitted path of the worktree, both ends of a staged rename, each name as Git wrote it."""
-    fields = _git(root, "status", "--porcelain=v1", "-z", "--untracked-files=all").decode().split("\0")
-    paths, i = [], 0
-    while i < len(fields) and fields[i]:
-        paths.append(fields[i][3:])
-        if fields[i][0] in {"R", "C"}:
-            i += 1
-            paths.append(fields[i])
-        i += 1
-    return paths
+    """Every uncommitted path of the worktree, both ends of a rename or copy in either column, each once."""
+    out = _git(root, "status", "--porcelain=v1", "-z", "--untracked-files=all")
+    return worktree.status_paths(out.decode().split("\0"))
 
 
 def capture(root: Path, paths: Sequence[str]) -> bytes:
