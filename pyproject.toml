@@ -24,19 +24,15 @@ dev = [
 testpaths = ["tests", "serve"]
 pythonpath = [".", "serve/tools/src"]
 addopts = """\
---import-mode=importlib -m 'not e2e and not model' -n auto --dist loadfile \
+--import-mode=importlib -m 'not model' -n auto --dist loadfile \
 -p no:logfire -p no:pytest_logfire\
 """
 timeout = 30
 session_timeout = 900
 asyncio_mode = "strict"
 markers = [
-  "api: tests that require API integrations or network services",
   "browser: tests that require an installed browser runtime",
   "biome: tests that require the root Node dependencies (Biome)",
-  "slow: tests that are long-running",
-  "integration: marks tests that require the kanban-md binary (deselect with -m 'not integration')",
-  "e2e: end-to-end tests requiring VS Code agent runtime prerequisites (run explicitly with -m e2e)",
   "model: tests that require a real model runtime (run explicitly with -m model)",
 ]
 

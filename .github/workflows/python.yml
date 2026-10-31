@@ -121,7 +121,7 @@ jobs:
           mkdir -p "$plugin_dir"
           cp .github/scripts/ci_shard.py "$plugin_dir/"
           PYTHONPATH="$plugin_dir" uv run --no-sync pytest tests serve -p ci_shard \
-            -m "not e2e and not model and not browser" -n "${CI_WORKERS:-6}" --dist worksteal \
+            -m "not model and not browser" -n "${CI_WORKERS:-6}" --dist worksteal \
             --junitxml="$RUNNER_TEMP/test-results/junit.xml"
 
       - name: Upload test results
