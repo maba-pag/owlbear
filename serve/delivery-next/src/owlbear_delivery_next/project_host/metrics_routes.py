@@ -7,13 +7,14 @@ again until the pass is done, and the answer after that holds all it imported. N
 
 from __future__ import annotations
 
+import logging
 from datetime import date
 from typing import TYPE_CHECKING, Annotated, Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, HTTPException, Query
 
-from owlbear_delivery_next.runtimes import spend_reconcile
+from owlbear_delivery_next.runtimes import compaction_report, spend_reconcile
 from owlbear_delivery_next.state_store import spend_metrics, tool_metrics
 
 if TYPE_CHECKING:
@@ -23,6 +24,8 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.state_store.store import Store
 
 type Projects = Callable[[], list[tuple[Store, Path | None]]]
+
+_log = logging.getLogger(__name__)
 
 
 def _zone(name: str) -> ZoneInfo:
@@ -42,7 +45,7 @@ def _date(text: str, what: str) -> date | None:
 
 
 def router(projects: Projects) -> APIRouter:
-    """``GET /metrics``: totals, one split, the runs, the coverage and the tool use for the filters given."""
+    """``GET /metrics``: totals, one split, the runs, the coverage, the tool use and compaction for the filters."""
     routes = APIRouter()
 
     @routes.get("/metrics")
@@ -66,8 +69,9 @@ def router(projects: Projects) -> APIRouter:
         if spend_reconcile.due():
             spend_reconcile.start(projects())
         said = spend_reconcile.status()  # before the read: a pass said done has written all it found
+        every = spend_metrics.pieces()
         found = spend_metrics.query(
-            spend_metrics.pieces(), tz=zone, start=since, end=until, project=project, agent=agent, model=model,
+            every, tz=zone, start=since, end=until, project=project, agent=agent, model=model,
             change=change, stopped=stopped, by=by, cursor=cursor,
         )  # fmt: skip
         found["coverage"]["reconcile"] = {k: said.get(k) for k in ("state", "started", "finished", "sources", "done",
@@ -79,6 +83,14 @@ def router(projects: Projects) -> APIRouter:
         for k in ("agents", "models"):  # a main agent whose spend shows only as an unsplit subagent's is still chosen
             found["choices"][k] = sorted(set(found["choices"][k]) | set(used["choices"][k]))
         found["tool_use"] = used
+        try:
+            found["compaction"] = compaction_report.report(
+                every, tz=zone, start=since, end=until, project=project, agent=agent, model=model, change=change,
+                stopped=stopped,
+            )  # fmt: skip
+        except Exception as exc:
+            _log.exception("compaction report failed")
+            raise HTTPException(500, f"compaction report: {type(exc).__name__}: {exc}") from exc
         return found
 
     return routes

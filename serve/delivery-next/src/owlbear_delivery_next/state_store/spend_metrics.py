@@ -88,7 +88,20 @@ def reached(p: dict[str, Any]) -> bool:
     }  # the second: this ledger's first lines, before the meter's names
 
 
-def _in(p: dict[str, Any], since: datetime | None, until: datetime | None) -> bool | None:
+def keeps(  # noqa: PLR0913 - one value per filter the page offers
+    p: dict[str, Any], *, project: str, agent: str, model: str, change: str, stopped: bool
+) -> bool:
+    """Whether the piece passes the page's filters other than its time range."""
+    return (
+        (not project or (p["project"] or UNKNOWN) == project)
+        and (not agent or (p["agent"] or UNKNOWN) == agent)
+        and (not model or (p["model"] or UNKNOWN) == model)
+        and (not change or f"{p['project']}/{p['change']}" == change)
+        and (not stopped or reached(p))
+    )
+
+
+def within(p: dict[str, Any], since: datetime | None, until: datetime | None) -> bool | None:
     """Whether the piece lies in the range: None when that is unknown (its window is open or crosses an edge)."""
     if since is None and until is None:
         return True
@@ -132,18 +145,9 @@ def query(  # noqa: PLR0913 - one value per filter the page offers
         if p["name"]:
             names[p["project"]] = p["name"]
 
-    def kept(p: dict[str, Any]) -> bool:
-        return (
-            (not project or (p["project"] or UNKNOWN) == project)
-            and (not agent or (p["agent"] or UNKNOWN) == agent)
-            and (not model or (p["model"] or UNKNOWN) == model)
-            and (not change or f"{p['project']}/{p['change']}" == change)
-            and (not stopped or reached(p))
-        )
-
-    chosen = [p for p in found if kept(p)]
-    inside = [p for p in chosen if _in(p, since, until) is True]
-    undated = [p for p in chosen if _in(p, since, until) is None]
+    chosen = [p for p in found if keeps(p, project=project, agent=agent, model=model, change=change, stopped=stopped)]
+    inside = [p for p in chosen if within(p, since, until) is True]
+    undated = [p for p in chosen if within(p, since, until) is None]
     rows: dict[str, dict[str, Any]] = {}
     groups: dict[str, list[dict[str, Any]]] = {}
     for p in inside:
