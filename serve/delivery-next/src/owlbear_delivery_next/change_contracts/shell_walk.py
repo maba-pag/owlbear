@@ -110,7 +110,7 @@ class Walk:
             state.home_moved = state.home_moved or "HOME" in assigned
         if first in {"unset", *_DECLARE} and any(w.partition("=")[0] == "HOME" for w in words[i + 1 :]):
             state.home_moved = True
-        elif first in _DECLARE:
+        if first in _DECLARE:
             state.startup |= {k: None for k in _STARTUP if any(w.partition("=")[0] == k for w in words[i + 1 :])}
         if first == "exec" and command.stdin() is not None:
             state.exec_in = True
@@ -149,6 +149,9 @@ class Walk:
         for sub in shell_programs.runs(line, context=context):
             if _built(sub, sub.words[0]):
                 return f"`{self.name}` runs `{word}`, whose interpreter is built at run time (`{sub.words[0]}`)"
+            for program in (*sub.launchers, sub.words[0]):
+                if "/" in program and _script(Path(program)):
+                    return f"`{self.name}` runs `{word}`, whose interpreter `{program}` is itself a script"
             if reason := self.bypass(self.name, sub):
                 return reason
             if shell_programs.name(sub.words[0]) in shell_programs.SHELLS and (
@@ -172,6 +175,7 @@ class Walk:
     def _shell_reads(self, command: Command, run: Run, state: State, args: shell_programs.ShellArgs) -> str | None:
         plain = state.plain() and not command.opaque_stdin and not run.from_input
         child = state.child(plain=plain and command.stdin() is None)
+        child.home_moved = child.home_moved or "HOME" in run.env or bool(run.removed & {"HOME", "*"})
         if run.chdir:  # env -C, find -execdir: it starts in another folder
             child.at = None
         for file in [*_startup(run, state), *args.startup]:
@@ -257,13 +261,13 @@ class Walk:
         if _built(run, word) or (word.tilde and not _home(word, state)):
             return None, f"`{self.name}` runs `{word}`, a path built at run time; write the path out"
         path = _home(word, state) or Path(word)
-        if str(path).startswith(_SYSTEM) or os.path.realpath(path).startswith(_SYSTEM):
+        if not path.is_absolute():
+            if state.at is None or run.chdir:
+                return None, f"`{self.name}` runs `{word}` from a folder the guard can't follow; use an absolute path"
+            path = state.at / path
+        if _system(path):
             return None, f"`{self.name}` runs `{word}`, a device or process file the guard doesn't read"
-        if path.is_absolute():
-            return path, ""
-        if state.at is None or run.chdir:
-            return None, f"`{self.name}` runs `{word}` from a folder the guard can't follow; use an absolute path"
-        return state.at / path, ""
+        return path, ""
 
     def _text(self, text: str, state: State) -> str | None:
         if self.depth >= shell_programs.NESTING:
@@ -292,6 +296,22 @@ class Walk:
     def _unreadable(self, word: str, error: OSError | UnicodeDecodeError) -> str:
         why = "it is not UTF-8 text" if isinstance(error, UnicodeDecodeError) else error.strerror or str(error)
         return f"`{self.name}` runs `{word}`, which can't be read: {why}"
+
+
+def _system(path: Path) -> bool:
+    """Whether *path*, or a link on the way to it, names a device or process file."""
+    if str(path).startswith(_SYSTEM) or os.path.realpath(path).startswith(_SYSTEM):
+        return True
+    return any(part.is_symlink() and str(part.readlink()).startswith(_SYSTEM) for part in (path, *path.parents))
+
+
+def _script(path: Path) -> bool:
+    """Whether the program file at *path* is a script with a #! line, not a binary."""
+    try:
+        with path.open("rb") as file:
+            return file.read(2) == b"#!"
+    except OSError:
+        return False
 
 
 def _home(word: Word, state: State) -> Path | None:

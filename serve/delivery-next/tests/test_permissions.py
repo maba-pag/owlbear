@@ -1129,3 +1129,51 @@ def test_a_bypass_in_a_shells_script_is_named_before_a_missing_shell_file() -> N
     text = "/nonexistent/zsh -c 'cd x && git push -f'"  # /bin/zsh on a machine without zsh
 
     assert decide(WRITE, shell(text)) == f"`cd x && git push -f` uses -f, {BYPASS}"
+
+
+def test_a_declaration_naming_home_and_a_startup_file_records_both(scripts: Path) -> None:
+    text = "export BASH_ENV=./good.sh; declare HOME=/tmp BASH_ENV=./bad.sh; bash -c true"
+
+    assert decide(Policy(scripts), shell(text)).endswith("set where the guard can't follow it")
+
+
+def test_a_shebang_interpreter_that_is_itself_a_script_is_refused(scripts: Path) -> None:
+    shebang(scripts / "env", "#!/bin/sh", BAD)
+    shebang(scripts / "tool", f"#!{scripts}/env bash")
+
+    assert decide(Policy(scripts), shell("./tool")) == (
+        f"`./tool` runs `./tool`, whose interpreter `{scripts}/env` is itself a script"
+    )
+
+
+def test_a_tilde_in_a_shell_started_with_another_home_is_refused(scripts: Path) -> None:
+    for text in ("HOME=/other bash -c 'bash ~/good.sh'", "env -u HOME bash -c 'bash ~/good.sh'"):
+        assert decide(Policy(scripts), shell(text)).endswith("a path built at run time; write the path out")
+
+
+def test_a_link_to_a_process_file_is_not_followed(scripts: Path) -> None:
+    (scripts / "here").symlink_to("/proc/self/cwd")
+
+    assert decide(Policy(scripts), shell("bash here/x.sh")).endswith("a device or process file the guard doesn't read")
+
+
+def test_a_locale_translated_word_is_built_at_run_time(scripts: Path) -> None:
+    assert decide(Policy(scripts), shell('$"bash" bad.sh')).endswith("write the program and its script out")
+    assert decide(WRITE, shell('echo "cost $"')) is None
+
+
+def test_a_substitution_in_a_double_quoted_parameter_default_is_judged() -> None:
+    text = "unset x; echo \"${x:-'$(git commit --no-verify -m x)'}\""
+
+    assert decide(WRITE, shell(text)).endswith(BYPASS)
+
+
+def test_arithmetic_inside_a_parameter_is_no_here_document() -> None:
+    assert decide(WRITE, shell("echo ${a:-$((1<<x))}\ngit commit --no-verify -m x\nx")).endswith(BYPASS)
+
+
+def test_a_here_document_delimiter_joined_by_a_continuation_ends_the_body(scripts: Path) -> None:
+    (scripts / "joined.sh").write_text("cat <<EOF\nhi\nEO\\\nF\ngit commit --no-verify -m x\n")
+
+    assert decide(Policy(scripts), shell("bash joined.sh")).endswith(BYPASS)
+    assert decide(WRITE, shell("cat <<'EOF'\nEO\\\nF\nEOF")) is None  # a quoted body joins nothing

@@ -198,7 +198,9 @@ class _Lexer:
             s.expanded = True
             depth = s.depth + 1
             return self.level(i + 1, "`", depth) if text[i] == "`" else self.level(i + 2, ")", depth)
-        if (nxt := text[i + 1 : i + 2]) and (nxt in "{_'" or nxt.isalnum() or nxt in _SPECIAL):
+        nxt = text[i + 1 : i + 2]
+        named = bool(nxt) and (nxt in "{_" or nxt.isalnum() or nxt in _SPECIAL)
+        if named or (nxt and nxt in "'\"" and not s.quote):  # $'...' and $"...": decoded or translated by the shell
             s.expanded = True
         return None
 
@@ -225,7 +227,9 @@ class _Lexer:
         while j < len(text) and depth:
             if text[j] == "\\":
                 j += 2
-            elif text[j] == "'":
+            elif text.startswith("$((", j):
+                j = self._arithmetic(_Level(s.depth, s.opaque), j + 3)
+            elif text[j] == "'" and s.quote != '"':  # in "${x:-'...'}" a single quote is a character
                 if (end := text.find("'", j + 1)) < 0:
                     raise ValueError
                 j = end + 1
@@ -373,7 +377,11 @@ class _Lexer:
             while i < len(self.text):
                 stop = self.text.find("\n", i)
                 stop = len(self.text) if stop < 0 else stop
-                line = self.text[i:stop].lstrip("\t") if strip else self.text[i:stop]
+                while not literal and _continued(self.text[i:stop]) and stop < len(self.text):  # EO\ + F is EOF
+                    nxt = self.text.find("\n", stop + 1)
+                    stop = len(self.text) if nxt < 0 else nxt
+                line = self.text[i:stop].replace("\\\n", "") if not literal else self.text[i:stop]
+                line = line.lstrip("\t") if strip else line
                 if line == delimiter:
                     end, i = i, stop + 1
                     break
@@ -405,6 +413,11 @@ class _Lexer:
                 found = found or (text[i] == "$" and text[i + 1 : i + 2] not in ("", " ", "\n", "\t"))
                 i += 1
         return found
+
+
+def _continued(line: str) -> bool:
+    """Whether a line ends in an unescaped backslash, which joins it to the next."""
+    return (len(line) - len(line.rstrip("\\"))) % 2 == 1
 
 
 def parse(text: str) -> list[Command]:
