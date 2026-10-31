@@ -1,9 +1,9 @@
 // Settings' cost arrows (D-01M621PC80RKPA2XJR4DZD1YKV, D-01M68ZZZE6707CQ2D029TE3T2B): an option is dearer than
 // another when any rate both state is higher, so two options that cross are each dearer. Its arrows count the
 // distinct priced options it is dearer than; an option without rates gets none.
-export const RATES = ["input", "output", "cache", "cache_write", "cache_write_1h"];
+const RATES = ["input", "output", "cache", "cache_write", "cache_write_1h"];
 
-export function dearer(a, b) {
+function dearer(a, b) {
   return RATES.some((k) => a[k] != null && b[k] != null && a[k] > b[k]);
 }
 
