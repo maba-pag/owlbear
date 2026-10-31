@@ -26,11 +26,11 @@ from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.local_system import data_repo, local_home, maintenance
 from owlbear_delivery_next.local_system.storage_io import atomic_write
-from owlbear_delivery_next.machine_host import curation_snapshots, curation_tree
+from owlbear_delivery_next.machine_host import curation_block, curation_snapshots, curation_tree
+from owlbear_delivery_next.machine_host.curation_block import LABEL
 from owlbear_delivery_next.runtimes import loop_owner, maintained, sdk_adapter
 from owlbear_delivery_next.settings import roles
-from owlbear_delivery_next.settings.config import Settings, SettingsUnset
-from owlbear_delivery_next.state_store import machine_settings, registry, spend_ledger
+from owlbear_delivery_next.state_store import machine_settings, registry, spend_ledger, work_block
 from owlbear_delivery_next.state_store.curation_runs import STATE, FolderRun, Runs
 from owlbear_delivery_next.workflow_steps import lookup
 
@@ -43,7 +43,6 @@ if TYPE_CHECKING:
 
 _log = logging.getLogger(__name__)
 
-LABEL = "memory-curation"
 SLOT = "memory"  # curation's own share of the machine's slots
 ALL = "all"
 type Trigger = Literal["merge", "idle"]  # each has its own machine setting (the owner, 2026-10-23)
@@ -187,8 +186,15 @@ class Curation:
         shared = self.shared()
         if shared is None:
             return {"available": False, "reason": NO_SHARED, "folders": []}
-        runs = self.load().folders
-        listed = [{"folder": f, **runs.get(f, FolderRun()).model_dump(mode="json")} for f in folders(shared.root)]
+        runs, here = self.load().folders, work_block.machine()
+        listed = [
+            {
+                "folder": f,
+                **runs.get(f, FolderRun()).model_dump(mode="json"),
+                "blocked": curation_block.blocked(shared, f, here),
+            }
+            for f in folders(shared.root)
+        ]
         return {"available": True, "folders": listed, "queue": list(self.queue)}
 
     def _pids(self, event: dict[str, Any]) -> None:
@@ -349,9 +355,9 @@ class Curation:
         """
         shared = self.shared()
         why = NO_SHARED if shared is None else LEFT if self.lingering() else self.fenced()
-        why = why or _unset(lookup.machine(shared))  # checked again on the snapshot it starts with
-        if shared is None or why:
-            self._save(folder, FolderRun(state="failed", started_at=started, ended_at=started, reason=why))
+        refused = None if shared is None or why else self._blocked(shared, folder, started)  # again at the grant
+        if shared is None or why or refused:
+            self._save(folder, refused or FolderRun(state="failed", started_at=started, ended_at=started, reason=why))
             return False
         turn = threading.Event()
         while True:
@@ -366,15 +372,17 @@ class Curation:
         try:  # from the grant on, the slot goes back however this ends, unless the ledger holds it
             with self.admission():  # the stop barrier: a stop when idle sees this run admitted, or it is refused here
                 why = self.fenced()
+                refused = None if why else self._blocked(shared, folder, started)  # a setting cleared while it waited
                 with self.lock:  # the automatic switches are read at the grant, not when the request was made
                     asked = self.asked.get(folder, "manual")
                     # a rename holds it, or moved it after it was queued: the run would curate a folder that is gone
                     why = why or (MOVED if folder in self.renaming or folder not in folders(shared.root) else "")
-                    admitted = not why and (asked == "manual" or self.allowed(asked))
+                    admitted = not why and not refused and (asked == "manual" or self.allowed(asked))
                     self.running = folder if admitted else ""
-            if why:
+            if why or refused:  # a refused folder stays due: the next trigger after the setting is set runs it
                 self.slots.give(SLOT, key)
-                self._save(folder, FolderRun(state="failed", started_at=started, ended_at=started, reason=why))
+                fixed = FolderRun(state="failed", started_at=started, ended_at=started, reason=why)
+                self._save(folder, refused if refused and not why else fixed)
                 return False
             if not admitted:  # the folder stays due, so a later allowed trigger runs it
                 self.slots.give(SLOT, key)
@@ -390,9 +398,13 @@ class Curation:
                 self.slots.give(SLOT, key)
         return False
 
+    def _blocked(self, shared: data_repo.DataRepo, folder: str, started: datetime) -> FolderRun | None:
+        return curation_block.refusal(shared, folder, self.load().folders.get(folder, FolderRun()), started)
+
     def _session(self, shared: data_repo.DataRepo, folder: str, started: datetime, key: str) -> FolderRun:
         settings = lookup.machine(shared)
-        if why := _unset(settings):  # cleared while it waited for its slot: the run never starts, its entries unseen
+        # cleared just after the grant's check: the run never starts, its entries unseen
+        if why := curation_block.unset(settings):
             return FolderRun(state="failed", started_at=started, ended_at=datetime.now(UTC), reason=why)
         role = roles.chosen(settings, LABEL)
         with curation_tree.forgetting(shared), self.maintenance.workspace("owlbear-curation-") as at:
@@ -484,15 +496,3 @@ def legacy_uncertain(run: FolderRun) -> bool:
     if run.state not in {"failed", "waiting"} or run.summary:
         return False  # never and done, a finished run's copy, and running, which the caller takes on its own
     return not run.reason.startswith("ended ") or UNKNOWN in run.reason
-
-
-def _unset(settings: Settings) -> str:
-    """Why a run cannot start for unset settings: the curator's role, its threshold or a user-config switch; else ''."""
-    try:
-        agent = settings.agent(roles.SESSIONS[LABEL])
-        settings.need("curator_threshold", *roles.USER_CONFIG)
-    except SettingsUnset as exc:
-        return str(exc)
-    if agent.subagents is None:  # set per role: a run never guesses whether its subagents may start
-        return f"agents.{roles.SESSIONS[LABEL]}.subagents is unset"
-    return ""

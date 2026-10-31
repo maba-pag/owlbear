@@ -18,7 +18,7 @@ from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.github.provider import Check
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.local_system.slots import Slots
-from owlbear_delivery_next.machine_host import curation
+from owlbear_delivery_next.machine_host import curation, curation_block
 from owlbear_delivery_next.settings import carried, config, profile, roles, rounds
 from owlbear_delivery_next.settings.config import GlobalLayer, Layer, Prefs, SettingsUnset, resolve
 from owlbear_delivery_next.settings.improvement import CATEGORIES, Spotter
@@ -176,18 +176,18 @@ def test_curation_never_starts_with_its_threshold_or_role_unset(shared_repo):
     settings_carry.carry(shared)
     glob = read_layer(shared.global_path, GlobalLayer)
     switches = "load_user_instructions, load_user_skills, load_user_memory"
-    assert switches in curation._unset(lookup.machine(shared))  # noqa: SLF001
+    assert switches in curation_block.unset(lookup.machine(shared))
     glob = glob.model_copy(update=SWITCHES)
     shared.global_path.write_text(glob.model_dump_json())
-    assert curation._unset(lookup.machine(shared)) == ""  # noqa: SLF001
+    assert curation_block.unset(lookup.machine(shared)) == ""
     shared.global_path.write_text(glob.model_copy(update={"curator_threshold": None}).model_dump_json())
-    assert "curator_threshold" in curation._unset(lookup.machine(shared))  # noqa: SLF001
+    assert "curator_threshold" in curation_block.unset(lookup.machine(shared))
     job = curation.Curation(Slots(lambda: 1), shared=lambda: shared, run=lambda _cfg: pytest.fail("never started"))
     ran = job._session(shared, "shop", datetime.now(UTC), "curate:shop")  # noqa: SLF001 - cleared while it waited
     assert (ran.state, "curator_threshold" in ran.reason, ran.seen) == ("failed", True, {})
     agents = {r: a for r, a in glob.agents.items() if r != "curator"}
     shared.global_path.write_text(glob.model_copy(update={"agents": agents}).model_dump_json())
-    assert "agents.curator.model" in curation._unset(lookup.machine(shared))  # noqa: SLF001
+    assert "agents.curator.model" in curation_block.unset(lookup.machine(shared))
 
 
 @pytest.mark.parametrize("key", roles.USER_CONFIG)
@@ -201,7 +201,7 @@ def test_each_unset_user_config_switch_refuses_every_step_session_but_not_the_pa
         assert caught.value.keys == [key]
     with pytest.raises(SettingsUnset, match=key):
         roles.user_config(settings)
-    assert key in curation._unset(settings)  # noqa: SLF001 - machine curation never starts either
+    assert key in curation_block.unset(settings)  # machine curation never starts either
     assert settings.agent("shaper").model  # the shaper's chat opens (project_host.api.start_chat)
     assert settings.agent("spotter").model
     assert watched.needed(settings) == settings.spotter.look_credit_limit  # the Spotter's check passes
