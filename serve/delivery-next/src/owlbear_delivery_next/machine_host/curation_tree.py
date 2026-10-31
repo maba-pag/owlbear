@@ -141,6 +141,15 @@ class Tree:
             except (OSError, DataRepoError, subprocess.SubprocessError) as exc:  # live, maybe committed: it stands
                 return "", f"written, but not published: {type(exc).__name__}: {exc}"
 
+    def keep(self) -> str:
+        """Move the worktree out of its run's workspace, which is removed next, by a rename that needs no space."""
+        kept = self.root.parent.with_name(f"{self.root.parent.name}-kept")
+        try:
+            self.root.rename(kept)
+        except OSError as exc:
+            return f"its edits are lost: {exc}"
+        return f"its worktree is kept at {kept}"
+
     def _apply(self, texts: dict[str, str | None]) -> None:
         """Write the run's files into the checkout, as seeded when this begins; on a failure put every one back.
 
@@ -227,7 +236,13 @@ def holding(tree: Tree, folder: str, key: str) -> Iterator[None]:
     try:
         yield
     except Exception as exc:
-        if (held := tree.hold(folder, key)) == NO_EDITS:
+        try:
+            held = tree.hold(folder, key)
+        except (OSError, DataRepoError) as failed:
+            msg = f"{tree.keep()}, not held: {type(failed).__name__}: {failed}; {type(exc).__name__}: {exc}"
+            _log.error("%s: %s", tree.shared.root, msg)
+            raise RuntimeError(msg) from exc
+        if held == NO_EDITS:
             raise
         msg = f"{held}; {type(exc).__name__}: {exc}"
         raise RuntimeError(msg) from exc

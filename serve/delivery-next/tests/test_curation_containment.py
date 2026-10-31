@@ -1,6 +1,7 @@
 """#746: a refused curation run's edits never reach the remote, while every other writer's commits still do."""
 
 import re
+import shutil
 import subprocess
 import time
 from pathlib import Path
@@ -334,6 +335,43 @@ def test_an_accepted_run_whose_push_fails_stands_and_a_later_publication_carries
     assert git(repo, "for-each-ref", "refs/owlbear").strip() == ""
     other = publish_other(repo, "after")
     assert (remote_has(remote, other), remote_bytes(remote, rel(entry))) == (True, made["bytes"])
+
+
+def test_a_refused_run_that_cannot_be_held_keeps_its_worktree_and_says_where(repo, remote, monkeypatch, caplog) -> None:
+    entry = curated(repo / "shop" / "memory", "Lesson")
+    pushed(repo, "a curated entry")
+    before, real, made = (repo / rel(entry)).read_bytes(), curation_tree._git, {}  # noqa: SLF001
+
+    def git_(cwd, *args, **kw):
+        if args[0] == "update-ref":
+            msg = f"git update-ref failed: {FULL}"
+            raise curation_tree.DataRepoError(msg)
+        return real(cwd, *args, **kw)
+
+    def run(cfg) -> Run:
+        made["bytes"] = (
+            reword(cfg.memory, entry.id, "Lesson: the curator's version")
+            and (cfg.memory / f"{entry.id}.md").read_bytes()
+        )
+        return Run(cfg.session_id, termination=Termination(confirmed=True), **REFUSALS["unread"])
+
+    monkeypatch.setattr(curation_tree, "_git", git_)
+    job = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(repo), run=run)
+    job.start("shop")
+    row = drained(job)
+    monkeypatch.undo()
+
+    kept = re.search(r"its worktree is kept at (\S+), not held: DataRepoError: git update-ref failed", row.reason)
+    assert (row.state, bool(kept)) == ("failed", True), row.reason
+    try:
+        assert (Path(kept.group(1)) / rel(entry)).read_bytes() == made["bytes"]
+    finally:
+        shutil.rmtree(kept.group(1))
+    assert [r.levelname for r in caplog.records if r.name == curation_tree.__name__] == ["ERROR"]
+    other = publish_other(repo, "after")
+    assert (remote_has(remote, other), remote_bytes(remote, rel(entry)), (repo / rel(entry)).read_bytes()) == (
+        True, before, before
+    )  # fmt: skip
 
 
 def test_an_accepted_run_publishes_its_edits_once_and_leaves_pending_and_receipts_local(repo, remote) -> None:
