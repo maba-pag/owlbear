@@ -86,7 +86,7 @@ class Walk:
         head = next((w for w in command.words if not shell_programs.ASSIGNMENT.match(w)), None)
         runs = shell_programs.runs(command.words)
         checked: set[str] = set()
-        for run in runs if runs or head is None else [shell_programs.Run(words=[head])]:
+        for run in runs if runs or head is None else [shell_programs.leafless(command.words)]:
             before = state.effects.wrote  # the program starts before its own script writes
             if runs and (reason := self._run(command, run, state)):  # its script first: a bypass is named as one
                 return reason
@@ -147,7 +147,7 @@ class Walk:
 
     def _interpreted(self, command: Command, run: Run, word: Word, line: list[Word], state: State) -> str | None:
         """The program a script's #! line runs, started as the script was: a shell reads the script."""
-        context = shell_programs.Run(env=dict(run.env), chdir=run.chdir)
+        context = shell_programs.Run(env=dict(run.env), chdir=run.chdir, removed=run.removed)
         for sub in shell_programs.runs(line, context=context):
             if _built(sub, sub.words[0]):
                 return f"`{self.name}` runs `{word}`, whose interpreter is built at run time (`{sub.words[0]}`)"

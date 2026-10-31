@@ -312,8 +312,8 @@ def _mutation(text: str, commands: Sequence[Sequence[str]]) -> str | None:
     """How a shell command would write files or change Git state; discarded output does not count."""
     if found := next(filter(None, map(_git_mutation, commands)), None):
         return found
-    for run in (r for words in commands for r in shell_programs.runs(words)):  # a command env -S hides in its string
-        if match := _SHELL_MUTATION.match(" ".join(run.words)):
+    for run in (r for words in commands for r in shell_programs.runs(words)):  # env -S hides it, /bin/cp names it
+        if match := _SHELL_MUTATION.match(" ".join([shell_programs.name(run.words[0]), *run.words[1:]])):
             return f"filesystem mutation '{match[0].strip(' \t;&|')}'"
     text = _HARMLESS.sub("", text)
     if _REDIRECT.search(text):
@@ -365,8 +365,10 @@ def _check(
 
 
 def _run_bypass(name: str, run: shell_programs.Run) -> str | None:
-    """The refusal of a program's environment that turns hooks or signing off, as a shebang's env -S sets it."""
-    return f"`{name}` uses environment setting {setting}, {BYPASS}" if (setting := _env_setting(run.env)) else None
+    """The refusal of a #! line's program that skips hooks or signing or forces history, as env -S runs it."""
+    if setting := _env_setting(run.env):
+        return f"`{name}` uses environment setting {setting}, {BYPASS}"
+    return f"`{name}` uses {flag}, {BYPASS}" if (flag := _bypass(run.words)) else None
 
 
 def _writes(command: shell_parse.Command) -> bool:

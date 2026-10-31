@@ -136,6 +136,16 @@ def runs(words: Sequence[Word], depth: int = 0, context: Run | None = None) -> l
     return [replace(here, words=list(words[i:]))]
 
 
+def leafless(words: Sequence[Word]) -> Run:
+    """A command whose wrappers run nothing (env ./env, find .): its launchers by path, its last one the program."""
+    i, launchers = head(words), []
+    while i < len(words) and name(words[i]) in _WRAPPERS:
+        launchers.append(words[i])
+        i = operand(words, i)
+    program = words[i] if i < len(words) else launchers.pop() if launchers else Word()
+    return Run(words=[program, *words[i + 1 :]], launchers=tuple(launchers))
+
+
 def _found(words: Sequence[Word], i: int, depth: int, context: Run) -> list[Run]:
     """The commands find's -exec actions run, with each match's path replacing {}."""
     found = []
@@ -151,23 +161,27 @@ def _wrapped(words: Sequence[Word], i: int, depth: int, context: Run) -> list[Ru
     sub = replace(context, launchers=(*context.launchers, words[i]))
     match name(words[i]):
         case "env":
+            split, k = _env_split(words, i, k)  # env's own options end with its -S string
             cleared, unset = _env_removals(words, i, k)
             kept = {} if cleared else {key: v for key, v in sub.env.items() if key not in unset}
             env = {**kept, **assignments(words[i + 1 : k])}
             removed = sub.removed | unset | ({"*"} if cleared else set())
             sub = replace(sub, env=env, chdir=sub.chdir or _env_chdir(words, i, k), removed=frozenset(removed))
-            if (split := _env_split(words, i, k)) is not None:  # its words go before the rest, env reads them again
+            if split is not None:  # its words go where it stood, before the rest, and env reads them again
                 return runs([Word("env"), *split, *words[k:]], depth + 1, sub)
         case "xargs":
             sub = replace(sub, from_input=True, replaced=_replacement(words, i, k) or sub.replaced)
     return runs(words[k:], depth + 1, sub)
 
 
-def _env_split(words: Sequence[Word], i: int, k: int) -> list[Word] | None:
-    """The words env -S or --split-string gives among the options of the env at ``words[i]``, or None."""
+def _env_split(words: Sequence[Word], i: int, k: int) -> tuple[list[Word] | None, int]:
+    """The words env -S gives among the options of the env at ``words[i]``, or None, and where those options end.
+
+    They end right after the string, as env splices its words in place, or at *k* without one.
+    """
     found: list[Word] | None = None
     j = i + 1
-    while j < k:
+    while j < k and found is None:
         w, value = words[j], None
         if w.startswith("--split-string"):
             value, j = (_part(w, w.partition("=")[2]), j + 1) if "=" in w else (_at(words, j + 1), j + 2)
@@ -181,7 +195,7 @@ def _env_split(words: Sequence[Word], i: int, k: int) -> list[Word] | None:
             if value.expanded:  # the outer shell filled it in: what env splits is built at run time
                 raise UnreadableError(_SPLIT_BUILT)
             found = [*(found or []), *split_string(value)]
-    return found
+    return found, (j if found is not None else k)
 
 
 def _valued(cluster: str) -> int | None:

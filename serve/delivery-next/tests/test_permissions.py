@@ -1227,3 +1227,42 @@ def test_a_shell_passes_its_startup_file_to_the_shells_it_starts(scripts: Path) 
 def test_a_shell_run_by_path_starts_before_its_script_writes() -> None:
     assert decide(WRITE, shell("/bin/bash -c 'touch x'")) is None
     assert decide(WRITE, shell("/usr/bin/env touch x")) is None
+
+
+def test_a_write_by_a_program_named_by_path_is_a_write(scripts: Path) -> None:
+    assert decide(Policy(scripts), shell("/bin/cp bad.sh good.sh; bash good.sh")).endswith("run it in the next")
+    assert (
+        decide(READ, shell("/bin/rm x"))
+        == "`/bin/rm x` uses filesystem mutation 'rm', which writes in a read-only step"
+    )
+
+
+def test_a_shebang_that_runs_git_with_a_bypass_is_refused(scripts: Path) -> None:
+    shebang(scripts / "tool", "#!/usr/bin/env -S git commit --no-verify -m")
+
+    assert decide(Policy(scripts), shell("./tool")) == f"`./tool` uses --no-verify, {BYPASS}"
+
+
+@pytest.mark.parametrize("text", ["env ./env", "env ./find ."])
+def test_every_launcher_is_checked_when_the_chain_runs_nothing(scripts: Path, text: str) -> None:
+    shebang(scripts / "env", "#!/bin/sh", BAD)
+    shebang(scripts / "find", "#!/bin/sh", BAD)
+
+    assert decide(Policy(scripts), shell(text)).endswith(BYPASS)
+
+
+def test_a_subshell_function_body_reads_its_callers_input() -> None:
+    assert decide(WRITE, shell("f() (sh)\nprintf 'git commit --no-verify -m x\\n' | f")).endswith(PIPED)
+
+
+def test_a_script_run_by_path_keeps_the_removals_of_the_env_that_started_it(scripts: Path) -> None:
+    shebang(scripts / "fine", "#!/bin/bash")
+
+    assert decide(Policy(scripts), shell("export BASH_ENV=/missing; env -u BASH_ENV ./fine")) is None
+    assert decide(Policy(scripts), shell("export BASH_ENV=/missing; env -i ./fine")) is None
+
+
+def test_options_after_an_env_split_string_belong_to_the_command(scripts: Path) -> None:
+    text = "export BASH_ENV=./bad.sh; env -S 'bash -c true' -u BASH_ENV"
+
+    assert decide(Policy(scripts), shell(text)) == f"`./bad.sh` uses --no-verify, {BYPASS}"

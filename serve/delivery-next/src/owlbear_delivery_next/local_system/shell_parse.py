@@ -325,7 +325,8 @@ class _Lexer:
         return i + 2 if self.text.startswith("|&", i) else i + 1
 
     def _subshell(self, s: _Level, i: int) -> int:
-        opaque = s.opaque or s.piped or any(o for _, o in self.blocks)
+        body = self.defined and not s.words  # f() (...): a function's body, whose input is its caller's
+        opaque = s.opaque or s.piped or body or any(o for _, o in self.blocks)
         self.close(s, i)
         s.piped = False
         start = len(self.commands)
