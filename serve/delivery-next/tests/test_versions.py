@@ -506,3 +506,36 @@ def test_a_tests_git_never_reaches_github(route, tmp_path, monkeypatch):
     with pytest.raises(versions.VersionError, match="/nonexistent/offline-in-tests/"):
         versions.repo()  # codebase.URL, OwlBear's GitHub repository
     assert time.monotonic() - began < 5
+
+
+AFTER_TEARDOWN = """
+import json, os, pytest
+
+@pytest.hookimpl(hookwrapper=True, trylast=True)
+def pytest_runtest_teardown(item):
+    yield
+    names = ("GIT_CONFIG_COUNT", "GIT_CONFIG_KEY_0", "GIT_CONFIG_VALUE_0")
+    with open(os.environ["AFTER_TEARDOWN"], "a") as out:
+        out.write(json.dumps({name: os.environ.get(name) for name in names}) + "\\n")
+"""
+
+
+@pytest.mark.timeout(120)  # a child pytest starts with this package's conftest; a loaded runner needs more than 30 s
+@pytest.mark.parametrize(
+    "parent", [{"GIT_CONFIG_COUNT": "1", "GIT_CONFIG_KEY_0": "core.fsmonitor", "GIT_CONFIG_VALUE_0": "false"}, {}]
+)
+def test_the_offline_rule_ends_with_the_test_that_changed_it(parent, tmp_path):
+    """#804: once each route of the probe above has ended, git's settings are the ones it started with, set or not;
+    checked after teardown, where a check inside the test passes falsely."""
+    (tmp_path / "after_teardown.py").write_text(AFTER_TEARDOWN)
+    seen = tmp_path / "seen.jsonl"
+    names = ("GIT_CONFIG_COUNT", "GIT_CONFIG_KEY_0", "GIT_CONFIG_VALUE_0")
+    env = {k: v for k, v in os.environ.items() if k not in names} | parent
+    env |= {"AFTER_TEARDOWN": str(seen), "PYTHONPATH": os.pathsep.join([str(tmp_path), env.get("PYTHONPATH", "")])}
+    probe = f"{Path(__file__).resolve()}::test_a_tests_git_never_reaches_github"
+    run = [sys.executable, "-m", "pytest", "-q", "-n", "0", "-p", "no:cacheprovider", "-p", "after_teardown", probe]
+    root = Path(__file__).resolve().parents[3]
+    done = subprocess.run(run, cwd=root, env=env, capture_output=True, text=True, check=False)  # noqa: S603
+    assert done.returncode == 0, done.stdout[-2000:]
+    after = [json.loads(line) for line in seen.read_text().splitlines()]
+    assert after == [{name: parent.get(name) for name in names}] * 3
