@@ -290,11 +290,12 @@ export function ratesCell(role) {
   const model = offeredModel(role), long = tierOf(role) === "long" && model?.long;
   const rates = long ? model.long.rates : model?.rates;
   if (!rates) return cell(html`<p-text>\u2014</p-text><p-text size="xs" color="contrast-medium">not known</p-text>`);
-  const write = rates.cache_write ? ` \u00b7 cache write ${amount(rates.cache_write)}` : "";
-  const flow = `in ${amount(rates.input)} \u00b7 out ${amount(rates.output)}`;
-  const line = `${flow} \u00b7 cache ${rates.cache == null ? "not known" : amount(rates.cache)}${write}`;
-  return cell(html`<p-text>${line}</p-text><p-text size="xs" color="contrast-medium">${model.id}, ${long ? "long"
-    : "default"} context</p-text>`);
+  const write = rates.cache_write ? ` \u00b7 cache\u00a0write\u00a0${amount(rates.cache_write)}` : "";
+  const flow = `in\u00a0${amount(rates.input)} \u00b7 out\u00a0${amount(rates.output)}`;
+  const line = `${flow} \u00b7 cache\u00a0${rates.cache == null ? "not known" : amount(rates.cache)}${write}`;
+  const effort = own(`${role}.effort`) || inherited().agents[role].effort;  // the runtime prices no effort
+  return cell(html`<p-text>${line}</p-text><p-text color="contrast-medium">${model.id}, ${long ? "long"
+    : "default"} context \u00b7 effort\u00a0${said(effort)}; same rates at every effort</p-text>`);
 }
 
 export function editable(role, field) {
