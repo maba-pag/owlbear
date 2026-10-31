@@ -898,6 +898,8 @@ def test_merge_and_cleanup_preferences_save_reload_and_clear_back_to_inherit(sto
 
 INSTRUCTIONS, SKILLS = "Your instructions in Delivery steps", "Your skills in Delivery steps"
 LABELS = "Labels, comma-separated; none for no labels"
+MEMORY = "Copilot Memory in Delivery sessions"
+USER_KEYS = ("load_user_instructions", "load_user_skills", "load_user_memory")
 
 
 def _saved(page, pds, button: str, whose: str) -> None:
@@ -908,33 +910,67 @@ def _saved(page, pds, button: str, whose: str) -> None:
     expect(page.locator("#status")).to_have_text(f"Saved {whose} settings. They apply to the next session.")
 
 
-@pytest.mark.browser
-def test_the_user_config_switches_save_in_each_layer_reload_and_clear_back_to_inherit(store, pds, monkeypatch) -> None:
-    """D-01M5YE4P5317N1HWD0QN6N05E0: no default; Global, this machine and the project set them; the project wins."""
+def _saved_by_keyboard(page, pds, button: str, whose: str) -> None:
+    """As _saved, and the save's dialog holds the keyboard focus until it closes, then gives it back to the bar."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
+    page.locator(".bar").get_by_role("button", name=button).click()
+    expect(pds.modal(page)).to_be_visible()
+    inside = "document.activeElement?.closest('p-modal') !== null"
+    page.wait_for_function(inside, timeout=5000)
+    where = []
+    for _ in range(6):  # the page behind is inert
+        page.keyboard.press("Tab")
+        where.append(page.evaluate(f"{inside} ? 'dialog' : document.activeElement === document.body ? '' : 'page'"))
+    assert "page" not in where
+    pds.answer(page, button)
+    expect(page.locator("#status")).to_have_text(f"Saved {whose} settings. They apply to the next session.")
+    page.wait_for_function("document.activeElement?.closest('.bar') !== null", timeout=5000)
+
+
+def _user_layers(store: Store) -> tuple[list[list[bool | None]], list[tuple[bool, str]]]:
+    """Each layer's own user-config values, and each value in use with the layer it comes from."""
     from owlbear_delivery_next.settings import config  # noqa: PLC0415
     from owlbear_delivery_next.state_store.store import read_layer  # noqa: PLC0415
 
-    unset = {"load_user_instructions": None, "load_user_skills": None}
-    monkeypatch.setattr(config, "BASE", config.BASE.model_copy(update=unset))
+    layers = (store.read_config(), read_layer(store.machine_path, config.MachineLayer),
+              read_layer(store.global_path, config.GlobalLayer))  # fmt: skip
+    resolved = store.settings()
+    return [[getattr(layer, k) for k in USER_KEYS] for layer in layers], [
+        (getattr(resolved, k), resolved.sources[k]) for k in USER_KEYS
+    ]
+
+
+@pytest.mark.browser
+def test_the_user_config_switches_save_in_each_layer_reload_and_clear_back_to_inherit(store, pds, monkeypatch) -> None:
+    """D-01M5YE4P5317N1HWD0QN6N05E0, D-01M69EBRBBW97001KZ43C0BJM1: no default; Global, this machine and the project
+    set them; the project wins."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    from owlbear_delivery_next.settings import config  # noqa: PLC0415
+
+    monkeypatch.setattr(config, "BASE", config.BASE.model_copy(update=dict.fromkeys(USER_KEYS)))
     with settings_page(store, pds) as page:
         shown = page.locator("#user-config")
         pds.group(page, "overview")
-        expect(page.locator("#unset")).to_contain_text("load_user_instructions, load_user_skills")
+        expect(page.locator("#unset")).to_contain_text(", ".join(USER_KEYS))
         pds.group(page, "agents")
-        for key in ("load_user_instructions", "load_user_skills"):  # GW8RT6: a red name, no line saying it is unset
+        for key in USER_KEYS:  # GW8RT6: a red name, no line saying it is unset
             expect(page.locator(f"#set-{key} p-text[color='error']")).to_have_count(1)
         expect(shown).not_to_contain_text("unset: set it here")
         pds.pick(page, "Layer", "global")
         expect(shown).to_contain_text("Unset")
         pds.pick(page, INSTRUCTIONS, "off")
         pds.pick(page, SKILLS, "off")
-        _saved(page, pds, "Save global defaults", "the global")
+        pds.pick(page, MEMORY, "off")
+        box = pds.select(page, MEMORY).get_by_role("combobox").bounding_box()
+        assert (box["width"], box["height"]) >= (24, 24)  # WCAG 2.5.8 target size
+        _saved_by_keyboard(page, pds, "Save global defaults", "the global")
         pds.pick(page, "Layer", "machine")
         expect(pds.select(page, INSTRUCTIONS)).to_have_js_property("value", "inherit")
         expect(shown).to_contain_text("inherit (off)")
         pds.pick(page, INSTRUCTIONS, "on")
+        pds.pick(page, MEMORY, "on")
         _saved(page, pds, "Save this machine's preferences", "this machine's")
         pds.pick(page, "Layer", "project")
         pds.pick(page, SKILLS, "on")
@@ -948,19 +984,21 @@ def test_the_user_config_switches_save_in_each_layer_reload_and_clear_back_to_in
         opened(page, pds)
         expect(pds.select(page, INSTRUCTIONS)).to_have_js_property("value", "inherit")
         expect(pds.select(page, SKILLS)).to_have_js_property("value", "on")
+        expect(pds.select(page, MEMORY)).to_have_js_property("value", "inherit")
+        expect(page.locator("#set-load_user_memory")).to_contain_text("in use: on, from this machine")
         expect(shown).to_contain_text("in use: on, from this machine")
         expect(shown).to_contain_text("in use: on, from this project")
         pds.pick(page, SKILLS, "inherit")  # the project's own value is cleared: Global's off applies again
         _saved(page, pds, "Save project settings", "this project's")
         expect(shown).to_contain_text("in use: off, from global")
-    project, machine = store.read_config(), read_layer(store.machine_path, config.MachineLayer)
-    glob = read_layer(store.global_path, config.GlobalLayer)
-    assert (project.load_user_instructions, project.load_user_skills) == (None, None)
-    assert (machine.load_user_instructions, machine.load_user_skills) == (True, None)
-    assert (glob.load_user_instructions, glob.load_user_skills) == (False, False)
-    resolved = store.settings()
-    assert (resolved.load_user_instructions, resolved.sources["load_user_instructions"]) == (True, "machine")
-    assert (resolved.load_user_skills, resolved.sources["load_user_skills"]) == (False, "global")
+        pds.pick(page, "Layer", "machine")
+        pds.pick(page, MEMORY, "inherit")  # the machine's own value is cleared: Global's off applies again
+        _saved(page, pds, "Save this machine's preferences", "this machine's")
+        expect(page.locator("#set-load_user_memory")).to_contain_text("in use: off, from global")
+    assert _user_layers(store) == (
+        [[None, None, None], [True, None, None], [False, False, False]],  # project, this machine, Global
+        [(True, "machine"), (False, "global"), (False, "global")],  # in use, and from where
+    )
 
 
 CATEGORY_LABELS = {
