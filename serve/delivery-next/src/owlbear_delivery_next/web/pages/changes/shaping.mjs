@@ -7,8 +7,8 @@ export function startedView() {
   if (state.choosing) return chooserView();
   const s = state.started;
   if (!s) return html`<p-text id="started" aria-live="polite"></p-text>`;
-  return html`<p-text id="started" aria-live="polite">${s.text ?? html`Could not open the chat: ${s.reason}. Copy
-    this command: <code>${s.command}</code>`}</p-text>`;
+  return html`<p-text id="started" aria-live="polite">${s.text ?? html`Could not open the chat ${s.about}: ${s.reason}.
+    Copy this command: <code>${s.command}</code>`}</p-text>`;
 }
 
 async function launched(id, of) {  // the host opens the chat in the background; VS Code may first have to start
@@ -47,7 +47,7 @@ function chooserView() {
 
 function shape(of) {
   return openChat({
-    path: "/new-change", of, opened: "A chat opened in VS Code to shape the new Change.",
+    path: "/new-change", of, about: "to shape the new Change",
     dialog: {
       title: "Shape a new Change?", yes: "Open the chat", no: "Not now",
       now: "A chat opens in VS Code where the shaper works out the brief with you; the chat uses AI credits like any "
@@ -64,7 +64,7 @@ export function reviseBrief(d) {
   const v = d.brief.version;
   return openChat({
     path: `/changes/${encodeURIComponent(d.slug)}/revise-brief`, of: d.project,
-    opened: `A chat opened in VS Code to revise ${d.handle}.`,
+    about: `to revise ${d.handle}${several() ? ` in ${d.projectName}` : ""}`,  // handles repeat across projects
     dialog: {
       title: `Revise brief v${v} in a new chat?`, yes: "Open the chat", no: "Not now",
       now: `A chat opens in VS Code where the shaper revises brief v${v} of ${d.handle} with you; the chat uses AI `
@@ -77,8 +77,9 @@ export function reviseBrief(d) {
   });
 }
 
-// Asks first, then opens the shaping chat through *path* and says how it went (TD-83).
-async function openChat({ path, of, dialog, opened }) {
+// Asks first, then opens the shaping chat through *path* and says how it went (TD-83); *about* names what it opens
+// for, so a launch that ends after the person chose another Change still says which one it was.
+async function openChat({ path, of, dialog, about }) {
   if (!(await ask(dialog))) return;
   state.creating = true;
   state.started = { text: "Opening the shaping chat…" };
@@ -87,8 +88,8 @@ async function openChat({ path, of, dialog, opened }) {
     const r = await call(path, {}, of);
     const s = r.started ? await launched(r.launch, of) : { state: "failed", ...r };
     state.started = s.state === "open"
-      ? { text: `${opened}${s.warning ? ` Note: ${s.warning}.` : ""}` }
-      : { reason: s.reason, command: s.command };
+      ? { text: `A chat opened in VS Code ${about}.${s.warning ? ` Note: ${s.warning}.` : ""}` }
+      : { reason: s.reason, command: s.command, about };
   } catch (e) {
     state.started = null;
     failed(e);

@@ -325,7 +325,9 @@ def test_the_brief_offers_a_new_shaping_chat_and_says_how_it_went(tmp_path: Path
         expect(again).to_be_visible(timeout=15000)
         again.click()
         pds.answer(page, "Open the chat")
-        expect(page.locator("#started")).to_contain_text("Could not open the chat: the Copilot chat did not start")
+        expect(page.locator("#started")).to_contain_text(
+            "Could not open the chat to revise c1: the Copilot chat did not"
+        )
         expect(page.locator("#started code")).to_contain_text("code chat -m")
 
         unset = {k: v for k, v in config.BASE.agents.items() if k != "shaper"}
@@ -358,7 +360,6 @@ def test_two_projects_whose_changes_share_a_handle_revise_the_one_clicked(tmp_pa
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     launched = chats(monkeypatch)
-    launched.release.set()
     a, b = (registry.register(clone(tmp_path / n, "same")) for n in ("alpha", "beta"))
     for p, title in [(a, "Alpha brief"), (b, "Beta brief")]:
         shaping(Path(p.path), title)
@@ -367,7 +368,11 @@ def test_two_projects_whose_changes_share_a_handle_revise_the_one_clicked(tmp_pa
         expect(page.locator("#detail")).to_contain_text("in beta")
         page.locator("#detail").get_by_role("button", name=REVISE).click()
         pds.answer(page, "Open the chat")
-        expect(page.locator("#started")).to_have_text("A chat opened in VS Code to revise c1.")
+        until(page, lambda: launched.calls)
+        page.locator(f'#changes a[data-key="{a.id}/same"]').click()  # another c1 chosen while beta's chat opens
+        expect(page.locator("#detail")).to_contain_text("in alpha")
+        launched.release.set()
+        expect(page.locator("#started")).to_have_text("A chat opened in VS Code to revise c1 in beta.")
         [(repo, prompt)] = launched.calls
         said = prompt.split(" in this project")[0]
         assert (Path(repo), said) == (Path(b.path), 'Continue Delivery Change c1 ("Beta brief")')
