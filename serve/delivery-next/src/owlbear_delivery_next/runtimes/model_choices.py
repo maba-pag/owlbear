@@ -54,10 +54,9 @@ class Offered:
             models = [
                 shown(m) for m in _read() if m.id != AUTO and (m.policy is None or _value(m.policy.state) == "enabled")
             ]
+            self._kept, self._error = (time.monotonic(), models), ""
         except Exception as exc:  # noqa: BLE001 - without a new list the page keeps the last one, or a typed model
             self._error = f"{type(exc).__name__}: {exc}"[:200]
-            return self._last()
-        self._kept, self._error = (time.monotonic(), models), ""
         return self._last()
 
 

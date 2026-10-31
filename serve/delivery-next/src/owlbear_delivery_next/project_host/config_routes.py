@@ -422,9 +422,9 @@ def router(store: Store, host: Host) -> APIRouter:
     def put_global(body: Save) -> dict[str, Any]:
         if store.global_path is None:
             raise HTTPException(409, "no shared settings location is set up; run `owlbear-next data PATH`")
-        own_save = reads().ledger.own  # this machine's change of Global is never noticed as one from elsewhere
         what = "global: from the settings page"
-        return _state(store, _save(store, store.global_path, GlobalLayer, body, what, host, written=own_save))
+        # this machine's change of Global is never noticed as one from elsewhere
+        return _state(store, _save(store, store.global_path, GlobalLayer, body, what, host, written=reads().ledger.own))
 
     @routes.put("/config/machine")
     def put_machine(body: Save) -> dict[str, Any]:

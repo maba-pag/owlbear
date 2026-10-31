@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Any
 import httpx
 import pytest
 import uvicorn
+from copilot.generated import rpc
 
 from owlbear_delivery_next.change_contracts.models import Brief, Change, Step, StepKind
 from owlbear_delivery_next.impeccable import pack_files
@@ -1453,22 +1454,13 @@ def _git(cwd: Path, *args: str) -> None:
     subprocess.run(["git", *who, *args], cwd=cwd, check=True, capture_output=True)  # noqa: S603, S607
 
 
-def offered(model_id: str, price: float) -> SimpleNamespace:
+def offered(model_id: str, price: float) -> rpc.Model:
     """A model the Copilot CLI offers, at *price* per million input tokens."""
-    prices = SimpleNamespace(
-        input_price=price,
-        output_price=15,
-        cache_read_price=None,
-        cache_price=None,
-        cache_write_price=None,
-        cache_write1_h_price=None,
-        long_context=None,
-        context_max=None,
-    )
-    limits = SimpleNamespace(max_context_window_tokens=200_000)
-    return SimpleNamespace(id=model_id, name=model_id, supported_reasoning_efforts=["low", "medium"],
-                           default_reasoning_effort="low", billing=SimpleNamespace(token_prices=prices),
-                           capabilities=SimpleNamespace(limits=limits), policy=None)  # fmt: skip
+    prices = rpc.ModelBillingTokenPrices(input_price=price, output_price=15)
+    limits = rpc.ModelCapabilitiesLimits(max_context_window_tokens=200_000)
+    return rpc.Model(id=model_id, name=model_id, supported_reasoning_efforts=["low", "medium"],
+                     default_reasoning_effort="low", billing=rpc.ModelBilling(token_prices=prices),
+                     capabilities=rpc.ModelCapabilities(limits=limits))  # fmt: skip
 
 
 class Outside:

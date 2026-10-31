@@ -111,14 +111,13 @@ class Reader:
 
     def _overrides(self) -> list[tuple[str, set[str]]]:
         """Who on this machine sets which keys above Global; a layer that does not read is skipped here."""
-        over: list[tuple[str, set[str]]] = []
         mine: set[str] = set()
         with contextlib.suppress(StoreError):
             mine = set(flatten(read_layer(local_home.root() / MACHINE_SETTINGS, MachineLayer)))
         with contextlib.suppress(registry.RegistryError):
             own = registry.load().settings
             mine |= {f"machine.{k}" for k in machine_settings.FIELDS if getattr(own, k) is not None}
-        over.append(("this machine", mine))
+        over = [("this machine", mine)]
         names: set[str] = set()
         for store in self.stores():
             name = store.name or store.root.name

@@ -5,6 +5,7 @@ import shutil
 import subprocess
 import threading
 from datetime import UTC, datetime
+from functools import partial
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -82,19 +83,10 @@ class World:
         publish(self.other, rel, layer(**fields))
 
 
-class Host:
-    """A project host whose machine reads through *reads*."""
-
-    maintenance = None
-    wake = SimpleNamespace(set=lambda: None)
-    record = HostRecord(url="http://127.0.0.1:9/", token="tok", pid=1, started_at=datetime.now(UTC), code=CURRENT)  # noqa: S106
-
-    def __init__(self, reads: Reader) -> None:
-        self.reads = reads
-
-
 def client(store: Store, reads: Reader) -> TestClient:
-    app = api.create_app(store, "t", Host(reads))
+    record = HostRecord(url="http://127.0.0.1:9/", token="tok", pid=1, started_at=datetime.now(UTC), code=CURRENT)  # noqa: S106
+    host = SimpleNamespace(maintenance=None, wake=SimpleNamespace(set=lambda: None), record=record, reads=reads)
+    app = api.create_app(store, "t", host)
     return TestClient(app, base_url="http://127.0.0.1", headers={"authorization": "Bearer t"})
 
 
@@ -109,6 +101,10 @@ def ids(reader: Reader) -> list[str]:
 
 def builder(model_id: str) -> dict[str, object]:
     return {"agents": {"builder": {"model": model_id}}}
+
+
+def as_saved(model_id: str) -> GlobalLayer:
+    return GlobalLayer.model_validate({"format": CONFIG_FORMAT, **builder(model_id)})
 
 
 def _diverge(w: World) -> str:
@@ -144,12 +140,9 @@ def _shared_project(w: World) -> str:
     return str(w.root / "shop" / "config.json")
 
 
-def _releases(answer: bytes | Exception) -> object:
-    def broken(w: World) -> str:
-        w.releases(answer)
-        return "GitHub's releases of"
-
-    return broken
+def _releases(answer: bytes | Exception, w: World) -> str:
+    w.releases(answer)
+    return "GitHub's releases of"
 
 
 def _models(w: World) -> str:
@@ -161,8 +154,8 @@ ELSEWHERE = '"elsewhere"'
 CASES = [  # what breaks, the source named, the Global value the read then finds (None: Global is as before)
     pytest.param(_diverge, settings_read.SHARED, '"mine"', id="sync-refuses"),  # the checkout's own, not pulled
     pytest.param(_no_remote, settings_read.SHARED, None, id="fetch-fails"),
-    pytest.param(_releases(OSError("no route")), settings_read.IMPECCABLE, ELSEWHERE, id="impeccable-unknown"),
-    pytest.param(_releases(b"not json"), settings_read.IMPECCABLE, ELSEWHERE, id="impeccable-error"),
+    pytest.param(partial(_releases, OSError("no route")), settings_read.IMPECCABLE, ELSEWHERE, id="impeccable-unknown"),
+    pytest.param(partial(_releases, b"not json"), settings_read.IMPECCABLE, ELSEWHERE, id="impeccable-error"),
     pytest.param(_models, settings_read.MODELS, ELSEWHERE, id="models"),
     pytest.param(_settings_json, settings_read.MACHINE, ELSEWHERE, id="machine-layer"),
     pytest.param(_alone_layer, settings_read.SHARED, ELSEWHERE, id="unshared-project-layer"),
@@ -348,9 +341,6 @@ def test_a_settings_save_is_not_noticed_but_a_key_pulled_during_it_is(world, tmp
 
 
 def test_a_save_during_a_read_is_not_noticed_against_the_global_the_read_found(world, monkeypatch):
-    def as_saved(model_id: str) -> GlobalLayer:
-        return GlobalLayer.model_validate({"format": CONFIG_FORMAT, **builder(model_id)})
-
     world.push(**builder("A"))
     reader = world.reader()
     reader.read()
@@ -382,9 +372,6 @@ def test_a_read_is_dated_when_it_ends(world, monkeypatch):
 
 
 def test_a_read_never_takes_an_own_save_for_one_from_elsewhere_before_its_hook_ran(world):
-    def as_saved(model_id: str) -> GlobalLayer:
-        return GlobalLayer.model_validate({"format": CONFIG_FORMAT, **builder(model_id)})
-
     world.push(**builder("A"))
     reader = world.reader()
     reader.read()

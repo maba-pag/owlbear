@@ -10,8 +10,6 @@ import { rowOf } from "./groups.mjs";
 import { button } from "./cells.mjs";
 import { unsaved } from "./sections.mjs";
 
-const READ = 200000;  // a read pulls the shared repository and starts the Copilot runtime: minutes at worst
-
 function when(iso) {
   return iso ? new Date(iso).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : "never";
 }
@@ -63,7 +61,8 @@ export async function readAgain() {
   state.readsError = "";
   show();
   try {
-    const answer = await call("/config/read", { method: "POST", timeout: READ });
+    // a read pulls the shared repository and starts the Copilot runtime: minutes at worst
+    const answer = await call("/config/read", { method: "POST", timeout: 200000 });
     state.reading = false;
     await refresh(answer.reads);
   } catch (e) {
