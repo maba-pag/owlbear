@@ -142,10 +142,10 @@ class DataRepo:
         wait = LOCK_SECONDS if wait is None else wait
         lock = self._lock_file()
         admin = lock.parent
-        fd = os.open(lock, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
         holding: set[Path] = _HOLDING.__dict__.setdefault("paths", set())
-        mine = False
-        try:
+        with contextlib.ExitStack() as stack:
+            fd = os.open(lock, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+            stack.callback(os.close, fd)
             end = time.monotonic() + wait
             while True:
                 try:
@@ -156,14 +156,11 @@ class DataRepo:
                         msg = "another settings save is still running; try again"
                         raise DataRepoError(msg) from None
                     time.sleep(0.1)
-            mine = lock not in holding
-            holding.add(lock)
+            if lock not in holding:
+                holding.add(lock)
+                stack.callback(holding.discard, lock)
             self._exclude(admin)
             yield
-        finally:
-            if mine:
-                holding.discard(lock)
-            os.close(fd)
 
     @contextlib.contextmanager
     def quiet(self) -> Iterator[bool]:
