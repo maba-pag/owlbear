@@ -34,7 +34,7 @@ def host_with(tmp_path, slots):
     path.mkdir()
     subprocess.run(["git", "init", "-q"], cwd=path, check=True, capture_output=True)  # noqa: S607
     store = Store.open(path)
-    host = Host(store, tmp_path / "host", spawn=lambda _s: None, scan=lambda *_a: {}, group=lambda _g: {})
+    host = Host(store, tmp_path / "host", spawn=lambda _s: None, members=lambda _ids: {})
     host.slots = slots
     host.maintenance = maintenance.Maintenance(slots, boot=lambda: 10.0, observe=lambda *_args: False)
     return host, store

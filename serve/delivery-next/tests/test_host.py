@@ -38,8 +38,7 @@ from owlbear_delivery_next.change_flow import delivery_target, loop, worktree
 from owlbear_delivery_next.change_flow.loop import StepResult, apply
 from owlbear_delivery_next.change_flow.status import Activity, status
 from owlbear_delivery_next.commands import cli, runner
-from owlbear_delivery_next.local_system import codebase
-from owlbear_delivery_next.local_system.process_probe import WorktreeProcessScanError
+from owlbear_delivery_next.local_system import codebase, processes
 from owlbear_delivery_next.local_system.storage_io import open_lock
 from owlbear_delivery_next.project_host import api, host
 from owlbear_delivery_next.project_host.host import Host, RunnerRecord
@@ -64,13 +63,14 @@ def store(tmp_path):
 
 
 class Fake:
-    """Process seams: spawned runners stay alive until ended; the worktree scan reports what a test puts there."""
+    """Process seams: spawned runners stay alive until ended; ``tree`` files each process under its group or session."""
 
     def __init__(self, store, tmp_path):
-        self.live, self.found, self.groups, self.pid = set(), {}, {}, 100
+        self.live, self.pid = set(), 100
+        self.tree: dict[int, tuple[int, str]] | None = {}  # pid -> (group or session id, name); None: unlistable
         (tmp_path / "wt").mkdir(exist_ok=True)
         self.worktree = str(tmp_path / "wt")
-        self.host = Host(store, tmp_path, spawn=self.spawn, scan=self.scan, group=lambda g: self.groups.get(g, {}))
+        self.host = Host(store, tmp_path, spawn=self.spawn, members=self.members)
         self.host.alive = lambda pid, _created: pid in self.live
 
     def spawn(self, _slug):
@@ -78,10 +78,11 @@ class Fake:
         self.live.add(self.pid)
         return RunnerRecord(pid=self.pid, created=1.0, started_at=NOW)
 
-    def scan(self, _path, _since):
-        if self.found is None:
-            raise WorktreeProcessScanError
-        return self.found
+    def members(self, ids):
+        if self.tree is None:
+            msg = "the process table could not be listed: denied"
+            raise processes.UnlistedError(msg)
+        return {p: name for p, (i, name) in self.tree.items() if i in ids}
 
 
 def save(store, change):
@@ -112,16 +113,16 @@ def test_no_writer_starts_until_the_former_runner_and_its_processes_are_gone(sto
     save(store, asking(fake).model_copy(update={"outcome": None}))
     assert fake.host.tick(NOW) == ["c1"]
     fake.live.clear()
-    fake.found, fake.groups = {4242: "sleep"}, {101: {4243: "copilot"}}
+    fake.tree = {4242: (101, "sleep"), 4243: (101, "copilot")}
     assert fake.host.tick(NOW) == []
     blocked = store.read("c1").blocked
     assert blocked.action == "End processes 4242, 4243"
     assert "4242 (sleep)" in status(store.read("c1"), Activity(host_up=True), NOW).line
-    fake.groups = {}
-    fake.found = None
+    fake.tree = None
     assert fake.host.tick(NOW) == []
-    assert store.read("c1").blocked.reason == "the process table could not be scanned"
-    fake.found = {}
+    reason = "the step's processes could not be looked for: the process table could not be listed: denied"
+    assert store.read("c1").blocked.reason == reason
+    fake.tree = {}
     assert fake.host.tick(NOW) == ["c1"]
     assert store.read("c1").blocked is None
 
@@ -139,18 +140,20 @@ def test_recorded_pids_of_the_runner_block_until_gone(store, tmp_path):
     assert fake.host.tick(NOW) == ["c1"]
 
 
-def test_a_read_only_worktree_left_unconfirmed_is_scanned_before_its_mark_is_cleared(store, tmp_path):
-    fake, ro, scanned = Fake(store, tmp_path), tmp_path / "c1.ro", []
+def test_a_read_only_copys_install_left_behind_blocks_until_gone(store, tmp_path):
+    fake, ro = Fake(store, tmp_path), tmp_path / "c1.ro"
     ro.mkdir()
-    fake.host.scan = lambda path, _since: (scanned.append(path), fake.found if path == ro else {})[1]
-    save(store, asking(fake).model_copy(update={"outcome": None}))
+    c = asking(fake).model_copy(update={"outcome": None})
+    c.step.started_at = NOW - timedelta(minutes=1)
+    save(store, c)
     folder = store.root / "changes" / "c1"
     disposable.begin(folder, ro)
-    fake.found = {4242: "copilot"}
+    with store.lock("c1") as lock:  # the install's leader, ended, as check.run journals it
+        store.log(lock, "c1", {"event": "pids", "at": (NOW - timedelta(seconds=30)).isoformat(), "pids": {"900": 1.0}})
+    fake.tree = {4242: (900, "copilot")}
     assert fake.host.tick(NOW) == []
     assert (store.read("c1").blocked.action, disposable.live(folder)) == ("End processes 4242", ro)
-    assert scanned == [Path(fake.worktree), ro]
-    fake.found = {}
+    fake.tree = {}
     assert fake.host.tick(NOW) == ["c1"]
     assert disposable.live(folder) is None
 
@@ -466,15 +469,22 @@ def test_a_check_without_a_test_preparation_never_launches(store, tmp_path, monk
     assert after.outcome.reason == "the check has no test preparation; nothing launches without one"
 
 
-def test_an_uncertain_launch_is_disposed_from_the_worktree_scan_before_another_copy(store, tmp_path, monkeypatch):
+def launched(store, pid):
+    """The pid file a launch's wrapper wrote at ``NOW`` before the host recorded its group."""
+    path = store.root / "changes" / "c1" / check.PIDFILE
+    path.write_text(f"{pid}\n")
+    os.utime(path, (NOW.timestamp(), NOW.timestamp()))
+    return NOW.timestamp()
+
+
+def test_an_uncertain_launch_is_disposed_from_its_pid_file_before_another_copy(store, tmp_path, monkeypatch):
     fake = Fake(store, tmp_path)
     calls = environment(store, fake, monkeypatch, launched_at=NOW)
-    fake.found, calls["left"] = {77: "npm"}, [{77: "npm"}]
+    at, calls["left"] = launched(store, 77), [{77: "npm"}]
     assert fake.host.tick(NOW) == []
     assert (calls["start"], store.read("c1").blocked.action) == ([], "End processes 77")
-    fake.found = {}
     assert fake.host.tick(NOW) == []
-    assert (calls["dispose"][0], calls["start"]) == ({77: 2.0}, ["npm run preview"])
+    assert (calls["dispose"][0], calls["start"]) == ({77: at}, ["npm run preview"])
 
 
 def test_the_environment_launches_after_the_builder_is_gone_and_is_disposed_on_the_result(store, tmp_path, monkeypatch):
@@ -483,10 +493,10 @@ def test_the_environment_launches_after_the_builder_is_gone_and_is_disposed_on_t
     (store.root / "changes" / "c1" / "runner.json").write_text(
         RunnerRecord(pid=5, created=1.0, started_at=NOW).model_dump_json()
     )
-    fake.found = {55: "vite"}
+    fake.tree = {55: (5, "vite")}
     assert fake.host.tick(NOW) == []
     assert calls["start"] == []
-    fake.found = {}
+    fake.tree = {}
     assert fake.host.tick(NOW) == []
     assert calls["start"] == ["npm run preview"]
     assert set(calls["env"]) - set(BASE) == {"APP_ENV"}  # the explicit test environment, never the host's own
@@ -868,8 +878,8 @@ def test_a_launch_that_left_no_pids_is_found_and_stopped_before_a_stop_when_idle
     paused(fake, [True])
     calls = environment(store, fake, monkeypatch, launched_at=NOW)
     fake.host.draining = lambda: True
-    fake.found = {902: "node"}  # started in the worktree before the crash recorded its group
-    assert (fake.host.tick(NOW), calls["dispose"], store.read("c1").env.launched_at) == ([], [{902: 2.0}], None)
+    at = launched(store, 902)  # the crash came before its group was recorded
+    assert (fake.host.tick(NOW), calls["dispose"], store.read("c1").env.launched_at) == ([], [{902: at}], None)
 
 
 def test_a_liveness_stop_found_while_paused_clears_once_its_processes_are_gone(store, tmp_path):
@@ -880,10 +890,10 @@ def test_a_liveness_stop_found_while_paused_clears_once_its_processes_are_gone(s
     assert fake.host.tick(NOW) == ["c1"]
     flag[0] = True
     fake.live.clear()
-    fake.found = {4242: "sleep"}
+    fake.tree = {4242: (101, "sleep")}
     assert fake.host.tick(NOW) == []
     assert (store.read("c1").blocked.action, fake.host.runner("c1").pid) == ("End processes 4242", 101)
-    fake.found = {}
+    fake.tree = {}
     assert fake.host.tick(NOW) == []
     assert (store.read("c1").blocked, fake.host.runner("c1"), fake.pid) == (None, None, 101)
 

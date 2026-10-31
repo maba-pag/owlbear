@@ -6,6 +6,7 @@ import contextvars
 import os
 import signal
 import subprocess
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -16,6 +17,7 @@ from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_contracts.tools import Worktree
 from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.git import remote_git
+from owlbear_delivery_next.project_host.host import Host
 from owlbear_delivery_next.runtimes import command_marks, sdk_adapter
 from owlbear_delivery_next.state_store.store import Store
 
@@ -85,7 +87,9 @@ def test_a_runner_step_marks_its_sessions_and_journals_its_pushes(change_repo, t
     monkeypatch.setattr(sdk_adapter.preload, "missing", lambda *_a, **_k: [])
     store = Store.open(change_repo)
     with store.lock("c1") as lock:
-        store.write(lock, Change(slug="c1", step=Step(kind=StepKind.BUILD)))
+        store.write(
+            lock, Change(slug="c1", step=Step(kind=StepKind.BUILD, started_at=datetime.now(UTC) - timedelta(seconds=5)))
+        )
     remote, left = tmp_path / "remote.git", tmp_path / "left"
     _git(tmp_path, "init", "-q", "--bare", str(remote))
     hook = change_repo / _git(change_repo, "rev-parse", "--git-path", "hooks/pre-push")
@@ -111,6 +115,10 @@ def test_a_runner_step_marks_its_sessions_and_journals_its_pushes(change_repo, t
         journaled = {int(p) for e in store.events("c1") if e["event"] == "pids" for p in e["pids"]}
         assert os.getsid(sleep) in journaled  # Git's leader, whose session the hook's leftover is in
         assert (command_marks._active, remote_git.launched) == ([], None)  # noqa: SLF001 - nothing outlives the runner
+        host = Host(store, change_repo, spawn=lambda _s: pytest.fail("a runner started beside the leftover"))
+        host.say = lambda _text: None
+        assert host.tick() == []
+        assert str(sleep) in store.read("c1").blocked.action
 
         monkeypatch.setattr(runner, "_step", failing)
         with pytest.raises(RuntimeError, match="the step failed"):

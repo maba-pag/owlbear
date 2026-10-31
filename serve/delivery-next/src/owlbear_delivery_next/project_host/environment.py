@@ -23,7 +23,7 @@ def launch(h: Host, lock: Lock, c: Change, now: datetime) -> Change:  # noqa: PL
     e = c.env
     if e is None or h.env_action(c) != "launch" or before.due(c) or prepare.due(h.store, c):
         return c  # the runner renders the "before" states, then prepares the test copy (TD-24, TD-96)
-    if (left := h.clear(c, e)) is None or left:
+    if left := h.clear(c, e):
         h.mark(c, left, now)  # never a second group beside one that may still run
         return c
     # after disposal: a stop or question holds only the launch; a setting unset holds it before the gate's fetch
@@ -50,7 +50,7 @@ def launch(h: Host, lock: Lock, c: Change, now: datetime) -> Change:  # noqa: PL
             h.store.write(lock, c)
     pids = check.ready(e, proc) if proc else None
     if pids is None:
-        if (left := h.clear(c, e)) is None or left:
+        if left := h.clear(c, e):
             h.mark(c, left, now)
             return c
         c.env = c.recipe = None

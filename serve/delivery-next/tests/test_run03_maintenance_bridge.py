@@ -363,7 +363,7 @@ def replay_store(tmp_path, shared_repo):
     git(project, "remote", "add", "origin", "git@github.com:acme/shop-site.git")
     store = Store.open(project)
     slots = Slots(lambda: 1)
-    host = Host(store, tmp_path / "host", spawn=lambda _s: None, scan=lambda *_a: {}, group=lambda _g: {})
+    host = Host(store, tmp_path / "host", spawn=lambda _s: None, members=lambda _ids: {})
     host.slots = slots
     host.maintenance = maintenance.Maintenance(slots, boot=lambda: 10.0, observe=lambda *_a: False)
     return store, host
