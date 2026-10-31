@@ -135,4 +135,7 @@ source_pkgs = [
   "owlbear_memory_mcp",
   "owlbear_browser",
   "owlbear_tools",
+  "owlbear_delivery_next",
+  "owlbear_memory",
+  "owlbear_web_content",
 ]
