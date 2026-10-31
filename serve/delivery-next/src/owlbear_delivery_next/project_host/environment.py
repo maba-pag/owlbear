@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 from owlbear_delivery_next.change_contracts import tools
 from owlbear_delivery_next.change_contracts.models import Recipe
 from owlbear_delivery_next.change_flow import loop, worktree
+from owlbear_delivery_next.project_host import launch_gate
 from owlbear_delivery_next.workflow_steps import before, check, decisions_gate, prepare
 
 if TYPE_CHECKING:
@@ -25,7 +26,8 @@ def launch(h: Host, lock: Lock, c: Change, now: datetime) -> Change:  # noqa: PL
     if (left := h.clear(c, e)) is None or left:
         h.mark(c, left, now)  # never a second group beside one that may still run
         return c
-    c, going = decisions_gate.launch(h.store, c, now)  # after disposal: a stop or question holds only the launch
+    # after disposal: a stop or question holds only the launch; a setting unset holds it before the gate's fetch
+    c, going = (c, False) if launch_gate.blocked(h) else decisions_gate.launch(h.store, c, now)
     if not going:
         return c
     root = Path(c.names.worktree)
@@ -39,7 +41,7 @@ def launch(h: Host, lock: Lock, c: Change, now: datetime) -> Change:  # noqa: PL
         return loop.apply(c, check.failed("; ".join(errors)), now)
     log = h.store.root / "changes" / c.slug / "env.log"
     with h.launching:  # a project's stop or a folder rename waits; once paused or stopping, nothing starts
-        if h.paused() or h.updating():  # an update's fence holds it too
+        if h.paused() or h.updating() or launch_gate.blocked(h):  # an update's fence holds it too
             return c
         c.env = e = e.model_copy(update={"pids": {}, "pgid": None, "ready_at": None, "launched_at": datetime.now(UTC)})
         h.store.write(lock, c)
