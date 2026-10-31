@@ -537,6 +537,7 @@ def the_overview_shows_what_projects_set_apart(page) -> Any:
 
 
 @pytest.mark.browser
+@pytest.mark.timeout(120)  # one page walks every settings group and saves several times: 32 s alone on a loaded laptop
 def test_settings_show_what_each_project_sets_apart_and_ask_where_an_edit_goes(
     tmp_path: Path, shared_repo, pds
 ) -> None:

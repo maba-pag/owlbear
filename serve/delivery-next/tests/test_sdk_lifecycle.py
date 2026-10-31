@@ -343,6 +343,8 @@ def test_a_clean_lifecycle_confirms_without_signals(world):
 
 
 @pytest.mark.parametrize("stage", ["list", "cancel", "disconnect", "stop"])
+# The child keeps the default 30 s; the parent waits for a child that a loaded machine can take a minute to start.
+@pytest.mark.timeout(30 if os.environ.get("OWLBEAR_TEST_OWNED_TEARDOWN") else 180)
 def test_real_sdk_teardown_progresses_past_repeatedly_cancel_resistant_rpc(tmp_path, monkeypatch, stage, request):
     if os.environ.get("OWLBEAR_TEST_OWNED_TEARDOWN") != stage:
         try:
@@ -363,7 +365,7 @@ def test_real_sdk_teardown_progresses_past_repeatedly_cancel_resistant_rpc(tmp_p
                 env=os.environ | {"OWLBEAR_TEST_OWNED_TEARDOWN": stage},
                 capture_output=True,
                 text=True,
-                timeout=15,
+                timeout=120,
                 check=False,
             )
         except subprocess.TimeoutExpired as error:
