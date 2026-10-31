@@ -26,7 +26,6 @@ from owlbear_delivery_next.state_store import machine_settings, registry
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-    from pathlib import Path
 
     from owlbear_delivery_next.machine_host.machine import Machine
 
@@ -74,12 +73,9 @@ def _found() -> dict[str, Any]:
     return {"state": "found", "version": choice.tag, "commit": choice.commit, "pins": pins, "channel": channel}
 
 
-def checked(home: Path | None = None) -> dict[str, Any]:
-    """Look now and keep it for the pages; what was found: ``state``, the ``version`` to take and ``detail``.
-
-    *home* is the ``~/.owlbear`` it keeps that in, by default this one.
-    """
-    path = (home or local_home.root()) / pack_files.PACKS / RELEASED
+def checked() -> dict[str, Any]:
+    """Look now and keep it for the pages; what was found: ``state``, the ``version`` to take and ``detail``."""
+    path = local_home.root() / pack_files.PACKS / RELEASED  # before the fetch: the home may move while it runs
     kept = _found() | {"running": versions.running(), "running_pack": pack_files.manifest()["pack"]}
     with contextlib.suppress(OSError):  # a hint: unwritten, it is looked at again by the next check
         path.parent.mkdir(parents=True, exist_ok=True)

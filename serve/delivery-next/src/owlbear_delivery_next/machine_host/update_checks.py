@@ -30,7 +30,6 @@ from owlbear_delivery_next.state_store import machine_settings
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-    from pathlib import Path
 
     from owlbear_delivery_next.machine_host.machine import Machine
 
@@ -66,15 +65,15 @@ def _time(value: object) -> datetime | None:
         return None
 
 
-def owlbear(home: Path) -> dict[str, Any]:
+def owlbear() -> dict[str, Any]:
     """The version this machine would take, newer whether or not it pins another Impeccable; never installs.
 
-    It also keeps that version's pack in *home* for the pages' Impeccable banner (``impeccable.release``).
+    It also keeps that version's pack for the pages' Impeccable banner (``impeccable.release``).
 
     Raises:
         Failed: The versions could not be read, or their channel is unset.
     """
-    found, running = impeccable.checked(home), versions.running()
+    found, running = impeccable.checked(), versions.running()
     tag = str(found.get("version", ""))
     if found.get("state") == "unknown" and not tag:
         raise Failed(str(found.get("detail", "")))
@@ -112,14 +111,13 @@ def _number(version: str) -> tuple[int, ...]:
     return tuple(int(n) for n in re.findall(r"\d+", version))
 
 
-def impeccable_skill(home: Path | None = None) -> dict[str, Any]:
-    """Upstream's skill releases against the pinned tag, kept in *home*'s ``notice.json`` for the other pages too.
+def impeccable_skill() -> dict[str, Any]:
+    """Upstream's skill releases against the pinned tag, kept in ``notice.json`` for the other pages too.
 
     Raises:
         Failed: GitHub was not reached, refused, or answered with no list of releases.
     """
-    said = pack_update.notice(refresh=False, force=True, home=home)
-    pinned = pack_files.manifest()["upstream"]["tag"]
+    said, pinned = pack_update.notice(refresh=False, force=True), pack_files.manifest()["upstream"]["tag"]
     if said["state"] != "known":
         raise Failed(said["detail"] or "the releases could not be read", offline=said["state"] == "unknown")
     behind = said["behind"]
@@ -127,9 +125,7 @@ def impeccable_skill(home: Path | None = None) -> dict[str, Any]:
     return {"newer": behind > 0, "current": pinned, "latest": said["latest"] or pinned, "detail": detail}
 
 
-CHECKS: dict[str, Callable[[Path], dict[str, Any]]] = {  # each given the home its host started with
-    "owlbear": owlbear, "pds": lambda _home: pds(), "impeccable": impeccable_skill,
-}  # fmt: skip
+CHECKS: dict[str, Callable[[], dict[str, Any]]] = {"owlbear": owlbear, "pds": pds, "impeccable": impeccable_skill}
 INSTALLED: dict[str, Callable[[], str]] = {
     "owlbear": versions.running, "pds": pages.pds_version,
     "impeccable": lambda: pack_files.manifest()["upstream"]["tag"],
@@ -166,8 +162,7 @@ class Checks:
         self.machine, self.now, self.spawn, self.lock = machine, now, spawn, threading.Lock()
         self.checking: set[str] = set()
         self.workers: list[threading.Thread] = []  # the threads ``drain`` waits for
-        self.home = local_home.root()  # a check ending after the home moved (a test's teardown) still writes here
-        self.path = self.home / STATE
+        self.path = local_home.root() / STATE  # a check ending after the home moved (a test's teardown) keeps it here
         self.kept: dict[str, dict[str, Any]] = self._restored()
 
     def _restored(self) -> dict[str, dict[str, Any]]:
@@ -219,7 +214,7 @@ class Checks:
     def _run(self, name: str) -> None:
         at, found, failure = self.now(), None, None
         try:
-            found = CHECKS[name](self.home)
+            found = CHECKS[name]()
         except Failed as exc:
             failure = exc
         except Exception as exc:  # noqa: BLE001 - a check that broke is one more failure, never the loop's end

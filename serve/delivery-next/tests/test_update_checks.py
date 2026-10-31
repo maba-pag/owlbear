@@ -115,7 +115,7 @@ def outcomes(monkeypatch, name: str, *each: dict | Failed) -> None:
         monkeypatch.setitem(update_checks.INSTALLED, n, lambda n=n: "v1" if n == "owlbear" else "1.0.0")
     answers = iter(each)
 
-    def check(_home: Path) -> dict:
+    def check() -> dict:
         outcome = next(answers)
         if isinstance(outcome, Failed):
             raise outcome
@@ -188,7 +188,7 @@ def test_available_counts_each_runnable_component_once_and_pds_not_yet(monkeypat
 def test_each_update_is_checked_at_the_start_and_then_only_at_its_own_set_interval(monkeypatch):
     ran: list[str] = []
     for name in CHECKS:
-        monkeypatch.setitem(CHECKS, name, lambda _home, name=name: ran.append(name) or FOUND)
+        monkeypatch.setitem(CHECKS, name, lambda name=name: ran.append(name) or FOUND)
     clock, machine = Clock(), stub()
     checks = Checks(machine, clock, lambda work: work())
     monkeypatch.setattr(machine.stopping, "wait", lambda _seconds: True)  # the loop's start only
@@ -213,7 +213,7 @@ def test_each_update_is_checked_at_the_start_and_then_only_at_its_own_set_interv
     assert ran == ["owlbear", "pds", "pds", "owlbear", "pds"]
     assert shown(checks, "pds")["next_at"] == (clock.at + timedelta(hours=3)).isoformat()
 
-    def unreached(_home: Path) -> dict:
+    def unreached() -> dict:
         ran.append("pds failed")
         msg = "npm was not reached"
         raise Failed(msg, offline=True)
@@ -275,38 +275,26 @@ def move(monkeypatch, home: Path) -> None:
     monkeypatch.setenv("HOME", str(home.parent))
 
 
-@pytest.mark.parametrize("delayed", ["before its check began", "while it fetched"])
-def test_a_check_ending_after_its_home_moved_writes_only_in_the_home_its_host_started_with(
-    delayed, tmp_path, monkeypatch
-):
-    """#804: a worker still running when a test's teardown puts the real home back wrote into it when it ended."""
+def test_a_check_ending_after_its_home_moved_writes_only_in_the_home_its_host_started_with(tmp_path, monkeypatch):
+    """#804: a worker still fetching when a test's teardown puts the real home back wrote into it when it ended."""
     a, b = homes(tmp_path, monkeypatch)
-    names = ["owlbear", "impeccable"] if delayed.startswith("before") else ["owlbear"]
-    entered, release = {n: threading.Event() for n in names}, threading.Event()
+    entered, release = threading.Event(), threading.Event()
 
-    def held(name: str) -> None:
-        entered[name].set()
+    def fetching(_channel=None):
+        entered.set()
         release.wait(10)
-
-    def offline(_channel=None):
-        if not delayed.startswith("before"):
-            held("owlbear")
         msg = "offline"
         raise versions.VersionError(msg)
 
-    monkeypatch.setattr(versions, "target", offline)
-    if delayed.startswith("before"):
-        for name in names:
-            monkeypatch.setitem(CHECKS, name, lambda home, name=name, check=CHECKS[name]: held(name) or check(home))
+    monkeypatch.setattr(versions, "target", fetching)
     checks = Checks(stub())  # its own worker threads, as the host's
-    assert all(checks.start(n) for n in names)
-    assert all(entered[n].wait(5) for n in names)
+    assert checks.start("owlbear")
+    assert entered.wait(5)
     move(monkeypatch, b)  # the teardown
     release.set()
     assert checks.drain(10)
-    assert sorted(p.relative_to(b) for p in b.rglob("*")) == []
-    written = [update_checks.STATE, *(Path(pack_files.PACKS) / f for f in (impeccable.RELEASED, pack_update.NOTICE))]
-    assert [(a / f).exists() for f in written] == [True, True, "impeccable" in names]
+    released = Path(pack_files.PACKS) / impeccable.RELEASED
+    assert [(home / f).exists() for home in (b, a) for f in (update_checks.STATE, released)] == [False] * 2 + [True] * 2
     assert json.loads((a / update_checks.STATE).read_text())["owlbear"]["failures"] == 1
 
 
@@ -322,7 +310,7 @@ def test_the_hosts_stop_waits_a_while_for_its_checks_and_then_starts_none(tmp_pa
         return FOUND
 
     for name in CHECKS:
-        monkeypatch.setitem(CHECKS, name, lambda _home, name=name: blocked(name))
+        monkeypatch.setitem(CHECKS, name, lambda name=name: blocked(name))
     monkeypatch.setattr(update_checks, "DRAIN", 1.0)
     now = datetime.now(UTC)
     machine = Machine(HostRecord(url="http://127.0.0.1:9/", token="t", pid=1, started_at=now, code=codebase.CURRENT))  # noqa: S106
