@@ -2,9 +2,13 @@
 
 Every shell command and file access is allowed, except in every step a hook or signing bypass or a force push,
 and in a read-only step any write. The read-only shell rule is ported from the old agents' deny-writes guard.
-Commands behind wrapper programs (env, xargs, timeout, find -exec, ...) and scripts given to a nested shell (-c) or
-eval are judged the same way, and so is turning hooks or signing off through git config. Not read: a script file a
-shell runs, a shell's standard input (pipes, here-strings), env -S, and commands built at run time.
+A shell request is judged by its whole command text, not the runtime's segments, which lose pipes, redirections and
+here-document bodies. Commands behind wrapper programs (env, env -S, xargs, timeout, find -exec, ...) are judged the
+same way, and so is turning hooks or signing off through git config. So is every script a shell runs (``shell_walk``):
+its -c script, script file, startup files, here-document or here-string, a sourced file, eval's words and a shell
+script run by path. What the guard can't read is refused: a shell reading input from another program, a command or
+script built at run time, a script or program run after an earlier write in the same command, and a relative path
+once the folder can't be followed.
 """
 
 from __future__ import annotations
