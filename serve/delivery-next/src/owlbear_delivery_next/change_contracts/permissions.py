@@ -16,7 +16,7 @@ from pathlib import PurePath
 from typing import TYPE_CHECKING, Any, NamedTuple
 
 from owlbear_delivery_next.change_contracts import tools
-from owlbear_delivery_next.local_system import shell_parse
+from owlbear_delivery_next.local_system import shell_parse, shell_programs
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -243,12 +243,12 @@ def _sub_bypass(sub: str | None, arguments: Sequence[str]) -> str | None:
 
 def _environment(words: Sequence[str]) -> dict[str, str]:
     """The variables one command sets for what it runs: leading assignments, env's, and export's."""
-    i = next((i for i, w in enumerate(words) if not shell_parse.ASSIGNMENT.match(w)), len(words))
+    i = next((i for i, w in enumerate(words) if not shell_programs.ASSIGNMENT.match(w)), len(words))
     found = list(words[:i])
     if i < len(words) and PurePath(words[i]).name == "env":
-        found += [w for w in words[i + 1 : shell_parse.operand(words, i)] if shell_parse.ASSIGNMENT.match(w)]
+        found += [w for w in words[i + 1 : shell_programs.operand(words, i)] if shell_programs.ASSIGNMENT.match(w)]
     elif i < len(words) and words[i] == "export":
-        found += [w for w in words[i + 1 :] if shell_parse.ASSIGNMENT.match(w)]
+        found += [w for w in words[i + 1 :] if shell_programs.ASSIGNMENT.match(w)]
     return dict(w.partition("=")[::2] for w in found)
 
 
@@ -270,10 +270,10 @@ def _bypass(words: Sequence[str]) -> str | None:
     """Return the setting, option or refspec of a git command that skips hooks or signing, or forces a push."""
     if setting := _env_setting(words):
         return f"environment setting {setting}"
-    for prog in shell_parse.programs(words):
-        if PurePath(prog[0]).name != "git":
+    for run in shell_programs.runs(words):
+        if shell_programs.name(run.words[0]) != "git":
             continue
-        call = _parse_git(prog[1:])
+        call = _parse_git(run.words[1:])
         if setting := next((s for s in call.config if _disables(s)), None):
             return f"-c {setting}"
         if call.sub == "config" and (setting := _config_write(call.arguments)):
@@ -291,7 +291,7 @@ def _is_read_only_branch(arguments: Sequence[str]) -> bool:
 
 def _git_mutation(words: Sequence[str]) -> str | None:
     """How a git command one command's words run would write."""
-    for prog in (p for p in shell_parse.programs(words) if PurePath(p[0]).name == "git"):
+    for prog in (r.words for r in shell_programs.runs(words) if shell_programs.name(r.words[0]) == "git"):
         call = _parse_git(prog[1:])
         if option := next((a for a in call.arguments if a.partition("=")[0] in _GIT_WRITE_OPTIONS), None):
             return f"Git output option {option}"
@@ -331,25 +331,43 @@ def bypass(reason: str) -> bool:
 def _check(policy: Policy, text: str, depth: int = 0) -> str | None:
     """Judge one shell text, and each script it hands to a nested shell or eval the same way."""
     try:
-        commands = shell_parse.commands(text)
+        commands = shell_parse.parse(text)
     except ValueError:
         return f"`{text}` cannot be parsed"
     if not commands:
         return "the shell request names no command" if depth == 0 else None  # an empty script does nothing
-    if flag := next(filter(None, map(_bypass, commands)), None):
+    if flag := next(filter(None, (_bypass(c.words) for c in commands)), None):
         return f"`{text}` uses {flag}, {BYPASS}"
-    if not policy.write and (found := _mutation(text, commands)):
+    if not policy.write and (found := _mutation(text, [c.words for c in commands])):
         return f"`{text}` uses {found}, which writes in a read-only step"
     return _nested(policy, text, commands, depth)
 
 
-def _nested(policy: Policy, text: str, commands: Sequence[Sequence[str]], depth: int) -> str | None:
-    for script in (s for words in commands for s in shell_parse.scripts(words)):
-        if depth >= shell_parse.NESTING:
-            return f"`{text}` nests scripts more than {shell_parse.NESTING} deep"
+def _nested(policy: Policy, text: str, commands: Sequence[shell_parse.Command], depth: int) -> str | None:
+    for script in (s for command in commands for s in _scripts(command)):
+        if depth >= shell_programs.NESTING:
+            return f"`{text}` nests scripts more than {shell_programs.NESTING} deep"
         if reason := _check(policy, script, depth + 1):
             return reason
     return None
+
+
+def _scripts(command: shell_parse.Command) -> list[str]:
+    """The shell text a command hands on: each shell's -c script or here-document, and eval's arguments."""
+    found = []
+    given = command.stdin()
+    for run in shell_programs.runs(command.words):
+        program = shell_programs.name(run.words[0])
+        if program == "eval":
+            rest = list(run.words[1:])
+            found.append(" ".join(rest[1:] if rest[:1] == ["--"] else rest))
+        elif program in shell_programs.SHELLS:
+            args = shell_programs.shell_args(run.words)
+            if args.script is not None:
+                found.append(args.script)
+            elif args.reads_stdin and given and given.kind in {"here", "string"}:
+                found.append(given.word)
+    return found
 
 
 def decide(policy: Policy, req: Request, offered: frozenset[str] = frozenset()) -> str | None:

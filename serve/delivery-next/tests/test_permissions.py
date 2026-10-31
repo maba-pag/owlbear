@@ -5,6 +5,7 @@ import pytest
 from copilot.generated.session_events import PermissionRequestShell
 
 from owlbear_delivery_next.change_contracts.permissions import Policy, Request, decide, view
+from owlbear_delivery_next.local_system.shell_parse import parse
 
 ROOT = Path("/w")
 READ, WRITE = Policy(ROOT, write=False), Policy(ROOT)
@@ -326,3 +327,58 @@ def test_mcp_and_custom_tools_stay_bound_to_the_role() -> None:
     assert decide(READ, Request("custom-tool", tool="submit_result")) is None
     assert decide(READ, Request("custom-tool", tool="other")) == "tool other is not allowed"
     assert decide(WRITE, Request("url")) is None  # the planner's web_fetch (TD-82)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "git commit -F - <<'EOF'\nfix: refuse git push --force and git commit --no-verify\nEOF",
+        "cat <<'EOF'\n$(git commit --no-verify -m x)\nEOF",
+        "cat <<-EOF\n\tgit push -f\n\tEOF",
+        "echo $((1<<2))",
+        "x=$(cat <<'A'\nhi\nA\n); echo \"$x\"",
+        "cat <<A <<'B'\none\nA\ngit push -f\nB",
+    ],
+)
+def test_a_here_document_to_a_program_other_than_a_shell_is_data(text: str) -> None:
+    assert decide(WRITE, shell(text)) is None
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "cat <<EOF\n$(git commit --no-verify -m x)\nEOF",
+        "cat <<EOF\n`git push -f`\nEOF",
+        "echo $(( $(git push -f) + 1 ))",
+        "echo $(( `git push -f` + 1 ))",
+        "bash <<'EOF'\ngit push -f\nEOF",
+        "bash <<< 'git push -f'",
+    ],
+)
+def test_substitutions_and_a_shells_here_document_are_still_judged(text: str) -> None:
+    assert decide(WRITE, shell(text)).endswith(BYPASS)
+
+
+def test_the_lexer_attaches_here_documents_and_here_strings_to_their_command() -> None:
+    first, second = parse("bash 3<<'A' <<-B\nfd3 $x\nA\n\tstdin $x\nB\ncat <<< \"$y\"")
+
+    assert first.words == ["bash"]
+    assert [(i.fd, i.kind, str(i.word), i.word.expanded) for i in first.inputs] == [
+        (3, "here", "fd3 $x\n", False),
+        (0, "here", "stdin $x\n", True),
+    ]
+    assert first.stdin().word == "stdin $x\n"
+    assert (second.stdin().kind, second.stdin().word, second.stdin().word.expanded) == ("string", "$y", True)
+
+
+def test_the_lexer_marks_expansions_tildes_and_where_input_comes_from() -> None:
+    run_time, literal, echo, cat, sh, group, closer, fed, tee = parse(
+        "$PY -V; '$PY' ~/a '~/b'; echo a | (cat; sh) && { x; } < f; tee >(sh)"
+    )
+
+    assert [(w.expanded, w.tilde) for w in run_time.words] == [(True, False), (False, False)]
+    assert [(w.expanded, w.tilde) for w in literal.words] == [(False, False), (False, True), (False, False)]
+    assert (echo.opaque_stdin, echo.top_level) == (False, True)
+    assert (cat.opaque_stdin, sh.opaque_stdin, cat.top_level) == (True, True, False)
+    assert (group.words, group.opaque_stdin, closer.words) == (["{", "x"], True, ["}"])  # the group's input feeds it
+    assert (fed.words, fed.opaque_stdin, tee.opaque_stdin) == (["sh"], True, False)
