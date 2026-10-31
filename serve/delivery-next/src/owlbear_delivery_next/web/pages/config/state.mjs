@@ -39,6 +39,7 @@ export const state = {
   machineUnread: "",  // why this machine's settings could not be read, until a read succeeds
   // Owner edited or cleared a project Merge and cleanup preference; kept until a save publishes.
   prefsReview: false,
+  reads: null, readsSeen: "", reading: false, readsError: "",  // the outside reads as last shown (#810)
 };
 export const drafts = { project: {}, machine: {}, global: {} };
 // The way back a Metrics compaction row's link gave: kept only when it is this host's own Metrics page

@@ -328,7 +328,8 @@ export async function readModels() {
   try {
     const answer = await call("/config/models", { timeout: 45000 });
     const offered = answer.models.length ? answer.models : null;
-    const note = offered ? "Models, efforts and context sizes as this machine's Copilot offers them."
+    const note = offered && answer.error ? `Models as last read; reading them again failed (${answer.error}).`
+      : offered ? "Models, efforts and context sizes as this machine's Copilot offers them."
       : `Could not read the offered models (${answer.error || "none offered"}); type a model name.`;
     page.arrived = { offered, note };
   } catch (e) {
