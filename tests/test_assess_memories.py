@@ -79,6 +79,7 @@ def _seed_entry(directory: Path, entry: MemoryEntry) -> None:
 def _make_ctx(engine: MemoryEngine) -> MagicMock:
     ctx = MagicMock()
     ctx.request_context.lifespan_context.engine = engine
+    ctx.request_context.lifespan_context.global_dir = None  # unbound: no shared repository
     return ctx
 
 

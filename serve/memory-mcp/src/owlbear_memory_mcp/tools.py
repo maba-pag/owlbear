@@ -33,6 +33,7 @@ from owlbear_memory import (
 )
 from pydantic import BaseModel, ConfigDict, Field, StrictStr, ValidationError, field_validator
 
+from owlbear_memory_mcp import receipts
 from owlbear_memory_mcp.git import commit_batch, commit_move, format_git_failure, repo_locked
 
 if TYPE_CHECKING:
@@ -124,8 +125,10 @@ def _readable(ctx: Context) -> list[MemoryEntry]:
 def _shared_root(ctx: Context) -> Path | None:
     """The shared repository whose project folder this server is bound to, beside its Global memory (TD-72, TD-241)."""
     common = getattr(ctx.request_context.lifespan_context, "global_dir", None)
+    if common is None:
+        return None
     root = _memory_dir_from_ctx(ctx).parent.parent
-    return root if common is not None and Path(common) == root / GLOBAL else None
+    return root if Path(common) == root / GLOBAL else None
 
 
 def _in_folder(ctx: Context, folder: str | None) -> Context:
@@ -770,43 +773,45 @@ async def assess_memories(
 
     engine = _engine_from_ctx(ctx)
     results: list[dict[str, object]] = []
-
-    for assessment in batch.assessments:
-        entry_id = assessment.entry_id
-        bucket = assessment.bucket
-        try:
-            if bucket == "factually_wrong":
-                outcome = engine.record_factually_wrong(
-                    entry_id,
-                    batch.task_id,
-                    expected_revision=assessment.revision,
+    root = _shared_root(ctx)
+    ids = [assessment.entry_id for assessment in batch.assessments]
+    with receipts.committed(root, _memory_dir_from_ctx(ctx) if root else None, ids, batch.task_id):
+        for assessment in batch.assessments:
+            entry_id = assessment.entry_id
+            bucket = assessment.bucket
+            try:
+                if bucket == "factually_wrong":
+                    outcome = engine.record_factually_wrong(
+                        entry_id,
+                        batch.task_id,
+                        expected_revision=assessment.revision,
+                    )
+                else:
+                    outcome = engine.record_assessment(
+                        entry_id,
+                        bucket,
+                        task_id=batch.task_id,
+                        expected_revision=assessment.revision,
+                    )
+                results.append(
+                    {
+                        "entry_id": entry_id,
+                        "success": True,
+                        "already_applied": outcome.already_applied,
+                        "recorded_bucket": outcome.recorded_bucket,
+                        **({"state": str(outcome.entry.state)} if outcome.entry.challenges else {}),
+                        **_challenges(outcome.entry),
+                    }
                 )
-            else:
-                outcome = engine.record_assessment(
-                    entry_id,
-                    bucket,
-                    task_id=batch.task_id,
-                    expected_revision=assessment.revision,
-                )
-            results.append(
-                {
-                    "entry_id": entry_id,
-                    "success": True,
-                    "already_applied": outcome.already_applied,
-                    "recorded_bucket": outcome.recorded_bucket,
-                    **({"state": str(outcome.entry.state)} if outcome.entry.challenges else {}),
-                    **_challenges(outcome.entry),
-                }
-            )
-        except (
-            NotFoundError,
-            TransitionError,
-            ConcurrencyError,
-            DuplicateEntryError,
-            MemoryValidationError,
-            ValidationError,
-        ) as exc:
-            results.append({"entry_id": entry_id, "success": False, "error": str(exc)})
+            except (
+                NotFoundError,
+                TransitionError,
+                ConcurrencyError,
+                DuplicateEntryError,
+                MemoryValidationError,
+                ValidationError,
+            ) as exc:
+                results.append({"entry_id": entry_id, "success": False, "error": str(exc)})
 
     return {"results": results}
 
