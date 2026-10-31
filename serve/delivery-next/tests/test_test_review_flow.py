@@ -171,6 +171,7 @@ def test_a_moved_worktree_stops_the_review_before_any_share(review):
     assert (review.ran, c.outcome.exit, "not at the commit it reviews" in c.stop.reason) == ([], Exit.STOP, True)
 
 
+@pytest.mark.usefixtures("every_machine_setting")
 def test_a_test_review_never_shapes_or_plans_and_its_status_counts_shares_and_the_owner_reruns_its_stopped_step(review):
     c = review.store.read(review.slug)
     line = status(c, Activity(host_up=True, runner_alive=True), NOW).line

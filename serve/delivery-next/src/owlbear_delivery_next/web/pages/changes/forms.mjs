@@ -295,9 +295,8 @@ export function pullbackNote(p, d) {
     @action=${behind ? pull : nothing}>${p.reason || ""}</p-inline-notification>`;
 }
 
-// A stop the owner may clear once he did what it asks (#754): Delivery then reruns its step. A paused stopped Change's
-// line describes the pause, so the stop's own reason and action come from *d.recovery*. While a setting is unset the
-// action is withheld, as every work-starting button is (D-01M61SBWK4VE4MNTD35TR0VPS8).
+// A stop the owner may clear once he did what it asks (#754), so Delivery reruns its step; *d.recovery* has the stop,
+// as a paused Change's line describes its pause. Unset settings withhold the action (D-01M61SBWK4VE4MNTD35TR0VPS8).
 export function stopNotice(d) {
   const r = d.recovery, reason = r ? r.reason : d.line.replace(/^.*?stopped: /, ""), action = r ? r.action : d.action;
   if (!r || r.unset) {

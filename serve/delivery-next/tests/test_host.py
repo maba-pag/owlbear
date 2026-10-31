@@ -929,6 +929,7 @@ def stopped(fake, kind=StepKind.BUILD, stop=None):
 SHOWN = {"action": "Resolve it in GitHub", "at": "2026-10-10T12:00:00Z"}  # the stop of stopped(), as the page shows it
 
 
+@pytest.mark.usefixtures("every_machine_setting")
 def test_resume_leaves_a_stop_and_the_owners_recovery_reruns_its_step(store, tmp_path):
     """#754: Resume clears only a pause; the owner's recovery on the Changes page clears the stop."""
     fake = Fake(store, tmp_path)
@@ -945,6 +946,7 @@ def test_resume_leaves_a_stop_and_the_owners_recovery_reruns_its_step(store, tmp
     assert (store.read("c1").stop, store.read("c1").outcome) == (None, None)
 
 
+@pytest.mark.usefixtures("every_machine_setting")
 @pytest.mark.parametrize("kind", [StepKind.BUILD, StepKind.CLEANUP])
 @pytest.mark.parametrize("pause", ["change", "delivery"])
 def test_a_recovery_while_paused_clears_the_stop_and_only_a_cleanup_runs_before_resume(store, tmp_path, pause, kind):
@@ -983,6 +985,7 @@ LIVENESS = Stop(kind=ErrorKind.LIVENESS, reason="processes still present: 7", ac
                 resume="The host sees none of them", at=NOW)  # fmt: skip
 
 
+@pytest.mark.usefixtures("every_machine_setting")
 @pytest.mark.parametrize(
     ("case", "why"),
     [("asking", NOT_STOPPED), ("finished", "This Change has finished"), ("wrong merge", NOT_STOPPED),
@@ -1009,10 +1012,10 @@ def test_a_stop_the_owner_cannot_clear_is_refused_and_nothing_is_queued(store, t
         assert store.fold(lock, "c1", NOW)[0].stop == c.stop
 
 
-def test_no_recovery_while_a_setting_is_unset(store, tmp_path, monkeypatch):
-    """D-01M61SBWK4VE4MNTD35TR0VPS8: no work starts while a setting is unset, the owner's rerun included."""
-    monkeypatch.setattr(machine_settings, "BASE", None)
-    monkeypatch.setattr(config, "BASE", None)
+@pytest.mark.parametrize("layer", [machine_settings, config])
+def test_no_recovery_while_a_setting_is_unset(store, tmp_path, monkeypatch, layer):
+    """D-01M61SBWK4VE4MNTD35TR0VPS8: no work starts while a setting is unset, this machine's included."""
+    monkeypatch.setattr(layer, "BASE", None)
     fake = Fake(store, tmp_path)
     save(store, stopped(fake))
     api_ = client(store, fake)
@@ -1020,6 +1023,15 @@ def test_no_recovery_while_a_setting_is_unset(store, tmp_path, monkeypatch):
     assert why.startswith("Settings unset: ")
     answer = api_.post("/api/next/changes/c1/recovery", json=SHOWN)
     assert (answer.status_code, answer.json()["detail"], queued(store)) == (409, why, [])
+
+
+def test_a_recovery_is_checked_and_queued_under_the_changes_lock(store, tmp_path):
+    """No pass can stop the Change again between the route's check and its queueing."""
+    fake = Fake(store, tmp_path)
+    save(store, stopped(fake))
+    with store.lock("c1"):
+        answer = client(store, fake).post("/api/next/changes/c1/recovery", json=SHOWN)
+    assert (answer.status_code, answer.json()["detail"].endswith("; try again"), queued(store)) == (409, True, [])
 
 
 def test_a_chat_cannot_clear_a_stop(store, tmp_path):

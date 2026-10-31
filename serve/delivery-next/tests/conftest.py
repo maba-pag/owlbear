@@ -116,6 +116,15 @@ def _carried_settings(monkeypatch):
     monkeypatch.setattr(machine_settings, "BASE", carried.MACHINE.model_copy(update=IMPROVEMENT_MACHINE))
 
 
+@pytest.fixture
+def every_machine_setting(monkeypatch):
+    """The autouse layer with the update-check intervals set too, for work that starts only once nothing is unset."""
+    from owlbear_delivery_next.state_store import machine_settings  # noqa: PLC0415
+
+    hours = dict.fromkeys(("update_check_hours_owlbear", "update_check_hours_pds", "update_check_hours_impeccable"), 24)
+    monkeypatch.setattr(machine_settings, "BASE", machine_settings.BASE.model_copy(update=hours))
+
+
 IMPROVEMENT_MACHINE = {  # tests only: settings added after the carry start unset in production (2026-10-25)
     "retro_after_change": "on", "retro_when_idle": "on", "enrolled_chats": [],
 }  # fmt: skip

@@ -11,16 +11,15 @@ from owlbear_delivery_next.change_contracts.inbox import Recovery
 from owlbear_delivery_next.change_contracts.models import Exit, Record
 from owlbear_delivery_next.change_flow import delivery_target
 from owlbear_delivery_next.project_host import runner_end
-from owlbear_delivery_next.state_store.store import StoreError
+from owlbear_delivery_next.state_store import machine_settings
+from owlbear_delivery_next.state_store.registry import RegistryError
+from owlbear_delivery_next.state_store.store import LockHeldError, StoreError
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from owlbear_delivery_next.change_contracts.inbox import InboxItem
     from owlbear_delivery_next.change_contracts.models import Change
     from owlbear_delivery_next.state_store.store import Store
-
-CHAT_REFUSED = "Only the owner clears a stop, on the Changes page"
 
 
 class RecoveryBody(Record):
@@ -44,10 +43,10 @@ def clearable(c: Change) -> str | None:
 
 
 def unset(store: Store) -> str | None:
-    """Why no work may start for want of settings (D-01M61SBWK4VE4MNTD35TR0VPS8), or None."""
+    """Why no work may start for want of settings, this machine's included (D-01M61SBWK4VE4MNTD35TR0VPS8), or None."""
     try:
-        missing = store.settings().missing
-    except StoreError as exc:
+        missing = [*store.settings().missing, *machine_settings.current().missing]
+    except (StoreError, RegistryError) as exc:
         return f"The settings can't be read ({exc}); fix them on the Settings page to run the step again"
     if missing:
         more = " and others" if missing[1:] else ""
@@ -64,20 +63,27 @@ def shown(c: Change, store: Store) -> dict[str, Any] | None:
 
 def _owner(request: Request) -> None:
     if request.headers.get("x-owlbear-use", "").lower() == "chat":
-        raise HTTPException(403, CHAT_REFUSED)
+        raise HTTPException(403, "Only the owner clears a stop, on the Changes page")
 
 
-def router(store: Store, read: Callable[[str], Change], put: Callable[[str, InboxItem], dict[str, str]]) -> APIRouter:
-    """The recovery route; *read* and *put* are the API's own Change reader and inbox writer."""
+def router(store: Store, read: Callable[[str], Change], wake: Callable[[], None]) -> APIRouter:
+    """The recovery route; *read* is the API's Change reader, *wake* starts the host's next pass."""
     routes = APIRouter()
 
     @routes.post("/changes/{slug}/recovery", dependencies=[Depends(_owner)])
     def recovery(slug: str, body: RecoveryBody) -> dict[str, str]:
-        c = read(slug)
-        if why := clearable(c) or unset(store):
-            raise HTTPException(409, why)
-        if (c.stop.action, c.stop.at) != (body.action, body.at):
-            raise HTTPException(409, "The stop changed since the page showed it; reload")
-        return put(slug, Recovery(at=datetime.now(UTC), action=c.stop.action))
+        read(slug)
+        try:  # under the lock no pass can stop the Change again between the check and the queueing
+            with store.lock(slug):
+                c = store.read(slug)
+                if why := clearable(c) or unset(store):
+                    raise HTTPException(409, why)
+                if (c.stop.action, c.stop.at) != (body.action, body.at):
+                    raise HTTPException(409, "The stop changed since the page showed it; reload")
+                store.put_inbox(slug, Recovery(at=datetime.now(UTC), action=c.stop.action))
+        except (LockHeldError, StoreError) as exc:
+            raise HTTPException(409, f"change: {exc}; try again") from exc
+        wake()
+        return {"accepted": "recovery"}
 
     return routes
