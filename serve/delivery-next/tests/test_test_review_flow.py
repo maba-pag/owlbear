@@ -171,7 +171,7 @@ def test_a_moved_worktree_stops_the_review_before_any_share(review):
     assert (review.ran, c.outcome.exit, "not at the commit it reviews" in c.stop.reason) == ([], Exit.STOP, True)
 
 
-def test_a_test_review_never_shapes_or_plans_and_its_status_counts_shares(review):
+def test_a_test_review_never_shapes_or_plans_and_its_status_counts_shares_and_the_owner_reruns_its_stopped_step(review):
     c = review.store.read(review.slug)
     line = status(c, Activity(host_up=True, runner_alive=True), NOW).line
     assert "reviewing tests: Review the tests · 0 of 2 shares done" in line
@@ -181,8 +181,21 @@ def test_a_test_review_never_shapes_or_plans_and_its_status_counts_shares(review
     assert (c.step.kind, c.outcome.exit, c.stop.reason) == (
         StepKind.BUILD, Exit.STOP, "a test review keeps its fixed brief and plan: the plan is wrong"
     )  # fmt: skip
+    assert (c.stop.action, c.stop.resume) == (
+        'Abandon the test review, or press "Done: run the step again" on the Changes page to run its step again',
+        'You pressed "Done: run the step again"',
+    )  # not Resume, which clears only a pause (#754)
     done = c.model_copy(update={"finished_at": NOW, "tests": c.tests.model_copy(update={"unchanged": True})})
     assert status(done, Activity(host_up=True), NOW).line == "Done · no test changed"
+    with review.store.lock(review.slug) as lock:
+        review.store.write(lock, c)
+    client = TestClient(api.create_app(review.store, "tok", Host(review.store, review.repo)),
+                        base_url="http://127.0.0.1", headers=AUTH)  # fmt: skip
+    shown = c.stop.model_dump(mode="json", include={"action", "at"})
+    assert client.post(f"/api/next/changes/{review.slug}/recovery", json=shown).status_code == 200
+    with review.store.lock(review.slug) as lock:
+        after, _ = review.store.fold(lock, review.slug, NOW, None)
+    assert (after.stop, loop.next_step(after, NOW), after.brief, after.plan) == (None, c.step, c.brief, c.plan)
 
 
 def test_an_unchanged_curation_goes_straight_to_cleanup_and_a_changed_one_to_its_review(review):

@@ -8,7 +8,7 @@ import socket
 import threading
 import time
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 import pytest
@@ -20,11 +20,13 @@ from owlbear_delivery_next.change_contracts.inbox import AnswerItem
 from owlbear_delivery_next.change_contracts.round_records import RoundLoop, RoundPolicy
 from owlbear_delivery_next.change_contracts.tool_use import ToolUse
 from owlbear_delivery_next.change_contracts.visual_records import OwnerCriterion
+from owlbear_delivery_next.change_flow.loop import StepResult, apply
 from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import HostRecord
-from owlbear_delivery_next.state_store import spend_ledger
+from owlbear_delivery_next.settings import config
+from owlbear_delivery_next.state_store import machine_settings, spend_ledger
 from owlbear_delivery_next.state_store.store import Lock, Store
 
 if TYPE_CHECKING:
@@ -472,3 +474,110 @@ def test_recent_activity_reads_in_words_with_one_line_per_merge_and_repeats_coun
         )
         expect(lines.nth(9).locator("time")).to_have_attribute("title", " to ".join(exact))  # the exact times on hover
     assert [e["event"] for e in store.events("flip")][-len(events) :] == [e["event"] for e in events]
+
+
+BROKEN = m.Stop(kind=m.ErrorKind.STATE, reason="GitHub refused the push", action="Grant the token push rights",
+                resume="GitHub takes the push", at=NOW)  # fmt: skip
+AFTER = "Recovery accepted: Delivery reruns the step when it can run. Existing pauses are kept."
+WHEN = {
+    "stopped": "Delivery runs the build step again on its next pass. While",
+    "paused": "once you resume this Change",
+    "cleanup-paused": "even while paused",
+}
+
+
+def stopped(case: str, stop: m.Stop = BROKEN) -> m.Change:
+    """The approved Change stopped in its build, or its cleanup; paused by the owner, or stopped by a liveness check."""
+    kind = m.StepKind.CLEANUP if case == "cleanup-paused" else m.StepKind.BUILD
+    if case == "liveness":
+        stop = m.Stop(kind=m.ErrorKind.LIVENESS, reason="processes still present: 7", action="End processes 7",
+                      resume="The host sees none of them", at=NOW)  # fmt: skip
+    c = change()
+    brief = c.brief.model_copy(update={"approved_version": 2, "approved_at": NOW})
+    c = c.model_copy(update={"brief": brief, "step": m.Step(kind=kind)})
+    c = apply(c, StepResult(exit=m.Exit.STOP, reason=stop.reason, stop=stop), NOW)
+    if case.endswith("paused"):
+        c = c.model_copy(update={"intent": c.intent.model_copy(update={"paused_at": NOW})})
+    return c
+
+
+@contextlib.contextmanager
+def launched(base: str, pds: Any) -> Iterator[Any]:
+    """The Changes page on the flip Change in Chromium; a missing browser fails rather than skips."""
+    from playwright.sync_api import sync_playwright  # noqa: PLC0415 - the optional browser runtime
+
+    with sync_playwright() as pw, contextlib.closing(pw.chromium.launch()) as browser:
+        page = browser.new_page(viewport={"width": 1280, "height": 900})
+        pds.only(page, base)
+        page.add_init_script("sessionStorage.setItem('token', 'tok');")
+        page.goto(f"{base}/?change=flip")
+        yield page
+
+
+@pytest.mark.browser
+@pytest.mark.parametrize("case", ["stopped", "paused", "cleanup-paused", "liveness", "unset"])
+def test_the_owner_reruns_a_stopped_step_after_confirming_what_follows(page_url, pds, case, monkeypatch) -> None:
+    """#754: the Stopped notice offers "Done: run the step again" unless a liveness check holds the stop or a setting
+    is unset (D-01M61SBWK4VE4MNTD35TR0VPS8)."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    store, base = page_url
+    if case == "unset":
+        monkeypatch.setattr(machine_settings, "BASE", None)
+        monkeypatch.setattr(config, "BASE", None)
+    c = stopped(case)
+    store.write(Lock("flip"), c)
+    with launched(base, pds) as page:
+        note = page.locator("p-inline-notification[heading='Stopped']")
+        expect(note).to_contain_text(f"{c.stop.reason}. What to do: {c.stop.action}.")
+        if case.endswith("paused"):
+            expect(page.get_by_role("region", name="Selected Change").get_by_text("Paused", exact=True)).to_be_visible()
+        again = page.get_by_role("button", name="Done: run the step again")
+        if case in {"liveness", "unset"}:
+            if case == "unset":
+                expect(note).to_contain_text("Settings unset: ")
+            expect(again).to_have_count(0)
+            return
+        posts = []
+        page.on("request", lambda r: posts.append(r.post_data_json) if r.url.endswith("/recovery") else None)
+        expect(again).to_be_visible()
+        box = again.bounding_box()
+        assert box["width"] >= 24
+        assert box["height"] >= 24
+        again.click()
+        dialog = page.locator("p-modal.ask")
+        expect(dialog.get_by_role("heading", name="Run the stopped step again?")).to_be_visible()
+        for said in [f"You did what the stop asked ({c.stop.action}), so the stop clears.", WHEN[case], "AI credits",
+                     "You can pause afterwards", "once the running step ends", "doesn't undo", "stops again",
+                     "The Change stays stopped"]:  # fmt: skip
+            expect(dialog).to_contain_text(said)
+        dialog.get_by_role("button", name="Keep it stopped").click()
+        expect(dialog).to_have_count(0)
+        expect(again).to_be_focused()
+        assert posts == []
+        again.click()
+        with replied(page, "/recovery") as reply:
+            page.locator("p-modal.ask").get_by_role("button", name="Run it again").click()
+        assert (reply.value.status, posts) == (200, [c.stop.model_dump(mode="json", include={"action", "at"})])
+        assert '"kind":"recovery"' in sent(store, "flip").replace(" ", "")
+        expect(page.get_by_text(AFTER)).to_be_visible()
+
+
+@pytest.mark.browser
+def test_a_stop_that_changed_since_the_page_showed_it_is_not_cleared(page_url, pds) -> None:
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    store, base = page_url
+    store.write(Lock("flip"), stopped("stopped"))
+    with launched(base, pds) as page:
+        again = page.get_by_role("button", name="Done: run the step again")
+        again.click()
+        store.write(Lock("flip"), stopped("stopped", BROKEN.model_copy(update={"at": NOW + timedelta(minutes=5)})))
+        with replied(page, "/recovery") as reply:
+            page.locator("p-modal.ask").get_by_role("button", name="Run it again").click()
+        assert reply.value.status == 409
+        refused = page.locator(".refused")
+        expect(refused).to_contain_text("Not done")
+        expect(refused).to_contain_text("The stop changed since the page showed it; reload")
+        with store.db.read() as db:
+            assert db.execute("SELECT count(*) FROM inbox").fetchone() == (0,)
