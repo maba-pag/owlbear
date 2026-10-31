@@ -157,6 +157,14 @@ earlier spend is read from the Changes, the Spotter's records and the runtime's 
 that were not reported count as unknown, never as zero, and spend whose day or agent is not known
 closely is said apart. Metrics never limit any work. Your own chats' spend is not recorded.
 
+Its **Context compaction** table shows, per agent and project under the same filters, how often its sessions
+compacted their context (the runtime replaced earlier turns with a summary as the conversation neared the model's
+context window) and how early: the share of the session's model calls made before its first compaction, as the median
+and the earliest over the sessions that compacted. Only applied compactions in readable runtime logs count; sessions
+without a log and those whose log could not be read are counted apart. Each agent's row links to its context setting
+on the Settings page, on the project and layer whose value applies, and Settings leads back to the same Metrics view;
+an agent row on the machine host's Settings also links to its compaction on Metrics.
+
 ### The shared settings repository
 
 A shared settings repository is a Git repository you choose for project settings, agent memory and
