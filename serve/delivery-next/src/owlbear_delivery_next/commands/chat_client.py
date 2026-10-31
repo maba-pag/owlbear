@@ -10,18 +10,21 @@ read-only status fallback is gone, since an older chat server could misread what
 
 from __future__ import annotations
 
+import functools
 import http.client
 import json
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.change_contracts import chat_contract, pick_tools
 from owlbear_delivery_next.local_system import codebase, data_repo, local_home
 from owlbear_delivery_next.project_host import answers, api, host
 from owlbear_delivery_next.state_store import project_home
+from owlbear_delivery_next.state_store.decision_errors import SAVING
 from owlbear_delivery_next.state_store.store import StoreError
 
 if TYPE_CHECKING:
@@ -63,11 +66,23 @@ def done(code: int) -> bool | None:
 
 
 WAIT, POLL = 600.0, 5.0  # seconds a brief challenge request waits for the verdict, and between its reads
+# Seconds a decision write waits for its answer: the lock's 20, a save's two 45 s phases of Git commands capped at 10 s
+# each, and a replacement's impact report; a margin, not a bound
+WRITE = 180.0
+ADMIT, SETTLE = 90.0, 150.0  # seconds a propose may take to start its save, and to settle after that (#846)
+ADMIT_BY = "X-OwlBear-Admit-By"  # the propose's deadline, on the host's clock (`decision_batch.ADMIT_BY`)
+_now = functools.partial(time.clock_gettime, time.CLOCK_MONOTONIC)  # the clock the host's fence reads
 PAGE_ONLY = ("progress", "spend", "tool_use", "pullback")  # off the list of all Changes: 16 rows were 77 KB with them
 PAUSED = "paused: ask the owner to press Resume on the Changes page; the challenge runs then - call show_status"
 _pause = time.sleep  # the poll's own pause
 FOUND = 20  # decisions a find returns; the rest are counted
 SHORT = ("id", "title", "statement", "scope", "origin", "state", "conflict", "read_back", "revision")
+SAVED = "the host's answer was lost; the decision is saved as {id}"
+IMPACT_LOST = "; its impact report was lost: see the Decisions page"
+NOT_SAVED = "the host's answer was lost and the decision was not saved: record it again"
+UNCLEAR = "the host's answer was lost and whether the decision was saved is unclear; do not record it again: {why}"
+STILL_SAVING = "a decision save is still in progress; check find_decisions shortly"
+UNFENCED = "this host cannot promise the save did not start; check find_decisions shortly, or ask the owner"
 
 
 class Chat:
@@ -76,6 +91,7 @@ class Chat:
     prefix = ""  # where its decisions are, under the host's API
     not_running = NOT_RUNNING
     checked: tuple[int, str] | None = None  # the host (pid, start) whose chat contract was checked
+    fenced = False  # whether that host refuses a save past its chat's deadline (`decision_batch.ADMIT_BY`)
 
     def __init__(self, repo: Path, home: Path) -> None:
         self.repo, self.home = repo, home  # the project's home: its host's record, never its state
@@ -89,7 +105,9 @@ class Chat:
         machine = host.running_at(local_home.root(), chat_contract.HostFound)
         return (NOT_SERVED if machine and machine.token else self.not_running).format(repo=self.repo)
 
-    def call(self, method: str, path: str, body: object = None, timeout: float = 15.0) -> tuple[int, Any]:
+    def call(
+        self, method: str, path: str, body: object = None, timeout: float = 15.0, headers: dict[str, str] | None = None
+    ) -> tuple[int, Any]:
         """One request to the host with its token, naming the chat contract; 503 when it is not running.
 
         A request the host may have received but did not answer is 0: its effect is unknown, never "not done".
@@ -100,13 +118,14 @@ class Chat:
         if (refused := self.contract(rec)) is not None:
             return refused[0], {"error": refused[1]}
         url = f"{rec.url}{f'p/{rec.project}/' if rec.project else ''}api/next{self.prefix}{path}"  # TD-242
-        return self.send(rec, method, url, body, timeout)
+        return self.send(rec, method, url, body, timeout, headers=headers)
 
-    def send(
-        self, rec: chat_contract.HostFound, method: str, url: str, body: object, timeout: float
-    ) -> tuple[int, Any]:
-        """One request to *url* at the host of *rec*, with this chat's headers."""
-        headers = {
+    def send(  # noqa: PLR0913 - a request and how long it waits
+        self, rec: chat_contract.HostFound, method: str, url: str, body: object, timeout: float, *,
+        headers: dict[str, str] | None = None,
+    ) -> tuple[int, Any]:  # fmt: skip
+        """One request to *url* at the host of *rec*, with this chat's headers; *headers* never replace them."""
+        headers = (headers or {}) | {
             "Authorization": f"Bearer {rec.token}", "Content-Type": "application/json", "X-OwlBear-Use": "chat",
             chat_contract.HEADER: str(chat_contract.CHAT),
         }  # fmt: skip
@@ -148,7 +167,7 @@ class Chat:
         if chat_contract.CHAT not in (served := out.get("supported", [])):
             listed = ", ".join(map(str, served)) or "none"
             return STALE, chat_contract.UNSUPPORTED.format(sent=chat_contract.CHAT, served=listed)
-        self.checked = (rec.pid, rec.started_at.isoformat())
+        self.checked, self.fenced = (rec.pid, rec.started_at.isoformat()), out.get("admit_by") is True
         return None
 
     def save_brief(self, fields: dict[str, Any], path: str = "/briefs") -> dict[str, Any]:
@@ -250,12 +269,71 @@ class Chat:
             return {"failed": str(out.get("detail") or out.get("error") or f"the host answered {code}")}
         return out
 
-    def write(self, path: str, body: dict[str, Any]) -> dict[str, Any]:
+    def write(self, path: str, body: dict[str, Any], headers: dict[str, str] | None = None) -> dict[str, Any]:
         """One decision write through the host: its receipts, or why it was refused."""
-        code, out = self.call("POST", path, body)
+        code, out = self.call("POST", path, body, timeout=WRITE, headers=headers)
         if code != OK:
             return {"saved": done(code), "error": out.get("detail") or out.get("error"), "decisions_page": self.page()}
         return out | {"decisions_page": self.page()}
+
+    def propose(self, body: dict[str, Any]) -> dict[str, Any]:
+        """Record or propose a decision; when the host's answer is lost, the decisions say whether it was saved.
+
+        The host refuses to start the save past *admit_by*, so a read after it that finds neither the decision nor a
+        save in progress proves nothing was written; a host without that fence leaves it unclear (#846).
+        """
+        started, admit_by = datetime.now(UTC), _now() + ADMIT
+        out = self.write("/decisions/propose", body, {ADMIT_BY: repr(admit_by)})
+        if out.get("saved") is not None:
+            return out
+        return self._settled(body, started, admit_by, fenced=self.fenced) | {"decisions_page": self.page()}
+
+    def _settled(self, body: dict[str, Any], started: datetime, admit_by: float, *, fenced: bool) -> dict[str, Any]:
+        """Saved with its id, not saved, or unclear with why, from the decisions as the host reads them now."""
+        query = urllib.parse.urlencode({"where": "all", "retired": "true"})
+        while True:
+            t = _now()
+            code, out = self.call("GET", f"/decisions?{query}")
+            if code != OK or not out.get("available"):
+                why = str(out.get("reason") or out.get("detail") or out.get("error") or f"the host answered {code}")
+                if SAVING not in why:
+                    return {"saved": None, "error": UNCLEAR.format(why=f"{why}; ask the owner")}
+                if t > admit_by + SETTLE:
+                    return {"saved": None, "error": UNCLEAR.format(why=STILL_SAVING)}
+            elif found := [d for d in out["decisions"] if _same(d, body, started)]:
+                return self._found(body, found)
+            elif t > admit_by and fenced:
+                return {"saved": False, "error": NOT_SAVED}
+            elif t > admit_by:
+                return {"saved": None, "error": UNCLEAR.format(why=UNFENCED)}
+            _pause(POLL)
+
+    def _found(self, body: dict[str, Any], found: list[dict[str, Any]]) -> dict[str, Any]:
+        """The one decision this propose saved, else why it is unclear: never a decision someone else made."""
+        ids = ", ".join(d["id"] for d in found)
+        if len(found) > 1:
+            return {"saved": None, "error": UNCLEAR.format(why=f"{ids} match it; ask the owner")}
+        made = found[0]
+        code, detail = self.call("GET", f"/decisions/{urllib.parse.quote(made['id'])}")
+        links = [link.get("id") for link in detail.get("links", []) if link.get("type") == "replaces"]
+        wanted = (body["replaces"],) if body.get("replaces") else ()
+        state, origin = ("in_force", body["origin"]) if body["confirmed"] else ("draft", "autonomous")
+        if code != OK or tuple(links) != wanted or (made["state"], made["origin"]) != (state, origin):
+            return {"saved": None, "error": UNCLEAR.format(why=f"{ids} matches it in part; ask the owner")}
+        notice = SAVED.format(id=made["id"])
+        if body["confirmed"] and body.get("replaces") and body.get("effect") != "wording":
+            notice += IMPACT_LOST
+        return {"saved": True, "receipts": [{"id": made["id"], "saved": True}], "notice": notice}
+
+
+def _same(row: dict[str, Any], body: dict[str, Any], started: datetime) -> bool:
+    """The row has the sent wording and layer, and was made since the propose started."""
+    made = datetime.fromisoformat(row.get("created_at") or "1970-01-01T00:00:00Z")
+    return (
+        (row["title"].strip(), row["statement"].strip()) == (body["title"].strip(), body["statement"].strip())
+        and (row["scope"] == "global") == (body["scope"] == "global")
+        and made >= started
+    )
 
 
 class OwlBear(Chat):

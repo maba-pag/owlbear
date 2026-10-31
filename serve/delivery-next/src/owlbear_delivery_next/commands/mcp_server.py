@@ -187,7 +187,7 @@ def record_decision(  # noqa: PLR0913 - the decision's fields
     if replaces:
         body |= {"replaces": replaces.decision, "revision": replaces.revision, "redecide": replaces.redecide}
         body |= {"effect": replaces.effect}
-    return _STATE["chat"].write("/decisions/propose", body)
+    return _STATE["chat"].propose(body)
 
 
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=False, idempotent_hint=False, destructive_hint=True))

@@ -46,6 +46,7 @@ if TYPE_CHECKING:
 
     type Placed = tuple[Decision, Path, str | None]  # a decision, its layer's folder and its expected revision
 
+LATE = "not saved: the save could not start before the chat stopped waiting for it; nothing was written"
 ROUNDS = 3  # flag-and-publish rounds before a conflict is reported unresolved
 
 
@@ -272,7 +273,10 @@ def _save_all(shared: DataRepo, items: list[Placed], message: str) -> list[Recei
     head, behind = decision_sync.prepare(shared, until)
     if not head:  # nothing is journalled or written until HEAD is proved on the remote
         return [Receipt(d.id, saved=False, commit="", notice=behind[:300]) for d, _, _ in items]
-    return _journal(shared, items, message, head, behind)
+    try:
+        return _journal(shared, items, message, head, behind)
+    except decision_batch.Late:  # refused before its journal: nothing was written
+        return [Receipt(d.id, saved=False, commit="", notice=LATE) for d, _, _ in items]
 
 
 def _journal(shared: DataRepo, items: list[Placed], message: str, head: str, behind: str) -> list[Receipt]:
@@ -327,7 +331,8 @@ def _begin(
         path = decision_path(decision, folder)
         rows.append((path.relative_to(shared.root).as_posix(), before[path], serialize(decision).encode("utf-8")))
     project = next((d.project for d, _, _ in items if d.project), "")
-    generation = decision_batch.begin(shared, project, head, message, [d.id for d, _, _ in items], rows)
+    ids = [d.id for d, _, _ in items]
+    generation = decision_batch.begin(shared, project, head, message, ids, rows, decision_batch.ADMIT_BY.get())
     return generation, rows
 
 
