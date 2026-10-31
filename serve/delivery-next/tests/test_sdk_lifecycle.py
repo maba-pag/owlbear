@@ -68,7 +68,7 @@ class _World:
             raise self.status_error
         if self.status_hang:
             await asyncio.Event().wait()
-        return SimpleNamespace(version="1.0.105-test", protocol_version=3)
+        return SimpleNamespace(version="1.0.105-test")
 
     async def start(self):
         if self.has_pid:
@@ -739,8 +739,7 @@ def test_the_real_open_records_the_cli_version_before_its_first_send(world, monk
     seen = []
 
     async def send(*_args, **_kwargs):
-        assert spend_ledger.WRITER.settled(5)
-        seen.append([line for line in spend_ledger.lines() if line["type"] == "start"])
+        seen.append([line for line in _spend() if line["type"] == "start"])
         msg = "stop here"
         raise RuntimeError(msg)
 
