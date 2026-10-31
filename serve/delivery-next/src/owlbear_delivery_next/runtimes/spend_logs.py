@@ -286,13 +286,13 @@ def _checkpoints(sid: str, checked: dict[str, Any], pending: dict[str, str]) -> 
         opener = gzip.open if path.suffix == ".gz" else open
         with opener(path, "rt", encoding="utf-8") as f:  # type: ignore[operator]
             for raw in f:
-                kind = _kind(raw)
-                if kind in {"session.usage_checkpoint", "session.shutdown"}:
+                event = kind(raw)
+                if event in {"session.usage_checkpoint", "session.shutdown"}:
                     got = _read(raw)
                     if got is not None:
                         read.append(got)
-                    final = kind == "session.shutdown" and got is not None
-                elif kind in {"session.start", "session.resume"}:
+                    final = event == "session.shutdown" and got is not None
+                elif event in {"session.start", "session.resume"}:
                     final = False
         return _highs(read, final=final)
     return []
@@ -325,7 +325,7 @@ def _highs(read: list[tuple[str, dict[str, Any]]], *, final: bool) -> list[tuple
     return [(at, usage, False) for at, usage in highs[:-1]] + [(*last, done)]
 
 
-def _kind(raw: str) -> str:
+def kind(raw: str) -> str:
     """A log line's event type, read without parsing the line when it comes first, as the runtime writes it."""
     head = raw[:80]
     if '"type"' not in head:
