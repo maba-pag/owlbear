@@ -179,6 +179,8 @@ function machineControls() {
       disabled: !state.machineDraft })}</div>` : nothing}`;
 }
 
+const machineReads = turns(), acrossReads = turns();  // reads overlap: two refreshes, a save's and a refresh's
+
 async function saveMachine() {
   if (!state.machineDraft || state.machineSaving) return;
   const shown = (key, v) => (v === null || v === undefined ? "inherited" : said(key, v));
@@ -191,7 +193,7 @@ async function saveMachine() {
     instead: "Your edits stay unsaved on this page.",
   }))) return;
   state.machineSaving = true;  // the controls stay disabled until it ends, so no edit is made and lost meanwhile
-  state.machineWrites += 1;
+  machineReads.shown();  // a read begun before never shows older values
   show();
   try {
     accept(await call("/machine/settings", { method: "PUT", machine: true, timeout: WRITE,
@@ -206,7 +208,7 @@ async function saveMachine() {
       + "again." : e.message);
   } finally {
     state.machineSaving = false;
-    state.machineWrites += 1;
+    machineReads.shown();
     show();
   }
 }
@@ -260,19 +262,17 @@ async function removeLegacy() {
   show();
 }
 
-const machineReads = turns(), acrossReads = turns();  // reads overlap: two refreshes, a save's and a refresh's
-
 // The machine's values, or why they could not be read, unless a machine save ran during this read or a newer read has
 // answered; then that answer stands.
 export async function readMachine() {
-  const writes = state.machineWrites, n = machineReads.ask();
+  const n = machineReads.ask();
   if (state.machineSaving) return;
   let failed = "";
   const read = await call("/machine", { machine: true }).catch((e) => {
     failed = e.message;
     return undefined;
   });
-  if (state.machineSaving || writes !== state.machineWrites) return;
+  if (state.machineSaving) return;
   if (read === undefined) {
     if (machineReads.newer(n)) state.machineUnread = failed;
   } else if (machineReads.take(n)) accept(read);  // typed text stays: it shows only while its items are its own

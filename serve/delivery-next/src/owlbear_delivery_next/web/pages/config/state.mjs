@@ -37,9 +37,7 @@ export function turns() {
       last = n;
       return true;
     },
-    shown() {
-      last = ++asked;
-    },
+    shown() { last = ++asked; },
   };
 }
 
@@ -53,7 +51,6 @@ export const state = {
   everything: false,  // the overview shows every setting, not only those a project sets apart (TD-295)
   machineDraft: null, machineSaving: false,  // the machine's settings as edited, before they are saved
   machineText: null,  // a list setting's text as typed, until a save
-  machineWrites: 0,  // counts machine saves, so a read that started before one never shows older values
   machineUnread: "",  // why this machine's settings could not be read, until a read succeeds
   // Owner edited or cleared a project Merge and cleanup preference; kept until a save publishes.
   prefsReview: false,

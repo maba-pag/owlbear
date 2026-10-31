@@ -14,7 +14,6 @@ from contextlib import contextmanager
 from datetime import UTC, datetime
 from functools import partial
 from pathlib import Path
-from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
 import httpx
@@ -1481,7 +1480,7 @@ class Outside:
     def models(self, price: float | None) -> None:
         """Offer m1 at *price*; None: the model list cannot be read."""
 
-        def read() -> list[SimpleNamespace]:
+        def read() -> list[rpc.Model]:
             if price is None:
                 msg = "the CLI is gone"
                 raise RuntimeError(msg)

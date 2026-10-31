@@ -25,9 +25,9 @@ from owlbear_delivery_next.state_store import layers, registry, settings_carry
 from owlbear_delivery_next.state_store.store import Store
 
 
-def git(cwd: Path, *args: str) -> str:
+def git(cwd: Path, *args: str) -> None:
     who = ["-c", "user.name=t", "-c", "user.email=t@example.com"]
-    return subprocess.run(["git", *who, *args], cwd=cwd, check=True, capture_output=True, text=True).stdout  # noqa: S603, S607
+    subprocess.run(["git", *who, *args], cwd=cwd, check=True, capture_output=True)  # noqa: S603, S607
 
 
 def publish(clone: Path, rel: str, text: str) -> None:

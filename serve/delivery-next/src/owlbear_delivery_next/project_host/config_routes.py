@@ -373,15 +373,11 @@ def _settle_prefs_import(store: Store, *, reviewed: bool) -> None:
         raise HTTPException(503, str(exc)) from exc
 
 
-def _reader(store: Store, host: Host, own: list[settings_read.Reader]) -> settings_read.Reader:
-    """The machine's reader; a host without a machine (tests, a lone project host) builds its own once, in *own*."""
-    if (found := getattr(host, "reads", None)) is not None:
-        return found
-    if not own:
-        own.append(
-            settings_read.Reader(getattr(host, "say", lambda _text: None), getattr(host, "machine", lambda: [store]))
-        )
-    return own[0]
+def _reader(store: Store, host: Host) -> Callable[[], settings_read.Reader]:
+    """The machine's reader; a host without a machine (tests, a lone project host) builds its own once."""
+    say, machine = getattr(host, "say", lambda _text: None), getattr(host, "machine", lambda: [store])
+    own = functools.cache(lambda: settings_read.Reader(say, machine))
+    return lambda: getattr(host, "reads", None) or own()
 
 
 def _read_routes(routes: APIRouter, reads: Callable[[], settings_read.Reader]) -> None:
@@ -403,7 +399,7 @@ def _read_routes(routes: APIRouter, reads: Callable[[], settings_read.Reader]) -
 
 def router(store: Store, host: Host) -> APIRouter:
     """The settings routes; the caller adds the token check."""
-    routes, reads = APIRouter(), functools.partial(_reader, store, host, [])
+    routes, reads = APIRouter(), _reader(store, host)
     _read_routes(routes, reads)
 
     @routes.get("/config")

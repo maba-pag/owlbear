@@ -12,7 +12,8 @@ import json
 import secrets
 import threading
 from datetime import datetime
-from typing import TYPE_CHECKING, Any
+from functools import partial
+from typing import TYPE_CHECKING
 
 from pydantic import Field, ValidationError
 
@@ -60,8 +61,7 @@ class Seen(Record):
     notices: list[Notice] = Field(default_factory=list)
 
 
-def _text(value: Any) -> str:  # noqa: ANN401 - any JSON value
-    return json.dumps(value, separators=(",", ":"), sort_keys=True)
+_text = partial(json.dumps, separators=(",", ":"), sort_keys=True)
 
 
 def flatten(layer: Layer | None) -> dict[str, str]:
@@ -122,9 +122,8 @@ class Ledger:
         Each value that differs from the last read's gets its own notice; the first read only records.
         """
         with self._lock:
-            owned, self._owned = self._owned, {}
             if glob is not None:
-                glob = {k: v for k, v in (glob | owned).items() if v is not None}
+                glob = {k: v for k, v in (glob | self._owned).items() if v is not None}
             seen, broken = self._read()
             if broken:
                 self.say(f"settings read: {STATE} failed at {self.path}: {broken}; it is rebuilt")
