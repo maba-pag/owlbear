@@ -207,6 +207,18 @@ def prune(shared: DataRepo) -> str:
 
 
 @contextlib.contextmanager
+def forgetting(shared: DataRepo) -> Iterator[None]:
+    """On an exception, forget the run's worktree as a returning run's caller does, then raise, prune failure added."""
+    try:
+        yield
+    except Exception as exc:
+        if pruned := prune(shared):
+            msg = f"{type(exc).__name__}: {exc}; {pruned}"
+            raise RuntimeError(msg) from exc
+        raise
+
+
+@contextlib.contextmanager
 def holding(tree: Tree, folder: str, key: str) -> Iterator[None]:
     """On an exception, hold the run's edits and raise again, led by where they are held; unchanged if none."""
     try:

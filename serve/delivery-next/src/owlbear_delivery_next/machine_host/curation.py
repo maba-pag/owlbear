@@ -391,34 +391,28 @@ class Curation:
         if why := _unset(settings):  # cleared while it waited for its slot: the run never starts, its entries unseen
             return FolderRun(state="failed", started_at=started, ended_at=datetime.now(UTC), reason=why)
         role = roles.chosen(settings, LABEL)
-        try:
-            with self.maintenance.workspace("owlbear-curation-") as at:
-                tree = curation_tree.seed(shared, at / "data", folders(shared.root))
-                store = tree.root / folder / "memory"
-                before = {e.id: e.revision for e in _pending(store)}  # what the curator can see when it starts
-                said = message(folder)
-                cfg = sdk_adapter.Session(
-                    kind=StepKind.REVIEW, worktree=at, session_id=f"{LABEL}-{folder}-{uuid.uuid4().hex[:8]}",
-                    message=said, fresh=said, resume=False, policy=Policy(at, write=False),
-                    observe=lambda: tools.Worktree("", ""), checks=(), submit=memory_curation_tools.SUBMIT,
-                    model=role.model, effort=role.effort, context=role.context, limit=roles.limit(settings, LABEL),
-                    subagents=roles.subagents(settings, LABEL), user=roles.user_config(settings),
-                    role=tools.CURATOR, job=LABEL, journal=sdk_adapter.Journal(event=self._pids), memory=store,
-                )  # fmt: skip
-                with curation_tree.holding(tree, folder, key):  # what an exception leaves stays out of the checkout
-                    with self.lock:
-                        self.left_key = key  # persisted with the first PIDs this run records, so a restart knows whose
-                    place = spend_ledger.Where(project=folder, name=folder)  # a memory folder is its project's
-                    with spend_ledger.at(place):
-                        done = maintained.run_owned(
-                            self.maintenance, cfg, self.run, project=SLOT, slot=key, kind="curation"
-                        )
-                    judged = self._judged(tree, folder, started, key, done)
-        except Exception as exc:  # the workspace is gone, unless the ledger holds it: forget its worktree too
-            if pruned := curation_tree.prune(shared):
-                msg = f"{type(exc).__name__}: {exc}; {pruned}"
-                raise RuntimeError(msg) from exc
-            raise
+        with curation_tree.forgetting(shared), self.maintenance.workspace("owlbear-curation-") as at:
+            tree = curation_tree.seed(shared, at / "data", folders(shared.root))
+            store = tree.root / folder / "memory"
+            before = {e.id: e.revision for e in _pending(store)}  # what the curator can see when it starts
+            said = message(folder)
+            cfg = sdk_adapter.Session(
+                kind=StepKind.REVIEW, worktree=at, session_id=f"{LABEL}-{folder}-{uuid.uuid4().hex[:8]}",
+                message=said, fresh=said, resume=False, policy=Policy(at, write=False),
+                observe=lambda: tools.Worktree("", ""), checks=(), submit=memory_curation_tools.SUBMIT,
+                model=role.model, effort=role.effort, context=role.context, limit=roles.limit(settings, LABEL),
+                subagents=roles.subagents(settings, LABEL), user=roles.user_config(settings),
+                role=tools.CURATOR, job=LABEL, journal=sdk_adapter.Journal(event=self._pids), memory=store,
+            )  # fmt: skip
+            with curation_tree.holding(tree, folder, key):  # what an exception leaves stays out of the checkout
+                with self.lock:
+                    self.left_key = key  # persisted with the first PIDs this run records, so a restart knows whose
+                place = spend_ledger.Where(project=folder, name=folder)  # a memory folder is its project's
+                with spend_ledger.at(place):
+                    done = maintained.run_owned(
+                        self.maintenance, cfg, self.run, project=SLOT, slot=key, kind="curation"
+                    )
+                judged = self._judged(tree, folder, started, key, done)
         if pruned := curation_tree.prune(shared):
             judged = judged.model_copy(update={"reason": "; ".join(filter(None, (judged.reason, pruned)))})
         if judged.state != "done":
