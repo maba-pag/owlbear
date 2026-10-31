@@ -340,7 +340,7 @@ def environment(store, fake, monkeypatch, **env):
         calls["durable"] = store.read("c1").env  # the group is recorded before readiness is awaited
         return e.pids | {901: 2.0}
 
-    def start(e, _root, _log, env=None):
+    def start(e, _root, _log, env=None, _pidfile=None):
         calls["start"].append(e.command)
         calls["env"] = env
         return Proc()

@@ -45,7 +45,7 @@ def launch(h: Host, lock: Lock, c: Change, now: datetime) -> Change:  # noqa: PL
             return c
         c.env = e = e.model_copy(update={"pids": {}, "pgid": None, "ready_at": None, "launched_at": datetime.now(UTC)})
         h.store.write(lock, c)
-        if proc := check.start(e, root, log, env):
+        if proc := check.start(e, root, log, env, log.with_name(check.PIDFILE)):
             c.env = e = e.model_copy(update={"pgid": proc.pid, "pids": {proc.pid: check.created(proc.pid)}})
             h.store.write(lock, c)
     pids = check.ready(e, proc) if proc else None

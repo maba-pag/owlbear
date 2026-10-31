@@ -30,6 +30,7 @@ READY_WITHIN = 60.0
 GRACE = 5.0
 WITHIN = 600.0  # seconds per install or preparation command
 SHOWN = 80  # characters of a command a note quotes, so a long path never pushes out why it failed
+PIDFILE = "env.pid"  # the launched recipe's pid, written by its wrapper before the recipe runs
 CAUSE = 160  # characters of its last output line; a whole note then fits a caller's 300 behind a 45-character prefix
 type Action = Literal["launch", "keep", "dispose", "settle"]
 type Pids = dict[int, float | None]
@@ -171,13 +172,21 @@ def dispose(e: Environment) -> Found:
 
 
 def start(
-    e: Environment, root: Path, log: Path, env: Mapping[str, str] | None = None
+    e: Environment, root: Path, log: Path, env: Mapping[str, str] | None = None, pidfile: Path | None = None
 ) -> subprocess.Popen[bytes] | None:
-    """Spawn the recipe as leader of its own session and group; *env* is a test copy's isolated environment."""
+    """Spawn the recipe as leader of its own session and group; *env* is a test copy's isolated environment.
+
+    With *pidfile*, a shell writes its pid there and then becomes the recipe, so a host that stops before it records
+    the group can still find it (``recovered``).
+    """
     try:
+        argv = shlex.split(e.command)
+        if pidfile is not None:
+            pidfile.unlink(missing_ok=True)
+            argv = ["/bin/sh", "-c", 'echo $$ > "$0"; exec "$@"', str(pidfile), *argv]
         with log.open("ab") as out:
             proc = subprocess.Popen(  # noqa: S603 - argument vector of the Builder's launch recipe
-                shlex.split(e.command),
+                argv,
                 cwd=root / e.directory,
                 stdin=subprocess.DEVNULL,
                 stdout=out,
@@ -189,6 +198,26 @@ def start(
         return None
     threading.Thread(target=proc.wait, daemon=True).start()  # reaps the leader whenever it ends
     return proc
+
+
+def recovered(e: Environment, pidfile: Path) -> Environment:
+    """A launch whose group was never recorded, with its leader's pid from *pidfile* and the file's time as its start.
+
+    No file, or one older than the launch, leaves *e* unchanged. The time bounds the leader's start, so disposal never
+    signals a pid that a newer process took over.
+    """
+    try:
+        st = pidfile.stat()
+    except FileNotFoundError:
+        return e
+    if e.launched_at is None or st.st_mtime < e.launched_at.timestamp() - 1:
+        return e
+    text = pidfile.read_text().strip()
+    if not (text.isascii() and text.isdigit()) or int(text) <= 0:
+        msg = f"{pidfile} holds {text!r}, not a process id"
+        raise ValueError(msg)
+    pid = int(text)
+    return e.model_copy(update={"pgid": pid, "pids": e.pids | {pid: st.st_mtime}})
 
 
 def ready(e: Environment, proc: subprocess.Popen[bytes]) -> Pids | None:
