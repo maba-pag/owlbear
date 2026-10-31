@@ -300,6 +300,7 @@ def run_states() -> dict[str, dict[str, Any]]:
         elif event == "ended":
             snap |= {"state": "ended", "result": line.get("result", ""), "ended": line["at"]}
             snap["credits"], snap["held"] = line.get("credits"), line.get("held", False)
+            snap |= {k: line[k] for k in ("followup", "redraft") if k in line}  # what a redraft or follow-up made
     return found
 
 

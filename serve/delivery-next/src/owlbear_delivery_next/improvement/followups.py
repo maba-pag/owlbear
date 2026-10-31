@@ -39,6 +39,10 @@ RECORD = ("id", "look", "category", "note", "step")
 type Backlogs = Callable[[str], Backlog]  # a project's folder in the shared repository ("" none) -> its backlog view
 
 
+class Unknown(store.RetroError):
+    """No Retro finding or Spotter record has the id asked for."""
+
+
 def backlog(folder: str) -> Backlog:
     """The shared repository's backlog seen from *folder* ("" from no project).
 
@@ -56,7 +60,8 @@ def subject(fid: str, places: Mapping[str, targets.Place]) -> dict[str, Any]:
     """What follow-up *fid* is about: a Retro finding, else a Spotter record; its project, Change, source and text.
 
     Raises:
-        RetroError: *fid* is neither, or a synthetic finding while the sandbox is not registered.
+        Unknown: *fid* is neither.
+        RetroError: A synthetic finding while the sandbox is not registered.
     """
     found = next((f for f in store.all_findings() if f["id"] == fid), None)
     if found is not None:
@@ -68,7 +73,7 @@ def subject(fid: str, places: Mapping[str, targets.Place]) -> dict[str, Any]:
         shown = {k: record.get(k) for k in RECORD} | {"grades": grades}
     else:
         msg = f"no Retro finding or Spotter record {fid}"
-        raise store.RetroError(msg)
+        raise Unknown(msg)
     pid = targets.sandbox(places) if provenance == "synthetic" else targets.project(unit, places, store.known())
     if provenance == "synthetic" and not pid:
         msg = f"a synthetic finding's follow-up goes only to the sandbox; register ~/Projects/{targets.SANDBOX}"
