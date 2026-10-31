@@ -78,6 +78,7 @@ class Project:
         self.state: State = "loading"
         self.reason = ""
         self.mcp_said = ""  # the MCP files' problems last logged for this project
+        self.mcp_lock = threading.Lock()  # orders each poll's read of the MCP files with its update of mcp_said
         self.store: Store | None = None
         self.host: Host | None = None
         self.app: ASGIApp | None = None
@@ -257,13 +258,15 @@ class Project:
         if self.host:
             out["ready"] = self.host.record.ready
         if self.state == "loaded":
-            found, problems = setup.registration(Path(self.entry.path))
-            if said := "; ".join(problems):
+            with self.mcp_lock:  # list polls overlap: the last read is the one remembered
+                found, problems = setup.registration(Path(self.entry.path))
+                said = "; ".join(problems)
+                if said != self.mcp_said:  # info() answers every poll of the list: log a problem when it changes
+                    self.mcp_said = said
+                    if said:
+                        self.host.say(said)
+            if said:
                 out["reason"] = said
-            if said != self.mcp_said:  # info() answers every poll of the list: log a problem when it changes
-                self.mcp_said = said
-                if said:
-                    self.host.say(said)
             if not found:
                 out["setup"] = f"owlbear setup --repo {shlex.quote(self.entry.path)}"
         return out
