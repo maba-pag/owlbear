@@ -12,7 +12,8 @@ known; otherwise it ends ``stopped: unknown spend after an interruption`` and it
 pass: the button's requests (they bypass both switches and pause, never the fence, eligibility or a held lease), then
 a waiting run, then Changes due when ``retro_after_change`` allows, then enrolled chats due when OwlBear is idle and
 ``retro_when_idle`` allows, and once a day the pruning of judged chat captures no finding, case or open proposal pins.
-An unset limit or role, or a retired assumption the run needs, refuses the run, recorded.
+An unset limit or role, or a retired assumption the run needs, refuses the run, recorded. While a setting of the
+unit's project is unset (``retro_block``), the button's run is refused, recorded, and the automatic ones wait.
 """
 
 from __future__ import annotations
@@ -27,7 +28,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from owlbear_delivery_next.improvement import chatlogs, retro_judge
+from owlbear_delivery_next.improvement import retro_judge
 from owlbear_delivery_next.improvement import retro_store as store
 from owlbear_delivery_next.improvement import retro_synthetic as syn
 from owlbear_delivery_next.improvement import retro_units as units
@@ -35,14 +36,13 @@ from owlbear_delivery_next.improvement.credit_meter import Meter
 from owlbear_delivery_next.improvement.retro_calls import Paid, StoppedError, WaitingError, Work
 from owlbear_delivery_next.improvement.retro_evidence import evidence
 from owlbear_delivery_next.local_system import maintenance, processes
-from owlbear_delivery_next.machine_host import cases_job
+from owlbear_delivery_next.machine_host import cases_job, retro_block
 from owlbear_delivery_next.machine_host.auto_update import IDLE_FOR
 from owlbear_delivery_next.machine_host.retro_inputs import (
     Running,
     enrolled,
     failed_grading,
-    judged_sessions,
-    pinned,
+    prune,
     session,
     settle_open,
     unfinished,
@@ -71,7 +71,7 @@ SWITCH = {"change": "retro_after_change", "idle": "retro_when_idle"}  # an autom
 
 @dataclass(frozen=True)
 class Seams:
-    """What the job reads of the machine: its fence, pause, stop barrier, idle time and loaded projects."""
+    """What the job reads of the machine: its fence, pause, stop barrier, idle time, loaded projects and blocks."""
 
     fenced: Callable[[], str] = str
     paused: Callable[[], bool] = bool
@@ -80,6 +80,7 @@ class Seams:
     asked: Callable[..., Any] = retro_review.asked
     idle: Callable[[], bool] = bool
     projects: Callable[[], units.Projects] = dict
+    blocked: Callable[[str], str] = lambda _uid: ""  # why a unit may not start; ``attach`` reads ``retro_block``
 
 
 class RetroJob:
@@ -94,6 +95,7 @@ class RetroJob:
         self.thread: threading.Thread | None = None
         self.waiting: list[Running] = []
         self.checked, self.pruned_at = False, -PRUNE_EVERY
+        self.skips = retro_block.Skips(self.seams.say)
 
     @classmethod
     def attach(cls, m: Machine, fenced: Callable[[], str]) -> RetroJob:
@@ -109,7 +111,8 @@ class RetroJob:
             loaded = [(pid, p) for pid, p in list(m.projects.items()) if p.store and p.state == "loaded"]
             return {pid: (p.store, Path(p.entry.path)) for pid, p in loaded}
 
-        seams = Seams(fenced, lambda: m.paused, lambda: m.lock, m.say, retro_review.asked, idle, projects)
+        blocked = retro_block.of_machine(m.projects)
+        seams = Seams(fenced, lambda: m.paused, lambda: m.lock, m.say, retro_review.asked, idle, projects, blocked)
         job = cls(m.slots, seams, m.maintenance)
         return job
 
@@ -176,7 +179,7 @@ class RetroJob:
         self._chats()
         if now - self.pruned_at >= PRUNE_EVERY and not self.waiting:
             self.pruned_at = now
-            self._prune()
+            prune(self.seams.say)
 
     def _closed(self) -> bool:
         return bool(self.seams.fenced() or self.halting or self.lingering())
@@ -206,11 +209,15 @@ class RetroJob:
         if named := request.get("synthetic"):
             spec = syn.specs(named)[0]
             if not self._took(uid := syn.unit_id(spec), by):
-                self._start(Running(uid, "button", by, provenance="synthetic", spec=spec["name"]))
+                why = f"refused: {why}" if (why := self.seams.blocked(uid)) else ""
+                self._start(Running(uid, "button", by, provenance="synthetic", spec=spec["name"]), why)
             return
         change, chat = request.get("change"), request.get("chat", "")
         uid = units.change_id(*change.split(":", 1)) if change else units.chat_id(chat)
         if self._took(uid, by):
+            return
+        if why := self.seams.blocked(uid):  # before the grade-only runs, so a refusal is a plain run of its own
+            self._start(Running(uid, "button", by), f"refused: {why}")
             return
         late = [i for i in units.late(units.records(), store.known(), store.graded()) if i["unit"] == uid]
         late += unfinished(uid)  # with records written after a judged revision, grade-only runs that stopped
@@ -460,6 +467,8 @@ class RetroJob:
         if not self._allowed(SWITCH["change"]):
             return
         for item in units.due_changes(self.seams.projects()):
+            if self._skip(item["unit"]):
+                continue
             self._start(Running(item["unit"], "change", rev=item["rev"]))
             if self.waiting:
                 return
@@ -469,6 +478,8 @@ class RetroJob:
         if not self._allowed(SWITCH["idle"]) or not self.seams.idle():
             return
         for item in units.due_chats(enrolled(), datetime.now(UTC)):
+            if self._skip(item["unit"]):
+                continue
             self._start(Running(item["unit"], "idle", rev=item["rev"]))
             if self.waiting:
                 return
@@ -478,16 +489,11 @@ class RetroJob:
         """Grade-only runs of judged revisions with records written after them; one that did not end judged waits."""
         failed = failed_grading()
         for item in units.late(units.records(), store.known(), store.graded()):
-            if item["unit"].startswith(prefix) and (item["unit"], item["rev"]) not in failed:
+            unit = item["unit"]
+            if unit.startswith(prefix) and (unit, item["rev"]) not in failed and not self._skip(unit):
                 self._start(Running(item["unit"], trigger, rev=item["rev"], mode="grade-only", records=item["records"]))
                 if self.waiting:
                     return
 
-    def _prune(self) -> None:
-        try:
-            gone = chatlogs.prune(datetime.now(UTC), judged_sessions(), pinned())
-        except (store.RetroError, OSError, ValueError) as exc:
-            self.seams.say(f"Retro could not prune judged captures: {type(exc).__name__}: {exc}")
-            return
-        if gone:
-            self.seams.say(f"Retro pruned the captures of {len(gone)} judged sessions")
+    def _skip(self, uid: str) -> bool:
+        return self.skips.blocked(uid, self.seams.blocked(uid))

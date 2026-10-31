@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-from owlbear_delivery_next.improvement import assumptions, cases, retro_judge
+from owlbear_delivery_next.improvement import assumptions, cases, chatlogs, retro_judge
 from owlbear_delivery_next.improvement import retro_proposals as props
 from owlbear_delivery_next.improvement import retro_store as store
 from owlbear_delivery_next.improvement import retro_synthetic as syn
@@ -22,6 +22,8 @@ from owlbear_delivery_next.settings.config import SettingsUnset
 from owlbear_delivery_next.state_store import machine_settings, registry, spend_ledger
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from owlbear_delivery_next.change_contracts.profile_record import RoleModel
     from owlbear_delivery_next.improvement.credit_meter import Meter
 
@@ -139,6 +141,17 @@ def pinned() -> set[str]:
             for fid in snap.get("findings") or ():
                 pins |= set(known.get(owner.get(fid) or "", {}).get("sessions") or ())
     return pins - {""}
+
+
+def prune(say: Callable[[str], None]) -> None:
+    """Remove the captures of judged chats nothing pins, saying how many or why it could not."""
+    try:
+        gone = chatlogs.prune(datetime.now(UTC), judged_sessions(), pinned())
+    except (store.RetroError, OSError, ValueError) as exc:
+        say(f"Retro could not prune judged captures: {type(exc).__name__}: {exc}")
+        return
+    if gone:
+        say(f"Retro pruned the captures of {len(gone)} judged sessions")
 
 
 NEEDS = (*retro_judge.NEEDS, assumptions.RETRO_LESSON_BAR, assumptions.RETRO_CATCHABLE)  # what every run rests on
