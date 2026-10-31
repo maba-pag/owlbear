@@ -1,9 +1,10 @@
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { here } from "/assets/ui.mjs";
 import { DIALOG, state, send } from "./state.mjs";
-import { button, hd, text, list, panel, info } from "./widgets.mjs";
+import { button, hd, text, list, panel, info, row } from "./widgets.mjs";
 import { merging } from "./forms.mjs";
 import { marks, findingDetails, WORKERS } from "./progress.mjs";
+import { reviseBrief } from "./shaping.mjs";
 
 function screen(s) {
   const steps = s.steps.map((x) => (x.do === "type" ? `type "${x.text}" into ${x.target}` : `click ${x.target}`));
@@ -124,6 +125,13 @@ function readBacks(d) {
       r.more ? ` (${r.more} more wait there)` : ""}</p-text></section>`;
 }
 
+// A new shaping chat on the saved brief, offered only while the brief may take a revision.
+function reviseButton(d) {
+  if (d.brief.unrevisable !== "") return nothing;
+  return button("Revise the brief in a new chat", () => reviseBrief(d),
+    { variant: "secondary", icon: "edit", aria: DIALOG, busy: state.creating });
+}
+
 export function approval(d) {
   const version = d.brief.version, key = `${d.key}:approve:${version}`;
   const start = async () => {
@@ -139,9 +147,11 @@ export function approval(d) {
       "Finding details of the brief challenge", [["Brief challenge", d.rounds.brief, WORKERS.brief]])}` : nothing,
     text("Nothing is built until you approve. You approve the whole brief, including the collapsed technical "
       + "details; your own choices stay yours to change. Approval authorises work within this brief, not new "
-      + "product commitments. To change the brief before approving, return to the shaping chat."),
+      + `product commitments. To change the brief before approving, ${d.brief.unrevisable === ""
+        ? "revise it in a new chat or in the shaping chat" : "return to the shaping chat"}.`),
     why ? text(`Not yet: ${why}.`, { weight: "semibold" }) : nothing,
-    button(`Approve brief v${version}`, start, { icon: "check", aria: DIALOG, disabled: Boolean(why) }));
+    row(button(`Approve brief v${version}`, start, { icon: "check", aria: DIALOG, disabled: Boolean(why) }),
+      reviseButton(d)));
 }
 
 // What approving starts (TD-151): the brief, details included, becomes the baseline; then the challenge, planning,
@@ -181,7 +191,7 @@ export function briefInfo(d) {
     ${d.brief.outcome ? text(d.brief.outcome) : nothing}${agreement(d, true)}${picked(d)}${technical(d)}
     ${part("Changes since you approved", added.length ? saidList(added)
       : text("None. A change to an approved brief comes back to you as a new version to approve."))}
-    ${(d.amendments || []).length ? proposedWording(d.amendments) : nothing}</div>`);
+    ${(d.amendments || []).length ? proposedWording(d.amendments) : nothing}</div>${reviseButton(d)}`);
 }
 
 // TD-179: new wording a worker proposed for a generated criterion, with the challenger's verdict. Nothing is

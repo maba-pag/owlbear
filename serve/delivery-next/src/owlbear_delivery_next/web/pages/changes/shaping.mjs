@@ -45,24 +45,49 @@ function chooserView() {
     ${button("Continue", go)}${button("Cancel", stop, { variant: "secondary" })}</div>`;
 }
 
-async function shape(of) {
-  const wanted = await ask({
-    title: "Shape a new Change?", yes: "Open the chat", no: "Not now",
-    now: "A chat opens in VS Code where the shaper works out the brief with you; the chat uses AI credits like any "
-      + "Copilot chat.",
-    then: "Nothing is built. When you save the brief in the chat, it appears here for your approval.",
-    after: "Approve it here to start the work, or keep shaping it in the chat.",
-    instead: "Nothing opens.",
+function shape(of) {
+  return openChat({
+    path: "/new-change", of, opened: "A chat opened in VS Code to shape the new Change.",
+    dialog: {
+      title: "Shape a new Change?", yes: "Open the chat", no: "Not now",
+      now: "A chat opens in VS Code where the shaper works out the brief with you; the chat uses AI credits like any "
+        + "Copilot chat.",
+      then: "Nothing is built. When you save the brief in the chat, it appears here for your approval.",
+      after: "Approve it here to start the work, or keep shaping it in the chat.",
+      instead: "Nothing opens.",
+    },
   });
-  if (!wanted) return;
+}
+
+// A saved brief opens a new shaping chat in its Change's project; the Change stays as it is until the chat saves.
+export function reviseBrief(d) {
+  const v = d.brief.version;
+  return openChat({
+    path: `/changes/${encodeURIComponent(d.slug)}/revise-brief`, of: d.project,
+    opened: `A chat opened in VS Code to revise ${d.handle}.`,
+    dialog: {
+      title: `Revise brief v${v} in a new chat?`, yes: "Open the chat", no: "Not now",
+      now: `A chat opens in VS Code where the shaper revises brief v${v} of ${d.handle} with you; the chat uses AI `
+        + "credits like any Copilot chat.",
+      then: "Nothing is built, and the brief here stays as it is. When the shaper saves the revision, it appears "
+        + "here as a new version for your approval.",
+      after: "Approve the new version here, or keep shaping it in the chat.",
+      instead: "Nothing opens; the brief stays as it is.",
+    },
+  });
+}
+
+// Asks first, then opens the shaping chat through *path* and says how it went (TD-83).
+async function openChat({ path, of, dialog, opened }) {
+  if (!(await ask(dialog))) return;
   state.creating = true;
   state.started = { text: "Opening the shaping chat…" };
   show();
   try {
-    const r = await call("/new-change", {}, of);
+    const r = await call(path, {}, of);
     const s = r.started ? await launched(r.launch, of) : { state: "failed", ...r };
     state.started = s.state === "open"
-      ? { text: `A chat opened in VS Code to shape the new Change.${s.warning ? ` Note: ${s.warning}.` : ""}` }
+      ? { text: `${opened}${s.warning ? ` Note: ${s.warning}.` : ""}` }
       : { reason: s.reason, command: s.command };
   } catch (e) {
     state.started = null;
