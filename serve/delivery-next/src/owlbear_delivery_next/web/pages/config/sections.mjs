@@ -40,7 +40,8 @@ function scopeSection() {
       : "No shared settings location is set up (run owlbear-next data PATH), so only this project's and this "
         + "machine's settings can be saved, locally."}</p-text></div>
     <p-text>A blank project value uses this machine's; a blank value on this machine uses the global one. OwlBear's
-      code has no defaults: a value no layer sets is unset, and a step that needs it asks you to fill it in.</p-text>
+      code has no defaults: a value no layer sets is unset, and the project's work waits until it is set; the Changes
+      page names each project that waits.</p-text>
   </section>`;
 }
 

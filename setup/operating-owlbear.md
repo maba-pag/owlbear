@@ -205,8 +205,15 @@ worktree fails, the move stops with the reason and nothing reads either copy unt
 
 OwlBear's code ships no settings defaults: every model, effort, limit and switch comes from the
 global settings in the shared repository, this machine's, or the project's. A setting no layer
-sets shows as unset on the Settings page, and a step that needs it asks you to fill it in;
-automatic memory curation does not start until its role and threshold are set. A new machine that uses your
+sets shows as unset on the Settings page. While one of a project's settings is unset, or its
+settings can't be read, nothing starts for that project: no Change step runs, and New Change,
+Retro, curation of its memory folder and test review wait. On the Changes page the buttons that
+would start its work, such as Resume, Answer and the approvals, are disabled; Pause, Withdraw and
+Pull still work, and a draft answer stays. The page names each project that waits, with what is
+unset and a link to its settings, and shows an error once no project can start work. A
+step that already runs when one turns unset asks you to fill it in. Automatic memory curation also
+waits until its role and threshold are set; a memory folder with no project settings of its own
+waits only for those and this machine's. A new machine that uses your
 shared repository takes its global settings; one without starts with every setting unset. Nothing
 lies under the global settings, so with the Global layer chosen the page names the choice that
 clears a value Unset and warns while a needed one is unset.
@@ -226,20 +233,20 @@ roles are refused a save. The Spotter and Retro never use it. A memory a step sa
 curation and reaches your later hand-run chats in that repository, so off is recommended: steps still have OwlBear's
 own memory either way.
 
-None of the three has a default: while one is
-unset, a Change's step asks you to set it before its session starts, and an Impeccable update or
-automatic memory curation ends without starting one; the shaping chat and the Spotter do not need
-them. Right after the first install of a version that adds one, choose the Global layer, set
-it (off for Copilot Memory, as recommended), and save.
+None of the three has a default: while one is unset, the project's work waits as described above, and
+an Impeccable update or automatic memory curation ends without starting one; the Spotter does not need
+them. Right after the first install of a version that adds one, choose the Global layer, set it (off
+for Copilot Memory, as recommended), and save.
 
 The machine settings in **Settings → This machine** (versions, updating itself, curation per
 trigger, sessions at once) work the same way: each machine follows the global ones, which you
 edit there with the Global layer chosen, unless it sets its own, which you set with the This
 machine layer chosen; with a project chosen they show read-only, as in use. Each start of OwlBear first
 brings the shared repository up to date, so a machine follows what another one saved. With one unset in both, the
-machine does not update by itself, curate automatically or start agent sessions. The first start
-after this change moves the values in `machine.json` into the global settings where those have
-none, then clears them, so every machine follows Global; a later machine copies nothing. Until
+machine does not update by itself, curate automatically or start agent sessions, and no project's work starts. That
+includes the three update-check intervals (hours between checks for OwlBear, Porsche Design System and
+Impeccable). The first start after this change moves the values in `machine.json` into the global
+settings where those have none, then clears them, so every machine follows Global; a later machine copies nothing. Until
 that is published (the shared repository is offline, or Global has an edit you have not saved),
 **Settings → This machine** says why, the machine keeps its own values, and the next start tries
 again. If another machine changed the global settings meanwhile, nothing is undone for you: the

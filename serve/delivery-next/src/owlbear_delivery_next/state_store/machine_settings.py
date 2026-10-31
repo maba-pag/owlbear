@@ -1,8 +1,8 @@
 """The machine settings in force (D-01M5MZKEPPVMFC9HK795MMG91B): this machine's own value, else Global's, else unset.
 
-Code ships no defaults (the owner, 2026-10-23): an unset setting is an error on the Settings page, and what needs it
-does not run: no update by itself without its switches and channel, no automatic curation without its trigger, no
-agent session without the machine's total.
+Code ships no defaults (the owner, 2026-10-23): an unset setting is an error on the Settings page, and while one is
+unset or can't be read no project's work starts (#808). What needs it does not run either: no update by itself without
+its switches and channel, no automatic curation without its trigger, no agent session without the machine's total.
 """
 
 from __future__ import annotations
