@@ -347,10 +347,12 @@ def test_a_storage_failure_on_save_is_a_readable_error(store, monkeypatch):
     assert r.json()["detail"] == "the settings could not be saved: No space left on device"
 
 
-def prices(context: int | None, inp: float, out: float, long: SimpleNamespace | None = None) -> SimpleNamespace:
+def prices(
+    context: int | None, inp: float, out: float, long: SimpleNamespace | None = None, hour: float | None = None
+) -> SimpleNamespace:
     return SimpleNamespace(
         context_max=context, input_price=inp, output_price=out, cache_read_price=inp / 20, cache_price=None,
-        cache_write_price=0.0, long_context=long,
+        cache_write_price=0.0, cache_write1_h_price=hour, long_context=long,
     )  # fmt: skip
 
 
@@ -368,7 +370,7 @@ def offered_model(
 
 def test_the_settings_offer_the_enabled_models_with_efforts_context_tiers_and_rates_read_once(store, monkeypatch):
     reads = []
-    sol = prices(272_000, 200.0, 1000.0, prices(922_000, 400.0, 1500.0))
+    sol = prices(272_000, 200.0, 1000.0, prices(922_000, 400.0, 1500.0, hour=600.0), hour=300.0)
 
     def read() -> list[SimpleNamespace]:
         reads.append(1)
@@ -383,9 +385,9 @@ def test_the_settings_offer_the_enabled_models_with_efforts_context_tiers_and_ra
         "models": [
             {"id": "gpt-6.1-sol", "name": "Gpt-6.1-Sol", "efforts": ["low", "medium", "high"],
              "default_effort": "low", "context": 272_000,
-             "rates": {"input": 200.0, "output": 1000.0, "cache": 10.0, "cache_write": 0.0},
-             "long": {"context": 922_000,
-                      "rates": {"input": 400.0, "output": 1500.0, "cache": 20.0, "cache_write": 0.0}}},
+             "rates": {"input": 200.0, "output": 1000.0, "cache": 10.0, "cache_write": 0.0, "cache_write_1h": 300.0},
+             "long": {"context": 922_000, "rates": {"input": 400.0, "output": 1500.0, "cache": 20.0,
+                                                    "cache_write": 0.0, "cache_write_1h": 600.0}}},
             {"id": "tiny", "name": "Tiny", "efforts": [], "default_effort": "", "context": 200_000, "rates": None,
              "long": None},
         ],
@@ -394,7 +396,7 @@ def test_the_settings_offer_the_enabled_models_with_efforts_context_tiers_and_ra
     assert c.get("/api/next/config/models").json() == got
     assert len(reads) == 1  # the runtime starts once an hour at most
     unstated = SimpleNamespace(input_price=1.0, output_price=2.0, cache_read_price=None, cache_price=None,
-                               cache_write_price=None)  # fmt: skip
+                               cache_write_price=None, cache_write1_h_price=None)  # fmt: skip
     assert model_choices._rates(unstated)["cache"] is None  # noqa: SLF001 - shown as not known, never as free
 
 
