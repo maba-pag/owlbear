@@ -60,10 +60,9 @@ def marked(store: Store, *, wrapped: bool = False) -> int:
         script = command_marks.folder(store, "c1") / command_marks.SCRIPT
         argv = ["/bin/bash", "-c", f'. "{script}"; {SLEEP} & echo $!']
         if wrapped:  # bash runs in its parent's new session, so its own pid names no group
-            setsid = "import os, subprocess, sys; os.setsid(); sys.exit(subprocess.run(sys.argv[1:]).returncode)"
-            argv = [sys.executable, "-c", setsid, *argv]
-        new = not wrapped
-        out = subprocess.run(argv, check=True, capture_output=True, text=True, timeout=30, start_new_session=new)  # noqa: S603
+            wrapper = "import subprocess, sys; sys.exit(subprocess.run(sys.argv[1:]).returncode)"
+            argv = [sys.executable, "-c", wrapper, *argv]
+        out = subprocess.run(argv, check=True, capture_output=True, text=True, timeout=30, start_new_session=True)  # noqa: S603
     return int(out.stdout.split()[-1])
 
 

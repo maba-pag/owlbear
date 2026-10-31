@@ -46,15 +46,13 @@ def marking(store: Store, lock: Lock, slug: str) -> Iterator[None]:
     The marks file starts afresh, since the host starts a runner only once the last step's processes are gone.
     """
     where = folder(store, slug)
-    where.mkdir(parents=True, exist_ok=True)
     (where / SCRIPT).write_text(f"LC_ALL=C /bin/ps -o pgid=,lstart= -p $$ >> {shlex.quote(str(where / FILE))}\n")
     (where / FILE).write_bytes(b"")
 
     def launched(pid: int) -> None:
-        try:
-            started: float | None = processes.started(pid)
-        except psutil.Error, OSError:
-            started = None
+        started: float | None = None
+        with contextlib.suppress(psutil.Error, OSError):
+            started = processes.started(pid)
         event = {"event": "pids", "at": datetime.now(UTC).isoformat(), "pids": {str(pid): started}}
         store.log(lock, slug, event)
 

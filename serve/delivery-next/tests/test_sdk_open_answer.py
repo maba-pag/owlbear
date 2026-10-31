@@ -187,7 +187,6 @@ def _opened(tmp_path, monkeypatch, session, *, resume=False, on=False, events=No
     work.mkdir()
     monkeypatch.setattr(sdk_adapter, "session_options", command_marks.opened)  # undo conftest's no-op
     monkeypatch.setattr(sdk_adapter, "usage_read", lambda *_a: asyncio.sleep(0, {}))
-    monkeypatch.setattr(sdk_adapter.preload, "missing", lambda *_a, **_k: [])
     cfg = sdk_adapter.Session(
         kind=StepKind.CHECK, worktree=work, session_id="sid", message="check", resume=resume, policy=Policy(work),
         observe=Worktree, checks=(), model="gpt-6-luna", user=UserConfig(instructions=on, skills=False, memory=not on),
@@ -195,6 +194,7 @@ def _opened(tmp_path, monkeypatch, session, *, resume=False, on=False, events=No
                                     delivered=lambda: session.order.append(("delivered",))),
     )  # fmt: skip
     store = SimpleNamespace(root=tmp_path / "data", log=lambda *_a: None)
+    (store.root / "changes" / "c1").mkdir(parents=True)  # as Store.lock makes it
     client = (_Resuming if resume else _Client)(session)
 
     async def scenario():

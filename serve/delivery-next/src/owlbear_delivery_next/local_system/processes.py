@@ -101,12 +101,9 @@ def _matches(ids: Pids, *, sessions: bool) -> dict[int, list[int]]:
 
 def _newer(pid: int, bound: float | None) -> bool:
     """Whether *pid* is a process created after *bound*; unknown counts as not newer, so nothing is overlooked."""
-    if bound is None:
-        return False
-    try:
-        return psutil.Process(pid).create_time() > bound + 1.0
-    except psutil.Error, OSError:
-        return False
+    with contextlib.suppress(psutil.Error, OSError):
+        return bound is not None and started(pid) > bound + 1.0
+    return False
 
 
 def _label(pid: int) -> str | None:

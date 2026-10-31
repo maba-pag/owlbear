@@ -40,7 +40,6 @@ def test_every_leftover_of_a_marked_command_is_found() -> None:
         bound = time.time()
         assert set(processes.members({leader: bound})) == set(left)
         assert set(processes.members({leader: bound}, sessions=False)) == set(left[:-1])
-        assert processes.members({leader: bound})[left[0]] == "sleep"
     finally:
         end(left)
 

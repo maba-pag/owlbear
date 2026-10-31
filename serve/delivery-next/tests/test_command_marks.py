@@ -38,23 +38,6 @@ class _Session:
     async def send(self, _message, **_extra):
         self.scripts.append("send")
 
-    async def get_events(self):
-        return []
-
-
-class _Client:
-    def __init__(self, session: _Session) -> None:
-        self.session = session
-
-    async def get_session_metadata(self, _sid):
-        return None
-
-    async def list_models(self):
-        return []
-
-    async def create_session(self, session_id, **_opts):  # noqa: ARG002 - a fresh one
-        return self.session
-
 
 def _open(work: Path, kind: StepKind, role: str = "") -> list[str]:
     """The real opening of one session of *kind*, as the step's factory makes it; what it was given, in order."""
@@ -66,7 +49,8 @@ def _open(work: Path, kind: StepKind, role: str = "") -> list[str]:
 
     async def scenario():
         st = sdk_adapter._Step(cfg, asyncio.get_running_loop())  # noqa: SLF001 - the real opening under test
-        await sdk_adapter._open(_Client(_Session(scripts)), st)  # noqa: SLF001
+        client = SimpleNamespace(create_session=lambda **_: asyncio.sleep(0, _Session(scripts)))
+        await sdk_adapter._open(client, st)  # noqa: SLF001
 
     asyncio.run(scenario())
     return scripts
@@ -83,8 +67,6 @@ def _push(work: Path, remote: Path, ref: str) -> None:
 
 def test_a_runner_step_marks_its_sessions_and_journals_its_pushes(change_repo, tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(sdk_adapter, "session_options", command_marks.opened)  # undo conftest's no-op
-    monkeypatch.setattr(sdk_adapter, "usage_read", lambda *_a: asyncio.sleep(0, {}))
-    monkeypatch.setattr(sdk_adapter.preload, "missing", lambda *_a, **_k: [])
     store = Store.open(change_repo)
     with store.lock("c1") as lock:
         store.write(
