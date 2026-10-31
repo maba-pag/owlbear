@@ -1728,6 +1728,76 @@ def test_an_older_read_s_other_projects_answered_last_never_replace_a_newer_read
 
 @pytest.mark.browser
 @pytest.mark.timeout(120)  # a real browser and a host pulling a shared repository: a loaded runner needs more than 30 s
+def test_an_older_read_s_models_answered_last_never_replace_a_newer_read_s(tmp_path: Path, monkeypatch, pds, outside):
+    """#810: two reads' refreshes overlap; the models' rates as the first one read them, answered after the second's,
+    are not shown."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    a = registry.register(clone(tmp_path / "alpha"))
+    with browsing(monkeypatch, pds) as (page, base):
+        page.goto(f"{base}/config?project={a.id}#token=t")
+        expect(page.locator("#reads-status")).to_contain_text("all sources", timeout=READS_TIME * 1000)
+        held: list[tuple[Any, Any]] = []
+
+        def hold(route: Any) -> None:
+            if held or route.request.method != "GET":
+                route.continue_()
+                return
+            held.append((route, route.fetch()))  # the models at 3, as the first read's refresh has them
+
+        page.route("**/config/models", hold)
+        pds.group(page, "overview")
+        page.get_by_role("button", name="Read again").click()
+        until(page, lambda: held, READS_TIME)
+        outside.models(7)
+        with page.expect_response("**/config/models", timeout=READS_TIME * 1000):
+            page.get_by_role("button", name="Read again").click()
+        pds.group(page, "agents")
+        expect(rates(page)).to_contain_text("in 7 ")
+        route, before = held[0]
+        with page.expect_response("**/config/models"):
+            route.fulfill(response=before)
+        page.wait_for_timeout(200)  # the answer's handler has run
+        expect(rates(page)).to_contain_text("in 7 ")
+
+
+@pytest.mark.browser
+@pytest.mark.timeout(120)  # a real browser and a host pulling a shared repository: a loaded runner needs more than 30 s
+def test_an_older_read_state_answered_last_never_hides_a_newer_read_s_failure(
+    tmp_path: Path, monkeypatch, pds, outside
+) -> None:
+    """#810: the page follows a read made elsewhere while its own Read again finds a failure; the state of the earlier
+    read, answered last, does not replace the newer one."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    a = registry.register(clone(tmp_path / "alpha"))
+    with browsing(monkeypatch, pds) as (page, base):
+        page.goto(f"{base}/config?project={a.id}#token=t")
+        expect(page.locator("#reads-status")).to_contain_text("all sources", timeout=READS_TIME * 1000)
+        held: list[tuple[Any, Any]] = []
+
+        def hold(route: Any) -> None:
+            if held or route.request.method != "GET":
+                route.continue_()
+                return
+            held.append((route, route.fetch()))  # the read made elsewhere, every source read
+
+        page.route("**/config/read", hold)
+        Outside.read(base, a.id)  # the page learns of it by its poll and asks for it
+        until(page, lambda: held, READS_TIME)
+        outside.releases(None)
+        pds.group(page, "overview")
+        failure = page.locator(".reads-failure")
+        page.get_by_role("button", name="Read again").click()
+        expect(failure).to_contain_text("Impeccable", timeout=READS_TIME * 1000)
+        route, before = held[0]
+        with page.expect_request(f"**/p/{a.id}/api/next/config"):  # sent right after the state is applied and shown
+            route.fulfill(response=before)
+        assert "Impeccable" in " ".join(failure.all_inner_texts())  # at once: the next poll would repair it
+
+
+@pytest.mark.browser
+@pytest.mark.timeout(120)  # a real browser and a host pulling a shared repository: a loaded runner needs more than 30 s
 def test_an_open_page_follows_reads_and_dismissals_made_elsewhere(tmp_path: Path, monkeypatch, pds, outside) -> None:
     """#810: a read the page did not start (the hourly one) and a dismissal made elsewhere show through the poll."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime

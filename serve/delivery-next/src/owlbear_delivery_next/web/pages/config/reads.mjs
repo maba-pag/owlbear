@@ -30,7 +30,11 @@ function seen(readAt, ids) {
   return `${readAt ?? ""}|${ids.join(",")}`;
 }
 
+const readAt = (reads) => (reads?.read_at ? Date.parse(reads.read_at) : 0);
+
+// The read state, unless the page shows a later read's: answers from overlapping refreshes may arrive in any order.
 function apply(reads) {
+  if (readAt(reads) < readAt(state.reads)) return;
   state.reads = reads;
   state.readsSeen = seen(reads.read_at, reads.notices.map((n) => n.id));
 }

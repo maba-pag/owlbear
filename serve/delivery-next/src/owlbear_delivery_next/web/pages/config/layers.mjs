@@ -213,7 +213,7 @@ function walk(path, as) {
   return value === null ? null : { value, from: as ?? base.sources[path] };
 }
 
-const answers = turns();  // the layers' reloads, saves and renames
+const answers = turns(), models = turns();  // the layers' reloads, saves and renames
 
 // The layers as the host has them now, unless a newer reload, save or rename has answered meanwhile.
 export async function reload() {
@@ -330,18 +330,22 @@ export async function rename() {
 }
 
 // The offered models replace typing once read; the runtime starts for it, so this can take a while.
+// Of overlapping reads, the newest one's answer stands, a failure too.
 export async function readModels() {
+  const n = models.ask();
   state.modelsNote = "Reading the models this machine's Copilot offers…";
   show();
+  let arrived;
   try {
     const answer = await call("/config/models", { timeout: 45000 });
     const offered = answer.models.length ? answer.models : null;
     const note = offered && answer.error ? `Models as last read; reading them again failed (${answer.error}).`
       : offered ? "Models, efforts and context sizes as this machine's Copilot offers them."
       : `Could not read the offered models (${answer.error || "none offered"}); type a model name.`;
-    page.arrived = { offered, note };
+    arrived = { offered, note };
   } catch (e) {
-    page.arrived = { offered: null, note: `Could not read the offered models (${e.message}); type a model name.` };
+    arrived = { offered: null, note: `Could not read the offered models (${e.message}); type a model name.` };
   }
+  if (models.take(n)) page.arrived = arrived;
   showIdle();
 }
