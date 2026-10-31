@@ -918,11 +918,9 @@ def _saved_by_keyboard(page, pds, button: str, whose: str) -> None:
     expect(pds.modal(page)).to_be_visible()
     inside = "document.activeElement?.closest('p-modal') !== null"
     page.wait_for_function(inside, timeout=5000)
-    where = []
     for _ in range(6):  # the page behind is inert
         page.keyboard.press("Tab")
-        where.append(page.evaluate(f"{inside} ? 'dialog' : document.activeElement === document.body ? '' : 'page'"))
-    assert "page" not in where
+        assert page.evaluate(f"{inside} || document.activeElement === document.body")
     pds.answer(page, button)
     expect(page.locator("#status")).to_have_text(f"Saved {whose} settings. They apply to the next session.")
     page.wait_for_function("document.activeElement?.closest('.bar') !== null", timeout=5000)
