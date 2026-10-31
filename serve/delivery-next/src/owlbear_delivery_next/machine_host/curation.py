@@ -150,13 +150,21 @@ class Curation:
         return f"{self.path()}#{curation_snapshots.window(folder, run)}"
 
     def load(self) -> Runs:
-        """Every folder's last run; none when the file is missing or unreadable."""
+        """Every folder's last run; none when the file is missing. An unreadable one raises, naming the way out."""
         try:
             return Runs.model_validate_json(self.path().read_text())
         except FileNotFoundError:
             return Runs()
         except (OSError, ValueError) as exc:
-            msg = f"the memory curation ownership record cannot be read: {exc}"
+            path = self.path()
+            msg = (
+                f"the memory curation ownership record {path} cannot be read:\n{exc}\n"
+                "OwlBear can't tell whether a memory curation session it started still runs, so memory curation "
+                "doesn't go on. Stop OwlBear if it still runs, and make sure no copilot process that memory curation "
+                'started still runs: the PIDs under "left" are the ones it recorded, but a session that failed early '
+                f"recorded none. Then move {path} aside, for example to {path}.broken, and start OwlBear again; the "
+                "folders' last runs are forgotten and curate again when due."
+            )
             raise maintenance.MaintenanceError(msg) from exc
 
     def _write(self, runs: Runs) -> None:
