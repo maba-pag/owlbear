@@ -406,24 +406,44 @@ def _answer_close(conn: socket.socket) -> bytes:
     return data
 
 
-def _sign_in(conn: socket.socket, *, refuse: bool = False, seen: list | None = None) -> list[tuple[str, str | None]]:
-    """Answer ``initialize`` and ``authenticate``; each method and token is noted before its reply is sent."""
+def _sign_in(
+    conn: socket.socket,
+    *,
+    refuse: bool = False,
+    seen: list | None = None,
+    version: str = ahp.PROTOCOL,
+    offered: list | None = None,
+) -> list[tuple[str, str | None]]:
+    """Answer ``initialize`` with ``version``, then ``authenticate``; each method and token is noted before its reply.
+
+    A refused ``authenticate`` gets the spec's AuthRequired error with a long detail; ``offered`` collects the versions
+    each ``initialize`` offered. A client that did not offer ``version`` sends no ``authenticate``.
+    """
     seen = [] if seen is None else seen
     for _ in range(2):
         msg = _ws_recv(conn)
         seen.append((msg["method"], msg["params"].get("token")))
-        failed = refuse and msg["method"] == "authenticate"
-        reply = {"error": {"message": "bad token"}} if failed else {"result": {}}
+        if msg["method"] == "initialize" and offered is not None:
+            offered.append(msg["params"]["protocolVersions"])
+        if refuse and msg["method"] == "authenticate":
+            reply = {"error": {"code": -32007, "message": "bad token", "data": {"detail": "x" * 400}}}
+        elif msg["method"] == "initialize":
+            reply = {"result": {"protocolVersion": version}}
+        else:
+            reply = {"result": {}}
         _ws_send(conn, {"jsonrpc": "2.0", "id": msg["id"], **reply})
+        if version != ahp.PROTOCOL:
+            break
     return seen
 
 
 def test_a_reconnect_reaches_the_same_socket_and_signs_in_again() -> None:
     seen: list[list[tuple[str, str | None]]] = []
+    offered: list[list[str]] = []
 
     def serve(conn: socket.socket) -> None:
         seen.append([])
-        _sign_in(conn, seen=seen[-1])  # noted before the reply, so the client cannot return first
+        _sign_in(conn, seen=seen[-1], offered=offered)  # noted before the reply, so the client cannot return first
         _answer_close(conn)
 
     path, server = _host(serve, accepts=2)
@@ -435,6 +455,8 @@ def test_a_reconnect_reaches_the_same_socket_and_signs_in_again() -> None:
             [("initialize", None), ("authenticate", "gh-1")],
             [("initialize", None), ("authenticate", "gh-2")],
         ]
+        assert offered == [[ahp.PROTOCOL], [ahp.PROTOCOL]]
+        assert first.protocol == second.protocol == "1.0.0"
     finally:
         first.close()
         second.close()
@@ -450,9 +472,37 @@ def test_a_failed_sign_in_closes_the_connection() -> None:
 
     path, server = _host(serve)
     try:
-        with pytest.raises(ahp.HostError, match="bad token"):
+        with pytest.raises(ahp.HostRefusedError) as refused:
             ahp.connect({"endpoint": {"path": str(path)}, "connectionToken": "secret"}, "c1", "gh")
+        got = refused.value
+        assert (got.method, got.code, got.message, got.data) == (
+            "authenticate",
+            -32007,
+            "bad token",
+            {"detail": "x" * 400},
+        )
+        assert "x" * 400 in str(got)
         assert ended.get(timeout=5) == b"\x03\xe8"  # a normal close
+    finally:
+        server.close()
+
+
+def test_a_version_the_client_did_not_offer_ends_the_sign_in_before_authenticate() -> None:
+    ended: queue.Queue[bytes] = queue.Queue()
+    seen: list[tuple[str, str | None]] = []
+
+    def serve(conn: socket.socket) -> None:
+        _sign_in(conn, seen=seen, version="0.9.0")
+        ended.put(_answer_close(conn))
+
+    path, server = _host(serve)
+    try:
+        with pytest.raises(
+            ahp.HostRefusedError, match=r"chose protocol '0\.9\.0', which OwlBear did not offer \(1\.0\.0\)"
+        ):
+            ahp.connect({"endpoint": {"path": str(path)}, "connectionToken": "secret"}, "c1", "gh")
+        assert ended.get(timeout=5) == b"\x03\xe8"
+        assert seen == [("initialize", None)]
     finally:
         server.close()
 
@@ -468,8 +518,10 @@ def test_connection_speaks_websocket_json_rpc_over_the_local_socket() -> None:
         _ws_send(conn, {"jsonrpc": "2.0", "id": first["id"], "result": {"items": [first["method"]]}})
         second = _ws_recv(conn)
         _ws_send(conn, {"jsonrpc": "2.0", "id": second["id"], "error": {"message": "nope"}})
+        seqs.extend(_ws_recv(conn)["params"]["clientSeq"] for _ in range(2))
         _answer_close(conn)
 
+    seqs: list[int] = []
     path, server = _host(serve)
     conn = ahp.Connection(str(path), "secret", "owlbear-delivery-test")
     try:
@@ -478,6 +530,9 @@ def test_connection_speaks_websocket_json_rpc_over_the_local_socket() -> None:
         assert conn.next_event(1) == {"jsonrpc": "2.0", "method": "action", "params": {"channel": "c"}}
         with pytest.raises(ahp.HostError, match="nope"):
             conn.request("subscribe", {})
+        assert [conn.dispatch("c", {"type": "a"}), conn.dispatch("c", {"type": "b"})] == [1, 2]
+        conn.close()
+        assert seqs == [1, 2]  # the returned seq is the one on the wire
     finally:
         conn.close()
         server.close()
@@ -494,8 +549,9 @@ def test_a_server_close_is_answered_and_later_requests_fail_at_once() -> None:
     path, server = _host(serve)
     conn = ahp.Connection(str(path), "secret", "owlbear-delivery-test")
     try:
-        with pytest.raises(ahp.HostError, match="connection closed"):
+        with pytest.raises(ahp.HostError, match="connection closed") as closed:
             conn.request("listSessions", {}, timeout=5)
+        assert type(closed.value) is ahp.HostError  # a disconnect is not the host's answer
         assert replies.get(timeout=5) == (8, b"\x03\xe8")
         assert conn.next_event(1) == {"method": "closed", "params": {"error": "server closed"}}
         with pytest.raises(ahp.HostError, match="connection closed"):
