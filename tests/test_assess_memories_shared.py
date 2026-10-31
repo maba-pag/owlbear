@@ -168,3 +168,30 @@ async def test_a_failed_commit_is_reported_and_leaves_the_receipt_uncommitted(sh
     assert git(shared.data, "rev-parse", "HEAD") == head
     assert git(shared.data, "diff", "--cached", "--name-only") == ""
     assert MemoryEngine(shared.folder).get_entry(kept).outstanding_count == 1
+
+
+@pytest.mark.asyncio
+async def test_receipts_written_before_a_failing_write_are_still_committed(
+    shared: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A later entry's write failure still surfaces, and the receipts already written do not stop the refresh."""
+    first, second = (f"550e8400-e29b-41d4-a716-44665544753{n}" for n in (5, 6))
+    seed(shared.folder, "a.md", entry(first, MemoryState.APPROVED))
+    seed(shared.folder, "b.md", entry(second, MemoryState.APPROVED))
+    publish(shared)
+    record = MemoryEngine.record_assessment
+
+    def full_disk(engine: MemoryEngine, entry_id: str, *args: object, **kwargs: object) -> object:
+        if entry_id == second:
+            raise OSError(28, "No space left on device")
+        return record(engine, entry_id, *args, **kwargs)
+
+    monkeypatch.setattr(MemoryEngine, "record_assessment", full_disk)
+
+    with pytest.raises(OSError, match="No space left"):
+        await assess(shared, (first, "outstanding"), (second, "outstanding"))
+
+    assert git(shared.data, "show", "--name-only", "--format=%s", "HEAD").splitlines() == [
+        _SUBJECT, "", "proj/memory/a.md"
+    ]  # fmt: skip
+    assert decision_store.refresh(DataRepo(root=shared.data)) == ""

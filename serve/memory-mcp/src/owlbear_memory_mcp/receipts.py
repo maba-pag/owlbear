@@ -23,7 +23,8 @@ def committed(root: Path | None, memory_dir: Path | None, entry_ids: Collection[
 
     Unbound (*root* None) nothing else happens. Bound to the shared repository, the batch runs under
     its lock and then the memory folder's writer lock, as make_global does; a file changed or untracked before the
-    batch is another writer's and is never committed. Nothing is pushed: Delivery's next publication pushes it.
+    batch is another writer's and is never committed. A batch that fails still commits the receipts it wrote
+    first. Nothing is pushed: Delivery's next publication pushes it.
     """
     if root is None:
         yield
@@ -38,19 +39,30 @@ def committed(root: Path | None, memory_dir: Path | None, entry_ids: Collection[
         except (subprocess.CalledProcessError, OSError) as exc:
             msg = f"nothing was assessed: the shared repository {root} could not be read: {_detail(exc)}"
             raise ToolError(msg) from exc
-        yield
-        written: list[Path] = []
         try:
-            written = [path for path in clean if path.exists() and _changed(path)]
-            if written:
-                commit_move(written, f"chore: memory assessments ({task_id}, memory-mcp)")
-        except (subprocess.CalledProcessError, OSError) as exc:
-            names = ", ".join(path.name for path in written or clean)
-            msg = (
-                f"the receipts were recorded but not committed: {names} in {memory_dir} stay uncommitted, "
-                f"so Delivery's refresh stops on them: {_detail(exc)}"
-            )
-            raise ToolError(msg) from exc
+            yield
+        except BaseException as failure:
+            try:  # receipts written before the failure still get committed; the failure stays the one raised
+                _commit(clean, memory_dir, task_id)
+            except ToolError as uncommitted:
+                failure.add_note(str(uncommitted))
+            raise
+        _commit(clean, memory_dir, task_id)
+
+
+def _commit(clean: list[Path], memory_dir: Path, task_id: str) -> None:
+    written: list[Path] = []
+    try:
+        written = [path for path in clean if path.exists() and _changed(path)]
+        if written:
+            commit_move(written, f"chore: memory assessments ({task_id}, memory-mcp)")
+    except (subprocess.CalledProcessError, OSError) as exc:
+        names = ", ".join(path.name for path in written or clean)
+        msg = (
+            f"the receipts were recorded but not committed: {names} in {memory_dir} stay uncommitted, "
+            f"so Delivery's refresh stops on them: {_detail(exc)}"
+        )
+        raise ToolError(msg) from exc
 
 
 def _batch_files(memory_dir: Path, ids: set[str]) -> list[Path]:
