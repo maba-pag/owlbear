@@ -401,7 +401,8 @@ def test_an_accepted_run_never_publishes_a_deletion_the_memory_batch_deferred(re
 LOCKED = "git worktree failed: locked"
 
 
-def test_a_finished_runs_worktree_left_listed_is_logged_and_named_in_its_row(repo, monkeypatch, caplog) -> None:
+@pytest.mark.parametrize("raises", [False, True], ids=["refused", "raised"])
+def test_a_finished_runs_worktree_left_listed_is_logged_and_named_in_its_row(repo, monkeypatch, caplog, raises) -> None:
     real = curation_tree._git  # noqa: SLF001
     failing = []
 
@@ -412,6 +413,9 @@ def test_a_finished_runs_worktree_left_listed_is_logged_and_named_in_its_row(rep
 
     def run(cfg) -> Run:
         failing.append(True)  # the seed's own prune ran
+        if raises:
+            msg = "the session broke"
+            raise RuntimeError(msg)
         return Run(cfg.session_id, termination=Termination(confirmed=True), **REFUSALS["unread"])
 
     monkeypatch.setattr(curation_tree, "_git", git_)
