@@ -38,7 +38,6 @@ _PRECOMMIT_FIX_HOOKS: dict[str, tuple[str, str, str | None]] = {
 }
 _PRECOMMIT_CHECK_HOOKS = {
     "lint-yaml": "yamllint",
-    "lint-shell": "shellcheck",
     "lint-actionlint": "actionlint",
     "lint-zizmor": "zizmor",
     "lint-editorconfig": "editorconfig-checker",
@@ -53,7 +52,6 @@ _AGGREGATES: dict[str, tuple[str, ...]] = {
         "lint-python",
         "lint-markdown",
         "lint-yaml",
-        "lint-shell",
         "lint-actions",
         "lint-editorconfig",
         "lint-biome",
@@ -317,11 +315,6 @@ def lint_markdown() -> None:
 def lint_yaml() -> None:
     """Run strict YAML lint checks."""
     _run_public_leaf("lint-yaml", fixes=False, allow_unsafe=False, staged=True)
-
-
-def lint_shell() -> None:
-    """Run ShellCheck on shell sources."""
-    _run_public_leaf("lint-shell", fixes=False, allow_unsafe=False, staged=True)
 
 
 def lint_actions() -> None:

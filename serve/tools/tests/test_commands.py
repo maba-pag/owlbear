@@ -26,7 +26,6 @@ _QUALITY_TREE = (
     "      lint-python",
     "      lint-markdown",
     "      lint-yaml",
-    "      lint-shell",
     "      lint-actions",
     "      lint-editorconfig",
     "      lint-biome",
