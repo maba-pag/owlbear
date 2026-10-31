@@ -233,7 +233,7 @@ class _Lexer:
             if self.text.startswith("$((", i):
                 i = self._arithmetic(s, i + 3)
             elif self.text.startswith("$(", i) or self.text[i] == "`":
-                i = self.level(i + 2, ")", s.depth + 1) if self.text[i] == "$" else self.level(i + 1, "`", s.depth + 1)
+                i = self._substitution(s, i)
             else:
                 depth += {opener: 1, close: -1}.get(self.text[i], 0)
                 i += 1
@@ -248,7 +248,7 @@ class _Lexer:
             if text[j] == "\\":
                 j += 2
             elif text.startswith("$((", j) and self._arithmetic_closes(j + 3):
-                j = self._arithmetic(_Level(s.depth, s.opaque), j + 3)
+                j = self._arithmetic(_Level(s.depth, s.opaque, piped=s.piped), j + 3)
             elif text[j] == "'" and s.quote != '"' and not quoted:  # in "${x:-'...'}" a single quote is a character
                 if (end := text.find("'", j + 1)) < 0:
                     raise ValueError
@@ -256,7 +256,7 @@ class _Lexer:
             elif text[j] == '"':  # a quote inside ${...}: a } in it doesn't close the expansion
                 quoted, j = not quoted, j + 1
             elif text.startswith("$(", j) or text[j] == "`":
-                j = self.level(j + 2, ")", s.depth + 1) if text[j] == "$" else self.level(j + 1, "`", s.depth + 1)
+                j = self._substitution(_Level(s.depth, s.opaque, piped=s.piped), j)
             elif text.startswith("${", j):
                 depth, j = depth + 1, j + 2
             else:

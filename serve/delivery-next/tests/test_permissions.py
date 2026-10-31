@@ -1297,3 +1297,10 @@ def test_a_startup_file_set_on_source_reaches_the_shells_its_text_starts(scripts
         == f"`./bad.sh` uses --no-verify, {BYPASS}"
     )
     assert decide(Policy(scripts), shell("BASH_ENV=./good.sh source ./runner.sh")) is None
+
+
+@pytest.mark.parametrize(
+    "text", ["printf x | echo ${a:-$(sh)}", "printf x | echo $(($(sh)+1))", "printf x | echo $[$(sh)]"]
+)
+def test_a_substitution_inside_a_parameter_or_arithmetic_reads_its_commands_input(text: str) -> None:
+    assert decide(WRITE, shell(text)).endswith(PIPED)
