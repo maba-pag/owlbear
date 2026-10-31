@@ -45,9 +45,9 @@ def repo(shared_repo) -> Path:
 
 
 @pytest.fixture
-def root(tmp_path) -> Path:
-    """The same folders without Git, for what never reaches a commit: the runs record, the ledger and their slots."""
-    return layout(tmp_path / "owlbear-data")
+def root(repo) -> Path:
+    """The same shared clone: every run works on a worktree of it (#746), even one that never reaches a commit."""
+    return repo
 
 
 def finished(job: curation.Curation) -> None:
