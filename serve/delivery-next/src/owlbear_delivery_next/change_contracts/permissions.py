@@ -141,10 +141,11 @@ class Request:
     """The parts of a permission request the policy judges."""
 
     kind: str
-    commands: tuple[str, ...] = ()
+    commands: tuple[str, ...] = ()  # a shell request's segments as the runtime split them
     paths: tuple[str, ...] = ()
     tool: str = ""
     server: str = ""  # an MCP request's server
+    text: str = ""  # a shell request's whole command: segments lose pipes, redirections and here-document bodies
 
 
 def identities(req: Request) -> set[str]:
@@ -316,7 +317,7 @@ def _mutation(text: str, commands: Sequence[Sequence[str]]) -> str | None:
 
 
 def _shell(policy: Policy, req: Request) -> str | None:
-    for text in req.commands or ("",):
+    for text in (req.text,) if req.text else req.commands or ("",):
         if reason := _check(policy, text):
             return reason
     return None
@@ -396,8 +397,9 @@ def view(r: Any) -> Request:  # noqa: ANN401 - one of the SDK's permission reque
     """Normalise one SDK permission request into a Request."""
     kind = getattr(r, "kind", type(r).__name__)
     if kind == "shell":
+        whole = getattr(r, "full_command_text", "") or ""
         texts = [s.full_command_text for s in r.command_segments or ()] or [c.identifier for c in r.commands]
-        return Request(kind, tuple(texts or [r.full_command_text]), tuple(r.possible_paths or ()))
+        return Request(kind, tuple(texts or [whole]), tuple(r.possible_paths or ()), text=whole)
     if kind in {"read", "write"}:
         path = r.resolved_path or getattr(r, "path", None) or getattr(r, "file_name", "")
         edits = getattr(r, "file_edits", None) or ()  # a move names a before and an after path

@@ -2,6 +2,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from copilot.generated.session_events import PermissionRequestShell
 
 from owlbear_delivery_next.change_contracts.permissions import Policy, Request, decide, view
 
@@ -19,6 +20,32 @@ def sdk_shell(text: str) -> SimpleNamespace:
     command = SimpleNamespace(identifier=text.split(maxsplit=1)[0], read_only=True)
     segment = SimpleNamespace(full_command_text=text)
     return SimpleNamespace(kind="shell", commands=[command], command_segments=[segment], possible_paths=())
+
+
+def cli_shell(text: str, *segments: str) -> PermissionRequestShell:
+    """A shell request as the CLI sends it: its segments split at pipes, redirections and here-document bodies gone."""
+    return PermissionRequestShell.from_dict(
+        {
+            "canOfferSessionApproval": False,
+            "commands": [{"identifier": text, "readOnly": False}],
+            "fullCommandText": text,
+            "hasWriteFileRedirection": ">" in text,
+            "intention": "run it",
+            "possiblePaths": [],
+            "possibleUrls": [],
+            "commandSegments": [{"fullCommandText": s, "identifier": s.split()[0]} for s in segments],
+        }
+    )
+
+
+def test_the_guard_judges_the_whole_command_not_the_runtimes_segments() -> None:
+    write = view(cli_shell("gh issue view 1 > f.md", "gh issue view 1"))
+    piped = view(cli_shell("echo 'git commit --no-verify -m x' | sh", "echo 'git commit --no-verify -m x'", "sh"))
+
+    assert write.commands == ("gh issue view 1",)
+    assert decide(READ, write) == "`gh issue view 1 > f.md` uses a redirect, which writes in a read-only step"
+    assert piped.text == "echo 'git commit --no-verify -m x' | sh"
+    assert piped.commands == ("echo 'git commit --no-verify -m x'", "sh")
 
 
 @pytest.mark.parametrize(
