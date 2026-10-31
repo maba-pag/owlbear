@@ -204,7 +204,7 @@ def _routes(machine: Machine) -> APIRouter:
     routes.add_api_route("/chat/contract", chat_routes.contract, methods=["GET"])  # what a chat server asks first
     _machine_routes(routes, machine)
     routes.include_router(maintenance_routes.router(machine))  # machine-wide: every project's held sessions
-    routes.include_router(metrics_routes.router(lambda: _stores(machine)))  # every project's spend
+    routes.include_router(metrics_routes.router(lambda: _stores(machine), lambda: _loaded(machine)))  # all spend
     _curation_routes(routes, machine)
     _update_routes(routes, machine)
     routes.include_router(update_routes.router(machine))  # the update checks (D-01M63CCVRK8ZKFENY9F4A2K11A)
@@ -215,6 +215,11 @@ def _routes(machine: Machine) -> APIRouter:
 def _stores(machine: Machine) -> list[tuple[Any, Path | None]]:
     """Each served project's store and clone, for the spend metrics' reconciling pass."""
     return [(p.store, Path(p.entry.path)) for p in list(machine.projects.values()) if p.store is not None]
+
+
+def _loaded(machine: Machine) -> list[tuple[str, Any]]:
+    """Each loaded project's id and store, for the links from Metrics to its settings."""
+    return [(pid, p.store) for pid, p in list(machine.projects.items()) if p.store is not None and p.state == "loaded"]
 
 
 def _shared() -> data_repo.DataRepo | None:

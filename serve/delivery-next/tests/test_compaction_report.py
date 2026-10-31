@@ -12,9 +12,13 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from owlbear_delivery_next.improvement import chatlogs
+from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.project_host import metrics_routes
 from owlbear_delivery_next.runtimes import compaction_logs, spend_reconcile
+from owlbear_delivery_next.settings import config
+from owlbear_delivery_next.settings.config import Agent, GlobalLayer, Layer, MachineLayer
 from owlbear_delivery_next.state_store import spend_ledger
+from owlbear_delivery_next.state_store.store import Store, update_layer
 
 NOW = datetime.now(UTC).replace(microsecond=0) - timedelta(hours=1)
 OLD = NOW - timedelta(days=40)
@@ -117,11 +121,32 @@ def seed(*, b1_unread: bool = False) -> None:
     copied("s-rt", gzip.compress("".join([*calls(1), *applied("a"), *calls(4)]).encode()))
 
 
+def context(path, model: type[Layer], role: str, value: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    update_layer(path, model, lambda layer: layer.model_copy(update={"agents": {role: Agent(context=value)}}))
+
+
 @pytest.fixture
-def get(monkeypatch):
+def served(tmp_path, monkeypatch) -> list[tuple[str, Store]]:
+    """Shop and mill on a shared location: builder long on Global, default on mill; retro long on this machine."""
+    base = config.BASE
+    assert base is not None
+    agents = base.agents | {"reviewer": base.agents["reviewer"].model_copy(update={"context": None})}
+    monkeypatch.setattr(config, "BASE", base.model_copy(update={"agents": agents}))  # reviewer's context set nowhere
+    shared = DataRepo(tmp_path / "data")
+    stores = [(name, Store(tmp_path / "projects" / name, shared, name)) for name in ("shop", "mill")]
+    context(shared.global_path, GlobalLayer, "builder", "long")
+    context(stores[1][1].config_path, Layer, "builder", "default")
+    context(stores[0][1].machine_path, MachineLayer, "retro", "long")
+    return stores
+
+
+@pytest.fixture
+def get(monkeypatch, request):
     monkeypatch.setattr(spend_reconcile, "due", lambda *_a: False)  # the ledger holds only the fixture's lines
+    stores = request.getfixturevalue("served") if "served" in request.fixturenames else []
     app = FastAPI()
-    app.include_router(metrics_routes.router(list), prefix="/api/next")
+    app.include_router(metrics_routes.router(list, lambda: stores), prefix="/api/next")
     client = TestClient(app, raise_server_exceptions=False)
     return lambda query="": client.get(f"/api/next/metrics?{query}")
 
@@ -203,3 +228,47 @@ def test_a_failed_report_says_why(get, monkeypatch, caplog) -> None:
     assert answer.status_code == 500
     assert answer.json()["detail"] == "compaction report: RuntimeError: x"
     assert "RuntimeError: x" in caplog.text
+
+
+def links(answer: dict) -> dict[tuple, list]:
+    return {(r["agent"], r["subagent"], r["project"]): r["settings"] for r in answer["rows"]}
+
+
+def at(project: str, layer: str, **more: object) -> dict:
+    return {"project": project, "name": project, "clone": project, "layer": layer} | more
+
+
+@pytest.mark.usefixtures("served")
+def test_each_row_links_its_roles_context_setting_on_the_layer_that_sets_it(get) -> None:
+    seed()
+    found = get(LAST_30).json()["compaction"]
+    assert links(found) == {
+        ("builder", "", None): [at("mill", "project"), at("shop", "global")],
+        ("builder", "", "mill"): [at("mill", "project")],
+        ("builder", "", "shop"): [at("shop", "global")],
+        ("builder", "explore", "shop"): [],
+        ("retro", "", ""): [{"project": "", "name": "This machine", "clone": "shop", "layer": "machine"}],
+        ("reviewer", "", "shop"): [at("shop", "global", unset=True)],
+    }
+    assert found["settings_errors"] == []
+
+
+def test_a_project_whose_settings_do_not_read_says_so_and_the_others_still_link(served, get, caplog) -> None:
+    seed()
+    mill = served[1][1].config_path
+    mill.write_bytes(b"\xff\xfe not utf-8")
+    found = get(LAST_30).json()["compaction"]
+    said = links(found)
+    assert said["builder", "", "mill"] == [{"project": "mill", "name": "mill", "why": "settings unreadable"}]
+    assert said["builder", "", "shop"] == [at("shop", "global")]
+    [error] = found["settings_errors"]
+    assert (error["project"], error["file"]) == ("mill", str(mill))
+    assert "UnicodeDecodeError" in error["error"]
+    assert "settings of mill unreadable" in caplog.text
+
+
+def test_a_row_of_a_project_this_machine_does_not_serve_says_so(get) -> None:
+    seed()
+    said = links(get(LAST_30).json()["compaction"])
+    assert said["builder", "", "shop"] == [{"project": "shop", "name": "shop", "why": "not served"}]
+    assert said["retro", "", ""] == [{"project": "", "name": "This machine", "why": "no project served"}]

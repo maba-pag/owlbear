@@ -111,7 +111,7 @@ def _state(store: Store, notice: str = "") -> dict[str, Any]:
     except StoreError as exc:
         raise HTTPException(409, str(exc)) from exc
     here, alone = list[str](), list[str]()
-    settings, below = _resolved(glob, project, machine, here), _resolved(glob, Layer(), machine, alone)
+    settings, below = resolved(glob, project, machine, here), resolved(glob, Layer(), machine, alone)
     if here:
         notice = (
             f"The challenge-round values in use here do not fit together ({here[0]}); steps stop until you fix them"
@@ -142,7 +142,7 @@ def _state(store: Store, notice: str = "") -> dict[str, Any]:
         "settings": settings.page(),
         "inherited": {  # what a blank field in each layer resolves to: the layers below it only; None where unset
             "project": below.page(),
-            "machine": _resolved(glob, Layer(), None, []).page(),
+            "machine": resolved(glob, Layer(), None, []).page(),
             "global": resolve(None, Layer()).page(),
         },
         "applied": APPLIED,
@@ -151,7 +151,7 @@ def _state(store: Store, notice: str = "") -> dict[str, Any]:
     }
 
 
-def _resolved(glob: GlobalLayer | None, project: Layer, machine: MachineLayer | None, misfit: list[str]) -> Settings:
+def resolved(glob: GlobalLayer | None, project: Layer, machine: MachineLayer | None, misfit: list[str]) -> Settings:
     """The settings; when stored round values do not fit together, those without them, the problem in *misfit*.
 
     A hand edit, two saves at once or another machine's save can store such a combination; the page shows it so the
