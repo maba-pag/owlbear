@@ -34,7 +34,7 @@ from owlbear_delivery_next.commands import chat_client, setup
 from owlbear_delivery_next.commands.chat_client import NOT_RUNNING, NOT_SERVED, OWLBEAR_DOWN, Chat, OwlBear
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.local_system.codebase import CURRENT
-from owlbear_delivery_next.project_host import answers, api, launches, pages
+from owlbear_delivery_next.project_host import answers, api, brief_routes, launches, pages
 from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.runtimes import ahp, copilot_cli, readiness, step_input, vscode_adapter
 from owlbear_delivery_next.runtimes.vscode_contract import Outcome as Outcome_
@@ -472,12 +472,11 @@ def test_a_file_tracked_while_the_owner_answers_is_not_written(repo):
     assert path.read_text() == "{}\n"
 
 
-def command(prompt: str) -> str:
-    return shlex.join(["code", "chat", "-m", "owlbear-shaper", prompt])
+def command(prompt: str, repo: Path) -> str:
+    return f"cd {shlex.quote(str(repo))} && " + shlex.join(["code", "chat", "-m", "owlbear-shaper", prompt])
 
 
 PROMPT = api.START_PROMPT + api.PICKER_NOTE.format(model="claude-opus-5.5", effort="medium")
-COMMAND = command(PROMPT)
 SHAPER = carried.layer().agents["shaper"]  # module level runs before the carried-settings fixture
 
 
@@ -544,14 +543,14 @@ def test_new_change_returns_at_once_and_the_page_polls_the_launch_on_the_project
     opening = Opening({"state": "open", "warning": "could not remove it"})
     c = launcher(store, opening)
     started = c.post("/api/next/new-change").json()
-    luna = command(api.START_PROMPT + api.PICKER_NOTE.format(model="gpt-6-luna", effort="max"))
+    luna = command(api.START_PROMPT + api.PICKER_NOTE.format(model="gpt-6-luna", effort="max"), store.root)
     assert (started["started"], set(started)) == (True, {"started", "launch"})
     assert c.get(f"/api/next/new-change/{started['launch']}").json() == {"state": "opening", "command": luna}
     opening.release.set()
     assert settled(c, started["launch"]) == {"state": "open", "warning": "could not remove it", "command": luna}
     [(repo, role, prompt)] = opening.calls
     assert (repo, role.model, role.effort) == (store.root, "gpt-6-luna", "max")
-    assert luna == command(prompt)  # the command by hand carries the same note as the launch (TD-277)
+    assert luna == command(prompt, store.root)  # the command by hand carries the same note as the launch (TD-277)
     assert prompt.endswith('model picker: set it to gpt-6-luna at max effort."')
 
 
@@ -569,9 +568,14 @@ def test_new_change_returns_at_once_and_the_page_polls_the_launch_on_the_project
 def test_a_failed_launch_gives_its_reason_and_the_command(tmp_path, caplog, ending, reason, logged):
     opening = Opening(ending)
     opening.release.set()
-    c = launcher(Store(tmp_path), opening)
+    store = Store(tmp_path)
+    c = launcher(store, opening)
     state = settled(c, c.post("/api/next/new-change").json()["launch"])
-    assert (state["state"], state["command"], reason in state["reason"]) == ("failed", COMMAND, True)
+    assert (state["state"], state["command"], reason in state["reason"]) == (
+        "failed",
+        command(PROMPT, store.root),
+        True,
+    )
     records = [r for r in caplog.records if r.name == launches.__name__]
     assert [r.levelname for r in records] == logged
     assert all(r.exc_info for r in records)  # the traceback is kept
@@ -648,6 +652,17 @@ def test_a_saved_brief_opens_a_new_shaping_chat_in_its_project_and_leaves_the_ch
     assert untouched(store) == before
 
 
+def test_each_projects_command_by_hand_opens_its_own_change(tmp_path):
+    stores = [revisable(tmp_path / name) for name in ("alpha", "beta")]
+    out = [
+        launcher(s, Opening(), which=lambda _n: None).post("/api/next/changes/flip/revise-brief").json() for s in stores
+    ]
+    prompt = brief_routes.REVISE.format(handle="c1", title="Flip the hero") + api.PICKER_NOTE.format(
+        model="claude-opus-5.5", effort="medium"
+    )
+    assert [(o["started"], o["command"]) for o in out] == [(False, command(prompt, s.root)) for s in stores]
+
+
 def due_finding() -> dict:
     finding = RoundFinding(id="F1", text="t", raised=1, reconsider="due")
     return {"loops": {"brief": RoundLoop(subject="brief", policy=RoundPolicy(), findings=[finding])}}
@@ -696,13 +711,17 @@ def test_new_change_needs_the_token_and_without_code_or_settings_returns_the_com
     out = launcher(store, opening, which=lambda _n: None).post("/api/next/new-change").json()
     assert (out["started"], out["command"], out["reason"]) == (
         False,
-        COMMAND,
+        command(PROMPT, store.root),
         f"`code` is not on PATH; run this in {store.root}",
     )
     store.config_path.write_text("{")
     c = launcher(store, opening)
     out = c.post("/api/next/new-change").json()
-    assert (out["started"], out["command"], "settings" in out["reason"]) == (False, command(api.START_PROMPT), True)
+    assert (out["started"], out["command"], "settings" in out["reason"]) == (
+        False,
+        command(api.START_PROMPT, store.root),
+        True,
+    )
     assert (c.get("/api/next/new-change/nope").status_code, opening.calls) == (404, [])
 
 

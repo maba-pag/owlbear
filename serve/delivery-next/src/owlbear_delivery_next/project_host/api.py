@@ -280,18 +280,20 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
     for path, html in pages.pages().items():
         app.add_api_route(path, fixed_page(html), methods=["GET"], response_class=HTMLResponse)
 
+    def by_hand(prompt: str) -> str:
+        # `code chat` opens the chat on the folder it runs in, and two projects can share a Change's handle
+        return f"cd {shlex.quote(str(host.repo))} && {shlex.join(['code', 'chat', '-m', SHAPER_MODE, prompt])}"
+
     def start_chat(prompt: str, done: Ended | None = None) -> dict[str, Any]:
         """Open the shaping chat with ``prompt`` in the background, or say why not and give the command by hand."""
         try:
             shaper = store.settings().agent("shaper")
         except SettingsUnset as exc:
-            command = shlex.join(["code", "chat", "-m", SHAPER_MODE, prompt])
-            return {"started": False, "command": command, "reason": str(exc)}
+            return {"started": False, "command": by_hand(prompt), "reason": str(exc)}
         except StoreError as exc:
-            command = shlex.join(["code", "chat", "-m", SHAPER_MODE, prompt])
-            return {"started": False, "command": command, "reason": f"the settings are unreadable ({exc})"}
+            return {"started": False, "command": by_hand(prompt), "reason": f"the settings are unreadable ({exc})"}
         prompt += PICKER_NOTE.format(model=shaper.model, effort=shaper.effort)
-        command = shlex.join(["code", "chat", "-m", SHAPER_MODE, prompt])
+        command = by_hand(prompt)
         if not which("code"):
             return {"started": False, "command": command, "reason": f"`code` is not on PATH; run this in {host.repo}"}
 
