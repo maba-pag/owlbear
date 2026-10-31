@@ -264,6 +264,8 @@ class Step:
             return ""
         # subscribe before dispatching: the host sends a rejection only to the channel's subscribers
         values = (self._chat(session).get("config") or {}).get("values") or {}
+        if all(values.get(k) == v for k, v in self.spec.config.items()):
+            return ""  # nothing to change, so no action whose rejection could go unread
         seq = self.conn.dispatch(session, {"type": "session/configChanged", "config": self.spec.config})
         deadline, asked = self.clock() + ACK, json.dumps(self.spec.config, sort_keys=True)
         while self.clock() < deadline:

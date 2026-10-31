@@ -1011,6 +1011,23 @@ def test_a_cleanup_failure_is_a_warning_and_the_chat_still_started(plain: Path) 
     assert json.loads((folder / "settings.json").read_text()) == {HARNESS: True}
 
 
+def test_settings_the_session_already_holds_are_not_sent_again(tmp_path: Path) -> None:
+    host = FakeHost(tmp_path, [{}], [DONE])
+    host.reject = {"session/configChanged": "nothing to change"}
+    original = host.add
+
+    def add(**kw: object) -> str:
+        resource = original(**kw)
+        host.config[resource] = {"sandboxEnabled": "on"}
+        return resource
+
+    host.add = add
+    out = step(host, spec(tmp_path, config={"sandboxEnabled": "on"})).open()
+
+    assert out.end == "started"
+    assert host.actions("session/configChanged") == []
+
+
 def test_a_settings_rejection_fails_the_shaping_chat_at_once_whole_and_logged(plain: Path, caplog) -> None:
     host = shaping_host(plain)
     reason = "managed policy: Allow All is blocked; " + "p" * 300
