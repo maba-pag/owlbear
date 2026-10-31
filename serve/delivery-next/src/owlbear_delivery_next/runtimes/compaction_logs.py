@@ -100,7 +100,7 @@ def read(session: str) -> Log:
             log = _parse(path)
         except FileNotFoundError:
             continue
-        except (OSError, EOFError, ValueError, zlib.error) as exc:  # gzip.BadGzipFile is an OSError
+        except (OSError, EOFError, ValueError, TypeError, zlib.error) as exc:  # gzip.BadGzipFile is an OSError
             error = f"{path}: {type(exc).__name__}: {exc}"
             LOG.warning("compaction log unreadable: %s", error)
             return Log("error", error=error)
@@ -124,7 +124,9 @@ def _parse(path: Path) -> Log:
                 if raw.endswith("\n"):
                     raise
                 continue  # the last line, which the runtime is still writing
-            data = event.get("data") or {}
+            data = event.get("data") or {} if isinstance(event, dict) else None
+            if not isinstance(data, dict):
+                raise TypeError(kind)
             if kind == "subagent.started":
                 found.launch(str(data.get("agentName") or "subagent"), str(data.get("toolCallId") or ""),
                              str(event.get("agentId") or ""))  # fmt: skip

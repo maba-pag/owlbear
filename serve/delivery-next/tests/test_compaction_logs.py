@@ -4,6 +4,8 @@ import gzip
 import json
 from pathlib import Path
 
+import pytest
+
 from owlbear_delivery_next.improvement import chatlogs
 from owlbear_delivery_next.runtimes import compaction_logs
 from owlbear_delivery_next.runtimes.compaction_logs import Actor, Log
@@ -56,11 +58,15 @@ def test_a_log_that_cannot_be_reached_is_unreadable_not_missing() -> None:
     assert f"{folder / 'events.jsonl'}: PermissionError" in found.error
 
 
-def test_a_finished_line_that_is_not_json_makes_the_log_unreadable() -> None:
+@pytest.mark.parametrize(
+    ("bad", "exc"),
+    [('{"type":"session.compaction_complete","da\n', "JSONDecodeError"),
+     ('{"type":"session.compaction_start","data":["x"]}\n', "TypeError: session.compaction_start")],
+)  # fmt: skip
+def test_a_finished_line_that_is_no_event_makes_the_log_unreadable(bad: str, exc: str) -> None:
     log = chatlogs.state() / "s4" / "events.jsonl"
     log.parent.mkdir(parents=True)
-    log.write_text("".join([line("assistant.turn_start"), '{"type":"session.compaction_complete","da\n',
-                            line("assistant.turn_start")]))  # fmt: skip
+    log.write_text("".join([line("assistant.turn_start"), bad, line("assistant.turn_start")]))
     found = compaction_logs.read("s4")
     assert found.state == "error"
-    assert f"{log}: JSONDecodeError" in found.error
+    assert f"{log}: {exc}" in found.error
