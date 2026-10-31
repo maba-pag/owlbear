@@ -25,7 +25,6 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Collection
     from pathlib import Path
 
-    from owlbear_delivery_next.local_system.data_repo import DataRepo
     from owlbear_delivery_next.state_store.store import Store
 
 EVERY = 3600.0  # seconds between the host's reads
@@ -126,11 +125,9 @@ class Reader:
             name = store.name or store.root.name
             if name in names:
                 continue
-            try:
+            with contextlib.suppress(StoreError):
                 over.append((name, set(flatten(store.read_config()))))
                 names.add(name)
-            except StoreError:
-                continue
         return over
 
     def _shared(self) -> tuple[Missed, dict[str, str] | None, bool]:
@@ -142,7 +139,11 @@ class Reader:
         missed: Missed = []
         glob = None
         if shared is not None:
-            missed += _sync(shared)
+            try:
+                refused = settings_carry.sync(shared, registry.load().global_written)
+            except (data_repo.DataRepoError, registry.RegistryError) as exc:
+                refused = str(exc)
+            missed += [(str(shared.root), refused)] if refused else []
             try:
                 glob = flatten(read_layer_settled(shared.global_path, GlobalLayer))  # an own save is taken as one
             except StoreError as exc:
@@ -162,12 +163,7 @@ class Reader:
         return []
 
     def _machine(self) -> Missed:
-        path = local_home.root() / MACHINE_SETTINGS
-        missed: Missed = []
-        try:
-            read_layer(path, MachineLayer)
-        except StoreError as exc:
-            missed.append((str(path), str(exc)))
+        missed = _unreadable([local_home.root() / MACHINE_SETTINGS], MachineLayer)
         try:
             machine_settings.current()
         except registry.RegistryError as exc:
@@ -175,21 +171,12 @@ class Reader:
         return missed
 
 
-def _sync(shared: DataRepo) -> Missed:
-    """Bring the checkout current; why it is not."""
-    try:
-        refused = settings_carry.sync(shared, registry.load().global_written)
-    except (data_repo.DataRepoError, registry.RegistryError) as exc:
-        refused = str(exc)
-    return [(str(shared.root), refused)] if refused else []
-
-
-def _unreadable(paths: list[Path]) -> Missed:
-    """The project layers among *paths* that do not read."""
+def _unreadable(paths: list[Path], model: type[Layer] = Layer) -> Missed:
+    """The layers among *paths* that do not read as *model*."""
     missed: Missed = []
     for path in paths:
         try:
-            read_layer(path, Layer)
+            read_layer(path, model)
         except StoreError as exc:
             missed.append((str(path), str(exc)))
     return missed

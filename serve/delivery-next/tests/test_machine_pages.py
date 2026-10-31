@@ -1562,11 +1562,9 @@ def rates(page: Page):
     return page.locator("#set-agents-builder p-table-cell").last
 
 
-def machine_layer(**fields: object) -> Path:
+def machine_layer(**fields: object) -> None:
     """This machine's preference layer in ~/.owlbear, written as the owner would by hand."""
-    path = local_home.root() / MACHINE_SETTINGS
-    path.write_text(json.dumps({"format": CONFIG_FORMAT, **fields}))
-    return path
+    (local_home.root() / MACHINE_SETTINGS).write_text(json.dumps({"format": CONFIG_FORMAT, **fields}))
 
 
 READS_TIME = 60  # a 120 s test: a read pulls the shared repository; a read the page did not start shows by its poll

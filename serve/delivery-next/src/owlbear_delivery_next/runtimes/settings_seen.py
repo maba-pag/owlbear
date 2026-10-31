@@ -89,7 +89,7 @@ class Ledger:
 
     def __init__(self, path: Path, say: Callable[[str], None]) -> None:
         self.path, self.say, self._lock = path, say, threading.Lock()
-        self._owned: dict[str, str | None] | None = None  # this machine's saves of Global during a read, by key
+        self._owned: dict[str, str | None] = {}  # this machine's saves of Global during a read, by key
 
     def _read(self) -> tuple[Seen, str]:
         """The state, and why it could not be read; an absent file is the state before any read."""
@@ -122,16 +122,15 @@ class Ledger:
         Each value that differs from the last read's gets its own notice; the first read only records.
         """
         with self._lock:
-            owned, self._owned = self._owned or {}, None
+            owned, self._owned = self._owned, {}
             if glob is not None:
                 glob = {k: v for k, v in (glob | owned).items() if v is not None}
             seen, broken = self._read()
             if broken:
                 self.say(f"settings read: {STATE} failed at {self.path}: {broken}; it is rebuilt")
                 failures = [Failure(source=STATE, at=at, error=broken), *failures]
-            notices = seen.notices
             if glob is not None and seen.seen is not None:
-                notices += [
+                seen.notices += [
                     Notice(id=secrets.token_hex(8), key=k, old=seen.seen.get(k), new=glob.get(k), at=at)
                     for k in changed(seen.seen, glob)
                 ]
@@ -141,7 +140,7 @@ class Ledger:
                 failures=failures,
                 unshared=unshared,
                 seen=glob if glob is not None else seen.seen,
-                notices=notices,
+                notices=seen.notices,
             )
             self._write(done)
             return done
@@ -153,8 +152,7 @@ class Ledger:
         """
         old, new = flatten(before), flatten(after)
         with self._lock:
-            if self._owned is not None:
-                self._owned |= {key: new.get(key) for key in changed(old, new)}
+            self._owned |= {key: new.get(key) for key in changed(old, new)}
             seen, broken = self._read()
             if broken or seen.seen is None:
                 return
