@@ -16,6 +16,7 @@ PAGES = (  # every page the host serves, as path, title and file; the menu links
     ("/memory", "Memory", "memory.html"),
     ("/decisions", "Decisions", "decisions.html"),
     ("/metrics", "Metrics", "metrics.html"),
+    ("/improvement", "Improvement", "improvement.html"),
     ("/projects", "Projects", "projects.html"),
     ("/config", "Settings", "config.html"),
     ("/maintenance", "Maintenance", "maintenance.html"),

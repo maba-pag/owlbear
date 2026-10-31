@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en" class="scheme-light-dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="owlbear-scope" content="all">
+<title>OwlBear Delivery · Improvement</title>
+<link rel="stylesheet" href="/assets/pds/4.10.1/index.css">
+<script type="module">
+  import { load } from "/assets/pds/4.10.1/load.mjs";
+  load();
+</script>
+<!-- base -->
+<style>
+  #page > section { margin-block-start: var(--p-spacing-static-lg); }
+  .filters > p-select { flex: 0 1 16rem; min-width: 0; }
+  .proposal .direction { font-weight: 600; }
+  .proposal .actions, .followup { margin-block-start: var(--p-spacing-static-sm); }
+  .from { color: var(--p-color-contrast-medium); }
+  .cards ul.meta, .panel ul.meta, .panel ol.meta { margin: 0; padding-inline-start: 1.25rem; }
+</style>
+</head>
+<body>
+<main>
+<!-- tabs -->
+<header>
+  <p-heading size="2xl"><h1>Improvement</h1></p-heading>
+</header>
+<p-text size="sm">The Spotter and Retro on this machine, for every loaded project: what they saw, what they spent,
+  and what Retro proposes to change. Each button says what it will do before it does anything.</p-text>
+<div id="page"></div>
+</main>
+<!-- ask -->
+<script type="module" src="/assets/page/improvement/main.mjs"></script>
+</body>
+</html>

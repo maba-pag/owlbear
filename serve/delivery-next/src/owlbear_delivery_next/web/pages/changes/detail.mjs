@@ -10,6 +10,7 @@ import { activityLog, split } from "./activity.mjs";
 import { approval, briefInfo } from "./brief.mjs";
 import { choose } from "./list.mjs";
 import { watcherSection } from "./watcher.mjs";
+import { improvementSection } from "./improvement.mjs";
 
 function detailHead(d) {
   const back = html`<p-button-pure type="button" icon="arrow-left" class="back" @click=${() => choose(null)}>All
@@ -87,6 +88,7 @@ export function detailView(d) {
     ${!approvingNow && (d.brief.outcome || d.criteria.length) ? briefInfo(d) : nothing}
     ${d.pullback && !behind ? pullbackNote(d.pullback, d) : nothing}
     ${watcherSection(d.watcher)}
+    ${improvementSection(d)}
     ${info("Recent activity", activityLog(d.activity))}
     ${spendLines(d.spend)}
     ${toolLines(d.tool_use)}`;
