@@ -538,6 +538,40 @@ def test_models_arriving_during_a_save_apply_once_it_ends(store, monkeypatch, pd
 
 
 @pytest.mark.browser
+def test_a_refresh_answered_after_a_save_keeps_the_saved_values(store, pds) -> None:
+    """#810: a read's refresh that the host answered before a save, arriving after it, never shows the older layers."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    with settings_page(store, pds) as page:
+        pds.group(page, "overview")
+        expect(page.locator("#reads-status")).to_contain_text("Last read")
+        held: list[tuple[Any, Any]] = []
+
+        def hold(route: Any) -> None:
+            if route.request.method != "GET" or held:
+                route.continue_()
+                return
+            held.append((route, route.fetch()))  # the layers as they are before the save
+
+        page.route("**/api/next/config", hold)
+        page.locator("#read-again").click()
+        for _ in range(200):  # the old layers are in hand before the save starts
+            if held:
+                break
+            page.wait_for_timeout(50)
+        assert held
+        pds.group(page, "runs")
+        page.get_by_label("Minutes per session, builder").fill("50")
+        page.get_by_role("button", name="Save project settings").click()
+        pds.answer(page, "Save project settings")
+        expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
+        route, before = held[0]
+        with page.expect_response("**/config/models"):  # the refresh goes on past the layers it read
+            route.fulfill(response=before)
+        expect(page.get_by_label("Minutes per session, builder")).to_have_value("50")
+
+
+@pytest.mark.browser
 def test_with_no_layer_setting_anything_the_page_names_every_unset_value_and_a_save_fills_one(
     store, pds, monkeypatch
 ) -> None:

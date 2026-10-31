@@ -213,9 +213,13 @@ function walk(path, as) {
   return value === null ? null : { value, from: as ?? base.sources[path] };
 }
 
+// The layers as the host has them now, unless a save or rename started during this read: then its answer stands.
 export async function reload() {
+  const writes = state.layerWrites;
   try {
-    state.loaded = await call("/config");
+    const loaded = await call("/config");
+    if (writes !== state.layerWrites) return false;
+    state.loaded = loaded;
     state.error = state.loaded.notice ? state.loaded.notice.charAt(0).toUpperCase() + state.loaded.notice.slice(1) : "";
     return true;
   } catch (e) {
@@ -263,6 +267,7 @@ async function saveLayer(review) {
   // this save's outcome. The outcome is shown once it is settled, together with the save button taking a retry.
   let error = "", status = "";
   state.saving = true;
+  state.layerWrites += 1;
   state.error = "";
   state.status = "Saving…";
   show();
@@ -305,6 +310,7 @@ export async function rename() {
   });
   if (!sure) return;
   state.saving = true;
+  state.layerWrites += 1;
   state.status = "Renaming…";
   show();
   try {
