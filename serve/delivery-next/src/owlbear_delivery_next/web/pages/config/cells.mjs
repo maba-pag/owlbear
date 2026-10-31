@@ -171,13 +171,17 @@ export function sessionsAtOnce() {
   source(key, state.loaded.settings[key]));
 }
 
-// TD-400: the curator decides alone at or above this confidence; one value for every machine and project.
+// TD-400: the curator decides alone at or above this confidence; one value for every machine and project, so
+// another layer shows it read-only with where it is set (#809).
 export function curatorThreshold() {
-  const key = "curator_threshold";
+  const key = "curator_threshold", label = "Curator's confidence threshold in percent (50 to 100)";
   if (state.layer !== "global") {
-    return cell(html`<p-text>Set for all projects</p-text>`, source(key, state.loaded.settings[key]));
+    const inUse = state.loaded.settings[key];
+    return cell(typed(label, inUse === null || inUse === undefined ? "" : String(inUse), () => undefined,
+      { placeholder: "unset", inputmode: "numeric", disabled: true }), source(key, inUse),
+    html`<p-text size="sm" color="contrast-medium">set on Global</p-text>`);
   }
-  return cell(typed("Curator's confidence threshold in percent (50 to 100)", own(key), (v) => edit(key, v),
+  return cell(typed(label, own(key), (v) => edit(key, v),
     { key, placeholder: clear(inherited()[key]), inputmode: "numeric", disabled: state.saving }),
   source(key, state.loaded.settings[key]));
 }

@@ -199,7 +199,9 @@ OwlBear's code ships no settings defaults: every model, effort, limit and switch
 global settings in the shared repository, this machine's, or the project's. A setting no layer
 sets shows as unset on the Settings page, and a step that needs it asks you to fill it in;
 automatic memory curation does not start until its role and threshold are set. A new machine that uses your
-shared repository takes its global settings; one without starts with every setting unset.
+shared repository takes its global settings; one without starts with every setting unset. Nothing
+lies under the global settings, so with the Global layer chosen the page names the choice that
+clears a value Unset and warns while a needed one is unset.
 
 Two of them, in **Settings → Your instructions and skills**, decide whether Delivery's agent steps
 also use your own Copilot files from `~/.copilot` (or `$COPILOT_HOME`). **Your instructions in
@@ -216,7 +218,8 @@ both (off keeps steps as they were), and save.
 
 The machine settings in **Settings → This machine** (versions, updating itself, curation per
 trigger, sessions at once) work the same way: each machine follows the global ones, which you
-edit there with the Global layer chosen, unless it sets its own. Each start of OwlBear first
+edit there with the Global layer chosen, unless it sets its own, which you set with the This
+machine layer chosen; with a project chosen they show read-only, as in use. Each start of OwlBear first
 brings the shared repository up to date, so a machine follows what another one saved. With one unset in both, the
 machine does not update by itself, curate automatically or start agent sessions. The first start
 after this change moves the values in `machine.json` into the global settings where those have

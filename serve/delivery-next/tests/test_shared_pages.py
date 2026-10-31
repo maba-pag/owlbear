@@ -301,6 +301,7 @@ def machine_settings_are_saved_and_a_stale_save_is_refused(page, pds, shared: Da
     """TD-288, TD-300: the machine section edits the machine's own settings against the revision it read."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
+    pds.pick(page, "Layer", "machine")  # #809: this machine's own values are set with it chosen
     save = page.get_by_role("region", name="This machine").get_by_role("button", name="Save machine settings")
     expect(save).to_be_disabled()
     pds.pick(page, "Versions this machine takes", "major")
@@ -443,6 +444,21 @@ def every_machine_s_settings_are_saved_with_the_global_layer(page, pds, shared: 
     pds.pick(page, "Layer", "project")
     expect(machine).to_contain_text("in use: Major versions only (v1, v2 …), from global")
     expect(machine).to_contain_text("in use: 3, from this machine")  # its own sessions still override
+    a_project_shows_the_machine_s_settings_read_only(page, pds, machine)
+
+
+def a_project_shows_the_machine_s_settings_read_only(page, pds, machine) -> None:
+    """#809: a project holds no machine setting; each shows its value in use, disabled, and where it is set."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    channel = pds.select(page, "Versions this machine takes")
+    expect(channel).to_have_js_property("value", "major")
+    expect(channel).to_have_attribute("disabled", "")
+    sessions = page.get_by_label("Agent sessions at once on this machine, across its projects")
+    expect(sessions).to_have_value("3")
+    expect(sessions).to_be_disabled()
+    expect(machine.locator("#set-machine-sessions")).to_contain_text("set on This machine or Global")
+    expect(machine.get_by_role("button", name="Save machine settings")).to_have_count(0)
 
 
 def open_with_docs_needing_setup(page, base: str, path: str) -> None:
@@ -654,6 +670,7 @@ def test_with_no_machine_setting_set_anywhere_the_page_names_each_and_a_pending_
             expect(page.locator("#machine-pending")).to_contain_text("offline")
             red = region.locator(".field > p-text[color='error']")  # GW8RT6: each unset setting's name is red
             expect(red).to_have_count(14)  # 3 update checks
+            pds.pick(page, "Layer", "machine")
             pds.pick(page, "Versions this machine takes", "minor")  # this machine's own: no longer unset
             region.get_by_role("button", name="Save machine settings").click()
             pds.answer(page, "Save machine settings")

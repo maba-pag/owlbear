@@ -60,7 +60,8 @@ function machineEdit(key, value) {
 
 // Whether the edited layer has an unsaved edit of *key*: Global's value for every machine, else this machine's own.
 function moved(key) {
-  if (state.layer !== "global") return Boolean(state.machineDraft && key in state.machineDraft);
+  if (state.layer === "machine") return Boolean(state.machineDraft && key in state.machineDraft);
+  if (state.layer !== "global") return false;  // a project holds no machine setting
   return JSON.stringify(layerValue("global", `machine.${key}`)) !== JSON.stringify(state.loaded.global?.machine?.[key]
     ?? null);
 }
@@ -91,8 +92,10 @@ function machineRow(key, label, control, note = nothing) {
     color=${unset ? "error" : nothing}>${label}</p-text>${control}${note}</div>`;
 }
 
-// This machine's own value of one setting: inherit Global's, or its own.
-function ownControl(key) {
+// This machine's own value of one setting: inherit Global's, or its own. A project holds none: it shows the value in
+// use read-only, with where it is set (#809).
+function ownControl(key, held) {
+  if (!held) return heldElsewhere(key);
   const below = `inherit (${said(key, state.machine.resolved?.shared?.[key])})`, value = machineValue(key);
   const common = { disabled: state.machineSaving };
   let control;
@@ -130,6 +133,18 @@ function ownControl(key) {
   return machineRow(key, MACHINE_LABELS[key], control, machineSource(key));
 }
 
+function heldElsewhere(key) {
+  const value = state.machine.resolved?.[key], unset = value === null || value === undefined;
+  const control = TYPED.includes(key)
+    ? html`<p-input-text id=${`machine-${key}`} label=${MACHINE_LABELS[key]} hide-label="true" placeholder="unset"
+      .value=${live(unset ? "" : said(key, value))} disabled></p-input-text>`
+    : html`<p-select id=${`machine-${key}`} label=${MACHINE_LABELS[key]} hide-label="true"
+      .value=${live(unset ? INHERIT : String(value))} disabled>${[[INHERIT, "unset"], ...CHOICES[key]]
+        .map(([v, text]) => html`<p-select-option value=${v}>${text}</p-select-option>`)}</p-select>`;
+  return machineRow(key, MACHINE_LABELS[key], control, html`${machineSource(key)}<p-text size="sm"
+    color="contrast-medium">set on This machine or Global</p-text>`);
+}
+
 // Global's value of one setting, edited in the global layer and saved with it; clearing it leaves it unset (SEXPFT).
 function sharedControl(key) {
   const draftKey = `machine.${key}`, value = own(draftKey), label = `Every machine: ${MACHINE_LABELS[key]}`;
@@ -151,7 +166,7 @@ function machineControls() {
   const keys = Object.keys(MACHINE_LABELS);
   if (state.layer === "global") {
     return html`<p-text id="machine-global">Every machine's settings: each machine follows these unless it sets
-      its own (choose This project or This machine above to see this machine's). Save them with the global
+      its own (choose This machine above to set this machine's). Save them with the global
       defaults.</p-text>${keys.map(sharedControl)}`;
   }
   const notice = state.machine.resolved?.notice, pending = state.machine.pending;
@@ -159,9 +174,10 @@ function machineControls() {
     ${pending ? html`<p-text id="machine-pending" color="error">Moving this machine's settings into the global ones
       is not done: ${pending}. OwlBear tries again at its next start (<code>owlbear restart</code>); until then
       this machine keeps its own values.</p-text>` : nothing}
-    ${keys.map(ownControl)}
-    <div class="row">${button("Save machine settings", saveMachine, { busy: state.machineSaving,
-      variant: state.machineDraft ? "primary" : "secondary", disabled: !state.machineDraft })}</div>`;
+    ${keys.map((key) => ownControl(key, state.layer === "machine"))}
+    ${state.layer === "machine" ? html`<div class="row">${button("Save machine settings", saveMachine, {
+      busy: state.machineSaving, variant: state.machineDraft ? "primary" : "secondary",
+      disabled: !state.machineDraft })}</div>` : nothing}`;
 }
 
 async function saveMachine() {

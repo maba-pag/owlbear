@@ -474,6 +474,7 @@ def test_settings_say_this_machine_s_settings_could_not_be_read_and_read_them_ag
 def machine_saved(page, pds, channel: str) -> None:
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
+    pds.pick(page, "Layer", "machine")  # #809: this machine's own values are set with it chosen
     pds.pick(page, "Versions this machine takes", channel)
     page.get_by_role("region", name="This machine").get_by_role("button", name="Save machine settings").click()
     pds.answer(page, "Save machine settings")

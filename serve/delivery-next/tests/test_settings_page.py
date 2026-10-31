@@ -139,7 +139,10 @@ def the_global_layer_kept_its_edit_and_takes_one_more(page, pds) -> None:
     threshold.fill("90")
     expect(page.locator("#pending")).to_contain_text("curator threshold: unset → 90")
     pds.pick(page, "Layer", "project")
-    expect(page.locator("#curation")).to_contain_text("Set for all projects")  # one value everywhere
+    held = page.locator("#set-curator_threshold")  # #809: one value everywhere, shown read-only as saved
+    expect(held).to_contain_text("set on Global")
+    expect(threshold).to_be_disabled()
+    expect(threshold).to_have_value("95")
 
 
 def a_list_keeps_its_text_as_typed_and_counts_only_new_items(page, looks) -> None:
@@ -792,6 +795,34 @@ def test_the_in_use_line_follows_an_unsaved_edit_and_returns_once_it_is_undone(s
     with settings_page(store, pds) as page:
         the_project_s_edit_shows_what_its_save_would_give(page, pds)
         global_s_edit_shows_what_its_save_would_give(page, pds)
+
+
+@pytest.mark.browser
+def test_the_curator_threshold_shows_read_only_with_its_value_off_global(store, pds, monkeypatch) -> None:
+    """#809: every layer shows the curator's threshold; one that can't hold it shows the saved value read-only, with
+    its in-use line and where it is set; Global's unsaved edit stays Global's."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    _layered(store, monkeypatch, GLOBAL | {"curator_threshold": 85}, {}, {})
+    with settings_page(store, pds) as page:
+        pds.group(page, "runs")
+        threshold = page.get_by_label("Curator's confidence threshold in percent (50 to 100)")
+        row, line = page.locator("#set-curator_threshold"), _in_use(page, "set-curator_threshold")
+        for layer in ("project", "machine"):
+            pds.pick(page, "Layer", layer)
+            expect(threshold).to_be_disabled()
+            expect(threshold).to_have_value("85")
+            expect(line).to_have_text("in use: 85, from global")
+            expect(row).to_contain_text("set on Global")
+        pds.pick(page, "Layer", "global")
+        expect(threshold).to_be_enabled()
+        expect(row).not_to_contain_text("set on Global")
+        threshold.fill("90")
+        expect(line).to_have_text("in use: 90, from global")
+        pds.pick(page, "Layer", "project")
+        expect(threshold).to_have_value("85")
+        expect(line).to_have_text("in use: 85, from global")
+        expect(page.locator("#pending")).to_contain_text("All projects: 1 more unsaved")  # Global's edit is kept
 
 
 @pytest.mark.browser
