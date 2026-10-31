@@ -14,8 +14,9 @@ import threading
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import Field, ValidationError
 
+from owlbear_delivery_next.change_contracts.models import Record
 from owlbear_delivery_next.local_system.storage_io import atomic_write
 
 if TYPE_CHECKING:
@@ -30,10 +31,8 @@ NESTED = frozenset({"prefs", "final_review", "spotter", "machine"})  # one key p
 STATE = "read state"  # the source an unreadable file is a failure of
 
 
-class Notice(BaseModel):
+class Notice(Record):
     """One Global value changed elsewhere: its key, the value before and after as JSON text, ``None`` for unset."""
-
-    model_config = ConfigDict(extra="forbid")
 
     id: str
     key: str
@@ -42,20 +41,16 @@ class Notice(BaseModel):
     at: datetime
 
 
-class Failure(BaseModel):
+class Failure(Record):
     """One source a read could not read, and why."""
-
-    model_config = ConfigDict(extra="forbid")
 
     source: str
     at: datetime
     error: str
 
 
-class Seen(BaseModel):
+class Seen(Record):
     """The reads' record; ``seen`` is ``None`` before the first read that found Global."""
-
-    model_config = ConfigDict(extra="forbid")
 
     succeeded_at: datetime | None = None  # the last read in which every source succeeded
     read_at: datetime | None = None  # the last completed read, partial or not
@@ -77,7 +72,7 @@ def flatten(layer: Layer | None) -> dict[str, str]:
             continue
         if key == "agents":
             out |= {f"agents.{role}.{field}": _text(v) for role, agent in value.items() for field, v in agent.items()}
-        elif key in NESTED and isinstance(value, dict):
+        elif key in NESTED:
             out |= {f"{key}.{field}": _text(v) for field, v in value.items()}
         else:
             out[key] = _text(value)

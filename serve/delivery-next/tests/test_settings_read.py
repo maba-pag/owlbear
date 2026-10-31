@@ -104,7 +104,7 @@ def world(shared_repo, tmp_path, monkeypatch) -> World:
 
 
 def ids(reader: Reader) -> list[str]:
-    return [m["id"] for m in reader.offered.last()["models"]]
+    return [m["id"] for m in reader.offered()["models"]]
 
 
 def builder(model_id: str) -> dict[str, object]:
@@ -189,7 +189,7 @@ def test_each_source_s_failure_is_named_while_the_others_update(world, breaks, s
     assert (got.succeeded_at, got.read_at > first.read_at) == (first.succeeded_at, True)
     assert ids(reader) == (["m1"] if source == settings_read.MODELS else ["m1", "m2"])
     if source == settings_read.MODELS:
-        assert "the CLI is gone" in reader.offered.last()["error"]  # the kept list, and why it is not new
+        assert "the CLI is gone" in reader.offered()["error"]  # the kept list, and why it is not new
     notices = [(n.key, n.old, n.new) for n in got.notices]
     assert notices == ([("agents.builder.model", None, found)] if found else [])
 

@@ -15,6 +15,6 @@ document.addEventListener("owlbear-polled", followPolled);
 
 await defined(["p-select", "p-input-text", "p-checkbox", "p-button", "p-table"]);
 route(true);
-await refresh().catch(() => undefined);  // what was read last: the read state shows even when a layer does not read
+await refresh();  // what was read last: the read state shows even when a layer does not read
 page.target = null;  // an address naming nothing shown by now names nothing here
 await readAgain();  // and what is there now

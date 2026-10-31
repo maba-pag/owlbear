@@ -27,9 +27,9 @@ async function dismiss(ids) {
 export function elsewhereBanner() {
   const ids = machineState()?.reads?.notices ?? [];
   if (!ids.length) return own.error ? html`<p role="alert">${own.error}</p>` : nothing;
-  const n = ids.length, counted = [...ids];
+  const n = ids.length;
   return html`<p-inline-notification id="elsewhere" state="info" dismiss-button="false" action-label="Dismiss"
-    action-icon="close" .actionLoading=${own.busy} @action=${() => dismiss(counted)}>
+    action-icon="close" .actionLoading=${own.busy} @action=${() => dismiss(ids)}>
     ${n} Global setting${n === 1 ? "" : "s"} changed elsewhere.
     <a href=${here({}, "/config#reads-changed")}>Show in Settings</a>
     ${own.error ? html`<br><span role="alert">${own.error}</span>` : nothing}</p-inline-notification>`;

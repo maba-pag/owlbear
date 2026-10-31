@@ -18,7 +18,7 @@ from owlbear_delivery_next.runtimes import model_choices
 from owlbear_delivery_next.runtimes.settings_seen import NAME, Failure, Ledger, Seen, flatten
 from owlbear_delivery_next.settings.config import GlobalLayer, Layer, MachineLayer
 from owlbear_delivery_next.state_store import machine_settings, registry, settings_carry
-from owlbear_delivery_next.state_store.store import MACHINE_SETTINGS, StoreError, read_layer_bytes
+from owlbear_delivery_next.state_store.store import MACHINE_SETTINGS, StoreError, read_layer
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Collection
@@ -115,12 +115,10 @@ class Reader:
         over: list[tuple[str, set[str]]] = []
         mine: set[str] = set()
         with contextlib.suppress(StoreError):
-            mine = set(flatten(read_layer_bytes(local_home.root() / MACHINE_SETTINGS, MachineLayer)[0]))
-        try:
+            mine = set(flatten(read_layer(local_home.root() / MACHINE_SETTINGS, MachineLayer)))
+        with contextlib.suppress(registry.RegistryError):
             own = registry.load().settings
             mine |= {f"machine.{k}" for k in machine_settings.FIELDS if getattr(own, k) is not None}
-        except registry.RegistryError:
-            pass
         over.append(("this machine", mine))
         names: set[str] = set()
         for store in self.stores():
@@ -145,7 +143,7 @@ class Reader:
         if shared is not None:
             missed += _sync(shared)
             try:
-                glob = flatten(read_layer_bytes(shared.global_path, GlobalLayer)[0])
+                glob = flatten(read_layer(shared.global_path, GlobalLayer))
             except StoreError as exc:
                 missed.append((str(shared.global_path), str(exc)))
             missed += _unreadable(sorted(shared.root.glob(f"*/{data_repo.CONFIG}")))
@@ -166,7 +164,7 @@ class Reader:
         path = local_home.root() / MACHINE_SETTINGS
         missed: Missed = []
         try:
-            read_layer_bytes(path, MachineLayer)
+            read_layer(path, MachineLayer)
         except StoreError as exc:
             missed.append((str(path), str(exc)))
         try:
@@ -190,7 +188,7 @@ def _unreadable(paths: list[Path]) -> Missed:
     missed: Missed = []
     for path in paths:
         try:
-            read_layer_bytes(path, Layer)
+            read_layer(path, Layer)
         except StoreError as exc:
             missed.append((str(path), str(exc)))
     return missed

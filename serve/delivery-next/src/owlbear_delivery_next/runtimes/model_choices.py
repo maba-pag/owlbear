@@ -39,19 +39,12 @@ class Offered:
     def __call__(self) -> dict[str, Any]:
         """The models and the last read's error; read again when the kept list is older than ``FRESH`` or absent."""
         with self._lock:
-            if self._kept and time.monotonic() - self._kept[0] < FRESH:
-                return self._last()
-            return self._refresh()
+            return self._last() if self._kept and time.monotonic() - self._kept[0] < FRESH else self._refresh()
 
     def refresh(self) -> dict[str, Any]:
         """Read now, whatever the kept list's age."""
         with self._lock:
             return self._refresh()
-
-    def last(self) -> dict[str, Any]:
-        """The kept list and the last read's error, without reading."""
-        with self._lock:
-            return self._last()
 
     def _last(self) -> dict[str, Any]:
         return {"models": self._kept[1] if self._kept else [], "error": self._error}
