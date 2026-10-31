@@ -51,21 +51,18 @@ export function compaction(c) {
       </p-table-head><p-table-body>${c.rows.map(row)}</p-table-body></p-table>` : nothing}
     ${read ? nothing : html`<p-text id="compaction-none" size="sm">No session of these filters has a readable log.
       </p-text>`}
-    ${c.errors.length || c.settings_errors?.length ? html`<ul id="compaction-errors" class="notes">
+    ${c.errors.length || c.settings_errors.length ? html`<ul id="compaction-errors" class="notes">
       ${c.errors.map((e) => html`<li class="error">Could not read the log of session ${e.session}
         (${e.project || "this machine"}): ${e.error}</li>`)}
-      ${(c.settings_errors ?? []).map((e) => html`<li class="error">Could not read the settings of ${e.project}
+      ${c.settings_errors.map((e) => html`<li class="error">Could not read the settings of ${e.project}
         (${e.file}): ${e.error}</li>`)}</ul>` : nothing}
   </section>`;
 }
 
-let arrived = false;
-
 // Arriving at #compaction, from a context setting's way back: the section scrolls into view with its heading focused.
 export function arrive() {
   const title = document.getElementById("compaction-title");
-  if (arrived || location.hash !== "#compaction" || !title) return;
-  arrived = true;
+  if (location.hash !== "#compaction" || !title) return;
   title.scrollIntoView({ block: "start" });
   title.focus({ preventScroll: true });
 }

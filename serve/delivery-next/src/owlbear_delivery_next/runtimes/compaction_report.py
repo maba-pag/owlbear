@@ -69,9 +69,8 @@ def report(  # noqa: PLR0913 - one value per filter the page offers
 
 def _row(rows: dict[Key, dict[str, Any]], key: Key, p: dict[str, Any]) -> dict[str, Any]:
     return rows.setdefault(key, {
-        "agent": key[0], "subagent": key[1], "project": key[2], "name": p["name"] if key[2] is not None else "",
-        "clone": p["clone"] if key[2] is not None else "", "sessions": 0, "logs": 0, "missing": 0, "unreadable": 0,
-        "compacted": 0, "compactions": 0,
+        "agent": key[0], "subagent": key[1], "project": key[2], "name": p["name"], "clone": p["clone"],
+        "sessions": 0, "logs": 0, "missing": 0, "unreadable": 0, "compacted": 0, "compactions": 0,
     })  # fmt: skip
 
 

@@ -13,7 +13,7 @@ import time
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
-from urllib.parse import quote
+from urllib.parse import parse_qsl, quote, urlsplit
 
 import pytest
 import uvicorn
@@ -370,11 +370,11 @@ def returned(page: Page, pds, left: str) -> None:
 
     expect(page).to_have_url(f"{left}#compaction")
     expect(page.locator("#compaction-title")).to_be_focused()
-    query = {"period": "30", "by": "agent"} | dict(p.split("=", 1) for p in left.split("?", 1)[1].split("&"))
+    query = {"period": "30", "by": "agent"} | dict(parse_qsl(urlsplit(left).query, keep_blank_values=True))
     filters = page.get_by_role("group", name="Show only")
     for label, key in (("Period", "period"), ("Project", "in"), ("Agent", "agent"), ("Model", "model"),
                        ("Change", "change"), ("Split by", "by")):  # fmt: skip
-        expect(pds.select(filters, label)).to_have_js_property("value", query.get(key, "").replace("%2F", "/"))
+        expect(pds.select(filters, label)).to_have_js_property("value", query.get(key, ""))
     if "from" in query:
         expect(page.locator("#from")).to_have_js_property("value", query["from"])
         expect(page.locator("#to")).to_have_js_property("value", query["to"])
