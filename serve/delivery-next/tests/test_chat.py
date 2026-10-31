@@ -786,6 +786,10 @@ def test_yes_confirms_only_the_profile_and_local_files_need_their_own_consent(
     out = capsys.readouterr().out
     assert "run `owlbear install` and let it link the shaper" in out  # TD-335: never copied
     assert "Memory server not registered: no shared repository" in out  # it would start with no store
+    assert 'under "servers" in your VS Code user MCP configuration (MCP: Open User Configuration)' in out
+    shared = f'under "mcpServers" in Copilot\'s shared one ({home / ".copilot" / "mcp-config.json"}): '
+    snippet = json.JSONDecoder().raw_decode(out, out.index(shared) + len(shared))[0]
+    assert snippet[setup.SERVER]["args"] == ["-m", "owlbear_delivery_next", "mcp", "--repo", str(repo)]
     asked.clear()
     assert setup.run(repo, [], yes=True, local_files="no", ask=lambda q: asked.append(q) or "y") == 0
     assert (asked, [p.exists() for p in written]) == ([], [False] * 2)

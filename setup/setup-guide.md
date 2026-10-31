@@ -120,8 +120,12 @@ The `.mcp.json` entries name OwlBear's Python through `${HOME}` and no project p
 Copilot CLI start them in the project folder, so they serve whichever project they sit in.
 
 Setup never writes a file Git tracks. For a tracked `.mcp.json` it prints the Delivery server entry
-to add under `"servers"` with **MCP: Open User Configuration** instead; that entry names the project
-with `--repo`, because a user-level server has no project folder of its own. The memory server has no such
+to add instead, under `"servers"` with **MCP: Open User Configuration** or under `"mcpServers"` in Copilot's
+shared `~/.copilot/mcp-config.json` (`$COPILOT_HOME/mcp-config.json` when that is set); that entry names the
+project with `--repo`, because a user-level server has no project folder of its own. The page counts an entry in
+either file only with exactly one `--repo PATH` or `--repo=PATH` naming the project; setup reads these files and
+never writes them. An MCP file it can't read or parse is named on the project's line on the page, with the error,
+and in the host log. The memory server has no such
 fallback: without it the shaping chat works on without memory. Setup offers it only once a folder in the
 shared data repository holds the project, because that folder is where the memory lives; without one it
 prints `Memory server not registered:` and the reason.
@@ -171,7 +175,8 @@ See [Delivery Workflow](operating-owlbear.md#delivery-workflow) for daily operat
 | **New Change** opens no shaping chat | The shaping agent is not linked into `~/.copilot` | Run `owlbear install` again and answer yes to the shaping agent |
 | `owlbear install` says `not done, no terminal to answer` | It ran without a terminal, for example from an agent; nothing was linked or added | Run `owlbear install` yourself in a terminal |
 | The Copilot runtime in VS Code 1.143 offers only Auto (and HydraFusion) | More than one GitHub account is signed in to VS Code, and the runtime uses the first one, which has no Copilot; the agent host's log says `Found 0 models` | Sign the other GitHub accounts out of VS Code (Accounts menu), then run **Restart Local Agent Host**; `gh` keeps its accounts |
-| `not written: ... is tracked` from setup | The file is tracked in Git | Add the printed server entry with **MCP: Open User Configuration** |
+| `not written: ... is tracked` from setup | The file is tracked in Git | Add the printed server entry with **MCP: Open User Configuration**, or under `"mcpServers"` in `~/.copilot/mcp-config.json` |
+| A project on the page says `... cannot be read: ...` | An MCP file setup checks isn't valid JSON or can't be opened | Fix or remove the named file; the line goes on the next refresh |
 | MCP server fails to start | Its command, `~/.owlbear/runtime/.venv/bin/python`, is missing or lacks a package | Read the server's output (**MCP: List Servers** → the server → **Show Output**); check that interpreter exists, and for a missing module run `uv sync --locked --all-packages --all-groups` in `~/.owlbear/runtime` |
 
 For deeper debugging, use **"Show Chat Debug View"** (Chat view ellipsis `…` menu) to inspect

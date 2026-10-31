@@ -459,7 +459,10 @@ def write_project_files(repo: Path, python: str, ask: Ask, say: Callable[[str], 
     say(server)
     if not server.startswith("written"):
         snippet = json.dumps(with_server({}, python, repo)["mcpServers"])
-        say(f'Add this under "servers" in your user-level MCP configuration (MCP: Open User Configuration): {snippet}')
+        say(
+            'Add this under "servers" in your VS Code user MCP configuration (MCP: Open User Configuration)'
+            f' or under "mcpServers" in Copilot\'s shared one ({shared_mcp()}): {snippet}'
+        )
     if why := memory_missing(repo):
         say(f"Memory server not registered: {why}")
     else:
