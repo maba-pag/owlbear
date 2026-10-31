@@ -191,7 +191,8 @@ def test_a_test_review_never_shapes_or_plans_and_its_status_counts_shares_and_th
         review.store.write(lock, c)
     client = TestClient(api.create_app(review.store, "tok", Host(review.store, review.repo)),
                         base_url="http://127.0.0.1", headers=AUTH)  # fmt: skip
-    assert client.post(f"/api/next/changes/{review.slug}/recovery", json={"action": c.stop.action}).status_code == 200
+    shown = c.stop.model_dump(mode="json", include={"action", "at"})
+    assert client.post(f"/api/next/changes/{review.slug}/recovery", json=shown).status_code == 200
     with review.store.lock(review.slug) as lock:
         after, _ = review.store.fold(lock, review.slug, NOW, None)
     assert (after.stop, loop.next_step(after, NOW), after.brief, after.plan) == (None, c.step, c.brief, c.plan)

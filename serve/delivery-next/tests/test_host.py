@@ -43,7 +43,9 @@ from owlbear_delivery_next.local_system.process_probe import WorktreeProcessScan
 from owlbear_delivery_next.local_system.storage_io import open_lock
 from owlbear_delivery_next.project_host import api, host
 from owlbear_delivery_next.project_host.host import Host, RunnerRecord
+from owlbear_delivery_next.settings import config
 from owlbear_delivery_next.settings.config import Layer
+from owlbear_delivery_next.state_store import machine_settings
 from owlbear_delivery_next.state_store.database import put_record
 from owlbear_delivery_next.state_store.store import Store
 from owlbear_delivery_next.workflow_steps import check, disposable, prepare
@@ -924,6 +926,9 @@ def stopped(fake, kind=StepKind.BUILD, stop=None):
     return apply(c, StepResult(exit=Exit.STOP, reason=stop.reason, stop=stop), NOW)
 
 
+SHOWN = {"action": "Resolve it in GitHub", "at": "2026-10-10T12:00:00Z"}  # the stop of stopped(), as the page shows it
+
+
 def test_resume_leaves_a_stop_and_the_owners_recovery_reruns_its_step(store, tmp_path):
     """#754: Resume clears only a pause; the owner's recovery on the Changes page clears the stop."""
     fake = Fake(store, tmp_path)
@@ -932,9 +937,8 @@ def test_resume_leaves_a_stop_and_the_owners_recovery_reruns_its_step(store, tmp
     assert api_.post("/api/next/changes/c1/intent", json={"intent": "resume"}).status_code == 200
     assert fake.host.tick(NOW) == []
     assert store.read("c1").outcome.exit == Exit.STOP
-    assert api_.get("/api/next/changes/c1").json()["recovery"] == {"reason": "GitHub refused",
-                                                                   "action": "Resolve it in GitHub"}  # fmt: skip
-    answer = api_.post("/api/next/changes/c1/recovery", json={"action": "Resolve it in GitHub"})
+    assert api_.get("/api/next/changes/c1").json()["recovery"] == {"reason": "GitHub refused", "unset": None} | SHOWN
+    answer = api_.post("/api/next/changes/c1/recovery", json=SHOWN)
     assert (answer.status_code, answer.json()) == (200, {"accepted": "recovery"})
     assert [(i["kind"], i["action"]) for i in map(json.loads, queued(store))] == [("recovery", "Resolve it in GitHub")]
     assert fake.host.tick(NOW) == ["c1"]
@@ -950,7 +954,7 @@ def test_a_recovery_while_paused_clears_the_stop_and_only_a_cleanup_runs_before_
     save(store, c.model_copy(update={"intent": c.intent.model_copy(update={"paused_at": NOW})}) if pause == "change"
          else c)  # fmt: skip
     api_ = client(store, fake)
-    assert api_.post("/api/next/changes/c1/recovery", json={"action": "Resolve it in GitHub"}).status_code == 200
+    assert api_.post("/api/next/changes/c1/recovery", json=SHOWN).status_code == 200
     runs = ["c1"] if kind == StepKind.CLEANUP else []
     assert fake.host.tick(NOW) == runs
     after = store.read("c1")
@@ -983,7 +987,8 @@ LIVENESS = Stop(kind=ErrorKind.LIVENESS, reason="processes still present: 7", ac
     ("case", "why"),
     [("asking", NOT_STOPPED), ("finished", "This Change has finished"), ("wrong merge", NOT_STOPPED),
      ("held", "This stop ends only when you abandon or pause the Change; answer its question"),
-     ("liveness", "This stop clears itself once the host sees none of the step's processes"), ("stale", STALE)],
+     ("liveness", "This stop clears itself once the host sees none of the step's processes"), ("stale", STALE),
+     ("older page", STALE)],
 )  # fmt: skip
 def test_a_stop_the_owner_cannot_clear_is_refused_and_nothing_is_queued(store, tmp_path, case, why):
     fake = Fake(store, tmp_path)
@@ -992,22 +997,34 @@ def test_a_stop_the_owner_cannot_clear_is_refused_and_nothing_is_queued(store, t
         "asking": lambda: asking(fake), "finished": lambda: stopped(fake).model_copy(update={"finished_at": NOW}),
         "wrong merge": lambda: wrong_merge(fake, store), "held": lambda: stopped(fake, stop=held),
         "liveness": lambda: stopped(fake, stop=LIVENESS), "stale": lambda: stopped(fake),
+        "older page": lambda: stopped(fake),
     }[case]()  # fmt: skip
     save(store, c)
     api_ = client(store, fake)
-    answer = api_.post("/api/next/changes/c1/recovery", json={"action": c.stop.action if c.stop else "x"} |
-                       ({"action": "Resolve it elsewhere"} if case == "stale" else {}))  # fmt: skip
+    changed = {"stale": {"action": "Resolve it elsewhere"}, "older page": {"at": "2026-10-10T11:00:00Z"}}
+    answer = api_.post("/api/next/changes/c1/recovery", json=SHOWN | changed.get(case, {}))
     assert (answer.status_code, answer.json()["detail"], queued(store)) == (409, why, [])
-    assert (api_.get("/api/next/changes/c1").json()["recovery"] is None) is (case != "stale")
+    assert (api_.get("/api/next/changes/c1").json()["recovery"] is None) is (case not in changed)
     with store.lock("c1") as lock:
         assert store.fold(lock, "c1", NOW)[0].stop == c.stop
+
+
+def test_no_recovery_while_a_setting_is_unset(store, tmp_path, monkeypatch):
+    """D-01M61SBWK4VE4MNTD35TR0VPS8: no work starts while a setting is unset, the owner's rerun included."""
+    monkeypatch.setattr(machine_settings, "BASE", None)
+    monkeypatch.setattr(config, "BASE", None)
+    fake = Fake(store, tmp_path)
+    save(store, stopped(fake))
+    api_ = client(store, fake)
+    why = api_.get("/api/next/changes/c1").json()["recovery"]["unset"]
+    assert why.startswith("Settings unset: ")
+    answer = api_.post("/api/next/changes/c1/recovery", json=SHOWN)
+    assert (answer.status_code, answer.json()["detail"], queued(store)) == (409, why, [])
 
 
 def test_a_chat_cannot_clear_a_stop(store, tmp_path):
     fake = Fake(store, tmp_path)
     save(store, stopped(fake))
-    answer = client(store, fake, **{"x-owlbear-use": "chat"}).post(
-        "/api/next/changes/c1/recovery", json={"action": "Resolve it in GitHub"}
-    )
+    answer = client(store, fake, **{"x-owlbear-use": "chat"}).post("/api/next/changes/c1/recovery", json=SHOWN)
     refused = "Only the owner clears a stop, on the Changes page"
     assert (answer.status_code, answer.json()["detail"], queued(store)) == (403, refused, [])

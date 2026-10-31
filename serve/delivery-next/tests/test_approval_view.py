@@ -8,7 +8,7 @@ import socket
 import threading
 import time
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 import pytest
@@ -25,7 +25,8 @@ from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import HostRecord
-from owlbear_delivery_next.state_store import spend_ledger
+from owlbear_delivery_next.settings import config
+from owlbear_delivery_next.state_store import machine_settings, spend_ledger
 from owlbear_delivery_next.state_store.store import Lock, Store
 
 if TYPE_CHECKING:
@@ -505,25 +506,25 @@ def launched(base: str, pds: Any) -> Iterator[Any]:
     """The Changes page on the flip Change in Chromium; a missing browser fails rather than skips."""
     from playwright.sync_api import sync_playwright  # noqa: PLC0415 - the optional browser runtime
 
-    with sync_playwright() as pw:
-        browser = pw.chromium.launch()
-        try:
-            page = browser.new_page(viewport={"width": 1280, "height": 900})
-            pds.only(page, base)
-            page.add_init_script("sessionStorage.setItem('token', 'tok');")
-            page.goto(f"{base}/?change=flip")
-            yield page
-        finally:
-            browser.close()
+    with sync_playwright() as pw, contextlib.closing(pw.chromium.launch()) as browser:
+        page = browser.new_page(viewport={"width": 1280, "height": 900})
+        pds.only(page, base)
+        page.add_init_script("sessionStorage.setItem('token', 'tok');")
+        page.goto(f"{base}/?change=flip")
+        yield page
 
 
 @pytest.mark.browser
-@pytest.mark.parametrize("case", ["stopped", "paused", "cleanup-paused", "liveness"])
-def test_the_owner_reruns_a_stopped_step_after_confirming_what_follows(page_url, pds, case) -> None:
-    """#754: the Stopped notice offers "Done: run the step again" unless a liveness check holds the stop."""
+@pytest.mark.parametrize("case", ["stopped", "paused", "cleanup-paused", "liveness", "unset"])
+def test_the_owner_reruns_a_stopped_step_after_confirming_what_follows(page_url, pds, case, monkeypatch) -> None:
+    """#754: the Stopped notice offers "Done: run the step again" unless a liveness check holds the stop or a setting
+    is unset (D-01M61SBWK4VE4MNTD35TR0VPS8)."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     store, base = page_url
+    if case == "unset":
+        monkeypatch.setattr(machine_settings, "BASE", None)
+        monkeypatch.setattr(config, "BASE", None)
     c = stopped(case)
     store.write(Lock("flip"), c)
     with launched(base, pds) as page:
@@ -532,7 +533,9 @@ def test_the_owner_reruns_a_stopped_step_after_confirming_what_follows(page_url,
         if case.endswith("paused"):
             expect(page.get_by_role("region", name="Selected Change").get_by_text("Paused", exact=True)).to_be_visible()
         again = page.get_by_role("button", name="Done: run the step again")
-        if case == "liveness":
+        if case in {"liveness", "unset"}:
+            if case == "unset":
+                expect(note).to_contain_text("Settings unset: ")
             expect(again).to_have_count(0)
             return
         posts = []
@@ -555,7 +558,7 @@ def test_the_owner_reruns_a_stopped_step_after_confirming_what_follows(page_url,
         again.click()
         with replied(page, "/recovery") as reply:
             page.locator("p-modal.ask").get_by_role("button", name="Run it again").click()
-        assert (reply.value.status, posts) == (200, [{"action": c.stop.action}])
+        assert (reply.value.status, posts) == (200, [c.stop.model_dump(mode="json", include={"action", "at"})])
         assert '"kind":"recovery"' in sent(store, "flip").replace(" ", "")
         expect(page.get_by_text(AFTER)).to_be_visible()
 
@@ -569,7 +572,7 @@ def test_a_stop_that_changed_since_the_page_showed_it_is_not_cleared(page_url, p
     with launched(base, pds) as page:
         again = page.get_by_role("button", name="Done: run the step again")
         again.click()
-        store.write(Lock("flip"), stopped("stopped", BROKEN.model_copy(update={"action": "Rotate the token"})))
+        store.write(Lock("flip"), stopped("stopped", BROKEN.model_copy(update={"at": NOW + timedelta(minutes=5)})))
         with replied(page, "/recovery") as reply:
             page.locator("p-modal.ask").get_by_role("button", name="Run it again").click()
         assert reply.value.status == 409

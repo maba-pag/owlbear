@@ -408,7 +408,7 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
                 "owner_criteria": [k.model_dump(mode="json") for k in c.owner_criteria if k.withdrawn_at is None],
                 "amendments": [a.model_dump(mode="json") for a in c.amendments],  # TD-179: proposed, never applied here
                 "restartable": not round_flow.restartable(c),
-                "recovery": None if stop_routes.clearable(c) else c.stop.model_dump(include={"reason", "action"}),
+                "recovery": stop_routes.shown(c, store),  # #754: the stop the owner may clear, or None
                 "activity": events[-20:],
                 "watcher": watcher(store, slug),
             }
@@ -479,7 +479,7 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
 
     router.include_router(config_routes.router(store, host))
     router.include_router(answers.router(store, read, put))
-    router.include_router(stop_routes.router(read, put))
+    router.include_router(stop_routes.router(store, read, put))
     router.include_router(chat_routes.router(read))
     wake, ending = lambda: host.wake.set(), lambda: host.draining()  # noqa: PLW0108 - read late
     router.include_router(brief_routes.router(store, read, wake, ending))

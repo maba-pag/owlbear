@@ -296,10 +296,13 @@ export function pullbackNote(p, d) {
 }
 
 // A stop the owner may clear once he did what it asks (#754): Delivery then reruns its step. A paused stopped Change's
-// line describes the pause, so the stop's own reason and action come from *d.recovery*.
+// line describes the pause, so the stop's own reason and action come from *d.recovery*. While a setting is unset the
+// action is withheld, as every work-starting button is (D-01M61SBWK4VE4MNTD35TR0VPS8).
 export function stopNotice(d) {
   const r = d.recovery, reason = r ? r.reason : d.line.replace(/^.*?stopped: /, ""), action = r ? r.action : d.action;
-  if (!r) return notice("error", "Stopped", `${reason}.`, action ? `What to do: ${action}.` : "");
+  if (!r || r.unset) {
+    return notice("error", "Stopped", `${reason}.`, action ? `What to do: ${action}.` : "", r ? `${r.unset}.` : "");
+  }
   const clear = async () => {
     const again = "If the cause is still there, it stops again with the same message.";
     const sure = await ask({
@@ -314,11 +317,9 @@ export function stopNotice(d) {
         + "branch or an opened PR.",
       instead: "The Change stays stopped; Pause and your other controls still work.",
     });
-    if (sure && await send("/recovery", { action }, d) && state.selected === d.key) {
-      const said = "Recovery accepted: Delivery reruns the step when it can run. Existing pauses are kept.";
-      state.started = { text: said };
-      show();
-    }
+    if (!sure || !(await send("/recovery", { action, at: r.at }, d)) || state.selected !== d.key) return;
+    state.started = { text: "Recovery accepted: Delivery reruns the step when it can run. Existing pauses are kept." };
+    show();
   };
   return html`<p-inline-notification state="error" heading="Stopped" heading-tag="h3" dismiss-button="false"
     action-label="Done: run the step again" action-icon="refresh" @action=${clear}>${reason}. What to do: ${action}.

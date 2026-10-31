@@ -368,7 +368,8 @@ def test_a_failed_refresh_stops_publish_and_merge_until_the_owner_clears_it_once
                       headers={"authorization": "Bearer tok"})  # fmt: skip
 
     def recover() -> Change:
-        assert page.post("/api/next/changes/c1/recovery", json={"action": c.stop.action}).status_code == 200
+        shown = store.read("c1").stop.model_dump(mode="json", include={"action", "at"})  # the page reads it afresh
+        assert page.post("/api/next/changes/c1/recovery", json=shown).status_code == 200
         store.fold(Lock("c1"), "c1", AT)
         return step(store, tmp_path)
 
