@@ -1613,6 +1613,7 @@ def test_read_again_updates_every_surface_and_keeps_drafts(tmp_path: Path, monke
         pds.group(page, "runs")
         page.get_by_label("Minutes per session, reviewer").fill("50")  # a draft of this project's layer
         pds.group(page, "this-machine")
+        pds.pick(page, "Layer", "machine")  # #809: this machine's own values are set with it chosen
         versions = pds.select(page, "Versions this machine takes")
         channel = "minor" if versions.evaluate("e => e.value") == "major" else "major"
         pds.pick(page, "Versions this machine takes", channel)  # a draft of This machine
@@ -1636,9 +1637,11 @@ def test_read_again_updates_every_surface_and_keeps_drafts(tmp_path: Path, monke
         expect(page.locator("#impeccable")).to_contain_text("0 releases behind")
         pds.group(page, "agents")
         expect(rates(page)).to_contain_text("in 5 ")
+        pds.pick(page, "Layer", "project")
         pds.group(page, "runs")
         expect(page.get_by_label("Minutes per session, builder")).to_have_value("30")
         expect(page.get_by_label("Minutes per session, reviewer")).to_have_value("50")
+        pds.pick(page, "Layer", "machine")
         pds.group(page, "this-machine")
         expect(versions).to_have_js_property("value", channel)
         assert said == []
