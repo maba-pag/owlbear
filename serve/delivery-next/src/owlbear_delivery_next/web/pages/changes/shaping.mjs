@@ -81,6 +81,7 @@ export function reviseBrief(d) {
 // for, so a launch that ends after the person chose another Change still says which one it was.
 async function openChat({ path, of, dialog, about }) {
   if (!(await ask(dialog))) return;
+  state.choosing = false;  // New Change's project chooser, left open, would hide this launch's result
   state.creating = true;
   state.started = { text: "Opening the shaping chat…" };
   show();

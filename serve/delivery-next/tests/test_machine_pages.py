@@ -366,8 +366,11 @@ def test_two_projects_whose_changes_share_a_handle_revise_the_one_clicked(tmp_pa
     with browsing(monkeypatch, pds) as (page, base):
         opened(page, base, b.id)
         expect(page.locator("#detail")).to_contain_text("in beta")
+        page.get_by_role("button", name="New Change").click()  # its project chooser is left open
+        expect(page.locator("#choose")).to_have_count(1)
         page.locator("#detail").get_by_role("button", name=REVISE).click()
         pds.answer(page, "Open the chat")
+        expect(page.locator("#choose")).to_have_count(0)
         until(page, lambda: launched.calls)
         page.locator(f'#changes a[data-key="{a.id}/same"]').click()  # another c1 chosen while beta's chat opens
         expect(page.locator("#detail")).to_contain_text("in alpha")
