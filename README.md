@@ -136,7 +136,7 @@ Only with your yes does it add:
   memory server for New Change's shaping chat in `.mcp.json`, and `chat.defaultToCopilotHarness` in `.vscode/settings.json`, each with its own yes.
   Both files are listed in `.git/info/exclude`. Setup never writes a file Git tracks; for a tracked
   `.mcp.json` it prints the Delivery entry to add to your user-level MCP configuration or Copilot's shared
-  `~/.copilot/mcp-config.json`.
+  `~/.copilot/mcp-config.json` (`$COPILOT_HOME/mcp-config.json` when that is set).
 
 To undo it, run `owlbear uninstall`: it removes the links, the completion and the login item, and
 keeps the runtime, your projects and the shared settings repository's checkout, which nothing of

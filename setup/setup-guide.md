@@ -175,7 +175,7 @@ See [Delivery Workflow](operating-owlbear.md#delivery-workflow) for daily operat
 | **New Change** opens no shaping chat | The shaping agent is not linked into `~/.copilot` | Run `owlbear install` again and answer yes to the shaping agent |
 | `owlbear install` says `not done, no terminal to answer` | It ran without a terminal, for example from an agent; nothing was linked or added | Run `owlbear install` yourself in a terminal |
 | The Copilot runtime in VS Code 1.143 offers only Auto (and HydraFusion) | More than one GitHub account is signed in to VS Code, and the runtime uses the first one, which has no Copilot; the agent host's log says `Found 0 models` | Sign the other GitHub accounts out of VS Code (Accounts menu), then run **Restart Local Agent Host**; `gh` keeps its accounts |
-| `not written: ... is tracked` from setup | The file is tracked in Git | Add the printed server entry with **MCP: Open User Configuration**, or under `"mcpServers"` in `~/.copilot/mcp-config.json` |
+| `not written: ... is tracked` from setup | The file is tracked in Git | Add the printed server entry with **MCP: Open User Configuration**, or under `"mcpServers"` in the shared file it names (`~/.copilot/mcp-config.json`, or under `$COPILOT_HOME`) |
 | A project on the page says `... cannot be read: ...` | An MCP file setup checks isn't valid JSON or can't be opened | Fix or remove the named file; the line goes on the next refresh |
 | MCP server fails to start | Its command, `~/.owlbear/runtime/.venv/bin/python`, is missing or lacks a package | Read the server's output (**MCP: List Servers** → the server → **Show Output**); check that interpreter exists, and for a missing module run `uv sync --locked --all-packages --all-groups` in `~/.owlbear/runtime` |
 
