@@ -301,10 +301,15 @@ def machine_settings_are_saved_and_a_stale_save_is_refused(page, pds, shared: Da
     """TD-288, TD-300: the machine section edits the machine's own settings against the revision it read."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
-    pds.pick(page, "Layer", "machine")  # #809: this machine's own values are set with it chosen
-    save = page.get_by_role("region", name="This machine").get_by_role("button", name="Save machine settings")
+    region = page.get_by_role("region", name="This machine")
+    expect(pds.select(page, "Versions this machine takes")).to_have_attribute("disabled", "")  # #809: on a project
+    expect(region).to_contain_text("set on This machine or Global")
+    save = region.get_by_role("button", name="Save machine settings")
+    expect(save).to_have_count(0)
+    pds.pick(page, "Layer", "machine")  # this machine's own values are set with it chosen
     expect(save).to_be_disabled()
     pds.pick(page, "Versions this machine takes", "major")
+    expect(region).to_contain_text("in use: Major versions only (v1, v2 …), from this machine")  # before the save
     pds.pick(page, "Update itself while paused", "false")
     pds.pick(page, "Curate memory after a merge", "paused")  # on, not while paused, by default (owner, 2026-10-23)
     pds.pick(page, "Curate memory when idle (the Maintenance button always runs)", "off")
@@ -615,6 +620,28 @@ def test_settings_show_what_each_project_sets_apart_and_ask_where_an_edit_goes(
         server.should_exit = True
 
 
+def a_machine_s_draft_never_shows_on_global(page, pds, region) -> None:
+    """#809: This machine's edit shows on its own line, and Global's line counts only Global's edits."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    line = region.locator("#set-machine-update_when_idle p-text[size='xs']")
+    pds.pick(page, "Layer", "machine")
+    pds.pick(page, "Update itself when idle", "true")
+    expect(line).to_have_text("in use: On, from this machine")
+    pds.pick(page, "Update itself when idle", "inherit")
+    expect(line).to_have_count(0)
+    pds.pick(page, "Update itself when idle", "true")  # left unsaved
+    pds.pick(page, "Layer", "global")
+    pds.pick(page, "Every machine: Update itself when idle", "false")
+    expect(line).to_have_text("in use: Off, from global")
+    pds.pick(page, "Layer", "machine")
+    expect(line).to_have_text("in use: On, from this machine")
+    pds.pick(page, "Update itself when idle", "inherit")
+    pds.pick(page, "Layer", "global")
+    pds.pick(page, "Every machine: Update itself when idle", "inherit")
+    expect(line).to_have_count(0)
+
+
 def a_machine_s_clear_shows_global_s_saved_value_and_global_ignores_its_draft(page, pds, region) -> None:
     """#809: the in-use line follows the shown layer's unsaved edit only, over the other layers as saved."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
@@ -670,7 +697,10 @@ def test_with_no_machine_setting_set_anywhere_the_page_names_each_and_a_pending_
             expect(page.locator("#machine-pending")).to_contain_text("offline")
             red = region.locator(".field > p-text[color='error']")  # GW8RT6: each unset setting's name is red
             expect(red).to_have_count(14)  # 3 update checks
+            expect(region.locator("p-select[disabled], p-input-text[disabled]")).to_have_count(14)  # #809: a project
+            expect(region.get_by_role("button", name="Save machine settings")).to_have_count(0)
             pds.pick(page, "Layer", "machine")
+            expect(region).not_to_contain_text("must then set its own")
             pds.pick(page, "Versions this machine takes", "minor")  # this machine's own: no longer unset
             region.get_by_role("button", name="Save machine settings").click()
             pds.answer(page, "Save machine settings")
@@ -685,6 +715,7 @@ def test_with_no_machine_setting_set_anywhere_the_page_names_each_and_a_pending_
             expect(warned).to_have_count(13)
             pds.pick(page, channel, "inherit")
             expect(warned).to_have_count(14)
+            a_machine_s_draft_never_shows_on_global(page, pds, region)
             a_machine_s_clear_shows_global_s_saved_value_and_global_ignores_its_draft(page, pds, region)
             browser.close()
     finally:

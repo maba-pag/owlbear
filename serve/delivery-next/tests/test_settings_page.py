@@ -752,6 +752,33 @@ def the_project_s_edit_shows_what_its_save_would_give(page, pds) -> None:
     expect(marker).to_have_text("in use: no, from this project")
 
 
+def the_machine_s_edit_shows_what_its_save_would_give(page, pds) -> None:
+    """A machine edit shows where no project value masks it; the project's line never counts the machine's draft."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    pds.pick(page, "Layer", "machine")
+    pds.group(page, "checks")
+    labels, line = page.get_by_label(LABELS), _in_use(page, "set-pr_labels")
+    expect(line).to_have_text("in use: m, from this machine")
+    labels.fill("")
+    expect(line).to_have_text("in use: unset")  # Global sets none
+    labels.fill("a")
+    expect(line).to_have_text("in use: a, from this machine")
+    labels.fill("m")
+    expect(line).to_have_text("in use: m, from this machine")
+    pds.group(page, "runs")
+    at_once, sessions = page.get_by_label("Agent sessions at once in one project"), _in_use(page, "set-sessions")
+    at_once.fill("6")
+    expect(sessions).to_have_text("in use: 4, from this project")  # the project's own masks it
+    pds.pick(page, "Layer", "project")
+    at_once.fill("")
+    expect(sessions).to_have_text("in use: 3, from this machine")  # the machine's saved 3, not its unsaved 6
+    at_once.fill("4")
+    pds.pick(page, "Layer", "machine")
+    at_once.fill("3")
+    expect(page.locator("#pending")).to_have_text("No unsaved edits.")
+
+
 def global_s_edit_shows_what_its_save_would_give(page, pds) -> None:
     """A builder's value fills the final review's unset one; the curator's threshold; the Spotter's sample rate is
     needed only while the looks include a sample."""
@@ -781,6 +808,13 @@ def global_s_edit_shows_what_its_save_would_give(page, pds) -> None:
     expect(sample).to_contain_text("Unset: every machine or project must then set its own")
     looks.fill("hand-off")
     expect(sample.locator("p-text[color='warning']")).to_have_count(0)
+    builder = page.locator("#set-agents-builder")
+    pds.pick(page, "Effort for builder", "low")  # no lower layer sets it
+    expect(builder).to_contain_text("in use: low, from global")
+    pds.pick(page, "Effort for builder", "inherit")
+    expect(builder).to_contain_text("in use: unset")
+    pds.pick(page, "Effort for builder", "high")
+    expect(builder).not_to_contain_text("in use: unset")
     expect(page.locator("#pending")).to_have_text("No unsaved edits.")
 
 
@@ -791,37 +825,49 @@ def test_the_in_use_line_follows_an_unsaved_edit_and_returns_once_it_is_undone(s
     builder = {"max_rounds": 3, "last_round_at": 1, "ask_owner_at": 4}
     glob = GLOBAL | {"agents": {"builder": GLOBAL["agents"]["builder"] | builder}}
     final = {"max_rounds": 2, "last_round_at": 1, "ask_owner_at": 3}
-    _layered(store, monkeypatch, glob, {"sessions": 3}, {"sessions": 4, "pr_marker": False, "final_review": final})
+    machine = {"sessions": 3, "pr_labels": ["m"]}
+    _layered(store, monkeypatch, glob, machine, {"sessions": 4, "pr_marker": False, "final_review": final})
     with settings_page(store, pds) as page:
         the_project_s_edit_shows_what_its_save_would_give(page, pds)
+        the_machine_s_edit_shows_what_its_save_would_give(page, pds)
         global_s_edit_shows_what_its_save_would_give(page, pds)
 
 
 @pytest.mark.browser
 def test_the_curator_threshold_shows_read_only_with_its_value_off_global(store, pds, monkeypatch) -> None:
     """#809: every layer shows the curator's threshold; one that can't hold it shows the saved value read-only, with
-    its in-use line and where it is set; Global's unsaved edit stays Global's."""
+    its in-use line and where it is set; its unset link focuses the row; Global's unsaved edit stays Global's."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
-    _layered(store, monkeypatch, GLOBAL | {"curator_threshold": 85}, {}, {})
+    _layered(store, monkeypatch, GLOBAL, {}, {})
     with settings_page(store, pds) as page:
-        pds.group(page, "runs")
         threshold = page.get_by_label("Curator's confidence threshold in percent (50 to 100)")
         row, line = page.locator("#set-curator_threshold"), _in_use(page, "set-curator_threshold")
-        for layer in ("project", "machine"):
-            pds.pick(page, "Layer", layer)
-            expect(threshold).to_be_disabled()
-            expect(threshold).to_have_value("85")
-            expect(line).to_have_text("in use: 85, from global")
-            expect(row).to_contain_text("set on Global")
+        url = page.url.split("#")[0]
+        pds.group(page, "overview")
+        expect(page.locator("#unset-runs")).to_contain_text("unset")
+        page.goto(f"{url}#set-curator_threshold")  # an unset link's address; Runs lists only its first three
+        expect(row).to_be_focused()  # the disabled field can't take the focus
+        expect(threshold).to_be_disabled()
+        expect(threshold).to_have_attribute("placeholder", "unset")
+        expect(row).to_contain_text("set on Global")
         pds.pick(page, "Layer", "global")
         expect(threshold).to_be_enabled()
         expect(row).not_to_contain_text("set on Global")
         threshold.fill("90")
-        expect(line).to_have_text("in use: 90, from global")
+        _saved(page, pds, "Save global defaults", "the global")
+        for layer in ("project", "machine"):
+            pds.pick(page, "Layer", layer)
+            expect(threshold).to_be_disabled()
+            expect(threshold).to_have_value("90")
+            expect(line).to_have_text("in use: 90, from global")
+            expect(row).to_contain_text("set on Global")
+        pds.pick(page, "Layer", "global")
+        threshold.fill("95")
+        expect(line).to_have_text("in use: 95, from global")
         pds.pick(page, "Layer", "project")
-        expect(threshold).to_have_value("85")
-        expect(line).to_have_text("in use: 85, from global")
+        expect(threshold).to_have_value("90")
+        expect(line).to_have_text("in use: 90, from global")
         expect(page.locator("#pending")).to_contain_text("All projects: 1 more unsaved")  # Global's edit is kept
 
 
