@@ -229,18 +229,17 @@ class _Lexer:
 
     def _braced(self, s: _Level, i: int) -> int:
         """A ${...} expansion: < and > in it never redirect; its substitutions are lexed."""
-        j = self._brace_end(s, i)
+        j = self._brace_end(s, i, outer=s.quote == '"')
         s.add(self.text[i:j])
         s.expanded = True
         return j
 
-    def _brace_end(self, s: _Level, i: int, *, outer: bool | None = None) -> int:
+    def _brace_end(self, s: _Level, i: int, *, outer: bool) -> int:
         """The index after the ${...} at *i*; each nested ${...} keeps its own quotes.
 
         *outer* is whether double quotes enclose it, in its own text or around an enclosing ${...}.
         """
         text, j, depth, quoted = self.text, i + 2, 1, False
-        outer = s.quote == '"' if outer is None else outer
         while j < len(text) and depth:
             if text[j] == "\\":
                 j += 2

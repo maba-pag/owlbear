@@ -22,7 +22,6 @@ if TYPE_CHECKING:
 _PREFIX_WORDS = frozenset({"!", "{", "do", "elif", "else", "if", "then", "until", "while"})  # time: see head()
 ASSIGNMENT = re.compile(r"[A-Za-z_]\w*=")
 SHELLS = frozenset({"ash", "bash", "dash", "fish", "ksh", "sh", "zsh"})
-_SHELL_VALUES = frozenset({"-o", "+o", "-O", "+O"})  # shell options taking a value
 _STARTUP = frozenset({"--rcfile", "--init-file"})  # options naming a file an interactive shell runs first
 _EXEC = frozenset({"-exec", "-execdir", "-ok", "-okdir"})  # find's actions that run a command up to ; or +
 _IN_PLACE = frozenset({"-execdir", "-okdir"})  # find's actions that run in each match's folder
@@ -409,15 +408,14 @@ def shell_args(words: Sequence[Word]) -> ShellArgs:
         if w in _STARTUP:
             startup += words[i + 1 : i + 2]
             i += 2
-        elif w in _SHELL_VALUES:
-            flags |= {"reversed"} if "posix" in words[i + 1 : i + 2] else set()  # -o posix, +o posix: not followed
-            i += 2
         elif w.startswith(("-", "+")) and w not in {"-", "+"}:
-            reverse = {"reversed"} if "i" in w[1:] else set()  # +i: interactive turned off again
-            flags |= {w} if w.startswith("--") else set(w[1:]) if w.startswith("-") else reverse
-            command = command or (not w.startswith("--") and "c" in w[1:])
-            stdin = stdin or (not w.startswith("--") and "s" in w[1:])
-            i += 1
+            short = "" if w.startswith("--") else w[1:]
+            values = words[i + 1 : i + 1 + sum(ch in "oO" for ch in short)]  # -o and -O take a word each, -eco too
+            plus = w.startswith("+")
+            reverse = {"reversed"} if "posix" in values or (plus and "i" in short) else set()  # not followed
+            flags |= {w} if not short else reverse if plus else set(short) | reverse
+            command, stdin = command or "c" in short, stdin or "s" in short
+            i += 1 + len(values)
         else:
             break
     rest = words[i:]

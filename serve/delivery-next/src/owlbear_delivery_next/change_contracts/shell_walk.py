@@ -113,8 +113,8 @@ class Walk:
             state.home_moved = state.home_moved or "HOME" in assigned
         if first in {"unset", *_DECLARE} and any(w.partition("=")[0] == "HOME" for w in words[i + 1 :]):
             state.home_moved = True
-        options = [w for w in words[i + 1 :] if w.startswith("-")]
-        if first == "unset" and all(o in {"-v", "--"} for o in options):  # unset -f, -fv: no variable goes
+        # unset -f, -fv: no variable goes
+        if first == "unset" and all(w in {"-v", "--"} for w in words[i + 1 :] if w.startswith("-")):
             _unset(state, [k for k in _STARTUP if k in words[i + 1 :]], top_level=command.top_level)
         if first in _DECLARE:
             state.startup |= {k: None for k in _STARTUP if any(w.partition("=")[0] == k for w in words[i + 1 :])}

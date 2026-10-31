@@ -28,6 +28,9 @@ if TYPE_CHECKING:
 
 BYPASS = "which skips hooks or signing or forces history"  # the end of every bypass denial's reason
 _HARMLESS = re.compile(r"\d*>>?\s*/dev/null(?![^\s;&|)])|\d*>&\d+")  # discarded output or a descriptor copy
+_LOOKUP = re.compile(  # command -v cp: names the program, runs nothing
+    r"(?<![^\s;&|(])command(?:[ \t]+-p)*[ \t]+-[pV]*[vV][pvV]*(?:[ \t]+-[pvV]+)*(?:[ \t]+--)?(?:[ \t]+[\w./+-]+)+"
+)
 _CONFIG_VALUES = frozenset({"-f", "--file", "--blob", "--type", "--default", "--comment"})
 _CONFIG_QUERIES = frozenset(
     {"--get", "--get-all", "--get-regexp", "--get-urlmatch", "--get-color", "--get-colorbool", "--list", "-l",
@@ -315,7 +318,7 @@ def _mutation(text: str, commands: Sequence[Sequence[str]]) -> str | None:
     for run in (r for words in commands for r in shell_programs.runs(words)):  # env -S hides it, /bin/cp names it
         if match := _SHELL_MUTATION.match(" ".join([shell_programs.name(run.words[0]), *run.words[1:]])):
             return f"filesystem mutation '{match[0].strip(' \t;&|')}'"
-    text = _HARMLESS.sub("", text)
+    text = _LOOKUP.sub("", _HARMLESS.sub("", text))
     if _REDIRECT.search(text):
         return "a redirect"
     if match := _SHELL_MUTATION.search(text):

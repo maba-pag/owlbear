@@ -1457,3 +1457,24 @@ def test_a_lookup_program_run_by_path_is_still_a_program(scripts: Path) -> None:
 )
 def test_an_option_that_keeps_the_mode_reads_no_other_startup_file(text: str) -> None:
     assert decide(WRITE, shell(text)) is None
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "bash -eco pipefail 'git commit --no-verify -m x'",
+        "bash -eoc pipefail 'git commit --no-verify -m x'",
+        "bash -euo pipefail -c 'git commit --no-verify -m x'",
+    ],
+)
+def test_a_value_option_in_a_cluster_takes_its_word_not_the_script(text: str) -> None:
+    assert decide(WRITE, shell(text)).endswith(BYPASS)
+    assert decide(WRITE, shell(text.replace("git commit --no-verify -m x", "echo hi"))) is None
+
+
+def test_a_lookup_names_a_mutating_program_without_writing() -> None:
+    assert decide(READ, shell("command -v cp")) is None
+    assert decide(READ, shell("command -pv rm mv || true")) is None
+    assert decide(WRITE, shell("command -v cp; /bin/echo hi")) is None
+    assert decide(READ, shell("command -v cp > f")).endswith("which writes in a read-only step")
+    assert decide(READ, shell("command -v cp\nrm x")).endswith("which writes in a read-only step")
