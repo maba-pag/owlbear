@@ -916,7 +916,7 @@ def client(store, fake, **headers):
 
 def queued(store):
     with store.db.read() as db:
-        return [item for (item,) in db.execute("SELECT item FROM inbox WHERE slug = 'c1'").fetchall()]
+        return [item for (item,) in db.execute("SELECT item FROM inbox WHERE slug = 'c1'")]
 
 
 def stopped(fake, kind=StepKind.BUILD, stop=None):
