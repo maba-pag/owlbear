@@ -23,7 +23,7 @@ from owlbear_delivery_next.local_system.data_repo import CONFIG, MEMORY, DataRep
 from owlbear_delivery_next.local_system.storage_io import atomic_write
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Iterator, Sequence
+    from collections.abc import Iterator, Sequence
     from pathlib import Path
 
     from owlbear_delivery_next.local_system.data_repo import DataRepo
@@ -130,15 +130,7 @@ class Tree:
             touched = sorted(changed.keys() | deleted)
             if moved := next((r for r in touched if _read(shared.root / r) != self.base.get(r)), None):
                 return f"refused, {moved} changed meanwhile; {self.hold(folder, key)}", ""
-            try:
-                for r, text in texts.items():
-                    if text is None:
-                        (shared.root / r).unlink(missing_ok=True)
-                    else:
-                        atomic_write(shared.root / r, text)
-            except BaseException:
-                self._restore(texts)
-                raise
+            self._apply(texts)
             kept = [
                 shared.root / r
                 for r in touched
@@ -146,14 +138,39 @@ class Tree:
             ]
             return "", shared.publish(kept, f"chore: memory curation of {folder} (machine host)")
 
-    def _restore(self, rels: Iterable[str]) -> None:
-        """Put back the checkout's files as seeded, which they were when the writes began, so none of them is left."""
-        for r in rels:
-            if _read(path := self.shared.root / r) != (raw := self.base.get(r)):
-                if raw is None:
-                    path.unlink(missing_ok=True)
+    def _apply(self, texts: dict[str, str | None]) -> None:
+        """Write the run's files into the checkout, as seeded when this begins; on a failure put every one back.
+
+        Each seeded file gets a hidden hard link first, so putting it back is a rename, which needs no free space. One
+        that still differs from the seed is logged and named in the raised error, since a later batch could publish it.
+        """
+        root = self.shared.root
+        aside = {r: (root / r).with_name(f".{(root / r).name}.before-curation") for r in texts if r in self.base}
+        try:
+            for r, link in aside.items():
+                link.unlink(missing_ok=True)
+                link.hardlink_to(root / r)
+            for r, text in texts.items():
+                if text is None:
+                    (root / r).unlink(missing_ok=True)
                 else:
-                    path.write_bytes(raw)
+                    atomic_write(root / r, text)
+        except BaseException as exc:
+            for r in texts:
+                with contextlib.suppress(OSError):  # whatever stays is checked below
+                    if r not in aside:
+                        (root / r).unlink(missing_ok=True)
+                    elif aside[r].exists():
+                        aside[r].replace(root / r)
+            if left := [r for r in texts if _read(root / r) != self.base.get(r)]:
+                msg = f"not put back as seeded: {', '.join(left)}; {type(exc).__name__}: {exc}"
+                _log.error("%s: %s", root, msg)
+                raise DataRepoError(msg) from exc
+            raise
+        finally:
+            for link in aside.values():
+                with contextlib.suppress(OSError):  # a hidden link no publication names
+                    link.unlink(missing_ok=True)
 
 
 def seed(shared: DataRepo, at: Path, folders: Sequence[str]) -> Tree:

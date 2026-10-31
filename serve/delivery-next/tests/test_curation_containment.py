@@ -255,16 +255,26 @@ def test_a_folder_name_git_takes_for_no_ref_name_still_holds_a_refused_runs_edit
     assert held(repo, row.reason, rel(entry, folder)) == made["bytes"]
 
 
-def test_a_write_failing_midway_leaves_the_checkout_as_seeded_and_holds_the_run(repo, remote, monkeypatch) -> None:
+@pytest.mark.parametrize("lost", [False, True], ids=["restored", "a-link-lost"])
+def test_a_write_failing_midway_leaves_the_checkout_as_seeded_and_holds_the_run(
+    repo, remote, monkeypatch, caplog, lost
+) -> None:
     a, b = curated(repo / "shop" / "memory", "First"), curated(repo / "shop" / "memory", "Second")
     pushed(repo, "two curated entries")
     before = {e.id: (repo / rel(e)).read_bytes() for e in (a, b)}
     real, written, made = curation_tree.atomic_write, [], {}
 
+    def full(*_args, **_kw):
+        raise OSError(28, "No space left on device")
+
     def atomic_write(path, text):
-        if written:
-            raise OSError(28, "No space left on device")
-        written.append(real(path, text))
+        if not written:
+            written.append(path)
+            return real(path, text)
+        monkeypatch.setattr(Path, "write_bytes", full)  # the disk is full from here on, for putting back too
+        if lost:
+            (written[0].parent / f".{written[0].name}.before-curation").unlink()
+        return full()
 
     def run(cfg) -> Run:
         reword(cfg.memory, a.id, "First: the curator's version")
@@ -277,10 +287,20 @@ def test_a_write_failing_midway_leaves_the_checkout_as_seeded_and_holds_the_run(
     job = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(repo), run=run)
     job.start("shop")
     row = drained(job)
+    monkeypatch.undo()
 
     other = publish_other(repo, "after")
+    first = str(written[0].relative_to(repo))
     assert (len(written), row.state, "No space left on device" in row.reason) == (1, "failed", True)
-    assert {e.id: (repo / rel(e)).read_bytes() for e in (a, b)} == before
+    assert (f"not put back as seeded: {first}; OSError" in row.reason) is lost
+    assert [r.levelname for r in caplog.records if r.name == curation_tree.__name__] == ["ERROR"] * lost
+    now = {e.id: (repo / rel(e)).read_bytes() for e in (a, b)}
+    assert {i: n for i, n in now.items() if not first.endswith(f"{i}.md")} == {
+        i: n for i, n in before.items() if not first.endswith(f"{i}.md")
+    }
+    assert lost or now == before
+    assert not [p.name for p in (repo / "shop" / "memory").iterdir() if p.name.startswith(".")]
+    assert git(repo, "worktree", "list", "--porcelain").count("worktree ") == 1
     assert (remote_has(remote, other), remote_has(remote, made["curator"])) == (True, False)
     assert {e.id: remote_bytes(remote, rel(e)) for e in (a, b)} == before
     assert held(repo, row.reason, rel(a)) == made["a"]
