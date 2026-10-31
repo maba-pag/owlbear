@@ -7,6 +7,7 @@ session slots (TD-336). The Maintenance page's button starts it now. A merge sta
 every folder, when the folder holds a pending entry no run has seen; while paused only with "Curate memory while
 paused" on (the owner, 2026-10-22). An entry a run left pending starts no other run until it changes. A rename of a
 project's folder waits until no curation of it runs or waits, and no run starts in a folder while it moves (#678).
+A run works on its own worktree of the repository; only an accepted run's edits reach the shared checkout (#746).
 """
 
 from __future__ import annotations
@@ -24,7 +25,7 @@ from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.local_system import data_repo, local_home, maintenance
 from owlbear_delivery_next.local_system.storage_io import atomic_write
-from owlbear_delivery_next.machine_host import curation_snapshots
+from owlbear_delivery_next.machine_host import curation_snapshots, curation_tree
 from owlbear_delivery_next.runtimes import loop_owner, maintained, sdk_adapter
 from owlbear_delivery_next.settings import roles
 from owlbear_delivery_next.settings.config import Settings, SettingsUnset
@@ -390,9 +391,10 @@ class Curation:
         if why := _unset(settings):  # cleared while it waited for its slot: the run never starts, its entries unseen
             return FolderRun(state="failed", started_at=started, ended_at=datetime.now(UTC), reason=why)
         role = roles.chosen(settings, LABEL)
-        store = shared.root / folder / "memory"
-        before = {e.id: e.revision for e in _pending(store)}  # what the curator can see when it starts
-        with self.maintenance.workspace("owlbear-curation-") as at:
+        with curation_tree.forgetting(shared), self.maintenance.workspace("owlbear-curation-") as at:
+            tree = curation_tree.seed(shared, at / "data", folders(shared.root))
+            store = tree.root / folder / "memory"
+            before = {e.id: e.revision for e in _pending(store)}  # what the curator can see when it starts
             said = message(folder)
             cfg = sdk_adapter.Session(
                 kind=StepKind.REVIEW, worktree=at, session_id=f"{LABEL}-{folder}-{uuid.uuid4().hex[:8]}",
@@ -402,11 +404,28 @@ class Curation:
                 subagents=roles.subagents(settings, LABEL), user=roles.user_config(settings),
                 role=tools.CURATOR, job=LABEL, journal=sdk_adapter.Journal(event=self._pids), memory=store,
             )  # fmt: skip
-            with self.lock:
-                self.left_key = key  # persisted with the first PIDs this run records, so a restart knows whose they are
-            place = spend_ledger.Where(project=folder, name=folder)  # a memory folder is its project's
-            with spend_ledger.at(place):
-                done = maintained.run_owned(self.maintenance, cfg, self.run, project=SLOT, slot=key, kind="curation")
+            with curation_tree.holding(tree, folder, key):  # what an exception leaves stays out of the checkout
+                with self.lock:
+                    self.left_key = key  # persisted with the first PIDs this run records, so a restart knows whose
+                place = spend_ledger.Where(project=folder, name=folder)  # a memory folder is its project's
+                with spend_ledger.at(place):
+                    done = maintained.run_owned(
+                        self.maintenance, cfg, self.run, project=SLOT, slot=key, kind="curation"
+                    )
+                judged = self._judged(tree, folder, started, key, done)
+        if pruned := curation_tree.prune(shared):
+            judged = judged.model_copy(update={"reason": "; ".join(filter(None, (judged.reason, pruned)))})
+        if judged.state != "done":
+            return judged
+        after = {e.id: e.revision for e in _pending(shared.root / folder / "memory")}
+        seen = {i: r for i, r in after.items() if before.get(i) == r}  # one saved or changed meanwhile stays due
+        skipped = {
+            j.entry_id: after[j.entry_id] for j in judged.entries if j.action == "skipped" and j.entry_id in after
+        }
+        return judged.model_copy(update={"skipped": skipped, "seen": seen})
+
+    def _judged(self, tree: curation_tree.Tree, folder: str, started: datetime, key: str, done: Run) -> FolderRun:
+        """The run's row: a refused run's edits held, an accepted one's in the checkout and published."""
         t = done.termination
         with self.lock:
             watched = dict.fromkeys((*t.survivors, *t.unknown)) | done.pids if t is not None and not t.confirmed else {}
@@ -426,19 +445,15 @@ class Curation:
                 state="failed",
                 started_at=started,
                 ended_at=ended,
-                reason=f"ended {done.ending}: {why}",
+                reason=f"ended {done.ending}: {why}; {tree.hold(folder, key)}",
                 key=key if unknown else "",
             )
-        with shared.locked():
-            notice = shared.publish([], f"memory {folder}: curation")  # push what the curator committed
-        after = {e.id: e.revision for e in _pending(store)}
-        seen = {i: r for i, r in after.items() if before.get(i) == r}  # one saved or changed meanwhile stays due
-        skipped = {
-            j.entry_id: after[j.entry_id] for j in report.entries if j.action == "skipped" and j.entry_id in after
-        }
+        refusal, notice = tree.accept(folder, key)
+        if refusal:  # a confirmed end: "ended result: …" tells a restart its termination was judged
+            return FolderRun(state="failed", started_at=started, ended_at=ended, reason=f"ended result: {refusal}")
         return FolderRun(
             state="done", started_at=started, ended_at=ended, summary=report.summary, reason=notice,
-            entries=report.entries, skipped=skipped, seen=seen,
+            entries=report.entries,
         )  # fmt: skip
 
 
