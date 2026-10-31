@@ -10,7 +10,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from owlbear_memory import storage, writer_lock
 from owlbear_memory.errors import MemoryBusyError
 
-from owlbear_memory_mcp.git import commit_move, format_git_failure, repo_locked
+from owlbear_memory_mcp.git import _git, commit_move, format_git_failure, repo_locked
 
 if TYPE_CHECKING:
     from collections.abc import Collection, Iterator
@@ -60,11 +60,7 @@ def _batch_files(memory_dir: Path, ids: set[str]) -> list[Path]:
 
 def _changed(path: Path) -> bool:
     """Whether Git shows *path* as anything but committed and unchanged: modified, staged, untracked or ignored."""
-    status = subprocess.run(  # noqa: S603
-        ["git", "status", "--porcelain", "--ignored", "--", path.name],  # noqa: S607
-        capture_output=True, check=True, cwd=path.parent, text=True, stdin=subprocess.DEVNULL,
-    )  # fmt: skip
-    return bool(status.stdout.strip())
+    return bool(_git(path.parent, "status", "--porcelain", "--ignored", "--", path.name))
 
 
 def _detail(exc: BaseException) -> str:
