@@ -149,12 +149,20 @@ def _loose_json(text: str) -> object:
 
 
 def _serves(servers: object, repo: Path, *, own: bool) -> bool:
-    """Whether one of *servers* is Delivery's chat server for *repo*; one naming no folder serves only its own."""
+    """Whether one of *servers* is Delivery's chat server for *repo*; one naming no folder serves only its own.
+
+    Only one exact ``--repo`` binding counts; an abbreviated or repeated one never does.
+    """
 
     def serves(args: list[object]) -> bool:
-        args = [p for a in args for p in (a.split("=", 1) if isinstance(a, str) and a.startswith("--repo=") else [a])]
-        named = args[args.index("--repo") + 1 : args.index("--repo") + 2] if "--repo" in args else []
-        return named == [str(repo)] or (own and "--repo" not in args)
+        named: list[object] = []
+        for i, a in enumerate(args):
+            flag, eq, value = a.partition("=") if isinstance(a, str) else ("", "", "")
+            if flag in {"--r", "--re", "--rep"}:
+                return False  # the server's argparse takes an abbreviation as --repo
+            if flag == "--repo":
+                named.append(value if eq else args[i + 1] if i + 1 < len(args) else None)
+        return named == [str(repo)] or (own and not named)
 
     entries = servers.values() if isinstance(servers, dict) else []
     return any(

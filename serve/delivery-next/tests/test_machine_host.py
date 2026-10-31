@@ -821,8 +821,15 @@ BINDINGS = {  # the arguments after ``mcp`` (``{w}`` is the project), and whethe
     "equals": (("--repo={w}",), True),
     "none": ((), False),
     "other": (("--repo", "/other"), False),
+    "repeated": (("--repo", "{w}", "--repo", "{w}"), False),
+    "repeated-different": (("--repo", "{w}", "--repo", "/other"), False),
+    "mixed": (("--repo", "{w}", "--repo={w}"), False),
+    "r": (("--r", "{w}"), False),  # the server's argparse takes an abbreviation as --repo
+    "rep": (("--rep", "{w}"), False),
+    "re-equals": (("--re={w}",), False),
+    "bare": (("--repo",), False),
 }
-OWN_BINDINGS: tuple[str, ...] = ()  # the project's own file; the tests above prove its other rows
+OWN_BINDINGS = ("repeated", "repeated-different", "mixed", "r", "rep", "re-equals", "bare")  # the tests above: the rest
 
 
 def mcp_file(place: str, work: Path, monkeypatch) -> tuple[Path, str]:
