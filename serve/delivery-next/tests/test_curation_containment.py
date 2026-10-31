@@ -16,6 +16,7 @@ from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.local_system.slots import Slots
 from owlbear_delivery_next.machine_host import curation
 from owlbear_delivery_next.runtimes.session_result import Run
+from owlbear_memory_mcp.git import commit_batch
 
 REPORT = MemoryCurationResult(summary="curated", entries=[])
 CURATOR = "chore: memory curation batch (memory-mcp, memory-curator)"
@@ -287,6 +288,43 @@ def test_an_accepted_run_publishes_its_edits_once_and_leaves_pending_and_receipt
     assert row.state == "done"
     assert p2.id not in row.seen
     assert job.due("shop")
+
+
+def test_an_accepted_run_never_publishes_a_deletion_the_memory_batch_deferred(repo, remote) -> None:
+    """A duplicate ID whose newer copy is pending: the memory server keeps the original published until curated."""
+    shop = repo / "shop" / "memory"
+    entry = curated(shop, "Lesson")
+    pushed(repo, "a curated entry")
+    before = (repo / rel(entry)).read_bytes()
+    newer = {"title": "Newer copy", "state": MemoryState.PENDING, "updated_at": "2099-08-30T00:00:00+00:00"}
+    storage.write_entry(shop / "newer-copy.md", entry.model_copy(update=newer), memory_dir=shop)
+    made = {}
+
+    def run(cfg) -> Run:
+        MemoryEngine(cfg.memory).get_entries()  # the server's first read repairs the duplicate ID
+        made["deferred"] = commit_batch(cfg.memory, session_type="curation").deferred_deletions
+        return Run(cfg.session_id, ending="result", payload=REPORT, termination=Termination(confirmed=True))
+
+    job = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(repo), run=run)
+    job.start("shop")
+    row = drained(job)
+
+    other = publish_other(repo, "after")
+    assert (made["deferred"], row.state) == ((rel(entry),), "done")
+    assert (remote_has(remote, other), remote_bytes(remote, rel(entry))) == (True, before)
+    assert git(repo, "ls-files", "--", rel(entry)).strip() == rel(entry)  # still tracked, deleted only here
+
+    def curate(cfg) -> Run:  # a later run curates the copy; its batch now commits the original's deletion
+        (survivor,) = [e for e in MemoryEngine(cfg.memory).get_entries() if e.id == entry.id]
+        MemoryEngine(cfg.memory).edit(entry.id, {"scope_agents": ["builder"]}, expected_revision=survivor.revision)
+        assert commit_batch(cfg.memory, session_type="curation").commit_sha
+        return Run(cfg.session_id, ending="result", payload=REPORT, termination=Termination(confirmed=True))
+
+    later = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(repo), run=curate)
+    later.start("shop")
+    assert drained(later).state == "done"
+    listed = bare(remote, "ls-tree", "-r", "--name-only", "main", "--", "shop/memory").stdout.decode().split()
+    assert listed == ["shop/memory/newer-copy.md"]  # the original's deletion published with its curated copy
 
 
 def test_the_checkout_lists_held_runs_as_its_own_and_no_finished_runs_worktree(repo) -> None:

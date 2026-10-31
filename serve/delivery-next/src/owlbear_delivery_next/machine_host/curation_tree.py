@@ -115,23 +115,31 @@ class Tree:
         """Write the run's changes into the checkout and publish them: why it was refused, or the publication notice.
 
         Refused whole, and held, when a file it changed changed in the checkout meanwhile. Pending entries it wrote
-        stay uncommitted there.
+        stay uncommitted there, and so does a deletion its own commits did not make: the memory server defers one
+        whose entry lives on pending.
         """
         changed = self.changed()
         texts = {r: None if b is None else b.decode() for r, b in changed.items()}  # undecodable: raised, held
+        made = ("diff", "-z", "--name-only", "--no-renames", "--diff-filter=D", self.head, "HEAD", "--", *self.dirs)
+        deleted = {r for r in _git(self.root, *made).split("\0") if r}  # its commits' deletions, batch-validated
         shared = self.shared
         with shared.locked(), contextlib.ExitStack() as locks:  # the repository lock first, as every writer
-            for d in sorted({r.rpartition("/")[0] for r in changed}):
+            for d in sorted({r.rpartition("/")[0] for r in changed.keys() | deleted}):
                 (shared.root / d).mkdir(exist_ok=True)  # Global's folder, before its first entry, as Make global
                 locks.enter_context(writer_lock(shared.root / d))
-            if moved := next((r for r in sorted(changed) if _read(shared.root / r) != self.base.get(r)), None):
+            touched = sorted(changed.keys() | deleted)
+            if moved := next((r for r in touched if _read(shared.root / r) != self.base.get(r)), None):
                 return f"refused, {moved} changed meanwhile; {self.hold(folder, key)}", ""
             for r, text in texts.items():
                 if text is None:
                     (shared.root / r).unlink(missing_ok=True)
                 else:
                     atomic_write(shared.root / r, text)
-            kept = [shared.root / r for r, b in changed.items() if b is None or not _pending(r, b)]
+            kept = [
+                shared.root / r
+                for r in touched
+                if ((b := changed.get(r)) is None and r in deleted) or (b is not None and not _pending(r, b))
+            ]
             return "", shared.publish(kept, f"chore: memory curation of {folder} (machine host)")
 
 
