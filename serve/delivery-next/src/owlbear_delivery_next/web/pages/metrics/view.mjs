@@ -87,8 +87,10 @@ function exactness(t, undated) {
   const items = [
     t.unknown ? `${runs(t.unknown)} did not report ${t.unknown === 1 ? "its" : "their"} credits: they count as unknown,
       never as zero, so the total is a lower bound.` : "",
-    t.incomplete ? `${runs(t.incomplete)} count only up to an earlier read, as ${t.incomplete === 1 ? "its" : "their"}
-      last read failed: a lower bound.` : "",
+    t.failed ? `${runs(t.failed)} ${t.failed === 1 ? "counts" : "count"} only up to an earlier read, as
+      ${t.failed === 1 ? "its" : "their"} last read failed: a lower bound.` : "",
+    t.incomplete > t.failed ? `${runs(t.incomplete - t.failed)} ${t.incomplete - t.failed === 1 ? "was" : "were"} read
+      while a call could still be billed: a lower bound until OwlBear reads the runtime's own records.` : "",
     t.open ? `${runs(t.open)} started with no end recorded yet: ${t.open === 1 ? "its" : "their"} credits so far
       count.` : "",
     t.uncertain_time ? `${credits(t.uncertain_time)} credits were spent at a time known only roughly, so they may

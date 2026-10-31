@@ -31,6 +31,7 @@ SETTLE = 10.0
 CALL = 30.0  # one request while the step runs
 STOP_CALL = 10.0  # one teardown request
 GRACE = 5.0  # between terminate and kill
+IDLE = 2.0  # for the turn a submitted result ended; the runtime ends it within ~0.1 s (#780)
 
 
 async def call[T](aw: Awaitable[T], what: str, limit: float = CALL) -> T:
@@ -122,6 +123,7 @@ async def teardown(client: CopilotClient, session: CopilotSession | None, st: _S
         _guard(problems, "tasks log", st.log, event="tasks", listed=sorted(listed), problems=list(problems))
         settled = (await settle(listed, [])).confirmed and not failed
         if st.metered:  # what it spent once its tasks settled: once, bounded, before the disconnect (``sdk_spend``)
+            await _idle(st)
             try:
                 final = await owned_call(st, partial(usage_once, session, st.cfg.model), "usage read")
             except Exception as exc:  # noqa: BLE001 - an unread usage is recorded as such
@@ -144,6 +146,17 @@ async def teardown(client: CopilotClient, session: CopilotSession | None, st: _S
     await _workers(st, problems)
     observed = await settle(dict(st.run.pids), problems)
     return replace(observed, confirmed=False) if pending else observed
+
+
+async def _idle(st: _Step) -> None:
+    """Let the turn a submitted result ended go idle, so the final read counts it whole; one bound for any wake-ups."""
+    if st.run.ending != "result" or not st.turn:
+        return
+    with contextlib.suppress(TimeoutError):
+        async with asyncio.timeout(IDLE):
+            while st.turn:
+                await st.changed.wait()
+                st.changed.clear()
 
 
 async def _requests(st: _Step, problems: list[str]) -> bool:

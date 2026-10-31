@@ -136,8 +136,8 @@ export function runs() {
   const total = state.data.runs.total, heads = ["When", "Project", "Change", "Agent", "Models", "Credits", "Ended"];
   const shown = state.runs.length;
   const lowerNote = state.runs.some(lower) ? html`<p-text id="lower-bound" size="sm">A run tagged
-    <strong>lower bound</strong>, its credits marked +, spent at least this: some of its credits were not reported,
-    its last read failed, or it has no end recorded yet.</p-text>` : nothing;
+    <strong>lower bound</strong>, its credits marked +, spent at least this: some of its credits were not reported or
+    not yet read in full, or it has no end recorded yet.</p-text>` : nothing;
   return html`<section aria-labelledby="runs-title">
     <p-heading size="lg"><h2 id="runs-title">Runs, newest first</h2></p-heading>
     <p-text id="runs-count" size="sm">${shown < total ? `The newest ${shown} of ${total} runs.` : `All ${total} runs.`}
