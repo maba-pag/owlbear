@@ -24,6 +24,7 @@ from owlbear_delivery_next.change_contracts import chat_contract, pick_tools
 from owlbear_delivery_next.local_system import codebase, data_repo, local_home
 from owlbear_delivery_next.project_host import answers, api, host
 from owlbear_delivery_next.state_store import project_home
+from owlbear_delivery_next.state_store.decision_actions import EFFECT, EFFECTS
 from owlbear_delivery_next.state_store.decision_errors import SAVING
 from owlbear_delivery_next.state_store.store import StoreError
 
@@ -323,6 +324,10 @@ class Chat:
         state, origin = ("in_force", body["origin"]) if body["confirmed"] else ("draft", "autonomous")
         if code != OK or tuple(links) != wanted or (detail.get("state"), detail.get("origin")) != (state, origin):
             return {"saved": None, "error": UNCLEAR.format(why=f"{ids} matches it in part; ask the owner")}
+        said = [EFFECTS[e]] if (e := body.get("effect")) else []
+        if body["confirmed"] and body.get("replaces") and _marks(detail) != said:
+            why = f"{ids} marks another effect on existing work; ask the owner"
+            return {"saved": None, "error": UNCLEAR.format(why=why)}
         notice = SAVED.format(id=made["id"])
         if body["confirmed"] and body.get("replaces") and body.get("effect") != "wording":
             notice += IMPACT_LOST
@@ -338,6 +343,11 @@ def _same(row: dict[str, Any], body: dict[str, Any]) -> bool:
 
 def _ids(rows: list[dict[str, Any]]) -> str:
     return ", ".join(d["id"] for d in rows)
+
+
+def _marks(detail: dict[str, Any]) -> list[str]:
+    """The effects a found replacement's rationale marks (TD-428): one at most, none when the chat named none."""
+    return [p.removeprefix(EFFECT) for p in str(detail.get("rationale", "")).split("\n\n") if p.startswith(EFFECT)]
 
 
 class OwlBear(Chat):
