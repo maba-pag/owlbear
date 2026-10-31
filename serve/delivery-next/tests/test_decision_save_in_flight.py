@@ -493,6 +493,29 @@ def test_a_found_decision_the_owner_withdraws_before_its_detail_is_read_is_uncle
     assert (out["saved"], titled(shared)[0] in out["error"]) == (None, True)
 
 
+def test_a_found_draft_reworded_before_its_detail_is_read_is_unclear(shared, wire, monkeypatch):
+    chat, _ = wire()
+    read = chat.call
+
+    def call(method: str, path: str, *args: object, **kwargs: object) -> object:
+        if method == "GET" and path.startswith("/decisions/"):  # the owner edits the draft the list found
+            made = decision_store.load(shared, PROJECT).snapshot.get(titled(shared)[0]).decision
+            edited = made.model_copy(update={"statement": "Notes live in two Postgres tables."})
+            assert decision_store.save(shared, edited, expected_revision=made.revision, message="decisions: edit").saved
+        return read(method, path, *args, **kwargs)
+
+    monkeypatch.setattr(chat, "call", call)
+    out = chat.propose(PROPOSAL | {"confirmed": False})
+    assert (out["saved"], titled(shared)[0] in out["error"]) == (None, True)
+
+
+def test_a_decision_like_a_new_one_in_a_change_is_never_taken_for_it(shared, wire):
+    chat, _ = wire(after=made_now(shared, title=TITLE, statement=PROPOSAL["statement"], scope=Scope.CHANGE,
+                                  change="notes-move", state=State.DRAFT))  # fmt: skip
+    out = chat.propose(REFUSED)
+    assert (out["saved"], out["error"]) == (False, chat_client.NOT_SAVED)
+
+
 def test_a_host_without_the_fence_never_has_a_lost_save_called_not_saved(wire):
     chat, _ = wire(served={"supported": [2]})
     out = chat.propose(REFUSED)

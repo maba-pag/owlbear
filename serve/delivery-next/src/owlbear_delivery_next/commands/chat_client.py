@@ -322,7 +322,8 @@ class Chat:
         links = [link.get("id") for link in detail.get("links", []) if link.get("type") == "replaces"]
         wanted = (body["replaces"],) if body.get("replaces") else ()
         state, origin = ("in_force", body["origin"]) if body["confirmed"] else ("draft", "autonomous")
-        if code != OK or tuple(links) != wanted or (detail.get("state"), detail.get("origin")) != (state, origin):
+        as_sent = (detail.get("state"), detail.get("origin")) == (state, origin)
+        if code != OK or tuple(links) != wanted or not as_sent or not _same(detail, body):
             return {"saved": None, "error": UNCLEAR.format(why=f"{ids} matches it in part; ask the owner")}
         said = [EFFECTS[e]] if (e := body.get("effect")) else []
         if body["confirmed"] and body.get("replaces") and _marks(detail) != said:
@@ -335,10 +336,10 @@ class Chat:
 
 
 def _same(row: dict[str, Any], body: dict[str, Any]) -> bool:
-    """The row has the sent wording and layer."""
-    return (row["title"].strip(), row["statement"].strip()) == (body["title"].strip(), body["statement"].strip()) and (
-        row["scope"] == "global"
-    ) == (body["scope"] == "global")
+    """The row has the sent wording and the layer it is saved in: Global, else a project, or a replacement's own."""
+    layers = {"global"} if body["scope"] == "global" else {"project", "change"} if body.get("replaces") else {"project"}
+    wording = (row["title"].strip(), row["statement"].strip())
+    return wording == (body["title"].strip(), body["statement"].strip()) and row["scope"] in layers
 
 
 def _ids(rows: list[dict[str, Any]]) -> str:
