@@ -30,7 +30,6 @@ if TYPE_CHECKING:
 EVERY = 3600.0  # seconds between the host's reads
 DRAIN = 120.0  # seconds a stopping host waits for a running read
 SHARED, MODELS, IMPECCABLE, MACHINE = "shared settings", "models", "Impeccable releases", "this machine's settings"
-SOURCES = (SHARED, MODELS, IMPECCABLE, MACHINE)
 
 type Missed = list[tuple[str, str]]  # each failure's place (a file, a folder, a service; may be empty) and detail
 
@@ -51,7 +50,7 @@ class Reader:
             self.ledger.begin()
             failures: list[Failure] = []
             glob, unshared = None, False
-            for source in SOURCES:
+            for source in (SHARED, MODELS, IMPECCABLE, MACHINE):
                 if self.stopping is not None and self.stopping.is_set():
                     return self.ledger.load()
                 try:
@@ -158,9 +157,8 @@ class Reader:
 
     def _impeccable(self) -> Missed:
         n = pack_update.notice(refresh=True, force=True)
-        if n["state"] in ("unknown", "error"):
-            return [(f"GitHub's releases of {n['pack']}", n.get("detail") or "upstream was not reached")]
-        return []
+        place = f"GitHub's releases of {n['pack']}"
+        return [(place, n.get("detail") or "upstream was not reached")] if n["state"] in ("unknown", "error") else []
 
     def _machine(self) -> Missed:
         missed = _unreadable([local_home.root() / MACHINE_SETTINGS], MachineLayer)

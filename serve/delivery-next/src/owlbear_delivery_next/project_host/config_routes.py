@@ -378,11 +378,9 @@ def _reader(store: Store, host: Host, own: list[settings_read.Reader]) -> settin
     if (found := getattr(host, "reads", None)) is not None:
         return found
     if not own:
-
-        def stores() -> list[Store]:
-            return getattr(host, "machine", lambda: [store])()
-
-        own.append(settings_read.Reader(getattr(host, "say", lambda _text: None), stores))
+        own.append(
+            settings_read.Reader(getattr(host, "say", lambda _text: None), getattr(host, "machine", lambda: [store]))
+        )
     return own[0]
 
 

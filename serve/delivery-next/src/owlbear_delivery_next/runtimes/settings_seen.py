@@ -134,16 +134,11 @@ class Ledger:
                     Notice(id=secrets.token_hex(8), key=k, old=seen.seen.get(k), new=glob.get(k), at=at)
                     for k in changed(seen.seen, glob)
                 ]
-            done = Seen(
-                succeeded_at=seen.succeeded_at if failures else at,
-                read_at=at,
-                failures=failures,
-                unshared=unshared,
-                seen=glob if glob is not None else seen.seen,
-                notices=seen.notices,
-            )
-            self._write(done)
-            return done
+            seen.succeeded_at = seen.succeeded_at if failures else at
+            seen.read_at, seen.failures, seen.unshared = at, failures, unshared
+            seen.seen = glob if glob is not None else seen.seen
+            self._write(seen)
+            return seen
 
     def own(self, before: Layer | None, after: Layer) -> None:
         """Take this machine's own save of Global as seen, so only changes made elsewhere are noticed.
@@ -152,26 +147,22 @@ class Ledger:
         """
         old, new = flatten(before), flatten(after)
         with self._lock:
-            self._owned |= {key: new.get(key) for key in changed(old, new)}
+            updates = {key: new.get(key) for key in changed(old, new)}
+            self._owned |= updates
             seen, broken = self._read()
             if broken or seen.seen is None:
                 return
-            for key in changed(old, new):
-                if key in new:
-                    seen.seen[key] = new[key]
-                else:
-                    seen.seen.pop(key, None)
+            seen.seen = {k: v for k, v in (seen.seen | updates).items() if v is not None}
             try:
                 self._write(seen)
             except OSError as exc:
                 self.say(f"settings read: the saved Global values could not be recorded as seen: {exc}")
 
-    def dismiss(self, ids: Collection[str]) -> Seen:
+    def dismiss(self, ids: Collection[str]) -> None:
         """Remove the notices with these ids; unknown ids are ignored."""
         with self._lock:
             seen, broken = self._read()
             if broken or not any(n.id in ids for n in seen.notices):
-                return self.load() if broken else seen
+                return
             seen.notices = [n for n in seen.notices if n.id not in ids]
             self._write(seen)
-            return seen

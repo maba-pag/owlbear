@@ -1757,9 +1757,7 @@ def test_a_layer_that_does_not_read_still_shows_the_read(tmp_path: Path, monkeyp
         page.get_by_role("button", name="Read again").click()
         expect(failure).to_contain_text(f"Could not read: this machine's settings — {mine}", timeout=READS_TIME * 1000)
 
-        fresh = (
-            page.context.browser.new_page()
-        )  # the first page keeps its draft; a new one opens on the unreadable layer
+        fresh = page.context.browser.new_page()  # the first keeps its draft; this one opens on the unreadable layer
         said = errors(fresh)
         pds.only(fresh, base)
         fresh.goto(f"{base}/config?project={a.id}#token=t")
