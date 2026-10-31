@@ -85,7 +85,13 @@ For each must-change item, the proof its fix needs, chosen by the part it change
 | --- | --- |
 | Session options or events (`sdk_adapter.py`, `sdk_*.py`) | A unit test that fails before the fix, and one live step |
 | AHP (`ahp.py`, `vscode_*.py`) | The spec's `version-negotiation.json` fixture test, and a live New Change |
-| The CLI | `uv run pytest -m model serve/delivery-next/tests/test_step_loading_live.py`, run locally |
+| The CLI | `uv run pytest -m model serve/delivery-next/tests/test_step_loading_live.py`, run locally against the new CLI (below) |
+
+Before `brew upgrade`, that test would run the old CLI. Stage the new one beside it instead: in the run's scratch
+folder, `gh release download v<to> -R github/copilot-cli -p "copilot-darwin-$(uname -m).tar.gz" -p SHA256SUMS.txt`,
+check it (`grep "copilot-darwin-$(uname -m).tar.gz" SHA256SUMS.txt | shasum -a 256 -c -`), unpack it, confirm
+`./copilot --version` names `<to>`, and run the test with `COPILOT_CLI_PATH` set to that executable's absolute path.
+The host's own CLI stays as it is.
 
 ## 6. Report and act
 
