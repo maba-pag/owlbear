@@ -49,6 +49,13 @@ _WRAPPERS: dict[str, tuple[str, frozenset[str], int]] = {
 }  # fmt: skip
 _LOOKUP = frozenset({"-v", "-V"})  # command -v names a program without running it
 _HEAD = 4096  # bytes of a program file read to tell a script from a binary
+_ESCAPES = {"t": "\t", "n": "\n", "v": "\v", "f": "\f", "r": "\r", "'": "'", '"': '"', "\\": "\\", "$": "$", "#": "#"}
+_VARIABLE = re.compile(r"\$\{[A-Za-z_]\w*\}")
+_SPLIT_UNREAD = "uses env -S with text the guard can't read"
+
+
+class UnreadableError(ValueError):
+    """Text the guard can't read, its reason the message."""
 
 
 @dataclass(frozen=True)
@@ -114,9 +121,125 @@ def _wrapped(words: Sequence[Word], i: int, depth: int, context: Run) -> list[Ru
         case "env":
             env = {**sub.env, **assignments(words[i + 1 : k])}
             sub = replace(sub, env=env, chdir=sub.chdir or _env_chdir(words, i, k))
+            if (split := _env_split(words, i, k)) is not None:  # its words go before the rest, env reads them again
+                return runs([Word("env"), *split, *words[k:]], depth + 1, sub)
         case "xargs":
             sub = replace(sub, from_input=True, replaced=_replacement(words, i, k) or sub.replaced)
     return runs(words[k:], depth + 1, sub)
+
+
+def _env_split(words: Sequence[Word], i: int, k: int) -> list[Word] | None:
+    """The words env -S or --split-string gives among the options of the env at ``words[i]``, or None."""
+    found: list[Word] | None = None
+    j = i + 1
+    while j < k:
+        w, value = words[j], None
+        if w.startswith("--split-string"):
+            value, j = (w.partition("=")[2], j + 1) if "=" in w else (_at(words, j + 1), j + 2)
+        elif w.startswith("-") and not w.startswith("--") and (at := _valued(w)):
+            rest = w[at + 1 :]
+            given, j = (rest, j + 1) if rest else (_at(words, j + 1), j + 2)
+            value = given if w[at] == "S" else None
+        else:
+            j += 1
+        if value is not None:
+            found = [*(found or []), *split_string(value)]
+    return found
+
+
+def _valued(cluster: str) -> int | None:
+    """The index of the first option taking a value in an env option cluster (-u, -C, -S), if any."""
+    return next((p for p, ch in enumerate(cluster[1:], 1) if ch in "uCS"), None)
+
+
+def _at(words: Sequence[Word], j: int) -> Word:
+    return words[j] if j < len(words) else Word()
+
+
+def split_string(text: str) -> list[Word]:
+    r"""Split an env -S string as env does: quotes, escapes, \_ and \c; ${NAME} marks its word expanded.
+
+    Raises:
+        UnreadableError: It holds a quote left open, an escape env doesn't define or a $ other than ${NAME}.
+    """
+    splitter = _Splitter(text)
+    i = 0
+    while 0 <= i < len(text):
+        i = splitter.step(i)
+    if splitter.quote:
+        raise UnreadableError(_SPLIT_UNREAD)
+    splitter.flush()
+    return splitter.words
+
+
+@dataclass
+class _Splitter:
+    """The words an env -S string splits into so far, and the word being read."""
+
+    text: str
+    words: list[Word] = field(default_factory=list)
+    current: str | None = None
+    expanded: bool = False
+    quote: str = ""
+
+    def add(self, chars: str) -> None:
+        self.current = (self.current or "") + chars
+
+    def flush(self) -> None:
+        if self.current is not None:
+            self.words.append(Word(self.current, expanded=self.expanded))
+        self.current, self.expanded = None, False
+
+    def step(self, i: int) -> int:
+        """Read the character at *i*; return the next index, or -1 where the string ends early."""
+        ch = self.text[i]
+        if self.quote == "'":
+            return self._single(ch, i)
+        if ch == "\\":
+            return self._escape(i)
+        if ch == "$":
+            if not (match := _VARIABLE.match(self.text, i)):
+                raise UnreadableError(_SPLIT_UNREAD)
+            self.add(match[0])
+            self.expanded = True
+            return match.end()
+        if self.quote == '"':
+            self.quote = "" if ch == '"' else self.quote
+            if self.quote:
+                self.add(ch)
+        elif ch in "'\"":
+            self.quote = ch
+            self.add("")
+        elif ch in " \t\n\r\f\v":
+            self.flush()
+        elif ch == "#" and self.current is None:
+            return -1
+        else:
+            self.add(ch)
+        return i + 1
+
+    def _single(self, ch: str, i: int) -> int:
+        if ch == "\\":
+            raise UnreadableError(_SPLIT_UNREAD)
+        if ch == "'":
+            self.quote = ""
+        else:
+            self.add(ch)
+        return i + 1
+
+    def _escape(self, i: int) -> int:
+        nxt = self.text[i + 1 : i + 2]
+        if nxt == "c":
+            return -1
+        if nxt == "_" and not self.quote:
+            self.flush()
+        elif nxt == "_":
+            self.add(" ")
+        elif nxt in _ESCAPES and nxt:
+            self.add(_ESCAPES[nxt])
+        else:
+            raise UnreadableError(_SPLIT_UNREAD)
+        return i + 2
 
 
 def _env_chdir(words: Sequence[Word], i: int, k: int) -> bool:

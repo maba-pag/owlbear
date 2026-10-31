@@ -253,9 +253,8 @@ def _environment(words: Sequence[str]) -> dict[str, str]:
     return dict(w.partition("=")[::2] for w in found)
 
 
-def _env_setting(words: Sequence[str]) -> str | None:
+def _env_setting(env: dict[str, str]) -> str | None:
     """A setting that git configuration passed by environment uses to replace the hooks or turn signing off."""
-    env = _environment(words)
     try:
         settings = shlex.split(env.get("GIT_CONFIG_PARAMETERS", ""))
     except ValueError:
@@ -269,9 +268,11 @@ def _env_setting(words: Sequence[str]) -> str | None:
 
 def _bypass(words: Sequence[str]) -> str | None:
     """Return the setting, option or refspec of a git command that skips hooks or signing, or forces a push."""
-    if setting := _env_setting(words):
+    if setting := _env_setting(_environment(words)):  # leading assignments, env's and export's
         return f"environment setting {setting}"
     for run in shell_programs.runs(words):
+        if setting := _env_setting(run.env):  # those an env -S split sets too
+            return f"environment setting {setting}"
         if shell_programs.name(run.words[0]) != "git":
             continue
         call = _parse_git(run.words[1:])
@@ -340,12 +341,15 @@ def _check(
         return f"`{name}` cannot be parsed"
     if not commands:
         return "the shell request names no command" if depth == 0 else None  # an empty script does nothing
-    if flag := next(filter(None, (_bypass(c.words) for c in commands)), None):
-        return f"`{name}` uses {flag}, {BYPASS}"
-    if not policy.write and (found := _mutation(text, [c.words for c in commands])):
-        return f"`{name}` uses {found}, which writes in a read-only step"
-    judge = functools.partial(_judge, policy)
-    return shell_walk.Walk(name, depth, judge, _writes).commands(commands, state or shell_walk.State(policy.root))
+    try:
+        if flag := next(filter(None, (_bypass(c.words) for c in commands)), None):
+            return f"`{name}` uses {flag}, {BYPASS}"
+        if not policy.write and (found := _mutation(text, [c.words for c in commands])):
+            return f"`{name}` uses {found}, which writes in a read-only step"
+        walk = shell_walk.Walk(name, depth, functools.partial(_judge, policy), _writes)
+        return walk.commands(commands, state or shell_walk.State(policy.root))
+    except shell_programs.UnreadableError as error:
+        return f"`{name}` {error}"
 
 
 def _judge(policy: Policy, text: str, depth: int, state: shell_walk.State, label: str) -> str | None:

@@ -7,6 +7,7 @@ from copilot.generated.session_events import PermissionRequestShell
 
 from owlbear_delivery_next.change_contracts.permissions import Policy, Request, decide, view
 from owlbear_delivery_next.local_system.shell_parse import parse
+from owlbear_delivery_next.local_system.shell_programs import UnreadableError, split_string
 
 ROOT = Path("/w")
 READ, WRITE = Policy(ROOT, write=False), Policy(ROOT)
@@ -593,7 +594,7 @@ def shebang(path: Path, first: str, body: str = "echo hi\n") -> Path:
     return path
 
 
-@pytest.mark.parametrize("first", ["#!/bin/bash", "#!/usr/bin/env bash", ""])
+@pytest.mark.parametrize("first", ["#!/bin/bash", "#!/usr/bin/env bash", "#!/usr/bin/env -S bash -e", ""])
 def test_a_shell_script_run_by_path_is_read(scripts: Path, first: str) -> None:
     shebang(scripts / "tool", first, BAD)
     shebang(scripts / "fine", first)
@@ -736,3 +737,55 @@ def test_git_settings_exported_before_git_stay_refused(text: str) -> None:
 
 def test_a_harmless_exported_git_setting_runs() -> None:
     assert decide(WRITE, shell("export GIT_CONFIG_PARAMETERS=\"'commit.gpgsign=true'\"; git status")) is None
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "env -S 'git commit --no-verify -m x'",
+        'env -S"git push -f"',
+        "env --split-string='git push -f'",
+        "env -iS 'git push -f'",
+        "env -S 'GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.hooksPath GIT_CONFIG_VALUE_0=/x git status'",
+        "timeout 5 env -S 'X=1 git push -f'",
+    ],
+)
+def test_a_bypass_through_env_split_string_is_refused(text: str) -> None:
+    assert decide(WRITE, shell(text)).endswith(BYPASS)
+
+
+def test_env_split_string_runs_its_harmless_command_and_reads_its_startup_file(scripts: Path) -> None:
+    assert decide(WRITE, shell("env -S 'echo hi'")) is None
+    assert decide(WRITE, shell("env -u X -S 'echo hi'")) is None
+    assert (
+        decide(at(scripts), shell("env -S 'BASH_ENV=./bad.sh bash -c true'"))
+        == f"`./bad.sh` uses --no-verify, {BYPASS}"
+    )
+    shebang(scripts / "tool", "#!/usr/bin/env -S BASH_ENV=./bad.sh bash")
+    assert decide(at(scripts), shell("./tool")) == f"`./bad.sh` uses --no-verify, {BYPASS}"
+
+
+@pytest.mark.parametrize(
+    ("text", "words"),
+    [
+        ("a\\_b", ["a", "b"]),
+        ('"a\\_b"', ["a b"]),
+        ("a\\c b", ["a"]),
+        ("a # b", ["a"]),
+        ("'a b' \"c d\"", ["a b", "c d"]),
+        ("a\\tb", ["a\tb"]),
+    ],
+)
+def test_env_split_string_splits_as_env_does(text: str, words: list[str]) -> None:
+    assert split_string(text) == words
+
+
+def test_env_split_string_marks_variables_and_refuses_what_env_wouldnt_read() -> None:
+    assert [w.expanded for w in split_string("${HOME}/bin/x y")] == [True, False]
+    for text in ("a\\q", "'open", "$HOME", "'a\\b'"):
+        with pytest.raises(UnreadableError):
+            split_string(text)
+    assert decide(WRITE, shell("env -S 'a\\q'")) == "`env -S 'a\\q'` uses env -S with text the guard can't read"
+    assert decide(WRITE, shell("env -S '${CMD} x'")).endswith(
+        "builds a command at run time (`${CMD}`); write the program and its script out"
+    )
