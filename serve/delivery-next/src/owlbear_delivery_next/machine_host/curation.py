@@ -159,11 +159,11 @@ class Curation:
             path = self.path()
             msg = (
                 f"the memory curation ownership record {path} cannot be read:\n{exc}\n"
-                "OwlBear can't tell whether a memory curation session it started still runs, so it doesn't go on "
-                "and curation's slot stays held. First make sure no copilot process that memory curation started "
-                'still runs: the PIDs under "left" are the ones it recorded, but a session that failed early recorded '
-                f"none. Then move {path} aside, for example to {path}.broken, and start OwlBear again; the folders' "
-                "last runs are forgotten and curate again when due."
+                "OwlBear can't tell whether a memory curation session it started still runs, so memory curation "
+                "doesn't go on. Stop OwlBear if it still runs, and make sure no copilot process that memory curation "
+                'started still runs: the PIDs under "left" are the ones it recorded, but a session that failed early '
+                f"recorded none. Then move {path} aside, for example to {path}.broken, and start OwlBear again; the "
+                "folders' last runs are forgotten and curate again when due."
             )
             raise maintenance.MaintenanceError(msg) from exc
 
