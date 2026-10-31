@@ -455,6 +455,6 @@ def shebang(path: Path) -> list[Word] | None:
         return None
     try:
         codecs.getincrementaldecoder("utf-8")().decode(head, final=False)  # a character cut at the end is fine
-    except UnicodeDecodeError:
-        return None
+    except UnicodeDecodeError as error:  # no NUL byte: bash still runs it as a script, which can't be read
+        raise OSError(0, "it is not UTF-8 text", str(path)) from error
     return [Word("sh")]

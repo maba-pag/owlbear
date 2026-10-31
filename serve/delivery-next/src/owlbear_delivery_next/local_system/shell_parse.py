@@ -284,7 +284,8 @@ class _Lexer:
         elif match := _REDIRECTION.match(text, i):
             op = match[0]
             fd = s.descriptor(0 if op.lstrip("&").startswith("<") else 1)
-            s.redirect = (fd, "dup" if op == "<&" else "file" if op in {"<", "<>"} else "out")
+            dup = op == "<&" or (op == ">&" and fd == 0)  # 0>&3 feeds stdin from fd 3 too
+            s.redirect = (fd, "dup" if dup else "file" if op in {"<", "<>"} else "out")
             s.out = s.out or s.redirect[1] == "out"
             return match.end()
         elif ch == "(":

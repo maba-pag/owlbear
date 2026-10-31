@@ -1266,3 +1266,34 @@ def test_options_after_an_env_split_string_belong_to_the_command(scripts: Path) 
     text = "export BASH_ENV=./bad.sh; env -S 'bash -c true' -u BASH_ENV"
 
     assert decide(Policy(scripts), shell(text)) == f"`./bad.sh` uses --no-verify, {BYPASS}"
+
+
+def test_a_descriptor_duplicated_onto_stdin_either_way_is_opaque() -> None:
+    assert decide(WRITE, shell("bash 3<<'EOF' 0>&3\ngit commit --no-verify -m x\nEOF")).endswith(PIPED)
+
+
+def test_a_shebangless_file_that_isnt_utf8_is_refused_unread(scripts: Path) -> None:
+    (scripts / "tool").write_bytes(b"# \xe9 comment\n" + BAD.encode())
+
+    assert (
+        decide(Policy(scripts), shell("./tool")) == "`./tool` runs `./tool`, which can't be read: it is not UTF-8 text"
+    )
+
+
+def test_a_shebangs_program_is_judged_for_writes(scripts: Path) -> None:
+    shebang(scripts / "tool", "#!/usr/bin/env -S rm -f")
+
+    assert decide(Policy(scripts, write=False), shell("./tool")) == (
+        "`./tool` uses filesystem mutation 'rm', which writes in a read-only step"
+    )
+    assert decide(Policy(scripts), shell("./tool")) is None
+
+
+def test_a_startup_file_set_on_source_reaches_the_shells_its_text_starts(scripts: Path) -> None:
+    (scripts / "runner.sh").write_text("bash -c true\n")
+
+    assert (
+        decide(Policy(scripts), shell("BASH_ENV=./bad.sh source ./runner.sh"))
+        == f"`./bad.sh` uses --no-verify, {BYPASS}"
+    )
+    assert decide(Policy(scripts), shell("BASH_ENV=./good.sh source ./runner.sh")) is None

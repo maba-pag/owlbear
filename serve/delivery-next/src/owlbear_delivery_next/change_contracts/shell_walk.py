@@ -70,6 +70,7 @@ class Walk:
     judge: Callable[[str, int, State, str], str | None]  # text, depth, state, its name in reasons -> a refusal
     writes: Callable[[Command], bool]
     bypass: Callable[[str, Run], str | None]  # the refusal of a run's environment that turns hooks or signing off
+    mutation: Callable[[str, Run], str | None]  # the refusal of a write by a run, in a read-only step
 
     def commands(self, commands: Sequence[Command], state: State) -> str | None:
         """Read *commands* in order and return the first refusal."""
@@ -156,6 +157,10 @@ class Walk:
                     return f"`{self.name}` runs `{word}`, whose interpreter `{program}` is {what}"
             if reason := self.bypass(self.name, sub):
                 return reason
+            if reason := self.mutation(self.name, sub):
+                return reason
+            if self.writes(replace(command, words=sub.words, raw=" ".join(sub.words))):
+                state.effects.wrote = True
             if shell_programs.name(sub.words[0]) in shell_programs.SHELLS and (
                 reason := self._shell(command, sub, state)
             ):
@@ -212,14 +217,19 @@ class Walk:
         self, state: State, command: Command, run: Run, read: Callable[[Command, Run, State], str | None]
     ) -> str | None:
         """Read text that runs in this shell (sourced, eval, startup): its input is the command's, its cd unknown."""
-        saved = state.stdin_plain
+        saved, startup, home = state.stdin_plain, dict(state.startup), state.home_moved
         state.stdin_plain = state.plain() and not command.opaque_stdin and command.stdin() is None
+        state.startup |= {k: run.env[k] for k in _STARTUP if k in run.env}  # BASH_ENV=x source y: for its text
+        state.home_moved = home or "HOME" in run.env
         state.current += 1
         try:
             return read(command, run, state)
         finally:
             state.current -= 1
             state.stdin_plain = saved
+            if any(k in run.env for k in _STARTUP):  # only for that text; what the text set itself is unknown
+                state.startup = startup | {k: None for k in _STARTUP if state.startup.get(k) != startup.get(k)}
+            state.home_moved = home or state.home_moved
 
     def _source(self, command: Command, run: Run, state: State) -> str | None:
         operands = _operands(run)

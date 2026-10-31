@@ -358,7 +358,8 @@ def _check(
             return f"`{name}` uses {flag}, {BYPASS}"
         if not policy.write and (found := _mutation(text, [c.words for c in commands])):
             return f"`{name}` uses {found}, which writes in a read-only step"
-        walk = shell_walk.Walk(name, depth, functools.partial(_check, policy), _writes, _run_bypass)
+        mutation = functools.partial(_run_mutation, policy)
+        walk = shell_walk.Walk(name, depth, functools.partial(_check, policy), _writes, _run_bypass, mutation)
         return walk.commands(commands, state or shell_walk.State(policy.root))
     except shell_programs.UnreadableError as error:
         return f"`{name}` {error}"
@@ -369,6 +370,13 @@ def _run_bypass(name: str, run: shell_programs.Run) -> str | None:
     if setting := _env_setting(run.env):
         return f"`{name}` uses environment setting {setting}, {BYPASS}"
     return f"`{name}` uses {flag}, {BYPASS}" if (flag := _bypass(run.words)) else None
+
+
+def _run_mutation(policy: Policy, name: str, run: shell_programs.Run) -> str | None:
+    """The refusal of a #! line's program that writes, in a read-only step (#!/usr/bin/env -S rm -f)."""
+    if policy.write or not (found := _mutation(" ".join(run.words), [run.words])):
+        return None
+    return f"`{name}` uses {found}, which writes in a read-only step"
 
 
 def _writes(command: shell_parse.Command) -> bool:
