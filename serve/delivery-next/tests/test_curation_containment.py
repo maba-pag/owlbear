@@ -215,8 +215,9 @@ def test_an_exception_after_an_edit_holds_it_and_the_failed_row_names_where(repo
     assert logged.exc_info is not None
 
 
-def test_a_run_that_raises_and_cannot_be_held_shows_both_failures_in_full_in_its_row_and_log(
-    repo, monkeypatch, caplog
+@pytest.mark.parametrize("ends", ["raised", "returned"])
+def test_a_failed_run_that_cannot_be_held_shows_both_failures_in_full_in_its_row_and_log(
+    repo, monkeypatch, caplog, ends
 ) -> None:
     entry = curated(repo / "shop" / "memory", "Lesson")
     real = subprocess.run
@@ -227,17 +228,20 @@ def test_a_run_that_raises_and_cannot_be_held_shows_both_failures_in_full_in_its
             return subprocess.CompletedProcess(argv, 1, "", said)
         return real(argv, *args, **kw)
 
+    broke = f"the session broke{' and said more' * 30}"
+
     def run(cfg) -> Run:
         reword(cfg.memory, entry.id, "Lesson: the curator's version")
-        msg = f"the session broke{' and said more' * 30}"
-        raise RuntimeError(msg)
+        if ends == "returned":  # an SDK failure comes back as the run's result
+            return Run(cfg.session_id, ending="error", detail=broke, termination=Termination(confirmed=True))
+        raise RuntimeError(broke)
 
     monkeypatch.setattr(curation_tree.subprocess, "run", run_)
     job = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(repo), run=run)
     job.start("shop")
     row = drained(job)
 
-    ran = f"RuntimeError: the session broke{' and said more' * 30}"
+    ran = f"RuntimeError: {broke}" if ends == "raised" else f"ended error: {broke}"
     assert row.state == "failed"
     assert f"{ran}; its edits are not held in a curation ref: DataRepoError: git update-ref failed: {said.strip()}" in (
         row.reason
