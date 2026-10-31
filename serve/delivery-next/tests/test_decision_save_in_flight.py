@@ -509,6 +509,23 @@ def test_a_found_draft_reworded_before_its_detail_is_read_is_unclear(shared, wir
     assert (out["saved"], titled(shared)[0] in out["error"]) == (None, True)
 
 
+def test_a_saved_draft_reworded_before_the_decisions_are_read_is_never_called_not_saved(shared, wire, monkeypatch):
+    chat, _ = wire()
+    read = chat.call
+
+    def call(method: str, path: str, *args: object, **kwargs: object) -> object:
+        if method == "GET" and path.startswith("/decisions?") and (made := titled(shared)):
+            snapshot = decision_store.load(shared, PROJECT).snapshot.get(made[0]).decision
+            edited = snapshot.model_copy(update={"title": "Notes in two tables"})
+            assert decision_store.save(shared, edited, expected_revision=snapshot.revision, message="edit").saved
+        return read(method, path, *args, **kwargs)
+
+    monkeypatch.setattr(chat, "call", call)
+    out = chat.propose(PROPOSAL | {"confirmed": False})
+    assert out["saved"] is None
+    assert any(e.decision.id in out["error"] for e in decision_store.load(shared, PROJECT).snapshot.entries)
+
+
 def test_a_decision_like_a_new_one_in_a_change_is_never_taken_for_it(shared, wire):
     chat, _ = wire(after=made_now(shared, title=TITLE, statement=PROPOSAL["statement"], scope=Scope.CHANGE,
                                   change="notes-move", state=State.DRAFT))  # fmt: skip

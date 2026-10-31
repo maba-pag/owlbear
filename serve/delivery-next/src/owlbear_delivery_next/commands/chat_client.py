@@ -85,6 +85,7 @@ UNCLEAR = "the host's answer was lost and whether the decision was saved is uncl
 STILL_SAVING = "a decision save is still in progress; check find_decisions shortly"
 UNFENCED = "this host cannot promise the save did not start; check find_decisions shortly, or ask the owner"
 OLDER = "{ids} match it but read as made before it was sent; ask the owner"
+CHANGED = "{ids} were made in its layer since it was sent and may be it, edited since; ask the owner"
 
 
 class Chat:
@@ -281,8 +282,8 @@ class Chat:
     def propose(self, body: dict[str, Any]) -> dict[str, Any]:
         """Record or propose a decision; when the host's answer is lost, the decisions say whether it was saved.
 
-        The host refuses to start the save past *admit_by*, so a read after it that finds neither the decision nor a
-        save in progress proves nothing was written; a host without that fence leaves it unclear (#846).
+        The host refuses to start the save past *admit_by*, so a read after it that finds no save in progress and no
+        decision made since in its layer proves nothing was written; a host without that fence leaves it unclear (#846).
         """
         started, admit_by = datetime.now(UTC), _now() + ADMIT
         out = self.write("/decisions/propose", body, {ADMIT_BY: repr(admit_by)})
@@ -302,14 +303,12 @@ class Chat:
                 if t > admit_by + SETTLE:
                     return {"saved": None, "error": UNCLEAR.format(why=STILL_SAVING)}
             elif same := [d for d in out["decisions"] if _same(d, body)]:
-                if found := [d for d in same if datetime.fromisoformat(d["created_at"]) >= started]:
+                if found := [d for d in same if _new(d, body, started)]:
                     return self._found(body, found)
                 if t > admit_by:  # an older one, or this one if the clock went back: never "record it again"
                     return {"saved": None, "error": UNCLEAR.format(why=OLDER.format(ids=_ids(same)))}
-            elif t > admit_by and fenced:
-                return {"saved": False, "error": NOT_SAVED}
             elif t > admit_by:
-                return {"saved": None, "error": UNCLEAR.format(why=UNFENCED)}
+                return _absent(out["decisions"], body, started, fenced=fenced)
             _pause(POLL)
 
     def _found(self, body: dict[str, Any], found: list[dict[str, Any]]) -> dict[str, Any]:
@@ -337,15 +336,32 @@ class Chat:
 
 
 def _same(row: dict[str, Any], body: dict[str, Any]) -> bool:
-    """The row has the sent wording and the layer it is saved in: Global, else a project, or a replacement's own."""
-    layers = {"global"} if body["scope"] == "global" else {"project", "change"} if body.get("replaces") else {"project"}
+    """The row has the sent wording and the layer it is saved in."""
     wording = (row["title"].strip(), row["statement"].strip())
-    return wording == (body["title"].strip(), body["statement"].strip()) and row["scope"] in layers
+    return wording == (body["title"].strip(), body["statement"].strip()) and row["scope"] in _layers(body)
+
+
+def _absent(rows: list[dict[str, Any]], body: dict[str, Any], started: datetime, *, fenced: bool) -> dict[str, Any]:
+    """Past the deadline with no row like it: not saved only on a fenced host where nothing new is in its layer."""
+    if new := [d for d in rows if _new(d, body, started)]:
+        return {"saved": None, "error": UNCLEAR.format(why=CHANGED.format(ids=_ids(new)))}
+    if fenced:
+        return {"saved": False, "error": NOT_SAVED}
+    return {"saved": None, "error": UNCLEAR.format(why=UNFENCED)}
+
+
+def _new(row: dict[str, Any], body: dict[str, Any], started: datetime) -> bool:
+    """The row was made since the call started, in the layer the save is made in: it may be this save, edited since."""
+    return row["scope"] in _layers(body) and datetime.fromisoformat(row["created_at"]) >= started
+
+
+def _layers(body: dict[str, Any]) -> set[str]:
+    """Global, else a project for a new decision, or the project or Change of the decision it replaces."""
+    return {"global"} if body["scope"] == "global" else {"project", "change"} if body.get("replaces") else {"project"}
 
 
 def _ids(rows: list[dict[str, Any]]) -> str:
     return ", ".join(d["id"] for d in rows)
-
 
 
 class OwlBear(Chat):
