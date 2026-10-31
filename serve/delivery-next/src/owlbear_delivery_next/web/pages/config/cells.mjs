@@ -293,8 +293,9 @@ export function ratesCell(role) {
   const write = rates.cache_write ? ` \u00b7 cache write ${amount(rates.cache_write)}` : "";
   const flow = `in ${amount(rates.input)} \u00b7 out ${amount(rates.output)}`;
   const line = `${flow} \u00b7 cache ${rates.cache == null ? "not known" : amount(rates.cache)}${write}`;
+  const effort = own(`${role}.effort`) || inherited().agents[role].effort;  // the runtime prices no effort
   return cell(html`<p-text>${line}</p-text><p-text size="xs" color="contrast-medium">${model.id}, ${long ? "long"
-    : "default"} context</p-text>`);
+    : "default"} context \u00b7 effort ${said(effort)}; same rates at every effort</p-text>`);
 }
 
 export function editable(role, field) {
