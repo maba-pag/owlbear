@@ -1,7 +1,7 @@
 """The shaping chat's request for a brief challenge (TD-249): the version, with the shaper's rejections.
 
 The request is checked and recorded under the Change's lock; the host then runs the challenger, and the chat reads
-the verdict from the Change.
+the verdict from the Change. A saved brief can also open a new shaping chat to revise it.
 """
 
 from __future__ import annotations
@@ -18,6 +18,7 @@ from owlbear_delivery_next.change_contracts.round_records import BRIEF
 from owlbear_delivery_next.change_flow import brief_rounds, picks
 from owlbear_delivery_next.settings import rounds
 from owlbear_delivery_next.settings.config import SettingsUnset
+from owlbear_delivery_next.state_store.briefs import unrevisable
 from owlbear_delivery_next.state_store.store import LockHeldError, StoreError
 from owlbear_delivery_next.workflow_steps import decision_publication, decisions_gate, pick
 
@@ -27,6 +28,12 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.change_contracts.models import Change
     from owlbear_delivery_next.state_store.decision_store import DataView
     from owlbear_delivery_next.state_store.store import Lock, Store
+
+
+REVISE = (
+    'Continue Delivery Change {handle} ("{title}") in this project: '
+    "use the owlbear-change-shaping skill to revise its saved brief with me."
+)
 
 
 class ChallengeBody(BaseModel):
@@ -156,5 +163,22 @@ def router(
         wake()
         out = {"requested": True, "change": body.change, "slug": slug, "version": body.version, "paused": held()}
         return out | brief_rounds.status(c)
+
+    return routes
+
+
+def revising(read: Callable[[str], Change], start: Callable[[str], dict[str, Any]]) -> APIRouter:
+    """POST /changes/{slug}/revise-brief opens a new shaping chat on the saved brief with *start(prompt)*.
+
+    The Change is left as it is: the chat saves its revision as the brief's next version.
+    """
+    routes = APIRouter()
+
+    @routes.post("/changes/{slug}/revise-brief")
+    def revise(slug: str) -> dict[str, Any]:
+        c = read(slug)
+        if why := unrevisable(c):
+            raise HTTPException(409, why)
+        return start(REVISE.format(handle=c.handle, title=c.brief.title))
 
     return routes

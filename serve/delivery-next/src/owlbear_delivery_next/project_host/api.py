@@ -53,7 +53,7 @@ from owlbear_delivery_next.runtimes.window_files import HARNESS
 from owlbear_delivery_next.settings import profile
 from owlbear_delivery_next.settings.config import SettingsUnset
 from owlbear_delivery_next.state_store import spend_ledger, tool_metrics, watch_reports
-from owlbear_delivery_next.state_store.briefs import save_brief, save_visual
+from owlbear_delivery_next.state_store.briefs import save_brief, save_visual, unrevisable
 from owlbear_delivery_next.state_store.store import StoreError
 from owlbear_delivery_next.workflow_steps import check, decision, decisions_gate, held, visual
 
@@ -371,6 +371,7 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
                     "ui": c.brief.ui,
                     "visual": [s.model_dump() for s in c.brief.visual],
                     "unapprovable": brief_rounds.approvable(c),  # TD-249: why the approve button is off
+                    "unrevisable": unrevisable(c),  # why no new shaping chat may revise the saved brief
                     "unreviewed": brief_rounds.unreviewed(c),  # TD-255: approving needs the owner's tick
                     "read_backs": decisions_gate.checkpoint(store, c),  # TD-427: at most three, never blocking
                     "picked": picks.shown(c),  # TD-459: the decisions this version's work follows, by title
@@ -482,6 +483,7 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
     router.include_router(chat_routes.router(read))
     wake, ending = lambda: host.wake.set(), lambda: host.draining()  # noqa: PLW0108 - read late
     router.include_router(brief_routes.router(store, read, wake, ending))
+    router.include_router(brief_routes.revising(read, start_chat))
     router.include_router(stop_routes.router(store, read, wake))
     router.include_router(backlog_routes.router(store, start_chat, lambda: host.record.project))
     router.include_router(memory_routes.router(store))
