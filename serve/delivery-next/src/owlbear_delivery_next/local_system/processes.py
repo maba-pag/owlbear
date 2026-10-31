@@ -1,4 +1,4 @@
-"""Recorded step processes: observing them by PID and start time, signalling them, and the termination verdict (F4)."""
+"""Step processes: observed by PID and start time, found by hierarchy, signalled, and the termination verdict (F4)."""
 
 from __future__ import annotations
 
@@ -46,6 +46,90 @@ def alive(pid: int, created: float | None) -> bool | None:
         return False
     except psutil.Error, OSError:
         return None
+
+
+class UnlistedError(RuntimeError):
+    """The process table, or one process's group or session, could not be read; nothing can be ruled out."""
+
+
+def members(ids: Pids, *, sessions: bool = True) -> dict[int, str]:
+    """Live, non-zombie processes whose pgid (or sid, with *sessions*) is one of *ids*, each with its label.
+
+    Each id maps to the latest time its leader may have started, or None if unknown. An id whose pid is now a
+    process created more than 1 s after that time names a newer process, so it is dropped. Every pid is listed,
+    but only its pgid and sid are read to decide (D-01M68YBR3M77X54K6R17F4ZHP4). Name, status and start time are
+    read only for members.
+
+    Raises:
+        UnlistedError: the table could not be listed, or a pgid or sid could not be read.
+    """
+    if not ids:
+        return {}
+    found: dict[int, str] = {}
+    for key, pids in _matches(ids, sessions=sessions).items():
+        if key in pids and _newer(key, ids[key]):  # a recycled pid carries the id only by leading anew
+            continue
+        found |= {p: label for p in pids if (label := _label(p)) is not None}
+    return found
+
+
+def _matches(ids: Pids, *, sessions: bool) -> dict[int, list[int]]:
+    """Every listed pid filed under the id its pgid, or else its sid, is; nothing else of it is read."""
+    try:
+        table = psutil.pids()
+    except (psutil.Error, OSError) as exc:
+        msg = f"the process table could not be listed: {exc}"
+        raise UnlistedError(msg) from exc
+    matched: dict[int, list[int]] = {}
+    for p in table:
+        if p <= 0:  # 0 asks getpgid and getsid about the caller itself
+            continue
+        try:
+            key = os.getpgid(p)
+            if key not in ids and sessions:
+                key = os.getsid(p)
+        except ProcessLookupError:
+            continue
+        except OSError as exc:
+            msg = f"process {p}: its group or session could not be read: {exc}"
+            raise UnlistedError(msg) from exc
+        if key in ids:
+            matched.setdefault(key, []).append(p)
+    return matched
+
+
+def _newer(pid: int, bound: float | None) -> bool:
+    """Whether *pid* is a process created after *bound*; unknown counts as not newer, so nothing is overlooked."""
+    if bound is None:
+        return False
+    try:
+        return psutil.Process(pid).create_time() > bound + 1.0
+    except psutil.Error, OSError:
+        return False
+
+
+def _label(pid: int) -> str | None:
+    """A member's name and any field that could not be read; None once it is gone or a zombie."""
+    failed: list[str] = []
+
+    def read[T](what: str, get: Callable[[], T]) -> T | None:
+        try:
+            return get()
+        except psutil.NoSuchProcess:  # also a zombie's ZombieProcess
+            raise
+        except (psutil.Error, OSError) as exc:
+            failed.append(f"{what} unreadable: {type(exc).__name__}: {exc}")
+            return None
+
+    try:
+        p = psutil.Process(pid)
+        name = read("name", p.name)
+        if read("status", p.status) == psutil.STATUS_ZOMBIE:
+            return None
+        read("start time", p.create_time)
+    except psutil.NoSuchProcess:
+        return None
+    return "; ".join(x for x in (name, *failed) if x)
 
 
 def started(pid: int) -> float:

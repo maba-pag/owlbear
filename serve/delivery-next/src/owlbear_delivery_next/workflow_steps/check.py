@@ -143,15 +143,7 @@ def created(pid: int) -> float | None:
 
 def members(pgid: int, leader: float | None = None) -> Found:
     """Live members of one recorded group; none once its id names a newer process, as then the group ended."""
-    found: Found = {}
-    for p in psutil.process_iter(["name", "status", "create_time"]):
-        with contextlib.suppress(OSError, psutil.Error):
-            if p.info["status"] == psutil.STATUS_ZOMBIE or os.getpgid(p.pid) != pgid:
-                continue
-            if p.pid == pgid and leader is not None and abs(p.info["create_time"] - leader) >= 1.0:
-                return {}
-            found[p.pid] = p.info["name"] or ""
-    return found
+    return processes.members({pgid: leader}, sessions=False)
 
 
 def remaining(
