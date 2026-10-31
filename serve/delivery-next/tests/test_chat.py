@@ -23,9 +23,9 @@ from owlbear_delivery_next.commands import chat_client, setup
 from owlbear_delivery_next.commands.chat_client import NOT_RUNNING, NOT_SERVED, OWLBEAR_DOWN, Chat, OwlBear
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.local_system.codebase import CURRENT
-from owlbear_delivery_next.project_host import answers, api, pages
+from owlbear_delivery_next.project_host import answers, api, launches, pages
 from owlbear_delivery_next.project_host.host import HostRecord
-from owlbear_delivery_next.runtimes import copilot_cli, readiness, step_input
+from owlbear_delivery_next.runtimes import ahp, copilot_cli, readiness, step_input, vscode_adapter
 from owlbear_delivery_next.runtimes.vscode_contract import Outcome as Outcome_
 from owlbear_delivery_next.settings import carried
 from owlbear_delivery_next.settings.config import Agent, Layer
@@ -545,18 +545,56 @@ def test_new_change_returns_at_once_and_the_page_polls_the_launch_on_the_project
 
 
 @pytest.mark.parametrize(
-    ("ending", "reason"),
+    ("ending", "reason", "logged"),
     [
-        ({"state": "failed", "reason": "the Copilot chat did not start (unbound: x)"}, "did not start (unbound: x)"),
-        (OSError("no window"), "OSError: no window"),
+        (
+            {"state": "failed", "reason": "the Copilot chat did not start (unbound: x)"},
+            "did not start (unbound: x)",
+            [],
+        ),
+        (OSError("no window " + "w" * 300), "OSError: no window " + "w" * 300, ["ERROR"]),
     ],
 )
-def test_a_failed_launch_gives_its_reason_and_the_command(tmp_path, ending, reason):
+def test_a_failed_launch_gives_its_reason_and_the_command(tmp_path, caplog, ending, reason, logged):
     opening = Opening(ending)
     opening.release.set()
     c = launcher(Store(tmp_path), opening)
     state = settled(c, c.post("/api/next/new-change").json()["launch"])
     assert (state["state"], state["command"], reason in state["reason"]) == ("failed", COMMAND, True)
+    records = [r for r in caplog.records if r.name == launches.__name__]
+    assert [r.levelname for r in records] == logged
+    assert all(r.exc_info for r in records)  # the traceback is kept
+
+
+def test_a_refusal_from_open_chat_reaches_the_new_change_page_whole(tmp_path):
+    def refuse(_folder: Path) -> ahp.Transport:
+        raise ahp.HostRefusedError(method="authenticate", code=-32007, message="bad token", data={"d": "x" * 400})
+
+    env = vscode_adapter.Env(connect=refuse, shaper=None)
+
+    def start(repo, role, prompt):
+        return vscode_adapter.open_chat(repo, role, prompt, env)
+
+    c = launcher(Store(tmp_path), lambda repo, role, prompt: api.new_chat(repo, role, prompt, start=start))
+    state = settled(c, c.post("/api/next/new-change").json()["launch"])
+    assert state["state"] == "failed"
+    assert state["reason"].startswith("the Copilot chat did not start (error: HostRefusedError: authenticate: ")
+    assert "x" * 400 in state["reason"]
+    assert "(code -32007)" in state["reason"]
+
+
+def test_a_failed_follow_up_is_kept_whole_and_logged(caplog):
+    def done(_launch, _out):
+        raise RuntimeError("d" * 400)
+
+    kept = launches.Launches(0, time.monotonic)
+    launch = kept.start(lambda: {"state": "open"}, done=done)
+    end = time.monotonic() + 5
+    while (state := kept.state(launch))["state"] == "opening" and time.monotonic() < end:
+        time.sleep(0.01)
+    assert state == {"state": "open", "warning": "RuntimeError: " + "d" * 400}
+    [record] = [r for r in caplog.records if r.name == launches.__name__]
+    assert (record.levelname, record.exc_info is not None) == ("ERROR", True)
 
 
 def test_a_new_change_while_one_opens_is_refused_and_the_gap_starts_when_it_ends(tmp_path, monkeypatch):

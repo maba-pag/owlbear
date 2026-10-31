@@ -7,7 +7,7 @@ since an agentless chat would have every tool (TD-93, TD-102). Delivery steps ne
 
 from __future__ import annotations
 
-import contextlib
+import logging
 import os
 import subprocess
 import time
@@ -28,6 +28,7 @@ if TYPE_CHECKING:
 
 SHAPING = {"autoApprove": "autoApprove", "sandboxEnabled": "off", "mode": "interactive"}  # D2, D4, D5; it waits (TD-83)
 START = 60.0  # seconds a started editor has to publish its agent host
+_log = logging.getLogger(__name__)
 
 
 def _token() -> str:
@@ -37,20 +38,30 @@ def _token() -> str:
 
 
 def connect(folder: Path) -> ahp.Connection:
-    """Connect to the editor's agent host; start VS Code on ``folder`` when no host answers (TD-35)."""
-    entry = ahp.endpoint()
+    """Connect to the editor's agent host; start VS Code on ``folder`` when no host answers (TD-35).
+
+    A host that answers with a refusal ends the attempt at once: starting VS Code again cannot change its answer.
+    """
+    entry, token = ahp.endpoint(), _token()
     client = f"owlbear-delivery-{uuid.uuid4().hex[:8]}"
+    stale = "no agent host was published"
     if entry is not None:
-        with contextlib.suppress(OSError, ahp.HostError):
-            return ahp.connect(entry, client, _token())
+        try:
+            return ahp.connect(entry, client, token)
+        except ahp.HostRefusedError:
+            raise
+        except (OSError, ahp.HostError) as exc:  # a stale endpoint: the editor that published it is gone
+            stale = f"the published agent host failed: {type(exc).__name__}: {exc}"
+            _log.warning("%s; starting VS Code on %s", stale, folder)
     launch_code_chat(["code", str(folder)], folder)
     end = time.monotonic() + START
     while time.monotonic() < end:
         time.sleep(1)
         fresh = ahp.endpoint()
         if fresh is not None and fresh != entry:
-            return ahp.connect(fresh, client, _token())
-    raise ahp.HostError(f"VS Code published no agent host within {START:.0f} s")  # noqa: EM102, TRY003
+            return ahp.connect(fresh, client, token)
+    why = f"VS Code published no agent host within {START:.0f} s; before that, {stale}"
+    raise ahp.HostError(why)
 
 
 def reopen(conn: ahp.Transport) -> ahp.Transport:
@@ -99,9 +110,12 @@ def open_chat(folder: Path, role: Effective, prompt: str, env: Env | None = None
         hooks = Hooks(launch=env.launch, clock=env.clock, settings=harness, reconnect=lambda: env.reconnect(conn))
         out = Step(conn, spec, hooks).open()
     except (OSError, wf.SettingsError, ahp.HostError, subprocess.SubprocessError) as exc:
-        out = Outcome("error", f"{type(exc).__name__}: {exc}"[:300])
+        out = Outcome("error", f"{type(exc).__name__}: {exc}")
+        _log.exception("the shaping chat in %s did not open", folder)
     finally:
         if close := getattr(conn, "close", None):
             close()
         warning = wf.remove_harness(folder, added[0]) if added else ""
+    if out.end not in {"started", "error"}:
+        _log.warning("the shaping chat in %s ended %s: %s", folder, out.end, out.detail)
     return out, warning

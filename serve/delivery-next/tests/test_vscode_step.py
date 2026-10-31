@@ -1,12 +1,14 @@
 import base64
 import hashlib
 import json
+import logging
 import queue
 import re
 import socket
 import subprocess
 import tempfile
 import threading
+import time
 from collections.abc import Callable
 from pathlib import Path
 
@@ -674,6 +676,114 @@ def test_connect_uses_a_running_host_without_opening_a_window(tmp_path: Path, mo
 
     assert vscode_adapter.connect(tmp_path) == "conn"
     assert calls == [("connect", "entry")]
+
+
+def _entry(path: Path) -> dict:
+    return {"endpoint": {"path": str(path)}, "connectionToken": "secret"}
+
+
+def _gone() -> dict:
+    """An endpoint whose editor is gone: its socket file no longer exists."""
+    return _entry(Path(tempfile.mkdtemp(dir="/tmp")) / "gone.sock")
+
+
+def _no_waiting(monkeypatch, sleep: Callable[[float], None]) -> None:
+    """Replace the adapter's clock module, so a patched sleep cannot reach the socket threads."""
+    monkeypatch.setattr(vscode_adapter, "time", type("Clock", (), {"monotonic": time.monotonic, "sleep": sleep}))
+
+
+def _refuse_initialize(conn: socket.socket) -> None:
+    msg = _ws_recv(conn)
+    data = {"supportedVersions": ["0.9.0"], "detail": "x" * 400}
+    _ws_send(conn, {"jsonrpc": "2.0", "id": msg["id"], "error": {"code": -32005, "message": "no", "data": data}})
+    _answer_close(conn)
+
+
+def _refuse_authenticate(conn: socket.socket) -> None:
+    _sign_in(conn, refuse=True)
+    _answer_close(conn)
+
+
+@pytest.mark.parametrize(("serve", "code"), [(_refuse_initialize, -32005), (_refuse_authenticate, -32007)])
+def test_a_host_refusal_reaches_the_shaping_outcome_whole_without_a_relaunch(
+    plain: Path, monkeypatch, caplog, serve: Callable[[socket.socket], None], code: int
+) -> None:
+    path, server = _host(serve)
+    launched: list[list[str]] = []
+
+    def no_sleep(_s: float) -> None:
+        pytest.fail("a refusal must not wait for another editor")
+
+    monkeypatch.setattr(ahp, "endpoint", lambda: _entry(path))
+    monkeypatch.setattr(vscode_adapter, "_token", lambda: "gh")
+    monkeypatch.setattr(readiness, "shaper_path", lambda _home: None)
+    monkeypatch.setattr(vscode_adapter, "launch_code_chat", lambda args, _cwd: launched.append(args))
+    _no_waiting(monkeypatch, no_sleep)
+    try:
+        out, warning = vscode_adapter.open_chat(plain, SHAPER, "Shape a brief with me.")
+    finally:
+        server.close()
+
+    assert (out.end, warning, launched) == ("error", "", [])
+    assert out.detail.startswith("HostRefusedError: ")
+    assert f"(code {code})" in out.detail
+    assert "x" * 400 in out.detail
+    assert any(r.name == vscode_adapter.__name__ and r.levelno >= logging.WARNING for r in caplog.records)
+
+
+def _close_on_initialize(conn: socket.socket) -> None:
+    _ws_recv(conn)
+    _ws_send(conn, b"\x03\xe8", op=8)
+    _ws_frame(conn)
+
+
+@pytest.mark.parametrize("stale", ["dead socket", "closes while initialize waits"])
+def test_a_stale_endpoint_still_starts_vscode_and_connects_to_the_fresh_one(
+    tmp_path: Path, monkeypatch, caplog, stale: str
+) -> None:
+    servers = []
+    if stale == "dead socket":
+        old = _gone()
+    else:
+        old_path, old_server = _host(_close_on_initialize)
+        old, servers = _entry(old_path), [old_server]
+
+    def serve(conn: socket.socket) -> None:
+        _sign_in(conn)
+        _answer_close(conn)
+
+    path, server = _host(serve)
+    launched: list[list[str]] = []
+    monkeypatch.setattr(ahp, "endpoint", lambda: _entry(path) if launched else old)
+    monkeypatch.setattr(vscode_adapter, "_token", lambda: "gh")
+    monkeypatch.setattr(vscode_adapter, "launch_code_chat", lambda args, _cwd: launched.append(args))
+    _no_waiting(monkeypatch, lambda _s: None)
+    try:
+        conn = vscode_adapter.connect(tmp_path)
+        conn.close()
+    finally:
+        for each in [server, *servers]:
+            each.close()
+
+    assert (conn.protocol, launched) == ("1.0.0", [["code", str(tmp_path)]])
+    warned = [r.getMessage() for r in caplog.records if r.name == vscode_adapter.__name__ and r.levelname == "WARNING"]
+    assert len(warned) == 1
+    assert "the published agent host failed: " in warned[0]
+
+
+def test_without_a_fresh_endpoint_the_timeout_names_why_the_published_one_failed(tmp_path: Path, monkeypatch) -> None:
+    gone = _gone()
+    monkeypatch.setattr(ahp, "endpoint", lambda: gone)
+    monkeypatch.setattr(vscode_adapter, "_token", lambda: "gh")
+    monkeypatch.setattr(vscode_adapter, "launch_code_chat", lambda _args, _cwd: None)
+    monkeypatch.setattr(vscode_adapter, "START", 0.0)
+
+    with pytest.raises(ahp.HostError) as failed:
+        vscode_adapter.connect(tmp_path)
+    assert str(failed.value).startswith(
+        "VS Code published no agent host within 0 s; before that, the published agent host failed: "
+    )
+    assert "FileNotFoundError" in str(failed.value)
 
 
 def git(cwd: Path, *args: str) -> str:
