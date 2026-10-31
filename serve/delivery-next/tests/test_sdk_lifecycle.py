@@ -474,19 +474,18 @@ def test_a_finished_run_records_its_start_and_end_where_it_ran(world, monkeypatc
 
 @pytest.mark.parametrize("unread", ["error", "hang"])
 def test_an_unread_cli_version_is_recorded_whole_and_the_step_goes_on(world, monkeypatch, unread):
-    """#849: the version read is a request of its own; its failure or silence is shown whole, not the step's."""
+    """#849: the version read is a request of its own; its failure or silence is journalled and recorded whole."""
     _metered(world, monkeypatch)
-    plain = asyncio.run(sdk_adapter.run(world.cfg))
     detail = "the runtime refused the status request: " + "x" * 400
     if unread == "error":
         world.status_error = RuntimeError(detail)
     else:
         world.status_hang = True
         monkeypatch.setattr(sdk_teardown, "CALL", 0.05)
-    run = asyncio.run(sdk_adapter.run(world.cfg))
+    asyncio.run(sdk_adapter.run(world.cfg))
     start = [line for line in _spend() if line["type"] == "start"][-1]
     want = f"RuntimeError: {detail}" if unread == "error" else "TimeoutError: CLI status read did not answer within 0 s"
-    assert (run.ending, start["cli"], start["cli_error"]) == (plain.ending, "", want)
+    assert (start["cli"], start["cli_error"]) == ("", want)
     assert {"event": "request-failed", "operation": "CLI status read", "error": want} in [
         {k: e.get(k) for k in ("event", "operation", "error")} for e in world.events
     ]  # fmt: skip
@@ -734,8 +733,10 @@ def test_a_session_that_cannot_be_noted_as_ours_is_never_created(world, monkeypa
     assert (run.ending, run.detail) == ("error", f"UnnotedError: {chatlogs.UNNOTED}")
 
 
-def test_the_real_open_records_the_cli_version_before_its_first_send(world, monkeypatch):
-    """#849: the start line, with the CLI the runtime said it is, is written before the step's first send."""
+@pytest.mark.parametrize("status", ["read", "error", "hang"])
+def test_the_real_open_records_the_cli_version_before_its_first_send(world, monkeypatch, status):
+    """#849: the start line, with the CLI the runtime said it is, is written before the step's first send; an unread
+    version is recorded as such and the send still happens."""
     seen = []
 
     async def send(*_args, **_kwargs):
@@ -751,10 +752,14 @@ def test_the_real_open_records_the_cli_version_before_its_first_send(world, monk
         return None
 
     world.create_session = create_session
+    world.status_error = RuntimeError("no status") if status == "error" else None
+    world.status_hang = status == "hang"
+    monkeypatch.setattr(sdk_teardown, "CALL", 0.05)
     monkeypatch.setattr(sdk_adapter, "_open", REAL_OPEN)
     monkeypatch.setattr(sdk_adapter, "own_instructions", nothing)
     asyncio.run(sdk_adapter.run(world.cfg))
-    assert [[start["cli"] for start in starts] for starts in seen] == [["1.0.105-test"]]
+    assert [[start["cli"] for start in starts] for starts in seen] == [["1.0.105-test" if status == "read" else ""]]
+    assert ("cli_error" in seen[0][0]) == (status != "read")
     assert world.status_calls == 1
 
 
