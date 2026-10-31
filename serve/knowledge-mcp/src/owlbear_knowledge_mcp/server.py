@@ -446,8 +446,14 @@ class RefreshToolResult(TypedDict):
     errors: list[RefreshErrorResult]
 
 
-def _serialize_knowledge_failure(failure: KnowledgeFailure) -> KnowledgeFailureResult:
-    """Project a core failure without reclassifying or exposing exception text."""
+_EMBEDDINGS_MISSING = "Embeddings are not installed: install owlbear-knowledge[embedding,qdrant]"
+
+
+def _serialize_knowledge_failure(failure: KnowledgeFailure, *, query: bool = False) -> KnowledgeFailureResult:
+    """Project a core failure without exposing exception text; a missing embedding stack names its install."""
+    if failure.code == "embedding_dependency_missing":
+        stage = KnowledgeFailureStage.QUERY if query else failure.stage
+        failure = failure.model_copy(update={"stage": stage, "message": _EMBEDDINGS_MISSING})
     return {
         "stage": failure.stage.value,
         "code": failure.code,
@@ -479,9 +485,6 @@ def _serialize_refresh_error(error: RefreshError) -> RefreshErrorResult:
         "source_id": error.source_id,
         "timestamp": error.timestamp.isoformat(),
     }
-
-
-_EMBEDDINGS_MISSING = "Embeddings are not installed: install owlbear-knowledge[embedding,qdrant]"
 
 
 class MissingVectorStore:
@@ -674,7 +677,7 @@ async def knowledge_search(
         )
         result = await query_facade.search(request)
     except KnowledgeOperationError as exc:
-        return _serialize_knowledge_failure(exc.failure)
+        return _serialize_knowledge_failure(exc.failure, query=True)
     except ValueError as exc:
         msg = "invalid search request"
         raise ToolError(msg) from exc

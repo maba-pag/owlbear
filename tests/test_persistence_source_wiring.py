@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 import sqlite3
+import sys
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from owlbear_knowledge import qdrant
 from owlbear_knowledge.protocols.failures import KnowledgeFailureStage, KnowledgeOperationError
-from owlbear_knowledge_mcp.server import _DEFAULT_QDRANT_PATH, MissingVectorStore, app_lifespan
+from owlbear_knowledge_mcp import server
+from owlbear_knowledge_mcp.server import _DEFAULT_QDRANT_PATH, app_lifespan
 
 
 class TestQdrantPersistencePathWiring:
@@ -84,24 +87,32 @@ class TestQdrantPersistencePathWiring:
 
 
 @pytest.mark.asyncio
-async def test_lifespan_without_the_embedding_extras_fails_vector_calls_clearly(
+async def test_without_the_embedding_extras_the_tools_name_the_install(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    """Without qdrant-client the server starts and vector calls name the missing extras."""
+    """Without FlagEmbedding and qdrant-client the server starts and search and ingest name the missing extras."""
     (tmp_path / ".owlbear").mkdir()
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(qdrant, "QdrantClient", None)
+    monkeypatch.setitem(sys.modules, "FlagEmbedding", None)
 
     async with app_lifespan(MagicMock()) as context:
-        vector_store = context.content_store._vector_store  # noqa: SLF001
+        tool_context = SimpleNamespace(request_context=SimpleNamespace(lifespan_context=context))
+        searched = await server.knowledge_search(tool_context, query="anything")
+        ingested = await server.knowledge_ingest(tool_context, text="Some text.", scope="global")
+        stored = context.vector_store
 
-    assert isinstance(vector_store, MissingVectorStore)
+    hint = "owlbear-knowledge[embedding,qdrant]"
+    assert searched["stage"] == "query"
+    assert searched["code"] == "embedding_dependency_missing"
+    assert hint in searched["message"]
+    assert (ingested["documents_created"], ingested["documents_failed"]) == (0, 1)
+    assert [(item["stage"], item["code"]) for item in ingested["errors"]] == [
+        ("indexing", "embedding_dependency_missing"),
+    ]
+    assert hint in ingested["errors"][0]["message"]
     with pytest.raises(KnowledgeOperationError) as raised:
-        vector_store.search_similar([0.0], top_k=1)
+        stored.search_similar([0.0], top_k=1)
     assert raised.value.failure.stage is KnowledgeFailureStage.QUERY
-    assert raised.value.failure.code == "embedding_dependency_missing"
-    assert "owlbear-knowledge[embedding,qdrant]" in raised.value.failure.message
-    with pytest.raises(KnowledgeOperationError) as raised:
-        vector_store.store_embedding("chunk", [0.0], "document", scope="global")
-    assert raised.value.failure.stage is KnowledgeFailureStage.INDEXING
+    assert hint in raised.value.failure.message
