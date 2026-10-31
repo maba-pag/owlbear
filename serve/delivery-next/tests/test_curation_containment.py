@@ -16,7 +16,6 @@ from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.local_system.slots import Slots
 from owlbear_delivery_next.machine_host import curation, curation_tree
 from owlbear_delivery_next.runtimes.session_result import Run
-from owlbear_memory_mcp.git import commit_batch
 
 REPORT = MemoryCurationResult(summary="curated", entries=[])
 CURATOR = "chore: memory curation batch (memory-mcp, memory-curator)"
@@ -292,6 +291,8 @@ def test_an_accepted_run_publishes_its_edits_once_and_leaves_pending_and_receipt
 
 def test_an_accepted_run_never_publishes_a_deletion_the_memory_batch_deferred(repo, remote) -> None:
     """A duplicate ID whose newer copy is pending: the memory server keeps the original published until curated."""
+    from owlbear_memory_mcp.git import commit_batch  # noqa: PLC0415 - the browser job syncs only this package
+
     shop = repo / "shop" / "memory"
     entry = curated(shop, "Lesson")
     pushed(repo, "a curated entry")
