@@ -49,7 +49,6 @@ _WRAPPERS: dict[str, tuple[str, frozenset[str], int]] = {
     "xargs": ("IEdLnPsaJ", frozenset({"--arg-file", "--delimiter", "--max-args", "--max-procs", "--max-chars",
                                       "--process-slot-var"}), 0),
 }  # fmt: skip
-_LOOKUP = frozenset({"-v", "-V"})  # command -v names a program without running it
 _HEAD = 4096  # bytes of a program file read to tell a script from a binary
 _ESCAPES = {"t": "\t", "n": "\n", "v": "\v", "f": "\f", "r": "\r", "'": "'", '"': '"', "\\": "\\", "$": "$", "#": "#"}
 _VARIABLE = re.compile(r"\$\{[A-Za-z_]\w*\}")
@@ -105,10 +104,27 @@ def head(words: Sequence[str], i: int = 0) -> int:
     return min(i, len(words))
 
 
+def lookup(words: Sequence[str], i: int) -> bool:
+    """Whether the ``command`` at ``words[i]`` only names a program (-v, -V, -pv, -p -v), running nothing."""
+    j = i + 1
+    while j < len(words) and words[j].startswith("-") and words[j] != "-":
+        if words[j] == "--":
+            break
+        if set(words[j][1:]) & {"v", "V"}:
+            return True
+        j += 1
+    return False
+
+
 def builtin(words: Sequence[str]) -> int:
-    """The index of the builtin a command runs, past ``command`` or ``builtin`` and their options too."""
+    """The index of the builtin a command runs, past ``command`` or ``builtin`` and their options too.
+
+    The length of *words* for a lookup (command -v unset ...), which runs nothing.
+    """
     i = head(words)
     while i < len(words) - 1 and words[i] in {"command", "builtin"}:
+        if words[i] == "command" and lookup(words, i):
+            return len(words)
         i += 1
         while i < len(words) - 1 and words[i].startswith("-"):
             i += 1
@@ -127,7 +143,7 @@ def runs(words: Sequence[Word], depth: int = 0, context: Run | None = None) -> l
     program = name(words[i])
     if program == "find":
         return _found(words, i, depth, here)
-    if program == "command" and words[i + 1 : i + 2] and words[i + 1] in _LOOKUP:
+    if program == "command" and lookup(words, i):
         return []
     if program in _WRAPPERS:
         if depth >= _WRAPPED:
@@ -143,8 +159,8 @@ def leafless(words: Sequence[Word]) -> Run | None:
     """
     i, launchers = head(words), []
     while i < len(words) and name(words[i]) in _WRAPPERS:
-        if name(words[i]) == "command" and words[i + 1 : i + 2] and words[i + 1] in _LOOKUP:
-            return None
+        if name(words[i]) == "command" and lookup(words, i):  # ./env command -v x: ./env still runs
+            return Run(words=[launchers.pop()], launchers=tuple(launchers)) if launchers else None
         launchers.append(words[i])
         i = operand(words, i)
     program = words[i] if i < len(words) else launchers.pop() if launchers else Word()
@@ -395,9 +411,10 @@ def shell_args(words: Sequence[Word]) -> ShellArgs:
             startup += words[i + 1 : i + 2]
             i += 2
         elif w in _SHELL_VALUES:
+            flags.add("reversed")  # -o posix, +o posix: the mode isn't followed
             i += 2
         elif w.startswith(("-", "+")) and w not in {"-", "+"}:
-            flags |= {w} if w.startswith("--") else set(w[1:]) if w.startswith("-") else set()
+            flags |= {w} if w.startswith("--") else set(w[1:]) if w.startswith("-") else {"reversed"}  # +i, +x
             command = command or (not w.startswith("--") and "c" in w[1:])
             stdin = stdin or (not w.startswith("--") and "s" in w[1:])
             i += 1
@@ -407,10 +424,11 @@ def shell_args(words: Sequence[Word]) -> ShellArgs:
     shell, interactive = name(words[0]), "i" in flags
     own = _own_startup(shell, flags | ({"--rcfile"} if startup else set()))
     reads = frozenset(
-        {"BASH_ENV"} if shell == "bash" and not interactive and "--posix" not in flags
+        {"BASH_ENV", "ENV"} if "reversed" in flags  # a mode turned off again: read every one it may read
+        else {"BASH_ENV"} if shell == "bash" and not interactive and "--posix" not in flags
         else {"ENV"} if interactive and (shell != "bash" or "--posix" in flags) else set()
     )  # fmt: skip
-    rc = tuple(startup) if interactive else ()  # bash reads --rcfile only when interactive
+    rc = tuple(startup) if interactive or "reversed" in flags else ()  # --rcfile only when interactive
     if command:
         return ShellArgs(script=rest[0] if rest else None, startup=rc, own_startup=own, reads=reads)
     return ShellArgs(operand=None if stdin or not rest else rest[0], startup=rc, own_startup=own, reads=reads)

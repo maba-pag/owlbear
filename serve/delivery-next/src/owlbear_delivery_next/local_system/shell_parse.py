@@ -344,11 +344,8 @@ class _Lexer:
 
     def _process(self, s: _Level, i: int) -> int:
         """A process substitution: its commands are lexed, and the word standing for it is built at run time."""
-        start = len(self.commands)
         inherited = s.opaque or s.piped or any(o for _, o in self.blocks)  # <(sh) reads its command's input
-        end = self.level(i + 2, ")", s.depth + 1, opaque=inherited)
-        if self.text[i] == ">":  # its commands read what the outer command writes
-            self._opaque(start)
+        end = self.level(i + 2, ")", s.depth + 1, opaque=inherited or self.text[i] == ">")  # >(sh) reads the output
         s.add("<(…)")
         s.expanded = True
         return end
@@ -423,17 +420,12 @@ class _Lexer:
             if not literal:  # the shell removes these backslashes before handing the body on
                 body = _BODY_ESCAPE.sub(lambda m: m[1] if m[1] != "\n" else "", body)
             found = len(self.commands)
-            owner = next((c for c in self.commands if any(i is given for i in c.inputs)), None)
-            opaque = owner is not None and owner.opaque_stdin
+            owner = next((k for k, c in enumerate(self.commands) if any(i is given for i in c.inputs)), None)
+            opaque = owner is not None and self.commands[owner].opaque_stdin
             given.word = Word(body, expanded=not literal and self._expansions(start, end, opaque=opaque))
-            self._before(given, found)
+            if owner is not None:  # the shell runs the body's substitutions before the command it feeds
+                self.commands[owner:] = self.commands[found:] + self.commands[owner:found]
         return min(i, len(self.text))
-
-    def _before(self, given: Input, found: int) -> None:
-        """Move a here-document body's substituted commands, listed from *found* on, before the command it feeds."""
-        owner = next((k for k, c in enumerate(self.commands[:found]) if any(i is given for i in c.inputs)), None)
-        if owner is not None:
-            self.commands[owner:] = self.commands[found:] + self.commands[owner:found]
 
     def _expansions(self, i: int, end: int, *, opaque: bool) -> bool:
         """Lex the substitutions in text[i:end] as commands; return whether it holds any expansion."""

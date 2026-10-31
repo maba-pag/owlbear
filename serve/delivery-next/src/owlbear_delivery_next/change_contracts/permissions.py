@@ -27,7 +27,6 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 BYPASS = "which skips hooks or signing or forces history"  # the end of every bypass denial's reason
-_ARITHMETIC = re.compile(r"\$\(\((?:[^()`$]|\$(?![(\[{])|\((?:[^()`$]|\$(?![(\[{]))*\))*\)\)|\$\[[^\]`$]*\]")
 _HARMLESS = re.compile(r"\d*>>?\s*/dev/null(?![^\s;&|)])|\d*>&\d+")  # discarded output or a descriptor copy
 _CONFIG_VALUES = frozenset({"-f", "--file", "--blob", "--type", "--default", "--comment"})
 _CONFIG_QUERIES = frozenset(
@@ -385,7 +384,42 @@ def _writes(command: shell_parse.Command) -> bool:
 
     An arithmetic expansion's > or < compares, so $((1 > 0)) writes nothing.
     """
-    return _mutation(_ARITHMETIC.sub("", command.raw), [command.words]) is not None
+    return _mutation(_without_arithmetic(command.raw), [command.words]) is not None
+
+
+def _without_arithmetic(text: str) -> str:
+    """*text* without its $((...)) expansions outside quotes that hold no substitution: their < and > compare."""
+    out, i, quote = [], 0, ""
+    while i < len(text):
+        ch = text[i]
+        if ch == "\\" and quote != "'":
+            out.append(text[i : i + 2])
+            i += 2
+            continue
+        if (quote and ch == quote) or (not quote and ch in "'\""):
+            quote = "" if quote else ch
+        elif quote != "'" and text.startswith("$((", i) and (end := _arithmetic_end(text, i + 3)):
+            span = text[i:end]
+            if "$(" not in span[1:] and "`" not in span and "'" not in span and '"' not in span:
+                i = end
+                continue
+        out.append(ch)
+        i += 1
+    return "".join(out)
+
+
+def _arithmetic_end(text: str, i: int) -> int | None:
+    """The index after the )) closing the $(( before *i*, or None."""
+    depth = 0
+    while i < len(text):
+        if text[i] == "(":
+            depth += 1
+        elif text[i] == ")":
+            if depth == 0:
+                return i + 2 if text.startswith("))", i) else None
+            depth -= 1
+        i += 1
+    return None
 
 
 def decide(policy: Policy, req: Request, offered: frozenset[str] = frozenset(), *, memory: bool = False) -> str | None:

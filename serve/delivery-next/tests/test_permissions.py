@@ -1375,3 +1375,44 @@ def test_a_relative_shebang_interpreter_is_found_from_the_shells_folder(scripts:
         "`./tool` runs `./tool`, whose interpreter `./interpreter` is itself a script"
     )
     assert decide(Policy(scripts), shell("env -C sub ./tool")).endswith("use an absolute path")
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "export BASH_ENV=./bad.sh; command -v unset BASH_ENV; bash -c true",
+        "export BASH_ENV=./bad.sh; unset -fv BASH_ENV; bash -c true",
+        "export BASH_ENV=./bad.sh; unset -f BASH_ENV; bash -c true",
+    ],
+)
+def test_an_unset_that_removes_no_variable_keeps_the_startup_file(scripts: Path, text: str) -> None:
+    assert decide(Policy(scripts), shell(text)) == f"`./bad.sh` uses --no-verify, {BYPASS}"
+
+
+@pytest.mark.parametrize(
+    "text", ["BASH_ENV=./bad.sh bash --norc -i +i -c true", "BASH_ENV=./bad.sh bash --posix +o posix -c true"]
+)
+def test_a_shell_mode_turned_off_again_still_reads_its_startup_file(scripts: Path, text: str) -> None:
+    assert decide(Policy(scripts), shell(text)) == f"`./bad.sh` uses --no-verify, {BYPASS}"
+
+
+def test_a_launcher_before_a_lookup_still_runs(scripts: Path) -> None:
+    shebang(scripts / "env", "#!/bin/sh", BAD)
+
+    assert decide(Policy(scripts), shell("./env command -v git")).endswith(BYPASS)
+    assert decide(Policy(scripts), shell("echo hi > ./other; /usr/bin/env command -v git")).endswith(
+        "run it in the next"
+    )
+
+
+@pytest.mark.parametrize(
+    "text", ["command -p -v /no/such/tool || true", "command -pv /no/such/tool", "command -p -V /x"]
+)
+def test_command_lookup_with_options_runs_nothing(text: str) -> None:
+    assert decide(WRITE, shell(text)) is None
+
+
+def test_only_real_arithmetic_is_no_write(scripts: Path) -> None:
+    assert decide(WRITE, shell("echo $(( (1 + (2 * 3)) > 0 )); /bin/echo hi")) is None
+    text = "printf '%s\\n' 'git commit --no-verify -m x' '$((1' > ./good.sh '0))'; bash ./good.sh"
+    assert decide(Policy(scripts), shell(text)).endswith("run it in the next")

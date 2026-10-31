@@ -113,7 +113,8 @@ class Walk:
             state.home_moved = state.home_moved or "HOME" in assigned
         if first in {"unset", *_DECLARE} and any(w.partition("=")[0] == "HOME" for w in words[i + 1 :]):
             state.home_moved = True
-        if first == "unset" and "-f" not in words[i + 1 :]:
+        options = [w for w in words[i + 1 :] if w.startswith("-")]
+        if first == "unset" and all(o in {"-v", "--"} for o in options):  # unset -f, -fv: no variable goes
             _unset(state, [k for k in _STARTUP if k in words[i + 1 :]], top_level=command.top_level)
         if first in _DECLARE:
             state.startup |= {k: None for k in _STARTUP if any(w.partition("=")[0] == k for w in words[i + 1 :])}
@@ -202,7 +203,7 @@ class Walk:
         }
         if run.chdir:  # env -C, find -execdir: it starts in another folder
             child.at = None
-        for file in [*_startup(run, state, args.reads), *args.startup]:
+        for file in [*(v for k, v in child.startup.items() if k in args.reads), *args.startup]:
             if file is None:
                 return f"`{self.name}` starts a shell whose startup file was set where the guard can't follow it"
             if file and (reason := self._current(child, command, run, self._starts(file))):
@@ -363,13 +364,6 @@ def _unset(state: State, keys: list[str], *, top_level: bool) -> None:
             state.startup[key] = None
         elif state.startup.get(key, "") is not None:
             state.startup.pop(key, None)
-
-
-def _startup(run: Run, state: State, reads: frozenset[str]) -> list[Word | None]:
-    """The startup files a shell runs first, of the variables it *reads*: from its command, else as text set them."""
-    inherited = {} if "*" in run.removed else {k: v for k, v in state.startup.items() if k not in run.removed}
-    files = inherited | run.env
-    return [files[key] for key in _STARTUP if key in files and key in reads]
 
 
 def _operands(run: Run) -> list[Word]:
