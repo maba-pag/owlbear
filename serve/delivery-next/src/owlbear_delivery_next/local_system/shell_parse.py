@@ -188,7 +188,7 @@ class _Lexer:
         """
         text = self.text
         if text.startswith("$((", i):
-            return self._arithmetic(s, i + 3) if self._arithmetic_closes(i + 3) else self._substitution(s, i)
+            return self._arithmetic(s, i + 3) if arithmetic_end(text, i + 3) is not None else self._substitution(s, i)
         if text.startswith("$[", i):
             return self._arithmetic(s, i + 2, close="]")
         if text.startswith("${", i):
@@ -209,20 +209,6 @@ class _Lexer:
         if self.text[i] == "`":
             return self.level(i + 1, "`", s.depth + 1, opaque=opaque)
         return self.level(i + 2, ")", s.depth + 1, opaque=opaque)
-
-    def _arithmetic_closes(self, i: int) -> bool:
-        """Whether the $(( before *i* closes with )) as arithmetic; else it is $( ( ... ) ...), as bash reads it."""
-        depth = 0
-        while i < len(self.text):
-            ch = self.text[i]
-            if ch == "(":
-                depth += 1
-            elif ch == ")":
-                if depth == 0:
-                    return self.text[i + 1 : i + 2] == ")"
-                depth -= 1
-            i += 1
-        return False
 
     def _arithmetic(self, s: _Level, i: int, close: str = ")") -> int:
         """Skip an arithmetic expansion's operators, where < and > never redirect, but lex its substitutions."""
@@ -248,15 +234,19 @@ class _Lexer:
         s.expanded = True
         return j
 
-    def _brace_end(self, s: _Level, i: int) -> int:
-        """The index after the ${...} at *i*; each nested ${...} keeps its own quotes."""
+    def _brace_end(self, s: _Level, i: int, *, outer: bool | None = None) -> int:
+        """The index after the ${...} at *i*; each nested ${...} keeps its own quotes.
+
+        *outer* is whether double quotes enclose it, in its own text or around an enclosing ${...}.
+        """
         text, j, depth, quoted = self.text, i + 2, 1, False
+        outer = s.quote == '"' if outer is None else outer
         while j < len(text) and depth:
             if text[j] == "\\":
                 j += 2
-            elif text.startswith("$((", j) and self._arithmetic_closes(j + 3):
+            elif text.startswith("$((", j) and arithmetic_end(text, j + 3) is not None:
                 j = self._arithmetic(_Level(s.depth, s.opaque, piped=s.piped), j + 3)
-            elif text[j] == "'" and s.quote != '"' and not quoted:  # in "${x:-'...'}" a single quote is a character
+            elif text[j] == "'" and not outer and not quoted:  # in "${x:-'...'}" a single quote is a character
                 if (end := text.find("'", j + 1)) < 0:
                     raise ValueError
                 j = end + 1
@@ -265,7 +255,7 @@ class _Lexer:
             elif text.startswith("$(", j) or text[j] == "`":
                 j = self._substitution(_Level(s.depth, s.opaque, piped=s.piped), j)
             elif text.startswith("${", j):
-                j = self._brace_end(s, j)
+                j = self._brace_end(s, j, outer=outer or quoted)
             else:
                 depth, j = depth - (text[j] == "}" and not quoted), j + 1
         if depth or quoted:
@@ -457,3 +447,17 @@ def parse(text: str) -> list[Command]:
     if lexer.pending:
         lexer._bodies(len(text))  # noqa: SLF001 - here-documents the text ends inside
     return lexer.commands
+
+
+def arithmetic_end(text: str, i: int) -> int | None:
+    """The index after the )) closing the $(( before *i*, or None: then it is $( ( ... ) ...), as bash reads it."""
+    depth = 0
+    while i < len(text):
+        if text[i] == "(":
+            depth += 1
+        elif text[i] == ")":
+            if depth == 0:
+                return i + 2 if text.startswith("))", i) else None
+            depth -= 1
+        i += 1
+    return None

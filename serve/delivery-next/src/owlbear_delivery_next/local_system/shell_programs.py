@@ -119,12 +119,12 @@ def lookup(words: Sequence[str], i: int) -> bool:
 def builtin(words: Sequence[str]) -> int:
     """The index of the builtin a command runs, past ``command`` or ``builtin`` and their options too.
 
-    The length of *words* for a lookup (command -v unset ...), which runs nothing.
+    The index of ``command`` itself for a lookup (command -v unset ...), which runs nothing.
     """
     i = head(words)
     while i < len(words) - 1 and words[i] in {"command", "builtin"}:
         if words[i] == "command" and lookup(words, i):
-            return len(words)
+            return i
         i += 1
         while i < len(words) - 1 and words[i].startswith("-"):
             i += 1
@@ -143,8 +143,8 @@ def runs(words: Sequence[Word], depth: int = 0, context: Run | None = None) -> l
     program = name(words[i])
     if program == "find":
         return _found(words, i, depth, here)
-    if program == "command" and lookup(words, i):
-        return []
+    if words[i] == "command" and lookup(words, i):  # it runs nothing, but the launchers before it run
+        return [replace(here, words=[here.launchers[-1]], launchers=here.launchers[:-1])] if here.launchers else []
     if program in _WRAPPERS:
         if depth >= _WRAPPED:
             raise UnreadableError(_WRAPPED_UNREAD)
@@ -155,12 +155,12 @@ def runs(words: Sequence[Word], depth: int = 0, context: Run | None = None) -> l
 def leafless(words: Sequence[Word]) -> Run | None:
     """A command whose wrappers run nothing (env ./env, find .): its launchers by path, its last one the program.
 
-    None for a lookup (command -v), which runs nothing.
+    None for a lookup (command -v) alone, which runs nothing.
     """
     i, launchers = head(words), []
     while i < len(words) and name(words[i]) in _WRAPPERS:
-        if name(words[i]) == "command" and lookup(words, i):  # ./env command -v x: ./env still runs
-            return Run(words=[launchers.pop()], launchers=tuple(launchers)) if launchers else None
+        if words[i] == "command" and lookup(words, i):  # runs() gives the launchers before it
+            return None
         launchers.append(words[i])
         i = operand(words, i)
     program = words[i] if i < len(words) else launchers.pop() if launchers else Word()
@@ -296,10 +296,9 @@ class _Splitter:
         return i + 1
 
     def _single(self, ch: str, i: int) -> int:
-        if ch == "\\":  # in single quotes env reads \\ and \' as escapes and keeps any other backslash
-            nxt = self.text[i + 1 : i + 2]
-            self.add(nxt if nxt in {"\\", "'"} else ch)
-            return i + 2 if nxt in {"\\", "'"} else i + 1
+        if ch == "\\" and (nxt := self.text[i + 1 : i + 2]) in {"\\", "'"}:  # env's only escapes in single quotes
+            self.add(nxt)
+            return i + 2
         if ch == "'":
             self.quote = ""
         else:
@@ -411,10 +410,11 @@ def shell_args(words: Sequence[Word]) -> ShellArgs:
             startup += words[i + 1 : i + 2]
             i += 2
         elif w in _SHELL_VALUES:
-            flags.add("reversed")  # -o posix, +o posix: the mode isn't followed
+            flags |= {"reversed"} if "posix" in words[i + 1 : i + 2] else set()  # -o posix, +o posix: not followed
             i += 2
         elif w.startswith(("-", "+")) and w not in {"-", "+"}:
-            flags |= {w} if w.startswith("--") else set(w[1:]) if w.startswith("-") else {"reversed"}  # +i, +x
+            reverse = {"reversed"} if "i" in w[1:] else set()  # +i: interactive turned off again
+            flags |= {w} if w.startswith("--") else set(w[1:]) if w.startswith("-") else reverse
             command = command or (not w.startswith("--") and "c" in w[1:])
             stdin = stdin or (not w.startswith("--") and "s" in w[1:])
             i += 1

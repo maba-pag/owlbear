@@ -1416,3 +1416,44 @@ def test_only_real_arithmetic_is_no_write(scripts: Path) -> None:
     assert decide(WRITE, shell("echo $(( (1 + (2 * 3)) > 0 )); /bin/echo hi")) is None
     text = "printf '%s\\n' 'git commit --no-verify -m x' '$((1' > ./good.sh '0))'; bash ./good.sh"
     assert decide(Policy(scripts), shell(text)).endswith("run it in the next")
+
+
+def test_single_quotes_in_a_nested_default_under_outer_double_quotes_protect_nothing() -> None:
+    assert decide(WRITE, shell("echo ${A:-\"${B:-'$(git commit --no-verify -m x)'}\"}")).endswith(BYPASS)
+    assert decide(WRITE, shell("echo ${A:-\"${B:-'ok'}\"}")) is None
+
+
+def test_a_lookup_operand_shaped_like_an_assignment_sets_nothing(scripts: Path) -> None:
+    text = "export BASH_ENV=./bad.sh; command -v BASH_ENV=; bash -c true"
+    assert decide(Policy(scripts), shell(text)) == f"`./bad.sh` uses --no-verify, {BYPASS}"
+
+
+@pytest.mark.parametrize(
+    "text", ["echo hi > x; env -S './env command -pv git'", "echo hi > x; find . -exec ./env command -pv git \\;"]
+)
+def test_a_launcher_before_a_split_or_found_lookup_still_runs(scripts: Path, text: str) -> None:
+    shebang(scripts / "env", "#!/bin/sh", BAD)
+
+    assert decide(Policy(scripts), shell(text)).endswith("run it in the next")
+    assert decide(Policy(scripts), shell(text.partition("; ")[2])).endswith(BYPASS)
+
+
+def test_a_lookup_program_run_by_path_is_still_a_program(scripts: Path) -> None:
+    shebang(scripts / "command", "#!/bin/sh", BAD)
+
+    assert decide(WRITE, shell("echo hi > x; /usr/bin/command -v git")).endswith("run it in the next")
+    assert decide(Policy(scripts), shell("./command -v git")).endswith(BYPASS)
+    assert decide(WRITE, shell("command -pv /missing")) is None
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "ENV=/missing bash -o pipefail -c true",
+        "ENV=/missing sh -o errexit -c true",
+        "bash --rcfile /missing -o pipefail -c true",
+        "BASH_ENV=/missing bash --posix +x -c true",
+    ],
+)
+def test_an_option_that_keeps_the_mode_reads_no_other_startup_file(text: str) -> None:
+    assert decide(WRITE, shell(text)) is None
