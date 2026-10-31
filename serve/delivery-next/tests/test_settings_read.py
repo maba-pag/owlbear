@@ -4,17 +4,22 @@ import json
 import shutil
 import subprocess
 import threading
+from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from fastapi.testclient import TestClient
 
 from owlbear_delivery_next.impeccable import pack_files
 from owlbear_delivery_next.local_system import data_repo, local_home
+from owlbear_delivery_next.local_system.codebase import CURRENT
+from owlbear_delivery_next.project_host import api
+from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.runtimes import model_choices, settings_read
 from owlbear_delivery_next.runtimes.settings_read import Reader
 from owlbear_delivery_next.runtimes.settings_seen import NAME
-from owlbear_delivery_next.settings.config import CONFIG_FORMAT
+from owlbear_delivery_next.settings.config import CONFIG_FORMAT, GlobalLayer
 from owlbear_delivery_next.state_store import registry, settings_carry
 from owlbear_delivery_next.state_store.store import Store
 
@@ -75,6 +80,22 @@ class World:
 
     def push(self, rel: str = "config.json", **fields: object) -> None:
         publish(self.other, rel, layer(**fields))
+
+
+class Host:
+    """A project host whose machine reads through *reads*."""
+
+    maintenance = None
+    wake = SimpleNamespace(set=lambda: None)
+    record = HostRecord(url="http://127.0.0.1:9/", token="tok", pid=1, started_at=datetime.now(UTC), code=CURRENT)  # noqa: S106
+
+    def __init__(self, reads: Reader) -> None:
+        self.reads = reads
+
+
+def client(store: Store, reads: Reader) -> TestClient:
+    app = api.create_app(store, "t", Host(reads))
+    return TestClient(app, base_url="http://127.0.0.1", headers={"authorization": "Bearer t"})
 
 
 @pytest.fixture
@@ -281,3 +302,46 @@ def test_an_unreadable_state_file_is_said_and_rebuilt(world):
     assert ([f.source for f in rebuilt.failures], rebuilt.notices) == (["read state"], [])
     assert any(line.startswith("settings read: read state failed") for line in world.said)
     assert [(n.key, n.old, n.new) for n in after.notices] == [("agents.builder.model", '"A"', '"B"')]
+
+
+def test_a_failed_model_read_keeps_the_last_list_and_says_why(world, tmp_path, monkeypatch):
+    reader, calls = world.reader(), []
+    c = client(Store(tmp_path / "shop"), reader)
+
+    def read(*found: str) -> None:
+        def answer() -> list[SimpleNamespace]:
+            calls.append(found)
+            if not found:
+                msg = "the CLI is gone"
+                raise RuntimeError(msg)
+            return [model(i) for i in found]
+
+        monkeypatch.setattr(model_choices, "_read", answer)
+        reader.read()
+
+    read("m1")
+    read()
+    got = c.get("/api/next/config/models").json()
+    assert ([m["id"] for m in got["models"]], "the CLI is gone" in got["error"], len(calls)) == (["m1"], True, 2)
+    read("m2")
+    assert (c.get("/api/next/config/models").json()["error"], ids(reader), len(calls)) == ("", ["m2"], 3)
+
+
+def test_a_settings_save_is_not_noticed_but_a_key_pulled_during_it_is(world, tmp_path):
+    def written(**fields: object) -> str:  # as every machine writes Global: one line per field
+        return GlobalLayer.model_validate({"format": CONFIG_FORMAT, **fields}).model_dump_json(indent=1)
+
+    publish(world.other, "config.json", written())
+    reader = world.reader()
+    reader.read()
+    shop = Store(tmp_path / "shop", data_repo.DataRepo(world.root), "shop")
+    c = client(shop, reader)
+    rev = c.get("/api/next/config").json()["global_rev"]
+    publish(world.other, "config.json", written(pr_marker=True))  # another machine, while the page is open
+
+    edited = {"format": CONFIG_FORMAT, "machine": {"channel": "major"}}
+    saved = c.put("/api/next/config/global", json={"rev": rev, "layer": edited})
+
+    assert (saved.status_code, saved.json()["notice"]) == (200, "")
+    assert '"pr_marker": true' in (world.root / "config.json").read_text()  # pulled by the save's publication
+    assert [(n.key, n.old, n.new) for n in reader.read().notices] == [("pr_marker", None, "true")]

@@ -8,7 +8,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from owlbear_delivery_next.change_contracts.models import StepKind
-from owlbear_delivery_next.local_system import data_repo
+from owlbear_delivery_next.impeccable import pack_files
+from owlbear_delivery_next.local_system import data_repo, local_home
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import HostRecord
@@ -409,6 +410,65 @@ def test_unreadable_models_leave_typing_and_are_read_again_next_time(store):
     assert (first["models"], first["error"]) == ([], "OSError: offline in tests: models.list")
     assert c.get("/api/next/config/models").json() == first  # a failure is not kept: read again, still offline
     assert client(store).get("/api/next/config/models").status_code == 401
+
+
+def counted(monkeypatch: pytest.MonkeyPatch, *models: str) -> list[str]:
+    """Every outside source answers; the list records each model and release read."""
+    calls: list[str] = []
+    monkeypatch.setattr(
+        model_choices, "_read", lambda: calls.append("models") or [offered_model(m, None) for m in models]
+    )
+    monkeypatch.setattr(pack_files, "fetch", lambda _url, *_a: calls.append("releases") or b"[]")
+    return calls
+
+
+def test_post_read_reads_at_once_even_when_the_last_read_is_fresh(store, monkeypatch):
+    calls = counted(monkeypatch, "m1")
+    c = client(store, headers=AUTH)
+    one = c.post("/api/next/config/read").json()["reads"]
+    two = c.post("/api/next/config/read").json()["reads"]
+    assert calls == ["models", "releases", "models", "releases"]
+    assert (one["failures"], one["unshared"], one["succeeded_at"]) == ([], True, one["read_at"])
+    assert two["read_at"] > one["read_at"]
+    assert client(store).post("/api/next/config/read").status_code == 401
+
+
+def test_get_read_shows_the_stored_state_without_reading(store, monkeypatch, shared_repo):
+    monkeypatch.setenv(data_repo.VIEW, str(shared_repo[0]))
+    store = Store(store.root, data_repo.DataRepo(shared_repo[0]), "shop")
+    calls = counted(monkeypatch, "m1")
+    c = client(store, store.global_path, headers=AUTH)
+    c.post("/api/next/config/read")
+    store.global_path.write_text(json.dumps({"format": F, "pr_marker": True}))  # a hand edit: noticed
+    read = c.post("/api/next/config/read").json()["reads"]
+    calls.clear()
+
+    got = c.get("/api/next/config/read").json()["reads"]
+
+    assert (got, calls) == (read, [])
+    assert [(n["key"], n["old"], n["new"], n["overridden"]) for n in got["notices"]] == [
+        ("pr_marker", None, "true", [])
+    ]
+    assert set(got) == {"succeeded_at", "read_at", "failures", "unshared", "notices"}
+
+
+def test_a_read_whose_layer_does_not_read_still_says_what_it_read(store, monkeypatch):
+    counted(monkeypatch, "m1")
+    c = client(store, headers=AUTH)
+    first = c.post("/api/next/config/read").json()["reads"]
+    path = local_home.root() / "settings.json"
+    path.write_text("{not json")
+    counted(monkeypatch, "m1", "m2")
+
+    answer = c.post("/api/next/config/read")
+
+    assert answer.status_code == 200
+    got = answer.json()["reads"]
+    assert [(f["source"], str(path) in f["error"]) for f in got["failures"]] == [("this machine's settings", True)]
+    assert (got["succeeded_at"], got["read_at"] > first["read_at"]) == (first["succeeded_at"], True)
+    assert c.get("/api/next/config/read").json()["reads"] == got
+    assert c.get("/api/next/config").status_code == 409
+    assert [m["id"] for m in c.get("/api/next/config/models").json()["models"]] == ["m1", "m2"]
 
 
 def test_this_machine_s_layer_sits_between_global_and_project_and_stays_local(store, shared_repo):
