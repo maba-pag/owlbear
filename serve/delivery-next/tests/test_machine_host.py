@@ -899,6 +899,7 @@ def test_an_unreadable_mcp_file_is_named_on_the_project_and_logged_when_it_chang
     assert listed() == (broken, True, 0)
 
 
+@pytest.mark.skipif(os.geteuid() == 0, reason="root reads files whatever their mode")
 def test_a_mcp_file_that_cannot_be_opened_is_named(tmp_path, http, monkeypatch):
     work = clone(tmp_path / "a")
     shared, key = mcp_file("shared", work, monkeypatch)
