@@ -197,3 +197,22 @@ async def test_receipts_written_before_a_failing_write_are_still_committed(
         _SUBJECT, "", "proj/memory/a.md"
     ]  # fmt: skip
     assert decision_store.refresh(DataRepo(root=shared.data)) == ""
+
+
+@pytest.mark.asyncio
+async def test_a_hook_that_sweeps_other_files_into_the_receipt_commit_is_reported(shared: SimpleNamespace) -> None:
+    """A pre-commit hook running `git add -A` cannot pass pending memory off as a receipt commit."""
+    kept, pending = (f"550e8400-e29b-41d4-a716-44665544753{n}" for n in (7, 8))
+    seed(shared.folder, "a.md", entry(kept, MemoryState.APPROVED))
+    publish(shared)
+    seed(shared.folder, "c.md", entry(pending, MemoryState.PENDING))
+    (shared.folder / "notes.txt").write_text("scratch\n")
+    hook = shared.data / ".git" / "hooks" / "pre-commit"
+    hook.write_text("#!/bin/sh\nexec git add -A\n")
+    hook.chmod(0o755)
+
+    with pytest.raises(ToolError) as raised:
+        await assess(shared, (kept, "outstanding"))
+
+    assert all(part in str(raised.value) for part in ("proj/memory/c.md", "proj/memory/notes.txt"))
+    assert "a.md" not in str(raised.value)  # the receipt itself is as written

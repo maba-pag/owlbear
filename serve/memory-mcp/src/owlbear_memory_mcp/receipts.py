@@ -4,17 +4,24 @@ from __future__ import annotations
 
 import contextlib
 import subprocess
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from mcp.server.mcpserver.exceptions import ToolError
 from owlbear_memory import storage, writer_lock
 from owlbear_memory.errors import MemoryBusyError
 
-from owlbear_memory_mcp.git import _git, commit_move, format_git_failure, repo_locked
+from owlbear_memory_mcp.git import (
+    _git,
+    _git_object_id,
+    _verify_committed_change_set,
+    commit_move,
+    format_git_failure,
+    repo_locked,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Collection, Iterator
-    from pathlib import Path
 
 
 @contextlib.contextmanager
@@ -55,7 +62,18 @@ def _commit(clean: list[Path], memory_dir: Path, task_id: str) -> None:
     try:
         written = [path for path in clean if path.exists() and _changed(path)]
         if written:
-            commit_move(written, f"chore: memory assessments ({task_id}, memory-mcp)")
+            repo = Path(_git(memory_dir, "rev-parse", "--show-toplevel")).resolve()
+            receipts = {
+                (p.parent.resolve() / p.name).relative_to(repo).as_posix(): (storage.read_entry(p), p.read_bytes())
+                for p in written
+            }
+            before = _git_object_id(repo, "HEAD")
+            after = commit_move(written, f"chore: memory assessments ({task_id}, memory-mcp)")
+            try:  # a hook may have swept other files in: pending memory must never pass as a receipt
+                _verify_committed_change_set(repo, before, after, set(receipts), receipts)
+            except ValueError as exc:
+                msg = f"the receipt commit {after[:9]} holds more than the receipts: {exc}"
+                raise ToolError(msg) from exc
     except (subprocess.CalledProcessError, OSError) as exc:
         names = ", ".join(path.name for path in written or clean)
         msg = (
