@@ -77,8 +77,7 @@ class Connection:
 
     def __init__(self, path: str, token: str, client_id: str) -> None:
         """Connect and upgrade; raises ``HostError`` when the host refuses, ``TimeoutError`` when it is silent."""
-        self.client_id = client_id
-        self.protocol = ""  # the version the host chose at initialize
+        self.client_id, self.protocol = client_id, ""  # protocol: the version the host chose at initialize
         self._path, self._token = path, token
         try:
             self._ws = unix_connect(
@@ -197,8 +196,7 @@ class Connection:
 
 def _chosen(result: Json) -> str:
     """The protocol the host chose; OwlBear offers one version, so any other answer is one it cannot speak."""
-    chosen = result.get("protocolVersion")
-    if chosen != PROTOCOL:
+    if (chosen := result.get("protocolVersion")) != PROTOCOL:
         why = f"the host chose protocol {chosen!r}, which OwlBear did not offer ({PROTOCOL})"
         raise HostRefusedError(method="initialize", code=None, message=why, data=result)
     return chosen

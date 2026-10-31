@@ -723,11 +723,6 @@ def _entry(path: Path) -> dict:
     return {"endpoint": {"path": str(path)}, "connectionToken": "secret"}
 
 
-def _gone() -> dict:
-    """An endpoint whose editor is gone: its socket file no longer exists."""
-    return _entry(Path(tempfile.mkdtemp(dir="/tmp")) / "gone.sock")
-
-
 def _no_waiting(monkeypatch, sleep: Callable[[float], None]) -> None:
     """Replace the adapter's clock module, so a patched sleep cannot reach the socket threads."""
     monkeypatch.setattr(vscode_adapter, "time", type("Clock", (), {"monotonic": time.monotonic, "sleep": sleep}))
@@ -784,7 +779,7 @@ def test_a_stale_endpoint_still_starts_vscode_and_connects_to_the_fresh_one(
 ) -> None:
     servers = []
     if stale == "dead socket":
-        old = _gone()
+        old = None
     else:
         old_path, old_server = _host(_close_on_initialize)
         old, servers = _entry(old_path), [old_server]
@@ -794,6 +789,7 @@ def test_a_stale_endpoint_still_starts_vscode_and_connects_to_the_fresh_one(
         _answer_close(conn)
 
     path, server = _host(serve)
+    old = old or _entry(path.with_name("gone.sock"))
     launched: list[list[str]] = []
     monkeypatch.setattr(ahp, "endpoint", lambda: _entry(path) if launched else old)
     monkeypatch.setattr(vscode_adapter, "_token", lambda: "gh")
@@ -813,7 +809,7 @@ def test_a_stale_endpoint_still_starts_vscode_and_connects_to_the_fresh_one(
 
 
 def test_without_a_fresh_endpoint_the_timeout_names_why_the_published_one_failed(tmp_path: Path, monkeypatch) -> None:
-    gone = _gone()
+    gone = _entry(Path(tempfile.mkdtemp(dir="/tmp")) / "gone.sock")
     monkeypatch.setattr(ahp, "endpoint", lambda: gone)
     monkeypatch.setattr(vscode_adapter, "_token", lambda: "gh")
     monkeypatch.setattr(vscode_adapter, "launch_code_chat", lambda _args, _cwd: None)
