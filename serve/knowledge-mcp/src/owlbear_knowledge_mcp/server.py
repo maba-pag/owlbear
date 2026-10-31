@@ -507,17 +507,12 @@ class MissingVectorStore:
     def delete_embedding(self, *_args: object, **_kwargs: object) -> bool:
         raise self._missing(KnowledgeFailureStage.INDEXING)
 
-    def get_embedding(self, *_args: object, **_kwargs: object) -> list[float] | None:
-        raise self._missing(KnowledgeFailureStage.QUERY)
-
     def search_similar(self, *_args: object, **_kwargs: object) -> list[tuple[str, float]]:
         raise self._missing(KnowledgeFailureStage.QUERY)
 
 
 def _vector_store(location: str) -> object:
-    if qdrant.QdrantClient is None:
-        return MissingVectorStore()
-    return QdrantVectorStore(location=location)
+    return MissingVectorStore() if qdrant.QdrantClient is None else QdrantVectorStore(location=location)
 
 
 @asynccontextmanager
