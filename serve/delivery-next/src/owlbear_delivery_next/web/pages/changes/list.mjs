@@ -7,6 +7,7 @@ import { spentText } from "./progress.mjs";
 import { short, split } from "./activity.mjs";
 import { badge, detailView } from "./detail.mjs";
 import { startedView } from "./shaping.mjs";
+import { elsewhereBanner } from "./elsewhere.mjs";
 
 const GROUPS = { you: "Needs you", working: "Delivery is working", paused: "Paused", done: "Done" };
 
@@ -99,6 +100,7 @@ export function view() {
     <p-inline-notification id="error" state="error" dismiss-button="false" ?hidden=${!state.error}>${state.error
       ?? ""}</p-inline-notification>
     ${blockedBanner()}
+    ${elsewhereBanner()}
     <p-text id="seen" color="contrast-medium" size="xs">${state.seen}</p-text>
     <section id="notes" class="panel" aria-label="Repository settings" ?hidden=${!state.notes.length}>
       ${state.notes.map((n) => text(n))}</section>
