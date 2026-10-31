@@ -23,7 +23,7 @@ from owlbear_delivery_next.local_system.data_repo import CONFIG, MEMORY, DataRep
 from owlbear_delivery_next.local_system.storage_io import atomic_write
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator, Sequence
+    from collections.abc import Iterable, Iterator, Sequence
     from pathlib import Path
 
     from owlbear_delivery_next.local_system.data_repo import DataRepo
@@ -62,6 +62,15 @@ def _files(root: Path, dirs: Sequence[str]) -> dict[str, bytes]:
                 if not p.name.startswith(".") and p.is_file() and not p.is_symlink():
                     found[f"{d}/{p.name}"] = p.read_bytes()
     return found
+
+
+def _linked(root: Path, rels: Iterable[str]) -> str:
+    """The first of *rels* with a symbolic link on its path under *root*, which a write would follow; "" if none."""
+    for rel in rels:
+        parts = rel.split("/")
+        if any(root.joinpath(*parts[:n]).is_symlink() for n in range(1, len(parts) + 1)):
+            return rel
+    return ""
 
 
 def _read(path: Path) -> bytes | None:
@@ -124,11 +133,13 @@ class Tree:
         made = ("diff", "-z", "--name-only", "--no-renames", "--diff-filter=D", self.head, "HEAD", "--", *self.dirs)
         deleted = {r for r in _git(self.root, *made).split("\0") if r}  # its commits' deletions, batch-validated
         shared = self.shared
+        touched = sorted(changed.keys() | deleted)
         with shared.locked(), contextlib.ExitStack() as locks:  # the repository lock first, as every writer
-            for d in sorted({r.rpartition("/")[0] for r in changed.keys() | deleted}):
+            if linked := _linked(shared.root, touched):  # a pull may have brought one since the seed
+                return f"refused, {linked} has a symbolic link on its path; {self.hold(folder, key)}", ""
+            for d in sorted({r.rpartition("/")[0] for r in touched}):
                 (shared.root / d).mkdir(exist_ok=True)  # Global's folder, before its first entry, as Make global
                 locks.enter_context(writer_lock(shared.root / d))
-            touched = sorted(changed.keys() | deleted)
             if moved := next((r for r in touched if _read(shared.root / r) != self.base.get(r)), None):
                 return f"refused, {moved} changed meanwhile; {self.hold(folder, key)}", ""
             self._apply(texts)
@@ -196,11 +207,9 @@ def seed(shared: DataRepo, at: Path, folders: Sequence[str]) -> Tree:
             for d in sorted(d for d in dirs if (shared.root / d).is_dir()):
                 locks.enter_context(writer_lock(shared.root / d))
             base = _files(shared.root, dirs)
-        for rel in (CONFIG, *dirs, *base):
-            parts = rel.split("/")
-            if any(at.joinpath(*parts[:n]).is_symlink() for n in range(1, len(parts) + 1)):
-                msg = f"HEAD has a symbolic link on the path of {rel}; curation writes through none"
-                raise DataRepoError(msg)
+        if linked := _linked(at, (CONFIG, *dirs, *base)):
+            msg = f"HEAD has a symbolic link on the path of {linked}; curation writes through none"
+            raise DataRepoError(msg)
         for rel in _files(at, dirs).keys() - base.keys():
             (at / rel).unlink()
         for d in dirs:

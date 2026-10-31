@@ -547,6 +547,27 @@ def test_a_seed_writes_through_no_symbolic_link_at_head(repo, tmp_path) -> None:
     assert "HEAD has a symbolic link on the path of shop/memory/linked.md" in row.reason
 
 
+def test_an_accepted_run_writes_through_no_symbolic_link_the_checkout_gained(repo, remote, tmp_path) -> None:
+    curated(repo / "shop" / "memory", "Lesson")
+    pushed(repo, "a curated entry")
+    start, elsewhere, made = bare(remote, "rev-parse", "main").stdout, tmp_path / "elsewhere", {}
+
+    def run(cfg) -> Run:
+        made["new"] = rel(curated(cfg.memory, "Learned"))
+        (repo / "shop" / "memory").rename(elsewhere)  # the same files, now outside the repository
+        (repo / "shop" / "memory").symlink_to(elsewhere)
+        return Run(cfg.session_id, ending="result", payload=REPORT, termination=Termination(confirmed=True))
+
+    job = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(repo), run=run)
+    job.start("shop")
+    row = drained(job)
+
+    assert (row.state, f"refused, {made['new']} has a symbolic link on its path; " in row.reason) == ("failed", True)
+    assert not (elsewhere / made["new"].rpartition("/")[2]).exists()
+    assert held(repo, row.reason, made["new"]).startswith(b"---")
+    assert bare(remote, "rev-parse", "main").stdout == start
+
+
 def test_the_checkout_lists_held_runs_as_its_own_and_no_finished_runs_worktree(repo) -> None:
     entry = curated(repo / "shop" / "memory", "Lesson")
     pushed(repo, "a curated entry")
