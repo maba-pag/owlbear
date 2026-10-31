@@ -148,14 +148,11 @@ def test_a_save_held_in_publish_reads_as_in_progress_never_as_interrupted(shared
     assert decision_batch.pending(shared) is None
 
 
-def _one_file() -> tuple[list[str], list[tuple[str, bytes | None, bytes]]]:
-    decision_id = new_id()
-    return [decision_id], [(f"{PROJECT}/decisions/{decision_id}.md", None, b"crashed\n")]
-
-
 def crashed(shared: DataRepo) -> str:
     """A batch journalled and never ended, as a writer that died leaves it; its generation."""
-    return decision_batch.begin(shared, PROJECT, decision_store.head(shared), "decisions: crashed", *_one_file())
+    decision_id = new_id()
+    rows = [(f"{PROJECT}/decisions/{decision_id}.md", None, b"crashed\n")]
+    return decision_batch.begin(shared, PROJECT, decision_store.head(shared), "decisions: crashed", [decision_id], rows)
 
 
 def action(shared: DataRepo) -> str:
@@ -360,9 +357,6 @@ class Loop:
             raise urllib.error.HTTPError(request.full_url, r.status_code, "", Message(), io.BytesIO(r.content))
         return Answer(r.content)
 
-    def reads(self) -> list[dict[str, object]]:
-        return [out for path, out in self.got if path.startswith("/api/next/decisions?")]
-
 
 @pytest.fixture
 def wire(tmp_path, shared, clock, monkeypatch) -> Callable[..., tuple[chat_client.Chat, Loop]]:  # noqa: ARG001
@@ -401,7 +395,7 @@ def test_a_save_whose_answer_was_lost_is_found_saved_once_it_settles(shared, wir
     assert len(titled(shared)) == 1
     assert out["receipts"] == [{"id": titled(shared)[0], "saved": True}]
     assert out["notice"] == chat_client.SAVED.format(id=titled(shared)[0])
-    first = loop.reads()[0]
+    first = next(out for path, out in loop.got if path.startswith("/api/next/decisions?"))
     assert (first["available"], decision_store.SAVING in first["reason"]) == (False, True)
     (_, _, timeout, headers), = [s for s in loop.seen if s[0] == "POST"]  # fmt: skip
     assert (timeout, float(headers[ADMIT.lower()])) == (chat_client.WRITE, admit_by)

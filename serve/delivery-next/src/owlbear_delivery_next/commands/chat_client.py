@@ -290,10 +290,9 @@ class Chat:
 
     def _settled(self, body: dict[str, Any], started: datetime, admit_by: float, *, fenced: bool) -> dict[str, Any]:
         """Saved with its id, not saved, or unclear with why, from the decisions as the host reads them now."""
-        query = urllib.parse.urlencode({"where": "all", "retired": "true"})
         while True:
             t = _now()
-            code, out = self.call("GET", f"/decisions?{query}")
+            code, out = self.call("GET", "/decisions?where=all&retired=true")
             if code != OK or not out.get("available"):
                 why = str(out.get("reason") or out.get("detail") or out.get("error") or f"the host answered {code}")
                 if SAVING not in why:
@@ -328,11 +327,10 @@ class Chat:
 
 def _same(row: dict[str, Any], body: dict[str, Any], started: datetime) -> bool:
     """The row has the sent wording and layer, and was made since the propose started."""
-    made = datetime.fromisoformat(row.get("created_at") or "1970-01-01T00:00:00Z")
     return (
         (row["title"].strip(), row["statement"].strip()) == (body["title"].strip(), body["statement"].strip())
         and (row["scope"] == "global") == (body["scope"] == "global")
-        and made >= started
+        and datetime.fromisoformat(row["created_at"]) >= started
     )
 
 

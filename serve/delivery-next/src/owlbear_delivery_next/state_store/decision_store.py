@@ -332,8 +332,7 @@ def _begin(
         rows.append((path.relative_to(shared.root).as_posix(), before[path], serialize(decision).encode("utf-8")))
     project = next((d.project for d, _, _ in items if d.project), "")
     ids = [d.id for d, _, _ in items]
-    generation = decision_batch.begin(shared, project, head, message, ids, rows, decision_batch.ADMIT_BY.get())
-    return generation, rows
+    return decision_batch.begin(shared, project, head, message, ids, rows, decision_batch.ADMIT_BY.get()), rows
 
 
 def _refusals(items: list[Placed]) -> dict[str, str]:
