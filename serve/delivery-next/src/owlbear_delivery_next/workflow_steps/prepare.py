@@ -116,24 +116,29 @@ def _git(root: Path, *args: str, env: Mapping[str, str] | None = None) -> bytes:
 
 
 def edits(root: Path) -> list[str]:
-    """Every uncommitted path of the worktree, both ends of a staged rename, each name as Git wrote it."""
-    fields = _git(root, "status", "--porcelain=v1", "-z", "--untracked-files=all").decode().split("\0")
-    paths, i = [], 0
-    while i < len(fields) and fields[i]:
-        paths.append(fields[i][3:])
-        if fields[i][0] in {"R", "C"}:
-            i += 1
-            paths.append(fields[i])
-        i += 1
-    return paths
+    """Every uncommitted path of the worktree, both ends of a rename or copy in either column, each once."""
+    out = _git(root, "status", "--porcelain=v1", "-z", "--untracked-files=all")
+    return worktree.status_paths(out.decode().split("\0"))
+
+
+def _in_head(root: Path, paths: Sequence[str]) -> set[str]:
+    out = _git(root, "--literal-pathspecs", "ls-tree", "-r", "-z", "--name-only", "HEAD", "--", *paths)
+    return set(out.decode().split("\0")) - {""}
 
 
 def capture(root: Path, paths: Sequence[str]) -> bytes:
-    """The edits of *paths* against HEAD as one binary patch, staged in a private index; the worktree's is untouched."""
+    """The edits of *paths* against HEAD as one binary patch, staged in a private index; the worktree's is untouched.
+
+    A path in neither HEAD nor the worktree, such as a rename's middle name, has no edit and is left out (#744).
+    """
+    head = _in_head(root, paths) if paths else set()
+    kept = [p for p in paths if p in head or os.path.lexists(root / p)]
+    if not kept:
+        return b""  # a pathless ``add --all`` would take every other edit too
     with tempfile.TemporaryDirectory() as tmp:
         env = os.environ | {"GIT_INDEX_FILE": str(Path(tmp) / "index")}
         _git(root, "read-tree", "HEAD", env=env)
-        _git(root, "--literal-pathspecs", "add", "--all", "--", *paths, env=env)
+        _git(root, "--literal-pathspecs", "add", "--all", "--", *kept, env=env)
         return _git(root, "diff", "--cached", "--binary", "HEAD", env=env)
 
 
@@ -142,8 +147,7 @@ def discard(root: Path, paths: Sequence[str]) -> None:
     if not paths:
         return
     _git(root, "--literal-pathspecs", "reset", "-q", "HEAD", "--", *paths)
-    tracked = set(_git(root, "--literal-pathspecs", "ls-tree", "-r", "-z", "--name-only", "HEAD", "--", *paths)
-                  .decode().split("\0")) - {""}  # fmt: skip
+    tracked = _in_head(root, paths)
     if tracked:
         _git(root, "--literal-pathspecs", "checkout", "HEAD", "--", *sorted(tracked))
     for p in set(paths) - tracked:
@@ -195,9 +199,10 @@ def chosen(  # noqa: PLR0913, PLR0917 - the session's end, its worktree and what
             result = check.failed(f"the preparer committed (HEAD was {moved[:12]}); its commits were undone")
         elif result.exit == Exit.PENDING and isinstance(payload, tools.CheckRecipe):
             if option := ctx.option(payload.preparation):
-                patch = capture(root, made) if made else b""
+                patch = capture(root, made)
+                # git apply refuses an empty patch, so one without edits keeps no paths to apply
                 _write(store, c.slug, Prepared(check=c.step.task or "", option=option, reason=payload.reason,
-                                               paths=made), patch)  # fmt: skip
+                                               paths=made if patch else []), patch)  # fmt: skip
             else:
                 for suffix in (".json", ".patch"):
                     _file(store, c.slug, c.step.task or "", suffix).unlink(missing_ok=True)

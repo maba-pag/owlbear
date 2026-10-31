@@ -124,14 +124,13 @@ def inventory(path: Path, branch: str, keep: Sequence[str]) -> Inventory:
     kept = [k for k in keep if engine.git_ok(path, "rev-parse", "--verify", "--quiet", f"{k}^{{commit}}")]
     commits = worktree.git(path, "rev-list", f"refs/heads/{branch}", "--not", *kept, "--").split()
     args = ("status", "--porcelain=v1", "-z", "--ignored=matching", "--untracked-files=all")
-    dirty, ignored, entries = [], [], iter(_bytes(path, *args).split(b"\0"))
-    for entry in entries:
-        if entry[:3] == b"!! ":
-            ignored += _ignored(path, entry[3:].decode(errors="surrogateescape").rstrip("/"))
-        elif entry:
-            dirty.append(entry[3:].decode(errors="surrogateescape"))
-            if entry[:1] in {b"R", b"C"}:
-                next(entries, None)  # the rename's source path
+    out = _bytes(path, *args).decode(errors="surrogateescape")
+    dirty, ignored = [], []
+    for xy, rel, _source in worktree.status_records(out.split("\0")):
+        if xy == "!!":
+            ignored += _ignored(path, rel.rstrip("/"))
+        else:
+            dirty.append(rel)  # a rename's source is gone from the worktree; its deletion is in changes.diff
     for rel in dirty:
         _kind(path / rel)
     return Inventory(tuple(commits), tuple(dirty), tuple(ignored))
