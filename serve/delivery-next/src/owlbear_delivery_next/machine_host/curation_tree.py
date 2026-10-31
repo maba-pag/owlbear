@@ -29,6 +29,7 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.local_system.data_repo import DataRepo
 
 NO_EDITS = "the run changed no memory, so nothing is held"
+LISTED = "its worktree is still listed (the log says why)"
 
 _log = logging.getLogger(__name__)
 
@@ -214,7 +215,7 @@ def prune(shared: DataRepo) -> str:
             _git(shared.root, "worktree", "prune")
     except DataRepoError as exc:
         _log.warning("%s still lists a finished curation run's worktree: %s", shared.root, exc)
-        return f"its worktree is still listed: {exc}"
+        return LISTED
     return ""
 
 
@@ -225,7 +226,7 @@ def forgetting(shared: DataRepo) -> Iterator[None]:
         yield
     except Exception as exc:
         if pruned := prune(shared):
-            msg = f"{type(exc).__name__}: {exc}; {pruned}"
+            msg = f"{pruned}; {type(exc).__name__}: {exc}"  # first: a row keeps the reason's start
             raise RuntimeError(msg) from exc
         raise
 

@@ -471,8 +471,9 @@ LOCKED = "git worktree failed: locked"
 
 @pytest.mark.parametrize("raises", [False, True], ids=["refused", "raised"])
 def test_a_finished_runs_worktree_left_listed_is_logged_and_named_in_its_row(repo, monkeypatch, caplog, raises) -> None:
-    real = curation_tree._git  # noqa: SLF001
-    failing = []
+    entry = curated(repo / "shop" / "memory", "Lesson")
+    pushed(repo, "a curated entry")
+    real, failing = curation_tree._git, []  # noqa: SLF001
 
     def git_(cwd, *args, **kw):
         if failing and args == ("worktree", "prune"):
@@ -481,8 +482,9 @@ def test_a_finished_runs_worktree_left_listed_is_logged_and_named_in_its_row(rep
 
     def run(cfg) -> Run:
         failing.append(True)  # the seed's own prune ran
+        reword(cfg.memory, entry.id, "Lesson: the curator's version")
         if raises:
-            msg = "the session broke"
+            msg = "the session broke: " + "x" * 400  # longer than a row's reason keeps
             raise RuntimeError(msg)
         return Run(cfg.session_id, termination=Termination(confirmed=True), **REFUSALS["unread"])
 
@@ -491,7 +493,7 @@ def test_a_finished_runs_worktree_left_listed_is_logged_and_named_in_its_row(rep
     job.start("shop")
 
     row = drained(job)
-    assert (row.state, row.reason.endswith(f"its worktree is still listed: {LOCKED}")) == ("failed", True)
+    assert (row.state, curation_tree.LISTED in row.reason, bool(HELD.search(row.reason))) == ("failed", True, True)
     assert [r.getMessage() for r in caplog.records if r.name == curation_tree.__name__] == [
         f"{repo} still lists a finished curation run's worktree: {LOCKED}"
     ]
