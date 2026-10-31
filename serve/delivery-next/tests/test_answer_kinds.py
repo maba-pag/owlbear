@@ -456,8 +456,8 @@ def test_a_second_answer_before_the_fold_is_refused_and_the_first_one_holds(pick
     assert refused == (409, f"question {run.qid} {WAITING}", 1)
     c, _ = run.fold()
     assert (run.asked(c).answer.option, inbox(picking)) == ("en", 0)
-    said = [e["question"] for e in picking.store.events(picking.slug) if e.get("event") == "answer"]
-    assert said == [run.qid]
+    said = [e for e in picking.store.events(picking.slug) if e.get("event") in {"answer", "answer-not-applied"}]
+    assert [(e["event"], e["question"]) for e in said] == [("answer", run.qid)]
     late = run.answer(option="de", kind="event")
     assert (late.status_code, late.json()["detail"]) == (409, f"question {run.qid} is not open")
 
