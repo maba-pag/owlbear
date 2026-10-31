@@ -172,7 +172,7 @@ See [Delivery Workflow](operating-owlbear.md#delivery-workflow) for daily operat
 | `owlbear install` says `not done, no terminal to answer` | It ran without a terminal, for example from an agent; nothing was linked or added | Run `owlbear install` yourself in a terminal |
 | The Copilot runtime in VS Code 1.143 offers only Auto (and HydraFusion) | More than one GitHub account is signed in to VS Code, and the runtime uses the first one, which has no Copilot; the agent host's log says `Found 0 models` | Sign the other GitHub accounts out of VS Code (Accounts menu), then run **Restart Local Agent Host**; `gh` keeps its accounts |
 | `not written: ... is tracked` from setup | The file is tracked in Git | Add the printed server entry with **MCP: Open User Configuration** |
-| MCP server fails to start | Its command, `~/.owlbear/runtime/.venv/bin/python`, is missing or lacks a package | Read the server's output (**MCP: List Servers** → the server → **Show Output**); check that interpreter exists, and for a missing module run `uv sync --locked` in `~/.owlbear/runtime` |
+| MCP server fails to start | Its command, `~/.owlbear/runtime/.venv/bin/python`, is missing or lacks a package | Read the server's output (**MCP: List Servers** → the server → **Show Output**); check that interpreter exists, and for a missing module run `uv sync --locked --all-packages --all-groups` in `~/.owlbear/runtime` |
 
 For deeper debugging, use **"Show Chat Debug View"** (Chat view ellipsis `…` menu) to inspect
 raw LLM request/response payloads.
