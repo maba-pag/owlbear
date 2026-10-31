@@ -1,7 +1,8 @@
 """The pages show which projects' work waits for their settings and hold the buttons that would start it (#808).
 
 A real machine host serves two registered clones, alpha and beta, in Chromium; only the PDS CDN answers besides it.
-Alpha leaves the CI poll interval unset, beta sets it in its own layer.
+Alpha leaves the CI poll interval unset, beta sets it in its own layer. The Maintenance and Backlog tests add the
+shared repository, with a memory folder for each project, and a fake GitHub holding the backlog.
 """
 
 from __future__ import annotations
@@ -24,12 +25,14 @@ from owlbear_delivery_next.change_contracts import models as m
 from owlbear_delivery_next.change_contracts.merge_records import Pullback
 from owlbear_delivery_next.change_contracts.visual_records import OwnerCriterion
 from owlbear_delivery_next.local_system import codebase
+from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.machine_host import app, project
 from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.project_host.host import Host, HostRecord
 from owlbear_delivery_next.settings import config
 from owlbear_delivery_next.settings.config import Layer, Prefs
 from owlbear_delivery_next.state_store import machine_settings, registry
+from owlbear_delivery_next.state_store.backlog import Backlog
 from owlbear_delivery_next.state_store.store import Store
 
 if TYPE_CHECKING:
@@ -40,6 +43,7 @@ GAP = "prefs.ci_poll_seconds"
 UNSET = f"settings unset: {GAP}; fill them in on the Settings page"
 EVERY = "No work can be done until the unset settings are set."
 NONE_OPEN = "every project's settings are unset or can't be read"
+NO_FOLDER = "every folder's settings are unset or can't be read"
 WAIT = 15_000  # ms: the machine's poll comes every 5 s, the Changes list's every 3 s
 
 
@@ -57,9 +61,13 @@ def asking() -> m.Change:
 
 
 def clone(path: Path) -> Store:
-    """A registered clone holding a Change that asks and one the owner paused."""
-    for args in (["init", "-q", str(path)], ["-C", str(path), "commit", "-q", "--allow-empty", "-m", "i"]):
-        subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", *args], check=True)  # noqa: S603, S607
+    """A clone whose ``main`` holds one package of tests, with a Change that asks and one the owner paused."""
+    (path / "tests").mkdir(parents=True)
+    (path / "pyproject.toml").write_text("")
+    (path / "tests" / "test_a.py").write_text("a\n" * 3)
+    for args in (["init", "-q", "-b", "main"], ["add", "-A"], ["commit", "-qm", "base"]):
+        subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", *args], cwd=path, check=True,  # noqa: S603, S607
+                       capture_output=True)  # fmt: skip
     store = Store.open(path)
     held = m.Change(slug="held", step=m.Step(kind=m.StepKind.BUILD), intent=m.Intent(paused_at=NOW))
     for change in (asking(), held):
@@ -103,8 +111,21 @@ def _served(machine: Machine) -> Iterator[str]:
 
 
 @pytest.fixture
-def host(tmp_path: Path, monkeypatch, pds) -> Iterator[Host2]:
+def data(monkeypatch, shared_repo) -> Path:
+    """The shared repository, alpha's and beta's folders keeping memory; asked for, it comes before the clones."""
+    root = shared_repo[0]
+    monkeypatch.setenv("OWLBEAR_DATA", str(root))
+    for name in ("alpha", "beta"):
+        (root / name / "memory").mkdir(parents=True, exist_ok=True)
+    return root
+
+
+@pytest.fixture
+def host(tmp_path: Path, monkeypatch, pds, request) -> Iterator[Host2]:
     from playwright.sync_api import Error, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+
+    if "data" in request.fixturenames:
+        request.getfixturevalue("data")
 
     prefs = config.BASE.prefs.model_copy(update={"ci_poll_seconds": None})
     monkeypatch.setattr(config, "BASE", config.BASE.model_copy(update={"prefs": prefs}))
@@ -230,3 +251,69 @@ def test_an_unreadable_layer_is_named_with_its_reason_and_an_unset_interval_bloc
     expect(banner.locator("li")).to_have_count(2)
     expect(banner.locator("li").nth(1)).to_contain_text("beta: settings unset: machine.update_check_hours_")
     expect(page.get_by_role("button", name="New Change")).to_be_disabled()
+
+
+@pytest.mark.browser
+@pytest.mark.timeout(180)  # five settings changes, each seen at the machine's next 5 s poll
+@pytest.mark.usefixtures("data")
+def test_maintenance_holds_curation_and_a_test_review_only_where_work_may_not_start(host) -> None:
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    page, base, a = host.page, host.base, host.ids["alpha"]
+    page.goto(f"{base}/#token=t")
+    page.goto(f"{base}/maintenance?project={a}")
+    rows, body = page.locator("#curation li"), page.locator("body")
+    expect(rows.locator("h3")).to_have_text(["alpha", "beta"], timeout=WAIT)
+    held_with(rows.nth(0), "Curate alpha now", UNSET)
+    expect(rows.nth(0).locator("p-text.blocked")).to_have_text(f"S{UNSET[1:]}.")
+    expect(rows.nth(1).get_by_role("button", name="Curate beta now")).to_be_enabled()
+    expect(page.get_by_role("button", name="Curate all now")).to_be_enabled()
+    held_with(page.locator("#tests"), "Review tests", UNSET)
+    expect(page.locator("#tests-blocked")).to_have_text(f"S{UNSET[1:]}.")
+
+    poll_interval(host.stores["beta"], None)  # every folder waits now: the open page follows the machine's poll
+    held_with(body, "Curate all now", NO_FOLDER)
+    held_with(rows.nth(1), "Curate beta now", UNSET)
+    poll_interval(host.stores["beta"], 20)
+    expect(page.get_by_role("button", name="Curate all now")).to_be_enabled(timeout=WAIT)
+    poll_interval(host.stores["alpha"], 30)
+    expect(page.get_by_role("button", name="Review tests")).to_be_enabled(timeout=WAIT)
+    expect(page.locator("#tests-blocked")).to_have_count(0)
+
+
+@pytest.mark.browser
+@pytest.mark.timeout(180)  # five settings changes, each seen at the machine's next 5 s poll
+@pytest.mark.usefixtures("github")
+def test_the_backlog_holds_create_change_where_work_may_not_start_and_follows_the_poll(data, host, pds) -> None:
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    page, base, b = host.page, host.base, host.ids["beta"]
+    for title, kind, projects in (("Alpha only", "improvement", ["alpha"]), ("Every project", "idea", [])):
+        backlog = Backlog(DataRepo(data), "alpha")
+        backlog.update(backlog.add(title)[0].id, {"kind": kind, "projects": projects})
+    page.goto(f"{base}/#token=t")
+    page.goto(f"{base}/backlog?project={b}&show=all")
+    selection, create = page.locator("#selection"), "Create Change from 1"
+    expect(page.locator("li.entry")).to_have_count(2, timeout=WAIT)
+    page.get_by_label("Select Alpha only").check()
+    held_with(selection, create, UNSET)  # alpha's own entry: its clone may not start work
+    page.get_by_label("Select Alpha only").uncheck()
+    page.get_by_label("Select Every project").check()
+    expect(page.get_by_role("button", name=create)).to_be_enabled()
+    poll_interval(host.stores["beta"], None)  # no clone may start work now: no reload, the machine's poll shows it
+    held_with(selection, create, NONE_OPEN)
+    expect(page.get_by_label("Select Every project")).to_be_checked()
+    poll_interval(host.stores["beta"], 20)
+    expect(page.get_by_role("button", name=create)).to_be_enabled(timeout=WAIT)
+
+    page.get_by_role("button", name=create).click()
+    chooser = page.locator("#choose")
+    select = pds.select(chooser, "Shape the Change in")
+    expect(select.locator("p-select-option")).to_have_text(["beta"])  # alpha's clone is not offered
+    expect(select).to_have_js_property("value", b)
+    poll_interval(host.stores["beta"], None)
+    held_with(chooser, "Continue", NONE_OPEN)
+    poll_interval(host.stores["beta"], 20)
+    expect(chooser.get_by_role("button", name="Continue")).to_be_enabled(timeout=WAIT)
+    expect(select).to_have_js_property("value", b)
+    expect(page.get_by_label("Select Every project")).to_be_checked()

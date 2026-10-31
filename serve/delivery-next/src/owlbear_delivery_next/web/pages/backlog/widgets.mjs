@@ -1,9 +1,10 @@
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { live } from "/assets/lit-html/3.3.3/directives/live.js";
 
-export function button(label, onclick, { variant, icon, aria, busy = false, disabled = false } = {}) {
+export function button(label, onclick, { variant, icon, aria, busy = false, disabled = false, title = "" } = {}) {
   return html`<p-button type="button" compact="true" variant=${variant ?? nothing} icon=${icon ?? nothing}
-    aria=${aria ?? nothing} .loading=${busy} ?disabled=${disabled} @click=${onclick}>${label}</p-button>`;
+    aria=${aria ?? nothing} .loading=${busy} ?disabled=${disabled} title=${title || nothing}
+    @click=${onclick}>${label}</p-button>`;
 }
 
 // A choice list showing *value* as the data has it; *chosen* gets the person's pick.

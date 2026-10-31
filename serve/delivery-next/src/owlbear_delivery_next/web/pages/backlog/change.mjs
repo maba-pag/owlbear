@@ -1,5 +1,5 @@
 import { html } from "/assets/lit-html/3.3.3/lit-html.js";
-import { call } from "/assets/ui.mjs";
+import { blockedOf, call } from "/assets/ui.mjs";
 import { GET, WRITE, state, show, notify } from "./state.mjs";
 import { button, select } from "./widgets.mjs";
 import { clonesOf } from "./entries.mjs";
@@ -13,6 +13,11 @@ async function launched(id, of) {  // the host opens the chat in the background;
   }
 }
 
+// The clones of entry *e*'s repository a Change may start in: those whose settings let work start (#808).
+function startable(e) {
+  return clonesOf(e).filter((c) => !blockedOf(c.id));
+}
+
 // The clone a Change from *picked* starts in, when the entries name it: one project, held by one clone here. A
 // Global or untriaged entry names none.
 function clear(picked) {
@@ -21,14 +26,27 @@ function clear(picked) {
   return clones.length === 1 ? clones[0] : only.length === 1 ? only[0] : null;
 }
 
+// Why no Change can start from *picked*, or "" (#808): the clone they name may not start work, or no clone the owner
+// could choose may.
+export function held(picked) {
+  if (!picked.length) return "";
+  const target = clear(picked);
+  if (target) return blockedOf(target.id);
+  return startable(picked[0]).length ? "" : "every project's settings are unset or can't be read";
+}
+
 // Global, untriaged or several projects' entries, or a project with several clones here: the owner picks the clone.
+// The choice follows the machine's poll: a clone whose work stops being able to start is replaced or cleared.
 export function chooser() {
-  const clones = clonesOf(state.choosing.picked[0]);
+  const clones = startable(state.choosing.picked[0]);
+  if (!clones.some((c) => c.id === state.choosing.of)) state.choosing.of = clones[0]?.id ?? null;
   const go = () => { const { picked, of } = state.choosing; state.choosing = null; show(); shapeFrom(picked, of); };
   const stop = () => { state.choosing = null; show(); };
+  const why = held(state.choosing.picked);
   return html`<div id="choose" class="row">${select("Shape the Change in", clones.map((c) => [c.id, c.label]),
-    state.choosing.of, (v) => { state.choosing.of = v; })}
-    ${button("Continue", go)}${button("Cancel", stop, { variant: "secondary" })}</div>`;
+    state.choosing.of ?? "", (v) => { state.choosing.of = v; show(); })}
+    ${button("Continue", go, { disabled: state.choosing.of === null, title: why })}
+    ${button("Cancel", stop, { variant: "secondary" })}</div>`;
 }
 
 export async function createChange() {
@@ -37,9 +55,11 @@ export async function createChange() {
   if (new Set(picked.map((e) => e.repository)).size > 1) {
     return notify("These entries are in different repositories' backlogs; pick entries of one of them.");
   }
+  const why = held(picked);
+  if (why) return notify(why);
   const target = clear(picked);
   if (target) return shapeFrom(picked, target.id);
-  state.choosing = { picked, of: clonesOf(picked[0])[0].id };
+  state.choosing = { picked, of: startable(picked[0])[0].id };
   show();
   return undefined;
 }
