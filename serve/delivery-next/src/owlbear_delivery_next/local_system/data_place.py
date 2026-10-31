@@ -30,6 +30,7 @@ if TYPE_CHECKING:
 
 POINTER, OLD_POINTER = local_home.POINTER, local_home.OLD_POINTER
 CLONE_SECONDS, INVENTORY_SECONDS = 900, 20
+HELD = "refs/owlbear/curation"  # a refused memory curation run's edits, never pushed (#746)
 CLONING = ".data-clone-"  # a clone in progress beside its place; never published, so a leftover one goes
 # A clone address rather than a folder: a scheme (https://, ssh://, file://) or scp's user@host:path
 _URL = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*://|^[^/\s@]+@[^/\s:]+:")
@@ -434,14 +435,15 @@ def worktrees(root: Path) -> list[Path]:
 def inventory(shared: DataRepo) -> list[str]:
     """What only this checkout holds, as lines; none when everything in it is published.
 
-    Uncommitted files, memory included; commits on any local branch no remote has; stashes; a held publication; and its
-    linked worktrees, which live elsewhere.
+    Uncommitted files, memory included; commits on any local branch no remote has; stashes; a held publication; the
+    edits of refused memory curation runs; and its linked worktrees, which live elsewhere.
     """
     until, root = time.monotonic() + INVENTORY_SECONDS, shared.root
     status = _git(root, "status", "--porcelain=v1", "-uall", until=until)
     ahead = _git(root, "rev-list", "--count", "--branches", "--not", "--remotes", until=until)
     stashes = _git(root, "stash", "list", until=until)
-    if failed := next((d for d in (status, ahead, stashes) if d.returncode), None):
+    curated = _git(root, "for-each-ref", "--format=%(refname)", HELD, until=until)
+    if failed := next((d for d in (status, ahead, stashes, curated) if d.returncode), None):
         return [f"{root} cannot be read: {failed.stderr.strip()[:200]}"]
     lines = []
     if files := status.stdout.splitlines():
@@ -451,6 +453,8 @@ def inventory(shared: DataRepo) -> list[str]:
         lines.append(f"{count} commit(s) on local branches that no remote has")
     if stashed := stashes.stdout.splitlines():
         lines.append(f"{len(stashed)} stash(es)")
+    if runs := curated.stdout.splitlines():
+        lines.append(f"{len(runs)} refused memory curation run(s) held under {HELD}")
     if held := publication_hold.refusal(shared, until):
         lines.append(f"an automatic change is held: {held}")
     lines += [f"linked worktree: {p}" for p in worktrees(root)]

@@ -15,7 +15,7 @@ from owlbear_delivery_next.local_system import local_home, maintenance, processe
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.local_system.slots import Slots
-from owlbear_delivery_next.machine_host import curation, curation_snapshots
+from owlbear_delivery_next.machine_host import curation, curation_snapshots, curation_tree
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.settings import config
 from owlbear_delivery_next.settings.config import GlobalLayer
@@ -85,7 +85,7 @@ def test_a_run_curates_one_folder_as_the_curator_and_keeps_its_report_and_what_i
             Judged(entry_id=left.id, action="skipped", confidence=60, reason="only one project shows it"),
             Judged(entry_id=done.id, action="pruned", confidence=97),
         ])  # fmt: skip
-        MemoryEngine(repo / "shop" / "memory").delete(done.id, done.updated_at)
+        MemoryEngine(cfg.memory).delete(done.id, done.updated_at)  # in the run's own worktree (#746)
         return Run(cfg.session_id, ending="result", payload=report, termination=Termination(confirmed=True))
 
     job = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(repo), run=run)
@@ -93,7 +93,13 @@ def test_a_run_curates_one_folder_as_the_curator_and_keeps_its_report_and_what_i
     finished(job)
 
     (cfg,) = seen
-    assert (cfg.role, cfg.memory, cfg.submit) == (tools.CURATOR, repo / "shop" / "memory", memory_curation_tools.SUBMIT)
+    assert (cfg.role, cfg.memory.parts[-2:], cfg.submit) == (
+        tools.CURATOR,
+        ("shop", "memory"),
+        memory_curation_tools.SUBMIT,
+    )
+    assert not cfg.memory.is_relative_to(repo)
+    assert not (repo / "shop" / "memory" / f"{done.id}.md").exists()  # the accepted deletion reached the checkout
     assert "`shop`" in cfg.message
     assert cfg.policy.write is False
     shop = {f["folder"]: f for f in job.read()["folders"]}["shop"]
@@ -135,7 +141,9 @@ def test_a_report_whose_model_is_unproven_fails_publishes_nothing_and_leaves_its
     finished(job)
     shop = job.load().folders["shop"]
     assert (shop.state, shop.reason, shop.summary, shop.seen, published) == (
-        "failed", "ended result: the model is unknown: no gpt-x tokens in the usage", "", {}, []
+        "failed",
+        f"ended result: the model is unknown: no gpt-x tokens in the usage; {curation_tree.NO_EDITS}",
+        "", {}, [],
     )  # fmt: skip
     assert (job.due("shop"), job.slots.counts(curation.SLOT)[2]) == (True, 0)
 
