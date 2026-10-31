@@ -82,19 +82,13 @@ def elsewhere(shared: SimpleNamespace) -> str:
     return git(other, "rev-parse", "HEAD")
 
 
-def bound(shared: SimpleNamespace) -> SimpleNamespace:
-    """The context the memory server builds from Delivery's environment (preload.memory)."""
-    context = AppContext(
-        engine=MemoryEngine(shared.folder), memory_dir=shared.folder, global_dir=shared.data / "memory"
-    )
-    return SimpleNamespace(request_context=SimpleNamespace(lifespan_context=context))
-
-
 async def assess(shared: SimpleNamespace, *items: tuple[str, str]) -> list[dict[str, object]]:
-    context = bound(shared)
-    engine = context.request_context.lifespan_context.engine
+    # The context the memory server builds from Delivery's environment (preload.memory).
+    engine = MemoryEngine(shared.folder)
+    context = AppContext(engine=engine, memory_dir=shared.folder, global_dir=shared.data / "memory")
     batch = [{"entry_id": i, "revision": engine.get_entry(i).revision, "bucket": b} for i, b in items]
-    return (await tools.assess_memories(context, assessments=batch, task_id=_TASK))["results"]
+    ctx = SimpleNamespace(request_context=SimpleNamespace(lifespan_context=context))
+    return (await tools.assess_memories(ctx, assessments=batch, task_id=_TASK))["results"]
 
 
 @pytest.mark.asyncio
