@@ -225,6 +225,13 @@ def test_each_filter_picks_its_sessions_and_an_agent_its_own_rows(get) -> None:
     assert rows(get(f"{LAST_30}&stopped=true").json()["compaction"]) == REVIEWER
 
 
+def test_a_session_whose_spend_is_not_split_from_its_subagents_is_still_its_roles(get) -> None:
+    spend_ledger.append(ran("u", NOW, SHOP, usage=used(1.0), before={}, subagents=1))
+    live("s-u", [*calls(1), *applied("a"), *calls(1)])
+    assert rows(get(f"{LAST_30}&agent=builder").json()["compaction"]) == {
+        ("builder", "", "shop"): (1, 1, 0, 0, 1, 1, 0.5, 0.5)}  # fmt: skip
+
+
 def test_a_session_whose_spend_crosses_the_periods_start_is_left_out(get) -> None:
     seed(b1_unread=True)
     assert rows(get(LAST_30).json()["compaction"]) == {

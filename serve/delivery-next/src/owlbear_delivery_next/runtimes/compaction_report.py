@@ -33,7 +33,8 @@ def report(  # noqa: PLR0913 - one value per filter the page offers
     since, until = spend_metrics.bounds(start, end, tz)
     sessions: dict[str, dict[str, Any]] = {}
     for p in found:
-        chosen = spend_metrics.keeps(p, project=project, agent=agent, model=model, change=change, stopped=stopped)
+        mine = p if p["agent"] else p | {"agent": p["role"]}  # spend not split from its subagents' is still the role's
+        chosen = spend_metrics.keeps(mine, project=project, agent=agent, model=model, change=change, stopped=stopped)
         if p["session"] and chosen and spend_metrics.within(p, since, until) is True:
             sessions.setdefault(p["session"], p)
     rows: dict[Key, dict[str, Any]] = {}
