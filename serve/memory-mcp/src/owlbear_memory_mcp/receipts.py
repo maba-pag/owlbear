@@ -21,11 +21,11 @@ if TYPE_CHECKING:
 def committed(root: Path | None, memory_dir: Path | None, entry_ids: Collection[str], task_id: str) -> Iterator[None]:
     """Around one assess_memories batch: commit the receipts it writes to entry files committed before it.
 
-    Unbound (*root* and *memory_dir* None) nothing else happens. Bound to the shared repository, the batch runs under
+    Unbound (*root* None) nothing else happens. Bound to the shared repository, the batch runs under
     its lock and then the memory folder's writer lock, as make_global does; a file changed or untracked before the
     batch is another writer's and is never committed. Nothing is pushed: Delivery's next publication pushes it.
     """
-    if root is None or memory_dir is None:
+    if root is None:
         yield
         return
     with contextlib.ExitStack() as held:
