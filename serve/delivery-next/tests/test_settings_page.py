@@ -964,7 +964,7 @@ def test_the_user_config_switches_save_in_each_layer_reload_and_clear_back_to_in
         pds.pick(page, SKILLS, "off")
         pds.pick(page, MEMORY, "off")
         box = pds.select(page, MEMORY).get_by_role("combobox").bounding_box()
-        assert (box["width"], box["height"]) >= (24, 24)  # WCAG 2.5.8 target size
+        assert min(box["width"], box["height"]) >= 24  # WCAG 2.5.8 target size
         _saved_by_keyboard(page, pds, "Save global defaults", "the global")
         pds.pick(page, "Layer", "machine")
         expect(pds.select(page, INSTRUCTIONS)).to_have_js_property("value", "inherit")
