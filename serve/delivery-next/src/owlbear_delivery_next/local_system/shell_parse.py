@@ -110,6 +110,7 @@ class _Lexer:
         self.pending: list[tuple[Input, str, bool, bool]] = []  # here-documents whose body starts at the next line
         self.blocks: list[tuple[int, bool]] = []  # open compound commands: first command and whether input is opaque
         self.group: tuple[int, int] | None = None  # the commands of the subshell that just closed
+        self.defined = False  # an empty () just closed: a function's body may follow
 
     def level(self, i: int, close: str = "", depth: int = 0, *, opaque: bool = False) -> int:
         """Read text[i:] up to the unquoted *close*, or to the end without one; return the index after it.
@@ -137,7 +138,8 @@ class _Lexer:
 
     def _keep(self, s: _Level, i: int) -> None:
         first = s.words[0] if s.words else ""
-        opaque = s.opaque or s.piped or any(o for _, o in self.blocks)
+        body = first == "function" or (first == "{" and self.defined)  # its input is its caller's, unknown here
+        opaque = s.opaque or s.piped or body or any(o for _, o in self.blocks)
         top = s.depth == 0 and not self.blocks and not s.piped and not s.conditional
         command = Command(s.words, self.text[s.start or 0 : i], s.inputs, opaque, top)
         if first in _CLOSERS and self.blocks:
@@ -147,7 +149,7 @@ class _Lexer:
         elif not s.words and command.stdin() and self.group:  # `(sh) < f`
             self._opaque(*self.group)
         self.commands.append(command)
-        self.group = None
+        self.group, self.defined = None, False
         if first in _OPENERS:
             self.blocks.append((len(self.commands) - 1, opaque))
 
@@ -262,6 +264,7 @@ class _Lexer:
         start = len(self.commands)
         end = self.level(i + 1, ")", s.depth + 1, opaque=opaque)
         self.group = (start, len(self.commands))
+        self.defined = start == len(self.commands)
         return end
 
     def _process(self, s: _Level, i: int) -> int:
@@ -293,25 +296,32 @@ class _Lexer:
         while i < len(text) and text[i] in " \t":
             i += 1
         out, quote, literal = "", "", False
-        while i < len(text) and (quote or text[i] not in _BLANK):
+        while i < len(text) and (quote or text[i] not in _BLANK or text.startswith("\\\n", i)):
             ch = text[i]
-            if quote:
-                if quote == '"' and ch == "\\" and (nxt := text[i + 1 : i + 2]) and nxt in '$`"\\\n':
-                    out, i = out + nxt, i + 1
-                elif ch == quote:
-                    quote = ""
-                else:
-                    out += ch
+            if ch == "\\" and text[i + 1 : i + 2] == "\n" and quote != "'":  # a line continuation
+                i += 2
+            elif quote:
+                out, quote, i = self._quoted(out, quote, i)
+            elif ch == "$" and text[i + 1 : i + 2] in {"'", '"'}:  # $'...' or $"...": not read
+                raise ValueError
             elif ch in "'\"":
-                quote, literal = ch, True
+                quote, literal, i = ch, True, i + 1
             elif ch == "\\":
-                out, literal, i = out + text[i + 1 : i + 2], True, i + 1
+                out, literal, i = out + text[i + 1 : i + 2], True, i + 2
             else:
-                out += ch
-            i += 1
+                out, i = out + ch, i + 1
         if quote or not (out or literal):
             raise ValueError
         return i, out, literal
+
+    def _quoted(self, out: str, quote: str, i: int) -> tuple[str, str, int]:
+        """One character of a quoted delimiter part: the text so far, the quote still open, and the next index."""
+        ch, nxt = self.text[i], self.text[i + 1 : i + 2]
+        if quote == '"' and ch == "\\" and nxt and nxt in '$`"\\\n':
+            return out + nxt, quote, i + 2
+        if ch == quote:
+            return out, "", i + 1
+        return out + ch, quote, i + 1
 
     def _bodies(self, i: int) -> int:
         """Read each pending here-document's body from index *i*; an unquoted body's substitutions are lexed."""
@@ -339,9 +349,7 @@ class _Lexer:
         """Move a here-document body's substituted commands, listed from *found* on, before the command it feeds."""
         owner = next((k for k, c in enumerate(self.commands[:found]) if any(i is given for i in c.inputs)), None)
         if owner is not None:
-            moved = self.commands[found:]
-            self.commands[owner:owner] = moved
-            del self.commands[found + len(moved) :]
+            self.commands[owner:] = self.commands[found:] + self.commands[owner:found]
 
     def _expansions(self, i: int, end: int) -> bool:
         """Lex the substitutions in text[i:end] as commands; return whether it holds any expansion."""

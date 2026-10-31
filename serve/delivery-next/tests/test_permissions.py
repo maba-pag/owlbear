@@ -926,3 +926,66 @@ def test_ansi_c_quoting_is_not_decoded_but_refused(scripts: Path, text: str, sho
         assert reason == f"`{text}` builds a command at run time (`{shown}`); write the program and its script out"
     else:
         assert reason.endswith("a path built at run time; write the path out")
+
+
+@pytest.mark.parametrize(
+    "wrapper", ['"$WRAP/env" echo hi', '"${TOOL_DIR}/timeout" 5 echo hi', '"$WRAP/find" . -name x']
+)
+def test_a_wrapper_whose_name_is_built_at_run_time_is_refused(wrapper: str) -> None:
+    assert "builds a command at run time" in decide(WRITE, shell(wrapper))
+    assert decide(WRITE, shell("/usr/bin/env echo hi")) is None
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "if true; then export BASH_ENV=./bad.sh; fi; bash -c true",
+        "if true; then BASH_ENV=./bad.sh; fi; bash -c true",
+    ],
+)
+def test_a_startup_variable_set_after_a_control_word_is_not_followed(scripts: Path, text: str) -> None:
+    assert decide(Policy(scripts), shell(text)).endswith("set where the guard can't follow it")
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "if true; then exec <<< 'echo hi'; fi; sh",
+        "printf x | time -p sh",
+        "f() { sh; }\nprintf x | f",
+        "function f { sh; }\nprintf x | f",
+    ],
+)
+def test_input_hidden_by_a_control_word_time_or_a_function_is_refused(text: str) -> None:
+    assert decide(WRITE, shell(text)).endswith(PIPED)
+
+
+def test_time_and_functions_keep_their_readable_counterparts() -> None:
+    assert decide(WRITE, shell("time -p sh -c 'echo hi'")) is None
+    assert decide(WRITE, shell("f() { sh -c 'echo hi'; }\nf")) is None
+    assert decide(WRITE, shell("printf data | time -p $CMD")).endswith(
+        "builds a command at run time (`$CMD`); write the program and its script out"
+    )
+
+
+@pytest.mark.parametrize("delimiter", ["\\\nEOF", "$'EOF'"])
+def test_a_here_document_delimiter_the_guard_reads_differently_hides_nothing(delimiter: str) -> None:
+    text = f"cat << {delimiter}\nhello\nEOF\ngit commit --no-verify -m x"
+
+    reason = decide(WRITE, shell(text))
+    assert reason is not None
+    assert reason.endswith((BYPASS, "cannot be parsed"))
+    assert decide(WRITE, shell("cat << \\\nEOF\nhello\nEOF\necho after")) is None
+
+
+@pytest.mark.parametrize("prefix", ["command ", "builtin ", "if true; then "])
+def test_git_settings_exported_behind_a_prefix_stay_refused(prefix: str) -> None:
+    text = f"{prefix}export GIT_CONFIG_PARAMETERS=\"'core.hooksPath=/x'\""
+    text += "; fi; git status" if prefix.startswith("if") else "; git status"
+
+    assert decide(WRITE, shell(text)).endswith(BYPASS)
+
+
+def test_a_function_defined_with_the_keyword_is_judged_like_its_body() -> None:
+    assert decide(WRITE, shell("function f { git push -f; }")).endswith(BYPASS)
+    assert decide(WRITE, shell("function f { echo hi; }")) is None

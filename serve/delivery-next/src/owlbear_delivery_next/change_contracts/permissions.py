@@ -247,8 +247,8 @@ def _sub_bypass(sub: str | None, arguments: Sequence[str]) -> str | None:
 
 def _environment(words: Sequence[str]) -> dict[str, str]:
     """The variables one command sets for what it runs: leading assignments, env's, and export's."""
-    i = next((i for i, w in enumerate(words) if not shell_programs.ASSIGNMENT.match(w)), len(words))
-    found = list(words[:i])
+    i = shell_programs.builtin(words)  # then export ..., command export ...
+    found = [w for w in words[:i] if shell_programs.ASSIGNMENT.match(w)]
     if i < len(words) and shell_programs.name(words[i]) == "env":
         found += [w for w in words[i + 1 : shell_programs.operand(words, i)] if shell_programs.ASSIGNMENT.match(w)]
     elif i < len(words) and words[i] == "export":

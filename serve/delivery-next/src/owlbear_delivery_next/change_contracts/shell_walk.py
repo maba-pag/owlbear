@@ -27,7 +27,6 @@ _STDIN = _DEVICE_STDIN | {"-"}  # as a shell's script operand; source reads a fi
 _FOLDER = frozenset({"cd", "pushd", "popd"})
 _STARTUP = ("BASH_ENV", "ENV")  # variables naming a file a shell runs before its script
 _DECLARE = frozenset({"declare", "typeset", "readonly", "local"})
-_PREFIXES = frozenset({"command", "builtin"})  # run the builtin after them in this shell
 _SHOWN = 60  # characters of a script built at run time shown in a reason
 
 
@@ -58,16 +57,13 @@ class State:
         return self.stdin_plain and not self.exec_in
 
 
-type Judge = Callable[[str, int, State, str], str | None]  # text, depth, state, its name in reasons -> a refusal
-
-
 @dataclass(frozen=True)
 class Walk:
     """The walk through one text: its name in reasons, its depth, and how nested text and writes are judged."""
 
     name: str
     depth: int
-    judge: Judge
+    judge: Callable[[str, int, State, str], str | None]  # text, depth, state, its name in reasons -> a refusal
     writes: Callable[[Command], bool]
     bypass: Callable[[str, Run], str | None]  # the refusal of a run's environment that turns hooks or signing off
 
@@ -101,11 +97,7 @@ class Walk:
     def _environment(self, command: Command, state: State) -> None:
         """Note startup variables a command sets for later shells, and an exec that redirects this shell's input."""
         words = command.words
-        i = next((i for i, w in enumerate(words) if not shell_programs.ASSIGNMENT.match(w)), len(words))
-        while i < len(words) - 1 and words[i] in _PREFIXES:  # command -p -- exec ...: the builtin after its options
-            i += 1
-            while i < len(words) - 1 and words[i].startswith("-"):
-                i += 1
+        i = shell_programs.builtin(words)  # then export ..., command -p -- exec ...: the builtin itself
         first = words[i] if i < len(words) else None
         if first is None or first == "export":
             assigned = shell_programs.assignments(words[:i] if first is None else words[i + 1 :])
@@ -220,8 +212,8 @@ class Walk:
         word = operands[0] if len(operands) == 1 else Word("-")
         path = Path(word).expanduser() if word.tilde else Path(word)
         followed = shell_programs.name(run.words[0]) == "cd" and command.top_level and not state.current
-        plain = not word.expanded and not word.startswith("-") and path.is_absolute() and ".." not in path.parts
-        plain = plain and path.is_dir()  # cd fails into anything else, and the shell stays where it was
+        # cd fails into anything but an existing folder, and the shell stays where it was
+        plain = not word.expanded and path.is_absolute() and ".." not in path.parts and path.is_dir()
         state.at = path if followed and plain else None
 
     def _file(self, run: Run, word: Word, state: State) -> str | None:

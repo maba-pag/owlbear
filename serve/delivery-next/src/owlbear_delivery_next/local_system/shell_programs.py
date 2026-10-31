@@ -86,13 +86,41 @@ def assignments(words: Sequence[Word]) -> dict[str, Word]:
     return found
 
 
+def head(words: Sequence[str], i: int = 0) -> int:
+    """The index of the word a command runs, after control words, assignments and time with its options."""
+    while i < len(words):
+        if words[i] == "time":
+            i += 1
+            while i < len(words) and words[i].startswith("-"):
+                i += 1
+        elif words[i] == "function":  # function NAME { body: the body's first command
+            i += 2
+        elif words[i] in _PREFIX_WORDS or ASSIGNMENT.match(words[i]):
+            i += 1
+        else:
+            break
+    return min(i, len(words))
+
+
+def builtin(words: Sequence[str]) -> int:
+    """The index of the builtin a command runs, past ``command`` or ``builtin`` and their options too."""
+    i = head(words)
+    while i < len(words) - 1 and words[i] in {"command", "builtin"}:
+        i += 1
+        while i < len(words) - 1 and words[i].startswith("-"):
+            i += 1
+    return i
+
+
 def runs(words: Sequence[Word], depth: int = 0, context: Run | None = None) -> list[Run]:
     """Each program one command's words run, through prefixes, assignments and wrappers."""
     context = context or Run()
-    i = next((i for i, w in enumerate(words) if w not in _PREFIX_WORDS and not ASSIGNMENT.match(w)), len(words))
+    i = head(words)
     if i == len(words):
         return []
     here = replace(context, env={**context.env, **assignments(words[:i])})
+    if getattr(words[i], "expanded", False):  # a wrapper's name built at run time may be anything
+        return [replace(here, words=list(words[i:]))]
     program = name(words[i])
     if program == "find":
         return _found(words, i, depth, here)
@@ -105,9 +133,8 @@ def runs(words: Sequence[Word], depth: int = 0, context: Run | None = None) -> l
 
 def _found(words: Sequence[Word], i: int, depth: int, context: Run) -> list[Run]:
     """The commands find's -exec actions run, with each match's path replacing {}."""
-    starts = [j + 1 for j, w in enumerate(words) if w in _EXEC and j + 1 < len(words)]
     found = []
-    for j in starts:
+    for j in (j + 1 for j, w in enumerate(words) if w in _EXEC and j + 1 < len(words)):
         k = next((k for k in range(j, len(words)) if words[k] in {";", "+"}), len(words))
         sub = replace(context, launchers=(*context.launchers, words[i]), replaced="{}")
         found += runs(words[j:k], depth + 1, replace(sub, chdir=sub.chdir or words[j - 1] in _IN_PLACE))
@@ -323,9 +350,7 @@ def shell_args(words: Sequence[Word]) -> ShellArgs:
     rest = words[i:]
     if command:
         return ShellArgs(script=rest[0] if rest else None, startup=tuple(startup))
-    if stdin or not rest:
-        return ShellArgs(startup=tuple(startup))
-    return ShellArgs(operand=rest[0], startup=tuple(startup))
+    return ShellArgs(operand=None if stdin or not rest else rest[0], startup=tuple(startup))
 
 
 def _regular(path: Path) -> None:
