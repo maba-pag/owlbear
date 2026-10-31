@@ -314,6 +314,9 @@ def _mutation(text: str, commands: Sequence[Sequence[str]]) -> str | None:
     """How a shell command would write files or change Git state; discarded output does not count."""
     if found := next(filter(None, map(_git_mutation, commands)), None):
         return found
+    for run in (r for words in commands for r in shell_programs.runs(words)):  # a command env -S hides in its string
+        if match := _SHELL_MUTATION.match(" ".join(run.words)):
+            return f"filesystem mutation '{match[0].strip(' \t;&|')}'"
     text = _HARMLESS.sub("", text)
     if _REDIRECT.search(text):
         return "a redirect"
@@ -350,14 +353,10 @@ def _check(
             return f"`{name}` uses {flag}, {BYPASS}"
         if not policy.write and (found := _mutation(text, [c.words for c in commands])):
             return f"`{name}` uses {found}, which writes in a read-only step"
-        walk = shell_walk.Walk(name, depth, functools.partial(_judge, policy), _writes)
+        walk = shell_walk.Walk(name, depth, functools.partial(_check, policy), _writes)
         return walk.commands(commands, state or shell_walk.State(policy.root))
     except shell_programs.UnreadableError as error:
         return f"`{name}` {error}"
-
-
-def _judge(policy: Policy, text: str, depth: int, state: shell_walk.State, label: str) -> str | None:
-    return _check(policy, text, depth, state, label)
 
 
 def _writes(command: shell_parse.Command) -> bool:

@@ -22,10 +22,12 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.local_system.shell_parse import Command
     from owlbear_delivery_next.local_system.shell_programs import Run
 
-_STDIN = frozenset({"/dev/stdin", "/dev/fd/0", "-"})  # a script operand naming the shell's own input
+_DEVICE_STDIN = frozenset({"/dev/stdin", "/dev/fd/0"})  # a path naming the shell's own input
+_STDIN = _DEVICE_STDIN | {"-"}  # as a shell's script operand; source reads a file named -
 _FOLDER = frozenset({"cd", "pushd", "popd"})
 _STARTUP = ("BASH_ENV", "ENV")  # variables naming a file a shell runs before its script
 _DECLARE = frozenset({"declare", "typeset", "readonly", "local"})
+_PREFIXES = frozenset({"command", "builtin"})  # run the builtin after them in this shell
 _SHOWN = 60  # characters of a script built at run time shown in a reason
 
 
@@ -72,17 +74,30 @@ class Walk:
         """Read *commands* in order and return the first refusal."""
         for command in commands:
             self._environment(command, state)
-            for run in shell_programs.runs(command.words):
-                if reason := self._run(command, run, state):
-                    return reason
+            if reason := self._command(command, state):
+                return reason
             if self.writes(command):
                 state.effects.wrote = True
         return None
+
+    def _command(self, command: Command, state: State) -> str | None:
+        runs = shell_programs.runs(command.words)
+        head = next((w for w in command.words if not shell_programs.ASSIGNMENT.match(w)), None)
+        checked: set[str] = set()
+        for run in [*runs, shell_programs.Run(words=[head])] if head is not None else runs:
+            for word in (*run.launchers, run.words[0]):  # a launcher by path is checked even with nothing to run
+                if "/" in word and word not in checked and not _built(run, word):
+                    checked.add(word)
+                    if reason := self._by_path(command, run, word, state):
+                        return reason
+        return next(filter(None, (self._run(command, run, state) for run in runs)), None)
 
     def _environment(self, command: Command, state: State) -> None:
         """Note startup variables a command sets for later shells, and an exec that redirects this shell's input."""
         words = command.words
         i = next((i for i, w in enumerate(words) if not shell_programs.ASSIGNMENT.match(w)), len(words))
+        while i < len(words) - 1 and words[i] in _PREFIXES:
+            i += 1
         first = words[i] if i < len(words) else None
         if first is None or first == "export":
             assigned = shell_programs.assignments(words[:i] if first is None else words[i + 1 :])
@@ -96,11 +111,8 @@ class Walk:
 
     def _run(self, command: Command, run: Run, state: State) -> str | None:
         program = run.words[0]
-        if program.expanded or _replaced(run, program):
+        if _built(run, program):
             return f"`{self.name}` builds a command at run time (`{program}`); write the program and its script out"
-        for word in (*run.launchers, program):
-            if "/" in word and (reason := self._by_path(command, run, word, state)):
-                return reason
         match shell_programs.name(program):
             case name if name in _FOLDER:
                 self._folder(command, run, state)
@@ -123,7 +135,8 @@ class Walk:
             interpreter = shell_programs.shebang(path)
         except OSError as error:
             return self._unreadable(word, error)
-        for sub in shell_programs.runs([*interpreter, Word(str(path))]) if interpreter else ():
+        context = shell_programs.Run(env=dict(run.env))  # the variables it is started with reach its interpreter
+        for sub in shell_programs.runs([*interpreter, Word(str(path))], context=context) if interpreter else ():
             if shell_programs.name(sub.words[0]) in shell_programs.SHELLS and (
                 reason := self._shell(command, sub, state)
             ):
@@ -135,6 +148,8 @@ class Walk:
         args = shell_programs.shell_args(run.words)
         plain = state.plain() and not command.opaque_stdin and not run.from_input
         child = state.child(plain=plain and command.stdin() is None)
+        if run.chdir:  # env -C, find -execdir: it starts in another folder
+            child.at = None
         for file in [*_startup(run, state), *args.startup]:
             if file is None:
                 return f"`{self.name}` starts a shell whose startup file was set where the guard can't follow it"
@@ -173,20 +188,18 @@ class Walk:
             state.stdin_plain = saved
 
     def _source(self, command: Command, run: Run, state: State) -> str | None:
-        operands = list(run.words[1:])
-        operands = operands[1:] if operands[:1] == ["--"] else operands
+        operands = _operands(run)
         if not operands:
             return None
         word = operands[0]
-        if word in _STDIN:
+        if word in _DEVICE_STDIN:
             return self._stdin(command, run, state, plain=state.stdin_plain and not run.from_input)
         if "/" not in word and not word.expanded:
             return f"`{self.name}` sources `{word}` through PATH; write `./{word}`"
         return self._file(run, word, state)
 
     def _eval(self, _command: Command, run: Run, state: State) -> str | None:
-        words = list(run.words[1:])
-        words = words[1:] if words[:1] == ["--"] else words
+        words = _operands(run)
         if built := next((w for w in words if _built(run, w)), None):
             return self._built(built)
         return self._text(" ".join(words), state)
@@ -198,6 +211,7 @@ class Walk:
         path = Path(word).expanduser() if word.tilde else Path(word)
         followed = shell_programs.name(run.words[0]) == "cd" and command.top_level and not state.current
         plain = not word.expanded and not word.startswith("-") and path.is_absolute() and ".." not in path.parts
+        plain = plain and path.is_dir()  # cd fails into anything else, and the shell stays where it was
         state.at = path if followed and plain else None
 
     def _file(self, run: Run, word: Word, state: State) -> str | None:
@@ -265,10 +279,9 @@ def _built(run: Run, word: Word) -> bool:
 
 def _startup(run: Run, state: State) -> list[Word | None]:
     """The startup files a shell runs first: BASH_ENV and ENV from its command, else as earlier text set them."""
-    found = []
-    for key in _STARTUP:
-        if key in run.env:
-            found.append(run.env[key])
-        elif key in state.startup:
-            found.append(state.startup[key])
-    return found
+    files = state.startup | run.env
+    return [files[key] for key in _STARTUP if key in files]
+
+
+def _operands(run: Run) -> list[Word]:
+    return run.words[2 if run.words[1:2] == ["--"] else 1 :]

@@ -379,7 +379,7 @@ def test_the_lexer_marks_expansions_tildes_and_where_input_comes_from() -> None:
 
     assert [(w.expanded, w.tilde) for w in run_time.words] == [(True, False), (False, False)]
     assert [(w.expanded, w.tilde) for w in literal.words] == [(False, False), (False, True), (False, False)]
-    assert (echo.opaque_stdin, echo.top_level) == (False, True)
+    assert (echo.opaque_stdin, echo.top_level) == (False, False)  # a pipeline part runs in a subshell
     assert (cat.opaque_stdin, sh.opaque_stdin, cat.top_level) == (True, True, False)
     assert (group.words, group.opaque_stdin, closer.words) == (["{", "x"], True, ["}"])  # the group's input feeds it
     assert (fed.words, fed.opaque_stdin, tee.opaque_stdin) == (["sh"], True, False)
@@ -390,21 +390,16 @@ BAD = "git commit --no-verify -m x\n"
 
 @pytest.fixture
 def scripts(tmp_path: Path) -> Path:
-    """A worktree whose good.sh is harmless and whose bad.sh skips the hooks, also in sub/ and outside it."""
+    """A worktree whose good.sh and x.sh are harmless and whose bad.sh and sub/x.sh skip the hooks."""
     root = tmp_path / "root"
-    for folder, good, bad in ((root, "good.sh", "bad.sh"), (root / "sub", "x.sh", "bad.sh")):
-        folder.mkdir(parents=True)
-        (folder / good).write_text("echo hi\n")
-        (folder / bad).write_text(BAD)
+    (root / "sub").mkdir(parents=True)
+    (root / "good.sh").write_text("echo hi\n")
+    (root / "bad.sh").write_text(BAD)
     (root / "x.sh").write_text("echo root\n")
     (root / "sub" / "x.sh").write_text(BAD)
     (root / "scripts").mkdir()
     (root / "scripts" / "check.sh").write_text("echo checked\n")
     return root
-
-
-def at(root: Path, *, write: bool = True) -> Policy:
-    return Policy(root, write=write)
 
 
 @pytest.mark.parametrize(
@@ -435,7 +430,7 @@ def at(root: Path, *, write: bool = True) -> Policy:
     ],
 )
 def test_a_readable_script_a_shell_runs_is_judged_and_a_harmless_one_runs(scripts: Path, text: str) -> None:
-    assert decide(at(scripts), shell(text)) is None
+    assert decide(Policy(scripts), shell(text)) is None
 
 
 @pytest.mark.parametrize(
@@ -454,7 +449,7 @@ def test_a_readable_script_a_shell_runs_is_judged_and_a_harmless_one_runs(script
     ],
 )
 def test_a_bypass_in_a_script_file_is_refused(scripts: Path, text: str, name: str | None) -> None:
-    reason = decide(at(scripts), shell(text))
+    reason = decide(Policy(scripts), shell(text))
 
     if name is None:  # a relative cd leaves the folder unknown
         assert reason == f"`{text}` runs `../bad.sh` from a folder the guard can't follow; use an absolute path"
@@ -565,7 +560,7 @@ def test_a_script_that_cant_be_read_is_refused(scripts: Path, text: str, why: st
     os.mkfifo(scripts / "fifo")
     file = text.split()[1]
 
-    assert decide(at(scripts), shell(text)) == f"`{text}` runs `{file}`, which can't be read: {why}"
+    assert decide(Policy(scripts), shell(text)) == f"`{text}` runs `{file}`, which can't be read: {why}"
 
 
 @pytest.mark.parametrize(
@@ -576,14 +571,14 @@ def test_a_script_that_cant_be_read_is_refused(scripts: Path, text: str, why: st
     ],
 )
 def test_a_script_path_the_guard_cant_resolve_is_refused(scripts: Path, text: str, reason: str) -> None:
-    assert decide(at(scripts), shell(text)) == f"`{text}` {reason}"
+    assert decide(Policy(scripts), shell(text)) == f"`{text}` {reason}"
 
 
 def test_a_read_only_step_judges_a_scripts_writes(scripts: Path) -> None:
     (scripts / "wipe.sh").write_text("rm x\n")
 
-    assert decide(at(scripts, write=False), shell("bash good.sh")) is None
-    assert decide(at(scripts, write=False), shell("bash wipe.sh")) == (
+    assert decide(Policy(scripts, write=False), shell("bash good.sh")) is None
+    assert decide(Policy(scripts, write=False), shell("bash wipe.sh")) == (
         "`wipe.sh` uses filesystem mutation 'rm', which writes in a read-only step"
     )
 
@@ -599,8 +594,8 @@ def test_a_shell_script_run_by_path_is_read(scripts: Path, first: str) -> None:
     shebang(scripts / "tool", first, BAD)
     shebang(scripts / "fine", first)
 
-    assert decide(at(scripts), shell("./tool")).endswith(BYPASS)
-    assert decide(at(scripts), shell("./fine")) is None
+    assert decide(Policy(scripts), shell("./tool")).endswith(BYPASS)
+    assert decide(Policy(scripts), shell("./fine")) is None
 
 
 def test_a_program_by_path_that_isnt_a_shell_script_runs_unread(scripts: Path) -> None:
@@ -610,10 +605,10 @@ def test_a_program_by_path_that_isnt_a_shell_script_runs_unread(scripts: Path) -
 
     (scripts / "long").write_text(long_text)
 
-    assert decide(at(scripts), shell("./tool.py")) is None
-    assert decide(at(scripts), shell("./binary")) is None
-    assert decide(at(scripts), shell("./long")).endswith(BYPASS)
-    assert decide(at(scripts), shell("./missing")) == (
+    assert decide(Policy(scripts), shell("./tool.py")) is None
+    assert decide(Policy(scripts), shell("./binary")) is None
+    assert decide(Policy(scripts), shell("./long")).endswith(BYPASS)
+    assert decide(Policy(scripts), shell("./missing")) == (
         "`./missing` runs `./missing`, which can't be read: No such file or directory"
     )
 
@@ -621,8 +616,8 @@ def test_a_program_by_path_that_isnt_a_shell_script_runs_unread(scripts: Path) -
 def test_a_launcher_run_by_path_is_read_too(scripts: Path) -> None:
     shebang(scripts / "env", "#!/bin/sh", BAD)
 
-    assert decide(at(scripts), shell("./env echo hi")).endswith(BYPASS)
-    assert decide(at(scripts), shell("/usr/bin/env echo hi")) is None
+    assert decide(Policy(scripts), shell("./env echo hi")).endswith(BYPASS)
+    assert decide(Policy(scripts), shell("/usr/bin/env echo hi")) is None
 
 
 def test_scripts_outside_the_worktree_are_read_too(scripts: Path) -> None:
@@ -631,16 +626,16 @@ def test_scripts_outside_the_worktree_are_read_too(scripts: Path) -> None:
     (elsewhere / "good.sh").write_text("echo hi\n")
     shebang(elsewhere / "bad.sh", "#!/bin/sh", BAD)
 
-    assert decide(at(scripts), shell(f"bash {elsewhere}/good.sh")) is None
-    assert decide(at(scripts), shell(f"{elsewhere}/bad.sh")).endswith(BYPASS)
+    assert decide(Policy(scripts), shell(f"bash {elsewhere}/good.sh")) is None
+    assert decide(Policy(scripts), shell(f"{elsewhere}/bad.sh")).endswith(BYPASS)
 
 
 def test_nesting_counts_each_script_once_up_to_the_limit(scripts: Path) -> None:
     shebang(scripts / "leaf", "#!/bin/sh")
     (scripts / "mid.sh").write_text("./leaf\n")
 
-    assert decide(at(scripts), shell("sh -c 'bash mid.sh'")) is None  # -c, mid.sh, leaf: three levels
-    assert decide(at(scripts), shell("sh -c \"sh -c 'bash mid.sh'\"")).endswith("nests scripts more than 3 deep")
+    assert decide(Policy(scripts), shell("sh -c 'bash mid.sh'")) is None  # -c, mid.sh, leaf: three levels
+    assert decide(Policy(scripts), shell("sh -c \"sh -c 'bash mid.sh'\"")).endswith("nests scripts more than 3 deep")
 
 
 @pytest.mark.parametrize(
@@ -658,14 +653,14 @@ def test_nesting_counts_each_script_once_up_to_the_limit(scripts: Path) -> None:
     ],
 )
 def test_a_relative_script_after_a_folder_change_the_guard_cant_follow_is_refused(scripts: Path, text: str) -> None:
-    assert decide(at(scripts), shell(text)).endswith("from a folder the guard can't follow; use an absolute path")
+    assert decide(Policy(scripts), shell(text)).endswith("from a folder the guard can't follow; use an absolute path")
 
 
 def test_a_cd_to_an_absolute_path_is_followed(scripts: Path) -> None:
-    assert decide(at(scripts), shell(f"cd {scripts}/sub && bash x.sh")).endswith(BYPASS)
-    assert decide(at(scripts), shell(f"cd {scripts}/sub && bash ../good.sh")) is None
-    assert decide(at(scripts), shell(f"cd {scripts}/sub/.. && bash x.sh")).endswith("use an absolute path")
-    assert decide(at(scripts), shell(f"cd sub && bash {scripts}/good.sh")) is None
+    assert decide(Policy(scripts), shell(f"cd {scripts}/sub && bash x.sh")).endswith(BYPASS)
+    assert decide(Policy(scripts), shell(f"cd {scripts}/sub && bash ../good.sh")) is None
+    assert decide(Policy(scripts), shell(f"cd {scripts}/sub/.. && bash x.sh")).endswith("use an absolute path")
+    assert decide(Policy(scripts), shell(f"cd sub && bash {scripts}/good.sh")) is None
 
 
 def test_a_quoted_tilde_is_a_folder_named_tilde(scripts: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -676,8 +671,8 @@ def test_a_quoted_tilde_is_a_folder_named_tilde(scripts: Path, monkeypatch: pyte
     (scripts / "~" / "x.sh").write_text(BAD)
     monkeypatch.setenv("HOME", str(home))
 
-    assert decide(at(scripts), shell("bash ~/x.sh")) is None
-    assert decide(at(scripts), shell("bash '~/x.sh'")).endswith(BYPASS)
+    assert decide(Policy(scripts), shell("bash ~/x.sh")) is None
+    assert decide(Policy(scripts), shell("bash '~/x.sh'")).endswith(BYPASS)
 
 
 @pytest.mark.parametrize(
@@ -698,13 +693,13 @@ def test_a_quoted_tilde_is_a_folder_named_tilde(scripts: Path, monkeypatch: pyte
 def test_a_script_or_program_run_after_a_write_in_the_same_command_is_refused(scripts: Path, text: str) -> None:
     (scripts / "writer.sh").write_text("cp bad.sh good.sh\n")
 
-    assert decide(at(scripts), shell(text)).endswith("write it in one command and run it in the next")
+    assert decide(Policy(scripts), shell(text)).endswith("write it in one command and run it in the next")
 
 
 def test_a_startup_file_that_writes_nothing_leaves_the_script_readable(scripts: Path) -> None:
     (scripts / "quiet.sh").write_text("echo quiet\n")
 
-    assert decide(at(scripts), shell("BASH_ENV=./quiet.sh bash -c 'bash ./good.sh'")) is None
+    assert decide(Policy(scripts), shell("BASH_ENV=./quiet.sh bash -c 'bash ./good.sh'")) is None
 
 
 @pytest.mark.parametrize(
@@ -715,11 +710,11 @@ def test_a_startup_file_that_writes_nothing_leaves_the_script_readable(scripts: 
     ],
 )
 def test_a_startup_file_set_earlier_in_the_command_is_read(scripts: Path, text: str) -> None:
-    assert decide(at(scripts), shell(text)) == f"`./bad.sh` uses --no-verify, {BYPASS}"
+    assert decide(Policy(scripts), shell(text)) == f"`./bad.sh` uses --no-verify, {BYPASS}"
 
 
 def test_a_startup_file_set_where_the_guard_cant_follow_it_is_refused(scripts: Path) -> None:
-    assert decide(at(scripts), shell("(BASH_ENV=./x); bash -c true")).endswith(
+    assert decide(Policy(scripts), shell("(BASH_ENV=./x); bash -c true")).endswith(
         "starts a shell whose startup file was set where the guard can't follow it"
     )
 
@@ -758,11 +753,11 @@ def test_env_split_string_runs_its_harmless_command_and_reads_its_startup_file(s
     assert decide(WRITE, shell("env -S 'echo hi'")) is None
     assert decide(WRITE, shell("env -u X -S 'echo hi'")) is None
     assert (
-        decide(at(scripts), shell("env -S 'BASH_ENV=./bad.sh bash -c true'"))
+        decide(Policy(scripts), shell("env -S 'BASH_ENV=./bad.sh bash -c true'"))
         == f"`./bad.sh` uses --no-verify, {BYPASS}"
     )
     shebang(scripts / "tool", "#!/usr/bin/env -S BASH_ENV=./bad.sh bash")
-    assert decide(at(scripts), shell("./tool")) == f"`./bad.sh` uses --no-verify, {BYPASS}"
+    assert decide(Policy(scripts), shell("./tool")) == f"`./bad.sh` uses --no-verify, {BYPASS}"
 
 
 @pytest.mark.parametrize(
@@ -789,3 +784,77 @@ def test_env_split_string_marks_variables_and_refuses_what_env_wouldnt_read() ->
     assert decide(WRITE, shell("env -S '${CMD} x'")).endswith(
         "builds a command at run time (`${CMD}`); write the program and its script out"
     )
+
+
+def test_an_escaped_character_in_a_double_quoted_delimiter_ends_the_document_where_the_shell_does() -> None:
+    text = 'cat <<"\\$END"\nhello\n$END\ngit commit --no-verify -m x'
+
+    assert decide(WRITE, shell(text)).endswith(BYPASS)
+    assert decide(WRITE, shell('cat <<"\\$END"\nhello\n$END\necho after')) is None
+
+
+def test_an_unquoted_here_documents_escapes_are_removed_before_the_shell_reads_it() -> None:
+    assert "builds a command at run time (`$CMD`)" in decide(WRITE, shell("bash <<EOF\n\\$CMD\nEOF"))
+    assert decide(WRITE, shell("bash <<EOF\necho \\$HOME\nEOF")) is None
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "cd {root}/sub || cd {root}; bash ./x.sh",
+        "true && cd {root}/sub; bash ./x.sh",
+        "cd {root}/sub | cat; bash ./x.sh",
+        "cd {root}/sub & bash ./x.sh",
+        "cd {root}/missing; bash ./x.sh",
+    ],
+)
+def test_a_folder_change_that_may_not_happen_leaves_the_folder_unknown(scripts: Path, text: str) -> None:
+    assert decide(Policy(scripts), shell(text.format(root=scripts))).endswith("use an absolute path")
+
+
+def test_a_startup_variable_set_conditionally_is_not_followed(scripts: Path) -> None:
+    text = "export BASH_ENV=./bad.sh\nfalse && export BASH_ENV=./good.sh\nbash -c true"
+
+    assert decide(Policy(scripts), shell(text)).endswith("set where the guard can't follow it")
+
+
+def test_a_script_run_by_path_keeps_the_variables_it_was_started_with(scripts: Path) -> None:
+    shebang(scripts / "fine", "#!/bin/bash")
+
+    assert decide(Policy(scripts), shell("BASH_ENV=./bad.sh ./fine")) == f"`./bad.sh` uses --no-verify, {BYPASS}"
+    assert decide(Policy(scripts), shell("env BASH_ENV=./bad.sh ./fine")) == f"`./bad.sh` uses --no-verify, {BYPASS}"
+    assert decide(Policy(scripts), shell("BASH_ENV=./good.sh ./fine")) is None
+
+
+@pytest.mark.parametrize("prefix", ["command ", "builtin "])
+def test_exec_behind_command_or_builtin_still_redirects_the_shells_input(prefix: str) -> None:
+    assert decide(WRITE, shell(f"{prefix}exec <<< 'echo hi'\nsh")).endswith(PIPED)
+    assert decide(WRITE, shell(f"{prefix}sh -c 'echo hi'")) is None
+
+
+def test_a_command_env_split_string_hides_is_judged_for_writes(scripts: Path) -> None:
+    assert (
+        decide(READ, shell("env -S 'rm x'"))
+        == "`env -S 'rm x'` uses filesystem mutation 'rm', which writes in a read-only step"
+    )
+    assert decide(READ, shell("env -S 'echo hi'")) is None
+    assert decide(Policy(scripts), shell("env -S 'cp a b'; /usr/bin/env echo hi")).endswith("run it in the next")
+
+
+@pytest.mark.parametrize("text", ["env -C sub sh -c 'bash x.sh'", "find sub -execdir sh -c 'bash x.sh' \\;"])
+def test_a_shell_started_in_another_folder_reads_relative_scripts_nowhere(scripts: Path, text: str) -> None:
+    assert decide(Policy(scripts), shell(text)).endswith("use an absolute path")
+    assert decide(Policy(scripts), shell(text.replace("x.sh", f"{scripts}/good.sh"))) is None
+
+
+def test_a_launcher_run_by_path_is_checked_with_nothing_for_it_to_run(scripts: Path) -> None:
+    shebang(scripts / "find", "#!/bin/sh", BAD)
+
+    assert decide(Policy(scripts), shell("./find . -name x")).endswith(BYPASS)
+    assert decide(Policy(scripts), shell("cp a b; /usr/bin/env")).endswith("run it in the next")
+    assert decide(Policy(scripts), shell("/usr/bin/find . -name x")) is None
+
+
+@pytest.mark.parametrize("text", ["source -", ". -", "source - <<< 'echo hi'"])
+def test_source_reads_a_file_named_dash_not_its_input(text: str) -> None:
+    assert decide(WRITE, shell(text)).endswith("through PATH; write `./-`")

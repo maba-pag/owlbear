@@ -235,7 +235,7 @@ class _Splitter:
             self.flush()
         elif nxt == "_":
             self.add(" ")
-        elif nxt in _ESCAPES and nxt:
+        elif nxt in _ESCAPES:
             self.add(_ESCAPES[nxt])
         else:
             raise UnreadableError(_SPLIT_UNREAD)
@@ -288,8 +288,7 @@ class ShellArgs:
     """What one shell invocation runs: a -c script, a script file, or its standard input, after its startup files."""
 
     script: Word | None = None
-    operand: Word | None = None
-    reads_stdin: bool = False
+    operand: Word | None = None  # None with no script: it reads its standard input
     startup: tuple[Word, ...] = ()
 
 
@@ -318,7 +317,7 @@ def shell_args(words: Sequence[Word]) -> ShellArgs:
     if command:
         return ShellArgs(script=rest[0] if rest else None, startup=tuple(startup))
     if stdin or not rest:
-        return ShellArgs(reads_stdin=True, startup=tuple(startup))
+        return ShellArgs(startup=tuple(startup))
     return ShellArgs(operand=rest[0], startup=tuple(startup))
 
 

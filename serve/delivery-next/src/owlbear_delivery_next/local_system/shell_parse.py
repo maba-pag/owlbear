@@ -16,6 +16,7 @@ _OPENERS = frozenset({"{", "case", "for", "if", "select", "until", "while"})  # 
 _CLOSERS = frozenset({"}", "done", "esac", "fi"})
 _SPECIAL = frozenset("@*#?$!-0123456789")  # $@, $1, ...: parameters without a name
 _BLANK = " \t\n;&|<>()"  # what ends a here-document's delimiter word
+_BODY_ESCAPE = re.compile(r"\\([$`\\\n])")  # escapes an unquoted here-document's body loses
 
 
 class Word(str):  # noqa: SLOT000 - a str subclass can hold attributes only in a __dict__
@@ -48,7 +49,8 @@ class Command:
     raw: str  # its own text, redirections included and here-document bodies not
     inputs: list[Input] = field(default_factory=list)
     opaque_stdin: bool = False  # its input comes from a pipe, a process substitution or its group's redirection
-    top_level: bool = True  # not in a subshell, substitution, loop, condition, function body or brace group
+    top_level: bool = True  # it runs in the text's own shell, surely: not in a subshell, substitution, compound
+    # command, pipeline or background job, and not after && or ||
 
     def stdin(self) -> Input | None:
         """The redirection that is the command's standard input: the last one on descriptor 0, as in bash."""
@@ -70,6 +72,7 @@ class _Level:
     redirect: tuple[int, str] | None = None  # the next word is a redirection's target: its descriptor and kind
     start: int | None = None
     piped: bool = False  # the next command reads the previous one's output
+    conditional: bool = False  # the next commands run only as && or || decides
 
     def add(self, chars: str) -> None:
         self.word = (self.word or "") + chars
@@ -120,18 +123,21 @@ class _Lexer:
         self.close(s, i)
         return i + 1
 
-    def close(self, s: _Level, i: int) -> None:
-        """End the command being read at index *i*, keeping it when it has words or input."""
+    def close(self, s: _Level, i: int) -> bool:
+        """End the command being read at index *i*, keeping it when it has words or input; return whether it did."""
         s.end_word()
-        if s.words or s.inputs:
+        kept = bool(s.words or s.inputs)
+        if kept:
             self._keep(s, i)
             s.piped = False
         s.words, s.inputs, s.redirect, s.start = [], [], None, None
+        return kept
 
     def _keep(self, s: _Level, i: int) -> None:
         first = s.words[0] if s.words else ""
         opaque = s.opaque or s.piped or any(o for _, o in self.blocks)
-        command = Command(s.words, self.text[s.start or 0 : i], s.inputs, opaque, s.depth == 0 and not self.blocks)
+        top = s.depth == 0 and not self.blocks and not s.piped and not s.conditional
+        command = Command(s.words, self.text[s.start or 0 : i], s.inputs, opaque, top)
         if first in _CLOSERS and self.blocks:
             start, _ = self.blocks.pop()
             if command.stdin():  # `done < f`: the loop's commands read it
@@ -215,9 +221,7 @@ class _Lexer:
         elif ch == "|":
             return self._pipe(s, i)
         elif ch in ";&\n)":
-            self.close(s, i)
-            if ch == "\n" and self.pending:
-                return self._bodies(i + 1)
+            return self._separator(s, i)
         elif ch in " \t":
             s.end_word()
         else:
@@ -226,10 +230,26 @@ class _Lexer:
             s.add(ch)
         return i + 1
 
-    def _pipe(self, s: _Level, i: int) -> int:
-        self.close(s, i)
-        if self.text.startswith("||", i):
+    def _separator(self, s: _Level, i: int) -> int:
+        """End a command at ;, &, &&, a newline or an unmatched ), reading here-document bodies after a newline."""
+        kept = self.close(s, i)
+        if self.text.startswith("&&", i):
+            s.conditional = True
             return i + 2
+        if kept and self.text[i] == "&":  # a background job runs in a subshell
+            self.commands[-1].top_level = False
+        s.conditional = False
+        if self.text[i] == "\n" and self.pending:
+            return self._bodies(i + 1)
+        return i + 1
+
+    def _pipe(self, s: _Level, i: int) -> int:
+        kept = self.close(s, i)
+        if self.text.startswith("||", i):
+            s.conditional = True
+            return i + 2
+        if kept:  # each part of a pipeline runs in a subshell
+            self.commands[-1].top_level = False
         s.piped = True
         return i + 2 if self.text.startswith("|&", i) else i + 1
 
@@ -274,7 +294,9 @@ class _Lexer:
         while i < len(text) and (quote or text[i] not in _BLANK):
             ch = text[i]
             if quote:
-                if ch == quote:
+                if quote == '"' and ch == "\\" and (nxt := text[i + 1 : i + 2]) and nxt in '$`"\\\n':
+                    out, i = out + nxt, i + 1
+                elif ch == quote:
                     quote = ""
                 else:
                     out += ch
@@ -304,7 +326,9 @@ class _Lexer:
                 lines.append(line)
                 i = stop + 1
             body = "".join(f"{line}\n" for line in lines)
-            given.word = Word(body, expanded=not literal and self._expansions(start, min(end, len(self.text))))
+            if not literal:  # the shell removes these backslashes before handing the body on
+                body = _BODY_ESCAPE.sub(lambda m: m[1] if m[1] != "\n" else "", body)
+            given.word = Word(body, expanded=not literal and self._expansions(start, end))
         return min(i, len(self.text))
 
     def _expansions(self, i: int, end: int) -> bool:
@@ -313,7 +337,7 @@ class _Lexer:
         while i < end:
             if text[i] == "\\":
                 i += 2
-            elif text.startswith("$((", i) or text.startswith("$(", i) or text[i] == "`":
+            elif text.startswith("$(", i) or text[i] == "`":
                 found, i = True, self._step(_Level(1, opaque=False), i)
             else:
                 found = found or (text[i] == "$" and text[i + 1 : i + 2] not in ("", " ", "\n", "\t"))
