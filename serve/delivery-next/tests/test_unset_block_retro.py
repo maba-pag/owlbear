@@ -208,7 +208,9 @@ def test_a_chat_in_a_nested_project_belongs_to_the_innermost(tmp_path, machine, 
     _layer(child if blocked == "parent" else parent, Prefs(ci_poll_seconds=20))
     _chat("cn", tmp_path / "p" / "c" / "deep")
     if reverse:
-        machine.projects = dict(reversed(machine.projects.items()))
+        items = list(machine.projects.items())  # in place: the seam reads this dict at each call
+        machine.projects.clear()
+        machine.projects.update(reversed(items))
     assert machine.retro.seams.blocked("chat:cn") == ("" if blocked == "parent" else UNSET)
 
 
