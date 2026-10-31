@@ -332,10 +332,11 @@ def test_the_brief_offers_a_new_shaping_chat_and_says_how_it_went(tmp_path: Path
 
         unset = {k: v for k, v in config.BASE.agents.items() if k != "shaper"}
         monkeypatch.setattr(config, "BASE", config.BASE.model_copy(update={"agents": unset}))
-        again.click()
-        pds.answer(page, "Open the chat")
-        expect(page.locator("#started")).to_contain_text("shaper")
-        expect(page.locator("#started code")).to_have_count(0)  # the work waits: nothing to run by hand (#808)
+        # the project's work now waits for its settings (#808): the button is held and says why
+        expect(again).to_be_disabled(timeout=15000)
+        expect(page.locator("#detail section.info p-button", has_text=REVISE)).to_have_attribute(
+            "title", re.compile("shaper")
+        )
         assert len(launched.calls) == 2
 
 

@@ -1,6 +1,6 @@
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { here } from "/assets/ui.mjs";
-import { DIALOG, state, send } from "./state.mjs";
+import { DIALOG, state, send, starts } from "./state.mjs";
 import { button, hd, text, list, panel, info, row } from "./widgets.mjs";
 import { merging } from "./forms.mjs";
 import { marks, findingDetails, WORKERS } from "./progress.mjs";
@@ -129,7 +129,7 @@ function readBacks(d) {
 function reviseButton(d) {
   if (d.brief.unrevisable !== "") return nothing;
   return button("Revise the brief in a new chat", () => reviseBrief(d),
-    { variant: "secondary", icon: "edit", aria: DIALOG, busy: state.creating });
+    { variant: "secondary", icon: "edit", aria: DIALOG, busy: state.creating, ...starts(d) });
 }
 
 export function approval(d) {
@@ -150,8 +150,8 @@ export function approval(d) {
       + `product commitments. To change the brief before approving, ${d.brief.unrevisable === ""
         ? "revise it in a new chat or in the shaping chat" : "return to the shaping chat"}.`),
     why ? text(`Not yet: ${why}.`, { weight: "semibold" }) : nothing,
-    row(button(`Approve brief v${version}`, start, { icon: "check", aria: DIALOG, disabled: Boolean(why) }),
-      reviseButton(d)));
+    row(button(`Approve brief v${version}`, start,
+      { icon: "check", aria: DIALOG, disabled: Boolean(why), ...starts(d) }), reviseButton(d)));
 }
 
 // What approving starts (TD-151): the brief, details included, becomes the baseline; then the challenge, planning,

@@ -1,5 +1,5 @@
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
-import { state, show, several, formsOf, send } from "./state.mjs";
+import { state, show, several, formsOf, send, starts } from "./state.mjs";
 import { toggle, button, hd, text, row, info, notice, refusal } from "./widgets.mjs";
 import {
   questionForm, retryForm, criteriaPanel, checkForm, mergeForm, restartButton, pullbackNote, stopNotice,
@@ -25,7 +25,7 @@ function detailHead(d) {
         show();
       }
     };
-    intent = button(d.paused ? "Resume" : "Pause", go, d.paused ? { icon: "play" }
+    intent = button(d.paused ? "Resume" : "Pause", go, d.paused ? { icon: "play", ...starts(d) }
       : { variant: "secondary", icon: "pause" });
   }
   const under = [d.brief.title && d.slug, several() && `in ${d.projectName}`].filter(Boolean).join(" \u00b7 ");

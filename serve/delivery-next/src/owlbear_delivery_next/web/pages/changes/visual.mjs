@@ -1,6 +1,6 @@
 import { html, nothing, render } from "/assets/lit-html/3.3.3/lit-html.js";
 import { api, token } from "/assets/ui.mjs";
-import { DIALOG, REVERT, show, parts, draft, notify, send } from "./state.mjs";
+import { DIALOG, REVERT, show, parts, draft, notify, send, starts } from "./state.mjs";
 import { disclosure, button, field, tick, hd, text, list, row, panel } from "./widgets.mjs";
 import { merging, finale, mergeSetting } from "./forms.mjs";
 
@@ -141,8 +141,8 @@ export function decisionForm(q, r, pictures, d) {
       : nothing,
     field(key, "text", "Comment: on Fail it becomes a criterion every later round checks until you withdraw it; on "
       + "Pass it is only a note"),
-    row(button("Pass", () => decide("pass"), { icon: "check", aria: DIALOG }),
-      button("Fail", () => decide("fail"), { variant: "secondary", icon: "close", aria: DIALOG })));
+    row(button("Pass", () => decide("pass"), { icon: "check", aria: DIALOG, ...starts(d) }),
+      button("Fail", () => decide("fail"), { variant: "secondary", icon: "close", aria: DIALOG, ...starts(d) })));
 }
 
 // Screenshots load with the token once each; a loaded one renders from its object URL.
