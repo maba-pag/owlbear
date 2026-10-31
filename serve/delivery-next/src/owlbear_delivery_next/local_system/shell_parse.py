@@ -243,6 +243,13 @@ class _Lexer:
 
     def _braced(self, s: _Level, i: int) -> int:
         """A ${...} expansion: < and > in it never redirect; its substitutions are lexed."""
+        j = self._brace_end(s, i)
+        s.add(self.text[i:j])
+        s.expanded = True
+        return j
+
+    def _brace_end(self, s: _Level, i: int) -> int:
+        """The index after the ${...} at *i*; each nested ${...} keeps its own quotes."""
         text, j, depth, quoted = self.text, i + 2, 1, False
         while j < len(text) and depth:
             if text[j] == "\\":
@@ -258,13 +265,11 @@ class _Lexer:
             elif text.startswith("$(", j) or text[j] == "`":
                 j = self._substitution(_Level(s.depth, s.opaque, piped=s.piped), j)
             elif text.startswith("${", j):
-                depth, j = depth + 1, j + 2
+                j = self._brace_end(s, j)
             else:
                 depth, j = depth - (text[j] == "}" and not quoted), j + 1
         if depth or quoted:
             raise ValueError
-        s.add(text[i:j])
-        s.expanded = True
         return j
 
     def _unquoted(self, s: _Level, i: int) -> int:  # noqa: C901, PLR0911 - one branch per shell operator
@@ -340,7 +345,8 @@ class _Lexer:
     def _process(self, s: _Level, i: int) -> int:
         """A process substitution: its commands are lexed, and the word standing for it is built at run time."""
         start = len(self.commands)
-        end = self.level(i + 2, ")", s.depth + 1)
+        inherited = s.opaque or s.piped or any(o for _, o in self.blocks)  # <(sh) reads its command's input
+        end = self.level(i + 2, ")", s.depth + 1, opaque=inherited)
         if self.text[i] == ">":  # its commands read what the outer command writes
             self._opaque(start)
         s.add("<(…)")
@@ -417,7 +423,9 @@ class _Lexer:
             if not literal:  # the shell removes these backslashes before handing the body on
                 body = _BODY_ESCAPE.sub(lambda m: m[1] if m[1] != "\n" else "", body)
             found = len(self.commands)
-            given.word = Word(body, expanded=not literal and self._expansions(start, end))
+            owner = next((c for c in self.commands if any(i is given for i in c.inputs)), None)
+            opaque = owner is not None and owner.opaque_stdin
+            given.word = Word(body, expanded=not literal and self._expansions(start, end, opaque=opaque))
             self._before(given, found)
         return min(i, len(self.text))
 
@@ -427,14 +435,14 @@ class _Lexer:
         if owner is not None:
             self.commands[owner:] = self.commands[found:] + self.commands[owner:found]
 
-    def _expansions(self, i: int, end: int) -> bool:
+    def _expansions(self, i: int, end: int, *, opaque: bool) -> bool:
         """Lex the substitutions in text[i:end] as commands; return whether it holds any expansion."""
         found, text = False, self.text
         while i < end:
             if text[i] == "\\":
                 i += 2
             elif text.startswith("$(", i) or text[i] == "`":
-                found, i = True, self._step(_Level(1, opaque=False), i)
+                found, i = True, self._step(_Level(1, opaque=opaque), i)
             else:
                 found = found or (text[i] == "$" and text[i + 1 : i + 2] not in ("", " ", "\n", "\t"))
                 i += 1

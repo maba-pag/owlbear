@@ -27,6 +27,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 BYPASS = "which skips hooks or signing or forces history"  # the end of every bypass denial's reason
+_ARITHMETIC = re.compile(r"\$\(\((?:[^()`$]|\$(?![(\[{])|\((?:[^()`$]|\$(?![(\[{]))*\))*\)\)|\$\[[^\]`$]*\]")
 _HARMLESS = re.compile(r"\d*>>?\s*/dev/null(?![^\s;&|)])|\d*>&\d+")  # discarded output or a descriptor copy
 _CONFIG_VALUES = frozenset({"-f", "--file", "--blob", "--type", "--default", "--comment"})
 _CONFIG_QUERIES = frozenset(
@@ -380,8 +381,11 @@ def _run_mutation(policy: Policy, name: str, run: shell_programs.Run) -> str | N
 
 
 def _writes(command: shell_parse.Command) -> bool:
-    """Whether one command writes files or changes Git state, as the read-only rule sees it."""
-    return _mutation(command.raw, [command.words]) is not None
+    """Whether one command writes files or changes Git state, as the read-only rule sees it.
+
+    An arithmetic expansion's > or < compares, so $((1 > 0)) writes nothing.
+    """
+    return _mutation(_ARITHMETIC.sub("", command.raw), [command.words]) is not None
 
 
 def decide(policy: Policy, req: Request, offered: frozenset[str] = frozenset(), *, memory: bool = False) -> str | None:

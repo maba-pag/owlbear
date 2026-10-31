@@ -136,10 +136,15 @@ def runs(words: Sequence[Word], depth: int = 0, context: Run | None = None) -> l
     return [replace(here, words=list(words[i:]))]
 
 
-def leafless(words: Sequence[Word]) -> Run:
-    """A command whose wrappers run nothing (env ./env, find .): its launchers by path, its last one the program."""
+def leafless(words: Sequence[Word]) -> Run | None:
+    """A command whose wrappers run nothing (env ./env, find .): its launchers by path, its last one the program.
+
+    None for a lookup (command -v), which runs nothing.
+    """
     i, launchers = head(words), []
     while i < len(words) and name(words[i]) in _WRAPPERS:
+        if name(words[i]) == "command" and words[i + 1 : i + 2] and words[i + 1] in _LOOKUP:
+            return None
         launchers.append(words[i])
         i = operand(words, i)
     program = words[i] if i < len(words) else launchers.pop() if launchers else Word()
@@ -194,7 +199,7 @@ def _env_split(words: Sequence[Word], i: int, k: int) -> tuple[list[Word] | None
         if value is not None:
             if value.expanded:  # the outer shell filled it in: what env splits is built at run time
                 raise UnreadableError(_SPLIT_BUILT)
-            found = [*(found or []), *split_string(value)]
+            found = split_string(value)
     return found, (j if found is not None else k)
 
 
@@ -275,8 +280,10 @@ class _Splitter:
         return i + 1
 
     def _single(self, ch: str, i: int) -> int:
-        if ch == "\\":
-            raise UnreadableError(_SPLIT_UNREAD)
+        if ch == "\\":  # in single quotes env reads \\ and \' as escapes and keeps any other backslash
+            nxt = self.text[i + 1 : i + 2]
+            self.add(nxt if nxt in {"\\", "'"} else ch)
+            return i + 2 if nxt in {"\\", "'"} else i + 1
         if ch == "'":
             self.quote = ""
         else:
@@ -370,6 +377,7 @@ class ShellArgs:
     operand: Word | None = None  # None with no script: it reads its standard input
     startup: tuple[Word, ...] = ()
     own_startup: bool = False  # it reads startup files of its own: zsh, fish, an interactive or login bash or sh
+    reads: frozenset[str] = frozenset()  # the startup variables it reads: BASH_ENV (bash -c), ENV (an interactive sh)
 
 
 def shell_args(words: Sequence[Word]) -> ShellArgs:
@@ -396,10 +404,16 @@ def shell_args(words: Sequence[Word]) -> ShellArgs:
         else:
             break
     rest = words[i:]
-    own = _own_startup(name(words[0]), flags | ({"--rcfile"} if startup else set()))
+    shell, interactive = name(words[0]), "i" in flags
+    own = _own_startup(shell, flags | ({"--rcfile"} if startup else set()))
+    reads = frozenset(
+        {"BASH_ENV"} if shell == "bash" and not interactive and "--posix" not in flags
+        else {"ENV"} if interactive and (shell != "bash" or "--posix" in flags) else set()
+    )  # fmt: skip
+    rc = tuple(startup) if interactive else ()  # bash reads --rcfile only when interactive
     if command:
-        return ShellArgs(script=rest[0] if rest else None, startup=tuple(startup), own_startup=own)
-    return ShellArgs(operand=None if stdin or not rest else rest[0], startup=tuple(startup), own_startup=own)
+        return ShellArgs(script=rest[0] if rest else None, startup=rc, own_startup=own, reads=reads)
+    return ShellArgs(operand=None if stdin or not rest else rest[0], startup=rc, own_startup=own, reads=reads)
 
 
 def _own_startup(shell: str, flags: set[str]) -> bool:

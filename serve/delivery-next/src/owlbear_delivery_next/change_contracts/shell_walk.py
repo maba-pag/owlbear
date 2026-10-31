@@ -87,7 +87,7 @@ class Walk:
         head = next((w for w in command.words if not shell_programs.ASSIGNMENT.match(w)), None)
         runs = shell_programs.runs(command.words)
         checked: set[str] = set()
-        for run in runs if runs or head is None else [shell_programs.leafless(command.words)]:
+        for run in runs if runs or head is None else [r for r in [shell_programs.leafless(command.words)] if r]:
             before = state.effects.wrote  # the program starts before its own script writes
             if runs and (reason := self._run(command, run, state)):  # its script first: a bypass is named as one
                 return reason
@@ -113,6 +113,8 @@ class Walk:
             state.home_moved = state.home_moved or "HOME" in assigned
         if first in {"unset", *_DECLARE} and any(w.partition("=")[0] == "HOME" for w in words[i + 1 :]):
             state.home_moved = True
+        if first == "unset" and "-f" not in words[i + 1 :]:
+            _unset(state, [k for k in _STARTUP if k in words[i + 1 :]], top_level=command.top_level)
         if first in _DECLARE:
             state.startup |= {k: None for k in _STARTUP if any(w.partition("=")[0] == k for w in words[i + 1 :])}
         if first == "exec" and command.stdin() is not None:
@@ -152,9 +154,8 @@ class Walk:
         for sub in shell_programs.runs(line, context=context):
             if _built(sub, sub.words[0]):
                 return f"`{self.name}` runs `{word}`, whose interpreter is built at run time (`{sub.words[0]}`)"
-            for program in (*sub.launchers, sub.words[0]):
-                if "/" in program and (what := _unrun(Path(program))):
-                    return f"`{self.name}` runs `{word}`, whose interpreter `{program}` is {what}"
+            if reason := self._interpreter_files(sub, word, state):
+                return reason
             if reason := self.bypass(self.name, sub):
                 return reason
             if reason := self.mutation(self.name, sub):
@@ -165,6 +166,18 @@ class Walk:
                 reason := self._shell(command, sub, state)
             ):
                 return reason
+        return None
+
+    def _interpreter_files(self, sub: Run, word: Word, state: State) -> str | None:
+        """Refuse a #! line's launcher or interpreter file that is itself a script or no regular file."""
+        for program in (*sub.launchers, sub.words[0]):
+            if "/" not in program:
+                continue
+            at, reason = self._locate(sub, Word(program), state)  # ./interpreter: from the shell's folder
+            if at is None:
+                return reason
+            if what := _unrun(at):
+                return f"`{self.name}` runs `{word}`, whose interpreter `{program}` is {what}"
         return None
 
     def _shell(self, command: Command, run: Run, state: State) -> str | None:
@@ -189,7 +202,7 @@ class Walk:
         }
         if run.chdir:  # env -C, find -execdir: it starts in another folder
             child.at = None
-        for file in [*_startup(run, state), *args.startup]:
+        for file in [*_startup(run, state, args.reads), *args.startup]:
             if file is None:
                 return f"`{self.name}` starts a shell whose startup file was set where the guard can't follow it"
             if file and (reason := self._current(child, command, run, self._starts(file))):
@@ -217,10 +230,10 @@ class Walk:
         self, state: State, command: Command, run: Run, read: Callable[[Command, Run, State], str | None]
     ) -> str | None:
         """Read text that runs in this shell (sourced, eval, startup): its input is the command's, its cd unknown."""
-        saved, startup, home = state.stdin_plain, dict(state.startup), state.home_moved
+        saved, startup = state.stdin_plain, dict(state.startup)
         state.stdin_plain = state.plain() and not command.opaque_stdin and command.stdin() is None
         state.startup |= {k: run.env[k] for k in _STARTUP if k in run.env}  # BASH_ENV=x source y: for its text
-        state.home_moved = home or "HOME" in run.env
+        state.home_moved = state.home_moved or "HOME" in run.env
         state.current += 1
         try:
             return read(command, run, state)
@@ -229,7 +242,6 @@ class Walk:
             state.stdin_plain = saved
             if any(k in run.env for k in _STARTUP):  # only for that text; what the text set itself is unknown
                 state.startup = startup | {k: None for k in _STARTUP if state.startup.get(k) != startup.get(k)}
-            state.home_moved = home or state.home_moved
 
     def _source(self, command: Command, run: Run, state: State) -> str | None:
         operands = _operands(run)
@@ -344,11 +356,20 @@ def _built(run: Run, word: Word) -> bool:
     return word.expanded or (run.replaced is not None and run.replaced in word)
 
 
-def _startup(run: Run, state: State) -> list[Word | None]:
-    """The startup files a shell runs first: BASH_ENV and ENV from its command, else as earlier text set them."""
+def _unset(state: State, keys: list[str], *, top_level: bool) -> None:
+    """After `unset BASH_ENV` the shells read none; a conditional, readonly or unknown one stays unknown."""
+    for key in keys:
+        if not top_level:
+            state.startup[key] = None
+        elif state.startup.get(key, "") is not None:
+            state.startup.pop(key, None)
+
+
+def _startup(run: Run, state: State, reads: frozenset[str]) -> list[Word | None]:
+    """The startup files a shell runs first, of the variables it *reads*: from its command, else as text set them."""
     inherited = {} if "*" in run.removed else {k: v for k, v in state.startup.items() if k not in run.removed}
     files = inherited | run.env
-    return [files[key] for key in _STARTUP if key in files]
+    return [files[key] for key in _STARTUP if key in files and key in reads]
 
 
 def _operands(run: Run) -> list[Word]:
