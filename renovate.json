@@ -64,6 +64,11 @@
       "automerge": false
     },
     {
+      "description": "Copilot SDK: its own pull request, so each release is analysed before it merges",
+      "matchPackageNames": ["github-copilot-sdk"],
+      "groupName": null
+    },
+    {
       "description": "Lint toolchain: every pre-commit hook in one weekly pull request",
       "matchManagers": ["pre-commit"],
       "groupName": "lint toolchain",
