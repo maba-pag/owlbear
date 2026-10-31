@@ -25,13 +25,13 @@ and tool namespaces. Read what actually changed, never one component's notes alo
 | Copilot CLI | Before `brew upgrade` installs it |
 | VS Code | Before installing the release |
 
-If the CLI or VS Code already moved: stop OwlBear when idle on the machine page (New Change is refused while it
-drains). That stops the host, which the decision lookup in step 4 needs, so restart it with `owlbear start --paused`
-and start no Change step or New Change yourself (paused does not refuse New Change) until the analysis is done and any
-repair is released and installed (`owlbear update`); then press Resume. Paused still runs a curation or Retro trigger
-set to "On, even while paused" (curate after merge, curate when idle, Retro after a Change, Retro when idle): before
-the restart, set each such trigger on the machine page to "On, not while paused", start neither by hand, and put them
-back after the Resume.
+If the CLI or VS Code already moved: first, on the machine page, set each curation or Retro trigger that says "On, even
+while paused" (curate after merge, curate when idle, Retro after a Change, Retro when idle) to "On, not while paused";
+paused would still run it, on the CLI under analysis. Then stop OwlBear when idle there (New Change is refused while
+it drains). That stops the host, which the decision lookup in step 4 needs, so restart it with
+`owlbear start --paused`, and start no Change step, curation, Retro or New Change yourself (paused does not refuse New
+Change) until the analysis is done and any repair is released and installed (`owlbear update`). Then press Resume and
+put the triggers back.
 
 ## 2. Pin the versions and read what changed
 
