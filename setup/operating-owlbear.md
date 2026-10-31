@@ -148,6 +148,19 @@ with `--change PROJECT/SLUG`, `--chat SESSION` or `--synthetic [NAME]` queues a 
 host (one per synthetic unit), even while paused or switched off; `owlbear improvement retro status` lists the latest runs,
 and `--plan UNIT` shows how many judging calls a run would make, without spending credits.
 
+The **Improvement** page (menu, under Work) shows Retro's proposals waiting for you first, each with
+the findings it rests on, its risks and where it would land. **Accept** makes it there: a pending
+memory, a candidate Spotter case, an entry in the project's backlog, or an issue on GitHub for a change
+to OwlBear itself; if making it fails, the card says why and **Apply again** retries. **Reject** closes
+it for good, **Later** sets it aside, and **Redirect** takes your direction: Retro redrafts it at once
+and it comes back as a new proposal. Proposals from synthetic runs land only in the sandbox's places;
+one about OwlBear itself becomes a public issue marked `[synthetic]`, closed at once. Below them are
+the Spotter's settings, where each comes from, and its spend over the last week; its looks and the
+outside writes the watcher saw, by project and Change; Retro's switches and runs, with **Run Retro** on
+a finished Change; and the Spotter cases, whose moves queue a regression run and wait until it has run.
+A look or a Retro finding can be followed up as one backlog entry. The menu's switch **Show the
+Spotter's and Retro's detail on Change pages** adds a Change's looks and findings to its page.
+
 The **Metrics** page shows every credit OwlBear spent on this Mac: every agent session it ran
 (Delivery's workers, judges, picker and lookups, the curator, Impeccable runs, Spotter looks, Retro),
 summed, split by project, agent (subagents included), model, day, Change or step, and filtered by
