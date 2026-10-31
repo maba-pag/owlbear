@@ -25,6 +25,24 @@ export const LOOPS = [["shaper", "Brief challenges (shaper)"], ["planner", "Plan
 export const WRITE = 60000;  // a save commits and pushes the shared settings repository (TD-64): a network round trip
 // Everything shown comes from here (TD-264): drafts per layer ("role.field" -> as typed), the folder being typed and
 // the offered models once read.
+// Answers of one kind that overlap and settle in any order, as the bar's reads do: an older one never replaces a newer
+// one's, and a newer one that failed never discards what an older one brought. *shown* marks a write's answer as shown.
+export function turns() {
+  let asked = 0, last = 0;
+  return {
+    ask: () => ++asked,
+    newer: (n) => n > last,
+    take(n) {
+      if (n <= last) return false;
+      last = n;
+      return true;
+    },
+    shown() {
+      last = ++asked;
+    },
+  };
+}
+
 const asked = new URLSearchParams(location.search);
 export const state = {
   loaded: null, saving: false, offered: null, modelsNote: "", error: "", status: "",
@@ -36,7 +54,6 @@ export const state = {
   machineDraft: null, machineSaving: false,  // the machine's settings as edited, before they are saved
   machineText: null,  // a list setting's text as typed, until a save
   machineWrites: 0,  // counts machine saves, so a read that started before one never shows older values
-  layerTurn: 0,  // moves when a reload of the layers begins and when a save or rename answers; see reload()
   machineUnread: "",  // why this machine's settings could not be read, until a read succeeds
   // Owner edited or cleared a project Merge and cleanup preference; kept until a save publishes.
   prefsReview: false,

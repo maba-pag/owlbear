@@ -1698,6 +1698,44 @@ def test_a_read_s_layers_answered_while_a_save_reads_across_never_replace_the_sa
 
 @pytest.mark.browser
 @pytest.mark.timeout(120)  # a real browser and a host pulling a shared repository: a loaded runner needs more than 30 s
+def test_an_older_read_s_other_projects_answered_last_never_replace_a_newer_read_s(
+    tmp_path: Path, monkeypatch, pds, outside
+) -> None:
+    """#810: two reads' refreshes overlap; another project's settings as the first one read them, answered after the
+    second's, are not shown."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    a, b = (registry.register(clone(tmp_path / n)) for n in ("alpha", "beta"))
+    outside.push("beta/config.json", agents={"builder": {"minutes": 20}})
+    with browsing(monkeypatch, pds) as (page, base):
+        page.goto(f"{base}/config?project={a.id}#token=t")
+        expect(page.locator("#reads-status")).to_contain_text("all sources", timeout=READS_TIME * 1000)
+        pds.group(page, "overview")
+        across = page.locator("#across-table")
+        expect(across).to_contain_text("beta: 20")
+        held: list[tuple[Any, Any]] = []
+
+        def hold(route: Any) -> None:
+            if held or route.request.method != "GET":
+                route.continue_()
+                return
+            held.append((route, route.fetch()))  # beta's settings as the first read's refresh has them
+
+        page.route(f"**/p/{b.id}/api/next/config", hold)
+        page.locator("#read-again").click()
+        until(page, lambda: held, READS_TIME)
+        outside.push("beta/config.json", agents={"builder": {"minutes": 45}})
+        with page.expect_request("**/config/models", timeout=READS_TIME * 1000):  # the second refresh has shown all
+            page.locator("#read-again").click()
+        expect(across).to_contain_text("beta: 45")
+        route, before = held[0]
+        with page.expect_request("**/config/models"):  # the first refresh goes on past what it read
+            route.fulfill(response=before)
+        expect(across).to_contain_text("beta: 45")
+
+
+@pytest.mark.browser
+@pytest.mark.timeout(120)  # a real browser and a host pulling a shared repository: a loaded runner needs more than 30 s
 def test_an_open_page_follows_reads_and_dismissals_made_elsewhere(tmp_path: Path, monkeypatch, pds, outside) -> None:
     """#810: a read the page did not start (the hourly one) and a dismissal made elsewhere show through the poll."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime

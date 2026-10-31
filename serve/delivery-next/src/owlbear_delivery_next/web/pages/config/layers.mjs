@@ -1,5 +1,5 @@
 import { call } from "/assets/ui.mjs";
-import { CREDITS, INHERIT, LAYERS, NUMBERS, WRITE, state, drafts, page, show, showIdle, notify, typedNumber }
+import { CREDITS, INHERIT, LAYERS, NUMBERS, WRITE, state, drafts, page, show, showIdle, notify, typedNumber, turns }
   from "./state.mjs";
 import { USER_KEYS, mismatch, tierMismatch } from "./cells.mjs";
 import { draftGroup } from "./groups.mjs";
@@ -213,13 +213,14 @@ function walk(path, as) {
   return value === null ? null : { value, from: as ?? base.sources[path] };
 }
 
-// The layers as the host has them now, unless a later reload began or a save or rename answered meanwhile: then that
-// newer answer stands.
+const answers = turns();  // the layers' reloads, saves and renames
+
+// The layers as the host has them now, unless a newer reload, save or rename has answered meanwhile.
 export async function reload() {
-  const turn = ++state.layerTurn;
+  const n = answers.ask();
   try {
     const loaded = await call("/config");
-    if (turn !== state.layerTurn) return false;
+    if (!answers.take(n)) return false;
     state.loaded = loaded;
     state.error = state.loaded.notice ? state.loaded.notice.charAt(0).toUpperCase() + state.loaded.notice.slice(1) : "";
     return true;
@@ -275,7 +276,7 @@ async function saveLayer(review) {
     state.loaded = await call(`/config/${layer}`,
       { method: "PUT", body: { rev: state.loaded[`${layer}_rev`], layer: edited(layer),
         prefs_reviewed: layer === "project" && state.prefsReview }, timeout: WRITE });
-    state.layerTurn += 1;
+    answers.shown();
     if (layer === "project" && !state.loaded.unpublished) state.prefsReview = false;  // kept until published
     for (const [key, value] of Object.entries(sent)) if (drafts[layer][key] === value) delete drafts[layer][key];
     error = state.loaded.notice ?? "";
@@ -315,7 +316,7 @@ export async function rename() {
   show();
   try {
     state.loaded = await call("/config/folder", { method: "PUT", body: { name }, timeout: WRITE });
-    state.layerTurn += 1;
+    answers.shown();
     state.folder = null;
     state.error = state.loaded.notice ? state.loaded.notice.charAt(0).toUpperCase() + state.loaded.notice.slice(1) : "";
     state.status = `This project's folder is now ${state.loaded.folder}.`;

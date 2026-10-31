@@ -1,7 +1,7 @@
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { live } from "/assets/lit-html/3.3.3/directives/live.js";
 import { call, here, loaded as clones, project as current } from "/assets/ui.mjs";
-import { CREDITS, INHERIT, SOURCES, WRITE, state, show, notify, typedNumber } from "./state.mjs";
+import { CREDITS, INHERIT, SOURCES, WRITE, state, show, notify, typedNumber, turns } from "./state.mjs";
 import { button } from "./cells.mjs";
 import { edit, own, layerValue } from "./layers.mjs";
 
@@ -260,10 +260,12 @@ async function removeLegacy() {
   show();
 }
 
-// The machine's values, or why they could not be read, unless a machine save ran during this read; then the save's
-// answer stands.
+const machineReads = turns(), acrossReads = turns();  // reads overlap: two refreshes, a save's and a refresh's
+
+// The machine's values, or why they could not be read, unless a machine save ran during this read or a newer read has
+// answered; then that answer stands.
 export async function readMachine() {
-  const writes = state.machineWrites;
+  const writes = state.machineWrites, n = machineReads.ask();
   if (state.machineSaving) return;
   let failed = "";
   const read = await call("/machine", { machine: true }).catch((e) => {
@@ -271,8 +273,9 @@ export async function readMachine() {
     return undefined;
   });
   if (state.machineSaving || writes !== state.machineWrites) return;
-  if (read === undefined) state.machineUnread = failed;
-  else accept(read);  // typed text stays: it shows only while its items are the field's own (ownControl)
+  if (read === undefined) {
+    if (machineReads.newer(n)) state.machineUnread = failed;
+  } else if (machineReads.take(n)) accept(read);  // typed text stays: it shows only while its items are its own
 }
 
 // The machine's values as the host answered them, so a read that failed before no longer speaks for them.
@@ -285,7 +288,9 @@ function accept(machine) {
 export async function readAcross() {
   const others = (clones() ?? []).filter((p) => p.id !== current);
   if (!clones()) return;
+  const n = acrossReads.ask();
   const [, ...read] = await Promise.allSettled([readMachine(), ...others.map((p) => call("/config", { of: p.id }))]);
+  if (!acrossReads.take(n)) return;
   const seen = new Set(state.loaded?.folder ? [state.loaded.folder] : []);
   state.others = [];
   state.unread = [];

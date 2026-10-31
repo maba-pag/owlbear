@@ -660,6 +660,43 @@ def test_an_older_read_s_layers_answered_last_never_replace_a_newer_read_s(store
 
 
 @pytest.mark.browser
+@pytest.mark.parametrize("order", ["failure first", "failure last"])
+def test_a_newer_read_s_failed_layers_never_discard_an_older_read_s(store, pds, order: str) -> None:
+    """#810: of two reads' refreshes, the newer one's layers fail; the older one's, answered before or after, show."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    with settings_page(store, pds) as page:
+        pds.group(page, "overview")
+        expect(page.locator("#reads-status")).to_contain_text("Last read")
+        store.config_path.parent.mkdir(parents=True, exist_ok=True)
+        store.config_path.write_text(json.dumps({"format": CONFIG_FORMAT, "agents": {"builder": {"minutes": 45}}}))
+        held: list[tuple[Any, Any]] = []
+
+        def hold(route: Any) -> None:
+            if route.request.method != "GET" or len(held) == 2:
+                route.continue_()
+                return
+            held.append((route, None if held else route.fetch()))  # the first brings the change
+
+        page.route("**/api/next/config", hold)
+        for count in (1, 2):
+            page.locator("#read-again").click()
+            for _ in range(400):
+                if len(held) == count:
+                    break
+                page.wait_for_timeout(50)
+            assert len(held) == count
+        (older, found), (newer, _) = held
+        failed = {"status": 503, "json": {"detail": "the layers could not be read"}}
+        steps = [lambda: newer.fulfill(**failed), lambda: older.fulfill(response=found)]
+        for step in steps if order == "failure first" else steps[::-1]:
+            with page.expect_response("**/api/next/config"):
+                step()
+        pds.group(page, "runs")
+        expect(page.get_by_label("Minutes per session, builder")).to_have_value("45")
+
+
+@pytest.mark.browser
 def test_with_no_layer_setting_anything_the_page_names_every_unset_value_and_a_save_fills_one(
     store, pds, monkeypatch
 ) -> None:
