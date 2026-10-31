@@ -244,6 +244,45 @@ def test_a_fold_counts_changes_by_project_apart_from_runs_outside_one_and_its_ro
 
 
 @pytest.mark.browser
+def test_only_a_failed_read_is_said_to_have_failed(pds) -> None:
+    """#780: picker runs read while their turn ran were all said to have had their last read fail."""
+    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+
+    now = datetime.now(UTC) - timedelta(hours=1)
+    place = {"project": "owlbear", "name": "owlbear", "change": "", "agent": "picker", "job": "decision-pick"}
+
+    def used(spent: float, **more: str) -> dict:
+        return {"credits": spent, "models": {"m1": {"credits": spent, "input": 100, "output": 10}}} | more
+
+    spend_ledger.append([
+        *run("exact", now, used(9.0), place),
+        *run("turn", now + timedelta(minutes=1), used(9.33, incomplete="turn running"), place),
+        *run("failed", now + timedelta(minutes=2), used(9.73, incomplete="TimeoutError"), place),
+    ])  # fmt: skip
+    machine, server, base = serve()
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except Error as exc:
+                pytest.skip(f"no Playwright Chromium: {exc}")
+            page = browser.new_page()
+            pds.only(page, base)
+            page.goto(f"{base}/metrics#token=t")
+            said = page.locator("#exact li")
+            expect(said).to_have_count(2)
+            texts = said.all_inner_texts()
+            assert [t.startswith("1 run ") for t in texts] == [True, True]
+            assert [("failed" in t) for t in texts].count(True) == 1
+            expect(page.locator("#lower-bound")).to_contain_text("spent at least this")
+            expect(page.locator("#lower-bound")).not_to_contain_text("failed")
+            browser.close()
+    finally:
+        server.should_exit = True
+        machine.stop_all()
+
+
+@pytest.mark.browser
 def test_spend_said_apart_from_the_period_never_reads_unknown_as_zero_or_a_counted_run_as_left_out(pds) -> None:
     """Sol's and Copilot's counterexamples: a run with only its start said "0.00 more"; one carrying known credits too
     said "credits not known"; and a resumed run, counted with its own spend, was called one more run not counted."""

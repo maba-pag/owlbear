@@ -110,7 +110,8 @@ def _sum(group: list[dict[str, Any]]) -> dict[str, Any]:
         "runs": len(runs),
         "unknown": len(unknown),
         "open": len({p["run"] for p in group if p["kind"] == "open"}),
-        "incomplete": len({p["run"] for p in group if p["incomplete"]}),  # a lower bound: its final read failed
+        "incomplete": len({p["run"] for p in group if p["incomplete"]}),  # a lower bound: read short or failed
+        "failed": len({p["run"] for p in group if p["failed"]}),
         "stopped": len({p["run"] for p in group if reached(p)}),
         "stopped_unknown": len({p["run"] for p in group if p["stopped"] == "unknown"}),
         "tokens": int(sum(p["input"] + p["output"] for p in group)),
