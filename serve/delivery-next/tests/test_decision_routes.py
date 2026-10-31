@@ -598,6 +598,25 @@ def test_a_confirmed_replacement_retires_its_predecessor_in_one_commit_and_shows
     assert (got["impact"]["old"]["id"], got["impact"]["effect"]) == (rule.id, "forbids")
 
 
+def test_a_replacement_whose_answer_was_lost_is_found_with_its_link_and_says_its_impact_is_lost(shared, chat):
+    rule = make()
+    seed(shared, rule)
+    answered = chat.call
+
+    def lost(method: str, path: str, *args: object, **kw: object) -> tuple[int, Any]:
+        code, out = answered(method, path, *args, **kw)
+        return (chat_client.LOST, {"error": chat_client.UNKNOWN}) if method == "POST" else (code, out)
+
+    chat.call = lost
+    got = tool("record_decision", title="Notes", statement="A file.", rationale="Smaller.", confirmed=True,
+               replaces={"decision": rule.id, "revision": rule.revision, "effect": "forbids"})  # fmt: skip
+
+    made = [e.decision.id for e in decision_store.load(shared, PROJECT).snapshot.entries if e.decision.id != rule.id]
+    assert (got["saved"], [r["id"] for r in got["receipts"]]) == (True, made)
+    assert now(shared, rule.id).state is State.REPLACED
+    assert got["notice"] == chat_client.SAVED.format(id=made[0]) + chat_client.IMPACT_LOST
+
+
 @pytest.mark.usefixtures("chat")
 def test_a_draft_replacement_naming_a_stale_revision_is_refused_and_nothing_is_written(shared):
     rule = make()

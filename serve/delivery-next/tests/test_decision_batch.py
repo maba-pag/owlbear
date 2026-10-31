@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import os
 import subprocess
 import sys
@@ -95,15 +96,17 @@ def _statements(shared) -> set[str]:
 
 
 @pytest.mark.parametrize("point", ["before-first", "after-first"])
-def test_interrupted_batch_fails_closed_until_abandoned(picking, point):
+def test_interrupted_batch_fails_closed_until_abandoned(picking, point, owner_api):
     old = _seed(picking)
     _crash(picking, old, point)
     pending = decision_batch.pending(picking.shared)
     assert pending is not None
     assert pending.project == PROJECT
 
-    with pytest.raises(decision_store.DecisionsUnavailable, match="interrupted decision batch"):
+    with pytest.raises(decision_store.DecisionsUnavailable, match="interrupted decision batch") as exc:
         decision_store.load(picking.shared, PROJECT)
+    assert exc.value.action == decision_store.RECOVER
+    assert owner_api.get("/decisions/recovery").json()["interrupted"] is True
     with pytest.raises(decision_store.DecisionsUnavailable, match="interrupted decision batch"):
         decision_store.file_snapshot(picking.shared, PROJECT)
     unrelated = make(title="Notes use UTC", statement="All note timestamps use UTC.")
@@ -197,7 +200,7 @@ def test_a_batch_that_begins_and_completes_while_the_decisions_are_read_is_refus
     _race(warmth, picking.shared, "decisions: raced")
     with pytest.raises(decision_store.DecisionsUnavailable, match="changed while they were read"):
         reader(picking.shared, PROJECT)
-    assert warmth.parses == warmth.collected(PROJECT)
+    assert warmth.parses == warmth.collected(PROJECT) * 2  # read again once no writer holds the lock, and raced again
 
 
 @pytest.fixture
@@ -259,11 +262,13 @@ def test_ambiguous_stale_publish_stays_interrupted(picking, monkeypatch):
     assert not receipt.saved
     assert "interrupted batch" in receipt.notice
     assert decision_batch.pending(picking.shared) is not None
-    with pytest.raises(decision_store.DecisionsUnavailable, match="interrupted decision batch"):
+    with pytest.raises(decision_store.DecisionsUnavailable, match="interrupted decision batch") as exc:
         decision_store.load(picking.shared, PROJECT)
+    assert exc.value.action == decision_store.RECOVER
 
 
-def test_a_batch_already_pending_at_the_first_stamp_is_refused(picking, monkeypatch, warmth):
+@pytest.mark.parametrize("held", [False, True], ids=["crashed", "writer-holds-the-lock"])
+def test_a_batch_already_pending_at_the_first_stamp_is_refused(picking, monkeypatch, warmth, writing, held):
     _seed(picking)
     warmth.ready(picking.shared, PROJECT)
     real_stamp = decision_store._stamp  # noqa: SLF001
@@ -276,10 +281,11 @@ def test_a_batch_already_pending_at_the_first_stamp_is_refused(picking, monkeypa
         return real_stamp(shared)
 
     monkeypatch.setattr(decision_store, "_stamp", begun_before_first_stamp)
-    with pytest.raises(decision_store.DecisionsUnavailable, match="interrupted decision batch"):
-        decision_store.load(picking.shared, PROJECT)
-    with pytest.raises(decision_store.DecisionsUnavailable, match="interrupted decision batch"):
-        decision_store.file_snapshot(picking.shared, PROJECT)
+    with writing(picking.shared) if held else contextlib.nullcontext():
+        for read in (decision_store.load, decision_store.file_snapshot):
+            with pytest.raises(decision_store.DecisionsUnavailable) as exc:
+                read(picking.shared, PROJECT)
+            assert exc.value.action == (decision_store.SAVING if held else decision_store.RECOVER)
     assert warmth.parses == []  # refused before the files were collected
 
 
