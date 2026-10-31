@@ -27,6 +27,8 @@ MODEL, EFFORT, AGENT = "gpt-6-luna", "max", ".github/agents/owlbear-builder.agen
 class FakeHost:
     """A scripted editor host: sessions appear on launch, each started turn plays its script."""
 
+    client_id = "fake"
+
     def __init__(self, folder: Path, sessions_on_launch: list[dict], scripts: list[list[dict]]) -> None:
         self.folder, self.t = folder, 0.0
         self.items: list[dict] = []
@@ -45,6 +47,9 @@ class FakeHost:
         self.sent: list[tuple[str, dict]] = []
         self.events: list[dict] = []
         self.launched: list[list[str]] = []
+        self.seq = 0
+        self.reject: dict[str, str] = {}  # action type -> the host's rejection reason
+        self.log: list[tuple[str, str, str]] = []  # (subscribe or dispatch:<type>, client, channel)
 
     def clock(self) -> float:
         return self.t
@@ -96,10 +101,11 @@ class FakeHost:
         self.config[resource] = {}
         return resource
 
-    def request(self, method: str, params: dict, timeout: float = 60) -> dict:  # noqa: ARG002
+    def request(self, method: str, params: dict, timeout: float = 60, client: str = "fake") -> dict:  # noqa: ARG002
         if method == "listSessions":
             return {"items": list(self.items)}
         channel = params["channel"]
+        self.log.append((method, client, channel))
         if channel == "ahp-root://":
             listed = [{"id": m} for m in self.models] if self.t >= self.models_at else []
             listed = [m | {"configSchema": self.schema} for m in listed] if self.schema else listed
@@ -113,10 +119,17 @@ class FakeHost:
         }
         return {"snapshot": {"state": state}}
 
-    def dispatch(self, channel: str, action: dict) -> None:
+    def dispatch(self, channel: str, action: dict, client: str = "fake") -> int:
+        self.seq += 1
         self.sent.append((channel, action))
         kind = action["type"]
-        if kind == "session/configChanged" and self.accept_config:
+        self.log.append((f"dispatch:{kind}", client, channel))
+        if kind in self.reject:
+            if ("subscribe", client, channel) in self.log:  # the host tells only the channel's subscribers
+                origin = {"clientId": client, "clientSeq": self.seq}
+                params = {"channel": channel, "action": action, "origin": origin, "rejectionReason": self.reject[kind]}
+                self.events.append({"method": "action", "params": params})
+        elif kind == "session/configChanged" and self.accept_config:
             self.config[channel] |= action["config"]
         elif kind == "chat/turnCancelled" and not self.ignore_cancel:
             if (self.chats[channel].get("activeTurn") or {}).get("id") == action["turnId"]:
@@ -127,6 +140,7 @@ class FakeHost:
                 self.play(channel, action["turnId"], self.scripts.pop(0))
         elif kind == "chat/toolCallConfirmed" and str(action["turnId"]).startswith("boot") and action["approved"]:
             self.chats[channel]["activeTurn"] = None  # the confirmed echo runs and the bootstrap ends
+        return self.seq
 
     def play(self, chat: str, turn: str, script: list[dict]) -> None:
         for a in script:
@@ -149,14 +163,16 @@ class FakeHost:
 class Twin:
     """A second connection to the same fake host."""
 
+    client_id = "fake-again"
+
     def __init__(self, host: FakeHost) -> None:
         self.host, self.closed = host, 0
 
     def request(self, method: str, params: dict, timeout: float = 60) -> dict:
-        return self.host.request(method, params, timeout)
+        return self.host.request(method, params, timeout, client=self.client_id)
 
-    def dispatch(self, channel: str, action: dict) -> None:
-        self.host.dispatch(channel, action)
+    def dispatch(self, channel: str, action: dict) -> int:
+        return self.host.dispatch(channel, action, client=self.client_id)
 
     def next_event(self, timeout: float) -> dict | None:
         return self.host.next_event(timeout)
@@ -308,10 +324,34 @@ def test_the_turn_waits_until_the_session_lists_the_agent(tmp_path: Path) -> Non
 def test_step_fails_closed_when_host_ignores_the_config(tmp_path: Path) -> None:
     host = FakeHost(tmp_path, [{}], [DONE])
     host.accept_config = False
+    original = host.dispatch
+
+    def dispatch(channel: str, action: dict, client: str = "fake") -> int:
+        seq = original(channel, action, client)
+        if action["type"] == "session/configChanged":  # rejections of other clients' actions are not this chat's
+            for who, n in (("someone-else", seq), ("fake-again", 99)):
+                params = {"channel": channel, "origin": {"clientId": who, "clientSeq": n}, "rejectionReason": who}
+                host.events.append({"method": "action", "params": params})
+        return seq
+
+    host.dispatch = dispatch
     out = step(host, spec(tmp_path, config={"sandboxEnabled": "on"})).open()
 
     assert out.end == "config-refused"
+    assert out.detail == (
+        'the host did not apply the settings {"sandboxEnabled": "on"} within 10 s; applied: {}; '
+        "a managed policy that forces the Copilot harness or blocks Allow All may be why"
+    )
     assert host.actions("chat/turnStarted") == []
+
+
+def test_a_rejected_first_turn_ends_unstarted_with_the_hosts_reason(tmp_path: Path) -> None:
+    host = FakeHost(tmp_path, [{}], [DONE])
+    host.reject = {"chat/turnStarted": "a turn is already running"}
+    out = step(host, spec(tmp_path)).open()
+
+    assert (out.end, out.detail) == ("unstarted", "the host refused the prompt's turn: a turn is already running")
+    assert host.t < 1  # at once, not after the wait for the turn
 
 
 def test_a_bootstrap_that_never_finishes_is_cancelled_and_starts_no_turn(tmp_path: Path) -> None:
@@ -333,10 +373,11 @@ def test_a_user_turn_in_the_bound_chat_blocks_the_start(tmp_path: Path) -> None:
     host = FakeHost(tmp_path, [{}], [DONE])
     original = host.dispatch
 
-    def dispatch(channel: str, action: dict) -> None:
-        original(channel, action)
+    def dispatch(channel: str, action: dict, client: str = "fake") -> int:
+        seq = original(channel, action, client)
         if action["type"] == "session/configChanged":
             host.chats["ahp-chat://default/c0"]["activeTurn"] = {"id": "user", "message": {"text": "mine"}}
+        return seq
 
     host.dispatch = dispatch
     out = step(host, spec(tmp_path, config={"sandboxEnabled": "on"})).open()
@@ -970,6 +1011,27 @@ def test_a_cleanup_failure_is_a_warning_and_the_chat_still_started(plain: Path) 
     assert json.loads((folder / "settings.json").read_text()) == {HARNESS: True}
 
 
+def test_a_settings_rejection_fails_the_shaping_chat_at_once_whole_and_logged(plain: Path, caplog) -> None:
+    host = shaping_host(plain)
+    reason = "managed policy: Allow All is blocked; " + "p" * 300
+    host.reject = {"session/configChanged": reason}
+    out, _ = shape(plain, shaping_env(host))
+
+    asked = json.dumps(vscode_adapter.SHAPING, sort_keys=True)
+    assert (out.end, out.detail) == (
+        "config-refused",
+        f"the host refused the settings {asked}: {reason}; applied: {{}}",
+    )
+    warned = [r.getMessage() for r in caplog.records if r.name == vscode_adapter.__name__]
+    assert len(warned) == 1
+    assert out.detail in warned[0]
+    assert host.actions("chat/turnStarted") == []
+    assert host.t < 1  # at once, not after the wait for the settings
+    session = out.session or ""
+    subscribed = host.log.index(("subscribe", "fake-again", session))
+    assert subscribed < host.log.index(("dispatch:session/configChanged", "fake-again", session))
+
+
 def test_settings_that_are_not_an_object_refuse_the_shaping_chat_before_launch(plain: Path) -> None:
     settings = plain / ".vscode" / "settings.json"
     settings.parent.mkdir()
@@ -982,7 +1044,9 @@ def test_settings_that_are_not_an_object_refuse_the_shaping_chat_before_launch(p
 def test_a_shaping_turn_the_host_never_starts_is_reported(plain: Path) -> None:
     host = shaping_host(plain)
     dispatch = host.dispatch
-    host.dispatch = lambda channel, action: None if action["type"] == "chat/turnStarted" else dispatch(channel, action)
+    host.dispatch = lambda channel, action, client="fake": (
+        0 if action["type"] == "chat/turnStarted" else dispatch(channel, action, client)
+    )
     out, _ = shape(plain, shaping_env(host))
     assert (out.end, out.detail) == ("unstarted", "the host did not start the prompt's turn")
 
