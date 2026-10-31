@@ -255,6 +255,37 @@ def test_a_folder_name_git_takes_for_no_ref_name_still_holds_a_refused_runs_edit
     assert held(repo, row.reason, rel(entry, folder)) == made["bytes"]
 
 
+def test_a_write_failing_midway_leaves_the_checkout_as_seeded_and_holds_the_run(repo, remote, monkeypatch) -> None:
+    a, b = curated(repo / "shop" / "memory", "First"), curated(repo / "shop" / "memory", "Second")
+    pushed(repo, "two curated entries")
+    before = {e.id: (repo / rel(e)).read_bytes() for e in (a, b)}
+    real, written, made = curation_tree.atomic_write, [], {}
+
+    def atomic_write(path, text):
+        if written:
+            raise OSError(28, "No space left on device")
+        written.append(real(path, text))
+
+    def run(cfg) -> Run:
+        reword(cfg.memory, a.id, "First: the curator's version")
+        reword(cfg.memory, b.id, "Second: the curator's version")
+        made["curator"] = committed(cfg.memory, "shop/memory")
+        made["a"] = (cfg.memory / f"{a.id}.md").read_bytes()
+        return Run(cfg.session_id, ending="result", payload=REPORT, termination=Termination(confirmed=True))
+
+    monkeypatch.setattr(curation_tree, "atomic_write", atomic_write)
+    job = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(repo), run=run)
+    job.start("shop")
+    row = drained(job)
+
+    other = publish_other(repo, "after")
+    assert (len(written), row.state, "No space left on device" in row.reason) == (1, "failed", True)
+    assert {e.id: (repo / rel(e)).read_bytes() for e in (a, b)} == before
+    assert (remote_has(remote, other), remote_has(remote, made["curator"])) == (True, False)
+    assert {e.id: remote_bytes(remote, rel(e)) for e in (a, b)} == before
+    assert held(repo, row.reason, rel(a)) == made["a"]
+
+
 def test_an_accepted_run_publishes_its_edits_once_and_leaves_pending_and_receipts_local(repo, remote) -> None:
     shop, owlbear = repo / "shop" / "memory", repo / "owlbear" / "memory"
     c, d, g, o = curated(shop, "Assessed"), curated(shop, "Pruned"), curated(shop, "Shared"), curated(owlbear, "Own")

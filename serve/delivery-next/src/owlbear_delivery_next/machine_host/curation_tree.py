@@ -23,7 +23,7 @@ from owlbear_delivery_next.local_system.data_repo import CONFIG, MEMORY, DataRep
 from owlbear_delivery_next.local_system.storage_io import atomic_write
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator, Sequence
+    from collections.abc import Iterable, Iterator, Sequence
     from pathlib import Path
 
     from owlbear_delivery_next.local_system.data_repo import DataRepo
@@ -130,17 +130,30 @@ class Tree:
             touched = sorted(changed.keys() | deleted)
             if moved := next((r for r in touched if _read(shared.root / r) != self.base.get(r)), None):
                 return f"refused, {moved} changed meanwhile; {self.hold(folder, key)}", ""
-            for r, text in texts.items():
-                if text is None:
-                    (shared.root / r).unlink(missing_ok=True)
-                else:
-                    atomic_write(shared.root / r, text)
+            try:
+                for r, text in texts.items():
+                    if text is None:
+                        (shared.root / r).unlink(missing_ok=True)
+                    else:
+                        atomic_write(shared.root / r, text)
+            except BaseException:
+                self._restore(texts)
+                raise
             kept = [
                 shared.root / r
                 for r in touched
                 if ((b := changed.get(r)) is None and r in deleted) or (b is not None and not _pending(r, b))
             ]
             return "", shared.publish(kept, f"chore: memory curation of {folder} (machine host)")
+
+    def _restore(self, rels: Iterable[str]) -> None:
+        """Put back the checkout's files as seeded, which they were when the writes began, so none of them is left."""
+        for r in rels:
+            if _read(path := self.shared.root / r) != (raw := self.base.get(r)):
+                if raw is None:
+                    path.unlink(missing_ok=True)
+                else:
+                    path.write_bytes(raw)
 
 
 def seed(shared: DataRepo, at: Path, folders: Sequence[str]) -> Tree:
