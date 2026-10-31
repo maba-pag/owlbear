@@ -3,7 +3,8 @@
 A case's session family (a Delivery Change, or a chat's session) is on one side of the split for good: ``dev`` or
 the ``reserve``. The pilot's own splits are kept; any other family is assigned once by the pilot's rule (ordered by
 sha256(seed + family), the first 60% dev) and persisted in ``families.json``. A Spotter record becomes a candidate
-with its card frozen anew; its provenance keeps the record's own fields, an old record's as it has them.
+with its card frozen anew; its provenance keeps the record's own fields, an old record's as it has them. A synthetic
+unit's record (Retro's demonstration) becomes one resting on Retro's synthetic assumption, so a reset leaves it out.
 """
 
 from __future__ import annotations
@@ -14,7 +15,18 @@ import hashlib
 import json
 from typing import TYPE_CHECKING
 
-from owlbear_delivery_next.improvement.cases import CALLS, CaseError, commit, current, freeze, locked, place, ready
+from owlbear_delivery_next.improvement import assumptions, retro_synthetic
+from owlbear_delivery_next.improvement.cases import (
+    CALLS,
+    CaseError,
+    commit,
+    current,
+    fact,
+    freeze,
+    locked,
+    place,
+    ready,
+)
 from owlbear_delivery_next.local_system.storage_io import atomic_write
 
 if TYPE_CHECKING:
@@ -68,15 +80,34 @@ def side(family: str) -> str:
     return assign({family: (one, "hashed once")})[family]
 
 
+def _call(call: str) -> None:
+    if call not in CALLS:
+        msg = f"the call is one of {', '.join(CALLS)}"
+        raise CaseError(msg)
+
+
+def _candidate(cid: str, call: str, why: str, by: str, reason: str) -> str:
+    with locked():
+        cur = current()
+        entry = {"stage": "candidate", "call": call, "why": why, "example": "", "review": None}
+        commit(cur["n"], {cid: entry}, by, reason)
+    return cid
+
+
+def of_record(record: str) -> str:
+    """The current case made from the Spotter's record *record*, else nothing."""
+    return next(
+        (cid for cid in sorted(current()["cases"]) if fact(cid)["provenance"].get("record", {}).get("id") == record), ""
+    )
+
+
 def from_record(record: str, call: str, why: str, by: str) -> str:
     """A candidate case from the Spotter's record *record* (its card frozen anew); its id.
 
     Raises:
         CaseError: The record or its card cannot be found.
     """
-    if call not in CALLS:
-        msg = f"the call is one of {', '.join(CALLS)}"
-        raise CaseError(msg)
+    _call(call)
     spot = place().parent
     found = None
     for path in sorted(spot.glob("records-*.jsonl"), reverse=True):
@@ -102,12 +133,35 @@ def from_record(record: str, call: str, why: str, by: str) -> str:
     cid = freeze(
         the_card, {"source": "record", "provenance": provenance, "family": family, "reserve": side(family) == "reserve"}
     )
-    with locked():
-        cur = current()
-        commit(
-            cur["n"],
-            {cid: {"stage": "candidate", "call": call, "why": why, "example": "", "review": None}},
-            by,
-            f"from Spotter record {record}",
-        )
-    return cid
+    return _candidate(cid, call, why, by, f"from Spotter record {record}")
+
+
+def from_synthetic(record: str, call: str, why: str, by: str) -> str:
+    """A candidate case from synthetic unit's record *record*, resting on Retro's synthetic assumption; its id.
+
+    Raises:
+        CaseError: No synthetic unit has that record, or the assumption was reset.
+    """
+    _call(call)
+    if not assumptions.ensure(assumptions.RETRO_SYNTHETIC):
+        msg = "Retro's synthetic assumption was reset: its records make no cases"
+        raise CaseError(msg)
+    names = [s["name"] for s in json.loads(retro_synthetic.DATA.read_text())]
+    every = (r for n in names for r in retro_synthetic.records(retro_synthetic.specs(n)[0]))
+    found = next((r for r in every if r["id"] == record), None)
+    if found is None:
+        msg = f"no synthetic unit has the record {record}"
+        raise CaseError(msg)
+    the_card = {**found["card"], "gaps": [*found["card"].get("gaps", []), "synthetic: an invented moment"]}
+    keep = ("id", "session", "look", "category", "note")
+    cid = freeze(
+        the_card,
+        {
+            "source": "synthetic",
+            "provenance": {"record": {k: found[k] for k in keep}},
+            "family": f"session:{found['session']}",
+            "reserve": False,
+            "assumption": assumptions.RETRO_SYNTHETIC,
+        },
+    )
+    return _candidate(cid, call, why, by, f"from synthetic record {record}")

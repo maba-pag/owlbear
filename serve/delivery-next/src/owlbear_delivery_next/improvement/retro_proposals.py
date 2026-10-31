@@ -265,13 +265,14 @@ def transition(
     state: str,
     by: str,
     *,
-    check: Callable[[dict[str, Any]], None] | None = None,
+    check: Callable[[dict[str, Any]], Mapping[str, Any] | None] | None = None,
     **fields: object,
 ) -> dict[str, Any]:
     """The page's move of *proposal* to *state* (shown, accepted, rejected, redirected, later), by the owner *by*.
 
-    *check* sees the snapshot under the lock and may refuse it (the page checks the token of what the owner saw);
-    *fields* go on the ``state`` event: ``snapshot`` on an accept, ``direction`` on a redirect. The new snapshot.
+    *check* sees the snapshot under the lock and may refuse it (the page checks the token of what the owner saw); what
+    it returns goes on the ``state`` event with *fields*: ``snapshot`` on an accept, ``direction`` on a redirect. The
+    new snapshot.
 
     Raises:
         RetroError: The state is not one the owner gives, the proposal is unknown, closed or hidden (it rests on a
@@ -291,10 +292,9 @@ def transition(
         if snap["state"] == "drafted" or snap.get("review_digest") != snap["evidence"]:
             msg = f"proposal {proposal}'s evidence waits for its review"
             raise store.RetroError(msg)
-        if check is not None:
-            check(snap)
+        taken = (check(snap) if check is not None else None) or {}
         event = {"eid": f"st-{uuid.uuid4().hex[:12]}", "proposal": proposal, "type": "state", "state": state, "by": by}
-        _event(event | fields)
+        _event(event | fields | taken)
         return folded()[proposal]
 
 
