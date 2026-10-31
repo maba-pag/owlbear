@@ -33,10 +33,14 @@ function required(key) {
   return ((next ? next.value : state.loaded.settings.spotter?.looks) ?? []).includes("sample");
 }
 
-// The option or placeholder that clears the edited layer's value: on Global it leaves the value unset (SEXPFT);
-// elsewhere it names what the layers below give, "unset" where none sets it.
+// What a blank field inherits, in words; "unset" where no layer below sets it.
+function said(value) {
+  return value === null || value === undefined ? "unset" : value;
+}
+
+// The option or placeholder that clears the edited layer's value: on Global it leaves the value unset (SEXPFT).
 function clear(below) {
-  return state.layer === "global" ? "Unset" : `inherit (${below ?? "unset"})`;
+  return state.layer === "global" ? "Unset" : `inherit (${said(below)})`;
 }
 
 function onOff(value) {
