@@ -76,11 +76,14 @@ def shown(m: Model) -> dict[str, Any]:
 
 
 def _rates(p: ModelBillingTokenPrices | ModelBillingTokenPricesLongContext | None) -> dict[str, float | None] | None:
-    """Input, output, cache read and cache write rates; a rate the runtime does not state stays ``None``."""
+    """Input, output, cache read, cache write and one-hour cache write rates; one not stated stays ``None``."""
     if p is None or p.input_price is None or p.output_price is None:
         return None
     cache = p.cache_read_price if p.cache_read_price is not None else p.cache_price
-    return {"input": p.input_price, "output": p.output_price, "cache": cache, "cache_write": p.cache_write_price}
+    return {
+        "input": p.input_price, "output": p.output_price, "cache": cache, "cache_write": p.cache_write_price,
+        "cache_write_1h": p.cache_write1_h_price,
+    }  # fmt: skip
 
 
 def _value(state: object) -> object:
