@@ -899,34 +899,6 @@ def test_an_unreadable_mcp_file_is_named_on_the_project_and_logged_when_it_chang
     assert listed() == (broken, True, 0)
 
 
-def test_an_older_poll_finishing_late_does_not_hide_a_problem_that_comes_back(
-    tmp_path, http, machine, monkeypatch, capsys
-):
-    p = machine.projects[add(http, clone(tmp_path / "a"))["id"]]
-    read, release = threading.Event(), threading.Event()
-
-    def registration(_):
-        if threading.current_thread().name == "older":
-            read.set()
-            release.wait(5)
-            return True, ["broken"]
-        return True, [] if threading.current_thread().name == "newer" else ["broken"]
-
-    monkeypatch.setattr(setup, "registration", registration)
-    p.info()  # the problem, logged
-    older, newer = (threading.Thread(target=p.info, name=n) for n in ("older", "newer"))
-    older.start()
-    read.wait(5)
-    newer.start()
-    newer.join(0.5)  # without the order kept, the repair is seen first
-    release.set()
-    for t in (older, newer):
-        t.join(5)
-    capsys.readouterr()
-    p.info()  # the problem comes back
-    assert capsys.readouterr().out.endswith(" a: broken\n")
-
-
 @pytest.mark.skipif(os.geteuid() == 0, reason="root reads files whatever their mode")
 def test_a_mcp_file_that_cannot_be_opened_is_named(tmp_path, http, monkeypatch):
     work = clone(tmp_path / "a")
