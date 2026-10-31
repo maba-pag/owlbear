@@ -1,13 +1,17 @@
 """TD-69/TD-70/TD-72: each worker role is offered only the tools its agent file names, and the project's owlbear-memory
 in the shared repository."""
 
+import json
 from pathlib import Path
 from types import SimpleNamespace
+
+from copilot.generated.session_events import PermissionRequestMemory, PermissionRequestMemoryAction
 
 from owlbear_delivery_next.change_contracts import tools
 from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_contracts.tools import Worktree
+from owlbear_delivery_next.change_contracts.user_config import UserConfig
 from owlbear_delivery_next.local_system import preload
 from owlbear_delivery_next.runtimes import sdk_adapter, subagents
 
@@ -17,6 +21,7 @@ SDK_TOOLS = {  # the runtime's built-in tools, the same for every model (tools.l
     *("task", "read_agent", "list_agents", "write_agent"),
 }
 MEMORY_TOOLS = {"recall_memory", "save_memory", "assess_memories"}
+COPILOT_MEMORY = {"store_memory", "vote_memory"}  # the runtime's own, with memory on (D-01M69EQN3KZE2QSBPH1CMDFK22)
 RESULT_TOOLS = [s.name for s in tools.SPECS]
 
 
@@ -44,7 +49,7 @@ def test_each_agent_names_only_tools_both_runtimes_know() -> None:
         assert names
         for name in names:
             server, _, tool = name.partition("/")
-            assert name in SDK_TOOLS or (server == preload.MEMORY and tool in MEMORY_TOOLS)
+            assert name in SDK_TOOLS | COPILOT_MEMORY or (server == preload.MEMORY and tool in MEMORY_TOOLS)
 
 
 def test_only_the_builder_writes_files_and_every_role_recalls_memory() -> None:
@@ -108,6 +113,30 @@ def test_the_sdk_approves_only_the_mcp_tools_the_role_is_offered(tmp_path) -> No
     assert asked(StepKind.REVIEW, preload.MEMORY, "save_memory") == "PermissionDecisionReject"
     assert asked(StepKind.BUILD, preload.MEMORY, "curate_memories") == "PermissionDecisionReject"
     assert asked(StepKind.BUILD, "uv", "uv-init") == "PermissionDecisionReject"
+
+
+def test_a_copilot_memory_save_passes_only_with_the_switch_on_for_a_role_that_lists_it() -> None:
+    """D-01M69EBRBBW97001KZ43C0BJM1, D-01M69EQN3KZE2QSBPH1CMDFK22: the runtime's own memory requests, as sent."""
+    fact = "OB847-SENTINEL fact text"
+
+    def asked(kind: StepKind, action: PermissionRequestMemoryAction | None, *, on: bool) -> tuple[str, list]:
+        events = []
+        user = UserConfig(instructions=False, skills=False, memory=on)
+        journal = sdk_adapter.Journal(events.append)
+        cfg = sdk_adapter.Session(**(FIELDS | {"kind": kind, "user": user, "journal": journal}))
+        st = sdk_adapter._Step(cfg, SimpleNamespace(call_soon_threadsafe=lambda *_: None))  # noqa: SLF001
+        request = PermissionRequestMemory(fact=fact, action=action, subject="testing", citations="a.py:1")
+        return type(st.permission(request, None)).__name__, events
+
+    store, vote = PermissionRequestMemoryAction.STORE, PermissionRequestMemoryAction.VOTE
+    assert asked(StepKind.BUILD, store, on=True)[0] == "PermissionDecisionApproveOnce"
+    assert asked(StepKind.BUILD, vote, on=True)[0] == "PermissionDecisionApproveOnce"
+    for refused in (asked(StepKind.BUILD, store, on=False), asked(StepKind.REVIEW, store, on=True),
+                    asked(StepKind.BUILD, None, on=True)):  # fmt: skip
+        assert refused[0] == "PermissionDecisionReject"
+        denied = [e for e in refused[1] if e["event"] == "denied"]
+        assert denied
+        assert fact not in json.dumps(denied)  # Delivery's own log never holds the fact
 
 
 def test_each_role_is_offered_only_its_own_agent_and_the_builtins_follow_its_setting() -> None:

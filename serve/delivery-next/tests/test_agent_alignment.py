@@ -35,6 +35,8 @@ SDK_TOOLS = {  # the SDK runtime's built-in tools (tools.list, runtime research 
     *("task", "read_agent", "list_agents", "write_agent"),
 }
 MEMORY_TOOLS = {"recall_memory", "save_memory", "assess_memories"}
+COPILOT_MEMORY = {"store_memory", "vote_memory"}  # the runtime's own (D-01M69EQN3KZE2QSBPH1CMDFK22)
+PRODUCERS = {"planner", "preparer", "builder", "updater", "test-curator"}
 CURATOR_TOOLS = {  # the memory curator's (item 5 slice 3)
     "curation_threshold", "list_memories", "read_memory", "curate_memory", "delete_memory", "make_global",
     "commit_memory_batch",
@@ -47,7 +49,7 @@ CHAT_TOOLS |= {"lookup_decisions"}  # TD-456, TD-459: the picker's answer, not g
 CHAT_TOOLS |= {"correct_decision_origin"}  # the owner's provenance correction (2026-10-23), not the shaper's
 WINDOW_TOOLS = {"ask_user"}  # a window chat's structured question (live probe, TD-109)
 VOCABULARY = SDK_TOOLS | MEMORY_TOOLS | CURATOR_TOOLS | CHAT_TOOLS | WINDOW_TOOLS | {s.name for s in tools.SPECS}
-VOCABULARY |= {tools.FIRST_LOOK, tools.SCAN_DESIGN, tools.LOOKUP}
+VOCABULARY |= {tools.FIRST_LOOK, tools.SCAN_DESIGN, tools.LOOKUP} | COPILOT_MEMORY
 ALIASES = (f"{preload.MEMORY}/", f"{setup.SERVER}/")  # a server's tool is named bare or as <server>/<tool>
 SHAPER_TOOLS = [  # the names a window chat's agent file grants, each verified live (TD-109)
     *("view", "glob", "grep", "web_fetch", "ask_user", "owlbear-memory/recall_memory", "owlbear-memory/save_memory"),
@@ -118,6 +120,12 @@ def test_every_worker_role_has_its_own_agent_file_or_is_explicitly_pending() -> 
 def test_each_agent_explains_exactly_its_grants_and_names_only_granted_tools(role) -> None:
     _, body = preload.agent_file(role)
     assert audit(granted(role), body) == []
+
+
+def test_only_the_producing_roles_may_save_copilot_memories() -> None:
+    for role in AGENTS:
+        assert set(preload.tools(role)) & COPILOT_MEMORY == (COPILOT_MEMORY if role in PRODUCERS else set()), role
+    assert set(shaper_file()[1]) & COPILOT_MEMORY == set()
 
 
 def test_the_launcher_comes_from_the_role_setting_never_from_an_agent_file() -> None:

@@ -1,7 +1,7 @@
 ---
 name: owlbear-updater
 description: Brings Impeccable's extracted skills in line with a new upstream release and implements the challenger's findings after judging them
-tools: [view, create, edit, glob, grep, owlbear-memory/recall_memory, owlbear-memory/save_memory, owlbear-memory/assess_memories]
+tools: [view, create, edit, glob, grep, owlbear-memory/recall_memory, owlbear-memory/save_memory, owlbear-memory/assess_memories, store_memory, vote_memory]
 ---
 
 <persona>
@@ -49,6 +49,9 @@ text. Without the memory tools, go on without them.
   or research, for a bounded side question and wait for its answer. It works under your step's
   permissions, and Delivery records what it did.
 - Memory: `recall_memory`, `assess_memories`, `save_memory` (as `owlbear-memory/<tool>`), for agent `updater`.
+- Copilot Memory: `store_memory` and `vote_memory`, present only while the owner has Copilot Memory on for Delivery:
+  store a durable fact about this repository that later chats should know, or vote on a recalled one; a lesson for
+  Delivery's agents still goes to `save_memory`.
 - Not granted: shell, `ask_question`.
 
 </tools>

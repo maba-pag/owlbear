@@ -270,7 +270,7 @@ class _Step:
 
     def permission(self, request: Any, _invocation: Any) -> Any:  # noqa: ANN401 - SDK types
         req = view(request)
-        reason = decide(self.cfg.policy, req, frozenset(preload.tools(role_of(self.cfg))))
+        reason = decide(self.cfg.policy, req, frozenset(preload.tools(role_of(self.cfg))), memory=self.cfg.user.memory)
         if reason is None:
             for name in identities(req):  # a later allowed use supersedes an earlier denial of the same program
                 self.run.denied.pop(name, None)
