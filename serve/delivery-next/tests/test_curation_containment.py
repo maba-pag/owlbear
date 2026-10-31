@@ -529,6 +529,24 @@ def test_a_seed_reads_the_checkout_under_its_memory_writer_locks(repo, monkeypat
     assert busy == [True]
 
 
+def test_a_seed_writes_through_no_symbolic_link_at_head(repo, tmp_path) -> None:
+    outside = tmp_path / "outside.md"
+    outside.write_text("not memory")
+    linked = repo / "shop" / "memory" / "linked.md"
+    linked.symlink_to(outside)
+    pushed(repo, "a link in memory")
+    linked.unlink()
+    linked.write_text("a regular file now")
+    ran = []
+
+    job = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(repo), run=ran.append)
+    job.start("shop")
+    row = drained(job)
+
+    assert (outside.read_text(), ran, row.state) == ("not memory", [], "failed")
+    assert "HEAD has a symbolic link on the path of shop/memory/linked.md" in row.reason
+
+
 def test_the_checkout_lists_held_runs_as_its_own_and_no_finished_runs_worktree(repo) -> None:
     entry = curated(repo / "shop" / "memory", "Lesson")
     pushed(repo, "a curated entry")

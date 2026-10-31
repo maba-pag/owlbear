@@ -196,6 +196,11 @@ def seed(shared: DataRepo, at: Path, folders: Sequence[str]) -> Tree:
             for d in sorted(d for d in dirs if (shared.root / d).is_dir()):
                 locks.enter_context(writer_lock(shared.root / d))
             base = _files(shared.root, dirs)
+        for rel in (CONFIG, *dirs, *base):
+            parts = rel.split("/")
+            if any(at.joinpath(*parts[:n]).is_symlink() for n in range(1, len(parts) + 1)):
+                msg = f"HEAD has a symbolic link on the path of {rel}; curation writes through none"
+                raise DataRepoError(msg)
         for rel in _files(at, dirs).keys() - base.keys():
             (at / rel).unlink()
         for d in dirs:
