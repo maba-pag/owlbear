@@ -74,8 +74,9 @@ export function agentsGroup() {
         followed), and is offered your own skills there (skills/), never one named as Delivery's. A plugin's files and
         your agents stay off either way. Copilot Memory on lets every Delivery session recall the memories Copilot
         keeps for this repository, and the planner, preparer, builder, updater and test curator may save or vote on
-        them; the Spotter and Retro never use it. None has a default: until all three are set, a step asks you to set
-        them instead of starting its session.</p-text>
+        them; the Spotter and Retro never use it. A memory saved this way skips OwlBear's memory curation and reaches
+        your later hand-run chats in this repository, so off is recommended. None has a default: until all three are
+        set, a step asks you to set them instead of starting its session.</p-text>
       ${table("Your instructions, skills and memory: they apply to the next session", ["Setting", "Value"],
         "user-config", USER_KEYS.map((key) => setting(`set-${key}`, userConfigLabel(key), [key], userConfig(key))))}
     </section>`;
