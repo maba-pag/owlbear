@@ -166,23 +166,21 @@ class Checks:
         self.kept: dict[str, dict[str, Any]] = self._restored()
 
     def _restored(self) -> dict[str, dict[str, Any]]:
-        path = self.path
         try:
-            kept = json.loads(path.read_text(encoding="utf-8"))
+            kept = json.loads(self.path.read_text(encoding="utf-8"))
         except FileNotFoundError:
             return {}
         except (OSError, ValueError) as exc:
-            self.machine.say(f"update checks: {path} is unreadable, so they start afresh: {exc}")
+            self.machine.say(f"update checks: {self.path} is unreadable, so they start afresh: {exc}")
             return {}
         return {n: kept[n] for n in CHECKS if isinstance(kept, dict) and isinstance(kept.get(n), dict)}
 
     def _keep(self) -> None:
-        path = self.path
         try:
-            path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-            atomic_write(path, json.dumps(self.kept, indent=2) + "\n")
+            self.path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+            atomic_write(self.path, json.dumps(self.kept, indent=2) + "\n")
         except OSError as exc:  # held until the host ends; the next check writes it again
-            self.machine.say(f"update checks: {path} could not be written: {exc}")
+            self.machine.say(f"update checks: {self.path} could not be written: {exc}")
 
     def start(self, name: str) -> bool:
         """Check *name* now, unless it is being checked or the machine is stopping; whether a check started."""

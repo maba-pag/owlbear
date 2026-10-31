@@ -309,17 +309,14 @@ def test_the_hosts_stop_waits_a_while_for_its_checks_and_then_starts_none(tmp_pa
     _a, b = homes(tmp_path, monkeypatch)
     release, entered, ran = threading.Event(), {n: threading.Event() for n in ("pds", "impeccable")}, []
 
-    def blocked(name: str):
-        def check() -> dict:
-            ran.append(name)
-            entered[name].set()
-            release.wait(10)
-            return FOUND
-
-        return check
+    def blocked(name: str) -> dict:
+        ran.append(name)
+        entered[name].set()
+        release.wait(10)
+        return FOUND
 
     for name in CHECKS:
-        monkeypatch.setitem(CHECKS, name, blocked(name))
+        monkeypatch.setitem(CHECKS, name, lambda name=name: blocked(name))
     monkeypatch.setattr(update_checks, "DRAIN", 1.0)
     now = datetime.now(UTC)
     machine = Machine(HostRecord(url="http://127.0.0.1:9/", token="t", pid=1, started_at=now, code=codebase.CURRENT))  # noqa: S106
