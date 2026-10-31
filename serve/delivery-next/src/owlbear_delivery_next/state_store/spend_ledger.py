@@ -107,13 +107,17 @@ STOPS = ("", "reached", "unknown")  # a run's stop at its credit limit: none, re
 
 def started(  # noqa: PLR0913 - the run, its session and what it is
     run: str, session: str, *, agent: str, job: str, model: str | None, before: dict[str, Any] | None,
-            place: Where | None = None, look: str = "") -> None:  # fmt: skip
+            place: Where | None = None, look: str = "", cli: str = "", cli_error: str = "") -> None:  # fmt: skip
     """A run opened its session; *before* is its usage before the first send (None unread, ``{}`` new).
 
     *look* is a Spotter look's own id, the one its Spotter record carries, so the two are never counted twice.
+    *cli* is the Copilot CLI version the session runs, empty with *cli_error* when it could not be read; a run that
+    passes neither, such as a Spotter look, writes no ``cli``.
     """
+    ran = ({"look": look} if look else {}) | ({"cli": cli} if cli or cli_error else {})
+    ran |= {"cli_error": cli_error} if cli_error else {}
     put({"id": f"start:{run}", "type": "start", "run": run, "at": _now(), "session": session, "agent": agent,
-         "model": model or "", "before": before, **_placed(place, job)} | ({"look": look} if look else {}))  # fmt: skip
+         "model": model or "", "before": before, **_placed(place, job)} | ran)  # fmt: skip
 
 
 def ended(  # noqa: PLR0913 - the run, its session and how it ended
