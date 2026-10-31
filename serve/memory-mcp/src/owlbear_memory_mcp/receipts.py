@@ -13,7 +13,6 @@ from owlbear_memory.errors import MemoryBusyError
 
 from owlbear_memory_mcp.git import (
     _git,
-    _git_object_id,
     _verify_committed_change_set,
     commit_move,
     format_git_failure,
@@ -69,9 +68,9 @@ def _commit(clean: list[Path], memory_dir: Path, task_id: str) -> None:
             }
             after = commit_move(written, f"chore: memory assessments ({task_id}, memory-mcp)")
             # A hook may have swept other files in: pending memory must never pass as a receipt. Only this commit is
-            # checked, since curation commits other folders without the repository lock.
+            # checked, since other writers commit other folders without the repository lock.
             try:
-                _verify_committed_change_set(repo, _git_object_id(repo, f"{after}^"), after, set(receipts), receipts)
+                _verify_committed_change_set(repo, f"{after}^", after, set(receipts), receipts)
             except ValueError as exc:
                 msg = f"the receipt commit {after[:9]} holds more than the receipts: {exc}"
                 raise ToolError(msg) from exc

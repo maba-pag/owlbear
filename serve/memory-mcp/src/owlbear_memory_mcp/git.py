@@ -5,6 +5,7 @@ from __future__ import annotations
 import contextlib
 import fcntl
 import os
+import re
 import shlex
 import stat
 import subprocess
@@ -25,6 +26,7 @@ _CURATION = "curation"
 _REVIEW = "review"
 _FAILURE_OUTPUT_LIMIT = 4_096
 _TRUNCATION_MARKER = "... [truncated; showing final command output] ...\n"
+_MADE = re.compile(r"\[[^\n]*? ([0-9a-f]{40}|[0-9a-f]{64})\](?: |$)")  # `git commit`'s own line naming its commit
 _SESSION_TO_ACTOR = {
     _CURATION: "memory-curator",
     _REVIEW: "memory-reviewer",
@@ -486,18 +488,21 @@ def _known(repo_dir: Path, rel: str) -> bool:
 def commit_move(paths: Sequence[Path], message: str) -> str:
     """Commit exactly *paths*, one entry moved between two memory folders of one repository; return the commit.
 
-    On failure the paths are unstaged again, so the caller can put the files back as they were.
+    The commit returned is the one `git commit` printed, not HEAD read afterwards, which a writer that doesn't hold the
+    repository lock may already have moved. On failure the paths are unstaged again, so the caller can put the files
+    back as they were.
     """
     repo_dir = Path(_git(paths[0].parent, "rev-parse", "--show-toplevel")).resolve()
     rels = [p.parent.resolve().joinpath(p.name).relative_to(repo_dir).as_posix() for p in paths]
     tracked = [r for r in rels if _known(repo_dir, r)]
     try:
         _git(repo_dir, "add", "-A", "--", *tracked)
-        _git(repo_dir, "commit", "-q", "-m", message, "--", *tracked)
+        made = _git(repo_dir, "-c", "core.abbrev=no", "commit", "-m", message, "--", *tracked)
     except subprocess.CalledProcessError:
         _git_bytes(repo_dir, "reset", "-q", "--", *tracked)
         raise
-    return _git(repo_dir, "rev-parse", "HEAD")
+    named = _MADE.match(made.partition("\n")[0])
+    return named.group(1) if named else _git(repo_dir, "rev-parse", "HEAD")
 
 
 def main(argv: Sequence[str] | None = None) -> int:
