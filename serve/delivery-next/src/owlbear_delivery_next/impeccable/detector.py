@@ -64,7 +64,14 @@ def _run(command: list[str], cwd: Path, env: dict[str, str]) -> tuple[int, str, 
     """Run the engine in its own process group; on timeout the whole group ends, a browser it started included."""
     try:
         proc = subprocess.Popen(  # noqa: S603 - the pack's engine, verified just before
-            command, cwd=cwd, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, start_new_session=True
+            command,
+            cwd=cwd,
+            env=env,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            process_group=0,
         )
     except OSError as exc:
         msg = f"the design detector did not start: {exc}"
