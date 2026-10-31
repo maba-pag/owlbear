@@ -77,6 +77,8 @@ class Project:
         self.entry, self.gate = entry, Gate()
         self.state: State = "loading"
         self.reason = ""
+        self.mcp_said = ""  # the MCP files' problems last logged for this project
+        self.mcp_lock = threading.Lock()  # orders each poll's read of the MCP files with its update of mcp_said
         self.store: Store | None = None
         self.host: Host | None = None
         self.app: ASGIApp | None = None
@@ -246,12 +248,25 @@ class Project:
         return []
 
     def info(self) -> dict[str, Any]:
-        """The project as the machine's project list shows it; ``setup`` is the command a clone still needs."""
+        """The project as the machine's project list shows it; ``setup`` is the command a clone still needs.
+
+        A loaded project's ``reason`` names the MCP files its setup check could not read.
+        """
         out: dict[str, Any] = {"id": self.entry.id, "name": self.name, "path": self.entry.path, "state": self.state}
         if self.reason:
             out["reason"] = self.reason
         if self.host:
             out["ready"] = self.host.record.ready
-        if self.state == "loaded" and not setup.registered(Path(self.entry.path)):
-            out["setup"] = f"owlbear setup --repo {shlex.quote(self.entry.path)}"
+        if self.state == "loaded":
+            with self.mcp_lock:  # list polls overlap: the last read is the one remembered
+                found, problems = setup.registration(Path(self.entry.path))
+                said = "; ".join(problems)
+                if said != self.mcp_said:  # info() answers every poll of the list: log a problem when it changes
+                    self.mcp_said = said
+                    if said:
+                        self.host.say(said)
+            if said:
+                out["reason"] = said
+            if not found:
+                out["setup"] = f"owlbear setup --repo {shlex.quote(self.entry.path)}"
         return out

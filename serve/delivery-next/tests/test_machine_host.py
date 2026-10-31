@@ -816,6 +816,129 @@ def test_a_server_entry_naming_its_folder_as_repo_equals_counts_as_setup(tmp_pat
     assert setup.registered(work)
 
 
+BINDINGS = {  # the arguments after ``mcp`` (``{w}`` is the project), and whether they count outside its own file
+    "exact": (("--repo", "{w}"), True),
+    "equals": (("--repo={w}",), True),
+    "none": ((), False),
+    "other": (("--repo", "/other"), False),
+    "repeated": (("--repo", "{w}", "--repo", "{w}"), False),
+    "repeated-different": (("--repo", "{w}", "--repo", "/other"), False),
+    "mixed": (("--repo", "{w}", "--repo={w}"), False),
+    "r": (("--r", "{w}"), False),  # the server's argparse takes an abbreviation as --repo
+    "rep": (("--rep", "{w}"), False),
+    "re-equals": (("--re={w}",), False),
+    "bare": (("--repo",), False),
+}
+OWN_BINDINGS = ("repeated", "repeated-different", "mixed", "r", "rep", "re-equals", "bare")  # the tests above: the rest
+
+
+def mcp_file(place: str, work: Path, monkeypatch) -> tuple[Path, str]:
+    """The MCP file setup reads in *place* and the key that holds its servers; ``shared`` sets ``COPILOT_HOME``."""
+    if place == "own":
+        return work / ".mcp.json", "mcpServers"
+    if place == "user":
+        return setup.user_mcp(Path.home()), "servers"
+    monkeypatch.setenv("COPILOT_HOME", str(work.parent / "copilot"))
+    return work.parent / "copilot" / "mcp-config.json", "mcpServers"
+
+
+@pytest.mark.parametrize(
+    ("place", "row"), [(p, r) for p in ("user", "shared") for r in BINDINGS] + [("own", r) for r in OWN_BINDINGS]
+)
+def test_an_entry_counts_only_with_one_exact_binding_or_none_in_the_projects_own_file(
+    place, row, tmp_path, monkeypatch
+):
+    work = clone(tmp_path / "a")
+    binding, counts = BINDINGS[row]
+    path, key = mcp_file(place, work, monkeypatch)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    args = ["-m", "owlbear_delivery_next", "mcp", *(a.format(w=work) for a in binding)]
+    path.write_text(json.dumps({key: {"x": {"args": args}}}))
+    assert setup.registered(work) is counts
+
+
+def test_copilots_shared_file_is_read_from_the_home_copilot_folder_without_copilot_home(tmp_path):
+    assert "COPILOT_HOME" not in os.environ  # the autouse fixture removes it
+    work = clone(tmp_path / "a")
+    shared = Path.home() / ".copilot" / "mcp-config.json"
+    shared.parent.mkdir(exist_ok=True)
+    shared.write_text("// mine\n" + json.dumps({"mcpServers": setup.with_server({}, "/py", work)["mcpServers"]}))
+    assert setup.registered(work)
+
+
+@pytest.mark.parametrize("place", ["own", "user", "shared"])
+def test_an_unreadable_mcp_file_is_named_on_the_project_and_logged_when_it_changes(
+    place, tmp_path, http, monkeypatch, capsys
+):
+    work = clone(tmp_path / "a")
+    path, _ = mcp_file(place, work, monkeypatch)
+    valid, key = mcp_file("user" if place == "shared" else "shared", work, monkeypatch)
+    assert "reason" not in add(http, work)  # no MCP file at all: nothing to name
+    for p in (path, valid):
+        p.parent.mkdir(parents=True, exist_ok=True)
+
+    def listed() -> tuple[str | None, bool, int]:
+        p = http.get("/api/next/projects").json()["projects"][0]
+        said = sum(f"{path} cannot be read" in line for line in capsys.readouterr().out.splitlines())
+        return p.get("reason"), "setup" in p, said
+
+    broken = f"{path} cannot be read: Expecting value: line 1 column 16 (char 15)"
+    valid.write_text(json.dumps({key: setup.with_server({}, "/py", work)["mcpServers"]}))
+    path.write_text('{"mcpServers": ')
+    assert listed() == (broken, False, 1)  # registered in a readable file: no setup, the broken one still named
+    assert listed() == (broken, False, 0)  # logged once, not on every poll
+    valid.unlink()
+    assert listed() == (broken, True, 0)
+    path.write_text("{")
+    again = f"{path} cannot be read: Expecting property name enclosed in double quotes: line 1 column 2 (char 1)"
+    assert listed() == (again, True, 1)
+    path.write_text("{}")
+    assert listed() == (None, True, 0)
+    path.write_text('{"mcpServers": ')
+    assert listed() == (broken, True, 1)  # it comes back: logged again
+    assert listed() == (broken, True, 0)
+
+
+def test_an_older_poll_finishing_late_does_not_hide_a_problem_that_comes_back(
+    tmp_path, http, machine, monkeypatch, capsys
+):
+    p = machine.projects[add(http, clone(tmp_path / "a"))["id"]]
+    read, release = threading.Event(), threading.Event()
+
+    def registration(_):
+        if threading.current_thread().name == "older":
+            read.set()
+            release.wait(5)
+            return True, ["broken"]
+        return True, [] if threading.current_thread().name == "newer" else ["broken"]
+
+    monkeypatch.setattr(setup, "registration", registration)
+    p.info()  # the problem, logged
+    older, newer = (threading.Thread(target=p.info, name=n) for n in ("older", "newer"))
+    older.start()
+    read.wait(5)
+    newer.start()
+    newer.join(0.5)  # without the order kept, the repair is seen first
+    release.set()
+    for t in (older, newer):
+        t.join(5)
+    capsys.readouterr()
+    p.info()  # the problem comes back
+    assert capsys.readouterr().out.endswith(" a: broken\n")
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root reads files whatever their mode")
+def test_a_mcp_file_that_cannot_be_opened_is_named(tmp_path, http, monkeypatch):
+    work = clone(tmp_path / "a")
+    shared, key = mcp_file("shared", work, monkeypatch)
+    shared.parent.mkdir()
+    shared.write_text(json.dumps({key: setup.with_server({}, "/py", work)["mcpServers"]}))
+    shared.chmod(0)
+    listed = add(http, work)
+    why = f"{shared} cannot be read: [Errno 13] Permission denied: '{shared}'"
+    assert (listed["reason"], listed["setup"]) == (why, f"owlbear setup --repo {work}")  # an unread entry counts not
+
+
 @pytest.mark.parametrize(
     ("text", "parsed"),
     [
@@ -832,6 +955,12 @@ def test_vs_code_json_drops_comments_and_trailing_commas_only_outside_strings(te
             loose(text)
     else:
         assert loose(text) == parsed
+
+
+def test_a_vs_code_json_error_names_the_files_own_line_and_column():
+    text = '{\n  /* two\n  lines */ "a": [1,],\n  "b": oops\n}'
+    with pytest.raises(ValueError, match=r"line 4 column 8 \(char 40\)"):
+        setup._loose_json(text)  # noqa: SLF001
 
 
 def test_each_project_line_in_the_log_names_its_project(tmp_path, http, machine, capsys):

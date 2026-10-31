@@ -113,8 +113,16 @@ def user_mcp(home: Path) -> Path:
     return base / "Code" / "User" / "mcp.json"
 
 
+def shared_mcp() -> Path:
+    """Copilot's shared MCP configuration, which VS Code's MCP setup offers as Copilot Global."""
+    return preload.copilot_home() / "mcp-config.json"
+
+
 def _loose_json(text: str) -> object:
-    """JSON as VS Code writes its own files: line comments, block comments and trailing commas allowed."""
+    """JSON as VS Code writes its own files: line comments, block comments and trailing commas allowed.
+
+    What is dropped turns into blanks, newlines kept, so an error names the file's own line and column.
+    """
     out: list[str] = []
     i, comma = 0, None  # comma: where in ``out`` the last comma outside a string went, until something follows it
     while i < len(text):
@@ -127,15 +135,18 @@ def _loose_json(text: str) -> object:
             i, comma = end + 1, None
         elif text.startswith("//", i):
             end = text.find("\n", i)
-            i = len(text) if end < 0 else end
+            end = len(text) if end < 0 else end
+            out.append(" " * (end - i))
+            i = end
         elif text.startswith("/*", i):
             end = text.find("*/", i + 2)
             if end < 0:
                 raise ValueError("unterminated block comment")  # noqa: EM101, TRY003
+            out.append("".join(ch if ch == "\n" else " " for ch in text[i : end + 2]))
             i = end + 2
         else:
             if c in "}]" and comma is not None:
-                out[comma] = ""
+                out[comma] = " "
             if not c.isspace():
                 comma = len(out) if c == "," else None
             out.append(c)
@@ -144,12 +155,20 @@ def _loose_json(text: str) -> object:
 
 
 def _serves(servers: object, repo: Path, *, own: bool) -> bool:
-    """Whether one of *servers* is Delivery's chat server for *repo*; one naming no folder serves only its own."""
+    """Whether one of *servers* is Delivery's chat server for *repo*; one naming no folder serves only its own.
+
+    Only one exact ``--repo`` binding counts; an abbreviated or repeated one never does.
+    """
 
     def serves(args: list[object]) -> bool:
-        args = [p for a in args for p in (a.split("=", 1) if isinstance(a, str) and a.startswith("--repo=") else [a])]
-        named = args[args.index("--repo") + 1 : args.index("--repo") + 2] if "--repo" in args else []
-        return named == [str(repo)] or (own and "--repo" not in args)
+        named: list[object] = []
+        for i, a in enumerate(args):
+            flag, eq, value = a.partition("=") if isinstance(a, str) else ("", "", "")
+            if flag in {"--r", "--re", "--rep"}:
+                return False  # the server's argparse takes an abbreviation as --repo
+            if flag == "--repo":
+                named.append(value if eq else args[i + 1] if i + 1 < len(args) else None)
+        return named == [str(repo)] or (own and not named)
 
     entries = servers.values() if isinstance(servers, dict) else []
     return any(
@@ -159,16 +178,32 @@ def _serves(servers: object, repo: Path, *, own: bool) -> bool:
     )  # fmt: skip
 
 
-def registered(repo: Path, home: Path | None = None) -> bool:
-    """Whether the chat server of *repo* is registered: in its ``.mcp.json`` or the user's MCP configuration."""
-    for path, key, own in ((repo / ".mcp.json", "mcpServers", True), (user_mcp(home or Path.home()), "servers", False)):
+def registration(repo: Path) -> tuple[bool, list[str]]:
+    """Whether the chat server of *repo* is registered, and the MCP files that could not be read.
+
+    It looks in the project's ``.mcp.json``, VS Code's user configuration and Copilot's shared one, always all three;
+    a missing file is no problem.
+    """
+    found, problems = False, []
+    for path, key, own in (
+        (repo / ".mcp.json", "mcpServers", True),
+        (user_mcp(Path.home()), "servers", False),
+        (shared_mcp(), "mcpServers", False),
+    ):
         try:
             data = _loose_json(path.read_text())
-        except OSError, ValueError:
+        except FileNotFoundError:
             continue
-        if isinstance(data, dict) and _serves(data.get(key), repo, own=own):
-            return True
-    return False
+        except (OSError, ValueError) as exc:
+            problems.append(f"{path} cannot be read: {exc}")
+            continue
+        found = found or (isinstance(data, dict) and _serves(data.get(key), repo, own=own))
+    return found, problems
+
+
+def registered(repo: Path) -> bool:
+    """Whether the chat server of *repo* is registered in a file that could be read."""
+    return registration(repo)[0]
 
 
 def memory_missing(repo: Path) -> str | None:
@@ -430,7 +465,10 @@ def write_project_files(repo: Path, python: str, ask: Ask, say: Callable[[str], 
     say(server)
     if not server.startswith("written"):
         snippet = json.dumps(with_server({}, python, repo)["mcpServers"])
-        say(f'Add this under "servers" in your user-level MCP configuration (MCP: Open User Configuration): {snippet}')
+        say(
+            'Add this under "servers" in your VS Code user MCP configuration (MCP: Open User Configuration)'
+            f' or under "mcpServers" in Copilot\'s shared one ({shared_mcp()}): {snippet}'
+        )
     if why := memory_missing(repo):
         say(f"Memory server not registered: {why}")
     else:
