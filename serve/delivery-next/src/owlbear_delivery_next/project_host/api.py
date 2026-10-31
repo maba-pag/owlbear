@@ -18,6 +18,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from owlbear_delivery_next.change_contracts import chat_contract, evidence
 from owlbear_delivery_next.change_contracts.inbox import (
+    AnswerItem,
     CheckResult,
     ConsentItem,
     IntentItem,
@@ -256,7 +257,10 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
         return summary(store, slug, host.activity(slug), datetime.now(UTC))
 
     def put(slug: str, item: InboxItem) -> dict[str, str]:
-        store.put_inbox(slug, item)
+        if not isinstance(item, AnswerItem):
+            store.put_inbox(slug, item)
+        elif why := store.put_answer(slug, item):
+            raise HTTPException(409, why)
         host.wake.set()
         return {"accepted": item.kind}
 

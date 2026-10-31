@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import TypeAdapter, ValidationError
 
-from owlbear_delivery_next.change_contracts.inbox import InboxItem, parse_rows
+from owlbear_delivery_next.change_contracts.inbox import AnswerItem, InboxItem, parse_rows
 from owlbear_delivery_next.change_contracts.models import FORMAT, Change, Record
 from owlbear_delivery_next.change_flow import answer_kinds, loop
 from owlbear_delivery_next.local_system import data_repo, local_home
@@ -43,6 +43,7 @@ from owlbear_delivery_next.state_store.layers import (  # noqa: F401 - re-export
 )
 
 if TYPE_CHECKING:
+    import sqlite3
     from collections.abc import Callable, Iterator
     from pathlib import Path
 
@@ -114,6 +115,11 @@ def _load[T: Record](path: Path, model: type[T], current: int, forward: Migratio
         msg = f"state of {name} is unreadable"
         raise StoreError(msg) from exc
     return _parse(raw, name, model, current, forward)
+
+
+def _queue(db: sqlite3.Connection, slug: str, item: InboxItem) -> None:
+    name = f"{time.time_ns():020d}-{uuid.uuid4().hex[:8]}.json"
+    db.execute("INSERT INTO inbox(slug, name, item) VALUES (?, ?, ?)", (slug, name, _INBOX.dump_json(item).decode()))
 
 
 class Store:
@@ -395,12 +401,22 @@ class Store:
 
     def put_inbox(self, slug: str, item: InboxItem) -> None:
         """Add one inbox item without the Change lock; only a lock holder folds it."""
-        name = f"{time.time_ns():020d}-{uuid.uuid4().hex[:8]}.json"
         self._dir(slug)
         with self.db.write() as db:
-            db.execute(
-                "INSERT INTO inbox(slug, name, item) VALUES (?, ?, ?)", (slug, name, _INBOX.dump_json(item).decode())
-            )
+            _queue(db, slug, item)
+
+    def put_answer(self, slug: str, item: AnswerItem) -> str | None:
+        """Queue an answer while its question is open and has none waiting; otherwise why not, queueing nothing."""
+        self._dir(slug)
+        with self.db.write() as db:
+            change = self.read(slug)  # the same connection: read inside this write's transaction
+            if not any(q.id == item.question and q.answer is None for q in change.questions):
+                return f"question {item.question} is not open"
+            waiting, _ = parse_rows(db.execute("SELECT id, item FROM inbox WHERE slug = ?", (slug,)).fetchall())
+            if any(isinstance(i, AnswerItem) and i.question == item.question for i in waiting):
+                return f"question {item.question} already has an answer waiting to be applied; this one was not queued"
+            _queue(db, slug, item)
+        return None
 
     def fold(  # noqa: PLR0913 - the PR observation and the queue barrier
         self,

@@ -37,10 +37,9 @@ def answer(store: Store, a: argparse.Namespace) -> int:
         why = "; ".join(f"{'.'.join(map(str, e['loc']))}: {e['msg']}" for e in exc.errors())
     else:
         got = answers.answer_item(store, store.read(a.change), body)
-        if not isinstance(got, tuple):
-            store.put_inbox(a.change, got)
+        why = got[1] if isinstance(got, tuple) else store.put_answer(a.change, got)
+        if why is None:
             return 0
-        why = got[1]
     sys.stderr.write(f"not answered: {why}\n")
     return 1
 
