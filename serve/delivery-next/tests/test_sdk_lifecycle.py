@@ -560,6 +560,128 @@ def test_a_usage_read_after_an_unverified_task_cleanup_is_a_lower_bound(world, m
     assert (end["usage"]["credits"], end["usage"].get("incomplete")) == (2.0, "tasks unsettled")
 
 
+_TURN = SimpleNamespace(model="gpt-6-luna", parent_tool_call_id=None)
+
+
+def _waited(world, monkeypatch):
+    """A metered session the real wait runs on, ended by the step itself; its worktree reads as one commit."""
+    world.cfg = dataclasses.replace(world.cfg, observe=lambda: Worktree("a" * 40, "b" * 40))
+
+    async def opened(_client, st):
+        world.steps.append(st)
+        st.session, st.billed = world.session, {}
+        sdk_spend.meter(st, "synthetic", "builder")
+        return world.session
+
+    monkeypatch.setattr(sdk_adapter, "_open", opened)
+
+    async def usage(_session, _model):
+        return _used(1.0)
+
+    monkeypatch.setattr(sdk_adapter, "usage_read", usage)
+
+
+async def _turn_started(world):
+    async with asyncio.timeout(2):
+        while not world.steps:  # noqa: ASYNC110 - the open records its step; nothing signals it
+            await asyncio.sleep(0.01)
+    st = world.steps[0]
+    st.on_event(SimpleNamespace(type="assistant.turn_start", data=_TURN))
+    return st
+
+
+async def _submit(world, st):
+    call = SimpleNamespace(tool_call_id="result", arguments=BuildResult(summary="Done", checks=[]).model_dump())
+    return await st._submitted(world.cfg.submit, call)  # noqa: SLF001 - the owned worker
+
+
+def test_a_run_ended_by_its_result_reads_its_final_usage_once_its_turn_went_idle(world, monkeypatch):
+    """#780: the runtime ends the submit tool's turn itself, milliseconds after the tool returns; a read before that
+    left every such run a lower bound. Idle comes 50 ms after the task list, or as the final read starts."""
+    _waited(world, monkeypatch)
+    order = []
+
+    def idle():
+        if "idle" not in order:
+            order.append("idle")
+            world.steps[0].on_event(SimpleNamespace(type="session.idle", data=_TURN))
+
+    async def tasks():
+        asyncio.get_running_loop().call_later(0.05, idle)
+        return SimpleNamespace(tasks=[])
+
+    async def once(_session, _model):
+        order.append("final usage")
+        used = _used(2.0 if "idle" in order else 1.0)
+        idle()
+        return used
+
+    async def disconnect():
+        order.append("disconnect")
+
+    monkeypatch.setattr(sdk_teardown, "usage_once", once)
+    world.session.rpc.tasks.list, world.session.disconnect = tasks, disconnect
+
+    async def scenario():
+        task = asyncio.create_task(sdk_adapter.run(world.cfg))
+        st = await _turn_started(world)
+        submitted = await _submit(world, st)
+        async with asyncio.timeout(5):
+            return submitted.result_type, await task
+
+    accepted, run = asyncio.run(scenario())
+    _, end = _spend()
+    assert (accepted, run.ending, order) == ("success", "result", ["idle", "final usage", "disconnect"])
+    assert (end["usage"]["credits"], end["usage"].get("incomplete")) == (2.0, None)
+
+
+@pytest.mark.parametrize("ending", ["result", "deadline"])
+def test_a_turn_that_never_goes_idle_holds_a_result_run_once_for_the_bound_and_a_deadline_not_at_all(
+    world, monkeypatch, ending
+):
+    """Unrelated wake-ups only re-check the turn: the bound is one fixed deadline, and a deadline run never waits."""
+    _waited(world, monkeypatch)
+    monkeypatch.setattr(sdk_teardown, "IDLE", 0.3)
+    times = {}
+
+    async def once(_session, _model):
+        times.setdefault("read", time.monotonic())
+        return _used(1.0)
+
+    monkeypatch.setattr(sdk_teardown, "usage_once", once)
+
+    async def waking(st):
+        while "read" not in times:
+            st._wake()  # noqa: SLF001 - any wake-up, as later events would cause
+            await asyncio.sleep(0.02)
+
+    async def scenario():
+        task = asyncio.create_task(sdk_adapter.run(world.cfg))
+        st = await _turn_started(world)
+        if ending == "result":
+            await _submit(world, st)
+        else:
+            st.finish("deadline", detail="step deadline")
+        times["done"] = time.monotonic()
+        waker = asyncio.create_task(waking(st))
+        try:
+            finished, _ = await asyncio.wait(
+                {task}, timeout=3
+            )  # teardown holds cancellation: never a timeout around it
+        finally:
+            times.setdefault("read", time.monotonic())
+            await waker
+        return bool(finished), task.result() if finished else None
+
+    finished, run = asyncio.run(scenario())
+    assert finished, "a bound that restarts on every wake-up never ends"
+    assert run.ending == ending
+    held = times["read"] - times["done"]
+    assert 0.3 <= held < 1.5 if ending == "result" else held < 0.2
+    _, end = _spend()
+    assert end["usage"].get("incomplete") == "turn running"
+
+
 REAL_OPEN = sdk_adapter._open  # noqa: SLF001 - the real one, which the fixture replaces
 
 
