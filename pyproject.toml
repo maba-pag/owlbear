@@ -23,10 +23,7 @@ dev = [
 [tool.pytest.ini_options]
 testpaths = ["tests", "serve"]
 pythonpath = [".", "serve/tools/src"]
-addopts = """\
---import-mode=importlib -m 'not model' -n auto --dist loadfile \
--p no:logfire -p no:pytest_logfire\
-"""
+addopts = "--import-mode=importlib -m 'not model' -n auto --dist loadfile"
 timeout = 30
 session_timeout = 900
 asyncio_mode = "strict"
