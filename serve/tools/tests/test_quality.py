@@ -209,7 +209,6 @@ def test_quality_executes_todo_last() -> None:
     with patch("owlbear_tools.quality._run_leaf", side_effect=record):
         assert _run_named("quality", staged=False, fix_mode=FixMode.SAFE) == 0
 
-    assert executed[-1] == "todo"
     assert executed == [
         "format-python",
         "format-biome",
