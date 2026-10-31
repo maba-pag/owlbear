@@ -100,7 +100,7 @@ def read(session: str) -> Log:
             log = _parse(path)
         except FileNotFoundError:
             continue
-        except (OSError, EOFError, zlib.error) as exc:  # gzip.BadGzipFile is an OSError
+        except (OSError, EOFError, ValueError, zlib.error) as exc:  # gzip.BadGzipFile is an OSError
             error = f"{path}: {type(exc).__name__}: {exc}"
             LOG.warning("compaction log unreadable: %s", error)
             return Log("error", error=error)
@@ -120,8 +120,10 @@ def _parse(path: Path) -> Log:
                 continue
             try:
                 event = json.loads(raw)
-            except ValueError:  # a line the runtime is still writing
-                continue
+            except ValueError:
+                if raw.endswith("\n"):
+                    raise
+                continue  # the last line, which the runtime is still writing
             data = event.get("data") or {}
             if kind == "subagent.started":
                 found.launch(str(data.get("agentName") or "subagent"), str(data.get("toolCallId") or ""),

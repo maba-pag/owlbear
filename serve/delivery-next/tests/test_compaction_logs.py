@@ -54,3 +54,13 @@ def test_a_log_that_cannot_be_reached_is_unreadable_not_missing() -> None:
         folder.chmod(0o700)
     assert found.state == "error"
     assert f"{folder / 'events.jsonl'}: PermissionError" in found.error
+
+
+def test_a_finished_line_that_is_not_json_makes_the_log_unreadable() -> None:
+    log = chatlogs.state() / "s4" / "events.jsonl"
+    log.parent.mkdir(parents=True)
+    log.write_text("".join([line("assistant.turn_start"), '{"type":"session.compaction_complete","da\n',
+                            line("assistant.turn_start")]))  # fmt: skip
+    found = compaction_logs.read("s4")
+    assert found.state == "error"
+    assert f"{log}: JSONDecodeError" in found.error
