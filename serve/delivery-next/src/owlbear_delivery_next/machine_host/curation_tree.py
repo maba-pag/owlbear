@@ -69,10 +69,8 @@ def _read(path: Path) -> bytes | None:
 
 def _pending(rel: str, raw: bytes) -> bool:
     """Whether the file is a pending entry, which stays uncommitted as the memory server leaves it."""
-    if not rel.endswith(".md"):
-        return False
-    try:
-        return storage.read_entry_bytes_strict(raw).state == MemoryState.PENDING  # the model keeps the plain value
+    try:  # the model keeps the plain value
+        return rel.endswith(".md") and storage.read_entry_bytes_strict(raw).state == MemoryState.PENDING
     except ValueError:
         return False
 
