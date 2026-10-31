@@ -61,7 +61,8 @@ def test_a_log_that_cannot_be_reached_is_unreadable_not_missing() -> None:
 @pytest.mark.parametrize(
     ("bad", "exc"),
     [('{"type":"session.compaction_complete","da\n', "JSONDecodeError"),
-     ('{"type":"session.compaction_start","data":["x"]}\n', "TypeError: session.compaction_start")],
+     ('{"type":"session.compaction_start","data":["x"]}\n', "TypeError: session.compaction_start"),
+     ('{"type":"session.compaction_complete","data":[]}\n', "TypeError: session.compaction_complete")],
 )  # fmt: skip
 def test_a_finished_line_that_is_no_event_makes_the_log_unreadable(bad: str, exc: str) -> None:
     log = chatlogs.state() / "s4" / "events.jsonl"

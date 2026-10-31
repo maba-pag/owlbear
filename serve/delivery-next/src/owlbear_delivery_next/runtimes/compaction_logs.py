@@ -124,7 +124,7 @@ def _parse(path: Path) -> Log:
                 if raw.endswith("\n"):
                     raise
                 continue  # the last line, which the runtime is still writing
-            data = event.get("data") or {} if isinstance(event, dict) else None
+            data = event.get("data", {}) if isinstance(event, dict) else None
             if not isinstance(data, dict):
                 raise TypeError(kind)
             if kind == "subagent.started":
