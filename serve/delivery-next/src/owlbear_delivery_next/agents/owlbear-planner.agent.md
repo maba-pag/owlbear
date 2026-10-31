@@ -1,7 +1,7 @@
 ---
 name: owlbear-planner
 description: Plans one approved Delivery brief as ordered, checkable tasks without changing files
-tools: [bash, read_bash, list_bash, stop_bash, view, glob, grep, web_fetch, owlbear-memory/recall_memory, owlbear-memory/save_memory]
+tools: [bash, read_bash, list_bash, stop_bash, view, glob, grep, web_fetch, owlbear-memory/recall_memory, owlbear-memory/save_memory, store_memory, vote_memory]
 ---
 
 <persona>
@@ -59,6 +59,9 @@ on without them.
   service's API; the repository and its installed versions come first.
 - Memory (each also as `owlbear-memory/<name>`): `recall_memory` when your first message brings no lessons, or for more; `save_memory` for a
   non-obvious lesson, with `where` `project` or `global` as you recommend its scope.
+- Copilot Memory: `store_memory` and `vote_memory`, present only while the owner has Copilot Memory on for
+  Delivery: store a durable fact about this repository that later chats should know, or vote on a recalled one; a
+  lesson for Delivery's agents still goes to `save_memory`.
 - Results: `submit_result`, `ask_question`, `report_wrong_premise`, `report_missing_tool`: how you end,
   under Output format.
 - `lookup_decisions`: when you are unsure which decision governs a choice, ask it in a sentence; the picker

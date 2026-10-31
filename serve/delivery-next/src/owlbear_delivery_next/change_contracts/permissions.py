@@ -384,14 +384,15 @@ def _writes(command: shell_parse.Command) -> bool:
     return _mutation(command.raw, [command.words]) is not None
 
 
-def decide(policy: Policy, req: Request, offered: frozenset[str] = frozenset()) -> str | None:
+def decide(policy: Policy, req: Request, offered: frozenset[str] = frozenset(), *, memory: bool = False) -> str | None:
     """Return None to allow, or the denial reason the agent and the activity log see.
 
     *offered* are the MCP tools the role's agent file names as server/tool, such as saving a memory (TD-70); the
-    runtime names a request's tool server-tool.
+    runtime names a request's tool server-tool. *memory* is the owner's Copilot Memory switch: with it on, a role
+    whose agent file names store_memory or vote_memory may save or vote (D-01M69EQN3KZE2QSBPH1CMDFK22).
     """
-    if req.kind == "mcp" and f"{req.server}/{req.tool.removeprefix(f'{req.server}-')}" in offered:
-        return None
+    if req.kind in {"mcp", "memory"}:
+        return _offered(req, offered, memory=memory)
     if req.kind == "custom-tool":
         return (
             None
@@ -405,6 +406,16 @@ def decide(policy: Policy, req: Request, offered: frozenset[str] = frozenset()) 
     if req.kind == "shell":
         return "this step runs no shell commands" if policy.confined else _shell(policy, req)
     return f"{req.kind} requests are not allowed in this step"
+
+
+def _offered(req: Request, offered: frozenset[str], *, memory: bool) -> str | None:
+    """An MCP server's tool, or with Copilot Memory on the runtime's memory tool, that the role's agent file names."""
+    if req.kind == "mcp":
+        named = f"{req.server}/{req.tool.removeprefix(f'{req.server}-')}" in offered
+        return None if named else "mcp requests are not allowed in this step"
+    if not memory:
+        return "Copilot Memory is off for Delivery's sessions"
+    return None if req.tool in offered else f"{req.tool or 'this memory request'} is not offered to this role"
 
 
 def _file(policy: Policy, req: Request) -> str | None:
@@ -437,4 +448,7 @@ def view(r: Any) -> Request:  # noqa: ANN401 - one of the SDK's permission reque
         edits = getattr(r, "file_edits", None) or ()  # a move names a before and an after path
         moved = [side.path for e in edits for side in (e.before, e.after) if side is not None and side.path]
         return Request(kind, paths=tuple(dict.fromkeys([*([path] if path else []), *moved])))
+    if kind == "memory":  # a Copilot Memory save or vote names its tool by its action
+        action = getattr(r, "action", None)
+        return Request(kind, tool=f"{getattr(action, 'value', action)}_memory" if action else "")
     return Request(kind, tool=getattr(r, "tool_name", ""), server=getattr(r, "server_name", ""))

@@ -946,6 +946,7 @@ def test_a_retro_review_session_is_noted_as_ours_before_it_is_created_or_never_c
     assert asyncio.run(retro_review.asked("review this", Meter(1.0, "retro-run"), role)) == "reviewed"
     assert [m["noted"] for m in made] == [True]  # in OwlBear's manifest before the session existed
     assert str(made[0]["working_directory"]).startswith(str(spotter.place() / "looks"))  # never an enrolled folder
+    assert made[0]["memory"] == {"enabled": False}  # Retro never has Copilot Memory, whatever the switch
     monkeypatch.setattr(chatlogs, "note", lambda _event: False)  # the manifest cannot be written
     with pytest.raises(RuntimeError, match="could not be noted"):
         asyncio.run(retro_review.asked("another", Meter(1.0, "retro-run"), role))

@@ -66,14 +66,19 @@ export function agentsGroup() {
         label]) => setting(`set-spotter-${field}`, name, [`spotter.${field}`], spotterCell(field, label))))}
     </section>
     <section class="panel" aria-labelledby="user-config-title">
-      <p-heading size="lg"><h2 id="user-config-title" tabindex="-1">Your instructions and skills</h2></p-heading>
+      <p-heading size="lg">
+        <h2 id="user-config-title" tabindex="-1">Your instructions, skills and memory</h2>
+      </p-heading>
       <p-text>A Delivery step reads its repository's instructions and Delivery's own skills. Switched on, it also
         reads your own instruction files in your Copilot folder (instructions/ and copilot-instructions.md, links
         followed), and is offered your own skills there (skills/), never one named as Delivery's. A plugin's files and
-        your agents stay off either way. Neither has a default: until both are set, a step asks you to set them
-        instead of starting its session.</p-text>
-      ${table("Your instructions and skills: they apply to the next session", ["Setting", "Value"], "user-config",
-        USER_KEYS.map((key) => setting(`set-${key}`, userConfigLabel(key), [key], userConfig(key))))}
+        your agents stay off either way. Copilot Memory on lets every Delivery session recall the memories Copilot
+        keeps for this repository, and the planner, preparer, builder, updater and test curator may save or vote on
+        them; the Spotter and Retro never use it. A memory saved this way skips OwlBear's memory curation and reaches
+        your later hand-run chats in this repository, so off is recommended. None has a default: until all three are
+        set, a step asks you to set them instead of starting its session.</p-text>
+      ${table("Your instructions, skills and memory: they apply to the next session", ["Setting", "Value"],
+        "user-config", USER_KEYS.map((key) => setting(`set-${key}`, userConfigLabel(key), [key], userConfig(key))))}
     </section>`;
 }
 

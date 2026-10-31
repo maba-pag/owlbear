@@ -325,6 +325,7 @@ def test_mcp_and_custom_tools_stay_bound_to_the_role() -> None:
     mcp = Request("mcp", tool="owlbear-memory-save_memory", server="owlbear-memory")
     assert decide(WRITE, mcp, offered) is None
     assert decide(WRITE, mcp) == "mcp requests are not allowed in this step"
+    assert decide(WRITE, Request("memory", tool="store_memory")) == "Copilot Memory is off for Delivery's sessions"
     assert decide(READ, Request("custom-tool", tool="submit_result")) is None
     assert decide(READ, Request("custom-tool", tool="other")) == "tool other is not allowed"
     assert decide(WRITE, Request("url")) is None  # the planner's web_fetch (TD-82)

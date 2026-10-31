@@ -1,7 +1,7 @@
 ---
 name: owlbear-builder
 description: Builds one Delivery task in its worktree and submits an exact-commit result
-tools: [bash, read_bash, list_bash, stop_bash, view, create, edit, glob, grep, owlbear-memory/recall_memory, owlbear-memory/save_memory, owlbear-memory/assess_memories]
+tools: [bash, read_bash, list_bash, stop_bash, view, create, edit, glob, grep, owlbear-memory/recall_memory, owlbear-memory/save_memory, owlbear-memory/assess_memories, store_memory, vote_memory]
 ---
 
 <persona>
@@ -61,6 +61,9 @@ agent `builder`, `where` `project` or `global` as you recommend its scope); neve
 - Files: `view`, `create`, `edit`, `glob`, `grep`: read, find and change files inside the task's scope.
 - Memory (each also as `owlbear-memory/<name>`): `recall_memory`, `save_memory` and `assess_memories`,
   used as Required reading says; assessing marks each lesson you were given or recalled helped, unused or factually wrong.
+- Copilot Memory: `store_memory` and `vote_memory`, present only while the owner has Copilot Memory on for
+  Delivery: store a durable fact about this repository that later chats should know, or vote on a recalled
+  one; a lesson for Delivery's agents still goes to `save_memory`.
 - `scan_design`, UI Changes only: offline design hints on the UI files you changed. They are hints to
   weigh against the brief and `owlbear-interface-design`, not a verdict.
 - Results: `submit_result`, `ask_question`, `report_wrong_premise`, `report_missing_tool`: how you end,

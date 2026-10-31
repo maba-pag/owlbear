@@ -138,19 +138,21 @@ def complete_layer():
         role: base.agents["curator"].model_copy(update={"model": "gpt-6.1-sol", "effort": "medium"})
         for role in ("retro", "retro-review")
     }
-    update = {"spotter": spotter, "agents": agents, "load_user_instructions": False, "load_user_skills": False}
+    update = {"spotter": spotter, "agents": agents} | dict.fromkeys(
+        ("load_user_instructions", "load_user_skills", "load_user_memory"), False
+    )
     return base.model_copy(update=update)
 
 
 @pytest.fixture
 def user_on(monkeypatch, _carried_settings):
-    """Both user-config switches on under every layer: a session site that omits them shows as off, never as set."""
+    """All three user-config switches on under every layer: a session site that omits them shows as off, never set."""
     from owlbear_delivery_next.settings import config  # noqa: PLC0415
     from owlbear_delivery_next.settings.roles import UserConfig  # noqa: PLC0415
 
-    switched = {"load_user_instructions": True, "load_user_skills": True}
+    switched = {"load_user_instructions": True, "load_user_skills": True, "load_user_memory": True}
     monkeypatch.setattr(config, "BASE", config.BASE.model_copy(update=switched))
-    return UserConfig(instructions=True, skills=True)
+    return UserConfig(instructions=True, skills=True, memory=True)
 
 
 @pytest.fixture(autouse=True)

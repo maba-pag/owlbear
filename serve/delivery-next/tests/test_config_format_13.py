@@ -16,15 +16,15 @@ def _written(tmp_path, data: dict, fmt: int) -> object:
     return path
 
 
-def test_the_format_is_eighteen():
-    assert config.CONFIG_FORMAT == 18
+def test_the_format_is_nineteen():
+    assert config.CONFIG_FORMAT == 19
 
 
 def test_a_published_format_12_layer_keeps_its_spotter_values_and_starts_without_preferences(tmp_path):
     spotter = {"mode": "learning", "steer_share": 20, "intervention_cap": 3, "verbose": "off", "looks": ["hand-off"]}
     agents = {"spotter": {"model": "gpt-6-luna", "effort": "medium"}}
     layer = read_layer(_written(tmp_path, {"spotter": spotter, "agents": agents}, 12), Layer)
-    assert layer.format == 18
+    assert layer.format == 19
     assert layer.spotter is not None
     assert (layer.spotter.switch, layer.spotter.hand_off_fitness) == ("on", "record")
     assert layer.spotter.steer_share == 20
@@ -36,7 +36,7 @@ def test_a_published_format_12_layer_keeps_its_spotter_values_and_starts_without
 def test_a_format_11_watcher_layer_gets_the_spotter_and_the_preferences_slot(tmp_path):
     path = _written(tmp_path, {"watcher": False, "agents": {"watcher": {"model": "gpt-6-luna", "effort": "low"}}}, 11)
     layer = read_layer(path, Layer)
-    assert layer.format == 18
+    assert layer.format == 19
     assert layer.spotter is not None
     assert layer.spotter == Spotter(switch="off")
     assert layer.agents["spotter"].model == "gpt-6-luna"
@@ -47,7 +47,7 @@ def test_a_format_11_watcher_layer_gets_the_spotter_and_the_preferences_slot(tmp
 def test_an_existing_format_13_layer_keeps_its_preferences_and_its_mode_becomes_the_switch(tmp_path):
     prefs = {"merge_method": "squash", "delete_remote_branch": False}
     layer = read_layer(_written(tmp_path, {"prefs": prefs, "spotter": {"mode": "off"}}, 13), Layer)
-    assert layer.format == 18
+    assert layer.format == 19
     assert layer.prefs is not None
     assert layer.prefs.merge_method == "squash"
     assert layer.prefs.delete_remote_branch is False
@@ -55,9 +55,9 @@ def test_an_existing_format_13_layer_keeps_its_preferences_and_its_mode_becomes_
     assert layer.spotter == Spotter(switch="off")
 
 
-def test_a_newer_format_than_18_is_refused(tmp_path):
+def test_a_newer_format_than_19_is_refused(tmp_path):
     with pytest.raises(FormatTooNewError):
-        read_layer(_written(tmp_path, {}, 19), Layer)
+        read_layer(_written(tmp_path, {}, 20), Layer)
 
 
 @pytest.mark.parametrize("fmt", [14.5, 15.0, True, "15", "abc"])  # "abc" is malformed today: the same refusal

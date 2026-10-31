@@ -44,7 +44,7 @@ def test_the_written_values_are_five_times_the_assumed_costs():
 def test_a_format_15_global_drops_its_budgets_and_gets_the_limits_keeping_every_other_value(tmp_path):
     glob = read_layer(_file(tmp_path, {"format": 15, "spotter": SPOTTER, "machine": MACHINE, "sessions": 2}),
                       GlobalLayer)  # fmt: skip
-    assert glob.format == 18
+    assert glob.format == 19
     assert _limits(glob) == tuple(LIMITS.values())
     assert glob.spotter.model_dump(exclude_none=True) == SPOTTER | {"look_credit_limit": 0.75}
     kept = {k: v for k, v in MACHINE.items() if k not in migrations.DAILY}
@@ -82,7 +82,7 @@ def test_an_older_global_gets_them_through_the_whole_chain(tmp_path):
 @pytest.mark.parametrize("model", [Layer, MachineLayer])
 def test_a_project_or_this_machine_s_layer_gets_no_limit(tmp_path, model):
     layer = read_layer(_file(tmp_path, {"format": 15, "spotter": {"switch": "off"}}), model)
-    assert (layer.format, layer.spotter) == (18, Spotter(switch="off"))
+    assert (layer.format, layer.spotter) == (19, Spotter(switch="off"))
 
 
 def test_a_format_16_global_whose_limits_the_owner_cleared_stays_without_them(tmp_path):
@@ -103,7 +103,7 @@ def test_a_budget_the_format_never_allowed_is_refused_not_dropped(tmp_path, bad)
 
 @pytest.mark.parametrize(
     ("fmt", "said"),
-    [(16, r"cannot be migrated to format 18"), (18, r"unknown field machine\.spotter_budget")],
+    [(16, r"cannot be migrated to format 19"), (19, r"unknown field machine\.spotter_budget")],
 )  # a format-16 layer is migrated first, so its refusal says so; the current format names the field
 def test_a_format_16_or_later_layer_naming_a_budget_is_refused(tmp_path, fmt, said):
     with pytest.raises(StoreError, match=said):

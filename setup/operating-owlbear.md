@@ -203,18 +203,26 @@ shared repository takes its global settings; one without starts with every setti
 lies under the global settings, so with the Global layer chosen the page names the choice that
 clears a value Unset and warns while a needed one is unset.
 
-Two of them, in **Settings → Your instructions and skills**, decide whether Delivery's agent steps
-also use your own Copilot files from `~/.copilot` (or `$COPILOT_HOME`). **Your instructions in
+Three of them, in **Settings → Your instructions, skills and memory**, decide whether Delivery's agent steps
+also use your own Copilot files from `~/.copilot` (or `$COPILOT_HOME`) and Copilot Memory. **Your instructions in
 Delivery steps** keeps your instruction files there, each entry of `instructions/` and
 `copilot-instructions.md`, links followed, beside the repository's. **Your skills in Delivery
 steps** offers each skill in `skills/` beside the step's own; none is preloaded, and one named as a
 Delivery skill or as the shaping skill is left out. Off, a step reads only its worktree's
 instruction files and Delivery's skills. A plugin's instructions, any other instruction source
-outside the worktree and your agents stay off either way. Neither has a default: while one is
+outside the worktree and your agents stay off either way.
+
+**Copilot Memory in Delivery sessions** on lets every Delivery session recall the memories Copilot keeps for the
+repository, and lets the planner, preparer, builder, updater and test curator save a new one or vote on one; other
+roles are refused a save. The Spotter and Retro never use it. A memory a step saves this way skips OwlBear's memory
+curation and reaches your later hand-run chats in that repository, so off is recommended: steps still have OwlBear's
+own memory either way.
+
+None of the three has a default: while one is
 unset, a Change's step asks you to set it before its session starts, and an Impeccable update or
 automatic memory curation ends without starting one; the shaping chat and the Spotter do not need
-them. Right after the first install of the version that adds them, choose the Global layer, set
-both (off keeps steps as they were), and save.
+them. Right after the first install of a version that adds one, choose the Global layer, set
+it (off for Copilot Memory, as recommended), and save.
 
 The machine settings in **Settings → This machine** (versions, updating itself, curation per
 trigger, sessions at once) work the same way: each machine follows the global ones, which you

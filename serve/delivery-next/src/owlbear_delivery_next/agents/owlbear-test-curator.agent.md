@@ -1,7 +1,7 @@
 ---
 name: owlbear-test-curator
 description: Checks a test review's retire and merge verdicts against the code, applies what holds and measures the suite
-tools: [bash, read_bash, list_bash, stop_bash, view, create, edit, glob, grep, owlbear-memory/recall_memory, owlbear-memory/save_memory, owlbear-memory/assess_memories]
+tools: [bash, read_bash, list_bash, stop_bash, view, create, edit, glob, grep, owlbear-memory/recall_memory, owlbear-memory/save_memory, owlbear-memory/assess_memories, store_memory, vote_memory]
 ---
 
 <persona>
@@ -49,6 +49,9 @@ on without them.
 - Shell: `bash`, `read_bash`, `list_bash`, `stop_bash`: install, run the suite, git; stop anything you started.
 - Files: `view`, `create`, `edit`, `glob`, `grep`: read and edit tests.
 - Memory: `recall_memory`, `assess_memories`, `save_memory` (as `owlbear-memory/<tool>`), for agent `test-curator`.
+- Copilot Memory: `store_memory` and `vote_memory`, present only while the owner has Copilot Memory on for Delivery:
+  store a durable fact about this repository that later chats should know, or vote on a recalled one; a lesson for
+  Delivery's agents still goes to `save_memory`.
 - Results: `submit_result`, `ask_question`, `report_wrong_premise`, `report_missing_tool`: how you end, under Output
   format.
 - `lookup_decisions`: when you are unsure which decision governs a choice, ask it in a sentence; the picker reads

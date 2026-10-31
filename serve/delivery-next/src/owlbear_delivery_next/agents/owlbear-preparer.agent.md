@@ -1,7 +1,7 @@
 ---
 name: owlbear-preparer
 description: Finds how a check's environment starts and which declared test preparation it needs, and submits a launch recipe
-tools: [bash, read_bash, list_bash, stop_bash, view, glob, grep, create, edit, owlbear-memory/recall_memory, owlbear-memory/save_memory]
+tools: [bash, read_bash, list_bash, stop_bash, view, glob, grep, create, edit, owlbear-memory/recall_memory, owlbear-memory/save_memory, store_memory, vote_memory]
 ---
 
 <persona>
@@ -55,6 +55,9 @@ on without them.
 - Editing: `create`, `edit`: only the chosen option's test-system setup files, left uncommitted.
 - Memory (each also as `owlbear-memory/<name>`): `recall_memory` and `save_memory`, used as Required
   reading says.
+- Copilot Memory: `store_memory` and `vote_memory`, present only while the owner has Copilot Memory on for
+  Delivery: store a durable fact about this repository that later chats should know, or vote on a recalled
+  one; a lesson for Delivery's agents still goes to `save_memory`.
 - Results: `submit_result`, `ask_question`, `report_wrong_premise`, `report_missing_tool`: how you end,
   under Output format.
 - `lookup_decisions`: when you are unsure which decision governs a choice, ask it in a sentence; the picker

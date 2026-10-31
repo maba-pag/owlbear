@@ -233,6 +233,8 @@ const USER_CONFIG = {
   load_user_instructions: ["Your instructions in Delivery steps", "on: your instruction files load too",
     "off: only the repository's instructions"],
   load_user_skills: ["Your skills in Delivery steps", "on: your skills are offered too", "off: only Delivery's skills"],
+  load_user_memory: ["Copilot Memory in Delivery sessions", "on: they recall it; producing steps may save",
+    "off: no Copilot Memory (recommended)"], // D-01M69EBRBBW97001KZ43C0BJM1
 };
 export const USER_KEYS = Object.keys(USER_CONFIG);
 

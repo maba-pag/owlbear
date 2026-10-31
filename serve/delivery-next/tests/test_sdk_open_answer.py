@@ -51,7 +51,8 @@ class _Client:
     async def list_models(self):
         return []
 
-    async def create_session(self, session_id, **_opts):  # noqa: ARG002 - the id is the replacement's
+    async def create_session(self, session_id, **opts):  # noqa: ARG002 - the id is the replacement's
+        self.opts = opts
         return self.session
 
 
@@ -151,7 +152,8 @@ class _Resuming(_Client):
     async def get_session_metadata(self, _sid):
         return object()
 
-    async def resume_session(self, _sid, **_opts):
+    async def resume_session(self, _sid, **opts):
+        self.opts = opts
         return self.session
 
 
@@ -189,15 +191,18 @@ def test_the_real_scope_keeps_the_owners_files_only_with_his_switch_on_before_th
     session = _Listing(order, sources)
     cfg = sdk_adapter.Session(
         kind=StepKind.CHECK, worktree=work, session_id="sid", message="check", resume=resume, policy=Policy(work),
-        observe=Worktree, checks=(), model="gpt-6-luna", user=UserConfig(instructions=on, skills=False),
+        observe=Worktree, checks=(), model="gpt-6-luna", user=UserConfig(instructions=on, skills=False, memory=not on),
         journal=sdk_adapter.Journal(event=events.append, delivered=lambda: order.append(("delivered",))),
     )  # fmt: skip
+    client = (_Resuming if resume else _Client)(session)
 
     async def scenario():
         st = sdk_adapter._Step(cfg, asyncio.get_running_loop())  # noqa: SLF001 - the real opening under test
-        return await sdk_adapter._open((_Resuming if resume else _Client)(session), st)  # noqa: SLF001
+        return await sdk_adapter._open(client, st)  # noqa: SLF001
 
     asyncio.run(scenario())
+
+    assert client.opts["memory"] == {"enabled": not on}  # the owner's switch, never the runtime's default
 
     off = ["plugin"] if on else ["linked", "root", "plugin"]
     assert [step[0] for step in order] == ["off", "send", "delivered"]

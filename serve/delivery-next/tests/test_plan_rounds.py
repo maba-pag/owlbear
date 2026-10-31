@@ -174,17 +174,17 @@ def test_a_failed_challenge_challenges_the_same_plan_again_without_planning_agai
     assert (c.step.kind, c.loops[PLAN].ended, c.loops[PLAN].round) == (K.BUILD, "clean", 1)
 
 
-@pytest.mark.parametrize(("instructions", "skills"), [(True, False), (False, True)])
+@pytest.mark.parametrize(("instructions", "skills", "memory"), [(True, False, True), (False, True, False)])
 def test_the_planner_and_its_challenger_run_with_the_owners_user_config(  # noqa: PLR0913, PLR0917 - fixtures
-    store, change_repo, mp, monkeypatch, instructions, skills
+    store, change_repo, mp, monkeypatch, instructions, skills, memory
 ):
-    switched = {"load_user_instructions": instructions, "load_user_skills": skills}
+    switched = {"load_user_instructions": instructions, "load_user_skills": skills, "load_user_memory": memory}
     monkeypatch.setattr(config, "BASE", config.BASE.model_copy(update=switched))
     mp.plans += [plan(1)]
     mp.reviews += [review()]
     step(store, change_repo)
     assert mp.kinds() == ["plan", "challenge"]
-    assert [cfg.user for _, cfg in mp.told] == [UserConfig(instructions=instructions, skills=skills)] * 2
+    assert [cfg.user for _, cfg in mp.told] == [UserConfig(instructions=instructions, skills=skills, memory=memory)] * 2
 
 
 def test_a_host_that_dies_during_the_challenge_keeps_the_revision_and_challenges_it(store, change_repo, mp):
