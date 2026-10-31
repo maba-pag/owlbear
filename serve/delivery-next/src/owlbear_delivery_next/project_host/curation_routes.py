@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
+from owlbear_delivery_next.state_store import work_block
 from owlbear_delivery_next.workflow_steps import curation
 
 if TYPE_CHECKING:
@@ -35,6 +36,8 @@ def router(store: Store, host: Host) -> APIRouter:
     def start(body: StartBody) -> dict[str, str]:
         if host.draining():
             raise HTTPException(409, "OwlBear stops once the running steps end; press Resume to cancel")
+        if why := work_block.of_store(store).text():  # its start is the owner's work for this project (#808)
+            raise HTTPException(409, why)
         try:
             c = curation.start(store, host.repo, body.packages, datetime.now(UTC))
         except curation.StartError as exc:

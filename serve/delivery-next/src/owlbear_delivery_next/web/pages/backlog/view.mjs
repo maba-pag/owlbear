@@ -67,8 +67,10 @@ function started() {
   if (state.choosing) return chooser();
   const s = state.started;
   if (!s) return html`<p-text id="started" aria-live="polite"></p-text>`;
-  return html`<p-text id="started" aria-live="polite">${s.text ?? html`Could not open the chat: ${s.reason}. Run this
-    command instead:<pre><code>${s.command}</code></pre>`}</p-text>`;
+  // a project whose settings block its work gets no command to run by hand (#808)
+  const by = s.command ? html` Run this command instead:<pre><code>${s.command}</code></pre>` : "";
+  return html`<p-text id="started" aria-live="polite">${s.text ?? html`Could not open the chat: ${s.reason}.${by}`}
+    </p-text>`;
 }
 
 export function view() {

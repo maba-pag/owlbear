@@ -7,8 +7,10 @@ export function startedView() {
   if (state.choosing) return chooserView();
   const s = state.started;
   if (!s) return html`<p-text id="started" aria-live="polite"></p-text>`;
-  return html`<p-text id="started" aria-live="polite">${s.text ?? html`Could not open the chat ${s.about}: ${s.reason}.
-    Copy this command: <code>${s.command}</code>`}</p-text>`;
+  // a project whose settings block its work gets no command to run by hand (#808)
+  const by = s.command ? html` Copy this command: <code>${s.command}</code>` : "";
+  return html`<p-text id="started" aria-live="polite">${s.text
+    ?? html`Could not open the chat ${s.about}: ${s.reason}.${by}`}</p-text>`;
 }
 
 async function launched(id, of) {  // the host opens the chat in the background; VS Code may first have to start

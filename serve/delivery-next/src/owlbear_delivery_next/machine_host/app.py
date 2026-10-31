@@ -34,7 +34,7 @@ from owlbear_delivery_next.project_host import (
     pack_routes,
     pages,
 )
-from owlbear_delivery_next.state_store import decision_impact, machine_settings, registry
+from owlbear_delivery_next.state_store import decision_impact, machine_settings, registry, work_block
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Awaitable, Callable
@@ -148,6 +148,13 @@ def create(machine: Machine, ended: Callable[[], None] = lambda: None) -> ASGIAp
     return Dispatcher(app, machine, expected)
 
 
+def _update_while_paused() -> bool:
+    try:
+        return machine_settings.current().update_while_paused is True
+    except registry.RegistryError:  # every loaded project names it as its block
+        return False
+
+
 def _routes(machine: Machine) -> APIRouter:
     routes = APIRouter(prefix="/api/next")
 
@@ -159,11 +166,12 @@ def _routes(machine: Machine) -> APIRouter:
 
     @routes.get("/projects")
     def projects() -> dict[str, Any]:
-        listed = [p.info() for p in list(machine.projects.values())]
+        here = work_block.machine()
+        listed = [p.info(here) for p in list(machine.projects.values())]
         return {
             "paused": machine.paused, "waiting": machine.waiting(), "projects": listed, "ending": machine.ending,
             "left": machine.left() if machine.ending else [],
-            "update_while_paused": machine_settings.current().update_while_paused is True,
+            "update_while_paused": _update_while_paused(),
             "update": machine.updater.read(), "updated": machine.updated or versions.running(),
             "announce": machine.auto.read(), "pack": machine.impeccable.read(),
         }  # fmt: skip

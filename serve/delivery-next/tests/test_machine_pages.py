@@ -335,7 +335,7 @@ def test_the_brief_offers_a_new_shaping_chat_and_says_how_it_went(tmp_path: Path
         again.click()
         pds.answer(page, "Open the chat")
         expect(page.locator("#started")).to_contain_text("shaper")
-        expect(page.locator("#started code")).to_contain_text('Continue Delivery Change c1 ("Alpha brief")')
+        expect(page.locator("#started code")).to_have_count(0)  # the work waits: nothing to run by hand (#808)
         assert len(launched.calls) == 2
 
 

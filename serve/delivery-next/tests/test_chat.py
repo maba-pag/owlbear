@@ -40,7 +40,7 @@ from owlbear_delivery_next.runtimes import ahp, copilot_cli, readiness, step_inp
 from owlbear_delivery_next.runtimes.vscode_contract import Outcome as Outcome_
 from owlbear_delivery_next.settings import carried
 from owlbear_delivery_next.settings.config import Agent, Layer
-from owlbear_delivery_next.state_store import briefs
+from owlbear_delivery_next.state_store import briefs, work_block
 from owlbear_delivery_next.state_store.database import put_record
 from owlbear_delivery_next.state_store.store import Lock, Store
 
@@ -703,7 +703,7 @@ def test_a_new_change_while_one_opens_is_refused_and_the_gap_starts_when_it_ends
     assert len(opening.calls) == 2
 
 
-def test_new_change_needs_the_token_and_without_code_or_settings_returns_the_command(tmp_path):
+def test_new_change_needs_the_token_without_code_returns_the_command_and_with_broken_settings_none(tmp_path):
     store, opening = Store(tmp_path), Opening()
     anonymous = launcher(store, opening, auth="")
     codes = [anonymous.post("/api/next/new-change").status_code, anonymous.get("/api/next/new-change/x").status_code]
@@ -717,11 +717,7 @@ def test_new_change_needs_the_token_and_without_code_or_settings_returns_the_com
     store.config_path.write_text("{")
     c = launcher(store, opening)
     out = c.post("/api/next/new-change").json()
-    assert (out["started"], out["command"], "settings" in out["reason"]) == (
-        False,
-        command(api.START_PROMPT, store.root),
-        True,
-    )
+    assert (out["started"], "command" in out, out["reason"].startswith(work_block.UNREADABLE)) == (False, False, True)
     assert (c.get("/api/next/new-change/nope").status_code, opening.calls) == (404, [])
 
 
