@@ -208,6 +208,32 @@ def test_an_exception_after_an_edit_holds_it_and_the_failed_row_names_where(repo
     assert held(repo, row.reason, rel(entry)) == made["bytes"]
 
 
+def test_a_run_that_raises_and_cannot_be_held_names_both_failures_in_its_row(repo, monkeypatch) -> None:
+    entry = curated(repo / "shop" / "memory", "Lesson")
+    pushed(repo, "a curated entry")
+    real = curation_tree._git  # noqa: SLF001
+
+    def git_(cwd, *args, **kw):
+        if args[0] == "update-ref":
+            msg = f"git update-ref failed: {FULL}"
+            raise curation_tree.DataRepoError(msg)
+        return real(cwd, *args, **kw)
+
+    def run(cfg) -> Run:
+        reword(cfg.memory, entry.id, "Lesson: the curator's version")
+        msg = "the session broke"
+        raise RuntimeError(msg)
+
+    monkeypatch.setattr(curation_tree, "_git", git_)
+    job = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(repo), run=run)
+    job.start("shop")
+    row = drained(job)
+
+    assert row.state == "failed"
+    assert "its edits are lost, not held: DataRepoError: git update-ref failed" in row.reason, row.reason
+    assert "RuntimeError: the session broke" in row.reason, row.reason
+
+
 def test_a_run_whose_entry_changed_meanwhile_is_refused_whole_and_the_other_change_is_published(repo, remote) -> None:
     a, b = curated(repo / "shop" / "memory", "First"), curated(repo / "shop" / "memory", "Second")
     pushed(repo, "two curated entries")

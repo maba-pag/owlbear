@@ -201,7 +201,12 @@ def holding(tree: Tree, folder: str, key: str) -> Iterator[None]:
     try:
         yield
     except Exception as exc:
-        if (held := tree.hold(folder, key)) == NO_EDITS:
+        try:
+            held = tree.hold(folder, key)
+        except (OSError, DataRepoError) as failed:  # the run's own failure stays in its row
+            msg = f"its edits are lost, not held: {type(failed).__name__}: {failed}; {type(exc).__name__}: {exc}"
+            raise RuntimeError(msg) from exc
+        if held == NO_EDITS:
             raise
         msg = f"{held}; {type(exc).__name__}: {exc}"
         raise RuntimeError(msg) from exc
