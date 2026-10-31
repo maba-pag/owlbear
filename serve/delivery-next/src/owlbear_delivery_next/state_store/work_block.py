@@ -60,9 +60,9 @@ def machine() -> Block:
     return Block(tuple(f"machine.{k}" for k in resolved.missing), notice)
 
 
-def of_settings(settings: Settings, here: Block | None = None) -> Block:
-    """Resolved settings' unset keys, with this machine's (*here*, read now unless given)."""
-    return Block(tuple(settings.missing)) + (machine() if here is None else here)
+def of_settings(settings: Settings) -> Block:
+    """Resolved settings' unset keys, with this machine's read now."""
+    return Block(tuple(settings.missing)) + machine()
 
 
 def of_store(store: Store, here: Block | None = None) -> Block:

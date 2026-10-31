@@ -6,8 +6,6 @@ The shared repository, its settings layers, this machine's settings and the slot
 
 from __future__ import annotations
 
-import time
-
 import pytest
 from owlbear_memory import MemoryCategory, MemoryEngine
 
@@ -52,11 +50,9 @@ def _row(job: curation.Curation, folder: str) -> FolderRun:
 
 
 def _drained(job: curation.Curation) -> None:
-    for _ in range(500):
-        if job.worker is None:
-            return
-        time.sleep(0.02)
-    pytest.fail("the curation queue did not drain")
+    if w := job.worker:
+        w.join(10)
+        assert not w.is_alive(), "the curation queue did not drain"
 
 
 class Curator:

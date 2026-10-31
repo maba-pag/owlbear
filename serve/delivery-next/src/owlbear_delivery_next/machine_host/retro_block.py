@@ -7,7 +7,6 @@ run under this machine's settings over Global. A project registered but not load
 
 from __future__ import annotations
 
-import contextlib
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -32,17 +31,16 @@ def of_machine(projects: Mapping[str, Project]) -> Callable[[str], str]:
 
 def block(uid: str, registered: Registered) -> str:
     """Why *uid* may not start now; empty when it may."""
-    known = list(registered)
     if uid.startswith("chg:"):
         pid = uid.split(":", 2)[1]
-        found = next((r for r in known if r[0] == pid), None)
+        found = next((r for r in registered if r[0] == pid), None)
         return _project(found[2], found[3]) if found else "its project is not registered"
     if uid.startswith("chat:"):
         cwd = chatlogs.workspace(chatlogs.state() / uid.removeprefix("chat:"))
         if not cwd:
             return f"{work_block.UNREADABLE}its chat's workspace is unknown"
-        if inside := [r for r in known if chatlogs.enrolled(cwd, [str(r[1])])]:
-            _, _, state, store = max(inside, key=lambda r: _depth(r[1]))
+        if inside := [r for r in registered if chatlogs.enrolled(cwd, [str(r[1])])]:
+            _, _, state, store = max(inside, key=lambda r: len(r[1].resolve().parts))  # enrolled resolved them
             return _project(state, store)
     return _outside()
 
@@ -51,12 +49,6 @@ def _project(state: str, store: Store | None) -> str:
     if state != "loaded" or store is None:
         return f"its project is {state}"
     return work_block.of_store(store).text()
-
-
-def _depth(folder: Path) -> int:
-    with contextlib.suppress(OSError, ValueError):
-        return len(folder.resolve().parts)
-    return 0
 
 
 def _outside() -> str:
