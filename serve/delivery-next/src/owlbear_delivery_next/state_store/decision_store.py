@@ -174,14 +174,15 @@ def _stamp(shared: DataRepo) -> tuple[bytes | None, bytes | None]:
 
 def _paired(shared: DataRepo, project: str) -> DataView:
     """Pair files with HEAD and journal, refusing active or unknown rebases; HEAD is checked after the final probes."""
-    if not decision_transaction.operation_idle(shared):
-        msg = "a rebase is active or unknown, so the decisions are unavailable; resolve it in Git first"
+    msg = "a rebase is active or unknown, so the decisions are unavailable; resolve it in Git first"
+    if decision_transaction.rebasing(shared, DecisionsUnavailable(msg)):
         raise Unsettled(msg)
     first = _stamp(shared)
     commit = _head(shared)
     seen = decision_cache.files(shared, project, commit, _files)
-    if _stamp(shared) != first or not decision_transaction.operation_idle(shared) or _head(shared) != commit:
-        msg = "the decisions or rebase state changed while they were read, so they are not settled; read them again"
+    msg = "the decisions or rebase state changed while they were read, so they are not settled; read them again"
+    changed = DecisionsUnavailable(msg, READ)
+    if _stamp(shared) != first or decision_transaction.rebasing(shared, changed) or _head(shared) != commit:
         raise Unsettled(msg, READ)
     return DataView(seen, commit)
 
