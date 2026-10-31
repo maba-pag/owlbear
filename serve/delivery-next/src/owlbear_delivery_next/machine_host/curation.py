@@ -12,6 +12,7 @@ A run works on its own worktree of the repository; only an accepted run's edits 
 
 from __future__ import annotations
 
+import logging
 import threading
 import uuid
 from contextlib import AbstractContextManager, contextmanager, nullcontext
@@ -39,6 +40,8 @@ if TYPE_CHECKING:
 
     from owlbear_delivery_next.local_system.slots import Slots
     from owlbear_delivery_next.runtimes.session_result import Run
+
+_log = logging.getLogger(__name__)
 
 LABEL = "memory-curation"
 SLOT = "memory"  # curation's own share of the machine's slots
@@ -319,7 +322,8 @@ class Curation:
             try:
                 refused = self._one(folder, started, key)
             except Exception as exc:  # noqa: BLE001 - one folder's failure never strands the others
-                why = f"{type(exc).__name__}: {exc}"[:300]
+                _log.exception("memory curation of %s failed (%s)", folder, key)
+                why = f"{type(exc).__name__}: {exc}"
                 failed = FolderRun(state="failed", started_at=started, ended_at=datetime.now(UTC), reason=why, key=key)
                 self._save(folder, failed)  # its session, if one began, is the ledger's lease under this key
             with self.lock:  # a follow-up joins before the run leaves, so the queue never looks empty between
@@ -437,9 +441,9 @@ class Curation:
         ended = datetime.now(UTC)
         report = done.payload if isinstance(done.payload, memory_curation_tools.MemoryCurationResult) else None
         if done.ending != "result" or report is None or unknown or done.usage_unread:
-            why = " ".join((done.detail or "no report was submitted").split())[:300]
+            why = " ".join((done.detail or "no report was submitted").split())
             if done.usage_unread and done.ending == "result" and report is not None:  # TD-94: its model is unproven
-                why = " ".join(f"the model is unknown: {done.usage_unread}".split())[:300]
+                why = " ".join(f"the model is unknown: {done.usage_unread}".split())
             why = f"{UNKNOWN}; {why}" if unknown else why
             return FolderRun(
                 state="failed",
