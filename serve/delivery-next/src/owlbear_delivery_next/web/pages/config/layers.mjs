@@ -291,6 +291,7 @@ async function saveLayer(review) {
     }
   } finally {
     state.saving = false;
+    state.layerWrites += 1;  // and a reload begun during it is older than its answer too
     state.error = error ? error.charAt(0).toUpperCase() + error.slice(1) : "";
     state.status = status;
     showIdle();  // models that arrived during it apply now
@@ -323,6 +324,7 @@ export async function rename() {
     state.error = e.message.charAt(0).toUpperCase() + e.message.slice(1);
   } finally {
     state.saving = false;
+    state.layerWrites += 1;
     showIdle();  // models that arrived during it apply now
   }
 }

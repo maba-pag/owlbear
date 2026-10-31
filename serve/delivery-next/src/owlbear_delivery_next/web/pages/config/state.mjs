@@ -36,7 +36,7 @@ export const state = {
   machineDraft: null, machineSaving: false,  // the machine's settings as edited, before they are saved
   machineText: null,  // a list setting's text as typed, until a save
   machineWrites: 0,  // counts machine saves, so a read that started before one never shows older values
-  layerWrites: 0,  // counts layer saves and renames, likewise for a reload of the layers
+  layerWrites: 0,  // counts layer saves and renames as they start and end, likewise for a reload of the layers
   machineUnread: "",  // why this machine's settings could not be read, until a read succeeds
   // Owner edited or cleared a project Merge and cleanup preference; kept until a save publishes.
   prefsReview: false,

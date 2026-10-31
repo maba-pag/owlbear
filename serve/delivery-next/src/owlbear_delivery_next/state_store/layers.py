@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 from typing import TYPE_CHECKING
@@ -16,7 +17,7 @@ from owlbear_delivery_next.settings.config import CONFIG_FORMAT, GlobalLayer, La
 from owlbear_delivery_next.state_store.database import FormatTooNewError, StoreError
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Iterator
     from pathlib import Path
 
     from owlbear_delivery_next.settings.config import Settings
@@ -95,13 +96,8 @@ def read_layer_bytes[T: Layer](path: Path, model: type[T]) -> tuple[T, bytes]:
     return _parse(text, path.stem, model, CONFIG_FORMAT, forward), raw
 
 
-def update_layer[T: Layer](
-    path: Path, model: type[T], change: Callable[[T], T], on_written: Callable[[], None] | None = None
-) -> T:
-    """Read, change and write one layer under its own lock, so no concurrent save is lost; invalid writes nothing.
-
-    *on_written* runs under the same lock right after the write, so nothing can land between the two.
-    """
+@contextlib.contextmanager
+def _locked(path: Path) -> Iterator[None]:
     path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     dir_fd = os.open(path.parent, _DIR_FLAGS)
     try:
@@ -109,6 +105,25 @@ def update_layer[T: Layer](
     finally:
         os.close(dir_fd)
     try:
+        yield
+    finally:
+        os.close(fd)
+
+
+def read_layer_settled[T: Layer](path: Path, model: type[T]) -> T:
+    """One layer under its lock: never a write whose *on_written* has not run yet."""
+    with _locked(path):
+        return read_layer(path, model)
+
+
+def update_layer[T: Layer](
+    path: Path, model: type[T], change: Callable[[T], T], on_written: Callable[[], None] | None = None
+) -> T:
+    """Read, change and write one layer under its own lock, so no concurrent save is lost; invalid writes nothing.
+
+    *on_written* runs under the same lock right after the write, so nothing can land between the two.
+    """
+    with _locked(path):
         current = read_layer(path, model)
         new = model.model_validate(change(current).model_dump())
         if current.roles_moved and not new.roles_moved:  # the receipt is never lost to a later write
@@ -117,5 +132,3 @@ def update_layer[T: Layer](
         if on_written:
             on_written()
         return new
-    finally:
-        os.close(fd)

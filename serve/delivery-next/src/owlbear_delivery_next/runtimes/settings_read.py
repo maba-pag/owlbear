@@ -18,6 +18,7 @@ from owlbear_delivery_next.runtimes import model_choices
 from owlbear_delivery_next.runtimes.settings_seen import NAME, Failure, Ledger, Seen, flatten
 from owlbear_delivery_next.settings.config import GlobalLayer, Layer, MachineLayer
 from owlbear_delivery_next.state_store import machine_settings, registry, settings_carry
+from owlbear_delivery_next.state_store.layers import read_layer_settled
 from owlbear_delivery_next.state_store.store import MACHINE_SETTINGS, StoreError, read_layer
 
 if TYPE_CHECKING:
@@ -143,7 +144,7 @@ class Reader:
         if shared is not None:
             missed += _sync(shared)
             try:
-                glob = flatten(read_layer(shared.global_path, GlobalLayer))
+                glob = flatten(read_layer_settled(shared.global_path, GlobalLayer))  # an own save is taken as one
             except StoreError as exc:
                 missed.append((str(shared.global_path), str(exc)))
             missed += _unreadable(sorted(shared.root.glob(f"*/{data_repo.CONFIG}")))

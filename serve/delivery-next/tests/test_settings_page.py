@@ -26,7 +26,7 @@ from owlbear_delivery_next.settings.improvement import ALLOWED, CATEGORIES
 from owlbear_delivery_next.state_store.store import Store
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Callable, Iterator
     from pathlib import Path
 
 MODELS = {
@@ -566,6 +566,59 @@ def test_a_refresh_answered_after_a_save_keeps_the_saved_values(store, pds) -> N
         pds.answer(page, "Save project settings")
         expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
         route, before = held[0]
+        with page.expect_response("**/config/models"):  # the refresh goes on past the layers it read
+            route.fulfill(response=before)
+        expect(page.get_by_label("Minutes per session, builder")).to_have_value("50")
+
+
+@pytest.mark.browser
+def test_a_refresh_begun_during_a_save_keeps_the_saved_values(store, pds, monkeypatch) -> None:
+    """#810: a read answered while a save runs reloads the layers then; that older answer never replaces the save's."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    go = threading.Event()
+    real = config_routes._save  # noqa: SLF001 - the save the route runs
+
+    def save(*args: Any, **kwargs: Any) -> str:
+        go.wait(30)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(config_routes, "_save", save)
+    with settings_page(store, pds) as page:
+        pds.group(page, "overview")
+        expect(page.locator("#reads-status")).to_contain_text("Last read")
+        read: list[tuple[Any, Any]] = []
+        layers: list[tuple[Any, Any]] = []
+
+        def hold(into: list[tuple[Any, Any]], method: str) -> Callable[[Any], None]:
+            def handle(route: Any) -> None:
+                if route.request.method != method or into:
+                    route.continue_()
+                    return
+                into.append((route, route.fetch()))
+
+            return handle
+
+        def held(into: list[tuple[Any, Any]]) -> tuple[Any, Any]:
+            for _ in range(400):
+                if into:
+                    return into[0]
+                page.wait_for_timeout(50)
+            pytest.fail("the request never came")
+
+        page.route("**/api/next/config/read", hold(read, "POST"))
+        page.locator("#read-again").click()
+        route, answer = held(read)
+        pds.group(page, "runs")
+        page.get_by_label("Minutes per session, builder").fill("50")
+        page.get_by_role("button", name="Save project settings").click()
+        pds.answer(page, "Save project settings")
+        expect(page.locator("#status")).to_have_text("Saving…")
+        page.route("**/api/next/config", hold(layers, "GET"))
+        route.fulfill(response=answer)  # the read's refresh starts while the save runs
+        route, before = held(layers)  # the layers as they are before the save writes
+        go.set()
+        expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
         with page.expect_response("**/config/models"):  # the refresh goes on past the layers it read
             route.fulfill(response=before)
         expect(page.get_by_label("Minutes per session, builder")).to_have_value("50")

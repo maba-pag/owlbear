@@ -20,7 +20,7 @@ from owlbear_delivery_next.runtimes import model_choices, settings_read
 from owlbear_delivery_next.runtimes.settings_read import Reader
 from owlbear_delivery_next.runtimes.settings_seen import NAME
 from owlbear_delivery_next.settings.config import CONFIG_FORMAT, GlobalLayer
-from owlbear_delivery_next.state_store import registry, settings_carry
+from owlbear_delivery_next.state_store import layers, registry, settings_carry
 from owlbear_delivery_next.state_store.store import Store
 
 
@@ -379,3 +379,30 @@ def test_a_read_is_dated_when_it_ends(world, monkeypatch):
 
     assert got.read_at >= mid[0]
     assert got.succeeded_at == got.read_at
+
+
+def test_a_read_never_takes_an_own_save_for_one_from_elsewhere_before_its_hook_ran(world):
+    def as_saved(model_id: str) -> GlobalLayer:
+        return GlobalLayer.model_validate({"format": CONFIG_FORMAT, **builder(model_id)})
+
+    world.push(**builder("A"))
+    reader = world.reader()
+    reader.read()
+    written, done, got = threading.Event(), threading.Event(), []
+
+    def hook() -> None:  # the save has replaced the file; the read may finish before this records it
+        written.set()
+        done.wait(2)
+        reader.ledger.own(as_saved("A"), as_saved("B"))
+
+    path = world.root / "config.json"
+    saving = threading.Thread(target=layers.update_layer, args=(path, GlobalLayer, lambda _c: as_saved("B"), hook))
+    saving.start()
+    written.wait(10)
+    reading = threading.Thread(target=lambda: (got.append(reader.read()), done.set()))
+    reading.start()
+    reading.join(30)
+    saving.join(30)
+
+    assert got[0].notices == []
+    assert reader.read().notices == []
