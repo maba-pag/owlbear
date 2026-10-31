@@ -5,6 +5,7 @@ import json
 import threading
 from datetime import UTC, datetime, timedelta
 from email.message import Message
+from pathlib import Path
 from types import SimpleNamespace
 from urllib.error import HTTPError
 
@@ -13,7 +14,7 @@ from fastapi.testclient import TestClient
 
 from owlbear_delivery_next.impeccable import pack_files, pack_update
 from owlbear_delivery_next.local_system import codebase, local_home
-from owlbear_delivery_next.machine_host import app, update_checks
+from owlbear_delivery_next.machine_host import app, impeccable, update_checks, versions
 from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.machine_host.update_checks import CHECKS, Checks, Failed
 from owlbear_delivery_next.project_host import pages
@@ -257,6 +258,65 @@ def test_with_its_versions_unset_the_owlbear_check_fails_with_why(monkeypatch):
         checks.start("owlbear")
     said = shown(checks, "owlbear")
     assert (said["state"], "versions this machine takes are unset" in said["reason"]) == ("failed", True)
+
+
+def homes(tmp_path, monkeypatch) -> tuple[Path, Path]:
+    """Two homes, the first in use: the second stands for the one a test's teardown puts back (#804)."""
+    a, b = tmp_path / "a" / ".owlbear", tmp_path / "b" / ".owlbear"
+    for home in (a, b):
+        home.mkdir(parents=True)
+    move(monkeypatch, a)
+    return a, b
+
+
+def move(monkeypatch, home: Path) -> None:
+    monkeypatch.setattr(local_home, "root", lambda: home)
+    monkeypatch.setenv("HOME", str(home.parent))
+
+
+def workers() -> list[threading.Thread]:
+    return [t for t in threading.enumerate() if t.name == "update-check"]
+
+
+def test_a_check_ending_after_its_home_moved_writes_only_in_the_home_its_host_started_with(tmp_path, monkeypatch):
+    """#804: a worker still fetching when a test's teardown puts the real home back wrote into it when it ended."""
+    a, b = homes(tmp_path, monkeypatch)
+    entered, release = threading.Event(), threading.Event()
+
+    def fetching(_channel=None):
+        entered.set()
+        release.wait(10)
+        msg = "offline"
+        raise versions.VersionError(msg)
+
+    monkeypatch.setattr(versions, "target", fetching)
+    checks = Checks(stub())  # its own worker threads, as the host's
+    assert checks.start("owlbear")
+    assert entered.wait(5)
+    move(monkeypatch, b)  # the teardown
+    release.set()
+    for t in workers():
+        t.join(10)
+    assert not workers()
+    released = Path(pack_files.PACKS) / impeccable.RELEASED
+    assert [(home / f).exists() for home in (b, a) for f in (update_checks.STATE, released)] == [False] * 2 + [True] * 2
+    assert json.loads((a / update_checks.STATE).read_text())["owlbear"]["failures"] == 1
+
+
+def test_a_check_whose_record_cannot_be_written_still_ends_and_says_why(monkeypatch):
+    def refused(path, _text):
+        msg = f"read-only: {path}"
+        raise OSError(msg)
+
+    said: list[str] = []
+    machine = stub()
+    machine.say = said.append
+    monkeypatch.setattr(update_checks, "atomic_write", refused)
+    outcomes(monkeypatch, "pds", NEWER)
+    checks = Checks(machine, Clock(), lambda work: work())
+    assert checks.start("pds")
+    assert (shown(checks, "pds")["state"], shown(checks, "pds")["checking"]) == ("newer", False)
+    assert any("could not be written: read-only" in line for line in said)
 
 
 @pytest.fixture

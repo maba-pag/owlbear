@@ -163,10 +163,11 @@ class Checks:
         """What the last checks kept; nothing runs until ``loop`` or ``start``."""
         self.machine, self.now, self.spawn, self.lock = machine, now, spawn, threading.Lock()
         self.checking: set[str] = set()
+        self.path = local_home.root() / STATE  # a check ending after the home moved (a test's teardown) keeps it here
         self.kept: dict[str, dict[str, Any]] = self._restored()
 
     def _restored(self) -> dict[str, dict[str, Any]]:
-        path = local_home.root() / STATE
+        path = self.path
         try:
             kept = json.loads(path.read_text(encoding="utf-8"))
         except FileNotFoundError:
@@ -177,7 +178,7 @@ class Checks:
         return {n: kept[n] for n in CHECKS if isinstance(kept, dict) and isinstance(kept.get(n), dict)}
 
     def _keep(self) -> None:
-        path = local_home.root() / STATE
+        path = self.path
         try:
             path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
             atomic_write(path, json.dumps(self.kept, indent=2) + "\n")
