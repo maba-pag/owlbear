@@ -13,7 +13,7 @@ from owlbear_delivery_next.change_contracts.tools import Worktree
 from owlbear_delivery_next.local_system import local_home
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Iterable, Iterator, Sequence
 
     from owlbear_delivery_next.change_contracts.profile_record import Profile
 
@@ -119,7 +119,7 @@ def observe(path: Path, target: str, since: str | None = None) -> Worktree:
     """
     head_ = head(path)
     base = git(path, "merge-base", "HEAD", tracking(path, target)).strip()
-    status = _status(_fields(path, "status", "--porcelain=v1", "-z", "--untracked-files=all"))
+    status = status_paths(_fields(path, "status", "--porcelain=v1", "-z", "--untracked-files=all"))
     changed = diff(path, base)
     if since:
         task = set(diff(path, since))
@@ -168,16 +168,21 @@ def _name_status(fields: list[str]) -> list[str]:
     return list(dict.fromkeys(out))
 
 
-def _status(fields: list[str]) -> list[str]:
-    """The paths of ``status --porcelain=v1 -z``: ``XY path``, then the source of a rename or copy in either column."""
-    out, i = [], 0
-    while i < len(fields) and fields[i]:
-        out.append(fields[i][3:])
-        if {"R", "C"} & set(fields[i][:2]):
-            i += 1
-            out.append(fields[i])
-        i += 1
-    return list(dict.fromkeys(out))
+def status_records(fields: Iterable[str]) -> Iterator[tuple[str, str, str | None]]:
+    """Yield each record of ``status --porcelain=v1 -z`` as ``(XY, path, source)``.
+
+    The source is the old name of a rename or copy in either column, else None.
+    """
+    entries = iter(fields)
+    for entry in entries:
+        if not entry:
+            return
+        yield entry[:2], entry[3:], next(entries) if {"R", "C"} & set(entry[:2]) else None
+
+
+def status_paths(fields: Iterable[str]) -> list[str]:
+    """Every path of ``status --porcelain=v1 -z``, both ends of a rename or copy, each once in order."""
+    return list(dict.fromkeys(p for _, path, source in status_records(fields) for p in (path, source) if p))
 
 
 def fingerprints(path: Path, paths: Sequence[str], rev: str = "HEAD") -> dict[str, str]:

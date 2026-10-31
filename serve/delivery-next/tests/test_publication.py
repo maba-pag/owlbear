@@ -1636,6 +1636,24 @@ def test_cleanup_removes_the_worktree_only_after_bundle_and_archive_verify(workt
         assert tar.extractfile("files/new.txt").read() == b"untracked\n"
 
 
+@pytest.mark.parametrize("how", ["worktree", "index", "chained"])
+def test_the_inventory_lists_a_renamed_file_by_its_real_names_once(worktree_with_work, how):
+    _clone, wt = worktree_with_work
+    first = {"worktree": " R ", "index": "R  ", "chained": "R  "}[how]
+    if how == "worktree":
+        (wt / "kept.txt").rename(wt / "néw kept.txt")
+        git(wt, "add", "-N", "néw kept.txt")  # " R new\0old": a rename in the worktree column (#744)
+    else:
+        git(wt, "mv", "kept.txt", "néw kept.txt")
+    if how == "chained":
+        (wt / "néw kept.txt").rename(wt / "third.txt")
+        git(wt, "add", "-N", "third.txt")
+    assert f"{first}néw kept.txt\0kept.txt\0" in worktree.git(wt, "status", "--porcelain=v1", "-z")
+    inv = cleanup.inventory(wt, "owlbear/c2", ["origin/main"])
+    renamed = ["néw kept.txt", "third.txt"] if how == "chained" else ["néw kept.txt"]
+    assert sorted(inv.dirty) == sorted(["a.txt", "new.txt", "staged.txt", *renamed])  # the source is in the diff
+
+
 def test_cleanup_removes_the_change_s_read_only_worktree_with_its_own(worktree_with_work, tmp_path):
     clone, wt = worktree_with_work
     cx = ctx(tmp_path, FakeGh(pr()), repo=clone)
