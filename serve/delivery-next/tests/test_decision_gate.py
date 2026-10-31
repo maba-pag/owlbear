@@ -346,7 +346,6 @@ def test_another_checkouts_replacement_reaches_an_idle_checkouts_next_gated_step
     assert f"new: {new.id}" in loop.open_question(c).text
 
 
-@pytest.mark.usefixtures("every_machine_setting")
 @pytest.mark.parametrize("kind", [K.PUBLISH, K.MERGE])
 def test_a_failed_refresh_stops_publish_and_merge_until_the_owner_clears_it_once_the_refresh_works(
     tmp_path, shared, ran, kind

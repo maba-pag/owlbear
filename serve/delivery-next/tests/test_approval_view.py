@@ -514,7 +514,6 @@ def launched(base: str, pds: Any) -> Iterator[Any]:
         yield page
 
 
-@pytest.mark.usefixtures("every_machine_setting")
 @pytest.mark.browser
 @pytest.mark.parametrize("case", ["stopped", "paused", "cleanup-paused", "liveness", "unset"])
 def test_the_owner_reruns_a_stopped_step_after_confirming_what_follows(page_url, pds, case, monkeypatch) -> None:
@@ -564,7 +563,6 @@ def test_the_owner_reruns_a_stopped_step_after_confirming_what_follows(page_url,
         expect(page.get_by_text(AFTER)).to_be_visible()
 
 
-@pytest.mark.usefixtures("every_machine_setting")
 @pytest.mark.browser
 def test_a_stop_that_changed_since_the_page_showed_it_is_not_cleared(page_url, pds) -> None:
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime

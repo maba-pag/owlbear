@@ -44,8 +44,9 @@ def clearable(c: Change) -> str | None:
 
 def unset(store: Store) -> str | None:
     """Why no work may start for want of settings, this machine's included (D-01M61SBWK4VE4MNTD35TR0VPS8), or None."""
-    try:
-        missing = [*store.settings().missing, *machine_settings.current().missing]
+    try:  # until #808, an unset update-check interval stops only its timed check (D-01M63ZYZT2RGZ0AFZW775FV16E)
+        machine = [n for n in machine_settings.current().missing if not n.startswith("update_check_hours_")]
+        missing = [*store.settings().missing, *machine]
     except (StoreError, RegistryError) as exc:
         return f"The settings can't be read ({exc}); fix them on the Settings page to run the step again"
     if missing:

@@ -929,7 +929,6 @@ def stopped(fake, kind=StepKind.BUILD, stop=None):
 SHOWN = {"action": "Resolve it in GitHub", "at": "2026-10-10T12:00:00Z"}  # the stop of stopped(), as the page shows it
 
 
-@pytest.mark.usefixtures("every_machine_setting")
 def test_resume_leaves_a_stop_and_the_owners_recovery_reruns_its_step(store, tmp_path):
     """#754: Resume clears only a pause; the owner's recovery on the Changes page clears the stop."""
     fake = Fake(store, tmp_path)
@@ -946,7 +945,6 @@ def test_resume_leaves_a_stop_and_the_owners_recovery_reruns_its_step(store, tmp
     assert (store.read("c1").stop, store.read("c1").outcome) == (None, None)
 
 
-@pytest.mark.usefixtures("every_machine_setting")
 @pytest.mark.parametrize("kind", [StepKind.BUILD, StepKind.CLEANUP])
 @pytest.mark.parametrize("pause", ["change", "delivery"])
 def test_a_recovery_while_paused_clears_the_stop_and_only_a_cleanup_runs_before_resume(store, tmp_path, pause, kind):
@@ -985,7 +983,6 @@ LIVENESS = Stop(kind=ErrorKind.LIVENESS, reason="processes still present: 7", ac
                 resume="The host sees none of them", at=NOW)  # fmt: skip
 
 
-@pytest.mark.usefixtures("every_machine_setting")
 @pytest.mark.parametrize(
     ("case", "why"),
     [("asking", NOT_STOPPED), ("finished", "This Change has finished"), ("wrong merge", NOT_STOPPED),
