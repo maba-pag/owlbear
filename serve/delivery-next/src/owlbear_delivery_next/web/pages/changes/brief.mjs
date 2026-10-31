@@ -191,7 +191,8 @@ export function briefInfo(d) {
     ${d.brief.outcome ? text(d.brief.outcome) : nothing}${agreement(d, true)}${picked(d)}${technical(d)}
     ${part("Changes since you approved", added.length ? saidList(added)
       : text("None. A change to an approved brief comes back to you as a new version to approve."))}
-    ${(d.amendments || []).length ? proposedWording(d.amendments) : nothing}</div>${reviseButton(d)}`);
+    ${(d.amendments || []).length ? proposedWording(d.amendments) : nothing}</div>
+    ${d.brief.unrevisable === "" ? row(reviseButton(d)) : nothing}`);
 }
 
 // TD-179: new wording a worker proposed for a generated criterion, with the challenger's verdict. Nothing is
