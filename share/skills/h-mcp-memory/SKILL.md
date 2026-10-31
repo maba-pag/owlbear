@@ -322,8 +322,11 @@ approved`, refuses any other state with a `ToolError`, and sets `approved_at`.
 Agent files and memory references change together; no compatibility aliases are kept. `*` is anonymous provenance;
 `curate_memory` checks a named scope as Lifecycle says.
 
-- After renaming an agent definition, call `rename_agent_memories(old_name="old", new_name="new")`. The new name
-  must already resolve from the active agent locations. Provenance and every matching scope are rewritten.
+- After renaming an agent definition, call `rename_agent_memories(old_name="old", new_name="new")`. It rewrites
+  provenance and every matching scope in the server's own folder only; Global memory and other project folders keep
+  the old name. The server doesn't check the new name, so first check that an agent file with that name exists:
+  renamed scopes on curated or approved entries then vouch for it in `curate_memory` (see Lifecycle), a misspelling
+  included.
 - When deleting an agent, call `delete_agent_memories(agent="name")`. Historical `source_agent` stays. The retired
   name leaves every scope; pending entries left without an audience are hard-deleted, reviewed ones become
   `deleted` tombstones that must be committed before purge.
