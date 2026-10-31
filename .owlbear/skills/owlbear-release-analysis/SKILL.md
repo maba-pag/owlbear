@@ -28,7 +28,10 @@ and tool namespaces. Read what actually changed, never one component's notes alo
 If the CLI or VS Code already moved: stop OwlBear when idle on the machine page (New Change is refused while it
 drains). That stops the host, which the decision lookup in step 4 needs, so restart it with `owlbear start --paused`
 and start no Change step or New Change yourself (paused does not refuse New Change) until the analysis is done and any
-repair is released and installed (`owlbear update`); then press Resume.
+repair is released and installed (`owlbear update`); then press Resume. Paused still runs a curation or Retro trigger
+set to "On, even while paused" (curate after merge, curate when idle, Retro after a Change, Retro when idle): before
+the restart, set each such trigger on the machine page to "On, not while paused", start neither by hand, and put them
+back after the Resume.
 
 ## 2. Pin the versions and read what changed
 
