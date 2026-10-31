@@ -23,24 +23,24 @@ export const LOOPS = [["shaper", "Brief challenges (shaper)"], ["planner", "Plan
   ["builder", "Task reviews (builder)"], ["final_review", "Final review"],
   ["updater", "Impeccable updates (updater)"]];
 export const WRITE = 60000;  // a save commits and pushes the shared settings repository (TD-64): a network round trip
-// Everything shown comes from here (TD-264): drafts per layer ("role.field" -> as typed), the folder being typed and
-// the offered models once read.
 // Answers of one kind that overlap and settle in any order, as the bar's reads do: an older one never replaces a newer
 // one's, and a newer one that failed never discards what an older one brought. *shown* marks a write's answer as shown.
 export function turns() {
-  let asked = 0, last = 0;
+  let begun = 0, last = 0;
   return {
-    ask: () => ++asked,
+    ask: () => ++begun,
     newer: (n) => n > last,
     take(n) {
       if (n <= last) return false;
       last = n;
       return true;
     },
-    shown() { last = ++asked; },
+    shown() { last = ++begun; },
   };
 }
 
+// Everything shown comes from here (TD-264): drafts per layer ("role.field" -> as typed), the folder being typed and
+// the offered models once read.
 const asked = new URLSearchParams(location.search);
 export const state = {
   loaded: null, saving: false, offered: null, modelsNote: "", error: "", status: "",
