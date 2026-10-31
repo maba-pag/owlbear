@@ -206,6 +206,11 @@ def test_a_session_under_a_grant_of_0_is_refused_before_any_adapter_and_stops_th
     after = store.read("c1")
     why = "Delivery started build with no session slot granted to its step"
     assert (after.outcome.exit, after.stop.reason) == (Exit.STOP, why)
+    done = '"Done: run the step again"'  # not Resume, which clears only a pause (#754)
+    assert (after.stop.action, after.stop.resume) == (
+        f"Report this scheduling bug; {done} on the Changes page runs the step again with a new grant",
+        f"You pressed {done}",
+    )
 
 
 def test_a_pack_updates_sessions_hold_the_projects_slots_and_its_wait_is_logged(store, tmp_path):

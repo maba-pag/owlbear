@@ -361,6 +361,7 @@ def test_a_failed_refresh_stops_publish_and_merge_until_the_owner_clears_it_once
     assert ran == [K.BUILD]
     assert (c.outcome.exit, c.stop.kind, c.stop.action) == (Exit.STOP, ErrorKind.STATE, decisions_gate.STALE)
     assert f"not refreshed before {kind}, which cannot be undone: not refreshed from the remote" in c.stop.reason
+    assert c.stop.action.endswith('then press "Done: run the step again" on the Changes page')  # not Resume (#754)
 
     # #754: the owner's recovery reruns the gate, which stops again while the remote is still unreachable
     page = TestClient(api.create_app(store, "tok", Host(store, tmp_path)), base_url="http://127.0.0.1",

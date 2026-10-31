@@ -181,6 +181,10 @@ def test_a_test_review_never_shapes_or_plans_and_its_status_counts_shares_and_th
     assert (c.step.kind, c.outcome.exit, c.stop.reason) == (
         StepKind.BUILD, Exit.STOP, "a test review keeps its fixed brief and plan: the plan is wrong"
     )  # fmt: skip
+    assert (c.stop.action, c.stop.resume) == (
+        'Abandon the test review, or press "Done: run the step again" on the Changes page to run its step again',
+        'You pressed "Done: run the step again"',
+    )  # not Resume, which clears only a pause (#754)
     done = c.model_copy(update={"finished_at": NOW, "tests": c.tests.model_copy(update={"unchanged": True})})
     assert status(done, Activity(host_up=True), NOW).line == "Done · no test changed"
     with review.store.lock(review.slug) as lock:

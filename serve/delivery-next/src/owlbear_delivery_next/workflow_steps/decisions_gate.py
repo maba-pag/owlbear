@@ -50,7 +50,7 @@ OPTIONS = [
 FAULTY = "Resolve the decision's conflict or finding in the shared data repository"
 STALE = (
     "Let the shared data repository's checkout catch up with its remote (reach the network, commit or discard its "
-    "local changes, or resolve what refused the rebase), then resume"
+    'local changes, or resolve what refused the rebase), then press "Done: run the step again" on the Changes page'
 )
 CHANGED = "Decisions this Change follows changed since its brief was approved:"
 UNPINNED = (

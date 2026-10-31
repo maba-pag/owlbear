@@ -50,8 +50,9 @@ def options(c: Change) -> list[Option]:
 def stop(c: Change, why: str, cause: str | None, now: datetime) -> None:
     """Stop a test review for the owner where it is, instead of shaping or planning it (TD-390)."""
     reason = f"a test review keeps its fixed brief and plan: {why}"[:300]
-    action = "Abandon the test review, or press Resume to run its step again"
-    c.stop = Stop(kind=ErrorKind.SCOPE, reason=reason, action=action, resume="You pressed Resume", at=now)
+    action = 'Abandon the test review, or press "Done: run the step again" on the Changes page to run its step again'
+    resume = 'You pressed "Done: run the step again"'
+    c.stop = Stop(kind=ErrorKind.SCOPE, reason=reason, action=action, resume=resume, at=now)
     c.outcome = Outcome(exit=Exit.STOP, cause=cause, reason=reason, who="you", at=now)
 
 

@@ -44,8 +44,9 @@ class SessionGrantError(Exception):
         stop = Stop(
             kind=ErrorKind.STATE,
             reason=str(self),
-            action="Report this scheduling bug; Resume runs the step again with a new grant",
-            resume="You pressed Resume",
+            action='Report this scheduling bug; "Done: run the step again" on the Changes page runs the step again '
+            "with a new grant",
+            resume='You pressed "Done: run the step again"',
             at=now,
         )
         return loop.StepResult(exit=Exit.STOP, reason=stop.reason, stop=stop)
