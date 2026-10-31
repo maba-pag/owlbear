@@ -93,14 +93,13 @@ def read(session: str) -> Log:
     for path in (chatlogs.state() / session / "events.jsonl", chatlogs.root() / "chatlogs" / session / "log.jsonl.gz"):
         try:
             seen = path.stat()
-        except OSError:
-            continue
-        with _lock:
-            hit = _cache.get(session)
-        if hit is not None and hit[:3] == (path, seen.st_size, seen.st_mtime_ns):
-            return hit[3]
-        try:
+            with _lock:
+                hit = _cache.get(session)
+            if hit is not None and hit[:3] == (path, seen.st_size, seen.st_mtime_ns):
+                return hit[3]
             log = _parse(path)
+        except FileNotFoundError:
+            continue
         except (OSError, EOFError, zlib.error) as exc:  # gzip.BadGzipFile is an OSError
             error = f"{path}: {type(exc).__name__}: {exc}"
             LOG.warning("compaction log unreadable: %s", error)

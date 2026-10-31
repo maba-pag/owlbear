@@ -42,3 +42,15 @@ def test_a_line_still_being_written_is_skipped_and_an_unchanged_log_is_not_read_
         first, again = compaction_logs.read("s2"), compaction_logs.read("s2")
     assert first == again == Log("found", Actor(calls=1, compactions=1, before=1))
     assert opened == [log]
+
+
+def test_a_log_that_cannot_be_reached_is_unreadable_not_missing() -> None:
+    folder = chatlogs.state() / "s3"
+    folder.mkdir(parents=True)
+    folder.chmod(0)
+    try:
+        found = compaction_logs.read("s3")
+    finally:
+        folder.chmod(0o700)
+    assert found.state == "error"
+    assert f"{folder / 'events.jsonl'}: PermissionError" in found.error
