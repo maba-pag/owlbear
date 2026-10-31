@@ -113,6 +113,11 @@ def user_mcp(home: Path) -> Path:
     return base / "Code" / "User" / "mcp.json"
 
 
+def shared_mcp() -> Path:
+    """Copilot's shared MCP configuration, which VS Code's MCP setup offers as Copilot Global."""
+    return preload.copilot_home() / "mcp-config.json"
+
+
 def _loose_json(text: str) -> object:
     """JSON as VS Code writes its own files: line comments, block comments and trailing commas allowed."""
     out: list[str] = []
@@ -159,9 +164,13 @@ def _serves(servers: object, repo: Path, *, own: bool) -> bool:
     )  # fmt: skip
 
 
-def registered(repo: Path, home: Path | None = None) -> bool:
-    """Whether the chat server of *repo* is registered: in its ``.mcp.json`` or the user's MCP configuration."""
-    for path, key, own in ((repo / ".mcp.json", "mcpServers", True), (user_mcp(home or Path.home()), "servers", False)):
+def registered(repo: Path) -> bool:
+    """Whether the chat server of *repo* is registered: in its ``.mcp.json``, VS Code's user or Copilot's shared one."""
+    for path, key, own in (
+        (repo / ".mcp.json", "mcpServers", True),
+        (user_mcp(Path.home()), "servers", False),
+        (shared_mcp(), "mcpServers", False),
+    ):
         try:
             data = _loose_json(path.read_text())
         except OSError, ValueError:

@@ -816,6 +816,49 @@ def test_a_server_entry_naming_its_folder_as_repo_equals_counts_as_setup(tmp_pat
     assert setup.registered(work)
 
 
+BINDINGS = {  # the arguments after ``mcp`` (``{w}`` is the project), and whether they count outside its own file
+    "exact": (("--repo", "{w}"), True),
+    "equals": (("--repo={w}",), True),
+    "none": ((), False),
+    "other": (("--repo", "/other"), False),
+}
+OWN_BINDINGS: tuple[str, ...] = ()  # the project's own file; the tests above prove its other rows
+
+
+def mcp_file(place: str, work: Path, monkeypatch) -> tuple[Path, str]:
+    """The MCP file setup reads in *place* and the key that holds its servers; ``shared`` sets ``COPILOT_HOME``."""
+    if place == "own":
+        return work / ".mcp.json", "mcpServers"
+    if place == "user":
+        return setup.user_mcp(Path.home()), "servers"
+    monkeypatch.setenv("COPILOT_HOME", str(work.parent / "copilot"))
+    return work.parent / "copilot" / "mcp-config.json", "mcpServers"
+
+
+@pytest.mark.parametrize(
+    ("place", "row"), [(p, r) for p in ("user", "shared") for r in BINDINGS] + [("own", r) for r in OWN_BINDINGS]
+)
+def test_an_entry_counts_only_with_one_exact_binding_or_none_in_the_projects_own_file(
+    place, row, tmp_path, monkeypatch
+):
+    work = clone(tmp_path / "a")
+    binding, counts = BINDINGS[row]
+    path, key = mcp_file(place, work, monkeypatch)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    args = ["-m", "owlbear_delivery_next", "mcp", *(a.format(w=work) for a in binding)]
+    path.write_text(json.dumps({key: {"x": {"args": args}}}))
+    assert setup.registered(work) is counts
+
+
+def test_copilots_shared_file_is_read_from_the_home_copilot_folder_without_copilot_home(tmp_path):
+    assert "COPILOT_HOME" not in os.environ  # the autouse fixture removes it
+    work = clone(tmp_path / "a")
+    shared = Path.home() / ".copilot" / "mcp-config.json"
+    shared.parent.mkdir(exist_ok=True)
+    shared.write_text("// mine\n" + json.dumps({"mcpServers": setup.with_server({}, "/py", work)["mcpServers"]}))
+    assert setup.registered(work)
+
+
 @pytest.mark.parametrize(
     ("text", "parsed"),
     [
