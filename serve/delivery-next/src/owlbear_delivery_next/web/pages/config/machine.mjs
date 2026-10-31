@@ -3,7 +3,7 @@ import { live } from "/assets/lit-html/3.3.3/directives/live.js";
 import { call, here, loaded as clones, project as current } from "/assets/ui.mjs";
 import { CREDITS, INHERIT, SOURCES, WRITE, state, show, notify, typedNumber } from "./state.mjs";
 import { button } from "./cells.mjs";
-import { edit, own } from "./layers.mjs";
+import { edit, own, layerValue } from "./layers.mjs";
 
 // The machine settings: Global's for every machine, each machine may set its own (D-01M5MZKEPPVMFC9HK795MMG91B);
 // changed only here or in a terminal, never in a project's layer (TD-243).
@@ -58,11 +58,29 @@ function machineEdit(key, value) {
   show();
 }
 
-// Where a setting in force comes from; an unset one says nothing here, its name is red (GW8RT6).
+// Whether the edited layer has an unsaved edit of *key*: Global's value for every machine, else this machine's own.
+function moved(key) {
+  if (state.layer !== "global") return Boolean(state.machineDraft && key in state.machineDraft);
+  return JSON.stringify(layerValue("global", `machine.${key}`)) !== JSON.stringify(state.loaded.global?.machine?.[key]
+    ?? null);
+}
+
+// What this machine would use once the edited layer is saved: its own value, else Global's, else unset. On Global
+// its own is the saved one: a draft of This machine is no edit of Global's.
+function machineInUse(key) {
+  const global = state.layer === "global", mine = global ? state.machine.settings[key] : machineValue(key);
+  if (mine !== null && mine !== undefined) return { value: sent(key, mine), from: "machine" };
+  const shared = global ? layerValue("global", `machine.${key}`) : state.machine.resolved?.shared?.[key];
+  return { value: shared ?? null, from: shared === null || shared === undefined ? undefined : "global" };
+}
+
+// Where a setting in force comes from; an unset one says nothing here, its name is red (GW8RT6). While the edited
+// layer has an unsaved edit of it, what the save would give (#809).
 function machineSource(key) {
-  const r = state.machine.resolved ?? {}, from = SOURCES[r.sources?.[key]];
-  if (!from) return nothing;
-  return html`<p-text size="xs" color="contrast-medium">in use: ${said(key, r[key])}, from ${from}</p-text>`;
+  const r = state.machine.resolved ?? {}, edited = moved(key);
+  const { value, from } = edited ? machineInUse(key) : { value: r[key], from: r.sources?.[key] };
+  const line = SOURCES[from] ? `in use: ${said(key, value)}, from ${SOURCES[from]}` : edited ? "in use: unset" : "";
+  return line ? html`<p-text size="xs" color="contrast-medium">${line}</p-text>` : nothing;
 }
 
 // One machine setting with its name shown, red while no layer sets it (GW8RT6): a PDS label cannot be coloured, so
@@ -121,12 +139,12 @@ function sharedControl(key) {
     return machineRow(key, label, html`<p-input-text id=${`global-machine-${key}`} label=${label} hide-label="true"
       data-key=${draftKey} inputmode=${key === "enrolled_chats" ? nothing : CREDITS.includes(key) ? "decimal"
         : "numeric"} placeholder="Unset" .value=${live(value)} ?disabled=${state.saving}
-      @input=${(e) => edit(draftKey, e.target.value ?? "")}></p-input-text>`, warning);
+      @input=${(e) => edit(draftKey, e.target.value ?? "")}></p-input-text>`, html`${machineSource(key)}${warning}`);
   }
   return machineRow(key, label, html`<p-select id=${`global-machine-${key}`} label=${label} hide-label="true"
     data-key=${draftKey} .value=${live(value || INHERIT)} ?disabled=${state.saving}
     @change=${(e) => edit(draftKey, e.target.value)}>${[[INHERIT, "Unset"], ...CHOICES[key]].map(([v, text]) =>
-      html`<p-select-option value=${v}>${text}</p-select-option>`)}</p-select>`, warning);
+      html`<p-select-option value=${v}>${text}</p-select-option>`)}</p-select>`, html`${machineSource(key)}${warning}`);
 }
 
 function machineControls() {

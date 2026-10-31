@@ -194,6 +194,25 @@ export function layerValue(layer, path) {
   return at(built[layer].value, path) ?? null;
 }
 
+// What *path* resolves to once the edited layer's unsaved edits are saved, as { value, from }; null while they leave
+// it as saved. The final review's values fall back to the builder's, as the server resolves them.
+export function preview(path) {
+  const layer = state.layer, saved = state.loaded[layer];
+  const moved = (p) => JSON.stringify(layerValue(layer, p)) !== JSON.stringify(at(saved, p) ?? null);
+  const builder = path.startsWith("final_review.") ? `agents.builder.${path.slice("final_review.".length)}` : null;
+  if (!moved(path) && !(builder && moved(builder))) return null;
+  return walk(path) ?? (builder && walk(builder, "builder")) ?? { value: null };
+}
+
+function walk(path, as) {
+  for (const layer of ["project", "machine", "global"]) {
+    const value = layer === state.layer ? layerValue(layer, path) : at(state.loaded[layer], path) ?? null;
+    if (value !== null) return { value, from: as ?? layer };
+  }
+  const base = state.loaded.inherited.global, value = at(base, path) ?? null;  // a built-in layer, in tests only
+  return value === null ? null : { value, from: as ?? base.sources[path] };
+}
+
 export async function reload() {
   try {
     state.loaded = await call("/config");

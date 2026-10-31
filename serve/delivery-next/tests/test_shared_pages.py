@@ -599,6 +599,27 @@ def test_settings_show_what_each_project_sets_apart_and_ask_where_an_edit_goes(
         server.should_exit = True
 
 
+def a_machine_s_clear_shows_global_s_saved_value_and_global_ignores_its_draft(page, pds, region) -> None:
+    """#809: the in-use line follows the shown layer's unsaved edit only, over the other layers as saved."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    channel = "Every machine: Versions this machine takes"
+    line = region.locator("#set-machine-channel p-text[size='xs']")
+    pds.pick(page, channel, "major")
+    expect(line).to_have_text("in use: Every minor version (v0.1, v0.2 …), from this machine")  # its own stays
+    page.locator(".bar").get_by_role("button", name="Save global defaults").click()
+    pds.answer(page, "Save global defaults")
+    expect(page.locator("#status")).to_have_text("Saved the global settings. They apply to the next session.")
+    pds.pick(page, "Layer", "machine")
+    pds.pick(page, "Versions this machine takes", "inherit")
+    expect(line).to_have_text("in use: Major versions only (v1, v2 …), from global")
+    pds.pick(page, "Layer", "global")
+    expect(line).to_have_text("in use: Every minor version (v0.1, v0.2 …), from this machine")
+    pds.pick(page, "Layer", "machine")
+    pds.pick(page, "Versions this machine takes", "minor")
+    expect(line).to_have_text("in use: Every minor version (v0.1, v0.2 …), from this machine")
+
+
 @pytest.mark.browser
 def test_with_no_machine_setting_set_anywhere_the_page_names_each_and_a_pending_move(
     tmp_path: Path, shared_repo, pds, monkeypatch
@@ -647,6 +668,7 @@ def test_with_no_machine_setting_set_anywhere_the_page_names_each_and_a_pending_
             expect(warned).to_have_count(13)
             pds.pick(page, channel, "inherit")
             expect(warned).to_have_count(14)
+            a_machine_s_clear_shows_global_s_saved_value_and_global_ignores_its_draft(page, pds, region)
             browser.close()
     finally:
         server.should_exit = True

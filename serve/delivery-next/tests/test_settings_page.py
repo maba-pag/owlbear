@@ -712,6 +712,88 @@ def test_global_s_clear_option_is_unset_and_warns_while_the_other_layers_inherit
         with_the_models_unread_a_typed_name_and_a_chosen_tier_clear_alike(page, pds)
 
 
+def _in_use(page, row: str) -> Any:
+    """The in-use line of the setting row *row*."""
+    return page.locator(f"#{row} p-text[size='xs']").filter(has_text="in use")
+
+
+def the_project_s_edit_shows_what_its_save_would_give(page, pds) -> None:
+    """Each layer below the project in turn, then the project's own value again once the edit is undone."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    pds.group(page, "runs")
+    at_once, line = page.get_by_label("Agent sessions at once in one project"), _in_use(page, "set-sessions")
+    expect(line).to_have_text("in use: 4, from this project")
+    at_once.fill("")
+    expect(line).to_have_text("in use: 3, from this machine")  # the machine's, not Global's 2
+    at_once.fill("6")
+    expect(line).to_have_text("in use: 6, from this project")
+    pds.pick(page, "Layer", "global")  # another layer's draft is no edit of the shown one
+    expect(line).to_have_text("in use: 4, from this project")
+    pds.pick(page, "Layer", "project")
+    at_once.fill("4")
+    expect(line).to_have_text("in use: 4, from this project")
+    expect(page.locator("#pending")).to_have_text("No unsaved edits.")
+    final = _in_use(page, "set-rounds-final_review")
+    rounds = page.get_by_label("Rounds at most, final review")
+    rounds.fill("")
+    expect(final.first).to_have_text("in use: 3, from the builder's value")
+    rounds.fill("2")
+    expect(final.first).to_have_text("in use: 2, from this project")
+    pds.group(page, "checks")
+    marker = _in_use(page, "set-pr_marker")
+    expect(marker).to_have_text("in use: no, from this project")
+    pds.pick(page, "The line Opened by OwlBear Delivery", "inherit")
+    expect(marker).to_have_text("in use: yes, from global")
+    pds.pick(page, "The line Opened by OwlBear Delivery", "off")
+    expect(marker).to_have_text("in use: no, from this project")
+
+
+def global_s_edit_shows_what_its_save_would_give(page, pds) -> None:
+    """A builder's value fills the final review's unset one; the curator's threshold; the Spotter's sample rate is
+    needed only while the looks include a sample."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    pds.pick(page, "Layer", "global")
+    pds.group(page, "runs")
+    findings = page.get_by_label("New findings per round at most, builder")
+    final = page.locator("#set-rounds-final_review")
+    expect(final.get_by_text("in use", exact=False)).to_have_count(3)  # its findings: unset, the builder's too
+    findings.fill("5")
+    expect(final).to_contain_text("in use: 5, from the builder's value")
+    findings.fill("")
+    expect(final.get_by_text("in use", exact=False)).to_have_count(3)
+    threshold = page.get_by_label("Curator's confidence threshold in percent (50 to 100)")
+    line = _in_use(page, "set-curator_threshold")
+    expect(line).to_have_count(0)
+    threshold.fill("90")
+    expect(line).to_have_text("in use: 90, from global")
+    threshold.fill("")
+    expect(line).to_have_count(0)
+    pds.group(page, "agents")
+    looks, sample = page.get_by_label("Looks", exact=True), page.locator("#set-spotter-sample_rate")
+    expect(sample.locator("p-text[color='warning']")).to_have_count(0)
+    looks.fill("hand-off, sample")
+    expect(_in_use(page, "set-spotter-looks")).to_have_text("in use: hand-off, sample, from global")
+    expect(sample).to_contain_text("Unset: every machine or project must then set its own")
+    looks.fill("hand-off")
+    expect(sample.locator("p-text[color='warning']")).to_have_count(0)
+    expect(page.locator("#pending")).to_have_text("No unsaved edits.")
+
+
+@pytest.mark.browser
+def test_the_in_use_line_follows_an_unsaved_edit_and_returns_once_it_is_undone(store, pds, monkeypatch) -> None:
+    """#809: the line under a setting says what saving the shown layer would give, from the layers as they are saved
+    and that layer's own edits; another layer's edits never show there."""
+    builder = {"max_rounds": 3, "last_round_at": 1, "ask_owner_at": 4}
+    glob = GLOBAL | {"agents": {"builder": GLOBAL["agents"]["builder"] | builder}}
+    final = {"max_rounds": 2, "last_round_at": 1, "ask_owner_at": 3}
+    _layered(store, monkeypatch, glob, {"sessions": 3}, {"sessions": 4, "pr_marker": False, "final_review": final})
+    with settings_page(store, pds) as page:
+        the_project_s_edit_shows_what_its_save_would_give(page, pds)
+        global_s_edit_shows_what_its_save_would_give(page, pds)
+
+
 @pytest.mark.browser
 def test_merge_and_cleanup_preferences_save_reload_and_clear_back_to_inherit(store, pds) -> None:
     """R15: the five optional preferences save into the shown layer, survive a reload, and clear to inherit."""

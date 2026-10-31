@@ -1,15 +1,17 @@
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { live } from "/assets/lit-html/3.3.3/directives/live.js";
 import { EFFORTS, INHERIT, SOURCES, state, shown } from "./state.mjs";
-import { own, inherited, edit, layerValue } from "./layers.mjs";
+import { own, inherited, edit, layerValue, preview } from "./layers.mjs";
 import { levels, arrows } from "./cost.mjs";
 
-// Code ships no defaults (2026-10-23): a value no layer sets is unset; its row's name says so in red (GW8RT6).
-function source(key, inUse, needed = true) {
-  const from = SOURCES[state.loaded.settings.sources[key]];
-  const line = !from && !needed ? html`<p-text size="xs" color="contrast-medium">unset; nothing applies it yet</p-text>`
-    : !from ? nothing : html`<p-text size="xs" color="contrast-medium">${inUse === undefined ? `from ${from}`
-      : `in use: ${shown(inUse)}, from ${from}`}</p-text>`;
+// Code ships no defaults (2026-10-23): a value no layer sets is unset; its row's name says so in red (GW8RT6). While
+// the edited layer has an unsaved edit of it, the line says what the save would give (#809).
+function source(key, inUse, needed = true, format = (v) => v) {
+  const next = preview(key), from = SOURCES[next ? next.from : state.loaded.settings.sources[key]];
+  const said = (text) => html`<p-text size="xs" color="contrast-medium">${text}</p-text>`;
+  const line = next ? said(from ? `in use: ${shown(format(next.value))}, from ${from}` : "in use: unset")
+    : !from && !needed ? said("unset; nothing applies it yet")
+      : !from ? nothing : said(inUse === undefined ? `from ${from}` : `in use: ${shown(format(inUse))}, from ${from}`);
   return html`${line}${unsetWarning(key)}`;
 }
 
@@ -30,7 +32,8 @@ function required(key) {
 }
 
 function looksInUse() {
-  return state.loaded.settings.spotter?.looks;
+  const next = preview("spotter.looks");
+  return next ? next.value : state.loaded.settings.spotter?.looks;
 }
 
 // What a blank field inherits, in words; "unset" where no layer below sets it.
@@ -156,7 +159,8 @@ export function widths() {
   const below = inherited().widths?.join(", ");
   return cell(typed("Screenshot widths in px, comma-separated (1280 to 2400)", own("widths"),
     (v) => edit("widths", v), { key: "widths", placeholder: clear(below), disabled: state.saving }),
-  source("widths", state.loaded.settings.widths));
+  source("widths", state.loaded.settings.widths, true,
+    (v) => (Array.isArray(v) && v.some(Number.isNaN) ? own("widths") : v)));
 }
 
 // TD-336: how many agent sessions of one project run at once; the machine's total holds as well.
@@ -204,7 +208,7 @@ export function spotterCell(field, label) {
     : typed(label, value, (v) => edit(key, v, true), { key, placeholder: clear(words(below)),
       inputmode: ["looks", "verbose_until"].includes(field) ? undefined
         : field === "look_credit_limit" ? "decimal" : "numeric", disabled: state.saving });
-  return cell(control, source(`spotter.${field}`, words(state.loaded.settings.spotter?.[field]), needed));
+  return cell(control, source(`spotter.${field}`, state.loaded.settings.spotter?.[field], needed, words));
 }
 
 // TD-308: the labels on every pull request OwlBear opens; a project's list replaces the global one.
@@ -238,7 +242,7 @@ export function userConfigLabel(key) {
 export function userConfig(key) {
   const [label, on, off] = USER_CONFIG[key], below = onOff(inherited()[key]);
   return cell(choose(label, [[INHERIT, clear(below)], ["on", on], ["off", off]], own(key) || INHERIT,
-    (v) => edit(key, v), { key, disabled: state.saving }), source(key, onOff(state.loaded.settings[key])));
+    (v) => edit(key, v), { key, disabled: state.saving }), source(key, state.loaded.settings[key], true, onOff));
 }
 
 function tokens(n) {
