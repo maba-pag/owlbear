@@ -230,8 +230,8 @@ def test_a_run_that_raises_and_cannot_be_held_names_both_failures_in_its_row(rep
     row = drained(job)
 
     assert row.state == "failed"
-    assert "its edits are lost, not held: DataRepoError: git update-ref failed" in row.reason, row.reason
-    assert "RuntimeError: the session broke" in row.reason, row.reason
+    assert "its edits are not held in a curation ref: DataRepoError: git update-ref failed" in row.reason
+    assert "RuntimeError: the session broke" in row.reason
 
 
 def test_a_run_whose_entry_changed_meanwhile_is_refused_whole_and_the_other_change_is_published(repo, remote) -> None:
