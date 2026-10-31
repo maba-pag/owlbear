@@ -1,5 +1,5 @@
 // Global settings changed elsewhere (#810): the machine's poll counts them; Settings lists them, Dismiss here clears
-// every one counted, on every page (D-01M690J2NH828XZEEFFFCA2NKM).
+// every one counted, on every page.
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { call, here, machineState, reread } from "/assets/ui.mjs";
 import { show } from "./state.mjs";

@@ -1732,8 +1732,8 @@ def test_a_layer_that_does_not_read_still_shows_the_read(tmp_path: Path, monkeyp
 def test_a_notice_shows_old_to_new_its_overrides_and_its_link_opens_the_row(
     tmp_path: Path, monkeypatch, pds, outside
 ) -> None:
-    """#810, D-01M690H2XGZPX8Z5MWA9Q9N5QP: a Global change from elsewhere is listed old → new, with where this machine
-    sets the key apart; its links open the row in Global, in This machine's layer and in the other project."""
+    """#810: a Global change from elsewhere is listed old → new, with where this machine sets the key apart; its links
+    open the row in Global, in This machine's layer and in the other project."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     a, b = (registry.register(clone(tmp_path / n)) for n in ("alpha", "beta"))
@@ -1777,8 +1777,8 @@ def test_a_notice_shows_old_to_new_its_overrides_and_its_link_opens_the_row(
 @pytest.mark.browser
 @pytest.mark.timeout(180)  # two reads of 300 changes and two pages: a loaded runner needs more than 30 s
 def test_dismiss_one_in_settings_and_all_from_changes(tmp_path: Path, monkeypatch, pds, outside) -> None:
-    """#810, D-01M690J2NH828XZEEFFFCA2NKM: Settings dismisses one entry; Changes counts the rest, links to their list
-    and dismisses every one it counts, on both pages, in batches of the route's limit."""
+    """#810: Settings dismisses one entry; Changes counts the rest, links to their list and dismisses every one it
+    counts, on both pages, in batches of the route's limit."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     a = registry.register(clone(tmp_path / "alpha"))

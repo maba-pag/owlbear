@@ -2,8 +2,8 @@
 
 The file holds when the last read ran and when the last one succeeded in full, the last read's failures, Global's set
 values as that read found them, and a notice for each Global value changed elsewhere since the read before, kept until
-the owner dismisses it (D-01M690H2XGZPX8Z5MWA9Q9N5QP, D-01M690J2NH828XZEEFFFCA2NKM). A save from this machine's
-Settings page updates the values seen, so the owner's own change is never noticed.
+the owner dismisses it. A save from this machine's Settings page updates the values seen, so the owner's own change is
+never noticed.
 """
 
 from __future__ import annotations
