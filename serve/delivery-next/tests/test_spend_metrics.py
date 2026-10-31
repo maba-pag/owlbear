@@ -165,6 +165,27 @@ def test_a_failed_final_read_is_unknown_until_the_next_run_recovers_it_in_its_wi
     assert [(r["key"], r["credits"]) for r in day["rows"]] == [("2026-10-01", 6.0)]  # its window is in one day
 
 
+def test_a_read_that_may_be_short_is_a_lower_bound_and_only_a_failed_one_says_it_failed() -> None:
+    """#780: a read taken while its turn ran is a lower bound, not a failed read; a failed one, carried back too."""
+    event = {"id": "event:e", "type": "event", "at": "2026-10-01T09:00:00+00:00", "session": "s3", "usage": usage(10.0),
+             "agent": "builder", "project": "p", "change": "ch", "source": "import:activity"}  # fmt: skip
+    mark = {"id": "mark:m", "type": "mark", "session": "s3", "usage": usage(10.0) | {"incomplete": "unread"},
+            "agent": "", "project": "p", "source": "import:change"}  # fmt: skip
+    lines = [
+        start("turn", "2026-10-01T10:00:00+00:00", session="s1", before={}),
+        end("turn", "2026-10-01T10:01:00+00:00", usage(9.33) | {"incomplete": "turn running"}, session="s1"),
+        start("timeout", "2026-10-01T11:00:00+00:00", session="s2", before={}),
+        end("timeout", "2026-10-01T11:01:00+00:00", usage(9.73) | {"incomplete": "TimeoutError"}, session="s2"),
+        event,
+        mark,
+    ]
+    pieces = spend_shares.derive(lines)
+    flags = {p["run"]: (p["incomplete"], p["failed"]) for p in pieces if p["credits"]}
+    assert flags == {"turn": (True, False), "timeout": (True, True), "event:e": (True, True)}
+    totals = spend_metrics.query(pieces, tz=UTC)["totals"]
+    assert (totals["incomplete"], totals["failed"], totals["credits"]) == (3, 2, 29.06)
+
+
 def test_a_killed_run_stays_open_and_unknown_until_reconciled() -> None:
     pieces = spend_shares.derive([start("r1", "2026-10-01T10:00:00+00:00", before={})])
     assert [(p["kind"], p["credits"]) for p in pieces] == [("open", None)]

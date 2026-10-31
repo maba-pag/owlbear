@@ -29,10 +29,10 @@ invented proportional split. For each run:
    credits (or None when its credits were not reported), so it counts as a run with its ending and its stop.
 3. The marks rise to its usage.
 
-A run whose final usage read failed records its earlier sample, marked ``incomplete``: its credits are a lower bound
-until reconciled. A run with subagents but no split leaves its pieces' agent unknown, under its role. A piece's time
-is the window ``[lo, hi]`` it certainly lies in: one instant for a run, the run's end; wider or open-ended when
-uncertain, never a made-up day.
+A run whose final usage read failed records its earlier sample, and a read that may be short (``LOWER_BOUNDS``) is
+marked too: both ``incomplete``, a lower bound until reconciled, and only the first ``failed``. A run with subagents
+but no split leaves its pieces' agent unknown, under its role. A piece's time is the window ``[lo, hi]`` it certainly
+lies in: one instant for a run, the run's end; wider or open-ended when uncertain, never a made-up day.
 """
 
 from __future__ import annotations
@@ -43,6 +43,9 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
 FIELDS = ("credits", "input", "output", "cache_read", "cache_write")
+# what producers mark on a read that worked but may be short; any other mark names a failed read
+LOWER_BOUNDS = frozenset({"turn running", "tasks unsettled", "lower final read", "interrupted", "checkpoint",
+                          "unconfirmed"})  # fmt: skip
 EPS = 1e-9
 LIVE = ("start", "end")
 LOG = "import:runtime-log"  # a line the runtime's log gave
@@ -266,10 +269,12 @@ def _time(run: dict[str, Any]) -> str | None:
 def _base(run: dict[str, Any]) -> dict[str, Any]:
     keys = ("run", "session", "project", "name", "clone", "change", "step", "job", "ending", "stopped", "stopped_by",
             "limit", "source", "look")  # fmt: skip
-    incomplete = bool((run.get("usage") or {}).get("incomplete")) and not run.get("settled")  # a lower bound
+    why = (run.get("usage") or {}).get("incomplete")
+    incomplete = bool(why) and not run.get("settled")  # a lower bound
     return {k: run.get(k) or ("" if k != "limit" else None) for k in keys} | {
         "role": run.get("agent") or "",
         "incomplete": incomplete,
+        "failed": incomplete and str(why) not in LOWER_BOUNDS,
     }
 
 
@@ -453,9 +458,10 @@ def _session(group: list[dict[str, Any]]) -> list[dict[str, Any]]:
         window = (run["at"], run["at"]) if exact else (last, run.get("at"))  # unread baseline: since the last report
         grown, known = marks.grow(usage, model)
         found = _pieces(run, "run", grown, window, [] if exact else ["at"])
-        if not found and _base(run)["incomplete"]:
+        if not found and (bound := _base(run))["incomplete"]:
             for piece in credited:  # a lower bound repeating what they credited: they are lower bounds too
                 piece["incomplete"] = True
+                piece["failed"] = piece["failed"] or bound["failed"]
         if not found and _invocation(run) and not run.get("continued"):
             # nothing spent, or nothing known: still a run, with its ending and stop
             zero = {f: (0.0 if known else None) if f == "credits" else 0.0 for f in FIELDS}
