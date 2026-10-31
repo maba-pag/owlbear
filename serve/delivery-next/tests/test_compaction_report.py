@@ -5,24 +5,45 @@ from __future__ import annotations
 import gzip
 import json
 import logging
+import re
+import socket
+import subprocess
+import threading
+import time
+from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING
+from urllib.parse import quote
 
 import pytest
+import uvicorn
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from owlbear_delivery_next.change_contracts.models import Change, Step, StepKind
 from owlbear_delivery_next.improvement import chatlogs
+from owlbear_delivery_next.local_system import codebase, data_place
 from owlbear_delivery_next.local_system.data_repo import DataRepo
+from owlbear_delivery_next.machine_host import app, project
+from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.project_host import metrics_routes
+from owlbear_delivery_next.project_host.host import Host, HostRecord
 from owlbear_delivery_next.runtimes import compaction_logs, spend_reconcile
 from owlbear_delivery_next.settings import config
 from owlbear_delivery_next.settings.config import Agent, GlobalLayer, Layer, MachineLayer
-from owlbear_delivery_next.state_store import spend_ledger
+from owlbear_delivery_next.state_store import registry, spend_ledger
 from owlbear_delivery_next.state_store.store import Store, update_layer
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+    from pathlib import Path
+
+    from playwright.sync_api import Page
 
 NOW = datetime.now(UTC).replace(microsecond=0) - timedelta(hours=1)
 OLD = NOW - timedelta(days=40)
 LAST_30 = f"from={(NOW - timedelta(days=30)).date()}&to={(NOW + timedelta(days=2)).date()}"
+NONE = "\u2013"  # the en dash a cell without a value shows
 COUNTS = ("sessions", "logs", "missing", "unreadable", "compacted", "compactions", "median", "earliest")
 
 
@@ -87,19 +108,19 @@ SHOP = {"project": "shop", "name": "shop", "clone": "shop", "agent": "builder", 
 MILL = {"project": "mill", "name": "mill", "clone": "mill", "agent": "builder", "change": "c3"}
 
 
-def seed(*, b1_unread: bool = False) -> None:
+def seed(*, b1_unread: bool = False, shop: dict = SHOP, mill: dict = MILL) -> None:
     """The plan's fixture: shop's and mill's builder sessions, shop's reviewer and the machine's retro."""
     b1r = used(1.0)
     spend_ledger.append([
-        *ran("b1r", OLD, SHOP, usage=b1r, session="s-b1", before={}),
-        *ran("b1", NOW, SHOP, usage=used(3.0, x1=("explore", 0.5), x2=("explore", 0.5)), session="s-b1",
+        *ran("b1r", OLD, shop, usage=b1r, session="s-b1", before={}),
+        *ran("b1", NOW, shop, usage=used(3.0, x1=("explore", 0.5), x2=("explore", 0.5)), session="s-b1",
              before=None if b1_unread else b1r),
-        *ran("b2", NOW, SHOP, usage=used(1.0, "m2"), before={}),
-        *ran("b6", NOW, SHOP, usage=used(1.0), before={}),
-        *ran("rv", NOW, SHOP | {"agent": "reviewer", "change": "c1"}, usage=used(0.5), stopped="reached", before={}),
-        *ran("b3", NOW, MILL, usage=used(1.0), before={}),
-        *ran("b4", NOW, MILL, usage=used(1.0), before={}),
-        *ran("b7", NOW, MILL, usage=used(1.0), before={}),
+        *ran("b2", NOW, shop, usage=used(1.0, "m2"), before={}),
+        *ran("b6", NOW, shop, usage=used(1.0), before={}),
+        *ran("rv", NOW, shop | {"agent": "reviewer", "change": "c1"}, usage=used(0.5), stopped="reached", before={}),
+        *ran("b3", NOW, mill, usage=used(1.0), before={}),
+        *ran("b4", NOW, mill, usage=used(1.0), before={}),
+        *ran("b7", NOW, mill, usage=used(1.0), before={}),
         *ran("rt", NOW, {"project": "", "name": "", "clone": "", "agent": "retro", "change": ""}, usage=used(0.5),
              before={}),
     ])  # fmt: skip
@@ -126,13 +147,18 @@ def context(path, model: type[Layer], role: str, value: str) -> None:
     update_layer(path, model, lambda layer: layer.model_copy(update={"agents": {role: Agent(context=value)}}))
 
 
-@pytest.fixture
-def served(tmp_path, monkeypatch) -> list[tuple[str, Store]]:
-    """Shop and mill on a shared location: builder long on Global, default on mill; retro long on this machine."""
+def unset_reviewer(monkeypatch) -> None:
+    """The reviewer's context is set on no layer, the tests' base layer included."""
     base = config.BASE
     assert base is not None
     agents = base.agents | {"reviewer": base.agents["reviewer"].model_copy(update={"context": None})}
-    monkeypatch.setattr(config, "BASE", base.model_copy(update={"agents": agents}))  # reviewer's context set nowhere
+    monkeypatch.setattr(config, "BASE", base.model_copy(update={"agents": agents}))
+
+
+@pytest.fixture
+def served(tmp_path, monkeypatch) -> list[tuple[str, Store]]:
+    """Shop and mill on a shared location: builder long on Global, default on mill; retro long on this machine."""
+    unset_reviewer(monkeypatch)
     shared = DataRepo(tmp_path / "data")
     stores = [(name, Store(tmp_path / "projects" / name, shared, name)) for name in ("shop", "mill")]
     context(shared.global_path, GlobalLayer, "builder", "long")
@@ -272,3 +298,182 @@ def test_a_row_of_a_project_this_machine_does_not_serve_says_so(get) -> None:
     said = links(get(LAST_30).json()["compaction"])
     assert said["builder", "", "shop"] == [{"project": "shop", "name": "shop", "why": "not served"}]
     assert said["retro", "", ""] == [{"project": "", "name": "This machine", "why": "no project served"}]
+
+
+def clone(path: Path) -> Path:
+    for args in (["init", "-q", str(path)], ["-C", str(path), "commit", "-q", "--allow-empty", "-m", "i"]):
+        subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", *args], check=True)  # noqa: S603, S607
+    store = Store.open(path)
+    with store.lock(f"{path.name}-1") as lock:
+        store.write(lock, Change(slug=f"{path.name}-1", step=Step(kind=StepKind.BUILD)))
+    return path.resolve()
+
+
+@contextmanager
+def hosted(tmp_path: Path, monkeypatch, pds, shared: Path) -> Iterator[tuple[Page, str, str, str, list[str]]]:
+    """The fixture's sessions and settings on registered clones shop and mill, a machine host serving them and a
+    Chromium page reaching only it; the page, the host's address, shop's and mill's ids and the page's errors."""
+    from playwright.sync_api import Error, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+
+    monkeypatch.setenv(data_place.VIEW, str(shared))
+    monkeypatch.setattr(spend_reconcile, "due", lambda *_a: False)  # the ledger holds only the fixture's lines
+    monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
+    monkeypatch.setattr(Host, "_launch", lambda _self, _slug: False)
+    unset_reviewer(monkeypatch)
+    shop, mill = (registry.register(clone(tmp_path / name)) for name in ("shop", "mill"))
+    stores = [Store.open(tmp_path / name) for name in ("shop", "mill")]
+    assert [s.name for s in stores] == ["shop", "mill"]
+    context(stores[0].global_path, GlobalLayer, "builder", "long")
+    context(stores[1].config_path, Layer, "builder", "default")
+    context(stores[0].machine_path, MachineLayer, "retro", "long")
+    seed(shop=SHOP | {"clone": shop.id}, mill=MILL | {"clone": mill.id})
+    sock = socket.socket()
+    sock.bind(("127.0.0.1", 0))
+    base = f"http://127.0.0.1:{sock.getsockname()[1]}"
+    record = HostRecord(url=f"{base}/", token="t", pid=1, started_at=datetime.now(UTC), code=codebase.CURRENT)  # noqa: S106
+    machine = Machine(record)
+    machine.load_all()
+    server = uvicorn.Server(uvicorn.Config(app.create(machine), log_level="warning", timeout_keep_alive=60))
+    threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True).start()
+    while not server.started:
+        time.sleep(0.05)
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except Error as exc:
+                pytest.skip(f"no Playwright Chromium: {exc}")
+            page = browser.new_page(viewport={"width": 1280, "height": 800})
+            pds.only(page, base)
+            errors: list[str] = []
+            page.on("pageerror", lambda e: errors.append(str(e)))
+            page.on("console", lambda m: errors.append(m.text) if m.type == "error" else None)
+            page.goto(f"{base}/metrics#token=t")
+            yield page, base, shop.id, mill.id, errors
+            browser.close()
+    finally:
+        server.should_exit = True
+        machine.stop_all()
+
+
+def shown(page: Page) -> list[list[str]]:
+    """The compaction table's rows as shown, but for their links: agent, project, sessions to earliest."""
+    return page.locator("#compaction-table p-table-row").evaluate_all(
+        "rows => rows.map(r => [...r.querySelectorAll('p-table-cell')].slice(0, 7)"
+        ".map(c => c.textContent.replace(/\\s+/g, ' ').trim()))"
+    )
+
+
+def returned(page: Page, pds, left: str) -> None:
+    """Back on Metrics at the address *left* with the compaction section focused and every filter as it was."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    expect(page).to_have_url(f"{left}#compaction")
+    expect(page.locator("#compaction-title")).to_be_focused()
+    query = {"period": "30", "by": "agent"} | dict(p.split("=", 1) for p in left.split("?", 1)[1].split("&"))
+    filters = page.get_by_role("group", name="Show only")
+    for label, key in (("Period", "period"), ("Project", "in"), ("Agent", "agent"), ("Model", "model"),
+                       ("Change", "change"), ("Split by", "by")):  # fmt: skip
+        expect(pds.select(filters, label)).to_have_js_property("value", query.get(key, "").replace("%2F", "/"))
+    if "from" in query:
+        expect(page.locator("#from")).to_have_js_property("value", query["from"])
+        expect(page.locator("#to")).to_have_js_property("value", query["to"])
+    expect(page.locator("#stopped")).to_have_js_property("checked", query.get("stopped") == "1")
+
+
+def setting_link(page: Page, row: str):
+    return page.locator(f"#set-agents-{row}").get_by_role("link", name="Compaction on Metrics")
+
+
+@pytest.mark.browser
+def test_metrics_shows_each_roles_compaction_and_its_setting_leads_back_with_the_filters(
+    tmp_path: Path, monkeypatch, pds, shared_repo
+) -> None:
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    with hosted(tmp_path, monkeypatch, pds, shared_repo[0]) as (page, base, shop, mill, errors):
+        page.goto(f"{base}/metrics?period=30&in=")
+        expect(page.locator("#compaction-table p-table-row")).to_have_count(6)
+        assert shown(page) == [
+            ["builder", "All projects", "6 · 1 without a log · 1 unreadable", "3 of 4 (75%)", "4",
+             "40% of its model calls", "20%"],
+            ["builder", "mill", "3 · 1 unreadable", "1 of 2 (50%)", "1", "90% of its model calls", "90%"],
+            ["builder", "shop", "3 · 1 without a log", "2 of 2 (100%)", "3", "30% of its model calls", "20%"],
+            ["explore (subagent of builder)", "shop", "2", "1 of 2 (50%)", "1", "40% of its model calls", "40%"],
+            ["retro", "This machine", "1", "1 of 1 (100%)", "1", "20% of its model calls", "20%"],
+            ["reviewer", "shop", "1", "0 of 1 (0%)", "0", NONE, NONE],
+        ]  # fmt: skip
+        table = page.locator("#compaction-table")
+        expect(table.locator("p-table-row").nth(3).locator("p-table-cell").last).to_have_text(NONE)
+        retro = table.get_by_role("link", name="This machine, retro's context setting")
+        assert f"project={shop}&layer=machine" in (retro.get_attribute("href") or "")
+        expect(page.locator("#compaction-errors")).to_contain_text("Could not read the log of session s-b7 (mill)")
+
+        page.goto(f"{base}/metrics?period=custom&from={(NOW - timedelta(days=3)).date()}"
+                  f"&to={(NOW + timedelta(days=2)).date()}&in=shop&agent=reviewer&model=m1&change=shop%2Fc1"
+                  "&stopped=1&by=day")  # fmt: skip
+        expect(page.locator("#compaction-table p-table-row")).to_have_count(1)
+        left = page.url
+        table.get_by_role("link", name="shop: Global (unset), reviewer's context setting").click()
+        expect(page.locator("#set-agents-reviewer :focus")).not_to_have_count(0)  # its first control
+        assert page.url.startswith(f"{base}/config?project={shop}&layer=global&back=")
+        expect(pds.select(page, "Layer")).to_have_js_property("value", "global")
+        pds.pick(page, "Layer", "machine")
+        setting_link(page, "reviewer").click()
+        returned(page, pds, left)
+
+        page.goto(f"{base}/metrics?in=&agent=builder")
+        expect(page.locator("#compaction-table p-table-row")).to_have_count(3)  # explore is an agent of its own
+        left = page.url
+        table.get_by_role("link", name="mill: project layer, builder's context setting").last.click()
+        expect(page.locator("#set-agents-builder :focus")).not_to_have_count(0)  # its first control
+        expect(pds.select(page, "Layer")).to_have_js_property("value", "project")
+        expect(pds.select(page, "Layer").locator('p-select-option[value="project"]')).to_have_text("Project mill")
+        setting_link(page, "builder").click()
+        returned(page, pds, left)
+        table.locator("p-table-row").first.get_by_role("link", name="shop: Global, builder's context setting").click()
+        expect(pds.select(page, "Layer")).to_have_js_property("value", "global")
+        assert f"project={shop}&" in page.url
+        setting_link(page, "builder").click()
+        returned(page, pds, left)
+        page.locator("#split").get_by_role("button", name="Show only builder").click()  # the drill still filters
+        expect(page).to_have_url(re.compile(r"agent=builder"))
+        expect(page.locator("#compaction-table p-table-row")).to_have_count(3)  # explore is an agent of its own
+
+        page.goto(f"{base}/config?project={mill}#agents")
+        expect(setting_link(page, "builder")).to_have_attribute(
+            "href", f"/metrics?project={mill}&in=mill&agent=builder#compaction"
+        )
+        pds.pick(page, "Layer", "machine")
+        expect(setting_link(page, "builder")).to_have_attribute(
+            "href", f"/metrics?project={mill}&agent=builder&in=#compaction"
+        )
+        assert errors == []
+
+        page.route("**/api/next/metrics?*", lambda route: route.abort())
+        setting_link(page, "builder").click()
+        expect(page.locator("#error")).to_be_visible()
+        expect(page).to_have_url(f"{base}/metrics?project={mill}&agent=builder&in=#compaction")
+
+
+@pytest.mark.browser
+def test_settings_keep_unsaved_edits_and_go_back_only_to_this_hosts_metrics(
+    tmp_path: Path, monkeypatch, pds, shared_repo
+) -> None:
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    with hosted(tmp_path, monkeypatch, pds, shared_repo[0]) as (page, base, shop, _mill, errors):
+        fallback = f"/metrics?project={shop}&in=shop&agent=builder#compaction"
+        for away in ("https://evil.example/metrics", "/config", "https://["):
+            page.goto(f"{base}/config?project={shop}&back={quote(away, safe='')}#agents")
+            expect(setting_link(page, "builder")).to_have_attribute("href", fallback)
+        page.goto(f"{base}/config?project={shop}&back={quote('/metrics?in=&agent=builder#compaction', safe='')}#runs")
+        page.get_by_label("Rounds at most, builder").fill("4")
+        pds.group(page, "agents")
+        setting_link(page, "builder").click()
+        expect(page.locator("#machine > [role=alert]")).to_have_text(
+            "Save or discard your edits before you leave this page."
+        )
+        assert page.url.startswith(f"{base}/config?")
+        expect(setting_link(page, "builder")).to_have_attribute("href", "/metrics?in=&agent=builder#compaction")
+        assert errors == []
