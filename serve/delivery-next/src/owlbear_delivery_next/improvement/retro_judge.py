@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.improvement import assumptions, case_review, cases, retro_bars, retro_segments, spotter
+from owlbear_delivery_next.improvement import proposal_targets as targets
 from owlbear_delivery_next.improvement import retro_proposals as props
 from owlbear_delivery_next.improvement import retro_store as store
 from owlbear_delivery_next.improvement import retro_units as units
@@ -246,8 +247,20 @@ def judge(w: Work) -> list[str]:
 # Phase 3: review
 
 
-def render(snap: Mapping[str, Any], findings: Mapping[str, Mapping[str, Any]]) -> str:
-    """One proposal's review message, at most ``REVIEW`` characters, deterministic for its evidence."""
+def seen_findings() -> dict[str, dict[str, Any]]:
+    """The findings a review may show, by id: Retro's findings and its graded looks."""
+    findings = {f["id"]: f for f in store.all_findings()}
+    return findings | {g["id"]: _graded(g) for g in store.grades(synthetic=True)}
+
+
+def render(
+    snap: Mapping[str, Any],
+    findings: Mapping[str, Mapping[str, Any]],
+    *,
+    prompt: Path = REVIEWING,
+    more: Mapping[str, Any] | None = None,
+) -> str:
+    """One proposal's review message under *prompt*, with *more* of it, at most ``REVIEW`` characters, deterministic."""
     mine = [findings[f] for f in snap["findings"] if f in findings]
     newest = sorted(mine, key=lambda f: (str(f.get("at")), f["id"]), reverse=True)
     shown = sorted(newest, key=lambda f: bool(f.get("recovered")))[:SAMPLES]  # the costliest: unrecovered, then newest
@@ -267,9 +280,9 @@ def render(snap: Mapping[str, Any], findings: Mapping[str, Mapping[str, Any]]) -
         "counterexamples": list(snap["counterexamples"].get("sample") or ())[:SHOWN],
         "omitted": f"[{max(0, len(snap['findings']) - len(shown))} more findings omitted]",
         "evidence": snap["evidence"],
-    }
+    } | dict(more or {})
     proposal = retro_segments.masked(proposal)
-    head = f"{REVIEWING.read_text()}\n\n## The proposal\n\n```json\n"
+    head = f"{prompt.read_text()}\n\n## The proposal\n\n```json\n"
     text = dumps(proposal)
     while len(head) + len(text) + 5 > REVIEW and proposal["findings"]:
         proposal["findings"].pop()
@@ -278,7 +291,8 @@ def render(snap: Mapping[str, Any], findings: Mapping[str, Mapping[str, Any]]) -
     return f"{head}{cut(text, REVIEW - len(head) - 5)}\n```\n"
 
 
-def _valid_review(said: Mapping[str, Any]) -> bool:
+def valid_review(said: Mapping[str, Any]) -> bool:
+    """Whether a review answer is usable: a verdict, why and risks, and a survivor's publishable title and body."""
     shown = said.get("publishable") or {}
     return (
         isinstance(said.get("verdict"), str)
@@ -308,29 +322,39 @@ def _shown_finding(f: Mapping[str, Any]) -> dict[str, Any]:
     return shown | {k: f[k] for k in ("moment", "later") if f.get(k)}
 
 
-def _bounded(snap: Mapping[str, Any], body: str) -> str:
-    """A survivor's body within ``BODY``, always ending with its proposal and first finding ids."""
+def _bounded(snap: Mapping[str, Any], body: str, limit: int = BODY) -> str:
+    """A survivor's body within *limit*, always ending with its proposal and first finding ids."""
     refs = f"\n\nRefs: {', '.join([snap['id'], *snap['findings'][:SAMPLES]])}"
-    return f"{body[: BODY - len(refs)]}{refs}"
+    return f"{body[: limit - len(refs)]}{refs}"
+
+
+def settled(snap: Mapping[str, Any], said: Mapping[str, Any]) -> dict[str, Any]:
+    """A review answer as kept: a survivor's publishable is its title and body, checked whole, then bounded.
+
+    A text holding a credential, an email address or a home path rejects the proposal. A ``lesson``'s body is bounded
+    to what a memory holds, any other's to ``BODY``.
+    """
+    said = dict(said)
+    shown = said.get("publishable") or {}
+    if said["verdict"] == "survive":
+        shown = {"title": shown["title"], "body": shown["body"]}
+    if leaked := case_review.leaks(shown):
+        said |= {"verdict": "reject", "why": f"leak: {', '.join(leaked)}", "publishable": {}}
+    elif said["verdict"] == "survive":
+        limit = targets.MEMORY if snap.get("kind") == "lesson" else BODY
+        said["publishable"] = {"title": shown["title"][:TITLE], "body": _bounded(snap, shown["body"], limit)}
+    return said
 
 
 def review(w: Work) -> int:
     """Phase 3: review each proposal of this run's provenance whose evidence has changed; how many were reviewed."""
-    findings = {f["id"]: f for f in store.all_findings()}
-    findings |= {g["id"]: _graded(g) for g in store.grades(synthetic=True)}
+    findings = seen_findings()
     n = 0
     for snap in props.due_reviews():
         if snap.get("provenance") != w.provenance:
             continue
-        said = dict(paid(w, f"review:{snap['evidence']}", render(snap, findings), _valid_review, "retro-review"))
-        shown = said.get("publishable") or {}
-        if said["verdict"] == "survive":  # a survivor's publishable is its title and body, checked whole, then bounded
-            shown = {"title": shown["title"], "body": shown["body"]}
-        if leaked := case_review.leaks(shown):
-            said |= {"verdict": "reject", "why": f"leak: {', '.join(leaked)}", "publishable": {}}
-        elif said["verdict"] == "survive":
-            said["publishable"] = {"title": shown["title"][:TITLE], "body": _bounded(snap, shown["body"])}
-        props.reviewed(snap["id"], snap["evidence"], said)
+        said = paid(w, f"review:{snap['evidence']}", render(snap, findings), valid_review, "retro-review")
+        props.reviewed(snap["id"], snap["evidence"], settled(snap, said))
         n += 1
     return n
 

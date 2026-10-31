@@ -37,7 +37,7 @@ from owlbear_delivery_next.improvement.credit_meter import Meter
 from owlbear_delivery_next.improvement.retro_calls import Paid, StoppedError, WaitingError, Work
 from owlbear_delivery_next.improvement.retro_evidence import evidence
 from owlbear_delivery_next.local_system import maintenance, processes
-from owlbear_delivery_next.machine_host import cases_job, retro_block
+from owlbear_delivery_next.machine_host import cases_job, retro_block, retro_more
 from owlbear_delivery_next.machine_host.auto_update import IDLE_FOR
 from owlbear_delivery_next.machine_host.retro_inputs import (
     Running,
@@ -207,11 +207,10 @@ class RetroJob:
 
     def _button(self, request: dict[str, Any]) -> None:
         by = request.get("by", "")
-        if named := request.get("synthetic"):
-            spec = syn.specs(named)[0]
-            if not self._took(uid := syn.unit_id(spec), by):
-                why = f"refused: {why}" if (why := self.seams.blocked(uid)) else ""
-                self._start(Running(uid, "button", by, provenance="synthetic", spec=spec["name"]), why)
+        if (more := retro_more.running(request)) is not None:  # a synthetic unit, a redraft or a follow-up
+            if not self._took(more.uid, by):
+                why = f"refused: {why}" if (why := self.seams.blocked(more.uid)) else ""
+                self._start(more, why)
             return
         change, chat = request.get("change"), request.get("chat", "")
         uid = units.change_id(*change.split(":", 1)) if change else units.chat_id(chat)
@@ -282,7 +281,7 @@ class RetroJob:
             if ctx.meter is None:
                 ctx.meter = Meter(ctx.limit - ctx.spent, "retro-run")
             work = self._admitted(ctx, "open", lambda _key: self._work(ctx))
-            out = retro_judge.run(work)
+            out = (retro_more.run if ctx.mode in retro_more.MODES else retro_judge.run)(work)
             result = "stopped: runtime end unconfirmed" if ctx.unended else "judged"  # its last call's end too
         except WaitingError as exc:
             if exc.why != ctx.why:
@@ -320,6 +319,8 @@ class RetroJob:
             return self._paid(ctx, batch, message, agent)
 
         projects = self.seams.projects()
+        if ctx.mode in retro_more.MODES:
+            return retro_more.work(ctx, ask, projects)
         if ctx.rev and ctx.mode != "grade-only" and self._revision(ctx).get("run") != ctx.id:
             units.settle(ctx.uid, ctx.rev, "open", run=ctx.id)  # a retry owns the revision it takes again until it ends
         if ctx.provenance == "synthetic":
@@ -384,7 +385,7 @@ class RetroJob:
             with self.seams.admission():
                 if why := self._refusal(ctx):
                     raise WaitingError(why)
-                real, fresh = ctx.provenance == "real", not ctx.rev  # a chat's new revision only when it is quiet
+                real, fresh = ctx.reads_real, not ctx.rev  # a chat's new revision only when it is quiet
                 why = real and units.eligible(ctx.uid, enrolled(), self.seams.projects(), fresh=fresh)
                 if why := ctx.retired() or (f"refused: {why}" if why else ""):
                     raise StoppedError(why)

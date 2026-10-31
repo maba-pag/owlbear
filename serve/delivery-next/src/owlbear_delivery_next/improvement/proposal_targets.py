@@ -50,11 +50,12 @@ def units_of() -> dict[str, str]:
     return found | {g["id"]: g.get("unit", "") for g in store.grades(synthetic=True)}
 
 
-def _sandbox(places: Mapping[str, Place]) -> str:
+def sandbox(places: Mapping[str, Place]) -> str:
+    """The registered sandbox project's id, or ``""``."""
     return next((pid for pid, p in places.items() if p.clone is not None and p.clone.name == SANDBOX), "")
 
 
-def _project(uid: str, places: Mapping[str, Place], known: Mapping[str, Any]) -> str:
+def project(uid: str, places: Mapping[str, Place], known: Mapping[str, Any]) -> str:
     """The registered project *uid* stands for, or ``""``."""
     if uid.startswith("chg:"):
         pid = uid.split(":")[1]
@@ -67,7 +68,7 @@ def _project(uid: str, places: Mapping[str, Place], known: Mapping[str, Any]) ->
 def projects(snap: Mapping[str, Any], places: Mapping[str, Place], units: Mapping[str, str]) -> list[str]:
     """The registered projects each finding of *snap* stands for, ``""`` for one standing for none, in order."""
     known = store.known()
-    return [_project(units.get(f, ""), places, known) for f in snap["findings"]]
+    return [project(units.get(f, ""), places, known) for f in snap["findings"]]
 
 
 def _agents(folder: Path) -> dict[str, str]:
@@ -132,7 +133,7 @@ def resolve(
     synthetic = snap.get("provenance") == "synthetic"
     if kind == "spotter-case":
         return {"kind": "case", "record": snap.get("record", ""), "call": snap.get("call", ""), "synthetic": synthetic}
-    pid = _sandbox(places) if synthetic else _one(projects(snap, places, units if units is not None else units_of()))
+    pid = sandbox(places) if synthetic else _one(projects(snap, places, units if units is not None else units_of()))
     if synthetic and not pid:
         msg = f"synthetic proposals publish only to the sandbox; register ~/Projects/{SANDBOX}"
         raise store.RetroError(msg)
