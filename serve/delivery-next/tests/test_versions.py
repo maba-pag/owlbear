@@ -427,16 +427,16 @@ def test_the_selfcheck_refuses_a_clones_unmoved_settings_newer_than_it_reads(tmp
     assert found == [f"{clone}: {said}"]
 
 
-def test_the_selfcheck_reads_settings_in_format_18_and_refuses_the_next_one(tmp_path):
+def test_the_selfcheck_reads_settings_in_format_19_and_refuses_the_next_one(tmp_path):
     clone = registered(tmp_path)
     folder = project_home.clone_dir(clone)
     folder.mkdir(exist_ok=True)
-    switched = {"format": 18, "load_user_instructions": True, "load_user_skills": False}
+    switched = {"format": 19, "load_user_instructions": True, "load_user_skills": False, "load_user_memory": False}
     (folder / "config.json").write_text(json.dumps(switched))
     assert selfcheck.problems() == []
 
-    (folder / "config.json").write_text(json.dumps(switched | {"format": 19}))
-    said = f"its settings in {folder / 'config.json'} have format 19, newer than this version's 18"
+    (folder / "config.json").write_text(json.dumps(switched | {"format": 20}))
+    said = f"its settings in {folder / 'config.json'} have format 20, newer than this version's 19"
     assert selfcheck.problems() == [f"{clone}: {said}"]
 
 
