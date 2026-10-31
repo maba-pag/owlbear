@@ -275,10 +275,6 @@ def move(monkeypatch, home: Path) -> None:
     monkeypatch.setenv("HOME", str(home.parent))
 
 
-def workers() -> list[threading.Thread]:
-    return [t for t in threading.enumerate() if t.name == "update-check"]
-
-
 def test_a_check_ending_after_its_home_moved_writes_only_in_the_home_its_host_started_with(tmp_path, monkeypatch):
     """#804: a worker still fetching when a test's teardown puts the real home back wrote into it when it ended."""
     a, b = homes(tmp_path, monkeypatch)
@@ -296,9 +292,7 @@ def test_a_check_ending_after_its_home_moved_writes_only_in_the_home_its_host_st
     assert entered.wait(5)
     move(monkeypatch, b)  # the teardown
     release.set()
-    for t in workers():
-        t.join(10)
-    assert not workers()
+    assert checks.drain(10)
     released = Path(pack_files.PACKS) / impeccable.RELEASED
     assert [(home / f).exists() for home in (b, a) for f in (update_checks.STATE, released)] == [False] * 2 + [True] * 2
     assert json.loads((a / update_checks.STATE).read_text())["owlbear"]["failures"] == 1
@@ -339,8 +333,7 @@ def test_the_hosts_stop_waits_a_while_for_its_checks_and_then_starts_none(tmp_pa
         assert not (b / update_checks.STATE).exists()
     finally:
         release.set()
-        for t in workers():
-            t.join(10)
+        machine.checks.drain(10)
 
 
 def test_a_check_slow_to_keep_its_record_still_ends_the_drain_within_its_time(monkeypatch):
@@ -365,8 +358,7 @@ def test_a_check_slow_to_keep_its_record_still_ends_the_drain_within_its_time(mo
         assert said == ["the update checks did not end within 0 s"]
     finally:
         release.set()
-        for t in workers():
-            t.join(10)
+        checks.drain(10)
 
 
 def test_a_check_whose_record_cannot_be_written_still_ends_and_says_why(monkeypatch):
