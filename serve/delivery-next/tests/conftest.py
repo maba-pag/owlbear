@@ -186,11 +186,15 @@ def _no_shared_settings(tmp_path_factory, monkeypatch):
     # git never reaches GitHub (#804): a fixture's own GIT_CONFIG_GLOBAL hides HOME's .gitconfig but not this
     # environment's rule; the host's start drops the environment's, but every git it runs reads HOME's .gitconfig.
     # Its own patcher, so a test's monkeypatch.undo(), which also puts the real HOME back, leaves it in place.
+    # The shared patcher is undone inside it: undone later, it would put back the rule over what a test removed.
     with pytest.MonkeyPatch.context() as rule:
         rule.setenv("GIT_CONFIG_COUNT", "1")
         rule.setenv("GIT_CONFIG_KEY_0", f"url.{offline}.insteadOf")
         rule.setenv("GIT_CONFIG_VALUE_0", github)
-        yield
+        try:
+            yield
+        finally:
+            monkeypatch.undo()
 
 
 @pytest.fixture(autouse=True)
