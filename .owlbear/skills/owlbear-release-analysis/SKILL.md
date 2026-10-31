@@ -32,8 +32,9 @@ repair is released and installed (`owlbear update`); then press Resume.
 
 ## 2. Pin the versions and read what changed
 
-Name the from and to versions, and each source with its exact version or ref. Work in `.owlbear/scratch/` and delete
-it at the end.
+Name the from and to versions, and each source with its exact version or ref. Work in a folder of this run's own,
+`.owlbear/scratch/release-<component>-<to>/`, and delete only that folder at the end: `.owlbear/scratch/` holds other
+tools' data.
 
 - **SDK:** for each version, `https://pypi.org/pypi/github-copilot-sdk/<version>/json` gives the
   `py3-none-any` wheel's URL and SHA-256. Fetch both with `curl`, check each hash, unpack with
