@@ -462,7 +462,7 @@ async def _run(st: _Step) -> Run:
             except TimeoutError as exc:
                 st.finish("deadline", detail=str(exc) or "step deadline")
             except Exception as exc:  # noqa: BLE001 - any SDK failure ends the step with retry after teardown
-                st.finish("error", detail=f"{type(exc).__name__}: {exc}"[:300])
+                st.finish("error", detail=f"{type(exc).__name__}: {exc}")
             session = st.session
             st.run.usage = await usage_read(session, cfg.model) if session else {}
             limit_reached(st.run, cfg.credit_limit)

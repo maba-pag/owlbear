@@ -62,7 +62,7 @@ class Gate:
         """End the step as an error even after an accepted result: a turn on another model voids it (TD-32)."""
         with self._lock:
             self.done = True
-            self.run.ending, self.run.payload, self.run.head, self.run.detail = "error", None, None, detail[:300]
+            self.run.ending, self.run.payload, self.run.head, self.run.detail = "error", None, None, detail
             self.run.changed = []
             self.run.changed = []
         self.ended()
