@@ -451,14 +451,12 @@ _EMBEDDINGS_MISSING = "Embeddings are not installed: install owlbear-knowledge[e
 
 def _serialize_knowledge_failure(failure: KnowledgeFailure, *, query: bool = False) -> KnowledgeFailureResult:
     """Project a core failure without exposing exception text; a missing embedding stack names its install."""
-    if failure.code == "embedding_dependency_missing":
-        stage = KnowledgeFailureStage.QUERY if query else failure.stage
-        failure = failure.model_copy(update={"stage": stage, "message": _EMBEDDINGS_MISSING})
+    missing = failure.code == "embedding_dependency_missing"
     return {
-        "stage": failure.stage.value,
+        "stage": KnowledgeFailureStage.QUERY.value if missing and query else failure.stage.value,
         "code": failure.code,
         "retryable": failure.retryable,
-        "message": failure.message,
+        "message": _EMBEDDINGS_MISSING if missing else failure.message,
     }
 
 
