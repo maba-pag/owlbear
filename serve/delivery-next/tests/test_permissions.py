@@ -1,9 +1,13 @@
+import os
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from copilot.generated.session_events import PermissionRequestShell
 
 from owlbear_delivery_next.change_contracts.permissions import Policy, Request, decide, view
+from owlbear_delivery_next.local_system.shell_parse import parse
+from owlbear_delivery_next.local_system.shell_programs import UnreadableError, split_string
 
 ROOT = Path("/w")
 READ, WRITE = Policy(ROOT, write=False), Policy(ROOT)
@@ -19,6 +23,32 @@ def sdk_shell(text: str) -> SimpleNamespace:
     command = SimpleNamespace(identifier=text.split(maxsplit=1)[0], read_only=True)
     segment = SimpleNamespace(full_command_text=text)
     return SimpleNamespace(kind="shell", commands=[command], command_segments=[segment], possible_paths=())
+
+
+def cli_shell(text: str, *segments: str) -> PermissionRequestShell:
+    """A shell request as the CLI sends it: its segments split at pipes, redirections and here-document bodies gone."""
+    return PermissionRequestShell.from_dict(
+        {
+            "canOfferSessionApproval": False,
+            "commands": [{"identifier": text, "readOnly": False}],
+            "fullCommandText": text,
+            "hasWriteFileRedirection": ">" in text,
+            "intention": "run it",
+            "possiblePaths": [],
+            "possibleUrls": [],
+            "commandSegments": [{"fullCommandText": s, "identifier": s.split()[0]} for s in segments],
+        }
+    )
+
+
+def test_the_guard_judges_the_whole_command_not_the_runtimes_segments() -> None:
+    write = view(cli_shell("gh issue view 1 > f.md", "gh issue view 1"))
+    piped = view(cli_shell("echo 'git commit --no-verify -m x' | sh", "echo 'git commit --no-verify -m x'", "sh"))
+
+    assert write.commands == ("gh issue view 1",)
+    assert decide(READ, write) == "`gh issue view 1 > f.md` uses a redirect, which writes in a read-only step"
+    assert piped.text == "echo 'git commit --no-verify -m x' | sh"
+    assert piped.commands == ("echo 'git commit --no-verify -m x'", "sh")
 
 
 @pytest.mark.parametrize(
@@ -223,7 +253,6 @@ def test_a_bypass_behind_a_wrapper_or_in_a_nested_shell_is_refused(text: str, in
         "env FOO=1 npm test",
         "xargs grep git",
         "sh -c 'git push origin main'",
-        "bash scripts/check.sh --force",
         "timeout 5 npm run build -- --force",
         "echo git push -f",
         "xargs grep -- git push -f",
@@ -299,3 +328,979 @@ def test_mcp_and_custom_tools_stay_bound_to_the_role() -> None:
     assert decide(READ, Request("custom-tool", tool="submit_result")) is None
     assert decide(READ, Request("custom-tool", tool="other")) == "tool other is not allowed"
     assert decide(WRITE, Request("url")) is None  # the planner's web_fetch (TD-82)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "git commit -F - <<'EOF'\nfix: refuse git push --force and git commit --no-verify\nEOF",
+        "cat <<'EOF'\n$(git commit --no-verify -m x)\nEOF",
+        "cat <<-EOF\n\tgit push -f\n\tEOF",
+        "echo $((1<<2))",
+        "x=$(cat <<'A'\nhi\nA\n); echo \"$x\"",
+        "cat <<A <<'B'\none\nA\ngit push -f\nB",
+    ],
+)
+def test_a_here_document_to_a_program_other_than_a_shell_is_data(text: str) -> None:
+    assert decide(WRITE, shell(text)) is None
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "cat <<EOF\n$(git commit --no-verify -m x)\nEOF",
+        "cat <<EOF\n`git push -f`\nEOF",
+        "echo $(( $(git push -f) + 1 ))",
+        "echo $(( `git push -f` + 1 ))",
+        "bash <<'EOF'\ngit push -f\nEOF",
+        "bash <<< 'git push -f'",
+    ],
+)
+def test_substitutions_and_a_shells_here_document_are_still_judged(text: str) -> None:
+    assert decide(WRITE, shell(text)).endswith(BYPASS)
+
+
+def test_the_lexer_attaches_here_documents_and_here_strings_to_their_command() -> None:
+    first, second = parse("bash 3<<'A' <<-B\nfd3 $x\nA\n\tstdin $x\nB\ncat <<< \"$y\"")
+
+    assert first.words == ["bash"]
+    assert [(i.fd, i.kind, str(i.word), i.word.expanded) for i in first.inputs] == [
+        (3, "here", "fd3 $x\n", False),
+        (0, "here", "stdin $x\n", True),
+    ]
+    assert first.stdin().word == "stdin $x\n"
+    assert (second.stdin().kind, second.stdin().word, second.stdin().word.expanded) == ("string", "$y", True)
+
+
+def test_the_lexer_marks_expansions_tildes_and_where_input_comes_from() -> None:
+    run_time, literal, echo, cat, sh, group, closer, fed, tee = parse(
+        "$PY -V; '$PY' ~/a '~/b'; echo a | (cat; sh) && { x; } < f; tee >(sh)"
+    )
+
+    assert [(w.expanded, w.tilde) for w in run_time.words] == [(True, False), (False, False)]
+    assert [(w.expanded, w.tilde) for w in literal.words] == [(False, False), (False, True), (False, False)]
+    assert (echo.opaque_stdin, echo.top_level) == (False, False)  # a pipeline part runs in a subshell
+    assert (cat.opaque_stdin, sh.opaque_stdin, cat.top_level) == (True, True, False)
+    assert (group.words, group.opaque_stdin, closer.words) == (["{", "x"], True, ["}"])  # the group's input feeds it
+    assert (fed.words, fed.opaque_stdin, tee.opaque_stdin) == (["sh"], True, False)
+
+
+BAD = "git commit --no-verify -m x\n"
+
+
+@pytest.fixture
+def scripts(tmp_path: Path) -> Path:
+    """A worktree whose good.sh and x.sh are harmless and whose bad.sh and sub/x.sh skip the hooks."""
+    root = tmp_path / "root"
+    (root / "sub").mkdir(parents=True)
+    (root / "good.sh").write_text("echo hi\n")
+    (root / "bad.sh").write_text(BAD)
+    (root / "x.sh").write_text("echo root\n")
+    (root / "sub" / "x.sh").write_text(BAD)
+    (root / "scripts").mkdir()
+    (root / "scripts" / "check.sh").write_text("echo checked\n")
+    return root
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "bash scripts/check.sh --force",
+        "bash good.sh",
+        "sh -e good.sh",
+        "bash -s < good.sh",
+        "sh < good.sh",
+        "source ./good.sh",
+        ". ./good.sh",
+        "BASH_ENV=./good.sh bash -c true",
+        "bash --rcfile ./good.sh -ic true",
+        "bash <<'EOF'\necho hi\nEOF",
+        "bash <<< 'echo hi'",
+        "source /dev/stdin <<< 'echo hi'",
+        ". /dev/stdin <<'EOF'\necho hi\nEOF",
+        "echo hi | sh -c 'echo hi'",
+        "true || sh -c 'echo hi'",
+        "'$PY' -V",
+        'echo "$HOME"',
+        'git commit -m "$MSG"',
+        "sh -c 'echo $X'",
+        "bash <<< 'echo $X'",
+        "bash good.sh > log.txt",
+        "bash good.sh && rm log.txt",
+    ],
+)
+def test_a_readable_script_a_shell_runs_is_judged_and_a_harmless_one_runs(scripts: Path, text: str) -> None:
+    assert decide(Policy(scripts), shell(text)) is None
+
+
+@pytest.mark.parametrize(
+    ("text", "name"),
+    [
+        ("bash bad.sh", "bad.sh"),
+        ("sh -e bad.sh", "bad.sh"),
+        ("bash -s < bad.sh", "bad.sh"),
+        ("sh < bad.sh", "bad.sh"),
+        ("source ./bad.sh", "./bad.sh"),
+        (". ./bad.sh", "./bad.sh"),
+        ("BASH_ENV=./bad.sh bash -c true", "./bad.sh"),
+        ("bash --rcfile ./bad.sh -ic true", "./bad.sh"),
+        ("timeout 5 bash bad.sh", "bad.sh"),
+        ("cd sub && bash ../bad.sh", None),
+    ],
+)
+def test_a_bypass_in_a_script_file_is_refused(scripts: Path, text: str, name: str | None) -> None:
+    reason = decide(Policy(scripts), shell(text))
+
+    if name is None:  # a relative cd leaves the folder unknown
+        assert reason == f"`{text}` runs `../bad.sh` from a folder the guard can't follow; use an absolute path"
+    else:
+        assert reason == f"`{name}` uses --no-verify, {BYPASS}"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "bash <<'EOF'\ngit commit --no-verify -m x\nEOF",
+        "sh <<EOF\ngit commit --no-verify -m x\nEOF",
+        "bash -s <<-EOF\n\tgit commit --no-verify -m x\n\tEOF",
+        "bash <<< 'git commit --no-verify -m x'",
+        "source /dev/stdin <<< 'git commit --no-verify -m x'",
+        "bash <<'A' 3<<'B'\ngit commit --no-verify -m x\nA\necho hi\nB",
+        "bash <<'A' <<'B'\necho hi\nA\ngit commit --no-verify -m x\nB",
+    ],
+)
+def test_a_bypass_in_a_shells_here_document_or_here_string_is_refused(text: str) -> None:
+    assert decide(WRITE, shell(text)).endswith(f"uses --no-verify, {BYPASS}")
+
+
+def test_only_a_shells_last_standard_input_is_its_script() -> None:
+    assert decide(WRITE, shell("bash <<'A' 3<<'B'\necho hi\nA\ngit commit --no-verify -m x\nB")) is None
+    assert decide(WRITE, shell("bash <<'A' <<'B'\ngit commit --no-verify -m x\nA\necho hi\nB")) is None
+
+
+PIPED = "pipes input into a shell, which the guard can't read; pass the commands with -c or as a script file"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "echo 'git commit --no-verify -m x' | sh",
+        "echo x | bash -s",
+        "echo x |& sh",
+        "echo x | bash -c 'sh'",
+        "echo x | { true; sh; }",
+        "echo x | (true; sh)",
+        "echo x | while read l; do sh; done",
+        "tee >(sh)",
+        "cat f | source /dev/stdin",
+        "printf x | eval 'sh'",
+        "eval 'exec < f'; sh",
+        "exec < f; bash",
+        "ls | xargs sh",
+        "bash 0<&3",
+    ],
+)
+def test_a_shell_reading_input_the_guard_cant_see_is_refused(text: str) -> None:
+    reason = decide(WRITE, shell(text))
+
+    assert reason is not None
+    assert reason.endswith(PIPED), reason
+    assert decide(READ, shell(text)) is not None
+
+
+@pytest.mark.parametrize(
+    ("text", "shown"),
+    [
+        ("$PY -V", "$PY"),
+        ('"$PY" -V', "$PY"),
+        ("$(echo git) push -f", "$"),
+        ("`echo git` status", "$"),
+        ("env $X", "$X"),
+        ("echo a | xargs $CMD", "$CMD"),
+        ("echo a | xargs -I{} {}", "{}"),
+        ("PY=/usr/bin/python3; $PY -V", "$PY"),
+    ],
+)
+def test_a_command_name_built_at_run_time_is_refused(text: str, shown: str) -> None:
+    assert decide(WRITE, shell(text)) == (
+        f"`{text}` builds a command at run time (`{shown}`); write the program and its script out"
+    )
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        'sh -c "$CMD"',
+        'sh -c "git commit $X"',
+        'bash -c "$(cat f) -x"',
+        'eval "$CMD"',
+        "eval git commit $X",
+        'bash <<< "$CMD"',
+        "bash <<EOF\necho $X\nEOF",
+        "echo a | xargs -I{} sh -c '{}'",
+    ],
+)
+def test_a_script_built_at_run_time_is_refused(text: str) -> None:
+    reason = decide(WRITE, shell(text))
+    assert reason is not None
+    assert "hands a shell a script built at run time" in reason
+
+
+@pytest.mark.parametrize(
+    ("text", "why"),
+    [
+        ("bash missing.sh", "No such file or directory"),
+        ("bash sub", "it is not a regular file"),
+        ("bash latin1.sh", "it is not UTF-8 text"),
+        ("bash fifo", "it is not a regular file"),
+    ],
+)
+def test_a_script_that_cant_be_read_is_refused(scripts: Path, text: str, why: str) -> None:
+    (scripts / "latin1.sh").write_bytes(b"echo \xe9\n")
+    os.mkfifo(scripts / "fifo")
+    file = text.split()[1]
+
+    assert decide(Policy(scripts), shell(text)) == f"`{text}` runs `{file}`, which can't be read: {why}"
+
+
+@pytest.mark.parametrize(
+    ("text", "reason"),
+    [
+        ('bash "$F"', "runs `$F`, a path built at run time; write the path out"),
+        ("source setup.sh", "sources `setup.sh` through PATH; write `./setup.sh`"),
+    ],
+)
+def test_a_script_path_the_guard_cant_resolve_is_refused(scripts: Path, text: str, reason: str) -> None:
+    assert decide(Policy(scripts), shell(text)) == f"`{text}` {reason}"
+
+
+def test_a_read_only_step_judges_a_scripts_writes(scripts: Path) -> None:
+    (scripts / "wipe.sh").write_text("rm x\n")
+
+    assert decide(Policy(scripts, write=False), shell("bash good.sh")) is None
+    assert decide(Policy(scripts, write=False), shell("bash wipe.sh")) == (
+        "`wipe.sh` uses filesystem mutation 'rm', which writes in a read-only step"
+    )
+
+
+def shebang(path: Path, first: str, body: str = "echo hi\n") -> None:
+    path.write_text(f"{first}\n{body}" if first else body)
+    path.chmod(0o755)
+
+
+@pytest.mark.parametrize("first", ["#!/bin/bash", "#!/usr/bin/env bash", "#!/usr/bin/env -S bash -e", ""])
+def test_a_shell_script_run_by_path_is_read(scripts: Path, first: str) -> None:
+    shebang(scripts / "tool", first, BAD)
+    shebang(scripts / "fine", first)
+
+    assert decide(Policy(scripts), shell("./tool")).endswith(BYPASS)
+    assert decide(Policy(scripts), shell("./fine")) is None
+
+
+def test_a_program_by_path_that_isnt_a_shell_script_runs_unread(scripts: Path) -> None:
+    shebang(scripts / "tool.py", "#!/usr/bin/env python3", "import subprocess\n")
+    (scripts / "binary").write_bytes(b"\x7fELF\0\0git commit --no-verify")
+    long_text = "#" + "é" * 3000 + "\n" + BAD  # a character cut at byte 4096 is still text
+
+    (scripts / "long").write_text(long_text)
+
+    assert decide(Policy(scripts), shell("./tool.py")) is None
+    assert decide(Policy(scripts), shell("./binary")) is None
+    assert decide(Policy(scripts), shell("./long")).endswith(BYPASS)
+    assert decide(Policy(scripts), shell("./missing")) == (
+        "`./missing` runs `./missing`, which can't be read: No such file or directory"
+    )
+
+
+def test_a_launcher_run_by_path_is_read_too(scripts: Path) -> None:
+    shebang(scripts / "env", "#!/bin/sh", BAD)
+
+    assert decide(Policy(scripts), shell("./env echo hi")).endswith(BYPASS)
+    assert decide(Policy(scripts), shell("/usr/bin/env echo hi")) is None
+
+
+def test_scripts_outside_the_worktree_are_read_too(scripts: Path) -> None:
+    elsewhere = scripts.parent / "elsewhere"
+    elsewhere.mkdir()
+    (elsewhere / "good.sh").write_text("echo hi\n")
+    shebang(elsewhere / "bad.sh", "#!/bin/sh", BAD)
+
+    assert decide(Policy(scripts), shell(f"bash {elsewhere}/good.sh")) is None
+    assert decide(Policy(scripts), shell(f"{elsewhere}/bad.sh")).endswith(BYPASS)
+
+
+def test_nesting_counts_each_script_once_up_to_the_limit(scripts: Path) -> None:
+    shebang(scripts / "leaf", "#!/bin/sh")
+    (scripts / "mid.sh").write_text("./leaf\n")
+
+    assert decide(Policy(scripts), shell("sh -c 'bash mid.sh'")) is None  # -c, mid.sh, leaf: three levels
+    assert decide(Policy(scripts), shell("sh -c \"sh -c 'bash mid.sh'\"")).endswith("nests scripts more than 3 deep")
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "cd sub && bash x.sh",
+        "CDPATH=/elsewhere; cd sub; bash x.sh",
+        "cd -; bash x.sh",
+        "(cd sub); bash x.sh",
+        'cd "$D" && bash x.sh',
+        "eval 'cd sub'; bash ./x.sh",
+        "env -C sub bash x.sh",
+        "find sub -name x.sh -execdir bash ./x.sh \\;",
+        "for d in sub; do cd /tmp; done; bash x.sh",
+    ],
+)
+def test_a_relative_script_after_a_folder_change_the_guard_cant_follow_is_refused(scripts: Path, text: str) -> None:
+    assert decide(Policy(scripts), shell(text)).endswith("from a folder the guard can't follow; use an absolute path")
+
+
+def test_a_cd_to_an_absolute_path_is_followed(scripts: Path) -> None:
+    assert decide(Policy(scripts), shell(f"cd {scripts}/sub && bash x.sh")).endswith(BYPASS)
+    assert decide(Policy(scripts), shell(f"cd {scripts}/sub && bash ../good.sh")) is None
+    assert decide(Policy(scripts), shell(f"cd {scripts}/sub/.. && bash x.sh")).endswith("use an absolute path")
+    assert decide(Policy(scripts), shell(f"cd sub && bash {scripts}/good.sh")) is None
+
+
+def test_a_quoted_tilde_is_a_folder_named_tilde(scripts: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    home = scripts.parent / "home"
+    home.mkdir()
+    (home / "x.sh").write_text("echo hi\n")
+    (scripts / "~").mkdir()
+    (scripts / "~" / "x.sh").write_text(BAD)
+    monkeypatch.setenv("HOME", str(home))
+
+    assert decide(Policy(scripts), shell("bash ~/x.sh")) is None
+    assert decide(Policy(scripts), shell("bash '~/x.sh'")).endswith(BYPASS)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "cat > good.sh <<'EOF'\ngit commit --no-verify -m x\nEOF\nbash good.sh",
+        "cp bad.sh good.sh && bash good.sh",
+        "git checkout x && ./good.sh",
+        "bash -c 'cp bad.sh good.sh'; bash ./good.sh",
+        "source ./writer.sh; bash ./good.sh",
+        "BASH_ENV=./writer.sh bash -c 'bash ./good.sh'",
+        "cp a b; bash -c 'bash good.sh'",
+        "cp tool.py ./tool && ./tool",
+        "mkdir -p out && ./bin/x",
+        "cp bad.sh ./env && ./env echo hi",
+    ],
+)
+def test_a_script_or_program_run_after_a_write_in_the_same_command_is_refused(scripts: Path, text: str) -> None:
+    (scripts / "writer.sh").write_text("cp bad.sh good.sh\n")
+
+    assert decide(Policy(scripts), shell(text)).endswith("write it in one command and run it in the next")
+
+
+def test_a_startup_file_that_writes_nothing_leaves_the_script_readable(scripts: Path) -> None:
+    (scripts / "quiet.sh").write_text("echo quiet\n")
+
+    assert decide(Policy(scripts), shell("BASH_ENV=./quiet.sh bash -c 'bash ./good.sh'")) is None
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "BASH_ENV=./bad.sh; bash -c true",
+        "export BASH_ENV=./bad.sh; bash -c true",
+    ],
+)
+def test_a_startup_file_set_earlier_in_the_command_is_read(scripts: Path, text: str) -> None:
+    assert decide(Policy(scripts), shell(text)) == f"`./bad.sh` uses --no-verify, {BYPASS}"
+
+
+def test_a_startup_file_set_where_the_guard_cant_follow_it_is_refused(scripts: Path) -> None:
+    assert decide(Policy(scripts), shell("(BASH_ENV=./x); bash -c true")).endswith(
+        "starts a shell whose startup file was set where the guard can't follow it"
+    )
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.hooksPath GIT_CONFIG_VALUE_0=/x; git status",
+        "export GIT_CONFIG_PARAMETERS=\"'commit.gpgsign=false'\"; git status",
+    ],
+)
+def test_git_settings_exported_before_git_stay_refused(text: str) -> None:
+    assert decide(WRITE, shell(text)).endswith(BYPASS)
+
+
+def test_a_harmless_exported_git_setting_runs() -> None:
+    assert decide(WRITE, shell("export GIT_CONFIG_PARAMETERS=\"'commit.gpgsign=true'\"; git status")) is None
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "env -S 'git commit --no-verify -m x'",
+        'env -S"git push -f"',
+        "env --split-string='git push -f'",
+        "env -iS 'git push -f'",
+        "env -S 'GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.hooksPath GIT_CONFIG_VALUE_0=/x git status'",
+        "timeout 5 env -S 'X=1 git push -f'",
+    ],
+)
+def test_a_bypass_through_env_split_string_is_refused(text: str) -> None:
+    assert decide(WRITE, shell(text)).endswith(BYPASS)
+
+
+def test_env_split_string_runs_its_harmless_command_and_reads_its_startup_file(scripts: Path) -> None:
+    assert decide(WRITE, shell("env -S 'echo hi'")) is None
+    assert decide(WRITE, shell("env -u X -S 'echo hi'")) is None
+    assert (
+        decide(Policy(scripts), shell("env -S 'BASH_ENV=./bad.sh bash -c true'"))
+        == f"`./bad.sh` uses --no-verify, {BYPASS}"
+    )
+    shebang(scripts / "tool", "#!/usr/bin/env -S BASH_ENV=./bad.sh bash")
+    assert decide(Policy(scripts), shell("./tool")) == f"`./bad.sh` uses --no-verify, {BYPASS}"
+
+
+@pytest.mark.parametrize(
+    ("text", "words"),
+    [
+        ("a\\_b", ["a", "b"]),
+        ('"a\\_b"', ["a b"]),
+        ("a\\c b", ["a"]),
+        ("a # b", ["a"]),
+        ("'a b' \"c d\"", ["a b", "c d"]),
+        ("a\\tb", ["a\tb"]),
+    ],
+)
+def test_env_split_string_splits_as_env_does(text: str, words: list[str]) -> None:
+    assert split_string(text) == words
+
+
+def test_env_split_string_marks_variables_and_refuses_what_env_wouldnt_read() -> None:
+    assert [w.expanded for w in split_string("${HOME}/bin/x y")] == [True, False]
+    for text in ("a\\q", "'open", "$HOME", "'a\\b'"):
+        with pytest.raises(UnreadableError):
+            split_string(text)
+    assert decide(WRITE, shell("env -S 'a\\q'")) == "`env -S 'a\\q'` uses env -S with text the guard can't read"
+    assert decide(WRITE, shell("env -S '${CMD} x'")).endswith(
+        "builds a command at run time (`${CMD}`); write the program and its script out"
+    )
+
+
+def test_an_escaped_character_in_a_double_quoted_delimiter_ends_the_document_where_the_shell_does() -> None:
+    text = 'cat <<"\\$END"\nhello\n$END\ngit commit --no-verify -m x'
+
+    assert decide(WRITE, shell(text)).endswith(BYPASS)
+    assert decide(WRITE, shell('cat <<"\\$END"\nhello\n$END\necho after')) is None
+
+
+def test_an_unquoted_here_documents_escapes_are_removed_before_the_shell_reads_it() -> None:
+    assert "builds a command at run time (`$CMD`)" in decide(WRITE, shell("bash <<EOF\n\\$CMD\nEOF"))
+    assert decide(WRITE, shell("bash <<EOF\necho \\$HOME\nEOF")) is None
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "cd {root}/sub || cd {root}; bash ./x.sh",
+        "true && cd {root}/sub; bash ./x.sh",
+        "cd {root}/sub | cat; bash ./x.sh",
+        "cd {root}/sub & bash ./x.sh",
+        "cd {root}/missing; bash ./x.sh",
+    ],
+)
+def test_a_folder_change_that_may_not_happen_leaves_the_folder_unknown(scripts: Path, text: str) -> None:
+    assert decide(Policy(scripts), shell(text.format(root=scripts))).endswith("use an absolute path")
+
+
+def test_a_startup_variable_set_conditionally_is_not_followed(scripts: Path) -> None:
+    text = "export BASH_ENV=./bad.sh\nfalse && export BASH_ENV=./good.sh\nbash -c true"
+
+    assert decide(Policy(scripts), shell(text)).endswith("set where the guard can't follow it")
+
+
+def test_a_script_run_by_path_keeps_the_variables_it_was_started_with(scripts: Path) -> None:
+    shebang(scripts / "fine", "#!/bin/bash")
+
+    assert decide(Policy(scripts), shell("BASH_ENV=./bad.sh ./fine")) == f"`./bad.sh` uses --no-verify, {BYPASS}"
+    assert decide(Policy(scripts), shell("env BASH_ENV=./bad.sh ./fine")) == f"`./bad.sh` uses --no-verify, {BYPASS}"
+    assert decide(Policy(scripts), shell("BASH_ENV=./good.sh ./fine")) is None
+
+
+@pytest.mark.parametrize("prefix", ["command ", "builtin "])
+def test_exec_behind_command_or_builtin_still_redirects_the_shells_input(prefix: str) -> None:
+    assert decide(WRITE, shell(f"{prefix}exec <<< 'echo hi'\nsh")).endswith(PIPED)
+    assert decide(WRITE, shell(f"{prefix}sh -c 'echo hi'")) is None
+
+
+def test_a_command_env_split_string_hides_is_judged_for_writes(scripts: Path) -> None:
+    assert (
+        decide(READ, shell("env -S 'rm x'"))
+        == "`env -S 'rm x'` uses filesystem mutation 'rm', which writes in a read-only step"
+    )
+    assert decide(READ, shell("env -S 'echo hi'")) is None
+    assert decide(Policy(scripts), shell("env -S 'cp a b'; /usr/bin/env echo hi")).endswith("run it in the next")
+
+
+@pytest.mark.parametrize("text", ["env -C sub sh -c 'bash x.sh'", "find sub -execdir sh -c 'bash x.sh' \\;"])
+def test_a_shell_started_in_another_folder_reads_relative_scripts_nowhere(scripts: Path, text: str) -> None:
+    assert decide(Policy(scripts), shell(text)).endswith("use an absolute path")
+    assert decide(Policy(scripts), shell(text.replace("x.sh", f"{scripts}/good.sh"))) is None
+
+
+def test_a_launcher_run_by_path_is_checked_with_nothing_for_it_to_run(scripts: Path) -> None:
+    shebang(scripts / "find", "#!/bin/sh", BAD)
+
+    assert decide(Policy(scripts), shell("./find . -name x")).endswith(BYPASS)
+    assert decide(Policy(scripts), shell("cp a b; /usr/bin/env")).endswith("run it in the next")
+    assert decide(Policy(scripts), shell("/usr/bin/find . -name x")) is None
+
+
+@pytest.mark.parametrize("text", ["source -", ". -", "source - <<< 'echo hi'"])
+def test_source_reads_a_file_named_dash_not_its_input(text: str) -> None:
+    assert decide(WRITE, shell(text)).endswith("through PATH; write `./-`")
+
+
+@pytest.mark.parametrize("text", ["env -S \"'$CMD' hi\"", "env -S \"bash -c 'echo $CMD'\"", 'env --split-string="$X"'])
+def test_an_env_split_string_the_outer_shell_filled_in_is_refused(text: str) -> None:
+    assert decide(WRITE, shell(text)) == f"`{text}` uses env -S with text built at run time; write it out"
+
+
+def test_a_function_body_is_not_the_shells_own_folder(scripts: Path) -> None:
+    for text in (f"function f {{\ncd {scripts}/sub\n}}\nbash ./x.sh", f"f() {{\ncd {scripts}/sub\n}}\nbash ./x.sh"):
+        assert decide(Policy(scripts), shell(text)).endswith("use an absolute path")
+    assert decide(Policy(scripts), shell(f"function f {{\ncd {scripts}/sub\n}}\nbash {scripts}/good.sh")) is None
+
+
+@pytest.mark.parametrize("first", ["#!/bin/sh\t-e", "#!/usr/bin/env\tbash", "#! /bin/sh"])
+def test_a_shebang_separated_by_tabs_or_spaces_names_the_same_shell(scripts: Path, first: str) -> None:
+    shebang(scripts / "tool", first, BAD)
+    shebang(scripts / "fine", first)
+
+    assert decide(Policy(scripts), shell("./tool")).endswith(BYPASS)
+    assert decide(Policy(scripts), shell("./fine")) is None
+
+
+@pytest.mark.parametrize("prefix", ["command -- ", "command -p ", "builtin -- "])
+def test_exec_or_export_behind_command_options_still_changes_the_shell(scripts: Path, prefix: str) -> None:
+    assert decide(WRITE, shell(f"{prefix}exec <<< 'echo hi'\nbash")).endswith(PIPED)
+    assert decide(Policy(scripts), shell(f"{prefix}export BASH_ENV=./bad.sh\nbash -c true")) == (
+        f"`./bad.sh` uses --no-verify, {BYPASS}"
+    )
+
+
+def test_a_shebangs_environment_is_judged_like_a_typed_one(scripts: Path) -> None:
+    first = "#!/usr/bin/env -S GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.hooksPath GIT_CONFIG_VALUE_0=/x bash"
+    shebang(scripts / "tool", first, "git commit -m x\n")
+
+    assert decide(Policy(scripts), shell("./tool")) == (
+        f"`./tool` uses environment setting core.hooksPath=/x, {BYPASS}"
+    )
+
+
+def test_a_script_run_by_path_in_another_folder_reads_relative_scripts_nowhere(scripts: Path) -> None:
+    shebang(scripts / "tool", "#!/bin/sh", "bash ./x.sh\n")
+
+    assert decide(Policy(scripts), shell(f"env -C sub {scripts}/tool")).endswith("use an absolute path")
+    assert decide(Policy(scripts), shell(f"{scripts}/tool")) is None
+
+
+def test_a_write_in_a_here_documents_substitution_comes_before_the_command_that_reads_it(scripts: Path) -> None:
+    assert decide(Policy(scripts), shell("bash good.sh <<EOF\n$(cp bad.sh good.sh)\nEOF")).endswith(
+        "run it in the next"
+    )
+    assert decide(Policy(scripts), shell("bash good.sh <<'EOF'\n$(cp bad.sh good.sh)\nEOF")) is None
+
+
+def test_a_write_by_one_find_action_comes_before_the_next(scripts: Path) -> None:
+    text = "find . -maxdepth 0 -exec cp bad.sh good.sh \\; -exec bash good.sh \\;"
+
+    assert decide(Policy(scripts), shell(text)).endswith("run it in the next")
+    assert decide(Policy(scripts), shell("find . -maxdepth 0 -exec bash good.sh \\;")) is None
+
+
+@pytest.mark.parametrize(("text", "shown"), [("$'bash' bad.sh", "$bash"), ("bash $'bad.sh'", None)])
+def test_ansi_c_quoting_is_not_decoded_but_refused(scripts: Path, text: str, shown: str | None) -> None:
+    reason = decide(Policy(scripts), shell(text))
+
+    if shown:
+        assert reason == f"`{text}` builds a command at run time (`{shown}`); write the program and its script out"
+    else:
+        assert reason.endswith("a path built at run time; write the path out")
+
+
+@pytest.mark.parametrize(
+    "wrapper", ['"$WRAP/env" echo hi', '"${TOOL_DIR}/timeout" 5 echo hi', '"$WRAP/find" . -name x']
+)
+def test_a_wrapper_whose_name_is_built_at_run_time_is_refused(wrapper: str) -> None:
+    assert "builds a command at run time" in decide(WRITE, shell(wrapper))
+    assert decide(WRITE, shell("/usr/bin/env echo hi")) is None
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "if true; then export BASH_ENV=./bad.sh; fi; bash -c true",
+        "if true; then BASH_ENV=./bad.sh; fi; bash -c true",
+    ],
+)
+def test_a_startup_variable_set_after_a_control_word_is_not_followed(scripts: Path, text: str) -> None:
+    assert decide(Policy(scripts), shell(text)).endswith("set where the guard can't follow it")
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "if true; then exec <<< 'echo hi'; fi; sh",
+        "printf x | time -p sh",
+        "f() { sh; }\nprintf x | f",
+        "function f { sh; }\nprintf x | f",
+    ],
+)
+def test_input_hidden_by_a_control_word_time_or_a_function_is_refused(text: str) -> None:
+    assert decide(WRITE, shell(text)).endswith(PIPED)
+
+
+def test_time_and_functions_keep_their_readable_counterparts() -> None:
+    assert decide(WRITE, shell("time -p sh -c 'echo hi'")) is None
+    assert decide(WRITE, shell("f() { sh -c 'echo hi'; }\nf")) is None
+    assert decide(WRITE, shell("printf data | time -p $CMD")).endswith(
+        "builds a command at run time (`$CMD`); write the program and its script out"
+    )
+
+
+@pytest.mark.parametrize("delimiter", ["\\\nEOF", "$'EOF'"])
+def test_a_here_document_delimiter_the_guard_reads_differently_hides_nothing(delimiter: str) -> None:
+    text = f"cat << {delimiter}\nhello\nEOF\ngit commit --no-verify -m x"
+
+    reason = decide(WRITE, shell(text))
+    assert reason is not None
+    assert reason.endswith((BYPASS, "cannot be parsed"))
+    assert decide(WRITE, shell("cat << \\\nEOF\nhello\nEOF\necho after")) is None
+
+
+@pytest.mark.parametrize("prefix", ["command ", "builtin ", "if true; then "])
+def test_git_settings_exported_behind_a_prefix_stay_refused(prefix: str) -> None:
+    text = f"{prefix}export GIT_CONFIG_PARAMETERS=\"'core.hooksPath=/x'\""
+    text += "; fi; git status" if prefix.startswith("if") else "; git status"
+
+    assert decide(WRITE, shell(text)).endswith(BYPASS)
+
+
+def test_a_function_defined_with_the_keyword_is_judged_like_its_body() -> None:
+    assert decide(WRITE, shell("function f { git push -f; }")).endswith(BYPASS)
+    assert decide(WRITE, shell("function f { echo hi; }")) is None
+
+
+def test_a_shebang_interpreter_built_at_run_time_is_refused(scripts: Path) -> None:
+    shebang(scripts / "tool", "#!/usr/bin/env -S ${OB_INTERP}", "rm x\n")
+
+    assert decide(Policy(scripts), shell("OB_INTERP=/bin/sh ./tool")) == (
+        "`OB_INTERP=/bin/sh ./tool` runs `./tool`, whose interpreter is built at run time (`${OB_INTERP}`)"
+    )
+
+
+def test_a_subshells_output_redirection_is_a_write_before_what_follows(scripts: Path) -> None:
+    text = "(printf '%s\\n' 'git commit --no-verify -m x') > good.sh; bash good.sh"
+
+    assert decide(Policy(scripts), shell(text)).endswith("run it in the next")
+    assert decide(Policy(scripts), shell("(echo hi) > /dev/null; bash good.sh")) is None
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "env -S 'nohup env sh' <<'EOF'\ngit commit --no-verify -m x\nEOF",
+        "nohup timeout 3 sh <<'EOF'\ngit commit --no-verify -m x\nEOF",
+    ],
+)
+def test_stacked_wrappers_still_reach_the_shell(text: str) -> None:
+    assert decide(WRITE, shell(text)).endswith(BYPASS)
+
+
+def test_wrappers_stacked_past_the_limit_are_refused_unread() -> None:
+    text = "nohup " * 9 + "echo hi"
+
+    assert decide(WRITE, shell(text)) == f"`{text}` runs wrapper programs more than 8 deep"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "BASH_ENV=/missing env -u BASH_ENV bash -c true",
+        "BASH_ENV=/missing env -i bash -c true",
+        "export BASH_ENV=/missing; env --unset=BASH_ENV bash -c true",
+    ],
+)
+def test_a_startup_file_env_removes_is_not_read(text: str) -> None:
+    assert decide(WRITE, shell(text)) is None
+
+
+def test_a_startup_file_set_again_after_env_removes_one_is_read(scripts: Path) -> None:
+    assert decide(Policy(scripts), shell("BASH_ENV=/missing env -u BASH_ENV BASH_ENV=./bad.sh bash -c true")) == (
+        f"`./bad.sh` uses --no-verify, {BYPASS}"
+    )
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "((1<<x))\ngit commit --no-verify -m wip\nx",
+        "for ((i=0; i<<x; i++)); do :; done\ngit commit --no-verify -m wip\nx",
+        "echo $[1<<x]\ngit commit --no-verify -m wip\nx",
+        "echo ${a:-<<x}\ngit commit --no-verify -m wip\nx}",
+        "((git push -f); true)",
+    ],
+)
+def test_a_shift_in_arithmetic_or_a_parameter_is_no_here_document(text: str) -> None:
+    for policy in (READ, WRITE):
+        assert decide(policy, shell(text)).endswith(BYPASS)
+
+
+@pytest.mark.parametrize("text", ["echo $((1<<2))", "for ((i=0;i<3;i++)); do echo $i; done", "echo ${HOME:-x}"])
+def test_ordinary_arithmetic_and_parameters_run(text: str) -> None:
+    assert decide(WRITE, shell(text)) is None
+
+
+def test_the_runtimes_segments_are_checked_for_a_bypass_too() -> None:
+    misread = view(
+        cli_shell("((1<<x))\ngit commit --no-verify -m x\nx", "((1<<x))", "git commit --no-verify -m x", "x")
+    )
+
+    assert misread.commands[1] == "git commit --no-verify -m x"
+    assert decide(WRITE, misread).endswith(BYPASS)
+
+
+STARTUP = (
+    "reads startup files of its own; use bash or sh without -i or -l, or zsh -f, fish --no-config, bash --norc"
+    " --noprofile"
+)
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["zsh -c true", "ZDOTDIR=/tmp/x zsh -c true", "fish -c true", "bash -ic true", "bash -l -c true", "sh -l -c true"],
+)
+def test_a_shell_that_reads_startup_files_of_its_own_is_refused(text: str) -> None:
+    assert decide(WRITE, shell(text)).endswith(STARTUP)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "zsh -f -c true",
+        "fish --no-config -c true",
+        "bash --norc -ic true",
+        "bash --noprofile -l -c true",
+        "bash -c true",
+    ],
+)
+def test_a_shell_told_not_to_read_its_own_startup_files_runs(text: str) -> None:
+    assert decide(WRITE, shell(text)) is None
+
+
+def test_a_bypass_in_a_startup_reading_shells_script_is_still_a_bypass() -> None:
+    assert decide(WRITE, shell("zsh -c 'git push -f'")) == f"`git push -f` uses -f, {BYPASS}"
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["HOME=/tmp/elsewhere; bash ~/good.sh", "export HOME=/tmp/elsewhere; . ~/good.sh", "unset HOME; bash ~/good.sh"],
+)
+def test_a_tilde_after_home_changed_is_refused(scripts: Path, text: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("HOME", str(scripts))
+
+    assert decide(Policy(scripts), shell(text)).endswith("a path built at run time; write the path out")
+    assert decide(Policy(scripts), shell("bash ~/good.sh")) is None
+
+
+@pytest.mark.parametrize("text", ["bash ~+/good.sh", "bash ~-/good.sh", "bash ~root/x.sh"])
+def test_a_tilde_form_the_guard_doesnt_expand_is_refused(scripts: Path, text: str) -> None:
+    assert decide(Policy(scripts), shell(text)).endswith("a path built at run time; write the path out")
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["bash /dev/fd/3 3<<'E'\ngit commit --no-verify -m wip\nE", "source /proc/self/fd/0", "bash /dev/tty"],
+)
+def test_a_device_or_process_file_is_not_read_by_the_guard(text: str) -> None:
+    assert decide(WRITE, shell(text)).endswith("a device or process file the guard doesn't read")
+
+
+def test_a_bypass_in_a_shells_script_is_named_before_a_missing_shell_file() -> None:
+    text = "/nonexistent/zsh -c 'cd x && git push -f'"  # /bin/zsh on a machine without zsh
+
+    assert decide(WRITE, shell(text)) == f"`cd x && git push -f` uses -f, {BYPASS}"
+
+
+def test_a_declaration_naming_home_and_a_startup_file_records_both(scripts: Path) -> None:
+    text = "export BASH_ENV=./good.sh; declare HOME=/tmp BASH_ENV=./bad.sh; bash -c true"
+
+    assert decide(Policy(scripts), shell(text)).endswith("set where the guard can't follow it")
+
+
+def test_a_shebang_interpreter_that_is_itself_a_script_is_refused(scripts: Path) -> None:
+    shebang(scripts / "env", "#!/bin/sh", BAD)
+    shebang(scripts / "tool", f"#!{scripts}/env bash")
+
+    assert decide(Policy(scripts), shell("./tool")) == (
+        f"`./tool` runs `./tool`, whose interpreter `{scripts}/env` is itself a script"
+    )
+
+
+def test_a_tilde_in_a_shell_started_with_another_home_is_refused(scripts: Path) -> None:
+    for text in ("HOME=/other bash -c 'bash ~/good.sh'", "env -u HOME bash -c 'bash ~/good.sh'"):
+        assert decide(Policy(scripts), shell(text)).endswith("a path built at run time; write the path out")
+
+
+def test_a_link_to_a_process_file_is_not_followed(scripts: Path) -> None:
+    (scripts / "here").symlink_to("/proc/self/cwd")
+
+    assert decide(Policy(scripts), shell("bash here/x.sh")).endswith("a device or process file the guard doesn't read")
+
+
+def test_a_locale_translated_word_is_built_at_run_time(scripts: Path) -> None:
+    assert decide(Policy(scripts), shell('$"bash" bad.sh')).endswith("write the program and its script out")
+    assert decide(WRITE, shell('echo "cost $"')) is None
+
+
+def test_a_substitution_in_a_double_quoted_parameter_default_is_judged() -> None:
+    text = "unset x; echo \"${x:-'$(git commit --no-verify -m x)'}\""
+
+    assert decide(WRITE, shell(text)).endswith(BYPASS)
+
+
+def test_arithmetic_inside_a_parameter_is_no_here_document() -> None:
+    assert decide(WRITE, shell("echo ${a:-$((1<<x))}\ngit commit --no-verify -m x\nx")).endswith(BYPASS)
+
+
+def test_a_here_document_delimiter_joined_by_a_continuation_ends_the_body(scripts: Path) -> None:
+    (scripts / "joined.sh").write_text("cat <<EOF\nhi\nEO\\\nF\ngit commit --no-verify -m x\n")
+
+    assert decide(Policy(scripts), shell("bash joined.sh")).endswith(BYPASS)
+    assert decide(WRITE, shell("cat <<'EOF'\nEO\\\nF\nEOF")) is None  # a quoted body joins nothing
+
+
+@pytest.mark.parametrize(
+    "text", ['echo ${x:-"}"}; git push -f #"', "unset x; echo ${x:-\"'$(git commit --no-verify -m x)'\"}"]
+)
+def test_quotes_inside_a_parameter_expansion_nest(text: str) -> None:
+    assert decide(WRITE, shell(text)).endswith(BYPASS)
+
+
+def test_a_subshell_in_a_command_substitution_is_not_arithmetic() -> None:
+    assert decide(WRITE, shell("echo $((git push -f) )")).endswith(BYPASS)
+    assert decide(WRITE, shell("echo $((1 + (2 * 3)))")) is None
+
+
+def test_a_command_substitution_reads_its_commands_input() -> None:
+    assert decide(WRITE, shell("printf 'git push -f\\n' | echo \"$(sh)\"")).endswith(PIPED)
+
+
+def test_an_unquoted_here_document_with_a_line_continuation_is_not_read() -> None:
+    assert decide(WRITE, shell("bash <<EOF\n$\\\n(git commit --no-verify -m x)\nEOF")).endswith("cannot be parsed")
+    assert decide(WRITE, shell("cat <<'EOF'\na \\\nb\nEOF")) is None
+
+
+def test_env_dash_clears_the_environment_and_runs_the_rest(scripts: Path) -> None:
+    assert decide(Policy(scripts), shell("env - bash bad.sh")) == f"`bad.sh` uses --no-verify, {BYPASS}"
+
+
+def test_an_empty_shebang_runs_the_file_as_a_shell_script(scripts: Path) -> None:
+    shebang(scripts / "tool", "#!", BAD)
+
+    assert decide(Policy(scripts), shell("./tool")).endswith(BYPASS)
+
+
+def test_an_interpreter_that_is_no_regular_file_is_refused_without_blocking(scripts: Path) -> None:
+    os.mkfifo(scripts / "fifo")
+    shebang(scripts / "tool", f"#!{scripts}/fifo")
+
+    assert decide(Policy(scripts), shell("./tool")).endswith("is not a regular file")
+
+
+def test_a_shell_passes_its_startup_file_to_the_shells_it_starts(scripts: Path) -> None:
+    (scripts / "sub" / "good.sh").write_text(BAD)
+    text = f"BASH_ENV=./good.sh bash -c 'cd {scripts}/sub; bash -c true'"
+
+    assert decide(Policy(scripts), shell(text)) == f"`./good.sh` uses --no-verify, {BYPASS}"
+
+
+def test_a_shell_run_by_path_starts_before_its_script_writes() -> None:
+    assert decide(WRITE, shell("/bin/bash -c 'touch x'")) is None
+    assert decide(WRITE, shell("/usr/bin/env touch x")) is None
+
+
+def test_a_write_by_a_program_named_by_path_is_a_write(scripts: Path) -> None:
+    assert decide(Policy(scripts), shell("/bin/cp bad.sh good.sh; bash good.sh")).endswith("run it in the next")
+    assert (
+        decide(READ, shell("/bin/rm x"))
+        == "`/bin/rm x` uses filesystem mutation 'rm', which writes in a read-only step"
+    )
+
+
+def test_a_shebang_that_runs_git_with_a_bypass_is_refused(scripts: Path) -> None:
+    shebang(scripts / "tool", "#!/usr/bin/env -S git commit --no-verify -m")
+
+    assert decide(Policy(scripts), shell("./tool")) == f"`./tool` uses --no-verify, {BYPASS}"
+
+
+@pytest.mark.parametrize("text", ["env ./env", "env ./find ."])
+def test_every_launcher_is_checked_when_the_chain_runs_nothing(scripts: Path, text: str) -> None:
+    shebang(scripts / "env", "#!/bin/sh", BAD)
+    shebang(scripts / "find", "#!/bin/sh", BAD)
+
+    assert decide(Policy(scripts), shell(text)).endswith(BYPASS)
+
+
+def test_a_subshell_function_body_reads_its_callers_input() -> None:
+    assert decide(WRITE, shell("f() (sh)\nprintf 'git commit --no-verify -m x\\n' | f")).endswith(PIPED)
+
+
+def test_a_script_run_by_path_keeps_the_removals_of_the_env_that_started_it(scripts: Path) -> None:
+    shebang(scripts / "fine", "#!/bin/bash")
+
+    assert decide(Policy(scripts), shell("export BASH_ENV=/missing; env -u BASH_ENV ./fine")) is None
+    assert decide(Policy(scripts), shell("export BASH_ENV=/missing; env -i ./fine")) is None
+
+
+def test_options_after_an_env_split_string_belong_to_the_command(scripts: Path) -> None:
+    text = "export BASH_ENV=./bad.sh; env -S 'bash -c true' -u BASH_ENV"
+
+    assert decide(Policy(scripts), shell(text)) == f"`./bad.sh` uses --no-verify, {BYPASS}"
+
+
+def test_a_descriptor_duplicated_onto_stdin_either_way_is_opaque() -> None:
+    assert decide(WRITE, shell("bash 3<<'EOF' 0>&3\ngit commit --no-verify -m x\nEOF")).endswith(PIPED)
+
+
+def test_a_shebangless_file_that_isnt_utf8_is_refused_unread(scripts: Path) -> None:
+    (scripts / "tool").write_bytes(b"# \xe9 comment\n" + BAD.encode())
+
+    assert (
+        decide(Policy(scripts), shell("./tool")) == "`./tool` runs `./tool`, which can't be read: it is not UTF-8 text"
+    )
+
+
+def test_a_shebangs_program_is_judged_for_writes(scripts: Path) -> None:
+    shebang(scripts / "tool", "#!/usr/bin/env -S rm -f")
+
+    assert decide(Policy(scripts, write=False), shell("./tool")) == (
+        "`./tool` uses filesystem mutation 'rm', which writes in a read-only step"
+    )
+    assert decide(Policy(scripts), shell("./tool")) is None
+
+
+def test_a_startup_file_set_on_source_reaches_the_shells_its_text_starts(scripts: Path) -> None:
+    (scripts / "runner.sh").write_text("bash -c true\n")
+
+    assert (
+        decide(Policy(scripts), shell("BASH_ENV=./bad.sh source ./runner.sh"))
+        == f"`./bad.sh` uses --no-verify, {BYPASS}"
+    )
+    assert decide(Policy(scripts), shell("BASH_ENV=./good.sh source ./runner.sh")) is None
+
+
+@pytest.mark.parametrize(
+    "text", ["printf x | echo ${a:-$(sh)}", "printf x | echo $(($(sh)+1))", "printf x | echo $[$(sh)]"]
+)
+def test_a_substitution_inside_a_parameter_or_arithmetic_reads_its_commands_input(text: str) -> None:
+    assert decide(WRITE, shell(text)).endswith(PIPED)

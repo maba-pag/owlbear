@@ -2,21 +2,25 @@
 
 Every shell command and file access is allowed, except in every step a hook or signing bypass or a force push,
 and in a read-only step any write. The read-only shell rule is ported from the old agents' deny-writes guard.
-Commands behind wrapper programs (env, xargs, timeout, find -exec, ...) and scripts given to a nested shell (-c) or
-eval are judged the same way, and so is turning hooks or signing off through git config. Not read: a script file a
-shell runs, a shell's standard input (pipes, here-strings), env -S, and commands built at run time.
+A shell request is judged by its whole command text, not the runtime's segments, which lose pipes, redirections and
+here-document bodies. Commands behind wrapper programs (env, env -S, xargs, timeout, find -exec, ...) are judged the
+same way, and so is turning hooks or signing off through git config. So is every script a shell runs (``shell_walk``):
+its -c script, script file, startup files, here-document or here-string, a sourced file, eval's words and a shell
+script run by path. What the guard can't read is refused: a shell reading input from another program, a command or
+script built at run time, a script or program run after an earlier write in the same command, and a relative path
+once the folder can't be followed.
 """
 
 from __future__ import annotations
 
+import functools
 import re
 import shlex
 from dataclasses import dataclass
-from pathlib import PurePath
 from typing import TYPE_CHECKING, Any, NamedTuple
 
-from owlbear_delivery_next.change_contracts import tools
-from owlbear_delivery_next.local_system import shell_parse
+from owlbear_delivery_next.change_contracts import shell_walk, tools
+from owlbear_delivery_next.local_system import shell_parse, shell_programs
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -141,10 +145,11 @@ class Request:
     """The parts of a permission request the policy judges."""
 
     kind: str
-    commands: tuple[str, ...] = ()
+    commands: tuple[str, ...] = ()  # a shell request's segments as the runtime split them
     paths: tuple[str, ...] = ()
     tool: str = ""
     server: str = ""  # an MCP request's server
+    text: str = ""  # a shell request's whole command: segments lose pipes, redirections and here-document bodies
 
 
 def identities(req: Request) -> set[str]:
@@ -242,18 +247,16 @@ def _sub_bypass(sub: str | None, arguments: Sequence[str]) -> str | None:
 
 def _environment(words: Sequence[str]) -> dict[str, str]:
     """The variables one command sets for what it runs: leading assignments, env's, and export's."""
-    i = next((i for i, w in enumerate(words) if not shell_parse.ASSIGNMENT.match(w)), len(words))
-    found = list(words[:i])
-    if i < len(words) and PurePath(words[i]).name == "env":
-        found += [w for w in words[i + 1 : shell_parse.operand(words, i)] if shell_parse.ASSIGNMENT.match(w)]
+    i = shell_programs.builtin(words)  # then export ..., command export ...
+    if i < len(words) and shell_programs.name(words[i]) == "env":
+        i = shell_programs.operand(words, i)
     elif i < len(words) and words[i] == "export":
-        found += [w for w in words[i + 1 :] if shell_parse.ASSIGNMENT.match(w)]
-    return dict(w.partition("=")[::2] for w in found)
+        i = len(words)
+    return shell_programs.assignments(words[:i])
 
 
-def _env_setting(words: Sequence[str]) -> str | None:
+def _env_setting(env: dict[str, str]) -> str | None:
     """A setting that git configuration passed by environment uses to replace the hooks or turn signing off."""
-    env = _environment(words)
     try:
         settings = shlex.split(env.get("GIT_CONFIG_PARAMETERS", ""))
     except ValueError:
@@ -267,12 +270,14 @@ def _env_setting(words: Sequence[str]) -> str | None:
 
 def _bypass(words: Sequence[str]) -> str | None:
     """Return the setting, option or refspec of a git command that skips hooks or signing, or forces a push."""
-    if setting := _env_setting(words):
+    if setting := _env_setting(_environment(words)):  # leading assignments, env's and export's
         return f"environment setting {setting}"
-    for prog in shell_parse.programs(words):
-        if PurePath(prog[0]).name != "git":
+    for run in shell_programs.runs(words):
+        if setting := _env_setting(run.env):  # those an env -S split sets too
+            return f"environment setting {setting}"
+        if shell_programs.name(run.words[0]) != "git":
             continue
-        call = _parse_git(prog[1:])
+        call = _parse_git(run.words[1:])
         if setting := next((s for s in call.config if _disables(s)), None):
             return f"-c {setting}"
         if call.sub == "config" and (setting := _config_write(call.arguments)):
@@ -290,7 +295,7 @@ def _is_read_only_branch(arguments: Sequence[str]) -> bool:
 
 def _git_mutation(words: Sequence[str]) -> str | None:
     """How a git command one command's words run would write."""
-    for prog in (p for p in shell_parse.programs(words) if PurePath(p[0]).name == "git"):
+    for prog in (r.words for r in shell_programs.runs(words) if shell_programs.name(r.words[0]) == "git"):
         call = _parse_git(prog[1:])
         if option := next((a for a in call.arguments if a.partition("=")[0] in _GIT_WRITE_OPTIONS), None):
             return f"Git output option {option}"
@@ -307,6 +312,9 @@ def _mutation(text: str, commands: Sequence[Sequence[str]]) -> str | None:
     """How a shell command would write files or change Git state; discarded output does not count."""
     if found := next(filter(None, map(_git_mutation, commands)), None):
         return found
+    for run in (r for words in commands for r in shell_programs.runs(words)):  # env -S hides it, /bin/cp names it
+        if match := _SHELL_MUTATION.match(" ".join([shell_programs.name(run.words[0]), *run.words[1:]])):
+            return f"filesystem mutation '{match[0].strip(' \t;&|')}'"
     text = _HARMLESS.sub("", text)
     if _REDIRECT.search(text):
         return "a redirect"
@@ -316,9 +324,16 @@ def _mutation(text: str, commands: Sequence[Sequence[str]]) -> str | None:
 
 
 def _shell(policy: Policy, req: Request) -> str | None:
-    for text in req.commands or ("",):
+    for text in (req.text,) if req.text else req.commands or ("",):
         if reason := _check(policy, text):
             return reason
+    for text in req.commands if req.text else ():  # the runtime's own reading too, should the text be misread
+        try:
+            flag = next(filter(None, (_bypass(c.words) for c in shell_parse.parse(text))), None)
+        except ValueError:  # the whole text was judged already
+            continue
+        if flag:
+            return f"`{text}` uses {flag}, {BYPASS}"
     return None
 
 
@@ -327,28 +342,46 @@ def bypass(reason: str) -> bool:
     return reason.endswith(BYPASS)
 
 
-def _check(policy: Policy, text: str, depth: int = 0) -> str | None:
-    """Judge one shell text, and each script it hands to a nested shell or eval the same way."""
+def _check(
+    policy: Policy, text: str, depth: int = 0, state: shell_walk.State | None = None, label: str = ""
+) -> str | None:
+    """Judge one shell text, and each script it runs, the same way; *label* names a script file in reasons."""
+    name = label or text
     try:
-        commands = shell_parse.commands(text)
+        commands = shell_parse.parse(text)
     except ValueError:
-        return f"`{text}` cannot be parsed"
+        return f"`{name}` cannot be parsed"
     if not commands:
         return "the shell request names no command" if depth == 0 else None  # an empty script does nothing
-    if flag := next(filter(None, map(_bypass, commands)), None):
-        return f"`{text}` uses {flag}, {BYPASS}"
-    if not policy.write and (found := _mutation(text, commands)):
-        return f"`{text}` uses {found}, which writes in a read-only step"
-    return _nested(policy, text, commands, depth)
+    try:
+        if flag := next(filter(None, (_bypass(c.words) for c in commands)), None):
+            return f"`{name}` uses {flag}, {BYPASS}"
+        if not policy.write and (found := _mutation(text, [c.words for c in commands])):
+            return f"`{name}` uses {found}, which writes in a read-only step"
+        mutation = functools.partial(_run_mutation, policy)
+        walk = shell_walk.Walk(name, depth, functools.partial(_check, policy), _writes, _run_bypass, mutation)
+        return walk.commands(commands, state or shell_walk.State(policy.root))
+    except shell_programs.UnreadableError as error:
+        return f"`{name}` {error}"
 
 
-def _nested(policy: Policy, text: str, commands: Sequence[Sequence[str]], depth: int) -> str | None:
-    for script in (s for words in commands for s in shell_parse.scripts(words)):
-        if depth >= shell_parse.NESTING:
-            return f"`{text}` nests scripts more than {shell_parse.NESTING} deep"
-        if reason := _check(policy, script, depth + 1):
-            return reason
-    return None
+def _run_bypass(name: str, run: shell_programs.Run) -> str | None:
+    """The refusal of a #! line's program that skips hooks or signing or forces history, as env -S runs it."""
+    if setting := _env_setting(run.env):
+        return f"`{name}` uses environment setting {setting}, {BYPASS}"
+    return f"`{name}` uses {flag}, {BYPASS}" if (flag := _bypass(run.words)) else None
+
+
+def _run_mutation(policy: Policy, name: str, run: shell_programs.Run) -> str | None:
+    """The refusal of a #! line's program that writes, in a read-only step (#!/usr/bin/env -S rm -f)."""
+    if policy.write or not (found := _mutation(" ".join(run.words), [run.words])):
+        return None
+    return f"`{name}` uses {found}, which writes in a read-only step"
+
+
+def _writes(command: shell_parse.Command) -> bool:
+    """Whether one command writes files or changes Git state, as the read-only rule sees it."""
+    return _mutation(command.raw, [command.words]) is not None
 
 
 def decide(policy: Policy, req: Request, offered: frozenset[str] = frozenset()) -> str | None:
@@ -396,8 +429,9 @@ def view(r: Any) -> Request:  # noqa: ANN401 - one of the SDK's permission reque
     """Normalise one SDK permission request into a Request."""
     kind = getattr(r, "kind", type(r).__name__)
     if kind == "shell":
+        whole = getattr(r, "full_command_text", "") or ""
         texts = [s.full_command_text for s in r.command_segments or ()] or [c.identifier for c in r.commands]
-        return Request(kind, tuple(texts or [r.full_command_text]), tuple(r.possible_paths or ()))
+        return Request(kind, tuple(texts or [whole]), tuple(r.possible_paths or ()), text=whole)
     if kind in {"read", "write"}:
         path = r.resolved_path or getattr(r, "path", None) or getattr(r, "file_name", "")
         edits = getattr(r, "file_edits", None) or ()  # a move names a before and an after path

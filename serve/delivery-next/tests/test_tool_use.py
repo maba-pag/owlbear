@@ -122,6 +122,22 @@ def test_a_guard_denial_is_a_wrong_choice_unless_it_refused_a_bypass() -> None:
     assert (st.run.wrong, len(st.run.denials), st.run.denied) == ({"denied": 1}, 2, {"git": st.run.denials[-1]})
 
 
+def test_a_script_the_guard_cant_read_is_a_wrong_choice_and_a_bypass_inside_a_read_one_is_not(tmp_path: Path) -> None:
+    (tmp_path / "fix.sh").write_text("git commit --no-verify -m x\n")
+    at = sdk_adapter.Session(StepKind.BUILD, tmp_path, "s1", "m", resume=False, policy=Policy(tmp_path), checks=(),
+                             journal=sdk_adapter.Journal(event=lambda _e: None),
+                             observe=lambda: Worktree(HEAD, BASE, changed=()))  # fmt: skip
+    st = sdk_adapter._Step(at, SimpleNamespace(call_soon_threadsafe=lambda *_: None))  # noqa: SLF001
+
+    unread = st.permission(shell("bash missing.sh"), None)
+    bypass = st.permission(shell("bash fix.sh"), None)
+
+    assert unread.feedback == f"Denied: {st.run.denials[0]}"
+    assert "`bash missing.sh` runs `missing.sh`, which can't be read" in unread.feedback
+    assert bypass.feedback == f"Denied: `fix.sh` uses --no-verify, {permissions.BYPASS}"
+    assert st.run.wrong == {"denied": 1}  # the unreadable script only
+
+
 def test_a_missing_tool_report_is_pointless_while_the_guard_denies_it_or_only_a_window_has_it() -> None:
     def reported(tool: str, *requests: str, after: tuple[str, ...] = ()) -> dict[str, int]:
         st = step()
