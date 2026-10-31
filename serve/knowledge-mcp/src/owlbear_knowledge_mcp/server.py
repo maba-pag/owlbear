@@ -18,6 +18,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
 from pydantic import ValidationError
 
+from owlbear_knowledge import qdrant
 from owlbear_knowledge.chunker import TextChunker
 from owlbear_knowledge.embeddings import BgeM3EmbeddingProvider, EmbeddingProvider
 from owlbear_knowledge.fetcher import HttpResponseFetcher, HttpxContentFetcher
@@ -480,6 +481,42 @@ def _serialize_refresh_error(error: RefreshError) -> RefreshErrorResult:
     }
 
 
+_EMBEDDINGS_MISSING = "Embeddings are not installed: install owlbear-knowledge[embedding,qdrant]"
+
+
+class MissingVectorStore:
+    """Stands in for Qdrant when the opt-in embedding extras are not installed."""
+
+    @staticmethod
+    def _missing(stage: KnowledgeFailureStage) -> KnowledgeOperationError:
+        return KnowledgeOperationError(
+            KnowledgeFailure(
+                stage=stage,
+                code="embedding_dependency_missing",
+                retryable=False,
+                message=_EMBEDDINGS_MISSING,
+            ),
+        )
+
+    def store_embedding(self, *_args: object, **_kwargs: object) -> None:
+        raise self._missing(KnowledgeFailureStage.INDEXING)
+
+    def delete_embedding(self, *_args: object, **_kwargs: object) -> bool:
+        raise self._missing(KnowledgeFailureStage.INDEXING)
+
+    def get_embedding(self, *_args: object, **_kwargs: object) -> list[float] | None:
+        raise self._missing(KnowledgeFailureStage.QUERY)
+
+    def search_similar(self, *_args: object, **_kwargs: object) -> list[tuple[str, float]]:
+        raise self._missing(KnowledgeFailureStage.QUERY)
+
+
+def _vector_store(location: str) -> object:
+    if qdrant.QdrantClient is None:
+        return MissingVectorStore()
+    return QdrantVectorStore(location=location)
+
+
 @asynccontextmanager
 async def app_lifespan(_server: MCPServer) -> AsyncGenerator[AppContext]:
     """Initialise knowledge-base services; close the DB connection on exit."""
@@ -497,7 +534,7 @@ async def app_lifespan(_server: MCPServer) -> AsyncGenerator[AppContext]:
             factories=KnowledgeRuntimeFactories(
                 http_response_fetcher_factory=HttpxContentFetcher,
                 embedding_provider_factory=BgeM3EmbeddingProvider,
-                vector_store_factory=lambda location: QdrantVectorStore(location=location),
+                vector_store_factory=_vector_store,
             ),
         )
         yield ctx

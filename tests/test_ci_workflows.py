@@ -23,7 +23,6 @@ SUITE_WORKFLOWS = (
     "tooling.yml",
 )
 REUSING_WORKFLOWS = ("python.yml", "python-browser.yml", "static.yml", "tooling.yml")
-SKIPPED_PACKAGE_WORKFLOWS = ("python.yml", "copilot-setup-steps.yml")
 PR_ONLY = "${{ github.event_name == 'pull_request' }}"
 _SPEC = importlib.util.spec_from_file_location("ci_scope", ROOT / ".github/scripts/ci_scope.py")
 ci_scope = importlib.util.module_from_spec(_SPEC)
@@ -58,13 +57,26 @@ def _runs(job: dict[str, object]) -> str:
     return "\n".join(str(step.get("run", "")) for step in job["steps"])
 
 
-def _skipped_packages(name: str) -> list[str]:
-    workflow = _workflow(name)
-    env = workflow.get("env") or {}
-    if "CI_SKIPPED_PACKAGES" not in env:
-        steps = [step for job in _jobs(name).values() for step in job["steps"]]
-        env = next(step["env"] for step in steps if "CI_SKIPPED_PACKAGES" in step.get("env", {}))
-    return env["CI_SKIPPED_PACKAGES"].split()
+def _default_install(lock: dict[str, object]) -> set[str]:
+    """Packages `uv sync --all-packages --all-groups` installs: no member's own extras unless a dependency asks."""
+    packages = {package["name"]: package for package in lock["package"]}
+    members = lock["manifest"]["members"]
+    pending = [(name, None) for name in members]
+    groups = [*lock["manifest"].get("dependency-groups", {}).values()]
+    groups += [group for name in members for group in packages[name].get("dev-dependencies", {}).values()]
+    for group in groups:
+        pending += [(dependency["name"], dependency.get("extra", dependency.get("extras"))) for dependency in group]
+    seen: set[tuple[str, str | None]] = set()
+    while pending:
+        name, extras = pending.pop()
+        for extra in [None, *(extras or [])]:
+            if (name, extra) in seen:
+                continue
+            seen.add((name, extra))
+            package = packages[name]
+            dependencies = package.get("dependencies", []) if extra is None else package["optional-dependencies"][extra]
+            pending += [(dependency["name"], dependency.get("extra")) for dependency in dependencies]
+    return {name for name, _extra in seen}
 
 
 def test_replaced_workflows_are_gone() -> None:
@@ -283,7 +295,7 @@ def test_proof_jobs_reuse_only_identical_passing_inputs(name: str) -> None:
             assert "steps.reuse.outputs.cache-hit != 'true'" in condition, f"{name}:{job_name}:{step.get('name')}"
 
 
-def test_python_tests_are_sharded_without_the_model_stack() -> None:
+def test_python_tests_are_sharded() -> None:
     workflow = _workflow("python.yml")
     job = _jobs("python.yml")["tests"]
     shards = job["strategy"]["matrix"]["shard"]
@@ -292,7 +304,7 @@ def test_python_tests_are_sharded_without_the_model_stack() -> None:
     assert shards == list(range(1, int(workflow["env"]["CI_SHARDS"]) + 1))
     assert job["name"] == f"Python tests ${{{{ matrix.shard }}}}/{len(shards)}"
     assert job["strategy"]["fail-fast"] is False
-    assert 'uv sync --locked --all-packages --all-groups "${skipped[@]}"' in runs
+    assert "uv sync --locked --all-packages --all-groups" in runs
     assert '-m "not e2e and not model and not browser" -n "${CI_WORKERS:-6}" --dist worksteal' in runs
     assert job["steps"][[s.get("name") for s in job["steps"]].index("Run test shard")]["env"]["CI_WORKERS"] == (
         "${{ inputs.workers }}"
@@ -303,16 +315,14 @@ def test_python_tests_are_sharded_without_the_model_stack() -> None:
     assert "ruff" not in runs
 
 
-def test_skipped_packages_cover_the_locked_gpu_stack_and_stay_aligned() -> None:
+def test_the_default_install_leaves_out_the_model_stack_and_the_lock_has_no_gpu_build() -> None:
     lock = tomllib.loads((ROOT / "uv.lock").read_text(encoding="utf-8"))
     locked = {package["name"] for package in lock["package"]}
-    gpu = {name for name in locked if name.startswith(("nvidia-", "cuda-")) or name in {"torch", "triton"}}
-    lists = {name: _skipped_packages(name) for name in SKIPPED_PACKAGE_WORKFLOWS}
+    installed = _default_install(lock)
 
-    assert len({tuple(values) for values in lists.values()}) == 1
-    skipped = set(next(iter(lists.values())))
-    assert gpu <= skipped
-    assert {"flagembedding", "transformers"} <= skipped
+    assert not {name for name in locked if name.startswith(("nvidia-", "cuda-")) or name == "triton"}
+    assert {"owlbear-knowledge", "owlbear-knowledge-mcp", "pytest"} <= installed
+    assert not installed & {"torch", "flagembedding", "transformers", "huggingface-hub", "qdrant-client"}
 
 
 def test_python_browser_tests_run_alone_with_chromium() -> None:

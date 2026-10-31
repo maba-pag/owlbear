@@ -11,7 +11,7 @@ user-invocable: false
 - Use `uv` — never bare `pip`. Run repository checks with `uv run --locked` once dependency inputs
   and their lockfile are current; a dependency-changing task generates its required lockfile before
   locked proof. Use `uv run` for scripts that do not resolve project dependencies.
-- Install the complete development environment with `uv sync --locked --all-packages --all-extras --all-groups` (reads the workspace manifests and lockfile). Never rely on bare `uv sync` for repository checks.
+- Install the development environment with `uv sync --locked --all-packages --all-groups` (reads the workspace manifests and lockfile); add `--all-extras` only for the `model` tests, which need the knowledge embedding stack. Never rely on bare `uv sync` for repository checks.
 
 ## Code Style
 

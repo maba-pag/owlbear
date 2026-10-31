@@ -48,16 +48,7 @@ jobs:
 
       - name: Install locked Python workspace and test tools
         timeout-minutes: 8
-        env:
-          # Only the deselected `model` tests import this stack; it is about two thirds of the workspace download.
-          CI_SKIPPED_PACKAGES: >-
-            torch flagembedding accelerate transformers
-            sentence-transformers peft datasets ir-datasets pyarrow pandas scipy scikit-learn sympy
-            tokenizers safetensors sentencepiece hf-xet huggingface-hub
-        run: |
-          skipped=()
-          for package in $CI_SKIPPED_PACKAGES; do skipped+=(--no-install-package "$package"); done
-          uv sync --locked --all-packages --group dev "${skipped[@]}"
+        run: uv sync --locked --all-packages --group dev
 
       - name: Install locked Node tooling
         timeout-minutes: 5

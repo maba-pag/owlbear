@@ -26,11 +26,7 @@ RUFF_TOOLCHAIN_SCRIPT = ROOT / ".github/scripts/check_ruff_toolchain.py"
 _SCOPE_SPEC = importlib.util.spec_from_file_location("ci_scope_dependency_test", ROOT / ".github/scripts/ci_scope.py")
 ci_scope = importlib.util.module_from_spec(_SCOPE_SPEC)
 _SCOPE_SPEC.loader.exec_module(ci_scope)
-COPILOT_UV_SYNC = (
-    "skipped=()\n"
-    'for package in $CI_SKIPPED_PACKAGES; do skipped+=(--no-install-package "$package"); done\n'
-    'uv sync --locked --all-packages --group dev "${skipped[@]}"\n'
-)
+COPILOT_UV_SYNC = "uv sync --locked --all-packages --group dev"
 
 
 def _workflow(path: Path) -> dict[str, object]:

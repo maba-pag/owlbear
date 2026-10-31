@@ -19,7 +19,6 @@ _UV_SYNC = (
     "sync",
     "--locked",
     "--all-packages",
-    "--all-extras",
     "--all-groups",
 )
 _NPM_ROOT = ("Root npm", Path())

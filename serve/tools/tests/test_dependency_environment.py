@@ -42,7 +42,7 @@ def test_dep_sync_installs_python_and_root_npm_after_node_check(
             dep_sync()
 
     commands = [command for command, _ in calls]
-    assert ["uv", "sync", "--locked", "--all-packages", "--all-extras", "--all-groups"] in commands
+    assert ["uv", "sync", "--locked", "--all-packages", "--all-groups"] in commands
     npm_cwds = {cwd.relative_to(repository).as_posix() for command, cwd in calls if command == ["npm", "ci"]}
     assert npm_cwds == {"."}
 

@@ -396,7 +396,9 @@ the project; OwlBear's own repository, which no folder claims, keeps them in `.o
 
 The `owlbear-knowledge` server stores its SQLite database and vectors under
 `.owlbear/knowledge/` in the current workspace. Launch it from the project root; it has no storage
-override or tool-exclusion environment settings.
+override or tool-exclusion environment settings. The runtime leaves out the embedding and Qdrant
+extras, so vectors are only written and searched where `owlbear-knowledge[embedding,qdrant]` is
+installed; elsewhere those calls fail with `embedding_dependency_missing`.
 
 ---
 
