@@ -28,22 +28,15 @@ function unsetWarning(key) {
 // Spotter's "verbose until" and its sample rate while the looks in use take no sample.
 function required(key) {
   if (key === "spotter.verbose_until") return false;
-  return key !== "spotter.sample_rate" || (looksInUse() ?? []).includes("sample");
-}
-
-function looksInUse() {
+  if (key !== "spotter.sample_rate") return true;
   const next = preview("spotter.looks");
-  return next ? next.value : state.loaded.settings.spotter?.looks;
+  return ((next ? next.value : state.loaded.settings.spotter?.looks) ?? []).includes("sample");
 }
 
-// What a blank field inherits, in words; "unset" where no layer below sets it.
-function said(value) {
-  return value === null || value === undefined ? "unset" : value;
-}
-
-// The option or placeholder that clears the edited layer's value: on Global it leaves the value unset (SEXPFT).
+// The option or placeholder that clears the edited layer's value: on Global it leaves the value unset (SEXPFT);
+// elsewhere it names what the layers below give, "unset" where none sets it.
 function clear(below) {
-  return state.layer === "global" ? "Unset" : `inherit (${said(below)})`;
+  return state.layer === "global" ? "Unset" : `inherit (${below ?? "unset"})`;
 }
 
 function onOff(value) {
@@ -177,7 +170,7 @@ export function curatorThreshold() {
   const key = "curator_threshold", label = "Curator's confidence threshold in percent (50 to 100)";
   if (state.layer !== "global") {
     const inUse = state.loaded.settings[key];
-    return cell(typed(label, inUse === null || inUse === undefined ? "" : String(inUse), () => undefined,
+    return cell(typed(label, String(inUse ?? ""), () => undefined,
       { placeholder: "unset", inputmode: "numeric", disabled: true }), source(key, inUse),
     html`<p-text size="sm" color="contrast-medium">set on Global</p-text>`);
   }
@@ -311,8 +304,8 @@ export function contextCell(role) {
     control = choose(label, [[INHERIT, clear(below)], ["default", "default"], ["long", "long"]],
       mine || INHERIT, (v) => edit(key, v), { key, disabled: state.saving });
   }
-  const undo = state.layer === "global" ? "Unset" : "Use inherited";
-  const reset = model && mine ? pure(undo, () => edit(key, "")) : nothing;
+  const reset = model && mine
+    ? pure(state.layer === "global" ? "Unset" : "Use inherited", () => edit(key, "")) : nothing;
   return cell(control, reset, source(`agents.${key}`, state.loaded.settings.agents[role].context));
 }
 

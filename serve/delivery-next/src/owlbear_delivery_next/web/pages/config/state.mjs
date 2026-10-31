@@ -56,9 +56,9 @@ export function show() {
 // focus is put back until it has stayed a few frames, for at most a second, and never after the owner's next key or
 // pointer press, which moves it himself.
 async function reveal(target) {
-  const control = target.matches("p-table-row, div") ? target.querySelector(["[data-key]", "[id^='machine-']",
-    "[id^='global-machine-']", "p-select", "p-input-text", "p-segmented-control"].map((s) => `${s}:not([disabled])`)
-    .join(", ")) : null;  // a setting the shown layer cannot hold is read-only: its row takes the focus
+  const control = target.matches("p-table-row, div") ? target.querySelector(":is([data-key], [id^='machine-'], "
+    + "[id^='global-machine-'], p-select, p-input-text, p-segmented-control):not([disabled])")
+    : null;  // a setting the shown layer cannot hold is read-only: its row takes the focus
   const into = control ?? target;
   into.scrollIntoView({ block: control ? "center" : "start" });
   const owner = new AbortController();

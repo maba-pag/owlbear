@@ -94,8 +94,7 @@ function machineRow(key, label, control, note = nothing) {
 
 // This machine's own value of one setting: inherit Global's, or its own. A project holds none: it shows the value in
 // use read-only, with where it is set (#809).
-function ownControl(key, held) {
-  if (!held) return heldElsewhere(key);
+function ownControl(key) {
   const below = `inherit (${said(key, state.machine.resolved?.shared?.[key])})`, value = machineValue(key);
   const common = { disabled: state.machineSaving };
   let control;
@@ -174,7 +173,7 @@ function machineControls() {
     ${pending ? html`<p-text id="machine-pending" color="error">Moving this machine's settings into the global ones
       is not done: ${pending}. OwlBear tries again at its next start (<code>owlbear restart</code>); until then
       this machine keeps its own values.</p-text>` : nothing}
-    ${keys.map((key) => ownControl(key, state.layer === "machine"))}
+    ${keys.map((key) => (state.layer === "machine" ? ownControl : heldElsewhere)(key))}
     ${state.layer === "machine" ? html`<div class="row">${button("Save machine settings", saveMachine, {
       busy: state.machineSaving, variant: state.machineDraft ? "primary" : "secondary",
       disabled: !state.machineDraft })}</div>` : nothing}`;
