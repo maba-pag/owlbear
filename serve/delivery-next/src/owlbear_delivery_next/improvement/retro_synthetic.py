@@ -10,8 +10,10 @@ The ``demo`` set shows two lessons' worth of findings (a hand-off claiming tests
 worth (a skill silent that a file is generated), plus a finding resting on a removed output, and a Delivery change's
 worth (an edit the tool reported but never wrote) with a hand-off record graded wrong, for a Spotter case. Together,
 judged in a row, they also make the catchable share that reconsiders the Spotter's looks. ``large`` is sized for two
-judging batches at least, for the credit-stop check. A text too long for one line of the file is a list of pieces,
-joined as read.
+judging batches at least, for the credit-stop check. ``acceptance`` holds two scouts listing functions from generated
+files their instructions never tell them to skip: one agent change for the Improvement page's acceptance (#716). A
+unit may name the ``project`` (a clone folder) its work stands for; its unit description keeps it. A text too long for
+one line of the file is a list of pieces, joined as read.
 """
 
 from __future__ import annotations
@@ -154,6 +156,7 @@ def install(spec: Mapping[str, Any]) -> dict[str, Any]:
         "gaps": units.session_gaps(sid, {"provisional": False}),
         "provenance": "synthetic",
         "assumptions": list(NEEDS),
+        "project": spec.get("project", ""),
     }
 
     def put(table: dict[str, Any]) -> None:

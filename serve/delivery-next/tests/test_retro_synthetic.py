@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 from owlbear_delivery_next.commands import cli
 from owlbear_delivery_next.improvement import assumptions, retro_evidence, retro_judge, retro_store
+from owlbear_delivery_next.improvement import proposal_targets as targets
 from owlbear_delivery_next.improvement import retro_proposals as props
 from owlbear_delivery_next.improvement import retro_synthetic as syn
 from owlbear_delivery_next.improvement import retro_units as units
@@ -21,6 +22,7 @@ CANNED = {  # a quote in a synthetic unit -> the finding's cause and target
     "Document every new command in docs/cli.md": ("instruction-gap", "skill:w-build"),
     "the full test run passed": ("skipped-verification", "agent:builder"),
     "the edit was never written": ("tool-defect", "tool:edit"),
+    "List every function the repository defines": ("instruction-gap", "agent:scout"),
 }
 WRONG = {"syn-edit-lost-2": "none"}  # a record the Spotter got wrong -> what it should have said
 
@@ -97,6 +99,24 @@ def test_the_synthetic_units_yield_every_proposal_kind_reviewed_and_apart_from_e
     assert props.proposals(synthetic=True) == []
     assert retro_store.findings(synthetic=True) == []
     assert retro_store.grades(synthetic=True) == []
+
+
+def test_the_two_scouts_make_one_agent_change_that_lands_in_the_sandboxs_backlog(tmp_path):
+    for n, name in enumerate(("scout-a", "scout-b")):
+        spec = syn.specs(name)[0]
+        rev = syn.install(spec)
+        retro_judge.run(syn.work(spec, rev, f"run-{n}", ask))
+        units.settle(syn.unit_id(spec), rev["rev"], "judged", run=f"run-{n}")
+
+    (change,) = [p for p in props.proposals(synthetic=True) if p["kind"] == "agent-change"]
+    assert (change["target"], change["state"]) == ("agent:scout", "waiting")
+    places = {
+        "p1": targets.Place(folder="work", clone=tmp_path / "work"),
+        "p2": targets.Place(folder="sandbox", clone=tmp_path / targets.SANDBOX),
+    }
+    assert targets.projects(change, places, targets.units_of()) == ["p2", "p2"]
+    got = targets.resolve(change, places, tmp_path / "shared")
+    assert (got["kind"], got["project"]) == ("backlog", "p2")
 
 
 def test_the_large_unit_needs_two_judging_batches_and_an_unchanged_unit_keeps_its_revision():
