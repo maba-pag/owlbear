@@ -16,6 +16,7 @@ import uvicorn
 
 from owlbear_delivery_next.change_contracts import models as m
 from owlbear_delivery_next.change_contracts.decision_records import Pick, PickedDecision
+from owlbear_delivery_next.change_contracts.inbox import AnswerItem
 from owlbear_delivery_next.change_contracts.round_records import RoundLoop, RoundPolicy
 from owlbear_delivery_next.change_contracts.tool_use import ToolUse
 from owlbear_delivery_next.change_contracts.visual_records import OwnerCriterion
@@ -290,6 +291,23 @@ def test_a_clarification_is_sent_only_with_the_owners_confirmed_statement(page_u
     item = sent(store, "greet").replace(" ", "")
     assert '"classed":"clarification"' in item
     assert '"statement":"ThegreetingisinEnglish."' in item
+
+
+@pytest.mark.browser
+def test_a_second_answer_while_one_waits_is_refused_beside_the_form(page_url, pds) -> None:
+    """#791: the page keeps the form while an answer waits for the runner; a second one is refused where it was sent."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    store, base = page_url
+    store.write(Lock("greet"), asking())
+    store.put_inbox("greet", AnswerItem(at=NOW, question="q1", option="de", classed="event"))
+    with opened(base, "greet", pds) as page:
+        form = page.locator("section.act", has_text="Question q1")
+        form.get_by_label("English").check()
+        form.get_by_label("It only settles how the work goes on").check()
+        answer(page, form)
+        expect(form.locator(".refused")).to_contain_text("question q1 already has an answer waiting to be applied")
+    assert '"option":"de"' in sent(store, "greet").replace(" ", "")  # the first answer, alone in the inbox
 
 
 @pytest.mark.browser

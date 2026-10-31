@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import TypeAdapter, ValidationError
 
-from owlbear_delivery_next.change_contracts.inbox import InboxItem, parse_rows
+from owlbear_delivery_next.change_contracts.inbox import AnswerItem, InboxItem, parse_rows
 from owlbear_delivery_next.change_contracts.models import FORMAT, Change, Record
 from owlbear_delivery_next.change_flow import answer_kinds, loop
 from owlbear_delivery_next.local_system import data_repo, local_home
@@ -43,6 +43,7 @@ from owlbear_delivery_next.state_store.layers import (  # noqa: F401 - re-export
 )
 
 if TYPE_CHECKING:
+    import sqlite3
     from collections.abc import Callable, Iterator
     from pathlib import Path
 
@@ -114,6 +115,11 @@ def _load[T: Record](path: Path, model: type[T], current: int, forward: Migratio
         msg = f"state of {name} is unreadable"
         raise StoreError(msg) from exc
     return _parse(raw, name, model, current, forward)
+
+
+def _queue(db: sqlite3.Connection, slug: str, item: InboxItem) -> None:
+    name = f"{time.time_ns():020d}-{uuid.uuid4().hex[:8]}.json"
+    db.execute("INSERT INTO inbox(slug, name, item) VALUES (?, ?, ?)", (slug, name, _INBOX.dump_json(item).decode()))
 
 
 class Store:
@@ -395,12 +401,22 @@ class Store:
 
     def put_inbox(self, slug: str, item: InboxItem) -> None:
         """Add one inbox item without the Change lock; only a lock holder folds it."""
-        name = f"{time.time_ns():020d}-{uuid.uuid4().hex[:8]}.json"
         self._dir(slug)
         with self.db.write() as db:
-            db.execute(
-                "INSERT INTO inbox(slug, name, item) VALUES (?, ?, ?)", (slug, name, _INBOX.dump_json(item).decode())
-            )
+            _queue(db, slug, item)
+
+    def put_answer(self, slug: str, item: AnswerItem) -> str | None:
+        """Queue an answer while its question is open and has none waiting; otherwise why not, queueing nothing."""
+        self._dir(slug)
+        with self.db.write() as db:
+            # self.read uses the same connection, so it reads inside this write's transaction
+            if not any(q.id == item.question and q.answer is None for q in self.read(slug).questions):
+                return f"question {item.question} is not open"
+            waiting, _ = parse_rows(db.execute("SELECT id, item FROM inbox WHERE slug = ?", (slug,)).fetchall())
+            if any(isinstance(i, AnswerItem) and i.question == item.question for i in waiting):
+                return f"question {item.question} already has an answer waiting to be applied; this one was not queued"
+            _queue(db, slug, item)
+        return None
 
     def fold(  # noqa: PLR0913 - the PR observation and the queue barrier
         self,
@@ -431,7 +447,8 @@ class Store:
             asking = self.settings().prefs.ask_before_merge is not False  # unset asks; only an explicit no turns it off
         except StoreError:  # unreadable or invalid settings: the owner's controls still fold; the runner reports it
             asking = True
-        change, step = loop.schedule(change, items, now, pr_state, moved=moved, asking=asking)
+        dropped: list[tuple[AnswerItem, str]] = []
+        change, step = loop.schedule(change, items, now, pr_state, moved=moved, asking=asking, dropped=dropped)
         if leave is not None:
             kept = leave(before, change)
             if kept is None:  # a queued PR could not be taken out yet: the items wait for the next pass
@@ -441,6 +458,9 @@ class Store:
         if asked and any(q.id == asked.id and q.answer and q.answer.option == loop.OBSOLETE for q in change.questions):
             events.append({"event": "consent-obsolete", "at": now.isoformat(timespec="seconds"), "question": asked.id})
         events += answer_kinds.logged(change, items, now)  # TD-461: each answer's class
+        events += [
+            {"event": "answer-not-applied", "at": at, "question": i.question, "reason": why} for i, why in dropped
+        ]
         with self.db.write() as db:
             put_record(db, change.slug, change.model_dump_json(indent=1))
             db.executemany("DELETE FROM inbox WHERE id = ?", [(row[0],) for row in rows])

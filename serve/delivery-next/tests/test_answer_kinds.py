@@ -15,6 +15,7 @@ from fastapi.testclient import TestClient
 
 from owlbear_decisions import Decision, Origin, Scope, State, new_id
 from owlbear_delivery_next.change_contracts import pick_tools, tools
+from owlbear_delivery_next.change_contracts.inbox import AnswerItem
 from owlbear_delivery_next.change_contracts.models import (
     Answer,
     Change,
@@ -439,6 +440,91 @@ def test_the_cli_refuses_an_option_the_question_does_not_offer_and_queues_nothin
     assert (said("en"), inbox(picking)) == (0, 1)
     shown = capsys.readouterr().out
     assert (ASKED in shown, f"{run.qid} option en: English" in shown) == (True, True)
+
+
+WAITING = "already has an answer waiting to be applied; this one was not queued"
+
+
+def test_a_second_answer_before_the_fold_is_refused_and_the_first_one_holds(picking, monkeypatch):
+    """#791: two answers to one question sent before the runner folds; the second is refused, never dropped silently."""
+    run = Asking(picking, monkeypatch, options=(Option(id="en", label="English"), Option(id="de", label="German")))
+    assert run.answer(option="en", kind="event").status_code == 200
+
+    second = run.answer(option="de", kind="event")
+
+    refused = (second.status_code, second.json().get("detail"), inbox(picking))
+    assert refused == (409, f"question {run.qid} {WAITING}", 1)
+    c, _ = run.fold()
+    assert (run.asked(c).answer.option, inbox(picking)) == ("en", 0)
+    said = [e for e in picking.store.events(picking.slug) if e.get("event") in {"answer", "answer-not-applied"}]
+    assert [(e["event"], e["question"]) for e in said] == [("answer", run.qid)]
+    late = run.answer(option="de", kind="event")
+    assert (late.status_code, late.json()["detail"]) == (409, f"question {run.qid} is not open")
+
+
+def test_the_cli_refuses_a_second_answer_while_one_waits_and_queues_nothing(picking, monkeypatch, capsys):
+    run = Asking(picking, monkeypatch)
+    monkeypatch.setattr(cli.Store, "open", lambda *_a, **_k: picking.store)
+    assert run.answer(kind="event", text=WORDS).status_code == 200
+
+    code = cli.main(["--repo", str(picking.repo), "answer", picking.slug, "--question", run.qid, "--text", "again",
+                     "--kind", "event"])  # fmt: skip
+
+    assert (code, inbox(picking)) == (1, 1)
+    assert f"not answered: question {run.qid} {WAITING}" in capsys.readouterr().err
+
+
+def test_the_chat_tool_reports_a_second_answer_as_not_answered(picking, monkeypatch):
+    run = Asking(picking, monkeypatch)
+    chat = chat_client.Chat.__new__(chat_client.Chat)
+    chat.repo, chat.home = picking.repo, picking.store.root
+    monkeypatch.setattr(chat_client.Chat, "record", lambda _self: RECORD)
+    monkeypatch.setattr(chat_client, "_LOCAL", Loopback(picking.http))
+    monkeypatch.setitem(mcp_server._STATE, "chat", chat)  # noqa: SLF001 - the server's one chat
+    assert run.answer(kind="event", text=WORDS).status_code == 200
+
+    args = {"question": f"c1.{run.qid}", "kind": "event", "text": "again"}
+    out = asyncio.run(mcp_server.mcp.call_tool("answer_question", args)).structured_content
+
+    assert (out["answered"], out.get("error"), inbox(picking)) == (False, f"question {run.qid} {WAITING}", 1)
+
+
+def test_an_answer_checked_against_an_older_read_is_refused_once_another_was_applied(picking, monkeypatch):
+    """The queue checks the stored question again, not the copy its caller read before another answer was applied."""
+    run = Asking(picking, monkeypatch)
+    before = picking.change()
+    assert run.answer(kind="event", text=WORDS).status_code == 200
+    run.fold()
+
+    item = answers.answer_item(picking.store, before, answers.AnswerBody(question=run.qid, kind="event", text="again"))
+
+    assert isinstance(item, AnswerItem)  # the older read still shows the question open
+    assert (picking.store.put_answer(picking.slug, item), inbox(picking)) == (f"question {run.qid} is not open", 0)
+
+
+@pytest.mark.parametrize(
+    ("options", "first", "why"),
+    [
+        ((), True, "is no longer open"),
+        ((Option(id="ok", label="Accept", next="accept"),), False,
+         "is settled only by one of its options, a reconsideration by a note"),
+    ],
+    ids=["already-answered", "no-option-chosen"],
+)  # fmt: skip
+def test_a_queued_answer_the_fold_does_not_apply_leaves_an_activity_line(picking, monkeypatch, options, first, why):
+    """#791: an answer that reached the inbox but settles nothing is named in the activity, never dropped silently."""
+    run = Asking(picking, monkeypatch, options=options)
+    if first:
+        assert run.answer(kind="event", text=WORDS).status_code == 200
+        run.fold()
+    picking.store.put_inbox(picking.slug, AnswerItem(at=AT, question=run.qid, text="again", classed="event"))
+
+    c, _ = run.fold()
+
+    dropped = [e for e in picking.store.events(picking.slug) if e.get("event") == "answer-not-applied"]
+    assert [(e["question"], e["reason"]) for e in dropped] == [(run.qid, f"question {run.qid} {why}")]
+    kept = run.asked(c).answer
+    assert (kept and kept.text, inbox(picking)) == (WORDS if first else None, 0)
 
 
 def test_a_replacement_check_session_is_told_the_owners_pending_answer(tmp_path):

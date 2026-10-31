@@ -177,7 +177,7 @@ def next_step(c: Change, now: datetime) -> Step | None:
     return None if o.wake_at and o.wake_at > now else c.step
 
 
-def schedule(  # noqa: PLR0913 - the PR observation and the profile's consent setting
+def schedule(  # noqa: PLR0913 - the PR observation, the profile's consent setting and the answers not applied
     change: Change,
     items: Iterable[InboxItem],
     now: datetime,
@@ -185,9 +185,10 @@ def schedule(  # noqa: PLR0913 - the PR observation and the profile's consent se
     *,
     moved: bool = False,
     asking: bool = True,
+    dropped: list[tuple[AnswerItem, str]] | None = None,
 ) -> tuple[Change, Step | None]:
     """Fold the inbox, observe the PR's end and intent flags, and only then apply exclusions."""
-    c = fold(change, items, now)
+    c = fold(change, items, now, dropped)
     routed = delivery_target.route(c, pr_state, now)
     if not routed and not c.finished_at and c.step.kind != StepKind.CLEANUP:
         if not asking and waiting_consent(c) and (q := open_question(c)) is not None:
@@ -214,7 +215,9 @@ def schedule(  # noqa: PLR0913 - the PR observation and the profile's consent se
     return c, next_step(c, now)
 
 
-def fold(change: Change, items: Iterable[InboxItem], now: datetime) -> Change:  # noqa: C901, PLR0912 - per item kind
+def fold(  # noqa: C901, PLR0912 - per item kind
+    change: Change, items: Iterable[InboxItem], now: datetime, dropped: list[tuple[AnswerItem, str]] | None = None
+) -> Change:
     """Apply inbox items in arrival order; a reconciled item makes the Change runnable again."""
     c = change.model_copy(deep=True)
     for item in items:
@@ -230,8 +233,9 @@ def fold(change: Change, items: Iterable[InboxItem], now: datetime) -> Change:  
                 if c.step.kind == StepKind.SHAPE:
                     _done(c, None, now)
                     c.outcome = None
-            case AnswerItem():
-                _answer(c, item, now)
+            case AnswerItem():  # one that settles nothing goes to *dropped* with why, for the activity (#791)
+                if (why := _answer(c, item, now)) and dropped is not None:
+                    dropped.append((item, why))
             case CheckResult():  # recorded only; the host settles it by its inputs and ends the wait then
                 for check in c.checks:
                     if check.id == item.check:
@@ -246,7 +250,8 @@ def fold(change: Change, items: Iterable[InboxItem], now: datetime) -> Change:  
                     answer = AnswerItem(
                         at=item.at, channel=item.channel, question=c.outcome.question or "", text=item.head
                     )
-                    _answer(c, answer, now)
+                    if (why := _answer(c, answer, now)) and dropped is not None:
+                        dropped.append((answer, why))
                     c.outcome = None
             case IntentItem():
                 _intent(c, item)
@@ -291,31 +296,35 @@ def _target(q: Question, option: str | None) -> str | None:
     return next((o.next for o in q.options if o.id == option), None)
 
 
-def _answer(c: Change, item: AnswerItem, now: datetime) -> None:
+def _answer(c: Change, item: AnswerItem, now: datetime) -> str:
+    """Record the answer; why it settles nothing, naming its question, or "" once recorded."""
     q = next((q for q in c.questions if q.id == item.question and q.answer is None), None)
-    gate = bool(q and c.outcome and c.outcome.question == q.id)
-    if q is None or ((q.repair or plan_rounds.owned(q) or brief_rounds.owned(q)) and not gate):
-        return  # a round gate or plan question the Change has moved past records nothing, so no session receives it
-    if rebuilds.refused(c, q, item.option, item.tasks, (item.attempt, item.head)):
-        return  # a final retry's selection the page no longer showed, or tasks where none belong (TD-217)
+    if q is None:
+        return f"question {item.question} is no longer open"
+    gate = bool(c.outcome and c.outcome.question == q.id)
+    if (q.repair or plan_rounds.owned(q) or brief_rounds.owned(q)) and not gate:
+        return f"the Change moved on since question {q.id} asked"  # so no session receives it
+    if why := rebuilds.refused(c, q, item.option, item.tasks, (item.attempt, item.head)):
+        return f"question {q.id}: {why[1]}"  # a final retry's selection the page no longer showed (TD-217)
     kind = item.classed if ordinary(q) else None  # TD-461: only a worker's question is classed
     said = {"kind": kind, "statement": item.statement if kind == "clarification" else ""}
     q.answer = Answer(option=item.option, text=item.text, channel=item.channel, at=item.at, tasks=item.tasks, **said)
     target = _target(q, item.option)
     if _refused(q, target, item.text):
         q.answer = None  # settled only by one of its options; a reconsideration needs the owner's note (TD-193)
-        return
+        return f"question {q.id} is settled only by one of its options, a reconsideration by a note"
     if gate and (target != "pause" or c.step.kind != StepKind.CLEANUP):
         c.outcome = None
     if kind == "brief_change":  # never delivered: the work stops and asks while amendments are not built
         ask(c, answer_kinds.question(c, q), now)
-        return
+        return ""
     if q.cause and kind_of(q.cause) in ENVIRONMENT | DEFECT and target != "pause":
         c.budgets.causes.pop(q.cause, None)  # "Done, continue" starts a new episode or streak
     if target in DECISIONS:
         _decided(c, q, item, target, gate=gate)
     elif target is not None:
         _moved(c, q, item, target, now)
+    return ""
 
 
 def _moved(c: Change, q: Question, item: AnswerItem, target: str, now: datetime) -> None:
