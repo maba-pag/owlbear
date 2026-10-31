@@ -12,9 +12,12 @@ import sys
 from importlib.resources import files
 from importlib.util import find_spec
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import yaml
+
+if TYPE_CHECKING:
+    from owlbear_delivery_next.local_system.pds_skill import Choice
 
 ROOT = "skills"
 CHAT = "owlbear-change-shaping"  # the owner's chat skill: only the shaper loads it
@@ -37,7 +40,7 @@ UI: dict[str, tuple[str, ...]] = {"builder": ("owlbear-interface-design",)}  # a
 JUDGED = ("owlbear-acceptance-criteria", "owlbear-review-judgment")  # no code to judge: no module design (TD-166)
 JOBS: dict[str, tuple[str, ...]] = dict.fromkeys(
     ("visual-review", "brief-challenge", "brief-reconsider", "amendment-challenge"), JUDGED
-)
+) | {"pds-audit": ("pds-audit-deprecations-js",), "pds-update": ("pds-knowledge-js",)}  # a PDS candidate's (#777)
 MEMORY = "owlbear-memory"  # the memory server's name; agent files name its tools as owlbear-memory/<tool>
 MEMORY_MODULE = "owlbear_memory_mcp"  # run as the workspace's .vscode/mcp.json runs it
 MEMORY_DIR = "OWLBEAR_MEMORY_DIR"  # the memory server's store folder
@@ -119,19 +122,37 @@ def _named(name: str, folder: Path | None = None) -> bool:
         return False
 
 
-def required(role: str, *, ui: bool = False, job: str = "") -> tuple[str, ...]:
-    """The skills a session of *role* preloads for its *job*; a Change with a user interface adds design skills."""
-    return (*JOBS.get(job, REQUIRED.get(role, ())), *(UI.get(role, ()) if ui else ()))
+def required(role: str, *, ui: bool = False, job: str = "", pds: Choice | None = None) -> tuple[str, ...]:
+    """The skills a session of *role* preloads for its *job*; a user interface adds design skills, *pds* its own."""
+    chosen = (pds.name,) if pds and pds.folder else ()
+    return (*JOBS.get(job, REQUIRED.get(role, ())), *(UI.get(role, ()) if ui else ()), *chosen)
 
 
-def folders(role: str, *, ui: bool = False, job: str = "", folder: Path | None = None, user: bool = False) -> list[str]:
+def folders(  # noqa: PLR0913 - the session's skill inputs, each keyword-only
+    role: str,
+    *,
+    ui: bool = False,
+    job: str = "",
+    folder: Path | None = None,
+    user: bool = False,
+    pds: Choice | None = None,
+) -> list[str]:
     """One folder per skill the session preloads, so it sees no other (TD-166); with *user*, also the owner's own.
 
     The owner's are offered, not preloaded: the role's agent names only its required skills
-    (D-01M5YE505DY18G63VH483CNZZ4).
+    (D-01M5YE505DY18G63VH483CNZZ4). A chosen PDS skill loads from its own folder.
     """
     own = [str((folder or directory()) / name) for name in required(role, ui=ui, job=job)]
-    return own + (user_skills(copilot_home(), folder=folder) if user else [])
+    chosen = [str(pds.folder)] if pds and pds.folder else []
+    return own + chosen + (user_skills(copilot_home(), folder=folder) if user else [])
+
+
+def loaded(path: str, folder: Path, pds: Choice | None = None) -> bool:
+    """Whether a skill the runtime loaded from *path* is the session's: under *folder*, or the chosen PDS skill."""
+    where = Path(path).resolve()
+    return where.is_relative_to(folder.resolve()) or bool(
+        pds and pds.folder and where == (pds.folder / "SKILL.md").resolve()
+    )
 
 
 def missing(role: str, *, ui: bool = False, job: str = "", folder: Path | None = None) -> list[str]:
@@ -152,7 +173,7 @@ def shipped(folder: Path | None = None) -> set[str]:
             entries = [e for e in root.iterdir() if e.is_dir()]
         except OSError:
             continue
-        names |= {e.name for e in entries} | {_name(e) for e in entries}
+        names |= {e.name for e in entries} | {skill_name(e) for e in entries}
     return names
 
 
@@ -167,10 +188,10 @@ def user_skills(home: Path, *, folder: Path | None = None) -> list[str]:
     except OSError:
         return []
     taken = shipped(folder)
-    return [str(e) for e in entries if (e / "SKILL.md").is_file() and _name(e) not in taken]
+    return [str(e) for e in entries if (e / "SKILL.md").is_file() and skill_name(e) not in taken]
 
 
-def _name(skill: Path) -> str:
+def skill_name(skill: Path) -> str:
     """A skill folder's name: its front matter's, else the folder's."""
     try:
         name = front_matter((skill / "SKILL.md").read_text(encoding="utf-8"))[0].get("name")

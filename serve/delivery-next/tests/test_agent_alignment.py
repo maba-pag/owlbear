@@ -59,6 +59,7 @@ SHAPER_TOOLS = [  # the names a window chat's agent file grants, each verified l
 VERBS = "submit|report|ask|recall|save|assess|scan|read|list|write|stop"
 LOOKALIKE = re.compile(rf"(?:{VERBS})_[a-z_]+|[a-z_]+_(?:bash|agents?|memory|memories)")  # unknown: a tool typo
 NOT_GRANTED = "Not granted:"
+PLAIN = Path("/nonexistent/plain-project")  # a judge's worktree: no PDS project, so no PDS skill (#777)
 
 
 def bare(name: str) -> str:
@@ -179,7 +180,7 @@ def test_skills_may_name_tools_but_never_grant_them() -> None:
 def _session(label: str, **fields) -> sdk_adapter.Session:
     base = {
         "kind": StepKind.REVIEW,
-        "worktree": Path(),
+        "worktree": PLAIN,
         "session_id": "",
         "message": label,
         "resume": False,
@@ -216,7 +217,7 @@ def test_a_judge_runs_as_its_labels_role(label, role, monkeypatch) -> None:
         resolve(None, Layer(spotter=Spotter(switch="off"))),
     )  # no database
     with pytest.raises(_Made):
-        sessions.judges(store, SimpleNamespace(slug="c1"), None, Path(), lambda _at: [(label, _session(label))],
+        sessions.judges(store, SimpleNamespace(slug="c1"), None, PLAIN, lambda _at: [(label, _session(label))],
                         settings)  # fmt: skip
     (cfg,) = built
     assert sdk_adapter.role_of(cfg) == role

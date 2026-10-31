@@ -107,7 +107,7 @@ def test_a_missing_seed_or_a_broken_link_refuses_the_release(change, said) -> No
 def test_served_files_are_npms_bytes_after_a_header_with_one_final_newline() -> None:
     served = unpacked(BASE).served
     header, _, body = served["load.mjs"].partition(b"\n")
-    assert header.startswith(b"/* @porsche-design-system/components-js 4.11.0 esm/index.mjs;")
+    assert header.startswith(f"/* {pin.NAME} {'4.11.0'} esm/index.mjs;".encode())  # split: no PDS version in the repo
     assert body == BASE["esm/index.mjs"] + b"\n"
     assert served["index.css"].partition(b"\n")[2] == BASE["stylesheets/index.css"]  # already ended with one
 

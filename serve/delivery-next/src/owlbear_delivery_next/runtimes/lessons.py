@@ -20,10 +20,10 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from owlbear_memory import selection
 
-from owlbear_delivery_next.local_system import preload
+from owlbear_delivery_next.local_system import pds_skill, preload
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Iterable
     from pathlib import Path
 
 HEADING = "## Lessons from earlier runs"
@@ -78,8 +78,14 @@ def opening(role: str, memory: Path | None, message: str, log: Callable[..., Non
 
 
 def holds(content: str, message: str) -> bool:
-    """Whether a sent user message is *message* itself, or a first message carrying it after its lessons."""
-    return content == message or (content.startswith(HEADING) and content.endswith(f"\n\n{message}"))
+    """Whether a sent user message is *message* itself, or a first message carrying it after its lessons or PDS note."""
+    return content == message or (content.startswith((HEADING, pds_skill.NOTE)) and content.endswith(f"\n\n{message}"))
+
+
+def sent(events: Iterable[Any], message: str) -> bool:
+    """Whether a session transcript holds *message* as a whole user message, lessons ahead of it allowed."""
+    users = (getattr(e.data, "content", "") or "" for e in events if getattr(e.type, "value", e.type) == "user.message")
+    return any(holds(c.strip(), message.strip()) for c in users)
 
 
 def shown(exposure: Exposure | None, session: str, log: Callable[..., None], *, confirmed: bool = True) -> None:
