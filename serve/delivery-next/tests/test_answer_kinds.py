@@ -502,6 +502,31 @@ def test_an_answer_checked_against_an_older_read_is_refused_once_another_was_app
     assert (picking.store.put_answer(picking.slug, item), inbox(picking)) == (f"question {run.qid} is not open", 0)
 
 
+@pytest.mark.parametrize(
+    ("options", "first", "why"),
+    [
+        ((), True, "is no longer open"),
+        ((Option(id="ok", label="Accept", next="accept"),), False,
+         "is settled only by one of its options, a reconsideration by a note"),
+    ],
+    ids=["already-answered", "no-option-chosen"],
+)  # fmt: skip
+def test_a_queued_answer_the_fold_does_not_apply_leaves_an_activity_line(picking, monkeypatch, options, first, why):
+    """#791: an answer that reached the inbox but settles nothing is named in the activity, never dropped silently."""
+    run = Asking(picking, monkeypatch, options=options)
+    if first:
+        assert run.answer(kind="event", text=WORDS).status_code == 200
+        run.fold()
+    picking.store.put_inbox(picking.slug, AnswerItem(at=AT, question=run.qid, text="again", classed="event"))
+
+    c, _ = run.fold()
+
+    dropped = [e for e in picking.store.events(picking.slug) if e.get("event") == "answer-not-applied"]
+    assert [(e["question"], e["reason"]) for e in dropped] == [(run.qid, f"question {run.qid} {why}")]
+    kept = run.asked(c).answer
+    assert (kept and kept.text, inbox(picking)) == (WORDS if first else None, 0)
+
+
 def test_a_replacement_check_session_is_told_the_owners_pending_answer(tmp_path):
     question = Question(
         id="q1",

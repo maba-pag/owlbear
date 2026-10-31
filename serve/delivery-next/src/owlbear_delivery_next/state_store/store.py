@@ -447,7 +447,8 @@ class Store:
             asking = self.settings().prefs.ask_before_merge is not False  # unset asks; only an explicit no turns it off
         except StoreError:  # unreadable or invalid settings: the owner's controls still fold; the runner reports it
             asking = True
-        change, step = loop.schedule(change, items, now, pr_state, moved=moved, asking=asking)
+        dropped: list[tuple[AnswerItem, str]] = []
+        change, step = loop.schedule(change, items, now, pr_state, moved=moved, asking=asking, dropped=dropped)
         if leave is not None:
             kept = leave(before, change)
             if kept is None:  # a queued PR could not be taken out yet: the items wait for the next pass
@@ -457,6 +458,9 @@ class Store:
         if asked and any(q.id == asked.id and q.answer and q.answer.option == loop.OBSOLETE for q in change.questions):
             events.append({"event": "consent-obsolete", "at": now.isoformat(timespec="seconds"), "question": asked.id})
         events += answer_kinds.logged(change, items, now)  # TD-461: each answer's class
+        events += [
+            {"event": "answer-not-applied", "at": at, "question": i.question, "reason": why} for i, why in dropped
+        ]
         with self.db.write() as db:
             put_record(db, change.slug, change.model_dump_json(indent=1))
             db.executemany("DELETE FROM inbox WHERE id = ?", [(row[0],) for row in rows])
