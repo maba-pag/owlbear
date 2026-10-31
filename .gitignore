@@ -87,3 +87,6 @@ store/audit/
 
 # --- OwlBear managed paths ---
 # OwlBear-specific rules live in .owlbear/.gitignore.
+
+# The vendored PDS release keeps npm's layout, whatever its folders are called (#777)
+!/serve/delivery-next/src/owlbear_delivery_next/pds/**

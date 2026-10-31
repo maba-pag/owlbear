@@ -21,6 +21,7 @@ exclude: |
       |(legacy|memory|research|target)/
     )
     |store/(audit|knowledge)/.*\.db$
+    |serve/delivery-next/src/owlbear_delivery_next/pds/  # the vendored PDS release, npm's bytes (#777)
     |(
       \.benchmarks
       |\.ruff_cache

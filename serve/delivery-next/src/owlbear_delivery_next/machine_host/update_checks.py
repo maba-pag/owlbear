@@ -83,7 +83,7 @@ def owlbear() -> dict[str, Any]:
 
 
 def pds(fetch: Callable[[str, float], bytes] | None = None) -> dict[str, Any]:
-    """The latest ``@porsche-design-system/components-js`` on npm against the release ``web/pds/load.mjs`` vendors.
+    """The latest ``@porsche-design-system/components-js`` on npm against the release ``pds.json`` pins.
 
     Raises:
         Failed: npm was not reached, refused, or named no version.

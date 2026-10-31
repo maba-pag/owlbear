@@ -1,0 +1,6 @@
+$blur-frosted: blur(32px);
+// @deprecated Use $blur-frosted instead. This API will be removed with the next major release.
+@mixin pds-frosted-glass {
+  backdrop-filter: blur(32px);
+  -webkit-backdrop-filter: blur(32px);
+}

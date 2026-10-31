@@ -1,0 +1,21 @@
+$duration-sm: 0.25s;
+$duration-md: 0.4s;
+$duration-lg: 0.6s;
+$duration-xl: 1.2s;
+// @deprecated Use $duration-sm instead. This API will be removed with the next major release.
+$pds-motion-duration-short: 0.25s;
+// @deprecated Use $duration-md instead. This API will be removed with the next major release.
+$pds-motion-duration-moderate: 0.4s;
+// @deprecated Use $duration-lg instead. This API will be removed with the next major release.
+$pds-motion-duration-long: 0.6s;
+// @deprecated Use $duration-xl instead. This API will be removed with the next major release.
+$pds-motion-duration-very-long: 1.2s;
+$ease-in-out: cubic-bezier(0.25, 0.1, 0.25, 1);
+$ease-in: cubic-bezier(0, 0, 0.2, 1);
+$ease-out: cubic-bezier(0.4, 0, 0.5, 1);
+// @deprecated Use $ease-in-out instead. This API will be removed with the next major release.
+$pds-motion-easing-base: cubic-bezier(0.25, 0.1, 0.25, 1);
+// @deprecated Use $ease-in instead. This API will be removed with the next major release.
+$pds-motion-easing-in: cubic-bezier(0, 0, 0.2, 1);
+// @deprecated Use $ease-out instead. This API will be removed with the next major release.
+$pds-motion-easing-out: cubic-bezier(0.4, 0, 0.5, 1);

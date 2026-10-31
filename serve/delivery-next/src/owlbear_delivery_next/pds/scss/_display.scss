@@ -1,0 +1,14 @@
+@use "heading";
+
+// @deprecated Use prose-heading-5xl() instead. This API will be removed with the next major release.
+@mixin pds-display-large {
+  @include heading.prose-heading-5xl;
+}
+// @deprecated Use prose-heading-4xl() instead. This API will be removed with the next major release.
+@mixin pds-display-medium {
+  @include heading.prose-heading-4xl;
+}
+// @deprecated Use prose-heading-3xl() instead. This API will be removed with the next major release.
+@mixin pds-display-small {
+  @include heading.prose-heading-3xl;
+}

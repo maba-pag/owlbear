@@ -14,6 +14,8 @@ STOP_START = f"{STOP}, then Start Server"
 SHIPPED = (
     "**/*.py",
     "impeccable.json",
+    "pds.json",
+    "pds/**/*",  # the pinned PDS release's vendored files, its skills among them (#777)
     "agents/*.md",
     "improvement/*.md",
     "improvement/*.json",  # the synthetic Spotter cases

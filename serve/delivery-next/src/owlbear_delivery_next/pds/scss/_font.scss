@@ -1,0 +1,108 @@
+$font-porsche-next:
+  "Porsche Next", "Arial Narrow", Arial, "Heiti SC", SimHei, sans-serif;
+$font-porsche-next-zh-hans:
+  "Porsche Next", "PingFang SC", "Microsoft YaHei", "Noto Sans SC",
+  "Arial Narrow", Arial, sans-serif;
+$font-porsche-next-zh-hant:
+  "Porsche Next", "PingFang TC", "Microsoft JhengHei", "Noto Sans TC",
+  "Arial Narrow", Arial, sans-serif;
+$font-porsche-next-ja:
+  "Porsche Next", "Hiragino Sans", "Yu Gothic", "Noto Sans JP", "Arial Narrow",
+  Arial, sans-serif;
+$font-porsche-next-ko:
+  "Porsche Next", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR",
+  "Arial Narrow", Arial, sans-serif;
+// @deprecated Use $font-porsche-next instead. This API will be removed with the next major release.
+$pds-font-family:
+  "Porsche Next", "Arial Narrow", Arial, "Heiti SC", SimHei, sans-serif;
+
+@mixin cjk-font-family {
+  /* Simplified Chinese */
+  &:lang(zh-Hans),
+  &:lang(zh-CN),
+  &:lang(zh-SG) {
+    font-family: $font-porsche-next-zh-hans;
+  }
+
+  /* Traditional Chinese */
+  &:lang(zh-Hant),
+  &:lang(zh-TW),
+  &:lang(zh-HK),
+  &:lang(zh-MO) {
+    font-family: $font-porsche-next-zh-hant;
+  }
+
+  /* Japanese */
+  &:lang(ja) {
+    font-family: $font-porsche-next-ja;
+  }
+
+  /* Korean */
+  &:lang(ko) {
+    font-family: $font-porsche-next-ko;
+  }
+}
+
+$leading-normal: calc(6px + 2.125ex);
+// @deprecated Use $leading-normal instead. This API will be removed with the next major release.
+$pds-font-line-height: calc(6px + 2.125ex);
+
+$typescale-2xs: 0.75rem;
+$typescale-xs: 0.875rem;
+$typescale-sm: 1rem;
+$typescale-md: clamp(1.13rem, 0.21vw + 1.08rem, 1.33rem);
+$typescale-lg: clamp(1.27rem, 0.51vw + 1.16rem, 1.78rem);
+$typescale-xl: clamp(1.42rem, 0.94vw + 1.23rem, 2.37rem);
+$typescale-2xl: clamp(1.6rem, 1.56vw + 1.29rem, 3.16rem);
+$typescale-3xl: clamp(1.8rem, 2.41vw + 1.32rem, 4.21rem);
+$typescale-4xl: clamp(2.03rem, 3.58vw + 1.31rem, 5.61rem);
+$typescale-5xl: clamp(2.28rem, 5.2vw + 1.24rem, 7.48rem);
+// @deprecated Use $typescale-2xs instead. This API will be removed with the next major release.
+$pds-font-size-text-xx-small: 0.75rem;
+// @deprecated Use $typescale-xs instead. This API will be removed with the next major release.
+$pds-font-size-text-x-small: 0.875rem;
+// @deprecated Use $typescale-sm instead. This API will be removed with the next major release.
+$pds-font-size-text-small: 1rem;
+// @deprecated Use $typescale-md instead. This API will be removed with the next major release.
+$pds-font-size-text-medium: clamp(1.13rem, 0.21vw + 1.08rem, 1.33rem);
+// @deprecated Use $typescale-lg instead. This API will be removed with the next major release.
+$pds-font-size-text-large: clamp(1.27rem, 0.51vw + 1.16rem, 1.78rem);
+// @deprecated Use $typescale-xl instead. This API will be removed with the next major release.
+$pds-font-size-text-x-large: clamp(1.42rem, 0.94vw + 1.23rem, 2.37rem);
+// @deprecated Use $typescale-sm instead. This API will be removed with the next major release.
+$pds-font-size-heading-small: 1rem;
+// @deprecated Use $typescale-md instead. This API will be removed with the next major release.
+$pds-font-size-heading-medium: clamp(1.13rem, 0.21vw + 1.08rem, 1.33rem);
+// @deprecated Use $typescale-lg instead. This API will be removed with the next major release.
+$pds-font-size-heading-large: clamp(1.27rem, 0.51vw + 1.16rem, 1.78rem);
+// @deprecated Use $typescale-xl instead. This API will be removed with the next major release.
+$pds-font-size-heading-x-large: clamp(1.42rem, 0.94vw + 1.23rem, 2.37rem);
+// @deprecated Use $typescale-2xl instead. This API will be removed with the next major release.
+$pds-font-size-heading-xx-large: clamp(1.6rem, 1.56vw + 1.29rem, 3.16rem);
+// @deprecated Use $typescale-3xl instead. This API will be removed with the next major release.
+$pds-font-size-display-small: clamp(1.8rem, 2.41vw + 1.32rem, 4.21rem);
+// @deprecated Use $typescale-4xl instead. This API will be removed with the next major release.
+$pds-font-size-display-medium: clamp(2.03rem, 3.58vw + 1.31rem, 5.61rem);
+// @deprecated Use $typescale-5xl instead. This API will be removed with the next major release.
+$pds-font-size-display-large: clamp(2.28rem, 5.2vw + 1.24rem, 7.48rem);
+
+$font-weight-normal: 400;
+$font-weight-semibold: 600;
+$font-weight-bold: 700;
+// @deprecated Use $font-weight-normal instead. This API will be removed with the next major release.
+$pds-font-weight-regular: 400;
+// @deprecated Use $font-weight-semibold instead. This API will be removed with the next major release.
+$pds-font-weight-semi-bold: 600;
+// @deprecated Use $font-weight-bold instead. This API will be removed with the next major release.
+$pds-font-weight-bold: 700;
+
+// @deprecated This API will be removed with the next major release.
+$pds-font-hyphenation-style-overflow-wrap: break-word;
+// @deprecated This API will be removed with the next major release.
+$pds-font-hyphenation-style-hyphens: var(--p-hyphens, auto);
+// @deprecated This API will be removed with the next major release.
+$pds-font-style-normal: normal;
+// @deprecated This API will be removed with the next major release.
+$pds-font-style-italic: italic;
+// @deprecated This API will be removed with the next major release.
+$pds-font-variant: normal;
