@@ -659,18 +659,15 @@ def test_renovate_tracks_the_ahp_version_the_shaping_chat_offers() -> None:
     renovate = json.loads((ROOT / "renovate.json").read_text(encoding="utf-8"))
     (manager,) = [m for m in renovate["customManagers"] if m.get("depNameTemplate") == "agent-host-protocol"]
     path = "serve/delivery-next/src/owlbear_delivery_next/runtimes/ahp.py"
-    files = [re.compile(p.strip("/")) for p in manager["managerFilePatterns"]]
     found = [
         re.findall(m.replace("(?<", "(?P<"), (ROOT / path).read_text(encoding="utf-8")) for m in manager["matchStrings"]
     ]
     sdk = [rule for rule in renovate["packageRules"] if "github-copilot-sdk" in rule.get("matchPackageNames", [])]
 
-    assert any(f.search(path) for f in files)
+    assert any(re.search(p.strip("/"), path) for p in manager["managerFilePatterns"])
     assert found == [[ahp.PROTOCOL]]
-    assert (manager["datasourceTemplate"], manager["packageNameTemplate"]) == (
-        "github-tags",
-        "microsoft/agent-host-protocol",
-    )
+    assert manager["datasourceTemplate"] == "github-tags"
+    assert manager["packageNameTemplate"] == "microsoft/agent-host-protocol"
     assert re.fullmatch(manager["extractVersionTemplate"].replace("(?<", "(?P<"), "spec/v1.0.0")["version"] == "1.0.0"
     assert "microsoft/agent-host-protocol" in sdk[0]["matchPackageNames"]  # its own PR, not the weekly tags group
 
