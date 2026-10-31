@@ -20,6 +20,7 @@ from owlbear_delivery_next.runtimes.session_result import Run
 REPORT = MemoryCurationResult(summary="curated", entries=[])
 CURATOR = "chore: memory curation batch (memory-mcp, memory-curator)"
 HELD = re.compile(r"refs/owlbear/curation/[0-9a-f]{32}")
+FULL = "[Errno 28] No space left on device"
 
 
 @pytest.fixture
@@ -304,6 +305,35 @@ def test_a_write_failing_midway_leaves_the_checkout_as_seeded_and_holds_the_run(
     assert (remote_has(remote, other), remote_has(remote, made["curator"])) == (True, False)
     assert {e.id: remote_bytes(remote, rel(e)) for e in (a, b)} == before
     assert held(repo, row.reason, rel(a)) == made["a"]
+
+
+def test_an_accepted_run_whose_push_fails_stands_and_a_later_publication_carries_it(repo, remote, monkeypatch) -> None:
+    entry = curated(repo / "shop" / "memory", "Lesson")
+    pushed(repo, "a curated entry")
+    real, made = DataRepo._push, {}  # noqa: SLF001
+
+    def push(self, until):
+        if not made.get("failed"):
+            made["failed"] = True
+            raise OSError(28, "No space left on device")
+        return real(self, until)
+
+    def run(cfg) -> Run:
+        made["bytes"] = (
+            reword(cfg.memory, entry.id, "Lesson: the curator's version")
+            and (cfg.memory / f"{entry.id}.md").read_bytes()
+        )
+        return Run(cfg.session_id, ending="result", payload=REPORT, termination=Termination(confirmed=True))
+
+    monkeypatch.setattr(DataRepo, "_push", push)
+    job = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(repo), run=run)
+    job.start("shop")
+    row = drained(job)
+
+    assert (row.state, row.reason) == ("done", f"written, but not published: OSError: {FULL}")
+    assert git(repo, "for-each-ref", "refs/owlbear").strip() == ""
+    other = publish_other(repo, "after")
+    assert (remote_has(remote, other), remote_bytes(remote, rel(entry))) == (True, made["bytes"])
 
 
 def test_an_accepted_run_publishes_its_edits_once_and_leaves_pending_and_receipts_local(repo, remote) -> None:

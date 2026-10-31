@@ -136,7 +136,10 @@ class Tree:
                 for r in touched
                 if ((b := changed.get(r)) is None and r in deleted) or (b is not None and not _pending(r, b))
             ]
-            return "", shared.publish(kept, f"chore: memory curation of {folder} (machine host)")
+            try:
+                return "", shared.publish(kept, f"chore: memory curation of {folder} (machine host)")
+            except (OSError, DataRepoError, subprocess.SubprocessError) as exc:  # live, maybe committed: it stands
+                return "", f"written, but not published: {type(exc).__name__}: {exc}"
 
     def _apply(self, texts: dict[str, str | None]) -> None:
         """Write the run's files into the checkout, as seeded when this begins; on a failure put every one back.
