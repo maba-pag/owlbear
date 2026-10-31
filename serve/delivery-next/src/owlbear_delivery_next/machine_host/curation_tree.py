@@ -203,9 +203,10 @@ def holding(tree: Tree, folder: str, key: str) -> Iterator[None]:
     except Exception as exc:
         try:
             held = tree.hold(folder, key)
-        except (OSError, DataRepoError) as failed:  # the run's own failure stays in its row
-            why = f"{type(failed).__name__}: {failed}; {type(exc).__name__}: {exc}"
-            msg = f"its edits are not held in a curation ref: {why}"
+        except (OSError, DataRepoError) as failed:  # the run's own failure leads its row, which keeps 300 characters
+            ran, why = f"{type(exc).__name__}: {exc}", f"{type(failed).__name__}: {failed}"
+            _log.error("%s: %s; its edits are not held in a curation ref: %s", tree.shared.root, ran, why)
+            msg = f"{ran[:120]}; its edits are not held in a curation ref: {why}"
             raise RuntimeError(msg) from exc
         if held == NO_EDITS:
             raise
