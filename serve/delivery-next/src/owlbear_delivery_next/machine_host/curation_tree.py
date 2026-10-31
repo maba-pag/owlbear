@@ -28,7 +28,6 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.local_system.data_repo import DataRepo
 
 NO_EDITS = "the run changed no memory, so nothing is held"
-GIT_SECONDS = 60
 
 
 def _git(cwd: Path, *args: str, index: Path | None = None) -> str:
@@ -37,7 +36,7 @@ def _git(cwd: Path, *args: str, index: Path | None = None) -> str:
     try:
         done = subprocess.run(  # noqa: S603 - fixed Git executable and argument vector
             ["git", *args],  # noqa: S607
-            cwd=cwd, env=env, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=GIT_SECONDS,
+            cwd=cwd, env=env, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=60,
             check=False,
         )  # fmt: skip
     except (OSError, subprocess.TimeoutExpired) as exc:

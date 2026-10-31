@@ -415,13 +415,12 @@ class Curation:
                 judged = self._judged(tree, folder, started, key, done)
         if pruned := curation_tree.prune(shared):
             judged = judged.model_copy(update={"reason": "; ".join(filter(None, (judged.reason, pruned)))})
-        report = done.payload
-        if judged.state != "done" or not isinstance(report, memory_curation_tools.MemoryCurationResult):
+        if judged.state != "done":
             return judged
         after = {e.id: e.revision for e in _pending(shared.root / folder / "memory")}
         seen = {i: r for i, r in after.items() if before.get(i) == r}  # one saved or changed meanwhile stays due
         skipped = {
-            j.entry_id: after[j.entry_id] for j in report.entries if j.action == "skipped" and j.entry_id in after
+            j.entry_id: after[j.entry_id] for j in judged.entries if j.action == "skipped" and j.entry_id in after
         }
         return judged.model_copy(update={"skipped": skipped, "seen": seen})
 
