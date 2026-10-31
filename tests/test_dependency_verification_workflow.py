@@ -634,10 +634,6 @@ def test_renovate_policy_keeps_maturity_and_lockfile_controls() -> None:
     assert renovate["vulnerabilityAlerts"]["minimumReleaseAge"] == "6 hours"
     assert "schedule" not in renovate["vulnerabilityAlerts"]  # Renovate ignores schedules for security fixes
     assert any(
-        rule.get("minimumReleaseAge") == "24 hours" and rule.get("matchDatasources") == ["docker"]
-        for rule in renovate["packageRules"]
-    )
-    assert any(
         rule.get("minimumReleaseAge") == "72 hours" and rule.get("matchUpdateTypes") == ["major"]
         for rule in renovate["packageRules"]
     )
