@@ -345,3 +345,37 @@ def test_a_settings_save_is_not_noticed_but_a_key_pulled_during_it_is(world, tmp
     assert (saved.status_code, saved.json()["notice"]) == (200, "")
     assert '"pr_marker": true' in (world.root / "config.json").read_text()  # pulled by the save's publication
     assert [(n.key, n.old, n.new) for n in reader.read().notices] == [("pr_marker", None, "true")]
+
+
+def test_a_save_during_a_read_is_not_noticed_against_the_global_the_read_found(world, monkeypatch):
+    def as_saved(model_id: str) -> GlobalLayer:
+        return GlobalLayer.model_validate({"format": CONFIG_FORMAT, **builder(model_id)})
+
+    world.push(**builder("A"))
+    reader = world.reader()
+    reader.read()
+    real = reader._models  # noqa: SLF001
+
+    def models() -> object:  # the owner saves B after this read found Global holding A
+        reader.ledger.own(as_saved("A"), as_saved("B"))
+        return real()
+
+    monkeypatch.setattr(reader, "_models", models)
+    during = reader.read()
+    monkeypatch.setattr(reader, "_models", real)
+    world.push(**builder("B"))  # the save's publication
+    after = reader.read()
+
+    assert (during.notices, during.seen["agents.builder.model"]) == ([], '"B"')
+    assert after.notices == []
+
+
+def test_a_read_is_dated_when_it_ends(world, monkeypatch):
+    reader, mid = world.reader(), []
+    real = reader._models  # noqa: SLF001
+    monkeypatch.setattr(reader, "_models", lambda: mid.append(datetime.now(UTC)) or real())
+
+    got = reader.read()
+
+    assert got.read_at >= mid[0]
+    assert got.succeeded_at == got.read_at

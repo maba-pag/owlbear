@@ -48,7 +48,7 @@ class Reader:
     def read(self) -> Seen:
         """Read every source now, after any read already running; record what was found and what failed."""
         with self._run:
-            at = datetime.now().astimezone()
+            self.ledger.begin()
             failures: list[Failure] = []
             glob, unshared = None, False
             for source in SOURCES:
@@ -65,7 +65,7 @@ class Reader:
                     self.say(f"settings read: {source} failed{f' at {place}' if place else ''}: {detail}")
                     error = f"{place}: {detail}" if place else detail
                     failures.append(Failure(source=source, at=datetime.now().astimezone(), error=error[:500]))
-            return self.ledger.finish(glob, failures, unshared=unshared, at=at)
+            return self.ledger.finish(glob, failures, unshared=unshared, at=datetime.now().astimezone())
 
     def loop(self, stopping: threading.Event) -> None:
         """The host's reads: one at once, then one every hour until *stopping* is set."""

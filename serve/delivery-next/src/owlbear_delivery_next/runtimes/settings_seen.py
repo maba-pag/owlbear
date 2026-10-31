@@ -94,6 +94,7 @@ class Ledger:
 
     def __init__(self, path: Path, say: Callable[[str], None]) -> None:
         self.path, self.say, self._lock = path, say, threading.Lock()
+        self._owned: dict[str, str | None] | None = None  # this machine's saves of Global during a read, by key
 
     def _read(self) -> tuple[Seen, str]:
         """The state, and why it could not be read; an absent file is the state before any read."""
@@ -115,17 +116,25 @@ class Ledger:
             seen.failures = [Failure(source=STATE, at=datetime.now().astimezone(), error=broken)]
         return seen
 
+    def begin(self) -> None:
+        """Start a read: a save made before it ends is taken over the Global it found, which may be older."""
+        with self._lock:
+            self._owned = {}
+
     def finish(self, glob: dict[str, str] | None, failures: list[Failure], *, unshared: bool, at: datetime) -> Seen:
         """Record a completed read: Global's values as found (*glob*, ``None`` when it did not read) and its failures.
 
         Each value that differs from the last read's gets its own notice; the first read only records.
         """
         with self._lock:
+            owned, self._owned = self._owned or {}, None
+            if glob is not None:
+                glob = {k: v for k, v in (glob | owned).items() if v is not None}
             seen, broken = self._read()
             if broken:
                 self.say(f"settings read: {STATE} failed at {self.path}: {broken}; it is rebuilt")
                 failures = [Failure(source=STATE, at=at, error=broken), *failures]
-            notices = list(seen.notices)
+            notices = seen.notices
             if glob is not None and seen.seen is not None:
                 notices += [
                     Notice(id=secrets.token_hex(8), key=k, old=seen.seen.get(k), new=glob.get(k), at=at)
@@ -136,7 +145,7 @@ class Ledger:
                 read_at=at,
                 failures=failures,
                 unshared=unshared,
-                seen=dict(glob) if glob is not None else seen.seen,
+                seen=glob if glob is not None else seen.seen,
                 notices=notices,
             )
             self._write(done)
@@ -149,6 +158,8 @@ class Ledger:
         """
         old, new = flatten(before), flatten(after)
         with self._lock:
+            if self._owned is not None:
+                self._owned |= {key: new.get(key) for key in changed(old, new)}
             seen, broken = self._read()
             if broken or seen.seen is None:
                 return
