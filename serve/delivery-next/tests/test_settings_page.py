@@ -898,3 +898,72 @@ def test_a_refused_save_offers_its_retry_only_once_it_has_settled(pending_shared
 
     assert [body["prefs_reviewed"] for body in sent] == [True, True]
     assert pending_shared.read_profile().prefs_import == "done"
+
+
+def _rates(inp: float, out: float, cache: float, write: float, hour: float | None = None) -> dict[str, float | None]:
+    return {"input": inp, "output": out, "cache": cache, "cache_write": write, "cache_write_1h": hour}
+
+
+PRICED = {
+    "models": [
+        {"id": "cache-only", "name": "Cache", "efforts": ["low", "high"], "default_effort": "low", "context": 200_000,
+         "rates": _rates(200, 1000, 10, 250), "long": {"context": 1_000_000, "rates": _rates(200, 1000, 20, 250)}},
+        {"id": "claude-opus-5.5", "name": "Opus", "efforts": ["low", "high"], "default_effort": "low",
+         "context": 200_000, "rates": _rates(300, 1500, 30, 375, 800),
+         "long": {"context": 1_000_000, "rates": _rates(300, 1500, 30, 375, 800)}},
+        {"id": "unpriced", "name": "Unpriced", "efforts": [], "default_effort": "", "context": 200_000, "rates": None,
+         "long": {"context": 1_000_000, "rates": None}},
+        {"id": "crossing", "name": "Crossing", "efforts": [], "default_effort": "", "context": 200_000,
+         "rates": _rates(200, 1000, 20, 250), "long": {"context": 1_000_000, "rates": _rates(400, 1000, 10, 250)}},
+    ],
+    "error": "",
+}  # fmt: skip
+RANKS = """async () => {
+  const { levels, arrows } = await import("/assets/page/config/cost.mjs");
+  const base = { input: 2, output: 8, cache: 1, cache_write: 3, cache_write_1h: 4 };
+  const up = (key) => ({ ...base, [key]: base[key] + 1 });
+  const [cheap, middle, dear] = [base, up("output"), { ...base, input: 9, output: 9 }];
+  return {
+    equal: levels([base, { ...base }]),
+    single: ["cache", "cache_write", "cache_write_1h"].map((key) => levels([base, up(key)])),
+    three: levels([middle, dear, cheap]),
+    repeated: levels([cheap, { ...cheap }, middle]),
+    unknown: levels([null, cheap, middle]),
+    crossing: levels([{ ...base, input: 2, output: 1 }, { ...base, input: 1, output: 2 }]),
+    arrows: [0, 1, 2].map(arrows),
+  };
+}"""
+
+
+@pytest.mark.browser
+def test_cost_arrows_rank_every_rate_and_leave_models_efforts_and_rates_unmarked(store, pds, monkeypatch) -> None:
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    monkeypatch.setattr(model_choices.Offered, "__call__", lambda _self: PRICED)
+    with settings_page(store, pds) as page:
+        row = page.locator("#set-agents-builder")
+        tier = row.locator("p-segmented-control-item")
+        pds.pick(page, "Model for builder", "cache-only")  # only its long tier's cache read is higher
+        expect(tier.and_(page.locator("[value=long]"))).to_have_text("1M\u00a0\u2191")
+        expect(tier.and_(page.locator("[value=default]"))).to_have_text("200k")
+        for label in ("Model for builder", "Effort for builder"):
+            options = pds.select(page, label).locator("p-select-option")
+            expect(options).not_to_have_count(0)
+            assert not any("\u2191" in said for said in options.all_inner_texts()), label
+        rates = row.locator("p-table-cell").last
+        expect(rates).to_contain_text("in 200 \u00b7 out 1,000 \u00b7 cache 10 \u00b7 cache write 250")
+        expect(rates).not_to_contain_text("\u2191")
+        pds.pick(page, "Model for builder", "claude-opus-5.5")  # its tiers are priced equally
+        expect(tier).to_have_text(["200k", "1M"])
+        expect(row).not_to_contain_text("\u2191")
+        pds.pick(page, "Model for builder", "unpriced")
+        expect(tier).to_have_text(["200k", "1M"])
+        expect(row).not_to_contain_text("\u2191")
+        expect(rates).to_contain_text("not known")
+        pds.pick(page, "Model for builder", "crossing")  # each tier is higher in one rate
+        expect(tier).to_have_text(["200k\u00a0\u2191", "1M\u00a0\u2191"])
+        ranks = page.evaluate(RANKS)
+    assert ranks == {
+        "equal": [0, 0], "single": [[0, 1]] * 3, "three": [1, 2, 0], "repeated": [0, 0, 1], "unknown": [0, 0, 1],
+        "crossing": [1, 1], "arrows": ["", "\u00a0\u2191", "\u00a0\u2191\u2191"],
+    }  # fmt: skip

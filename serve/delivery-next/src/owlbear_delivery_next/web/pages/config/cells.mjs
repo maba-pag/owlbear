@@ -2,6 +2,7 @@ import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { live } from "/assets/lit-html/3.3.3/directives/live.js";
 import { EFFORTS, INHERIT, SOURCES, state, shown } from "./state.mjs";
 import { own, inherited, edit } from "./layers.mjs";
+import { levels, arrows } from "./cost.mjs";
 
 // Code ships no defaults (2026-10-23): a value no layer sets is unset; its row's name says so in red (GW8RT6).
 function source(key, inUse, needed = true) {
@@ -256,20 +257,13 @@ export function tierMismatch(role) {
   return `${model.id} has no long context${own(`${role}.context`) ? "" : " (inherited)"}; choose its default`;
 }
 
-// The long tier costs more per token: higher input or output rates than the default tier.
-function dearer(model) {
-  const [base, long] = [model.rates, model.long?.rates];
-  return Boolean(base && long && (long.input > base.input || long.output > base.output));
-}
-
 export function contextCell(role) {
   const key = `${role}.context`, mine = own(key), model = offeredModel(role), label = `Context for ${role}`;
   let control;
   if (model?.long) {
-    const up = dearer(model), more = up ? "higher rates per token" : "same rates per token";
-    const items = [["default", tokens(model.context), `${tokens(model.context)}, default context`],
-      ["long", `${tokens(model.long.context)}${up ? "\u00a0\u2191" : ""}`,
-        `${tokens(model.long.context)}, long context, ${more}`]];
+    const [low, high] = levels([model.rates, model.long.rates]);
+    const items = [["default", model.context, low], ["long", model.long.context, high]].map(([v, size, level]) => [
+      v, `${tokens(size)}${arrows(level)}`, `${tokens(size)}, ${v} context${level ? ", higher rates per token" : ""}`]);
     control = html`<p-segmented-control label=${label} hide-label="true" compact="true" columns="2" data-key=${key}
       ?disabled=${state.saving} .value=${live(tierOf(role))} @change=${(e) => edit(key, e.target.value)}>
       ${items.map(([v, said, aria]) => html`<p-segmented-control-item value=${v}
