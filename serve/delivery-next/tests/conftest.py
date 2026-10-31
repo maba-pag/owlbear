@@ -162,8 +162,13 @@ def _no_shared_settings(tmp_path_factory, monkeypatch):
     """
     fake = tmp_path_factory.mktemp("home")
     monkeypatch.setenv("HOME", str(fake))
-    # git never reaches GitHub: the host's start drops GIT_CONFIG_*, but every git reads this HOME's .gitconfig (#804)
-    (fake / ".gitconfig").write_text('[url "/nonexistent/offline-in-tests/"]\n\tinsteadOf = https://github.com/\n')
+    # git never reaches GitHub (#804): a fixture's own GIT_CONFIG_GLOBAL hides HOME's .gitconfig but not this
+    # environment's rule; the host's start drops the environment's, but every git it runs reads HOME's .gitconfig
+    offline, github = "/nonexistent/offline-in-tests/", "https://github.com/"
+    monkeypatch.setenv("GIT_CONFIG_COUNT", "1")
+    monkeypatch.setenv("GIT_CONFIG_KEY_0", f"url.{offline}.insteadOf")
+    monkeypatch.setenv("GIT_CONFIG_VALUE_0", github)
+    (fake / ".gitconfig").write_text(f'[url "{offline}"]\n\tinsteadOf = {github}\n')
     monkeypatch.delenv("COPILOT_HOME", raising=False)  # nor the owner's Copilot folder: his skills and instructions
     browsers = MACHINE_HOME / ("Library/Caches" if sys.platform == "darwin" else ".cache") / "ms-playwright"
     monkeypatch.setenv("PLAYWRIGHT_BROWSERS_PATH", os.environ.get("PLAYWRIGHT_BROWSERS_PATH") or str(browsers))

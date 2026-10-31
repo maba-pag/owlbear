@@ -483,11 +483,16 @@ def test_a_format_3_machine_json_reads_with_no_version_ever_active():
     assert registry.load().active == ""
 
 
-def test_a_tests_git_never_reaches_github_even_after_the_hosts_start_scrubs_git_config(monkeypatch):
-    """#804: the host's start drops every GIT_CONFIG_* selector; the test HOME's .gitconfig still turns GitHub away."""
-    with monkeypatch.context() as scrubbed:
-        for name in environment.scrub(dict(os.environ)):
-            scrubbed.delenv(name)
+@pytest.mark.parametrize("route", ["the host's start scrubbed git's settings", "a fixture's own global git config"])
+def test_a_tests_git_never_reaches_github(route, tmp_path, monkeypatch):
+    """#804: neither the host start dropping GIT_CONFIG_* nor a fixture's own global config lets git reach GitHub."""
+    with monkeypatch.context() as patched:
+        if route.startswith("the host"):
+            for name in environment.scrub(dict(os.environ)):
+                patched.delenv(name)
+        else:
+            patched.setenv("GIT_CONFIG_GLOBAL", str(tmp_path / "gitconfig"))
+            patched.setenv("GIT_CONFIG_NOSYSTEM", "1")
         began = time.monotonic()
         with pytest.raises(versions.VersionError, match="/nonexistent/offline-in-tests/"):
             versions.repo()  # codebase.URL, OwlBear's GitHub repository
