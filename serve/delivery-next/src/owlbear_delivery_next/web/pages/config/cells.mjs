@@ -262,9 +262,8 @@ export function contextCell(role) {
   let control;
   if (model?.long) {
     const [low, high] = levels([model.rates, model.long.rates]);
-    const items = [["default", model.context, "default", low], ["long", model.long.context, "long", high]].map(
-      ([v, size, tier, level]) => [v, `${tokens(size)}${arrows(level)}`,
-        `${tokens(size)}, ${tier} context${level ? ", higher rates per token" : ""}`]);
+    const items = [["default", model.context, low], ["long", model.long.context, high]].map(([v, size, level]) => [
+      v, `${tokens(size)}${arrows(level)}`, `${tokens(size)}, ${v} context${level ? ", higher rates per token" : ""}`]);
     control = html`<p-segmented-control label=${label} hide-label="true" compact="true" columns="2" data-key=${key}
       ?disabled=${state.saving} .value=${live(tierOf(role))} @change=${(e) => edit(key, e.target.value)}>
       ${items.map(([v, said, aria]) => html`<p-segmented-control-item value=${v}
