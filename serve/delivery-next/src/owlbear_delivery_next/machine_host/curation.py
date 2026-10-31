@@ -445,12 +445,10 @@ class Curation:
             if done.usage_unread and done.ending == "result" and report is not None:  # TD-94: its model is unproven
                 why = " ".join(f"the model is unknown: {done.usage_unread}".split())
             why = f"{UNKNOWN}; {why}" if unknown else why
+            reason = f"ended {done.ending}: {why}; {tree.hold(folder, key)}"
+            _log.error("memory curation of %s failed (%s): %s", folder, key, reason)
             return FolderRun(
-                state="failed",
-                started_at=started,
-                ended_at=ended,
-                reason=f"ended {done.ending}: {why}; {tree.hold(folder, key)}",
-                key=key if unknown else "",
+                state="failed", started_at=started, ended_at=ended, reason=reason, key=key if unknown else ""
             )
         refusal, notice = tree.accept(folder, key)
         if refusal:  # a confirmed end: "ended result: …" tells a restart its termination was judged

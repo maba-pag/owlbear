@@ -117,13 +117,15 @@ def held(repo: Path, reason: str, path: str) -> bytes:
 REFUSALS = {
     "unread": {"ending": "result", "payload": REPORT, "usage_unread": "no tokens"},
     "no-report": {"ending": "result"},
-    "error-with-report": {"ending": "error", "payload": REPORT, "detail": "model unavailable"},
+    "error-with-report": {"ending": "error", "payload": REPORT, "detail": "model unavailable " * 30},
     "unconfirmed": {"ending": "result", "payload": REPORT},
 }
 
 
 @pytest.mark.parametrize("refusal", list(REFUSALS))
-def test_a_refused_runs_commit_never_reaches_the_remote_while_another_writers_does(repo, remote, refusal) -> None:
+def test_a_refused_runs_commit_never_reaches_the_remote_while_another_writers_does(
+    repo, remote, refusal, caplog
+) -> None:
     entry = curated(repo / "shop" / "memory", "Lesson")
     pushed(repo, "a curated entry")
     before = (repo / rel(entry)).read_bytes()
@@ -159,6 +161,8 @@ def test_a_refused_runs_commit_never_reaches_the_remote_while_another_writers_do
     assert bare(remote, "for-each-ref", "refs/owlbear").stdout == b""
     assert row.state == "failed"
     assert held(repo, row.reason, rel(entry)) == made["bytes"]
+    (logged,) = [r.getMessage() for r in caplog.records if r.name == curation.__name__]
+    assert row.reason in logged
 
 
 def test_a_publication_during_a_run_never_carries_its_commit(repo, remote) -> None:
