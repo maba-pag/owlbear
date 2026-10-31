@@ -141,7 +141,6 @@ class DataRepo:
         """Hold the repository-wide lock that serializes every write, commit, push and rebase; wait a bounded time."""
         wait = LOCK_SECONDS if wait is None else wait
         lock = self._lock_file()
-        admin = lock.parent
         holding: set[Path] = _HOLDING.__dict__.setdefault("paths", set())
         with contextlib.ExitStack() as stack:
             fd = os.open(lock, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
@@ -156,10 +155,9 @@ class DataRepo:
                         msg = "another settings save is still running; try again"
                         raise DataRepoError(msg) from None
                     time.sleep(0.1)
-            if lock not in holding:
-                holding.add(lock)
-                stack.callback(holding.discard, lock)
-            self._exclude(admin)
+            holding.add(lock)
+            stack.callback(holding.discard, lock)
+            self._exclude(lock.parent)
             yield
 
     @contextlib.contextmanager
@@ -175,12 +173,11 @@ class DataRepo:
             return
         fd = os.open(lock, os.O_RDONLY | os.O_CREAT | os.O_NOFOLLOW, 0o600)
         try:
+            held = True
             try:
                 fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)
             except BlockingIOError:
                 held = False
-            else:
-                held = True
             yield held
         finally:
             os.close(fd)

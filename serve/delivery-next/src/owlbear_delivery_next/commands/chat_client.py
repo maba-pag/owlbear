@@ -326,7 +326,8 @@ class Chat:
         if code != OK or tuple(links) != wanted or not as_sent or not _same(detail, body):
             return {"saved": None, "error": UNCLEAR.format(why=f"{ids} matches it in part; ask the owner")}
         said = [EFFECTS[e]] if (e := body.get("effect")) else []
-        if body["confirmed"] and body.get("replaces") and _marks(detail) != said:
+        marks = [p.removeprefix(EFFECT) for p in str(detail.get("rationale", "")).split("\n\n") if p.startswith(EFFECT)]
+        if body["confirmed"] and body.get("replaces") and marks != said:
             why = f"{ids} marks another effect on existing work; ask the owner"
             return {"saved": None, "error": UNCLEAR.format(why=why)}
         notice = SAVED.format(id=made["id"])
@@ -345,10 +346,6 @@ def _same(row: dict[str, Any], body: dict[str, Any]) -> bool:
 def _ids(rows: list[dict[str, Any]]) -> str:
     return ", ".join(d["id"] for d in rows)
 
-
-def _marks(detail: dict[str, Any]) -> list[str]:
-    """The effects a found replacement's rationale marks (TD-428): one at most, none when the chat named none."""
-    return [p.removeprefix(EFFECT) for p in str(detail.get("rationale", "")).split("\n\n") if p.startswith(EFFECT)]
 
 
 class OwlBear(Chat):
