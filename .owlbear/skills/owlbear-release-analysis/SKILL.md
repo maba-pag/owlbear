@@ -43,8 +43,11 @@ tools' data.
   `py3-none-any` wheel's URL and SHA-256. Fetch both with `curl`, check each hash, unpack with
   `uv run python -m zipfile -e <wheel> <folder>` (no pip), then `diff -ru` the two `copilot/` folders. Read every
   changed file, not only the notes. Note the CLI each pins (`copilot/_cli_version.py` `CLI_VERSION`) and its protocol
-  (`copilot/_sdk_protocol_version.py`) against the installed CLI (`copilot --version`): Delivery runs the installed
-  CLI (`runtimes/copilot_cli.py`), never the SDK's own.
+  (`copilot/_sdk_protocol_version.py`) against the CLI Delivery runs: never the SDK's own, but the one
+  `runtimes/copilot_cli.py` `cli_path()` resolves (`COPILOT_CLI_PATH`, else the first `copilot` on `PATH` that is not
+  VS Code's shim). Ask it, with the host's environment, for its version:
+  `"$(uv run python -c 'from owlbear_delivery_next.runtimes.copilot_cli import cli_path; print(cli_path())')" --version`.
+  The `cli` field of the newest `start` line in `~/.owlbear/spend/spend-*.jsonl` is the version a step last ran.
 - **CLI:** `gh release list -R github/copilot-cli` and `gh release view <tag> -R github/copilot-cli` for every
   release between the installed version and the new one, pre-releases skipped.
 - **AHP:** `gh api repos/microsoft/agent-host-protocol/compare/spec/v<from>...spec/v<to>`, its `CHANGELOG.md`, and
