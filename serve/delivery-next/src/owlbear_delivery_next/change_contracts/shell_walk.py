@@ -86,13 +86,13 @@ class Walk:
         runs = shell_programs.runs(command.words)
         checked: set[str] = set()
         for run in runs if runs or head is None else [shell_programs.Run(words=[head])]:
+            if runs and (reason := self._run(command, run, state)):  # its script first: a bypass is named as one
+                return reason
             for word in (*run.launchers, run.words[0]):  # a launcher by path is checked even with nothing to run
                 if "/" in word and word not in checked and not _built(run, word):
                     checked.add(word)
                     if reason := self._by_path(command, run, word, state):
                         return reason
-            if runs and (reason := self._run(command, run, state)):
-                return reason
             if self.writes(replace(command, words=run.words, raw=" ".join(run.words))):  # find's next action sees it
                 state.effects.wrote = True
         return None

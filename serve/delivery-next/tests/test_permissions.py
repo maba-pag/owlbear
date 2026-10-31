@@ -1123,3 +1123,9 @@ def test_a_tilde_form_the_guard_doesnt_expand_is_refused(scripts: Path, text: st
 )
 def test_a_device_or_process_file_is_not_read_by_the_guard(text: str) -> None:
     assert decide(WRITE, shell(text)).endswith("a device or process file the guard doesn't read")
+
+
+def test_a_bypass_in_a_shells_script_is_named_before_a_missing_shell_file() -> None:
+    text = "/nonexistent/zsh -c 'cd x && git push -f'"  # /bin/zsh on a machine without zsh
+
+    assert decide(WRITE, shell(text)) == f"`cd x && git push -f` uses -f, {BYPASS}"
