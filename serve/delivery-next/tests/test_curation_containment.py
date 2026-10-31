@@ -19,7 +19,7 @@ from owlbear_delivery_next.runtimes.session_result import Run
 
 REPORT = MemoryCurationResult(summary="curated", entries=[])
 CURATOR = "chore: memory curation batch (memory-mcp, memory-curator)"
-HELD = re.compile(r"refs/owlbear/curation/shop/[0-9a-f]{32}")
+HELD = re.compile(r"refs/owlbear/curation/[0-9a-f]{32}")
 
 
 @pytest.fixture
@@ -97,12 +97,12 @@ def publish_other(repo: Path, name: str) -> str:
     return made.commit
 
 
-def drained(job: curation.Curation) -> curation.FolderRun:
+def drained(job: curation.Curation, folder: str = "shop") -> curation.FolderRun:
     end = time.monotonic() + 30
     while job.worker is not None:
         assert time.monotonic() < end, "the curation queue did not drain"
         time.sleep(0.02)
-    return job.load().folders["shop"]
+    return job.load().folders[folder]
 
 
 def held(repo: Path, reason: str, path: str) -> bytes:
@@ -234,6 +234,25 @@ def test_a_run_whose_entry_changed_meanwhile_is_refused_whole_and_the_other_chan
     assert (remote_bytes(remote, rel(a)), remote_bytes(remote, rel(b))) == (before_a, made["other"])
     assert (held(repo, row.reason, rel(a)), held(repo, row.reason, rel(b))) == (made["a"], made["b"])
     assert not curation.legacy_uncertain(row)
+
+
+@pytest.mark.parametrize("folder", ["shop.lock", "shop..v2"])
+def test_a_folder_name_git_takes_for_no_ref_name_still_holds_a_refused_runs_edits(repo, folder) -> None:
+    entry = curated(repo / folder / "memory", "Lesson")
+    pushed(repo, "a curated entry")
+    made = {}
+
+    def run(cfg) -> Run:
+        reword(cfg.memory, entry.id, "Lesson: an edit never committed")
+        made["bytes"] = (cfg.memory / f"{entry.id}.md").read_bytes()
+        return Run(cfg.session_id, termination=Termination(confirmed=True), **REFUSALS["unread"])
+
+    job = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(repo), run=run)
+    job.start(folder)
+    row = drained(job, folder)
+
+    assert row.state == "failed"
+    assert held(repo, row.reason, rel(entry, folder)) == made["bytes"]
 
 
 def test_an_accepted_run_publishes_its_edits_once_and_leaves_pending_and_receipts_local(repo, remote) -> None:

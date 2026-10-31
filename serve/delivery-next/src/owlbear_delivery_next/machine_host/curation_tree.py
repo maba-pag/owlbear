@@ -106,7 +106,7 @@ class Tree:
         tree = _git(self.root, "write-tree", index=index)
         said = f"held: refused memory curation of {folder} (machine host)"
         commit = _git(self.root, "commit-tree", tree, "-p", "HEAD", "-m", said)
-        ref = f"{HELD}/{folder}/{key.rpartition(':')[2]}"  # a key's colons are not allowed in a ref name
+        ref = f"{HELD}/{key.rpartition(':')[2]}"  # the folder is in its message: '..' or '.lock' make no ref name
         _git(self.root, "update-ref", ref, commit)
         index.unlink(missing_ok=True)
         return f"its edits are held, never published, in {ref}"
