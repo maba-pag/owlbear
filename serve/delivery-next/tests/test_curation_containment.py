@@ -208,20 +208,20 @@ def test_an_exception_after_an_edit_holds_it_and_the_failed_row_names_where(repo
     assert held(repo, row.reason, rel(entry)) == made["bytes"]
 
 
-def test_a_run_that_raises_and_cannot_be_held_names_both_failures_in_its_row(repo, monkeypatch) -> None:
+def test_a_run_that_raises_and_cannot_be_held_names_both_failures_in_its_row(repo, monkeypatch, caplog) -> None:
     entry = curated(repo / "shop" / "memory", "Lesson")
     pushed(repo, "a curated entry")
     real = curation_tree._git  # noqa: SLF001
+    said = f"git update-ref failed: {f'{FULL} ' * 9}"[:222]  # _git keeps 200 characters of stderr
 
     def git_(cwd, *args, **kw):
         if args[0] == "update-ref":
-            msg = f"git update-ref failed: {FULL}"
-            raise curation_tree.DataRepoError(msg)
+            raise curation_tree.DataRepoError(said)
         return real(cwd, *args, **kw)
 
     def run(cfg) -> Run:
         reword(cfg.memory, entry.id, "Lesson: the curator's version")
-        msg = "the session broke"
+        msg = f"the session broke{' and said more' * 30}"
         raise RuntimeError(msg)
 
     monkeypatch.setattr(curation_tree, "_git", git_)
@@ -230,8 +230,12 @@ def test_a_run_that_raises_and_cannot_be_held_names_both_failures_in_its_row(rep
     row = drained(job)
 
     assert row.state == "failed"
-    assert "its edits are not held in a curation ref: DataRepoError: git update-ref failed" in row.reason
     assert "RuntimeError: the session broke" in row.reason
+    assert "its edits are not held in a curation ref: DataRepoError: git update-ref failed" in row.reason
+    logged = [r.getMessage() for r in caplog.records if r.name == curation_tree.__name__]
+    assert len(logged) == 1
+    assert f"{' and said more' * 30}" in logged[0]
+    assert said in logged[0]
 
 
 def test_a_run_whose_entry_changed_meanwhile_is_refused_whole_and_the_other_change_is_published(repo, remote) -> None:
