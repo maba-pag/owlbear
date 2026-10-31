@@ -1,7 +1,9 @@
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { state, show, several, formsOf, send } from "./state.mjs";
 import { toggle, button, hd, text, row, info, notice, refusal } from "./widgets.mjs";
-import { questionForm, retryForm, criteriaPanel, checkForm, mergeForm, restartButton, pullbackNote } from "./forms.mjs";
+import {
+  questionForm, retryForm, criteriaPanel, checkForm, mergeForm, restartButton, pullbackNote, stopNotice,
+} from "./forms.mjs";
 import { decisionForm, visualSection, beforeSection } from "./visual.mjs";
 import { spendLines, toolLines, planList, roundsInfo, stepper } from "./progress.mjs";
 import { activityLog, split } from "./activity.mjs";
@@ -70,8 +72,7 @@ export function detailView(d) {
     ${refusedTop}
     ${d.settings_fault ? notice("error", "Settings could not be read", d.settings_fault,
       "Delivery assumes nothing from them; Pause and the other controls still work.") : nothing}
-    ${label === "Stopped" ? notice("error", "Stopped", `${d.line.replace(/^.*?stopped: /, "")}.`,
-      d.action ? `What to do: ${d.action}.` : "") : nothing}
+    ${label === "Stopped" || d.recovery ? stopNotice(d) : nothing}
     ${behind ? pullbackNote(d.pullback, d) : nothing}
     ${question}
     ${d.merge ? mergeForm(d.merge, d) : nothing}

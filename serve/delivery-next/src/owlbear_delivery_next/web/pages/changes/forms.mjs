@@ -1,6 +1,6 @@
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
-import { DIALOG, REVERT, show, draft, notify, send } from "./state.mjs";
-import { button, external, field, choice, tick, hd, text, list, row, panel, info } from "./widgets.mjs";
+import { DIALOG, REVERT, state, show, draft, notify, send } from "./state.mjs";
+import { button, external, field, choice, tick, hd, text, list, row, panel, info, notice } from "./widgets.mjs";
 import { taskRounds } from "./progress.mjs";
 
 // A worker's question (TD-461): the owner says how his answer bears on the approved brief; a clarification is his
@@ -293,4 +293,34 @@ export function pullbackNote(p, d) {
   return html`<p-inline-notification state=${behind ? "warning" : "success"} heading=${title} heading-tag="h3"
     dismiss-button="false" action-label=${behind ? "Pull" : nothing} action-icon=${behind ? "refresh" : nothing}
     @action=${behind ? pull : nothing}>${p.reason || ""}</p-inline-notification>`;
+}
+
+// A stop the owner may clear once he did what it asks (#754): Delivery then reruns its step. A paused stopped Change's
+// line describes the pause, so the stop's own reason and action come from *d.recovery*.
+export function stopNotice(d) {
+  const r = d.recovery, reason = r ? r.reason : d.line.replace(/^.*?stopped: /, ""), action = r ? r.action : d.action;
+  if (!r) return notice("error", "Stopped", `${reason}.`, action ? `What to do: ${action}.` : "");
+  const clear = async () => {
+    const again = "If the cause is still there, it stops again with the same message.";
+    const sure = await ask({
+      title: "Run the stopped step again?", yes: "Run it again", no: "Keep it stopped",
+      now: `You did what the stop asked (${action}), so the stop clears.`,
+      then: d.step === "cleanup" ? `Delivery runs the cleanup again on its next pass, even while paused. ${again}`
+        : `Delivery runs the ${d.step} step again on its next pass${d.paused ? ", once you resume this Change" : ""}. `
+        + "While Delivery is paused only cleanups and brief challenges you asked for run; other steps wait for "
+        + `Resume. ${again}`,
+      after: "A step that runs an agent, a brief challenge or decision pick included, uses AI credits. You can pause "
+        + "afterwards: that takes effect once the running step ends and doesn't undo what it did, such as a pushed "
+        + "branch or an opened PR.",
+      instead: "The Change stays stopped; Pause and your other controls still work.",
+    });
+    if (sure && await send("/recovery", { action }, d) && state.selected === d.key) {
+      const said = "Recovery accepted: Delivery reruns the step when it can run. Existing pauses are kept.";
+      state.started = { text: said };
+      show();
+    }
+  };
+  return html`<p-inline-notification state="error" heading="Stopped" heading-tag="h3" dismiss-button="false"
+    action-label="Done: run the step again" action-icon="refresh" @action=${clear}>${reason}. What to do: ${action}.
+    </p-inline-notification>`;
 }
