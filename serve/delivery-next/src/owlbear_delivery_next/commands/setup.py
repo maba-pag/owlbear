@@ -119,7 +119,10 @@ def shared_mcp() -> Path:
 
 
 def _loose_json(text: str) -> object:
-    """JSON as VS Code writes its own files: line comments, block comments and trailing commas allowed."""
+    """JSON as VS Code writes its own files: line comments, block comments and trailing commas allowed.
+
+    What is dropped turns into blanks, newlines kept, so an error names the file's own line and column.
+    """
     out: list[str] = []
     i, comma = 0, None  # comma: where in ``out`` the last comma outside a string went, until something follows it
     while i < len(text):
@@ -132,15 +135,18 @@ def _loose_json(text: str) -> object:
             i, comma = end + 1, None
         elif text.startswith("//", i):
             end = text.find("\n", i)
-            i = len(text) if end < 0 else end
+            end = len(text) if end < 0 else end
+            out.append(" " * (end - i))
+            i = end
         elif text.startswith("/*", i):
             end = text.find("*/", i + 2)
             if end < 0:
                 raise ValueError("unterminated block comment")  # noqa: EM101, TRY003
+            out.append("".join(ch if ch == "\n" else " " for ch in text[i : end + 2]))
             i = end + 2
         else:
             if c in "}]" and comma is not None:
-                out[comma] = ""
+                out[comma] = " "
             if not c.isspace():
                 comma = len(out) if c == "," else None
             out.append(c)

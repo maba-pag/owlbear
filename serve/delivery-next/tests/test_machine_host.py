@@ -929,6 +929,12 @@ def test_vs_code_json_drops_comments_and_trailing_commas_only_outside_strings(te
         assert loose(text) == parsed
 
 
+def test_a_vs_code_json_error_names_the_files_own_line_and_column():
+    text = '{\n  /* two\n  lines */ "a": [1,],\n  "b": oops\n}'
+    with pytest.raises(ValueError, match=r"line 4 column 8 \(char 40\)"):
+        setup._loose_json(text)  # noqa: SLF001
+
+
 def test_each_project_line_in_the_log_names_its_project(tmp_path, http, machine, capsys):
     p = machine.projects[add(http, clone(tmp_path / "shop"))["id"]]
     p.host.say("c1: runner 7 started")
