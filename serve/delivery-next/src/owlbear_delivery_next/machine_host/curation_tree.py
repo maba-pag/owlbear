@@ -23,7 +23,7 @@ from owlbear_delivery_next.local_system.data_repo import CONFIG, MEMORY, DataRep
 from owlbear_delivery_next.local_system.storage_io import atomic_write
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Iterator, Sequence
+    from collections.abc import Iterator, Sequence
     from pathlib import Path
 
     from owlbear_delivery_next.local_system.data_repo import DataRepo
@@ -62,15 +62,6 @@ def _files(root: Path, dirs: Sequence[str]) -> dict[str, bytes]:
                 if not p.name.startswith(".") and p.is_file() and not p.is_symlink():
                     found[f"{d}/{p.name}"] = p.read_bytes()
     return found
-
-
-def _linked(root: Path, rels: Iterable[str]) -> str:
-    """The first of *rels* with a symbolic link on its path under *root*, which a write would follow; "" if none."""
-    for rel in rels:
-        parts = rel.split("/")
-        if any(root.joinpath(*parts[:n]).is_symlink() for n in range(1, len(parts) + 1)):
-            return rel
-    return ""
 
 
 def _read(path: Path) -> bytes | None:
@@ -135,14 +126,16 @@ class Tree:
         shared = self.shared
         touched = sorted(changed.keys() | deleted)
         with shared.locked(), contextlib.ExitStack() as locks:  # the repository lock first, as every writer
-            if linked := _linked(shared.root, touched):  # a pull may have brought one since the seed
-                return f"refused, {linked} has a symbolic link on its path; {self.hold(folder, key)}", ""
             for d in sorted({r.rpartition("/")[0] for r in touched}):
                 (shared.root / d).mkdir(exist_ok=True)  # Global's folder, before its first entry, as Make global
                 locks.enter_context(writer_lock(shared.root / d))
             if moved := next((r for r in touched if _read(shared.root / r) != self.base.get(r)), None):
                 return f"refused, {moved} changed meanwhile; {self.hold(folder, key)}", ""
-            self._apply(texts)
+            for r, text in texts.items():
+                if text is None:
+                    (shared.root / r).unlink(missing_ok=True)
+                else:
+                    atomic_write(shared.root / r, text)
             kept = [
                 shared.root / r
                 for r in touched
@@ -152,49 +145,6 @@ class Tree:
                 return "", shared.publish(kept, f"chore: memory curation of {folder} (machine host)")
             except (OSError, DataRepoError, subprocess.SubprocessError) as exc:  # live, maybe committed: it stands
                 return "", f"written, but not published: {type(exc).__name__}: {exc}"
-
-    def keep(self) -> str:
-        """Move the worktree out of its run's workspace, which is removed next, by a rename that needs no space."""
-        kept = self.root.parent.with_name(f"{self.root.parent.name}-kept")
-        try:
-            self.root.rename(kept)
-        except OSError as exc:
-            return f"its edits are lost: {exc}"
-        return f"its worktree is kept at {kept}"
-
-    def _apply(self, texts: dict[str, str | None]) -> None:
-        """Write the run's files into the checkout, as seeded when this begins; on a failure put every one back.
-
-        Each seeded file gets a hidden hard link first, so putting it back is a rename, which needs no free space. One
-        that still differs from the seed is logged and named in the raised error, since a later batch could publish it.
-        """
-        root = self.shared.root
-        aside = {r: (root / r).with_name(f".{(root / r).name}.before-curation") for r in texts if r in self.base}
-        try:
-            for r, link in aside.items():
-                link.unlink(missing_ok=True)
-                link.hardlink_to(root / r)
-            for r, text in texts.items():
-                if text is None:
-                    (root / r).unlink(missing_ok=True)
-                else:
-                    atomic_write(root / r, text)
-        except BaseException as exc:
-            for r in texts:
-                with contextlib.suppress(OSError):  # whatever stays is checked below
-                    if r not in aside:
-                        (root / r).unlink(missing_ok=True)
-                    elif aside[r].exists():
-                        aside[r].replace(root / r)
-            if left := [r for r in texts if _read(root / r) != self.base.get(r)]:
-                msg = f"not put back as seeded: {', '.join(left)}; {type(exc).__name__}: {exc}"
-                _log.error("%s: %s", root, msg)
-                raise DataRepoError(msg) from exc
-            raise
-        finally:
-            for link in aside.values():
-                with contextlib.suppress(OSError):  # a hidden link no publication names
-                    link.unlink(missing_ok=True)
 
 
 def seed(shared: DataRepo, at: Path, folders: Sequence[str]) -> Tree:
@@ -207,9 +157,6 @@ def seed(shared: DataRepo, at: Path, folders: Sequence[str]) -> Tree:
             for d in sorted(d for d in dirs if (shared.root / d).is_dir()):
                 locks.enter_context(writer_lock(shared.root / d))
             base = _files(shared.root, dirs)
-        if linked := _linked(at, (CONFIG, *dirs, *base)):
-            msg = f"HEAD has a symbolic link on the path of {linked}; curation writes through none"
-            raise DataRepoError(msg)
         for rel in _files(at, dirs).keys() - base.keys():
             (at / rel).unlink()
         for d in dirs:
@@ -254,13 +201,7 @@ def holding(tree: Tree, folder: str, key: str) -> Iterator[None]:
     try:
         yield
     except Exception as exc:
-        try:
-            held = tree.hold(folder, key)
-        except (OSError, DataRepoError) as failed:
-            msg = f"{tree.keep()}, not held: {type(failed).__name__}: {failed}; {type(exc).__name__}: {exc}"
-            _log.error("%s: %s", tree.shared.root, msg)
-            raise RuntimeError(msg) from exc
-        if held == NO_EDITS:
+        if (held := tree.hold(folder, key)) == NO_EDITS:
             raise
         msg = f"{held}; {type(exc).__name__}: {exc}"
         raise RuntimeError(msg) from exc
