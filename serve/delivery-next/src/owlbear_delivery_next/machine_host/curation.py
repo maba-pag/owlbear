@@ -413,7 +413,8 @@ class Curation:
                         self.maintenance, cfg, self.run, project=SLOT, slot=key, kind="curation"
                     )
                 judged = self._judged(tree, folder, started, key, done)
-        curation_tree.prune(shared)
+        if pruned := curation_tree.prune(shared):
+            judged = judged.model_copy(update={"reason": "; ".join(filter(None, (judged.reason, pruned)))})
         report = done.payload
         if judged.state != "done" or not isinstance(report, memory_curation_tools.MemoryCurationResult):
             return judged

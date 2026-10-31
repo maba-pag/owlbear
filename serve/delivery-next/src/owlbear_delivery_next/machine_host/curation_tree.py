@@ -162,13 +162,17 @@ def seed(shared: DataRepo, at: Path, folders: Sequence[str]) -> Tree:
     return Tree(shared, at, base, dirs, head)
 
 
-def prune(shared: DataRepo) -> None:
-    """Forget the worktrees whose folder is gone, so the checkout lists none of a finished run.
+def prune(shared: DataRepo) -> str:
+    """Forget the worktrees whose folder is gone, so the checkout lists none of a finished run; why that failed.
 
-    A failure changes nothing a run did: the next run's seed prunes again.
+    A failure changes nothing a run did, and the next run's seed prunes again, so its row only says so.
     """
-    with contextlib.suppress(DataRepoError), shared.locked():
-        _git(shared.root, "worktree", "prune")
+    try:
+        with shared.locked():
+            _git(shared.root, "worktree", "prune")
+    except DataRepoError as exc:
+        return f"its worktree is still listed: {exc}"
+    return ""
 
 
 @contextlib.contextmanager
