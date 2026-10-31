@@ -201,12 +201,14 @@ class Checks:
     def drain(self, timeout: float | None = None) -> bool:
         """Wait up to *timeout* (``DRAIN``) seconds for the checks running; whether all ended, said when not."""
         timeout = DRAIN if timeout is None else timeout
-        with self.lock:
-            running = list(self.workers)
         deadline = time.monotonic() + timeout
+        locked = self.lock.acquire(timeout=timeout)  # a check keeping its record holds it
+        running = list(self.workers) if locked else []
+        if locked:
+            self.lock.release()
         for worker in running:
             worker.join(max(0.0, deadline - time.monotonic()))
-        if any(worker.is_alive() for worker in running):
+        if not locked or any(worker.is_alive() for worker in running):
             self.machine.say(f"the update checks did not end within {timeout:.0f} s")
             return False
         return True

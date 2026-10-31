@@ -346,6 +346,32 @@ def test_the_hosts_stop_waits_a_while_for_its_checks_and_then_starts_none(tmp_pa
             t.join(10)
 
 
+def test_a_check_slow_to_keep_its_record_still_ends_the_drain_within_its_time(monkeypatch):
+    """The drain's limit includes waiting for the lock a check holds while it writes its record."""
+    entered, release, said = threading.Event(), threading.Event(), []
+
+    def slow(_path, _text):
+        entered.set()
+        release.wait(10)
+
+    machine = stub()
+    machine.say = said.append
+    monkeypatch.setattr(update_checks, "atomic_write", slow)
+    outcomes(monkeypatch, "pds", NEWER)
+    checks = Checks(machine, Clock())
+    try:
+        assert checks.start("pds")
+        assert entered.wait(5)
+        began = time.monotonic()
+        assert not checks.drain(0.2)
+        assert time.monotonic() - began < 1
+        assert said == ["the update checks did not end within 0 s"]
+    finally:
+        release.set()
+        for t in workers():
+            t.join(10)
+
+
 def test_a_check_whose_record_cannot_be_written_still_ends_and_says_why(monkeypatch):
     def refused(path, _text):
         msg = f"read-only: {path}"
