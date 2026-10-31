@@ -205,12 +205,15 @@ def test_a_writer_that_reads_under_its_own_lock_meets_an_interrupted_batch(share
         assert action(shared) == decision_store.RECOVER
 
 
-def test_probing_the_lock_makes_no_lock_file(shared):
+def test_a_probe_where_no_writer_has_made_the_lock_yet_keeps_the_first_one_out(shared):
     lock = git_folder(shared) / data_repo.LOCK
     lock.unlink(missing_ok=True)
     with shared.quiet() as quiet:
         assert quiet is True
-    assert not lock.exists()
+        with pytest.raises(data_repo.DataRepoError), shared.locked(wait=0):
+            pass
+    with shared.locked(wait=0):
+        pass
 
 
 def test_a_chat_server_and_its_host_read_one_clock():

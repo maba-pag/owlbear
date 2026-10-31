@@ -166,18 +166,14 @@ class DataRepo:
     def quiet(self) -> Iterator[bool]:
         """Whether no writer holds the lock now; while True, none can take it until the block ends.
 
-        This thread's own `locked` counts as quiet. The lock file is opened read-only and never made: a checkout that
-        has none has no writer. A shared hold keeps every writer out, so what the block reads stays as it is.
+        This thread's own `locked` counts as quiet. The lock file is made when no writer has made it yet, so the shared
+        hold keeps out the first writer too, and what the block reads stays as it is.
         """
         lock = self._lock_file()
         if lock in getattr(_HOLDING, "paths", ()):
             yield True
             return
-        try:
-            fd = os.open(lock, os.O_RDONLY | os.O_NOFOLLOW)
-        except FileNotFoundError:
-            yield True
-            return
+        fd = os.open(lock, os.O_RDONLY | os.O_CREAT | os.O_NOFOLLOW, 0o600)
         try:
             try:
                 fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)
