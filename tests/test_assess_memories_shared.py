@@ -46,6 +46,8 @@ def seed(folder: Path, name: str, item: MemoryEntry) -> Path:
 @pytest.fixture
 def shared(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
     """A bare remote and this machine's clone of it, holding a project's memory folder and Global memory."""
+    for name in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_OBJECT_DIRECTORY", "GIT_COMMON_DIR"):
+        monkeypatch.delenv(name, raising=False)  # inherited from a hook, Git would work on another repository
     monkeypatch.setenv("GIT_CONFIG_GLOBAL", os.devnull)
     monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
