@@ -1,8 +1,9 @@
 // The layered groups' panels (D-01M63C8QQMANY46N8GMNNKH1V9): Agents, Runs, and Checks and merge. Each setting's row
 // carries the id the unset list links to (GW8RT6).
 
-import { html } from "/assets/lit-html/3.3.3/lit-html.js";
-import { ROUNDS, LOOPS, state } from "./state.mjs";
+import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
+import { held, here, project } from "/assets/ui.mjs";
+import { ROUNDS, LOOPS, back, state } from "./state.mjs";
 import {
   cell, row, setting, table, numberCell, designFailures, widths, sessionsAtOnce, prLabels, prMarker, subagentsCell,
   curatorThreshold, spotterCell, prefRows, USER_KEYS, userConfig, userConfigLabel, contextCell, ratesCell, editable,
@@ -26,6 +27,23 @@ const SPOTTER = [
 ];
 
 const roles = () => Object.keys(state.loaded.settings.agents);
+
+// The way to the role's compaction on Metrics: back to the filters a compaction row's link came from, else the
+// role's on this project, or on every project from This machine or Global; unsaved edits keep the page.
+function toMetrics(role) {
+  if (!project) return nothing;
+  let href = back;
+  if (!href) {
+    const to = new URL(here({ in: state.layer === "project" ? state.loaded.folder || project : "", agent: role },
+      "/metrics#compaction"), location.href);
+    if (!to.searchParams.get("in")) to.searchParams.set("in", "");  // all projects, not the bar's clone's
+    href = `${to.pathname}${to.search}${to.hash}`;
+  }
+  const leave = (e) => {
+    if (e.button === 0 && !(e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) && held()) e.preventDefault();
+  };
+  return html`<br><a class="compaction-link" href=${href} @click=${leave}>Compaction on Metrics</a>`;
+}
 const workers = () => roles().filter((role) => !["shaper", "spotter"].includes(role));
 
 export function agentsGroup() {
@@ -34,7 +52,8 @@ export function agentsGroup() {
       <p-heading size="lg"><h2 id="agents-title" tabindex="-1">Agents</h2></p-heading>
       ${table("Agents: model, effort and context apply to the next session",
         ["Agent", "Model", "Effort", "Context", "AI credits per 1M tokens"], "agents-rows",
-        roles().map((role) => setting(`set-agents-${role}`, role === "shaper" ? "shaper (a recommendation)" : role,
+        roles().map((role) => setting(`set-agents-${role}`, html`${role === "shaper" ? "shaper (a recommendation)"
+          : role}${toMetrics(role)}`,
           ["model", "effort", "context"].map((f) => `agents.${role}.${f}`), editable(role, "model"),
           editable(role, "effort"), contextCell(role), ratesCell(role))))}
       <p-text id="shaper-note" size="xs" color="contrast-medium">The shaper's model and effort are a recommendation
