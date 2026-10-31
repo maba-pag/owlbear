@@ -72,6 +72,7 @@ class _Level:
     tilde: bool = False
     quote: str = ""
     redirect: tuple[int, str] | None = None  # the next word is a redirection's target: its descriptor and kind
+    out: bool = False  # it redirects output, a write even with no words: `(...) > f`
     start: int | None = None
     piped: bool = False  # the next command reads the previous one's output
     conditional: bool = False  # the next commands run only as && or || decides
@@ -129,11 +130,11 @@ class _Lexer:
     def close(self, s: _Level, i: int) -> bool:
         """End the command being read at index *i*, keeping it when it has words or input; return whether it did."""
         s.end_word()
-        kept = bool(s.words or s.inputs)
+        kept = bool(s.words or s.inputs or s.out)
         if kept:
             self._keep(s, i)
             s.piped = False
-        s.words, s.inputs, s.redirect, s.start = [], [], None, None
+        s.words, s.inputs, s.redirect, s.start, s.out = [], [], None, None, False
         return kept
 
     def _keep(self, s: _Level, i: int) -> None:
@@ -219,6 +220,7 @@ class _Lexer:
             op = match[0]
             fd = s.descriptor(0 if op.lstrip("&").startswith("<") else 1)
             s.redirect = (fd, "dup" if op == "<&" else "file" if op in {"<", "<>"} else "out")
+            s.out = s.out or s.redirect[1] == "out"
             return match.end()
         elif ch == "(":
             return self._subshell(s, i)

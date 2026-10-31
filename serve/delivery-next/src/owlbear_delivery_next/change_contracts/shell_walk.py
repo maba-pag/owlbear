@@ -135,8 +135,14 @@ class Walk:
             interpreter = shell_programs.shebang(path)
         except OSError as error:
             return self._unreadable(word, error)
-        context = shell_programs.Run(env=dict(run.env), chdir=run.chdir)  # its interpreter starts as it was started
-        for sub in shell_programs.runs([*interpreter, Word(str(path))], context=context) if interpreter else ():
+        return self._interpreted(command, run, word, [*interpreter, Word(str(path))], state) if interpreter else None
+
+    def _interpreted(self, command: Command, run: Run, word: Word, line: list[Word], state: State) -> str | None:
+        """The program a script's #! line runs, started as the script was: a shell reads the script."""
+        context = shell_programs.Run(env=dict(run.env), chdir=run.chdir)
+        for sub in shell_programs.runs(line, context=context):
+            if _built(sub, sub.words[0]):
+                return f"`{self.name}` runs `{word}`, whose interpreter is built at run time (`{sub.words[0]}`)"
             if reason := self.bypass(self.name, sub):
                 return reason
             if shell_programs.name(sub.words[0]) in shell_programs.SHELLS and (
@@ -277,7 +283,8 @@ def _built(run: Run, word: Word) -> bool:
 
 def _startup(run: Run, state: State) -> list[Word | None]:
     """The startup files a shell runs first: BASH_ENV and ENV from its command, else as earlier text set them."""
-    files = state.startup | run.env
+    inherited = {} if "*" in run.removed else {k: v for k, v in state.startup.items() if k not in run.removed}
+    files = inherited | run.env
     return [files[key] for key in _STARTUP if key in files]
 
 

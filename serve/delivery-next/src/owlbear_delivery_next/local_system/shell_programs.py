@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
     from pathlib import Path
 
-_PREFIX_WORDS = frozenset({"!", "{", "do", "elif", "else", "if", "then", "time", "until", "while"})
+_PREFIX_WORDS = frozenset({"!", "{", "do", "elif", "else", "if", "then", "until", "while"})  # time: see head()
 ASSIGNMENT = re.compile(r"[A-Za-z_]\w*=")
 SHELLS = frozenset({"ash", "bash", "dash", "fish", "ksh", "sh", "zsh"})
 _SHELL_VALUES = frozenset({"-o", "+o", "-O", "+O"})  # shell options taking a value
@@ -27,6 +27,8 @@ _STARTUP = frozenset({"--rcfile", "--init-file"})  # options naming a file an in
 _EXEC = frozenset({"-exec", "-execdir", "-ok", "-okdir"})  # find's actions that run a command up to ; or +
 _IN_PLACE = frozenset({"-execdir", "-okdir"})  # find's actions that run in each match's folder
 NESTING = 3  # scripts inside scripts beyond this are refused unread
+_WRAPPED = 8  # wrapper programs inside wrapper programs beyond this are refused unread
+_WRAPPED_UNREAD = f"runs wrapper programs more than {_WRAPPED} deep"
 # Programs that run the command in their arguments: short options taking a value, long ones taking a value (unless
 # attached with =), and the operands before the command (timeout's duration, flock's file).
 _WRAPPERS: dict[str, tuple[str, frozenset[str], int]] = {
@@ -69,6 +71,7 @@ class Run:
     chdir: bool = False  # it runs in another folder: env -C, find -execdir
     replaced: str | None = None  # text xargs -I or find -exec replaces at run time, such as {}
     from_input: bool = False  # xargs adds operands it reads from its input
+    removed: frozenset[str] = frozenset()  # variables env -u removed from what it inherited; * for env -i
 
 
 def name(word: str) -> str:
@@ -126,7 +129,9 @@ def runs(words: Sequence[Word], depth: int = 0, context: Run | None = None) -> l
         return _found(words, i, depth, here)
     if program == "command" and words[i + 1 : i + 2] and words[i + 1] in _LOOKUP:
         return []
-    if program in _WRAPPERS and depth < NESTING:
+    if program in _WRAPPERS:
+        if depth >= _WRAPPED:
+            raise UnreadableError(_WRAPPED_UNREAD)
         return _wrapped(words, i, depth, here)
     return [replace(here, words=list(words[i:]))]
 
@@ -146,8 +151,11 @@ def _wrapped(words: Sequence[Word], i: int, depth: int, context: Run) -> list[Ru
     sub = replace(context, launchers=(*context.launchers, words[i]))
     match name(words[i]):
         case "env":
-            env = {**sub.env, **assignments(words[i + 1 : k])}
-            sub = replace(sub, env=env, chdir=sub.chdir or _env_chdir(words, i, k))
+            cleared, unset = _env_removals(words, i, k)
+            kept = {} if cleared else {key: v for key, v in sub.env.items() if key not in unset}
+            env = {**kept, **assignments(words[i + 1 : k])}
+            removed = sub.removed | unset | ({"*"} if cleared else set())
+            sub = replace(sub, env=env, chdir=sub.chdir or _env_chdir(words, i, k), removed=frozenset(removed))
             if (split := _env_split(words, i, k)) is not None:  # its words go before the rest, env reads them again
                 return runs([Word("env"), *split, *words[k:]], depth + 1, sub)
         case "xargs":
@@ -274,6 +282,27 @@ class _Splitter:
         else:
             raise UnreadableError(_SPLIT_UNREAD)
         return i + 2
+
+
+def _env_removals(words: Sequence[Word], i: int, k: int) -> tuple[bool, set[str]]:
+    """Whether the env at ``words[i]`` clears its environment (-i), and the variables it unsets (-u NAME)."""
+    cleared, unset, j = False, set(), i + 1
+    while j < k:
+        w = words[j]
+        if w in {"-", "-i", "--ignore-environment"}:
+            cleared = True
+        elif w.startswith("--unset"):
+            unset.add(w.partition("=")[2] or _at(words, j + 1))
+            j += 0 if "=" in w else 1
+        elif w.startswith("-") and not w.startswith("--") and (at := _valued(w)) is not None:
+            cleared = cleared or "i" in w[1:at]
+            if w[at] == "u":
+                unset.add(w[at + 1 :] or _at(words, j + 1))
+            j += 0 if w[at + 1 :] else 1
+        elif w.startswith("-") and not w.startswith("--"):
+            cleared = cleared or "i" in w[1:]
+        j += 1
+    return cleared, unset
 
 
 def _env_chdir(words: Sequence[Word], i: int, k: int) -> bool:

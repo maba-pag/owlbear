@@ -583,10 +583,9 @@ def test_a_read_only_step_judges_a_scripts_writes(scripts: Path) -> None:
     )
 
 
-def shebang(path: Path, first: str, body: str = "echo hi\n") -> Path:
+def shebang(path: Path, first: str, body: str = "echo hi\n") -> None:
     path.write_text(f"{first}\n{body}" if first else body)
     path.chmod(0o755)
-    return path
 
 
 @pytest.mark.parametrize("first", ["#!/bin/bash", "#!/usr/bin/env bash", "#!/usr/bin/env -S bash -e", ""])
@@ -989,3 +988,53 @@ def test_git_settings_exported_behind_a_prefix_stay_refused(prefix: str) -> None
 def test_a_function_defined_with_the_keyword_is_judged_like_its_body() -> None:
     assert decide(WRITE, shell("function f { git push -f; }")).endswith(BYPASS)
     assert decide(WRITE, shell("function f { echo hi; }")) is None
+
+
+def test_a_shebang_interpreter_built_at_run_time_is_refused(scripts: Path) -> None:
+    shebang(scripts / "tool", "#!/usr/bin/env -S ${OB_INTERP}", "rm x\n")
+
+    assert decide(Policy(scripts), shell("OB_INTERP=/bin/sh ./tool")) == (
+        "`OB_INTERP=/bin/sh ./tool` runs `./tool`, whose interpreter is built at run time (`${OB_INTERP}`)"
+    )
+
+
+def test_a_subshells_output_redirection_is_a_write_before_what_follows(scripts: Path) -> None:
+    text = "(printf '%s\\n' 'git commit --no-verify -m x') > good.sh; bash good.sh"
+
+    assert decide(Policy(scripts), shell(text)).endswith("run it in the next")
+    assert decide(Policy(scripts), shell("(echo hi) > /dev/null; bash good.sh")) is None
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "env -S 'nohup env sh' <<'EOF'\ngit commit --no-verify -m x\nEOF",
+        "nohup timeout 3 sh <<'EOF'\ngit commit --no-verify -m x\nEOF",
+    ],
+)
+def test_stacked_wrappers_still_reach_the_shell(text: str) -> None:
+    assert decide(WRITE, shell(text)).endswith(BYPASS)
+
+
+def test_wrappers_stacked_past_the_limit_are_refused_unread() -> None:
+    text = "nohup " * 9 + "echo hi"
+
+    assert decide(WRITE, shell(text)) == f"`{text}` runs wrapper programs more than 8 deep"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "BASH_ENV=/missing env -u BASH_ENV bash -c true",
+        "BASH_ENV=/missing env -i bash -c true",
+        "export BASH_ENV=/missing; env --unset=BASH_ENV bash -c true",
+    ],
+)
+def test_a_startup_file_env_removes_is_not_read(text: str) -> None:
+    assert decide(WRITE, shell(text)) is None
+
+
+def test_a_startup_file_set_again_after_env_removes_one_is_read(scripts: Path) -> None:
+    assert decide(Policy(scripts), shell("BASH_ENV=/missing env -u BASH_ENV BASH_ENV=./bad.sh bash -c true")) == (
+        f"`./bad.sh` uses --no-verify, {BYPASS}"
+    )
