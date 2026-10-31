@@ -6,7 +6,8 @@ before launch and binds only the session it launched (nonce and folder; R2). The
 connection and waits until the host lists the chat's model, since a new window may start with none and resolve Auto
 (P14). The first turn names an explicit model, effort and agent file (TD-27, TD-32); the host ignores an agent it does
 not list, so the chat starts no turn unless its session lists the agent file. Nothing follows that turn or cancels it:
-the owner takes the chat from there. Delivery steps never run in a window (D-01M5WG8RGCBKADW6XPGP0E2FAP).
+the owner takes the chat from there. Delivery steps never run in a window (D-01M5WG8RGCBKADW6XPGP0E2FAP). When the host
+rejects the chat's own settings or first turn, matched by client id and sequence, the chat ends at once with its reason.
 """
 
 from __future__ import annotations
@@ -38,6 +39,17 @@ def _action_in(ev: Json | None, chat: str) -> Json:
     if not ev or ev.get("method") != "action" or (ev.get("params") or {}).get("channel") != chat:
         return {}
     return ev["params"].get("action") or {}
+
+
+def _rejection(ev: Json | None, client: str, seq: int) -> str | None:
+    """The host's reason when ``ev`` rejects the action ``client`` sent as ``seq``; None for anything else."""
+    if not ev or ev.get("method") != "action":
+        return None
+    params = ev.get("params") or {}
+    origin = params.get("origin") or {}
+    if "rejectionReason" not in params or (origin.get("clientId"), origin.get("clientSeq")) != (client, seq):
+        return None
+    return str(params["rejectionReason"]) or "no reason given"
 
 
 def shell_command(tool_input: object) -> str:
@@ -87,8 +99,8 @@ class Step:
             out, bound = self._open(bind_limit)
             if bound is None or not self._ready(out, bound):
                 return out
-            self._start(out, {"uri": self.agent_uri} if self.spec.agent else None, self.spec.prompt)
-            out.end, out.detail = ("started", "") if self._began(bound.chat, out.turns[-1]) else _UNBEGUN
+            seq = self._start(out, {"uri": self.agent_uri} if self.spec.agent else None, self.spec.prompt)
+            out.end, out.detail = self._began(bound.chat, out.turns[-1], seq)
             return out
         finally:
             self._close()
@@ -98,17 +110,18 @@ class Step:
             if close := getattr(conn, "close", None):
                 close()
 
-    def _began(self, chat: str, turn: str) -> bool:
-        """Wait, at most ``ACK`` seconds, until the chat runs or has run ``turn``."""
+    def _began(self, chat: str, turn: str, seq: int) -> tuple[End, str]:
+        """Wait, at most ``ACK`` seconds, until the chat runs or has run ``turn``, or the host rejects it."""
         deadline = self.clock() + ACK
         while True:
             state = self._chat(chat)
             ids = [(state.get("activeTurn") or {}).get("id"), *(t.get("id") for t in state.get("turns") or [])]
             if turn in ids:
-                return True
+                return "started", ""
             if self.clock() >= deadline:
-                return False
-            self.conn.next_event(0.2)
+                return _UNBEGUN
+            if (why := _rejection(self.conn.next_event(0.2), self.conn.client_id, seq)) is not None:
+                return "unstarted", f"the host refused the prompt's turn: {why}"
 
     def _open(self, bind_limit: float) -> tuple[Outcome, _Bound | None]:
         try:
@@ -131,8 +144,8 @@ class Step:
         if not self._model_listed():
             out.end, out.detail = "model-unavailable", f"the agent host does not list {self.spec.model}"
             return False
-        if not self._configure(bound.session):
-            out.end, out.detail = "config-refused", f"host did not apply {self.spec.config}"
+        if why := self._configure(bound.session):
+            out.end, out.detail = "config-refused", why
             return False
         if not self._listed(bound.session):
             out.end, out.detail = "no-agent", f"the session does not list {self.spec.agent_uris[0]}"
@@ -245,17 +258,27 @@ class Step:
             return False
         return False
 
-    def _configure(self, session: str) -> bool:
+    def _configure(self, session: str) -> str:
+        """Apply the session's settings: '' once the host shows them, else why not."""
         if not self.spec.config:
-            return True
-        self.conn.dispatch(session, {"type": "session/configChanged", "config": self.spec.config})
-        deadline = self.clock() + ACK
+            return ""
+        # subscribe before dispatching: the host sends a rejection only to the channel's subscribers
+        values = (self._chat(session).get("config") or {}).get("values") or {}
+        if all(values.get(k) == v for k, v in self.spec.config.items()):
+            return ""  # nothing to change, so no action whose rejection could go unread
+        seq = self.conn.dispatch(session, {"type": "session/configChanged", "config": self.spec.config})
+        deadline, asked = self.clock() + ACK, json.dumps(self.spec.config, sort_keys=True)
         while self.clock() < deadline:
-            values = self._chat(session).get("config") or {}
-            if all((values.get("values") or {}).get(k) == v for k, v in self.spec.config.items()):
-                return True
-            self.conn.next_event(0.2)
-        return False
+            values = (self._chat(session).get("config") or {}).get("values") or {}
+            if all(values.get(k) == v for k, v in self.spec.config.items()):
+                return ""
+            if (why := _rejection(self.conn.next_event(0.2), self.conn.client_id, seq)) is not None:
+                return f"the host refused the settings {asked}: {why}; applied: {json.dumps(values, sort_keys=True)}"
+        return (
+            f"the host did not apply the settings {asked} within {ACK:.0f} s; "
+            f"applied: {json.dumps(values, sort_keys=True)}; "
+            "a managed policy that forces the Copilot harness or blocks Allow All may be why"
+        )
 
     def _config(self) -> Json:
         """The effort, unless the listed model takes none, and its context size: the default tier unless long.
@@ -282,14 +305,15 @@ class Step:
             message["agent"] = agent
         return message
 
-    def _start(self, out: Outcome, agent: Json | None, text: str) -> None:
+    def _start(self, out: Outcome, agent: Json | None, text: str) -> int:
         turn = str(uuid.uuid4())
         message = self._message(text, agent)
         stamp = time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime())
-        self.conn.dispatch(
+        seq = self.conn.dispatch(
             out.chat or "", {"type": "chat/turnStarted", "turnId": turn, "startedAt": stamp, "message": message}
         )
         out.turns.append(turn)
+        return seq
 
     def _confirm(self, chat: str, action: Json, *, allowed: bool) -> None:
         confirm: Json = {

@@ -1,4 +1,4 @@
-"""Agent Host Protocol 0.10.0 client over the editor's local socket (TD-34, TD-36).
+"""Agent Host Protocol client (version ``PROTOCOL``) over the editor's local socket (TD-34, TD-36).
 
 The WebSocket layer is the ``websockets`` library's sync client over the Unix socket (TD-267), its limits chosen
 here rather than left to defaults: one message at most ``MAX_MESSAGE`` bytes, a ping every ``KEEPALIVE`` seconds that
@@ -6,6 +6,7 @@ must be answered within as many, ``CLOSE_TIMEOUT`` seconds for the closing hands
 A refused or broken handshake is a ``HostError``; an opening that does not finish in ``IO_TIMEOUT`` is a
 ``TimeoutError``. A write that does not finish in ``IO_TIMEOUT`` (a host that stopped reading) shuts the socket
 down, which fails it and ends the connection; reads wait without bound, as an idle host is normal.
+An error the host answers with is a ``HostRefusedError`` that keeps its method, code, message and data whole.
 """
 
 from __future__ import annotations
@@ -23,7 +24,7 @@ from urllib.parse import quote
 from websockets.exceptions import ConnectionClosed, InvalidHandshake, WebSocketException
 from websockets.sync.client import unix_connect
 
-PROTOCOL = "0.10.0"
+PROTOCOL = "1.0.0"
 ROOT = "ahp-root://"
 ENTRIES = Path.home() / "Library/Application Support/Code/agent-host/local-endpoint/entries"
 IO_TIMEOUT = 15.0  # the opening handshake, and each write
@@ -37,8 +38,10 @@ type Json = dict[str, Any]
 class Transport(Protocol):
     """What the step driver needs from a host connection; tests supply a fake."""
 
+    client_id: str
+
     def request(self, method: str, params: Json, timeout: float = 60) -> Json: ...  # noqa: D102
-    def dispatch(self, channel: str, action: Json) -> None: ...  # noqa: D102
+    def dispatch(self, channel: str, action: Json) -> int: ...  # noqa: D102
     def next_event(self, timeout: float) -> Json | None: ...  # noqa: D102
 
 
@@ -50,6 +53,16 @@ def endpoint(entries: Path = ENTRIES) -> Json | None:
 
 class HostError(RuntimeError):
     """The host refused a request or the connection ended."""
+
+
+class HostRefusedError(HostError):
+    """The host answered, and its answer ends the attempt: a JSON-RPC error, or a protocol OwlBear did not offer."""
+
+    def __init__(self, method: str, code: int | None, message: str, data: object = None) -> None:
+        """Keep every field; ``str()`` carries them all, uncut."""
+        self.method, self.code, self.message, self.data = method, code, message, data
+        text = f"{method}: {message}" + (f" (code {code})" if code is not None else "")
+        super().__init__(text + (f"; data: {json.dumps(data, sort_keys=True)}" if data is not None else ""))
 
 
 def _ended(exc: BaseException) -> str:
@@ -64,7 +77,7 @@ class Connection:
 
     def __init__(self, path: str, token: str, client_id: str) -> None:
         """Connect and upgrade; raises ``HostError`` when the host refuses, ``TimeoutError`` when it is silent."""
-        self.client_id = client_id
+        self.client_id, self.protocol = client_id, ""  # protocol: the version the host chose at initialize
         self._path, self._token = path, token
         try:
             self._ws = unix_connect(
@@ -112,8 +125,8 @@ class Connection:
                 self._closed = why
                 waiting, self._pending = list(self._pending.values()), {}
             self._events.put({"method": "closed", "params": {"error": why}})
-            for box in waiting:
-                box.put({"error": {"message": f"connection closed: {why}"}})
+            for box in waiting:  # not an "error" reply: the host never answered these
+                box.put({"closed": f"connection closed: {why}"})
 
     def _send(self, obj: Json) -> None:
         # The library holds its connection lock while it writes, so neither keepalive nor a close can interrupt a
@@ -134,7 +147,11 @@ class Connection:
             self._ws.socket.shutdown(socket.SHUT_RDWR)
 
     def request(self, method: str, params: Json, timeout: float = 60) -> Json:
-        """Send one request and wait for its answer; raises ``HostError`` on error, timeout or a closed connection."""
+        """Send one request and wait for its answer.
+
+        Raises ``HostRefusedError`` when the host answers with an error, ``HostError`` on a timeout or a closed
+        connection.
+        """
         rid, box = next(self._ids), queue.Queue[Json]()
         with self._lock:
             if self._closed is not None:
@@ -150,19 +167,24 @@ class Connection:
         finally:
             with self._lock:
                 self._pending.pop(rid, None)
+        if "closed" in msg:
+            raise HostError(f"{method}: {msg['closed']}")  # noqa: EM102, TRY003
         if "error" in msg:
-            raise HostError(f"{method}: {msg['error'].get('message', msg['error'])}")  # noqa: EM102, TRY003
+            error = msg["error"]
+            raise HostRefusedError(method, error.get("code"), str(error.get("message", error)), error.get("data"))
         return msg["result"]
 
-    def dispatch(self, channel: str, action: Json) -> None:
-        """Send one action; the host answers with an action notification or a rejection."""
+    def dispatch(self, channel: str, action: Json) -> int:
+        """Send one action and return the clientSeq it carried; the host answers with the action or a rejection."""
+        seq = next(self._seq)
         self._send(
             {
                 "jsonrpc": "2.0",
                 "method": "dispatchAction",
-                "params": {"channel": channel, "clientSeq": next(self._seq), "action": action},
+                "params": {"channel": channel, "clientSeq": seq, "action": action},
             }
         )
+        return seq
 
     def next_event(self, timeout: float) -> Json | None:
         """The next notification, or None after ``timeout`` seconds."""
@@ -172,11 +194,19 @@ class Connection:
             return None
 
 
+def _chosen(result: Json) -> str:
+    """The protocol the host chose; OwlBear offers one version, so any other answer is one it cannot speak."""
+    if (chosen := result.get("protocolVersion")) != PROTOCOL:
+        why = f"the host chose protocol {chosen!r}, which OwlBear did not offer ({PROTOCOL})"
+        raise HostRefusedError(method="initialize", code=None, message=why, data=result)
+    return chosen
+
+
 def connect(entry: Json, client_id: str, github_token: str) -> Connection:
     """Connect, initialize and authenticate; the model list fills only after ``authenticate`` (P3)."""
     conn = Connection(entry["endpoint"]["path"], entry["connectionToken"], client_id)
     try:
-        conn.request(
+        result = conn.request(
             "initialize",
             {
                 "channel": ROOT,
@@ -186,6 +216,7 @@ def connect(entry: Json, client_id: str, github_token: str) -> Connection:
                 "initialSubscriptions": [ROOT],
             },
         )
+        conn.protocol = _chosen(result)
         conn.request("authenticate", {"channel": ROOT, "resource": "https://api.github.com", "token": github_token})
     except BaseException:
         conn.close()

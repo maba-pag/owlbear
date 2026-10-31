@@ -5,6 +5,7 @@ The page gets a launch id at once and polls its state; a launch can take minutes
 
 from __future__ import annotations
 
+import logging
 import threading
 import uuid
 from dataclasses import asdict, dataclass
@@ -16,6 +17,7 @@ if TYPE_CHECKING:
     type Ended = Callable[[str, dict[str, str]], dict[str, str]]
 
 KEPT = 16  # ended launches whose state the page can still read
+_log = logging.getLogger(__name__)
 
 
 class Refused(Exception):  # noqa: N818 - the route's answer, not a fault
@@ -69,11 +71,13 @@ class Launches:
         try:
             out = work()
         except Exception as exc:  # noqa: BLE001 - the page must learn how its launch ended
-            out = {"state": "failed", "reason": f"{type(exc).__name__}: {exc}"[:300]}
+            out = {"state": "failed", "reason": f"{type(exc).__name__}: {exc}"}
+            _log.exception("New Change launch %s failed", launch)
         try:
             out = done(launch, out) if done else out
         except Exception as exc:  # noqa: BLE001 - a failed follow-up must not hold the next launch back
-            out = out | {"warning": f"{type(exc).__name__}: {exc}"[:300]}
+            out = out | {"warning": f"{type(exc).__name__}: {exc}"}
+            _log.exception("New Change launch %s: its follow-up failed", launch)
         with self.lock:
             if (kept := self.kept.get(launch)) is not None:
                 kept.state, kept.reason, kept.warning = out["state"], out.get("reason", ""), out.get("warning", "")
