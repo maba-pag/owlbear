@@ -7,8 +7,8 @@ export function startedView() {
   if (state.choosing) return chooserView();
   const s = state.started;
   if (!s) return html`<p-text id="started" aria-live="polite"></p-text>`;
-  return html`<p-text id="started" aria-live="polite">${s.text ?? html`Could not open the chat: ${s.reason}. Copy
-    this command: <code>${s.command}</code>`}</p-text>`;
+  return html`<p-text id="started" aria-live="polite">${s.text ?? html`Could not open the chat ${s.about}: ${s.reason}.
+    Copy this command: <code>${s.command}</code>`}</p-text>`;
 }
 
 async function launched(id, of) {  // the host opens the chat in the background; VS Code may first have to start
@@ -45,25 +45,52 @@ function chooserView() {
     ${button("Continue", go)}${button("Cancel", stop, { variant: "secondary" })}</div>`;
 }
 
-async function shape(of) {
-  const wanted = await ask({
-    title: "Shape a new Change?", yes: "Open the chat", no: "Not now",
-    now: "A chat opens in VS Code where the shaper works out the brief with you; the chat uses AI credits like any "
-      + "Copilot chat.",
-    then: "Nothing is built. When you save the brief in the chat, it appears here for your approval.",
-    after: "Approve it here to start the work, or keep shaping it in the chat.",
-    instead: "Nothing opens.",
+function shape(of) {
+  return openChat({
+    path: "/new-change", of, about: "to shape the new Change",
+    dialog: {
+      title: "Shape a new Change?", yes: "Open the chat", no: "Not now",
+      now: "A chat opens in VS Code where the shaper works out the brief with you; the chat uses AI credits like any "
+        + "Copilot chat.",
+      then: "Nothing is built. When you save the brief in the chat, it appears here for your approval.",
+      after: "Approve it here to start the work, or keep shaping it in the chat.",
+      instead: "Nothing opens.",
+    },
   });
-  if (!wanted) return;
+}
+
+// A saved brief opens a new shaping chat in its Change's project; the Change stays as it is until the chat saves.
+export function reviseBrief(d) {
+  const v = d.brief.version;
+  return openChat({
+    path: `/changes/${encodeURIComponent(d.slug)}/revise-brief`, of: d.project,
+    about: `to revise ${d.handle}${several() ? ` in ${d.projectName}` : ""}`,  // handles repeat across projects
+    dialog: {
+      title: `Revise brief v${v} in a new chat?`, yes: "Open the chat", no: "Not now",
+      now: `A chat opens in VS Code where the shaper revises brief v${v} of ${d.handle} with you; the chat uses AI `
+        + "credits like any Copilot chat.",
+      then: "Nothing is built, and the brief here stays as it is. When the shaper saves the revision, it appears "
+        + "here as a new version for your approval.",
+      after: "Approve the new version here, or keep shaping it in the chat.",
+      instead: "Nothing opens; the brief stays as it is.",
+    },
+  });
+}
+
+// Asks first, then opens the shaping chat through *path* and says how it went (TD-83); *about* names what it opens
+// for, so a launch that ends after the person chose another Change still says which one it was.
+async function openChat({ path, of, dialog, about }) {
+  if (!(await ask(dialog))) return;
+  state.choosing = false;  // New Change's project chooser, left open, would hide this launch's result
   state.creating = true;
   state.started = { text: "Opening the shaping chat…" };
   show();
   try {
-    const r = await call("/new-change", {}, of);
+    const r = await call(path, {}, of);
     const s = r.started ? await launched(r.launch, of) : { state: "failed", ...r };
     state.started = s.state === "open"
-      ? { text: `A chat opened in VS Code to shape the new Change.${s.warning ? ` Note: ${s.warning}.` : ""}` }
-      : { reason: s.reason, command: s.command };
+      ? { text: `A chat opened in VS Code ${about}.${s.warning ? ` Note: ${s.warning}.` : ""}` }
+      : { reason: s.reason, command: s.command, about };
   } catch (e) {
     state.started = null;
     failed(e);

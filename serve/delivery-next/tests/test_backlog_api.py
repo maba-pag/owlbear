@@ -55,7 +55,9 @@ def store(tmp_path, shared_repo, github) -> Store:  # noqa: ARG001 - its issues 
 
 
 def client(store, launch=None, which=lambda _n: "/bin/code", headers=AUTH) -> TestClient:
-    app = api.create_app(store, "t", Host(), launch=launch or Launch(), which=which)
+    host = Host()
+    host.repo = store.root
+    app = api.create_app(store, "t", host, launch=launch or Launch(), which=which)
     return TestClient(app, base_url="http://127.0.0.1", headers=headers)
 
 
@@ -147,7 +149,10 @@ def test_create_change_opens_the_shaping_chat_with_the_entries_as_starting_mater
                  "seen 1 times"):  # fmt: skip
         assert said in prompt
     state = settled(c, started["launch"])
-    assert (state["state"], shlex.split(state["command"])) == ("open", ["code", "chat", "-m", "owlbear-shaper", prompt])
+    assert (state["state"], shlex.split(state["command"])) == (
+        "open",
+        ["cd", str(store.root), "&&", "code", "chat", "-m", "owlbear-shaper", prompt],
+    )
     entries = {e["id"]: e for e in c.get("/api/next/backlog").json()["entries"]}
     assert {(e["status"], e["launch"]) for e in entries.values()} == {("in-change", started["launch"])}
 
@@ -211,7 +216,11 @@ def test_create_change_without_code_gives_the_command_and_leaves_the_entries(sto
 
     out = c.post("/api/next/backlog/change", json={"ids": [entry.id]}).json()
 
-    assert (out["started"], "Wider status line" in out["command"], out["command"].startswith("code chat")) == (
+    assert (
+        out["started"],
+        "Wider status line" in out["command"],
+        out["command"].startswith(f"cd {shlex.quote(str(store.root))} && code chat "),
+    ) == (
         False,
         True,
         True,

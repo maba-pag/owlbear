@@ -14,16 +14,27 @@ import pytest
 from fastapi.testclient import TestClient
 
 from owlbear_delivery_next.change_contracts import chat_contract, tool_schema, tools
-from owlbear_delivery_next.change_contracts.models import Change, Exit, Option, Outcome, Question, StepKind
+from owlbear_delivery_next.change_contracts.models import (
+    Brief,
+    Change,
+    Exit,
+    Intent,
+    Option,
+    Outcome,
+    Question,
+    Step,
+    StepKind,
+)
 from owlbear_delivery_next.change_contracts.preparation import Preparation
 from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
+from owlbear_delivery_next.change_contracts.round_records import RoundFinding, RoundLoop, RoundPolicy
 from owlbear_delivery_next.change_flow import loop
 from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.commands import chat_client, setup
 from owlbear_delivery_next.commands.chat_client import NOT_RUNNING, NOT_SERVED, OWLBEAR_DOWN, Chat, OwlBear
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.local_system.codebase import CURRENT
-from owlbear_delivery_next.project_host import answers, api, launches, pages
+from owlbear_delivery_next.project_host import answers, api, brief_routes, launches, pages
 from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.runtimes import ahp, copilot_cli, readiness, step_input, vscode_adapter
 from owlbear_delivery_next.runtimes.vscode_contract import Outcome as Outcome_
@@ -31,7 +42,7 @@ from owlbear_delivery_next.settings import carried
 from owlbear_delivery_next.settings.config import Agent, Layer
 from owlbear_delivery_next.state_store import briefs
 from owlbear_delivery_next.state_store.database import put_record
-from owlbear_delivery_next.state_store.store import Store
+from owlbear_delivery_next.state_store.store import Lock, Store
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
 BRIEF = {
@@ -461,12 +472,11 @@ def test_a_file_tracked_while_the_owner_answers_is_not_written(repo):
     assert path.read_text() == "{}\n"
 
 
-def command(prompt: str) -> str:
-    return shlex.join(["code", "chat", "-m", "owlbear-shaper", prompt])
+def command(prompt: str, repo: Path) -> str:
+    return f"cd {shlex.quote(str(repo))} && " + shlex.join(["code", "chat", "-m", "owlbear-shaper", prompt])
 
 
 PROMPT = api.START_PROMPT + api.PICKER_NOTE.format(model="claude-opus-5.5", effort="medium")
-COMMAND = command(PROMPT)
 SHAPER = carried.layer().agents["shaper"]  # module level runs before the carried-settings fixture
 
 
@@ -533,14 +543,14 @@ def test_new_change_returns_at_once_and_the_page_polls_the_launch_on_the_project
     opening = Opening({"state": "open", "warning": "could not remove it"})
     c = launcher(store, opening)
     started = c.post("/api/next/new-change").json()
-    luna = command(api.START_PROMPT + api.PICKER_NOTE.format(model="gpt-6-luna", effort="max"))
+    luna = command(api.START_PROMPT + api.PICKER_NOTE.format(model="gpt-6-luna", effort="max"), store.root)
     assert (started["started"], set(started)) == (True, {"started", "launch"})
     assert c.get(f"/api/next/new-change/{started['launch']}").json() == {"state": "opening", "command": luna}
     opening.release.set()
     assert settled(c, started["launch"]) == {"state": "open", "warning": "could not remove it", "command": luna}
     [(repo, role, prompt)] = opening.calls
     assert (repo, role.model, role.effort) == (store.root, "gpt-6-luna", "max")
-    assert luna == command(prompt)  # the command by hand carries the same note as the launch (TD-277)
+    assert luna == command(prompt, store.root)  # the command by hand carries the same note as the launch (TD-277)
     assert prompt.endswith('model picker: set it to gpt-6-luna at max effort."')
 
 
@@ -558,9 +568,14 @@ def test_new_change_returns_at_once_and_the_page_polls_the_launch_on_the_project
 def test_a_failed_launch_gives_its_reason_and_the_command(tmp_path, caplog, ending, reason, logged):
     opening = Opening(ending)
     opening.release.set()
-    c = launcher(Store(tmp_path), opening)
+    store = Store(tmp_path)
+    c = launcher(store, opening)
     state = settled(c, c.post("/api/next/new-change").json()["launch"])
-    assert (state["state"], state["command"], reason in state["reason"]) == ("failed", COMMAND, True)
+    assert (state["state"], state["command"], reason in state["reason"]) == (
+        "failed",
+        command(PROMPT, store.root),
+        True,
+    )
     records = [r for r in caplog.records if r.name == launches.__name__]
     assert [r.levelname for r in records] == logged
     assert all(r.exc_info for r in records)  # the traceback is kept
@@ -597,6 +612,80 @@ def test_a_failed_follow_up_is_kept_whole_and_logged(caplog):
     assert (record.levelname, record.exc_info is not None) == ("ERROR", True)
 
 
+DRAFT = {
+    "change": "c1",
+    "title": "Flip the hero",
+    "outcome": "Visitors flip the hero image with one button.",
+    "criteria": ["A second press returns the hero"],
+    "scope": ["web"],
+}
+
+
+def revisable(tmp_path, **update) -> Store:
+    """A project with Change flip, handle c1, shaping brief v2; *update* changes the Change."""
+    brief = Brief(version=2, title="Flip the hero", outcome="Visitors flip the hero image with one button.")
+    c = Change(slug="flip", handle="c1", brief=brief, step=Step(kind=StepKind.SHAPE))
+    store = Store(tmp_path)
+    store.write(Lock("flip"), c.model_copy(update=update))
+    return store
+
+
+def untouched(store: Store) -> tuple:
+    with store.db.read() as db:
+        inbox = db.execute("SELECT item FROM inbox WHERE slug = 'flip'").fetchall()
+    return store.read("flip").model_dump(), store.rev("flip"), store.events("flip"), inbox
+
+
+def test_a_saved_brief_opens_a_new_shaping_chat_in_its_project_and_leaves_the_change_as_it_is(tmp_path):
+    paused = Intent(paused_at=NOW, pause_reason="lunch")  # a pause holds Delivery's work, not the owner's chat
+    store, opening = revisable(tmp_path, intent=paused), Opening()
+    opening.release.set()
+    c = launcher(store, opening)
+    before = untouched(store)
+    assert c.get("/api/next/changes/flip").json()["brief"]["unrevisable"] == ""
+    out = c.post("/api/next/changes/flip/revise-brief").json()
+    assert (out["started"], set(out)) == (True, {"started", "launch"})
+    assert settled(c, out["launch"])["state"] == "open"
+    [(repo, _role, prompt)] = opening.calls
+    assert repo == store.root
+    assert prompt.startswith('Continue Delivery Change c1 ("Flip the hero") in this project: use the owlbear-change')
+    assert untouched(store) == before
+
+
+def test_each_projects_command_by_hand_opens_its_own_change(tmp_path):
+    stores = [revisable(tmp_path / name) for name in ("alpha", "beta")]
+    out = [
+        launcher(s, Opening(), which=lambda _n: None).post("/api/next/changes/flip/revise-brief").json() for s in stores
+    ]
+    prompt = brief_routes.REVISE.format(handle="c1", title="Flip the hero") + api.PICKER_NOTE.format(
+        model="claude-opus-5.5", effort="medium"
+    )
+    assert [(o["started"], o["command"]) for o in out] == [(False, command(prompt, s.root)) for s in stores]
+
+
+def due_finding() -> dict:
+    finding = RoundFinding(id="F1", text="t", raised=1, reconsider="due")
+    return {"loops": {"brief": RoundLoop(subject="brief", policy=RoundPolicy(), findings=[finding])}}
+
+
+@pytest.mark.parametrize(
+    ("update", "reason"),
+    [
+        ({"step": Step(kind=StepKind.PLAN)}, "c1 is approved; ask for changes in the Changes page"),
+        ({"finished_at": NOW}, "c1 is approved; ask for changes in the Changes page"),
+        ({"step": Step(kind=StepKind.SHAPE, mode="challenge")}, "its challenge runs; save the revision after it"),
+        (due_finding(), "a finding of its challenge waits for the owner's decision in the Changes page"),
+    ],
+)
+def test_a_state_that_refuses_a_revision_says_why_and_opens_no_chat(tmp_path, update, reason):
+    store, opening = revisable(tmp_path, **update), Opening()
+    c = launcher(store, opening)
+    assert c.get("/api/next/changes/flip").json()["brief"]["unrevisable"] == reason
+    refused = c.post("/api/next/changes/flip/revise-brief")
+    assert (refused.status_code, refused.json()["detail"], opening.calls) == (409, reason, [])
+    assert briefs.save_brief(store, DRAFT) == (409, {"errors": [f"change: {reason}"]})
+
+
 def test_a_new_change_while_one_opens_is_refused_and_the_gap_starts_when_it_ends(tmp_path, monkeypatch):
     now = [100.0]
     monkeypatch.setattr(api, "time", SimpleNamespace(monotonic=lambda: now[0]))
@@ -622,13 +711,17 @@ def test_new_change_needs_the_token_and_without_code_or_settings_returns_the_com
     out = launcher(store, opening, which=lambda _n: None).post("/api/next/new-change").json()
     assert (out["started"], out["command"], out["reason"]) == (
         False,
-        COMMAND,
+        command(PROMPT, store.root),
         f"`code` is not on PATH; run this in {store.root}",
     )
     store.config_path.write_text("{")
     c = launcher(store, opening)
     out = c.post("/api/next/new-change").json()
-    assert (out["started"], out["command"], "settings" in out["reason"]) == (False, command(api.START_PROMPT), True)
+    assert (out["started"], out["command"], "settings" in out["reason"]) == (
+        False,
+        command(api.START_PROMPT, store.root),
+        True,
+    )
     assert (c.get("/api/next/new-change/nope").status_code, opening.calls) == (404, [])
 
 

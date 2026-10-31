@@ -53,7 +53,7 @@ from owlbear_delivery_next.runtimes.window_files import HARNESS
 from owlbear_delivery_next.settings import profile
 from owlbear_delivery_next.settings.config import SettingsUnset
 from owlbear_delivery_next.state_store import spend_ledger, tool_metrics, watch_reports
-from owlbear_delivery_next.state_store.briefs import save_brief, save_visual
+from owlbear_delivery_next.state_store.briefs import save_brief, save_visual, unrevisable
 from owlbear_delivery_next.state_store.store import StoreError
 from owlbear_delivery_next.workflow_steps import check, decision, decisions_gate, held, visual
 
@@ -280,18 +280,20 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
     for path, html in pages.pages().items():
         app.add_api_route(path, fixed_page(html), methods=["GET"], response_class=HTMLResponse)
 
+    def by_hand(prompt: str) -> str:
+        # `code chat` opens the chat on the folder it runs in, and two projects can share a Change's handle
+        return f"cd {shlex.quote(str(host.repo))} && {shlex.join(['code', 'chat', '-m', SHAPER_MODE, prompt])}"
+
     def start_chat(prompt: str, done: Ended | None = None) -> dict[str, Any]:
         """Open the shaping chat with ``prompt`` in the background, or say why not and give the command by hand."""
         try:
             shaper = store.settings().agent("shaper")
         except SettingsUnset as exc:
-            command = shlex.join(["code", "chat", "-m", SHAPER_MODE, prompt])
-            return {"started": False, "command": command, "reason": str(exc)}
+            return {"started": False, "command": by_hand(prompt), "reason": str(exc)}
         except StoreError as exc:
-            command = shlex.join(["code", "chat", "-m", SHAPER_MODE, prompt])
-            return {"started": False, "command": command, "reason": f"the settings are unreadable ({exc})"}
+            return {"started": False, "command": by_hand(prompt), "reason": f"the settings are unreadable ({exc})"}
         prompt += PICKER_NOTE.format(model=shaper.model, effort=shaper.effort)
-        command = shlex.join(["code", "chat", "-m", SHAPER_MODE, prompt])
+        command = by_hand(prompt)
         if not which("code"):
             return {"started": False, "command": command, "reason": f"`code` is not on PATH; run this in {host.repo}"}
 
@@ -371,6 +373,7 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
                     "ui": c.brief.ui,
                     "visual": [s.model_dump() for s in c.brief.visual],
                     "unapprovable": brief_rounds.approvable(c),  # TD-249: why the approve button is off
+                    "unrevisable": unrevisable(c),  # why no new shaping chat may revise the saved brief
                     "unreviewed": brief_rounds.unreviewed(c),  # TD-255: approving needs the owner's tick
                     "read_backs": decisions_gate.checkpoint(store, c),  # TD-427: at most three, never blocking
                     "picked": picks.shown(c),  # TD-459: the decisions this version's work follows, by title
@@ -482,6 +485,7 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
     router.include_router(chat_routes.router(read))
     wake, ending = lambda: host.wake.set(), lambda: host.draining()  # noqa: PLW0108 - read late
     router.include_router(brief_routes.router(store, read, wake, ending))
+    router.include_router(brief_routes.revising(read, start_chat))
     router.include_router(stop_routes.router(store, read, wake))
     router.include_router(backlog_routes.router(store, start_chat, lambda: host.record.project))
     router.include_router(memory_routes.router(store))

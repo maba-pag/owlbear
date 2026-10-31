@@ -150,7 +150,8 @@ function consequence(o, d) {
   if (o.next === "shape") {
     return { ...choices, title: "Go back to the brief?",
       now: "The Change returns to its brief. Work already done is kept for now.",
-      then: "Nothing runs until you revise the brief in the shaping chat and approve the new version here.",
+      then: "Nothing runs until you revise the brief, in a new chat from the brief here or in the shaping chat, "
+        + "and approve the new version here.",
       after: "The new brief decides which work is kept or redone." };
   }
   if (o.next === "plan") {

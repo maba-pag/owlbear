@@ -149,15 +149,20 @@ def save_brief(store: Store, body: object) -> tuple[int, dict[str, Any]]:
     return _revise(store, draft) if draft.change else _create(store, draft)
 
 
+def unrevisable(c: Change) -> str:
+    """Why the shaper may not save a new brief version of *c* now, or ""."""
+    if c.step.kind != StepKind.SHAPE or c.finished_at:
+        return f"{c.handle} is approved; ask for changes in the Changes page"
+    return brief_rounds.saving(c)
+
+
 def _revise(store: Store, draft: brief_tools.BriefDraft) -> tuple[int, dict[str, Any]]:
     if (slug := identities.handles(store).get(draft.change)) is None:
         return 422, {"errors": [f"change: {draft.change} is not a Change here - leave it empty for a new one"]}
     try:
         with store.lock(slug) as lock:
             old = store.read(slug)
-            if old.step.kind != StepKind.SHAPE or old.finished_at:
-                return 409, {"errors": [f"change: {draft.change} is approved; ask for changes in the Changes page"]}
-            if why := brief_rounds.saving(old):
+            if why := unrevisable(old):
                 return 409, {"errors": [f"change: {why}"]}
             c = drafted(old, draft, slug, old.handle, store.read_profile() or Profile())
             store.write(lock, c)

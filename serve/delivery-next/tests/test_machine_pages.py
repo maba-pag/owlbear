@@ -11,17 +11,20 @@ import time
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime
+from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
 import uvicorn
 
-from owlbear_delivery_next.change_contracts.models import Change, Step, StepKind
+from owlbear_delivery_next.change_contracts.models import Brief, Change, Step, StepKind
 from owlbear_delivery_next.local_system import codebase
 from owlbear_delivery_next.machine_host import app, project
 from owlbear_delivery_next.machine_host.machine import Machine
+from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import Host, HostRecord
+from owlbear_delivery_next.settings import config
 from owlbear_delivery_next.state_store import registry
 from owlbear_delivery_next.state_store.store import Store
 
@@ -240,6 +243,149 @@ def _alpha_does_not_answer(page, base: str, alpha: str, expect) -> None:
     page.route(changes, lambda _r: None)  # up, yet never answers
     expect(page.locator("#error")).to_contain_text("slow to answer", timeout=30000)
     expect(page.locator("#detail")).to_have_class("stale")  # not shown as freshly read
+
+
+class Chats:
+    """The shaping chat's launcher in every project: each call's folder and prompt, held until released."""
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[Path, str]] = []
+        self.release, self.ending = threading.Event(), {"state": "open"}
+
+    def __call__(self, repo: Path, _role: object, prompt: str) -> dict[str, str]:
+        self.calls.append((repo, prompt))
+        assert self.release.wait(30)
+        return self.ending
+
+
+def chats(monkeypatch) -> Chats:
+    """Every project host the machine host starts opens its chats on one recorder, with no gap between launches."""
+    chats = Chats()
+    monkeypatch.setattr(api, "LAUNCH_GAP", 0)
+    monkeypatch.setattr(api, "create_app", partial(api.create_app, launch=chats, which=lambda _n: "/bin/code"))
+    return chats
+
+
+def shaping(path: Path, title: str, slug: str = "same", **update: object) -> None:
+    """Write *slug*, handle c1, shaping brief v1 called *title*; *update* changes the Change."""
+    store = Store.open(path)
+    brief = Brief(version=1, title=title, outcome=f"{title}: what the Change gives.")
+    with store.lock(slug) as lock:
+        c = Change(slug=slug, handle="c1", brief=brief, step=Step(kind=StepKind.SHAPE))
+        store.write(lock, c.model_copy(update=update))
+
+
+def opened(page: Page, base: str, of: str, slug: str = "same") -> None:
+    page.goto(f"{base}/#token=t")
+    page.goto(f"{base}/?change={of}%2F{slug}")
+
+
+REVISE = "Revise the brief in a new chat"
+# A native modal dialog: past either end focus leaves for the browser's own controls (body), never the page behind.
+INSIDE = """() => document.activeElement === document.body
+    || [...document.querySelectorAll('p-modal')].some((m) => m.open && m.contains(document.activeElement))"""
+
+
+@pytest.mark.browser
+@pytest.mark.timeout(90)  # a real browser's journey through three launches; a loaded runner needs more than 30 s
+def test_the_brief_offers_a_new_shaping_chat_and_says_how_it_went(tmp_path: Path, monkeypatch, pds) -> None:
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    launched = chats(monkeypatch)
+    alpha = registry.register(clone(tmp_path / "alpha", "same"))
+    shaping(Path(alpha.path), "Alpha brief")
+    with browsing(monkeypatch, pds) as (page, base):
+        opened(page, base, alpha.id)
+        revise = page.locator("#detail").get_by_role("button", name=REVISE)
+        expect(revise).to_be_visible()
+        pds.settled(page)
+        box = revise.bounding_box()
+        assert box and box["width"] >= 24 and box["height"] >= 24  # noqa: PT018 - one target size
+        revise.click()
+        expect(pds.modal(page)).to_contain_text("Revise brief v1 in a new chat?")
+        pds.settled(page)
+        for key in ["Shift+Tab"] * 3 + ["Tab"] * 3:  # the dialog keeps focus at both ends
+            page.keyboard.press(key)
+            assert page.evaluate(INSIDE), key
+        pds.answer(page, "Not now")
+        assert REVISE in page.evaluate("document.activeElement?.textContent ?? ''")  # focus back on the button
+        assert launched.calls == []
+        revise.click()
+        pds.answer(page, "Open the chat")
+        expect(page.locator("#started")).to_have_text("Opening the shaping chat…")
+        expect(page.locator("#detail p-button", has_text=REVISE)).to_have_js_property("loading", value=True)
+        until(page, lambda: launched.calls)
+        launched.release.set()
+        expect(page.locator("#started")).to_have_text("A chat opened in VS Code to revise c1.")
+
+        approved = Brief(version=1, approved_version=1, title="Alpha brief", outcome="Alpha brief: back to shaping.")
+        shaping(Path(alpha.path), "Alpha brief", brief=approved)  # approved, then sent back to its brief
+        launched.ending = {"state": "failed", "reason": "the Copilot chat did not start (unbound: x)"}
+        again = page.locator("#detail section.info").get_by_role("button", name=REVISE)
+        expect(again).to_be_visible(timeout=15000)
+        again.click()
+        pds.answer(page, "Open the chat")
+        expect(page.locator("#started")).to_contain_text(
+            "Could not open the chat to revise c1: the Copilot chat did not"
+        )
+        expect(page.locator("#started code")).to_contain_text("code chat -m")
+
+        unset = {k: v for k, v in config.BASE.agents.items() if k != "shaper"}
+        monkeypatch.setattr(config, "BASE", config.BASE.model_copy(update={"agents": unset}))
+        again.click()
+        pds.answer(page, "Open the chat")
+        expect(page.locator("#started")).to_contain_text("shaper")
+        expect(page.locator("#started code")).to_contain_text('Continue Delivery Change c1 ("Alpha brief")')
+        assert len(launched.calls) == 2
+
+
+@pytest.mark.browser
+def test_a_brief_that_cannot_take_a_revision_shows_no_button(tmp_path: Path, monkeypatch, pds) -> None:
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    alpha = registry.register(clone(tmp_path / "alpha", "planned"))
+    approved = Brief(version=1, approved_version=1, title="Planned brief", outcome="Planned: approved and planned.")
+    shaping(Path(alpha.path), "Planned brief", "planned", brief=approved, step=Step(kind=StepKind.PLAN))
+    shaping(Path(alpha.path), "Challenged brief", "challenged", step=Step(kind=StepKind.SHAPE, mode="challenge"))
+    with browsing(monkeypatch, pds) as (page, base):
+        for slug, title in [("planned", "Planned brief"), ("challenged", "Challenged brief")]:
+            opened(page, base, alpha.id, slug)
+            expect(page.locator("#detail")).to_contain_text(title)
+            pds.settled(page)
+            expect(page.locator("#detail").get_by_role("button", name=REVISE)).to_have_count(0)
+
+
+@pytest.mark.browser
+def test_two_projects_whose_changes_share_a_handle_revise_the_one_clicked(tmp_path: Path, monkeypatch, pds) -> None:
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    launched = chats(monkeypatch)
+    a, b = (registry.register(clone(tmp_path / n, "same")) for n in ("alpha", "beta"))
+    for p, title in [(a, "Alpha brief"), (b, "Beta brief")]:
+        shaping(Path(p.path), title)
+    with browsing(monkeypatch, pds) as (page, base):
+        opened(page, base, b.id)
+        expect(page.locator("#detail")).to_contain_text("in beta")
+        page.get_by_role("button", name="New Change").click()  # its project chooser is left open
+        expect(page.locator("#choose")).to_have_count(1)
+        page.locator("#detail").get_by_role("button", name=REVISE).click()
+        pds.answer(page, "Open the chat")
+        expect(page.locator("#choose")).to_have_count(0)
+        until(page, lambda: launched.calls)
+        page.locator(f'#changes a[data-key="{a.id}/same"]').click()  # another c1 chosen while beta's chat opens
+        expect(page.locator("#detail")).to_contain_text("in alpha")
+        launched.release.set()
+        expect(page.locator("#started")).to_have_text("A chat opened in VS Code to revise c1 in beta.")
+        [(repo, prompt)] = launched.calls
+        said = prompt.split(" in this project")[0]
+        assert (Path(repo), said) == (Path(b.path), 'Continue Delivery Change c1 ("Beta brief")')
+        page.goto(f"{base}/")
+        page.get_by_role("button", name="New Change").click()
+        expect(pds.select(page.locator("#choose"), "Shape the new Change in")).to_have_js_property("value", a.id)
+        page.get_by_role("button", name="Continue").click()
+        pds.answer(page, "Open the chat")
+        expect(page.locator("#started")).to_have_text("A chat opened in VS Code to shape the new Change.")
+        assert [(Path(r), p.startswith(api.START_PROMPT)) for r, p in launched.calls[1:]] == [(Path(a.path), True)]
 
 
 @pytest.mark.browser
