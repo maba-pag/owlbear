@@ -88,8 +88,9 @@ For each must-change item, the proof its fix needs, chosen by the part it change
 | The CLI | `uv run pytest -m model serve/delivery-next/tests/test_step_loading_live.py`, run locally against the new CLI (below) |
 
 Before `brew upgrade`, that test would run the old CLI. Stage the new one beside it instead: in the run's scratch
-folder, `gh release download v<to> -R github/copilot-cli -p "copilot-darwin-$(uname -m).tar.gz" -p SHA256SUMS.txt`,
-check it (`grep "copilot-darwin-$(uname -m).tar.gz" SHA256SUMS.txt | shasum -a 256 -c -`), unpack it, confirm
+folder, with `arch=$(uname -m | sed s/x86_64/x64/)` (the release names Intel builds `x64`),
+`gh release download v<to> -R github/copilot-cli -p "copilot-darwin-$arch.tar.gz" -p SHA256SUMS.txt`, check it
+(`grep "copilot-darwin-$arch.tar.gz" SHA256SUMS.txt | shasum -a 256 -c -`), unpack it, confirm
 `./copilot --version` names `<to>`, and run the test with `COPILOT_CLI_PATH` set to that executable's absolute path.
 The host's own CLI stays as it is.
 
