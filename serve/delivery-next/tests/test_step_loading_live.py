@@ -235,7 +235,7 @@ def test_a_steps_general_purpose_subagent_inherits_his_files_with_the_switch_on(
 
 async def offered(work: Path, home: Path, *, skills: bool) -> dict[str, object]:
     """The skills a step session is offered, by name; no message is sent."""
-    user = UserConfig(instructions=False, skills=skills)
+    user = UserConfig(instructions=False, skills=skills, memory=False)
     opts = step_options(work, user=user) | {"config_directory": str(home)}
     client = CopilotClient(connection=RuntimeConnection.for_stdio(path=cli_path()))
     await client.start()

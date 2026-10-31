@@ -24,7 +24,7 @@ from owlbear_delivery_next.github.provider import MergeMethod  # noqa: TC001 - p
 from owlbear_delivery_next.settings import improvement
 from owlbear_delivery_next.settings.improvement import Spotter
 
-CONFIG_FORMAT = 18  # 3 renamed the designer to design-judge (TD-169); 4 minutes; 5 PR labels; 6 subagents; 7 sessions;
+CONFIG_FORMAT = 19  # 3 renamed the designer to design-judge (TD-169); 4 minutes; 5 PR labels; 6 subagents; 7 sessions;
 # 8 the test reviewer and curator roles; 9 the watcher's role and switch; 10 no code defaults; 11 Global's machine part;
 # 12 the watcher became the Spotter (role and settings), with the retro roles (2026-10-25);
 # 13 the five unset-by-default preferences and their one-time import marker;
@@ -32,7 +32,8 @@ CONFIG_FORMAT = 18  # 3 renamed the designer to design-judge (TD-169); 4 minutes
 # 15 no window runtime settings: its switches, visibility and tool categories go (2026-10-26);
 # 16 credit limits per look and run replace the daily budgets, written into Global once (2026-10-27);
 # 17 the user-config switches for Delivery steps (2026-10-27);
-# 18 the machine's three update check intervals (D-01M63CCVRK8ZKFENY9F4A2K11A)
+# 18 the machine's three update check intervals (D-01M63CCVRK8ZKFENY9F4A2K11A);
+# 19 Copilot Memory in Delivery's sessions (D-01M69EBRBBW97001KZ43C0BJM1)
 CARRIED_FORMAT = 10  # a Global layer below it has not had the built-in values carried in (``settings_carry.carry``)
 ROLES: tuple[Role, ...] = get_args(Role.__value__)
 type Source = Literal["default", "global", "machine", "project", "builder"]
@@ -118,6 +119,7 @@ class Layer(Record):
     # D-01M5YE4P5317N1HWD0QN6N05E0: Delivery steps load the owner's own instructions and skills; no code default
     load_user_instructions: bool | None = None
     load_user_skills: bool | None = None
+    load_user_memory: bool | None = None  # D-01M69EBRBBW97001KZ43C0BJM1: Copilot Memory in Delivery's sessions
     sessions: int | None = Field(default=None, ge=1)  # TD-336: agent sessions at once in a project, layered
     spotter: Spotter | None = None  # Improvement's Spotter (design §4); a project may set its own, e.g. switch it off
 
@@ -265,6 +267,7 @@ class Settings(Record):
     pr_marker: bool | None = None
     load_user_instructions: bool | None = None  # D-01M5YE4P5317N1HWD0QN6N05E0: unset refuses a step's session
     load_user_skills: bool | None = None
+    load_user_memory: bool | None = None
     sessions: int | None = None
     prefs: Prefs = Field(default_factory=Prefs)  # R15: each field None where no layer sets it
     spotter: Spotter = Field(default_factory=Spotter)
@@ -338,6 +341,7 @@ def resolve(glob: GlobalLayer | None, project: Layer, machine: MachineLayer | No
             "pr_marker",
             "load_user_instructions",
             "load_user_skills",
+            "load_user_memory",
             "sessions",
         )
     }

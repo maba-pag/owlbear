@@ -577,7 +577,7 @@ def test_a_start_writes_the_limits_into_global_and_publishes_them_once(shared_re
     _carry(monkeypatch, shared)
 
     raw = json.loads(shared.global_path.read_text())
-    assert raw["format"] == 18
+    assert raw["format"] == 19
     assert (raw["spotter"]["look_credit_limit"], raw["machine"]["retro_run_credit_limit"],
             raw["machine"]["replay_run_credit_limit"]) == LIMITS  # fmt: skip
     assert not set(registry.DAILY) & set(raw["machine"])
@@ -630,7 +630,7 @@ def test_a_failed_commit_keeps_the_written_global_and_the_next_start_only_publis
         _carry(monkeypatch, shared)
     assert "the commit failed" in registry.load().settings_pending
     written = shared.global_path.read_text()
-    assert json.loads(written)["format"] == 18
+    assert json.loads(written)["format"] == 19
     assert settings_carry.limits_due(shared)
 
     _carry(monkeypatch, shared)

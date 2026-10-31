@@ -35,7 +35,7 @@ from owlbear_delivery_next.workflow_steps import (
     watched,
 )
 
-SWITCHES = {"load_user_instructions": False, "load_user_skills": False}  # set by the owner, never carried
+SWITCHES = dict.fromkeys(roles.USER_CONFIG, False)  # set by the owner, never carried
 
 
 @pytest.fixture
@@ -134,7 +134,7 @@ def test_a_carried_global_resolves_every_setting(shared_repo):
     later |= {f"spotter.{k}" for k in CATEGORIES.values()}  # the categories' actions too (2026-10-26)
     later |= {f"agents.{r}.{f}" for r in ("retro", "retro-review") for f in ("model", "effort", "context", "minutes",
                                                                              "subagents")}  # fmt: skip
-    later |= {"load_user_instructions", "load_user_skills"}  # the owner sets them; never carried (2026-10-27)
+    later |= set(roles.USER_CONFIG)  # the owner sets them; never carried (2026-10-27)
     assert set(resolve(read_layer(shared.global_path, GlobalLayer), Layer()).missing) == prefs | later
 
 
@@ -175,7 +175,8 @@ def test_curation_never_starts_with_its_threshold_or_role_unset(shared_repo):
     shared = DataRepo(shared_repo[0])
     settings_carry.carry(shared)
     glob = read_layer(shared.global_path, GlobalLayer)
-    assert "load_user_instructions, load_user_skills" in curation._unset(lookup.machine(shared))  # noqa: SLF001
+    switches = "load_user_instructions, load_user_skills, load_user_memory"
+    assert switches in curation._unset(lookup.machine(shared))  # noqa: SLF001
     glob = glob.model_copy(update=SWITCHES)
     shared.global_path.write_text(glob.model_dump_json())
     assert curation._unset(lookup.machine(shared)) == ""  # noqa: SLF001

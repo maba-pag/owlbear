@@ -120,7 +120,8 @@ def test_the_owners_skills_are_available_only_with_his_switch_on_never_as_delive
     home = tmp_path / "copilot"
     _user_skills(home, tmp_path)
     monkeypatch.setenv("COPILOT_HOME", str(home))
-    cfg = session(user=UserConfig(instructions=False, skills=True)) if on else session()  # a site that sets none: off
+    # off: a site that sets none
+    cfg = session(user=UserConfig(instructions=False, skills=True, memory=False)) if on else session()
     st = sdk_adapter._Step(cfg, SimpleNamespace(call_soon_threadsafe=lambda *_: None))  # noqa: SLF001
     opts = st.options()
     folder = preload.directory()

@@ -189,7 +189,7 @@ def test_the_real_scope_keeps_the_owners_files_only_with_his_switch_on_before_th
     session = _Listing(order, sources)
     cfg = sdk_adapter.Session(
         kind=StepKind.CHECK, worktree=work, session_id="sid", message="check", resume=resume, policy=Policy(work),
-        observe=Worktree, checks=(), model="gpt-6-luna", user=UserConfig(instructions=on, skills=False),
+        observe=Worktree, checks=(), model="gpt-6-luna", user=UserConfig(instructions=on, skills=False, memory=False),
         journal=sdk_adapter.Journal(event=events.append, delivered=lambda: order.append(("delivered",))),
     )  # fmt: skip
 

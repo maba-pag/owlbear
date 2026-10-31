@@ -274,6 +274,14 @@ def update_checks_added(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+def user_memory_added(data: dict[str, Any]) -> dict[str, Any]:
+    """Settings format 18 to 19: Copilot Memory in Delivery's sessions (D-01M69EBRBBW97001KZ43C0BJM1).
+
+    It starts unset in every layer; older runtimes refuse format 19.
+    """
+    return data
+
+
 def credit_limits_written(data: dict[str, Any]) -> dict[str, Any]:
     """Global's format 15 to 16: the credit limits are written into Global once (D-01M5XCD49YHHR1NQKKY8TQD0C3).
 
@@ -344,5 +352,6 @@ CONFIG: Migrations = {
     15: daily_budgets_dropped,
     16: user_config_added,
     17: update_checks_added,
+    18: user_memory_added,
 }
 GLOBAL: Migrations = CONFIG | {15: credit_limits_written}  # the Global layer's: only it is written the limits
