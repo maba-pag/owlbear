@@ -65,20 +65,27 @@ export function show() {
   }
 }
 
-// Focus *target*, or a row's first control: the menu's dialog puts the focus back on its button as it closes, so the
-// focus is put back until it has stayed a few frames, for at most a second, and never after the owner's next key or
-// pointer press, which moves it himself.
+// Focus *target*, or a row's first control, and keep it in view: the menu's dialog puts the focus back on its button as
+// it closes, and the components above it grow as they load, so the focus is put back and the control scrolled to again
+// until both have stayed a few frames, for at most a second, and never after the owner's next key, pointer press or
+// wheel, which moves them himself.
 async function reveal(target) {
   const control = target.matches("p-table-row, div") ? target.querySelector(":is([data-key], [id^='machine-'], "
     + "[id^='global-machine-'], p-select, p-input-text, p-segmented-control):not([disabled])")
     : null;  // a setting the shown layer cannot hold is read-only: its row takes the focus
-  const into = control ?? target;
-  into.scrollIntoView({ block: control ? "center" : "start" });
+  const into = control ?? target, block = control ? "center" : "start";
+  into.scrollIntoView({ block });
+  let top = into.getBoundingClientRect().top;
   const owner = new AbortController();
-  for (const type of ["keydown", "pointerdown"]) {
+  for (const type of ["keydown", "pointerdown", "wheel"]) {
     addEventListener(type, () => owner.abort(), { capture: true, signal: owner.signal });
   }
   for (let frame = 0, kept = 0; frame < 60 && kept < 10 && !owner.signal.aborted; frame++) {
+    if (into.getBoundingClientRect().top !== top) {
+      into.scrollIntoView({ block });
+      top = into.getBoundingClientRect().top;
+      kept = 0;
+    }
     if (into.matches(":focus")) kept++;
     else into.focus({ preventScroll: true });
     await new Promise(requestAnimationFrame);
