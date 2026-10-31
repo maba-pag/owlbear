@@ -16,7 +16,7 @@
       "decisions[].revision",
       "decisions[].created_at"
     ],
-    "GET /decisions/{decision_id}": ["links[].type", "links[].id"],
+    "GET /decisions/{decision_id}": ["state", "origin", "links[].type", "links[].id"],
     "POST /briefs/challenge": ["slug", "attempt", "paused"]
   },
   "routes": {

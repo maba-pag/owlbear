@@ -11,7 +11,7 @@ import threading
 import urllib.error
 import urllib.request
 from contextlib import contextmanager
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from email.message import Message
 from pathlib import Path
 from types import SimpleNamespace
@@ -121,6 +121,13 @@ def made_now(shared: DataRepo, **changes: object) -> Callable[[], None]:
         assert saving(shared, make(**changes, created_at=datetime.now(UTC)))().saved
 
     return save
+
+
+def withdraw(shared: DataRepo) -> None:
+    """The owner withdraws the one decision titled like the chat's."""
+    made = decision_store.load(shared, PROJECT).snapshot.get(titled(shared)[0]).decision
+    gone = made.model_copy(update={"state": State.WITHDRAWN})
+    assert decision_store.save(shared, gone, expected_revision=made.revision, message="decisions: gone").saved
 
 
 def test_a_save_held_in_publish_reads_as_in_progress_never_as_interrupted(shared, owner, held_publish):
@@ -425,9 +432,7 @@ def test_a_save_held_past_its_deadline_is_refused_and_the_chat_says_not_saved_on
     assert len([s for s in loop.seen if s[0] == "POST"]) == 1
 
 
-def test_a_decision_like_it_in_another_layer_or_made_before_it_is_never_taken_for_it(shared, wire):
-    older = make(title=TITLE, statement=PROPOSAL["statement"])
-    assert saving(shared, older)().saved
+def test_a_decision_like_it_in_another_layer_is_never_taken_for_it(shared, wire):
     chat, _ = wire(after=made_now(shared, title=TITLE, statement=PROPOSAL["statement"], scope=Scope.GLOBAL, project=""))
 
     out = chat.propose(REFUSED)
@@ -435,13 +440,29 @@ def test_a_decision_like_it_in_another_layer_or_made_before_it_is_never_taken_fo
     assert (out["saved"], out["error"]) == (False, chat_client.NOT_SAVED)
 
 
-def test_a_found_decision_that_is_not_the_one_sent_is_unclear_never_saved(shared, wire):
-    def withdrawn() -> None:
-        made = decision_store.load(shared, PROJECT).snapshot.get(titled(shared)[0]).decision
-        gone = made.model_copy(update={"state": State.WITHDRAWN})
-        assert decision_store.save(shared, gone, expected_revision=made.revision, message="decisions: gone").saved
+def test_a_decision_like_it_made_before_it_was_sent_is_never_taken_for_it_nor_called_not_saved(shared, wire):
+    older = make(title=TITLE, statement=PROPOSAL["statement"])
+    assert saving(shared, older)().saved
+    chat, _ = wire()
+    out = chat.propose(REFUSED)
+    assert (out["saved"], out["error"]) == (None, unclear(older.id))
 
-    chat, _ = wire(after=withdrawn)
+
+def unclear(ids: str) -> str:
+    return chat_client.UNCLEAR.format(why=chat_client.OLDER.format(ids=ids))
+
+
+def test_a_save_that_reads_as_made_before_it_was_sent_after_the_clock_went_back_is_unclear(shared, wire, monkeypatch):
+    back = SimpleNamespace(now=lambda tz: datetime.now(tz) + timedelta(hours=1), fromisoformat=datetime.fromisoformat)
+    monkeypatch.setattr(chat_client, "datetime", back)  # the propose started an hour "after" its save
+    chat, _ = wire()
+    out = chat.propose(PROPOSAL)
+    (made,) = titled(shared)
+    assert (out["saved"], out["error"]) == (None, unclear(made))
+
+
+def test_a_found_decision_that_is_not_the_one_sent_is_unclear_never_saved(shared, wire):
+    chat, _ = wire(after=lambda: withdraw(shared))
     out = chat.propose(PROPOSAL)
     assert out["saved"] is None
     assert decision_store.load(shared, PROJECT).snapshot.entries[0].decision.id in out["error"]
@@ -453,6 +474,20 @@ def test_a_found_decision_that_is_not_the_one_sent_is_unclear_never_saved(shared
                                   links=link))  # fmt: skip
     out = chat.propose(REFUSED)
     assert (out["saved"], rival in out["error"]) == (None, True)
+
+
+def test_a_found_decision_the_owner_withdraws_before_its_detail_is_read_is_unclear(shared, wire, monkeypatch):
+    chat, _ = wire()
+    read = chat.call
+
+    def call(method: str, path: str, *args: object, **kwargs: object) -> object:
+        if method == "GET" and path.startswith("/decisions/"):  # the list found it; its detail is read next
+            withdraw(shared)
+        return read(method, path, *args, **kwargs)
+
+    monkeypatch.setattr(chat, "call", call)
+    out = chat.propose(PROPOSAL)
+    assert (out["saved"], titled(shared)[0] in out["error"]) == (None, True)
 
 
 def test_a_host_without_the_fence_never_has_a_lost_save_called_not_saved(wire):

@@ -83,6 +83,7 @@ NOT_SAVED = "the host's answer was lost and the decision was not saved: record i
 UNCLEAR = "the host's answer was lost and whether the decision was saved is unclear; do not record it again: {why}"
 STILL_SAVING = "a decision save is still in progress; check find_decisions shortly"
 UNFENCED = "this host cannot promise the save did not start; check find_decisions shortly, or ask the owner"
+OLDER = "{ids} match it but read as made before it was sent; ask the owner"
 
 
 class Chat:
@@ -299,8 +300,11 @@ class Chat:
                     return {"saved": None, "error": UNCLEAR.format(why=f"{why}; ask the owner")}
                 if t > admit_by + SETTLE:
                     return {"saved": None, "error": UNCLEAR.format(why=STILL_SAVING)}
-            elif found := [d for d in out["decisions"] if _same(d, body, started)]:
-                return self._found(body, found)
+            elif same := [d for d in out["decisions"] if _same(d, body)]:
+                if found := [d for d in same if datetime.fromisoformat(d["created_at"]) >= started]:
+                    return self._found(body, found)
+                if t > admit_by:  # an older one, or this one if the clock went back: never "record it again"
+                    return {"saved": None, "error": UNCLEAR.format(why=OLDER.format(ids=_ids(same)))}
             elif t > admit_by and fenced:
                 return {"saved": False, "error": NOT_SAVED}
             elif t > admit_by:
@@ -308,8 +312,8 @@ class Chat:
             _pause(POLL)
 
     def _found(self, body: dict[str, Any], found: list[dict[str, Any]]) -> dict[str, Any]:
-        """The one decision this propose saved, else why it is unclear: never a decision someone else made."""
-        ids = ", ".join(d["id"] for d in found)
+        """The one decision this propose saved, else why it is unclear: never one that differs from it."""
+        ids = _ids(found)
         if len(found) > 1:
             return {"saved": None, "error": UNCLEAR.format(why=f"{ids} match it; ask the owner")}
         made = found[0]
@@ -317,7 +321,7 @@ class Chat:
         links = [link.get("id") for link in detail.get("links", []) if link.get("type") == "replaces"]
         wanted = (body["replaces"],) if body.get("replaces") else ()
         state, origin = ("in_force", body["origin"]) if body["confirmed"] else ("draft", "autonomous")
-        if code != OK or tuple(links) != wanted or (made["state"], made["origin"]) != (state, origin):
+        if code != OK or tuple(links) != wanted or (detail.get("state"), detail.get("origin")) != (state, origin):
             return {"saved": None, "error": UNCLEAR.format(why=f"{ids} matches it in part; ask the owner")}
         notice = SAVED.format(id=made["id"])
         if body["confirmed"] and body.get("replaces") and body.get("effect") != "wording":
@@ -325,13 +329,15 @@ class Chat:
         return {"saved": True, "receipts": [{"id": made["id"], "saved": True}], "notice": notice}
 
 
-def _same(row: dict[str, Any], body: dict[str, Any], started: datetime) -> bool:
-    """The row has the sent wording and layer, and was made since the propose started."""
-    return (
-        (row["title"].strip(), row["statement"].strip()) == (body["title"].strip(), body["statement"].strip())
-        and (row["scope"] == "global") == (body["scope"] == "global")
-        and datetime.fromisoformat(row["created_at"]) >= started
-    )
+def _same(row: dict[str, Any], body: dict[str, Any]) -> bool:
+    """The row has the sent wording and layer."""
+    return (row["title"].strip(), row["statement"].strip()) == (body["title"].strip(), body["statement"].strip()) and (
+        row["scope"] == "global"
+    ) == (body["scope"] == "global")
+
+
+def _ids(rows: list[dict[str, Any]]) -> str:
+    return ", ".join(d["id"] for d in rows)
 
 
 class OwlBear(Chat):
