@@ -25,6 +25,7 @@ from owlbear_delivery_next.machine_host.project import Project
 from owlbear_delivery_next.machine_host.retro_job import DRAIN, RetroJob
 from owlbear_delivery_next.project_host import session_slots
 from owlbear_delivery_next.project_host.host import RunnerRecord
+from owlbear_delivery_next.runtimes import settings_read
 from owlbear_delivery_next.state_store import machine_settings, project_home, registry, settings_carry
 from owlbear_delivery_next.state_store.store import StoreError
 
@@ -81,6 +82,7 @@ class Machine:
         self.total = 0  # until the machine's total is read; unset, no session starts (2026-10-23)
         self.slots = Slots(self._sessions, closed=True)  # opened once every project's live steps are counted
         self.maintenance = maintenance.Maintenance(self.slots)
+        self.reads = settings_read.Reader(self.say, lambda: [o.store for o in list(self.projects.values()) if o.store])
         from owlbear_delivery_next.machine_host.auto_update import Auto  # noqa: PLC0415 - it names this class
         from owlbear_delivery_next.machine_host.impeccable import Impeccable  # noqa: PLC0415 - it names this class
         from owlbear_delivery_next.machine_host.update import Updater  # noqa: PLC0415 - it names this class
@@ -161,7 +163,8 @@ class Machine:
 
         def bind(h: Host) -> None:  # before its scheduler's first pass
             h.peers = lambda: self.sharing(p)
-            h.machine = lambda: [o.store for o in list(self.projects.values()) if o.store]  # a failed host's too
+            h.machine = self.reads.stores  # every project's store, a failed host's too
+            h.reads = self.reads  # Settings' outside reads, one for the machine
             h.draining = lambda: self.ending
             h.closed = lambda: self.stopping.is_set() or not p.gate.open
             h.updating = lambda: self.updating
@@ -417,6 +420,7 @@ class Machine:
         if not self.chats.join(chats.CLOSE):  # outside the lock; the follower keeps its own lock until it ends
             self.say("the chats follower is still ending; no other follower starts until it has")
         self.checks.drain()  # says itself when a check did not end
+        self.reads.drain()  # a running read ends first; the stop is already set
         self.say("stopped: every project closed")
 
 

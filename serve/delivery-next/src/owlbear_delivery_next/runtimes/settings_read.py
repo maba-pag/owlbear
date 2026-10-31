@@ -100,9 +100,7 @@ class Reader:
     def polled(self) -> dict[str, Any]:
         """The read state in brief, for every page's poll."""
         seen = self.ledger.load()
-        return {
-            "read_at": seen.read_at.isoformat() if seen.read_at else None,
-            "succeeded_at": seen.succeeded_at.isoformat() if seen.succeeded_at else None,
+        return seen.model_dump(mode="json", include={"read_at", "succeeded_at"}) | {  # as shown() writes them
             "failed": sorted({f.source for f in seen.failures}),
             "notices": [n.id for n in seen.notices],
         }

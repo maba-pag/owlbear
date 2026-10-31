@@ -143,6 +143,7 @@ def serve(*, run: bool = False, handing: bool = False) -> int:
     threading.Thread(target=machine.idle_loop, daemon=True, name="idle-stop").start()
     threading.Thread(target=machine.auto.loop, daemon=True, name="idle-update").start()
     threading.Thread(target=machine.checks.loop, daemon=True, name="update-checks").start()
+    threading.Thread(target=machine.reads.loop, args=(machine.stopping,), daemon=True, name="settings-read").start()
     threading.Thread(target=machine.curation_loop, daemon=True, name="idle-curation").start()
     machine.cases.start(machine.stopping, time.monotonic)  # drained when the host ends (``Machine.stop_all``)
     machine.retro.start(machine.stopping, time.monotonic)  # drained when the host ends, too

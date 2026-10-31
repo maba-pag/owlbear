@@ -1,17 +1,23 @@
 import io
+import json
 import os
 import plistlib
 import signal
+import socket
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 
 import pytest
+from fastapi.testclient import TestClient
 
 from owlbear_delivery_next.commands import cli
-from owlbear_delivery_next.local_system import local_home
-from owlbear_delivery_next.machine_host import command, control, install
+from owlbear_delivery_next.local_system import data_repo, local_home
+from owlbear_delivery_next.machine_host import app, command, control, install
+from owlbear_delivery_next.runtimes import settings_read
+from owlbear_delivery_next.state_store import registry
 
 
 def test_help_and_completion_load_no_command_module() -> None:
@@ -260,8 +266,20 @@ def test_status_says_the_shared_data_with_the_host_down_and_no_project() -> None
 
 
 @pytest.fixture
-def no_host_left():
-    """A test that starts real hosts stops what it left running, even when it fails partway."""
+def no_host_left(monkeypatch, tmp_path):
+    """A test that starts real hosts stops what it left running, even when it fails partway.
+
+    The hosts are child processes, which this process's stubs never reach: their start read finds no Copilot CLI and
+    no way to GitHub, and fails at once.
+    """
+    with socket.socket() as closed:
+        closed.bind(("127.0.0.1", 0))
+        port = closed.getsockname()[1]
+    monkeypatch.setenv("COPILOT_CLI_PATH", str(tmp_path / "no-copilot"))
+    for name in ("https_proxy", "HTTPS_PROXY"):
+        monkeypatch.setenv(name, f"http://127.0.0.1:{port}")
+    for name in ("no_proxy", "NO_PROXY"):
+        monkeypatch.setenv(name, "")
     yield
     if control.serve.running() is not None:
         control.stop(lambda _said: None)
@@ -277,12 +295,19 @@ def test_start_runs_one_detached_host_and_stop_ends_it() -> None:
     assert said[-1].startswith("OwlBear is running")
     listed = control.projects()
     assert listed is not None
-    assert listed | {"update": None, "pack": None} == {
+    assert listed | {"update": None, "pack": None, "reads": None} == {
         "paused": False, "waiting": 0, "projects": [], "ending": False, "left": [], "update_while_paused": False,
-        "update": None, "updated": "", "announce": None, "pack": None,
+        "update": None, "updated": "", "announce": None, "pack": None, "reads": None,
     }  # fmt: skip  # a real host: no Global and nothing set here, so it never updates while paused (2026-10-23)
     assert listed["update"]["phase"] == "idle"
     assert set(listed["pack"]) == {"install", "release"}  # its content depends on this machine's own pack
+    end = time.monotonic() + 30
+    while (reads := control.projects()["reads"])["read_at"] is None:  # the start read, against the outside world
+        assert time.monotonic() < end, "the host never read at its start"
+        time.sleep(0.2)
+    assert (reads["failed"], reads["succeeded_at"], reads["notices"]) == (
+        [settings_read.IMPECCABLE, settings_read.MODELS], None, []
+    )  # fmt: skip
     assert control.stop(said.append) == 0
     assert (control.serve.running(), said[-1]) == (None, "OwlBear stopped; running steps finish on their own")
     logged = (local_home.root() / control.LOG).read_text()
@@ -406,3 +431,80 @@ def test_a_running_host_whose_api_does_not_answer_is_no_success(monkeypatch) -> 
     monkeypatch.setattr(control.subprocess, "Popen", lambda *_a, **_k: pytest.fail("one host runs already"))
     assert control.start(said.append) == 1
     assert said[-1] == "OwlBear did not answer within 0 s; see `owlbear logs`"
+
+
+def git(cwd: Path, *args: str) -> None:
+    who = ["-c", "user.name=t", "-c", "user.email=t@example.com"]
+    subprocess.run(["git", *who, *args], cwd=cwd, check=True, capture_output=True)  # noqa: S603, S607
+
+
+def flip_channel(other: Path) -> tuple[str | None, str]:
+    """Change Global's channel from another clone, on top of what this host's start carried into Global."""
+    git(other, "pull", "-q")
+    glob = json.loads((other / data_repo.CONFIG).read_text())
+    was = glob.setdefault("machine", {}).get("channel")
+    glob["machine"]["channel"] = "minor" if was == "major" else "major"
+    (other / data_repo.CONFIG).write_text(json.dumps(glob, indent=1))
+    git(other, "commit", "-qam", "elsewhere: Global's channel")
+    git(other, "push", "-q")
+    return was, glob["machine"]["channel"]
+
+
+def test_the_host_reads_at_start_and_every_hour_and_both_pages_see_it(monkeypatch, tmp_path, shared_repo) -> None:
+    """#810: the real ``serve`` reads once at its start and then waits an hour; a Global change from elsewhere that
+    the next read finds is shown to the machine's pages and the project's Settings until dismissed."""
+    root, remote = shared_repo
+    other = tmp_path / "other"
+    git(tmp_path, "clone", "-q", str(remote), str(other))
+    monkeypatch.setenv(data_repo.VIEW, str(root))
+    git(tmp_path, "init", "-q", str(tmp_path / "p"))
+    git(tmp_path / "p", "commit", "-q", "--allow-empty", "-m", "i")
+    pid = registry.register(tmp_path / "p").id
+    waits, go = [], threading.Event()
+
+    def gate(_self, stopping: threading.Event, seconds: float) -> bool:
+        """The hour between reads, held until the test lets the next read run."""
+        waits.append(seconds)
+        while not (go.is_set() or stopping.is_set()):
+            stopping.wait(0.05)
+        go.clear()
+        return stopping.is_set()
+
+    def until(done, what: str) -> None:
+        end = time.monotonic() + 30
+        while not done():
+            assert time.monotonic() < end, what
+            time.sleep(0.05)
+
+    checked = []
+
+    def run(self, **_kw) -> None:
+        machine = self.machine
+        until(lambda: waits, "the host never read at its start")
+        first = machine.reads.ledger.load()
+        assert (first.read_at is not None, first.notices, waits) == (True, [], [3600])
+        was, now = flip_channel(other)
+        go.set()
+        until(lambda: len(waits) == 2, "the hourly read never ran")
+        assert waits == [3600] * 2  # an hour, whatever the constant says
+        c = TestClient(app.create(machine), base_url="http://127.0.0.1",
+                       headers={"authorization": f"Bearer {machine.record.token}"})  # fmt: skip
+        polled = c.get("/api/next/projects").json()["reads"]
+        shown = c.get(f"/p/{pid}/api/next/config/read").json()["reads"]
+        notices = shown["notices"]
+        assert polled["read_at"] == shown["read_at"]  # the page compares them to know a read it has not shown
+        assert [(n["id"], n["key"], n["old"], n["new"]) for n in notices] == [
+            (polled["notices"][0], "machine.channel", was and json.dumps(was), json.dumps(now))
+        ]
+        assert c.post("/api/next/settings-read/dismiss", json={"ids": polled["notices"]}).json()["notices"] == []
+        assert c.get("/api/next/projects").json()["reads"]["notices"] == []
+        assert c.get(f"/p/{pid}/api/next/config/read").json()["reads"]["notices"] == []
+        checked.append(True)
+
+    monkeypatch.setattr(settings_read.Reader, "pause", gate)
+    monkeypatch.setattr(control.serve.Server, "run", run)
+    assert control.serve.serve(run=True) == 0
+    assert checked == [True]
+    for t in [t for t in threading.enumerate() if t.name == "settings-read"]:
+        t.join(5)
+        assert not t.is_alive(), "the hourly read outlived its host"
