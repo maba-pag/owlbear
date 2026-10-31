@@ -31,6 +31,7 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.state_store.backlog import Entry
 
 MARK = "followup:"
+SAVED = "followups.jsonl"  # the entries saved, or found made, at the owner's request rather than by a run
 SUBJECT = 6_000  # characters of the subject a minimising message carries
 PROMPT = Path(__file__).with_name("followup_prompt.md")
 FINDING = ("id", "what", "mechanism", "cost", "steps", "quotes", "cause", "target")
@@ -134,10 +135,22 @@ def request(fid: str, by: str, places: Mapping[str, targets.Place], backlogs: Ba
     subj = subject(fid, places)
     view = backlogs(subj["folder"])
     if (made := _made(view, fid)) is not None:
-        return {"entry": _entry(made, view)}
+        return _kept(fid, _entry(made, view))
     if subj["source"] == "retro" and (text := reusable(fid)) is not None:
-        return {"entry": save(subj, text, backlogs)}
+        return _kept(fid, save(subj, text, backlogs))
     return {"queued": store.request(by, followup=fid)}
+
+
+def _kept(fid: str, entry: dict[str, Any]) -> dict[str, Any]:
+    """Note *fid*'s entry, so its follow-up shows as saved without a run; the answer."""
+    with store.locked():
+        store.append(SAVED, {"id": fid, "entry": entry, "at": store.now()})
+    return {"entry": entry}
+
+
+def saved() -> dict[str, dict[str, Any]]:
+    """Each follow-up saved without a run: its finding's or record's id -> its entry, the newest."""
+    return {line["id"]: line["entry"] for line in store.lines(SAVED)}
 
 
 def _valid(said: Mapping[str, Any]) -> bool:

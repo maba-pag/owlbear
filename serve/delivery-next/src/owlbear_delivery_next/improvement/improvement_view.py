@@ -10,7 +10,7 @@ import contextlib
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
-from owlbear_delivery_next.improvement import assumptions, case_replay, cases, proposal_apply
+from owlbear_delivery_next.improvement import assumptions, case_replay, cases, followups, proposal_apply
 from owlbear_delivery_next.improvement import proposal_targets as targets
 from owlbear_delivery_next.improvement import retro_proposals as props
 from owlbear_delivery_next.improvement import retro_store as store
@@ -132,8 +132,8 @@ def looks(  # noqa: PLR0913 - what is read, and the filter
                 outside += [r | {"project": pid, "change": slug} for r in rows if r["targets"]]
         except UNREADABLE as exc:
             unread.append(f"{pid}: {type(exc).__name__}: {exc}")
-    queued, runs = store.queued(), store.runs(ALL_RUNS, synthetic=True)
-    shown = [r | {"followup": followup(r["id"], queued, runs)} for r in _graded(picked, grades)[:limit]]
+    known = _followups()
+    shown = [r | {"followup": followup(r["id"], *known)} for r in _graded(picked, grades)[:limit]]
     return {"looks": shown, "outside": _newest(outside)[:limit], "unread": unread}
 
 
@@ -263,10 +263,21 @@ def proposals(projects: units.Projects, shared_root: Path | None) -> list[dict[s
 # A Change's detail and a finding's follow-up
 
 
-def followup(fid: str, queued: list[dict[str, Any]], runs: list[dict[str, Any]]) -> dict[str, Any]:
-    """What this machine knows of *fid*'s follow-up: queued, the newest run's entry or how it ended, else nothing."""
+def _followups() -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, dict[str, Any]]]:
+    return store.queued(), store.runs(ALL_RUNS, synthetic=True), followups.saved()
+
+
+def followup(
+    fid: str, queued: list[dict[str, Any]], runs: list[dict[str, Any]], saved: Mapping[str, dict[str, Any]]
+) -> dict[str, Any]:
+    """What this machine knows of *fid*'s follow-up.
+
+    Queued, its entry saved without a run, the newest run's entry or how it ended, else nothing.
+    """
     if any(q.get("followup") == fid for q in queued):
         return {"state": "queued"}
+    if fid in saved:
+        return {"state": "saved", "entry": saved[fid]}
     run = next((r for r in runs if r.get("unit") == f"finding:{fid}"), None)
     if run is None:
         return {"state": ""}
@@ -277,8 +288,8 @@ def followup(fid: str, queued: list[dict[str, Any]], runs: list[dict[str, Any]])
 
 def change_detail(pid: str, slug: str, records: list[dict[str, Any]], grades: list[dict[str, Any]]) -> dict[str, Any]:
     """Change *slug* of project *pid*: its looks with their grades and its Retro findings, each with its follow-up."""
-    queued, runs = store.queued(), store.runs(ALL_RUNS, synthetic=True)
+    known = _followups()
     picked = [r for r in records if r.get("project") == pid and r.get("change") == slug]
-    shown = [r | {"followup": followup(r["id"], queued, runs)} for r in _graded(picked, grades)]
+    shown = [r | {"followup": followup(r["id"], *known)} for r in _graded(picked, grades)]
     found = store.findings(change=f"{pid}:{slug}", synthetic=True)
-    return {"looks": shown, "findings": [f | {"followup": followup(f["id"], queued, runs)} for f in found]}
+    return {"looks": shown, "findings": [f | {"followup": followup(f["id"], *known)} for f in found]}
