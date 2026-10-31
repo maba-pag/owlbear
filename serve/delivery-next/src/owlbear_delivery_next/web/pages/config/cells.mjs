@@ -294,7 +294,7 @@ export function ratesCell(role) {
   const flow = `in\u00a0${amount(rates.input)} \u00b7 out\u00a0${amount(rates.output)}`;
   const line = `${flow} \u00b7 cache\u00a0${rates.cache == null ? "not known" : amount(rates.cache)}${write}`;
   const effort = own(`${role}.effort`) || inherited().agents[role].effort;  // the runtime prices no effort
-  return cell(html`<p-text>${line}</p-text><p-text size="xs" color="contrast-medium">${model.id}, ${long ? "long"
+  return cell(html`<p-text>${line}</p-text><p-text color="contrast-medium">${model.id}, ${long ? "long"
     : "default"} context \u00b7 effort\u00a0${said(effort)}; same rates at every effort</p-text>`);
 }
 
