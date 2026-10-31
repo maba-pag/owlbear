@@ -75,8 +75,8 @@ def _found() -> dict[str, Any]:
 
 def checked() -> dict[str, Any]:
     """Look now and keep it for the pages; what was found: ``state``, the ``version`` to take and ``detail``."""
+    path = local_home.root() / pack_files.PACKS / RELEASED  # before the fetch: the home may move while it runs
     kept = _found() | {"running": versions.running(), "running_pack": pack_files.manifest()["pack"]}
-    path = local_home.root() / pack_files.PACKS / RELEASED
     with contextlib.suppress(OSError):  # a hint: unwritten, it is looked at again by the next check
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(kept | {"checked_at": _now()}) + "\n", encoding="utf-8")

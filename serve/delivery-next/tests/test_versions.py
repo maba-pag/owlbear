@@ -5,10 +5,12 @@ version's interpreter is a script that records how its Impeccable was installed.
 """
 
 import json
+import os
 import shutil
 import subprocess
 import sys
 import threading
+import time
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -16,7 +18,7 @@ import pytest
 
 from owlbear_delivery_next.impeccable import pack_files
 from owlbear_delivery_next.local_system import codebase, data_place, data_repo, local_home
-from owlbear_delivery_next.machine_host import impeccable, selfcheck, update_checks, versions
+from owlbear_delivery_next.machine_host import environment, impeccable, selfcheck, update_checks, versions
 from owlbear_delivery_next.machine_host.versions import Choice
 from owlbear_delivery_next.project_host import pages
 from owlbear_delivery_next.settings.config import CONFIG_FORMAT
@@ -283,7 +285,7 @@ def test_a_release_found_on_another_channel_is_unknown_to_the_banner_and_the_upd
     """A channel change can withdraw the version found; with the check's interval unset it would stay offered."""
     at_v0_2(origin)
     released(origin, "v0.3", '{"pack": "p-new"}')
-    checks = update_checks.Checks(SimpleNamespace(say=print), spawn=lambda work: work())
+    checks = update_checks.Checks(SimpleNamespace(say=print, stopping=threading.Event()), spawn=lambda work: work())
     checks.start("owlbear")
 
     def owlbear() -> dict:
@@ -313,7 +315,7 @@ def test_a_release_pinning_the_same_pack_shows_nothing_and_an_unreadable_one_sta
     said = impeccable.look()
     assert (said["state"], said["version"]) == ("unknown", "v0.4")
     assert "Impeccable is unreadable" in said["detail"]
-    checks = update_checks.Checks(SimpleNamespace(say=print), spawn=lambda work: work())
+    checks = update_checks.Checks(SimpleNamespace(say=print, stopping=threading.Event()), spawn=lambda work: work())
     checks.start("owlbear")
     row = next(u for u in checks.read()["updates"] if u["name"] == "owlbear")
     assert (row["state"], row["latest"], "Impeccable is unreadable" in row["detail"]) == ("newer", "v0.4", True)
@@ -479,3 +481,28 @@ def test_a_format_3_machine_json_reads_with_no_version_ever_active():
     (local_home.root() / registry.MACHINE).write_text(json.dumps({"format": 3, "projects": []}))
 
     assert registry.load().active == ""
+
+
+@pytest.mark.parametrize(
+    "route", ["the host's start scrubbed git's settings", "a fixture's own global git config", "a test's undo()"]
+)
+def test_a_tests_git_never_reaches_github(route, tmp_path, monkeypatch):
+    """#804: no route a test takes around the offline rule (the host start dropping GIT_CONFIG_*, a fixture's own
+    global config, a test's monkeypatch.undo() putting the real HOME back) lets git reach GitHub."""
+    if route.startswith("the host"):
+        for name in environment.scrub(dict(os.environ)):
+            monkeypatch.delenv(name)
+    elif route.startswith("a fixture"):
+        monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(tmp_path / "gitconfig"))
+        monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+    else:
+        monkeypatch.undo()
+        monkeypatch.setenv("HOME", str(tmp_path))  # one with no .gitconfig, never the machine's
+        monkeypatch.setattr(local_home, "root", lambda: tmp_path / ".owlbear")
+    url = ["git", "ls-remote", "--get-url", codebase.URL]  # resolves the URL offline
+    resolved = subprocess.run(url, capture_output=True, text=True, check=True).stdout  # noqa: S603 - fixed arguments
+    assert resolved.startswith("/nonexistent/offline-in-tests/"), resolved
+    began = time.monotonic()
+    with pytest.raises(versions.VersionError, match="/nonexistent/offline-in-tests/"):
+        versions.repo()  # codebase.URL, OwlBear's GitHub repository
+    assert time.monotonic() - began < 5
