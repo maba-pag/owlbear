@@ -434,7 +434,7 @@ def every_machine_s_settings_are_saved_with_the_global_layer(page, pds, shared: 
     page.get_by_label("Every machine: Agent sessions at once on this machine, across its projects").fill("5")
     page.get_by_label("Every machine: Hours between checks for a newer OwlBear (it also checks at launch)").fill("12")
     page.locator(".bar").get_by_role("button", name="Save global defaults").click()
-    expect(pds.modal(page)).to_contain_text("machine channel: inherited → major")
+    expect(pds.modal(page)).to_contain_text("machine channel: unset → major")
     pds.answer(page, "Save global defaults")
     expect(page.locator("#status")).to_have_text("Saved the global settings. They apply to the next session.")
     glob = read_layer(shared.global_path, GlobalLayer).machine
@@ -638,6 +638,15 @@ def test_with_no_machine_setting_set_anywhere_the_page_names_each_and_a_pending_
             pds.answer(page, "Save machine settings")
             expect(region).to_contain_text("in use: Every minor version (v0.1, v0.2 …), from this machine")
             expect(red).to_have_count(13)
+            pds.pick(page, "Layer", "global")  # D-01M61SEXPFT9MXZGQHYVYFQ77C: Global sets none of them
+            warned = region.get_by_text("Unset: every machine must then set its own", exact=True)
+            expect(warned).to_have_count(14)
+            channel = "Every machine: Versions this machine takes"
+            expect(pds.select(page, channel).locator('p-select-option[value="inherit"]')).to_have_text("Unset")
+            pds.pick(page, channel, "major")  # the warning follows the edit, before any save
+            expect(warned).to_have_count(13)
+            pds.pick(page, channel, "inherit")
+            expect(warned).to_have_count(14)
             browser.close()
     finally:
         server.should_exit = True

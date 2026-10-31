@@ -132,12 +132,12 @@ def the_global_layer_kept_its_edit_and_takes_one_more(page, pds) -> None:
     pds.group(page, "runs")
     expect(page.get_by_label("Minutes per session, builder")).to_have_value("60")
     pds.group(page, "checks")
-    expect(page.locator("#pr")).to_contain_text("inherit (on)")  # layered since code ships no defaults
+    expect(page.locator("#pr")).to_contain_text("Unset")  # D-01M61SEXPFT9MXZGQHYVYFQ77C: nothing under Global
     pds.group(page, "runs")
     threshold = page.get_by_label("Curator's confidence threshold in percent (50 to 100)")
-    expect(threshold).to_have_attribute("placeholder", "inherit (95)")
+    expect(threshold).to_have_attribute("placeholder", "Unset")
     threshold.fill("90")
-    expect(page.locator("#pending")).to_contain_text("curator threshold: inherited → 90")
+    expect(page.locator("#pending")).to_contain_text("curator threshold: unset → 90")
     pds.pick(page, "Layer", "project")
     expect(page.locator("#curation")).to_contain_text("Set for all projects")  # one value everywhere
 
@@ -575,6 +575,143 @@ def test_with_no_layer_setting_anything_the_page_names_every_unset_value_and_a_s
     assert (spotter.model, spotter.effort, spotter.context) == ("tiny", "medium", "default")
 
 
+def _layered(store: Store, monkeypatch, glob: dict, machine: dict, project: dict) -> None:
+    """Only these three layers set anything: no built-in layer under Global."""
+    from owlbear_delivery_next.settings import config  # noqa: PLC0415
+    from owlbear_delivery_next.state_store import machine_settings  # noqa: PLC0415
+
+    monkeypatch.setattr(config, "BASE", None)
+    monkeypatch.setattr(machine_settings, "BASE", None)
+    for path, model, values in ((store.global_path, config.GlobalLayer, glob),
+                                (store.machine_path, config.MachineLayer, machine),
+                                (store.config_path, config.Layer, project)):  # fmt: skip
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(model.model_validate(values).model_dump_json())
+
+
+GLOBAL = {
+    "sessions": 2,
+    "pr_marker": True,
+    "spotter": {"looks": ["hand-off"]},
+    "agents": {"builder": {"model": "claude-opus-5.5", "effort": "high", "context": "long", "minutes": 40}},
+}
+
+
+def _option(page, pds, label: str) -> Any:
+    """The option that clears the shown layer's value in the select labelled *label*."""
+    return pds.select(page, label).locator('p-select-option[value="inherit"]')
+
+
+WARNED = "Unset: every machine or project must then set its own"
+
+
+def global_s_agents_clear_to_unset_and_warn_where_needed(page, pds) -> None:
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    pds.pick(page, "Layer", "global")
+    expect(_option(page, pds, "Model for builder")).to_have_text("Unset")
+    expect(_option(page, pds, "Effort for builder")).to_have_text("Unset")
+    builder = page.locator("#set-agents-builder")
+    expect(builder.get_by_role("button", name="Unset")).to_be_visible()  # its own long context
+    expect(builder.locator("p-text[color='warning']")).to_have_count(0)
+    expect(page.locator("#set-agents-planner")).to_contain_text(WARNED)
+    expect(_option(page, pds, "Built-in subagents, builder")).to_have_text("Unset")
+    expect(_option(page, pds, "On or off")).to_have_text("Unset")  # the Spotter's switch
+    expect(page.locator("#set-spotter-switch")).to_contain_text(WARNED)
+    expect(page.get_by_label("Looks", exact=True)).to_have_value("hand-off")
+    for unneeded in ("verbose_until", "sample_rate"):  # never needed; needed only for a sample look
+        expect(page.locator(f"#set-spotter-{unneeded} p-text[color='warning']")).to_have_count(0)
+    expect(_option(page, pds, INSTRUCTIONS)).to_have_text("Unset")
+
+
+def global_s_runs_and_checks_clear_to_unset_and_warn_where_needed(page, pds) -> None:
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    pds.group(page, "runs")
+    expect(page.get_by_label("Rounds at most, final review")).to_have_attribute("placeholder", "Unset")
+    expect(page.locator("#set-rounds-final_review")).to_contain_text("Unset: it then takes the builder's value")
+    threshold = page.get_by_label("Curator's confidence threshold in percent (50 to 100)")
+    expect(threshold).to_have_attribute("placeholder", "Unset")
+    expect(page.locator("#set-curator_threshold")).to_contain_text(
+        "Unset: no machine or project can set it, so it stays unset"
+    )
+    at_once = page.get_by_label("Agent sessions at once in one project")
+    expect(at_once).to_have_attribute("placeholder", "Unset")
+    expect(page.locator("#set-sessions p-text[color='warning']")).to_have_count(0)
+    at_once.fill("")  # the warning follows the edit, before any save
+    expect(page.locator("#set-sessions")).to_contain_text(WARNED)
+    expect(page.locator("#pending")).to_contain_text("sessions: 2 → unset")
+    at_once.fill("2")
+    expect(page.locator("#set-sessions p-text[color='warning']")).to_have_count(0)
+    pds.group(page, "checks")
+    widths = page.get_by_label("Screenshot widths in px, comma-separated (1280 to 2400)")
+    expect(widths).to_have_attribute("placeholder", "Unset")
+    expect(_option(page, pds, "When the design judge fails a change")).to_have_text("Unset")
+    expect(_option(page, pds, "Merge method")).to_have_text("Unset")
+    expect(page.get_by_label("CI poll interval (seconds)")).to_have_attribute("placeholder", "Unset")
+    expect(page.get_by_label(LABELS)).to_have_attribute("placeholder", "Unset")
+    expect(page.locator("#set-pr_labels")).to_contain_text(WARNED)
+    expect(_option(page, pds, "The line Opened by OwlBear Delivery")).to_have_text("Unset")
+    expect(page.locator("#set-pr_marker p-text[color='warning']")).to_have_count(0)
+
+
+def the_machine_and_the_project_inherit_and_never_warn(page, pds) -> None:
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    warnings, labels = page.locator("main p-text[color='warning']"), page.get_by_label(LABELS)
+    at_once = page.get_by_label("Agent sessions at once in one project")
+    pds.pick(page, "Layer", "machine")
+    expect(warnings).to_have_count(0)
+    expect(labels).to_have_attribute("placeholder", "inherit (unset)")
+    expect(_option(page, pds, "The line Opened by OwlBear Delivery")).to_have_text("inherit (on)")
+    pds.group(page, "runs")
+    expect(at_once).to_have_attribute("placeholder", "inherit (2)")
+    pds.pick(page, "Layer", "project")
+    expect(warnings).to_have_count(0)
+    expect(at_once).to_have_attribute("placeholder", "inherit (3)")
+    pds.group(page, "checks")
+    expect(labels).to_have_attribute("placeholder", "inherit (m)")
+    pds.group(page, "agents")
+    expect(_option(page, pds, "Model for builder")).to_have_text("inherit (claude-opus-5.5)")
+    page.locator("#set-agents-builder p-segmented-control-item[value=default]").click()
+    expect(page.locator("#set-agents-builder").get_by_role("button", name="Use inherited")).to_be_visible()
+
+
+def with_the_models_unread_a_typed_name_and_a_chosen_tier_clear_alike(page, pds) -> None:
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    held = []
+
+    def hold(route) -> None:
+        held.append(route)  # this machine's models stay unread: typed names, chosen tiers
+
+    page.route("**/config/models", hold)
+    page.reload()
+    pds.pick(page, "Layer", "global")
+    typed = page.locator('p-input-text[label="Model for planner"]').get_by_label("Model for planner")
+    expect(typed).to_have_attribute("placeholder", "Unset")
+    expect(_option(page, pds, "Context for planner")).to_have_text("Unset")
+    pds.pick(page, "Layer", "project")
+    expect(typed).to_have_attribute("placeholder", "inherit (unset)")
+    expect(_option(page, pds, "Context for builder")).to_have_text("inherit (long)")
+    expect(page.locator("main p-text[color='warning']")).to_have_count(0)
+
+
+@pytest.mark.browser
+def test_global_s_clear_option_is_unset_and_warns_while_the_other_layers_inherit(store, pds, monkeypatch) -> None:
+    """D-01M61SEXPFT9MXZGQHYVYFQ77C: nothing lies under Global, so clearing its value leaves it unset, which each
+    needed setting warns about; a machine or a project clears to what it inherits and never warns."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    _layered(store, monkeypatch, GLOBAL, {"sessions": 3, "pr_labels": ["m"]}, {"sessions": 4})
+    with settings_page(store, pds) as page:
+        expect(page.locator("main p-text[color='warning']")).to_have_count(0)  # This project
+        global_s_agents_clear_to_unset_and_warn_where_needed(page, pds)
+        global_s_runs_and_checks_clear_to_unset_and_warn_where_needed(page, pds)
+        the_machine_and_the_project_inherit_and_never_warn(page, pds)
+        with_the_models_unread_a_typed_name_and_a_chosen_tier_clear_alike(page, pds)
+
+
 @pytest.mark.browser
 def test_merge_and_cleanup_preferences_save_reload_and_clear_back_to_inherit(store, pds) -> None:
     """R15: the five optional preferences save into the shown layer, survive a reload, and clear to inherit."""
@@ -601,6 +738,7 @@ def test_merge_and_cleanup_preferences_save_reload_and_clear_back_to_inherit(sto
 
 
 INSTRUCTIONS, SKILLS = "Your instructions in Delivery steps", "Your skills in Delivery steps"
+LABELS = "Labels, comma-separated; none for no labels"
 
 
 def _saved(page, pds, button: str, whose: str) -> None:
@@ -630,7 +768,7 @@ def test_the_user_config_switches_save_in_each_layer_reload_and_clear_back_to_in
             expect(page.locator(f"#set-{key} p-text[color='error']")).to_have_count(1)
         expect(shown).not_to_contain_text("unset: set it here")
         pds.pick(page, "Layer", "global")
-        expect(shown).to_contain_text("inherit (unset)")
+        expect(shown).to_contain_text("Unset")
         pds.pick(page, INSTRUCTIONS, "off")
         pds.pick(page, SKILLS, "off")
         _saved(page, pds, "Save global defaults", "the global")

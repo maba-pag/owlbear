@@ -112,19 +112,21 @@ function ownControl(key) {
   return machineRow(key, MACHINE_LABELS[key], control, machineSource(key));
 }
 
-// Global's value of one setting, edited in the global layer and saved with it.
+// Global's value of one setting, edited in the global layer and saved with it; clearing it leaves it unset (SEXPFT).
 function sharedControl(key) {
   const draftKey = `machine.${key}`, value = own(draftKey), label = `Every machine: ${MACHINE_LABELS[key]}`;
+  const warning = value.trim() ? nothing
+    : html`<p-text size="sm" color="warning">Unset: every machine must then set its own</p-text>`;
   if (TYPED.includes(key)) {
     return machineRow(key, label, html`<p-input-text id=${`global-machine-${key}`} label=${label} hide-label="true"
       data-key=${draftKey} inputmode=${key === "enrolled_chats" ? nothing : CREDITS.includes(key) ? "decimal"
-        : "numeric"} placeholder="unset" .value=${live(value)} ?disabled=${state.saving}
-      @input=${(e) => edit(draftKey, e.target.value ?? "")}></p-input-text>`);
+        : "numeric"} placeholder="Unset" .value=${live(value)} ?disabled=${state.saving}
+      @input=${(e) => edit(draftKey, e.target.value ?? "")}></p-input-text>`, warning);
   }
   return machineRow(key, label, html`<p-select id=${`global-machine-${key}`} label=${label} hide-label="true"
     data-key=${draftKey} .value=${live(value || INHERIT)} ?disabled=${state.saving}
-    @change=${(e) => edit(draftKey, e.target.value)}>${[[INHERIT, "unset"], ...CHOICES[key]].map(([v, text]) =>
-      html`<p-select-option value=${v}>${text}</p-select-option>`)}</p-select>`);
+    @change=${(e) => edit(draftKey, e.target.value)}>${[[INHERIT, "Unset"], ...CHOICES[key]].map(([v, text]) =>
+      html`<p-select-option value=${v}>${text}</p-select-option>`)}</p-select>`, warning);
 }
 
 function machineControls() {
