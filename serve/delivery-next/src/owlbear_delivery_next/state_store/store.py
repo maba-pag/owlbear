@@ -409,8 +409,8 @@ class Store:
         """Queue an answer while its question is open and has none waiting; otherwise why not, queueing nothing."""
         self._dir(slug)
         with self.db.write() as db:
-            change = self.read(slug)  # the same connection: read inside this write's transaction
-            if not any(q.id == item.question and q.answer is None for q in change.questions):
+            # self.read uses the same connection, so it reads inside this write's transaction
+            if not any(q.id == item.question and q.answer is None for q in self.read(slug).questions):
                 return f"question {item.question} is not open"
             waiting, _ = parse_rows(db.execute("SELECT id, item FROM inbox WHERE slug = ?", (slug,)).fetchall())
             if any(isinstance(i, AnswerItem) and i.question == item.question for i in waiting):
