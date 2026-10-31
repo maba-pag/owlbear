@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 import shutil
 import socket
@@ -13,20 +14,25 @@ from contextlib import contextmanager
 from datetime import UTC, datetime
 from functools import partial
 from pathlib import Path
+from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
+import httpx
 import pytest
 import uvicorn
 
 from owlbear_delivery_next.change_contracts.models import Brief, Change, Step, StepKind
-from owlbear_delivery_next.local_system import codebase
+from owlbear_delivery_next.impeccable import pack_files
+from owlbear_delivery_next.local_system import codebase, data_repo, local_home
 from owlbear_delivery_next.machine_host import app, project
 from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import Host, HostRecord
+from owlbear_delivery_next.runtimes import model_choices
 from owlbear_delivery_next.settings import config
+from owlbear_delivery_next.settings.config import CONFIG_FORMAT
 from owlbear_delivery_next.state_store import registry
-from owlbear_delivery_next.state_store.store import Store
+from owlbear_delivery_next.state_store.store import MACHINE_SETTINGS, Store
 
 if TYPE_CHECKING:
     from playwright.sync_api import Page
@@ -1440,3 +1446,375 @@ def alpha_answers_while_curation_runs(page, row, a: registry.Project) -> None:
     expect(row).to_have_attribute("aria-busy", "false")
     page.unroute(f"**/p/{a.id}/api/next/maintenance")
     page.unroute("**/api/next/curation")
+
+
+def _git(cwd: Path, *args: str) -> None:
+    who = ["-c", "user.name=t", "-c", "user.email=t@example.com"]
+    subprocess.run(["git", *who, *args], cwd=cwd, check=True, capture_output=True)  # noqa: S603, S607
+
+
+def offered(model_id: str, price: float) -> SimpleNamespace:
+    """A model the Copilot CLI offers, at *price* per million input tokens."""
+    prices = SimpleNamespace(
+        input_price=price,
+        output_price=15,
+        cache_read_price=None,
+        cache_price=None,
+        cache_write_price=None,
+        cache_write1_h_price=None,
+        long_context=None,
+        context_max=None,
+    )
+    limits = SimpleNamespace(max_context_window_tokens=200_000)
+    return SimpleNamespace(id=model_id, name=model_id, supported_reasoning_efforts=["low", "medium"],
+                           default_reasoning_effort="low", billing=SimpleNamespace(token_prices=prices),
+                           capabilities=SimpleNamespace(limits=limits), policy=None)  # fmt: skip
+
+
+class Outside:
+    """What a machine host reads from outside (#810): a shared repository another machine pushes to, the models this
+    machine's Copilot offers (m1, Global's builder model) and Impeccable's releases, each answering until told
+    not to."""
+
+    def __init__(self, shared_repo: tuple[Path, Path], tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        self.root, remote = shared_repo
+        self.other, self.mp = tmp_path / "other", monkeypatch
+        _git(tmp_path, "clone", "-q", str(remote), str(self.other))
+        monkeypatch.setenv(data_repo.VIEW, str(self.root))
+        self.push("config.json", agents={"builder": {"model": "m1"}})
+        _git(self.root, "pull", "-q")
+        self.models(3)
+        self.releases(b"[]")
+
+    def models(self, price: float | None) -> None:
+        """Offer m1 at *price*; None: the model list cannot be read."""
+
+        def read() -> list[SimpleNamespace]:
+            if price is None:
+                msg = "the CLI is gone"
+                raise RuntimeError(msg)
+            return [offered("m1", price)]
+
+        self.mp.setattr(model_choices, "_read", read)
+
+    def releases(self, answer: bytes | None) -> None:
+        """GitHub's releases of Impeccable answer *answer*; None: GitHub is not reached."""
+
+        def fetch(url: str, *_args: object, **_kwargs: object) -> bytes:
+            if answer is None:
+                msg = f"not reached: {url}"
+                raise OSError(msg)
+            return answer
+
+        self.mp.setattr(pack_files, "fetch", fetch)
+
+    def push(self, rel: str, *, whole: bool = False, **fields: object) -> None:
+        """Another machine sets *fields* in the layer *rel* of the shared repository, as pulled, and pushes it; *whole*:
+        the layer becomes *fields* alone, every other setting unset."""
+        _git(self.other, "pull", "-q")
+        path = self.other / rel
+        path.parent.mkdir(exist_ok=True)
+        layer = {} if whole or not path.exists() else json.loads(path.read_text())
+        path.write_text(json.dumps(layer | {"format": CONFIG_FORMAT, **fields}))
+        _git(self.other, "add", rel)
+        _git(self.other, "commit", "-q", "-m", f"elsewhere: {rel}")
+        _git(self.other, "push", "-q")
+
+    @staticmethod
+    def read(base: str, of: str) -> dict:
+        """A read the page did not start, as the hourly one: the same read, through the project's route."""
+        answer = httpx.post(f"{base}/p/{of}/api/next/config/read", headers=TOKEN, timeout=120)
+        answer.raise_for_status()
+        return answer.json()["reads"]
+
+    @staticmethod
+    def notices(base: str) -> list[str]:
+        """The notices' ids, as every page's poll reads them."""
+        return httpx.get(f"{base}/api/next/projects", headers=TOKEN, timeout=30).json()["reads"]["notices"]
+
+
+TOKEN = {"authorization": "Bearer t"}
+
+
+@pytest.fixture
+def outside(shared_repo, tmp_path: Path, monkeypatch) -> Outside:
+    return Outside(shared_repo, tmp_path, monkeypatch)
+
+
+def errors(page: Page) -> list[str]:
+    """The console errors *page* logs from now on."""
+    said: list[str] = []
+    page.on("console", lambda m: said.append(m.text) if m.type == "error" else None)
+    page.on("pageerror", lambda e: said.append(str(e)))
+    return said
+
+
+def big_enough(target) -> None:
+    """WCAG 2.5.8: a control at least 24 by 24 CSS pixels."""
+    box = target.bounding_box()
+    assert box is not None
+    assert box["width"] >= 24, box
+    assert box["height"] >= 24, box
+
+
+def rates(page: Page):
+    """The rates the builder's model costs, as Agents shows them."""
+    return page.locator("#set-agents-builder p-table-cell").last
+
+
+def machine_layer(**fields: object) -> Path:
+    """This machine's preference layer in ~/.owlbear, written as the owner would by hand."""
+    path = local_home.root() / MACHINE_SETTINGS
+    path.write_text(json.dumps({"format": CONFIG_FORMAT, **fields}))
+    return path
+
+
+READS_TIME = 60  # a 120 s test: a read pulls the shared repository; a read the page did not start shows by its poll
+
+
+@pytest.mark.browser
+@pytest.mark.timeout(120)  # a real browser and a host pulling a shared repository: a loaded runner needs more than 30 s
+def test_opening_settings_reads_without_a_click(tmp_path: Path, monkeypatch, pds, outside) -> None:
+    """#810: opening Settings reads every outside source, so what changed outside shows without a click."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    a = registry.register(clone(tmp_path / "alpha"))
+    with browsing(monkeypatch, pds) as (page, base):
+        said = errors(page)
+        outside.push("config.json", agents={"builder": {"model": "m1", "minutes": 45}})
+        outside.models(4)
+        page.goto(f"{base}/config?project={a.id}#token=t")
+        expect(page.locator("#reads-status")).to_contain_text("all sources", timeout=READS_TIME * 1000)
+        pds.group(page, "agents")
+        expect(rates(page)).to_contain_text("in 4 ")
+        pds.pick(page, "Layer", "global")
+        pds.group(page, "runs")
+        expect(page.get_by_label("Minutes per session, builder")).to_have_value("45")
+        assert said == []
+
+
+@pytest.mark.browser
+@pytest.mark.timeout(120)  # a real browser and a host pulling a shared repository: a loaded runner needs more than 30 s
+def test_read_again_updates_every_surface_and_keeps_drafts(tmp_path: Path, monkeypatch, pds, outside) -> None:
+    """#810: Read again brings Global, this project's, another project's and this machine's layers, the models'
+    rates and Impeccable's releases; a failed source is named until it reads; drafts stay."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    a, _b = (registry.register(clone(tmp_path / n)) for n in ("alpha", "beta"))
+    outside.releases(None)
+    with browsing(monkeypatch, pds) as (page, base):
+        said = errors(page)
+        page.goto(f"{base}/config?project={a.id}#token=t")
+        status = page.locator("#reads-status")
+        expect(status).to_contain_text("last full read never", timeout=READS_TIME * 1000)
+        expect(page.locator(".reads-failure")).to_contain_text("Could not read: Impeccable releases — GitHub's")
+        pds.group(page, "checks")
+        expect(page.locator("#impeccable")).to_contain_text("releases upstream unknown")
+        pds.group(page, "runs")
+        page.get_by_label("Minutes per session, reviewer").fill("50")  # a draft of this project's layer
+        pds.group(page, "this-machine")
+        versions = pds.select(page, "Versions this machine takes")
+        channel = "minor" if versions.evaluate("e => e.value") == "major" else "major"
+        pds.pick(page, "Versions this machine takes", channel)  # a draft of This machine
+        outside.push("config.json", agents={"builder": {"model": "m1", "minutes": 45}})
+        outside.push("alpha/config.json", agents={"builder": {"minutes": 30}})
+        outside.push("beta/config.json", agents={"builder": {"minutes": 20}})
+        machine_layer(agents={"builder": {"minutes": 33}})
+        outside.models(5)
+        outside.releases(b"[]")
+        pds.group(page, "overview")
+        again = page.get_by_role("button", name="Read again")
+        big_enough(again)
+        again.focus()
+        page.keyboard.press("Enter")
+        expect(status).to_contain_text("all sources", timeout=READS_TIME * 1000)
+        expect(page.locator(".reads-failure")).to_have_count(0)
+        across = page.locator("#across-table")
+        for value in ("45 (global)", "33", "alpha: 30", "beta: 20"):
+            expect(across).to_contain_text(value)
+        pds.group(page, "checks")
+        expect(page.locator("#impeccable")).to_contain_text("0 releases behind")
+        pds.group(page, "agents")
+        expect(rates(page)).to_contain_text("in 5 ")
+        pds.group(page, "runs")
+        expect(page.get_by_label("Minutes per session, builder")).to_have_value("30")
+        expect(page.get_by_label("Minutes per session, reviewer")).to_have_value("50")
+        pds.group(page, "this-machine")
+        expect(versions).to_have_js_property("value", channel)
+        assert said == []
+
+
+@pytest.mark.browser
+@pytest.mark.timeout(120)  # a real browser and a host pulling a shared repository: a loaded runner needs more than 30 s
+def test_an_open_page_follows_reads_and_dismissals_made_elsewhere(tmp_path: Path, monkeypatch, pds, outside) -> None:
+    """#810: a read the page did not start (the hourly one) and a dismissal made elsewhere show through the poll."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    a = registry.register(clone(tmp_path / "alpha"))
+    with browsing(monkeypatch, pds) as (page, base):
+        said = errors(page)
+        page.goto(f"{base}/config?project={a.id}#token=t")
+        status = page.locator("#reads-status")
+        expect(status).to_contain_text("all sources", timeout=READS_TIME * 1000)
+        full = re.search(r"Last read (.+), all sources", status.inner_text()).group(1)
+        outside.push("config.json", agents={"builder": {"model": "m1", "minutes": 45}})
+        outside.releases(None)
+        outside.models(6)
+        Outside.read(base, a.id)
+        changed = page.locator("#reads-changed li")
+        expect(changed).to_have_count(1, timeout=READS_TIME * 1000)
+        expect(changed).to_contain_text("agents.builder.minutes: unset → 45")
+        expect(page.locator(".reads-failure")).to_contain_text("Could not read: Impeccable releases")
+        expect(status).to_contain_text(re.compile(rf"last full read\s+{re.escape(full)}"))
+        pds.group(page, "agents")
+        expect(rates(page)).to_contain_text("in 6 ")
+        pds.group(page, "overview")
+        ids = Outside.notices(base)
+        httpx.post(f"{base}/api/next/settings-read/dismiss", json={"ids": ids}, headers=TOKEN).raise_for_status()
+        expect(changed).to_have_count(0, timeout=READS_TIME * 1000)
+        assert said == []
+
+
+@pytest.mark.browser
+@pytest.mark.timeout(120)  # a real browser and a host pulling a shared repository: a loaded runner needs more than 30 s
+def test_a_layer_that_does_not_read_still_shows_the_read(tmp_path: Path, monkeypatch, pds, outside) -> None:
+    """#810: with this machine's layer unreadable, the read still runs and says so, drafts stay, and a page opened
+    then shows the failure and Read again; models kept from an earlier read say a later read of them failed."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    a = registry.register(clone(tmp_path / "alpha"))
+    with browsing(monkeypatch, pds) as (page, base):
+        page.goto(f"{base}/config?project={a.id}#token=t")
+        status = page.locator("#reads-status")
+        expect(status).to_contain_text("all sources", timeout=READS_TIME * 1000)
+        pds.group(page, "runs")
+        page.get_by_label("Minutes per session, reviewer").fill("50")
+        mine = local_home.root() / MACHINE_SETTINGS
+        mine.write_text("{not json")
+        outside.models(7)
+        Outside.read(base, a.id)  # not from the page: it learns of it by its poll
+        failure = page.locator(".reads-failure")
+        pds.group(page, "overview")
+        expect(failure).to_contain_text(f"Could not read: this machine's settings — {mine}", timeout=READS_TIME * 1000)
+        expect(status).to_contain_text("last full read")
+        pds.group(page, "agents")
+        expect(rates(page)).to_contain_text("in 7 ")
+        pds.group(page, "runs")
+        expect(page.get_by_label("Minutes per session, reviewer")).to_have_value("50")
+        pds.group(page, "overview")
+        page.get_by_role("button", name="Read again").click()
+        expect(failure).to_contain_text(f"Could not read: this machine's settings — {mine}", timeout=READS_TIME * 1000)
+
+        fresh = (
+            page.context.browser.new_page()
+        )  # the first page keeps its draft; a new one opens on the unreadable layer
+        said = errors(fresh)
+        pds.only(fresh, base)
+        fresh.goto(f"{base}/config?project={a.id}#token=t")
+        expect(fresh.locator(".reads-failure")).to_contain_text("this machine's settings", timeout=READS_TIME * 1000)
+        expect(fresh.locator("#groups")).to_have_count(0)  # no layer read
+        mine.unlink()
+        outside.models(None)
+        fresh.get_by_role("button", name="Read again").click()
+        expect(fresh.locator("#reads-status")).to_contain_text("last full read", timeout=READS_TIME * 1000)
+        expect(fresh.locator(".reads-failure")).to_contain_text("Could not read: models")
+        pds.group(fresh, "agents")
+        expect(fresh.locator("#models-note")).to_contain_text("Models as last read; reading them again failed")
+        expect(rates(fresh)).to_contain_text("in 7 ")
+        assert [s for s in said if "409" not in s] == []  # the opening read of the layer is refused, as said
+
+
+@pytest.mark.browser
+@pytest.mark.timeout(120)  # a real browser and a host pulling a shared repository: a loaded runner needs more than 30 s
+def test_a_notice_shows_old_to_new_its_overrides_and_its_link_opens_the_row(
+    tmp_path: Path, monkeypatch, pds, outside
+) -> None:
+    """#810, D-01M690H2XGZPX8Z5MWA9Q9N5QP: a Global change from elsewhere is listed old → new, with where this machine
+    sets the key apart; its links open the row in Global, in This machine's layer and in the other project."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    a, b = (registry.register(clone(tmp_path / n)) for n in ("alpha", "beta"))
+    with browsing(monkeypatch, pds) as (page, base):
+        said = errors(page)
+        outside.push("config.json", agents={"builder": {"model": "m1", "minutes": 45}})
+        outside.push("alpha/config.json", agents={"builder": {"minutes": 30}})
+        outside.push("beta/config.json", agents={"builder": {"minutes": 20}})
+        machine_layer(agents={"builder": {"minutes": 33}})
+        page.goto(f"{base}/config?project={a.id}#token=t")
+        expect(page.locator("#reads-status")).to_contain_text("all sources", timeout=READS_TIME * 1000)
+        outside.push("config.json", agents={"builder": {"model": "m1", "minutes": 50}})
+        page.get_by_role("button", name="Read again").click()
+        entry = page.locator("#reads-changed li")
+        expect(entry).to_contain_text("agents.builder.minutes: 45 → 50", timeout=READS_TIME * 1000)
+        expect(entry).to_contain_text("Set apart by this machine, alpha, beta, so it does not apply there.")
+        entry.get_by_role("link", name="agents.builder.minutes").focus()
+        page.keyboard.press("Enter")
+        expect(pds.select(page, "Layer")).to_have_js_property("value", "global")
+        expect(page.locator("#groups a[href='#runs']")).to_have_attribute("aria-current", "page")
+        minutes = page.get_by_label("Minutes per session, builder")
+        expect(minutes).to_be_focused()
+        expect(minutes).to_be_in_viewport()
+        expect(minutes).to_have_value("50")
+        pds.group(page, "overview")
+        entry.get_by_role("link", name="this machine").click()
+        expect(pds.select(page, "Layer")).to_have_js_property("value", "machine")
+        expect(minutes).to_have_value("33")
+        pds.group(page, "overview")
+        entry.get_by_role("link", name="alpha").click()
+        expect(pds.select(page, "Layer")).to_have_js_property("value", "project")
+        expect(minutes).to_have_value("30")
+        pds.group(page, "overview")
+        entry.get_by_role("link", name="beta").click()
+        expect(page).to_have_url(f"{base}/config?project={b.id}#runs")
+        expect(minutes).to_have_value("20")
+        expect(minutes).to_be_focused()
+        assert said == []
+
+
+@pytest.mark.browser
+@pytest.mark.timeout(180)  # two reads of 300 changes and two pages: a loaded runner needs more than 30 s
+def test_dismiss_one_in_settings_and_all_from_changes(tmp_path: Path, monkeypatch, pds, outside) -> None:
+    """#810, D-01M690J2NH828XZEEFFFCA2NKM: Settings dismisses one entry; Changes counts the rest, links to their list
+    and dismisses every one it counts, on both pages, in batches of the route's limit."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    a = registry.register(clone(tmp_path / "alpha"))
+    whole = {k: v for k, v in config.BASE.model_dump(mode="json", exclude_none=True).items() if k != "format"}
+    with browsing(monkeypatch, pds) as (page, base):
+        said = errors(page)
+        page.goto(f"{base}/config?project={a.id}#token=t")
+        expect(page.locator("#reads-status")).to_contain_text("all sources", timeout=READS_TIME * 1000)
+        outside.push("config.json", **whole)  # every Global setting set elsewhere
+        Outside.read(base, a.id)
+        outside.push("config.json", whole=True)  # and every one unset again
+        reads = Outside.read(base, a.id)
+        assert not reads["failures"], reads["failures"]
+        n = len(reads["notices"])
+        assert n > 200, n  # more than one batch
+        entries = page.locator("#reads-changed li")
+        expect(entries).to_have_count(n, timeout=READS_TIME * 1000)
+        one = entries.first.get_by_role("button", name=re.compile(r"^Dismiss the change of "))
+        big_enough(one)
+        one.focus()
+        page.keyboard.press("Enter")
+        expect(entries).to_have_count(n - 1)
+        assert len(Outside.notices(base)) == n - 1
+
+        page.goto(f"{base}/?project={a.id}")
+        banner = page.locator("#elsewhere")
+        expect(banner).to_contain_text(f"{n - 1} Global settings changed elsewhere", timeout=READS_TIME * 1000)
+        banner.get_by_role("link", name="Show in Settings").click()
+        expect(page).to_have_url(f"{base}/config?project={a.id}#overview")
+        expect(page.locator("#reads-changed")).to_be_focused(timeout=READS_TIME * 1000)
+        expect(entries).to_have_count(n - 1)
+        page.go_back()
+        dismiss = banner.get_by_role("button", name="Dismiss")
+        big_enough(dismiss)
+        dismiss.focus()
+        page.keyboard.press("Enter")
+        expect(banner).to_have_count(0, timeout=READS_TIME * 1000)
+        assert Outside.notices(base) == []
+        page.goto(f"{base}/config?project={a.id}")
+        expect(page.locator("#reads-status")).to_contain_text("all sources", timeout=READS_TIME * 1000)
+        expect(entries).to_have_count(0)
+        assert said == []
