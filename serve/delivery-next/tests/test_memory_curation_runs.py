@@ -20,6 +20,7 @@ from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.settings import config
 from owlbear_delivery_next.settings.config import GlobalLayer
 from owlbear_delivery_next.state_store import layers, registry, settings_carry, spend_ledger
+from owlbear_delivery_next.state_store.curation_runs import Runs
 from owlbear_delivery_next.state_store.store import update_layer
 
 
@@ -378,14 +379,39 @@ def test_a_run_keeps_its_processes_on_file_while_it_runs_and_a_restart_holds_the
 
 
 def test_an_unreadable_record_naming_left_processes_stops_the_restart_and_stays_as_it_was(root) -> None:
-    """#674: only a missing record is empty; one that cannot be read keeps its evidence and the host does not start."""
+    """#674: only a missing record is empty; one that cannot be read keeps its evidence and the host does not start.
+
+    #801: the refusal names the file, the parser's whole text and the way out.
+    """
     path = local_home.root() / curation.STATE
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text('{"folders": {}, "left": {"4242": "not a birth time"}}\n')  # e.g. an older or newer format
     before, slots = path.read_bytes(), Slots(lambda: 1)
-    with pytest.raises(maintenance.MaintenanceError, match="ownership record cannot be read"):
+    with pytest.raises(ValueError, match="validation error") as parsed:
+        Runs.model_validate_json(before)
+    with pytest.raises(maintenance.MaintenanceError, match="ownership record") as refused:
         curation.Curation(slots, shared=lambda: DataRepo(root))
     assert (path.read_bytes(), slots.counts(curation.SLOT)[2]) == (before, 0)
+    said = str(refused.value)
+    assert str(path) in said
+    assert str(parsed.value) in said  # whole and contiguous, pydantic's "For further information" tail included
+    assert "aside" in said
+
+
+def test_a_record_that_cannot_be_opened_stops_the_restart_naming_it_and_the_way_out(root) -> None:
+    """#801: an OSError names the file, the system's whole text and the way out; what stands in its place stays."""
+    path = local_home.root() / curation.STATE
+    path.mkdir(parents=True)  # a folder where the file belongs: reading it is an OSError
+    slots = Slots(lambda: 1)
+    with pytest.raises(OSError, match="directory") as opened:
+        path.read_text()
+    with pytest.raises(maintenance.MaintenanceError, match="ownership record") as refused:
+        curation.Curation(slots, shared=lambda: DataRepo(root))
+    assert (list(path.iterdir()), slots.counts(curation.SLOT)[2]) == ([], 0)
+    said = str(refused.value)
+    assert str(path) in said
+    assert str(opened.value) in said
+    assert "aside" in said
 
 
 def test_pids_left_after_an_earlier_empty_import_are_held_before_they_can_be_cleared(root, monkeypatch) -> None:
