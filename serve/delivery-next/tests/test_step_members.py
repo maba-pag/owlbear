@@ -60,6 +60,23 @@ def test_a_job_left_by_a_recorded_leader_is_found_by_its_session(tmp_path: Path)
         end([pid])
 
 
+def test_a_member_of_a_recycled_group_still_counts_by_its_session() -> None:
+    group = subprocess.Popen(  # noqa: S603 - a recorded session whose job leads its own group
+        ["/bin/bash", "-c", f"set -m; {SLEEP} & echo $!; wait"],
+        start_new_session=True,
+        stdout=subprocess.PIPE,
+        text=True,
+    )
+    job = int(group.stdout.readline())
+    try:
+        assert (os.getpgid(job), os.getsid(job)) == (job, group.pid)
+        found = processes.members({job: 0.0, group.pid: time.time()})  # 0.0: the job's group id reads as recycled
+        assert set(found) == {group.pid, job}
+    finally:
+        end([job, group.pid])
+        group.wait()
+
+
 def test_only_pgid_and_sid_are_read_for_non_members(monkeypatch) -> None:
     member = subprocess.Popen(["/bin/sleep", "300"], start_new_session=True)
     unrelated = subprocess.Popen(["/bin/sleep", "300"], start_new_session=True)

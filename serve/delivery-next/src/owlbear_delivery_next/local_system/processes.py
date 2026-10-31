@@ -74,7 +74,10 @@ def members(ids: Pids, *, sessions: bool = True) -> dict[int, str]:
 
 
 def _matches(ids: Pids, *, sessions: bool) -> dict[int, list[int]]:
-    """Every listed pid filed under the id its pgid, or else its sid, is; nothing else of it is read."""
+    """Every listed pid filed under each id its pgid and (with *sessions*) its sid is; nothing else of it is read.
+
+    Filed under both, a process whose group id turns out recycled still counts by its session.
+    """
     try:
         table = psutil.pids()
     except (psutil.Error, OSError) as exc:
@@ -85,15 +88,13 @@ def _matches(ids: Pids, *, sessions: bool) -> dict[int, list[int]]:
         if p <= 0:  # 0 asks getpgid and getsid about the caller itself
             continue
         try:
-            key = os.getpgid(p)
-            if key not in ids and sessions:
-                key = os.getsid(p)
+            keys = {os.getpgid(p), os.getsid(p)} if sessions else {os.getpgid(p)}
         except ProcessLookupError:
             continue
         except OSError as exc:
             msg = f"process {p}: its group or session could not be read: {exc}"
             raise UnlistedError(msg) from exc
-        if key in ids:
+        for key in keys & ids.keys():
             matched.setdefault(key, []).append(p)
     return matched
 
