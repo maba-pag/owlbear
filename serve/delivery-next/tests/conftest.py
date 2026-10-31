@@ -5,6 +5,8 @@ import re
 import shutil
 import subprocess
 import sys
+import threading
+import time
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -160,6 +162,8 @@ def _no_shared_settings(tmp_path_factory, monkeypatch):
     """
     fake = tmp_path_factory.mktemp("home")
     monkeypatch.setenv("HOME", str(fake))
+    # git never reaches GitHub: the host's start drops GIT_CONFIG_*, but every git reads this HOME's .gitconfig (#804)
+    (fake / ".gitconfig").write_text('[url "/nonexistent/offline-in-tests/"]\n\tinsteadOf = https://github.com/\n')
     monkeypatch.delenv("COPILOT_HOME", raising=False)  # nor the owner's Copilot folder: his skills and instructions
     browsers = MACHINE_HOME / ("Library/Caches" if sys.platform == "darwin" else ".cache") / "ms-playwright"
     monkeypatch.setenv("PLAYWRIGHT_BROWSERS_PATH", os.environ.get("PLAYWRIGHT_BROWSERS_PATH") or str(browsers))
@@ -193,6 +197,18 @@ def _spotter_writes_end(_no_shared_settings):
     assert spend_reconcile.settled(10), "a spend reconciling pass still running after the test"
     assert spend_ledger.WRITER.settled(10), "spend ledger writes still running after the test"
     spend_ledger.WRITER.unwritten.clear()
+
+
+@pytest.fixture(autouse=True)
+def _update_checks_end(_no_shared_settings):
+    """No update check a test started outlives it: one ending later would write into the home put back (#804)."""
+    yield
+    names = ("update-check", "update-checks")
+    deadline = time.monotonic() + 10
+    for t in [t for t in threading.enumerate() if t.name in names]:
+        t.join(max(0.0, deadline - time.monotonic()))
+    left = sorted(t.name for t in threading.enumerate() if t.name in names)
+    assert not left, f"update check threads still running after the test: {left}"
 
 
 async def _silent_look(_card: dict, _ctx: object, _meter: object) -> str:

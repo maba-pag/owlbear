@@ -5,10 +5,12 @@ version's interpreter is a script that records how its Impeccable was installed.
 """
 
 import json
+import os
 import shutil
 import subprocess
 import sys
 import threading
+import time
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -16,7 +18,7 @@ import pytest
 
 from owlbear_delivery_next.impeccable import pack_files
 from owlbear_delivery_next.local_system import codebase, data_place, data_repo, local_home
-from owlbear_delivery_next.machine_host import impeccable, selfcheck, update_checks, versions
+from owlbear_delivery_next.machine_host import environment, impeccable, selfcheck, update_checks, versions
 from owlbear_delivery_next.machine_host.versions import Choice
 from owlbear_delivery_next.project_host import pages
 from owlbear_delivery_next.settings.config import CONFIG_FORMAT
@@ -479,3 +481,14 @@ def test_a_format_3_machine_json_reads_with_no_version_ever_active():
     (local_home.root() / registry.MACHINE).write_text(json.dumps({"format": 3, "projects": []}))
 
     assert registry.load().active == ""
+
+
+def test_a_tests_git_never_reaches_github_even_after_the_hosts_start_scrubs_git_config(monkeypatch):
+    """#804: the host's start drops every GIT_CONFIG_* selector; the test HOME's .gitconfig still turns GitHub away."""
+    with monkeypatch.context() as scrubbed:
+        for name in environment.scrub(dict(os.environ)):
+            scrubbed.delenv(name)
+        began = time.monotonic()
+        with pytest.raises(versions.VersionError, match="/nonexistent/offline-in-tests/"):
+            versions.repo()  # codebase.URL, OwlBear's GitHub repository
+        assert time.monotonic() - began < 5
