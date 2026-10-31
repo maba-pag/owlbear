@@ -866,6 +866,50 @@ def test_copilots_shared_file_is_read_from_the_home_copilot_folder_without_copil
     assert setup.registered(work)
 
 
+@pytest.mark.parametrize("place", ["own", "user", "shared"])
+def test_an_unreadable_mcp_file_is_named_on_the_project_and_logged_when_it_changes(
+    place, tmp_path, http, monkeypatch, capsys
+):
+    work = clone(tmp_path / "a")
+    path, _ = mcp_file(place, work, monkeypatch)
+    valid, key = mcp_file("user" if place == "shared" else "shared", work, monkeypatch)
+    assert "reason" not in add(http, work)  # no MCP file at all: nothing to name
+    for p in (path, valid):
+        p.parent.mkdir(parents=True, exist_ok=True)
+
+    def listed() -> tuple[str | None, bool, int]:
+        p = http.get("/api/next/projects").json()["projects"][0]
+        said = sum(f"{path} cannot be read" in line for line in capsys.readouterr().out.splitlines())
+        return p.get("reason"), "setup" in p, said
+
+    broken = f"{path} cannot be read: Expecting value: line 1 column 16 (char 15)"
+    valid.write_text(json.dumps({key: setup.with_server({}, "/py", work)["mcpServers"]}))
+    path.write_text('{"mcpServers": ')
+    assert listed() == (broken, False, 1)  # registered in a readable file: no setup, the broken one still named
+    assert listed() == (broken, False, 0)  # logged once, not on every poll
+    valid.unlink()
+    assert listed() == (broken, True, 0)
+    path.write_text("{")
+    again = f"{path} cannot be read: Expecting property name enclosed in double quotes: line 1 column 2 (char 1)"
+    assert listed() == (again, True, 1)
+    path.write_text("{}")
+    assert listed() == (None, True, 0)
+    path.write_text('{"mcpServers": ')
+    assert listed() == (broken, True, 1)  # it comes back: logged again
+    assert listed() == (broken, True, 0)
+
+
+def test_a_mcp_file_that_cannot_be_opened_is_named(tmp_path, http, monkeypatch):
+    work = clone(tmp_path / "a")
+    shared, key = mcp_file("shared", work, monkeypatch)
+    shared.parent.mkdir()
+    shared.write_text(json.dumps({key: setup.with_server({}, "/py", work)["mcpServers"]}))
+    shared.chmod(0)
+    listed = add(http, work)
+    why = f"{shared} cannot be read: [Errno 13] Permission denied: '{shared}'"
+    assert (listed["reason"], listed["setup"]) == (why, f"owlbear setup --repo {work}")  # an unread entry counts not
+
+
 @pytest.mark.parametrize(
     ("text", "parsed"),
     [

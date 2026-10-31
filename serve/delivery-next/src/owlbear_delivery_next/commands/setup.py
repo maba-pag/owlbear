@@ -172,8 +172,13 @@ def _serves(servers: object, repo: Path, *, own: bool) -> bool:
     )  # fmt: skip
 
 
-def registered(repo: Path) -> bool:
-    """Whether the chat server of *repo* is registered: in its ``.mcp.json``, VS Code's user or Copilot's shared one."""
+def registration(repo: Path) -> tuple[bool, list[str]]:
+    """Whether the chat server of *repo* is registered, and the MCP files that could not be read.
+
+    It looks in the project's ``.mcp.json``, VS Code's user configuration and Copilot's shared one, always all three;
+    a missing file is no problem.
+    """
+    found, problems = False, []
     for path, key, own in (
         (repo / ".mcp.json", "mcpServers", True),
         (user_mcp(Path.home()), "servers", False),
@@ -181,11 +186,18 @@ def registered(repo: Path) -> bool:
     ):
         try:
             data = _loose_json(path.read_text())
-        except OSError, ValueError:
+        except FileNotFoundError:
             continue
-        if isinstance(data, dict) and _serves(data.get(key), repo, own=own):
-            return True
-    return False
+        except (OSError, ValueError) as exc:
+            problems.append(f"{path} cannot be read: {exc}")
+            continue
+        found = found or (isinstance(data, dict) and _serves(data.get(key), repo, own=own))
+    return found, problems
+
+
+def registered(repo: Path) -> bool:
+    """Whether the chat server of *repo* is registered in a file that could be read."""
+    return registration(repo)[0]
 
 
 def memory_missing(repo: Path) -> str | None:
