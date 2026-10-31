@@ -103,12 +103,6 @@ def cells(page, role: str):
     return page.locator(f"#set-agents-{role}").locator("p-table-cell")
 
 
-def rates(page, role: str) -> tuple[Any, Any]:
-    """The role's rates line and its caption."""
-    said = cells(page, role).nth(4).locator("p-text")
-    return said.nth(0), said.nth(1)
-
-
 def caption(model: str, tier: str, effort: str) -> str:
     return f"{model}, {tier} context \u00b7 effort {effort}; same rates at every effort"
 
@@ -116,9 +110,9 @@ def caption(model: str, tier: str, effort: str) -> str:
 def shows(page, role: str, line: str, said: str) -> None:
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
-    rate, note = rates(page, role)
-    expect(note).to_have_text(said)
-    expect(rate).to_have_text(line)
+    texts = cells(page, role).nth(4).locator("p-text")  # the rates line, then its caption
+    expect(texts.nth(1)).to_have_text(said)
+    expect(texts.nth(0)).to_have_text(line)
 
 
 def switch(page, role: str):
