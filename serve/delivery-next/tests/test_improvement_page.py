@@ -26,8 +26,9 @@ from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.machine_host import app, cases_job, improvement_routes, project, retro_job
 from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.project_host.host import Host, HostRecord
-from owlbear_delivery_next.state_store import registry
+from owlbear_delivery_next.state_store import registry, watch_reports
 from owlbear_delivery_next.state_store.store import Store
+from owlbear_delivery_next.state_store.watch_reports import Report
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -353,7 +354,13 @@ def test_looks_and_cases_act_through_their_dialogs(tmp_path, monkeypatch, pds) -
                 "skipped": "capacity: 1 sampled looks skipped, looks already running"}  # fmt: skip
         with (spotter.root() / "records-2026-10-01.jsonl").open("a") as out:
             out.write(json.dumps(skip) + "\n")
+        with Store.open(tmp_path / "alpha").db.write() as connection:
+            for slug in (SLUG, DONE):
+                watch_reports.put(slug, Report("s", f"c-{slug}", "2026-10-01T10:00:01.000+00:00", "build", "main",
+                                               "bash", f"cp a /x-{slug}", (f"/x-{slug}",),
+                                               "outside write (not judged yet)", "", "start"))(connection)  # fmt: skip
         page = improvement(w, pds)
+        expect(page.locator("#looks")).to_contain_text(f"alpha \u00b7 {DONE} \u00b7 main \u00b7 cp a /x-{DONE}")
         expect(page.locator("#spotter")).to_contain_text("alpha")
         expect(page.locator("#spotter")).to_contain_text("0.00 credits; 1 look skipped before starting.")
         harm = page.locator("#look-r-harm")
@@ -381,6 +388,8 @@ def test_looks_and_cases_act_through_their_dialogs(tmp_path, monkeypatch, pds) -
         expect(note).to_be_visible()
         pds.pick(page.locator("#looks"), "Change", SLUG)
         expect(note).to_be_visible()
+        expect(page.locator("#looks")).to_contain_text(f"cp a /x-{SLUG}")
+        expect(page.locator("#looks")).not_to_contain_text(f"cp a /x-{DONE}")
         page.reload()
         pds.settled(page)
         expect(pds.select(page, "Change").get_by_role("combobox")).to_have_text(SLUG)  # kept in the address
