@@ -420,7 +420,9 @@ def test_a_reviewed_reserve_case_is_never_offered_as_an_example(tmp_path, monkey
 
 @pytest.mark.browser
 @pytest.mark.timeout(90)
-def test_an_unchecked_candidate_only_stays_or_goes_and_says_how_its_check_is_asked(tmp_path, monkeypatch, pds) -> None:
+def test_an_unchecked_candidate_only_stays_or_goes_and_says_its_last_check_and_how_another_is_asked(
+    tmp_path, monkeypatch, pds
+) -> None:
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     with machine_page(tmp_path, monkeypatch, pds) as w:
@@ -428,9 +430,15 @@ def test_an_unchecked_candidate_only_stays_or_goes_and_says_how_its_check_is_ask
                            {"source": "pilot", "family": "f"})  # fmt: skip
         unchecked = {"stage": "candidate", "call": "none", "why": "why", "example": "", "review": None}
         cases.commit(cases.current()["n"], {new: unchecked}, "t", "add")
+        with cases.locked():
+            cases.append("runs.jsonl", {"id": "r-old", "kind": "check", "by": "t", "asked": cases.now(),
+                                        "reviews": {new: {"result": "not supported", "note": "No test output."}},
+                                        "result": "checked", "ended": cases.now()})  # fmt: skip
         page = improvement(w, pds)
         fresh = page.locator(f"#case-{new}")
-        expect(fresh).to_contain_text(f"owlbear cases check {new}")
+        expect(fresh).to_contain_text("Its last check (r-old")
+        expect(fresh).to_contain_text("not supported. No test output.")
+        expect(fresh).to_contain_text(f"once a further paid check supports it: owlbear cases check {new}")
         expect(fresh.locator("p-select-option")).to_have_count(2)  # only stays or goes: the check comes first
 
         case_edits.check_request([new], "t")

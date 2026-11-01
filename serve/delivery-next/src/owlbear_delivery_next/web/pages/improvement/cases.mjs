@@ -63,14 +63,19 @@ function chooser(n, c, waiting) {
       disabled: !!state.busy || to === c.stage || waiting, aria: DIALOG })}</div>`;
 }
 
-// An unchecked candidate's way on: its check, asked already or to be asked.
-function onward(c, asked) {
-  return asked.has(c.id) ? html`<p class="meta">Its paid check is asked: a case it supports moves to the tests.</p>`
-    : html`<p class="meta">It moves to the tests once its paid check supports it:
-      <code>owlbear cases check ${c.id}</code> queues one.</p>`;
+// An unchecked candidate's way on: what its newest check among the shown runs said, then its check, asked already
+// or to be asked.
+function onward(c, asked, runs) {
+  const run = runs.find((r) => r.kind === "check" && r.reviews?.[c.id]), said = run?.reviews[c.id];
+  const last = run ? html`<p class="meta">Its last check (${run.id}, ${when(run.ended ?? run.asked)}): ${said.result
+    }.${said.note ? ` ${said.note}` : ""}</p>` : nothing;
+  return html`${last}${asked.has(c.id)
+    ? html`<p class="meta">Its paid check is asked: a case it supports moves to the tests.</p>`
+    : html`<p class="meta">It moves to the tests once ${run ? "a further" : "its"} paid check supports it:
+      <code>owlbear cases check ${c.id}</code> queues one.</p>`}`;
 }
 
-function card(n, c, waiting, asked) {
+function card(n, c, waiting, asked, runs) {
   return html`<li class="panel case" id=${`case-${c.id}`}>
     <div class="row">${text(c.id, { weight: "semibold" })}${(c.marks ?? []).map((m) => tag(m))}</div>
     ${c.error ? html`<p-inline-notification state="error" dismiss-button="false" heading="This case cannot be read"
@@ -78,7 +83,7 @@ function card(n, c, waiting, asked) {
     <p class="meta">Should be: ${c.call || "unknown"}${c.source ? ` \u00b7 from ${c.source}` : ""}</p>
     ${c.why ? text(c.why, { size: "sm" }) : nothing}
     ${c.example ? html`<p class="meta">Example text: ${c.example}</p>` : nothing}
-    ${unchecked(c) ? onward(c, asked) : nothing}
+    ${unchecked(c) ? onward(c, asked, runs) : nothing}
     ${c.error ? nothing : chooser(n, c, waiting)}</li>`;
 }
 
@@ -106,7 +111,7 @@ export function casesSection(c) {
         + "so moves wait until it has run."}>
       </p-inline-notification>` : nothing}
     ${STAGES.map(([stage, label]) => html`${heading(3, label, "md")}${of(stage).length
-      ? html`<ul class="cards">${repeat(of(stage), (x) => x.id, (x) => card(c.n, x, waiting, asked))}</ul>`
+      ? html`<ul class="cards">${repeat(of(stage), (x) => x.id, (x) => card(c.n, x, waiting, asked, c.runs))}</ul>`
       : empty(`No ${label.toLowerCase()}.`)}`)}
     <div class="panel">${heading(3, "Versions", "sm")}${c.versions.length
       ? html`<ol class="meta">${c.versions.map(version)}</ol>` : text("No version yet.", { size: "sm" })}</div>
