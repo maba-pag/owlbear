@@ -136,7 +136,7 @@ def test_a_backlog_entry_lands_in_the_project_its_change_unit_names_once(world):
     assert done["apply_state"] == "done", done["failures"]
     (entry,) = world.entries
     assert (entry.folder, entry.title, entry.source) == ("beta-folder", TEXT["title"], "retro")
-    assert entry.evidence == [f"retro-proposal:{pid}", "f-2"]
+    assert entry.evidence == ["f-2", f"retro-proposal:{pid}"]  # last: the backlog keeps an entry's newest refs
     assert act.apply(pid, world.seams)["applied"] == done["applied"]
     assert len(world.entries) == 1
 

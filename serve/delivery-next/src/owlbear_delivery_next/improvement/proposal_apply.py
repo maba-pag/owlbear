@@ -155,11 +155,11 @@ type Done = dict[str, dict[str, Any]]  # the artefact made at each step so far
 
 
 def _backlog(pid: str, accepted: Mapping[str, Any], text: Text, _done: Done, seams: Seams) -> None:
-    marker = f"retro-proposal:{pid}"
+    marker, (title, body) = f"retro-proposal:{pid}", text
     view = seams.backlog(accepted["destination"]["folder"])
     entry = next((e for e in view.read(fresh=True)[0].values() if marker in e.evidence), None)
-    if entry is None:
-        entry, _ = view.add(*text, "retro", evidence=[marker, *accepted["findings"]])
+    if entry is None:  # the marker last, as the newest refs are kept
+        entry, _ = view.add(title, body, "retro", evidence=[*accepted["findings"], marker])
     link = f"https://github.com/{view.repository}/issues/{entry.id}"
     props.outcome(pid, "applied", step="created", artefact=_artefact("backlog", view.repository, f"#{entry.id}", link))
 
