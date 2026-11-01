@@ -3,7 +3,7 @@
 // changed elsewhere, each kept until dismissed here or on Changes.
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { call, here, reread, loaded as clones, project as current } from "/assets/ui.mjs";
-import { state, show, showIdle, notify } from "./state.mjs";
+import { state, show, showIdle, notify, turns } from "./state.mjs";
 import { reload, readModels } from "./layers.mjs";
 import { readAcross } from "./machine.mjs";
 import { rowOf } from "./groups.mjs";
@@ -39,15 +39,18 @@ function apply(reads) {
   state.readsSeen = seen(reads.read_at, reads.notices.map((n) => n.id));
 }
 
+const readStates = turns();  // GETs of the read state overlap: the page's and the poll's
+
 // Everything the page shows from outside, as last read, with no read of its own: the read state, the layers (a 409
 // says which file does not read and keeps what is shown), the machine and the other projects, then the models. Drafts
 // stay.
 export async function refresh(reads) {
+  const n = readStates.ask();
   try {
     apply(reads ?? (await call("/config/read")).reads);
-    state.readsError = "";
+    if (readStates.take(n)) state.readsError = "";
   } catch (e) {
-    state.readsError = e.message;
+    if (readStates.newer(n)) state.readsError = e.message;  // a newer state answered first speaks for the reads
   }
   show();
   if (await reload()) show();
@@ -99,7 +102,14 @@ async function dismiss(id) {
 function rowLink(key, layer, label) {
   const row = rowOf(key);
   if (!layer.startsWith("go:")) {
-    return html`<a href=${`#${row}`} @click=${() => { state.layer = layer; }}>${label}</a>`;
+    const go = (e) => {
+      if (e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;  // a new tab or window loads it
+      e.preventDefault();  // this page keeps its edits
+      state.layer = layer;
+      location.hash = row;
+    };
+    const to = here({ layer: layer === "project" ? "" : layer }, `/config#${row}`);
+    return html`<a href=${to} @click=${go}>${label}</a>`;
   }
   const leave = (e) => {
     if (unsaved()) {

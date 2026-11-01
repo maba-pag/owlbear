@@ -697,6 +697,38 @@ def test_a_newer_read_s_failed_layers_never_discard_an_older_read_s(store, pds, 
 
 
 @pytest.mark.browser
+def test_an_older_read_s_failed_layers_never_speak_over_a_newer_read_s(store, pds) -> None:
+    """#810: of two reads' refreshes, the older one's layers fail after the newer one's showed; no error is said."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    with settings_page(store, pds) as page:
+        pds.group(page, "overview")
+        expect(page.locator("#reads-status")).to_contain_text("Last read")
+        held: list[Any] = []
+
+        def hold(route: Any) -> None:
+            if route.request.method != "GET" or len(held) == 2:
+                route.continue_()
+                return
+            held.append(route)
+
+        page.route("**/api/next/config", hold)
+        for count in (1, 2):
+            page.locator("#read-again").click()
+            for _ in range(400):
+                if len(held) == count:
+                    break
+                page.wait_for_timeout(50)
+            assert len(held) == count
+        older, newer = held
+        with page.expect_request("**/api/next/config/models"):  # the newer refresh is done with the layers
+            newer.continue_()
+        with page.expect_request("**/api/next/config/models"):  # asked right after the failed answer is handled
+            older.fulfill(status=503, json={"detail": "the layers could not be read"})
+        assert page.locator("#error").is_hidden()
+
+
+@pytest.mark.browser
 def test_with_no_layer_setting_anything_the_page_names_every_unset_value_and_a_save_fills_one(
     store, pds, monkeypatch
 ) -> None:

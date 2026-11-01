@@ -225,7 +225,7 @@ export async function reload() {
     state.error = state.loaded.notice ? state.loaded.notice.charAt(0).toUpperCase() + state.loaded.notice.slice(1) : "";
     return true;
   } catch (e) {
-    notify(e.message);
+    if (answers.newer(n)) notify(e.message);  // a newer answer speaks for the layers
     return false;
   }
 }

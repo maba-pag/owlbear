@@ -1797,6 +1797,41 @@ def test_an_older_read_state_answered_last_never_hides_a_newer_read_s_failure(
 
 @pytest.mark.browser
 @pytest.mark.timeout(120)  # a real browser and a host pulling a shared repository: a loaded runner needs more than 30 s
+def test_an_older_read_state_that_fails_last_never_hides_a_newer_read(
+    tmp_path: Path, monkeypatch, pds, outside
+) -> None:
+    """#810: the page's ask for a read made elsewhere fails after its own Read again is shown; the newer read stands,
+    with no error of the older ask."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    a = registry.register(clone(tmp_path / "alpha"))
+    with browsing(monkeypatch, pds) as (page, base):
+        page.goto(f"{base}/config?project={a.id}#token=t")
+        status = page.locator("#reads-status")
+        expect(status).to_contain_text("all sources", timeout=READS_TIME * 1000)
+        held: list[Any] = []
+
+        def hold(route: Any) -> None:
+            if held or route.request.method != "GET":
+                route.continue_()
+                return
+            held.append(route)
+
+        page.route("**/config/read", hold)
+        Outside.read(base, a.id)  # the page learns of it by its poll and asks for it
+        until(page, lambda: held, READS_TIME)
+        outside.releases(None)
+        pds.group(page, "overview")
+        page.get_by_role("button", name="Read again").click()
+        expect(page.locator(".reads-failure")).to_contain_text("Impeccable", timeout=READS_TIME * 1000)
+        with page.expect_request(f"**/p/{a.id}/api/next/config"):  # sent right after the failed ask is handled
+            held[0].fulfill(status=503, json={"detail": "the read state could not be read"})
+        assert page.locator("#reads-error").count() == 0  # at once: the next poll would repair it
+        assert "Impeccable" in " ".join(page.locator(".reads-failure").all_inner_texts())
+
+
+@pytest.mark.browser
+@pytest.mark.timeout(120)  # a real browser and a host pulling a shared repository: a loaded runner needs more than 30 s
 def test_an_open_page_follows_reads_and_dismissals_made_elsewhere(tmp_path: Path, monkeypatch, pds, outside) -> None:
     """#810: a read the page did not start (the hourly one) and a dismissal made elsewhere show through the poll."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
@@ -1879,7 +1914,7 @@ def test_a_notice_shows_old_to_new_its_overrides_and_its_link_opens_the_row(
     tmp_path: Path, monkeypatch, pds, outside
 ) -> None:
     """#810: a Global change from elsewhere is listed old → new, with where this machine sets the key apart; its links
-    open the row in Global, in This machine's layer and in the other project."""
+    open the row in Global, in This machine's layer and in the other project, on this page or in a new tab."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     a, b = (registry.register(clone(tmp_path / n)) for n in ("alpha", "beta"))
@@ -1896,6 +1931,15 @@ def test_a_notice_shows_old_to_new_its_overrides_and_its_link_opens_the_row(
         entry = page.locator("#reads-changed li")
         expect(entry).to_contain_text("agents.builder.minutes: 45 → 50", timeout=READS_TIME * 1000)
         expect(entry).to_contain_text("Set apart by this machine, alpha, beta, so it does not apply there.")
+        page.context.add_init_script("sessionStorage.setItem('token', 't')")  # a new tab has no token of its own
+        for name, layer in (("agents.builder.minutes", "global"), ("this machine", "machine")):
+            with page.context.expect_page() as opened:  # a new tab loads the address, which names the layer
+                entry.get_by_role("link", name=name).click(modifiers=["ControlOrMeta"])
+            tab = opened.value
+            expect(pds.select(tab, "Layer")).to_have_js_property("value", layer, timeout=READS_TIME * 1000)
+            expect(tab.get_by_label("Minutes per session, builder")).to_have_value("50" if layer == "global" else "33")
+            tab.close()
+        expect(pds.select(page, "Layer")).to_have_js_property("value", "project")  # this page stays as it was
         entry.get_by_role("link", name="agents.builder.minutes").focus()
         page.keyboard.press("Enter")
         expect(pds.select(page, "Layer")).to_have_js_property("value", "global")
