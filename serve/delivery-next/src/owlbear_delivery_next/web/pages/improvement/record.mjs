@@ -5,6 +5,7 @@ import { credits, plural, tag, when } from "./widgets.mjs";
 
 const CATEGORY = { "hand-off-fitness": "Unfit hand-off", "course-and-constraints": "Wrong course",
   "outside-state-changes": "Change outside the task", "irreversible-harm": "Irreversible harm" };
+const STOP = { reached: "Stopped at its credit limit", unknown: "Stopped: its spend was not reported" };
 
 // Where a look or a write happened: its project's name (or id) and its Change.
 export function place(r, named) {
@@ -31,7 +32,7 @@ export function look(r, named = {}, more = nothing) {
   return html`<li class="panel look" id=${`look-${r.id}`}>
     <div class="row">${found(r)}
       ${r.stopped_step ? tag("Stopped the step: irreversible harm", "error") : nothing}
-      ${r.credit_stop ? tag("Stopped at its credit limit", "warning") : nothing}</div>
+      ${r.credit_stop ? tag(STOP[r.credit_stop] ?? r.credit_stop, "warning") : nothing}</div>
     <p class="meta">${when(r.at)} \u00b7 ${place(r, named)}${r.step ? ` \u00b7 ${r.step}` : ""} \u00b7 ${r.look
       || "look"} \u00b7 ${r.credits_known ? credits(r.credits) : "credits not reported"}</p>
     ${r.note ? html`<p-text size="sm">${r.note}</p-text>` : nothing}

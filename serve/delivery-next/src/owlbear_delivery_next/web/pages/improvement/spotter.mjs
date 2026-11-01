@@ -31,7 +31,7 @@ function spent(s) {
   if (!s) return "No looks in the last week.";
   const unknown = s.unknown ? `, ${plural(s.unknown, "look")} whose credits were not reported` : "";
   const stopped = s.stopped ? `, ${plural(s.stopped, "look")} stopped at its credit limit` : "";
-  return `${plural(s.looks, "look")}, ${credits(s.credits)}${unknown}${stopped}.`;
+  return `${plural(s.looks, "look")}, ${credits(s.credits, !s.unknown)}${unknown}${stopped}.`;
 }
 
 function project(pid, p, spend) {

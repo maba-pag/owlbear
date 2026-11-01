@@ -1,4 +1,5 @@
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
+import { repeat } from "/assets/lit-html/3.3.3/directives/repeat.js";
 import { state, act, post } from "./state.mjs";
 import { DIALOG, button, empty, heading, plural, quiet, tag, text, when } from "./widgets.mjs";
 
@@ -182,6 +183,7 @@ export function proposalsSection(list) {
     ${heading(2, "Retro's proposals", "lg", "proposals-title")}
     ${quiet(waiting ? `${plural(waiting, "proposal")} ${waiting === 1 ? "waits" : "wait"} for you.`
       : "None waits for you.")}
-    ${list.length ? html`<ul class="cards">${list.map(card)}</ul>` : empty("Retro has proposed nothing yet.")}
+    ${list.length ? html`<ul class="cards">${repeat(list, (p) => p.id, card)}</ul>`
+      : empty("Retro has proposed nothing yet.")}
   </section>`;
 }

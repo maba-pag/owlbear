@@ -1,4 +1,5 @@
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
+import { repeat } from "/assets/lit-html/3.3.3/directives/repeat.js";
 import { live } from "/assets/lit-html/3.3.3/directives/live.js";
 import { entries } from "/assets/page/changes/reports.mjs";
 import { askFollowup, followupLine, said, send } from "./followup.mjs";
@@ -58,7 +59,7 @@ function body(named) {
   const { looks, outside, unread: missing } = state.looks;
   return html`${state.looksError ? unread("The newest looks", state.looksError) : nothing}
     ${heading(3, "The Spotter's looks", "md")}
-    ${looks.length ? html`<ul class="cards">${looks.map((r) => shown(r, named))}</ul>`
+    ${looks.length ? html`<ul class="cards">${repeat(looks, (r) => r.id, (r) => shown(r, named))}</ul>`
       : empty("No look yet here: the Spotter looks at the moments its settings name.")}
     ${heading(3, "Outside writes", "md")}
     ${quiet("Commands the watcher observed writing outside their worktree. It only reports: nothing was stopped.")}

@@ -1,4 +1,5 @@
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
+import { repeat } from "/assets/lit-html/3.3.3/directives/repeat.js";
 import { live } from "/assets/lit-html/3.3.3/directives/live.js";
 import { act, post, show, state } from "./state.mjs";
 import { DIALOG, button, empty, heading, quiet, tag, text, when } from "./widgets.mjs";
@@ -90,7 +91,7 @@ export function casesSection(c) {
         + "so moves wait until it has run."}>
       </p-inline-notification>` : nothing}
     ${STAGES.map(([stage, label]) => html`${heading(3, label, "md")}${of(stage).length
-      ? html`<ul class="cards">${of(stage).map((x) => card(c.n, x, waiting))}</ul>`
+      ? html`<ul class="cards">${repeat(of(stage), (x) => x.id, (x) => card(c.n, x, waiting))}</ul>`
       : empty(`No ${label.toLowerCase()}.`)}`)}
     <div class="panel">${heading(3, "Versions", "sm")}${c.versions.length
       ? html`<ol class="meta">${c.versions.map(version)}</ol>` : text("No version yet.", { size: "sm" })}</div>

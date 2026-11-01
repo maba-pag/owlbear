@@ -1,4 +1,5 @@
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
+import { repeat } from "/assets/lit-html/3.3.3/directives/repeat.js";
 import { call } from "/assets/ui.mjs";
 import { askFollowup, followupLine, said, send } from "/assets/page/improvement/followup.mjs";
 import { finding, look } from "/assets/page/improvement/record.mjs";
@@ -55,11 +56,11 @@ function body(d, r) {
   return html`${last ? notice(...last) : nothing}
     ${r.error ? notice("error", "The newest detail could not be read", r.error) : nothing}
     ${text("The Spotter's looks", { weight: "semibold" })}
-    ${looks.length ? html`<ul class="cards">${looks.map((l) => look(l, {}, followupLine(l,
+    ${looks.length ? html`<ul class="cards">${repeat(looks, (l) => l.id, (l) => look(l, {}, followupLine(l,
       () => followUp(d, l, "look"), { busy: busy === l.id, disabled: !!busy })))}</ul>`
       : text("No look at this Change.", { size: "sm", color: "contrast-medium" })}
     ${text("Retro's findings", { weight: "semibold" })}
-    ${findings.length ? html`<ul class="cards">${findings.map((f) => shownFinding(d, f))}</ul>`
+    ${findings.length ? html`<ul class="cards">${repeat(findings, (f) => f.id, (f) => shownFinding(d, f))}</ul>`
       : text("Retro has found nothing in this Change.", { size: "sm", color: "contrast-medium" })}`;
 }
 

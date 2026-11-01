@@ -89,7 +89,8 @@ def _records(pid: str) -> None:
             "credits": 0.2, "credits_known": True, "model": "m"}  # fmt: skip
     rows = [
         {"id": "r-note", "at": "2026-10-01T10:00:00+00:00", "category": "hand-off-fitness", "action": "note",
-         "note": "It said done with the week column unchecked.", "rationale": "the plan names the column"},
+         "note": "It said done with the week column unchecked.", "rationale": "the plan names the column",
+         "credits_known": False, "stopped": "unknown"},
         {"id": "r-harm", "at": "2026-10-01T11:00:00+00:00", "category": "irreversible-harm", "action": "stop",
          "acted": "stopped", "note": "A force-push over main."},
     ]  # fmt: skip
@@ -296,6 +297,24 @@ def test_proposals_are_decided_by_direction_and_each_dialog_says_what_follows(  
 
 
 @pytest.mark.browser
+@pytest.mark.timeout(90)
+def test_a_poll_while_a_dialog_is_open_returns_the_focus_to_the_card_it_opened_from(tmp_path, monkeypatch, pds) -> None:
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    with machine_page(tmp_path, monkeypatch, pds) as w:
+        page = improvement(w, pds)
+        card(page, w.ids["memory"]).get_by_role("button", name="Accept").click()
+        expect(pds.modal(page)).to_contain_text("A pending memory in")
+        newer = _proposal("lesson", "agent:reviewer", ["f-1"])  # it sorts before every other waiting proposal
+
+        page.evaluate("document.dispatchEvent(new CustomEvent('owlbear-polled'))")
+        expect(card(page, newer)).to_have_count(1)
+        pds.answer(page, "Cancel")
+
+        page.wait_for_function("document.activeElement?.closest('#proposal-" + w.ids["memory"] + "') !== null")
+
+
+@pytest.mark.browser
 @pytest.mark.timeout(120)  # a journey through each section's dialogs
 def test_looks_and_cases_act_through_their_dialogs(tmp_path, monkeypatch, pds) -> None:
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
@@ -308,6 +327,8 @@ def test_looks_and_cases_act_through_their_dialogs(tmp_path, monkeypatch, pds) -
         note = page.locator("#look-r-note")
         expect(note).to_contain_text("It said done with the week column unchecked.")
         expect(note).to_contain_text("Why: the plan names the column")
+        expect(note).to_contain_text("Stopped: its spend was not reported")
+        expect(note).not_to_contain_text("credit limit")
 
         note.get_by_role("button", name="Follow up").click()
         expect(pds.modal(page)).to_contain_text("OwlBear adds one backlog entry for r-note")

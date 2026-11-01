@@ -1,4 +1,5 @@
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
+import { repeat } from "/assets/lit-html/3.3.3/directives/repeat.js";
 import { live } from "/assets/lit-html/3.3.3/directives/live.js";
 import { here } from "/assets/ui.mjs";
 import { askFollowup, followupLine, said, send } from "./followup.mjs";
@@ -98,7 +99,7 @@ export function retroSection(r) {
       ? html`<ul class="meta">${units.map(([s, n]) => html`<li>${s}: ${n}</li>`)}</ul>`
       : text("No unit judged yet.", { size: "sm" })}</div>
     ${heading(3, "Findings", "md")}
-    ${r.findings.length ? html`<ul class="cards">${r.findings.map(shownFinding)}</ul>`
+    ${r.findings.length ? html`<ul class="cards">${repeat(r.findings, (f) => f.id, shownFinding)}</ul>`
       : empty("Retro has found nothing yet.")}
     ${heading(3, "Runs", "md")}
     ${r.runs.length ? html`<ul class="cards">${r.runs.map(run)}</ul>` : empty("No Retro run yet.")}
