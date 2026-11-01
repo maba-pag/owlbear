@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from owlbear_delivery_next.improvement import cases, followups, retro_judge, spotter
+from owlbear_delivery_next.improvement import assumptions, cases, followups, retro_judge, spotter
 from owlbear_delivery_next.improvement import proposal_apply as act
 from owlbear_delivery_next.improvement import proposal_targets as targets
 from owlbear_delivery_next.improvement import retro_proposals as props
@@ -286,6 +286,18 @@ def test_a_follow_up_a_reviewed_proposal_already_worded_is_saved_at_once_unless_
     with pytest.raises(store.RetroError, match="holds a credential, an email address"):
         followups.request("rf-1", "owner", world.places, followups.backlog)
     assert (len(world.entries), store.queued(), _runs()) == (1, [], [])
+
+
+def test_a_follow_up_of_a_finding_a_reset_retired_is_refused_with_nothing_saved_or_queued(world):
+    store.add_findings([_finding("rf-r", "chg:p1:fix") | {"assumptions": [assumptions.RETRO_SEGMENTS]}])
+    pid = props.file(props.open_key("real", "agent-change", "rf-r"), ["rf-r"], kind="agent-change", provenance="real",
+                     assumptions=[assumptions.RETRO_SEGMENTS])  # fmt: skip
+    props.reviewed(pid, props.folded()[pid]["evidence"], {"verdict": "survive", "publishable": TEXT})
+    assumptions.reset()
+
+    with pytest.raises(store.RetroError, match="rests on a retired assumption"):
+        followups.request("rf-r", "owner", world.places, followups.backlog)
+    assert (world.entries, store.queued(), followups.reusable("rf-r")) == ([], [], None)
 
 
 def test_a_follow_up_cut_at_its_limit_saves_nothing_and_a_synthetic_one_goes_only_to_the_sandbox(said, world):

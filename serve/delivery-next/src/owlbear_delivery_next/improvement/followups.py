@@ -5,7 +5,8 @@ follow-up, and nothing more is made. A Retro finding that a current reviewed pro
 publishable words is saved at once; anything else is minimised by one ``retro-review`` call of a Retro run first. The
 text is checked for credentials, emails and home paths before it is saved; an unsafe one is refused, nothing written,
 and an unsafe minimised answer is never replayed: the next run asks again. It lands in the backlog seen from the
-subject's project, or from none; a synthetic finding's only in the sandbox's.
+subject's project, or from none; a synthetic finding's only in the sandbox's. A finding resting on a retired
+assumption is refused, as is a reviewed proposal's text resting on one.
 """
 
 from __future__ import annotations
@@ -62,9 +63,12 @@ def subject(fid: str, places: Mapping[str, targets.Place]) -> dict[str, Any]:
 
     Raises:
         Unknown: *fid* is neither.
-        RetroError: A synthetic finding while the sandbox is not registered.
+        RetroError: A finding resting on a retired assumption, or a synthetic one while the sandbox is not registered.
     """
     found = next((f for f in store.all_findings() if f["id"] == fid), None)
+    if found is not None and not store.visible(found, store.retired_ids(), synthetic=True):
+        msg = f"finding {fid} is hidden: it rests on a retired assumption, so nothing follows it up"
+        raise store.RetroError(msg)
     if found is not None:
         unit, source, provenance = str(found.get("unit") or ""), "retro", str(found.get("provenance") or "real")
         shown = {k: found.get(k) for k in FINDING}
@@ -86,8 +90,14 @@ def subject(fid: str, places: Mapping[str, targets.Place]) -> dict[str, Any]:
 
 
 def reusable(fid: str) -> dict[str, str] | None:
-    """The publishable text of a current reviewed survivor whose findings are exactly *fid*, if there is one."""
+    """The publishable text of a current reviewed survivor whose findings are exactly *fid*, if there is one.
+
+    A proposal resting on a retired assumption is never reused.
+    """
+    gone = store.retired_ids()
     for snap in props.folded().values():
+        if not store.visible(snap, gone, synthetic=True):
+            continue
         current = snap["review_digest"] == snap["evidence"] and snap["verdict"] == "survive"
         if current and snap["findings"] == [fid] and snap["state"] not in {"rejected", "redirected"}:
             shown = snap.get("publishable") or {}
