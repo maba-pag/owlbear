@@ -384,6 +384,21 @@ def test_a_rerun_that_skips_a_failing_test_proves_no_flake(tmp_path, checkout, w
         assert "browser tests fail on main as well" in state["reason"]
 
 
+def test_an_update_whose_updater_sessions_are_spent_stops_with_what_is_still_open(tmp_path, checkout):
+    s = store(tmp_path)
+    config = json.loads((s.root / "config.json").read_text())
+    (s.root / "config.json").write_text(json.dumps({**config, "agents": {"updater": {"max_rounds": 1}}}))
+    broken = failing("tests/test_machine_pages.py::test_menu")
+    fakes = Fakes(checkout)
+    fakes.browsers = [broken, PASS, broken]
+    state = run(pds_job.Job(s, fakes.live(checkout)))
+
+    assert state["state"] == "failed"
+    assert "spent its 1 updater session(s)" in state["reason"]
+    assert "tests/test_machine_pages.py::test_menu" in state["reason"]
+    assert fakes.calls.count("update") == 1
+
+
 @pytest.mark.parametrize("added", [False, True], ids=["same-set", "new-follow-up"])
 def test_a_continue_covers_the_follow_ups_shown_and_a_new_one_asks_again(tmp_path, checkout, added):
     """D-01M69VVX2N0F938Y0NSHQYP40S: never the updater's; the owner's continue covers exactly the set he saw."""
