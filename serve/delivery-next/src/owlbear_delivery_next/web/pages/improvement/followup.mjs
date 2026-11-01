@@ -1,10 +1,10 @@
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { call } from "/assets/ui.mjs";
+import { DIALOG, button } from "./widgets.mjs";
 
 // A Retro finding's or a Spotter record's follow-up, shared by the Improvement page and a Change's page: what this
 // machine knows of it, and the button that asks for one.
 
-const DIALOG = "{ 'aria-haspopup': 'dialog' }";
 const RUNNING = { queued: "queued", open: "running", waiting: "waiting for a credit or a slot" };
 
 function entryLink(e) {
@@ -12,7 +12,7 @@ function entryLink(e) {
 }
 
 // What the follow-up of *item* is: its backlog entry, its run, how its run ended, or nothing yet.
-export function followupState(item) {
+function followupState(item) {
   const f = item.followup ?? { state: "" };
   if (f.state === "saved") return html`Followed up: ${entryLink(f.entry)}`;
   if (RUNNING[f.state]) return `Follow-up ${RUNNING[f.state]}: Retro writes its backlog entry, then it shows here.`;
@@ -51,7 +51,6 @@ export function followupLine(item, go, { busy = false, disabled = false } = {}) 
   const now = followupState(item), f = item.followup?.state ?? "";
   const open = !now || f === "ended";
   return html`<div class="row followup">${now ? html`<p-text size="sm">${now}</p-text>` : nothing}
-    ${open ? html`<p-button type="button" compact="true" variant="secondary" aria=${DIALOG} .loading=${busy}
-      ?disabled=${disabled} @click=${go}>${f === "ended" ? "Follow up again" : "Follow up"}</p-button>` : nothing}
+    ${open ? button(f === "ended" ? "Follow up again" : "Follow up", go, { busy, disabled, aria: DIALOG }) : nothing}
   </div>`;
 }

@@ -20,7 +20,7 @@ function title(p) {
 const synthetic = (p) => (p.provenance ?? "real") !== "real";
 
 // Where a finding was seen: its project's name and Change, from "project-id:slug"; else its Retro unit.
-function seenIn(f) {
+export function seenIn(f) {
   const at = (f.change ?? "").lastIndexOf(":");
   if (at < 0) return f.unit;
   const pid = f.change.slice(0, at);
@@ -28,7 +28,7 @@ function seenIn(f) {
 }
 
 // Where the proposal lands once accepted, in words.
-export function landing(d) {
+function landing(d) {
   if (!d || d.error) return `It cannot be accepted: ${d?.error ?? "where it lands is not known"}.`;
   switch (d.kind) {
     case "memory": return `A pending memory in ${d.folder}, for ${d.roles?.length ? d.roles.join(", ") : "every "
@@ -120,7 +120,7 @@ function actions(p) {
       disabled: off })}</div>`;
   }
   const run = p.redraft_run ?? {};
-  if (p.state === "redirected" && !p.redraft && run.state === "ended") {
+  if (p.state === "redirected" && !p.redraft && (!run.state || run.state === "ended")) {
     return html`<div class="row actions">${button("Redraft again", () => redraftAgain(p), { busy: busy("redraft"),
       disabled: off })}</div>`;
   }
@@ -148,7 +148,9 @@ function outcome(p) {
     if (p.redraft) lines.push(`Redrafted as ${p.redraft}.`);
     else if (run.state === "ended") lines.push(`The redraft run ended without one: ${run.result || "no result"}`
       + `${run.why ? `, ${run.why}` : ""}.`);
-    else lines.push("Retro is redrafting it.");
+    else if (run.state === "queued") lines.push("Retro redrafts it on its next run.");
+    else if (run.state) lines.push("Retro is redrafting it.");
+    else lines.push("No redraft is queued or running: ask for it again.");
   }
   if (p.redraft_of) lines.push(`A redraft of ${p.redraft_of}, after your direction.`);
   return lines.length ? html`<ul class="meta">${lines.map((l) => html`<li>${l}</li>`)}</ul>` : nothing;

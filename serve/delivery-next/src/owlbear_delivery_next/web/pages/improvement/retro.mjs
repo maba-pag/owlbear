@@ -1,13 +1,18 @@
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { live } from "/assets/lit-html/3.3.3/directives/live.js";
 import { here } from "/assets/ui.mjs";
+import { askFollowup, followupLine, said, send } from "./followup.mjs";
+import { seenIn } from "./proposals.mjs";
+import { finding } from "./record.mjs";
 import { act, post, show, state } from "./state.mjs";
 import { DIALOG, button, credits, empty, heading, plural, quiet, tag, text, when } from "./widgets.mjs";
 
-// Retro (design §6): its switches, what is queued, its units by state, its newest runs, and a run on one finished
-// Change at the owner's word.
+// Retro (design §6): its switches, what is queued, its units by state, its newest findings with their follow-ups, its
+// newest runs, and a run on one finished Change at the owner's word.
 
 const SWITCHES = [["retro_after_change", "Run after each finished Change"], ["retro_when_idle", "Run when idle"]];
+// A switch as Settings says it; unset is off (retro_job._allowed).
+const SAID = { on: "On, not while paused", paused: "On, even while paused" };
 const RUNS = { open: ["Running", "info"], waiting: ["Waiting", "warning"], ended: ["Ended", "secondary"] };
 
 function asked(q) {
@@ -24,18 +29,29 @@ function made(r) {
 
 function run(r) {
   const [said, variant] = RUNS[r.state] ?? [r.state, "secondary"];
-  const spent = r.known === false ? `at least ${credits(r.spent)} (some not reported)` : credits(r.credits ?? r.spent);
-  const parts = [r.unit, r.trigger && `by ${r.trigger}`, plural(r.calls ?? 0, "call"), spent, r.result, made(r)];
+  const parts = [r.unit, r.trigger && `by ${r.trigger}`, plural(r.calls ?? 0, "call"),
+    credits(r.spent, r.known !== false), r.result, made(r)];
   return html`<li class="panel" id=${`run-${r.id}`}><div class="row">${tag(said, variant)}<span class="meta">${
     when(r.at)}${r.ended ? html` to ${when(r.ended)}` : nothing}</span></div>
     <p class="meta">${parts.filter(Boolean).join(" \u00b7 ")}</p>${r.why ? html`<p class="meta">${r.why}</p>`
       : nothing}</li>`;
 }
 
+async function followUp(f) {
+  if (state.busy || !(await askFollowup(f, "finding"))) return;
+  await act(`followup:${f.id}`, () => send(f), said);
+}
+
+function shownFinding(f) {
+  const key = `followup:${f.id}`;
+  return finding(f, seenIn(f), followupLine(f, () => followUp(f), { busy: state.busy === key,
+    disabled: !!state.busy }));
+}
+
 function switches(s) {
   if (s.error) return html`<p-inline-notification state="error" dismiss-button="false"
     heading="Retro's switches could not be read" description=${s.error}></p-inline-notification>`;
-  return html`<ul class="meta">${SWITCHES.map(([key, label]) => html`<li>${label}: ${s[key] ? "on" : "off"}</li>`)}
+  return html`<ul class="meta">${SWITCHES.map(([key, label]) => html`<li>${label}: ${SAID[s[key]] ?? "Off"}</li>`)}
     </ul><p-link-pure icon="arrow-right"><a href=${here({}, "/config#set-machine-retro_after_change")}>Change them
     in Settings, This machine</a></p-link-pure>`;
 }
@@ -81,6 +97,9 @@ export function retroSection(r) {
     <div class="panel">${heading(3, "Units by state", "sm")}${units.length
       ? html`<ul class="meta">${units.map(([s, n]) => html`<li>${s}: ${n}</li>`)}</ul>`
       : text("No unit judged yet.", { size: "sm" })}</div>
+    ${heading(3, "Findings", "md")}
+    ${r.findings.length ? html`<ul class="cards">${r.findings.map(shownFinding)}</ul>`
+      : empty("Retro has found nothing yet.")}
     ${heading(3, "Runs", "md")}
     ${r.runs.length ? html`<ul class="cards">${r.runs.map(run)}</ul>` : empty("No Retro run yet.")}
   </section>`;

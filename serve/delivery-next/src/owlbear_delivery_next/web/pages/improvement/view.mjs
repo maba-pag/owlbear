@@ -20,7 +20,7 @@ function notice() {
 export function view() {
   const d = state.data;
   if (!d) return html`${notice()}${state.error ? unread("The Improvement page", state.error)
-    : quiet("Reading\u2026")}`;
+    : quiet("Reading\u2026")}${looksSection()}`;
   return html`${notice()}${state.error ? unread("The newest state", state.error) : nothing}
     ${proposalsSection(d.proposals)}${spotterSection(d.spotter)}${looksSection()}${retroSection(d.retro)}
     ${casesSection(d.cases)}`;

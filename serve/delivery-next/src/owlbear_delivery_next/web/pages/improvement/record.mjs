@@ -1,9 +1,9 @@
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { credits, plural, tag, when } from "./widgets.mjs";
 
-// One Spotter look as a row, shared by the Improvement page's looks and a Change's page.
+// One Spotter look or Retro finding as a row, shared by the Improvement page and a Change's page.
 
-export const CATEGORY = { "hand-off-fitness": "Unfit hand-off", "course-and-constraints": "Wrong course",
+const CATEGORY = { "hand-off-fitness": "Unfit hand-off", "course-and-constraints": "Wrong course",
   "outside-state-changes": "Change outside the task", "irreversible-harm": "Irreversible harm" };
 
 // Where a look or a write happened: its project's name (or id) and its Change.
@@ -41,4 +41,12 @@ export function look(r, named = {}, more = nothing) {
       : " (recorded; nothing acts on it yet)"}</p>` : nothing}
     ${r.grades?.length ? html`<ul class="meta">${r.grades.map(grade)}</ul>` : nothing}${more}
   </li>`;
+}
+
+// One Retro finding: what it saw and, when given, *where*; how it happened, its cost and cause; *more* follows.
+export function finding(f, where = "", more = nothing) {
+  const lines = [where, f.mechanism && `How: ${f.mechanism}`, f.cost && `Cost: ${f.cost}`,
+    f.cause && `Cause: ${f.cause}`];
+  return html`<li class="panel finding" id=${`finding-${f.id}`}><p-text>${f.what || f.id}</p-text>
+    ${lines.some(Boolean) ? html`<p class="meta">${lines.filter(Boolean).join(" \u00b7 ")}</p>` : nothing}${more}</li>`;
 }

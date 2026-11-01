@@ -23,7 +23,7 @@ from owlbear_delivery_next.improvement import retro_proposals as props
 from owlbear_delivery_next.improvement import retro_store as store
 from owlbear_delivery_next.local_system import codebase
 from owlbear_delivery_next.local_system.data_repo import DataRepo
-from owlbear_delivery_next.machine_host import app, cases_job, project, retro_job
+from owlbear_delivery_next.machine_host import app, cases_job, improvement_routes, project, retro_job
 from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.project_host.host import Host, HostRecord
 from owlbear_delivery_next.state_store import registry
@@ -283,15 +283,21 @@ def test_proposals_are_decided_by_direction_and_each_dialog_says_what_follows(  
         expect(read_back).to_contain_text("Retro redrafts it at once")
         pds.answer(page, "Redirect")
         expect(case).to_contain_text("Your direction: Ask for the column list first")
-        expect(case).to_contain_text("Retro is redrafting it.")
+        expect(case).to_contain_text("Retro redrafts it on its next run.")
         snap = props.folded()[ids["case"]]
         assert (snap["state"], snap["direction"]) == ("redirected", "Ask for the column list first")
-        assert [q.get("redraft") for q in store.queued()] == [ids["case"]]
+        (asked,) = store.queued()
+        assert asked["redraft"] == ids["case"]
+        assert store.take(asked["id"])  # the host that took it stopped before its run opened
+        expect(case).to_contain_text("No redraft is queued or running", timeout=15000)  # read again on the bar's poll
+        case.get_by_role("button", name="Redraft again").click()
+        expect(page.locator("#notice")).to_contain_text("Redraft queued as")
+        expect(case).to_contain_text("Retro redrafts it on its next run.")
 
 
 @pytest.mark.browser
 @pytest.mark.timeout(120)  # a journey through each section's dialogs
-def test_looks_retro_and_cases_act_through_their_dialogs(tmp_path, monkeypatch, pds) -> None:
+def test_looks_and_cases_act_through_their_dialogs(tmp_path, monkeypatch, pds) -> None:
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     with machine_page(tmp_path, monkeypatch, pds) as w:
@@ -323,14 +329,6 @@ def test_looks_retro_and_cases_act_through_their_dialogs(tmp_path, monkeypatch, 
         pds.settled(page)
         expect(pds.select(page, "Change").get_by_role("combobox")).to_have_text(SLUG)  # kept in the address
 
-        retro = page.locator("#retro")
-        expect(retro.locator("#retro-change")).to_contain_text(DONE)
-        retro.get_by_role("button", name="Run Retro").click()
-        expect(pds.modal(page)).to_contain_text(f"Run Retro on {DONE}?")
-        pds.answer(page, "Run Retro")
-        expect(page.locator("#notice")).to_contain_text(f"Retro run of {DONE} queued as")
-        assert [q["change"] for q in store.queued() if q["change"]] == [f"{w.pid}:{DONE}"]
-
         case = page.locator(f"#case-{w.ids['checked']}")
         pds.pick(case, f"Stage of case {w.ids['checked']}", "example")
         with page.expect_request(lambda r: r.url.endswith("/move")) as sent:
@@ -344,6 +342,34 @@ def test_looks_retro_and_cases_act_through_their_dialogs(tmp_path, monkeypatch, 
         expect(page.locator("#cases")).to_contain_text("A regression run is queued")
         pds.pick(case, f"Stage of case {w.ids['checked']}", "candidate")
         expect(case.get_by_role("button", name="Move")).to_be_disabled()  # moves wait for the queued run
+
+
+@pytest.mark.browser
+@pytest.mark.timeout(120)  # a journey through Retro's dialogs
+def test_retro_shows_its_switches_runs_and_findings(tmp_path, monkeypatch, pds) -> None:
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    switches = {"retro_after_change": "off", "retro_when_idle": "paused"}
+    monkeypatch.setattr(improvement_routes, "_switches", lambda: switches)
+    with machine_page(tmp_path, monkeypatch, pds) as w:
+        store.run_event("run-1", "opened", unit=f"chg:{w.pid}:{DONE}", trigger="button")
+        store.run_event("run-1", "ended", result="judged", spent=1.25, credits={"spent": 1.25, "known": True})
+        page = improvement(w, pds)
+        retro = page.locator("#retro")
+        expect(retro.locator("#retro-change")).to_contain_text(DONE)
+        retro.get_by_role("button", name="Run Retro").click()
+        expect(pds.modal(page)).to_contain_text(f"Run Retro on {DONE}?")
+        pds.answer(page, "Run Retro")
+        expect(page.locator("#notice")).to_contain_text(f"Retro run of {DONE} queued as")
+        assert [q["change"] for q in store.queued() if q["change"]] == [f"{w.pid}:{DONE}"]
+        expect(retro).to_contain_text("Run after each finished Change: Off")
+        expect(retro).to_contain_text("Run when idle: On, even while paused")
+        expect(retro.locator("#run-run-1")).to_contain_text("1.25 credits")
+        found = retro.locator("#finding-f-1")
+        expect(found).to_contain_text(f"done before the week held alpha \u00b7 {SLUG} \u00b7 How: said done early")
+        found.get_by_role("button", name="Follow up").click()
+        pds.answer(page, "Follow up")
+        expect(found).to_contain_text("Followed up: Check the export's week column")
 
 
 @pytest.mark.browser
@@ -361,6 +387,7 @@ def test_an_empty_machine_says_so_and_an_unread_one_says_why(tmp_path, monkeypat
         page.reload()
         expect(page.locator("#page")).to_contain_text("The Improvement page could not be read")
         expect(page.locator("#proposals")).to_have_count(0)
+        expect(page.locator("#looks")).to_contain_text("No look yet here")  # what was read still shows
 
 
 @pytest.mark.browser

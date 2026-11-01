@@ -15,9 +15,9 @@ export function quiet(said) {
   return text(said, { size: "sm", color: "contrast-medium" });
 }
 
-export function button(label, onclick, { busy = false, disabled = false, variant, icon, aria } = {}) {
-  return html`<p-button type="button" compact="true" variant=${variant ?? "secondary"} icon=${icon ?? nothing}
-    aria=${aria ?? nothing} .loading=${busy} ?disabled=${disabled} @click=${onclick}>${label}</p-button>`;
+export function button(label, onclick, { busy = false, disabled = false, variant, aria } = {}) {
+  return html`<p-button type="button" compact="true" variant=${variant ?? "secondary"} aria=${aria ?? nothing}
+    .loading=${busy} ?disabled=${disabled} @click=${onclick}>${label}</p-button>`;
 }
 
 export function tag(said, variant = "secondary") {
@@ -40,8 +40,8 @@ export function when(iso) {
   return html`<time datetime=${iso} title=${t.toLocaleString()}>${t.toLocaleString()}</time>`;
 }
 
-export function plural(n, one, many = `${one}s`) {
-  return `${n} ${n === 1 ? one : many}`;
+export function plural(n, one) {
+  return `${n} ${n === 1 ? one : `${one}s`}`;
 }
 
 export function credits(n, known = true) {
