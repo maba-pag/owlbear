@@ -15,7 +15,6 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.change_contracts import dispute_tools, tools
@@ -23,13 +22,14 @@ from owlbear_delivery_next.change_contracts.round_records import PDS, RoundLoop
 from owlbear_delivery_next.impeccable import pack_files, pack_git
 from owlbear_delivery_next.impeccable_runs import pack_activation, pack_publish, pack_repair, pack_rounds, pack_run
 from owlbear_delivery_next.impeccable_runs.pack_run import Stopped
-from owlbear_delivery_next.pds_runs import browser, checks, diff, pin, publish, repair, sessions, tree
-from owlbear_delivery_next.pds_runs.context import BASE, CANDIDATE, NEXT, UPDATER, Action, Context
+from owlbear_delivery_next.pds_runs import checks, diff, pin, publish, repair, sessions, tree
+from owlbear_delivery_next.pds_runs.context import CANDIDATE, NEXT, UPDATER, Action, Context
 from owlbear_delivery_next.settings import rounds
 from owlbear_delivery_next.workflow_steps import sessions as step_sessions
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from pathlib import Path
 
     from owlbear_delivery_next.pds_runs.job import Job
 
@@ -276,19 +276,7 @@ def _browser(job: Job, ctx: Context) -> Action:
         job.note("browser", "browser", "reused", "the pages are as the browser tests passed them", ident)
         return ctx.after
 
-    def work() -> browser.Result:
-        r = checks.browsed(job, at)
-        if r.passed:
-            return r
-        if not r.failed:
-            msg = f"browser tests: {r.said()} (exit {r.code})"
-            raise Stopped(msg)
-        if not checks.browsed(job, _base(job, ctx), r.failed).cleared(r.failed):
-            msg = f"browser tests fail on main as well: {', '.join(r.failed[:8])}"
-            raise Stopped(msg)
-        return r.flake() if checks.browsed(job, at, r.failed).cleared(r.failed) else r  # D-01M6BFK5YF5GYYN7QCDDPBEZH2
-
-    r = job.do("browser", work, lambda r: r.said(), op="browser", identity=ident,
+    r = job.do("browser", lambda: checks.browsed(job, ctx, at), lambda r: r.said(), op="browser", identity=ident,
                judged=lambda r: "passed" if r.passed else "findings")  # fmt: skip
     if r.passed:
         ctx.browsed, ctx.failures = pages, []
@@ -297,14 +285,6 @@ def _browser(job: Job, ctx: Context) -> Action:
     head, said = ("What the report says of them:", r.told) if r.told else ("Their output's tail:", r.output[-6000:])
     ctx.failures = [f"- {i}" for i in r.failed] + ["", head, "```", said, "```"]
     return "update"
-
-
-def _base(job: Job, ctx: Context) -> Path:
-    """The base's worktree, made once for the run: where a failing browser test is run again."""
-    at = job.workspace / BASE
-    if not (at / ".git").exists():
-        tree.worktree(Path(ctx.checkout["root"]), at, ctx.checkout["base"], job.live.git)
-    return at
 
 
 def _update(job: Job, ctx: Context, lp: RoundLoop) -> Action:

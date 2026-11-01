@@ -132,7 +132,7 @@ def gate(job: Job, ctx: Context, lp: RoundLoop) -> None:
 
     Raises:
         pack_publish.Held: Its release files differ, or its changed pages fail the audit, the browser tests or the
-            challenger.
+            challenger, or a failing browser test does not pass on main either.
     """
     pub, live = ctx.publication, job.live
     root = Path(pub.root)
@@ -150,7 +150,7 @@ def gate(job: Job, ctx: Context, lp: RoundLoop) -> None:
         _judged(job, ctx, lp, at, head)
         ctx.source = pages
         job.keep(ctx, lp)
-    except (pack_files.PackError, browser.Unrunnable) as exc:
+    except (pack_files.PackError, browser.Unrunnable, Stopped) as exc:
         msg = f"the merge gate could not judge the head {head[:12]}: {exc}"
         raise pack_publish.Held(msg) from exc
     finally:
@@ -176,7 +176,7 @@ def _judged(job: Job, ctx: Context, lp: RoundLoop, at: Path, head: str) -> None:
         msg = f"the pull request's head {head[:12]} changed pages, and the deprecation audit found: {said[:1500]}"
         raise pack_publish.Held(msg)
     _noted(job, "audit", "passed", f"the head {head[:12]}'s pages")
-    r = checks.browsed(job, at)
+    r = checks.browsed(job, ctx, at)
     _noted(job, "browser", "passed" if r.passed else "findings", r.said())
     if not r.passed:
         msg = f"the pull request's head {head[:12]} changed pages, and the browser tests found: {r.said()}"

@@ -617,6 +617,32 @@ def test_the_merge_gate_judges_the_pull_requests_head_again_when_its_pages_chang
         assert {"audit", "browser", "pds-challenge"} <= {op for op, _ in notes}
 
 
+FLAKY = "tests/test_visual.py::test_a_real_capture_of_a_local_page"
+
+
+@pytest.mark.parametrize(("reruns", "held"), [
+    ([PASS, PASS], ""),
+    ([failing(FLAKY)], "the merge gate could not judge the head"),
+    ([PASS, failing(FLAKY)], "changed pages, and the browser tests found"),
+], ids=["flake", "fails-on-main", "head-caused"])  # fmt: skip
+def test_the_merge_gate_reruns_a_failing_browser_test_as_the_candidate_s_gate_does(tmp_path, checkout, reruns, held):
+    fakes = Fakes(checkout)
+    fakes.github.push = {f"{REPO}{PAGE}": DEMO.replace(PLANT, 'size="xs"') + "export const u = 1;\n"}
+    fakes.browsers = [PASS, failing(FLAKY), *reruns]
+    state = run(pds_job.Job(store(tmp_path), fakes.live(checkout)))
+
+    assert [n for n, _ids in fakes.browsed][1:] == ["head", "base", "head"][: 1 + len(reruns)]
+    if held:
+        assert (state["state"], state["questions"][0]["kind"]) == ("waiting", "publish")
+        assert held in state["reason"]
+        assert "merge" not in fakes.github.calls
+        return
+    assert state["state"] == "passed", state["reason"]
+    [note] = [i for i in state["invocations"] if i.get("stage") == "merge" and i["operation"] == "browser"]
+    assert note["result"] == "passed"
+    assert note["detail"].endswith("passed on a rerun on the candidate and on main: " + FLAKY)
+
+
 class Runner:
     """``subprocess.run`` for the browser tests: what it was given, and the report and output it leaves."""
 

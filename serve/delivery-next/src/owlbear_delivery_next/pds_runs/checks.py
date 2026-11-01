@@ -7,17 +7,17 @@ they passed. Each judges the tree as it is; none changes it.
 from __future__ import annotations
 
 import shutil
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.change_contracts import tools
 from owlbear_delivery_next.impeccable_runs import pack_rounds
+from owlbear_delivery_next.impeccable_runs.pack_run import Stopped
 from owlbear_delivery_next.pds_runs import audit, browser, pin, sessions, tree
-from owlbear_delivery_next.pds_runs.context import AUDIT
+from owlbear_delivery_next.pds_runs.context import AUDIT, BASE
 from owlbear_delivery_next.workflow_steps import sessions as step_sessions
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from owlbear_delivery_next.change_contracts.round_records import RoundLoop
     from owlbear_delivery_next.pds_runs.context import Context
     from owlbear_delivery_next.pds_runs.job import Job
@@ -57,13 +57,31 @@ def follow_up(f: audit.FollowUp) -> str:
     return f"{f.subject}: {f.reason} ({places})"
 
 
-def browsed(job: Job, at: Path, ids: tuple[str, ...] = ()) -> browser.Result:
-    """The browser tests in the tree at *at*, or only *ids*.
+def browsed(job: Job, ctx: Context, at: Path) -> browser.Result:
+    """The browser tests in the tree at *at*; a failure passing a rerun on main and on *at* is a flake, named in a pass.
 
     Raises:
         browser.Unrunnable: They cannot run, or the PDS CDN did not answer.
+        Stopped: They failed without naming a test, or a failing test does not pass on main either.
     """
-    return job.live.browser(at, ids)
+    r = job.live.browser(at, ())
+    if r.passed:
+        return r
+    if not r.failed:
+        msg = f"browser tests: {r.said()} (exit {r.code})"
+        raise Stopped(msg)
+    if not job.live.browser(base(job, ctx), r.failed).cleared(r.failed):
+        msg = f"browser tests fail on main as well: {', '.join(r.failed[:8])}"
+        raise Stopped(msg)
+    return r.flake() if job.live.browser(at, r.failed).cleared(r.failed) else r  # D-01M6BFK5YF5GYYN7QCDDPBEZH2
+
+
+def base(job: Job, ctx: Context) -> Path:
+    """The base's worktree, made once for the run: where a failing browser test is run again."""
+    at = job.workspace / BASE
+    if not (at / ".git").exists():
+        tree.worktree(Path(ctx.checkout["root"]), at, ctx.checkout["base"], job.live.git)
+    return at
 
 
 def pages(job: Job, ctx: Context, at: Path) -> str:
