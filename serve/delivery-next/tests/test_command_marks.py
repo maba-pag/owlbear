@@ -152,6 +152,6 @@ def test_a_shell_in_another_zone_marks_its_start_as_the_host_reads_it(change_rep
             out = subprocess.run(  # noqa: S603
                 argv, env=env, check=True, capture_output=True, text=True, timeout=30, start_new_session=True
             )
-    marks = command_marks.read(command_marks.folder(store, "c1"), datetime.fromtimestamp(began, UTC))
+    marks = command_marks.read(command_marks.folder(store, "c1"), datetime.fromtimestamp(began - 2, UTC))
     assert list(marks) == [int(out.stdout)]
-    assert began < marks[int(out.stdout)] < time.time() + 2
+    assert began - 2 < marks[int(out.stdout)] < time.time() + 2  # Linux's lstart can be a second off
