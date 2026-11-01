@@ -35,7 +35,6 @@ if TYPE_CHECKING:
 
 BY = "owner (page)"
 DIRECTION = 1_000  # characters of the owner's direction for a redraft
-SYNTHETIC = "[synthetic] "
 FAILURES = (ProviderError, BacklogError, ConcurrencyError, DuplicateEntryError, ValidationError, OSError, ValueError)
 _acting = threading.Lock()  # one proposal acted on at a time: two clicks never make two artefacts
 
@@ -192,7 +191,7 @@ def _issue(pid: str, accepted: Mapping[str, Any], text: Text, done: Done, seams:
     synthetic, marker = bool(accepted["destination"].get("synthetic")), f"<!-- retro-proposal:{pid} -->"
     issue = gh.find(marker)
     if issue is None:
-        issue = gh.create(f"{SYNTHETIC}{title}" if synthetic else title, f"{body}\n\n{marker}")
+        issue = gh.create(f"[synthetic] {title}" if synthetic else title, f"{body}\n\n{marker}")
     made = _artefact("issue", gh.repository, f"#{issue.number}", issue.url)
     props.outcome(pid, "applied", step="created", artefact=made)
     if synthetic:
@@ -215,15 +214,15 @@ def _case(pid: str, accepted: Mapping[str, Any], _text: Text, done: Done, seams:
 def _checked(cid: str) -> str:
     """The check already asked of case *cid*, else nothing.
 
-    The host may stop between asking for it and recording it: one still queued counts, and so does one that ran once
-    the case has left the candidates.
+    The host may stop between asking for it and recording it: one still queued counts, and so does one that ran (or
+    was stopped by the host's end) once the case has left the candidates.
     """
     checks = [r for r in [*case_replay.queued(), *case_replay.results()] if r.get("kind") == "check"]
     if queued := [q["id"] for q in checks if cid in (q.get("ids") or {})]:
         return queued[-1]
     if cases.current()["cases"].get(cid, {}).get("stage") == "candidate":
         return ""
-    return next((r["id"] for r in reversed(checks) if cid in (r.get("reviews") or {})), "")
+    return next((r["id"] for r in reversed(checks) if cid in (r.get("reviews") or r.get("ids") or {})), "")
 
 
 def _artefact(kind: str, where: str, ref: str, link: str = "") -> dict[str, Any]:

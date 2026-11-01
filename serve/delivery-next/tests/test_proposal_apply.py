@@ -186,7 +186,8 @@ def test_a_spotter_case_becomes_a_candidate_with_its_check_queued(world):
     assert world.checks == [cid]
 
 
-def test_a_case_retried_after_its_check_ran_and_promoted_it_is_done_with_that_check(world, monkeypatch):
+@pytest.mark.parametrize("result", ["kept", "lost"])  # lost: the host ended after promoting, before the result
+def test_a_case_retried_after_its_check_ran_and_promoted_it_is_done_with_that_check(world, monkeypatch, result):
     _record("rec-1")
     pid = _waiting("spotter-case", "look:handoff", ["f-1"], record="rec-1", call="hand-off-fitness")
     seams = dataclasses.replace(world.seams, check=lambda cid: case_edits.check_request([cid], act.BY))
@@ -208,8 +209,11 @@ def test_a_case_retried_after_its_check_ran_and_promoted_it_is_done_with_that_ch
     review = {"by": "retro-review", "at": cases.now(), "note": "it holds", "content": asked["ids"][cid]}
     promoted = {**cur["cases"][cid], "stage": "test", "review": review}
     cases.commit(cur["n"], {cid: promoted}, "retro-review", "check: it holds")
-    cases.append("runs.jsonl", {"id": asked["id"], "kind": "check", "reviews": {cid: {"result": "supported"}}})
-    case_replay.done(asked["id"])
+    if result == "kept":
+        cases.append("runs.jsonl", {"id": asked["id"], "kind": "check", "reviews": {cid: {"result": "supported"}}})
+        case_replay.done(asked["id"])
+    else:
+        assert [r["id"] for r in case_replay.interrupted()] == [asked["id"]]
     monkeypatch.setattr(props, "outcome", kept)
 
     done = act.apply(pid, seams)

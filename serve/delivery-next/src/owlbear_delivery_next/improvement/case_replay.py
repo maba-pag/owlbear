@@ -399,6 +399,7 @@ def interrupted() -> list[dict[str, Any]]:
                         "kind": request.get("kind"),
                         "by": request.get("by"),
                         "asked": request.get("at"),
+                        **({"ids": request["ids"]} if "ids" in request else {}),
                         "ended": cases.now(),
                         "result": "stopped: OwlBear ended while it ran; it is not rerun",
                     },
