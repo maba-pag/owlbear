@@ -43,7 +43,8 @@ def steps(destination: Mapping[str, Any]) -> tuple[str, ...]:
 
 def token(snap: Mapping[str, Any], destination: Mapping[str, Any]) -> str:
     """What the owner saw of *snap*: its evidence, review, publishable text and *destination*; a decision names it."""
-    shown = [snap["id"], snap["evidence"], snap.get("review_digest", ""), snap.get("publishable") or {}, destination]
+    review = [snap.get("review_digest", ""), snap.get("verdict", ""), snap.get("why", ""), snap.get("risks") or []]
+    shown = [snap["id"], snap["evidence"], review, snap.get("publishable") or {}, destination]
     return store.digest(shown, 16)
 
 

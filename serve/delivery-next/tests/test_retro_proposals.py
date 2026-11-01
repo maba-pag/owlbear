@@ -24,7 +24,7 @@ def _waiting(provenance="real", kind="spotter-case", about="r1"):
 
 @pytest.mark.parametrize(
     "change",
-    ["re-review", "destination", "publishable"],
+    ["re-review", "destination", "publishable", "review-only"],
 )
 def test_the_token_changes_with_anything_the_owner_saw(change):
     pid = _waiting()
@@ -32,6 +32,11 @@ def test_the_token_changes_with_anything_the_owner_saw(change):
     destination = CASE
     if change == "destination":
         destination = {"kind": "issue", "where": "o/r"}
+    elif change == "review-only":  # a new sample, the same evidence digest: reviewed again, the text unchanged
+        props.file(props.open_key("real", "spotter-case", "r1"), ["g-1"], {"count": 0, "sample": ["r9"]})
+        answer = {"verdict": "survive", "why": "holds less", "risks": ["r9 says otherwise"], "publishable": {}}
+        props.reviewed(pid, props.folded()[pid]["evidence"], answer)
+        assert (props.folded()[pid]["state"], props.folded()[pid]["why"]) == ("waiting", "holds less")
     else:
         props.file(props.open_key("real", "spotter-case", "r1"), ["g-1", "g-2"])
         text = {"title": "t2"} if change == "publishable" else {}
