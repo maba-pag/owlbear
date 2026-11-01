@@ -21,7 +21,7 @@ function grade(g) {
 // What a look found: a category, nothing, or why it did not look.
 function found(r) {
   if (r.skipped) return tag(`Skipped: ${r.skipped}`);
-  if (!r.category) return tag("Nothing found", "success");
+  if (!r.category || r.category === "none") return tag("Nothing found", "success");  // "none": a silent look
   return tag(CATEGORY[r.category] ?? r.category, r.category === "irreversible-harm" ? "error" : "warning");
 }
 

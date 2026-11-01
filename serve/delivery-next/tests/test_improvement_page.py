@@ -93,6 +93,7 @@ def _records(pid: str) -> None:
          "credits_known": False, "stopped": "unknown"},
         {"id": "r-harm", "at": "2026-10-01T11:00:00+00:00", "category": "irreversible-harm", "action": "stop",
          "acted": "stopped", "note": "A force-push over main."},
+        {"id": "r-quiet", "at": "2026-10-01T09:00:00+00:00", "category": "none", "action": ""},
     ]  # fmt: skip
     with (spotter.root() / "records-2026-10-01.jsonl").open("a") as out:
         out.writelines(json.dumps(base | r) + "\n" for r in rows)
@@ -348,6 +349,7 @@ def test_looks_and_cases_act_through_their_dialogs(tmp_path, monkeypatch, pds) -
         note = page.locator("#look-r-note")
         expect(note).to_contain_text("It said done with the week column unchecked.")
         expect(note).to_contain_text("Why: the plan names the column")
+        expect(page.locator("#look-r-quiet")).to_contain_text("Nothing found")  # a silent look
         expect(note).to_contain_text("Stopped: its spend was not reported")
         expect(note).not_to_contain_text("credit limit")
 
