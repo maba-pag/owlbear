@@ -2039,6 +2039,84 @@ def test_a_read_answered_after_a_dismissal_never_shows_its_notice_again(
 
 @pytest.mark.browser
 @pytest.mark.timeout(120)  # a real browser and a host pulling a shared repository: a loaded runner needs more than 30 s
+def test_a_read_state_asked_before_read_again_failed_never_clears_its_failure(
+    tmp_path: Path, monkeypatch, pds, outside
+) -> None:
+    """#810: the poll's ask for a read made elsewhere is still out when Read again fails; the ask answers after; the
+    failure stays shown."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    a = registry.register(clone(tmp_path / "alpha"))
+    with browsing(monkeypatch, pds) as (page, base):
+        page.add_init_script(LONG_WAITS)
+        page.goto(f"{base}/config?project={a.id}#token=t")
+        expect(page.locator("#reads-status")).to_contain_text("all sources", timeout=READS_TIME * 1000)
+        held: list[tuple[Any, Any]] = []
+
+        def hold(route: Any) -> None:
+            if route.request.method == "POST":
+                route.fulfill(status=503, json={"detail": "the read could not start"})
+            elif not held:
+                held.append((route, route.fetch()))  # the read made elsewhere, as the poll's ask has it
+            # a later ask stays out: an answer to it is newer than the failure
+
+        page.route("**/config/read", hold)
+        outside.releases(None)
+        Outside.read(base, a.id)  # the page learns of it by its poll and asks for it
+        until(page, lambda: held, READS_TIME)
+        pds.group(page, "overview")
+        page.get_by_role("button", name="Read again").click()
+        error = page.locator("#reads-error")
+        expect(error).to_contain_text("could not start")
+        route, answer = held[0]
+        route.fulfill(response=answer)
+        expect(page.locator(".reads-failure")).to_contain_text("Impeccable")  # the earlier ask's read is shown
+        assert "could not start" in error.inner_text()
+
+
+@pytest.mark.browser
+@pytest.mark.timeout(120)  # a real browser and a host pulling a shared repository: a loaded runner needs more than 30 s
+def test_a_dismissal_whose_next_ask_fails_stays_and_no_earlier_ask_undoes_it(
+    tmp_path: Path, monkeypatch, pds, outside
+) -> None:
+    """#810: the owner dismisses a notice while the poll's ask for a later read is out, and the page's ask after the
+    dismissal fails; the notice stays dismissed, also once the earlier ask answers."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    a = registry.register(clone(tmp_path / "alpha"))
+    with browsing(monkeypatch, pds) as (page, base):
+        page.add_init_script(LONG_WAITS)
+        page.goto(f"{base}/config?project={a.id}#token=t")
+        expect(page.locator("#reads-status")).to_contain_text("all sources", timeout=READS_TIME * 1000)
+        outside.push("config.json", agents={"builder": {"model": "m1", "minutes": 45}})
+        Outside.read(base, a.id)
+        entries = page.locator("#reads-changed li")
+        expect(entries).to_have_count(1, timeout=READS_TIME * 1000)
+        held: list[tuple[Any, Any]] = []
+
+        def hold(route: Any) -> None:
+            if route.request.method != "GET":
+                route.continue_()
+            elif not held:
+                held.append((route, route.fetch()))  # the notice, as the state before the dismissal has it
+            else:
+                route.fulfill(status=503, json={"detail": "the read state could not be read"})
+
+        page.route("**/config/read", hold)
+        Outside.read(base, a.id)  # a later read: the page's poll asks for it
+        until(page, lambda: held, READS_TIME)
+        pds.group(page, "overview")
+        entries.first.get_by_role("button", name=re.compile(r"^Dismiss the change of ")).click()
+        expect(page.locator("#reads-error")).to_contain_text("could not be read")
+        expect(entries).to_have_count(0)
+        route, before = held[0]
+        with page.expect_request(f"**/p/{a.id}/api/next/config"):  # sent right after the state is handled
+            route.fulfill(response=before)
+        assert entries.count() == 0
+
+
+@pytest.mark.browser
+@pytest.mark.timeout(120)  # a real browser and a host pulling a shared repository: a loaded runner needs more than 30 s
 def test_an_open_page_follows_reads_and_dismissals_made_elsewhere(tmp_path: Path, monkeypatch, pds, outside) -> None:
     """#810: a read the page did not start (the hourly one) and a dismissal made elsewhere show through the poll."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
@@ -2169,6 +2247,33 @@ def test_a_notice_shows_old_to_new_its_overrides_and_its_link_opens_the_row(
         expect(minutes).to_have_value("20")
         expect(minutes).to_be_focused()
         assert said == []
+
+
+@pytest.mark.browser
+@pytest.mark.timeout(120)  # a real browser and a host pulling a shared repository: a loaded runner needs more than 30 s
+def test_another_project_s_link_opens_in_a_new_tab_while_an_edit_is_unsaved(
+    tmp_path: Path, monkeypatch, pds, outside
+) -> None:
+    """#810: with an unsaved edit, a notice's link to another project still opens that project in a new tab."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    a, b = (registry.register(clone(tmp_path / n)) for n in ("alpha", "beta"))
+    with browsing(monkeypatch, pds) as (page, base):
+        outside.push("config.json", agents={"builder": {"model": "m1", "minutes": 45}})
+        outside.push("beta/config.json", agents={"builder": {"minutes": 20}})
+        page.goto(f"{base}/config?project={a.id}#token=t")
+        expect(page.locator("#reads-status")).to_contain_text("all sources", timeout=READS_TIME * 1000)
+        outside.push("config.json", agents={"builder": {"model": "m1", "minutes": 50}})
+        page.get_by_role("button", name="Read again").click()
+        entry = page.locator("#reads-changed li")
+        expect(entry).to_contain_text("Set apart by beta", timeout=READS_TIME * 1000)
+        pds.group(page, "runs")
+        page.get_by_label("Minutes per session, builder").fill("31")
+        expect(page.locator("#pending")).not_to_have_text("No unsaved edits.")
+        pds.group(page, "overview")
+        with page.context.expect_page() as opened:
+            entry.get_by_role("link", name="beta").click(modifiers=["ControlOrMeta"])
+        expect(opened.value).to_have_url(f"{base}/config?project={b.id}#runs")
 
 
 @pytest.mark.browser

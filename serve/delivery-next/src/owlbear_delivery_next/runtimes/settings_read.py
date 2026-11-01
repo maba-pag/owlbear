@@ -136,7 +136,7 @@ class Reader:
             except (data_repo.DataRepoError, registry.RegistryError) as exc:
                 refused = str(exc)
             missed += [(str(shared.root), refused)] if refused else []
-            self.ledger.begin()  # from here only this machine's saves change Global, each under the snapshot's lock
+            self.ledger.begin()  # a save from here on is taken over the snapshot; one pulled beside it shows next read
             try:
                 glob = flatten(read_layer_settled(shared.global_path, GlobalLayer))  # an own save is taken as one
             except StoreError as exc:

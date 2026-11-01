@@ -70,6 +70,7 @@ export async function readAgain() {
   state.reading = true;
   state.readsError = "";
   show();
+  const n = readStates.ask();  // no read state asked before this read clears its failure
   let released = false;  // once this read has answered, another may start: its busy state is its own
   try {
     // a read pulls the shared repository and starts the Copilot runtime: minutes at worst
@@ -78,7 +79,7 @@ export async function readAgain() {
     released = true;
     await refresh();  // its state asked now, so a dismissal made while the read answered stays
   } catch (e) {
-    state.readsError = e.reread ?? e.message;
+    if (released || readStates.says(n)) state.readsError = e.reread ?? e.message;
   } finally {
     if (!released) state.reading = false;
     showIdle();
@@ -100,7 +101,11 @@ async function dismiss(id) {
     show();
     return;
   }
-  await readState();  // asked after the dismissal, so no answer asked before it shows the notice again
+  readStates.shown();  // no answer asked before the dismissal shows its notice again, even if the next ask fails
+  const notices = state.reads.notices.filter((x) => x.id !== id);
+  state.reads = { ...state.reads, notices };
+  state.readsSeen = seen(state.reads.read_at, notices.map((x) => x.id));
+  await readState();
   reread();  // the bar's poll knows at once, so no page refreshes for it again
   show();
 }
@@ -108,9 +113,10 @@ async function dismiss(id) {
 // A link to the row that sets *key* in the layer *layer*, on this page or another project's.
 function rowLink(key, layer, label) {
   const row = rowOf(key);
+  const elsewhere = (e) => e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey;  // a new tab or window
   if (!layer.startsWith("go:")) {
     const go = (e) => {
-      if (e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;  // a new tab or window loads it
+      if (elsewhere(e)) return;
       e.preventDefault();  // this page keeps its edits
       state.layer = layer;
       location.hash = row;
@@ -119,7 +125,7 @@ function rowLink(key, layer, label) {
     return html`<a href=${to} @click=${go}>${label}</a>`;
   }
   const leave = (e) => {
-    if (unsaved()) {
+    if (!elsewhere(e) && unsaved()) {  // a new tab or window leaves this page's edits here
       e.preventDefault();
       notify(unsaved());
     }
