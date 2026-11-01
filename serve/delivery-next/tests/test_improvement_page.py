@@ -17,7 +17,7 @@ import pytest
 import uvicorn
 
 from owlbear_delivery_next.change_contracts import models as m
-from owlbear_delivery_next.improvement import cases, followups, spotter
+from owlbear_delivery_next.improvement import case_edits, cases, followups, spotter
 from owlbear_delivery_next.improvement import proposal_targets as targets
 from owlbear_delivery_next.improvement import retro_proposals as props
 from owlbear_delivery_next.improvement import retro_store as store
@@ -383,9 +383,29 @@ def test_looks_and_cases_act_through_their_dialogs(tmp_path, monkeypatch, pds) -
         body = sent.value.post_data_json
         assert (body["stage"], body["example"]) == ("example", PREFILL)
         expect(page.locator("#notice")).to_contain_text("queued: the move is written only if it passes")
-        expect(page.locator("#cases")).to_contain_text("A regression run is queued")
+        expect(page.locator("#cases")).to_contain_text("A replay run is queued or running")
         pds.pick(case, f"Stage of case {w.ids['checked']}", "candidate")
         expect(case.get_by_role("button", name="Move")).to_be_disabled()  # moves wait for the queued run
+
+
+@pytest.mark.browser
+@pytest.mark.timeout(90)
+def test_an_unchecked_candidate_only_stays_or_goes_and_says_how_its_check_is_asked(tmp_path, monkeypatch, pds) -> None:
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    with machine_page(tmp_path, monkeypatch, pds) as w:
+        new = cases.freeze({"intent": {"task": "t new"}, "recent": [{"tool": "bash", "args": "ls"}]},
+                           {"source": "pilot", "family": "f"})  # fmt: skip
+        unchecked = {"stage": "candidate", "call": "none", "why": "why", "example": "", "review": None}
+        cases.commit(cases.current()["n"], {new: unchecked}, "t", "add")
+        page = improvement(w, pds)
+        fresh = page.locator(f"#case-{new}")
+        expect(fresh).to_contain_text(f"owlbear cases check {new}")
+        expect(fresh.locator("p-select-option")).to_have_count(2)  # only stays or goes: the check comes first
+
+        case_edits.check_request([new], "t")
+        page.evaluate("document.dispatchEvent(new CustomEvent('owlbear-polled'))")
+        expect(fresh).to_contain_text("Its paid check is asked")
 
 
 @pytest.mark.browser

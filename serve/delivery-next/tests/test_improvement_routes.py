@@ -246,6 +246,16 @@ def _job(monkeypatch) -> cases_job.CasesJob:
     return cases_job.CasesJob(slots, paused=lambda: False, looked=looked, asked=asked, shared=lambda: None)
 
 
+def test_a_case_run_the_job_has_taken_still_holds_the_moves(world) -> None:
+    chosen, n = _checked(), cases.current()["n"]
+    rid = world.http.post(f"{API}/cases/{chosen}/move", json={"stage": "example", "parent": n, "example": "x"})
+    assert case_replay.take(rid.json()["queued"])  # the job runs it now
+
+    queued = world.http.get(API).json()["cases"]["queued"]
+
+    assert [(q["id"], q.get("running")) for q in queued] == [(rid.json()["queued"], True)]
+
+
 def test_a_checked_case_moves_into_the_examples_only_with_its_text_and_commits_once_its_regression_passes(
     world, monkeypatch
 ) -> None:

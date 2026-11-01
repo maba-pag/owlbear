@@ -202,7 +202,7 @@ def _case(cid: str, entry: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def spotter_cases() -> dict[str, Any]:
-    """The newest version's cases with their marks, the versions and case runs (newest first), the queued runs."""
+    """The newest version's cases with marks, its versions and case runs (newest first), the queued and running runs."""
     cur = cases.current()
     shown = [{k: v for k, v in v.items() if k != "cases"} for v in cases.versions()]
     return {
@@ -210,7 +210,7 @@ def spotter_cases() -> dict[str, Any]:
         "cases": [_case(cid, e) for cid, e in sorted(cur["cases"].items())],
         "versions": shown[::-1][:VERSIONS],
         "runs": case_replay.results()[::-1][:VERSIONS],
-        "queued": case_replay.queued(),
+        "queued": [*case_replay.queued(), *({**r, "running": True} for r in case_replay.running())],
     }
 
 

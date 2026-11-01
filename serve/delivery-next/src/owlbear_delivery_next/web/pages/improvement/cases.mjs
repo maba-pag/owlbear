@@ -10,6 +10,8 @@ import { DIALOG, button, empty, heading, quiet, tag, text, when } from "./widget
 const STAGES = [["candidate", "Candidates"], ["test", "Tests"], ["example", "Examples"]];
 const MOVES = [["candidate", "Candidate"], ["test", "Test"], ["example", "Example"], ["removed", "Remove"]];
 const EXAMPLE = 800;  // characters of one example's text (cases.EXAMPLE)
+// A case enters the tests or examples only with a review of its card: an unchecked candidate stays or goes.
+const unchecked = (c) => c.stage === "candidate" && !c.review;
 
 // What a move does now and next: one into or out of the examples changes what the Spotter is shown, so a paid
 // regression run must pass first; any other move is a new version at once.
@@ -53,12 +55,20 @@ function chooser(n, c, waiting) {
   const key = `case-${c.id}`;
   return html`<div class="row"><p-select id=${`stage-${c.id}`} label=${`Stage of case ${c.id}`} hide-label="true"
       compact="true" .value=${live(to)} @change=${(e) => { state.stages.set(c.id, e.target.value); show(); }}>
-    ${MOVES.map(([v, said]) => html`<p-select-option value=${v}>${said}</p-select-option>`)}</p-select>
+    ${MOVES.filter(([v]) => !unchecked(c) || v === "candidate" || v === "removed")
+      .map(([v, said]) => html`<p-select-option value=${v}>${said}</p-select-option>`)}</p-select>
     ${button(to === "removed" ? "Remove" : "Move", () => move(n, c), { busy: state.busy === key,
       disabled: !!state.busy || to === c.stage || waiting, aria: DIALOG })}</div>`;
 }
 
-function card(n, c, waiting) {
+// An unchecked candidate's way on: its check, asked already or to be asked.
+function onward(c, asked) {
+  return asked.has(c.id) ? html`<p class="meta">Its paid check is asked: a case it supports moves to the tests.</p>`
+    : html`<p class="meta">It moves to the tests once its paid check supports it:
+      <code>owlbear cases check ${c.id}</code> queues one.</p>`;
+}
+
+function card(n, c, waiting, asked) {
   return html`<li class="panel case" id=${`case-${c.id}`}>
     <div class="row">${text(c.id, { weight: "semibold" })}${(c.marks ?? []).map((m) => tag(m))}</div>
     ${c.error ? html`<p-inline-notification state="error" dismiss-button="false" heading="This case cannot be read"
@@ -66,6 +76,7 @@ function card(n, c, waiting) {
     <p class="meta">Should be: ${c.call || "unknown"}${c.source ? ` \u00b7 from ${c.source}` : ""}</p>
     ${c.why ? text(c.why, { size: "sm" }) : nothing}
     ${c.example ? html`<p class="meta">Example text: ${c.example}</p>` : nothing}
+    ${unchecked(c) ? onward(c, asked) : nothing}
     ${c.error ? nothing : chooser(n, c, waiting)}</li>`;
 }
 
@@ -82,16 +93,18 @@ function replay(r) {
 
 export function casesSection(c) {
   const waiting = c.queued.length > 0;
+  const asked = new Set(c.queued.filter((q) => q.kind === "check").flatMap((q) => Object.keys(q.ids ?? {})));
   const of = (stage) => c.cases.filter((x) => x.stage === stage);
   return html`<section id="cases" aria-labelledby="cases-title">${heading(2, "Spotter cases", "lg", "cases-title")}
     ${quiet(`Version ${c.n}. A case is a past look with the call it should have made: candidates wait, tests check `
       + "a changed prompt, examples are shown to the Spotter.")}
-    ${waiting ? html`<p-inline-notification state="info" dismiss-button="false" heading="A regression run is queued"
+    ${waiting ? html`<p-inline-notification state="info" dismiss-button="false"
+      heading="A replay run is queued or running"
       description=${`${c.queued.map((q) => q.id).join(", ")}: another move now would leave it stale and refused, `
         + "so moves wait until it has run."}>
       </p-inline-notification>` : nothing}
     ${STAGES.map(([stage, label]) => html`${heading(3, label, "md")}${of(stage).length
-      ? html`<ul class="cards">${repeat(of(stage), (x) => x.id, (x) => card(c.n, x, waiting))}</ul>`
+      ? html`<ul class="cards">${repeat(of(stage), (x) => x.id, (x) => card(c.n, x, waiting, asked))}</ul>`
       : empty(`No ${label.toLowerCase()}.`)}`)}
     <div class="panel">${heading(3, "Versions", "sm")}${c.versions.length
       ? html`<ol class="meta">${c.versions.map(version)}</ol>` : text("No version yet.", { size: "sm" })}</div>
