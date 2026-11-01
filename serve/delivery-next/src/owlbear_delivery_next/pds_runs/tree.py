@@ -91,18 +91,8 @@ def copy(candidate: Path, at: Path, git: Git) -> dict[str, str]:
     """Lay out the updater's copy at *at*: the candidate's pages, in a repository of their own; their digests."""
     shutil.rmtree(at, ignore_errors=True)
     at.mkdir(parents=True)
-    start = _copied(candidate, at)
+    audit.copy_files(candidate / WEB, at / "web", skip=audit.VENDORED)
     git(at, ["init", "-q"])  # the session's window places files only in a repository
-    return start
-
-
-def _copied(candidate: Path, at: Path) -> dict[str, str]:
-    for path in files(candidate, WEB):
-        rel = path.removeprefix(PACKAGE)
-        if rel.startswith(EDITABLE):
-            continue
-        (at / rel).parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(candidate / path, at / rel)
     return _now(at)
 
 

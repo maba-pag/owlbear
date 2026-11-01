@@ -84,14 +84,15 @@ def run_id(now: datetime | None = None) -> str:
 
 def lay_out(at: Path, web: Path, tree: Path, version: str) -> Path:
     """Lay the copy out at *at* from the pages *web* and the release's vendored *tree*; return its skills folder."""
-    _copy(web, at / "web", skip=VENDORED)
+    copy_files(web, at / "web", skip=VENDORED)
     manifest = {"name": "owlbear-pages", "private": True, "dependencies": {pin.NAME: version}}
     (at / "package.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
-    _copy(tree, at / PACKAGE)
+    copy_files(tree, at / PACKAGE)
     return at / PACKAGE / "skills"
 
 
-def _copy(source: Path, target: Path, skip: tuple[str, ...] = ()) -> None:
+def copy_files(source: Path, target: Path, skip: tuple[str, ...] = ()) -> None:
+    """Copy the files under *source* to *target*, never a link nor a top folder named in *skip*."""
     for path in sorted(source.rglob("*")):
         rel = path.relative_to(source)
         if rel.parts[0] in skip or path.is_symlink() or not path.is_file():
