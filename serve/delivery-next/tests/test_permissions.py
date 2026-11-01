@@ -1492,3 +1492,23 @@ def test_an_escaped_quote_in_ansi_c_quoting_hides_no_substitution(text: str) -> 
 def test_an_interactive_bash_in_posix_mode_from_its_environment_reads_env(scripts: Path) -> None:
     text = "POSIXLY_CORRECT=1 ENV=./bad.sh bash --norc -i -c true"
     assert decide(Policy(scripts), shell(text)) == f"`./bad.sh` uses --no-verify, {BYPASS}"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "opt=-f; export BASH_ENV=./bad.sh; unset $opt BASH_ENV; bash -c true",
+        "export BASH_ENV=./bad.sh; unset BASH_ENV < ./missing; bash -c true",
+    ],
+)
+def test_an_unset_the_guard_cant_be_sure_of_leaves_the_startup_file_unknown(scripts: Path, text: str) -> None:
+    assert decide(Policy(scripts), shell(text)).endswith("set where the guard can't follow it")
+
+
+def test_an_expanded_command_option_is_no_lookup() -> None:
+    assert decide(WRITE, shell("v=p; command -$v bash -c 'git commit --no-verify -m x'")).endswith(BYPASS)
+
+
+def test_an_arithmetic_comparison_writes_nothing_in_a_read_only_step() -> None:
+    assert decide(READ, shell("echo $((1 > 0))")) is None
+    assert decide(READ, shell("echo $((1 > 0)) > f")).endswith("which writes in a read-only step")

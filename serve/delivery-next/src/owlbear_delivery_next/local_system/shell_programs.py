@@ -107,7 +107,7 @@ def lookup(words: Sequence[str], i: int) -> bool:
     """Whether the ``command`` at ``words[i]`` only names a program (-v, -V, -pv, -p -v), running nothing."""
     j = i + 1
     while j < len(words) and words[j].startswith("-") and words[j] != "-":
-        if words[j] == "--":
+        if words[j] == "--" or getattr(words[j], "expanded", False):  # command -$v: maybe -p, running its operand
             break
         if set(words[j][1:]) & {"v", "V"}:
             return True

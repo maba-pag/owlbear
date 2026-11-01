@@ -312,13 +312,16 @@ def _git_mutation(words: Sequence[str]) -> str | None:
 
 
 def _mutation(text: str, commands: Sequence[Sequence[str]]) -> str | None:
-    """How a shell command would write files or change Git state; discarded output does not count."""
+    """How a shell command would write files or change Git state.
+
+    Discarded output, a lookup (command -v cp) and an arithmetic comparison ($((1 > 0))) write nothing.
+    """
     if found := next(filter(None, map(_git_mutation, commands)), None):
         return found
     for run in (r for words in commands for r in shell_programs.runs(words)):  # env -S hides it, /bin/cp names it
         if match := _SHELL_MUTATION.match(" ".join([shell_programs.name(run.words[0]), *run.words[1:]])):
             return f"filesystem mutation '{match[0].strip(' \t;&|')}'"
-    text = _LOOKUP.sub("", _HARMLESS.sub("", text))
+    text = _LOOKUP.sub("", _HARMLESS.sub("", _without_arithmetic(text)))
     if _REDIRECT.search(text):
         return "a redirect"
     if match := _SHELL_MUTATION.search(text):
@@ -383,11 +386,8 @@ def _run_mutation(policy: Policy, name: str, run: shell_programs.Run) -> str | N
 
 
 def _writes(command: shell_parse.Command) -> bool:
-    """Whether one command writes files or changes Git state, as the read-only rule sees it.
-
-    An arithmetic expansion's > or < compares, so $((1 > 0)) writes nothing.
-    """
-    return _mutation(_without_arithmetic(command.raw), [command.words]) is not None
+    """Whether one command writes files or changes Git state, as the read-only rule sees it."""
+    return _mutation(command.raw, [command.words]) is not None
 
 
 def _without_arithmetic(text: str) -> str:
