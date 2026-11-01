@@ -85,6 +85,21 @@ def _clone(path: Path) -> registry.Project:
     return registry.register(path.resolve())
 
 
+def _outside_writes(path: Path, slugs: tuple[str, ...]) -> None:
+    """One outside write the watcher saw in each Change of *slugs* of the project at *path*."""
+    with Store.open(path).db.write() as connection:
+        for slug in slugs:
+            watch_reports.put(slug, Report("s", f"c-{slug}", "2026-10-01T10:00:01.000+00:00", "build", "main", "bash",
+                                           f"cp a /x-{slug}", (f"/x-{slug}",), "outside write (not judged yet)", "",
+                                           "start"))(connection)  # fmt: skip
+
+
+def _writes_shown(expect, looks, shown: str, hidden: str) -> None:
+    """*looks* lists Change *shown*'s outside write and not Change *hidden*'s, by Playwright's *expect*."""
+    expect(looks).to_contain_text(f"cp a /x-{shown}")
+    expect(looks).not_to_contain_text(f"cp a /x-{hidden}")
+
+
 def _records(pid: str) -> None:
     base = {"project": pid, "change": SLUG, "step": "build", "session": "s", "look": "handoff", "call": "c",
             "credits": 0.2, "credits_known": True, "model": "m"}  # fmt: skip
@@ -354,11 +369,7 @@ def test_looks_and_cases_act_through_their_dialogs(tmp_path, monkeypatch, pds) -
                 "skipped": "capacity: 1 sampled looks skipped, looks already running"}  # fmt: skip
         with (spotter.root() / "records-2026-10-01.jsonl").open("a") as out:
             out.write(json.dumps(skip) + "\n")
-        with Store.open(tmp_path / "alpha").db.write() as connection:
-            for slug in (SLUG, DONE):
-                watch_reports.put(slug, Report("s", f"c-{slug}", "2026-10-01T10:00:01.000+00:00", "build", "main",
-                                               "bash", f"cp a /x-{slug}", (f"/x-{slug}",),
-                                               "outside write (not judged yet)", "", "start"))(connection)  # fmt: skip
+        _outside_writes(tmp_path / "alpha", (SLUG, DONE))
         page = improvement(w, pds)
         expect(page.locator("#looks")).to_contain_text(f"alpha \u00b7 {DONE} \u00b7 main \u00b7 cp a /x-{DONE}")
         expect(page.locator("#spotter")).to_contain_text("alpha")
@@ -388,8 +399,7 @@ def test_looks_and_cases_act_through_their_dialogs(tmp_path, monkeypatch, pds) -
         expect(note).to_be_visible()
         pds.pick(page.locator("#looks"), "Change", SLUG)
         expect(note).to_be_visible()
-        expect(page.locator("#looks")).to_contain_text(f"cp a /x-{SLUG}")
-        expect(page.locator("#looks")).not_to_contain_text(f"cp a /x-{DONE}")
+        _writes_shown(expect, page.locator("#looks"), SLUG, DONE)
         page.reload()
         pds.settled(page)
         expect(pds.select(page, "Change").get_by_role("combobox")).to_have_text(SLUG)  # kept in the address
