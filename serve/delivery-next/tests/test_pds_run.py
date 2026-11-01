@@ -41,6 +41,7 @@ def _sibling(name: str) -> ModuleType:
 
 PACK = _sibling("test_pack_job")  # FakeGitHub and git
 PINS = _sibling("test_pds_pin")  # the release's entries, its tarball and integrity
+AUDITED = _sibling("test_pds_audit")  # a report the release's schema accepts
 git, GITHUB_URL = PACK.git, PACK.GITHUB_URL
 OLD, NEW = "4.9.0", "4.10.1"
 DEPRECATIONS = "skills/pds-knowledge-js/references/deprecations.md"
@@ -221,17 +222,7 @@ def report(at: Path, follow_ups: list[dict]) -> dict:
          "sources": [{"reference": "references/deprecations.md", "pdsVersion": NEW}]}
         for i, (path, n, line) in enumerate(places, 1)
     ]  # fmt: skip
-    return {
-        "schemaVersion": "1.0.0",
-        "audit": {"runId": "2026-11-01T00-00-00Z", "generatedAt": "2026-11-01T00:00:00Z", "skillName": audit.SKILL,
-                  "auditKind": "deprecations", "framework": "js", "pdsVersion": NEW},
-        "project": {"root": ".", "pdsPackages": [{"name": pin.NAME, "version": NEW}]},
-        "scope": {"includedPaths": ["."], "excludedPaths": [{"path": "node_modules", "reason": "default"}]},
-        "summary": {"result": "completed"},
-        "coverage": {"skippedFiles": [], "limitations": []},
-        "findings": found,
-        "manualFollowUps": follow_ups,
-    }  # fmt: skip
+    return AUDITED.report(version=NEW, findings=found, follow_ups=follow_ups)
 
 
 def store(tmp_path: Path) -> Store:
