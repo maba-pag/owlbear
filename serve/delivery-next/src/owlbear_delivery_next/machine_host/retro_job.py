@@ -209,8 +209,7 @@ class RetroJob:
         by = request.get("by", "")
         if (more := retro_more.running(request)) is not None:  # a synthetic unit, a redraft or a follow-up
             if not self._took(more.uid, by):
-                why = f"refused: {why}" if (why := self.seams.blocked(more.uid)) else ""
-                self._start(more, why)
+                self._start(more, f"refused: {why}" if (why := self.seams.blocked(more.uid)) else "")
             return
         change, chat = request.get("change"), request.get("chat", "")
         uid = units.change_id(*change.split(":", 1)) if change else units.chat_id(chat)
