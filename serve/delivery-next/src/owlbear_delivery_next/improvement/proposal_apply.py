@@ -19,7 +19,7 @@ from owlbear_memory.errors import ConcurrencyError, DuplicateEntryError, Validat
 from owlbear_memory.models import MemoryCategory
 
 from owlbear_delivery_next.github.provider import ProviderError
-from owlbear_delivery_next.improvement import case_edits, case_intake, case_review, cases
+from owlbear_delivery_next.improvement import case_intake, case_review, cases
 from owlbear_delivery_next.improvement import proposal_targets as targets
 from owlbear_delivery_next.improvement import retro_proposals as props
 from owlbear_delivery_next.improvement import retro_store as store
@@ -61,11 +61,6 @@ def intake(accepted: Mapping[str, Any]) -> str:
     make = case_intake.from_synthetic if dest.get("synthetic") else case_intake.from_record
     why = str((accepted.get("publishable") or {}).get("title") or "")[: cases.WHY]
     return make(dest["record"], dest["call"], why, BY)
-
-
-def check(cid: str) -> str:
-    """Queue the paid check of case *cid*; the request id."""
-    return case_edits.check_request([cid], BY)
 
 
 def destination(
@@ -160,9 +155,7 @@ type Text = tuple[str, str]  # the accepted title and body
 type Done = dict[str, dict[str, Any]]  # the artefact made at each step so far
 
 
-def _backlog(pid: str, accepted: Mapping[str, Any], text: Text, done: Done, seams: Seams) -> None:
-    if "created" in done:
-        return
+def _backlog(pid: str, accepted: Mapping[str, Any], text: Text, _done: Done, seams: Seams) -> None:
     marker = f"retro-proposal:{pid}"
     view = seams.backlog(accepted["destination"]["folder"])
     entry = next((e for e in view.read(fresh=True)[0].values() if marker in e.evidence), None)
@@ -172,9 +165,7 @@ def _backlog(pid: str, accepted: Mapping[str, Any], text: Text, done: Done, seam
     props.outcome(pid, "applied", step="created", artefact=_artefact("backlog", view.repository, f"#{entry.id}", link))
 
 
-def _memory(pid: str, accepted: Mapping[str, Any], text: Text, done: Done, seams: Seams) -> None:
-    if "created" in done:
-        return
+def _memory(pid: str, accepted: Mapping[str, Any], text: Text, _done: Done, seams: Seams) -> None:
     dest, (title, body) = accepted["destination"], text
     engine = seams.memory(Path(dest["folder"]))
     made = next(
@@ -192,11 +183,13 @@ def _memory(pid: str, accepted: Mapping[str, Any], text: Text, done: Done, seams
 
 
 def _issue(pid: str, accepted: Mapping[str, Any], text: Text, done: Done, seams: Seams) -> None:
-    synthetic = bool(accepted["destination"].get("synthetic"))
-    if "created" in done and (not synthetic or "closed" in done):
-        return
     gh, (title, body) = seams.issues(), text
-    marker = f"<!-- retro-proposal:{pid} -->"
+    if "created" in done:  # only a synthetic one's closing is left: the issue made is closed, not looked for again
+        made = done["created"]
+        gh.close(int(made["ref"].lstrip("#")))
+        props.outcome(pid, "applied", step="closed", artefact=made)
+        return
+    synthetic, marker = bool(accepted["destination"].get("synthetic")), f"<!-- retro-proposal:{pid} -->"
     issue = gh.find(marker)
     if issue is None:
         issue = gh.create(f"{SYNTHETIC}{title}" if synthetic else title, f"{body}\n\n{marker}")
@@ -212,7 +205,8 @@ def _case(pid: str, accepted: Mapping[str, Any], _text: Text, done: Done, seams:
     if "created" in done:
         cid = done["created"]["ref"]
     else:
-        cid = case_intake.of_record(accepted["destination"]["record"]) or seams.case(accepted)
+        dest = accepted["destination"]
+        cid = case_intake.of_record(dest["record"], dest["call"]) or seams.case(accepted)
         props.outcome(pid, "applied", step="created", artefact=_artefact("case", "Spotter cases", cid))
     if "done" not in done:
         rid = seams.check(cid)

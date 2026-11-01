@@ -75,7 +75,7 @@ def seams() -> proposal_apply.Seams:
         memory=MemoryEngine,
         issues=lambda: OwlbearIssues(targets.REPOSITORY, local_home.root()),
         case=proposal_apply.intake,
-        check=proposal_apply.check,
+        check=lambda cid: case_edits.check_request([cid], proposal_apply.BY),
     )
 
 

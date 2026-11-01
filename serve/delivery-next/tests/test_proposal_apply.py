@@ -11,7 +11,7 @@ from owlbear_memory.models import MemoryState
 
 from owlbear_delivery_next.commands import cli
 from owlbear_delivery_next.github.owlbear_issues import OwlbearIssues
-from owlbear_delivery_next.improvement import assumptions, cases, spotter
+from owlbear_delivery_next.improvement import assumptions, case_intake, cases, spotter
 from owlbear_delivery_next.improvement import proposal_apply as act
 from owlbear_delivery_next.improvement import proposal_targets as targets
 from owlbear_delivery_next.improvement import retro_proposals as props
@@ -164,12 +164,14 @@ def test_an_owlbear_change_is_one_issue_in_its_repository_carrying_the_marker(wo
 
 def test_a_spotter_case_becomes_a_candidate_with_its_check_queued(world):
     _record("rec-1")
+    other = case_intake.from_record("rec-1", "none", "another call", "cli")  # the same record, made by hand
     pid = _waiting("spotter-case", "look:handoff", ["f-1"], record="rec-1", call="hand-off-fitness")
 
     done = _accept(pid, world)
 
     assert [a["step"] for a in done["applied"]] == ["created", "done"]
     cid = done["applied"][0]["artefact"]["ref"]
+    assert (cid != other, cases.current()["cases"][cid]["call"]) == (True, "hand-off-fitness")
     assert cases.current()["cases"][cid]["stage"] == "candidate"
     assert cases.fact(cid)["provenance"]["record"]["id"] == "rec-1"
     assert world.checks == [cid]
@@ -217,7 +219,9 @@ def test_a_synthetic_issue_is_closed_on_retry_and_the_reset_lists_it_once(world,
     assert failed["apply_state"] == "failed"
     assert "ghp_" not in failed["failures"][0]["error"]
     assert "502" in failed["failures"][0]["error"]
+    sent = len(world.gh.sent)
     done = act.apply(pid, world.seams)
+    assert world.gh.sent[sent:] == [{"state": "closed", "state_reason": "not_planned"}]  # the issue made, not sought
     made = [i for i in world.gh.issues if "pull_request" not in i]
     assert [(i["title"], i["state"]) for i in made] == [(f"[synthetic] {TEXT['title']}", "closed")]
     assert done["apply_state"] == "done"

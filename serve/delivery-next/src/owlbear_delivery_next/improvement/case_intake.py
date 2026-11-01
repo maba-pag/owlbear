@@ -94,10 +94,20 @@ def _candidate(cid: str, call: str, why: str, by: str, reason: str) -> str:
     return cid
 
 
-def of_record(record: str) -> str:
-    """The current case made from the Spotter's record *record*, else nothing."""
+def of_record(record: str, call: str) -> str:
+    """The current candidate made from the Spotter's record *record* with *call*, else nothing.
+
+    One with another call, or checked already, is another case of that record.
+    """
+    cur = current()["cases"]
     return next(
-        (cid for cid in sorted(current()["cases"]) if fact(cid)["provenance"].get("record", {}).get("id") == record), ""
+        (
+            cid
+            for cid in sorted(cur)
+            if (cur[cid]["stage"], cur[cid].get("call")) == ("candidate", call)
+            and fact(cid)["provenance"].get("record", {}).get("id") == record
+        ),
+        "",
     )
 
 
