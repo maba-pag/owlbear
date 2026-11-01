@@ -1,11 +1,12 @@
 """The Improvement page's machine routes (#716, design §6): read the Spotter, Retro, cases and proposals; act on them.
 
-Every write is the owner's (``proposal_apply.BY``); nothing is written while OwlBear stops or updates. Errors carry
-their full text: what was refused, where and why.
+Every write is the owner's (``proposal_apply.BY``), made under the machine's stop barrier: nothing is written once
+OwlBear stops or updates. Errors carry their full text: what was refused, where and why.
 """
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Annotated, Any
@@ -29,7 +30,7 @@ from owlbear_delivery_next.state_store.backlog import BacklogError
 from owlbear_delivery_next.state_store.store import StoreError
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Iterator
     from contextlib import AbstractContextManager
     from pathlib import Path
 
@@ -115,6 +116,13 @@ class _Machine:
         if why := self.machine.updating or ("OwlBear is stopping" if self.machine.stopping.is_set() else ""):
             raise HTTPException(503, why)
 
+    @contextmanager
+    def held(self) -> Iterator[None]:
+        """A short write of the owner's, whole under the stop barrier: none lands once a stop or an update began."""
+        with self.machine.lock:
+            self.writable()
+            yield
+
     def admitted(self, what: str) -> AbstractContextManager[None]:
         """The owner's write *what*, admitted under the stop barrier while the machine may be written; counted."""
         return proposal_apply.admitted(what, self.machine.lock, self.writable)
@@ -179,16 +187,17 @@ def _retro(routes: APIRouter, m: _Machine) -> None:
     @routes.post("/retro")
     def run_retro(body: RetroBody) -> dict[str, Any]:
         """Queue a Retro run of one finished Change."""
-        m.writable()
         pid, _, slug = body.change.partition(":")
-        loaded = m.projects().get(pid)
-        try:
-            finished = loaded is not None and slug in loaded[0].slugs() and loaded[0].read(slug).finished_at
-        except (StoreError, OSError, ValueError) as exc:
-            raise HTTPException(409, f"Change {body.change} cannot be read: {exc}") from exc
-        if not finished:
-            raise HTTPException(409, f"{body.change} is not a finished Change of a loaded project: Retro runs on one")
-        return {"queued": store.request(BY, change=body.change)}
+        with m.held():
+            loaded = m.projects().get(pid)
+            try:
+                finished = loaded is not None and slug in loaded[0].slugs() and loaded[0].read(slug).finished_at
+            except (StoreError, OSError, ValueError) as exc:
+                raise HTTPException(409, f"Change {body.change} cannot be read: {exc}") from exc
+            if not finished:
+                msg = f"{body.change} is not a finished Change of a loaded project: Retro runs on one"
+                raise HTTPException(409, msg)
+            return {"queued": store.request(BY, change=body.change)}
 
     @routes.post("/followups")
     def followup(body: FollowupBody) -> dict[str, Any]:
@@ -208,12 +217,13 @@ def _proposals(routes: APIRouter, m: _Machine) -> None:
     @routes.post("/proposals/{pid}/decide")
     def decide(pid: str, body: DecideBody) -> dict[str, Any]:
         """The owner's decision on a proposal, given what he saw."""
-        m.writable()
         if (where := m.root()) is None:
             raise HTTPException(409, "there is no shared repository: a proposal lands in or through it")
         try:
-            return proposal_apply.decide(pid, body.state, body.token, BY, places=improvement_view.places(m.projects()),
-                                         shared_root=where, direction=body.direction)  # fmt: skip
+            with m.held():
+                places = improvement_view.places(m.projects())
+                return proposal_apply.decide(pid, body.state, body.token, BY, places=places, shared_root=where,
+                                             direction=body.direction)  # fmt: skip
         except proposal_apply.Refused as exc:
             raise HTTPException(422, str(exc)) from exc
         except store.RetroError as exc:
@@ -231,15 +241,14 @@ def _proposals(routes: APIRouter, m: _Machine) -> None:
     @routes.post("/proposals/{pid}/redraft")
     def redraft(pid: str) -> dict[str, Any]:
         """Queue a redirected proposal's redraft again, after one that did not file or review it."""
-        m.writable()
-        return {"queued": _redraft(pid)}
+        with m.held():
+            return {"queued": _redraft(pid)}
 
 
 def _cases(routes: APIRouter, m: _Machine) -> None:
     @routes.post("/cases/{cid}/move")
     def move(cid: str, body: MoveBody) -> dict[str, Any]:
         """Move a case to a stage, made of the version the owner saw; into the examples with its example text."""
-        m.writable()
         if body.stage not in {*cases.STAGES, "removed"}:
             raise HTTPException(422, f"{body.stage!r} is not a stage: {', '.join(cases.STAGES)} or removed")
         example = body.example.strip()
@@ -248,7 +257,8 @@ def _cases(routes: APIRouter, m: _Machine) -> None:
                                      "characters: nothing was written")  # fmt: skip
         fields = {"example": example} if body.stage == "example" else {}
         try:
-            return case_edits.move(cid, body.stage, BY, body.parent, **fields)
+            with m.held():
+                return case_edits.move(cid, body.stage, BY, body.parent, **fields)
         except Stale as exc:
             raise HTTPException(409, str(exc)) from exc
         except CaseError as exc:

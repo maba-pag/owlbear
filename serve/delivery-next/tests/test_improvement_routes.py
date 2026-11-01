@@ -55,7 +55,7 @@ def world(tmp_path, monkeypatch):
         projects=dict.fromkeys(projects),
         updating="",
         stopping=threading.Event(),
-        lock=threading.Lock(),
+        lock=threading.RLock(),
     )
     served = FastAPI()
     served.include_router(improvement_routes.router(machine, lambda: DataRepo(tmp_path / "shared")), prefix="/api/next")
@@ -130,6 +130,31 @@ def test_an_accepted_proposal_is_applied_from_the_page(world) -> None:
     assert (applied.status_code, applied.json()["apply_state"]) == (200, "done"), applied.text
     redraft = world.http.post(f"{API}/proposals/{pid}/redraft")
     assert (redraft.status_code, store.queued()) == (409, [])
+
+
+@pytest.mark.parametrize("write", ["decide", "move"])
+def test_a_write_that_arrives_while_an_update_takes_the_barrier_is_refused_with_nothing_written(world, write) -> None:
+    if write == "decide":
+        pid = _waiting()
+        (shown,) = world.http.get(API).json()["proposals"]
+        url, body = f"{API}/proposals/{pid}/decide", {"state": "accepted", "token": shown["token"]}
+    else:
+        chosen = _checked()
+        url, body = f"{API}/cases/{chosen}/move", {"stage": "example", "parent": cases.current()["n"], "example": "x"}
+
+    def now() -> object:
+        return props.folded()[pid]["state"] if write == "decide" else (cases.current()["n"], case_replay.queued())
+
+    before, said = now(), {}
+    writing = threading.Thread(target=lambda: said.update(r=world.http.post(url, json=body)))
+
+    with world.machine.lock:  # an update's fence: it takes the barrier, then says why
+        writing.start()
+        threading.Event().wait(0.5)
+        world.machine.updating = "OwlBear is updating"
+    writing.join(10)
+
+    assert (said["r"].status_code, said["r"].json()["detail"], now()) == (503, "OwlBear is updating", before)
 
 
 def test_an_apply_waiting_its_turn_is_counted_and_refused_once_a_fence_begins(world, monkeypatch) -> None:
