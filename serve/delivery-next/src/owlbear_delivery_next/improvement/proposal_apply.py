@@ -11,6 +11,7 @@ paths before anything leaves the machine; a failure is kept on the proposal, mas
 from __future__ import annotations
 
 import threading
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -26,7 +27,8 @@ from owlbear_delivery_next.improvement import retro_store as store
 from owlbear_delivery_next.state_store.backlog import BacklogError
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping
+    from collections.abc import Callable, Iterator, Mapping
+    from contextlib import AbstractContextManager
 
     from owlbear_memory.engine import MemoryEngine
 
@@ -37,6 +39,28 @@ BY = "owner (page)"
 DIRECTION = 1_000  # characters of the owner's direction for a redraft
 FAILURES = (ProviderError, BacklogError, ConcurrencyError, DuplicateEntryError, ValidationError, OSError, ValueError)
 _acting = threading.Lock()  # one proposal acted on at a time: two clicks never make two artefacts
+_writing: list[str] = []  # the owner's writes admitted and not yet ended
+
+
+def working() -> list[str]:
+    """The owner's writes admitted and not yet ended: what a stop when idle and an update wait for."""
+    return [f"Improvement: {w}" for w in list(_writing)]
+
+
+@contextmanager
+def admitted(what: str, barrier: AbstractContextManager[object], gate: Callable[[], None]) -> Iterator[None]:
+    """The owner's write *what*, admitted under the machine's stop *barrier* once *gate* lets it; counted till it ends.
+
+    A stop or an update's fence takes the barrier too: either it sees this write in ``working`` and waits for it, or
+    *gate* sees it and refuses the write.
+    """
+    with barrier:
+        gate()
+        _writing.append(what)
+    try:
+        yield
+    finally:
+        _writing.remove(what)
 
 
 class Refused(store.RetroError):
@@ -120,15 +144,17 @@ def decide(  # noqa: PLR0913 - the decision, what the owner saw, and where it ma
     return after
 
 
-def apply(pid: str, seams: Seams) -> dict[str, Any]:
+def apply(pid: str, seams: Seams, gate: Callable[[], None] = lambda: None) -> dict[str, Any]:
     """Act on the accepted proposal *pid* from what was accepted; the proposal after it, applied or failed.
 
     One resting on an assumption a reset retired since makes nothing more, except closing a synthetic issue it made.
+    *gate* is asked again once the proposal before it is done: a stop or a fence begun meanwhile refuses this one.
 
     Raises:
         RetroError: The proposal is unknown, not accepted, or rests on a retired assumption.
     """
     with _acting:
+        gate()
         snap = props.folded().get(pid)
         if snap is None or snap["state"] != "accepted":
             msg = f"proposal {pid} is {'unknown' if snap is None else snap['state']}, not accepted"

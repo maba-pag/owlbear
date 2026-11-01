@@ -29,7 +29,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from owlbear_delivery_next.improvement import retro_judge
+from owlbear_delivery_next.improvement import proposal_apply, retro_judge
 from owlbear_delivery_next.improvement import retro_store as store
 from owlbear_delivery_next.improvement import retro_synthetic as syn
 from owlbear_delivery_next.improvement import retro_units as units
@@ -118,10 +118,9 @@ class RetroJob:
         return job
 
     def working(self) -> list[str]:
-        """What a stop when idle and an update wait for: the running run, or a runtime that may still run."""
-        if self.running:
-            return [f"Retro: {self.running}"]
-        return [LINGERING] if self.lingering() else []
+        """What a stop when idle and an update wait for: the run, a runtime that may still run, the owner's writes."""
+        held = [f"Retro: {self.running}"] if self.running else [LINGERING] if self.lingering() else []
+        return held + proposal_apply.working()
 
     def lingering(self) -> bool:
         """Whether a call's lease is held: a runtime of it may still run, so no Retro call starts."""

@@ -11,9 +11,10 @@ from typing import TYPE_CHECKING, Any
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from owlbear_memory.engine import MemoryEngine
 
 from owlbear_delivery_next.change_contracts import models as m
-from owlbear_delivery_next.improvement import case_replay, cases, improvement_view, spotter
+from owlbear_delivery_next.improvement import case_replay, cases, improvement_view, proposal_apply, spotter
 from owlbear_delivery_next.improvement import proposal_targets as targets
 from owlbear_delivery_next.improvement import retro_proposals as props
 from owlbear_delivery_next.improvement import retro_store as store
@@ -54,10 +55,11 @@ def world(tmp_path, monkeypatch):
         projects=dict.fromkeys(projects),
         updating="",
         stopping=threading.Event(),
+        lock=threading.Lock(),
     )
     served = FastAPI()
     served.include_router(improvement_routes.router(machine, lambda: DataRepo(tmp_path / "shared")), prefix="/api/next")
-    return SimpleNamespace(http=TestClient(served), projects=projects, shared=tmp_path / "shared")
+    return SimpleNamespace(http=TestClient(served), projects=projects, shared=tmp_path / "shared", machine=machine)
 
 
 def _records(*rows: dict[str, Any]) -> None:
@@ -128,6 +130,45 @@ def test_an_accepted_proposal_is_applied_from_the_page(world) -> None:
     assert (applied.status_code, applied.json()["apply_state"]) == (200, "done"), applied.text
     redraft = world.http.post(f"{API}/proposals/{pid}/redraft")
     assert (redraft.status_code, store.queued()) == (409, [])
+
+
+def test_an_apply_waiting_its_turn_is_counted_and_refused_once_a_fence_begins(world, monkeypatch) -> None:
+    first = _waiting()
+    store.add_findings([{"id": "f-2", "unit": "chg:p1:fix", "change": "p1:fix", "what": "planned past the brief",
+                         "cost": "a re-run", "mechanism": "m-2"}])  # fmt: skip
+    second = props.file(props.open_key("real", "lesson", "agent:planner"), ["f-2"], kind="lesson",
+                        target="agent:planner", provenance="real")  # fmt: skip
+    props.reviewed(second, props.folded()[second]["evidence"], {"verdict": "survive", "why": "holds",
+                                                                "publishable": TEXT})  # fmt: skip
+    for shown in world.http.get(API).json()["proposals"]:
+        world.http.post(f"{API}/proposals/{shown['id']}/decide", json={"state": "accepted", "token": shown["token"]})
+    inside, release = threading.Event(), threading.Event()
+
+    def held(folder: Path) -> MemoryEngine:
+        inside.set()
+        release.wait(10)
+        return MemoryEngine(folder)
+
+    monkeypatch.setattr(improvement_routes, "MemoryEngine", held)
+    said: dict[str, Any] = {}
+    runs = [threading.Thread(target=lambda p=p: said.update({p: world.http.post(f"{API}/proposals/{p}/apply")}))
+            for p in (first, second)]  # fmt: skip
+    runs[0].start()
+    assert inside.wait(10)
+    runs[1].start()
+    for _ in range(200):
+        if len(proposal_apply.working()) == 2:
+            break
+        threading.Event().wait(0.05)
+    assert sorted(proposal_apply.working()) == [f"Improvement: applying proposal {p}" for p in sorted((first, second))]
+    world.machine.updating = "OwlBear is updating"
+    release.set()
+    for run in runs:
+        run.join(10)
+
+    assert said[first].status_code == 200, said[first].text
+    assert (said[second].status_code, said[second].json()["detail"]) == (503, "OwlBear is updating")
+    assert (props.folded()[second]["applied"], proposal_apply.working()) == ([], [])
 
 
 def test_a_closed_proposal_with_work_left_stays_shown_past_the_newest_closed(world, monkeypatch) -> None:

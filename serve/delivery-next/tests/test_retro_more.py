@@ -1,5 +1,6 @@
 """Retro's runs that judge no unit (#716): a redirected proposal's redraft and a finding's follow-up."""
 
+import contextlib
 import json
 import uuid
 from types import SimpleNamespace
@@ -286,6 +287,15 @@ def test_a_follow_up_a_reviewed_proposal_already_worded_is_saved_at_once_unless_
     with pytest.raises(store.RetroError, match="holds a credential, an email address"):
         followups.request("rf-1", "owner", world.places, followups.backlog)
     assert (len(world.entries), store.queued(), _runs()) == (1, [], [])
+
+
+def test_the_owners_writes_count_in_what_a_stop_or_an_update_waits_for(world):
+    job = _job(Model(TEXT), world.projects)
+
+    with act.admitted("applying proposal rp-1", contextlib.nullcontext(), lambda: None):
+        assert job.working() == ["Improvement: applying proposal rp-1"]
+
+    assert job.working() == []
 
 
 def test_a_follow_up_of_a_finding_a_reset_retired_is_refused_with_nothing_saved_or_queued(world):

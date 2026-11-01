@@ -30,6 +30,7 @@ from owlbear_delivery_next.state_store.store import StoreError
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from contextlib import AbstractContextManager
     from pathlib import Path
 
     from owlbear_delivery_next.local_system.data_repo import DataRepo
@@ -114,6 +115,10 @@ class _Machine:
         if why := self.machine.updating or ("OwlBear is stopping" if self.machine.stopping.is_set() else ""):
             raise HTTPException(503, why)
 
+    def admitted(self, what: str) -> AbstractContextManager[None]:
+        """The owner's write *what*, admitted under the stop barrier while the machine may be written; counted."""
+        return proposal_apply.admitted(what, self.machine.lock, self.writable)
+
     def registered(self, pid: str) -> None:
         if pid not in self.machine.projects:
             raise HTTPException(404, f"no registered project has the id {pid!r}")
@@ -188,9 +193,9 @@ def _retro(routes: APIRouter, m: _Machine) -> None:
     @routes.post("/followups")
     def followup(body: FollowupBody) -> dict[str, Any]:
         """Follow up a finding or record: its backlog entry, saved or found, or the run queued to write it."""
-        m.writable()
         try:
-            return followups.request(body.finding, BY, improvement_view.places(m.projects()), followups.backlog)
+            with m.admitted(f"following up {body.finding}"):
+                return followups.request(body.finding, BY, improvement_view.places(m.projects()), followups.backlog)
         except followups.Unknown as exc:
             raise HTTPException(404, str(exc)) from exc
         except store.RetroError as exc:
@@ -217,9 +222,9 @@ def _proposals(routes: APIRouter, m: _Machine) -> None:
     @routes.post("/proposals/{pid}/apply")
     def apply(pid: str) -> dict[str, Any]:
         """Make an accepted proposal's artefacts, or those still missing after a failure."""
-        m.writable()
         try:
-            return proposal_apply.apply(pid, seams(lambda: m.machine.cases.running))
+            with m.admitted(f"applying proposal {pid}"):
+                return proposal_apply.apply(pid, seams(lambda: m.machine.cases.running), m.writable)
         except store.RetroError as exc:
             raise HTTPException(409, str(exc)) from exc
 
