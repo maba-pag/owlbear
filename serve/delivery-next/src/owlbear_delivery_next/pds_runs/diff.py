@@ -16,14 +16,15 @@ HEADING = re.compile(r"^## \[(\d+)\.(\d+)\.(\d+)[^\]]*\]", re.MULTILINE)  # a re
 CAP = 20000  # characters of each part the sessions are shown
 
 
-def _number(version: str) -> tuple[int, ...]:
+def number(version: str) -> tuple[int, ...]:
+    """A release version as numbers, to order two."""
     return tuple(int(n) for n in re.findall(r"\d+", version)[:3])
 
 
 def changelog(text: str, since: str, to: str) -> str:
     """The changelog's sections for the releases after *since* up to *to*, newest first, as the file orders them."""
     marks = list(HEADING.finditer(text))
-    old, new = _number(since), _number(to)
+    old, new = number(since), number(to)
     kept = []
     for i, m in enumerate(marks):
         if old < tuple(int(n) for n in m.groups()) <= new:

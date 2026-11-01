@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import re
 from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.change_contracts import dispute_tools, tools
@@ -38,11 +37,6 @@ class Dropped(Exception):  # noqa: N818 - how a repair's failed check gives the 
     """The agent's CI repair did not pass the audit or the browser tests again: it is never pushed."""
 
 
-def number(version: str) -> tuple[int, ...]:
-    """A release version as numbers, to order two."""
-    return tuple(int(n) for n in re.findall(r"\d+", version)[:3])
-
-
 def notice(job: Job) -> str:
     """The latest release on npm, when newer than the installed pin.
 
@@ -61,7 +55,7 @@ def notice(job: Job) -> str:
         msg = f"npm's answer names no version: {str(latest)[:60]}"
         raise Stopped(msg)
     installed = pin.read(job.live.package.resolve()).version
-    if number(latest) <= number(installed):
+    if diff.number(latest) <= diff.number(installed):
         msg = f"up to date: PDS {installed} is npm's latest release"
         raise Stopped(msg, current=True)
     return latest
@@ -93,7 +87,7 @@ def prepare(job: Job, version: str) -> tuple[Context, pin.Release, bytes | None]
     at = tree.worktree(src.root, candidate(job), src.base, live.git)
     package = at / pin.PREFIX
     old = pin.read(package)
-    if number(old.version) >= number(version):
+    if diff.number(old.version) >= diff.number(version):
         msg = f"up to date: main already pins PDS {old.version}"
         raise Stopped(msg, current=True)
     evidence = package / pin.TREE / diff.DEPRECATIONS
