@@ -61,7 +61,8 @@ def _changes(uid: str) -> set[tuple[str, str]]:
         about = about or [units.unit_of(r) for r in units.records() if r.get("id") == sid]
     else:
         about = [uid]
-    return {(p, c) for u in about if u.startswith("chg:") for p, _, c in [u[4:].partition(":")] if c}
+    pairs = [(p, c) for u in about if u.startswith("chg:") for p, _, c in [u[4:].partition(":")] if c]
+    return set(pairs) if len(pairs) == len(about) else set()  # one unit outside a Change: none is shared
 
 
 def where(uid: str, projects: units.Projects) -> spend_ledger.Where:

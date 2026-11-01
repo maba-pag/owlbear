@@ -315,4 +315,6 @@ def test_a_follow_ups_spend_counts_for_its_change_and_an_unscoped_ones_machine_w
         "alpha-folder", "fix")  # fmt: skip
     assert where(f"proposal:{pid}", world.projects).change == "fix"
     assert where("finding:rf-c", world.projects).project == ""
+    mixed = props.file(props.open_key("real", "lesson", "y"), ["rf-1", "rf-c"], kind="lesson", provenance="real")
+    assert where(f"proposal:{mixed}", world.projects) == where("finding:rf-c", world.projects)  # no Change shared
     assert where("finding:unknown", world.projects).project == ""
