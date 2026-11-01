@@ -1,4 +1,4 @@
-"""The check launch's pid file (#752): a host that stops before recording the group still finds and ends it."""
+"""The check launch's pid file (#752): a host that stops before recording the group finds it; no recipe runs."""
 
 import contextlib
 import os
@@ -33,6 +33,7 @@ def test_the_pid_written_is_the_recipes_after_exec(tmp_path: Path) -> None:
     pidfile.write_text("1\n")  # an earlier launch's file is removed first
     proc = check.start(env("sleep 300"), tmp_path, tmp_path / "env.log", None, pidfile)
     assert proc is not None
+    check.release(proc)
     try:
         assert int(waited(pidfile)) == proc.pid
         end = time.monotonic() + 10
@@ -51,12 +52,25 @@ def test_a_recipe_never_runs_without_its_pid_file(tmp_path: Path) -> None:
     assert not ran.exists()
 
 
+def test_a_recipe_never_runs_when_its_host_stops_before_recording_the_group(tmp_path: Path) -> None:
+    ran, pidfile = tmp_path / "ran", tmp_path / check.PIDFILE
+    proc = check.start(env(f"touch {ran}"), tmp_path, tmp_path / "env.log", None, pidfile)
+    assert proc is not None
+    assert int(waited(pidfile)) == proc.pid
+    time.sleep(0.5)
+    assert not ran.exists()
+    proc.stdin.close()  # what a host's exit does to the pipe
+    assert proc.wait(10) != 0
+    assert not ran.exists()
+
+
 @pytest.mark.parametrize("shell", ["sh -c '", "bash -c 'set -m; "])  # a job-control job runs in a group of its own
 def test_a_launch_whose_leader_is_gone_is_disposed_from_its_pid_file(tmp_path: Path, shell: str) -> None:
     left = tmp_path / "left"
     e = env(f"{shell}sleep 300 >/dev/null 2>&1 & echo $! > {left}'", launched_at=datetime.now(UTC))
     proc = check.start(e, tmp_path, tmp_path / "env.log", None, tmp_path / check.PIDFILE)
     assert proc is not None
+    check.release(proc)
     proc.wait(10)
     sleep = int(waited(left))
     started = psutil.Process(sleep).create_time()

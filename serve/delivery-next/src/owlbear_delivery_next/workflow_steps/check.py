@@ -180,19 +180,20 @@ def start(
 ) -> subprocess.Popen[bytes] | None:
     """Spawn the recipe as leader of its own session and group; *env* is a test copy's isolated environment.
 
-    With *pidfile*, a shell writes its pid there and only then becomes the recipe, so a host that stops before it
-    records the group can still find it (``recovered``).
+    With *pidfile*, a shell writes its pid there and then waits on its stdin: it becomes the recipe only once
+    ``release`` says the group is recorded, so a host that stops in between leaves a pid file and no recipe.
     """
     try:
         argv = shlex.split(e.command)
         if pidfile is not None:
             pidfile.unlink(missing_ok=True)
-            argv = ["/bin/sh", "-c", 'echo $$ > "$0" && exec "$@"', str(pidfile), *argv]
+            wrapper = 'echo $$ > "$0" && read -r _ && exec "$@" </dev/null'
+            argv = ["/bin/sh", "-c", wrapper, str(pidfile), *argv]
         with log.open("ab") as out:
             proc = subprocess.Popen(  # noqa: S603 - argument vector of the Builder's launch recipe
                 argv,
                 cwd=root / e.directory,
-                stdin=subprocess.DEVNULL,
+                stdin=subprocess.DEVNULL if pidfile is None else subprocess.PIPE,
                 stdout=out,
                 stderr=subprocess.STDOUT,
                 start_new_session=True,
@@ -202,6 +203,13 @@ def start(
         return None
     threading.Thread(target=proc.wait, daemon=True).start()  # reaps the leader whenever it ends
     return proc
+
+
+def release(proc: subprocess.Popen[bytes]) -> None:
+    """Let a wrapped launch become its recipe; call only once its group is recorded."""
+    if proc.stdin is not None:
+        with contextlib.suppress(OSError), proc.stdin:
+            proc.stdin.write(b"go\n")
 
 
 def recovered(e: Environment, pidfile: Path) -> Environment:
