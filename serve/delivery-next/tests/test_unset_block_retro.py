@@ -10,6 +10,7 @@ import json
 import os
 import subprocess
 import uuid
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -227,6 +228,31 @@ def test_a_setting_unset_while_a_new_run_waits_for_a_slot_refuses_it_before_its_
     _layer(b, Prefs(ci_poll_seconds=20))
     job.tick(1.0)
     assert ("chg:pb:fix-it", "change", "judge", "judged") in _runs()[1:]
+
+
+def test_a_setting_unset_while_a_new_runs_first_admission_waits_refuses_it_when_it_resumes(a_b, machine, monkeypatch):
+    _, b = a_b
+    job, fence = _job(machine, []), [""]
+    job.seams = replace(job.seams, fenced=lambda: fence[0])
+    real = job.slots.take
+
+    def take(share, key, *args, **kwargs):
+        got = real(share, key, *args, **kwargs)
+        if key.startswith("retro:open") and got and not fence[0]:
+            fence[0] = "an update is starting"  # refused under the barrier: its first admission waits
+        return got
+
+    monkeypatch.setattr(job.slots, "take", take)
+    job.tick(0.0)
+    assert [c.uid for c in job.waiting] == ["chg:pb:fix-it", "chat:cb"]
+    _layer(b, None)
+    monkeypatch.setattr(job.slots, "take", real)
+    fence[0] = ""
+    job.tick(1.0)
+    assert {(unit, result) for unit, _, _, result in _runs()} == {
+        ("chg:pb:fix-it", f"refused: {UNSET}"),
+        ("chat:cb", f"refused: {UNSET}"),
+    }
 
 
 def test_a_late_grading_held_while_it_waits_for_a_slot_is_offered_again_once_set(a_b, machine, monkeypatch):

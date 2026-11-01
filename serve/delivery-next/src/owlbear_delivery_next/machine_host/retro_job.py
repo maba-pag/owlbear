@@ -373,7 +373,6 @@ class RetroJob:
             StoppedError: The unit may no longer be read, or an assumption the run rests on is retired; it ends refused.
         """
         key, turn = f"retro:{what}:{uuid.uuid4().hex[:8]}", threading.Event()
-        new, ctx.new = ctx.new, False  # its first admission, whatever comes of it
         while not self.slots.take(SLOT, key, 1, 1, wake=turn.set):
             if why := self._refusal(ctx) or (LINGERING if self.lingering() else ""):
                 self.slots.cancel(SLOT, key)
@@ -389,8 +388,9 @@ class RetroJob:
                 why = real and units.eligible(ctx.uid, enrolled(), self.seams.projects(), fresh=fresh)
                 if why := ctx.retired() or (f"refused: {why}" if why else ""):
                     raise StoppedError(why)
-                if new and (why := self.seams.blocked(ctx.uid)):  # set when it opened, unset since? (#808)
+                if ctx.new and (why := self.seams.blocked(ctx.uid)):  # set when it opened, unset since? (#808)
                     raise StoppedError.unset(why)
+                ctx.new = False  # rechecked once, by the first admission that gets this far
                 if lease:
                     begun = self.maintenance.begin(SLOT, key, KIND, "")  # durable before the session starts
             if ctx.why:
