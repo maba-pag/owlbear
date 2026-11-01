@@ -358,3 +358,23 @@ def test_after_a_restart_a_run_waiting_for_its_first_admission_is_rechecked_and_
         ("chat:cb", f"refused: {UNSET}"),
     }
 
+
+def test_a_retro_role_set_only_in_a_project_layer_holds_its_units_since_retro_reads_it_outside_projects(
+    a_b, machine, monkeypatch
+):
+    _, b = a_b
+    agents = config.BASE.agents | {"retro": config.BASE.agents["retro"].model_copy(update={"minutes": None})}
+    monkeypatch.setattr(config, "BASE", config.BASE.model_copy(update={"agents": agents}))
+    own = {"retro": config.Agent(minutes=1)}
+    assert b.save(b.config_path, Layer, lambda la: la.model_copy(update={"agents": own}), "t", owner=True) == ""
+    assert b.settings().missing == []
+    unset = "settings unset: agents.retro.minutes; fill them in on the Settings page"
+    job = _job(machine, said := [])
+    job.tick(0.0)
+    job.tick(1.0)
+    assert _runs() == []
+    assert said.count(f"Retro does not run chg:pb:fix-it: {unset}") == 1
+    assert not retro_store.known().get("chg:pb:fix-it", {}).get("revisions"), "its revision stays due"
+    retro_store.request("owner", change="pb:fix-it")
+    job.tick(2.0)
+    assert _runs() == [("chg:pb:fix-it", "button", "judge", f"refused: {unset}")]
