@@ -266,7 +266,7 @@ class RetroJob:
         ctx.limit, ctx.new = limit or 0.0, True
         keep = {"trigger": ctx.trigger, "by": ctx.by, "rev": ctx.rev, "mode": ctx.mode, "records": ctx.records}
         store.run_event(ctx.id, "opened", unit=ctx.uid, provenance=ctx.provenance, spec=ctx.spec, limit=ctx.limit,
-                        assumptions=list(ctx.needs), **keep)  # fmt: skip
+                        assumptions=list(ctx.needs), new=True, **keep)  # fmt: skip
         if why:
             self._ended(ctx, why)
         else:
@@ -389,7 +389,7 @@ class RetroJob:
                     raise StoppedError(why)
                 if ctx.new and (why := self.seams.blocked(ctx.uid)):  # set when it opened, unset since? (#808)
                     raise StoppedError.unset(why)
-                ctx.new = False  # rechecked once, by the first admission that gets this far
+                ctx.admit()  # rechecked once, by the first admission that gets this far
                 if lease:
                     begun = self.maintenance.begin(SLOT, key, KIND, "")  # durable before the session starts
             if ctx.why:
