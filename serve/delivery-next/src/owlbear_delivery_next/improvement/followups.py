@@ -11,6 +11,7 @@ assumption is refused, as is a reviewed proposal's text resting on one.
 
 from __future__ import annotations
 
+import threading
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -37,6 +38,7 @@ SUBJECT = 6_000  # characters of the subject a minimising message carries
 PROMPT = Path(__file__).with_name("followup_prompt.md")
 FINDING = ("id", "what", "mechanism", "cost", "steps", "quotes", "cause", "target")
 RECORD = ("id", "look", "category", "note", "step")
+_saving = threading.Lock()  # only the machine host saves follow-ups, from its routes and its Retro runs: one at a time
 
 type Backlogs = Callable[[str], Backlog]  # a project's folder in the shared repository ("" none) -> its backlog view
 
@@ -129,11 +131,13 @@ def save(subj: Mapping[str, Any], text: Mapping[str, str], backlogs: Backlogs) -
         msg = "the follow-up text has no title or body: nothing was written"
         raise store.RetroError(msg)
     view = backlogs(subj["folder"])
-    if (made := _made(view, subj["id"])) is None:
-        refs = f"\n\nRefs: {subj['id']}"
-        body = f"{body[: retro_judge.BODY - len(refs)]}{refs}" if subj["id"] not in body else body[: retro_judge.BODY]
-        title = f"[synthetic] {title}" if subj["provenance"] == "synthetic" else title  # never a real entry's match
-        made, _ = view.add(title[: retro_judge.TITLE], body, subj["source"], evidence=[f"{MARK}{subj['id']}"])
+    with _saving:  # the marker looked for and the entry made as one: two texts never make two entries
+        if (made := _made(view, subj["id"])) is None:
+            refs = f"\n\nRefs: {subj['id']}"
+            cut_body = body[: retro_judge.BODY - len(refs)]
+            body = f"{cut_body}{refs}" if subj["id"] not in body else body[: retro_judge.BODY]
+            title = f"[synthetic] {title}" if subj["provenance"] == "synthetic" else title  # never a real entry's match
+            made, _ = view.add(title[: retro_judge.TITLE], body, subj["source"], evidence=[f"{MARK}{subj['id']}"])
     return _entry(made, view)
 
 

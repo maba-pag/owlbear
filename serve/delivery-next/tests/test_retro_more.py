@@ -2,6 +2,7 @@
 
 import contextlib
 import json
+import threading
 import uuid
 from types import SimpleNamespace
 
@@ -296,6 +297,28 @@ def test_the_owners_writes_count_in_what_a_stop_or_an_update_waits_for(world):
         assert job.working() == ["Improvement: applying proposal rp-1"]
 
     assert job.working() == []
+
+
+def test_two_savers_of_one_follow_up_with_different_text_make_one_entry(world, monkeypatch):
+    both = threading.Barrier(2, timeout=1)  # each saver reads the backlog before either adds, unless one waits
+    shown = FakeBacklog.read
+
+    def read(self, *, fresh=False):
+        found = shown(self, fresh=fresh)
+        with contextlib.suppress(threading.BrokenBarrierError):
+            both.wait()
+        return found
+
+    monkeypatch.setattr(FakeBacklog, "read", read)
+    subj = followups.subject("rf-2", world.places)
+    savers = [threading.Thread(target=followups.save, args=(subj, {"title": t, "body": "b"}, followups.backlog))
+              for t in ("Minimised by a run", "Reviewed proposal text")]  # fmt: skip
+    for saver in savers:
+        saver.start()
+    for saver in savers:
+        saver.join(10)
+
+    assert [e.evidence for e in world.entries] == [["followup:rf-2"]]
 
 
 def test_a_follow_up_of_a_finding_a_reset_retired_is_refused_with_nothing_saved_or_queued(world):
