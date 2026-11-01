@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import threading
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
@@ -127,6 +127,32 @@ def test_an_accepted_proposal_is_applied_from_the_page(world) -> None:
     assert (applied.status_code, applied.json()["apply_state"]) == (200, "done"), applied.text
     redraft = world.http.post(f"{API}/proposals/{pid}/redraft")
     assert (redraft.status_code, store.queued()) == (409, [])
+
+
+def test_a_closed_proposal_with_work_left_stays_shown_past_the_newest_closed(world, monkeypatch) -> None:
+    ticks = iter(range(1000))
+    start = datetime(2026, 10, 1, tzinfo=UTC)
+    monkeypatch.setattr(store, "now", lambda: (start + timedelta(minutes=next(ticks))).isoformat(timespec="seconds"))
+    pids = []
+    for i in range(improvement_view.CLOSED + 1):
+        store.add_findings([{"id": f"f-{i}", "unit": "chg:p1:fix", "change": "p1:fix", "what": "w", "cost": "c",
+                             "mechanism": f"m-{i}"}])  # fmt: skip
+        pid = props.file(props.open_key("real", "lesson", f"agent:{i}"), [f"f-{i}"], kind="lesson",
+                         target="agent:builder", provenance="real")  # fmt: skip
+        answer = {"verdict": "survive", "why": "holds", "publishable": TEXT}
+        props.reviewed(pid, props.folded()[pid]["evidence"], answer)
+        pids.append(pid)
+    (first,) = [p for p in world.http.get(API).json()["proposals"] if p["id"] == pids[0]]
+    accepted = world.http.post(f"{API}/proposals/{pids[0]}/decide", json={"state": "accepted", "token": first["token"]})
+    assert accepted.json()["apply_state"] == "pending"  # the oldest closed one, never made
+    for pid in pids[1:]:
+        props.transition(pid, "rejected", "owner")
+
+    shown = [p["id"] for p in world.http.get(API).json()["proposals"]]
+
+    assert (len(shown), shown[-1]) == (improvement_view.CLOSED + 1, pids[0])
+    assert world.http.post(f"{API}/proposals/{pids[0]}/apply").json()["apply_state"] == "done"
+    assert pids[0] not in [p["id"] for p in world.http.get(API).json()["proposals"]]  # the cap holds again
 
 
 def test_a_case_shows_the_grade_it_rests_on_and_a_lost_redraft_is_asked_for_again(world) -> None:

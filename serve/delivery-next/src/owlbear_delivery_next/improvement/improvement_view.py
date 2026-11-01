@@ -259,9 +259,11 @@ def _shown(
 
 
 def proposals(projects: units.Projects, shared_root: Path | None) -> list[dict[str, Any]]:
-    """The visible proposals: open ones first (waiting, later, under review), then the newest closed ones.
+    """The visible proposals: open ones first, then the newest closed ones and every closed one with work left.
 
-    An open one carries where it would land, or why it cannot be accepted, and the token a decision on it names.
+    Open ones are waiting, later or under review. Work is left on an accepted one not made in full and on a redirected
+    one whose redraft is not filed and reviewed. An open one carries where it would land, or why it cannot be
+    accepted, and the token a decision on it names.
     """
     where, known, redrafts, found = places(projects), targets.units_of(), _redrafts(), _found()
     open_, closed = [], []
@@ -274,7 +276,13 @@ def proposals(projects: units.Projects, shared_root: Path | None) -> list[dict[s
             open_.append(_shown(snap, proposal_apply.destination(snap, where, shared_root, known), redrafts, found))
     open_.sort(key=lambda p: (OPEN.get(p["state"], len(OPEN)), -_when(p["history"][-1]["at"]).timestamp()))
     closed.sort(key=lambda p: _when(p["history"][-1]["at"]), reverse=True)
-    return open_ + closed[:CLOSED]
+    return open_ + [p for i, p in enumerate(closed) if i < CLOSED or _unfinished(p)]
+
+
+def _unfinished(p: Mapping[str, Any]) -> bool:
+    if p["state"] == "accepted":
+        return p["apply_state"] != "done"
+    return p["state"] == "redirected" and (not p["redraft"] or p["redraft_state"] == "drafted")
 
 
 # A Change's detail and a finding's follow-up
