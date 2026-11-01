@@ -354,6 +354,7 @@ def environment(store, fake, monkeypatch, **env):
     monkeypatch.setattr(check, "start", start)
     monkeypatch.setattr(check, "ready", ready)
     monkeypatch.setattr(check, "created", lambda _pid: 2.0)
+    monkeypatch.setattr(check, "taken", lambda e, _leader: e.pids)
     return calls
 
 
@@ -459,6 +460,17 @@ def test_a_failed_launch_forgets_the_recipe_so_an_agent_prepares_again(store, tm
     assert fake.host.tick(NOW) == []
     after = store.read("c1")
     assert (after.recipe, after.env, after.outcome.exit) == (None, None, Exit.RETRY)
+
+
+def test_a_leader_gone_before_readiness_leaves_its_members_recorded_for_disposal(store, tmp_path, monkeypatch):
+    fake = Fake(store, tmp_path)
+    calls = environment(store, fake, monkeypatch)
+    calls["left"] = [{}, {902: "node"}]  # the launch's own clearing, then the failed launch's
+    monkeypatch.setattr(check, "ready", lambda _e, _proc: None)
+    monkeypatch.setattr(check, "taken", lambda e, leader: e.pids | ({902: 3.0} if leader == Proc.pid else {}))
+    fake.host.tick(NOW)
+    assert calls["dispose"][-1] == {900: 2.0, 902: 3.0}
+    assert store.read("c1").env.pids == {900: 2.0, 902: 3.0}  # still blocked: the next try proves 902 the launch's
 
 
 def test_a_check_without_a_test_preparation_never_launches(store, tmp_path, monkeypatch):

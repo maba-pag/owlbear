@@ -83,28 +83,53 @@ def test_an_unlisted_table_while_awaiting_readiness_is_polled_again(monkeypatch)
     assert calls == [900, 900]
 
 
-@pytest.mark.parametrize("shell", ["sh -c '", "bash -c 'set -m; "])  # a job-control job runs in a group of its own
-def test_a_launch_whose_leader_is_gone_is_disposed_from_its_pid_file(tmp_path: Path, shell: str) -> None:
-    left = tmp_path / "left"
-    e = env(f"{shell}sleep 300 >/dev/null 2>&1 & echo $! > {left}'", launched_at=datetime.now(UTC))
+def leaderless(tmp_path: Path, shell: str) -> tuple[Environment, list[int]]:
+    """A launch whose leader exited and left two sleeps in its session, recovered from its pid file."""
+    first, second = tmp_path / "first", tmp_path / "second"
+    jobs = f"sleep 300 >/dev/null 2>&1 & echo $! > {first}; sleep 301 >/dev/null 2>&1 & echo $! > {second}'"
+    e = env(f"{shell}{jobs}", launched_at=datetime.now(UTC))
     proc = check.start(e, tmp_path, tmp_path / "env.log", None, tmp_path / check.PIDFILE)
     assert proc is not None
     check.release(proc)
     proc.wait(10)
-    sleep = int(waited(left))
-    started = psutil.Process(sleep).create_time()
-    assert (os.getpgid(sleep) == proc.pid) == shell.startswith("sh ")
+    sleeps = [int(waited(first)), int(waited(second))]
+    assert all((os.getpgid(s) == proc.pid) == shell.startswith("sh ") for s in sleeps)
+    found = check.recovered(e, tmp_path / check.PIDFILE)
+    assert found.pgid == proc.pid
+    return found, sleeps
+
+
+@pytest.mark.parametrize("shell", ["sh -c '", "bash -c 'set -m; "])  # a job-control job runs in a group of its own
+def test_a_leaderless_session_with_a_recorded_member_is_disposed_whole(tmp_path: Path, shell: str) -> None:
+    e, sleeps = leaderless(tmp_path, shell)
+    started = {s: psutil.Process(s).create_time() for s in sleeps}
     try:
-        found = check.recovered(e, tmp_path / check.PIDFILE)
-        assert found.pgid == proc.pid
-        assert check.dispose(found) == {}
+        e = e.model_copy(update={"pids": e.pids | {sleeps[0]: started[sleeps[0]]}})  # as readiness records it
+        assert check.dispose(e) == {}
         end = time.monotonic() + 5  # an exiting process has no group to list, yet psutil still sees it for a moment
-        while processes.alive(sleep, started) and time.monotonic() < end:
+        while any(processes.alive(s, t) for s, t in started.items()) and time.monotonic() < end:
             time.sleep(0.05)
-        assert processes.alive(sleep, started) is False
+        assert [processes.alive(s, t) for s, t in started.items()] == [False, False]
     finally:
-        with contextlib.suppress(OSError):
-            os.kill(sleep, signal.SIGKILL)
+        for s in sleeps:
+            with contextlib.suppress(OSError):
+                os.kill(s, signal.SIGKILL)
+
+
+def test_a_leaderless_session_without_a_recorded_member_is_reported_not_signalled(tmp_path: Path, monkeypatch) -> None:
+    e, sleeps = leaderless(tmp_path, "sh -c '")
+    sent: list[int] = []
+    try:
+        with monkeypatch.context() as m:
+            m.setattr(check, "GRACE", 0.1)
+            m.setattr(os, "kill", lambda pid, _sig: sent.append(pid))
+            m.setattr(os, "killpg", lambda pgid, _sig: sent.append(pgid))
+            assert set(check.dispose(e)) == set(sleeps)  # its id may name another's session by now
+        assert sent == []
+    finally:
+        for s in sleeps:
+            with contextlib.suppress(OSError):
+                os.kill(s, signal.SIGKILL)
 
 
 def test_an_earlier_launchs_pid_file_is_ignored(tmp_path: Path) -> None:

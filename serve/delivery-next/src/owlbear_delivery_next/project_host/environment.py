@@ -51,6 +51,7 @@ def launch(h: Host, lock: Lock, c: Change, now: datetime) -> Change:  # noqa: PL
             check.release(proc)
     pids = check.ready(e, proc) if proc else None
     if pids is None:
+        c.env = e = check.unready(e, proc)
         if left := h.clear(c, e):
             h.mark(c, left, now)
             return c

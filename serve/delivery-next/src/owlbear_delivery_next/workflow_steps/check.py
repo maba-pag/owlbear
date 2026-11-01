@@ -158,17 +158,46 @@ def remaining(
     return found | (group(e.pgid, e.pids.get(e.pgid)) if e.pgid else {})
 
 
+def taken(e: Environment, leader: int) -> Pids:
+    """The recorded PIDs and every live member of the leader's group and session, each with its start time."""
+    return e.pids | {p: created(p) for p in members(leader, e.pids.get(leader))}
+
+
+def unready(e: Environment, proc: subprocess.Popen[bytes] | None) -> Environment:
+    """A launch that never answered, with its group's members recorded for disposal to prove them its own.
+
+    Its leader is gone at most a moment ago, too soon for the group's or session's id to be another's.
+    """
+    if proc is not None and e.pgid:
+        with contextlib.suppress(processes.UnlistedError):
+            return e.model_copy(update={"pids": taken(e, e.pgid)})
+    return e
+
+
+def _proven(e: Environment, found: Found) -> bool:
+    """Whether the members are still the launch's: its leader, or a process recorded with its start time, is one.
+
+    Without either, the group's or session's id may have ended and been taken by another's leader since.
+    """
+    return e.pgid in found or any(p in found and t is not None and processes.alive(p, t) for p, t in e.pids.items())
+
+
 def dispose(e: Environment) -> Found:
-    """Signal the group, its session's other members and the recorded PIDs, TERM then KILL; return what remains."""
+    """Signal the group, its session's other members and the recorded PIDs, TERM then KILL; return what remains.
+
+    A group and session whose members are not proven the launch's are never signalled; they remain.
+    """
     left: Found = {}
+    proven = False
     for sig, wait in ((signal.SIGTERM, GRACE), (signal.SIGKILL, 2.0)):
         if not (left := remaining(e)):
             return {}
+        found = members(e.pgid, e.pids.get(e.pgid)) if e.pgid and e.pgid not in {os.getpgrp(), os.getsid(0)} else {}
+        proven = proven or _proven(e, found)  # read before any signal; once proven, the id is the launch's
         processes.kill(e.pids, sig)
-        if e.pgid and e.pgid not in {os.getpgrp(), os.getsid(0)} and (found := members(e.pgid, e.pids.get(e.pgid))):
-            for send, target in [(os.killpg, e.pgid), *((os.kill, p) for p in found)]:
-                with contextlib.suppress(OSError):
-                    send(target, sig)
+        for send, target in [(os.killpg, e.pgid), *((os.kill, p) for p in found)] if found and proven else []:
+            with contextlib.suppress(OSError):
+                send(target, sig)
         end = time.monotonic() + wait
         while (left := remaining(e)) and time.monotonic() < end:
             time.sleep(0.2)
@@ -238,7 +267,7 @@ def ready(e: Environment, proc: subprocess.Popen[bytes]) -> Pids | None:
     while time.monotonic() < end and proc.returncode is None:
         if answers(e.ready_url):
             with contextlib.suppress(processes.UnlistedError):  # unlisted now: poll again; the deadline ends the wait
-                return e.pids | {p: created(p) for p in members(proc.pid, e.pids.get(proc.pid))}
+                return taken(e, proc.pid)
         time.sleep(0.5)
     return None
 
