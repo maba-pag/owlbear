@@ -292,7 +292,7 @@ class RetroJob:
                 self.waiting.append(ctx)
             return
         except StoppedError as exc:
-            result = exc.result
+            result, out = exc.result, {"held": True} if exc.held else None
         except asyncio.CancelledError:
             result = "stopped: OwlBear stopped"
         except Exception as exc:
@@ -387,9 +387,10 @@ class RetroJob:
                     raise WaitingError(why)
                 real, fresh = ctx.provenance == "real", not ctx.rev  # a chat's new revision only when it is quiet
                 why = real and units.eligible(ctx.uid, enrolled(), self.seams.projects(), fresh=fresh)
-                why = why or (new and self.seams.blocked(ctx.uid))  # set when it opened, unset since? (#808)
                 if why := ctx.retired() or (f"refused: {why}" if why else ""):
                     raise StoppedError(why)
+                if new and (why := self.seams.blocked(ctx.uid)):  # set when it opened, unset since? (#808)
+                    raise StoppedError.unset(why)
                 if lease:
                     begun = self.maintenance.begin(SLOT, key, KIND, "")  # durable before the session starts
             if ctx.why:

@@ -102,10 +102,13 @@ def unfinished(uid: str) -> list[dict[str, Any]]:
 
 
 def failed_grading() -> set[tuple[str, str]]:
-    """Each (unit, revision) whose last grade-only run ended short of judged: its late records wait for the button."""
+    """Each (unit, revision) whose last grade-only run ended short of judged: its late records wait for the button.
+
+    A run its unset settings held before any work (#808) is not one: its records are offered again once they are set.
+    """
     last: dict[tuple[str, str], str] = {}
     for r in store.run_states().values():  # in the order the runs opened
-        if r.get("mode") == "grade-only" and r["state"] == "ended":
+        if r.get("mode") == "grade-only" and r["state"] == "ended" and not r.get("held"):
             last[r.get("unit", ""), r.get("rev", "")] = r["result"]
     return {key for key, result in last.items() if result != "judged"}
 

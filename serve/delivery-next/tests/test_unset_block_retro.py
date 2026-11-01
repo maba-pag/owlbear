@@ -195,6 +195,21 @@ def test_late_records_of_a_blocked_project_wait_and_its_button_records_a_plain_r
     assert "rec-late" in retro_store.graded()
 
 
+def _unset_while_queued(job: RetroJob, st: Store, monkeypatch) -> None:
+    """The job's only slot held by another, so its next new run queues; *st*'s setting is unset, then the slot given."""
+    assert job.slots.take("retro", "other", 1, 1) == 1
+    real = job.slots.take
+
+    def take(share, key, *args, **kwargs):
+        got = real(share, key, *args, **kwargs)
+        if key.startswith("retro:open") and not got:
+            _layer(st, None)
+            job.slots.give("retro", "other")
+        return got
+
+    monkeypatch.setattr(job.slots, "take", take)
+
+
 @pytest.mark.parametrize("trigger", ["change", "button"])
 def test_a_setting_unset_while_a_new_run_waits_for_a_slot_refuses_it_before_its_first_call(
     a_b, machine, monkeypatch, trigger
@@ -202,17 +217,7 @@ def test_a_setting_unset_while_a_new_run_waits_for_a_slot_refuses_it_before_its_
     """Its first admission checks the block again under the stop barrier; the unit stays due and runs once it is set."""
     _, b = a_b
     job = _job(machine, [])
-    assert job.slots.take("retro", "other", 1, 1) == 1
-    real = job.slots.take
-
-    def take(share, key, *args, **kwargs):
-        got = real(share, key, *args, **kwargs)
-        if key.startswith("retro:open") and not got:  # queued behind "other": B's setting unset, then granted
-            _layer(b, None)
-            job.slots.give("retro", "other")
-        return got
-
-    monkeypatch.setattr(job.slots, "take", take)
+    _unset_while_queued(job, b, monkeypatch)
     if trigger == "button":
         retro_store.request("owner", change="pb:fix-it")
     job.tick(0.0)
@@ -222,6 +227,24 @@ def test_a_setting_unset_while_a_new_run_waits_for_a_slot_refuses_it_before_its_
     _layer(b, Prefs(ci_poll_seconds=20))
     job.tick(1.0)
     assert ("chg:pb:fix-it", "change", "judge", "judged") in _runs()[1:]
+
+
+def test_a_late_grading_held_while_it_waits_for_a_slot_is_offered_again_once_set(a_b, machine, monkeypatch):
+    a, _ = a_b
+    _layer(a, Prefs(ci_poll_seconds=20))
+    job = _job(machine, [])
+    job.tick(0.0)
+    _record("rec-late", "pa", "s-pa", "2026-01-01T00:01:00+00:00")
+    before = len(_runs())
+    _unset_while_queued(job, a, monkeypatch)
+    job.tick(1.0)
+    assert _runs()[before:] == [("chg:pa:fix-it", "change", "grade-only", f"refused: {UNSET}")]
+    assert failed_grading() == set()
+
+    _layer(a, Prefs(ci_poll_seconds=20))
+    job.tick(2.0)
+    assert _runs()[before + 1 :] == [("chg:pa:fix-it", "change", "grade-only", "judged")]
+    assert "rec-late" in retro_store.graded()
 
 
 @pytest.mark.parametrize("reverse", [False, True], ids=["parent-first", "child-first"])
