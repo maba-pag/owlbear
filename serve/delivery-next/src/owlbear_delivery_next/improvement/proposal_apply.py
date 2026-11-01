@@ -158,7 +158,8 @@ def _backlog(pid: str, accepted: Mapping[str, Any], text: Text, _done: Done, sea
     marker, (title, body) = f"retro-proposal:{pid}", text
     view = seams.backlog(accepted["destination"]["folder"])
     entry = next((e for e in view.read(fresh=True)[0].values() if marker in e.evidence), None)
-    if entry is None:  # the marker last, as the newest refs are kept
+    if entry is None:  # the marker last, as the newest refs are kept; a synthetic title never matches a real entry
+        title = f"[synthetic] {title}" if accepted["destination"].get("synthetic") else title
         entry, _ = view.add(title, body, "retro", evidence=[*accepted["findings"], marker])
     link = f"https://github.com/{view.repository}/issues/{entry.id}"
     props.outcome(pid, "applied", step="created", artefact=_artefact("backlog", view.repository, f"#{entry.id}", link))

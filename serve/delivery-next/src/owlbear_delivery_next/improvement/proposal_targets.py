@@ -153,6 +153,8 @@ def resolve(
         }
     if target.startswith(OWN) or target.partition(":")[2] in shipped():
         return {"kind": "issue", "repository": REPOSITORY, "synthetic": synthetic}
-    if synthetic or (place and in_clone(target, clone)):
-        return {"kind": "backlog", "project": pid, "folder": place.folder if place else ""}
+    if synthetic:
+        return {"kind": "backlog", "project": pid, "folder": place.folder if place else "", "synthetic": True}
+    if place and in_clone(target, clone):
+        return {"kind": "backlog", "project": pid, "folder": place.folder}
     return {"kind": "backlog", "project": "", "folder": ""}

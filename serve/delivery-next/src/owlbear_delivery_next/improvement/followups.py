@@ -122,6 +122,7 @@ def save(subj: Mapping[str, Any], text: Mapping[str, str], backlogs: Backlogs) -
     if (made := _made(view, subj["id"])) is None:
         refs = f"\n\nRefs: {subj['id']}"
         body = f"{body[: retro_judge.BODY - len(refs)]}{refs}" if subj["id"] not in body else body[: retro_judge.BODY]
+        title = f"[synthetic] {title}" if subj["provenance"] == "synthetic" else title  # never a real entry's match
         made, _ = view.add(title[: retro_judge.TITLE], body, subj["source"], evidence=[f"{MARK}{subj['id']}"])
     return _entry(made, view)
 

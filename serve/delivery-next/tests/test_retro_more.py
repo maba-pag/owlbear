@@ -303,6 +303,7 @@ def test_a_follow_up_cut_at_its_limit_saves_nothing_and_a_synthetic_one_goes_onl
     followups.request("rf-s", "owner", world.places, followups.backlog)
     _job(Model(TEXT), world.projects).tick(1.0)
     assert [(e.folder, e.evidence) for e in world.entries] == [(f"{targets.SANDBOX}-folder", ["followup:rf-s"])]
+    assert world.entries[0].title.startswith("[synthetic] ")  # never the same title as a real entry
     with pytest.raises(store.RetroError, match="only to the sandbox"):
         followups.subject("rf-s", {"p1": world.places["p1"]})
 

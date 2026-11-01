@@ -25,6 +25,7 @@ from owlbear_delivery_next.improvement import proposal_apply as act
 from owlbear_delivery_next.improvement import proposal_targets as targets
 from owlbear_delivery_next.improvement import retro_proposals as props
 from owlbear_delivery_next.improvement import retro_store as store
+from owlbear_delivery_next.state_store import backlog
 
 UNITS = {"f-1": "chg:p1:fix", "f-2": "chg:p2:fix", "f-3": "syn:scout-a", "f-4": "chg:p1:other"}
 TEXT = {
@@ -139,6 +140,20 @@ def test_a_backlog_entry_lands_in_the_project_its_change_unit_names_once(world):
     assert entry.evidence == ["f-2", f"retro-proposal:{pid}"]  # last: the backlog keeps an entry's newest refs
     assert act.apply(pid, world.seams)["applied"] == done["applied"]
     assert len(world.entries) == 1
+
+
+def test_a_synthetic_backlog_entry_is_marked_so_it_never_matches_a_real_one(world):
+    agents = world.places["ps"].clone / ".github" / "agents"
+    agents.mkdir(parents=True)
+    (agents / "exporter.agent.md").write_text("exports")
+    pid = _waiting("agent-change", "agent:exporter", ["f-3"], provenance="synthetic")
+
+    done = _accept(pid, world)
+
+    assert done["apply_state"] == "done", done["failures"]
+    (entry,) = world.entries
+    assert (entry.folder, entry.title) == (f"{targets.SANDBOX}-folder", f"[synthetic] {TEXT['title']}")
+    assert backlog.key(entry.source, entry.title) != backlog.key("retro", TEXT["title"])
 
 
 def test_a_lesson_is_a_pending_memory_in_its_projects_folder_scoped_to_its_agent(world):
