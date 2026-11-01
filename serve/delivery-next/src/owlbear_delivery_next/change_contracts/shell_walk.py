@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 _DEVICE_STDIN = frozenset({"/dev/stdin", "/dev/fd/0"})  # a path naming the shell's own input
 _STDIN = _DEVICE_STDIN | {"-"}  # as a shell's script operand; source reads a file named -
 _FOLDER = frozenset({"cd", "pushd", "popd"})
-_PLAIN_PREFIX = frozenset({"command", "builtin", "-p", "--"})  # what may come before a builtin that surely runs
+_PLAIN_PREFIX = frozenset({"command", "builtin", "-p"})  # what may come before a builtin that surely runs
 _STARTUP = ("BASH_ENV", "ENV")  # variables naming a file a shell runs before its script
 _DECLARE = frozenset({"declare", "typeset", "readonly", "local"})
 _SHOWN = 60  # characters of a script built at run time shown in a reason
@@ -52,6 +52,7 @@ class State:
     startup: dict[str, Word | None] = field(default_factory=dict)  # BASH_ENV, ENV as set; None when not followable
     home_moved: bool = False  # the text set or unset HOME, so ~ is not the guard's home folder
     current: int = 0  # above 0 while sourced or eval text runs in this shell
+    unsure: int = 0  # above 0 while that text may not run: its source or eval is conditional or in a subshell
 
     def child(self, *, plain: bool) -> State:
         """The state a shell this one starts begins with: writes are shared, folder and variables copied."""
@@ -103,14 +104,14 @@ class Walk:
 
     def _environment(self, command: Command, state: State) -> None:
         """Note startup variables a command sets for later shells, and an exec that redirects this shell's input."""
-        words = command.words
+        words, top_level = command.words, command.top_level and not state.unsure
         i = shell_programs.builtin(words)  # then export ..., command -p -- exec ...: the builtin itself
         first = words[i] if i < len(words) else None
         if first is None or first == "export":
             assigned = shell_programs.assignments(words[:i] if first is None else words[i + 1 :])
             for key in _STARTUP:
                 if key in assigned:
-                    state.startup[key] = assigned[key] if command.top_level else None
+                    state.startup[key] = assigned[key] if top_level else None
             state.home_moved = state.home_moved or "HOME" in assigned
         if first in {"unset", *_DECLARE} and any(w.partition("=")[0] == "HOME" for w in words[i + 1 :]):
             state.home_moved = True
@@ -120,7 +121,7 @@ class Walk:
             sure = not any(getattr(w, "expanded", False) for w in words[i + 1 :]) and not set("<>") & set(command.raw)
             prefix = words[shell_programs.head(words) : i]  # command -$opt, command -x: unset may not run
             sure = sure and not shell_programs.assignments(words[:i]) and set(prefix) <= _PLAIN_PREFIX
-            _unset(state, [k for k in _STARTUP if k in words[i + 1 :]], top_level=command.top_level and sure)
+            _unset(state, [k for k in _STARTUP if k in words[i + 1 :]], top_level=top_level and sure)
         if first in _DECLARE:
             state.startup |= {k: None for k in _STARTUP if any(w.partition("=")[0] == k for w in words[i + 1 :])}
         if first == "exec" and command.stdin() is not None:
@@ -241,10 +242,12 @@ class Walk:
         state.startup |= {k: run.env[k] for k in _STARTUP if k in run.env}  # BASH_ENV=x source y: for its text
         state.home_moved = state.home_moved or "HOME" in run.env
         state.current += 1
+        state.unsure += not command.top_level
         try:
             return read(command, run, state)
         finally:
             state.current -= 1
+            state.unsure -= not command.top_level
             state.stdin_plain = saved
             if any(k in run.env for k in _STARTUP):  # only for that text; what the text set itself is unknown
                 state.startup = startup | {k: None for k in _STARTUP if state.startup.get(k) != startup.get(k)}

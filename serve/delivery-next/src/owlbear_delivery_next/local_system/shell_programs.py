@@ -53,6 +53,7 @@ _ESCAPES = {"t": "\t", "n": "\n", "v": "\v", "f": "\f", "r": "\r", "'": "'", '"'
 _VARIABLE = re.compile(r"\$\{[A-Za-z_]\w*\}")
 _SPLIT_UNREAD = "uses env -S with text the guard can't read"
 _SPLIT_BUILT = "uses env -S with text built at run time; write it out"
+_OPTION_BUILT = "gives a shell an option built at run time; write it out"
 
 
 class UnreadableError(ValueError):
@@ -409,10 +410,12 @@ def shell_args(words: Sequence[Word]) -> ShellArgs:
             startup += words[i + 1 : i + 2]
             i += 2
         elif w.startswith(("-", "+")) and w not in {"-", "+"}:
+            if getattr(w, "expanded", False):  # -$opt may be -c, or take the script as its value
+                raise UnreadableError(_OPTION_BUILT)
             short = "" if w.startswith("--") else w[1:]
             values = words[i + 1 : i + 1 + sum(ch in "oO" for ch in short)]  # -o and -O take a word each, -eco too
             plus = w.startswith("+")
-            unknown = any(getattr(v, "expanded", False) for v in (w, *values))  # +o "$mode": maybe posix
+            unknown = any(getattr(v, "expanded", False) for v in values)  # +o "$mode": maybe posix
             reverse = {"reversed"} if unknown or "posix" in values or (plus and "i" in short) else set()  # not followed
             flags |= {w} if not short else reverse if plus else set(short) | reverse
             command, stdin = command or "c" in short, stdin or "s" in short

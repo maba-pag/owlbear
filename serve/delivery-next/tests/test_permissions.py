@@ -1507,6 +1507,9 @@ def test_an_interactive_bash_in_posix_mode_from_its_environment_reads_env(script
         "export BASH_ENV=./bad.sh; BASH_ENV=./good.sh unset BASH_ENV; bash -c true",
         "opt=v; export BASH_ENV=./bad.sh; command -$opt unset BASH_ENV; bash -c true",
         "export BASH_ENV=./bad.sh; command -x unset BASH_ENV; bash -c true",
+        "export BASH_ENV=./bad.sh; command -- -p unset BASH_ENV; bash -c true",
+        "export BASH_ENV=./bad.sh; false && eval 'unset BASH_ENV'; bash -c true",
+        "export BASH_ENV=./bad.sh; (eval 'unset BASH_ENV'); bash -c true",
     ],
 )
 def test_an_unset_the_guard_cant_be_sure_of_leaves_the_startup_file_unknown(scripts: Path, text: str) -> None:
@@ -1520,3 +1523,8 @@ def test_an_expanded_command_option_is_no_lookup() -> None:
 def test_an_arithmetic_comparison_writes_nothing_in_a_read_only_step() -> None:
     assert decide(READ, shell("echo $((1 > 0))")) is None
     assert decide(READ, shell("echo $((1 > 0)) > f")).endswith("which writes in a read-only step")
+
+
+def test_a_shell_option_built_at_run_time_is_refused() -> None:
+    reason = decide(WRITE, shell("opt=c; bash -$opt 'git commit --no-verify -m x'"))
+    assert reason.endswith("gives a shell an option built at run time; write it out")
