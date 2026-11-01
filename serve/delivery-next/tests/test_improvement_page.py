@@ -256,7 +256,7 @@ def test_proposals_are_decided_by_direction_and_each_dialog_says_what_follows(  
         backlog.get_by_role("button", name="Apply again").click()
         expect(page.locator("#notice")).to_contain_text("Made: Check the export's week column.")
         expect(backlog).to_contain_text("Made: backlog #1 in acme/owlbear-data")
-        assert [e.evidence[0] for e in w.backlog.entries.values()] == [f"retro-proposal:{ids['backlog']}"]
+        assert [e.evidence[-1] for e in w.backlog.entries.values()] == [f"retro-proposal:{ids['backlog']}"]
 
         issue = card(page, ids["issue"])
         issue.get_by_role("button", name="Reject").click()
