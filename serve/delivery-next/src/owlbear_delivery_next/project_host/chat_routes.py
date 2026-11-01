@@ -34,9 +34,9 @@ def brief(change: Change) -> dict[str, Any]:
     return out | {"criteria": [k.text for k in b.criteria], "proposed_wording": proposed}
 
 
-def contract() -> dict[str, list[int]]:
-    """The chat contracts this host serves."""
-    return {"supported": sorted(chat_contract.SUPPORTED)}
+def contract() -> dict[str, Any]:
+    """The chat contracts this host serves, and that it refuses a chat's save past its deadline (`admit_by`, #846)."""
+    return {"supported": sorted(chat_contract.SUPPORTED), "admit_by": True}
 
 
 def router(read: Callable[[str], Change]) -> APIRouter:

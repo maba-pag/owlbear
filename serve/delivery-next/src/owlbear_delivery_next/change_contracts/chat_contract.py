@@ -14,6 +14,10 @@ A host may only add to them (an optional field, a new route); anything a server 
 Contract 2: contract 1, and ``record_decision`` takes ``origin`` (`approved` when the owner took the chat's
 recommendation as shown, D-01M5WAFJ99912ER7V0YEPJP2G5), sent to ``/decisions/propose``
 (``tests/fixtures/chat_contract_2.json``).
+
+A host whose contract answer has ``"admit_by": true`` refuses a ``/decisions/propose`` save that starts after the
+time in the request's ``X-OwlBear-Admit-By`` header (#846); a chat whose host lacks it never takes a lost answer as
+not saved.
 """
 
 from __future__ import annotations

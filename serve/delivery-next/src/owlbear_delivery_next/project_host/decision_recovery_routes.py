@@ -6,6 +6,7 @@ refuses both actions; nothing here clears the journal on its own.
 
 from __future__ import annotations
 
+from contextlib import ExitStack
 from typing import TYPE_CHECKING, Annotated, Any
 
 from fastapi import APIRouter, HTTPException
@@ -22,6 +23,8 @@ if TYPE_CHECKING:
 type Shared = Callable[[], DataRepo | None]
 
 NOT_CONFIRMED = "recovery needs the owner's explicit confirmation"
+SAVING = {"interrupted": False, "corrupt": False, "diagnosis": "a decision save is in progress; read again shortly",
+          "generation": ""}  # fmt: skip
 
 
 class RecoveryBody(BaseModel):
@@ -33,7 +36,23 @@ class RecoveryBody(BaseModel):
 
 
 def diagnosis(shared: DataRepo) -> dict[str, Any]:
-    """The interrupted batch the owner must decide on, or the journal's fault; never a success."""
+    """The interrupted batch the owner must decide on, or the journal's fault; never a success.
+
+    A pending journal whose writer still holds the repository-wide lock is a save in progress, not interrupted; once
+    no writer holds it, the journal is read again while none can start.
+    """
+    found = _diagnosis(shared)
+    if not found["interrupted"]:
+        return found
+    with ExitStack() as stack:
+        try:
+            quiet = stack.enter_context(shared.quiet())
+        except OSError, ValueError:  # the lock cannot be probed: what the journal says stands
+            return found
+        return _diagnosis(shared) if quiet else dict(SAVING)
+
+
+def _diagnosis(shared: DataRepo) -> dict[str, Any]:
     try:
         batch = decision_batch.pending(shared)
     except decision_batch.JournalError as exc:

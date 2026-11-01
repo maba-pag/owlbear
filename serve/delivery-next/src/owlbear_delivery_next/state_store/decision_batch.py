@@ -2,8 +2,10 @@
 
 A save of several decision files writes them, commits them as one commit and reads them back. Before the first file,
 the journal records the project, Git's head, the decision ids and each file's bytes before and after the batch, under
-a fresh generation. A journal that stays after a crash is an interrupted batch: `decision_store` then refuses every
-read and write of the decisions until the owner finishes or abandons it by that generation (`decision_recovery`).
+a fresh generation. A pending journal is a batch in flight: while its writer holds the repository-wide lock, a read of
+the decisions says a save is in progress (`decision_errors.settled`). One that stays once no writer holds the lock is
+an interrupted batch: `decision_store` then refuses every read and write of the decisions until the owner finishes or
+abandons it by that generation (`decision_recovery`).
 Completing a batch records its generation in a list that is never pruned, so a copy of an old journal cannot be
 replayed (ABA).
 """
@@ -11,10 +13,13 @@ replayed (ABA).
 from __future__ import annotations
 
 import base64
+import functools
 import json
 import os
+import time
 import uuid
 from contextlib import suppress
+from contextvars import ContextVar
 from typing import TYPE_CHECKING
 
 from owlbear_decisions.storage import bound, install, own_temporary
@@ -42,6 +47,17 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from owlbear_delivery_next.local_system.data_repo import DataRepo
+
+
+# A chat's deadline for its save to start (`CLOCK_MONOTONIC`, the machine's, so the chat server and the host compare
+# it): a save that would begin its batch later is refused before its journal, so a chat whose answer was lost and that
+# finds nothing once the deadline passed knows nothing was written (#846). Set by the route for its one request.
+ADMIT_BY: ContextVar[float | None] = ContextVar("admit_by", default=None)
+_now = functools.partial(time.clock_gettime, time.CLOCK_MONOTONIC)
+
+
+class Late(Exception):  # noqa: N818 - says what the save was
+    """The save's batch would begin after its chat's deadline: nothing is journalled or written."""
 
 
 def journal_path(shared: DataRepo) -> Path:
@@ -224,10 +240,13 @@ def begin(  # noqa: PLR0913, PLR0917 - a batch is its project, head, message, de
     message: str,
     ids: Sequence[str],
     files: Sequence[tuple[str, bytes | None, bytes]],
+    admit_by: float | None = None,
 ) -> str:
     """Record a batch in flight before any of its files is written; return its new generation.
 
-    The batch is checked as a reader decodes it, so a journal that could not be read back is never written.
+    The batch is checked as a reader decodes it, so a journal that could not be read back is never written. Past
+    *admit_by* it raises `Late` instead: the check and the journal share one hold of the lock every reader's `stamp`
+    takes, so a read after the deadline sees this batch's journal or its outcome, or no batch ever begins.
     """
     generation = uuid.uuid4().hex
     batch = Batch(generation, project, head, message, tuple(ids), tuple(files))
@@ -237,6 +256,8 @@ def begin(  # noqa: PLR0913, PLR0917 - a batch is its project, head, message, de
         msg = f"the decision batch cannot be journalled: {exc}"
         raise JournalError(msg) from exc
     with _locked(shared):
+        if admit_by is not None and _now() > admit_by:
+            raise Late
         replace_file(_admin(shared) / JOURNAL, _encode(batch))
     return generation
 

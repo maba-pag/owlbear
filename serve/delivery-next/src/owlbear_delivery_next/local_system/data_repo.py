@@ -16,6 +16,7 @@ import logging
 import os
 import re
 import subprocess
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -28,6 +29,7 @@ if TYPE_CHECKING:
     from typing import Self
 
 CONFIG, CLAIM, MEMORY = "config.json", "repository", "memory"
+LOCK = "owlbear-delivery.lock"  # in the checkout's Git folder
 VIEW = "OWLBEAR_DATA"  # the host's view for its runners: the repository's path, or empty for none
 # Delivery's locks, temporary files, calibration screenshots and the backlog migration's journal
 EXCLUDE = (".*.lock", ".tmp-*", "*/visual/*/*.png", ".backlog-migration.json")
@@ -37,6 +39,7 @@ GIT_SECONDS, LOCK_SECONDS, SAVE_SECONDS, PENDING_SECONDS = 10, 20, 45, 4  # a sa
 _UNSAFE = re.compile(r"[^A-Za-z0-9._-]+")
 _NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
 _log = logging.getLogger(__name__)
+_HOLDING = threading.local()  # the lock files this thread holds through `DataRepo.locked`
 
 
 class DataRepoError(ValueError):
@@ -125,17 +128,23 @@ class DataRepo:
             publication_hold.settled(self, until)
         return done
 
-    @contextlib.contextmanager
-    def locked(self, wait: float | None = None) -> Iterator[None]:
-        """Hold the repository-wide lock that serializes every write, commit, push and rebase; wait a bounded time."""
-        wait = LOCK_SECONDS if wait is None else wait
+    def _lock_file(self) -> Path:
         found = _git(self.root, "rev-parse", "--absolute-git-dir")
         admin = Path(found.stdout.strip())
         if found.returncode or not admin.is_dir():
             msg = f"the git folder of {self.root} cannot be found: {found.stderr.strip()[:200]}"
             raise DataRepoError(msg)
-        fd = os.open(admin / "owlbear-delivery.lock", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
-        try:
+        return admin / LOCK
+
+    @contextlib.contextmanager
+    def locked(self, wait: float | None = None) -> Iterator[None]:
+        """Hold the repository-wide lock that serializes every write, commit, push and rebase; wait a bounded time."""
+        wait = LOCK_SECONDS if wait is None else wait
+        lock = self._lock_file()
+        holding: set[Path] = _HOLDING.__dict__.setdefault("paths", set())
+        with contextlib.ExitStack() as stack:
+            fd = os.open(lock, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+            stack.callback(os.close, fd)
             end = time.monotonic() + wait
             while True:
                 try:
@@ -146,8 +155,30 @@ class DataRepo:
                         msg = "another settings save is still running; try again"
                         raise DataRepoError(msg) from None
                     time.sleep(0.1)
-            self._exclude(admin)
+            holding.add(lock)
+            stack.callback(holding.discard, lock)
+            self._exclude(lock.parent)
             yield
+
+    @contextlib.contextmanager
+    def quiet(self) -> Iterator[bool]:
+        """Whether no writer holds the lock now; while True, none can take it until the block ends.
+
+        This thread's own `locked` counts as quiet. The lock file is made when no writer has made it yet, so the shared
+        hold keeps out the first writer too, and what the block reads stays as it is.
+        """
+        lock = self._lock_file()
+        if lock in getattr(_HOLDING, "paths", ()):
+            yield True
+            return
+        fd = os.open(lock, os.O_RDONLY | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK, 0o600)
+        try:
+            held = True
+            try:
+                fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)
+            except BlockingIOError:
+                held = False
+            yield held
         finally:
             os.close(fd)
 

@@ -485,8 +485,9 @@ def chat(store, monkeypatch) -> chat_client.Chat:
     tools = chat_client.Chat.__new__(chat_client.Chat)
     tools.repo, tools.home = Path(), store.root
 
-    def call(method: str, path: str, body: object = None) -> tuple[int, Any]:
-        r = http.request(method, f"/api/next{path}", json=body)
+    def call(method: str, path: str, body: object = None, timeout: float = 15.0,  # noqa: ARG001
+             headers: dict[str, str] | None = None) -> tuple[int, Any]:  # fmt: skip
+        r = http.request(method, f"/api/next{path}", json=body, headers=headers)
         return r.status_code, r.json()
 
     tools.call = call
@@ -595,6 +596,46 @@ def test_a_confirmed_replacement_retires_its_predecessor_in_one_commit_and_shows
     assert git(shared.root, "log", "-1", "--format=%B") == f"decisions: replace {rule.id} with {new.id}"
     assert len(git(shared.root, "show", "--name-only", "--format=", "HEAD").splitlines()) == 2  # both or neither
     assert (got["impact"]["old"]["id"], got["impact"]["effect"]) == (rule.id, "forbids")
+
+
+def test_a_replacement_whose_answer_was_lost_is_found_with_its_link_and_says_its_impact_is_lost(shared, chat):
+    rule = make()
+    seed(shared, rule)
+    answered = chat.call
+
+    def lost(method: str, path: str, *args: object, **kw: object) -> tuple[int, Any]:
+        code, out = answered(method, path, *args, **kw)
+        return (chat_client.LOST, {"error": chat_client.UNKNOWN}) if method == "POST" else (code, out)
+
+    chat.call = lost
+    got = tool("record_decision", title="Notes", statement="A file.", rationale="Smaller.", confirmed=True,
+               replaces={"decision": rule.id, "revision": rule.revision, "effect": "forbids"})  # fmt: skip
+
+    made = [e.decision.id for e in decision_store.load(shared, PROJECT).snapshot.entries if e.decision.id != rule.id]
+    assert (got["saved"], [r["id"] for r in got["receipts"]]) == (True, made)
+    assert now(shared, rule.id).state is State.REPLACED
+    assert got["notice"] == chat_client.SAVED.format(id=made[0]) + chat_client.IMPACT_LOST
+
+
+def test_a_lost_replacement_found_with_another_effect_on_existing_work_is_unclear(shared, chat):
+    rule = make()
+    seed(shared, rule)
+    answered = chat.call
+
+    def rival_first(method: str, path: str, body: Any = None, **kw: object) -> tuple[int, Any]:
+        if method != "POST":
+            return answered(method, path, body, **kw)
+        assert answered(method, path, body | {"effect": "wording"}, **kw)[1]["saved"]  # another chat, the same words
+        assert answered(method, path, body, **kw)[1]["saved"] is False  # this one meets the rule already replaced
+        return chat_client.LOST, {"error": chat_client.UNKNOWN}
+
+    chat.call = rival_first
+    got = tool("record_decision", title="Notes", statement="A file.", rationale="Smaller.", confirmed=True,
+               replaces={"decision": rule.id, "revision": rule.revision, "effect": "forbids"})  # fmt: skip
+
+    entries = decision_store.load(shared, PROJECT).snapshot.entries
+    (rival,) = [e.decision.id for e in entries if e.decision.id != rule.id]
+    assert (got["saved"], rival in got["error"]) == (None, True)
 
 
 @pytest.mark.usefixtures("chat")
