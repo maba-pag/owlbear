@@ -17,7 +17,7 @@ from owlbear_delivery_next.change_contracts.round_records import RoundLoop
 from owlbear_delivery_next.github.gh import GhProvider
 from owlbear_delivery_next.impeccable import pack_files, pack_git
 from owlbear_delivery_next.impeccable_runs import pack_admission, pack_job, pack_progress
-from owlbear_delivery_next.pds_runs import browser, diff, pin, publish, run
+from owlbear_delivery_next.pds_runs import browser, diff, pin, publish, repair, run
 from owlbear_delivery_next.pds_runs.context import FOLDERS, Context
 from owlbear_delivery_next.state_store import pds_run_record
 from owlbear_delivery_next.workflow_steps import sessions
@@ -68,6 +68,7 @@ class Job(pack_job.Job):
     FILE, RUNS, STAGES, KIND = pds_run_record.FILE, pds_run_record.RUNS, STAGES, "pds"
     CONTEXT = Context
     ADMISSION = PDS
+    REPAIR = repair.PDS
     ACTIONS = pack_progress.PDS_ACTIONS
     HOLDER = " (PDS update)"
     BUSY = "an update runs for {who}; one update runs at a time on this machine"
@@ -92,7 +93,8 @@ class Job(pack_job.Job):
         with self.lock:
             ctx = Context.model_validate(self.state["context"])
             lp = RoundLoop.model_validate(self.state["loop"])
-        if ctx.publication and ctx.publication.commit:  # GitHub first: the candidate's base may have moved on
+        checking = ctx.repair.phase == "checking"  # an agent's repair of the pages, checked before it is pushed
+        if ctx.publication and ctx.publication.commit and not checking:  # GitHub first: the base may have moved on
             return publish.republish(self, ctx, lp)
         run.unchanged(self, ctx)
         return run.advance(self, ctx, lp)

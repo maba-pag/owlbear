@@ -18,7 +18,7 @@ import pytest
 
 from owlbear_delivery_next.change_contracts import tools
 from owlbear_delivery_next.change_contracts.audit_tools import AuditResult
-from owlbear_delivery_next.impeccable_runs import machine_lock, pack_job
+from owlbear_delivery_next.impeccable_runs import machine_lock, pack_job, pack_repair
 from owlbear_delivery_next.impeccable_runs.pack_state import MACHINE_LOCK
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.local_system.processes import Termination
@@ -104,6 +104,7 @@ class Fakes:
         self.verdicts: list[str] = []  # per challenger session; then pass
         self.sessions: list = []  # every session's config
         self.copies: list[list[str]] = []  # each updater copy's files
+        self.repairs: list[dict[str, str]] = []  # per CI repair session: repository path -> text
         self.hold: threading.Event | None = None  # set: the first session waits for it, its run holding the lock
         self.holding = threading.Event()
 
@@ -130,6 +131,13 @@ class Fakes:
             if self.ending != "result":
                 return Run(cfg.session_id, self.ending, detail="the model stopped", termination=done)
             said = AuditResult(report=json.dumps(report(cfg.worktree, self.follow_ups)), markdown="# Audit\n")
+            return Run(cfg.session_id, "result", payload=said, termination=done)
+        if cfg.submit is pack_repair.SUBMIT:  # the agent repairing the pull request's CI in a copy of its head
+            self.calls.append("repair")
+            for path, text in (self.repairs.pop(0) if self.repairs else {}).items():
+                (cfg.worktree / path).parent.mkdir(parents=True, exist_ok=True)
+                (cfg.worktree / path).write_text(text, encoding="utf-8")
+            said = pack_repair.RepairResult(summary=f"repair {self.calls.count('repair')}")
             return Run(cfg.session_id, "result", payload=said, termination=done)
         if cfg.role == "updater":
             self.calls.append("update")
@@ -413,6 +421,123 @@ def test_a_publication_stop_waits_and_a_retry_merges_the_one_pull_request(tmp_pa
     assert state["state"] == "passed", state["reason"]
     assert fakes.github.calls.count("create") == 1
     assert fakes.calls == ["audit", "update", "audit", "browser", "challenger"]  # nothing judged again
+
+
+FIXED = DEMO.replace(PLANT, 'size="xs"')  # the page as the update left it
+
+
+def ci_failed(tmp_path: Path, checkout: Path, *repairs: dict[str, str]) -> tuple[Fakes, pds_job.Job, dict, list[str]]:
+    """An update whose pull request's CI failed, waiting; its repair sessions make *repairs*. The last item is the pull
+    request's head on the remote at each browser run, to show what a repair's check saw pushed."""
+    fakes, heads = Fakes(checkout), []
+    fakes.github.checks, fakes.repairs = ["failure"], list(repairs)
+    browse = fakes.browser
+
+    def watched(at: Path, ids: tuple[str, ...]) -> browser.Result:
+        heads.append(pr_head(checkout, fakes))
+        return browse(at, ids)
+
+    fakes.browser = watched
+    job = pds_job.Job(store(tmp_path), fakes.live(checkout))
+    state = run(job)
+    (q,) = state["questions"]
+    assert (state["state"], q["kind"], [o["id"] for o in q["options"]]) == (
+        "waiting", "publish", ["retry", "repair", "discard"]
+    )  # fmt: skip
+    return fakes, job, state, heads
+
+
+def pr_head(checkout: Path, fakes: Fakes) -> str:
+    """The update's pull request's branch on the remote; empty before it is open."""
+    if not fakes.github.prs:
+        return ""
+    ref = f"refs/heads/{next(iter(fakes.github.prs.values()))['branch']}"
+    return git(checkout.parents[3], "ls-remote", "origin", ref).split()[0]
+
+
+def test_a_ci_repair_of_a_page_is_checked_as_one_more_round_before_it_is_pushed_and_merges_once_approved(
+    tmp_path, checkout
+):
+    """The repaired page passes the audit, the browser tests and the challenger before the remote has it; then CI, then
+    the owner's approval of the changed pages, then the merge."""
+    repaired = FIXED + "export const u = 1;\n"
+    fakes, job, _state, heads = ci_failed(tmp_path, checkout, {f"{REPO}{PAGE}": repaired})
+    calls, before = len(fakes.calls), pr_head(checkout, fakes)
+    fakes.github.checks = ["success"]
+
+    state = PACK.answered(job, "repair")
+
+    assert fakes.calls[calls:] == ["repair", "audit", "browser", "challenger"]
+    assert heads[-1] == before  # checked before it was pushed
+    assert "export const u = 1;" in fakes.sessions[-1].message  # the challenger saw the repair
+    (q,) = state["questions"]
+    assert (state["state"], q["kind"], q["paths"]) == ("waiting", "repair-approval", [f"{REPO}{PAGE}"])
+    assert "+export const u = 1;" in q["diff"]
+    assert pr_head(checkout, fakes) != before
+    assert (state["repair"]["attempts"], fakes.github.calls) == (1, ["create"])  # never merged without him
+    rounds = [i["round"] for i in state["invocations"] if i["operation"] == "pds-challenge"]
+    assert rounds == [1, 2]  # one more counted round
+
+    state = PACK.answered(job, "approve-repair")
+
+    assert state["state"] == "passed", state["reason"]
+    assert landed(checkout, PAGE) == repaired.rstrip("\n")
+    assert fakes.github.calls == ["create", "merge", "delete"]
+
+
+def test_a_ci_repair_whose_page_the_audit_flags_is_dropped_unpushed_and_another_is_offered(tmp_path, checkout):
+    fakes, job, _state, _heads = ci_failed(tmp_path, checkout, {f"{REPO}{PAGE}": DEMO})  # the plant back
+    calls, before = len(fakes.calls), pr_head(checkout, fakes)
+
+    state = PACK.answered(job, "repair")
+
+    assert fakes.calls[calls:] == ["repair", "audit"]
+    (q,) = state["questions"]
+    assert (state["state"], q["kind"], [o["id"] for o in q["options"]]) == (
+        "waiting", "publish", ["retry", "repair", "discard"]
+    )  # fmt: skip
+    assert "failed its check and was not pushed" in state["reason"]
+    assert (pr_head(checkout, fakes), fakes.github.calls, state["repair"]["attempts"]) == (before, ["create"], 1)
+
+
+@pytest.mark.parametrize(
+    "path",
+    [f"{REPO}{pin.PIN}", f"{REPO}{pin.TREE}/CHANGELOG.md", f"{REPO}{pin.WEB}/load.mjs"],
+    ids=["pin", "vendored", "served"],
+)
+def test_a_ci_repair_of_what_only_an_update_may_change_is_never_pushed(tmp_path, checkout, path):
+    fakes, job, _state, _heads = ci_failed(tmp_path, checkout, {path: "edited\n"})
+    calls, before = len(fakes.calls), pr_head(checkout, fakes)
+
+    state = PACK.answered(job, "repair")
+
+    (q,) = state["questions"]
+    assert (q["kind"], q["paths"], [o["id"] for o in q["options"]]) == (
+        "repair-config", [f"{path} (PDS files only an update may change)"], ["retry", "discard"]
+    )  # fmt: skip
+    with pytest.raises(pack_job.Refused):
+        job.answer(q["id"], "push-config")
+    assert (fakes.calls[calls:], pr_head(checkout, fakes), fakes.github.calls) == (["repair"], before, ["create"])
+
+
+def test_a_ci_repair_of_a_workflow_asks_the_owner_with_its_diff_before_it_is_pushed(tmp_path, checkout):
+    fakes, job, _state, _heads = ci_failed(tmp_path, checkout, {".github/workflows/ci.yml": "on: push\n"})
+    before = pr_head(checkout, fakes)
+
+    state = PACK.answered(job, "repair")
+    (q,) = state["questions"]
+    assert (q["kind"], q["paths"], [o["id"] for o in q["options"]]) == (
+        "repair-config", [".github/workflows/ci.yml"], ["push-config", "retry", "discard"]
+    )  # fmt: skip
+    assert "+on: push" in q["diff"]
+    assert (pr_head(checkout, fakes), fakes.github.calls) == (before, ["create"])
+    fakes.github.checks = ["success"]
+
+    state = PACK.answered(job, "push-config")
+
+    assert state["state"] == "passed", state["reason"]
+    root = checkout.parents[3]
+    assert git(root, "show", f"{landed(checkout)}:.github/workflows/ci.yml") == "on: push"
 
 
 def test_one_update_runs_at_a_time_on_this_machine_whichever_kind_holds_the_lock(tmp_path, checkout):

@@ -4,6 +4,7 @@ Only the candidate the challenger passed, or the one the owner accepted, is comm
 browser tests passed its pages and every follow-up was continued. Before the merge, once CI passed, the gate reads the
 pull request's head: its pin, vendored tree and served files must be the candidate's, and pages that differ from what
 was judged are audited, browser-tested and challenged again there; anything they find holds the merge for the owner.
+A CI repair of the pages (``repair``) is pushed only once the candidate holding exactly its pages passed them again.
 """
 
 from __future__ import annotations
@@ -12,9 +13,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.impeccable import pack_files
-from owlbear_delivery_next.impeccable_runs import pack_progress, pack_publish, pack_rounds, pack_run
+from owlbear_delivery_next.impeccable_runs import pack_progress, pack_publish, pack_repair, pack_rounds, pack_run
 from owlbear_delivery_next.impeccable_runs.pack_run import Stopped
-from owlbear_delivery_next.pds_runs import audit, browser, checks, tree
+from owlbear_delivery_next.pds_runs import audit, browser, checks, repair, run, tree
 from owlbear_delivery_next.pds_runs.context import CANDIDATE, HEAD, MARKER
 
 if TYPE_CHECKING:
@@ -29,7 +30,8 @@ def publish(job: Job, ctx: Context, lp: RoundLoop) -> str | None:
     Raises:
         Stopped: The candidate is not what was judged or accepted, or a file is not UTF-8 text.
     """
-    if ctx.publication is not None and ctx.publication.commit:
+    checking = ctx.repair.phase == "checking"  # an agent's repair of the pages, now judged as the candidate's were
+    if ctx.publication is not None and ctx.publication.commit and not checking:
         return republish(job, ctx, lp)
     at = job.workspace / CANDIDATE
     pages = tree.digest(tree.source(at))
@@ -43,6 +45,8 @@ def publish(job: Job, ctx: Context, lp: RoundLoop) -> str | None:
     if tree.digest(tree.protected(at)) != ctx.candidate:
         msg = "the candidate's release files changed; run the update again"
         raise Stopped(msg)
+    if checking:
+        return _repaired(job, ctx, lp, pages)
     if ctx.publication is None:
         ctx.source = pages
         ctx.publication = _publication(job, ctx, lp)
@@ -83,16 +87,44 @@ def republish(job: Job, ctx: Context, lp: RoundLoop) -> str | None:
     return _published(job, ctx, lp, {})
 
 
+def _repaired(job: Job, ctx: Context, lp: RoundLoop, pages: str) -> str | None:
+    """Push the agent's checked repair, once the candidate holds exactly its commit's pages; then merge as before."""
+    r = ctx.repair
+    try:
+        differ = repair.unlike(job, ctx)
+    except pack_files.PackError as exc:
+        differ = [str(exc)]
+    if differ:
+        r.laid = ""  # trying again lays it out and checks it again
+        job.hold(ctx, f"the checked candidate is not the agent's repair {r.commit[:12]}: {', '.join(differ[:10])}")
+        return None
+    ctx.source = pages  # the head it is pushed to holds these pages: the merge gate judges them no more
+    job.keep(ctx, lp)
+    return _published(job, ctx, lp, {})
+
+
 def _published(job: Job, ctx: Context, lp: RoundLoop, files: dict[str, str | None]) -> str | None:
     pub = ctx.publication
     try:
-        merged = pack_publish.publish(job, pub, files, ctx.why, gate=lambda: gate(job, ctx, lp), marker=MARKER)
-    except pack_publish.Held as exc:
-        ctx.repair.stop = None
+        pack_repair.repaired(job, ctx)
+        merged = pack_publish.publish(job, pub, files, ctx.why, gate=lambda: _gates(job, ctx, lp), marker=MARKER)
+    except pack_repair.Asked as exc:
+        job.wait(ctx, None, [exc.question], "merge")
+        return None
+    except pack_repair.Recheck:  # its pages are laid into the candidate and judged again before it is pushed
+        return run.advance(job, ctx, lp)
+    except pack_publish.Held as exc:  # only CI that failed on its own pull request may be repaired
+        ctx.repair.stop = pack_repair.failed(exc) if isinstance(exc, pack_publish.CiFailed) else None
         job.hold(ctx, str(exc))
         return None
     by = " by you after rounds without a pass" if ctx.accepted else ""
     return f"updated to PDS {ctx.version}{by}: merged into main as {merged[:12]} through {pub.url}"
+
+
+def _gates(job: Job, ctx: Context, lp: RoundLoop) -> None:
+    """Before the merge: the owner approved every page change the repairs made, then the head holds what was judged."""
+    pack_repair.gate(job, ctx)
+    gate(job, ctx, lp)
 
 
 def gate(job: Job, ctx: Context, lp: RoundLoop) -> None:

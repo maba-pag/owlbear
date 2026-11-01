@@ -29,6 +29,7 @@ from owlbear_delivery_next.impeccable_runs import (
     pack_progress,
     pack_publish,
     pack_repair,
+    pack_repair_content,
     pack_rounds,
     pack_run,
 )
@@ -100,6 +101,7 @@ class Job(Steps):
     FILE, RUNS, STAGES, KIND = FILE, RUNS, STAGES, "pack"  # the run record, workspaces, stages, maintenance kind
     CONTEXT: type[Any] = pack_run.Context
     ADMISSION = pack_admission.IMPECCABLE  # its title, records and pull requests
+    REPAIR = pack_repair_content.IMPECCABLE  # what its CI repairs check again or never push
     ACTIONS = pack_progress.ACTIONS
     HOLDER = ""  # after the project's name in the machine lock
     BUSY = "an Impeccable update runs for {who}; one runs at a time on this machine"

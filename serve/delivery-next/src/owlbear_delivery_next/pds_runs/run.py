@@ -4,7 +4,10 @@ The candidate is a worktree of the pinned base with the release written in (``tr
 browser tests gate it: findings and the failures it caused go to a fresh updater, which edits a copy of the pages, and
 both gates run again on its edits; neither is ever waived. A challenger then judges the release's evidence and every
 page edit, in ``pack_rounds``' rounds. The audit's manual follow-ups go to the owner, never the updater. Each updater
-session counts against the round policy. Publication goes through ``publish``.
+session counts against the round policy. Publication goes through ``publish``. An agent's CI repair of the pages
+(``repair``) is laid into the candidate and judged the same way, as one more round, before Delivery pushes it: nothing
+goes to the updater then; an audit or browser test that does not pass drops the repair and gives the owner the CI stop
+again, and challenger findings ask him whether to push it unreviewed.
 """
 
 from __future__ import annotations
@@ -18,15 +21,21 @@ from typing import TYPE_CHECKING, Any
 from owlbear_delivery_next.change_contracts import dispute_tools, tools
 from owlbear_delivery_next.change_contracts.round_records import PDS, RoundLoop
 from owlbear_delivery_next.impeccable import pack_files, pack_git
-from owlbear_delivery_next.impeccable_runs import pack_publish, pack_rounds, pack_run
+from owlbear_delivery_next.impeccable_runs import pack_activation, pack_publish, pack_repair, pack_rounds, pack_run
 from owlbear_delivery_next.impeccable_runs.pack_run import Stopped
-from owlbear_delivery_next.pds_runs import browser, checks, diff, pin, publish, sessions, tree
+from owlbear_delivery_next.pds_runs import browser, checks, diff, pin, publish, repair, sessions, tree
 from owlbear_delivery_next.pds_runs.context import BASE, CANDIDATE, NEXT, UPDATER, Action, Context
 from owlbear_delivery_next.settings import rounds
 from owlbear_delivery_next.workflow_steps import sessions as step_sessions
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from owlbear_delivery_next.pds_runs.job import Job
+
+
+class Dropped(Exception):  # noqa: N818 - how a repair's failed check gives the owner its CI stop again
+    """The agent's CI repair did not pass the audit or the browser tests again: it is never pushed."""
 
 
 def number(version: str) -> tuple[int, ...]:
@@ -139,27 +148,90 @@ def advance(job: Job, ctx: Context, lp: RoundLoop) -> str | None:
         Stopped: An action ended the run.
     """
     while True:
-        match ctx.next:
-            case "audit":
-                ctx.next = _audit(job, ctx)
-            case "browser":
-                ctx.next = _browser(job, ctx)
-            case "update":
-                ctx.next = _update(job, ctx, lp)
-            case "challenge" | "recheck":
-                ctx.next = _challenge(job, ctx, lp, recheck=ctx.next == "recheck")
-            case "reconsider":
-                ctx.next = _reconsider(job, ctx, lp)
-            case "wait":
-                asked, stage = _asked(job, ctx, lp)
-                job.wait(ctx, lp, asked, stage)
-                return None
-            case "publish":
-                return publish.publish(job, ctx, lp)
-            case other:
-                msg = f"the run's next action {other!r} is unknown; run the update again"
-                raise Stopped(msg)
+        if (r := ctx.repair).phase == "checking" and r.laid != r.commit and not _laid(job, ctx, lp):
+            return None  # a repair is judged only on its own pages, laid out again after a host stop
+        if ctx.next == "wait":
+            asked, stage = _asked(job, ctx, lp)
+            job.wait(ctx, lp, pack_activation.repairing(ctx, asked), stage)
+            return None
+        if ctx.next == "publish":
+            return publish.publish(job, ctx, lp)
+        try:
+            ctx.next = _step(job, ctx, lp)
+        except Dropped as exc:
+            job.hold(ctx, str(exc))
+            return None
         job.keep(ctx, lp)
+
+
+def _step(job: Job, ctx: Context, lp: RoundLoop) -> Action:
+    """The context's next action short of the owner and publication; what follows it.
+
+    Raises:
+        Stopped: The action ended the run.
+        Dropped: A checked repair failed its audit or browser tests.
+    """
+    match ctx.next:
+        case "audit":
+            return _gated(ctx, lambda: _audit(job, ctx))
+        case "browser":
+            return _gated(ctx, lambda: _browser(job, ctx))
+        case "update":  # a repair's challenger findings go to the owner, never the updater
+            return "wait" if ctx.repair.phase == "checking" else _update(job, ctx, lp)
+        case "challenge" | "recheck":
+            return _challenge(job, ctx, lp, recheck=ctx.next == "recheck")
+        case "reconsider":
+            return _reconsider(job, ctx, lp)
+        case other:
+            msg = f"the run's next action {other!r} is unknown; run the update again"
+            raise Stopped(msg)
+
+
+def _laid(job: Job, ctx: Context, lp: RoundLoop) -> bool:
+    """Lay the repair's pages, as its commit holds them, into the candidate for their check; False when it waits."""
+    r = ctx.repair
+    try:
+        repair.lay(job, ctx)
+    except pack_files.PackError as exc:
+        job.hold(ctx, f"the agent's repair {r.commit[:12]} could not be laid out for its check: {exc}")
+        return False
+    note = f"Then an agent repaired the pull request's failed CI: {r.summary}"
+    ctx.summary = ctx.summary if note in ctx.summary else f"{ctx.summary}\n\n{note}"
+    ctx.accepted, lp.ended, ctx.after, ctx.next = "", "", "challenge", "audit"  # no earlier verdict stands for it
+    ctx.audited = ctx.browsed = ""
+    r.laid = r.commit
+    job.identified(identity(ctx, candidate(job)))
+    job.keep(ctx, lp)
+    return True
+
+
+def _gated(ctx: Context, action: Callable[[], Action]) -> Action:
+    """The audit or the browser tests; while a repair is checked, anything but their pass drops it.
+
+    Raises:
+        Dropped: They found something in the repair's pages, or stopped on them.
+    """
+    if ctx.repair.phase != "checking":
+        return action()
+    try:
+        then = action()
+    except Stopped as exc:
+        raise Dropped(_dropped(ctx, str(exc))) from exc
+    if then == "update":
+        found = ctx.findings or [f.removeprefix("- ") for f in ctx.failures if f.startswith("- ")]
+        raise Dropped(_dropped(ctx, "; ".join(found)))
+    return then
+
+
+def _dropped(ctx: Context, why: str) -> str:
+    """Drop the checked repair, never pushed; the owner's words, with the CI stop it started from."""
+    r = ctx.repair
+    made, ctx.findings, ctx.failures = r.commit[:12], [], []
+    r.phase, r.commit, r.laid = "", "", ""
+    stop = f"CI failed at {r.stop.head[:12]}: {', '.join(c['name'] for c in r.stop.failed)}; " if r.stop else ""
+    more = "have an agent try again, " if pack_repair.offered(ctx) else ""
+    said = f"the agent's repair {made} failed its check and was not pushed: {why[:1500]}"
+    return f"{stop}{said}. Try again, {more}or discard"
 
 
 def _audit(job: Job, ctx: Context) -> Action:
@@ -354,8 +426,8 @@ def decided(  # noqa: PLR0913 - the open questions, the answered one, the answer
         if not left:
             ctx.next = NEXT[pack_rounds.after(lp)]
         return left
-    if q["kind"] == "publish":  # trying again reconciles with GitHub before anything is repeated
-        ctx.repair.stop, ctx.next = None, "publish"
+    if q["kind"] in {"publish", *pack_repair.KINDS}:  # trying again reconciles with GitHub before anything is repeated
+        pack_repair.decided(q, option, ctx, repair.PDS)
     elif q["kind"] == "follow-ups":
         ctx.followed, ctx.next = list(q["keys"]), "browser"
     elif option == pack_rounds.ANOTHER:
