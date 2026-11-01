@@ -186,8 +186,9 @@ def test_a_spotter_case_becomes_a_candidate_with_its_check_queued(world):
     assert world.checks == [cid]
 
 
-@pytest.mark.parametrize("result", ["kept", "lost"])  # lost: the host ended after promoting, before the result
-def test_a_case_retried_after_its_check_ran_and_promoted_it_is_done_with_that_check(world, monkeypatch, result):
+# lost: the host ended after promoting, before the result; stopped: it ended before promoting
+@pytest.mark.parametrize("result", ["kept", "lost", "stopped"])
+def test_a_retried_case_reuses_the_check_that_promoted_it_and_asks_again_after_one_stopped(world, monkeypatch, result):
     _record("rec-1")
     pid = _waiting("spotter-case", "look:handoff", ["f-1"], record="rec-1", call="hand-off-fitness")
     seams = dataclasses.replace(world.seams, check=lambda cid: case_edits.check_request([cid], act.BY))
@@ -205,10 +206,11 @@ def test_a_case_retried_after_its_check_ran_and_promoted_it_is_done_with_that_ch
     [asked] = case_replay.queued()
     cid = next(iter(asked["ids"]))
     assert case_replay.take(asked["id"])
-    cur = cases.current()
-    review = {"by": "retro-review", "at": cases.now(), "note": "it holds", "content": asked["ids"][cid]}
-    promoted = {**cur["cases"][cid], "stage": "test", "review": review}
-    cases.commit(cur["n"], {cid: promoted}, "retro-review", "check: it holds")
+    if result != "stopped":
+        cur = cases.current()
+        review = {"by": "retro-review", "at": cases.now(), "note": "it holds", "content": asked["ids"][cid]}
+        promoted = {**cur["cases"][cid], "stage": "test", "review": review}
+        cases.commit(cur["n"], {cid: promoted}, "retro-review", "check: it holds")
     if result == "kept":
         cases.append("runs.jsonl", {"id": asked["id"], "kind": "check", "reviews": {cid: {"result": "supported"}}})
         case_replay.done(asked["id"])
@@ -218,8 +220,13 @@ def test_a_case_retried_after_its_check_ran_and_promoted_it_is_done_with_that_ch
 
     done = act.apply(pid, seams)
 
-    assert (done["apply_state"], done["applied"][-1]["artefact"]["check"]) == ("done", asked["id"])
-    assert case_replay.queued() == []
+    check = done["applied"][-1]["artefact"]["check"]
+    if result == "stopped":
+        assert [q["id"] for q in case_replay.queued()] == [check]  # asked again
+    else:
+        assert check == asked["id"]
+        assert case_replay.queued() == []
+    assert done["apply_state"] == "done"
 
 
 def test_a_synthetic_case_rests_on_its_assumption_and_the_reset_leaves_it_out(world):

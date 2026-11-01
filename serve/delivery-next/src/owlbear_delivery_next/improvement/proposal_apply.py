@@ -217,12 +217,12 @@ def _checked(cid: str) -> str:
     The host may stop between asking for it and recording it: one still queued counts, and so does one that ran (or
     was stopped by the host's end) once the case has left the candidates.
     """
-    checks = [r for r in [*case_replay.queued(), *case_replay.results()] if r.get("kind") == "check"]
-    if queued := [q["id"] for q in checks if cid in (q.get("ids") or {})]:
+    if queued := [q["id"] for q in case_replay.queued() if q.get("kind") == "check" and cid in (q.get("ids") or {})]:
         return queued[-1]
     if cases.current()["cases"].get(cid, {}).get("stage") == "candidate":
         return ""
-    return next((r["id"] for r in reversed(checks) if cid in (r.get("reviews") or r.get("ids") or {})), "")
+    ran = [r for r in case_replay.results() if r.get("kind") == "check"]
+    return next((r["id"] for r in reversed(ran) if cid in (r.get("reviews") or r.get("ids") or {})), "")
 
 
 def _artefact(kind: str, where: str, ref: str, link: str = "") -> dict[str, Any]:
