@@ -225,10 +225,12 @@ def report(at: Path, follow_ups: list[dict]) -> dict:
     return AUDITED.report(version=NEW, findings=found, follow_ups=follow_ups)
 
 
-def store(tmp_path: Path) -> Store:
+def store(tmp_path: Path, **updater: int) -> Store:
+    """The project's store; *updater* gives the updater's loop these round values (TD-209)."""
     s = Store(tmp_path / "store")
     s.root.mkdir(parents=True, exist_ok=True)
-    (s.root / "config.json").write_text(json.dumps({"format": 4, "pr_labels": ["release:minor"]}))
+    agents = {"agents": {"updater": updater}} if updater else {}
+    (s.root / "config.json").write_text(json.dumps({"format": 4, "pr_labels": ["release:minor"]} | agents))
     return s
 
 
@@ -237,12 +239,12 @@ def run(job: pds_job.Job) -> dict:
     return PACK.settled(job)
 
 
-def started(tmp_path: Path, checkout: Path, **plan) -> tuple[Fakes, pds_job.Job, dict]:
-    """A PDS update run with the fakes' *plan* (attribute -> value), settled."""
+def started(tmp_path: Path, checkout: Path, *, updater: dict | None = None, **plan) -> tuple[Fakes, pds_job.Job, dict]:
+    """A PDS update run with the fakes' *plan* (attribute -> value) and *updater*'s round values, settled."""
     fakes = Fakes(checkout)
     for key, value in plan.items():
         setattr(fakes, key, value)
-    job = pds_job.Job(store(tmp_path), fakes.live(checkout))
+    job = pds_job.Job(store(tmp_path, **(updater or {})), fakes.live(checkout))
     return fakes, job, run(job)
 
 
@@ -302,6 +304,23 @@ def test_an_update_audits_fixes_tests_and_challenges_the_pages_then_merges_one_c
     now = (git(root, "rev-parse", "HEAD"), (checkout / PAGE).read_text(), (checkout / pin.PIN).read_bytes())
     assert now == before  # the running checkout never changed
     assert git(root, "status", "--porcelain") == ""
+
+
+def test_a_challenger_finding_goes_to_a_fresh_updater_and_both_gates_and_the_challenger_run_again(tmp_path, checkout):
+    """Plan d8 step 7: the challenger's findings send the run back; the next updater is told them.
+
+    With no round made the last by its few findings, the repair gets the full checks and a challenger round of its own.
+    """
+    answer = {PAGE: f"{FIXED}export const s = 1;\n"}
+    fakes, _job, state = started(tmp_path, checkout, updater={"last_round_at": 0}, verdicts=["fix"],
+                                 edits=[{PAGE: "fix"}, answer])  # fmt: skip
+
+    assert state["state"] == "passed", state["reason"]
+    assert fakes.calls == ["audit", "update", "audit", "browser", "challenger", "update", "audit", "browser",
+                           "challenger"]  # fmt: skip
+    first, second = (s.message for s in fakes.sessions if s.role == "updater")
+    assert "xs is too small" not in first
+    assert "xs is too small" in second
 
 
 def test_an_up_to_date_pin_ends_up_to_date_with_nothing_downloaded(tmp_path, checkout):
@@ -385,13 +404,8 @@ def test_a_rerun_that_skips_a_failing_test_proves_no_flake(tmp_path, checkout, w
 
 
 def test_an_update_whose_updater_sessions_are_spent_stops_with_what_is_still_open(tmp_path, checkout):
-    s = store(tmp_path)
-    config = json.loads((s.root / "config.json").read_text())
-    (s.root / "config.json").write_text(json.dumps({**config, "agents": {"updater": {"max_rounds": 1}}}))
     broken = failing("tests/test_machine_pages.py::test_menu")
-    fakes = Fakes(checkout)
-    fakes.browsers = [broken, PASS, broken]
-    state = run(pds_job.Job(s, fakes.live(checkout)))
+    fakes, _job, state = started(tmp_path, checkout, updater={"max_rounds": 1}, browsers=[broken, PASS, broken])
 
     assert state["state"] == "failed"
     assert "spent its 1 updater session(s)" in state["reason"]
