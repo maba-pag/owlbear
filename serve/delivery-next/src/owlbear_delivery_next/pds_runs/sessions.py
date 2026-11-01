@@ -48,14 +48,13 @@ class UpdateResult(tools.Args):
 SUBMIT = tools.Spec("submit_result", "Submit once, after editing the pages.", UpdateResult, "result")
 
 
-def auditor(  # noqa: PLR0913 - the copy, its skills and the run's records
+def auditor(
     settings: Settings,
     at: Path,
     skills: Path,
     message: str,
     *,
     memory: Path | None = None,
-    journal: sdk_adapter.Journal | None = None,
 ) -> sdk_adapter.Session:
     """The auditor's session on the copy at *at*: confined, writing nothing, its audit skill preloaded from *skills*.
 
@@ -69,7 +68,7 @@ def auditor(  # noqa: PLR0913 - the copy, its skills and the run's records
         observe=lambda: tools.Worktree("", ""), checks=(), submit=audit_tools.SUBMIT, skills=skills,
         model=role.model, effort=role.effort, context=role.context, limit=roles.limit(settings, AUDIT),
         subagents=roles.subagents(settings, AUDIT), user=roles.user_config(settings), role=tools.AUDITOR, job=AUDIT,
-        journal=journal or sdk_adapter.Journal(), memory=memory,
+        memory=memory,
     )  # fmt: skip
 
 
