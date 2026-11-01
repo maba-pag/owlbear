@@ -171,6 +171,23 @@ def test_an_owlbear_change_is_one_issue_in_its_repository_carrying_the_marker(wo
     assert done["applied"][0]["artefact"]["link"] == "https://github.com/o/r/issues/2"
 
 
+def test_an_issue_search_that_reads_every_page_without_the_marker_makes_none(world, tmp_path):
+    asked = []
+
+    def full(argv, _data, _timeout, _cwd):  # every page is full and none carries the marker
+        asked.append(argv[argv.index("--method") + 1])
+        page = [{"number": n, "body": "other", "html_url": "u", "state": "open"} for n in range(100)]
+        return subprocess.CompletedProcess((), 0, json.dumps(page).encode(), b"")
+
+    pid = _waiting("delivery-change", "delivery:hand-off", ["f-1"])
+    world.seams = dataclasses.replace(world.seams, issues=lambda: OwlbearIssues("o/r", tmp_path, runner=full))
+    _accept(pid, world)
+
+    snap = props.folded()[pid]
+    assert (snap["apply_state"], asked) == ("failed", ["GET"] * 10)  # unsure the issue is absent: none is made
+    assert "find_issue" in snap["failures"][0]["error"]
+
+
 def test_a_spotter_case_becomes_a_candidate_with_its_check_queued(world):
     _record("rec-1")
     other = case_intake.from_record("rec-1", "none", "another call", "cli")  # the same record, made by hand
