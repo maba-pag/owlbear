@@ -175,11 +175,18 @@ def unready(e: Environment, proc: subprocess.Popen[bytes] | None) -> Environment
 
 
 def _proven(e: Environment, found: Found) -> bool:
-    """Whether the members are still the launch's: its leader, or a process recorded with its start time, is one.
+    """Whether the members are still the launch's: a process recorded with its start time is one, started by then.
 
-    Without either, the group's or session's id may have ended and been taken by another's leader since.
+    The leader's recorded time bounds its start. Without such a member, or with its start unreadable, the group's or
+    session's id may have ended and been taken by another's leader since.
     """
-    return e.pgid in found or any(p in found and t is not None and processes.alive(p, t) for p, t in e.pids.items())
+
+    def started_by(pid: int, bound: float) -> bool:
+        with contextlib.suppress(psutil.Error, OSError):
+            return processes.started(pid) <= bound + 1.0
+        return False
+
+    return any(p in found and t is not None and started_by(p, t) for p, t in e.pids.items())
 
 
 def dispose(e: Environment) -> Found:

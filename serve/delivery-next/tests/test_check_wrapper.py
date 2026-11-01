@@ -132,6 +132,23 @@ def test_a_leaderless_session_without_a_recorded_member_is_reported_not_signalle
                 os.kill(s, signal.SIGKILL)
 
 
+def test_a_leader_without_a_recorded_start_proves_nothing(monkeypatch) -> None:
+    leader = subprocess.Popen(["sh", "-c", "sleep 300 & wait"], start_new_session=True)  # noqa: S607
+    sent: list[int] = []
+    try:
+        e = env("sleep 300", pgid=leader.pid, pids={leader.pid: None})  # its start time was unreadable at launch
+        with monkeypatch.context() as m:
+            m.setattr(check, "GRACE", 0.1)
+            m.setattr(os, "kill", lambda pid, _sig: sent.append(pid))
+            m.setattr(os, "killpg", lambda pgid, _sig: sent.append(pgid))
+            assert leader.pid in check.dispose(e)  # its id may be another's by now
+        assert sent == []
+    finally:
+        with contextlib.suppress(OSError):
+            os.killpg(leader.pid, signal.SIGKILL)
+        leader.wait(10)
+
+
 def test_an_earlier_launchs_pid_file_is_ignored(tmp_path: Path) -> None:
     pidfile = tmp_path / check.PIDFILE
     pidfile.write_text(f"{os.getpid()}\n")
