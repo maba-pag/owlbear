@@ -348,8 +348,14 @@ def test_looks_and_cases_act_through_their_dialogs(tmp_path, monkeypatch, pds) -
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     with machine_page(tmp_path, monkeypatch, pds) as w:
+        skip = {"id": "r-skip", "at": datetime.now(UTC).isoformat(timespec="seconds"), "project": w.pid,
+                "change": SLUG, "step": "build", "session": "s", "look": "sample", "call": "c",
+                "skipped": "capacity: 1 sampled looks skipped, looks already running"}  # fmt: skip
+        with (spotter.root() / "records-2026-10-01.jsonl").open("a") as out:
+            out.write(json.dumps(skip) + "\n")
         page = improvement(w, pds)
         expect(page.locator("#spotter")).to_contain_text("alpha")
+        expect(page.locator("#spotter")).to_contain_text("0.00 credits; 1 look skipped before starting.")
         harm = page.locator("#look-r-harm")
         expect(harm).to_contain_text("A force-push over main.")
         note = page.locator("#look-r-note")

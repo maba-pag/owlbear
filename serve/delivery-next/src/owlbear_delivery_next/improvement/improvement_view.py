@@ -86,11 +86,18 @@ def _settings(st: Store) -> dict[str, Any]:
 
 
 def spotter(projects: units.Projects, records: list[dict[str, Any]], now: datetime) -> dict[str, Any]:
-    """Each loaded project's Spotter settings and each project's spend over the last week."""
+    """Each loaded project's Spotter settings and each project's spend over the last week.
+
+    A look skipped before it began (no SDK session, no credits) is counted apart: it neither ran nor spent.
+    """
     spend: dict[str, dict[str, Any]] = {}
     for r in records:
         if _when(r.get("at")) >= now - timedelta(days=WINDOW):
-            s = spend.setdefault(str(r.get("project") or ""), {"looks": 0, "credits": 0.0, "unknown": 0, "stopped": 0})
+            s = spend.setdefault(str(r.get("project") or ""),
+                                 {"looks": 0, "credits": 0.0, "unknown": 0, "stopped": 0, "skipped": 0})  # fmt: skip
+            if r.get("skipped") and not r.get("sdk_sessions") and not r.get("credits"):
+                s["skipped"] += 1
+                continue
             s["looks"] += 1
             s["credits"] += float(r.get("credits") or 0.0)
             s["unknown"] += not r.get("credits_known")

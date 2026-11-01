@@ -207,17 +207,21 @@ def test_only_an_irreversible_stop_marks_a_stopped_step_and_looks_filter_by_proj
     assert world.http.get(f"{API}/change", params={"project": "p2", "slug": "gone"}).status_code == 404
 
 
-def test_a_look_whose_spend_was_not_reported_counts_as_unknown_never_as_a_limit_stop() -> None:
+def test_a_look_whose_spend_was_not_reported_counts_as_unknown_and_one_never_begun_counts_apart() -> None:
     at = "2026-10-01T10:00:00+00:00"
     records = [
         {"id": "r-1", "at": at, "project": "p1", "credits": 0.2, "credits_known": True, "stopped": "reached"},
         {"id": "r-2", "at": at, "project": "p1", "credits": 0.1, "credits_known": False, "stopped": "unknown"},
+        {"id": "r-3", "at": at, "project": "p1", "skipped": "capacity: looks already running"},
+        {"id": "r-4", "at": at, "project": "p1", "skipped": "time: the look ran over", "sdk_sessions": ["s-4"]},
     ]
 
     said = improvement_view.spotter({}, records, datetime(2026, 10, 2, tzinfo=UTC))
 
-    assert said["spend"]["p1"] == {"looks": 2, "credits": pytest.approx(0.3), "unknown": 1, "stopped": 1}
-    assert [r["credit_stop"] for r in improvement_view.looks({}, records, [])["looks"]] == ["reached", "unknown"]
+    spent = {"looks": 3, "credits": pytest.approx(0.3), "unknown": 2, "stopped": 1, "skipped": 1}
+    assert said["spend"]["p1"] == spent
+    stops = [r["credit_stop"] for r in improvement_view.looks({}, records, [])["looks"]]
+    assert stops == ["reached", "unknown", "", ""]
 
 
 def test_the_outside_writes_of_every_change_of_every_project_are_listed_together_each_tagged(world) -> None:
