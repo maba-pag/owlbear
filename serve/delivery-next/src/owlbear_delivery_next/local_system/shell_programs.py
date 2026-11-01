@@ -412,7 +412,8 @@ def shell_args(words: Sequence[Word]) -> ShellArgs:
             short = "" if w.startswith("--") else w[1:]
             values = words[i + 1 : i + 1 + sum(ch in "oO" for ch in short)]  # -o and -O take a word each, -eco too
             plus = w.startswith("+")
-            reverse = {"reversed"} if "posix" in values or (plus and "i" in short) else set()  # not followed
+            unknown = any(getattr(v, "expanded", False) for v in (w, *values))  # +o "$mode": maybe posix
+            reverse = {"reversed"} if unknown or "posix" in values or (plus and "i" in short) else set()  # not followed
             flags |= {w} if not short else reverse if plus else set(short) | reverse
             command, stdin = command or "c" in short, stdin or "s" in short
             i += 1 + len(values)

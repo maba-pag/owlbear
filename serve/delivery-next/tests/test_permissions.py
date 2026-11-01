@@ -1390,7 +1390,12 @@ def test_an_unset_that_removes_no_variable_keeps_the_startup_file(scripts: Path,
 
 
 @pytest.mark.parametrize(
-    "text", ["BASH_ENV=./bad.sh bash --norc -i +i -c true", "BASH_ENV=./bad.sh bash --posix +o posix -c true"]
+    "text",
+    [
+        "BASH_ENV=./bad.sh bash --norc -i +i -c true",
+        "BASH_ENV=./bad.sh bash --posix +o posix -c true",
+        'mode=posix; BASH_ENV=./bad.sh bash --posix +o "$mode" -c true',
+    ],
 )
 def test_a_shell_mode_turned_off_again_still_reads_its_startup_file(scripts: Path, text: str) -> None:
     assert decide(Policy(scripts), shell(text)) == f"`./bad.sh` uses --no-verify, {BYPASS}"
@@ -1500,6 +1505,8 @@ def test_an_interactive_bash_in_posix_mode_from_its_environment_reads_env(script
         "opt=-f; export BASH_ENV=./bad.sh; unset $opt BASH_ENV; bash -c true",
         "export BASH_ENV=./bad.sh; unset BASH_ENV < ./missing; bash -c true",
         "export BASH_ENV=./bad.sh; BASH_ENV=./good.sh unset BASH_ENV; bash -c true",
+        "opt=v; export BASH_ENV=./bad.sh; command -$opt unset BASH_ENV; bash -c true",
+        "export BASH_ENV=./bad.sh; command -x unset BASH_ENV; bash -c true",
     ],
 )
 def test_an_unset_the_guard_cant_be_sure_of_leaves_the_startup_file_unknown(scripts: Path, text: str) -> None:

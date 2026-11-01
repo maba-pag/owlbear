@@ -27,6 +27,7 @@ if TYPE_CHECKING:
 _DEVICE_STDIN = frozenset({"/dev/stdin", "/dev/fd/0"})  # a path naming the shell's own input
 _STDIN = _DEVICE_STDIN | {"-"}  # as a shell's script operand; source reads a file named -
 _FOLDER = frozenset({"cd", "pushd", "popd"})
+_PLAIN_PREFIX = frozenset({"command", "builtin", "-p", "--"})  # what may come before a builtin that surely runs
 _STARTUP = ("BASH_ENV", "ENV")  # variables naming a file a shell runs before its script
 _DECLARE = frozenset({"declare", "typeset", "readonly", "local"})
 _SHOWN = 60  # characters of a script built at run time shown in a reason
@@ -117,7 +118,8 @@ class Walk:
         if first == "unset" and all(w in {"-v", "--"} for w in words[i + 1 :] if w.startswith("-")):
             # an expanded operand, a redirection or a leading assignment (restored after it) may defeat it
             sure = not any(getattr(w, "expanded", False) for w in words[i + 1 :]) and not set("<>") & set(command.raw)
-            sure = sure and not shell_programs.assignments(words[:i])
+            prefix = words[shell_programs.head(words) : i]  # command -$opt, command -x: unset may not run
+            sure = sure and not shell_programs.assignments(words[:i]) and set(prefix) <= _PLAIN_PREFIX
             _unset(state, [k for k in _STARTUP if k in words[i + 1 :]], top_level=command.top_level and sure)
         if first in _DECLARE:
             state.startup |= {k: None for k in _STARTUP if any(w.partition("=")[0] == k for w in words[i + 1 :])}
