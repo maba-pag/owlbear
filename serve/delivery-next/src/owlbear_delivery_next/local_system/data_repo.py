@@ -171,7 +171,7 @@ class DataRepo:
         if lock in getattr(_HOLDING, "paths", ()):
             yield True
             return
-        fd = os.open(lock, os.O_RDONLY | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+        fd = os.open(lock, os.O_RDONLY | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK, 0o600)
         try:
             held = True
             try:

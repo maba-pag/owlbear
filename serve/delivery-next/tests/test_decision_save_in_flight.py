@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import io
 import json
+import os
 import subprocess
 import sys
 import threading
@@ -214,6 +215,28 @@ def test_a_probe_where_no_writer_has_made_the_lock_yet_keeps_the_first_one_out(s
             pass
     with shared.locked(wait=0):
         pass
+
+
+def test_a_probe_of_a_damaged_lock_never_waits(shared):
+    lock = git_folder(shared) / data_repo.LOCK
+    lock.unlink(missing_ok=True)
+    os.mkfifo(lock)
+    said: list[object] = []
+
+    def probe() -> None:
+        try:
+            with shared.quiet() as quiet:
+                said.append(quiet)
+        except OSError as error:
+            said.append(error)
+
+    thread = threading.Thread(target=probe, daemon=True)
+    thread.start()
+    thread.join(10)
+    waited = thread.is_alive()
+    if waited:  # a writer frees the probe, so the old code's thread ends
+        os.close(os.open(lock, os.O_WRONLY | os.O_NONBLOCK))
+    assert (waited, len(said)) == (False, 1)
 
 
 def test_a_chat_server_and_its_host_read_one_clock():
