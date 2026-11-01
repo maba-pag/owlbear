@@ -20,7 +20,7 @@ from owlbear_delivery_next.change_contracts.models import Brief, Change, Criteri
 from owlbear_delivery_next.improvement import chatlogs, retro_store, retro_units, spotter
 from owlbear_delivery_next.local_system import codebase, data_place, maintenance
 from owlbear_delivery_next.local_system.slots import Slots
-from owlbear_delivery_next.machine_host import retro_block
+from owlbear_delivery_next.machine_host import retro_block, retro_job
 from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.machine_host.project import Project
 from owlbear_delivery_next.machine_host.retro_inputs import failed_grading
@@ -333,3 +333,28 @@ def test_the_button_on_a_synthetic_unit_records_a_refusal_when_global_is_unreada
     assert (unit.startswith("syn:"), trigger, mode) == (True, "button", "judge")
     assert result.startswith("refused: settings can't be read: ")
     assert retro_block.block(unit, {}) == result.removeprefix("refused: ")
+
+
+def test_after_a_restart_a_run_waiting_for_its_first_admission_is_rechecked_and_an_admitted_one_goes_on(
+    a_b, machine, monkeypatch
+):
+    _, b = a_b
+    job, fence, real = _job(machine, []), [""], retro_job.evidence
+    job.seams = replace(job.seams, fenced=lambda: fence[0])
+
+    def evidence(*args):  # once admitted, before its first call: that call's admission waits
+        fence[0] = "an update is starting"
+        return real(*args)
+
+    monkeypatch.setattr(retro_job, "evidence", evidence)
+    job.tick(0.0)
+    assert [(c.uid, c.new) for c in job.waiting] == [("chg:pb:fix-it", False), ("chat:cb", True)]
+    monkeypatch.setattr(retro_job, "evidence", real)
+    _layer(b, None)
+    fence[0] = ""
+    _job(machine, []).tick(1.0)  # a restarted host takes both up
+    assert {(unit, result) for unit, _, _, result in _runs()} == {
+        ("chg:pb:fix-it", "judged"),
+        ("chat:cb", f"refused: {UNSET}"),
+    }
+

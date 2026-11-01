@@ -201,8 +201,14 @@ class Running:
     @classmethod
     def of(cls, snap: dict[str, Any]) -> Running:
         """A run as its kept snapshot has it, after a restart."""
-        keep = ("trigger", "by", "rev", "provenance", "mode", "records", "spec", "id", "limit", "spent", "known")
+        keep = ("trigger", "by", "rev", "provenance", "mode", "records", "spec", "id", "limit", "spent", "known", "new")
         return cls(uid=snap.get("unit", ""), **{k: snap[k] for k in keep if k in snap})
+
+    def admit(self) -> None:
+        """Mark it admitted, kept so a restart neither skips its first admission's recheck nor repeats it."""
+        if self.new:
+            store.run_event(self.id, "admitted")
+            self.new = False
 
     @property
     def reads_real(self) -> bool:
