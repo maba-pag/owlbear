@@ -54,7 +54,7 @@ class Project:
             subprocess.run(["git", *args], cwd=root, check=True, capture_output=True)  # noqa: S603, S607
         self.store, self.worktree, self.live, self.spawned = Store.open(root), root / "wt", set[int](), list[str]()
         self.worktree.mkdir()
-        self.host = Host(self.store, root, spawn=self.spawn, scan=lambda _p, _s: {}, group=lambda _g: {})
+        self.host = Host(self.store, root, spawn=self.spawn, members=lambda _ids: {})
         self.host.alive = lambda pid, _created: pid in self.live
         self.store.write_profile(Profile(version=1))
 
@@ -91,9 +91,9 @@ def started(monkeypatch) -> list[str]:
     """The worktrees whose check environment started."""
     roots: list[str] = []
 
-    def start(_e, root, _log, _env=None):
+    def start(_e, root, _log, _env=None, _pidfile=None):
         roots.append(str(root))
-        return SimpleNamespace(pid=900)
+        return SimpleNamespace(pid=900, stdin=None)
 
     monkeypatch.setattr(check, "dispose", lambda _e: {})
     monkeypatch.setattr(check, "start", start)
