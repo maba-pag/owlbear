@@ -17,7 +17,7 @@ import pytest
 import uvicorn
 
 from owlbear_delivery_next.change_contracts import models as m
-from owlbear_delivery_next.improvement import case_edits, case_replay, cases, followups, spotter
+from owlbear_delivery_next.improvement import case_edits, case_replay, cases, followups, improvement_view, spotter
 from owlbear_delivery_next.improvement import proposal_targets as targets
 from owlbear_delivery_next.improvement import retro_proposals as props
 from owlbear_delivery_next.improvement import retro_store as store
@@ -450,14 +450,21 @@ def test_an_unchecked_candidate_only_stays_or_goes_and_says_its_last_check_and_h
         unchecked = {"stage": "candidate", "call": "none", "why": "why", "example": "", "review": None}
         cases.commit(cases.current()["n"], {new: unchecked}, "t", "add")
         with cases.locked():
-            for rid, note in (("r-old", "No test output."), ("r-new", "Output has no assertion.")):
+            long = "tests/test_improvement_page.py::" + "a_check_note_quotes_a_long_test_id_" * 4
+            for rid, note in (("r-old", "No test output."), ("r-new", f"Output has no assertion: {long}.")):
                 cases.append("runs.jsonl", {"id": rid, "kind": "check", "by": "t", "asked": cases.now(),
                                             "reviews": {new: {"result": "not supported", "note": note}},
                                             "result": "checked", "ended": cases.now()})  # fmt: skip
+            for i in range(improvement_view.VERSIONS):  # newer runs of other kinds fill the page's run list
+                cases.append("runs.jsonl", {"id": f"p-{i}", "kind": "publication", "result": "nothing due",
+                                            "ended": cases.now()})  # fmt: skip
         page = improvement(w, pds)
         fresh = page.locator(f"#case-{new}")
         expect(fresh).to_contain_text("Its last check (r-new")
-        expect(fresh).to_contain_text("not supported. Output has no assertion.")
+        line = fresh.locator("p-text", has_text="Its last check (r-new")
+        expect(line).to_contain_text("): not supported. Output has no assertion:")
+        assert line.evaluate("e => getComputedStyle(e).maxInlineSize") != "none"  # running text, capped
+        assert line.evaluate("e => e.scrollWidth <= e.clientWidth")  # a long token wraps inside the cap
         expect(fresh).not_to_contain_text("r-old")
         expect(fresh).to_contain_text(f"once a further paid check supports it: owlbear cases check {new}")
         expect(fresh.locator("p-select-option")).to_have_count(2)  # only stays or goes: the check comes first
