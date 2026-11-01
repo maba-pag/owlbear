@@ -17,6 +17,7 @@
 .log { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--p-typescale-xs); }
 .findings { display: grid; gap: var(--p-spacing-static-md); margin: 0; padding-inline-start: 1.25rem; }
 .finding { display: grid; gap: var(--p-spacing-static-xs); }
+.finding code { overflow-wrap: anywhere; }
 /* The run view run.mjs draws for each pack's update. */
 .pack-run, .pack-summary, .pack-ask, .pack-steps, #pack-progress {
   display: grid; gap: var(--p-spacing-static-sm); min-width: 0; }

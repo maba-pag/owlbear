@@ -1411,6 +1411,27 @@ def test_a_view_that_cannot_be_read_says_why_without_widening_a_phone(tmp_path: 
         assert page.evaluate("document.documentElement.scrollWidth") <= 390
 
 
+@pytest.mark.browser
+def test_an_audit_report_s_long_paths_wrap_without_widening_a_phone(tmp_path: Path, monkeypatch, pds) -> None:
+    """#777: a finding's and a follow-up's file paths wrap; the report never scrolls sideways at 390 pixels."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    alpha = registry.register(clone(tmp_path / "alpha"))
+    path = "serve/delivery-next/src/owlbear_delivery_next/web/pages/updates/pds.mjs"
+    report = {"state": "passed", "outcome": "findings", "ended_at": "2026-11-01T13:25:20+00:00", "version": "4.9.0",
+              "commit": "a" * 40, "report": {"scope": {"includedPaths": [path], "excludedPaths": []}},
+              "findings": [{"title": "p-text size x-small", "path": path, "line": 12, "snippet": "size=x-small",
+                            "replacement": {"from": "x-small", "to": "xs"}, "fix": "Use xs."}],
+              "follow_ups": [{"subject": "the size the theme picks", "reason": "set at run time",
+                              "evidence": [{"path": path, "line": 30, "snippet": "size=${s}"}]}]}  # fmt: skip
+    with browsing(monkeypatch, pds, 390) as (page, base):
+        page.route("**/pds/audit", lambda route: route.fulfill(json=report))
+        page.goto(f"{base}/updates/pds?project={alpha.id}#token=t")
+        expect(page.locator("#audit-findings li")).to_have_count(1)
+        expect(page.locator("#audit-follow-ups li")).to_have_count(1)
+        assert page.evaluate("document.documentElement.scrollWidth") <= 390
+
+
 def each_scope_opens_its_view_and_leads_back(page, pds, base: str, row: dict, a: registry.Project) -> None:
     """Global's and OwlBear's views hold only theirs and lead back; a project's opens its page; an unlisted project
     opens the overview."""
