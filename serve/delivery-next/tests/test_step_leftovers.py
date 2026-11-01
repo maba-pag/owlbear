@@ -109,6 +109,18 @@ def test_a_marked_command_left_behind_blocks_until_it_ends(store, tmp_path, wrap
         end(sleep)
 
 
+def test_a_runner_run_by_hand_keeps_the_last_steps_records(store, tmp_path) -> None:
+    runnable(store, tmp_path)
+    sleep = marked(store)
+    try:
+        with store.lock("c1") as lock, command_marks.marking(store, lock, "c1"):
+            pass  # a runner the owner started himself, beside the host
+        assert host(store, tmp_path, []).tick() == []
+        assert store.read("c1").blocked.action == f"End processes {sleep}"
+    finally:
+        end(sleep)
+
+
 def test_marks_of_another_change_or_before_the_step_do_not_count(store, tmp_path) -> None:
     live = subprocess.Popen(["sleep", "300"], start_new_session=True)  # noqa: S607 - a group marked as it started
     try:

@@ -21,7 +21,6 @@ from owlbear_delivery_next.git import remote_git
 from owlbear_delivery_next.local_system import processes
 from owlbear_delivery_next.runtimes.instruction_scope import applied
 from owlbear_delivery_next.runtimes.sdk_teardown import call as _call
-from owlbear_delivery_next.state_store import step_pids
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
@@ -45,13 +44,11 @@ def folder(store: Store, slug: str) -> Path:
 def marking(store: Store, lock: Lock, slug: str) -> Iterator[None]:
     """While a runner's step runs: its sessions mark their commands and its remote Git leaders are journaled.
 
-    The marks file and the recorded processes start afresh, since the host starts a runner only once the last step's
-    processes are gone.
+    The marks file and the recorded processes only grow, and lookups read them from a step's start on: a runner run by
+    hand never erases the records of processes the last step left.
     """
     where = folder(store, slug)
     (where / SCRIPT).write_text(f"TZ=UTC LC_ALL=C /bin/ps -o pgid=,lstart= -p $$ >> {shlex.quote(str(where / FILE))}\n")
-    (where / FILE).write_bytes(b"")
-    (where / step_pids.FILE).write_bytes(b"")
 
     def launched(pid: int) -> None:
         started: float | None = None
