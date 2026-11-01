@@ -6,6 +6,7 @@ import contextvars
 import os
 import signal
 import subprocess
+import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
@@ -115,3 +116,42 @@ def test_a_runner_step_marks_its_sessions_and_journals_its_pushes(change_repo, t
         for pid in left.read_text().split() if left.exists() else []:
             with contextlib.suppress(OSError):
                 os.kill(int(pid), signal.SIGKILL)
+
+
+@contextlib.contextmanager
+def _zone(name: str):
+    old = os.environ.get("TZ")
+    os.environ["TZ"] = name
+    time.tzset()
+    try:
+        yield
+    finally:
+        if old is None:
+            del os.environ["TZ"]
+        else:
+            os.environ["TZ"] = old
+        time.tzset()
+
+
+def test_a_mark_in_new_yorks_repeated_hour_keeps_its_instant(tmp_path) -> None:
+    second = datetime(2025, 11, 2, 6, 30, tzinfo=UTC)  # the second 01:30 in New York that night
+    (tmp_path / command_marks.FILE).write_text(f"77 {second.strftime(command_marks.LSTART)}\n")
+    with _zone("America/New_York"):
+        assert command_marks.read(tmp_path, second) == {77: second.timestamp() + 1}
+
+
+def test_a_shell_in_another_zone_marks_its_start_as_the_host_reads_it(change_repo) -> None:
+    store = Store.open(change_repo)
+    with store.lock("c1") as lock:
+        store.write(lock, Change(slug="c1"))
+        with command_marks.marking(store, lock, "c1"):
+            script = command_marks.folder(store, "c1") / command_marks.SCRIPT
+            env = {**os.environ, "TZ": "Pacific/Kiritimati"}  # UTC+14, the CLI's shell zone unlike the host's
+            began = time.time()
+            argv = ["/bin/bash", "-c", f'. "{script}"; echo $$']
+            out = subprocess.run(  # noqa: S603
+                argv, env=env, check=True, capture_output=True, text=True, timeout=30, start_new_session=True
+            )
+    marks = command_marks.read(command_marks.folder(store, "c1"), datetime.fromtimestamp(began, UTC))
+    assert list(marks) == [int(out.stdout)]
+    assert began < marks[int(out.stdout)] < time.time() + 2

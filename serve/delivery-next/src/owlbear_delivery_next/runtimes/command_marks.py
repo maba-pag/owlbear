@@ -7,6 +7,7 @@ marks outlive a runner that dies.
 
 from __future__ import annotations
 
+import calendar
 import contextlib
 import shlex
 import time
@@ -48,7 +49,7 @@ def marking(store: Store, lock: Lock, slug: str) -> Iterator[None]:
     processes are gone.
     """
     where = folder(store, slug)
-    (where / SCRIPT).write_text(f"LC_ALL=C /bin/ps -o pgid=,lstart= -p $$ >> {shlex.quote(str(where / FILE))}\n")
+    (where / SCRIPT).write_text(f"TZ=UTC LC_ALL=C /bin/ps -o pgid=,lstart= -p $$ >> {shlex.quote(str(where / FILE))}\n")
     (where / FILE).write_bytes(b"")
     (where / step_pids.FILE).write_bytes(b"")
 
@@ -85,7 +86,7 @@ async def opened(session: Any, worktree: Path, user: UserConfig, log: Callable[.
 
 
 def read(where: Path, since: datetime) -> dict[int, float]:
-    """Each marked command's group since *since*, with the latest its shell can have started (``lstart`` is whole s).
+    """Each marked command's group since *since*, with the latest its shell can have started (``lstart``: whole s, UTC).
 
     Raises:
         OSError: The marks file could not be read.
@@ -100,7 +101,7 @@ def read(where: Path, since: datetime) -> dict[int, float]:
     for n, line in enumerate(text.splitlines(), 1):
         try:
             pgid, when = line.split(maxsplit=1)
-            bound = time.mktime(time.strptime(when.strip(), LSTART)) + 1
+            bound = calendar.timegm(time.strptime(when.strip(), LSTART)) + 1
             marks |= {int(pgid): bound} if bound >= since.timestamp() - 1 else {}
         except ValueError as exc:
             msg = f"{path} line {n}: {line!r}"

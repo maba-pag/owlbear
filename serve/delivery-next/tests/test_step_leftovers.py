@@ -112,7 +112,7 @@ def test_a_marked_command_left_behind_blocks_until_it_ends(store, tmp_path, wrap
 def test_marks_of_another_change_or_before_the_step_do_not_count(store, tmp_path) -> None:
     live = subprocess.Popen(["sleep", "300"], start_new_session=True)  # noqa: S607 - a group marked as it started
     try:
-        mark = f"{live.pid} {time.strftime(command_marks.LSTART)}\n"
+        mark = f"{live.pid} {time.strftime(command_marks.LSTART, time.gmtime())}\n"
         runnable(store, tmp_path, "c2")
         time.sleep(3.1)  # marks are whole seconds, kept from 1 s before the step: c1's step starts after this one
         runnable(store, tmp_path, ago=0)
@@ -178,7 +178,7 @@ def test_unreadable_marks_or_table_block_with_their_details(store, tmp_path, mon
     if what == "marks":
         marks.mkdir()
     else:
-        marks.write_text(f"{2**22 + 2} {time.strftime(command_marks.LSTART)}\n")
+        marks.write_text(f"{2**22 + 2} {time.strftime(command_marks.LSTART, time.gmtime())}\n")
     said: list[str] = []
     with monkeypatch.context() as m:
         if what == "table":
