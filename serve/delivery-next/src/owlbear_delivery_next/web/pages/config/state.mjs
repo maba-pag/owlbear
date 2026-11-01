@@ -23,19 +23,25 @@ export const LOOPS = [["shaper", "Brief challenges (shaper)"], ["planner", "Plan
   ["builder", "Task reviews (builder)"], ["final_review", "Final review"],
   ["updater", "Impeccable updates (updater)"]];
 export const WRITE = 60000;  // a save commits and pushes the shared settings repository (TD-64): a network round trip
-// Answers of one kind that overlap and settle in any order, as the bar's reads do: an older one never replaces a newer
-// one's, and a newer one that failed never discards what an older one brought. *shown* marks a write's answer as shown.
+// Answers of one kind that overlap and settle in any order, as the bar's reads do. *take*: an older one's data never
+// replaces a newer one's, and a newer one that failed never discards what an older one brought. *says*: whether this
+// answer, failed or not, is the newest to settle, so an older one never clears or replaces a newer one's failure.
+// *shown* marks a write's answer as shown.
 export function turns() {
-  let begun = 0, last = 0;
+  let begun = 0, last = 0, said = 0;
   return {
     ask: () => ++begun,
-    newer: (n) => n > last,
     take(n) {
       if (n <= last) return false;
       last = n;
       return true;
     },
-    shown() { last = ++begun; },
+    says(n) {
+      if (n <= said) return false;
+      said = n;
+      return true;
+    },
+    shown() { last = said = ++begun; },
   };
 }
 

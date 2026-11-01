@@ -32,26 +32,29 @@ function seen(readAt, ids) {
 
 const readAt = (reads) => (reads?.read_at ? Date.parse(reads.read_at) : 0);
 
-// The read state, unless the page shows a later read's: answers from overlapping refreshes may arrive in any order.
-function apply(reads) {
-  if (readAt(reads) < readAt(state.reads)) return;
-  state.reads = reads;
-  state.readsSeen = seen(reads.read_at, reads.notices.map((n) => n.id));
-}
+const readStates = turns();  // the read state's answers overlap: the page's, the poll's and a dismissal's
 
-const readStates = turns();  // GETs of the read state overlap: the page's and the poll's
+// The read state (*reads*, or the host's now), unless an answer asked later or a later read's is shown: answers may
+// arrive in any order. A state that does not read has no read time and is shown with its failure.
+async function readState(reads) {
+  const n = readStates.ask();
+  try {
+    const got = reads ?? (await call("/config/read")).reads;
+    if (readStates.take(n) && !(got.read_at && readAt(got) < readAt(state.reads))) {
+      state.reads = got;
+      state.readsSeen = seen(got.read_at, got.notices.map((x) => x.id));
+    }
+    if (readStates.says(n)) state.readsError = "";
+  } catch (e) {
+    if (readStates.says(n)) state.readsError = e.message;
+  }
+}
 
 // Everything the page shows from outside, as last read, with no read of its own: the read state, the layers (a 409
 // says which file does not read and keeps what is shown), the machine and the other projects, then the models. Drafts
 // stay.
 export async function refresh(reads) {
-  const n = readStates.ask();
-  try {
-    apply(reads ?? (await call("/config/read")).reads);
-    if (readStates.take(n)) state.readsError = "";
-  } catch (e) {
-    if (readStates.newer(n)) state.readsError = e.message;  // a newer state answered first speaks for the reads
-  }
+  await readState(reads);
   show();
   if (await reload()) show();
   if (state.loaded) {
@@ -67,15 +70,17 @@ export async function readAgain() {
   state.reading = true;
   state.readsError = "";
   show();
+  let released = false;  // once this read has answered, another may start: its busy state is its own
   try {
     // a read pulls the shared repository and starts the Copilot runtime: minutes at worst
     const answer = await call("/config/read", { method: "POST", timeout: 200000 });
     state.reading = false;
+    released = true;
     await refresh(answer.reads);
   } catch (e) {
     state.readsError = e.reread ?? e.message;
   } finally {
-    state.reading = false;
+    if (!released) state.reading = false;
     showIdle();
   }
 }
@@ -90,11 +95,13 @@ export function followPolled(event) {
 async function dismiss(id) {
   try {
     await call("/settings-read/dismiss", { method: "POST", machine: true, body: { ids: [id] } });
-    apply((await call("/config/read")).reads);
-    reread();  // the bar's poll knows at once, so no page refreshes for it again
   } catch (e) {
     notify(e.message);
+    show();
+    return;
   }
+  await readState();  // asked after the dismissal, so no answer asked before it shows the notice again
+  reread();  // the bar's poll knows at once, so no page refreshes for it again
   show();
 }
 
@@ -141,12 +148,14 @@ function notice(n) {
 
 function status(reads) {
   if (state.reading) return html`<p-text id="reads-status">Reading every outside source…</p-text>`;
-  if (!reads?.read_at) return html`<p-text id="reads-status">Outside data has not been read yet.</p-text>`;
-  if (!reads.failures.length) {
-    return html`<p-text id="reads-status">Last read ${when(reads.read_at)}, all sources.</p-text>`;
+  const failures = (reads?.failures ?? []).map((f) => html`<p-text class="reads-failure" color="error">Could not read:
+    ${f.source} — ${f.error}</p-text>`);
+  if (!reads?.read_at) {
+    return html`${failures}<p-text id="reads-status">${failures.length ? "No read is on record; Read again records one."
+      : "Outside data has not been read yet."}</p-text>`;
   }
-  return html`${reads.failures.map((f) => html`<p-text class="reads-failure" color="error">Could not read:
-    ${f.source} — ${f.error}</p-text>`)}<p-text id="reads-status">Last read ${when(reads.read_at)}; last full read
+  if (!failures.length) return html`<p-text id="reads-status">Last read ${when(reads.read_at)}, all sources.</p-text>`;
+  return html`${failures}<p-text id="reads-status">Last read ${when(reads.read_at)}; last full read
     ${when(reads.succeeded_at)}.</p-text>`;
 }
 

@@ -220,12 +220,13 @@ export async function reload() {
   const n = answers.ask();
   try {
     const loaded = await call("/config");
+    answers.says(n);
     if (!answers.take(n)) return false;
     state.loaded = loaded;
     state.error = state.loaded.notice ? state.loaded.notice.charAt(0).toUpperCase() + state.loaded.notice.slice(1) : "";
     return true;
   } catch (e) {
-    if (answers.newer(n)) notify(e.message);  // a newer answer speaks for the layers
+    if (answers.says(n)) notify(e.message);  // a newer answer speaks for the layers
     return false;
   }
 }

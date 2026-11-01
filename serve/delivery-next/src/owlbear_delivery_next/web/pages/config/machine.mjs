@@ -272,9 +272,13 @@ export async function readMachine() {
     return undefined;
   });
   if (state.machineSaving) return;
+  const says = machineReads.says(n);
   if (read === undefined) {
-    if (machineReads.newer(n)) state.machineUnread = failed;
-  } else if (machineReads.take(n)) accept(read);  // typed text stays: it shows only while its items are its own
+    if (says) state.machineUnread = failed;
+    return;
+  }
+  if (machineReads.take(n)) state.machine = read;  // typed text stays: it shows only while its items are its own
+  if (says) state.machineUnread = "";
 }
 
 // The machine's values as the host answered them, so a read that failed before no longer speaks for them.
