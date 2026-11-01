@@ -41,8 +41,9 @@ ASKING = {
 
 @pytest.mark.parametrize(("path", "title"), PAGES)
 def test_every_page_shares_the_top_row_stylesheet_and_confirmation_and_ignores_a_query(
-    tmp_path, path, title, page_source
+    tmp_path, path, title, page_source, monkeypatch
 ):
+    monkeypatch.setattr(pages, "pds_version", lambda: "9.9.9")  # every page follows the pin, never a literal
     c = TestClient(api.create_app(Store(tmp_path), "t", None), base_url="http://127.0.0.1")
 
     page = c.get(path)
