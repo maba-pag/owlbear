@@ -431,7 +431,9 @@ def test_the_hosts_launch_of_a_check_environment_waits_for_the_gate(tmp_path, sh
     store = stored(tmp_path, shared, checking())
     started: list[str] = []
     monkeypatch.setattr(check, "start", lambda e, *_a, **_k: started.append(e.command))
-    host = SimpleNamespace(store=store, env_action=lambda _c: "launch", clear=lambda _c, _e: {}, say=print)
+    host = SimpleNamespace(
+        store=store, env_action=lambda _c: "launch", clear=lambda _c, _e: {}, say=print, unset_said=None
+    )
     replace(shared, rule, "The pages are plain HTML, served as they are.")
 
     c = environment.launch(host, Lock("c1"), store.read("c1"), AT)
