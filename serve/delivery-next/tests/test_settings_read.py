@@ -220,7 +220,7 @@ def test_each_change_of_one_key_keeps_its_own_entry(world):
         ("agents.builder.model", '"C"', None),
         ("machine.channel", None, '"major"'),
     ]
-    reader.dismiss([got.notices[1].id])
+    reader.ledger.dismiss([got.notices[1].id])
     again = world.reader().read()
     assert [n.id for n in again.notices] == [got.notices[i].id for i in (0, 2, 3)]
 

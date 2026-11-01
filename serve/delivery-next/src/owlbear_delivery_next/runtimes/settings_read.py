@@ -22,7 +22,7 @@ from owlbear_delivery_next.state_store.layers import read_layer_settled
 from owlbear_delivery_next.state_store.store import MACHINE_SETTINGS, StoreError, read_layer
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Collection
+    from collections.abc import Callable
     from pathlib import Path
 
     from owlbear_delivery_next.state_store.store import Store
@@ -103,11 +103,6 @@ class Reader:
             "failed": sorted({f.source for f in seen.failures}),
             "notices": [n.id for n in seen.notices],
         }
-
-    def dismiss(self, ids: Collection[str]) -> dict[str, Any]:
-        """Remove these notices on every page; the brief state after."""
-        self.ledger.dismiss(ids)
-        return self.polled()
 
     def _overrides(self) -> list[tuple[str, set[str]]]:
         """Who on this machine sets which keys above Global; a layer that does not read is skipped here."""

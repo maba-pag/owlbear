@@ -270,7 +270,8 @@ def _machine_routes(routes: APIRouter, machine: Machine) -> None:
 
     @routes.post("/settings-read/dismiss")
     def dismiss(body: DismissBody) -> dict[str, Any]:
-        return machine.reads.dismiss(body.ids)  # machine-wide: every page and project stops showing them
+        machine.reads.ledger.dismiss(body.ids)  # machine-wide: every page and project stops showing them
+        return machine.reads.polled()
 
     @routes.post("/resume")
     def resume() -> dict[str, bool]:

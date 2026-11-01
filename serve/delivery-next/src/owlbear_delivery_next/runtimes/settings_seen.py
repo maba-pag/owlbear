@@ -27,8 +27,6 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.settings.config import Layer
 
 NAME = "settings-read.json"
-SKIP = frozenset({"format", "prefs_imported", "roles_moved", "machine_moved"})  # receipts, not settings
-NESTED = frozenset({"prefs", "final_review", "spotter", "machine"})  # one key per field, as Settings names them
 STATE = "read state"  # the source an unreadable file is a failure of
 
 
@@ -68,11 +66,11 @@ def flatten(layer: Layer | None) -> dict[str, str]:
     """A layer's set values, keyed as the Settings page names them (``agents.builder.model``, ``machine.channel``)."""
     out: dict[str, str] = {}
     for key, value in (layer.model_dump(mode="json", exclude_none=True) if layer else {}).items():
-        if key in SKIP:
+        if key in {"format", "prefs_imported", "roles_moved", "machine_moved"}:  # receipts, not settings
             continue
         if key == "agents":
             out |= {f"agents.{role}.{field}": _text(v) for role, agent in value.items() for field, v in agent.items()}
-        elif key in NESTED:
+        elif key in {"prefs", "final_review", "spotter", "machine"}:  # one key per field, as Settings names them
             out |= {f"{key}.{field}": _text(v) for field, v in value.items()}
         else:
             out[key] = _text(value)
