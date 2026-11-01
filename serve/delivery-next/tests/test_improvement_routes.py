@@ -150,6 +150,14 @@ def test_a_case_shows_the_grade_it_rests_on_and_a_lost_redraft_is_asked_for_agai
     again = world.http.post(f"{API}/proposals/{pid}/redraft")
     assert (again.status_code, [q.get("redraft") for q in store.queued()]) == (200, [pid])
 
+    (asked,) = store.queued()
+    assert store.take(asked["id"])  # this run filed the redraft, then stopped before reviewing it
+    child = props.redrafted(pid, {"cause": "review", "target": "look:handoff", "mechanism": "ask first"}, "x")
+    shown = world.http.get(API).json()["proposals"]
+    assert [(p["id"], p["redraft"], p["redraft_state"]) for p in shown if p["id"] == pid] == [(pid, child, "drafted")]
+    review = world.http.post(f"{API}/proposals/{pid}/redraft")
+    assert (review.status_code, [q.get("redraft") for q in store.queued()]) == (200, [pid])
+
 
 def test_only_an_irreversible_stop_marks_a_stopped_step_and_looks_filter_by_project_id(world) -> None:
     _records(

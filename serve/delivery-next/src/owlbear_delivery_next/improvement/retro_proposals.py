@@ -92,6 +92,7 @@ def _opened(line: Mapping[str, Any]) -> dict[str, Any]:
         "failures": [],
         "last": "",
         "redraft": "",
+        "redraft_state": "",
     }
 
 
@@ -141,7 +142,8 @@ def folded() -> dict[str, dict[str, Any]]:
 
     Besides Retro's fields, a snapshot holds what the owner did: ``accepted`` (the snapshot he accepted),
     ``direction`` (a redirect's), ``applied`` (the artefacts made, by step), ``failures`` (newest first),
-    ``apply_state`` (``""``, ``pending``, ``partly``, ``done`` or ``failed``) and ``redraft`` (a redirected one's).
+    ``apply_state`` (``""``, ``pending``, ``partly``, ``done`` or ``failed``), ``redraft`` (a redirected one's) and
+    ``redraft_state`` (that redraft's state).
     """
     found: dict[str, dict[str, Any]] = {}
     seen: set[str] = set()
@@ -158,7 +160,7 @@ def folded() -> dict[str, dict[str, Any]]:
         snap["evidence"] = evidence(snap)
         snap["apply_state"] = _apply_state(snap)
         if (prior := found.get(snap["redraft_of"])) is not None:
-            prior["redraft"] = snap["id"]
+            prior["redraft"], prior["redraft_state"] = snap["id"], snap["state"]
     return found
 
 

@@ -121,7 +121,8 @@ function actions(p) {
       disabled: off })}</div>`;
   }
   const run = p.redraft_run ?? {};
-  if (p.state === "redirected" && !p.redraft && (!run.state || run.state === "ended")) {
+  if (p.state === "redirected" && (!p.redraft || p.redraft_state === "drafted")
+    && (!run.state || run.state === "ended")) {
     return html`<div class="row actions">${button("Redraft again", () => redraftAgain(p), { busy: busy("redraft"),
       disabled: off })}</div>`;
   }
@@ -146,11 +147,13 @@ function outcome(p) {
   if (p.state === "redirected") {
     lines.push(`Your direction: ${p.direction}`);
     const run = p.redraft_run ?? {};
-    if (p.redraft) lines.push(`Redrafted as ${p.redraft}.`);
+    if (p.redraft && p.redraft_state !== "drafted") lines.push(`Redrafted as ${p.redraft}.`);
+    else if (run.state === "queued") lines.push("Retro redrafts it on its next run.");
+    else if (run.state && run.state !== "ended") lines.push("Retro is redrafting it.");
+    else if (p.redraft) lines.push(`Redrafted as ${p.redraft}, but its run stopped before reviewing it: ask for it `
+      + "again; the review is made from the redraft already paid for.");
     else if (run.state === "ended") lines.push(`The redraft run ended without one: ${run.result || "no result"}`
       + `${run.why ? `, ${run.why}` : ""}.`);
-    else if (run.state === "queued") lines.push("Retro redrafts it on its next run.");
-    else if (run.state) lines.push("Retro is redrafting it.");
     else lines.push("No redraft is queued or running: ask for it again.");
   }
   if (p.redraft_of) lines.push(`A redraft of ${p.redraft_of}, after your direction.`);

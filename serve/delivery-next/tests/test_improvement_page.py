@@ -295,6 +295,12 @@ def test_proposals_are_decided_by_direction_and_each_dialog_says_what_follows(  
         case.get_by_role("button", name="Redraft again").click()
         expect(page.locator("#notice")).to_contain_text("Redraft queued as")
         expect(case).to_contain_text("Retro redrafts it on its next run.")
+        (again,) = store.queued()
+        assert store.take(again["id"])  # this run files the redraft, then stops before reviewing it
+        props.redrafted(ids["case"], {"cause": "review", "target": "look:handoff", "mechanism": "ask first"}, "x")
+        expect(case).to_contain_text("its run stopped before reviewing it", timeout=15000)
+        case.get_by_role("button", name="Redraft again").click()
+        expect(case).to_contain_text("Retro redrafts it on its next run.")
 
 
 @pytest.mark.browser
