@@ -283,11 +283,10 @@ def _browser(job: Job, ctx: Context) -> Action:
         if not r.failed:
             msg = f"browser tests: {r.said()} (exit {r.code})"
             raise Stopped(msg)
-        again = checks.browsed(job, _base(job, ctx), r.failed)
-        if not again.passed:
+        if not checks.browsed(job, _base(job, ctx), r.failed).cleared(r.failed):
             msg = f"browser tests fail on main as well: {', '.join(r.failed[:8])}"
             raise Stopped(msg)
-        return r.flake() if checks.browsed(job, at, r.failed).passed else r  # D-01M6BFK5YF5GYYN7QCDDPBEZH2
+        return r.flake() if checks.browsed(job, at, r.failed).cleared(r.failed) else r  # D-01M6BFK5YF5GYYN7QCDDPBEZH2
 
     r = job.do("browser", work, lambda r: r.said(), op="browser", identity=ident,
                judged=lambda r: "passed" if r.passed else "findings")  # fmt: skip

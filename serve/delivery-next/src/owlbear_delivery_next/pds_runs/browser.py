@@ -57,6 +57,10 @@ class Result:
         bad = self.failures or self.errors or self.failed
         return self.code == 0 and self.tests > self.skipped and not bad
 
+    def cleared(self, ids: tuple[str, ...]) -> bool:
+        """A rerun of *ids* that passed with every one run: a skipped one proves nothing."""
+        return self.passed and not self.skipped and self.tests >= len(ids)
+
     def said(self) -> str:
         """The run in a line."""
         ran = self.tests - self.skipped

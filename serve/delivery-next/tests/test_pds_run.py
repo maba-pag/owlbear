@@ -376,6 +376,23 @@ def test_a_failure_passing_its_rerun_on_main_and_the_candidate_is_a_named_flake(
     assert gate["detail"].endswith("passed on a rerun on the candidate and on main: " + flaky.failed[0])
 
 
+@pytest.mark.parametrize(("where", "state_", "calls"), [
+    ("candidate", "passed", ["audit", "update", "audit", "browser", "browser", "browser", "update", "audit", "browser",
+                             "challenger"]),
+    ("base", "failed", ["audit", "update", "audit", "browser", "browser"]),
+])  # fmt: skip
+def test_a_rerun_that_skips_a_failing_test_proves_no_flake(tmp_path, checkout, where, state_, calls):
+    two = failing("tests/test_a.py::t", "tests/test_b.py::t")
+    half = browser.Result(tests=2, failures=0, errors=0, skipped=1, failed=(), code=0, output="1 passed, 1 skipped")
+    plan = [two, half] if where == "base" else [two, PASS, half]
+    fakes, _job, state = started(tmp_path, checkout, browsers=plan)
+
+    assert state["state"] == state_, state["reason"]
+    assert fakes.calls == calls
+    if where == "base":
+        assert "browser tests fail on main as well" in state["reason"]
+
+
 @pytest.mark.parametrize(
     ("edit", "named"),
     [
