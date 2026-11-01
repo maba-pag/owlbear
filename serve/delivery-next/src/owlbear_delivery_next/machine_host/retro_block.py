@@ -56,12 +56,12 @@ def _outside() -> str:
 class Skips:
     """What the automatic runs say: once per unit and reason why it waits, and once when it may start again."""
 
-    def __init__(self, say: Callable[[str], None]) -> None:
-        self.say, self.waiting = say, dict[str, str]()
+    def __init__(self, say: Callable[[str], None], block: Callable[[str], str]) -> None:
+        self.say, self.block, self.waiting = say, block, dict[str, str]()
 
-    def blocked(self, uid: str, why: str) -> bool:
-        """Whether *uid* waits for *why*, said when it starts waiting or its reason changes."""
-        if not why:
+    def blocked(self, uid: str) -> bool:
+        """Whether *uid* waits, said when it starts waiting or its reason changes."""
+        if not (why := self.block(uid)):
             if self.waiting.pop(uid, None) is not None:
                 self.say(f"Retro may run {uid} again")
             return False

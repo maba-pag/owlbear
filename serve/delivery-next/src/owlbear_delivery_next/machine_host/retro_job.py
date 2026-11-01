@@ -96,7 +96,7 @@ class RetroJob:
         self.thread: threading.Thread | None = None
         self.waiting: list[Running] = []
         self.checked, self.pruned_at = False, -PRUNE_EVERY
-        self.skips = retro_block.Skips(self.seams.say)
+        self.skips = retro_block.Skips(self.seams.say, self.seams.blocked)
 
     @classmethod
     def attach(cls, m: Machine, fenced: Callable[[], str]) -> RetroJob:
@@ -266,7 +266,7 @@ class RetroJob:
         if not why and limit is None:
             why = "refused: the Retro run credit limit is unset"
         why = why or ctx.retired()
-        ctx.limit = limit or 0.0
+        ctx.limit, ctx.new = limit or 0.0, True
         keep = {"trigger": ctx.trigger, "by": ctx.by, "rev": ctx.rev, "mode": ctx.mode, "records": ctx.records}
         store.run_event(ctx.id, "opened", unit=ctx.uid, provenance=ctx.provenance, spec=ctx.spec, limit=ctx.limit,
                         assumptions=list(ctx.needs), **keep)  # fmt: skip
@@ -373,6 +373,7 @@ class RetroJob:
             StoppedError: The unit may no longer be read, or an assumption the run rests on is retired; it ends refused.
         """
         key, turn = f"retro:{what}:{uuid.uuid4().hex[:8]}", threading.Event()
+        new, ctx.new = ctx.new, False  # its first admission, whatever comes of it
         while not self.slots.take(SLOT, key, 1, 1, wake=turn.set):
             if why := self._refusal(ctx) or (LINGERING if self.lingering() else ""):
                 self.slots.cancel(SLOT, key)
@@ -386,6 +387,7 @@ class RetroJob:
                     raise WaitingError(why)
                 real, fresh = ctx.provenance == "real", not ctx.rev  # a chat's new revision only when it is quiet
                 why = real and units.eligible(ctx.uid, enrolled(), self.seams.projects(), fresh=fresh)
+                why = why or (new and self.seams.blocked(ctx.uid))  # set when it opened, unset since? (#808)
                 if why := ctx.retired() or (f"refused: {why}" if why else ""):
                     raise StoppedError(why)
                 if lease:
@@ -468,7 +470,7 @@ class RetroJob:
         if not self._allowed(SWITCH["change"]):
             return
         for item in units.due_changes(self.seams.projects()):
-            if self._skip(item["unit"]):
+            if self.skips.blocked(item["unit"]):
                 continue
             self._start(Running(item["unit"], "change", rev=item["rev"]))
             if self.waiting:
@@ -479,7 +481,7 @@ class RetroJob:
         if not self._allowed(SWITCH["idle"]) or not self.seams.idle():
             return
         for item in units.due_chats(enrolled(), datetime.now(UTC)):
-            if self._skip(item["unit"]):
+            if self.skips.blocked(item["unit"]):
                 continue
             self._start(Running(item["unit"], "idle", rev=item["rev"]))
             if self.waiting:
@@ -491,10 +493,7 @@ class RetroJob:
         failed = failed_grading()
         for item in units.late(units.records(), store.known(), store.graded()):
             unit = item["unit"]
-            if unit.startswith(prefix) and (unit, item["rev"]) not in failed and not self._skip(unit):
+            if unit.startswith(prefix) and (unit, item["rev"]) not in failed and not self.skips.blocked(unit):
                 self._start(Running(item["unit"], trigger, rev=item["rev"], mode="grade-only", records=item["records"]))
                 if self.waiting:
                     return
-
-    def _skip(self, uid: str) -> bool:
-        return self.skips.blocked(uid, self.seams.blocked(uid))

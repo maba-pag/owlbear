@@ -176,6 +176,7 @@ class Running:
     meter: Meter | None = None
     why: str = ""  # why it waits
     unended: bool = False  # a session's end was not confirmed: the run ends at its next call
+    new: bool = False  # opened by this host and not yet admitted: its first admission rechecks its settings
 
     @classmethod
     def of(cls, snap: dict[str, Any]) -> Running:

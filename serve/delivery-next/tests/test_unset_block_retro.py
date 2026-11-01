@@ -195,6 +195,35 @@ def test_late_records_of_a_blocked_project_wait_and_its_button_records_a_plain_r
     assert "rec-late" in retro_store.graded()
 
 
+@pytest.mark.parametrize("trigger", ["change", "button"])
+def test_a_setting_unset_while_a_new_run_waits_for_a_slot_refuses_it_before_its_first_call(
+    a_b, machine, monkeypatch, trigger
+):
+    """Its first admission checks the block again under the stop barrier; the unit stays due and runs once it is set."""
+    _, b = a_b
+    job = _job(machine, [])
+    assert job.slots.take("retro", "other", 1, 1) == 1
+    real = job.slots.take
+
+    def take(share, key, *args, **kwargs):
+        got = real(share, key, *args, **kwargs)
+        if key.startswith("retro:open") and not got:  # queued behind "other": B's setting unset, then granted
+            _layer(b, None)
+            job.slots.give("retro", "other")
+        return got
+
+    monkeypatch.setattr(job.slots, "take", take)
+    if trigger == "button":
+        retro_store.request("owner", change="pb:fix-it")
+    job.tick(0.0)
+    assert _runs() == [("chg:pb:fix-it", trigger, "judge", f"refused: {UNSET}")]
+    assert not retro_store.known().get("chg:pb:fix-it", {}).get("revisions"), "no revision taken, so no call made"
+
+    _layer(b, Prefs(ci_poll_seconds=20))
+    job.tick(1.0)
+    assert ("chg:pb:fix-it", "change", "judge", "judged") in _runs()[1:]
+
+
 @pytest.mark.parametrize("reverse", [False, True], ids=["parent-first", "child-first"])
 @pytest.mark.parametrize("blocked", ["parent", "child"])
 @pytest.mark.usefixtures("gap")
