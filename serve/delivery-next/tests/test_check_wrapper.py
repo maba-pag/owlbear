@@ -43,14 +43,16 @@ def test_the_pid_written_is_the_recipes_after_exec(tmp_path: Path) -> None:
         proc.kill()
 
 
-def test_a_launch_whose_leader_is_gone_is_disposed_from_its_pid_file(tmp_path: Path) -> None:
+@pytest.mark.parametrize("shell", ["sh -c '", "bash -c 'set -m; "])  # a job-control job runs in a group of its own
+def test_a_launch_whose_leader_is_gone_is_disposed_from_its_pid_file(tmp_path: Path, shell: str) -> None:
     left = tmp_path / "left"
-    e = env(f"sh -c 'sleep 300 >/dev/null 2>&1 & echo $! > {left}'", launched_at=datetime.now(UTC))
+    e = env(f"{shell}sleep 300 >/dev/null 2>&1 & echo $! > {left}'", launched_at=datetime.now(UTC))
     proc = check.start(e, tmp_path, tmp_path / "env.log", None, tmp_path / check.PIDFILE)
     assert proc is not None
     proc.wait(10)
     sleep = int(waited(left))
     started = psutil.Process(sleep).create_time()
+    assert (os.getpgid(sleep) == proc.pid) == shell.startswith("sh ")
     try:
         found = check.recovered(e, tmp_path / check.PIDFILE)
         assert found.pgid == proc.pid

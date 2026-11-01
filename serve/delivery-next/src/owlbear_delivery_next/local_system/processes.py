@@ -52,8 +52,8 @@ class UnlistedError(RuntimeError):
     """The process table, or one process's group or session, could not be read; nothing can be ruled out."""
 
 
-def members(ids: Pids, *, sessions: bool = True) -> dict[int, str]:
-    """Live, non-zombie processes whose pgid (or sid, with *sessions*) is one of *ids*, each with its label.
+def members(ids: Pids) -> dict[int, str]:
+    """Live, non-zombie processes whose pgid or sid is one of *ids*, each with its label.
 
     Each id maps to the latest time its leader may have started, or None if unknown. An id whose pid is now a
     process created more than 1 s after that time names a newer process, so it is dropped. Every pid is listed,
@@ -66,15 +66,15 @@ def members(ids: Pids, *, sessions: bool = True) -> dict[int, str]:
     if not ids:
         return {}
     found: dict[int, str] = {}
-    for key, pids in _matches(ids, sessions=sessions).items():
+    for key, pids in _matches(ids).items():
         if key in pids and _newer(key, ids[key]):  # a recycled pid carries the id only by leading anew
             continue
         found |= {p: label for p in pids if (label := _label(p)) is not None}
     return found
 
 
-def _matches(ids: Pids, *, sessions: bool) -> dict[int, list[int]]:
-    """Every listed pid filed under each id its pgid and (with *sessions*) its sid is; nothing else of it is read.
+def _matches(ids: Pids) -> dict[int, list[int]]:
+    """Every listed pid filed under each id its pgid and its sid is; nothing else of it is read.
 
     Filed under both, a process whose group id turns out recycled still counts by its session.
     """
@@ -88,7 +88,7 @@ def _matches(ids: Pids, *, sessions: bool) -> dict[int, list[int]]:
         if p <= 0:  # 0 asks getpgid and getsid about the caller itself
             continue
         try:
-            keys = {os.getpgid(p), os.getsid(p)} if sessions else {os.getpgid(p)}
+            keys = {os.getpgid(p), os.getsid(p)}
         except ProcessLookupError:
             continue
         except OSError as exc:

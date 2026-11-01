@@ -102,7 +102,7 @@ def owned(e: Environment, pid: int) -> bool:
     if pid in e.pids:
         return True
     try:
-        return e.pgid is not None and os.getpgid(pid) == e.pgid
+        return e.pgid is not None and e.pgid in {os.getpgid(pid), os.getsid(pid)}
     except OSError:
         return False
 
@@ -143,28 +143,32 @@ def created(pid: int) -> float | None:
 
 
 def members(pgid: int, leader: float | None = None) -> Found:
-    """Live members of one recorded group; none once its id names a newer process, as then the group ended."""
-    return processes.members({pgid: leader}, sessions=False)
+    """Live members of a recorded leader's group and session; none once its id names a newer process.
+
+    The leader starts its own session, so a job-control job in another group of it is a member too.
+    """
+    return processes.members({pgid: leader})
 
 
 def remaining(
     e: Environment, alive: processes.Observe = processes.alive, group: Callable[..., Found] = members
 ) -> Found:
-    """Recorded PIDs alive or unobservable, and every live member of the recorded group."""
+    """Recorded PIDs alive or unobservable, and every live member of the recorded group and session."""
     found: Found = {p: "" for p, t in e.pids.items() if alive(p, t) is not False}
     return found | (group(e.pgid, e.pids.get(e.pgid)) if e.pgid else {})
 
 
 def dispose(e: Environment) -> Found:
-    """Signal the whole group, even without its leader, and the recorded PIDs, TERM then KILL; return what remains."""
+    """Signal the group, its session's other members and the recorded PIDs, TERM then KILL; return what remains."""
     left: Found = {}
     for sig, wait in ((signal.SIGTERM, GRACE), (signal.SIGKILL, 2.0)):
         if not (left := remaining(e)):
             return {}
         processes.kill(e.pids, sig)
-        if e.pgid and e.pgid != os.getpgrp() and members(e.pgid, e.pids.get(e.pgid)):
-            with contextlib.suppress(OSError):
-                os.killpg(e.pgid, sig)
+        if e.pgid and e.pgid not in {os.getpgrp(), os.getsid(0)} and (found := members(e.pgid, e.pids.get(e.pgid))):
+            for send, target in [(os.killpg, e.pgid), *((os.kill, p) for p in found)]:
+                with contextlib.suppress(OSError):
+                    send(target, sig)
         end = time.monotonic() + wait
         while (left := remaining(e)) and time.monotonic() < end:
             time.sleep(0.2)

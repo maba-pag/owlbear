@@ -39,7 +39,6 @@ def test_every_leftover_of_a_marked_command_is_found() -> None:
         assert (os.getpgid(job), os.getsid(job)) == (job, leader)  # the job leads its own group, in the session
         bound = time.time()
         assert set(processes.members({leader: bound})) == set(left)
-        assert set(processes.members({leader: bound}, sessions=False)) == set(left[:-1])
     finally:
         end(left)
 
