@@ -65,6 +65,17 @@ def test_a_recipe_never_runs_when_its_host_stops_before_recording_the_group(tmp_
     assert not ran.exists()
 
 
+def test_a_recipe_never_runs_when_its_runner_dies_before_journaling_it(tmp_path: Path) -> None:
+    ran = tmp_path / "ran"
+    proc = check.start(env(f"touch {ran}"), tmp_path, tmp_path / "preview.log")
+    assert proc is not None
+    time.sleep(1.0)  # an ungated recipe would have run by now
+    assert not ran.exists()
+    proc.stdin.close()  # what a runner's death does to the pipe
+    assert proc.wait(10) != 0
+    assert not ran.exists()
+
+
 def test_an_install_runs_only_once_its_pid_is_journaled(tmp_path: Path) -> None:
     ran = tmp_path / "ran"
 

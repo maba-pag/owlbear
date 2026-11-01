@@ -77,6 +77,7 @@ def _serve(  # noqa: PLR0913 - the widths come from the settings, the test copy 
     e = e.model_copy(update={"pgid": proc.pid, "pids": {proc.pid: check.created(proc.pid)}})
     try:
         check.journal(log, e.pids)
+        check.release(proc)
         if (pids := check.ready(e, proc)) is None:
             e = check.unready(e, proc)
             notes.append(f"the recipe did not answer at {e.ready_url} for the merge-base")

@@ -234,20 +234,20 @@ def start(
 ) -> subprocess.Popen[bytes] | None:
     """Spawn the recipe as leader of its own session and group; *env* is a test copy's isolated environment.
 
-    With *pidfile*, a shell writes its pid there and then waits on its stdin: it becomes the recipe only once
-    ``release`` says the group is recorded, so a host that stops in between leaves a pid file and no recipe.
+    Its leader, a shell, waits on its stdin: it becomes the recipe only once ``release`` says the group is recorded, so
+    a host or runner that stops in between leaves no recipe. With *pidfile*, the shell first writes its pid there.
     """
     try:
         argv = shlex.split(e.command)
         if pidfile is not None:
             pidfile.unlink(missing_ok=True)
-            wrapper = 'echo $$ > "$0" && read -r _ && exec "$@" </dev/null'
-            argv = ["/bin/sh", "-c", wrapper, str(pidfile), *argv]
+        record = 'echo $$ > "$0" && ' if pidfile is not None else ""
+        argv = ["/bin/sh", "-c", f'{record}read -r _ && exec "$@" </dev/null', str(pidfile or "sh"), *argv]
         with log.open("ab") as out:
             proc = subprocess.Popen(  # noqa: S603 - argument vector of the Builder's launch recipe
                 argv,
                 cwd=root / e.directory,
-                stdin=subprocess.DEVNULL if pidfile is None else subprocess.PIPE,
+                stdin=subprocess.PIPE,
                 stdout=out,
                 stderr=subprocess.STDOUT,
                 start_new_session=True,
