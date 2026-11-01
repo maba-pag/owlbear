@@ -777,9 +777,10 @@ def test_env_split_string_splits_as_env_does(text: str, words: list[str]) -> Non
 
 def test_env_split_string_marks_variables_and_refuses_what_env_wouldnt_read() -> None:
     assert [w.expanded for w in split_string("${HOME}/bin/x y")] == [True, False]
-    for text in ("a\\q", "'open", "$HOME", "'a\\b'"):
+    for text in ("a\\q", "'open", "$HOME"):
         with pytest.raises(UnreadableError):
             split_string(text)
+    assert split_string("'a\\b' 'a\\\\b' 'a\\'b'") == ["a\\b", "a\\b", "a'b"]  # as /usr/bin/env -S reads them
     assert decide(WRITE, shell("env -S 'a\\q'")) == "`env -S 'a\\q'` uses env -S with text the guard can't read"
     assert decide(WRITE, shell("env -S '${CMD} x'")).endswith(
         "builds a command at run time (`${CMD}`); write the program and its script out"
@@ -1305,3 +1306,225 @@ def test_a_startup_file_set_on_source_reaches_the_shells_its_text_starts(scripts
 )
 def test_a_substitution_inside_a_parameter_or_arithmetic_reads_its_commands_input(text: str) -> None:
     assert decide(WRITE, shell(text)).endswith(PIPED)
+
+
+@pytest.mark.parametrize("text", ['echo "${A:-"${B:-ok}"}"', 'echo ${A:-"${B}"}'])
+def test_a_nested_parameter_default_runs(text: str) -> None:
+    assert decide(WRITE, shell(text)) is None
+
+
+def test_a_nested_parameter_default_still_judges_its_substitution() -> None:
+    assert decide(WRITE, shell('echo "${A:-"${B:-$(git push -f)}"}"')).endswith(BYPASS)
+
+
+def test_env_split_string_reads_single_quoted_backslashes_as_env_does() -> None:
+    assert decide(WRITE, shell("env -S \"printf '%s\\n' hi\"")) is None
+
+
+def test_unset_removes_a_startup_file_unless_it_is_unknown(scripts: Path) -> None:
+    assert decide(WRITE, shell("export BASH_ENV=/missing; unset BASH_ENV; bash -c true")) is None
+    assert decide(Policy(scripts), shell("export BASH_ENV=./bad.sh; unset -f BASH_ENV; bash -c true")).endswith(BYPASS)
+    assert decide(
+        Policy(scripts), shell("export BASH_ENV=./bad.sh; readonly BASH_ENV; unset BASH_ENV; bash -c true")
+    ).endswith("set where the guard can't follow it")
+    assert decide(Policy(scripts), shell("export BASH_ENV=./bad.sh; false && unset BASH_ENV; bash -c true")).endswith(
+        "set where the guard can't follow it"
+    )
+
+
+def test_an_arithmetic_comparison_is_no_earlier_write(scripts: Path) -> None:
+    assert decide(WRITE, shell("echo $((1 > 0)); /bin/echo hi")) is None
+    assert decide(Policy(scripts), shell("echo hi > good.sh; ./good.sh")).endswith("run it in the next")
+
+
+def test_command_v_names_a_program_without_running_it() -> None:
+    assert decide(WRITE, shell("command -v /no/such/tool || true")) is None
+    assert decide(WRITE, shell("command -V /no/such/tool")) is None
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "BASH_ENV=/missing sh -c true",
+        "ENV=/missing bash -c true",
+        "bash --rcfile /missing -c true",
+        "ENV=/missing sh -c true",
+    ],
+)
+def test_a_startup_file_the_shell_doesnt_read_is_not_read(text: str) -> None:
+    assert decide(WRITE, shell(text)) is None
+
+
+def test_a_startup_file_the_shell_reads_is_still_read(scripts: Path) -> None:
+    assert decide(Policy(scripts), shell("BASH_ENV=./bad.sh bash -c true")).endswith(BYPASS)
+    assert decide(Policy(scripts), shell("ENV=./bad.sh sh -i -c true")).endswith(BYPASS)
+    assert decide(Policy(scripts), shell("bash --rcfile ./bad.sh -ic true")).endswith(BYPASS)
+
+
+@pytest.mark.parametrize("text", ["printf x | cat <(sh)", "printf x | cat <<EOF\n$(sh)\nEOF"])
+def test_a_process_or_here_document_substitution_reads_its_commands_input(text: str) -> None:
+    assert decide(WRITE, shell(text)).endswith(PIPED)
+    assert decide(WRITE, shell(text.replace("(sh)", "(sh -c 'echo hi')"))) is None
+
+
+def test_a_relative_shebang_interpreter_is_found_from_the_shells_folder(scripts: Path) -> None:
+    shebang(scripts / "interpreter", "#!/bin/sh", BAD)
+    shebang(scripts / "tool", "#!/usr/bin/env ./interpreter")
+
+    assert decide(Policy(scripts), shell("./tool")) == (
+        "`./tool` runs `./tool`, whose interpreter `./interpreter` is itself a script"
+    )
+    assert decide(Policy(scripts), shell("env -C sub ./tool")).endswith("use an absolute path")
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "export BASH_ENV=./bad.sh; command -v unset BASH_ENV; bash -c true",
+        "export BASH_ENV=./bad.sh; unset -fv BASH_ENV; bash -c true",
+        "export BASH_ENV=./bad.sh; unset -f BASH_ENV; bash -c true",
+    ],
+)
+def test_an_unset_that_removes_no_variable_keeps_the_startup_file(scripts: Path, text: str) -> None:
+    assert decide(Policy(scripts), shell(text)) == f"`./bad.sh` uses --no-verify, {BYPASS}"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "BASH_ENV=./bad.sh bash --norc -i +i -c true",
+        "BASH_ENV=./bad.sh bash --posix +o posix -c true",
+        'mode=posix; BASH_ENV=./bad.sh bash --posix +o "$mode" -c true',
+    ],
+)
+def test_a_shell_mode_turned_off_again_still_reads_its_startup_file(scripts: Path, text: str) -> None:
+    assert decide(Policy(scripts), shell(text)) == f"`./bad.sh` uses --no-verify, {BYPASS}"
+
+
+def test_a_launcher_before_a_lookup_still_runs(scripts: Path) -> None:
+    shebang(scripts / "env", "#!/bin/sh", BAD)
+
+    assert decide(Policy(scripts), shell("./env command -v git")).endswith(BYPASS)
+    assert decide(Policy(scripts), shell("echo hi > ./other; /usr/bin/env command -v git")).endswith(
+        "run it in the next"
+    )
+
+
+@pytest.mark.parametrize(
+    "text", ["command -p -v /no/such/tool || true", "command -pv /no/such/tool", "command -p -V /x"]
+)
+def test_command_lookup_with_options_runs_nothing(text: str) -> None:
+    assert decide(WRITE, shell(text)) is None
+
+
+def test_only_real_arithmetic_is_no_write(scripts: Path) -> None:
+    assert decide(WRITE, shell("echo $(( (1 + (2 * 3)) > 0 )); /bin/echo hi")) is None
+    text = "printf '%s\\n' 'git commit --no-verify -m x' '$((1' > ./good.sh '0))'; bash ./good.sh"
+    assert decide(Policy(scripts), shell(text)).endswith("run it in the next")
+
+
+def test_single_quotes_in_a_nested_default_under_outer_double_quotes_protect_nothing() -> None:
+    assert decide(WRITE, shell("echo ${A:-\"${B:-'$(git commit --no-verify -m x)'}\"}")).endswith(BYPASS)
+    assert decide(WRITE, shell("echo ${A:-\"${B:-'ok'}\"}")) is None
+
+
+def test_a_lookup_operand_shaped_like_an_assignment_sets_nothing(scripts: Path) -> None:
+    text = "export BASH_ENV=./bad.sh; command -v BASH_ENV=; bash -c true"
+    assert decide(Policy(scripts), shell(text)) == f"`./bad.sh` uses --no-verify, {BYPASS}"
+
+
+@pytest.mark.parametrize(
+    "text", ["echo hi > x; env -S './env command -pv git'", "echo hi > x; find . -exec ./env command -pv git \\;"]
+)
+def test_a_launcher_before_a_split_or_found_lookup_still_runs(scripts: Path, text: str) -> None:
+    shebang(scripts / "env", "#!/bin/sh", BAD)
+
+    assert decide(Policy(scripts), shell(text)).endswith("run it in the next")
+    assert decide(Policy(scripts), shell(text.partition("; ")[2])).endswith(BYPASS)
+
+
+def test_a_lookup_program_run_by_path_is_still_a_program(scripts: Path) -> None:
+    shebang(scripts / "command", "#!/bin/sh", BAD)
+
+    assert decide(WRITE, shell("echo hi > x; /usr/bin/command -v git")).endswith("run it in the next")
+    assert decide(Policy(scripts), shell("./command -v git")).endswith(BYPASS)
+    assert decide(WRITE, shell("command -pv /missing")) is None
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "ENV=/missing bash -o pipefail -c true",
+        "ENV=/missing sh -o errexit -c true",
+        "bash --rcfile /missing -o pipefail -c true",
+        "BASH_ENV=/missing bash --posix +x -c true",
+    ],
+)
+def test_an_option_that_keeps_the_mode_reads_no_other_startup_file(text: str) -> None:
+    assert decide(WRITE, shell(text)) is None
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "bash -eco pipefail 'git commit --no-verify -m x'",
+        "bash -eoc pipefail 'git commit --no-verify -m x'",
+        "bash -euo pipefail -c 'git commit --no-verify -m x'",
+    ],
+)
+def test_a_value_option_in_a_cluster_takes_its_word_not_the_script(text: str) -> None:
+    assert decide(WRITE, shell(text)).endswith(BYPASS)
+    assert decide(WRITE, shell(text.replace("git commit --no-verify -m x", "echo hi"))) is None
+
+
+def test_a_lookup_names_a_mutating_program_without_writing() -> None:
+    assert decide(READ, shell("command -v cp")) is None
+    assert decide(READ, shell("command -pv rm mv || true")) is None
+    assert decide(WRITE, shell("command -v cp; /bin/echo hi")) is None
+    assert decide(READ, shell("command -v cp > f")).endswith("which writes in a read-only step")
+    assert decide(READ, shell("command -v cp\nrm x")).endswith("which writes in a read-only step")
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["echo $'\\''$(git push -f)\\'", "echo ${x:-$'\\''$(git push -f)\\'}", "echo ${x:-$'\\''`git push -f`\\'}"],
+)
+def test_an_escaped_quote_in_ansi_c_quoting_hides_no_substitution(text: str) -> None:
+    assert decide(WRITE, shell(text)).endswith(BYPASS)
+    assert decide(WRITE, shell(text.replace("git push -f", "echo hi"))) is None
+
+
+def test_an_interactive_bash_in_posix_mode_from_its_environment_reads_env(scripts: Path) -> None:
+    text = "POSIXLY_CORRECT=1 ENV=./bad.sh bash --norc -i -c true"
+    assert decide(Policy(scripts), shell(text)) == f"`./bad.sh` uses --no-verify, {BYPASS}"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "opt=-f; export BASH_ENV=./bad.sh; unset $opt BASH_ENV; bash -c true",
+        "export BASH_ENV=./bad.sh; unset BASH_ENV < ./missing; bash -c true",
+        "export BASH_ENV=./bad.sh; BASH_ENV=./good.sh unset BASH_ENV; bash -c true",
+        "opt=v; export BASH_ENV=./bad.sh; command -$opt unset BASH_ENV; bash -c true",
+        "export BASH_ENV=./bad.sh; command -x unset BASH_ENV; bash -c true",
+        "export BASH_ENV=./bad.sh; command -- -p unset BASH_ENV; bash -c true",
+        "export BASH_ENV=./bad.sh; false && eval 'unset BASH_ENV'; bash -c true",
+        "export BASH_ENV=./bad.sh; (eval 'unset BASH_ENV'); bash -c true",
+    ],
+)
+def test_an_unset_the_guard_cant_be_sure_of_leaves_the_startup_file_unknown(scripts: Path, text: str) -> None:
+    assert decide(Policy(scripts), shell(text)).endswith("set where the guard can't follow it")
+
+
+def test_an_expanded_command_option_is_no_lookup() -> None:
+    assert decide(WRITE, shell("v=p; command -$v bash -c 'git commit --no-verify -m x'")).endswith(BYPASS)
+
+
+def test_an_arithmetic_comparison_writes_nothing_in_a_read_only_step() -> None:
+    assert decide(READ, shell("echo $((1 > 0))")) is None
+    assert decide(READ, shell("echo $((1 > 0)) > f")).endswith("which writes in a read-only step")
+
+
+def test_a_shell_option_built_at_run_time_is_refused() -> None:
+    reason = decide(WRITE, shell("opt=c; bash -$opt 'git commit --no-verify -m x'"))
+    assert reason.endswith("gives a shell an option built at run time; write it out")

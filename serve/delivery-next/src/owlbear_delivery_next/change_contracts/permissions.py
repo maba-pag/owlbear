@@ -28,6 +28,9 @@ if TYPE_CHECKING:
 
 BYPASS = "which skips hooks or signing or forces history"  # the end of every bypass denial's reason
 _HARMLESS = re.compile(r"\d*>>?\s*/dev/null(?![^\s;&|)])|\d*>&\d+")  # discarded output or a descriptor copy
+_LOOKUP = re.compile(  # command -v cp: names the program, runs nothing
+    r"(?<![^\s;&|(])command(?:[ \t]+-p)*[ \t]+-[pV]*[vV][pvV]*(?:[ \t]+-[pvV]+)*(?:[ \t]+--)?(?:[ \t]+[\w./+-]+)+"
+)
 _CONFIG_VALUES = frozenset({"-f", "--file", "--blob", "--type", "--default", "--comment"})
 _CONFIG_QUERIES = frozenset(
     {"--get", "--get-all", "--get-regexp", "--get-urlmatch", "--get-color", "--get-colorbool", "--list", "-l",
@@ -309,13 +312,16 @@ def _git_mutation(words: Sequence[str]) -> str | None:
 
 
 def _mutation(text: str, commands: Sequence[Sequence[str]]) -> str | None:
-    """How a shell command would write files or change Git state; discarded output does not count."""
+    """How a shell command would write files or change Git state.
+
+    Discarded output, a lookup (command -v cp) and an arithmetic comparison ($((1 > 0))) write nothing.
+    """
     if found := next(filter(None, map(_git_mutation, commands)), None):
         return found
     for run in (r for words in commands for r in shell_programs.runs(words)):  # env -S hides it, /bin/cp names it
         if match := _SHELL_MUTATION.match(" ".join([shell_programs.name(run.words[0]), *run.words[1:]])):
             return f"filesystem mutation '{match[0].strip(' \t;&|')}'"
-    text = _HARMLESS.sub("", text)
+    text = _LOOKUP.sub("", _HARMLESS.sub("", _without_arithmetic(text)))
     if _REDIRECT.search(text):
         return "a redirect"
     if match := _SHELL_MUTATION.search(text):
@@ -382,6 +388,27 @@ def _run_mutation(policy: Policy, name: str, run: shell_programs.Run) -> str | N
 def _writes(command: shell_parse.Command) -> bool:
     """Whether one command writes files or changes Git state, as the read-only rule sees it."""
     return _mutation(command.raw, [command.words]) is not None
+
+
+def _without_arithmetic(text: str) -> str:
+    """*text* without its $((...)) expansions outside quotes that hold no substitution: their < and > compare."""
+    out, i, quote = [], 0, ""
+    while i < len(text):
+        ch = text[i]
+        if ch == "\\" and quote != "'":
+            out.append(text[i : i + 2])
+            i += 2
+            continue
+        if (quote and ch == quote) or (not quote and ch in "'\""):
+            quote = "" if quote else ch
+        elif quote != "'" and text.startswith("$((", i) and (end := shell_parse.arithmetic_end(text, i + 3)):
+            span = text[i:end]
+            if "$(" not in span[1:] and "`" not in span and "'" not in span and '"' not in span:
+                i = end
+                continue
+        out.append(ch)
+        i += 1
+    return "".join(out)
 
 
 def decide(policy: Policy, req: Request, offered: frozenset[str] = frozenset(), *, memory: bool = False) -> str | None:

@@ -188,7 +188,7 @@ class _Lexer:
         """
         text = self.text
         if text.startswith("$((", i):
-            return self._arithmetic(s, i + 3) if self._arithmetic_closes(i + 3) else self._substitution(s, i)
+            return self._arithmetic(s, i + 3) if arithmetic_end(text, i + 3) is not None else self._substitution(s, i)
         if text.startswith("$[", i):
             return self._arithmetic(s, i + 2, close="]")
         if text.startswith("${", i):
@@ -196,6 +196,11 @@ class _Lexer:
         if text[i] == "`" or text.startswith("$(", i):
             return self._substitution(s, i)
         nxt = text[i + 1 : i + 2]
+        if nxt == "'" and not s.quote:  # $'...': its backslashes escape, \' too; the shell decodes it
+            end = ansi_c_end(text, i + 2)
+            s.add("$" + text[i + 2 : end - 1])
+            s.expanded = True
+            return end
         named = bool(nxt) and (nxt in "{_" or nxt.isalnum() or nxt in _SPECIAL)
         if named or (nxt and nxt in "'\"" and not s.quote):  # $'...' and $"...": decoded or translated by the shell
             s.expanded = True
@@ -209,20 +214,6 @@ class _Lexer:
         if self.text[i] == "`":
             return self.level(i + 1, "`", s.depth + 1, opaque=opaque)
         return self.level(i + 2, ")", s.depth + 1, opaque=opaque)
-
-    def _arithmetic_closes(self, i: int) -> bool:
-        """Whether the $(( before *i* closes with )) as arithmetic; else it is $( ( ... ) ...), as bash reads it."""
-        depth = 0
-        while i < len(self.text):
-            ch = self.text[i]
-            if ch == "(":
-                depth += 1
-            elif ch == ")":
-                if depth == 0:
-                    return self.text[i + 1 : i + 2] == ")"
-                depth -= 1
-            i += 1
-        return False
 
     def _arithmetic(self, s: _Level, i: int, close: str = ")") -> int:
         """Skip an arithmetic expansion's operators, where < and > never redirect, but lex its substitutions."""
@@ -243,28 +234,34 @@ class _Lexer:
 
     def _braced(self, s: _Level, i: int) -> int:
         """A ${...} expansion: < and > in it never redirect; its substitutions are lexed."""
+        j = self._brace_end(s, i, outer=s.quote == '"')
+        s.add(self.text[i:j])
+        s.expanded = True
+        return j
+
+    def _brace_end(self, s: _Level, i: int, *, outer: bool) -> int:
+        """The index after the ${...} at *i*; each nested ${...} keeps its own quotes.
+
+        *outer* is whether double quotes enclose it, in its own text or around an enclosing ${...}.
+        """
         text, j, depth, quoted = self.text, i + 2, 1, False
         while j < len(text) and depth:
             if text[j] == "\\":
                 j += 2
-            elif text.startswith("$((", j) and self._arithmetic_closes(j + 3):
+            elif text.startswith("$((", j) and arithmetic_end(text, j + 3) is not None:
                 j = self._arithmetic(_Level(s.depth, s.opaque, piped=s.piped), j + 3)
-            elif text[j] == "'" and s.quote != '"' and not quoted:  # in "${x:-'...'}" a single quote is a character
-                if (end := text.find("'", j + 1)) < 0:
-                    raise ValueError
-                j = end + 1
+            elif text[j] == "'" or (text.startswith("$'", j) and not outer and not quoted):
+                j = _single_end(text, j) if not outer and not quoted else j + 1  # in "${x:-'...'}" ' is a character
             elif text[j] == '"':  # a quote inside ${...}: a } in it doesn't close the expansion
                 quoted, j = not quoted, j + 1
             elif text.startswith("$(", j) or text[j] == "`":
                 j = self._substitution(_Level(s.depth, s.opaque, piped=s.piped), j)
             elif text.startswith("${", j):
-                depth, j = depth + 1, j + 2
+                j = self._brace_end(s, j, outer=outer or quoted)
             else:
                 depth, j = depth - (text[j] == "}" and not quoted), j + 1
         if depth or quoted:
             raise ValueError
-        s.add(text[i:j])
-        s.expanded = True
         return j
 
     def _unquoted(self, s: _Level, i: int) -> int:  # noqa: C901, PLR0911 - one branch per shell operator
@@ -339,10 +336,8 @@ class _Lexer:
 
     def _process(self, s: _Level, i: int) -> int:
         """A process substitution: its commands are lexed, and the word standing for it is built at run time."""
-        start = len(self.commands)
-        end = self.level(i + 2, ")", s.depth + 1)
-        if self.text[i] == ">":  # its commands read what the outer command writes
-            self._opaque(start)
+        inherited = s.opaque or s.piped or any(o for _, o in self.blocks)  # <(sh) reads its command's input
+        end = self.level(i + 2, ")", s.depth + 1, opaque=inherited or self.text[i] == ">")  # >(sh) reads the output
         s.add("<(…)")
         s.expanded = True
         return end
@@ -417,24 +412,21 @@ class _Lexer:
             if not literal:  # the shell removes these backslashes before handing the body on
                 body = _BODY_ESCAPE.sub(lambda m: m[1] if m[1] != "\n" else "", body)
             found = len(self.commands)
-            given.word = Word(body, expanded=not literal and self._expansions(start, end))
-            self._before(given, found)
+            owner = next((k for k, c in enumerate(self.commands) if any(i is given for i in c.inputs)), None)
+            opaque = owner is not None and self.commands[owner].opaque_stdin
+            given.word = Word(body, expanded=not literal and self._expansions(start, end, opaque=opaque))
+            if owner is not None:  # the shell runs the body's substitutions before the command it feeds
+                self.commands[owner:] = self.commands[found:] + self.commands[owner:found]
         return min(i, len(self.text))
 
-    def _before(self, given: Input, found: int) -> None:
-        """Move a here-document body's substituted commands, listed from *found* on, before the command it feeds."""
-        owner = next((k for k, c in enumerate(self.commands[:found]) if any(i is given for i in c.inputs)), None)
-        if owner is not None:
-            self.commands[owner:] = self.commands[found:] + self.commands[owner:found]
-
-    def _expansions(self, i: int, end: int) -> bool:
+    def _expansions(self, i: int, end: int, *, opaque: bool) -> bool:
         """Lex the substitutions in text[i:end] as commands; return whether it holds any expansion."""
         found, text = False, self.text
         while i < end:
             if text[i] == "\\":
                 i += 2
             elif text.startswith("$(", i) or text[i] == "`":
-                found, i = True, self._step(_Level(1, opaque=False), i)
+                found, i = True, self._step(_Level(1, opaque=opaque), i)
             else:
                 found = found or (text[i] == "$" and text[i + 1 : i + 2] not in ("", " ", "\n", "\t"))
                 i += 1
@@ -457,3 +449,39 @@ def parse(text: str) -> list[Command]:
     if lexer.pending:
         lexer._bodies(len(text))  # noqa: SLF001 - here-documents the text ends inside
     return lexer.commands
+
+
+def arithmetic_end(text: str, i: int) -> int | None:
+    """The index after the )) closing the $(( before *i*, or None: then it is $( ( ... ) ...), as bash reads it."""
+    depth = 0
+    while i < len(text):
+        if text[i] == "(":
+            depth += 1
+        elif text[i] == ")":
+            if depth == 0:
+                return i + 2 if text.startswith("))", i) else None
+            depth -= 1
+        i += 1
+    return None
+
+
+def _single_end(text: str, i: int) -> int:
+    """The index after the '...' or $'...' at *i*."""
+    if text[i] == "$":
+        return ansi_c_end(text, i + 2)
+    if (end := text.find("'", i + 1)) < 0:
+        raise ValueError
+    return end + 1
+
+
+def ansi_c_end(text: str, i: int) -> int:
+    """The index after the quote closing the $'...' whose text starts at *i*; a backslash escapes the next character.
+
+    Raises:
+        ValueError: It is not closed.
+    """
+    while i < len(text) and text[i] != "'":
+        i += 2 if text[i] == "\\" else 1
+    if i >= len(text):
+        raise ValueError
+    return i + 1

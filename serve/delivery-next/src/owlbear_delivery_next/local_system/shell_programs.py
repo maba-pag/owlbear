@@ -22,7 +22,6 @@ if TYPE_CHECKING:
 _PREFIX_WORDS = frozenset({"!", "{", "do", "elif", "else", "if", "then", "until", "while"})  # time: see head()
 ASSIGNMENT = re.compile(r"[A-Za-z_]\w*=")
 SHELLS = frozenset({"ash", "bash", "dash", "fish", "ksh", "sh", "zsh"})
-_SHELL_VALUES = frozenset({"-o", "+o", "-O", "+O"})  # shell options taking a value
 _STARTUP = frozenset({"--rcfile", "--init-file"})  # options naming a file an interactive shell runs first
 _EXEC = frozenset({"-exec", "-execdir", "-ok", "-okdir"})  # find's actions that run a command up to ; or +
 _IN_PLACE = frozenset({"-execdir", "-okdir"})  # find's actions that run in each match's folder
@@ -49,12 +48,12 @@ _WRAPPERS: dict[str, tuple[str, frozenset[str], int]] = {
     "xargs": ("IEdLnPsaJ", frozenset({"--arg-file", "--delimiter", "--max-args", "--max-procs", "--max-chars",
                                       "--process-slot-var"}), 0),
 }  # fmt: skip
-_LOOKUP = frozenset({"-v", "-V"})  # command -v names a program without running it
 _HEAD = 4096  # bytes of a program file read to tell a script from a binary
 _ESCAPES = {"t": "\t", "n": "\n", "v": "\v", "f": "\f", "r": "\r", "'": "'", '"': '"', "\\": "\\", "$": "$", "#": "#"}
 _VARIABLE = re.compile(r"\$\{[A-Za-z_]\w*\}")
 _SPLIT_UNREAD = "uses env -S with text the guard can't read"
 _SPLIT_BUILT = "uses env -S with text built at run time; write it out"
+_OPTION_BUILT = "gives a shell an option built at run time; write it out"
 
 
 class UnreadableError(ValueError):
@@ -105,10 +104,27 @@ def head(words: Sequence[str], i: int = 0) -> int:
     return min(i, len(words))
 
 
+def lookup(words: Sequence[str], i: int) -> bool:
+    """Whether the ``command`` at ``words[i]`` only names a program (-v, -V, -pv, -p -v), running nothing."""
+    j = i + 1
+    while j < len(words) and words[j].startswith("-") and words[j] != "-":
+        if words[j] == "--" or getattr(words[j], "expanded", False):  # command -$v: maybe -p, running its operand
+            break
+        if set(words[j][1:]) & {"v", "V"}:
+            return True
+        j += 1
+    return False
+
+
 def builtin(words: Sequence[str]) -> int:
-    """The index of the builtin a command runs, past ``command`` or ``builtin`` and their options too."""
+    """The index of the builtin a command runs, past ``command`` or ``builtin`` and their options too.
+
+    The index of ``command`` itself for a lookup (command -v unset ...), which runs nothing.
+    """
     i = head(words)
     while i < len(words) - 1 and words[i] in {"command", "builtin"}:
+        if words[i] == "command" and lookup(words, i):
+            return i
         i += 1
         while i < len(words) - 1 and words[i].startswith("-"):
             i += 1
@@ -127,8 +143,8 @@ def runs(words: Sequence[Word], depth: int = 0, context: Run | None = None) -> l
     program = name(words[i])
     if program == "find":
         return _found(words, i, depth, here)
-    if program == "command" and words[i + 1 : i + 2] and words[i + 1] in _LOOKUP:
-        return []
+    if words[i] == "command" and lookup(words, i):  # it runs nothing, but the launchers before it run
+        return [replace(here, words=[here.launchers[-1]], launchers=here.launchers[:-1])] if here.launchers else []
     if program in _WRAPPERS:
         if depth >= _WRAPPED:
             raise UnreadableError(_WRAPPED_UNREAD)
@@ -136,10 +152,15 @@ def runs(words: Sequence[Word], depth: int = 0, context: Run | None = None) -> l
     return [replace(here, words=list(words[i:]))]
 
 
-def leafless(words: Sequence[Word]) -> Run:
-    """A command whose wrappers run nothing (env ./env, find .): its launchers by path, its last one the program."""
+def leafless(words: Sequence[Word]) -> Run | None:
+    """A command whose wrappers run nothing (env ./env, find .): its launchers by path, its last one the program.
+
+    None for a lookup (command -v) alone, which runs nothing.
+    """
     i, launchers = head(words), []
     while i < len(words) and name(words[i]) in _WRAPPERS:
+        if words[i] == "command" and lookup(words, i):  # runs() gives the launchers before it
+            return None
         launchers.append(words[i])
         i = operand(words, i)
     program = words[i] if i < len(words) else launchers.pop() if launchers else Word()
@@ -194,7 +215,7 @@ def _env_split(words: Sequence[Word], i: int, k: int) -> tuple[list[Word] | None
         if value is not None:
             if value.expanded:  # the outer shell filled it in: what env splits is built at run time
                 raise UnreadableError(_SPLIT_BUILT)
-            found = [*(found or []), *split_string(value)]
+            found = split_string(value)
     return found, (j if found is not None else k)
 
 
@@ -275,8 +296,9 @@ class _Splitter:
         return i + 1
 
     def _single(self, ch: str, i: int) -> int:
-        if ch == "\\":
-            raise UnreadableError(_SPLIT_UNREAD)
+        if ch == "\\" and (nxt := self.text[i + 1 : i + 2]) in {"\\", "'"}:  # env's only escapes in single quotes
+            self.add(nxt)
+            return i + 2
         if ch == "'":
             self.quote = ""
         else:
@@ -370,6 +392,7 @@ class ShellArgs:
     operand: Word | None = None  # None with no script: it reads its standard input
     startup: tuple[Word, ...] = ()
     own_startup: bool = False  # it reads startup files of its own: zsh, fish, an interactive or login bash or sh
+    reads: frozenset[str] = frozenset()  # the startup variables it reads: BASH_ENV (bash -c), ENV (interactive)
 
 
 def shell_args(words: Sequence[Word]) -> ShellArgs:
@@ -386,20 +409,31 @@ def shell_args(words: Sequence[Word]) -> ShellArgs:
         if w in _STARTUP:
             startup += words[i + 1 : i + 2]
             i += 2
-        elif w in _SHELL_VALUES:
-            i += 2
         elif w.startswith(("-", "+")) and w not in {"-", "+"}:
-            flags |= {w} if w.startswith("--") else set(w[1:]) if w.startswith("-") else set()
-            command = command or (not w.startswith("--") and "c" in w[1:])
-            stdin = stdin or (not w.startswith("--") and "s" in w[1:])
-            i += 1
+            if getattr(w, "expanded", False):  # -$opt may be -c, or take the script as its value
+                raise UnreadableError(_OPTION_BUILT)
+            short = "" if w.startswith("--") else w[1:]
+            values = words[i + 1 : i + 1 + sum(ch in "oO" for ch in short)]  # -o and -O take a word each, -eco too
+            plus = w.startswith("+")
+            unknown = any(getattr(v, "expanded", False) for v in values)  # +o "$mode": maybe posix
+            reverse = {"reversed"} if unknown or "posix" in values or (plus and "i" in short) else set()  # not followed
+            flags |= {w} if not short else reverse if plus else set(short) | reverse
+            command, stdin = command or "c" in short, stdin or "s" in short
+            i += 1 + len(values)
         else:
             break
     rest = words[i:]
-    own = _own_startup(name(words[0]), flags | ({"--rcfile"} if startup else set()))
+    shell, interactive = name(words[0]), "i" in flags
+    own = _own_startup(shell, flags | ({"--rcfile"} if startup else set()))
+    reads = frozenset(
+        {"BASH_ENV", "ENV"} if "reversed" in flags  # a mode turned off again: read every one it may read
+        else {"BASH_ENV"} if shell == "bash" and not interactive and "--posix" not in flags
+        else {"ENV"} if interactive else set()  # bash 4 and 5 read it in posix mode, which POSIXLY_CORRECT turns on too
+    )  # fmt: skip
+    rc = tuple(startup) if interactive or "reversed" in flags else ()  # --rcfile only when interactive
     if command:
-        return ShellArgs(script=rest[0] if rest else None, startup=tuple(startup), own_startup=own)
-    return ShellArgs(operand=None if stdin or not rest else rest[0], startup=tuple(startup), own_startup=own)
+        return ShellArgs(script=rest[0] if rest else None, startup=rc, own_startup=own, reads=reads)
+    return ShellArgs(operand=None if stdin or not rest else rest[0], startup=rc, own_startup=own, reads=reads)
 
 
 def _own_startup(shell: str, flags: set[str]) -> bool:
