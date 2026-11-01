@@ -128,8 +128,8 @@ class Step:
     def _ready(self, out: Outcome, bound: _Bound) -> bool:
         if not self._booted(out, bound):
             return False
-        if not self._model_listed():
-            out.end, out.detail = "model-unavailable", f"the agent host does not list {self.spec.model}"
+        if why := self._model_missing():
+            out.end, out.detail = "model-unavailable", why
             return False
         if why := self._configure(bound.session):
             out.end, out.detail = "config-refused", why
@@ -176,20 +176,28 @@ class Step:
             return False
         return True
 
-    def _model_listed(self) -> bool:
-        """Wait, at most ``MODELS`` seconds, until the host lists the chat's model for Copilot sessions."""
+    def _model_missing(self) -> str:
+        """Wait, at most ``MODELS`` seconds, until the host lists the chat's model for Copilot sessions.
+
+        Returns '' once it does; otherwise which Copilot models the host lists instead, or that it lists none.
+        """
         deadline = self.clock() + MODELS
         while True:
             root = self.conn.request("subscribe", {"channel": ROOT})["snapshot"]["state"]
-            agents = (a for a in root.get("agents") or [] if a.get("provider") == "copilotcli")
-            if found := next(
-                (m for a in agents for m in a.get("models") or [] if m.get("id") == self.spec.model), None
-            ):
+            agents = [a for a in root.get("agents") or [] if a.get("provider") == "copilotcli"]
+            models = [m for a in agents for m in a.get("models") or []]
+            if found := next((m for m in models if m.get("id") == self.spec.model), None):
                 self.schema = (found.get("configSchema") or {}).get("properties")
-                return True
+                return ""
             if self.clock() >= deadline:
-                return False
+                break
             self.conn.next_event(0.5)
+        if ids := [str(m.get("id")) for m in models]:
+            return f"the agent host lists {', '.join(ids)} for Copilot after {MODELS:.0f} s, not {self.spec.model}"
+        return (
+            f"the agent host lists no Copilot models after {MODELS:.0f} s; OwlBear does not sign it in, "
+            "so check that VS Code is signed in to GitHub"
+        )
 
     def _listed(self, session: str) -> bool:
         """Wait, at most ``LISTED`` seconds, until the session's customizations list the chat's agent file."""
