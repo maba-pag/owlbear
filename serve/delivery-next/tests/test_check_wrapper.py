@@ -43,6 +43,14 @@ def test_the_pid_written_is_the_recipes_after_exec(tmp_path: Path) -> None:
         proc.kill()
 
 
+def test_a_recipe_never_runs_without_its_pid_file(tmp_path: Path) -> None:
+    ran = tmp_path / "ran"
+    proc = check.start(env(f"touch {ran}"), tmp_path, tmp_path / "env.log", None, tmp_path / "gone" / check.PIDFILE)
+    assert proc is not None
+    assert proc.wait(10) != 0
+    assert not ran.exists()
+
+
 @pytest.mark.parametrize("shell", ["sh -c '", "bash -c 'set -m; "])  # a job-control job runs in a group of its own
 def test_a_launch_whose_leader_is_gone_is_disposed_from_its_pid_file(tmp_path: Path, shell: str) -> None:
     left = tmp_path / "left"

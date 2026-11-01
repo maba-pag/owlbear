@@ -180,14 +180,14 @@ def start(
 ) -> subprocess.Popen[bytes] | None:
     """Spawn the recipe as leader of its own session and group; *env* is a test copy's isolated environment.
 
-    With *pidfile*, a shell writes its pid there and then becomes the recipe, so a host that stops before it records
-    the group can still find it (``recovered``).
+    With *pidfile*, a shell writes its pid there and only then becomes the recipe, so a host that stops before it
+    records the group can still find it (``recovered``).
     """
     try:
         argv = shlex.split(e.command)
         if pidfile is not None:
             pidfile.unlink(missing_ok=True)
-            argv = ["/bin/sh", "-c", 'echo $$ > "$0"; exec "$@"', str(pidfile), *argv]
+            argv = ["/bin/sh", "-c", 'echo $$ > "$0" && exec "$@"', str(pidfile), *argv]
         with log.open("ab") as out:
             proc = subprocess.Popen(  # noqa: S603 - argument vector of the Builder's launch recipe
                 argv,
