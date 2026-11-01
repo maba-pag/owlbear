@@ -77,9 +77,9 @@ class Audit:
     markdown: str = ""
 
 
-def run_id(now: datetime | None = None) -> str:
+def run_id() -> str:
     """A filesystem-safe UTC timestamp naming one audit, as the skill names its run folders."""
-    return (now or datetime.now(UTC)).astimezone(UTC).strftime("%Y-%m-%dT%H-%M-%SZ")
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H-%M-%SZ")
 
 
 def lay_out(at: Path, web: Path, tree: Path, version: str) -> Path:
@@ -127,17 +127,16 @@ def message(version: str, ident: str) -> str:
     )
 
 
-def audit(  # noqa: PLR0913 - the copy's inputs and the session that reads it
+def audit(
     at: Path,
     *,
     web: Path,
     tree: Path,
     version: str,
     session: Callable[[Path, Path, str], Run],
-    now: datetime | None = None,
 ) -> Audit:
     """Audit *web* against the release in *tree* in a copy at *at*; *session* runs the auditor on (at, skills, msg)."""
-    ident = run_id(now)
+    ident = run_id()
     skills = lay_out(at, web, tree, version)
     schema = json.loads((tree / SCHEMA).read_text(encoding="utf-8"))
     before = digests(at)
