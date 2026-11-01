@@ -384,6 +384,30 @@ def test_a_rerun_that_skips_a_failing_test_proves_no_flake(tmp_path, checkout, w
         assert "browser tests fail on main as well" in state["reason"]
 
 
+@pytest.mark.parametrize("added", [False, True], ids=["same-set", "new-follow-up"])
+def test_a_continue_covers_the_follow_ups_shown_and_a_new_one_asks_again(tmp_path, checkout, added):
+    """D-01M69VVX2N0F938Y0NSHQYP40S: never the updater's; the owner's continue covers exactly the set he saw."""
+    one, two = AUDITED.follow_up("the size the theme picks"), AUDITED.follow_up("the weight the theme picks")
+    broken = failing("tests/test_machine_pages.py::test_menu")
+    fakes, job, state = started(tmp_path, checkout, follow_ups=[one], browsers=[broken, PASS, broken])
+    [q] = state["questions"]
+    assert (state["state"], q["kind"], fakes.calls) == ("waiting", "follow-ups", ["audit", "update", "audit"])
+    if added:
+        fakes.follow_ups = [one, two]
+
+    state = PACK.answered(job, "continue")  # the browser failure sends the run back to the updater and the audit
+
+    assert fakes.calls[3:7] == ["browser", "browser", "browser", "update"]
+    assert all("the theme picks" not in s.message for s in fakes.sessions if s.role == "updater")
+    if added:
+        [q] = state["questions"]
+        assert (state["state"], q["kind"]) == ("waiting", "follow-ups")
+        assert "the weight the theme picks" in q["text"]
+        return
+    assert state["state"] == "passed", state["reason"]
+    assert fakes.calls[7:] == ["audit", "browser", "challenger"]
+
+
 @pytest.mark.parametrize(
     ("edit", "named"),
     [
