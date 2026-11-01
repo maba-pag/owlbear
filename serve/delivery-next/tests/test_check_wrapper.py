@@ -65,6 +65,21 @@ def test_a_recipe_never_runs_when_its_host_stops_before_recording_the_group(tmp_
     assert not ran.exists()
 
 
+def test_an_install_runs_only_once_its_pid_is_journaled(tmp_path: Path) -> None:
+    ran = tmp_path / "ran"
+
+    def log(_event) -> None:
+        time.sleep(1.0)  # an unjournaled install would have run by now
+        assert not ran.exists()
+        msg = "the runner died"
+        raise RuntimeError(msg)
+
+    with pytest.raises(RuntimeError, match="the runner died"):
+        check.run(["touch", str(ran)], tmp_path, log)
+    time.sleep(0.5)
+    assert not ran.exists()
+
+
 def test_an_unlisted_table_while_awaiting_readiness_is_polled_again(monkeypatch) -> None:
     calls: list[int] = []
 

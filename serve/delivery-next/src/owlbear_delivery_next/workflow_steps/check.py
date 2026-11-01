@@ -50,18 +50,23 @@ def shown(argv: list[str]) -> str:
 
 
 def run(argv: list[str], cwd: Path, log: Callable[[dict[str, Any]], None], env: Mapping[str, str] | None = None) -> str:
-    """Run one command the owner made known in its own group, within ``WITHIN``; a note if it failed, else empty."""
+    """Run one command the owner made known in its own group, within ``WITHIN``; a note if it failed, else empty.
+
+    Its leader waits on its stdin until the journal holds it; a runner that dies first closes the pipe, and the command
+    never runs.
+    """
     within, cmd = WITHIN, shown(argv)
     try:
         proc = subprocess.Popen(  # noqa: S603 - argument vector of a command the owner made known
-            argv, cwd=cwd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-            start_new_session=True, env=env,
+            ("/bin/sh", "-c", 'read -r _ && exec "$@" </dev/null', "sh", *argv), cwd=cwd, stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, start_new_session=True, env=env,
         )  # fmt: skip
     except OSError as exc:
         return f"`{cmd}` did not start: {exc}"
     born = created(proc.pid)
     try:
         journal(log, {proc.pid: born})
+        release(proc)
         out, _ = proc.communicate(timeout=within)
     except subprocess.TimeoutExpired:
         return f"`{cmd}` took over {within:.0f} s"
