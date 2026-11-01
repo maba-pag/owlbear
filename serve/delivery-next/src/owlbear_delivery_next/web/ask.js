@@ -26,14 +26,14 @@ function ask({ title, now, items = [], then, after, instead, yes, no = "Cancel",
       box.open = false;
       setTimeout(() => box.remove(), 1000);
       // The open modal keeps the rest of the page inert, so the focus is tried until it lands (2 s at most), unless
-      // the owner has put it somewhere himself.
+      // the owner has put it somewhere himself. The target is chosen once: one that goes later is the page's to place.
+      const it = back?.isConnected ? back
+        : document.getElementById(home)?.querySelector("p-button, p-select, a, button, [tabindex]");
       const refocus = (tries) => {
         const at = document.activeElement;
-        if (at !== document.body && !box.contains(at)) return;
-        const again = document.getElementById(home)?.querySelector("p-button, p-select, a, button, [tabindex]");
-        const it = back?.isConnected ? back : again;
-        it?.focus?.();
-        if (it && document.activeElement !== it && tries) setTimeout(() => refocus(tries - 1), 50);
+        if (!it?.isConnected || (at !== document.body && !box.contains(at))) return;
+        it.focus?.();
+        if (document.activeElement !== it && tries) setTimeout(() => refocus(tries - 1), 50);
       };
       refocus(40);
       resolve(answer);
