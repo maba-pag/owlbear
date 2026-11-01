@@ -79,6 +79,8 @@ class Job(pack_job.Job):
 
     def _stages(self) -> str | None:
         version = self.do("notice", lambda: run.notice(self), op="pds-notice")
+        with self.lock:
+            self.state["release"] = version  # an ended run's record drops its context; Updates still reads this
         ctx, release, before = self.do(
             "candidate", lambda: run.prepare(self, version), lambda out: f"PDS {out[0].old} to {version}",
             op="pds-candidate",

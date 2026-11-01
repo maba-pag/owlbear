@@ -14,13 +14,14 @@ import pytest
 from fastapi.testclient import TestClient
 
 from owlbear_delivery_next.impeccable import pack_files, pack_update
+from owlbear_delivery_next.impeccable_runs import pack_state
 from owlbear_delivery_next.local_system import codebase, local_home
 from owlbear_delivery_next.machine_host import app, impeccable, update_checks, versions
 from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.machine_host.update_checks import CHECKS, Checks, Failed
 from owlbear_delivery_next.project_host import pages
 from owlbear_delivery_next.project_host.host import HostRecord
-from owlbear_delivery_next.state_store import machine_settings, registry
+from owlbear_delivery_next.state_store import machine_settings, pds_run_record, project_home, registry
 
 AUTH = {"authorization": "Bearer " + "t"}  # the token of the record below
 FOUND = {"newer": False, "current": "1", "latest": "1", "detail": ""}
@@ -174,16 +175,51 @@ def test_a_newer_version_stays_available_through_failures_until_withdrawn_or_app
     assert (shown(checks, "impeccable")["current"], checks.read()["available"]) == ("2.0.0", 0)
 
 
-def test_available_counts_each_runnable_component_once_and_pds_not_yet(monkeypatch):
+def test_available_counts_each_runnable_component_once(monkeypatch):
     checks = Checks(stub(), Clock(), lambda work: work())
     outcomes(monkeypatch, "pds", NEWER)
     seen(checks, "pds", 1)
-    assert (shown(checks, "pds")["state"], checks.read()["available"]) == ("newer", 0)  # no PDS update action yet
+    assert (shown(checks, "pds")["state"], checks.read()["available"]) == ("newer", 1)
     outcomes(monkeypatch, "impeccable", NEWER | {"detail": "5 newer releases"})
     outcomes(monkeypatch, "owlbear", {"newer": True, "current": "v1", "latest": "v3", "detail": "", "channel": "minor"})
     for name in ("impeccable", "owlbear"):
         checks.start(name)
-    assert checks.read()["available"] == 2  # one per component that can be run, whatever its number of releases
+    assert checks.read()["available"] == 3  # one per component that can be run, whatever its number of releases
+
+
+AT = datetime(2026, 10, 17, 2, tzinfo=UTC)
+
+
+def pds_update(tmp_path: Path, state: str, version: str = "2.0.0", merged: str = "") -> None:
+    """The one registered project's last PDS update: *state*, for *version*, merged into main as *merged*."""
+    with registry.locked():
+        registry.save(registry.Machine(projects=[registry.Project(id="p", path=str(tmp_path / "p"), added_at=AT)]))
+    published = {"merged": merged} if merged else None
+    record = pack_state.blank() | {"state": state, "run": "r", "started_at": "2026-10-17T02:00:00+00:00",
+                                   "release": version, "published": published}  # fmt: skip
+    project_home.home("p").mkdir(parents=True, exist_ok=True)
+    (project_home.home("p") / pds_run_record.FILE).write_text(json.dumps(record))
+
+
+def test_a_newer_pds_release_an_update_takes_shows_its_run_and_counts_again_only_if_it_fails(monkeypatch, tmp_path):
+    """#777: available, then running, waiting, failed (available again), merged (not counted), then current."""
+    checks = Checks(stub(), Clock(), lambda work: work())
+    outcomes(monkeypatch, "pds", NEWER)
+    checks.start("pds")
+    said = []
+    for state, merged in (("running", ""), ("waiting", ""), ("failed", ""), ("passed", "abc"), ("passed", "")):
+        pds_update(tmp_path, state, merged=merged)
+        u = shown(checks, "pds")
+        said.append((u["state"], u["available"], checks.read()["available"], u["detail"]))
+    assert said == [
+        ("running", False, 0, ""), ("waiting", False, 0, ""), ("newer", True, 1, ""),
+        ("merged", False, 0, update_checks.MERGED), ("newer", True, 1, ""),
+    ]  # fmt: skip
+    pds_update(tmp_path, "passed", version="1.5.0", merged="abc")  # an older release's merge says nothing of 2.0.0
+    assert shown(checks, "pds")["state"] == "newer"
+    pds_update(tmp_path, "passed", merged="abc")
+    monkeypatch.setitem(update_checks.INSTALLED, "pds", lambda: "2.0.0")  # the OwlBear version carrying it, taken
+    assert (shown(checks, "pds")["state"], checks.read()["available"]) == ("current", 0)
 
 
 @pytest.mark.usefixtures("intervals_unset")

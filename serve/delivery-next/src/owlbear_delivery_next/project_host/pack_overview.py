@@ -48,8 +48,7 @@ def runs(
     ``holder`` names the project whose update holds the machine's lock now; a record that says running while none
     does was left by a host that stopped.
     """
-    places, unread = _places(own)
-    seen = [_seen(pid, name, root, reader) | {"own": here} for pid, name, root, here in places]
+    seen, unread = records(own, reader=reader)
     started = [s for s in seen if s["record"] and s["record"].get("started_at")]
     open_ = [s for s in started if s["state"] in OPEN]
     focus = open_[0] if open_ else max(started, key=lambda s: str(s["record"]["started_at"]), default=None)
@@ -59,6 +58,14 @@ def runs(
         "runs": [{k: s[k] for k in ("pid", "name", "own", "state", "error")} | _times(s["record"]) for s in seen],
         "run": _shown(focus, holder, actions) if focus else None,
     }  # fmt: skip
+
+
+def records(
+    own: tuple[str, Path] | None = None, *, reader: Callable[[Path], dict[str, Any] | None] = pack_run_record.read_only
+) -> tuple[list[dict[str, Any]], str]:
+    """Each project's last run of the kind *reader* reads, its record whole; why other projects' are unread."""
+    places, unread = _places(own)
+    return [_seen(pid, name, root, reader) | {"own": here} for pid, name, root, here in places], unread
 
 
 def _places(own: tuple[str, Path] | None) -> tuple[list[tuple[str, str, Path, bool]], str]:

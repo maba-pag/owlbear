@@ -7,7 +7,9 @@ import { checks, listen, readChecks, search, update } from "./checks.mjs";
 
 export const SETTINGS = "/config#machine-title";  // Settings ▸ This machine, where every update setting is
 const STATES = { newer: ["newer version", "info"], current: ["up to date", "success"],
-  unknown: ["not known", "secondary"], failed: ["check failed", "error"] };
+  unknown: ["not known", "secondary"], failed: ["check failed", "error"],
+  running: ["update running", "secondary"], waiting: ["update waiting for you", "warning"],  // PDS's, its run's
+  merged: ["merged, not released yet", "info"] };
 const own = { busy: false, error: "", show: () => {} };
 
 export function when(iso) {

@@ -22,7 +22,8 @@ const MENU = [
 const LEVELS = MENU.filter((entry) => !Array.isArray(entry));
 const DETAIL = "owlbear-improvement-detail";  // Change pages show the Spotter's and Retro's detail while it is "on"
 
-const menu = { open: false, level: undefined, run: null };
+const menu = { open: false, level: undefined, runs: {} };
+const RUNS = { impeccable: "/maintenance/pack/runs", pds: "/maintenance/pds/runs" };  // as pack.mjs reads each
 const root = document.getElementById("menu");
 const ENDED = ["idle", "current", "failed", "refused"];  // the OwlBear update's phases once it is not running
 const TONES = { Running: "secondary", "Waiting for you": "warning", "Host stopped": "warning", Failed: "error",
@@ -31,7 +32,7 @@ const TONES = { Running: "secondary", "Waiting for you": "warning", "Host stoppe
 // What the menu says of an update, in words: running (or waiting for the owner, or its host stopped), failed,
 // available.
 function words(name) {
-  const u = update(name), phase = machineState()?.update?.phase, run = name === "impeccable" ? menu.run : null;
+  const u = update(name), phase = machineState()?.update?.phase, run = menu.runs[name];
   if (name === "owlbear" && phase && !ENDED.includes(phase)) return ["Running"];
   if (run?.interrupted) return ["Host stopped"];  // it cannot go on until that project's host starts again
   if (run?.state === "running") return ["Running"];
@@ -71,13 +72,15 @@ function label(l) {
   return n ? `${l.label}, ${n} available` : l.label;
 }
 
-// Whether the Impeccable update runs, waits or failed: read when the menu opens, so no page polls it for the menu.
+// Whether the Impeccable and PDS updates run, wait or failed: read when the menu opens, so no page polls them for it.
 async function readRun() {
-  try {
-    menu.run = (await call("/maintenance/pack/runs", { timeout: 15000, machine: true })).run;  // as pack.mjs reads it
-  } catch {
-    menu.run = null;  // unknown: the entry says nothing of a run rather than something stale
-  }
+  await Promise.all(Object.entries(RUNS).map(async ([name, path]) => {
+    try {
+      menu.runs[name] = (await call(path, { timeout: 15000, machine: true })).run;
+    } catch {
+      menu.runs[name] = null;  // unknown: the entry says nothing of a run rather than something stale
+    }
+  }));
   if (menu.open) show();
 }
 

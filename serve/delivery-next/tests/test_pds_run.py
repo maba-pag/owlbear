@@ -25,6 +25,7 @@ from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.pds_runs import audit, browser, pin, sessions, tree
 from owlbear_delivery_next.pds_runs import job as pds_job
 from owlbear_delivery_next.runtimes.session_result import Run
+from owlbear_delivery_next.state_store import pds_run_record
 from owlbear_delivery_next.state_store.store import Store
 
 
@@ -270,12 +271,14 @@ def test_an_update_audits_fixes_tests_and_challenges_the_pages_then_merges_one_c
     """The plant is found, the updater fixes it in its copy, both gates pass the fix and one pull request merges it."""
     root = checkout.parents[3]
     before = (git(root, "rev-parse", "HEAD"), (checkout / PAGE).read_text(), (checkout / pin.PIN).read_bytes())
-    fakes, _job, state = started(tmp_path, checkout)
+    fakes, job, state = started(tmp_path, checkout)
 
     pub = state["published"]
     assert (state["state"], state["reason"]) == (
         "passed", f"updated to PDS {NEW}: merged into main as {pub['merged'][:12]} through {pub['url']}"
     )  # fmt: skip
+    kept = pds_run_record.read_only(job.store.root)  # what Updates reads: the ended run's context is gone
+    assert (kept["release"], kept["context"]) == (NEW, None)
     assert fakes.calls == ["audit", "update", "audit", "browser", "challenger"]
     assert fakes.browsed == [("candidate", ())]
     assert results(state) == dict.fromkeys(results(state), "passed") | {"update": "completed"}

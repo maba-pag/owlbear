@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 import socket
@@ -1006,8 +1007,7 @@ def test_a_focused_remove_stays_with_its_project_when_the_list_changes_under_it(
 
 def checked(name: str, state: str, current: str, latest: str = "", **more) -> dict:
     """One update as ``GET /updates`` shows it, last checked successfully on 17 October."""
-    return {"name": name, "title": name, "actionable": name != "pds", "state": state,
-            "available": state == "newer" and name != "pds",
+    return {"name": name, "title": name, "actionable": True, "state": state, "available": state == "newer",
             "current": current, "latest": latest or current, "detail": "", "checked_at": "2026-10-17T04:00:00+00:00",
             "attempted_at": "2026-10-17T04:00:00+00:00", "failures": 0, "reason": "", "checking": False, "hours": 24,
             "next_at": "2026-10-18T04:00:00+00:00"} | more  # fmt: skip
@@ -1111,6 +1111,78 @@ def test_updates_owlbear_marks_the_menu_refuses_start_while_work_runs_and_the_ma
         expect(page.locator("#check-failure")).to_contain_text("GitHub answered 503")
         expect(page.locator("#check-state")).to_have_text("check failed")  # a shown failure is never up to date
         expect(page.locator("#check-latest")).to_have_text("not known yet")
+
+
+@pytest.mark.browser
+@pytest.mark.timeout(150)  # a real browser through five run states with the menu opened in each
+def test_updates_pds_and_the_menu_follow_its_update_from_available_to_running_waiting_failed_merged_and_current(
+    tmp_path: Path, monkeypatch, pds
+) -> None:
+    """#777: a newer PDS release counts until an update takes it; the page and the menu say its run's state; a merged
+    one is not counted and waits for OwlBear's release; the installed pin reaching it is up to date."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    from owlbear_delivery_next.impeccable_runs import machine_lock, pack_rounds, pack_state  # noqa: PLC0415
+    from owlbear_delivery_next.local_system import local_home  # noqa: PLC0415
+    from owlbear_delivery_next.machine_host import update_checks  # noqa: PLC0415
+    from owlbear_delivery_next.pds_runs import job as pds_job  # noqa: PLC0415
+    from owlbear_delivery_next.state_store import pds_run_record, project_home  # noqa: PLC0415
+
+    found = {"success": {"at": "2026-10-17T04:00:00+00:00", "newer": True, "current": "4.9.0", "latest": "4.10.1",
+                         "detail": ""}, "failures": 0, "attempt_at": "2026-10-17T04:00:00+00:00"}  # fmt: skip
+    monkeypatch.setattr(update_checks.Checks, "_restored", lambda _self: {"pds": found})
+    monkeypatch.setattr(update_checks.Checks, "start", lambda _self, _name: False)  # no check overwrites it
+    installed = ["4.9.0"]
+    monkeypatch.setitem(update_checks.INSTALLED, "pds", lambda: installed[0])
+    alpha = registry.register(clone(tmp_path / "alpha"))
+    stages = [{"name": n, "label": label, "result": "pending", "detail": ""} for n, label in pds_job.STAGES]
+
+    def ran(state: str, **more) -> None:
+        record = pack_state.blank() | {"stages": stages, "state": state, "run": "r1", "release": "4.10.1",
+                                       "started_at": datetime.now(UTC).isoformat()} | more  # fmt: skip
+        project_home.home(alpha.id).mkdir(parents=True, exist_ok=True)
+        (project_home.home(alpha.id) / pds_run_record.FILE).write_text(json.dumps(record))
+
+    held = machine_lock.take(local_home.root() / pack_state.MACHINE_LOCK, alpha.id, lambda: None)  # its run holds it
+    asked = pack_rounds.question("r1:end:1", "end", "The rounds ended.", ["activate", "discard"])
+    merged = {"commit": "a" * 40, "branch": "pds/r1", "url": "https://github.com/o/r/pull/9", "number": 9,
+              "merged": "b" * 40}  # fmt: skip
+    journey = [
+        (None, "newer version", "Updates, 1 available", ["Available"], "No project has run a PDS update yet."),
+        ({"state": "running"}, "update running", "Updates", ["Running"], "Running since"),
+        ({"state": "waiting", "questions": [asked]}, "update waiting for you", "Updates", ["Waiting for you"],
+         "waits for your answers"),
+        ({"state": "failed", "reason": "audit: the auditor submitted no report"}, "newer version",
+         "Updates, 1 available", ["Failed", "Available"], "Last run failed"),
+        ({"state": "passed", "published": merged}, "merged, not released yet", "Updates", [], "Last run passed"),
+    ]  # fmt: skip
+    try:
+        with browsing(monkeypatch, pds) as (page, base):
+            for record, state, level, tags, run in journey:
+                if record:
+                    ran(**record)
+                if record and record["state"] != "running" and held is not None:
+                    os.close(held)
+                    held = None
+                page.goto(f"{base}/updates/pds#token=t")
+                expect(page.locator("#check-state")).to_have_text(state)
+                expect(page.locator("#pack-state")).to_contain_text(run)
+                expect(page.locator("#menu-dot")).to_have_count(1 if "available" in level else 0)
+                page.get_by_role("button", name=re.compile(r"^Menu")).click()
+                expect(page.locator('p-drilldown-item[identifier="updates"]')).to_have_attribute("label", level)
+                link = page.locator("p-drilldown").get_by_role("link", name="Porsche Design System")
+                expect(link.locator("p-tag")).to_have_text(tags)
+                page.keyboard.press("Escape")
+            expect(page.locator("#pack-summary")).to_have_css("display", "grid")  # the run view's shared styles
+            expect(page.locator(".pack-facts")).to_have_css("display", "grid")
+            expect(page.locator("#check-latest")).to_contain_text(f"4.10.1 ({update_checks.MERGED})")
+            installed[0] = "4.10.1"  # this machine took the OwlBear version that carries it
+            page.goto(f"{base}/updates/pds#token=t")
+            expect(page.locator("#check-state")).to_have_text("up to date")
+            expect(page.locator("#check-current")).to_have_text("4.10.1")
+    finally:
+        if held is not None:
+            os.close(held)
 
 
 @pytest.mark.browser
