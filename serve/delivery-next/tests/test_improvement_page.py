@@ -17,7 +17,7 @@ import pytest
 import uvicorn
 
 from owlbear_delivery_next.change_contracts import models as m
-from owlbear_delivery_next.improvement import case_edits, cases, followups, spotter
+from owlbear_delivery_next.improvement import case_edits, case_replay, cases, followups, spotter
 from owlbear_delivery_next.improvement import proposal_targets as targets
 from owlbear_delivery_next.improvement import retro_proposals as props
 from owlbear_delivery_next.improvement import retro_store as store
@@ -26,8 +26,9 @@ from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.machine_host import app, cases_job, improvement_routes, project, retro_job
 from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.project_host.host import Host, HostRecord
-from owlbear_delivery_next.state_store import registry
+from owlbear_delivery_next.state_store import registry, watch_reports
 from owlbear_delivery_next.state_store.store import Store
+from owlbear_delivery_next.state_store.watch_reports import Report
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -82,6 +83,21 @@ def _clone(path: Path) -> registry.Project:
     with st.lock(DONE) as lock:
         st.write(lock, m.Change(slug=DONE, step=m.Step(kind=m.StepKind.BUILD), finished_at=NOW))
     return registry.register(path.resolve())
+
+
+def _outside_writes(path: Path, slugs: tuple[str, ...]) -> None:
+    """One outside write the watcher saw in each Change of *slugs* of the project at *path*."""
+    with Store.open(path).db.write() as connection:
+        for slug in slugs:
+            watch_reports.put(slug, Report("s", f"c-{slug}", "2026-10-01T10:00:01.000+00:00", "build", "main", "bash",
+                                           f"cp a /x-{slug}", (f"/x-{slug}",), "outside write (not judged yet)", "",
+                                           "start"))(connection)  # fmt: skip
+
+
+def _writes_shown(expect, looks, shown: str, hidden: str) -> None:
+    """*looks* lists Change *shown*'s outside write and not Change *hidden*'s, by Playwright's *expect*."""
+    expect(looks).to_contain_text(f"cp a /x-{shown}")
+    expect(looks).not_to_contain_text(f"cp a /x-{hidden}")
 
 
 def _records(pid: str) -> None:
@@ -353,7 +369,9 @@ def test_looks_and_cases_act_through_their_dialogs(tmp_path, monkeypatch, pds) -
                 "skipped": "capacity: 1 sampled looks skipped, looks already running"}  # fmt: skip
         with (spotter.root() / "records-2026-10-01.jsonl").open("a") as out:
             out.write(json.dumps(skip) + "\n")
+        _outside_writes(tmp_path / "alpha", (SLUG, DONE))
         page = improvement(w, pds)
+        expect(page.locator("#looks")).to_contain_text(f"alpha \u00b7 {DONE} \u00b7 main \u00b7 cp a /x-{DONE}")
         expect(page.locator("#spotter")).to_contain_text("alpha")
         expect(page.locator("#spotter")).to_contain_text("0.00 credits; 1 look skipped before starting.")
         harm = page.locator("#look-r-harm")
@@ -381,6 +399,7 @@ def test_looks_and_cases_act_through_their_dialogs(tmp_path, monkeypatch, pds) -
         expect(note).to_be_visible()
         pds.pick(page.locator("#looks"), "Change", SLUG)
         expect(note).to_be_visible()
+        _writes_shown(expect, page.locator("#looks"), SLUG, DONE)
         page.reload()
         pds.settled(page)
         expect(pds.select(page, "Change").get_by_role("combobox")).to_have_text(SLUG)  # kept in the address
@@ -420,7 +439,9 @@ def test_a_reviewed_reserve_case_is_never_offered_as_an_example(tmp_path, monkey
 
 @pytest.mark.browser
 @pytest.mark.timeout(90)
-def test_an_unchecked_candidate_only_stays_or_goes_and_says_how_its_check_is_asked(tmp_path, monkeypatch, pds) -> None:
+def test_an_unchecked_candidate_only_stays_or_goes_and_says_its_last_check_and_how_another_is_asked(
+    tmp_path, monkeypatch, pds
+) -> None:
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     with machine_page(tmp_path, monkeypatch, pds) as w:
@@ -428,14 +449,28 @@ def test_an_unchecked_candidate_only_stays_or_goes_and_says_how_its_check_is_ask
                            {"source": "pilot", "family": "f"})  # fmt: skip
         unchecked = {"stage": "candidate", "call": "none", "why": "why", "example": "", "review": None}
         cases.commit(cases.current()["n"], {new: unchecked}, "t", "add")
+        with cases.locked():
+            for rid, note in (("r-old", "No test output."), ("r-new", "Output has no assertion.")):
+                cases.append("runs.jsonl", {"id": rid, "kind": "check", "by": "t", "asked": cases.now(),
+                                            "reviews": {new: {"result": "not supported", "note": note}},
+                                            "result": "checked", "ended": cases.now()})  # fmt: skip
         page = improvement(w, pds)
         fresh = page.locator(f"#case-{new}")
-        expect(fresh).to_contain_text(f"owlbear cases check {new}")
+        expect(fresh).to_contain_text("Its last check (r-new")
+        expect(fresh).to_contain_text("not supported. Output has no assertion.")
+        expect(fresh).not_to_contain_text("r-old")
+        expect(fresh).to_contain_text(f"once a further paid check supports it: owlbear cases check {new}")
         expect(fresh.locator("p-select-option")).to_have_count(2)  # only stays or goes: the check comes first
 
-        case_edits.check_request([new], "t")
+        rid = case_edits.check_request([new], "t")
         page.evaluate("document.dispatchEvent(new CustomEvent('owlbear-polled'))")
         expect(fresh).to_contain_text("Its paid check is asked")
+
+        assert case_replay.take(rid)
+        case_replay.interrupted()  # the host ended before the check reviewed it: no review of it, only its result
+        page.evaluate("document.dispatchEvent(new CustomEvent('owlbear-polled'))")
+        expect(fresh).to_contain_text(f"Its last check ({rid}")
+        expect(fresh).to_contain_text("stopped: OwlBear ended while it ran; it is not rerun.")
 
 
 @pytest.mark.browser

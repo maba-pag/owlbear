@@ -70,10 +70,11 @@ async def check(request: dict[str, Any], ask: Ask, meter: Meter, halt: Callable[
     """Review *request*'s candidates within the run's *meter*; the run's result, kept with the other runs.
 
     Each review is one session on *meter*; a closed meter, *halt* or a failed review ends the run, its result and
-    spend kept. Nothing reruns it.
+    spend kept. Nothing reruns it. The run names every case it was asked about, so a case it ended before reviewing
+    still shows this run as its last check.
     """
     out: dict[str, Any] = {"id": request["id"], "kind": "check", "by": request["by"], "asked": request["at"],
-                           "started": cases.now(), "reviews": {}}  # fmt: skip
+                           "ids": request["ids"], "started": cases.now(), "reviews": {}}  # fmt: skip
     why = ""
     try:
         for cid, wanted in request["ids"].items():

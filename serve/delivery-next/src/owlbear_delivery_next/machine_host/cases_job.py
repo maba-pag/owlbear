@@ -259,12 +259,13 @@ class CasesJob:
             return self.meter
 
     def _ended(self, request: dict[str, Any], why: str, meter: Meter | None = None) -> None:
-        """Keep *request*'s result as *why*, with what it spent, unless a result of it is kept already."""
+        """Keep *request*'s result as *why*, with what it spent and the cases it named, unless a result is kept."""
         with cases.locked():
             if any(r.get("id") == request["id"] and "result" in r for r in case_replay.results()):
                 return
             line = {"id": request["id"], "kind": request.get("kind"), "by": request.get("by", ""),
-                    "asked": request.get("at"), "result": why, "ended": cases.now()}  # fmt: skip
+                    "asked": request.get("at"), **({"ids": request["ids"]} if "ids" in request else {}),
+                    "result": why, "ended": cases.now()}  # fmt: skip
             if meter is not None:
                 line["credits"] = meter.report()
             cases.append("runs.jsonl", line)

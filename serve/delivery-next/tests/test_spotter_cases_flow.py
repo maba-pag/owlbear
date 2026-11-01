@@ -280,6 +280,7 @@ def test_a_check_never_promotes_a_case_changed_during_its_review_and_stops_at_it
     assert "changed during the review" in out["reviews"][a]["result"]
     assert len(seen) == 1
     assert out["result"].startswith("stopped")
+    assert (out["ids"], b in out["reviews"]) == (request["ids"], False)  # b, never reviewed, still finds this run
 
 
 def _git(cwd: Path, *args: str) -> str:
