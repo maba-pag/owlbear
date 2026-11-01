@@ -269,22 +269,17 @@ def test_the_step_waits_until_the_host_lists_its_model_and_never_starts_without_
     out = step(host, spec(tmp_path)).open()
     assert (out.end, len(host.actions("chat/turnStarted"))) == ("started", 1)
 
-    host = FakeHost(tmp_path, [{}], [DONE])
-    host.models = ["mai-code-1.1-flash", "gpt-5.6-sol"]
-    out = step(host, spec(tmp_path)).open()
-    detail = f"the agent host lists mai-code-1.1-flash, gpt-5.6-sol for Copilot after 30 s, not {MODEL}"
-    assert (out.end, out.detail) == ("model-unavailable", detail)
-    assert (host.actions("chat/turnStarted"), host.t >= vscode_step.MODELS) == ([], True)
-
-    host = FakeHost(tmp_path, [{}], [DONE])
-    host.models = []
-    out = step(host, spec(tmp_path)).open()
-    detail = (
+    listed = f"the agent host lists mai-code-1.1-flash, gpt-5.6-sol for Copilot after 30 s, not {MODEL}"
+    empty = (
         "the agent host lists no Copilot models after 30 s; OwlBear does not sign it in, "
         "so check that VS Code is signed in to GitHub"
     )
-    assert (out.end, out.detail) == ("model-unavailable", detail)
-    assert (host.actions("chat/turnStarted"), host.t >= vscode_step.MODELS) == ([], True)
+    for models, detail in ((["mai-code-1.1-flash", "gpt-5.6-sol"], listed), ([], empty)):
+        host = FakeHost(tmp_path, [{}], [DONE])
+        host.models = models
+        out = step(host, spec(tmp_path)).open()
+        assert (out.end, out.detail) == ("model-unavailable", detail)
+        assert (host.actions("chat/turnStarted"), host.t >= vscode_step.MODELS) == ([], True)
 
 
 def test_an_agent_the_session_does_not_list_starts_no_turn(tmp_path: Path) -> None:
