@@ -19,7 +19,7 @@ from owlbear_memory.errors import ConcurrencyError, DuplicateEntryError, Validat
 from owlbear_memory.models import MemoryCategory
 
 from owlbear_delivery_next.github.provider import ProviderError
-from owlbear_delivery_next.improvement import case_intake, case_review, cases
+from owlbear_delivery_next.improvement import case_intake, case_replay, case_review, cases
 from owlbear_delivery_next.improvement import proposal_targets as targets
 from owlbear_delivery_next.improvement import retro_proposals as props
 from owlbear_delivery_next.improvement import retro_store as store
@@ -208,9 +208,22 @@ def _case(pid: str, accepted: Mapping[str, Any], _text: Text, done: Done, seams:
         dest = accepted["destination"]
         cid = case_intake.of_record(dest["record"], dest["call"]) or seams.case(accepted)
         props.outcome(pid, "applied", step="created", artefact=_artefact("case", "Spotter cases", cid))
-    if "done" not in done:
-        rid = seams.check(cid)
-        props.outcome(pid, "applied", step="done", artefact=_artefact("case", "Spotter cases", cid) | {"check": rid})
+    rid = _checked(cid) or seams.check(cid)
+    props.outcome(pid, "applied", step="done", artefact=_artefact("case", "Spotter cases", cid) | {"check": rid})
+
+
+def _checked(cid: str) -> str:
+    """The check already asked of case *cid*, else nothing.
+
+    The host may stop between asking for it and recording it: one still queued counts, and so does one that ran once
+    the case has left the candidates.
+    """
+    checks = [r for r in [*case_replay.queued(), *case_replay.results()] if r.get("kind") == "check"]
+    if queued := [q["id"] for q in checks if cid in (q.get("ids") or {})]:
+        return queued[-1]
+    if cases.current()["cases"].get(cid, {}).get("stage") == "candidate":
+        return ""
+    return next((r["id"] for r in reversed(checks) if cid in (r.get("reviews") or {})), "")
 
 
 def _artefact(kind: str, where: str, ref: str, link: str = "") -> dict[str, Any]:

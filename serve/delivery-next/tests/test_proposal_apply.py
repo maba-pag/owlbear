@@ -1,5 +1,6 @@
 """Acting on an accepted Retro proposal (#716): each artefact made once, from what was accepted, and nothing unsafe."""
 
+import dataclasses
 import gzip
 import json
 import subprocess
@@ -11,7 +12,15 @@ from owlbear_memory.models import MemoryState
 
 from owlbear_delivery_next.commands import cli
 from owlbear_delivery_next.github.owlbear_issues import OwlbearIssues
-from owlbear_delivery_next.improvement import assumptions, case_intake, cases, spotter
+from owlbear_delivery_next.improvement import (
+    assumptions,
+    case_edits,
+    case_intake,
+    case_replay,
+    cases,
+    improvement_view,
+    spotter,
+)
 from owlbear_delivery_next.improvement import proposal_apply as act
 from owlbear_delivery_next.improvement import proposal_targets as targets
 from owlbear_delivery_next.improvement import retro_proposals as props
@@ -177,11 +186,44 @@ def test_a_spotter_case_becomes_a_candidate_with_its_check_queued(world):
     assert world.checks == [cid]
 
 
+def test_a_case_retried_after_its_check_ran_and_promoted_it_is_done_with_that_check(world, monkeypatch):
+    _record("rec-1")
+    pid = _waiting("spotter-case", "look:handoff", ["f-1"], record="rec-1", call="hand-off-fitness")
+    seams = dataclasses.replace(world.seams, check=lambda cid: case_edits.check_request([cid], act.BY))
+    act.decide(pid, "accepted", _seen(pid, world), "owner", places=world.places, shared_root=world.shared)
+    kept = props.outcome
+
+    def stopped(proposal, kind, **fields):
+        if fields.get("step") == "done":
+            msg = "the host stopped"
+            raise OSError(msg)
+        kept(proposal, kind, **fields)
+
+    monkeypatch.setattr(props, "outcome", stopped)
+    assert act.apply(pid, seams)["apply_state"] == "failed"
+    [asked] = case_replay.queued()
+    cid = next(iter(asked["ids"]))
+    assert case_replay.take(asked["id"])
+    cur = cases.current()
+    review = {"by": "retro-review", "at": cases.now(), "note": "it holds", "content": asked["ids"][cid]}
+    promoted = {**cur["cases"][cid], "stage": "test", "review": review}
+    cases.commit(cur["n"], {cid: promoted}, "retro-review", "check: it holds")
+    cases.append("runs.jsonl", {"id": asked["id"], "kind": "check", "reviews": {cid: {"result": "supported"}}})
+    case_replay.done(asked["id"])
+    monkeypatch.setattr(props, "outcome", kept)
+
+    done = act.apply(pid, seams)
+
+    assert (done["apply_state"], done["applied"][-1]["artefact"]["check"]) == ("done", asked["id"])
+    assert case_replay.queued() == []
+
+
 def test_a_synthetic_case_rests_on_its_assumption_and_the_reset_leaves_it_out(world):
     pid = _waiting("spotter-case", "look:sample", ["f-3"], provenance="synthetic", record="syn-scout-a-1", call="none")
     cid = _accept(pid, world)["applied"][0]["artefact"]["ref"]
     assert cases.fact(cid)["assumption"] == assumptions.RETRO_SYNTHETIC
-    assert cid in cases.current()["cases"]
+    [shown] = [c for c in improvement_view.spotter_cases()["cases"] if c["id"] == cid]
+    assert f"assumption {assumptions.RETRO_SYNTHETIC}" in shown["marks"]
 
     cases.reset()
 

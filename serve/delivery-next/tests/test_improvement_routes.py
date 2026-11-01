@@ -13,7 +13,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from owlbear_delivery_next.change_contracts import models as m
-from owlbear_delivery_next.improvement import case_replay, cases, spotter
+from owlbear_delivery_next.improvement import case_replay, cases, improvement_view, spotter
 from owlbear_delivery_next.improvement import proposal_targets as targets
 from owlbear_delivery_next.improvement import retro_proposals as props
 from owlbear_delivery_next.improvement import retro_store as store
@@ -163,14 +163,27 @@ def test_only_an_irreversible_stop_marks_a_stopped_step_and_looks_filter_by_proj
     said = world.http.get(f"{API}/looks", params={"project": "p1"}).json()
 
     assert [(r["id"], r["stopped_step"], r["credit_stop"]) for r in said["looks"]] == [
-        ("r-harm", True, False),
-        ("r-credit", False, True),
+        ("r-harm", True, ""),
+        ("r-credit", False, "reached"),
     ]
     assert said["looks"][0]["followup"] == {"state": ""}
     assert world.http.get(f"{API}/looks", params={"project": "nope"}).status_code == 404
     detail = world.http.get(f"{API}/change", params={"project": "p2", "slug": "fix"}).json()
     assert ([r["id"] for r in detail["looks"]], detail["findings"]) == (["r-other"], [])
     assert world.http.get(f"{API}/change", params={"project": "p2", "slug": "gone"}).status_code == 404
+
+
+def test_a_look_whose_spend_was_not_reported_counts_as_unknown_never_as_a_limit_stop() -> None:
+    at = "2026-10-01T10:00:00+00:00"
+    records = [
+        {"id": "r-1", "at": at, "project": "p1", "credits": 0.2, "credits_known": True, "stopped": "reached"},
+        {"id": "r-2", "at": at, "project": "p1", "credits": 0.1, "credits_known": False, "stopped": "unknown"},
+    ]
+
+    said = improvement_view.spotter({}, records, datetime(2026, 10, 2, tzinfo=UTC))
+
+    assert said["spend"]["p1"] == {"looks": 2, "credits": pytest.approx(0.3), "unknown": 1, "stopped": 1}
+    assert [r["credit_stop"] for r in improvement_view.looks({}, records, [])["looks"]] == ["reached", "unknown"]
 
 
 def test_the_outside_writes_of_every_change_of_every_project_are_listed_together_each_tagged(world) -> None:

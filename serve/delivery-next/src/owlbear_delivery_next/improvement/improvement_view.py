@@ -10,7 +10,7 @@ import contextlib
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
-from owlbear_delivery_next.improvement import assumptions, case_replay, cases, followups, proposal_apply
+from owlbear_delivery_next.improvement import case_replay, cases, followups, proposal_apply
 from owlbear_delivery_next.improvement import proposal_targets as targets
 from owlbear_delivery_next.improvement import retro_proposals as props
 from owlbear_delivery_next.improvement import retro_store as store
@@ -52,10 +52,11 @@ def _newest(rows: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
 
 
 def _graded(records: Iterable[Mapping[str, Any]], grades: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
-    """*records*, newest first, each with its grades, its unit and how its look ended.
+    """*records*, newest first, each with its grades and how its look ended.
 
     ``stopped_step`` is a step the Spotter stopped for irreversible harm (``acted``, which live delivery writes);
-    ``credit_stop`` a look stopped at its credit limit, which stops nothing else.
+    ``credit_stop`` why its credits stopped the look, which stops nothing else: its limit ``reached``, or its spend
+    ``unknown``; else nothing.
     """
     by: dict[str, list[dict[str, Any]]] = {}
     for g in grades:
@@ -63,9 +64,8 @@ def _graded(records: Iterable[Mapping[str, Any]], grades: Iterable[Mapping[str, 
     return [
         r
         | {
-            "unit": units.unit_of(r),
             "grades": by.get(r["id"], []),
-            "credit_stop": bool(r.get("stopped")),
+            "credit_stop": r.get("stopped") or "",
             "stopped_step": r.get("category") == "irreversible-harm" and r.get("acted") == "stopped",
         }
         for r in _newest(records)
@@ -94,7 +94,7 @@ def spotter(projects: units.Projects, records: list[dict[str, Any]], now: dateti
             s["looks"] += 1
             s["credits"] += float(r.get("credits") or 0.0)
             s["unknown"] += not r.get("credits_known")
-            s["stopped"] += bool(r.get("stopped"))
+            s["stopped"] += r.get("stopped") == "reached"
     return {
         "projects": {pid: {"name": repo.name} | _settings(st) for pid, (st, repo) in projects.items()},
         "window_days": WINDOW,
@@ -194,11 +194,10 @@ def _case(cid: str, entry: Mapping[str, Any]) -> dict[str, Any]:
         fact = cases.fact(cid)
     except CaseError as exc:
         return {"id": cid, **entry, "marks": [], "error": str(exc)}
-    synthetic = fact.get("source") == "synthetic"
-    marks = [m for m, on in (("reserve", fact.get("reserve")), ("synthetic", synthetic),
+    marks = [m for m, on in (("reserve", fact.get("reserve")), ("synthetic", fact.get("source") == "synthetic"),
                              ("unscored", fact.get("unscored"))) if on]  # fmt: skip
-    if synthetic:
-        marks.append(f"assumption {assumptions.SYNTHETIC}")
+    if fact.get("assumption"):
+        marks.append(f"assumption {fact['assumption']}")
     return {"id": cid, **entry, "source": fact.get("source"), "marks": marks, "prefill": prefill(cid)}
 
 
