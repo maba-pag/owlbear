@@ -2,11 +2,11 @@
 // where the pack stands (installed here, released with an OwlBear version, published by an update, the candidate an
 // update validates), and the one Impeccable update of this machine, answerable from wherever the page is opened.
 import { html, nothing, render } from "/assets/lit-html/3.3.3/lit-html.js";
-import { defined, machineState, project } from "/assets/ui.mjs";
+import { defined, machineState } from "/assets/ui.mjs";
 import { readChecks, update } from "./checks.mjs";
 import { frame, framed, sentence, when } from "./frame.mjs";
-import { ADMIT, button, follow, own, readPack, start } from "./pack.mjs";
-import { others, runPart } from "./run.mjs";
+import { follow, own, readPack } from "./pack.mjs";
+import { others, runPart, startPart } from "./run.mjs";
 
 function installed(i) {  // a missing pack is the running version's; one installing or failed names its version
   const whose = i.version ? `Impeccable of OwlBear ${i.version}` : "An Impeccable pack";
@@ -65,44 +65,13 @@ function stands() {
   </div>`;
 }
 
-function starting() {
-  const r = own.runs, run = r?.run, open = run && ["running", "waiting"].includes(run.state);
-  const canStart = Boolean(project || !machineState()), busy = Boolean(open || r?.holder);
-  return html`<div class="part">
-    <p-heading size="md"><h3 id="pack-update-title">Update</h3></p-heading>
-    <p-text size="sm">An update takes the newest upstream pack and validates it with model requests. Only if every
-      stage passes, or if you accept it after its challenge rounds end without a pass, it commits it on its own
-      branch, opens a pull request to main and merges it once CI passes. One runs at a time on this machine.</p-text>
-    <div class="row">
-      ${button("Update Impeccable", start, { id: "pack-update", icon: "refresh",
-        variant: open ? "secondary" : "primary",
-        busy: own.busy === "start" || Boolean(own.awaiting),
-        disabled: busy || !canStart || Boolean(own.busy) || Boolean(own.awaiting) })}
-      ${canStart ? nothing : html`<p-text id="pack-choose" size="sm">Choose a project above to start one: it runs on
-        that project's labels, calibration and spend.</p-text>`}
-    </div>
-    ${own.awaiting ? html`<p-inline-notification id="pack-admitting" state="info" dismiss-button="false">
-      Delivery has not answered the start yet; it may still be checking GitHub for an open Impeccable pull request.
-      It was not sent again. This page looks for the run until ${new Date(own.awaiting.until)
-        .toLocaleTimeString()}.</p-inline-notification>` : nothing}
-    ${own.lost ? html`<p-inline-notification id="pack-start-unknown" state="warning" dismiss-button="false">
-      Whether the update started is unknown: Delivery did not answer, and no new run appeared within
-      ${ADMIT / 1000} s. It was not sent again. Reload the page to see Delivery's state before you start another.
-      ${button("Reload", () => location.reload(), { id: "pack-reload" })}</p-inline-notification>` : nothing}
-    ${own.error ? html`<p-inline-notification id="pack-error" state="error" dismiss-button="false">${
-      sentence(own.error)}</p-inline-notification>` : nothing}
-    ${own.unread.runs ? html`<p-inline-notification id="pack-runs-error" state="error" dismiss-button="false">
-      Could not read the Impeccable runs: ${own.unread.runs}.</p-inline-notification>` : nothing}
-  </div>`;
-}
-
 function view() {
   const r = own.runs;
   return html`${frame("impeccable", { running: "Pinned upstream" })}
     <section id="pack" class="panel" aria-labelledby="pack-title">
       <p-heading size="lg"><h2 id="pack-title">The pack</h2></p-heading>
       ${stands()}
-      ${starting()}
+      ${startPart()}
       ${r ? html`<div class="part">${runPart(r.run)}${others(r)}</div>` : own.unread.runs ? nothing
         : html`<p-text size="sm">Reading the Impeccable runs…</p-text>`}
     </section>`;

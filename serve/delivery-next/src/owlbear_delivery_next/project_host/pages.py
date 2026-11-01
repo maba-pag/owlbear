@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from importlib.resources import files
 from typing import TYPE_CHECKING
 
@@ -29,7 +30,8 @@ MENU = "/assets/page/menu/menu.mjs"  # the burger and its drilldown (D-01M63C837
 MARK = "<!-- tabs -->"  # where each page takes the top row
 BASE = "<!-- base -->"  # where each page takes the shared stylesheet, before its own
 ASK = "<!-- ask -->"  # where a page with consequential buttons takes the shared confirmation, before its script
-PDS = {"index.css": "text/css", "load.mjs": "text/javascript"}  # the vendored Porsche Design System 4.10.1 files
+PDS = {"index.css": "text/css", "load.mjs": "text/javascript"}  # the pinned Porsche Design System's served files
+RELEASE = "<!-- pds -->"  # where each page's PDS URLs take the pinned release (#777)
 LIT = "vendor/lit-html"  # the vendored lit-html release; its SHA256SUMS names every file it serves (TD-264)
 OWN = {"mjs": "text/javascript", "css": "text/css"}  # a page's own modules and styles under web/pages/<page>/ (C-28)
 
@@ -59,9 +61,8 @@ def lit_version() -> str:
 
 
 def pds_version() -> str:
-    """The vendored PDS release, from its loader's header, as its URLs name it, so an update never hits a cache."""
-    first = files("owlbear_delivery_next").joinpath("web", "pds", "load.mjs").read_text(encoding="utf-8")
-    return first.split(None, 3)[2]
+    """The pinned PDS release, from ``pds.json``, as its URLs name it, so an update never hits a cache."""
+    return json.loads(files("owlbear_delivery_next").joinpath("pds.json").read_text(encoding="utf-8"))["version"]
 
 
 def assets(app: FastAPI) -> None:
@@ -108,8 +109,8 @@ def top(current: str) -> str:
 
 
 def pages() -> dict[str, str]:
-    """Each page's path and its HTML with the shared stylesheet, the confirmation and the top row in place."""
-    web = files("owlbear_delivery_next").joinpath("web")
+    """Each page's path and its HTML with the shared stylesheet, the confirmation, the top row and PDS's release."""
+    web, release = files("owlbear_delivery_next").joinpath("web"), pds_version()
     base = f"<style>\n{web.joinpath('base.css').read_text(encoding='utf-8')}</style>"
     ask = f"<script>\n{web.joinpath('ask.js').read_text(encoding='utf-8')}</script>"
     return {
@@ -118,5 +119,6 @@ def pages() -> dict[str, str]:
         .replace(BASE, base, 1)
         .replace(ASK, ask, 1)
         .replace(MARK, top(path), 1)
+        .replace(RELEASE, release)
         for path, _, name in PAGES
     }

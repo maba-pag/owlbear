@@ -147,7 +147,7 @@ def complete_layer():
     )  # fmt: skip
     agents = base.agents | {
         role: base.agents["curator"].model_copy(update={"model": "gpt-6.1-sol", "effort": "medium"})
-        for role in ("retro", "retro-review")
+        for role in ("retro", "retro-review", "auditor")
     }
     update = {"spotter": spotter, "agents": agents} | dict.fromkeys(
         ("load_user_instructions", "load_user_skills", "load_user_memory"), False

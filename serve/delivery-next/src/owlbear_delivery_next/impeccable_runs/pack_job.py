@@ -29,6 +29,7 @@ from owlbear_delivery_next.impeccable_runs import (
     pack_progress,
     pack_publish,
     pack_repair,
+    pack_repair_content,
     pack_rounds,
     pack_run,
 )
@@ -91,7 +92,19 @@ class Refused(Exception):  # noqa: N818 - the route's answer, not a fault
 
 
 class Job(Steps):
-    """The project's Impeccable update: start one, answer it, read its state."""
+    """The project's Impeccable update: start one, answer it, read its state.
+
+    The class attributes are the kind's: a PDS update (``pds_runs.job``) overrides them and the stages; Impeccable's
+    are the defaults.
+    """
+
+    FILE, RUNS, STAGES, KIND = FILE, RUNS, STAGES, "pack"  # the run record, workspaces, stages, maintenance kind
+    CONTEXT: type[Any] = pack_run.Context
+    ADMISSION = pack_admission.IMPECCABLE  # its title, records and pull requests
+    REPAIR = pack_repair_content.IMPECCABLE  # what its CI repairs check again or never push
+    ACTIONS = pack_progress.ACTIONS
+    HOLDER = ""  # after the project's name in the machine lock
+    BUSY = "an Impeccable update runs for {who}; one runs at a time on this machine"
 
     def __init__(self, store: Store, live: Live | None = None) -> None:
         """Read the last run; one the host stopped during reads as failed, one waiting for the owner still waits."""
@@ -104,7 +117,7 @@ class Job(Steps):
         self.version = ""  # the run file's identity as read; see _read
         self.state = self._read()
         if self.state["state"] == "running" and (self.state.get("context") or {}).get("publication"):
-            ctx = pack_run.Context.model_validate(self.state["context"])
+            ctx = self.CONTEXT.model_validate(self.state["context"])
             reason = pack_repair.interrupted(ctx) or "the host stopped while the update was being published"
             self._hold(ctx, reason)
         elif self.state["state"] == "running":
@@ -115,7 +128,7 @@ class Job(Steps):
     @property
     def path(self) -> Path:
         """Where the last run is kept."""
-        return self.store.root / FILE
+        return self.store.root / self.FILE
 
     @property
     def workspace(self) -> Path:
@@ -130,7 +143,11 @@ class Job(Steps):
     def _read(self) -> dict[str, Any]:
         """The last run, and its file version from the same descriptor: "absent", "" when unreadable."""
         state, self.version = read_version(self.path)
-        return state
+        return self._blank() if self.version in {"absent", ""} else state
+
+    def _blank(self) -> dict[str, Any]:
+        return _blank() | {"stages": [{"name": n, "label": label, "result": "pending", "detail": ""}
+                                      for n, label in self.STAGES]}  # fmt: skip
 
     def _save(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -143,7 +160,7 @@ class Job(Steps):
 
     def _copy(self) -> dict[str, Any]:
         shown = {k: v for k, v in self.state.items() if k != "context"} | {
-            "progress": pack_progress.progress(self.state),  # from the context, which the page never gets
+            "progress": pack_progress.progress(self.state, self.ACTIONS),  # from the context, which the page never gets
             "repair": pack_repair.view(self.state.get("context")),
         }
         return json.loads(json.dumps(shown))
@@ -166,21 +183,19 @@ class Job(Steps):
         """
         with self.lock:
             if self.state["state"] == "running" or self.busy():
-                msg = "an Impeccable update is already running"
+                msg = f"{self.ADMISSION.an} update is already running"
                 raise Busy(msg)
             if self.state["state"] == "waiting":
-                msg = "an Impeccable update waits for your answers; answer or discard it first"
+                msg = f"{self.ADMISSION.an} update waits for your answers; answer or discard it first"
                 raise Busy(msg)
             self._claim(self._fresh)
             run = uuid.uuid4().hex
-            self.state = _blank() | {
+            self.state = self._blank() | {
                 "state": "running", "started_at": _now(), "run": run,
-                "workspace": str(self.store.root / RUNS / run), "invocations": [],
+                "workspace": str(self.store.root / self.RUNS / run), "invocations": [],
             }  # fmt: skip
             self._save()
-            self.thread = threading.Thread(
-                target=self._run, args=(self._stages,), name="impeccable-update", daemon=True
-            )
+            self.thread = threading.Thread(target=self._run, args=(self._stages,), name=self._thread, daemon=True)
         self.thread.start()
         return self.read()
 
@@ -209,9 +224,9 @@ class Job(Steps):
                 self._log(said)
                 self._finish("discarded", "discarded by you; nothing changed")
                 return self._copy()
-            ctx = pack_run.Context.model_validate(self.state["context"])
+            ctx = self.CONTEXT.model_validate(self.state["context"])
             lp = RoundLoop.model_validate(self.state["loop"])
-            left = pack_run.decided(self.state["questions"], q, option, note=note, ctx=ctx, lp=lp)
+            left = self._decided(self.state["questions"], q, option, note=note, ctx=ctx, lp=lp)
             if not left:
                 self._claim(self._resumed)  # before anything changes: a refusal leaves the question open
             self._log(said)
@@ -223,9 +238,7 @@ class Job(Steps):
                 self.state["state"] = "running"
                 for s in self.state["stages"]:  # the stop he answered holds nothing any more
                     s["result"] = "answered" if s["result"] == "waiting" else s["result"]
-                self.thread = threading.Thread(
-                    target=self._run, args=(self._resume,), name="impeccable-update", daemon=True
-                )
+                self.thread = threading.Thread(target=self._run, args=(self._resume,), name=self._thread, daemon=True)
             self._save()
             resumed = self.thread if not left else None
         if resumed is not None:
@@ -240,11 +253,28 @@ class Job(Steps):
         """
         with self.lock:
             if self.state["state"] != "waiting" or self.busy():
-                msg = "no Impeccable update waits for you"
+                msg = f"no {self.ADMISSION.title} update waits for you"
                 raise Stale(msg)
             self._log("you discarded the update")
             self._finish("discarded", "discarded by you; nothing changed")
             return self._copy()
+
+    @property
+    def _thread(self) -> str:
+        return f"{self.ADMISSION.title.lower()}-update"
+
+    def _decided(  # noqa: PLR0913 - the open questions, the answer, and the run it changes
+        self,
+        questions: list[dict[str, Any]],
+        q: dict[str, Any],
+        option: str,
+        *,
+        note: str,
+        ctx: pack_run.Context,
+        lp: RoundLoop,
+    ) -> list[dict[str, Any]]:
+        """Carry out one answer on the run's context and loop; the questions still open."""
+        return pack_run.decided(questions, q, option, note=note, ctx=ctx, lp=lp)
 
     def keep(self, ctx: pack_run.Context, lp: RoundLoop | None = None) -> None:
         """Keep the run's context and loop (as kept when None), so it goes on from here."""
@@ -330,9 +360,10 @@ class Job(Steps):
         self._unproven()
         try:
             # Verified again while the lock is held: an earlier updater may have released it unconfirmed before this.
-            self.held = take(local_home.root() / MACHINE_LOCK, self._name, lambda: self._admitted(admits))
+            holder = f"{self._name}{self.HOLDER}"
+            self.held = take(local_home.root() / MACHINE_LOCK, holder, lambda: self._admitted(admits))
         except HeldError as exc:
-            msg = f"an Impeccable update runs for {exc.who}; one runs at a time on this machine"
+            msg = self.BUSY.format(who=exc.who)
             raise Busy(msg) from None
 
     @property
@@ -348,7 +379,7 @@ class Job(Steps):
 
     def _fresh(self) -> None:
         """A new update's policy: no run open on this machine and no pack pull request open (``pack_admission``)."""
-        pack_admission.fresh(self.store.root, self._name, self.live.github(self.live.package))
+        pack_admission.fresh(self.store.root, self._name, self.live.github(self.live.package), self.ADMISSION)
 
     def _resumed(self) -> None:
         """A waiting run's policy, for an answer and a publication retry: it goes on only as itself, with its own PR."""
@@ -356,19 +387,21 @@ class Job(Steps):
         pack_admission.resumed(
             self.store.root, self._name, run=self.state["run"], version=self.version,
             branch=str(publication.get("branch") or ""), github=self.live.github(self.live.package),
+            kind=self.ADMISSION,
         )  # fmt: skip
 
     def _alone(self) -> None:
         """A manual replay's policy: the lock alone. It writes no run record and no pull request (TD-177)."""
 
     def _unproven(self) -> None:
-        if self.maintenance is not None and self.maintenance.pending(kind="pack"):
-            msg = "an earlier Impeccable session is unproven; recover it on the Maintenance page first"
+        if self.maintenance is not None and self.maintenance.pending(kind=self.KIND):
+            msg = f"an earlier {self.ADMISSION.title} session is unproven; recover it on the Maintenance page first"
             raise Busy(msg)
 
     def _run(self, work: Callable[[], str | None]) -> None:
         try:
-            with spend_ledger.at(spend_ledger.Where.of(self.store, job="Impeccable update")):  # its project's spend
+            where = spend_ledger.Where.of(self.store, job=f"{self.ADMISSION.title} update")  # its project's spend
+            with spend_ledger.at(where):
                 self._steps(work)
         finally:
             self._release()

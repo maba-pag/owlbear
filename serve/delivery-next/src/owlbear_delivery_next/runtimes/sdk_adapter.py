@@ -8,7 +8,6 @@ import time
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from functools import partial
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import psutil
@@ -21,7 +20,7 @@ from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.change_contracts.permissions import decide, identities, view
 from owlbear_delivery_next.improvement import chatlogs
 from owlbear_delivery_next.improvement.chatlogs import around as chatlogged
-from owlbear_delivery_next.local_system import preload, processes
+from owlbear_delivery_next.local_system import pds_skill, preload, processes
 from owlbear_delivery_next.local_system.mask import redact
 from owlbear_delivery_next.local_system.processes import Termination, verdict
 from owlbear_delivery_next.runtimes import (
@@ -45,7 +44,8 @@ from owlbear_delivery_next.runtimes.sdk_usage import USAGE_PAUSE, unexpected_mod
 from owlbear_delivery_next.runtimes.session_result import PROVEN, Run, limit_reached, note_quota
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable
+    from collections.abc import Callable
+    from pathlib import Path
 
     from copilot.session import CopilotSession
 
@@ -114,6 +114,7 @@ class Session:
     settled: tuple[str, ...] = ()  # finding keys the owner decided to fix: never rejected (TD-193)
     amendable: tuple[str, ...] = ()  # generated criteria a premise may propose new wording for (TD-179)
     skills: Path | None = None  # the skill folder this session loads instead of the package's: a pack candidate's
+    pds: pds_skill.Choice | None = None  # the project's PDS knowledge skill; when None, chosen from the worktree (#777)
     subagents: bool = False  # its role's setting: it may start built-in subagents (TD-374, TD-376)
     user: user_config.UserConfig = user_config.USER_OFF  # the owner's switches; off where a site sets none
     credit_limit: float | None = None  # the runtime's hard session limit; an experiment's ledger sets it (TD-178)
@@ -137,12 +138,6 @@ class Session:
     watch: watch_feed.Watching | None = None  # a Change-owned session's watcher; None when the master switch is off
 
 
-def sent(events: Iterable[Any], message: str) -> bool:
-    """Whether a session transcript holds *message* as a whole user message, lessons ahead of it allowed."""
-    users = (getattr(e.data, "content", "") or "" for e in events if getattr(e.type, "value", e.type) == "user.message")
-    return any(lessons.holds(c.strip(), message.strip()) for c in users)
-
-
 class _Step:
     def __init__(self, cfg: Session, loop: asyncio.AbstractEventLoop) -> None:
         self.cfg, self.loop, self.run, self.proc = cfg, loop, Run(cfg.session_id), None
@@ -158,6 +153,8 @@ class _Step:
         self.preloaded: set[str] = set()  # skills the runtime loaded from Delivery's folder before the first turn
         self.checked = False  # the preload was checked at the first turn
         self.skills = cfg.skills or preload.directory()  # the folder its skills load from
+        wanted = pds_skill.wanted(role_of(cfg), ui=cfg.ui, skills=cfg.skills)
+        self.pds = cfg.pds or (pds_skill.choose(cfg.worktree) if wanted else None)  # the project's PDS skill (#777)
         self.watch = subagents.Watch(allowed=cfg.subagents)
         self.feed: watch_feed.Feed | None = None  # its watcher, for the run only
         self.requests: set[asyncio.Task[None]] = set()
@@ -233,12 +230,12 @@ class _Step:
         """Note a skill the runtime loaded; a preload from Delivery's folder counts toward the role's skills."""
         trigger = getattr(getattr(data, "trigger", None), "value", getattr(data, "trigger", None))
         name, path = getattr(data, "name", "") or "", getattr(data, "path", "") or ""
-        if trigger == "context-load" and path and Path(path).resolve().is_relative_to(self.skills.resolve()):
+        if trigger == "context-load" and path and preload.loaded(path, self.skills, self.pds):
             self.preloaded.add(name)
         self.log(event="skill", name=name, trigger=trigger)
 
     def _required(self) -> tuple[str, ...]:
-        return preload.required(role_of(self.cfg), ui=self.cfg.ui, job=self.cfg.job)
+        return preload.required(role_of(self.cfg), ui=self.cfg.ui, job=self.cfg.job, pds=self.pds)
 
     def preload_checked(self) -> None:
         """At a created session's first turn, every skill of the role is loaded, or the step ends (item 6)."""
@@ -338,7 +335,9 @@ class _Step:
         await step_budget.snapshot(self, session, budget, POLL)
 
     def options(self) -> dict[str, Any]:
+        cfg = self.cfg
         role = agent(self.cfg.kind, ui=self.cfg.ui, role=self.cfg.role, judging=self.cfg.judging, job=self.cfg.job)
+        role["skills"] = list(self._required())  # with the project's PDS skill, if any
         if self.watch.allowed:
             role["tools"].append(subagents.LAUNCHER)
         return {
@@ -349,7 +348,7 @@ class _Step:
             "excluded_builtin_agents": [] if self.watch.allowed else list(subagents.BUILTINS),
             "excluded_tools": ["ask_user"],  # autopilot: the owner is asked only through ask_question (N4, N10)
             "skill_directories": preload.folders(  # plus the owner's own when on (D-01M5YE505DY18G63VH483CNZZ4)
-                role_of(self.cfg), ui=self.cfg.ui, job=self.cfg.job, folder=self.skills, user=self.cfg.user.skills
+                role_of(cfg), ui=cfg.ui, job=cfg.job, folder=self.skills, user=cfg.user.skills, pds=self.pds
             ),
             "mcp_servers": {preload.MEMORY: {"type": "local", **m}} if (m := preload.memory(self.cfg.memory)) else {},
             "enable_file_hooks": False,  # a project's agent hooks never run in a step (TD-142)
@@ -403,7 +402,7 @@ async def _open(client: CopilotClient, st: _Step) -> CopilotSession | None:
         except Exception as exc:  # noqa: BLE001 - an unobserved transcript never authorizes a resend
             st.finish("unread", detail=f"transcript read failed ({type(exc).__name__}); the answer was not resent")
             return session
-        if sent(events, message):
+        if lessons.sent(events, message):
             message, resent = step_decisions.resumed(step_input.CONTINUE), False
     else:
         if cfg.resume:
@@ -414,7 +413,7 @@ async def _open(client: CopilotClient, st: _Step) -> CopilotSession | None:
         st.run.session_id = sid = await asyncio.to_thread(chatlogs.claimed, sid, who, cfg.session_id)
         session = await _call(client.create_session(session_id=sid, **opts), "session create", START)
         st.session, st.created = session, True
-        message, exposure = lessons.opening(role_of(cfg), cfg.memory, message, st.log)  # once per new conversation
+        message, exposure = lessons.opening(role_of(cfg), cfg.memory, pds_skill.noted(message, st.pds), st.log)
     await session_options(session, cfg.worktree, cfg.user, st.log)  # D-01M5YE55W7P4A6PS8YZV8K7J6A
     st.log(event="session", id=sid, resumed=resumed, resent=resent, runtime=st.run.runtime_pid)
     st.billed = await usage_read(session, cfg.model) if resumed else {}

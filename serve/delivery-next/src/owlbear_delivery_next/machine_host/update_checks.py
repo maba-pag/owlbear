@@ -8,6 +8,9 @@ it never installs, and runs whether updating by itself is on and whether the mac
 failure shows only once two come in a row; until then the last success stands, except that offline is unknown, never
 current. What is shown is read against the version installed now, so an update applied since is no longer offered;
 a newer version stays available through failed checks until a check finds it withdrawn.
+
+A newer PDS release is the Updates page's to take (#777): while a project's update of it runs or waits for the owner,
+or once one merged it, it is shown so and not counted; a failed update leaves it available.
 """
 
 from __future__ import annotations
@@ -25,8 +28,8 @@ from owlbear_delivery_next.impeccable import pack_files, pack_update
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.local_system.storage_io import atomic_write
 from owlbear_delivery_next.machine_host import impeccable, versions
-from owlbear_delivery_next.project_host import pages
-from owlbear_delivery_next.state_store import machine_settings
+from owlbear_delivery_next.project_host import pack_overview, pages
+from owlbear_delivery_next.state_store import machine_settings, pds_run_record
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -35,7 +38,7 @@ if TYPE_CHECKING:
 
 STATE = "update-checks.json"  # in ~/.owlbear: each update's last success, attempt and failures; no history
 TITLES = {"owlbear": "OwlBear", "pds": "Porsche Design System", "impeccable": "Impeccable"}
-ACTIONABLE = {"owlbear": True, "pds": False, "impeccable": True}  # PDS counts once its update action exists
+MERGED = "merged into main; it arrives with OwlBear's next release"
 SHOWN = 2  # failures in a row before a failure shows
 RETRY = timedelta(hours=1)  # after a failure, the next timed check comes this soon, unless the interval is shorter
 TICK = 60.0  # seconds between the loop's looks whether a check is due
@@ -83,7 +86,7 @@ def owlbear() -> dict[str, Any]:
 
 
 def pds(fetch: Callable[[str, float], bytes] | None = None) -> dict[str, Any]:
-    """The latest ``@porsche-design-system/components-js`` on npm against the release ``web/pds/load.mjs`` vendors.
+    """The latest ``@porsche-design-system/components-js`` on npm against the release ``pds.json`` pins.
 
     Raises:
         Failed: npm was not reached, refused, or named no version.
@@ -141,6 +144,22 @@ def _installed(name: str) -> str:
         return INSTALLED[name]()
     except Exception:  # noqa: BLE001 - a hint for the shown state; the check itself reads it again
         return ""
+
+
+def _pds_runs() -> dict[str, str]:
+    """What the projects' last PDS updates did with each release: running, waiting or merged; failed ones are left out.
+
+    A record that cannot be read says nothing here: Maintenance and the page name it.
+    """
+    taken: dict[str, str] = {}
+    for s in pack_overview.records(reader=pds_run_record.read_only)[0]:
+        record = s["record"] or {}
+        version = str(record.get("release") or "")
+        merged = bool((record.get("published") or {}).get("merged"))
+        state = "merged" if merged else s["state"] if s["state"] in pack_overview.OPEN else ""
+        if version and state and taken.get(version) != "merged":
+            taken[version] = state
+    return taken
 
 
 def _ahead(name: str, latest: str, current: str) -> bool:
@@ -274,8 +293,16 @@ class Checks:
     def read(self) -> dict[str, Any]:
         """Each update's state and when it is next checked; ``available`` counts each runnable newer one once."""
         (hours, channel), installed = self._settings(), {n: _installed(n) for n in CHECKS}
+        try:
+            taken = _pds_runs()
+        except Exception as exc:  # noqa: BLE001 - the checks still show; the page names the runs it cannot read
+            self.machine.say(f"update checks: the PDS updates could not be read: {exc}")
+            taken = {}
         with self.lock:
             shown = [self._shown(n, hours[n], installed[n], channel) for n in CHECKS]
+        for u in shown:
+            if u["name"] == "pds" and u["available"] and (state := taken.get(u["latest"])):
+                u.update({"state": state, "available": False} | ({"detail": MERGED} if state == "merged" else {}))
         available = sum(1 for u in shown if u["available"])
         return {"updates": shown, "available": available}
 
@@ -297,8 +324,8 @@ class Checks:
             state = "unknown"  # never checked, or not reached since: offline is never current
         due = self._next(name, hours)
         return {
-            "name": name, "title": TITLES[name], "actionable": ACTIONABLE[name], "state": state,
-            "available": offered and ACTIONABLE[name],  # until applied or found withdrawn, whatever a failure says
+            "name": name, "title": TITLES[name], "actionable": True, "state": state,
+            "available": offered,  # until applied or found withdrawn, whatever a failure says
             "current": current, "latest": latest if offered else current,
             "detail": impeccable.MOVED if moved else found.get("detail", ""),
             "checked_at": found.get("at"), "attempted_at": kept.get("attempt_at"), "failures": failures,

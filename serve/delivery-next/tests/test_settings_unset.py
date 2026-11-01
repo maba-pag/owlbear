@@ -132,8 +132,8 @@ def test_a_carried_global_resolves_every_setting(shared_repo):
     prefs = {f"prefs.{key}" for key in config.Prefs.model_fields}  # owner-set, never carried (no code defaults)
     later = {f"spotter.{k}" for k in ("steer_share", "intervention_cap", "verbose", "looks")}  # added after the carry
     later |= {f"spotter.{k}" for k in CATEGORIES.values()}  # the categories' actions too (2026-10-26)
-    later |= {f"agents.{r}.{f}" for r in ("retro", "retro-review") for f in ("model", "effort", "context", "minutes",
-                                                                             "subagents")}  # fmt: skip
+    later |= {f"agents.{r}.{f}" for r in ("retro", "retro-review", "auditor")
+              for f in ("model", "effort", "context", "minutes", "subagents")}  # fmt: skip
     later |= set(roles.USER_CONFIG)  # the owner sets them; never carried (2026-10-27)
     assert set(resolve(read_layer(shared.global_path, GlobalLayer), Layer()).missing) == prefs | later
 

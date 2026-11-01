@@ -438,8 +438,8 @@ def test_delivery_is_not_effect_and_a_delivered_answer_is_found_in_the_transcrip
         return SimpleNamespace(type=SimpleNamespace(value=kind), data=SimpleNamespace(content=content))
 
     events = [ev("assistant.message", "The owner answered"), ev("user.message", "The owner answered: German\n")]
-    assert sdk_adapter.sent(events, "The owner answered: German")
-    assert not sdk_adapter.sent(events[:1], "The owner answered: German")
+    assert lessons.sent(events, "The owner answered: German")
+    assert not lessons.sent(events[:1], "The owner answered: German")
     assert [session_result.effect_seen(Run("s", ending=e, payload=build())) for e in ("result", "ask", "deadline")] == [
         True,
         True,

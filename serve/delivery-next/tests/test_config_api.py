@@ -72,13 +72,14 @@ def test_get_shows_each_layer_the_resolved_values_their_source_and_what_is_appli
         "agents.shaper.max_findings", "agents.shaper.last_round_at", "agents.shaper.ask_owner_at", "final_review",
         "agents.planner.minutes", "agents.builder.minutes", "agents.reviewer.minutes", "agents.challenger.minutes",
         "agents.design-judge.minutes", "agents.preparer.minutes", "agents.updater.minutes", "agents.picker.minutes",
+        "agents.auditor.minutes",
         "pr_labels", "pr_marker", "load_user_instructions", "load_user_skills", "load_user_memory",
         "prefs.merge_method",
         "prefs.delete_remote_branch", "prefs.ci_poll_seconds",
         "prefs.ci_start_window_seconds", "prefs.ask_before_merge",
         "agents.planner.subagents", "agents.builder.subagents", "agents.reviewer.subagents",
         "agents.challenger.subagents", "agents.design-judge.subagents", "agents.preparer.subagents",
-        "agents.updater.subagents", "sessions",
+        "agents.updater.subagents", "agents.auditor.subagents", "sessions",
     ]  # fmt: skip
     assert len(got["project_rev"]) == 64
 

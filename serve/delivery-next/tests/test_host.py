@@ -209,6 +209,7 @@ def test_status_reads_the_host_lock_and_shows_host_down(store):
         "  spotter: gpt-6-luna effort medium",
         "  retro: gpt-6.1-sol effort medium",
         "  retro-review: gpt-6.1-sol effort medium",
+        "  auditor: gpt-6.1-sol effort medium",
     ]
 
 

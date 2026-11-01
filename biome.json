@@ -16,7 +16,8 @@
       "!**/.owlbear/memory",
       "!**/.owlbear/research",
       "!**/.owlbear/sources",
-      "!**/.owlbear/target"
+      "!**/.owlbear/target",
+      "!serve/delivery-next/src/owlbear_delivery_next/pds"
     ]
   },
   "formatter": {

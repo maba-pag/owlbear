@@ -6,7 +6,14 @@ import subprocess
 import threading
 from typing import TYPE_CHECKING, Any
 
-from owlbear_delivery_next.change_contracts import curation_tools, pack_tools, preparation, tool_schema, tools
+from owlbear_delivery_next.change_contracts import (
+    audit_tools,
+    curation_tools,
+    pack_tools,
+    preparation,
+    tool_schema,
+    tools,
+)
 from owlbear_delivery_next.change_flow import disputes
 from owlbear_delivery_next.impeccable import design_tools
 from owlbear_delivery_next.local_system import lint
@@ -218,6 +225,8 @@ class Gate:
             return preparation.check(args, tree, cfg.policy.root, cfg.preparing or preparation.Preparing()), tree
         if isinstance(args, curation_tools.TestCurationResult):  # TD-339: committed, clean, only tests
             return curation_tools.check(args, tree), tree
+        if isinstance(args, audit_tools.AuditResult):  # D-01M5DW3X00DR0Q4AC9294F0W9T: fixed while it can be
+            return audit_tools.check(args, cfg.policy.root), tree
         errors = tools.check_result(
             args,
             tree,

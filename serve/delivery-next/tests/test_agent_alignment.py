@@ -25,7 +25,7 @@ from owlbear_delivery_next.workflow_steps import sessions
 
 AGENTS = (
     "builder", "planner", "reviewer", "challenger", "design-judge", "preparer", "updater", "test-reviewer",
-    "test-curator", "picker", "curator",
+    "test-curator", "picker", "curator", "auditor",
 )  # fmt: skip
 PENDING: set[str] = {"spotter", "retro", "retro-review"}  # every worker role has its own agent file (TD-106);
 # Improvement's come with their slices (item 9)
@@ -59,6 +59,7 @@ SHAPER_TOOLS = [  # the names a window chat's agent file grants, each verified l
 VERBS = "submit|report|ask|recall|save|assess|scan|read|list|write|stop"
 LOOKALIKE = re.compile(rf"(?:{VERBS})_[a-z_]+|[a-z_]+_(?:bash|agents?|memory|memories)")  # unknown: a tool typo
 NOT_GRANTED = "Not granted:"
+PLAIN = Path("/nonexistent/plain-project")  # a judge's worktree: no PDS project, so no PDS skill (#777)
 
 
 def bare(name: str) -> str:
@@ -147,9 +148,9 @@ def test_roles_within_approved_work_carry_the_boundary_and_change_workers_the_lo
 def test_judges_are_never_offered_or_told_of_a_question() -> None:
     for role in AGENTS:
         asks = tools.ASK.name in tools.results(role)
-        assert asks == (role not in {"challenger", "design-judge", "updater", "test-reviewer", "picker", "curator"}), (
-            role
-        )  # the updater's stops are the job's; a test reviewer only reports (TD-339); the picker only picks
+        never = {"challenger", "design-judge", "updater", "test-reviewer", "picker", "curator", "auditor"}
+        assert asks == (role not in never), role
+        # the updater's stops are the job's; a test reviewer only reports (TD-339); the picker only picks
         assert (tools.ASK.name in step_input.reminder(role)) == asks
     for label in tools.VERDICTS:
         role = roles.SESSIONS[label]
@@ -179,7 +180,7 @@ def test_skills_may_name_tools_but_never_grant_them() -> None:
 def _session(label: str, **fields) -> sdk_adapter.Session:
     base = {
         "kind": StepKind.REVIEW,
-        "worktree": Path(),
+        "worktree": PLAIN,
         "session_id": "",
         "message": label,
         "resume": False,
@@ -216,7 +217,7 @@ def test_a_judge_runs_as_its_labels_role(label, role, monkeypatch) -> None:
         resolve(None, Layer(spotter=Spotter(switch="off"))),
     )  # no database
     with pytest.raises(_Made):
-        sessions.judges(store, SimpleNamespace(slug="c1"), None, Path(), lambda _at: [(label, _session(label))],
+        sessions.judges(store, SimpleNamespace(slug="c1"), None, PLAIN, lambda _at: [(label, _session(label))],
                         settings)  # fmt: skip
     (cfg,) = built
     assert sdk_adapter.role_of(cfg) == role

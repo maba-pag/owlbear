@@ -1,6 +1,7 @@
-// The Impeccable update's state and actions (D-01M63C5VGFVT3DVCC888B78K2A): the one update of this machine, kept in
-// the project that started it, whose endpoints its actions go to from whichever project the page shows, or from All
-// projects. Its view is run.mjs; Updates ▸ Impeccable (impeccable.mjs) shows both.
+// An update's state and actions (D-01M63C5VGFVT3DVCC888B78K2A): Impeccable's by default, or the kind a page sets in
+// own.kind (pds.mjs: the Porsche Design System's). Each is kept in the project that started it, whose endpoints its
+// actions go to from whichever project the page shows, or from All projects. Its view is run.mjs; Updates ▸
+// Impeccable (impeccable.mjs) and Updates ▸ Porsche Design System (pds.mjs) show both.
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { Slow, call, machineState, project } from "/assets/ui.mjs";
 
@@ -15,9 +16,39 @@ export const FOUND = { open: "to fix", fixed: "fixed by the updater",
   escalated: "rejected by the updater; the challenger upheld it", "owner-fix": "you decided: fix it",
   "owner-drop": "you dropped it", withdrawn: "withdrawn by the challenger" };
 
-export const own = { pinned: null, runs: null, unread: { pinned: "", runs: "" }, error: "", notes: new Map(),
-  choices: new Map(), unchosen: "", missing: "", busy: "", polling: null, reading: 0, awaiting: null, lost: false,
-  show: () => {} };
+// What differs between the kinds: where the runs are read and the update is answered, and what the dialogs say.
+export const IMPECCABLE = {
+  name: "Impeccable", uses: "labels, calibration and spend", label: "Update Impeccable",
+  intro: "An update takes the newest upstream pack and validates it with model requests. Only if every stage "
+    + "passes, or if you accept it after its challenge rounds end without a pass, it commits it on its own branch, "
+    + "opens a pull request to main and merges it once CI passes.",
+  pinned: "/maintenance/pack", runs: "/maintenance/pack/runs", update: "/impeccable/update",
+  start: {
+    title: "Update Impeccable?", yes: "Update", no: "Keep the current pack",
+    now: "Delivery takes the newest upstream pack, detector pins and design skills together; an updater session "
+      + "brings the skills, golden pages and detector glue in line, then the golden pages, calibration replay and a "
+      + "challenger check it. The challenger's findings go back to the updater. It runs on this project's labels, "
+      + "calibration and AI credits.",
+    then: "Only if every stage passes, it activates the pack: it commits impeccable.json, skills/NOTICE.md and "
+      + "the files the updater changed, opens a pull request to main and merges it once CI passes. It asks you here "
+      + "before changed golden evidence counts and before a glue change goes into the pull request, and when the "
+      + "rounds end without a pass or the challenger upholds a finding the updater rejected.",
+    after: "Later visual rounds use the new pack. If a stage fails, nothing changes and this page says why.",
+    instead: "The current pack stays active.",
+  },
+  activate: { title: "Activate the pack without a passing challenge?",
+    now: "Delivery activates the candidate as it is now: it commits impeccable.json, skills/NOTICE.md and the "
+      + "files the updater changed, opens a pull request to main and merges it once CI passes.",
+    after: "Later visual rounds use the new pack; run another update when upstream moves on." },
+  discard: { title: "Discard the Impeccable update?",
+    then: "Nothing is activated: the pinned pack stays as it is, and the run's candidate is not used again." },
+  merged: "The merged pack reaches each machine as it takes the OwlBear version that carries it; until then a "
+    + "machine keeps the pack it has.",
+};
+
+export const own = { kind: IMPECCABLE, pinned: null, runs: null, unread: { pinned: "", runs: "" }, error: "",
+  notes: new Map(), choices: new Map(), unchosen: "", missing: "", busy: "", polling: null, reading: 0,
+  awaiting: null, lost: false, show: () => {} };
 
 // *show* renders the whole page; the panel calls it whenever its state changes.
 export function follow(show) {
@@ -29,9 +60,10 @@ export function follow(show) {
 // replaced, removed meanwhile) hides neither.
 export async function readPack() {
   const generation = ++own.reading;
+  const k = own.kind;
   const [pinned, runs] = await Promise.allSettled([
-    call("/maintenance/pack", { timeout: 15000, machine: true }),
-    call("/maintenance/pack/runs", { timeout: 15000, machine: true }),
+    k.pinned ? call(k.pinned, { timeout: 15000, machine: true }) : null,
+    call(k.runs, { timeout: 15000, machine: true }),
   ]);
   if (generation !== own.reading) return;  // a later read is under way; it shows the newer state
   if (pinned.status === "fulfilled") [own.pinned, own.unread.pinned] = [pinned.value, ""];
@@ -89,18 +121,18 @@ export async function answer(run, q, o) {
   const standing = (loop?.findings ?? []).filter((f) => left.includes(f.state));
   const items = [...(loop?.unreviewed ?? []).map((r) => `Repair ${r}: no challenger reviewed it.`),
     ...standing.map((f) => `${f.id} not changed for (${FOUND[f.state]}): ${f.text}`)];
+  const a = own.kind.activate;
   if (o.id === "activate" && !(await ask({
-    title: "Activate the pack without a passing challenge?", yes: "Activate", no: "Keep it waiting",
-    now: "Delivery activates the candidate as it is now: it commits impeccable.json, skills/NOTICE.md and the "
-      + "files the updater changed, opens a pull request to main and merges it once CI passes. It activates "
+    title: a.title, yes: "Activate", no: "Keep it waiting",
+    now: `${a.now} It activates `
       + (items.length ? "with these left as they are:" : "with no repair left unreviewed and no finding left open."),
     items,
     then: "The commit message records that the rounds ended without a pass and which findings were not changed for.",
-    after: "Later visual rounds use the new pack; run another update when upstream moves on.",
+    after: a.after,
     instead: "The update keeps waiting; you can still discard it.",
   }))) return;
   await act(`${q.id}:${o.id}`, async () => {
-    await call("/impeccable/update/answer", { ...to, body: { question: q.id, option: o.id, note }, timeout: WRITE });
+    await call(`${own.kind.update}/answer`, { ...to, body: { question: q.id, option: o.id, note }, timeout: WRITE });
     own.notes.delete(q.id);
     own.choices.delete(q.id);
   });
@@ -118,19 +150,19 @@ export async function discard(run, d) {
   const to = reach(run), p = run.published;
   if (!to) return;
   const sure = await ask({
-    title: "Discard the Impeccable update?", yes: d.label, no: "Keep it waiting", destructive: true,
+    title: own.kind.discard.title, yes: d.label, no: "Keep it waiting", destructive: true,
     now: `The update started in ${run.name} ends here as discarded.`,
-    then: "Nothing is activated: the pinned pack stays as it is, and the run's candidate is not used again.",
+    then: own.kind.discard.then,
     after: p?.url ? `Its pull request #${p.number} stays open; close it on GitHub if you no longer want it.`
       : "Start a new update when you want one.",
     instead: "The update keeps waiting for your answer.",
   });
   if (!sure) return;
   if (d.q) {
-    await act(`${d.q.id}:discard`, () => call("/impeccable/update/answer",
+    await act(`${d.q.id}:discard`, () => call(`${own.kind.update}/answer`,
       { ...to, body: { question: d.q.id, option: "discard", note: "" }, timeout: WRITE }));
   } else {
-    await act("discard", () => call("/impeccable/update/discard", { ...to, method: "POST", timeout: WRITE }));
+    await act("discard", () => call(`${own.kind.update}/discard`, { ...to, method: "POST", timeout: WRITE }));
   }
 }
 
@@ -142,25 +174,13 @@ export function emphasis(q, o) {
 }
 
 export async function start() {
-  const sure = await ask({
-    title: "Update Impeccable?", yes: "Update", no: "Keep the current pack",
-    now: "Delivery takes the newest upstream pack, detector pins and design skills together; an updater session "
-      + "brings the skills, golden pages and detector glue in line, then the golden pages, calibration replay and a "
-      + "challenger check it. The challenger's findings go back to the updater. It runs on this project's labels, "
-      + "calibration and AI credits.",
-    then: "Only if every stage passes, it activates the pack: it commits impeccable.json, skills/NOTICE.md and "
-      + "the files the updater changed, opens a pull request to main and merges it once CI passes. It asks you here "
-      + "before changed golden evidence counts and before a glue change goes into the pull request, and when the "
-      + "rounds end without a pass or the challenger upholds a finding the updater rejected.",
-    after: "Later visual rounds use the new pack. If a stage fails, nothing changes and this page says why.",
-    instead: "The current pack stays active.",
-  });
+  const sure = await ask(own.kind.start);
   if (!sure) return;
   const before = key(own.runs?.run);
   own.lost = false;
   await act("start", async () => {
     try {
-      await call("/impeccable/update", { method: "POST", timeout: 10000 });
+      await call(own.kind.update, { method: "POST", timeout: 10000 });
     } catch (e) {
       if (!(e instanceof Slow && e.sent)) throw e;
       own.awaiting = { before, until: Date.now() + ADMIT };  // its admission may still be under way

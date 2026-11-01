@@ -3,14 +3,16 @@
 The detector's glue, the pins, the golden pages and the pinned skills are protected. A repair that changes them is
 checked again as the update was (``pack_activation``): its whole protected content is read from its commit, never from
 what an earlier repair left in the candidate, laid into the updater's folder, and compared with what was checked. The
-blobs it changed are kept for the owner's approval before the merge.
+blobs it changed are kept for the owner's approval before the merge. A ``Kind`` says what a kind of update protects and
+refuses; a PDS update's is ``pds_runs.repair``'s.
 """
 
 from __future__ import annotations
 
 import shutil
+from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.impeccable import pack_files, pack_git
 from owlbear_delivery_next.impeccable_runs import pack_gates, pack_updater
@@ -18,12 +20,48 @@ from owlbear_delivery_next.impeccable_runs.pack_candidate import MANIFEST, NOTIC
 from owlbear_delivery_next.impeccable_runs.pack_state import RUNS
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from owlbear_delivery_next.impeccable_runs.pack_candidate import Candidate
     from owlbear_delivery_next.impeccable_runs.pack_job import Job
     from owlbear_delivery_next.impeccable_runs.pack_repair import Repair
     from owlbear_delivery_next.impeccable_runs.pack_run import Context
+    from owlbear_delivery_next.runtimes.sdk_adapter import Session
+    from owlbear_delivery_next.runtimes.session_result import Run
 
 REGULAR = frozenset({"100644", "100755"})
+CHECKS = (
+    "The folder is a copy of the whole repository at the pull request's head. Change what makes the failed checks "
+    "fail, and only that. Never weaken a check: do not skip, xfail or delete a test, loosen an assertion, lower a "
+    "threshold or add a suppression (`noqa`, `type: ignore`, `biome-ignore`, `pragma: no cover` and the like). Do not "
+    "change lint, format, CI workflow, hook or security configuration (`.github/`, `pyproject.toml`, `biome.json`, "
+    "`.pre-commit-config.yaml`, `conftest.py` and the like): if the fix needs that, change nothing and say so in your "
+    "summary."
+)
+PUSH = "You cannot run commands or push: Delivery commits and pushes what you changed, and CI runs again."
+
+
+@dataclass(frozen=True)
+class Kind:
+    """What a kind of update's CI repair checks again or never pushes, how its session runs, and its words."""
+
+    rules: str  # the session's rules, after the CI stop
+    label: str  # the role whose settings its session takes
+    content: str  # what its protected paths are, in the owner's words
+    changes: str  # the words before the protected paths a repair changes
+    refusal: str  # why a refused path is never pushed
+    protected: Callable[[str, str], bool]  # (package, path): checked again before the push, approved before the merge
+    refused: Callable[[str, str, bool, list[str]], bool]  # (package, path, kept, pinned skills): only an update may
+    recheck: str  # the run's next action while a repair is checked
+    publish: str  # its next action otherwise
+    run: Callable[[Any, Session], Run]  # (job, session): the session's runner
+    job: str = ""  # the session's job, when it needs other skills than its role's
+    skills: Callable[[Path], Path | None] = lambda _at: None  # the skills folder in the copy, for its knowledge
+    pinned: Callable[[Any], list[str]] = lambda _ctx: []  # (context): the skills its run pinned, for ``refused``
+
+
+def _refused(package: str, path: str, kept: bool, skills: list[str]) -> bool:  # noqa: FBT001 - Kind.refused's shape
+    return protected(package, path) and not pack_gates.allowed(updater_path(package, path), kept, skills)
 
 
 def package_at(job: Job, src: pack_git.Source) -> str:
@@ -113,9 +151,11 @@ def unlike(at: Path, c: Candidate, snap: dict[str, bytes]) -> list[str]:
     return sorted(set(differ))
 
 
-def guarded(run: pack_git.Git, src: pack_git.Source, r: Repair, package: str) -> tuple[dict[str, str], str, bool]:
+def guarded(
+    run: pack_git.Git, src: pack_git.Source, r: Repair, package: str, rule: Callable[[str, str], bool] = protected
+) -> tuple[dict[str, str], str, bool]:
     """The protected paths the repair changes with their blobs in its commit, their diff, and whether it is binary."""
-    picked = [p for p in r.paths if protected(package, p)]
+    picked = [p for p in r.paths if rule(package, p)]
     if not picked:
         return {}, "", False
     listed = run(src.root, ["ls-tree", r.commit, "--", *picked]).splitlines()
@@ -135,3 +175,17 @@ def quiet(run: pack_git.Git, cwd: Path, args: list[str]) -> None:
         run(cwd, args)
     except pack_files.PackError:
         return
+
+
+IMPECCABLE = Kind(
+    rules=(
+        "This session is not a pack update: the updater's rules on `skills/`, `golden/` and `code/` do not apply. "
+        f"{CHECKS} A change to the detector's glue, the golden pages or the skills is checked again as the update was "
+        "and needs the owner's approval; never change `impeccable.json`, the notice or other files of the pack. "
+        f"{PUSH}"
+    ),
+    label=pack_updater.LABEL, content="the pack's protected content", changes="the pack's",
+    refusal="pack content only an update may change",
+    protected=protected, refused=_refused, recheck="golden", publish="activate",
+    run=lambda job, cfg: job.live.update(job.store, cfg), pinned=lambda ctx: ctx.pins["skills"],
+)  # fmt: skip

@@ -4,7 +4,8 @@ A step's agent sessions are reserved before its runner launches and given back o
 gone. A step reserves none when it never starts an agent session (publish, follow, merge, cleanup) and one once its
 decision pick waits for a session; up to the project's limit for a visual check that captures and judges (its judges
 run in waves of the grant), else one. The grant is written with the runner's record, so a restarted machine host
-counts it again before granting anything. An Impeccable update takes one slot for each of its sessions while it runs.
+counts it again before granting anything. An Impeccable update and a PDS audit take one slot for each of their
+sessions while they run.
 """
 
 from __future__ import annotations
@@ -20,10 +21,13 @@ from owlbear_delivery_next.change_contracts.models import ErrorKind, StepKind
 from owlbear_delivery_next.impeccable import pack_files
 from owlbear_delivery_next.impeccable_runs import pack_job, pack_replay, pack_run, pack_state
 from owlbear_delivery_next.local_system.slots import PACK
+from owlbear_delivery_next.pds_runs import hand_audit
+from owlbear_delivery_next.pds_runs import job as pds_job
 from owlbear_delivery_next.runtimes import maintained
 from owlbear_delivery_next.state_store import project_home
 from owlbear_delivery_next.state_store.store import StoreError
 from owlbear_delivery_next.workflow_steps import check, pick
+from owlbear_delivery_next.workflow_steps import sessions as step_sessions
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -34,7 +38,7 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.impeccable.calibration import Replay
     from owlbear_delivery_next.impeccable_runs.pack_candidate import Candidate
     from owlbear_delivery_next.impeccable_runs.pack_job import Job, Live
-    from owlbear_delivery_next.local_system.maintenance import Maintenance
+    from owlbear_delivery_next.local_system.maintenance import Kind, Maintenance
     from owlbear_delivery_next.project_host.host import Host
     from owlbear_delivery_next.runtimes.sdk_adapter import Session
     from owlbear_delivery_next.runtimes.session_result import Run
@@ -43,6 +47,7 @@ if TYPE_CHECKING:
 NO_AGENT = frozenset({StepKind.PUBLISH, StepKind.FOLLOW, StepKind.MERGE, StepKind.CLEANUP})
 ALL = 1_000  # as many as the project's limit and the machine's free slots allow
 WAIT = 2.0  # seconds between a pack session's checks for a stop while it waits
+WHO: dict[Kind, str] = {"pack": "Impeccable", "pds": "PDS"}  # whose sessions, in a refusal
 
 
 def wanted(c: Change, step: Step | None) -> int:
@@ -127,14 +132,14 @@ def admit(host: Host, note: Callable[[str], None]) -> str:
     return key
 
 
-def _still_admitted(host: Host) -> None:
+def _still_admitted(host: Host, kind: Kind = "pack") -> None:
     """Refuse a session whose slot was granted while a stop began: nothing enters the SDK once the stop has begun.
 
     Checked under the launch lock, so a stop either finds the session already counted or refuses it here.
     """
     with host.launching:
         if host.closed() or host.draining():
-            msg = "OwlBear stops; Impeccable's session did not start"
+            msg = f"OwlBear stops; {WHO[kind]}'s session did not start"
             raise pack_files.PackError(msg)
 
 
@@ -267,29 +272,71 @@ def restore(maintenance: Maintenance, key: str, root: Path, seen: tuple[dict[str
         _adopt_legacy(maintenance, key, legacy, kept, version)
 
 
+def owned(
+    host: Host | None, note: Callable[[str], None], work: Callable[[Session], Run], kind: Kind = "pack"
+) -> Callable[[Session], Run]:
+    """*work* entering the SDK only as maintenance of *kind* owning one of the project's slots."""
+
+    def run(cfg: Session) -> Run:
+        if host is None or host.maintenance is None:
+            msg = f"the machine's maintenance ownership is not bound; {WHO[kind]}'s sessions cannot start"
+            raise pack_files.PackError(msg)
+        slot = admit(host, note)
+        try:
+            _still_admitted(host, kind)
+        except BaseException:
+            release(host, slot)  # refused after its grant: the slot goes back before any SDK entry
+            raise
+        return maintained.run_owned(host.maintenance, cfg, work, project=project(host), slot=slot, kind=kind)
+
+    return run
+
+
+def pds(host: Host | None, store: Store) -> tuple[hand_audit.Hand, pds_job.Job]:
+    """*store*'s PDS work: its hand audit and its update, their sessions holding the project's slots."""
+    hand = hand_audit.Hand(store)
+    hand.maintenance = host.maintenance if host is not None else None
+    hand.run = owned(host, lambda _said: None, lambda cfg: step_sessions.run(hand.store, cfg), "pds")
+    return hand, pds_packed(host, pds_job.Job(store))
+
+
+def pds_packed(host: Host | None, job: pds_job.Job) -> pds_job.Job:
+    """*job* whose sessions each hold one of the project's slots as PDS maintenance; a run left open is held.
+
+    A run the last host left running is adopted as unknown work, so its workspace is never removed while a session of
+    it may still work. Without a running host its sessions refuse.
+    """
+    live = job.live
+    job.live = dataclasses.replace(
+        live, session=lambda store, cfg: owned(host, job.log, lambda bound: live.session(store, bound), "pds")(cfg)
+    )
+    job.maintenance = host.maintenance if host is not None else None
+    run = job.interrupted
+    if job.maintenance is not None and run is not None and not job.maintenance.owns(run["workspace"]):
+        job.maintenance.adopt_uncertain(
+            f"{project(host)}:{run['workspace']}:{run['generation']}", project(host), "pds",
+            workspace=run["workspace"], generation=run["generation"],
+        )  # fmt: skip
+    return job
+
+
+def busy(job: Job, hand: hand_audit.Hand, pds: pds_job.Job) -> list[str]:
+    """Work admitted outside a request, which a project's stop waits for (TD-242)."""
+    return [
+        *(["an Impeccable update"] if job.busy() else []),
+        *(["a PDS audit"] if hand.busy() else []),
+        *(["a PDS update"] if pds.busy() else []),
+    ]
+
+
 def pack_live(host: Host | None, live: Live, note: Callable[[str], None]) -> Live:
     """*live* whose updater, challenger and replay sessions enter the SDK only as maintenance owning a project slot."""
 
-    def owned(work: Callable[[Session], Run]) -> Callable[[Session], Run]:
-        def run(cfg: Session) -> Run:
-            if host is None or host.maintenance is None:
-                msg = "the machine's maintenance ownership is not bound; Impeccable's sessions cannot start"
-                raise pack_files.PackError(msg)
-            slot = admit(host, note)
-            try:
-                _still_admitted(host)
-            except BaseException:
-                release(host, slot)  # refused after its grant: the slot goes back before any SDK entry
-                raise
-            return maintained.run_owned(host.maintenance, cfg, work, project=project(host), slot=slot, kind="pack")
-
-        return run
-
     def update(store: Store, cfg: Session) -> Run:
-        return owned(lambda bound: live.update(store, bound))(cfg)
+        return owned(host, note, lambda bound: live.update(store, bound))(cfg)
 
     def challenge(store: Store, cfg: Session) -> Run:
-        return owned(lambda bound: live.challenge(store, bound))(cfg)
+        return owned(host, note, lambda bound: live.challenge(store, bound))(cfg)
 
     def replay(
         store: Store,
@@ -298,6 +345,6 @@ def pack_live(host: Host | None, live: Live, note: Callable[[str], None]) -> Liv
         *,
         keep: Callable[[Path], bool] | None = None,
     ) -> Replay:
-        return live.replay(store, candidate, owned(run or pack_replay.sdk_run), keep=keep)
+        return live.replay(store, candidate, owned(host, note, run or pack_replay.sdk_run), keep=keep)
 
     return dataclasses.replace(live, update=update, challenge=challenge, replay=replay)

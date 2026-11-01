@@ -1,0 +1,20 @@
+$breakpoint-xs: 480;
+$breakpoint-sm: 760;
+$breakpoint-md: 1000;
+$breakpoint-lg: 1300;
+$breakpoint-xl: 1760;
+$breakpoint-2xl: 1920;
+// @deprecated This API will be removed with the next major release.
+$pds-breakpoint-base: 0;
+// @deprecated Use $breakpoint-xs instead. This API will be removed with the next major release.
+$pds-breakpoint-xs: 480;
+// @deprecated Use $breakpoint-sm instead. This API will be removed with the next major release.
+$pds-breakpoint-s: 760;
+// @deprecated Use $breakpoint-md instead. This API will be removed with the next major release.
+$pds-breakpoint-m: 1000;
+// @deprecated Use $breakpoint-lg instead. This API will be removed with the next major release.
+$pds-breakpoint-l: 1300;
+// @deprecated Use $breakpoint-xl instead. This API will be removed with the next major release.
+$pds-breakpoint-xl: 1760;
+// @deprecated Use $breakpoint-2xl instead. This API will be removed with the next major release.
+$pds-breakpoint-xxl: 1920;

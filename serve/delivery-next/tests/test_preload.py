@@ -33,7 +33,7 @@ def gap(tmp_path: Path, monkeypatch) -> Path:
 def session(kind=StepKind.BUILD, **kw) -> sdk_adapter.Session:
     fields = {
         "kind": kind,
-        "worktree": Path(),
+        "worktree": Path("/nonexistent/plain-project"),  # no PDS project, so no PDS skill (#777)
         "session_id": "s1",
         "message": "m",
         "resume": False,

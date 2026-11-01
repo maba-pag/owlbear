@@ -1,8 +1,8 @@
 """An agent's CI repair of the Impeccable pull request: what in its change stops for the owner (``pack_repair``).
 
 Lint, format, CI workflow, hook or security configuration is held: the owner may push it. A weakened test (a deleted
-test file, an added skip, suppression or early return, a removed assertion or test) and protected pack content only an
-update may change are never pushed. Every other edit of an existing test file, including a Python test only
+test file, an added skip, suppression or early return, a removed assertion or test) and what only an update may change
+(the kind's ``refused``) are never pushed. Every other edit of an existing test file, including a Python test only
 reformatted (its syntax tree unchanged), waits for the owner's review of its diff: the patterns are a quick filter,
 no proof that a test still checks as much.
 """
@@ -14,8 +14,8 @@ import re
 from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Any
 
-from owlbear_delivery_next.impeccable_runs import pack_gates, pack_rounds
-from owlbear_delivery_next.impeccable_runs.pack_repair_content import protected, updater_path
+from owlbear_delivery_next.impeccable_runs import pack_rounds
+from owlbear_delivery_next.impeccable_runs.pack_repair_content import IMPECCABLE, Kind
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -97,8 +97,15 @@ def staged(run: pack_git.Git, at: Path, head: str) -> list[tuple[str, str]]:
     return changed
 
 
-def held(  # noqa: PLR0913 - the copy, its head, the change, and the package with its pinned skills
-    run: pack_git.Git, at: Path, head: str, changed: list[tuple[str, str]], *, package: str, skills: list[str]
+def held(  # noqa: PLR0913 - the copy, its head, the change, the package with its pinned skills, and the kind
+    run: pack_git.Git,
+    at: Path,
+    head: str,
+    changed: list[tuple[str, str]],
+    *,
+    package: str,
+    skills: list[str],
+    kind: Kind = IMPECCABLE,
 ) -> tuple[list[str], ...]:
     """What in the change stops for the owner: its configuration, what is never pushed and its other test edits.
 
@@ -108,9 +115,7 @@ def held(  # noqa: PLR0913 - the copy, its head, the change, and the package wit
     held = [p for p, how in changed if _configured(p) or how.split()[0] in LINKS]
     refused = [f"{p} (deleted test)" for p, how in changed if how.endswith("D") and TESTS.search(p)]
     refused += [
-        f"{p} (pack content only an update may change)"
-        for p, how in changed
-        if protected(package, p) and not pack_gates.allowed(updater_path(package, p), not how.endswith("D"), skills)
+        f"{p} ({kind.refusal})" for p, how in changed if kind.refused(package, p, not how.endswith("D"), skills)
     ]
     reviewed = []
     for path, how in changed:
