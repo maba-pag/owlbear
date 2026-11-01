@@ -18,7 +18,7 @@ from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.impeccable_runs import pack_job
 from owlbear_delivery_next.local_system import codebase, processes
 from owlbear_delivery_next.machine_host import app, project
-from owlbear_delivery_next.machine_host.machine import UNPROVEN_PACK, UNPROVEN_PDS, Machine
+from owlbear_delivery_next.machine_host.machine import UNPROVEN, UNPROVEN_PACK, Machine
 from owlbear_delivery_next.pds_runs import job as pds_job
 from owlbear_delivery_next.project_host import session_slots
 from owlbear_delivery_next.project_host.host import Host, HostRecord
@@ -138,7 +138,7 @@ def test_a_returned_unconfirmed_pds_session_keeps_the_update_and_the_stop_waitin
     (root := tmp_path / "wt").mkdir()
     assert job.live.session(loaded.store, session(root)) is IDENTIFIED
     assert (job.busy(), loaded.working(stopping=True)) == (False, [])
-    held = [f"a: {UNPROVEN_PDS}"]
+    held = [f"a: {UNPROVEN['pds']}"]
     assert (machine.busy(), machine.fence("synthetic update")) == (held, held)
     machine.unfence()
     stopped: list[bool] = []

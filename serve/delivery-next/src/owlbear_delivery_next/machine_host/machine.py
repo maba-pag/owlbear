@@ -38,7 +38,7 @@ RETRY = 60.0  # seconds between loads of a project that failed to load
 IDLE = 2.0  # seconds between looks whether a stop when idle may stop OwlBear
 CURATE_EVERY = 60.0  # seconds between looks whether idle time may curate memory (item 5 slice 4)
 UNPROVEN_PACK = "an Impeccable session not confirmed ended; the Maintenance page shows it"
-UNPROVEN_PDS = "a PDS session not confirmed ended; the Maintenance page shows it"
+UNPROVEN = {"pack": UNPROVEN_PACK, "pds": "a PDS session not confirmed ended; the Maintenance page shows it"}
 
 
 class MachineError(Exception):
@@ -303,9 +303,7 @@ class Machine:
     def _unproven_packs(self) -> list[str]:
         """Each project whose pack or PDS session the ledger holds, loaded or not: idle once the SDK returns."""
         names = {pid: p.name for pid, p in list(self.projects.items())}
-        held = [(key, UNPROVEN_PACK) for key in self.maintenance.holding("pack")]
-        held += [(key, UNPROVEN_PDS) for key in self.maintenance.holding("pds")]
-        return [f"{names.get(key, key)}: {said}" for key, said in held]
+        return [f"{names.get(k, k)}: {said}" for kind, said in UNPROVEN.items() for k in self.maintenance.holding(kind)]
 
     def left(self) -> list[str]:
         """What a stop when idle still waits for: each project's running steps, environments and admitted work."""
