@@ -100,7 +100,7 @@ def _now(at: Path) -> dict[str, str]:
     return {p: d for p, d in audit.digests(at).items() if not p.startswith(".git/")}
 
 
-def taken(at: Path, start: dict[str, str], candidate: Path) -> list[str]:
+def taken(at: Path, start: dict[str, str], candidate: Path) -> None:
     """The updater's edits in its copy at *at*, written into the candidate: only existing page files it changed.
 
     Raises:
@@ -118,4 +118,3 @@ def taken(at: Path, start: dict[str, str], candidate: Path) -> list[str]:
         raise Outside(msg)
     for p in changed:
         (candidate / PACKAGE / p).write_bytes((at / p).read_bytes())
-    return changed
