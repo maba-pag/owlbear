@@ -42,6 +42,7 @@ from owlbear_delivery_next.project_host import (
     memory_routes,
     pack_routes,
     pages,
+    pds_routes,
     session_slots,
     stop_routes,
 )
@@ -491,9 +492,8 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
     router.include_router(decision_routes.project(store, lambda: host.repo))
     job = session_slots.packed(host, pack or pack_job.Job(store))  # its sessions count as the project's (TD-336)
     router.include_router(pack_routes.router(store, job, lambda: admitted(host), host))
+    pds = session_slots.pds_hand(host, store)
+    router.include_router(pds_routes.router(pds, lambda: admitted(host)))
     app.include_router(router)
-    app.state.busy = lambda: [  # work admitted outside a request, which a project's stop waits for (TD-242)
-        *(["a shaping chat opening"] if launches.opening else []),
-        *(["an Impeccable update"] if job.busy() else []),
-    ]
+    app.state.busy = lambda: [*(["a shaping chat opening"] if launches.opening else []), *session_slots.busy(job, pds)]
     return app

@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 
 FILE = "maintenance-sessions.json"
 HELD = frozenset({"running", "held"})
-type Kind = Literal["pack", "curation", "replay", "retro"]
+type Kind = Literal["pack", "curation", "replay", "retro", "pds"]
 
 
 class Record(BaseModel):

@@ -37,6 +37,9 @@ SESSIONS: dict[str, Role] = {
     "memory-curation": "curator",  # one memory folder's automatic curation (item 5 slice 4)
     "decision-pick": "picker",  # a brief version's decisions, before its challenge (TD-459)
     "clarification-check": "picker",  # an owner's clarification against the approved brief (TD-461)
+    "pds-audit": "auditor",  # a PDS deprecation audit, of a candidate or of the installed pages (#777)
+    "pds-update": "updater",  # the PDS update's page edits
+    "pds-challenge": "challenger",  # a PDS update, before it is published
 }
 
 
