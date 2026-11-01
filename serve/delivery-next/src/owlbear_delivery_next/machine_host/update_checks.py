@@ -38,7 +38,6 @@ if TYPE_CHECKING:
 
 STATE = "update-checks.json"  # in ~/.owlbear: each update's last success, attempt and failures; no history
 TITLES = {"owlbear": "OwlBear", "pds": "Porsche Design System", "impeccable": "Impeccable"}
-ACTIONABLE = {"owlbear": True, "pds": True, "impeccable": True}
 MERGED = "merged into main; it arrives with OwlBear's next release"
 SHOWN = 2  # failures in a row before a failure shows
 RETRY = timedelta(hours=1)  # after a failure, the next timed check comes this soon, unless the interval is shorter
@@ -325,8 +324,8 @@ class Checks:
             state = "unknown"  # never checked, or not reached since: offline is never current
         due = self._next(name, hours)
         return {
-            "name": name, "title": TITLES[name], "actionable": ACTIONABLE[name], "state": state,
-            "available": offered and ACTIONABLE[name],  # until applied or found withdrawn, whatever a failure says
+            "name": name, "title": TITLES[name], "actionable": True, "state": state,
+            "available": offered,  # until applied or found withdrawn, whatever a failure says
             "current": current, "latest": latest if offered else current,
             "detail": impeccable.MOVED if moved else found.get("detail", ""),
             "checked_at": found.get("at"), "attempted_at": kept.get("attempt_at"), "failures": failures,
