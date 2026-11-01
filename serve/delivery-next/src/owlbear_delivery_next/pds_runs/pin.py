@@ -16,16 +16,16 @@ import posixpath
 import re
 import tarfile
 from dataclasses import dataclass
-from importlib.resources import files
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict
 
 from owlbear_delivery_next.impeccable import pack_files
+from owlbear_delivery_next.local_system.pds_skill import package
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from pathlib import Path
 
 NAME = "@porsche-design-system/components-js"
 REGISTRY = "https://registry.npmjs.org/@porsche-design-system/components-js"
@@ -94,11 +94,6 @@ def render(pin: Pin) -> bytes:
         folders.setdefault(folder, {})[name] = digest
     body = {"version": pin.version, "integrity": pin.integrity, "files": folders}
     return (json.dumps(body, indent=2) + "\n").encode()
-
-
-def package() -> Path:
-    """The installed package folder, whose ``pds.json`` and ``pds/`` this checkout serves."""
-    return Path(str(files("owlbear_delivery_next")))
 
 
 def read(root: Path | None = None) -> Pin:
