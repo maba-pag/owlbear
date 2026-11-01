@@ -14,7 +14,7 @@ import secrets
 import shutil
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Annotated, Any
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -56,6 +56,12 @@ class SettingsBody(api.Body):
 
     rev: str = Field(min_length=1, max_length=64)
     settings: registry.Settings
+
+
+class DismissBody(api.Body):
+    """The notices of Global changes made elsewhere that the owner dismissed."""
+
+    ids: list[Annotated[str, Field(pattern=r"^[0-9a-f]{16}$")]] = Field(min_length=1, max_length=200)
 
 
 class CurateBody(api.Body):
@@ -173,7 +179,7 @@ def _routes(machine: Machine) -> APIRouter:
             "left": machine.left() if machine.ending else [],
             "update_while_paused": _update_while_paused(),
             "update": machine.updater.read(), "updated": machine.updated or versions.running(),
-            "announce": machine.auto.read(), "pack": machine.impeccable.read(),
+            "announce": machine.auto.read(), "pack": machine.impeccable.read(), "reads": machine.reads.polled(),
         }  # fmt: skip
 
     @routes.post("/projects")
@@ -261,6 +267,11 @@ def _machine_routes(routes: APIRouter, machine: Machine) -> None:
         except registry.RegistryError as exc:
             raise HTTPException(409, str(exc)) from exc
         return values()
+
+    @routes.post("/settings-read/dismiss")
+    def dismiss(body: DismissBody) -> dict[str, Any]:
+        machine.reads.ledger.dismiss(body.ids)  # machine-wide: every page and project stops showing them
+        return machine.reads.polled()
 
     @routes.post("/resume")
     def resume() -> dict[str, bool]:

@@ -7,7 +7,7 @@ export const GROUPS = [["overview", "Overview"], ["agents", "Agents"], ["runs", 
 // Each group's sections and rows by the names their ids start with: a heading's (agents-title), a table's, a row's
 // (set-spotter-switch) or a control's (global-machine-channel). An old address names one of them.
 const PARTS = {
-  overview: ["scope", "unset", "across"],
+  overview: ["scope", "unset", "across", "reads"],
   agents: ["agents", "models", "shaper", "subagents", "spotter", "user-config", "load_user"],
   runs: ["rounds", "limits", "at-once", "sessions", "curation", "curator_threshold"],
   checks: ["general", "widths", "design_failures", "agreement", "impeccable", "merge", "prefs", "pr"],

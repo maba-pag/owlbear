@@ -10,6 +10,7 @@ while none of its runners runs and no memory curation works in it (#678).
 from __future__ import annotations
 
 import contextlib
+import functools
 import hashlib
 import time
 from typing import TYPE_CHECKING, Any
@@ -22,12 +23,13 @@ from owlbear_delivery_next.impeccable import calibration, pack_update
 from owlbear_delivery_next.local_system import data_repo
 from owlbear_delivery_next.local_system.data_repo import DataRepoError
 from owlbear_delivery_next.project_host import memory_routes
-from owlbear_delivery_next.runtimes import model_choices
+from owlbear_delivery_next.runtimes import settings_read
 from owlbear_delivery_next.settings.config import GlobalLayer, Layer, MachineLayer, resolve
 from owlbear_delivery_next.state_store import prefs_import, profile_share
 from owlbear_delivery_next.state_store.store import StoreError, read_layer_bytes, update_layer
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from pathlib import Path
 
     from owlbear_delivery_next.change_contracts.profile_record import Profile
@@ -231,12 +233,21 @@ def _layers(stores: list[Store]) -> list[Layer]:
 
 
 def _save[T: Layer](  # noqa: PLR0913, PLR0917 - the host names this machine's projects for its layer
-    store: Store, path: Path, model: type[T], body: Save, what: str, host: Host, *, reviewed: bool = False
+    store: Store,
+    path: Path,
+    model: type[T],
+    body: Save,
+    what: str,
+    host: Host,
+    *,
+    reviewed: bool = False,
+    written: Callable[[T, T], None] | None = None,
 ) -> str:
     """Validate the edited layer, write it if its file is still at ``body.rev``, publish it; return the notice.
 
     This machine's layer is written in place and never published (TD-336). A reviewed legacy import latches
     ``prefs_imported`` in the same write, and the latch is never lowered by a page that still holds the old value.
+    *written* gets the layer before and after, right after the write and before anything is pulled.
     """
     try:
         new = model.model_validate(body.layer)
@@ -246,18 +257,21 @@ def _save[T: Layer](  # noqa: PLR0913, PLR0917 - the host names this machine's p
     except StoreError as exc:
         raise HTTPException(409, str(exc)) from exc
 
+    pair: list[T] = []
+
     def change(current: T) -> T:
         if _rev(path) != body.rev:
             raise HTTPException(409, "the settings changed since this page loaded them")
-        return new.model_copy(
-            update={"prefs_imported": current.prefs_imported or reviewed, "roles_moved": current.roles_moved}
-        )
+        kept = {"prefs_imported": current.prefs_imported or reviewed, "roles_moved": current.roles_moved}
+        pair[:] = [current, new.model_copy(update=kept)]
+        return pair[1]
 
+    hook = (lambda: written(*pair)) if written else None
     try:
         if isinstance(new, MachineLayer):
             update_layer(path, model, change)
             return ""
-        return store.save(path, model, change, what, owner=True)
+        return store.save(path, model, change, what, owner=True, on_written=hook)
     except StoreError as exc:
         raise HTTPException(409, str(exc)) from exc
     except OSError as exc:
@@ -359,17 +373,38 @@ def _settle_prefs_import(store: Store, *, reviewed: bool) -> None:
         raise HTTPException(503, str(exc)) from exc
 
 
+def _reader(store: Store, host: Host) -> Callable[[], settings_read.Reader]:
+    """The machine's reader; a host without a machine (tests, a lone project host) builds its own once."""
+    say, machine = getattr(host, "say", lambda _text: None), getattr(host, "machine", lambda: [store])
+    own = functools.cache(lambda: settings_read.Reader(say, machine))
+    return lambda: getattr(host, "reads", None) or own()
+
+
+def _read_routes(routes: APIRouter, reads: Callable[[], settings_read.Reader]) -> None:
+    """The outside reads' routes: the offered models, the read state, and a read now."""
+
+    @routes.get("/config/models")
+    def models() -> dict[str, Any]:
+        return reads().offered()
+
+    @routes.get("/config/read")
+    def read_state() -> dict[str, Any]:
+        return {"reads": reads().shown()}  # never the layers: it answers while one of them does not read
+
+    @routes.post("/config/read")
+    def read_again() -> dict[str, Any]:
+        reads().read()
+        return {"reads": reads().shown()}
+
+
 def router(store: Store, host: Host) -> APIRouter:
     """The settings routes; the caller adds the token check."""
-    routes, offered = APIRouter(), model_choices.Offered()
+    routes, reads = APIRouter(), _reader(store, host)
+    _read_routes(routes, reads)
 
     @routes.get("/config")
     def read() -> dict[str, Any]:
         return _state(store)
-
-    @routes.get("/config/models")
-    def models() -> dict[str, Any]:
-        return offered()
 
     @routes.put("/config/project")
     def put_project(body: Save) -> dict[str, Any]:
@@ -383,7 +418,9 @@ def router(store: Store, host: Host) -> APIRouter:
     def put_global(body: Save) -> dict[str, Any]:
         if store.global_path is None:
             raise HTTPException(409, "no shared settings location is set up; run `owlbear-next data PATH`")
-        return _state(store, _save(store, store.global_path, GlobalLayer, body, "global: from the settings page", host))
+        what = "global: from the settings page"
+        # this machine's change of Global is never noticed as one from elsewhere
+        return _state(store, _save(store, store.global_path, GlobalLayer, body, what, host, written=reads().ledger.own))
 
     @routes.put("/config/machine")
     def put_machine(body: Save) -> dict[str, Any]:

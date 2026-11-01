@@ -1,5 +1,5 @@
 import { call } from "/assets/ui.mjs";
-import { CREDITS, INHERIT, LAYERS, NUMBERS, WRITE, state, drafts, page, show, showIdle, notify, typedNumber }
+import { CREDITS, INHERIT, LAYERS, NUMBERS, WRITE, state, drafts, page, show, showIdle, notify, typedNumber, turns }
   from "./state.mjs";
 import { USER_KEYS, mismatch, tierMismatch } from "./cells.mjs";
 import { draftGroup } from "./groups.mjs";
@@ -213,13 +213,20 @@ function walk(path, as) {
   return value === null ? null : { value, from: as ?? base.sources[path] };
 }
 
+const answers = turns(), models = turns();  // the layers' reloads, saves and renames
+
+// The layers as the host has them now, unless a newer reload, save or rename has answered meanwhile.
 export async function reload() {
+  const n = answers.ask();
   try {
-    state.loaded = await call("/config");
-    state.error = state.loaded.notice ? state.loaded.notice.charAt(0).toUpperCase() + state.loaded.notice.slice(1) : "";
+    const loaded = await call("/config");
+    const says = answers.says(n);
+    if (!answers.take(n)) return false;
+    state.loaded = loaded;
+    if (says) state.error = loaded.notice ? loaded.notice.charAt(0).toUpperCase() + loaded.notice.slice(1) : "";
     return true;
   } catch (e) {
-    notify(e.message);
+    if (answers.says(n)) notify(e.message);  // a newer answer speaks for the layers
     return false;
   }
 }
@@ -270,6 +277,7 @@ async function saveLayer(review) {
     state.loaded = await call(`/config/${layer}`,
       { method: "PUT", body: { rev: state.loaded[`${layer}_rev`], layer: edited(layer),
         prefs_reviewed: layer === "project" && state.prefsReview }, timeout: WRITE });
+    answers.shown();
     if (layer === "project" && !state.loaded.unpublished) state.prefsReview = false;  // kept until published
     for (const [key, value] of Object.entries(sent)) if (drafts[layer][key] === value) delete drafts[layer][key];
     error = state.loaded.notice ?? "";
@@ -309,6 +317,7 @@ export async function rename() {
   show();
   try {
     state.loaded = await call("/config/folder", { method: "PUT", body: { name }, timeout: WRITE });
+    answers.shown();
     state.folder = null;
     state.error = state.loaded.notice ? state.loaded.notice.charAt(0).toUpperCase() + state.loaded.notice.slice(1) : "";
     state.status = `This project's folder is now ${state.loaded.folder}.`;
@@ -322,17 +331,21 @@ export async function rename() {
 }
 
 // The offered models replace typing once read; the runtime starts for it, so this can take a while.
+// Of overlapping reads, the newest one's answer stands, a failure too.
 export async function readModels() {
+  const n = models.ask();
   state.modelsNote = "Reading the models this machine's Copilot offers…";
   show();
+  let offered = null, note;
   try {
     const answer = await call("/config/models", { timeout: 45000 });
-    const offered = answer.models.length ? answer.models : null;
-    const note = offered ? "Models, efforts and context sizes as this machine's Copilot offers them."
+    offered = answer.models.length ? answer.models : null;
+    note = offered && answer.error ? `Models as last read; reading them again failed (${answer.error}).`
+      : offered ? "Models, efforts and context sizes as this machine's Copilot offers them."
       : `Could not read the offered models (${answer.error || "none offered"}); type a model name.`;
-    page.arrived = { offered, note };
   } catch (e) {
-    page.arrived = { offered: null, note: `Could not read the offered models (${e.message}); type a model name.` };
+    note = `Could not read the offered models (${e.message}); type a model name.`;
   }
+  if (models.take(n)) page.arrived = { offered, note };
   showIdle();
 }

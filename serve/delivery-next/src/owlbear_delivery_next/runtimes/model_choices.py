@@ -28,26 +28,36 @@ EFFORTS = frozenset(get_args(Effort.__value__))
 
 
 class Offered:
-    """The last read of the offered models, shared by the settings page's requests; a failure is never kept."""
+    """The last good read of the offered models, shared by the settings page's requests, and the last read's error.
+
+    A failed read keeps the last good list beside its error; with no list kept, the next call reads again.
+    """
 
     def __init__(self) -> None:
-        self._lock, self._kept = threading.Lock(), None
+        self._lock, self._kept, self._error = threading.Lock(), None, ""
 
     def __call__(self) -> dict[str, Any]:
-        """The models with an empty error, or no models and why."""
+        """The models and the last read's error; read again when the kept list is older than ``FRESH`` or absent."""
         with self._lock:
-            if self._kept and time.monotonic() - self._kept[0] < FRESH:
-                return {"models": self._kept[1], "error": ""}
-            try:
-                models = [
-                    shown(m)
-                    for m in _read()
-                    if m.id != AUTO and (m.policy is None or _value(m.policy.state) == "enabled")
-                ]
-            except Exception as exc:  # noqa: BLE001 - without the list the page keeps a typed model
-                return {"models": [], "error": f"{type(exc).__name__}: {exc}"[:200]}
-            self._kept = (time.monotonic(), models)
-            return {"models": models, "error": ""}
+            return self._last() if self._kept and time.monotonic() - self._kept[0] < FRESH else self._refresh()
+
+    def refresh(self) -> dict[str, Any]:
+        """Read now, whatever the kept list's age."""
+        with self._lock:
+            return self._refresh()
+
+    def _last(self) -> dict[str, Any]:
+        return {"models": self._kept[1] if self._kept else [], "error": self._error}
+
+    def _refresh(self) -> dict[str, Any]:
+        try:
+            models = [
+                shown(m) for m in _read() if m.id != AUTO and (m.policy is None or _value(m.policy.state) == "enabled")
+            ]
+            self._kept, self._error = (time.monotonic(), models), ""
+        except Exception as exc:  # noqa: BLE001 - without a new list the page keeps the last one, or a typed model
+            self._error = f"{type(exc).__name__}: {exc}"[:200]
+        return self._last()
 
 
 async def takes_effort(client: CopilotClient, model: str) -> bool:

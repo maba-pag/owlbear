@@ -22,11 +22,12 @@ from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.project_host import api, config_routes
 from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.runtimes import model_choices
+from owlbear_delivery_next.settings.config import CONFIG_FORMAT
 from owlbear_delivery_next.settings.improvement import ALLOWED, CATEGORIES
 from owlbear_delivery_next.state_store.store import Store
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Callable, Iterator
     from pathlib import Path
 
 MODELS = {
@@ -535,6 +536,196 @@ def test_models_arriving_during_a_save_apply_once_it_ends(store, monkeypatch, pd
     finally:
         server.should_exit = True
     assert saved.is_set()
+
+
+@pytest.mark.browser
+def test_a_refresh_answered_after_a_save_keeps_the_saved_values(store, pds) -> None:
+    """#810: a read's refresh that the host answered before a save, arriving after it, never shows the older layers."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    with settings_page(store, pds) as page:
+        pds.group(page, "overview")
+        expect(page.locator("#reads-status")).to_contain_text("Last read")
+        held: list[tuple[Any, Any]] = []
+
+        def hold(route: Any) -> None:
+            if route.request.method != "GET" or held:
+                route.continue_()
+                return
+            held.append((route, route.fetch()))  # the layers as they are before the save
+
+        page.route("**/api/next/config", hold)
+        page.locator("#read-again").click()
+        for _ in range(200):  # the old layers are in hand before the save starts
+            if held:
+                break
+            page.wait_for_timeout(50)
+        assert held
+        pds.group(page, "runs")
+        page.get_by_label("Minutes per session, builder").fill("50")
+        page.get_by_role("button", name="Save project settings").click()
+        pds.answer(page, "Save project settings")
+        expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
+        route, before = held[0]
+        with page.expect_response("**/config/models"):  # the refresh goes on past the layers it read
+            route.fulfill(response=before)
+        expect(page.get_by_label("Minutes per session, builder")).to_have_value("50")
+
+
+@pytest.mark.browser
+def test_a_refresh_begun_during_a_save_keeps_the_saved_values(store, pds, monkeypatch) -> None:
+    """#810: a read answered while a save runs reloads the layers then; that older answer never replaces the save's."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    go = threading.Event()
+    real = config_routes._save  # noqa: SLF001 - the save the route runs
+
+    def save(*args: Any, **kwargs: Any) -> str:
+        go.wait(30)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(config_routes, "_save", save)
+    with settings_page(store, pds) as page:
+        pds.group(page, "overview")
+        expect(page.locator("#reads-status")).to_contain_text("Last read")
+        read: list[tuple[Any, Any]] = []
+        layers: list[tuple[Any, Any]] = []
+
+        def hold(into: list[tuple[Any, Any]], method: str) -> Callable[[Any], None]:
+            def handle(route: Any) -> None:
+                if route.request.method != method or into:
+                    route.continue_()
+                    return
+                into.append((route, route.fetch()))
+
+            return handle
+
+        def held(into: list[tuple[Any, Any]]) -> tuple[Any, Any]:
+            for _ in range(400):
+                if into:
+                    return into[0]
+                page.wait_for_timeout(50)
+            pytest.fail("the request never came")
+
+        page.route("**/api/next/config/read", hold(read, "POST"))
+        page.locator("#read-again").click()
+        route, answer = held(read)
+        pds.group(page, "runs")
+        page.get_by_label("Minutes per session, builder").fill("50")
+        page.get_by_role("button", name="Save project settings").click()
+        pds.answer(page, "Save project settings")
+        expect(page.locator("#status")).to_have_text("Saving…")
+        page.route("**/api/next/config", hold(layers, "GET"))
+        route.fulfill(response=answer)  # the read's refresh starts while the save runs
+        route, before = held(layers)  # the layers as they are before the save writes
+        go.set()
+        expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
+        with page.expect_response("**/config/models"):  # the refresh goes on past the layers it read
+            route.fulfill(response=before)
+        expect(page.get_by_label("Minutes per session, builder")).to_have_value("50")
+
+
+@pytest.mark.browser
+def test_an_older_read_s_layers_answered_last_never_replace_a_newer_read_s(store, pds) -> None:
+    """#810: two reads' refreshes overlap; the first one's layers, answered after the second's, are not shown."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    with settings_page(store, pds) as page:
+        pds.group(page, "overview")
+        expect(page.locator("#reads-status")).to_contain_text("Last read")
+        held: list[tuple[Any, Any]] = []
+
+        def hold(route: Any) -> None:
+            if route.request.method != "GET" or held:
+                route.continue_()
+                return
+            held.append((route, route.fetch()))  # the layers before the change below
+
+        page.route("**/api/next/config", hold)
+        page.locator("#read-again").click()
+        for _ in range(400):
+            if held:
+                break
+            page.wait_for_timeout(50)
+        assert held
+        store.config_path.parent.mkdir(parents=True, exist_ok=True)
+        store.config_path.write_text(json.dumps({"format": CONFIG_FORMAT, "agents": {"builder": {"minutes": 45}}}))
+        page.locator("#read-again").click()  # the second read's refresh shows the change
+        pds.group(page, "runs")
+        expect(page.get_by_label("Minutes per session, builder")).to_have_value("45")
+        route, before = held[0]
+        with page.expect_response("**/config/models"):  # the first refresh goes on past the layers it read
+            route.fulfill(response=before)
+        expect(page.get_by_label("Minutes per session, builder")).to_have_value("45")
+
+
+@pytest.mark.browser
+@pytest.mark.parametrize("order", ["failure first", "failure last"])
+def test_a_newer_read_s_failed_layers_never_discard_an_older_read_s(store, pds, order: str) -> None:
+    """#810: of two reads' refreshes, the newer one's layers fail; the older one's, answered before or after, show."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    with settings_page(store, pds) as page:
+        pds.group(page, "overview")
+        expect(page.locator("#reads-status")).to_contain_text("Last read")
+        store.config_path.parent.mkdir(parents=True, exist_ok=True)
+        store.config_path.write_text(json.dumps({"format": CONFIG_FORMAT, "agents": {"builder": {"minutes": 45}}}))
+        held: list[tuple[Any, Any]] = []
+
+        def hold(route: Any) -> None:
+            if route.request.method != "GET" or len(held) == 2:
+                route.continue_()
+                return
+            held.append((route, None if held else route.fetch()))  # the first brings the change
+
+        page.route("**/api/next/config", hold)
+        for count in (1, 2):
+            page.locator("#read-again").click()
+            for _ in range(400):
+                if len(held) == count:
+                    break
+                page.wait_for_timeout(50)
+            assert len(held) == count
+        (older, found), (newer, _) = held
+        failed = {"status": 503, "json": {"detail": "the layers could not be read"}}
+        steps = [lambda: newer.fulfill(**failed), lambda: older.fulfill(response=found)]
+        for step in steps if order == "failure first" else steps[::-1]:
+            with page.expect_response("**/api/next/config"):
+                step()
+        pds.group(page, "runs")
+        expect(page.get_by_label("Minutes per session, builder")).to_have_value("45")
+
+
+@pytest.mark.browser
+def test_an_older_read_s_failed_layers_never_speak_over_a_newer_read_s(store, pds) -> None:
+    """#810: of two reads' refreshes, the older one's layers fail after the newer one's showed; no error is said."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    with settings_page(store, pds) as page:
+        pds.group(page, "overview")
+        expect(page.locator("#reads-status")).to_contain_text("Last read")
+        held: list[Any] = []
+
+        def hold(route: Any) -> None:
+            if route.request.method != "GET" or len(held) == 2:
+                route.continue_()
+                return
+            held.append(route)
+
+        page.route("**/api/next/config", hold)
+        for count in (1, 2):
+            page.locator("#read-again").click()
+            for _ in range(400):
+                if len(held) == count:
+                    break
+                page.wait_for_timeout(50)
+            assert len(held) == count
+        older, newer = held
+        with page.expect_request("**/api/next/config/models"):  # the newer refresh is done with the layers
+            newer.continue_()
+        with page.expect_request("**/api/next/config/models"):  # asked right after the failed answer is handled
+            older.fulfill(status=503, json={"detail": "the layers could not be read"})
+        assert page.locator("#error").is_hidden()
 
 
 @pytest.mark.browser

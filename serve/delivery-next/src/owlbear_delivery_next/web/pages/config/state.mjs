@@ -23,6 +23,28 @@ export const LOOPS = [["shaper", "Brief challenges (shaper)"], ["planner", "Plan
   ["builder", "Task reviews (builder)"], ["final_review", "Final review"],
   ["updater", "Impeccable updates (updater)"]];
 export const WRITE = 60000;  // a save commits and pushes the shared settings repository (TD-64): a network round trip
+// Answers of one kind that overlap and settle in any order, as the bar's reads do. *take*: an older one's data never
+// replaces a newer one's, and a newer one that failed never discards what an older one brought. *says*: whether this
+// answer, failed or not, is the newest to settle, so an older one never clears or replaces a newer one's failure.
+// *shown* marks a write's answer as shown.
+export function turns() {
+  let begun = 0, last = 0, said = 0;
+  return {
+    ask: () => ++begun,
+    take(n) {
+      if (n <= last) return false;
+      last = n;
+      return true;
+    },
+    says(n) {
+      if (n <= said) return false;
+      said = n;
+      return true;
+    },
+    shown() { last = said = ++begun; },
+  };
+}
+
 // Everything shown comes from here (TD-264): drafts per layer ("role.field" -> as typed), the folder being typed and
 // the offered models once read.
 const asked = new URLSearchParams(location.search);
@@ -35,10 +57,10 @@ export const state = {
   everything: false,  // the overview shows every setting, not only those a project sets apart (TD-295)
   machineDraft: null, machineSaving: false,  // the machine's settings as edited, before they are saved
   machineText: null,  // a list setting's text as typed, until a save
-  machineWrites: 0,  // counts machine saves, so a read that started before one never shows older values
   machineUnread: "",  // why this machine's settings could not be read, until a read succeeds
   // Owner edited or cleared a project Merge and cleanup preference; kept until a save publishes.
   prefsReview: false,
+  reads: null, readsSeen: "", reading: false, readsError: "",  // the outside reads as last shown (#810)
 };
 export const drafts = { project: {}, machine: {}, global: {} };
 // The way back a Metrics compaction row's link gave: kept only when it is this host's own Metrics page
@@ -64,20 +86,27 @@ export function show() {
   }
 }
 
-// Focus *target*, or a row's first control: the menu's dialog puts the focus back on its button as it closes, so the
-// focus is put back until it has stayed a few frames, for at most a second, and never after the owner's next key or
-// pointer press, which moves it himself.
+// Focus *target*, or a row's first control, and keep it in view: the menu's dialog puts the focus back on its button as
+// it closes, and the components above it grow as they load, so the focus is put back and the control scrolled to again
+// until both have stayed a few frames, for at most a second, and never after the owner's next key, pointer press or
+// wheel, which moves them himself.
 async function reveal(target) {
   const control = target.matches("p-table-row, div") ? target.querySelector(":is([data-key], [id^='machine-'], "
     + "[id^='global-machine-'], p-select, p-input-text, p-segmented-control):not([disabled])")
     : null;  // a setting the shown layer cannot hold is read-only: its row takes the focus
-  const into = control ?? target;
-  into.scrollIntoView({ block: control ? "center" : "start" });
+  const into = control ?? target, block = control ? "center" : "start";
+  into.scrollIntoView({ block });
+  let top = into.getBoundingClientRect().top;
   const owner = new AbortController();
-  for (const type of ["keydown", "pointerdown"]) {
+  for (const type of ["keydown", "pointerdown", "wheel"]) {
     addEventListener(type, () => owner.abort(), { capture: true, signal: owner.signal });
   }
   for (let frame = 0, kept = 0; frame < 60 && kept < 10 && !owner.signal.aborted; frame++) {
+    if (into.getBoundingClientRect().top !== top) {
+      into.scrollIntoView({ block });
+      top = into.getBoundingClientRect().top;
+      kept = 0;
+    }
     if (into.matches(":focus")) kept++;
     else into.focus({ preventScroll: true });
     await new Promise(requestAnimationFrame);

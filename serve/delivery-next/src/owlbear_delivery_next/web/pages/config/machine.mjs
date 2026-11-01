@@ -1,7 +1,7 @@
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { live } from "/assets/lit-html/3.3.3/directives/live.js";
 import { call, here, loaded as clones, project as current } from "/assets/ui.mjs";
-import { CREDITS, INHERIT, SOURCES, WRITE, state, show, notify, typedNumber } from "./state.mjs";
+import { CREDITS, INHERIT, SOURCES, WRITE, state, show, notify, typedNumber, turns } from "./state.mjs";
 import { button } from "./cells.mjs";
 import { edit, own, layerValue } from "./layers.mjs";
 
@@ -179,6 +179,8 @@ function machineControls() {
       disabled: !state.machineDraft })}</div>` : nothing}`;
 }
 
+const machineReads = turns(), acrossReads = turns();  // reads overlap: two refreshes, a save's and a refresh's
+
 async function saveMachine() {
   if (!state.machineDraft || state.machineSaving) return;
   const shown = (key, v) => (v === null || v === undefined ? "inherited" : said(key, v));
@@ -191,7 +193,6 @@ async function saveMachine() {
     instead: "Your edits stay unsaved on this page.",
   }))) return;
   state.machineSaving = true;  // the controls stay disabled until it ends, so no edit is made and lost meanwhile
-  state.machineWrites += 1;
   show();
   try {
     accept(await call("/machine/settings", { method: "PUT", machine: true, timeout: WRITE,
@@ -206,7 +207,7 @@ async function saveMachine() {
       + "again." : e.message);
   } finally {
     state.machineSaving = false;
-    state.machineWrites += 1;
+    machineReads.shown();
     show();
   }
 }
@@ -260,19 +261,24 @@ async function removeLegacy() {
   show();
 }
 
-// The machine's values, or why they could not be read, unless a machine save ran during this read; then the save's
-// answer stands.
+// The machine's values, or why they could not be read, unless a machine save ran during this read or a newer read has
+// answered; then that answer stands.
 export async function readMachine() {
-  const writes = state.machineWrites;
+  const n = machineReads.ask();
   if (state.machineSaving) return;
   let failed = "";
   const read = await call("/machine", { machine: true }).catch((e) => {
     failed = e.message;
     return undefined;
   });
-  if (state.machineSaving || writes !== state.machineWrites) return;
-  if (read === undefined) state.machineUnread = failed;
-  else accept(read);  // typed text stays: it shows only while its items are the field's own (ownControl)
+  if (state.machineSaving) return;
+  const says = machineReads.says(n);
+  if (read === undefined) {
+    if (says) state.machineUnread = failed;
+    return;
+  }
+  if (machineReads.take(n)) state.machine = read;  // typed text stays: it shows only while its items are its own
+  if (says) state.machineUnread = "";
 }
 
 // The machine's values as the host answered them, so a read that failed before no longer speaks for them.
@@ -285,7 +291,9 @@ function accept(machine) {
 export async function readAcross() {
   const others = (clones() ?? []).filter((p) => p.id !== current);
   if (!clones()) return;
+  const n = acrossReads.ask();
   const [, ...read] = await Promise.allSettled([readMachine(), ...others.map((p) => call("/config", { of: p.id }))]);
+  if (!acrossReads.take(n)) return;
   const seen = new Set(state.loaded?.folder ? [state.loaded.folder] : []);
   state.others = [];
   state.unread = [];

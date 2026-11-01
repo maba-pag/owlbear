@@ -7,6 +7,7 @@ import { pendingLine, save, rename, reviewPrefs, hasEdits, anyEdits, pendingIn }
 import { machineSection } from "./machine.mjs";
 import { agentsGroup, runsGroup, checksGroup } from "./panels.mjs";
 import { GROUPS, groupOf, rowOf } from "./groups.mjs";
+import { readsView } from "./reads.mjs";
 
 // The project this page edits, by its name in the machine host's list; "This project" on a clone's own host.
 export function named(id = current) {
@@ -159,7 +160,7 @@ function groupNav() {
 }
 
 const GROUP_VIEWS = {
-  overview: () => html`${unsetSection()}${acrossSection()}`,
+  overview: () => html`${readsView()}${unsetSection()}${acrossSection()}`,
   agents: agentsGroup,
   runs: runsGroup,
   checks: checksGroup,
@@ -221,5 +222,6 @@ export function view() {
     <p-inline-notification id="error" state="error" dismiss-button="false" ?hidden=${!state.error}>${state.error}
     </p-inline-notification>
     <p-text id="status" role="status" aria-live="polite">${state.status}</p-text>
-    ${loaded ? html`${scopeSection()}${groupNav()}${GROUP_VIEWS[state.group]()}${saveBar()}` : nothing}`;
+    ${loaded ? html`${scopeSection()}${groupNav()}${GROUP_VIEWS[state.group]()}${saveBar()}`
+      : state.reads ? readsView() : nothing}`;  // a layer that does not read: Read again and why stay
 }
