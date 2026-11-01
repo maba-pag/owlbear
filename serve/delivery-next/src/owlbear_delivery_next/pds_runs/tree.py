@@ -78,9 +78,7 @@ def source(at: Path) -> dict[str, bytes]:
     return pages | ({PAGES: (at / PAGES).read_bytes()} if (at / PAGES).is_file() else {})
 
 
-def digest(files: dict[str, bytes]) -> str:
-    """One digest over *files*' paths and bytes."""
-    return pack_gates.digest(dict(files))
+digest = pack_gates.digest  # one digest over files' paths and bytes
 
 
 def identity(candidate: str, pages: str) -> str:
