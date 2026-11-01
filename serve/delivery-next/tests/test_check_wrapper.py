@@ -8,6 +8,7 @@ import sys
 import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 
 import psutil
 import pytest
@@ -62,6 +63,24 @@ def test_a_recipe_never_runs_when_its_host_stops_before_recording_the_group(tmp_
     proc.stdin.close()  # what a host's exit does to the pipe
     assert proc.wait(10) != 0
     assert not ran.exists()
+
+
+def test_an_unlisted_table_while_awaiting_readiness_is_polled_again(monkeypatch) -> None:
+    calls: list[int] = []
+
+    def members(pgid: int, _leader: float | None = None) -> dict[int, str]:
+        calls.append(pgid)
+        if len(calls) == 1:
+            msg = "the process table could not be listed"
+            raise processes.UnlistedError(msg)
+        return {pgid: "sleep"}
+
+    monkeypatch.setattr(check, "answers", lambda _url: True)
+    monkeypatch.setattr(check, "members", members)
+    monkeypatch.setattr(check, "created", lambda _pid: 2.0)
+    proc = SimpleNamespace(pid=900, returncode=None)
+    assert check.ready(env("sleep 300"), proc) == {900: 2.0}
+    assert calls == [900, 900]
 
 
 @pytest.mark.parametrize("shell", ["sh -c '", "bash -c 'set -m; "])  # a job-control job runs in a group of its own

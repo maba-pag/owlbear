@@ -237,7 +237,8 @@ def ready(e: Environment, proc: subprocess.Popen[bytes]) -> Pids | None:
     end = time.monotonic() + READY_WITHIN
     while time.monotonic() < end and proc.returncode is None:
         if answers(e.ready_url):
-            return e.pids | {p: created(p) for p in members(proc.pid, e.pids.get(proc.pid))}
+            with contextlib.suppress(processes.UnlistedError):  # unlisted now: poll again; the deadline ends the wait
+                return e.pids | {p: created(p) for p in members(proc.pid, e.pids.get(proc.pid))}
         time.sleep(0.5)
     return None
 
