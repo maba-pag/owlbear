@@ -2,13 +2,15 @@
 // The confirmation a consequential button opens (owner 2026-10-15): what happens now, what Delivery then does by
 // itself, what the owner can do afterwards, and the way forward if he declines; true only when he confirms. A *tick*
 // is a statement he must tick before confirming (TD-255). A *reason* is the label of the text he must give before
-// confirming; the dialog then answers with that text. A *destructive* confirm is never the primary: declining is
-// (D-01M63C7BJZZ7RQV9XS4XVR0DNE); the confirm stays first, so focus does not start on declining.
-function ask({ title, now, items = [], then, after, instead, yes, no = "Cancel", tick = "", reason = "",
-  destructive = false }) {
+// confirming; the dialog then answers with that text, which starts as *value* and holds *limit* characters at most.
+// A *destructive* confirm is never the primary: declining is (D-01M63C7BJZZ7RQV9XS4XVR0DNE); the confirm stays
+// first, so focus does not start on declining.
+function ask({ title, now, items = [], then, after, instead, yes, no = "Cancel", tick = "", reason = "", value = "",
+  limit = 4000, destructive = false }) {
   const parts = [["Now", now, items], ["Then, by itself", then], ["Afterwards", after], ["If you don't", instead]]
     .filter(([, said]) => said);
   const back = document.activeElement;
+  const home = back?.closest?.("[id]")?.id;  // a re-render may replace the opener: its holder's id finds it again
   const make = (tag, said, attrs = {}) => {
     const node = document.createElement(tag);
     if (said) node.textContent = said;
@@ -23,7 +25,17 @@ function ask({ title, now, items = [], then, after, instead, yes, no = "Cancel",
       answered = true;
       box.open = false;
       setTimeout(() => box.remove(), 1000);
-      back?.focus?.();
+      // The open modal keeps the rest of the page inert, so the focus is tried until it lands (2 s at most), unless
+      // the owner has put it somewhere himself. The target is chosen once: one that goes later is the page's to place.
+      const it = back?.isConnected ? back
+        : document.getElementById(home)?.querySelector("p-button, p-select, a, button, [tabindex]");
+      const refocus = (tries) => {
+        const at = document.activeElement;
+        if (!it?.isConnected || (at !== document.body && !box.contains(at))) return;
+        it.focus?.();
+        if (document.activeElement !== it && tries) setTimeout(() => refocus(tries - 1), 50);
+      };
+      refocus(40);
       resolve(answer);
     };
     const heading = make("p-heading", undefined, { size: "lg", slot: "header" });
@@ -51,7 +63,9 @@ function ask({ title, now, items = [], then, after, instead, yes, no = "Cancel",
       confirm = choice(yes, true, destructive ? "secondary" : "primary");
     const set = () => { confirm.disabled = !checks.every((c) => c()); };
     if (reason) {
-      const why = make("p-textarea", undefined, { label: reason, "max-length": "4000", rows: "3" });
+      const rows = value ? "8" : "3";
+      const why = make("p-textarea", undefined, { label: reason, "max-length": String(limit), rows });
+      why.value = value;
       checks.push(() => (why.value ?? "").trim() !== "");
       answer = () => why.value.trim();
       why.addEventListener("input", set);

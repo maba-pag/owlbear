@@ -12,6 +12,7 @@ PAGES = [
     ("/memory", "Memory"),
     ("/decisions", "Decisions"),
     ("/metrics", "Metrics"),
+    ("/improvement", "Improvement"),
     ("/projects", "Projects"),
     ("/config", "Settings"),
     ("/maintenance", "Maintenance"),
@@ -20,11 +21,22 @@ PAGES = [
     ("/updates/impeccable", "Impeccable"),
 ]
 WORK = PAGES[:5]  # the top row's links; every page is in the menu (D-01M63C8375KV9WA6NH8K2MB8PN)
-UPDATES = PAGES[8:]  # the menu's Updates level (D-01M63C5VGFWJ709X2GA0CE8Q5B), each page titled as an update
+WORK_LEVEL = PAGES[:6]  # the menu's Work level: the top row's pages and Improvement (#716)
+UPDATES = PAGES[9:]  # the menu's Updates level (D-01M63C5VGFWJ709X2GA0CE8Q5B), each page titled as an update
 LINKED = r'\["(/[a-z/]*)", "([A-Za-z ]+)"\]'  # a menu link as menu.mjs lists it: path and label
 
 
-ASKING = {"/", "/backlog", "/memory", "/decisions", "/projects", "/config", "/updates/owlbear", "/updates/impeccable"}
+ASKING = {
+    "/",
+    "/backlog",
+    "/memory",
+    "/decisions",
+    "/improvement",
+    "/projects",
+    "/config",
+    "/updates/owlbear",
+    "/updates/impeccable",
+}
 
 
 @pytest.mark.parametrize(("path", "title"), PAGES)
@@ -79,7 +91,7 @@ def test_the_menu_links_every_page_the_host_serves_once(tmp_path):
 
     assert sorted(linked) == sorted(PAGES) == sorted((path, title) for path, title, _ in pages.PAGES)
     work = re.search(r'id: "work".*?\] \}', menu, re.DOTALL).group()
-    assert re.findall(LINKED, work) == WORK
+    assert re.findall(LINKED, work) == WORK_LEVEL
     updates = re.search(r'id: "updates".*?\] \}', menu, re.DOTALL).group()
     assert re.findall(LINKED, updates) == UPDATES
     groups = re.search(r"export const GROUPS = .*?\];", c.get("/assets/page/config/groups.mjs").text, re.DOTALL)

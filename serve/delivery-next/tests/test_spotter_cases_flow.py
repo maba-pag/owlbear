@@ -12,8 +12,9 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from owlbear_delivery_next.commands import cases_cli, cli
+from owlbear_delivery_next.commands import cli
 from owlbear_delivery_next.improvement import (
+    case_edits,
     case_intake,
     case_replay,
     case_review,
@@ -504,6 +505,43 @@ def queue_regression() -> str:
     return case_replay.ask(case_replay.regression(edits, "owner", "promote"))
 
 
+@pytest.mark.parametrize("worse", [False, True])
+def test_a_checked_case_moved_into_the_examples_with_its_text_commits_only_when_nothing_worsens(
+    monkeypatch, worse
+) -> None:
+    j = Job(monkeypatch)
+    for _ in range(2):
+        reviewed(call="none")
+    chosen = reviewed()
+    n = cases.current()["n"]
+    assert cases.current()["cases"][chosen]["example"] == ""  # as intake and a check leave it
+    first: list[str] = []
+
+    async def looked(_card, prompt, meter, _spot) -> dict[str, Any]:  # the new prompt makes the "none" cases wrong
+        first.extend([] if first else [prompt.hash])
+        spend(meter, 0.1)
+        return {"category": "none" if prompt.hash == first[0] else "hand-off-fitness", "note": ""}
+
+    if worse:
+        j.job.looked = looked
+    said = case_edits.move(chosen, "example", "owner (page)", parent=n, example="a moment")
+    j.job.tick(0)
+
+    result = next(r for r in case_replay.results() if r["id"] == said["queued"])["result"]
+    if worse:
+        assert result == "refused: false notes rose"
+        assert cases.current()["n"] == n
+    else:
+        assert result == "passed"
+        assert cases.current()["cases"][chosen] | {"review": None} == {
+            "stage": "example",
+            "call": "hand-off-fitness",
+            "why": "why",
+            "example": "a moment",
+            "review": None,
+        }
+
+
 def test_the_job_runs_a_queued_replay_once_on_a_slot_and_nothing_while_paused(monkeypatch) -> None:
     j = Job(monkeypatch)
     rid = queue_regression()
@@ -840,7 +878,7 @@ def test_a_move_or_rollback_is_made_of_the_version_it_is_written_onto(monkeypatc
     assert added
     assert added[0] not in cases.current()["cases"]
     with cases.locked(), pytest.raises(cases.Stale):
-        cases_cli._change({other: None}, "stale", first)  # noqa: SLF001 - the guard against a stale parent
+        case_edits.change({other: None}, "stale", first, "t")  # the guard against a stale parent
 
 
 def test_a_retro_review_session_is_charged_as_it_reports_and_aborted_at_its_runs_limit(  # noqa: C901 - its fakes

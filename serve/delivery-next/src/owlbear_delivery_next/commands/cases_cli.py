@@ -1,6 +1,6 @@
 """``owlbear cases`` and ``owlbear improvement``: the narrow local commands for the Spotter cases and Retro (§4, §5).
 
-The Improvement page will call the same functions. A stage move that changes the active examples, a reserve
+The Improvement page calls the same functions (``case_edits``). A stage move that changes the active examples, a reserve
 comparison and a check of candidates cost credits: the command only queues them, on the owner's word, for the machine
 host's job, which runs them within their run credit limit (D-01M5XCE8ZEX5WPSCBZ5Y9S4K96). A Retro run is queued the
 same way, for the host's Retro job; its plan view reads what a run would ask without asking.
@@ -13,11 +13,19 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from owlbear_delivery_next.improvement import case_intake, case_replay, cases, pilot_seed, retro_evidence
+from owlbear_delivery_next.improvement import (
+    case_edits,
+    case_intake,
+    case_replay,
+    cases,
+    pilot_seed,
+    retro_evidence,
+    retro_proposals,
+)
 from owlbear_delivery_next.improvement import retro_store as retro
 from owlbear_delivery_next.improvement import retro_synthetic as syn
 from owlbear_delivery_next.improvement import retro_units as units
-from owlbear_delivery_next.improvement.cases import CaseError, Stale
+from owlbear_delivery_next.improvement.cases import CaseError
 from owlbear_delivery_next.state_store import registry
 from owlbear_delivery_next.state_store.database import StoreError
 from owlbear_delivery_next.state_store.store import Store
@@ -41,6 +49,8 @@ def main(a: argparse.Namespace) -> int:
         elif a.command == "improvement":
             retired, n = cases.reset()
             _say(f"retired: {', '.join(retired) or 'nothing'}" + (f"; cases version {n}" if n else ""))
+            for art in retro_proposals.synthetic_artefacts():  # what synthetic proposals published stays: listed
+                _say(f"synthetic {art['kind']} in {art['where']}: {art['ref']} {art.get('link') or ''}".rstrip())
         else:
             return _cases(a)
     except (CaseError, retro.RetroError, registry.RegistryError, StoreError) as exc:
@@ -67,9 +77,9 @@ def _cases(a: argparse.Namespace) -> int:  # noqa: C901, PLR0912 - one branch pe
     elif a.action == "rollback":
         with cases.locked():  # the copy is made of the version it is written onto
             edits = cases.rollback_edits(a.version)
-            return _change(edits, f"rollback to version {a.version}", cases.current()["n"])
+            _done(case_edits.change(edits, f"rollback to version {a.version}", cases.current()["n"], BY))
     elif a.action == "check":
-        _check(a.ids)
+        _say(QUEUED.format(case_edits.check_request(a.ids, BY)))
     elif a.action == "release":
         rid, new = case_replay.release(BY)
         _say(f"release {rid}" + ("" if new else " (the same corpus as before: no new release)"))
@@ -100,63 +110,13 @@ def _list(n: int | None) -> None:
 
 
 def _move(a: argparse.Namespace) -> int:
-    with cases.locked():  # the edit is made of the version it is written onto
-        cur = cases.current()
-        if a.case not in cur["cases"]:
-            msg = f"case {a.case} is not in version {cur['n']}"
-            raise CaseError(msg)
-        if a.stage == "removed":
-            return _change({a.case: None}, f"{a.case} removed", cur["n"])
-        entry = cases.edited(
-            a.case,
-            cur["cases"][a.case],
-            stage=a.stage,
-            call=a.call,
-            why=a.why,
-            example=a.example,
-            reviewed_by=a.reviewed_by,
-            note=a.note,
-        )
-        return _change({a.case: entry}, f"{a.case} to {a.stage}", cur["n"])
-
-
-def _change(edits: dict[str, Any], reason: str, parent: int) -> int:
-    """Write *edits*, made of version *parent*, or queue their regression when they change the active examples.
-
-    Raises:
-        Stale: The newest version is no longer *parent*: nothing is written or queued.
-    """
-    with cases.locked():
-        cur = cases.current()
-        if cur["n"] != parent:
-            msg = f"the Spotter cases are at version {cur['n']} now, not {parent}: look again and retry"
-            raise Stale(msg)
-        after = cases.applied(cur["cases"], edits)
-        if cases.shown(after) == cases.shown(cur["cases"]):
-            _say(f"version {cases.commit(cur['n'], edits, BY, reason)}")
-            return 0
-        request = case_replay.regression(edits, BY, reason)
-    _say(QUEUED.format(case_replay.ask(request)))
+    fields = {"call": a.call, "why": a.why, "example": a.example, "reviewed_by": a.reviewed_by, "note": a.note}
+    _done(case_edits.move(a.case, a.stage, BY, **fields))
     return 0
 
 
-def _check(ids: list[str]) -> None:
-    cur = cases.current()["cases"]
-    chosen = ids or [cid for cid, e in sorted(cur.items()) if e["stage"] == "candidate" and e.get("call")]
-    if bad := [cid for cid in chosen if cur.get(cid, {}).get("stage") != "candidate" or not cur[cid].get("call")]:
-        msg = f"only candidates with a call are checked: {', '.join(bad)}"
-        raise CaseError(msg)
-    if not chosen:
-        msg = "no candidate to check"
-        raise CaseError(msg)
-    request = {
-        "id": f"r-{cases.digest([chosen, cases.now()])[:10]}",
-        "kind": "check",
-        "at": cases.now(),
-        "by": BY,
-        "ids": {cid: cases.content(cid, cur[cid]) for cid in chosen},
-    }
-    _say(QUEUED.format(case_replay.ask(request)))
+def _done(said: dict[str, Any]) -> None:
+    _say(f"version {said['version']}" if "version" in said else QUEUED.format(said["queued"]))
 
 
 def _newest_release() -> str:

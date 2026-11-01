@@ -12,7 +12,7 @@ import { GROUPS } from "/assets/page/config/groups.mjs";
 // The menu in its order: levels, each with its links, and links to a page beside them.
 const MENU = [
   { id: "work", label: "Work", links: [["/", "Changes"], ["/backlog", "Backlog"], ["/memory", "Memory"],
-    ["/decisions", "Decisions"], ["/metrics", "Metrics"]] },
+    ["/decisions", "Decisions"], ["/metrics", "Metrics"], ["/improvement", "Improvement"]] },
   { id: "updates", label: "Updates", links: [["/updates/owlbear", "OwlBear"],
     ["/updates/pds", "Porsche Design System"], ["/updates/impeccable", "Impeccable"]] },
   ["/projects", "Projects"],
@@ -20,6 +20,7 @@ const MENU = [
   ["/maintenance", "Maintenance"],
 ];
 const LEVELS = MENU.filter((entry) => !Array.isArray(entry));
+const DETAIL = "owlbear-improvement-detail";  // Change pages show the Spotter's and Retro's detail while it is "on"
 
 const menu = { open: false, level: undefined, run: null };
 const root = document.getElementById("menu");
@@ -50,6 +51,19 @@ function link([path, label]) {
   return html`<p-drilldown-link ?active=${current}><a href=${here({}, path)}
     aria-current=${current ? "page" : nothing}>${label}${said.map((w) => html`<p-tag class="said" compact="true"
       variant=${TONES[w]}>${w}</p-tag>`)}</a></p-drilldown-link>`;
+}
+
+// The switch under Work: off by default; a Change page open now redraws at once (changes/improvement.mjs).
+function detailSwitch() {
+  const on = localStorage.getItem(DETAIL) === "on";
+  const set = (e) => {
+    if (e.detail?.checked === undefined || e.detail.checked === on) return;
+    localStorage.setItem(DETAIL, e.detail.checked ? "on" : "off");
+    dispatchEvent(new Event(DETAIL));
+    show();
+  };
+  return html`<p-switch id="improvement-detail-switch" compact="true" .checked=${on} @change=${set} @update=${set}>
+    Show the Spotter's and Retro's detail on Change pages</p-switch>`;
 }
 
 function label(l) {
@@ -122,12 +136,12 @@ function show() {
     <p-drilldown .open=${menu.open} .activeIdentifier=${menu.level} .aria=${{ "aria-label": "OwlBear pages" }}
       @update=${moved} @dismiss=${close} @click=${clicked}>
       ${MENU.map((e) => Array.isArray(e) ? link(e) : html`<p-drilldown-item identifier=${e.id}
-        label=${label(e)}>${e.links.map(link)}</p-drilldown-item>`)}
+        label=${label(e)}>${e.links.map(link)}${e.id === "work" ? detailSwitch() : nothing}</p-drilldown-item>`)}
     </p-drilldown>`, root);
 }
 
 if (root) {
-  await defined(["p-button-pure", "p-drilldown", "p-drilldown-item", "p-drilldown-link", "p-tag"]);
+  await defined(["p-button-pure", "p-drilldown", "p-drilldown-item", "p-drilldown-link", "p-switch", "p-tag"]);
   listen(show);
   document.addEventListener("owlbear-polled", () => show());  // the OwlBear update's phase
   show();

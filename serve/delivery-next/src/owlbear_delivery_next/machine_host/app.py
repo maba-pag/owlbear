@@ -22,7 +22,7 @@ from pydantic import Field
 
 from owlbear_delivery_next.change_contracts import chat_contract
 from owlbear_delivery_next.local_system import codebase, data_repo, leases, local_home
-from owlbear_delivery_next.machine_host import control, impeccable, update_routes, versions
+from owlbear_delivery_next.machine_host import control, impeccable, improvement_routes, update_routes, versions
 from owlbear_delivery_next.machine_host.machine import Machine, MachineError
 from owlbear_delivery_next.project_host import (
     api,
@@ -219,6 +219,7 @@ def _routes(machine: Machine) -> APIRouter:
     _machine_routes(routes, machine)
     routes.include_router(maintenance_routes.router(machine))  # machine-wide: every project's held sessions
     routes.include_router(metrics_routes.router(lambda: _stores(machine), lambda: _loaded(machine)))  # all spend
+    routes.include_router(improvement_routes.router(machine, _shared))  # the Spotter, Retro, cases and proposals
     _curation_routes(routes, machine)
     _update_routes(routes, machine)
     routes.include_router(update_routes.router(machine))  # the update checks (D-01M63CCVRK8ZKFENY9F4A2K11A)

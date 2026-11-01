@@ -367,6 +367,18 @@ def queued() -> list[dict[str, Any]]:
     return out
 
 
+def running() -> list[dict[str, Any]]:
+    """Every request taken off the queue and not yet done: running, or left by a host that ended (recorded stopped)."""
+    folder = cases.place() / "queue"
+    out = []
+    for path in sorted(folder.glob("r-*.taken")) if folder.is_dir() else []:
+        try:
+            out.append(json.loads(path.read_text()))
+        except OSError, ValueError:
+            continue  # interrupted() records it stopped
+    return out
+
+
 def take(rid: str) -> bool:
     """Take request *rid* off the queue before it runs, so a crash never runs it again; whether it was there."""
     folder = cases.place() / "queue"
@@ -399,6 +411,7 @@ def interrupted() -> list[dict[str, Any]]:
                         "kind": request.get("kind"),
                         "by": request.get("by"),
                         "asked": request.get("at"),
+                        **({"ids": request["ids"]} if "ids" in request else {}),
                         "ended": cases.now(),
                         "result": "stopped: OwlBear ended while it ran; it is not rerun",
                     },

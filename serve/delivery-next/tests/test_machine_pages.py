@@ -715,7 +715,7 @@ def test_the_menu_reaches_every_page_moves_focus_into_each_level_and_back_to_the
         overview = menu.get_by_role("link", name="Overview")  # Settings' group shown, in Settings' level
         expect(overview).to_be_focused()
         expect(overview).to_have_attribute("aria-current", "page")
-        served = ["/", "/backlog", "/memory", "/decisions", "/metrics", "/projects", "/maintenance"]
+        served = ["/", "/backlog", "/memory", "/decisions", "/metrics", "/improvement", "/projects", "/maintenance"]
         served += ["/updates/owlbear", "/updates/pds", "/updates/impeccable"]
         groups = ["overview", "agents", "runs", "checks", "project", "this-machine"]  # D-01M63C8QQMANY46N8GMNNKH1V9
         hrefs = menu.locator("a").evaluate_all("as => as.map(a => a.getAttribute('href'))")

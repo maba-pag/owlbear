@@ -16,8 +16,8 @@ share the mechanism, the counterexamples outweigh
 them, the change would not prevent the cost, or it would cost more than it saves. Otherwise let it survive and name
 its risks.
 
-Write `publishable` for people outside this machine: `title` at most 120 characters, `body` at most 1500, naming the
-proposal and finding ids. Generic wording only: never a path, an email address, a credential, a hostname, a session
+Write `publishable` for people outside this machine: `title` at most 120 characters, `body` at most 1500 (at most 700
+for a `lesson`, which becomes a memory), naming the proposal and finding ids. Generic wording only: never a path, an email address, a credential, a hostname, a session
 id, a project's name or a quote from the evidence.
 
 Answer with exactly one JSON object and nothing else:

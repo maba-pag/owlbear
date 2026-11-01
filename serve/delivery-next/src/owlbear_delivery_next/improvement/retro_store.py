@@ -206,8 +206,18 @@ def units(state: str | None = None, *, synthetic: bool = False) -> dict[str, dic
 # Button requests (the Improvement page's, or ``owlbear improvement retro run``)
 
 
-def request(by: str, change: str | None = None, chat: str | None = None, *, synthetic: str = "") -> str:
-    """Queue a run of one Change (``project:slug``), one chat, or one synthetic unit (by its name); its id.
+def request(  # noqa: PLR0913 - one keyword per thing a run may be about
+    by: str,
+    change: str | None = None,
+    chat: str | None = None,
+    *,
+    synthetic: str = "",
+    redraft: str = "",
+    followup: str = "",
+) -> str:
+    """Queue a run of one Change, chat, synthetic unit, redirected proposal's redraft or finding's follow-up; its id.
+
+    A Change is named ``project:slug``, a synthetic unit by its name, a proposal and a finding by their ids.
 
     A request is taken before its run opens, so a host that stops in between loses it and never pays twice; the
     synthetic set is queued one unit per request, so a stop loses none of its units still queued.
@@ -215,15 +225,14 @@ def request(by: str, change: str | None = None, chat: str | None = None, *, synt
     Raises:
         RetroError: Not exactly one of them is named.
     """
-    if sum(map(bool, (change, chat, synthetic))) != 1:
-        msg = "a Retro request names exactly one Change, one chat, or the synthetic units"
+    named = {"change": change or "", "chat": chat or "", "synthetic": synthetic}
+    named |= {"redraft": redraft, "followup": followup}
+    if sum(map(bool, named.values())) != 1:
+        msg = "a Retro request names exactly one Change, one chat, the synthetic units, one redraft or one follow-up"
         raise RetroError(msg)
     rid = f"rq-{uuid.uuid4().hex[:12]}"
     with locked():
-        append(
-            "requests.jsonl",
-            {"id": rid, "by": by, "change": change or "", "chat": chat or "", "synthetic": synthetic, "at": now()},
-        )
+        append("requests.jsonl", {"id": rid, "by": by, **named, "at": now()})
     return rid
 
 
@@ -291,6 +300,7 @@ def run_states() -> dict[str, dict[str, Any]]:
         elif event == "ended":
             snap |= {"state": "ended", "result": line.get("result", ""), "ended": line["at"]}
             snap["credits"], snap["held"] = line.get("credits"), line.get("held", False)
+            snap |= {k: line[k] for k in ("followup", "redraft") if k in line}  # what a redraft or follow-up made
     return found
 
 

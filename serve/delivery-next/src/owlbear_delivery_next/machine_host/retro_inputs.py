@@ -13,6 +13,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.improvement import assumptions, cases, chatlogs, retro_judge
+from owlbear_delivery_next.improvement import proposal_targets as targets
 from owlbear_delivery_next.improvement import retro_proposals as props
 from owlbear_delivery_next.improvement import retro_store as store
 from owlbear_delivery_next.improvement import retro_synthetic as syn
@@ -49,13 +50,29 @@ def session(agent: str) -> tuple[RoleModel, float]:
     return cases_job.role(agent), minutes * 60.0
 
 
+def _changes(uid: str) -> set[tuple[str, str]]:
+    """The (project, Change) pairs run unit *uid* is about: a Change's, a proposal's or a finding's (or record's)."""
+    kind, _, sid = uid.partition(":")
+    if kind == "proposal":
+        of = targets.units_of()
+        about = [of.get(f, "") for f in (props.folded().get(sid) or {}).get("findings") or ()]
+    elif kind == "finding":
+        about = [str(f.get("unit") or "") for f in store.all_findings() if f["id"] == sid]
+        about = about or [units.unit_of(r) for r in units.records() if r.get("id") == sid]
+    else:
+        about = [uid]
+    pairs = [(p, c) for u in about if u.startswith("chg:") for p, _, c in [u[4:].partition(":")] if c]
+    return set(pairs) if len(pairs) == len(about) else set()  # one unit outside a Change: none is shared
+
+
 def where(uid: str, projects: units.Projects) -> spend_ledger.Where:
-    """Where a run of *uid* spends: its Change's project, else machine-wide."""
-    if uid.startswith("chg:"):
-        pid, slug = uid.split(":", 2)[1:]
-        st, repo = projects[pid]
-        return spend_ledger.Where.of(st, repo, change=slug, job="retro")
-    return spend_ledger.Where(job="retro")
+    """Where a run of *uid* spends: the one loaded project its Changes are in, with its Change if one; else machine."""
+    pairs = _changes(uid)
+    if len({pid for pid, _ in pairs}) != 1 or (pid := next(iter(pairs))[0]) not in projects:
+        return spend_ledger.Where(job="retro")
+    st, repo = projects[pid]
+    more = {"change": next(iter(pairs))[1]} if len(pairs) == 1 else {}
+    return spend_ledger.Where.of(st, repo, job="retro", **more)
 
 
 def _at(text: str) -> datetime:
@@ -169,7 +186,7 @@ class Running:
     by: str = ""
     rev: str = ""  # "" until its revision is taken
     provenance: str = "real"
-    mode: str = "judge"  # or "grade-only"
+    mode: str = "judge"  # or "grade-only", or retro_more's "redraft" or "followup"
     records: list[str] = field(default_factory=list)  # a grade-only run's records
     spec: str = ""  # a synthetic unit's name
     id: str = field(default_factory=lambda: f"rr-{uuid.uuid4().hex[:12]}")
@@ -186,6 +203,11 @@ class Running:
         """A run as its kept snapshot has it, after a restart."""
         keep = ("trigger", "by", "rev", "provenance", "mode", "records", "spec", "id", "limit", "spent", "known")
         return cls(uid=snap.get("unit", ""), **{k: snap[k] for k in keep if k in snap})
+
+    @property
+    def reads_real(self) -> bool:
+        """Whether this run reads a real unit, its eligibility checked: not synthetic, a redraft or a follow-up."""
+        return self.provenance == "real" and self.mode in {"judge", "grade-only"}
 
     @property
     def needs(self) -> tuple[str, ...]:
