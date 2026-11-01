@@ -40,9 +40,7 @@ export function when(iso) {
   return html`<time datetime=${iso} title=${t.toLocaleString()}>${t.toLocaleString()}</time>`;
 }
 
-export function plural(n, one) {
-  return `${n} ${n === 1 ? one : `${one}s`}`;
-}
+export const plural = (n, one) => `${n} ${one}${n === 1 ? "" : "s"}`;
 
 export function credits(n, known = true) {
   const said = `${Number(n ?? 0).toFixed(2)} credits`;

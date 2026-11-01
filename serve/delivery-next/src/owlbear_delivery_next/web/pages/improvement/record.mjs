@@ -26,7 +26,7 @@ function found(r) {
 }
 
 // One look: its moment, what it found and why, what it spent, how it ended and how Retro graded it; *more* follows.
-export function look(r, named = {}, more = nothing) {
+export function look(r, named, more) {
   const evidence = r.evidence?.length ? `${plural(r.evidence.length, "piece")} of evidence: ${r.evidence.join(", ")}`
     : "";
   return html`<li class="panel look" id=${`look-${r.id}`}>
@@ -45,7 +45,7 @@ export function look(r, named = {}, more = nothing) {
 }
 
 // One Retro finding: what it saw and, when given, *where*; how it happened, its cost and cause; *more* follows.
-export function finding(f, where = "", more = nothing) {
+export function finding(f, where, more) {
   const lines = [where, f.mechanism && `How: ${f.mechanism}`, f.cost && `Cost: ${f.cost}`,
     f.cause && `Cause: ${f.cause}`];
   return html`<li class="panel finding" id=${`finding-${f.id}`}><p-text>${f.what || f.id}</p-text>
