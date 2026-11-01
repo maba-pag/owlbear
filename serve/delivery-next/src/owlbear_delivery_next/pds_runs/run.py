@@ -21,7 +21,7 @@ from owlbear_delivery_next.change_contracts.round_records import PDS, RoundLoop
 from owlbear_delivery_next.impeccable import pack_files, pack_git
 from owlbear_delivery_next.impeccable_runs import pack_activation, pack_publish, pack_repair, pack_rounds, pack_run
 from owlbear_delivery_next.impeccable_runs.pack_run import Stopped
-from owlbear_delivery_next.pds_runs import checks, diff, pin, publish, repair, sessions, tree
+from owlbear_delivery_next.pds_runs import audit, checks, diff, pin, publish, repair, sessions, tree
 from owlbear_delivery_next.pds_runs.context import CANDIDATE, NEXT, UPDATER, Action, Context
 from owlbear_delivery_next.settings import rounds
 from owlbear_delivery_next.workflow_steps import sessions as step_sessions
@@ -109,9 +109,7 @@ def prepare(job: Job, version: str) -> tuple[Context, pin.Release, bytes | None]
 def _vendored(old: dict[str, str], new: dict[str, str]) -> str:
     """The pinned files the release adds, changes and removes, by package path."""
     rows = [
-        f"{'added' if p not in old else 'removed' if p not in new else 'changed'}: {p}"
-        for p in sorted(old.keys() | new.keys())
-        if old.get(p) != new.get(p)
+        f"{'added' if p not in old else 'removed' if p not in new else 'changed'}: {p}" for p in audit.changed(old, new)
     ]
     return "\n".join(rows[:400]) + (f"\n… and {len(rows) - 400} more" if len(rows) > 400 else "")  # noqa: PLR2004
 
