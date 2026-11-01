@@ -208,15 +208,30 @@ def _case(cid: str, entry: Mapping[str, Any]) -> dict[str, Any]:
     return {"id": cid, **entry, "source": fact.get("source"), "marks": marks, "prefill": prefill(cid)}
 
 
+def _last_checks(runs: Iterable[Mapping[str, Any]]) -> dict[str, dict[str, Any]]:
+    """Each case's newest check run among *runs* (oldest first) with its review, else the run's own result."""
+    out: dict[str, dict[str, Any]] = {}
+    for r in runs:
+        if r.get("kind") != "check":
+            continue
+        reviews = r.get("reviews") or {}
+        for cid in {*reviews, *(r.get("ids") or {})}:
+            said = reviews.get(cid) or {"result": r.get("result")}
+            out[cid] = {"id": r["id"], "at": r.get("ended") or r.get("asked"), "result": said.get("result"),
+                        "note": said.get("note", "")}  # fmt: skip
+    return out
+
+
 def spotter_cases() -> dict[str, Any]:
-    """The newest version's cases with marks, its versions and case runs (newest first), the queued and running runs."""
-    cur = cases.current()
+    """The newest version's cases with marks and last checks, its versions and case runs (newest first), the queue."""
+    cur, runs = cases.current(), case_replay.results()
     shown = [{k: v for k, v in v.items() if k != "cases"} for v in cases.versions()]
+    last = _last_checks(runs)
     return {
         "n": cur["n"],
-        "cases": [_case(cid, e) for cid, e in sorted(cur["cases"].items())],
+        "cases": [{**_case(cid, e), "last_check": last.get(cid)} for cid, e in sorted(cur["cases"].items())],
         "versions": shown[::-1][:VERSIONS],
-        "runs": case_replay.results()[::-1][:VERSIONS],
+        "runs": runs[::-1][:VERSIONS],
         "queued": [*case_replay.queued(), *({**r, "running": True} for r in case_replay.running())],
     }
 
