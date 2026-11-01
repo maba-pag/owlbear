@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
 
-    from owlbear_delivery_next.runtimes.ahp import Json, Transport
+    from owlbear_delivery_next.runtimes.ahp import Json
 
 type End = Literal[
     "complete",
@@ -91,4 +91,3 @@ class Hooks:
     settings: Callable[[Path, str], None]  # pins the folder's settings before the window opens
     launch: Callable[[list[str], Path], None] = launch_code_chat
     clock: Callable[[], float] = time.monotonic
-    reconnect: Callable[[], Transport] | None = None  # a new, signed-in connection to the same host

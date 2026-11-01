@@ -583,7 +583,7 @@ def test_a_failed_launch_gives_its_reason_and_the_command(tmp_path, caplog, endi
 
 def test_a_refusal_from_open_chat_reaches_the_new_change_page_whole(tmp_path):
     def refuse(_folder: Path) -> ahp.Transport:
-        raise ahp.HostRefusedError(method="authenticate", code=-32007, message="bad token", data={"d": "x" * 400})
+        raise ahp.HostRefusedError(method="initialize", code=-32005, message="no", data={"d": "x" * 400})
 
     env = vscode_adapter.Env(connect=refuse, shaper=None)
 
@@ -593,9 +593,9 @@ def test_a_refusal_from_open_chat_reaches_the_new_change_page_whole(tmp_path):
     c = launcher(Store(tmp_path), lambda repo, role, prompt: api.new_chat(repo, role, prompt, start=start))
     state = settled(c, c.post("/api/next/new-change").json()["launch"])
     assert state["state"] == "failed"
-    assert state["reason"].startswith("the Copilot chat did not start (error: HostRefusedError: authenticate: ")
+    assert state["reason"].startswith("the Copilot chat did not start (error: HostRefusedError: initialize: ")
     assert "x" * 400 in state["reason"]
-    assert "(code -32007)" in state["reason"]
+    assert "(code -32005)" in state["reason"]
 
 
 def test_a_failed_follow_up_is_kept_whole_and_logged(caplog):
