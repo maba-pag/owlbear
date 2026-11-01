@@ -450,13 +450,15 @@ def test_an_unchecked_candidate_only_stays_or_goes_and_says_its_last_check_and_h
         unchecked = {"stage": "candidate", "call": "none", "why": "why", "example": "", "review": None}
         cases.commit(cases.current()["n"], {new: unchecked}, "t", "add")
         with cases.locked():
-            cases.append("runs.jsonl", {"id": "r-old", "kind": "check", "by": "t", "asked": cases.now(),
-                                        "reviews": {new: {"result": "not supported", "note": "No test output."}},
-                                        "result": "checked", "ended": cases.now()})  # fmt: skip
+            for rid, note in (("r-old", "No test output."), ("r-new", "Output has no assertion.")):
+                cases.append("runs.jsonl", {"id": rid, "kind": "check", "by": "t", "asked": cases.now(),
+                                            "reviews": {new: {"result": "not supported", "note": note}},
+                                            "result": "checked", "ended": cases.now()})  # fmt: skip
         page = improvement(w, pds)
         fresh = page.locator(f"#case-{new}")
-        expect(fresh).to_contain_text("Its last check (r-old")
-        expect(fresh).to_contain_text("not supported. No test output.")
+        expect(fresh).to_contain_text("Its last check (r-new")
+        expect(fresh).to_contain_text("not supported. Output has no assertion.")
+        expect(fresh).not_to_contain_text("r-old")
         expect(fresh).to_contain_text(f"once a further paid check supports it: owlbear cases check {new}")
         expect(fresh.locator("p-select-option")).to_have_count(2)  # only stays or goes: the check comes first
 
