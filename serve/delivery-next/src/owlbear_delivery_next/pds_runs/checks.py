@@ -10,7 +10,6 @@ import shutil
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from owlbear_delivery_next.change_contracts import tools
 from owlbear_delivery_next.impeccable_runs import pack_rounds
 from owlbear_delivery_next.impeccable_runs.pack_run import Stopped
 from owlbear_delivery_next.pds_runs import audit, browser, pin, sessions, tree
@@ -90,9 +89,7 @@ def pages(job: Job, ctx: Context, at: Path) -> str:
     return job.live.git(at, ["diff", "--no-color", ctx.checkout["base"], "--", *scope])
 
 
-def challenged(  # noqa: PLR0913 - the tree, the round's words and its bounds
-    job: Job, ctx: Context, at: Path, lp: RoundLoop, *, recheck: bool = False, submit: tools.Spec = tools.REVIEW
-) -> Run:
+def challenged(job: Job, ctx: Context, at: Path, lp: RoundLoop, *, recheck: bool = False) -> Run:
     """One challenger session on the tree at *at*: the release's evidence, the vendored change and every page edit."""
     text = sessions.challenge_message(
         ctx.version, ctx.old, evidence=ctx.diff, vendored=ctx.vendored, pages=pages(job, ctx, at)[: 4 * 20000],
@@ -101,7 +98,7 @@ def challenged(  # noqa: PLR0913 - the tree, the round's words and its bounds
     keys = tuple(f.id for f in pack_rounds.pending(lp))
     cap = 0 if recheck else lp.policy.max_findings
     cfg = sessions.challenger(
-        job.store.settings(), at, skills(at), text, rechecks=keys, cap=cap, submit=submit,
+        job.store.settings(), at, skills(at), text, rechecks=keys, cap=cap,
         memory=step_sessions.memory(job.store),
     )  # fmt: skip
     return job.live.session(job.store, cfg)
