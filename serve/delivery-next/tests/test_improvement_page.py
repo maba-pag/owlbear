@@ -17,7 +17,7 @@ import pytest
 import uvicorn
 
 from owlbear_delivery_next.change_contracts import models as m
-from owlbear_delivery_next.improvement import case_edits, cases, followups, spotter
+from owlbear_delivery_next.improvement import case_edits, case_replay, cases, followups, spotter
 from owlbear_delivery_next.improvement import proposal_targets as targets
 from owlbear_delivery_next.improvement import retro_proposals as props
 from owlbear_delivery_next.improvement import retro_store as store
@@ -462,9 +462,15 @@ def test_an_unchecked_candidate_only_stays_or_goes_and_says_its_last_check_and_h
         expect(fresh).to_contain_text(f"once a further paid check supports it: owlbear cases check {new}")
         expect(fresh.locator("p-select-option")).to_have_count(2)  # only stays or goes: the check comes first
 
-        case_edits.check_request([new], "t")
+        rid = case_edits.check_request([new], "t")
         page.evaluate("document.dispatchEvent(new CustomEvent('owlbear-polled'))")
         expect(fresh).to_contain_text("Its paid check is asked")
+
+        assert case_replay.take(rid)
+        case_replay.interrupted()  # the host ended before the check reviewed it: no review of it, only its result
+        page.evaluate("document.dispatchEvent(new CustomEvent('owlbear-polled'))")
+        expect(fresh).to_contain_text(f"Its last check ({rid}")
+        expect(fresh).to_contain_text("stopped: OwlBear ended while it ran; it is not rerun.")
 
 
 @pytest.mark.browser

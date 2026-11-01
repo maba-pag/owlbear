@@ -63,10 +63,11 @@ function chooser(n, c, waiting) {
       disabled: !!state.busy || to === c.stage || waiting, aria: DIALOG })}</div>`;
 }
 
-// An unchecked candidate's way on: what its newest check among the shown runs said, then its check, asked already
-// or to be asked.
+// An unchecked candidate's way on: what its newest check among the shown runs said (the run's own result when it
+// ended before reviewing this case), then its check, asked already or to be asked.
 function onward(c, asked, runs) {
-  const run = runs.find((r) => r.kind === "check" && r.reviews?.[c.id]), said = run?.reviews[c.id];
+  const run = runs.find((r) => r.kind === "check" && (r.reviews?.[c.id] || Object.hasOwn(r.ids ?? {}, c.id)));
+  const said = run && (run.reviews?.[c.id] ?? { result: run.result });
   const last = run ? html`<p class="meta">Its last check (${run.id}, ${when(run.ended ?? run.asked)}): ${said.result
     }.${said.note ? ` ${said.note}` : ""}</p>` : nothing;
   return html`${last}${asked.has(c.id)

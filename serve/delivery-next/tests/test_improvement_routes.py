@@ -14,7 +14,7 @@ from fastapi.testclient import TestClient
 from owlbear_memory.engine import MemoryEngine
 
 from owlbear_delivery_next.change_contracts import models as m
-from owlbear_delivery_next.improvement import case_replay, cases, improvement_view, proposal_apply, spotter
+from owlbear_delivery_next.improvement import case_edits, case_replay, cases, improvement_view, proposal_apply, spotter
 from owlbear_delivery_next.improvement import proposal_targets as targets
 from owlbear_delivery_next.improvement import retro_proposals as props
 from owlbear_delivery_next.improvement import retro_store as store
@@ -349,6 +349,20 @@ def _job(monkeypatch) -> cases_job.CasesJob:
         return '{"situation": "An agent stopped with half the task done.", "call": "hand-off-fitness", "why": "x"}'
 
     return cases_job.CasesJob(slots, paused=lambda: False, looked=looked, asked=asked, shared=lambda: None)
+
+
+@pytest.mark.usefixtures("world")
+def test_a_check_the_job_refuses_still_names_the_cases_it_was_asked_about(monkeypatch) -> None:
+    cid = cases.freeze({"intent": {"task": "t refused"}}, {"source": "pilot", "family": "f"})
+    cases.commit(cases.current()["n"], {cid: {"stage": "candidate", "call": "none", "why": "w", "example": "",
+                                              "review": None}}, "t", "add")  # fmt: skip
+    rid = case_edits.check_request([cid], "t")
+    job = _job(monkeypatch)
+    monkeypatch.setattr(cases_job, "limits", lambda: {"replay": 10.0, "retro": None, "look": 1.0})
+    job.tick(0)
+
+    run = next(r for r in case_replay.results() if r["id"] == rid)
+    assert (run["result"], list(run["ids"])) == ("refused: the Retro run credit limit is unset", [cid])
 
 
 def test_a_case_run_the_job_has_taken_still_holds_the_moves(world) -> None:
