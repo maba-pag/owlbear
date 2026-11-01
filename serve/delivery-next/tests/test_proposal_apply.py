@@ -331,6 +331,8 @@ def test_a_proposal_a_reset_retired_after_its_accept_makes_nothing_but_its_synth
 
     assumptions.reset()
 
+    shown = [(p["id"], p["apply_state"]) for p in improvement_view.proposals({}, world.shared)]
+    assert shown == [(synthetic, "failed")]  # its Apply again still closes the public issue
     with pytest.raises(store.RetroError, match="rests on a retired assumption"):
         act.apply(real, world.seams)
     assert world.entries == []

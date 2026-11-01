@@ -144,6 +144,13 @@ def decide(  # noqa: PLR0913 - the decision, what the owner saw, and where it ma
     return after
 
 
+def closing(snap: Mapping[str, Any]) -> bool:
+    """Whether all that is left of accepted *snap* is closing the synthetic issue it made; a reset never stops that."""
+    made = any(a["step"] == "created" for a in snap["applied"])
+    issue = (snap.get("accepted") or {}).get("destination", {}).get("kind") == "issue"
+    return snap["state"] == "accepted" and snap["apply_state"] != "done" and issue and made
+
+
 def apply(pid: str, seams: Seams, gate: Callable[[], None] = lambda: None) -> dict[str, Any]:
     """Act on the accepted proposal *pid* from what was accepted; the proposal after it, applied or failed.
 
@@ -163,8 +170,7 @@ def apply(pid: str, seams: Seams, gate: Callable[[], None] = lambda: None) -> di
             return snap
         accepted = snap["accepted"]
         done = {a["step"]: a["artefact"] for a in snap["applied"]}
-        closing = accepted["destination"]["kind"] == "issue" and "created" in done  # a synthetic issue left open
-        if not closing and not store.visible(snap, store.retired_ids(), synthetic=True):
+        if not closing(snap) and not store.visible(snap, store.retired_ids(), synthetic=True):
             msg = f"proposal {pid} rests on a retired assumption: nothing more is made of it"
             raise store.RetroError(msg)
         text = accepted.get("publishable") or {}

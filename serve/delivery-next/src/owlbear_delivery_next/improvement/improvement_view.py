@@ -269,12 +269,14 @@ def proposals(projects: units.Projects, shared_root: Path | None) -> list[dict[s
     """The visible proposals: open ones first, then the newest closed ones and every closed one with work left.
 
     Open ones are waiting, later or under review. Work is left on an accepted one not made in full and on a redirected
-    one whose redraft is not filed and reviewed. An open one carries where it would land, or why it cannot be
-    accepted, and the token a decision on it names.
+    one whose redraft is not filed and reviewed. One a reset retired shows only while its synthetic issue is open. An
+    open one carries where it would land, or why it cannot be accepted, and the token a decision on it names.
     """
     where, known, redrafts, found = places(projects), targets.units_of(), _redrafts(), _found()
     open_, closed = [], []
-    for snap in props.proposals(synthetic=True):
+    listed = props.proposals(synthetic=True)
+    ids = {p["id"] for p in listed}  # a reset hides a proposal, unless only its synthetic issue is left to close
+    for snap in [*listed, *(p for p in props.folded().values() if p["id"] not in ids and proposal_apply.closing(p))]:
         if snap["state"] in props.CLOSED:
             closed.append(_shown(snap, snap["accepted"].get("destination") or {}, redrafts, found))
         elif shared_root is None:
