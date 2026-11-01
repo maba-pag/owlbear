@@ -60,7 +60,8 @@ def lay(at: Path, files: dict[str, bytes | None]) -> None:
             (at / path).write_bytes(data)
 
 
-def _files(at: Path, folder: str) -> dict[str, bytes]:
+def files(at: Path, folder: str) -> dict[str, bytes]:
+    """The files under *folder* of the tree at *at*, never a link, by repository path."""
     base = at / folder
     found = sorted(p for p in base.rglob("*") if p.is_file() and not p.is_symlink()) if base.is_dir() else []
     return {p.relative_to(at).as_posix(): p.read_bytes() for p in found}
@@ -69,12 +70,12 @@ def _files(at: Path, folder: str) -> dict[str, bytes]:
 def protected(at: Path) -> dict[str, bytes]:
     """The pin, the vendored tree and the served files of the tree at *at*, by repository path."""
     pinned = {PIN: (at / PIN).read_bytes()} if (at / PIN).is_file() else {}
-    return pinned | _files(at, TREE) | _files(at, SERVED)
+    return pinned | files(at, TREE) | files(at, SERVED)
 
 
 def source(at: Path) -> dict[str, bytes]:
     """The pages and the module that serves them in the tree at *at*, by repository path."""
-    pages = {p: d for p, d in _files(at, WEB).items() if p.endswith(PAGE_TYPES) and not p.startswith(SERVED)}
+    pages = {p: d for p, d in files(at, WEB).items() if p.endswith(PAGE_TYPES) and not p.startswith(SERVED)}
     return pages | ({PAGES: (at / PAGES).read_bytes()} if (at / PAGES).is_file() else {})
 
 
@@ -96,7 +97,7 @@ def copy(candidate: Path, at: Path, git: Git) -> dict[str, str]:
 
 
 def _copied(candidate: Path, at: Path) -> dict[str, str]:
-    for path in _files(candidate, WEB):
+    for path in files(candidate, WEB):
         rel = path.removeprefix(PACKAGE)
         if rel.startswith(EDITABLE):
             continue

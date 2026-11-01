@@ -47,10 +47,7 @@ PDS = Kind(
 
 def _pages(at: Path) -> dict[str, bytes]:
     """The repair's protected files in the tree at *at*, by repository path."""
-    web = at / tree.WEB
-    found = sorted(p for p in web.rglob("*") if p.is_file() and not p.is_symlink()) if web.is_dir() else []
-    files = {p.relative_to(at).as_posix(): p.read_bytes() for p in found}
-    pages = {p: d for p, d in files.items() if not p.startswith(tree.SERVED)}
+    pages = {p: d for p, d in tree.files(at, tree.WEB).items() if not p.startswith(tree.SERVED)}
     return pages | ({tree.PAGES: (at / tree.PAGES).read_bytes()} if (at / tree.PAGES).is_file() else {})
 
 
