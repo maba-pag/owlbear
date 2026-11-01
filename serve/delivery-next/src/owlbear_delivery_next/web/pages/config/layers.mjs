@@ -220,10 +220,10 @@ export async function reload() {
   const n = answers.ask();
   try {
     const loaded = await call("/config");
-    answers.says(n);
+    const says = answers.says(n);
     if (!answers.take(n)) return false;
     state.loaded = loaded;
-    state.error = state.loaded.notice ? state.loaded.notice.charAt(0).toUpperCase() + state.loaded.notice.slice(1) : "";
+    if (says) state.error = loaded.notice ? loaded.notice.charAt(0).toUpperCase() + loaded.notice.slice(1) : "";
     return true;
   } catch (e) {
     if (answers.says(n)) notify(e.message);  // a newer answer speaks for the layers

@@ -34,12 +34,12 @@ const readAt = (reads) => (reads?.read_at ? Date.parse(reads.read_at) : 0);
 
 const readStates = turns();  // the read state's answers overlap: the page's, the poll's and a dismissal's
 
-// The read state (*reads*, or the host's now), unless an answer asked later or a later read's is shown: answers may
-// arrive in any order. A state that does not read has no read time and is shown with its failure.
-async function readState(reads) {
+// The host's read state, unless an answer asked later or a later read's is shown: answers may arrive in any order. A
+// state that does not read has no read time and is shown with its failure.
+async function readState() {
   const n = readStates.ask();
   try {
-    const got = reads ?? (await call("/config/read")).reads;
+    const got = (await call("/config/read")).reads;
     if (readStates.take(n) && !(got.read_at && readAt(got) < readAt(state.reads))) {
       state.reads = got;
       state.readsSeen = seen(got.read_at, got.notices.map((x) => x.id));
@@ -53,8 +53,8 @@ async function readState(reads) {
 // Everything the page shows from outside, as last read, with no read of its own: the read state, the layers (a 409
 // says which file does not read and keeps what is shown), the machine and the other projects, then the models. Drafts
 // stay.
-export async function refresh(reads) {
-  await readState(reads);
+export async function refresh() {
+  await readState();
   show();
   if (await reload()) show();
   if (state.loaded) {
@@ -73,10 +73,10 @@ export async function readAgain() {
   let released = false;  // once this read has answered, another may start: its busy state is its own
   try {
     // a read pulls the shared repository and starts the Copilot runtime: minutes at worst
-    const answer = await call("/config/read", { method: "POST", timeout: 200000 });
+    await call("/config/read", { method: "POST", timeout: 200000 });
     state.reading = false;
     released = true;
-    await refresh(answer.reads);
+    await refresh();  // its state asked now, so a dismissal made while the read answered stays
   } catch (e) {
     state.readsError = e.reread ?? e.message;
   } finally {
