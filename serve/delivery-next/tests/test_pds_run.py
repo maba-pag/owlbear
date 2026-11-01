@@ -414,11 +414,7 @@ def test_nothing_an_updater_did_is_taken_when_one_change_is_outside_its_pages(tm
     (candidate / tree.WEB / "pages").mkdir(parents=True)
     (candidate / REPO / PAGE).write_text(DEMO)
 
-    def git_(at: Path, args: list[str]) -> str:
-        done = subprocess.run(["git", *args], cwd=at, check=True, capture_output=True, text=True)  # noqa: S603, S607
-        return done.stdout
-
-    start = tree.copy(candidate, copy, git_)
+    start = tree.copy(candidate, copy, lambda at, args: git(at, *args))
     (copy / PAGE).write_text("fixed\n")
     (copy / "web/pages/new.mjs").write_text("export {};\n")
     with pytest.raises(tree.Outside, match=r"web/pages/new\.mjs"):
