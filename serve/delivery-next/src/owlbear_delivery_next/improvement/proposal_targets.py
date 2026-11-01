@@ -17,7 +17,6 @@ synthetic and closed at once. Without the sandbox registered they resolve to an 
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 from importlib.resources import files
 from pathlib import Path
@@ -31,7 +30,7 @@ if TYPE_CHECKING:
 
 SANDBOX = "owlbear-sandbox"  # the clone folder synthetic proposals publish to
 OWLBEAR = "owlbear"  # OwlBear's own folder in the shared repository
-REPOSITORY = re.sub(r"^https://github\.com/|\.git$", "", codebase.URL)
+REPOSITORY = codebase.URL.removeprefix("https://github.com/").removesuffix(".git")
 MEMORY = 1_024  # characters a memory's content holds (owlbear_memory MemoryEntry)
 OWN = ("tool:", "delivery:", "look:", "spotter:")  # targets that are always OwlBear's own
 

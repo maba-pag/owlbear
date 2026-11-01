@@ -322,7 +322,7 @@ def _shown_finding(f: Mapping[str, Any]) -> dict[str, Any]:
     return shown | {k: f[k] for k in ("moment", "later") if f.get(k)}
 
 
-def _bounded(snap: Mapping[str, Any], body: str, limit: int = BODY) -> str:
+def _bounded(snap: Mapping[str, Any], body: str, limit: int) -> str:
     """A survivor's body within *limit*, always ending with its proposal and first finding ids."""
     refs = f"\n\nRefs: {', '.join([snap['id'], *snap['findings'][:SAMPLES]])}"
     return f"{body[: limit - len(refs)]}{refs}"
