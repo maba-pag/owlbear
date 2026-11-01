@@ -244,12 +244,11 @@ def follow_up(item: dict[str, Any], at: Path | None = None) -> FollowUp:
     return FollowUp(hashlib.sha256(body.encode()).hexdigest(), item["subject"], item["reason"], shown)
 
 
-def write(out: Path, done: Audit) -> Path | None:
-    """Write the submitted reports as the skill names them, in *out*'s ``.pds/audits/<runId>/``; None without one."""
+def write(out: Path, done: Audit) -> None:
+    """Write the submitted reports as the skill names them, in *out*'s ``.pds/audits/<runId>/``; nothing without one."""
     if done.report is None:
-        return None
+        return
     folder = out / REPORTS / done.run_id
     folder.mkdir(parents=True, exist_ok=True)
     (folder / f"{SKILL}.json").write_text(done.raw, encoding="utf-8")
     (folder / f"{SKILL}.md").write_text(done.markdown, encoding="utf-8")
-    return folder

@@ -154,8 +154,8 @@ def test_only_a_completed_clean_report_passes_and_its_files_hold_what_was_submit
     clean = json.dumps(report(), indent=1)
     done = audited(sources, clean, markdown="# Clean\n")
     assert done.verdict == audit.Verdict("pass")
-    folder = audit.write(tmp_path / "out", done)
-    assert folder == tmp_path / "out" / audit.REPORTS / done.run_id
+    audit.write(tmp_path / "out", done)
+    folder = tmp_path / "out" / audit.REPORTS / done.run_id
     assert (folder / f"{audit.SKILL}.json").read_text(encoding="utf-8") == clean
     assert (folder / f"{audit.SKILL}.md").read_text(encoding="utf-8") == "# Clean\n"
 
