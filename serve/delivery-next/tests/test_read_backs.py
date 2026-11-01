@@ -94,8 +94,9 @@ def chat(store, monkeypatch) -> chat_client.Chat:
     tools = chat_client.Chat.__new__(chat_client.Chat)
     tools.repo, tools.home = Path(), store.root
 
-    def call(method: str, path: str, body: object = None) -> tuple[int, Any]:
-        r = http.request(method, f"/api/next{path}", json=body)
+    def call(method: str, path: str, body: object = None, timeout: float = 15.0,  # noqa: ARG001
+             headers: dict[str, str] | None = None) -> tuple[int, Any]:  # fmt: skip
+        r = http.request(method, f"/api/next{path}", json=body, headers=headers)
         return r.status_code, r.json()
 
     tools.call = call

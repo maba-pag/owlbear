@@ -15,7 +15,7 @@ from __future__ import annotations
 from dataclasses import asdict
 from typing import TYPE_CHECKING, Annotated, Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 from owlbear_decisions import Origin, ReadBackKind, Scope, State
@@ -24,6 +24,7 @@ from owlbear_delivery_next.change_contracts import decision_wording
 from owlbear_delivery_next.project_host import decision_recovery_routes, impact_routes
 from owlbear_delivery_next.state_store import (
     decision_actions,
+    decision_batch,
     decision_cache,
     decision_impact,
     decision_origin,
@@ -278,6 +279,8 @@ def scoped(where: Where = "all") -> str:
 
 
 In = Annotated[str, Depends(scoped)]  # the project folder a call reads and acts in
+# `decision_batch.ADMIT_BY`; a chat learns of it from its contract's `admit_by`, like `chat_contract.HEADER` unlisted
+AdmitBy = Annotated[float | None, Header(alias="x-owlbear-admit-by", include_in_schema=False)]
 
 
 type Shared = Callable[[], DataRepo | None]
@@ -449,13 +452,15 @@ def _shared_routes(routes: APIRouter, shared: Shared, at: At, places: Places) ->
     """What a chat may do as well as the page: record or propose, retire, queue a read-back and record one."""
 
     @routes.post("/decisions/propose")
-    def propose(body: ProposalBody, project: In) -> dict[str, Any]:
+    def propose(body: ProposalBody, project: In, admit_by: AdmitBy = None) -> dict[str, Any]:
         scope = Scope.GLOBAL if body.scope == "global" else Scope.PROJECT
-        out = _receipts(lambda: decision_actions.propose(
-            shared(), at(project), title=body.title, topic=body.topic, statement=body.statement, reason=body.reason,
-            rationale=body.rationale, confirmed=body.confirmed, replaces=body.replaces, scope=scope,
-            revision=body.revision, redecided=body.redecide, effect=body.effect, origin=Origin(body.origin),
-        ))  # fmt: skip
+        with decision_batch.ADMIT_BY.set(admit_by):  # a chat's deadline for the save to start; the page sends none
+            out = _receipts(lambda: decision_actions.propose(
+                shared(), at(project), title=body.title, topic=body.topic, statement=body.statement,
+                reason=body.reason, rationale=body.rationale, confirmed=body.confirmed, replaces=body.replaces,
+                scope=scope, revision=body.revision, redecided=body.redecide, effect=body.effect,
+                origin=Origin(body.origin),
+            ))  # fmt: skip
         if body.confirmed and body.replaces and out["saved"] and body.effect != "wording":
             out["impact"] = impact_routes.after_change(shared(), at(project), out["receipts"][0]["id"], places)
         return out

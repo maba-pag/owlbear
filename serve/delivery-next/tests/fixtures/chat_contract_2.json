@@ -13,7 +13,18 @@
       "decisions[].state",
       "decisions[].conflict",
       "decisions[].read_back",
-      "decisions[].revision"
+      "decisions[].revision",
+      "decisions[].created_at"
+    ],
+    "GET /decisions/{decision_id}": [
+      "title",
+      "statement",
+      "scope",
+      "state",
+      "origin",
+      "rationale",
+      "links[].type",
+      "links[].id"
     ],
     "POST /briefs/challenge": ["slug", "attempt", "paused"]
   },
@@ -140,6 +151,29 @@
           "schema": {
             "default": false,
             "type": "boolean"
+          }
+        }
+      ]
+    },
+    "GET /decisions/{decision_id}": {
+      "body": null,
+      "parameters": [
+        {
+          "in": "path",
+          "name": "decision_id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "in": "query",
+          "name": "where",
+          "required": false,
+          "schema": {
+            "default": "all",
+            "enum": ["project", "global", "all", "owlbear"],
+            "type": "string"
           }
         }
       ]

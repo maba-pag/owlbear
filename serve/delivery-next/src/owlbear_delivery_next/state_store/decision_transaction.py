@@ -191,6 +191,14 @@ def operation_idle(shared: DataRepo) -> bool:
         return False
 
 
+def rebasing(shared: DataRepo, unknown: Exception) -> bool:
+    """Whether a rebase is active; *unknown* when Git cannot tell, which no save leaves, so it isn't read again."""
+    try:
+        return shared.rebasing()
+    except DataRepoError as exc:
+        raise unknown from exc
+
+
 def head_commit(shared: DataRepo) -> str | None:
     """HEAD's commit, or None when Git cannot name it; a proof reads it once and checks it again last."""
     said = shared.git("rev-parse", "--verify", "-q", "HEAD")

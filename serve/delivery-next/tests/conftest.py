@@ -7,7 +7,8 @@ import subprocess
 import sys
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import AbstractContextManager, contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -375,6 +376,31 @@ def _copy(template: Path, tmp_path: Path, *names: str) -> None:
         for path in (git / "config", *(git / "logs").rglob("*")) if git.is_dir() else ():
             if path.is_file():
                 path.write_text(path.read_text().replace(str(template), str(tmp_path)))
+
+
+@contextmanager
+def _writing(shared: DataRepo) -> Iterator[None]:
+    took, done = threading.Event(), threading.Event()
+
+    def hold() -> None:
+        with shared.locked():
+            took.set()
+            done.wait(30)
+
+    thread = threading.Thread(target=hold)
+    thread.start()
+    assert took.wait(30)
+    try:
+        yield
+    finally:
+        done.set()
+        thread.join(30)
+
+
+@pytest.fixture
+def writing() -> Callable[[DataRepo], AbstractContextManager[None]]:
+    """Another thread holds the decisions repository's lock, as a writer does, until the block ends."""
+    return _writing
 
 
 @pytest.fixture(scope="session")
