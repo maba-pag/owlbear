@@ -218,12 +218,15 @@ def test_a_spotter_case_becomes_a_candidate_with_its_check_queued(world):
     assert world.checks == [cid]
 
 
-# lost: the host ended after promoting, before the result; stopped: it ended before promoting
-@pytest.mark.parametrize("result", ["kept", "lost", "stopped"])
+# lost: the host ended after promoting, before the result; stopped: it ended before promoting; running: this host's
+# job runs it now; left: an ended host left it taken, not yet recorded stopped
+@pytest.mark.parametrize("result", ["kept", "lost", "stopped", "running", "left"])
 def test_a_retried_case_reuses_the_check_that_promoted_it_and_asks_again_after_one_stopped(world, monkeypatch, result):
     _record("rec-1")
     pid = _waiting("spotter-case", "look:handoff", ["f-1"], record="rec-1", call="hand-off-fitness")
-    seams = dataclasses.replace(world.seams, check=lambda cid: case_edits.check_request([cid], act.BY))
+    live: list[str] = []
+    seams = dataclasses.replace(world.seams, check=lambda cid: case_edits.check_request([cid], act.BY),
+                                live=lambda: live[0] if live else "")  # fmt: skip
     act.decide(pid, "accepted", _seen(pid, world), "owner", places=world.places, shared_root=world.shared)
     kept = props.outcome
 
@@ -238,7 +241,7 @@ def test_a_retried_case_reuses_the_check_that_promoted_it_and_asks_again_after_o
     [asked] = case_replay.queued()
     cid = next(iter(asked["ids"]))
     assert case_replay.take(asked["id"])
-    if result != "stopped":
+    if result in {"kept", "lost"}:
         cur = cases.current()
         review = {"by": "retro-review", "at": cases.now(), "note": "it holds", "content": asked["ids"][cid]}
         promoted = {**cur["cases"][cid], "stage": "test", "review": review}
@@ -246,14 +249,16 @@ def test_a_retried_case_reuses_the_check_that_promoted_it_and_asks_again_after_o
     if result == "kept":
         cases.append("runs.jsonl", {"id": asked["id"], "kind": "check", "reviews": {cid: {"result": "supported"}}})
         case_replay.done(asked["id"])
-    else:
+    elif result in {"lost", "stopped"}:
         assert [r["id"] for r in case_replay.interrupted()] == [asked["id"]]
+    elif result == "running":
+        live.append(asked["id"])
     monkeypatch.setattr(props, "outcome", kept)
 
     done = act.apply(pid, seams)
 
     check = done["applied"][-1]["artefact"]["check"]
-    if result == "stopped":
+    if result in {"stopped", "left"}:
         assert [q["id"] for q in case_replay.queued()] == [check]  # asked again
     else:
         assert check == asked["id"]

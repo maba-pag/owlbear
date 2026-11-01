@@ -50,6 +50,7 @@ def world(tmp_path, monkeypatch):
         projects[pid] = (st, clone)
     machine = SimpleNamespace(
         retro=SimpleNamespace(seams=SimpleNamespace(projects=lambda: projects)),
+        cases=SimpleNamespace(running=""),
         projects=dict.fromkeys(projects),
         updating="",
         stopping=threading.Event(),

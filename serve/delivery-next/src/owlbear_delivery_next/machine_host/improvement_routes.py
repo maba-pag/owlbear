@@ -68,14 +68,15 @@ class MoveBody(api.Body):
     example: str = Field(default="", max_length=cases.EXAMPLE * 2)
 
 
-def seams() -> proposal_apply.Seams:
-    """Where an accepted proposal's artefacts are made on this machine."""
+def seams(live: Callable[[], str]) -> proposal_apply.Seams:
+    """Where an accepted proposal's artefacts are made on this machine; *live*: the check its cases job runs now."""
     return proposal_apply.Seams(
         backlog=followups.backlog,
         memory=MemoryEngine,
         issues=lambda: OwlbearIssues(targets.REPOSITORY, local_home.root()),
         case=proposal_apply.intake,
         check=lambda cid: case_edits.check_request([cid], proposal_apply.BY),
+        live=live,
     )
 
 
@@ -218,7 +219,7 @@ def _proposals(routes: APIRouter, m: _Machine) -> None:
         """Make an accepted proposal's artefacts, or those still missing after a failure."""
         m.writable()
         try:
-            return proposal_apply.apply(pid, seams())
+            return proposal_apply.apply(pid, seams(lambda: m.machine.cases.running))
         except store.RetroError as exc:
             raise HTTPException(409, str(exc)) from exc
 

@@ -52,6 +52,7 @@ class Seams:
     issues: Callable[[], OwlbearIssues]
     case: Callable[[Mapping[str, Any]], str]  # the intake of an accepted Spotter case -> its case id
     check: Callable[[str], str]  # the paid check of one case queued -> the request id
+    live: Callable[[], str] = lambda: ""  # the request this host's cases job runs now, "" none
 
 
 def intake(accepted: Mapping[str, Any]) -> str:
@@ -214,18 +215,20 @@ def _case(pid: str, accepted: Mapping[str, Any], _text: Text, done: Done, seams:
         dest = accepted["destination"]
         cid = case_intake.of_record(dest["record"], dest["call"]) or seams.case(accepted)
         props.outcome(pid, "applied", step="created", artefact=_artefact("case", "Spotter cases", cid))
-    rid = _checked(cid) or seams.check(cid)
+    rid = _checked(cid, seams.live()) or seams.check(cid)
     props.outcome(pid, "applied", step="done", artefact=_artefact("case", "Spotter cases", cid) | {"check": rid})
 
 
-def _checked(cid: str) -> str:
+def _checked(cid: str, live: str) -> str:
     """The check already asked of case *cid*, else nothing.
 
-    The host may stop between asking for it and recording it: one still queued counts, and so does one that ran (or
-    was stopped by the host's end) once the case has left the candidates.
+    The host may stop between asking for it and recording it: one still queued counts, so does the *live* one this
+    host's job runs now (not one an ended host left taken), and so does one that ran (or was stopped by the host's
+    end) once the case has left the candidates.
     """
-    if queued := [q["id"] for q in case_replay.queued() if q.get("kind") == "check" and cid in (q.get("ids") or {})]:
-        return queued[-1]
+    asked = case_replay.queued() + [r for r in case_replay.running() if live and r.get("id") == live]
+    if mine := [q["id"] for q in asked if q.get("kind") == "check" and cid in (q.get("ids") or {})]:
+        return mine[-1]
     if cases.current()["cases"].get(cid, {}).get("stage") == "candidate":
         return ""
     ran = [r for r in case_replay.results() if r.get("kind") == "check"]
