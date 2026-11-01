@@ -255,6 +255,19 @@ def test_a_setting_unset_while_a_new_runs_first_admission_waits_refuses_it_when_
     }
 
 
+def test_a_button_rerun_held_before_any_work_leaves_the_judged_revision_as_it_was(a_b, machine, monkeypatch):
+    _, b = a_b
+    job = _job(machine, [])
+    job.tick(0.0)
+    [judged] = retro_store.known()["chg:pb:fix-it"]["revisions"]
+    assert judged["state"] == "judged"
+    _unset_while_queued(job, b, monkeypatch)
+    retro_store.request("owner", change="pb:fix-it")
+    job.tick(1.0)
+    assert ("chg:pb:fix-it", "button", "judge", f"refused: {UNSET}") in _runs()
+    assert retro_store.known()["chg:pb:fix-it"]["revisions"] == [judged]
+
+
 def test_a_late_grading_held_while_it_waits_for_a_slot_is_offered_again_once_set(a_b, machine, monkeypatch):
     a, _ = a_b
     _layer(a, Prefs(ci_poll_seconds=20))

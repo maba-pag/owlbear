@@ -303,12 +303,12 @@ class RetroJob:
         self._ended(ctx, result, out)
 
     def _ended(self, ctx: Running, result: str, out: dict[str, Any] | None = None) -> None:
-        """Keep how *ctx* ended, with its spend, and settle its revision; a grade-only run leaves it judged."""
+        """Keep how *ctx* ended, with its spend, and settle its revision, unless grade-only or held before any work."""
         report = ctx.meter.report() if ctx.meter else None
         spent = ctx.spent + (report["credits"] if report else 0.0)
         known = ctx.known and (report["credits_known"] if report else True)
         store.run_event(ctx.id, "ended", result=result, credits=report, spent=spent, known=known, **(out or {}))
-        if ctx.rev and ctx.mode != "grade-only":
+        if ctx.rev and ctx.mode != "grade-only" and not (out or {}).get("held"):  # a held run never took it
             units.settle(ctx.uid, ctx.rev, result.split(":", 1)[0], run=ctx.id, result=result)
         if ctx in self.waiting:
             self.waiting.remove(ctx)
