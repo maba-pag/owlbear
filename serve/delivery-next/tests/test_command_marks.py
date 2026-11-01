@@ -66,6 +66,25 @@ def _push(work: Path, remote: Path, ref: str) -> None:
     remote_git.run_remote_git(work, ["push", str(remote), f"HEAD:refs/heads/{ref}"], kind="write")
 
 
+def test_remote_git_runs_only_once_its_leader_is_journaled(change_repo, tmp_path, monkeypatch) -> None:
+    remote = tmp_path / "remote.git"
+    _git(tmp_path, "init", "-q", "--bare", str(remote))
+    seen: list[str] = []
+
+    def launched(_pid: int) -> None:
+        time.sleep(1.0)  # an unjournaled Git would have pushed by now
+        seen.append(_git(remote, "branch", "--list"))
+        msg = "the runner died"
+        raise RuntimeError(msg)
+
+    monkeypatch.setattr(remote_git, "launched", launched)
+    with pytest.raises(RuntimeError, match="the runner died"):
+        _push(change_repo, remote, "early")
+    time.sleep(0.5)
+    assert seen == [""]
+    assert _git(remote, "branch", "--list") == ""
+
+
 def test_a_runner_step_marks_its_sessions_and_journals_its_pushes(change_repo, tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(sdk_adapter, "session_options", command_marks.opened)  # undo conftest's no-op
     store = Store.open(change_repo)

@@ -194,10 +194,11 @@ def run_remote_git(
         None if "GIT_SSH_COMMAND" in base else _configured_ssh_command(repository, base, _global_options(arguments))
     )
     command = (resolve_git_executable(), "-C", str(repository), *arguments)
+    gated = launched is not None  # a journaled leader waits on its stdin until the journal holds it
     try:
         process = subprocess.Popen(  # noqa: S603 - fixed Git executable and code-owned argument vectors.
-            command,
-            stdin=subprocess.DEVNULL,
+            ("/bin/sh", "-c", 'read -r _ && exec "$@" </dev/null', "sh", *command) if gated else command,
+            stdin=subprocess.PIPE if gated else subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             env=remote_git_environment(base, configured_ssh_command=configured),
@@ -210,6 +211,7 @@ def run_remote_git(
     try:
         if launched is not None:
             launched(process.pid)
+            _release(process)
         stdout, stderr = process.communicate(timeout=bound)
         finished = True
     except subprocess.TimeoutExpired as exc:
@@ -228,6 +230,13 @@ def run_remote_git(
         detail = "remote Git write did not confirm its outcome"
         raise RemoteGitWriteUnknown(detail, timed_out=False, result=result)
     return result
+
+
+def _release(process: subprocess.Popen[bytes]) -> None:
+    """Let a journaled leader become Git; a runner that dies first closes the pipe, and Git never runs."""
+    if process.stdin is not None:
+        with contextlib.suppress(OSError), process.stdin:
+            process.stdin.write(b"go\n")
 
 
 def _terminate_group(process: subprocess.Popen[bytes]) -> None:
