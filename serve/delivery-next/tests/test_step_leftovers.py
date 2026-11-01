@@ -17,6 +17,7 @@ from owlbear_delivery_next.change_flow.loop import StepResult, apply
 from owlbear_delivery_next.local_system import processes
 from owlbear_delivery_next.project_host.host import Host, RunnerRecord
 from owlbear_delivery_next.runtimes import command_marks
+from owlbear_delivery_next.state_store import step_pids
 from owlbear_delivery_next.state_store.store import Store
 
 SLEEP = "sleep 300 >/dev/null 2>&1"
@@ -166,11 +167,14 @@ def _no_group(_pid):
         ("table", "the step's processes could not be looked for: the process table could not be listed: "),
         ("group", "its group or session could not be read: [Errno 1] Operation not permitted"),
         ("marks", "the step's command marks could not be read: [Errno 21] Is a directory"),
+        ("pids", "the step's recorded processes could not be read: [Errno 21] Is a directory"),
     ],
 )
 def test_unreadable_marks_or_table_block_with_their_details(store, tmp_path, monkeypatch, what, detail) -> None:
     runnable(store, tmp_path)
     marks = command_marks.folder(store, "c1") / command_marks.FILE
+    if what == "pids":
+        (command_marks.folder(store, "c1") / step_pids.FILE).mkdir()
     if what == "marks":
         marks.mkdir()
     else:

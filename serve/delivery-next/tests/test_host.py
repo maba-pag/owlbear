@@ -46,7 +46,7 @@ from owlbear_delivery_next.settings import config
 from owlbear_delivery_next.settings.config import Layer
 from owlbear_delivery_next.state_store import machine_settings
 from owlbear_delivery_next.state_store.database import put_record
-from owlbear_delivery_next.state_store.store import Store
+from owlbear_delivery_next.state_store.store import ACTIVITY_LIMIT, Store
 from owlbear_delivery_next.workflow_steps import check, disposable, prepare
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
@@ -133,6 +133,8 @@ def test_recorded_pids_of_the_runner_block_until_gone(store, tmp_path):
     fake.host.tick(NOW)
     with store.lock("c1") as lock:
         store.log(lock, "c1", {"event": "pids", "at": NOW.isoformat(), "pids": {"777": 1.0}})
+        for _ in range(ACTIVITY_LIMIT):  # a long step's later activity evicts the record from the log
+            store.log(lock, "c1", {"event": "tool", "at": NOW.isoformat()})
     fake.live = {777}
     assert fake.host.tick(NOW) == []
     assert "777" in store.read("c1").blocked.action

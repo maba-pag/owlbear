@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.local_system import processes
 from owlbear_delivery_next.runtimes import command_marks
+from owlbear_delivery_next.state_store import step_pids
 from owlbear_delivery_next.workflow_steps import check
 
 if TYPE_CHECKING:
@@ -23,14 +23,16 @@ def survivors(h: Host, c: Change, rec: RunnerRecord | None) -> Found | str:
     """
     since = rec.started_at if rec else c.step.started_at
     pids: dict[int, float | None] = {rec.pid: rec.created} if rec else {}
-    for e in h.store.events(c.slug) if since else []:
-        if e.get("event") == "pids" and datetime.fromisoformat(e["at"]) >= since - timedelta(seconds=1):
-            pids |= {int(p): t for p, t in e["pids"].items()}
-    found: Found = {p: "" for p, t in pids.items() if h.alive(p, t) is not False}
+    folder = command_marks.folder(h.store, c.slug)
     try:
-        marks = command_marks.read(command_marks.folder(h.store, c.slug), since) if since else {}
+        pids |= step_pids.recorded(folder, since) if since else {}
+    except (OSError, ValueError) as exc:
+        return f"the step's recorded processes could not be read: {exc}"
+    try:
+        marks = command_marks.read(folder, since) if since else {}
     except (OSError, ValueError) as exc:
         return f"the step's command marks could not be read: {exc}"
+    found: Found = {p: "" for p, t in pids.items() if h.alive(p, t) is not False}
     try:
         found |= h.members(marks | pids)  # a recorded start time wins over a mark's
     except processes.UnlistedError as exc:
