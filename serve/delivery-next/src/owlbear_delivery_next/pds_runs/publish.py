@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING
 from owlbear_delivery_next.impeccable import pack_files
 from owlbear_delivery_next.impeccable_runs import pack_progress, pack_publish, pack_repair, pack_rounds, pack_run
 from owlbear_delivery_next.impeccable_runs.pack_run import Stopped
-from owlbear_delivery_next.pds_runs import audit, browser, checks, repair, run, tree
+from owlbear_delivery_next.pds_runs import browser, checks, repair, run, tree
 from owlbear_delivery_next.pds_runs.context import CANDIDATE, HEAD, MARKER
 
 if TYPE_CHECKING:
@@ -51,7 +51,7 @@ def publish(job: Job, ctx: Context, lp: RoundLoop) -> str | None:
         ctx.source = pages
         ctx.publication = _publication(job, ctx, lp)
         job.keep(ctx, lp)
-    edited = job.live.git(at, ["diff", "--name-only", ctx.checkout["base"], "--", *_scope()]).split()
+    edited = job.live.git(at, ["diff", "--name-only", ctx.checkout["base"], "--", *tree.SCOPE]).split()
     raw = tree.protected(at) | {p: (at / p).read_bytes() for p in edited}
     try:
         files: dict[str, str | None] = {p: d.decode("utf-8") for p, d in raw.items()}
@@ -59,11 +59,6 @@ def publish(job: Job, ctx: Context, lp: RoundLoop) -> str | None:
         msg = f"a file to commit is not UTF-8 text: {exc}; run the update again"
         raise Stopped(msg) from exc
     return _published(job, ctx, lp, files | dict.fromkeys(ctx.removed))
-
-
-def _scope() -> list[str]:
-    """The page paths a commit takes from the candidate: the pages and the module that serves them."""
-    return [tree.WEB, tree.PAGES, f":(exclude){tree.SERVED}", *(f":(exclude){tree.WEB}{d}/" for d in audit.VENDORED)]
 
 
 def _publication(job: Job, ctx: Context, lp: RoundLoop) -> pack_publish.Publication:

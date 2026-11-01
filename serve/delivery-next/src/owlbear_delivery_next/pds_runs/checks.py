@@ -85,8 +85,7 @@ def base(job: Job, ctx: Context) -> Path:
 
 def pages(job: Job, ctx: Context, at: Path) -> str:
     """The page changes in the tree at *at* against the base, as one diff."""
-    scope = [tree.WEB, tree.PAGES, f":(exclude){tree.SERVED}", *(f":(exclude){tree.WEB}{d}/" for d in audit.VENDORED)]
-    return job.live.git(at, ["diff", "--no-color", ctx.checkout["base"], "--", *scope])
+    return job.live.git(at, ["diff", "--no-color", ctx.checkout["base"], "--", *tree.SCOPE])
 
 
 def challenged(job: Job, ctx: Context, at: Path, lp: RoundLoop, *, recheck: bool = False) -> Run:

@@ -29,6 +29,7 @@ WEB = f"{PACKAGE}web/"
 PAGES = f"{PACKAGE}project_host/pages.py"  # serves the pages and puts the pinned version into them
 PAGE_TYPES = (".html", ".mjs", ".js", ".css")
 EDITABLE = tuple(f"web/{d}/" for d in audit.VENDORED)  # under web/ but never the updater's
+SCOPE = (WEB, PAGES, f":(exclude){SERVED}", *(f":(exclude){WEB}{d}/" for d in audit.VENDORED))  # pages, as pathspecs
 
 
 class Outside(pack_files.PackError):
