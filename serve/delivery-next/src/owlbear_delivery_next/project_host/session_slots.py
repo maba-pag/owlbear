@@ -320,12 +320,12 @@ def pds_packed(host: Host | None, job: pds_job.Job) -> pds_job.Job:
     return job
 
 
-def busy(job: Job, hand: hand_audit.Hand, pds: pds_job.Job | None = None) -> list[str]:
+def busy(job: Job, hand: hand_audit.Hand, pds: pds_job.Job) -> list[str]:
     """Work admitted outside a request, which a project's stop waits for (TD-242)."""
     return [
         *(["an Impeccable update"] if job.busy() else []),
         *(["a PDS audit"] if hand.busy() else []),
-        *(["a PDS update"] if pds is not None and pds.busy() else []),
+        *(["a PDS update"] if pds.busy() else []),
     ]
 
 
