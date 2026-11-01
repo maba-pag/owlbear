@@ -122,8 +122,10 @@ def decide(  # noqa: PLR0913 - the decision, what the owner saw, and where it ma
 def apply(pid: str, seams: Seams) -> dict[str, Any]:
     """Act on the accepted proposal *pid* from what was accepted; the proposal after it, applied or failed.
 
+    One resting on an assumption a reset retired since makes nothing more, except closing a synthetic issue it made.
+
     Raises:
-        RetroError: The proposal is unknown or not accepted.
+        RetroError: The proposal is unknown, not accepted, or rests on a retired assumption.
     """
     with _acting:
         snap = props.folded().get(pid)
@@ -133,9 +135,13 @@ def apply(pid: str, seams: Seams) -> dict[str, Any]:
         if snap["apply_state"] == "done":
             return snap
         accepted = snap["accepted"]
+        done = {a["step"]: a["artefact"] for a in snap["applied"]}
+        closing = accepted["destination"]["kind"] == "issue" and "created" in done  # a synthetic issue left open
+        if not closing and not store.visible(snap, store.retired_ids(), synthetic=True):
+            msg = f"proposal {pid} rests on a retired assumption: nothing more is made of it"
+            raise store.RetroError(msg)
         text = accepted.get("publishable") or {}
         title, body = str(text.get("title") or "").strip(), str(text.get("body") or "").strip()
-        done = {a["step"]: a["artefact"] for a in snap["applied"]}
         problem = "" if title and body else "the accepted text has no title or body"
         if leaked := case_review.leaks([title, body]):
             problem = f"the accepted text holds {', '.join(leaked)}: nothing was written; redirect it"

@@ -316,6 +316,23 @@ def test_a_synthetic_issue_is_closed_on_retry_and_the_reset_lists_it_once(world,
     assert listed.count("synthetic issue in o/r: #2 https://github.com/o/r/issues/2") == 1, listed
 
 
+def test_a_proposal_a_reset_retired_after_its_accept_makes_nothing_but_its_synthetic_issue_is_still_closed(world):
+    real = _waiting("agent-change", "agent:exporter", ["f-1"], assumptions=[assumptions.RETRO_SEGMENTS])
+    act.decide(real, "accepted", _seen(real, world), "owner", places=world.places, shared_root=world.shared)
+    synthetic = _waiting("delivery-change", "delivery:hand-off", ["f-3"], provenance="synthetic",
+                         assumptions=[assumptions.RETRO_SYNTHETIC])  # fmt: skip
+    world.gh.close_fails = 1
+    assert _accept(synthetic, world)["apply_state"] == "failed"  # made, its closing failed
+
+    assumptions.reset()
+
+    with pytest.raises(store.RetroError, match="rests on a retired assumption"):
+        act.apply(real, world.seams)
+    assert world.entries == []
+    assert act.apply(synthetic, world.seams)["apply_state"] == "done"
+    assert [i["state"] for i in world.gh.issues if "pull_request" not in i] == ["closed"]
+
+
 def test_unsafe_text_fails_with_nothing_sent_or_written(world):
     leaky = {"title": "Ask jane@example.com", "body": "Token ghp_" + "b" * 36 + " in /Users/jane/notes"}
     pid = _waiting("delivery-change", "delivery:hand-off", ["f-1"], text=leaky)
