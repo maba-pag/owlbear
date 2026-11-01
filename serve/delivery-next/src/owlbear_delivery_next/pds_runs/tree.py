@@ -63,8 +63,7 @@ def lay(at: Path, files: dict[str, bytes | None]) -> None:
 
 def files(at: Path, folder: str) -> dict[str, bytes]:
     """The files under *folder* of the tree at *at*, never a link, by repository path."""
-    base = at / folder
-    found = sorted(p for p in base.rglob("*") if p.is_file() and not p.is_symlink()) if base.is_dir() else []
+    found = sorted(p for p in (at / folder).rglob("*") if p.is_file() and not p.is_symlink())
     return {p.relative_to(at).as_posix(): p.read_bytes() for p in found}
 
 
