@@ -332,14 +332,11 @@ def busy(job: Job, hand: hand_audit.Hand, pds: pds_job.Job | None = None) -> lis
 def pack_live(host: Host | None, live: Live, note: Callable[[str], None]) -> Live:
     """*live* whose updater, challenger and replay sessions enter the SDK only as maintenance owning a project slot."""
 
-    def mine(work: Callable[[Session], Run]) -> Callable[[Session], Run]:
-        return owned(host, note, work)
-
     def update(store: Store, cfg: Session) -> Run:
-        return mine(lambda bound: live.update(store, bound))(cfg)
+        return owned(host, note, lambda bound: live.update(store, bound))(cfg)
 
     def challenge(store: Store, cfg: Session) -> Run:
-        return mine(lambda bound: live.challenge(store, bound))(cfg)
+        return owned(host, note, lambda bound: live.challenge(store, bound))(cfg)
 
     def replay(
         store: Store,
@@ -348,6 +345,6 @@ def pack_live(host: Host | None, live: Live, note: Callable[[str], None]) -> Liv
         *,
         keep: Callable[[Path], bool] | None = None,
     ) -> Replay:
-        return live.replay(store, candidate, mine(run or pack_replay.sdk_run), keep=keep)
+        return live.replay(store, candidate, owned(host, note, run or pack_replay.sdk_run), keep=keep)
 
     return dataclasses.replace(live, update=update, challenge=challenge, replay=replay)
