@@ -1,7 +1,7 @@
 """The Maintenance sessions: unknown work and its owner's explicit reboot recovery (OPS-03, OPS-06).
 
-Beside them, the machine's Impeccable update as the OwlBear section shows it, the same in every project
-(``pack_overview``): the machine host serves it without a project, so the section reads it with none chosen.
+Beside them, the machine's Impeccable and PDS updates as the Updates pages show them, the same in every project
+(``pack_overview``): the machine host serves them without a project, so the pages read them with none chosen.
 """
 
 from __future__ import annotations
@@ -11,7 +11,9 @@ from typing import TYPE_CHECKING, Any, Protocol
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict
 
+from owlbear_delivery_next.impeccable_runs import pack_progress
 from owlbear_delivery_next.project_host import decision_routes, pack_overview
+from owlbear_delivery_next.state_store import pds_run_record
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -48,6 +50,10 @@ def router(host: Holder | None, own: tuple[str, Path] | None = None) -> APIRoute
     @routes.get("/maintenance/pack/runs")
     def pack_runs() -> dict[str, Any]:
         return pack_overview.runs(own)
+
+    @routes.get("/maintenance/pds/runs")
+    def pds_runs() -> dict[str, Any]:
+        return pack_overview.runs(own, reader=pds_run_record.read_only, actions=pack_progress.PDS_ACTIONS)
 
     @routes.get("/maintenance/sessions")
     def sessions() -> dict[str, list[dict[str, Any]]]:

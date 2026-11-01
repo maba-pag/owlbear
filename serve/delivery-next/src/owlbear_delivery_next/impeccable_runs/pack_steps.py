@@ -64,12 +64,17 @@ class Steps:
         self.log(f"{name}: running")
         return inv
 
-    def note(self, name: str, op: str, result: str, detail: str, identity: str = "") -> None:
-        """An invocation that ran nothing, such as a replay reused for an unchanged identity; logged."""
+    def note(  # noqa: PLR0913 - the invocation, its words and where it shows
+        self, name: str, op: str, result: str, detail: str, identity: str = "", *, at: str = ""
+    ) -> None:
+        """An invocation that ran nothing, such as a replay reused for an unchanged identity; logged.
+
+        *at* overrides the phase, as for the merge gate's judgements of a pull request's head.
+        """
         with self.lock:
             invocations = self.state.get("invocations")
             if invocations is not None:
-                inv = pack_progress.opened(invocations, name, op, identity=identity, result=result)
+                inv = pack_progress.opened(invocations, name, op, at=at, identity=identity, result=result)
                 inv["detail"] = detail[:4000]
                 self._save()
         self.log(f"{name}: {pack_progress.words(op, result)}")

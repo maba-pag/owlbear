@@ -2438,7 +2438,8 @@ def test_updates_impeccable_shows_the_update_and_settings_and_maintenance_only_l
 
     assert '<section id="pack" class="panel" aria-labelledby="pack-title">' in page
     assert '<h2 id="pack-title">The pack</h2>' in page
-    assert 'button("Update Impeccable", start, { id: "pack-update", icon: "refresh"' in page  # lit-html
+    assert 'label: "Update Impeccable"' in page  # the kind's words (pack.mjs), on the shared button (run.mjs)
+    assert 'button(own.kind.label, start, { id: "pack-update", icon: "refresh"' in page  # lit-html
     assert '<p-text id="pack-state" size="sm" role="status" aria-live="polite">${runLine(u)}</p-text>' in page
     assert '<ol id="pack-stages" aria-label="Update stages">' in page
     assert "commits impeccable.json, skills/NOTICE.md and " in page  # the Update dialog says what it commits

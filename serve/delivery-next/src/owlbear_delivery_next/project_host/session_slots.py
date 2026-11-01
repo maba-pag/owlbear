@@ -22,6 +22,7 @@ from owlbear_delivery_next.impeccable import pack_files
 from owlbear_delivery_next.impeccable_runs import pack_job, pack_replay, pack_run, pack_state
 from owlbear_delivery_next.local_system.slots import PACK
 from owlbear_delivery_next.pds_runs import hand_audit
+from owlbear_delivery_next.pds_runs import job as pds_job
 from owlbear_delivery_next.runtimes import maintained
 from owlbear_delivery_next.state_store import project_home
 from owlbear_delivery_next.state_store.store import StoreError
@@ -299,9 +300,38 @@ def pds_hand(host: Host | None, store: Store) -> hand_audit.Hand:
     return hand
 
 
-def busy(job: Job, hand: hand_audit.Hand) -> list[str]:
+def pds(host: Host | None, store: Store) -> tuple[hand_audit.Hand, pds_job.Job]:
+    """*store*'s PDS work: its hand audit and its update, their sessions holding the project's slots."""
+    return pds_hand(host, store), pds_packed(host, pds_job.Job(store))
+
+
+def pds_packed(host: Host | None, job: pds_job.Job) -> pds_job.Job:
+    """*job* whose sessions each hold one of the project's slots as PDS maintenance; a run left open is held.
+
+    A run the last host left running is adopted as unknown work, so its workspace is never removed while a session of
+    it may still work. Without a running host its sessions refuse.
+    """
+    live = job.live
+    job.live = dataclasses.replace(
+        live, session=lambda store, cfg: owned(host, job.log, lambda bound: live.session(store, bound), "pds")(cfg)
+    )
+    job.maintenance = host.maintenance if host is not None else None
+    run = job.interrupted
+    if job.maintenance is not None and run is not None and not job.maintenance.owns(run["workspace"]):
+        job.maintenance.adopt_uncertain(
+            f"{project(host)}:{run['workspace']}:{run['generation']}", project(host), "pds",
+            workspace=run["workspace"], generation=run["generation"],
+        )  # fmt: skip
+    return job
+
+
+def busy(job: Job, hand: hand_audit.Hand, pds: pds_job.Job | None = None) -> list[str]:
     """Work admitted outside a request, which a project's stop waits for (TD-242)."""
-    return [*(["an Impeccable update"] if job.busy() else []), *(["a PDS audit"] if hand.busy() else [])]
+    return [
+        *(["an Impeccable update"] if job.busy() else []),
+        *(["a PDS audit"] if hand.busy() else []),
+        *(["a PDS update"] if pds is not None and pds.busy() else []),
+    ]
 
 
 def pack_live(host: Host | None, live: Live, note: Callable[[str], None]) -> Live:

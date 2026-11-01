@@ -1,10 +1,11 @@
-// The Impeccable update's run as Updates ▸ Impeccable shows it: its state, what the owner has to do, its questions
-// with their answers, its progress by invocation, its findings and log, and each project's last run (pack.mjs acts).
+// An update's run as its Updates page shows it (Impeccable's or the Porsche Design System's, by own.kind): its state,
+// what the owner has to do, its questions with their answers, its progress by invocation, its findings and log, and
+// each project's last run (pack.mjs acts).
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { live } from "/assets/lit-html/3.3.3/directives/live.js";
-import { machineState } from "/assets/ui.mjs";
+import { machineState, project } from "/assets/ui.mjs";
 import { sentence, when } from "./frame.mjs";
-import { FOUND, answer, button, discard, discarding, emphasis, own, reach } from "./pack.mjs";
+import { ADMIT, FOUND, answer, button, discard, discarding, emphasis, own, reach, start } from "./pack.mjs";
 
 const RESULTS = { pending: "not run", running: "running", passed: "passed", failed: "failed", skipped: "skipped",
   returned: "findings back to the updater", waiting: "waiting for you", completed: "session completed",
@@ -25,6 +26,7 @@ const STATES = { running: ["running", "info"], waiting: ["waiting for you", "war
 const KINDS = { end: "The challenge rounds ended without a pass", evidence: "Changed golden evidence",
   code: "A change to the detector's glue", scope: "Changes the updater may not make",
   unsure: "A change the challenger is unsure about",
+  "follow-ups": "Manual follow-ups from the deprecation audit",
   publish: "Publication stopped", "repair-config": "The CI repair was held before its push",
   "repair-approval": "The CI repair changed protected content" };
 
@@ -55,10 +57,7 @@ function todo(u, questions, to) {
     const n = questions.length;
     return `Answer ${n === 1 ? "the question" : `the ${n} questions`} below${elsewhere}.`;
   }
-  if (u.state === "passed") {
-    return "Nothing. The merged pack reaches each machine as it takes the OwlBear version that carries it; until "
-      + "then a machine keeps the pack it has.";
-  }
+  if (u.state === "passed") return `Nothing. ${own.kind.merged}`;
   if (u.state === "failed") return "Read why below, fix the cause, then start a new update.";
   return "Nothing.";
 }
@@ -73,7 +72,7 @@ function summary(u, questions, to) {
       <p-tag id="pack-tag" variant=${tone} compact="true">${word}</p-tag>
     </div>
     <p-text id="pack-project" size="sm">${open ? "Started" : "Run"} in <strong>${u.name}</strong>: it uses that
-      project's labels, calibration and spend${to ? "" : unreachable()}.</p-text>
+      project's ${own.kind.uses}${to ? "" : unreachable()}.</p-text>
     <p-text id="pack-state" size="sm" role="status" aria-live="polite">${runLine(u)}</p-text>
     <dl class="pack-facts">
       ${now ? html`<div><dt>Now</dt><dd id="pack-now">${now}…</dd></div>` : nothing}
@@ -234,8 +233,45 @@ function unreachable() {
   return machineState() ? "; its answers show here once that project is loaded" : "; open that project to act on it";
 }
 
+function article(name) {
+  return `${/^[AEIOU]/.test(name) ? "an" : "a"} ${name}`;
+}
+
+// Starting the update, from a chosen project: its button, what became of a start and why the runs can't be read.
+export function startPart() {
+  const r = own.runs, run = r?.run, open = run && ["running", "waiting"].includes(run.state);
+  const canStart = Boolean(project || !machineState()), busy = Boolean(open || r?.holder);
+  return html`<div class="part">
+    <p-heading size="md"><h3 id="pack-update-title">Update</h3></p-heading>
+    <p-text size="sm">${own.kind.intro} One runs at a time on this machine.</p-text>
+    <div class="row">
+      ${button(own.kind.label, start, { id: "pack-update", icon: "refresh",
+        variant: open ? "secondary" : "primary",
+        busy: own.busy === "start" || Boolean(own.awaiting),
+        disabled: busy || !canStart || Boolean(own.busy) || Boolean(own.awaiting) })}
+      ${canStart ? nothing : html`<p-text id="pack-choose" size="sm">Choose a project above to start one: it runs on
+        that project's ${own.kind.uses}.</p-text>`}
+    </div>
+    ${own.awaiting ? html`<p-inline-notification id="pack-admitting" state="info" dismiss-button="false">
+      Delivery has not answered the start yet; it may still be checking GitHub for an open ${own.kind.name} pull
+      request.
+      It was not sent again. This page looks for the run until ${new Date(own.awaiting.until)
+        .toLocaleTimeString()}.</p-inline-notification>` : nothing}
+    ${own.lost ? html`<p-inline-notification id="pack-start-unknown" state="warning" dismiss-button="false">
+      Whether the update started is unknown: Delivery did not answer, and no new run appeared within
+      ${ADMIT / 1000} s. It was not sent again. Reload the page to see Delivery's state before you start another.
+      ${button("Reload", () => location.reload(), { id: "pack-reload" })}</p-inline-notification>` : nothing}
+    ${own.error ? html`<p-inline-notification id="pack-error" state="error" dismiss-button="false">${
+      sentence(own.error)}</p-inline-notification>` : nothing}
+    ${own.unread.runs ? html`<p-inline-notification id="pack-runs-error" state="error" dismiss-button="false">
+      Could not read the ${own.kind.name} runs: ${own.unread.runs}.</p-inline-notification>` : nothing}
+  </div>`;
+}
+
 export function runPart(run) {
-  if (!run) return html`<p-text id="pack-state" size="sm">No project has run an Impeccable update yet.</p-text>`;
+  if (!run) {
+    return html`<p-text id="pack-state" size="sm">No project has run ${article(own.kind.name)} update yet.</p-text>`;
+  }
   const to = reach(run), questions = run.state === "waiting" ? run.questions ?? [] : [];
   const p = run.published, found = run.loop?.findings ?? [], d = discarding(run, questions);
   const why = run.state !== "running" ? run.reason : "";
@@ -272,7 +308,7 @@ export function runPart(run) {
 export function others(r) {
   const listed = r.runs.filter((x) => x.state !== "idle" || x.error);
   if (listed.length < 2 && !r.registry) return nothing;
-  return html`<details id="pack-runs"><summary>Each project's last Impeccable run</summary>
+  return html`<details id="pack-runs"><summary>Each project's last ${own.kind.name} run</summary>
     ${r.registry ? html`<p-text size="sm">${sentence(r.registry)}.</p-text>` : nothing}
     <ul>${listed.map((x) => html`<li>${x.name}: ${x.error ? sentence(x.error) : `${x.state}${x.started_at
       ? `, started ${when(x.started_at)}` : ""}`}</li>`)}</ul></details>`;

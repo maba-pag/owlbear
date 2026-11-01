@@ -72,10 +72,18 @@ class Publication(BaseModel):
     merged: str = ""  # the merge commit on main
 
 
-def publish(
-    job: Job, pub: Publication, files: dict[str, str | None], title: str, gate: Callable[[], None] = lambda: None
+def publish(  # noqa: PLR0913 - the job, where it goes, what it commits, its words and its gate
+    job: Job,
+    pub: Publication,
+    files: dict[str, str | None],
+    title: str,
+    gate: Callable[[], None] = lambda: None,
+    *,
+    marker: str = MARKER,
 ) -> str:
     """Take the update into ``main``; the merge commit. *gate* runs once CI passed, before the merge is requested.
+
+    *marker* closes a new pull request's text when the project wants it marked (TD-308).
 
     Raises:
         Held: The owner decides: a refused push, a failed check (``CiFailed``), a conflict, a closed pull request,
@@ -93,7 +101,8 @@ def publish(
         job.published(pub)
     _held(job, "push", lambda: pack_git.push(src, pub.commit, pub.branch, live.git), lambda _o: pub.branch,
           lambda _o: pub.commit)  # fmt: skip
-    pr = _held(job, "pull-request", lambda: _opened(job, gh, pub, title, body), lambda p: p.url, lambda p: p.head_sha)
+    opened = lambda: _opened(job, gh, pub, title, body, marker=marker)  # noqa: E731 - one stage's work
+    pr = _held(job, "pull-request", opened, lambda p: p.url, lambda p: p.head_sha)
     pub.number, pub.url = pr.number, pr.url
     job.published(pub)
     merged, head = _held(job, "merge", lambda: _merged(job, gh, pub, gate),
@@ -145,7 +154,9 @@ def _held[T](job: Job, name: str, work: Callable[[], T], said: Callable[[T], str
     return job.do(name, guarded, said, hold=Held, identity=made)
 
 
-def _opened(job: Job, gh: Provider, pub: Publication, title: str, body: str) -> PullRequest:
+def _opened(  # noqa: PLR0913 - the job, GitHub, the publication and the pull request's words
+    job: Job, gh: Provider, pub: Publication, title: str, body: str, *, marker: str = MARKER
+) -> PullRequest:
     """The update's pull request: found again, or opened ready with the project's labels and marker."""
     pr = gh.read_pull_request(pub.repository, pub.number) if pub.number else None
     pr = pr or gh.find_pull_request(pub.repository, pub.branch, pack_git.BASE)
@@ -158,7 +169,7 @@ def _opened(job: Job, gh: Provider, pub: Publication, title: str, body: str) -> 
     except SettingsUnset as exc:
         raise Held(str(exc)) from exc
     if pr is None:
-        text = f"{body}\n\n{MARKER}" if settings.pr_marker else body
+        text = f"{body}\n\n{marker}" if settings.pr_marker else body
         pr = gh.create_pull_request(pub.repository, pub.branch, pack_git.BASE, title, text)
     try:  # on a pull request found again too: its creation's answer may have been lost before its labels
         if settings.pr_labels:

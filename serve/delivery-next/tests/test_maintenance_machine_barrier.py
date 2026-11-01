@@ -18,7 +18,8 @@ from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.impeccable_runs import pack_job
 from owlbear_delivery_next.local_system import codebase, processes
 from owlbear_delivery_next.machine_host import app, project
-from owlbear_delivery_next.machine_host.machine import UNPROVEN_PACK, Machine
+from owlbear_delivery_next.machine_host.machine import UNPROVEN_PACK, UNPROVEN_PDS, Machine
+from owlbear_delivery_next.pds_runs import job as pds_job
 from owlbear_delivery_next.project_host import session_slots
 from owlbear_delivery_next.project_host.host import Host, HostRecord
 from owlbear_delivery_next.runtimes import sdk_adapter
@@ -121,3 +122,32 @@ def test_a_returned_unconfirmed_pack_session_keeps_the_update_and_the_stop_waiti
     assert (machine.busy(), machine.left(), machine.idle_stop(), stopped) == ([], [], True, [True])
     [ended] = machine.maintenance.read()["sessions"]
     assert ended["state"] == ("released" if run is IDENTIFIED else "recovered")
+
+
+def test_a_returned_unconfirmed_pds_session_keeps_the_update_and_the_stop_waiting_until_its_processes_are_gone(
+    tmp_path, machine, http
+):
+    """#777: a PDS update's sessions are held as the machine's ``pds`` maintenance, as an Impeccable update's are."""
+    entry = registry.register(clone(tmp_path / "a"))
+    machine.slots.total = lambda: 2
+    machine.load_all()
+    loaded = machine.projects[entry.id]
+    job = session_slots.pds_packed(
+        loaded.host, pds_job.Job(loaded.store, pds_job.Live(session=lambda _s, _c: IDENTIFIED))
+    )
+    (root := tmp_path / "wt").mkdir()
+    assert job.live.session(loaded.store, session(root)) is IDENTIFIED
+    assert (job.busy(), loaded.working(stopping=True)) == (False, [])
+    held = [f"a: {UNPROVEN_PDS}"]
+    assert (machine.busy(), machine.fence("synthetic update")) == (held, held)
+    machine.unfence()
+    stopped: list[bool] = []
+    machine.on_stop = lambda: stopped.append(True)
+    assert http.post("/api/next/pause-stop").json() == {"paused": True, "ending": True}
+    assert http.get("/api/next/projects").json()["left"] == held
+    assert (machine.idle_stop(), stopped) == (False, [])
+
+    machine.maintenance.observe = lambda _pid, _created: False
+    assert (machine.busy(), machine.left(), machine.idle_stop(), stopped) == ([], [], True, [True])
+    [ended] = machine.maintenance.read()["sessions"]
+    assert (ended["kind"], ended["state"]) == ("pds", "released")

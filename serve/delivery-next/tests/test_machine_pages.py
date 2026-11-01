@@ -1245,7 +1245,7 @@ def test_old_update_addresses_open_the_updates_pages_and_back_and_reload_keep_th
         page.route("**/api/next/updates", lambda route: route.abort())
         page.goto(f"{base}/updates/pds?project={a.id}")
         expect(page.locator("#check-unread")).to_contain_text("Could not read the update checks")
-        expect(page.locator("#pds-later")).to_be_visible()
+        expect(page.locator("#pack-update")).to_be_visible()  # the update is offered without the checks
 
 
 def decided(shared: Path, folder: str, *statements: str, **more) -> None:

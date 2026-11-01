@@ -34,20 +34,37 @@ OPERATIONS = {
     "pull-request": "Pull request to main",
     "merge": "CI and merge",
     REPAIR: "Agent repairs CI in a copy of the pull request; Delivery pushes it",
+    "pds-notice": "Notice: newer PDS release on npm",
+    "pds-candidate": "Candidate: verified release, skills and served files",
+    "pds-diff": "Diff: changelog and deprecations",
+    "audit": "Deprecation audit of the pages",
+    "pds-update": "Updater session on the pages",
+    "browser": "Browser tests on the candidate",
+    "pds-challenge": "Challenger on the update",
 }
-PREPARED = frozenset({"notice", "candidate", "diff", "initial-golden"})
+PREPARED = frozenset({"notice", "candidate", "diff", "initial-golden", "pds-notice", "pds-candidate", "pds-diff"})
 PUBLISHED = frozenset({"unchanged-check", "commit", "push", "pull-request", "merge", REPAIR})
-SESSIONS = frozenset({"update", "full-challenge", "rejection-recheck", "reconsideration"})
-JUDGED = frozenset({"candidate-golden", "replay", "full-challenge", "rejection-recheck"})  # a pass is the candidate's
+SESSIONS = frozenset(
+    {"update", "full-challenge", "rejection-recheck", "reconsideration", "audit", "pds-update", "pds-challenge"}
+)
+# a pass is the candidate's
+JUDGED = frozenset(
+    {"candidate-golden", "replay", "full-challenge", "rejection-recheck", "audit", "browser", "pds-challenge"}
+)
 ACTIONS = {  # the controller's next action (pack_run.Action) as the operation it starts
     "update": "update", "golden": "candidate-golden", "replay": "replay", "challenge": "full-challenge",
     "recheck": "rejection-recheck",
     "reconsider": "reconsideration", "wait": OWNER, "activate": "unchanged-check",
 }  # fmt: skip
+PDS_ACTIONS = {  # a PDS run's next action (pds_runs.run.Action) as the operation it starts
+    "audit": "audit", "browser": "browser", "update": "pds-update", "challenge": "pds-challenge",
+    "recheck": "rejection-recheck", "reconsider": "reconsideration", "wait": OWNER, "publish": "commit",
+}  # fmt: skip
 FOLLOWS = {  # what the run does after each operation whatever it found; absent: a verdict or the owner decides
     "notice": "candidate", "candidate": "diff", "diff": "initial-golden", "initial-golden": "update",
     "update": "candidate-golden", "unchanged-check": "commit", "commit": "push", "push": "pull-request",
-    "pull-request": "merge", REPAIR: "push",
+    "pull-request": "merge", REPAIR: "push", "pds-notice": "pds-candidate", "pds-candidate": "pds-diff",
+    "pds-diff": "audit", "pds-update": "audit",
 }  # fmt: skip
 OPEN = frozenset({"running", "waiting"})
 KEPT = frozenset({OWNER, REPAIR})  # never superseded by a re-run
@@ -167,10 +184,11 @@ def words(op: str, result: str) -> str:
     }.get(result, result)
 
 
-def progress(state: dict[str, Any]) -> dict[str, Any]:
+def progress(state: dict[str, Any], actions: dict[str, str] = ACTIONS) -> dict[str, Any]:
     """What the page shows of the run's progress: its phases with their invocations in order, now and next.
 
-    A record from before invocations is ``legacy``: no phases, its stages shown as they are.
+    A record from before invocations is ``legacy``: no phases, its stages shown as they are. *actions* maps the run's
+    next action to the operation it starts: Impeccable's, or a PDS run's.
     """
     invocations = state.get("invocations")
     shown: dict[str, dict[str, Any]] = {}
@@ -181,12 +199,14 @@ def progress(state: dict[str, Any]) -> dict[str, Any]:
     return {
         "legacy": invocations is None,
         "phases": list(shown.values()),
-        "now": _now(state, invocations),
-        "next": _next(state, invocations),
+        "now": _now(state, invocations, actions),
+        "next": _next(state, invocations, actions),
     }
 
 
-def _now(state: dict[str, Any], invocations: list[dict[str, Any]] | None) -> dict[str, Any] | None:
+def _now(
+    state: dict[str, Any], invocations: list[dict[str, Any]] | None, actions: dict[str, str] = ACTIONS
+) -> dict[str, Any] | None:
     if state["state"] == "waiting":
         gate = next((i for i in reversed(invocations or []) if i["result"] == "waiting"), None)
         n = len(state.get("questions") or [])
@@ -195,19 +215,23 @@ def _now(state: dict[str, Any], invocations: list[dict[str, Any]] | None) -> dic
     if state["state"] != "running":
         return None
     if invocations is None:  # a legacy record: its running stage, nothing more
-        label = dict(STAGES).get(state.get("stage") or "", "Running")
+        labels = {s.get("name"): s.get("label") for s in state.get("stages") or ()} or dict(STAGES)
+        label = labels.get(state.get("stage") or "") or "Running"
         return {"phase": "", "operation": state.get("stage") or "", "label": label, "since": ""}
     current = next((i for i in reversed(invocations) if i["result"] == "running"), None)
     if current is not None:
         op = current["operation"]
         return {"phase": title(current), "operation": op, "label": OPERATIONS[op], "since": current["started_at"]}
-    action = ACTIONS.get(str((state.get("context") or {}).get("next") or ""), "" if invocations else "notice")
+    first = "pds-notice" if actions is PDS_ACTIONS else "notice"
+    action = actions.get(str((state.get("context") or {}).get("next") or ""), "" if invocations else first)
     words_ = {"": "Starting the next step", OWNER: "Preparing your questions"}
     label = words_.get(action, f"Starting: {OPERATIONS.get(action)}")
     return {"phase": "", "operation": action, "label": label, "since": ""}
 
 
-def _next(state: dict[str, Any], invocations: list[dict[str, Any]] | None) -> dict[str, Any] | None:
+def _next(
+    state: dict[str, Any], invocations: list[dict[str, Any]] | None, actions: dict[str, str] = ACTIONS
+) -> dict[str, Any] | None:
     """The controller's next step after now: fixed by the run, by a session's verdict, or by the owner's answer."""
     if state["state"] == "waiting":
         options = list(dict.fromkeys(o["label"] for q in state.get("questions") or [] for o in q.get("options", [])))
@@ -222,10 +246,10 @@ def _next(state: dict[str, Any], invocations: list[dict[str, Any]] | None) -> di
     elif op == "candidate-golden":
         then, label = "replay", "Calibration replay, after your decision if the candidate changed golden evidence"
     elif op == "replay":
-        then = ACTIONS.get(str((state.get("context") or {}).get("after") or ""), "")
+        then = actions.get(str((state.get("context") or {}).get("after") or ""), "")
         label = OPERATIONS.get(then, "Decided by the rounds")
     elif op == "merge":
-        then, label = "", "Done: the pack is merged into main"
+        then, label = "", "Done: the pack is merged into main" if actions is ACTIONS else "Done: merged into main"
     else:
         then, by = "", "verdict"
         label = "Decided by the verdict: findings go back to the updater or to you; a pass goes to publication"
