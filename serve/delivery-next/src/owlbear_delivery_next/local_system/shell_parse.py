@@ -196,6 +196,11 @@ class _Lexer:
         if text[i] == "`" or text.startswith("$(", i):
             return self._substitution(s, i)
         nxt = text[i + 1 : i + 2]
+        if nxt == "'" and not s.quote:  # $'...': its backslashes escape, \' too; the shell decodes it
+            end = ansi_c_end(text, i + 2)
+            s.add("$" + text[i + 2 : end - 1])
+            s.expanded = True
+            return end
         named = bool(nxt) and (nxt in "{_" or nxt.isalnum() or nxt in _SPECIAL)
         if named or (nxt and nxt in "'\"" and not s.quote):  # $'...' and $"...": decoded or translated by the shell
             s.expanded = True
@@ -245,10 +250,8 @@ class _Lexer:
                 j += 2
             elif text.startswith("$((", j) and arithmetic_end(text, j + 3) is not None:
                 j = self._arithmetic(_Level(s.depth, s.opaque, piped=s.piped), j + 3)
-            elif text[j] == "'" and not outer and not quoted:  # in "${x:-'...'}" a single quote is a character
-                if (end := text.find("'", j + 1)) < 0:
-                    raise ValueError
-                j = end + 1
+            elif text[j] == "'" or (text.startswith("$'", j) and not outer and not quoted):
+                j = _single_end(text, j) if not outer and not quoted else j + 1  # in "${x:-'...'}" ' is a character
             elif text[j] == '"':  # a quote inside ${...}: a } in it doesn't close the expansion
                 quoted, j = not quoted, j + 1
             elif text.startswith("$(", j) or text[j] == "`":
@@ -460,3 +463,25 @@ def arithmetic_end(text: str, i: int) -> int | None:
             depth -= 1
         i += 1
     return None
+
+
+def _single_end(text: str, i: int) -> int:
+    """The index after the '...' or $'...' at *i*."""
+    if text[i] == "$":
+        return ansi_c_end(text, i + 2)
+    if (end := text.find("'", i + 1)) < 0:
+        raise ValueError
+    return end + 1
+
+
+def ansi_c_end(text: str, i: int) -> int:
+    """The index after the quote closing the $'...' whose text starts at *i*; a backslash escapes the next character.
+
+    Raises:
+        ValueError: It is not closed.
+    """
+    while i < len(text) and text[i] != "'":
+        i += 2 if text[i] == "\\" else 1
+    if i >= len(text):
+        raise ValueError
+    return i + 1

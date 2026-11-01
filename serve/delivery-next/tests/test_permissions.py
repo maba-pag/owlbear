@@ -1478,3 +1478,17 @@ def test_a_lookup_names_a_mutating_program_without_writing() -> None:
     assert decide(WRITE, shell("command -v cp; /bin/echo hi")) is None
     assert decide(READ, shell("command -v cp > f")).endswith("which writes in a read-only step")
     assert decide(READ, shell("command -v cp\nrm x")).endswith("which writes in a read-only step")
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["echo $'\\''$(git push -f)\\'", "echo ${x:-$'\\''$(git push -f)\\'}", "echo ${x:-$'\\''`git push -f`\\'}"],
+)
+def test_an_escaped_quote_in_ansi_c_quoting_hides_no_substitution(text: str) -> None:
+    assert decide(WRITE, shell(text)).endswith(BYPASS)
+    assert decide(WRITE, shell(text.replace("git push -f", "echo hi"))) is None
+
+
+def test_an_interactive_bash_in_posix_mode_from_its_environment_reads_env(scripts: Path) -> None:
+    text = "POSIXLY_CORRECT=1 ENV=./bad.sh bash --norc -i -c true"
+    assert decide(Policy(scripts), shell(text)) == f"`./bad.sh` uses --no-verify, {BYPASS}"

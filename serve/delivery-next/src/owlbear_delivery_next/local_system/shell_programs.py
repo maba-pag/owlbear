@@ -391,7 +391,7 @@ class ShellArgs:
     operand: Word | None = None  # None with no script: it reads its standard input
     startup: tuple[Word, ...] = ()
     own_startup: bool = False  # it reads startup files of its own: zsh, fish, an interactive or login bash or sh
-    reads: frozenset[str] = frozenset()  # the startup variables it reads: BASH_ENV (bash -c), ENV (an interactive sh)
+    reads: frozenset[str] = frozenset()  # the startup variables it reads: BASH_ENV (bash -c), ENV (interactive)
 
 
 def shell_args(words: Sequence[Word]) -> ShellArgs:
@@ -424,7 +424,7 @@ def shell_args(words: Sequence[Word]) -> ShellArgs:
     reads = frozenset(
         {"BASH_ENV", "ENV"} if "reversed" in flags  # a mode turned off again: read every one it may read
         else {"BASH_ENV"} if shell == "bash" and not interactive and "--posix" not in flags
-        else {"ENV"} if interactive and (shell != "bash" or "--posix" in flags) else set()
+        else {"ENV"} if interactive else set()  # bash 4 and 5 read it in posix mode, which POSIXLY_CORRECT turns on too
     )  # fmt: skip
     rc = tuple(startup) if interactive or "reversed" in flags else ()  # --rcfile only when interactive
     if command:
