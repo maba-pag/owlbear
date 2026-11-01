@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import functools
 import logging
 import threading
 import uuid
@@ -111,7 +112,7 @@ class RetroJob:
             loaded = [(pid, p) for pid, p in list(m.projects.items()) if p.store and p.state == "loaded"]
             return {pid: (p.store, Path(p.entry.path)) for pid, p in loaded}
 
-        blocked = retro_block.of_machine(m.projects)
+        blocked = functools.partial(retro_block.block, projects=m.projects)  # reads them at each call
         seams = Seams(fenced, lambda: m.paused, lambda: m.lock, m.say, retro_review.asked, idle, projects, blocked)
         job = cls(m.slots, seams, m.maintenance)
         return job

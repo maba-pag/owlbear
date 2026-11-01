@@ -39,11 +39,7 @@ RECORDS = "records-2026-01-01.jsonl"
 class Asker:
     """``retro_review.asked``: each call costs a credit and grades every record it is shown, finding nothing."""
 
-    def __init__(self) -> None:
-        self.calls = 0
-
     async def __call__(self, message, meter, _role, **_how):
-        self.calls += 1
         share = meter.part()
         share.call(1.0)
         share.ended(1.0, confirmed=True)
@@ -147,11 +143,11 @@ def a_b(tmp_path, machine, monkeypatch, gap) -> tuple[Store, Store]:
     return a, b
 
 
-def _job(m: Machine, said: list[str], asker: Asker | None = None) -> RetroJob:
+def _job(m: Machine, said: list[str]) -> RetroJob:
     slots = Slots(lambda: 1)
     owner = maintenance.Maintenance(slots, boot=lambda: 10.0, observe=lambda *_: False)
     slots.open()
-    seams = Seams(say=said.append, asked=asker or Asker(), idle=lambda: True, projects=m.retro.seams.projects,
+    seams = Seams(say=said.append, asked=Asker(), idle=lambda: True, projects=m.retro.seams.projects,
                   blocked=m.retro.seams.blocked)  # fmt: skip
     return RetroJob(slots, seams, owner)
 
@@ -238,4 +234,4 @@ def test_the_button_on_a_synthetic_unit_records_a_refusal_when_global_is_unreada
     [(unit, trigger, mode, result)] = _runs()
     assert (unit.startswith("syn:"), trigger, mode) == (True, "button", "judge")
     assert result.startswith("refused: settings can't be read: ")
-    assert retro_block.block(unit, []) == result.removeprefix("refused: ")
+    assert retro_block.block(unit, {}) == result.removeprefix("refused: ")

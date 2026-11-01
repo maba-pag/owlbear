@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import subprocess
 from datetime import UTC, datetime
+from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
 import pytest
@@ -85,10 +86,6 @@ class Project:
         prepare._write(self.store, "check", prepare.Prepared(check="preview", option=none, ready=True))  # noqa: SLF001
 
 
-class Proc:
-    pid = 900
-
-
 @pytest.fixture
 def started(monkeypatch) -> list[str]:
     """The worktrees whose check environment started."""
@@ -96,7 +93,7 @@ def started(monkeypatch) -> list[str]:
 
     def start(_e, root, _log, _env=None):
         roots.append(str(root))
-        return Proc()
+        return SimpleNamespace(pid=900)
 
     monkeypatch.setattr(check, "dispose", lambda _e: {})
     monkeypatch.setattr(check, "start", start)

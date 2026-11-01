@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import contextlib
 import subprocess
-import threading
 import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -188,17 +187,14 @@ def test_a_setting_unset_while_new_change_waits_for_the_launch_lock_opens_no_cha
 
 
 def test_a_setting_unset_while_a_test_review_waits_for_its_turn_starts_no_change(host, a_b, monkeypatch) -> None:
-    b, lock = a_b[1], threading.Lock()
+    b = a_b[1]
 
-    class Late:
-        def __enter__(self) -> None:  # the owner unsets it while the start waits for the one before it
-            _unset(host.store(b))
-            lock.acquire()
+    @contextlib.contextmanager
+    def late():  # the owner unsets it while the start waits for the one before it
+        _unset(host.store(b))
+        yield
 
-        def __exit__(self, *_: object) -> None:
-            lock.release()
-
-    monkeypatch.setattr(curation, "STARTING", Late())
+    monkeypatch.setattr(curation, "STARTING", late())
     refused = host.client.post(f"/p/{b}/api/next/maintenance/test-review", json={"packages": ["."]})
     assert (refused.status_code, refused.json()["detail"]) == (409, UNSET)
     assert host.client.get(f"/p/{b}/api/next/changes").json() == []

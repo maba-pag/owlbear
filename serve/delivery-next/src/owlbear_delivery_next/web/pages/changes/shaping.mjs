@@ -48,8 +48,8 @@ export function newChange() {
 // waits while none is open.
 function chooserView() {
   const offered = open();
-  if (offered.length && !offered.some((p) => p.id === state.choosing)) state.choosing = offered[0].id;
-  const ready = offered.some((p) => p.id === state.choosing);
+  const ready = offered.length > 0;
+  if (ready && !offered.some((p) => p.id === state.choosing)) state.choosing = offered[0].id;
   const picked = (e) => { state.choosing = e.target.value; };
   const go = () => {
     const of = state.choosing;

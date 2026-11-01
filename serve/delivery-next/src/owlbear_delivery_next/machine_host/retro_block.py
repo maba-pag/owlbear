@@ -16,21 +16,15 @@ from owlbear_delivery_next.state_store import work_block
 from owlbear_delivery_next.state_store.database import StoreError
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable, Mapping
+    from collections.abc import Callable, Mapping
 
     from owlbear_delivery_next.machine_host.project import Project
     from owlbear_delivery_next.state_store.store import Store
 
-type Registered = Iterable[tuple[str, Path, str, Store | None]]  # each project: id, folder, state, store when loaded
 
-
-def of_machine(projects: Mapping[str, Project]) -> Callable[[str], str]:
-    """Retro's ``blocked`` seam over a machine's registered *projects*, read at each call."""
-    return lambda uid: block(uid, [(i, Path(p.entry.path), p.state, p.store) for i, p in list(projects.items())])
-
-
-def block(uid: str, registered: Registered) -> str:
-    """Why *uid* may not start now; empty when it may."""
+def block(uid: str, projects: Mapping[str, Project]) -> str:
+    """Why *uid* may not start now under a machine's registered *projects*; empty when it may."""
+    registered = [(i, Path(p.entry.path), p.state, p.store) for i, p in list(projects.items())]
     if uid.startswith("chg:"):
         pid = uid.split(":", 2)[1]
         found = next((r for r in registered if r[0] == pid), None)
