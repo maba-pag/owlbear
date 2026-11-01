@@ -129,6 +129,28 @@ def test_an_accepted_proposal_is_applied_from_the_page(world) -> None:
     assert (redraft.status_code, store.queued()) == (409, [])
 
 
+def test_a_case_shows_the_grade_it_rests_on_and_a_lost_redraft_is_asked_for_again(world) -> None:
+    grade = {"id": "rg-r1", "record": "r1", "grade": "wrong", "reason": "it missed the column", "unit": "chg:p1:fix",
+             "look": "handoff", "provenance": "real"}  # fmt: skip
+    store.add_grades([grade])
+    pid = props.file(props.open_key("real", "spotter-case", "r1"), ["rg-r1"], kind="spotter-case",
+                     target="look:handoff", record="r1", call="hand-off-fitness", provenance="real")  # fmt: skip
+    props.reviewed(pid, props.folded()[pid]["evidence"], {"verdict": "survive", "why": "holds", "publishable": TEXT})
+    (shown,) = world.http.get(API).json()["proposals"]
+    what = "the handoff look was graded wrong: it missed the column"
+    assert shown["seen"] == [{"id": "rg-r1", "change": "p1:fix", "unit": "chg:p1:fix", "what": what, "cost": ""}]
+
+    body = {"state": "redirected", "token": shown["token"], "direction": "Ask for the columns first"}
+    assert world.http.post(f"{API}/proposals/{pid}/decide", json=body).status_code == 200
+    (asked,) = store.queued()
+    assert world.http.get(API).json()["proposals"][0]["redraft_run"] == {"state": "queued"}
+    assert store.take(asked["id"])  # the host that took it stopped before its run opened
+
+    assert world.http.get(API).json()["proposals"][0]["redraft_run"] == {}
+    again = world.http.post(f"{API}/proposals/{pid}/redraft")
+    assert (again.status_code, [q.get("redraft") for q in store.queued()]) == (200, [pid])
+
+
 def test_only_an_irreversible_stop_marks_a_stopped_step_and_looks_filter_by_project_id(world) -> None:
     _records(
         {"id": "r-credit", "project": "p1", "change": "fix", "category": "", "stopped": "reached",

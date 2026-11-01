@@ -137,9 +137,8 @@ def _reads(routes: APIRouter, m: _Machine) -> None:
     def overview() -> dict[str, Any]:
         """The Spotter, Retro, the Spotter cases and the proposals."""
         loaded = m.projects()
-        records, grades = units.records(), store.grades()
         return {
-            "spotter": improvement_view.spotter(loaded, records, grades, datetime.now(UTC)),
+            "spotter": improvement_view.spotter(loaded, units.records(), datetime.now(UTC)),
             "retro": improvement_view.retro(loaded, _switches()),
             "cases": improvement_view.spotter_cases(),
             "proposals": improvement_view.proposals(loaded, m.root()),

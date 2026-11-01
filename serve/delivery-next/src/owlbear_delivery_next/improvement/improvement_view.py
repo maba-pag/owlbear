@@ -27,9 +27,9 @@ if TYPE_CHECKING:
 
 SETTINGS = "/config#spotter-title"  # where the Spotter's settings are changed: the Settings page's Spotter panel
 WINDOW = 7  # days the Spotter's spend is summed over
-RECORDS = 50  # the Spotter's newest records shown
 LOOKS = 200  # looks and outside writes listed at most
 RUNS = 50  # Retro's newest runs shown
+FINDINGS = 50  # Retro's newest findings shown, each with its follow-up
 ALL_RUNS = 10_000  # runs searched for a proposal's redraft or a finding's follow-up
 CLOSED = 30  # closed proposals shown, newest first
 VERSIONS = 20  # case versions and case runs shown, newest first
@@ -47,8 +47,8 @@ def _when(text: object) -> datetime:
     return at if at.tzinfo else at.replace(tzinfo=UTC)
 
 
-def _newest(rows: Iterable[Mapping[str, Any]], key: str = "at") -> list[dict[str, Any]]:
-    return sorted((dict(r) for r in rows), key=lambda r: _when(r.get(key)), reverse=True)
+def _newest(rows: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    return sorted((dict(r) for r in rows), key=lambda r: _when(r.get("at")), reverse=True)
 
 
 def _graded(records: Iterable[Mapping[str, Any]], grades: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
@@ -85,10 +85,8 @@ def _settings(st: Store) -> dict[str, Any]:
             "link": SETTINGS}  # fmt: skip
 
 
-def spotter(
-    projects: units.Projects, records: list[dict[str, Any]], grades: list[dict[str, Any]], now: datetime
-) -> dict[str, Any]:
-    """Each loaded project's Spotter settings, each project's spend over the last week, the newest records graded."""
+def spotter(projects: units.Projects, records: list[dict[str, Any]], now: datetime) -> dict[str, Any]:
+    """Each loaded project's Spotter settings and each project's spend over the last week."""
     spend: dict[str, dict[str, Any]] = {}
     for r in records:
         if _when(r.get("at")) >= now - timedelta(days=WINDOW):
@@ -101,7 +99,6 @@ def spotter(
         "projects": {pid: {"name": repo.name} | _settings(st) for pid, (st, repo) in projects.items()},
         "window_days": WINDOW,
         "spend": spend,
-        "records": _graded(records, grades)[:RECORDS],
     }
 
 
@@ -154,13 +151,18 @@ def _finished(projects: units.Projects) -> list[dict[str, Any]]:
 
 
 def retro(projects: units.Projects, switches: Mapping[str, Any]) -> dict[str, Any]:
-    """Retro's queue, its newest runs, its units by state, its switches and the finished Changes it may run on."""
+    """Retro's queue, newest runs and findings, units by state, switches and the finished Changes it may run on.
+
+    Each finding carries its follow-up, a chat's too: a chat has no Change page to follow it up on.
+    """
     by_state: dict[str, int] = {}
     for u in store.units(synthetic=True).values():
         state = (u.get("revisions") or [{}])[-1].get("state") or "new"
         by_state[state] = by_state.get(state, 0) + 1
+    known, newest = _followups(), store.findings(synthetic=True)[::-1][:FINDINGS]
     return {
-        "queued": store.queued(),
+        "queued": known[0],
+        "findings": [f | {"followup": followup(f["id"], *known)} for f in newest],
         "runs": [{k: v for k, v in r.items() if k != "unsettled"} for r in store.runs(RUNS, synthetic=True)],
         "units": by_state,
         "switches": dict(switches),
@@ -210,7 +212,6 @@ def spotter_cases() -> dict[str, Any]:
         "versions": shown[::-1][:VERSIONS],
         "runs": case_replay.results()[::-1][:VERSIONS],
         "queued": case_replay.queued(),
-        "assumptions": assumptions.listed(),
     }
 
 
@@ -222,9 +223,27 @@ def places(projects: units.Projects) -> dict[str, targets.Place]:
     return {pid: targets.Place(st.name, repo) for pid, (st, repo) in projects.items()}
 
 
-def _redraft_run(pid: str, runs: list[dict[str, Any]]) -> dict[str, Any]:
-    run = next((r for r in runs if r.get("unit") == f"proposal:{pid}"), None)
-    return {} if run is None else {k: run.get(k) for k in ("id", "state", "result", "why", "ended", "redraft")}
+def _redrafts() -> dict[str, dict[str, Any]]:
+    """Each redirected proposal's redraft as far as known, by its id: queued, else its newest run's state and result.
+
+    One with neither (its request lost with the host that took it) may be asked for again.
+    """
+    found: dict[str, dict[str, Any]] = {}
+    for r in store.runs(ALL_RUNS, synthetic=True):
+        if (unit := str(r.get("unit") or "")).startswith("proposal:"):
+            found.setdefault(unit.removeprefix("proposal:"), {k: r.get(k) for k in ("state", "result", "why")})
+    return found | {q["redraft"]: {"state": "queued"} for q in store.queued() if q.get("redraft")}
+
+
+def _found() -> dict[str, dict[str, Any]]:
+    """What a proposal can rest on, by id: Retro's findings, and its grades, which a Spotter case rests on."""
+    found = {f["id"]: f for f in store.findings(synthetic=True)}
+    for g in store.grades(synthetic=True):
+        unit, why = str(g.get("unit") or ""), f": {g['reason']}" if g.get("reason") else ""
+        change = unit.removeprefix("chg:") if unit.startswith("chg:") else ""
+        what = f"the {g.get('look') or 'Spotter'} look was graded {g.get('grade')}{why}"
+        found.setdefault(g["id"], {"id": g["id"], "change": change, "unit": unit, "what": what, "cost": ""})
+    return found
 
 
 def _seen(snap: Mapping[str, Any], found: Mapping[str, Mapping[str, Any]]) -> list[dict[str, Any]]:
@@ -234,9 +253,9 @@ def _seen(snap: Mapping[str, Any], found: Mapping[str, Mapping[str, Any]]) -> li
 
 
 def _shown(
-    snap: dict[str, Any], dest: dict[str, Any], runs: list[dict[str, Any]], found: Mapping[str, Mapping[str, Any]]
+    snap: dict[str, Any], dest: dict[str, Any], redrafts: Mapping[str, Any], found: Mapping[str, Mapping[str, Any]]
 ) -> dict[str, Any]:
-    return snap | {"destination": dest, "token": props.token(snap, dest), "redraft_run": _redraft_run(snap["id"], runs),
+    return snap | {"destination": dest, "token": props.token(snap, dest), "redraft_run": redrafts.get(snap["id"], {}),
                    "seen": _seen(snap, found)}  # fmt: skip
 
 
@@ -245,16 +264,15 @@ def proposals(projects: units.Projects, shared_root: Path | None) -> list[dict[s
 
     An open one carries where it would land, or why it cannot be accepted, and the token a decision on it names.
     """
-    where, known, runs = places(projects), targets.units_of(), store.runs(ALL_RUNS, synthetic=True)
-    found = {f["id"]: f for f in store.findings(synthetic=True)}
+    where, known, redrafts, found = places(projects), targets.units_of(), _redrafts(), _found()
     open_, closed = [], []
     for snap in props.proposals(synthetic=True):
         if snap["state"] in props.CLOSED:
-            closed.append(_shown(snap, snap["accepted"].get("destination") or {}, runs, found))
+            closed.append(_shown(snap, snap["accepted"].get("destination") or {}, redrafts, found))
         elif shared_root is None:
-            open_.append(_shown(snap, NO_SHARED, runs, found))
+            open_.append(_shown(snap, NO_SHARED, redrafts, found))
         else:
-            open_.append(_shown(snap, proposal_apply.destination(snap, where, shared_root, known), runs, found))
+            open_.append(_shown(snap, proposal_apply.destination(snap, where, shared_root, known), redrafts, found))
     open_.sort(key=lambda p: (OPEN.get(p["state"], len(OPEN)), -_when(p["history"][-1]["at"]).timestamp()))
     closed.sort(key=lambda p: _when(p["history"][-1]["at"]), reverse=True)
     return open_ + closed[:CLOSED]

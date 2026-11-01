@@ -8,8 +8,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from owlbear_delivery_next.improvement import followups, retro_redraft
-from owlbear_delivery_next.improvement import proposal_targets as targets
+from owlbear_delivery_next.improvement import followups, improvement_view, retro_redraft
 from owlbear_delivery_next.improvement import retro_proposals as props
 from owlbear_delivery_next.improvement import retro_store as store
 from owlbear_delivery_next.improvement import retro_synthetic as syn
@@ -47,8 +46,7 @@ def running(request: Mapping[str, Any]) -> Running | None:
 def work(ctx: Running, ask: Ask, projects: units.Projects) -> Work:
     """*ctx*'s work: its subject and the registered projects, no evidence to read."""
     sid = ctx.uid.split(":", 1)[1]
-    places = {pid: targets.Place(st.name, repo) for pid, (st, repo) in projects.items()}
-    unit = {"mode": ctx.mode, "subject": sid, "places": places}
+    unit = {"mode": ctx.mode, "subject": sid, "places": improvement_view.places(projects)}
     rev = {"rev": store.digest([ctx.mode, sid])}
     return Work(ctx.id, ctx.uid, rev, unit, [], Prepared(), ask, provenance=ctx.provenance)
 
