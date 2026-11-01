@@ -292,17 +292,12 @@ def owned(
     return run
 
 
-def pds_hand(host: Host | None, store: Store) -> hand_audit.Hand:
-    """*store*'s hand audit, its auditor holding one of the project's slots as PDS maintenance; hostless it refuses."""
+def pds(host: Host | None, store: Store) -> tuple[hand_audit.Hand, pds_job.Job]:
+    """*store*'s PDS work: its hand audit and its update, their sessions holding the project's slots."""
     hand = hand_audit.Hand(store)
     hand.maintenance = host.maintenance if host is not None else None
     hand.run = owned(host, lambda _said: None, lambda cfg: step_sessions.run(hand.store, cfg), "pds")
-    return hand
-
-
-def pds(host: Host | None, store: Store) -> tuple[hand_audit.Hand, pds_job.Job]:
-    """*store*'s PDS work: its hand audit and its update, their sessions holding the project's slots."""
-    return pds_hand(host, store), pds_packed(host, pds_job.Job(store))
+    return hand, pds_packed(host, pds_job.Job(store))
 
 
 def pds_packed(host: Host | None, job: pds_job.Job) -> pds_job.Job:
