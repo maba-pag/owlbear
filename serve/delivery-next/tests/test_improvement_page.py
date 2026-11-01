@@ -315,6 +315,27 @@ def test_a_poll_while_a_dialog_is_open_returns_the_focus_to_the_card_it_opened_f
 
 
 @pytest.mark.browser
+@pytest.mark.timeout(90)
+def test_a_case_that_changes_stage_while_its_dialog_is_open_gets_the_focus_back(tmp_path, monkeypatch, pds) -> None:
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    with machine_page(tmp_path, monkeypatch, pds) as w:
+        page, cid = improvement(w, pds), w.ids["checked"]
+        case = page.locator(f"#case-{cid}")
+        pds.pick(case, f"Stage of case {cid}", "example")
+        case.get_by_role("button", name="Move").click()
+        expect(pds.modal(page)).to_be_visible()
+        cur = cases.current()
+        cases.commit(cur["n"], {cid: cases.edited(cid, cur["cases"][cid], stage="candidate")}, "t", "back")
+
+        page.evaluate("document.dispatchEvent(new CustomEvent('owlbear-polled'))")
+        expect(page.locator("#cases")).not_to_contain_text("No candidates.")
+        pds.answer(page, "Cancel")
+
+        page.wait_for_function(f"document.activeElement?.closest('#case-{cid}') !== null")
+
+
+@pytest.mark.browser
 @pytest.mark.timeout(120)  # a journey through each section's dialogs
 def test_looks_and_cases_act_through_their_dialogs(tmp_path, monkeypatch, pds) -> None:
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime

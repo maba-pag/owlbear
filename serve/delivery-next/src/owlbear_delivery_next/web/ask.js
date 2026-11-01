@@ -10,6 +10,7 @@ function ask({ title, now, items = [], then, after, instead, yes, no = "Cancel",
   const parts = [["Now", now, items], ["Then, by itself", then], ["Afterwards", after], ["If you don't", instead]]
     .filter(([, said]) => said);
   const back = document.activeElement;
+  const home = back?.closest?.("[id]")?.id;  // a re-render may replace the opener: its holder's id finds it again
   const make = (tag, said, attrs = {}) => {
     const node = document.createElement(tag);
     if (said) node.textContent = said;
@@ -24,7 +25,10 @@ function ask({ title, now, items = [], then, after, instead, yes, no = "Cancel",
       answered = true;
       box.open = false;
       setTimeout(() => box.remove(), 1000);
-      back?.focus?.();
+      setTimeout(() => {  // once the modal has let go of the focus
+        const again = document.getElementById(home)?.querySelector("p-button, p-select, a, button, [tabindex]");
+        (back?.isConnected ? back : again)?.focus?.();
+      });
       resolve(answer);
     };
     const heading = make("p-heading", undefined, { size: "lg", slot: "header" });
