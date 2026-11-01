@@ -266,6 +266,38 @@ def test_a_retried_case_reuses_the_check_that_promoted_it_and_asks_again_after_o
     assert done["apply_state"] == "done"
 
 
+def test_a_case_whose_making_went_unrecorded_is_found_again_after_a_check_promoted_it(world, monkeypatch):
+    _record("rec-1")
+    pid = _waiting("spotter-case", "look:handoff", ["f-1"], record="rec-1", call="hand-off-fitness")
+    act.decide(pid, "accepted", _seen(pid, world), "owner", places=world.places, shared_root=world.shared)
+    kept = props.outcome
+
+    def unrecorded(proposal, kind, **fields):
+        if fields.get("step") == "created":
+            msg = "the disk was full"
+            raise OSError(msg)
+        kept(proposal, kind, **fields)
+
+    monkeypatch.setattr(props, "outcome", unrecorded)
+    assert act.apply(pid, world.seams)["apply_state"] == "failed"
+    [cid] = cases.current()["cases"]
+    rid = case_edits.check_request([cid], "cli")  # the owner checks it by hand: it holds
+    cur = cases.current()
+    content = case_replay.queued()[0]["ids"][cid]
+    review = {"by": "retro-review", "at": cases.now(), "note": "it holds", "content": content}
+    cases.commit(cur["n"], {cid: {**cur["cases"][cid], "stage": "test", "review": review}}, "retro-review", "it holds")
+    assert case_replay.take(rid)
+    cases.append("runs.jsonl", {"id": rid, "kind": "check", "reviews": {cid: {"result": "supported"}}})
+    case_replay.done(rid)
+    monkeypatch.setattr(props, "outcome", kept)
+
+    done = act.apply(pid, world.seams)
+
+    assert (done["apply_state"], done["applied"][0]["artefact"]["ref"], done["applied"][-1]["artefact"]["check"]) == (
+        "done", cid, rid)  # fmt: skip
+    assert (list(cases.current()["cases"]), world.checks) == ([cid], [])
+
+
 def test_a_synthetic_case_rests_on_its_assumption_and_the_reset_leaves_it_out(world):
     pid = _waiting("spotter-case", "look:sample", ["f-3"], provenance="synthetic", record="syn-scout-a-1", call="none")
     cid = _accept(pid, world)["applied"][0]["artefact"]["ref"]

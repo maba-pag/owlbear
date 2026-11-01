@@ -3,9 +3,10 @@
 A decision names the token of what the owner saw (the proposal's evidence, review, text and destination); a proposal
 changed since is refused under the lock, with nothing written. An accept keeps a snapshot of what was accepted, and
 acting reads only that snapshot: a proposal grown since makes no difference. Each artefact is found again before it
-is made (a marker in a backlog entry's evidence or an issue's body, the same memory, the case of the same record), so
-a retry after a lost response makes no second one. The reviewed text is checked for credentials, emails and home
-paths before anything leaves the machine; a failure is kept on the proposal, masked, and acting can be retried.
+is made (a marker in a backlog entry's evidence or an issue's body, the same memory, the case marked with the
+proposal), so a retry after a lost response makes no second one. The reviewed text is checked for credentials, emails
+and home paths before anything leaves the machine; a failure is kept on the proposal, masked, and acting can be
+retried.
 """
 
 from __future__ import annotations
@@ -74,17 +75,17 @@ class Seams:
     backlog: Callable[[str], Backlog]
     memory: Callable[[Path], MemoryEngine]
     issues: Callable[[], OwlbearIssues]
-    case: Callable[[Mapping[str, Any]], str]  # the intake of an accepted Spotter case -> its case id
+    case: Callable[[str, Mapping[str, Any]], str]  # the intake of accepted Spotter case (pid, it) -> its case id
     check: Callable[[str], str]  # the paid check of one case queued -> the request id
     live: Callable[[], str] = lambda: ""  # the request this host's cases job runs now, "" none
 
 
-def intake(accepted: Mapping[str, Any]) -> str:
-    """The candidate case an accepted Spotter case makes: of its record, real or synthetic, with its call."""
+def intake(pid: str, accepted: Mapping[str, Any]) -> str:
+    """The candidate case accepted Spotter case *pid* makes: of its record, real or synthetic, with its call."""
     dest = accepted["destination"]
     make = case_intake.from_synthetic if dest.get("synthetic") else case_intake.from_record
     why = str((accepted.get("publishable") or {}).get("title") or "")[: cases.WHY]
-    return make(dest["record"], dest["call"], why, BY)
+    return make(dest["record"], dest["call"], why, BY, proposal=pid)
 
 
 def destination(
@@ -244,8 +245,7 @@ def _case(pid: str, accepted: Mapping[str, Any], _text: Text, done: Done, seams:
     if "created" in done:
         cid = done["created"]["ref"]
     else:
-        dest = accepted["destination"]
-        cid = case_intake.of_record(dest["record"], dest["call"]) or seams.case(accepted)
+        cid = case_intake.of_proposal(pid) or seams.case(pid, accepted)  # made before its record failed?
         props.outcome(pid, "applied", step="created", artefact=_artefact("case", "Spotter cases", cid))
     rid = _checked(cid, seams.live()) or seams.check(cid)
     props.outcome(pid, "applied", step="done", artefact=_artefact("case", "Spotter cases", cid) | {"check": rid})

@@ -94,25 +94,14 @@ def _candidate(cid: str, call: str, why: str, by: str, reason: str) -> str:
     return cid
 
 
-def of_record(record: str, call: str) -> str:
-    """The current candidate made from the Spotter's record *record* with *call*, else nothing.
-
-    One with another call, or checked already, is another case of that record.
-    """
+def of_proposal(proposal: str) -> str:
+    """The case Retro's *proposal* made, at whatever stage it has reached since, else nothing."""
     cur = current()["cases"]
-    return next(
-        (
-            cid
-            for cid in sorted(cur)
-            if (cur[cid]["stage"], cur[cid].get("call")) == ("candidate", call)
-            and fact(cid)["provenance"].get("record", {}).get("id") == record
-        ),
-        "",
-    )
+    return next((cid for cid in sorted(cur) if fact(cid)["provenance"].get("proposal") == proposal), "")
 
 
-def from_record(record: str, call: str, why: str, by: str) -> str:
-    """A candidate case from the Spotter's record *record* (its card frozen anew); its id.
+def from_record(record: str, call: str, why: str, by: str, proposal: str = "") -> str:
+    """A candidate case from the Spotter's record *record* (its card frozen anew), for Retro's *proposal*; its id.
 
     Raises:
         CaseError: The record or its card cannot be found.
@@ -139,15 +128,17 @@ def from_record(record: str, call: str, why: str, by: str) -> str:
         raise CaseError(msg) from exc
     family = f"change:{found['change']}" if found.get("change") else f"session:{found.get('session', '')}"
     keep = ("id", "at", "session", "change", "step", "look", "call", "category", "prompt", "cases", "turn")
-    provenance = {"record": {k: found[k] for k in keep if k in found}}
+    provenance = {"record": {k: found[k] for k in keep if k in found}} | ({"proposal": proposal} if proposal else {})
     cid = freeze(
         the_card, {"source": "record", "provenance": provenance, "family": family, "reserve": side(family) == "reserve"}
     )
     return _candidate(cid, call, why, by, f"from Spotter record {record}")
 
 
-def from_synthetic(record: str, call: str, why: str, by: str) -> str:
+def from_synthetic(record: str, call: str, why: str, by: str, proposal: str = "") -> str:
     """A candidate case from synthetic unit's record *record*, resting on Retro's synthetic assumption; its id.
+
+    *proposal* is Retro's proposal it is made for.
 
     Raises:
         CaseError: No synthetic unit has that record, or the assumption was reset.
@@ -168,7 +159,7 @@ def from_synthetic(record: str, call: str, why: str, by: str) -> str:
         the_card,
         {
             "source": "synthetic",
-            "provenance": {"record": {k: found[k] for k in keep}},
+            "provenance": {"record": {k: found[k] for k in keep}} | ({"proposal": proposal} if proposal else {}),
             "family": f"session:{found['session']}",
             "reserve": False,
             "assumption": assumptions.RETRO_SYNTHETIC,
