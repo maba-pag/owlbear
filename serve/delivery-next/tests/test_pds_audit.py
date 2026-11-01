@@ -14,6 +14,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from owlbear_delivery_next.change_contracts import audit_tools
 from owlbear_delivery_next.change_contracts.audit_tools import AuditResult
 from owlbear_delivery_next.impeccable_runs import machine_lock
 from owlbear_delivery_next.impeccable_runs.pack_state import MACHINE_LOCK
@@ -22,6 +23,7 @@ from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.pds_runs import audit, hand_audit, pin, sessions
 from owlbear_delivery_next.project_host import pds_routes
 from owlbear_delivery_next.runtimes import sdk_adapter
+from owlbear_delivery_next.runtimes.results import ACCEPTED, Gate
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.settings import carried, config, roles
 from owlbear_delivery_next.settings.config import Layer, SettingsUnset, resolve
@@ -245,6 +247,19 @@ def test_the_auditor_session_reads_confined_with_its_own_settings_and_no_questio
     assert options["skill_directories"] == [str(tmp_path / "skills" / audit.SKILL)]
     assert (options["model"], options["reasoning_effort"], options["context_tier"]) == ("claude-opus-5.5", "low",
                                                                                          "long_context")  # fmt: skip
+
+
+def test_the_auditor_corrects_a_report_its_schema_refuses_before_its_session_ends(sources):
+    """D-01M5DW3X00DR0Q4AC9294F0W9T: the tool checks the report against the copy's schema while it can be fixed."""
+    sources.at.mkdir()
+    skills = audit.lay_out(sources.at, sources.web, sources.tree, VERSION)
+    cfg = sessions.auditor(auditor_settings(model="claude-opus-5.5"), sources.at, skills, "audit it")
+    gate = Gate(cfg, Run("s"), lambda **_e: None, lambda: None)
+    for bad, said in (("not JSON", "report: not JSON"), ("{}", "'schemaVersion' is a required property")):
+        text, ok = gate.call(audit_tools.SUBMIT, AuditResult(report=bad, markdown="#"))
+        assert (ok, gate.done, said in text) == (False, False, True), text
+    text, ok = gate.call(audit_tools.SUBMIT, AuditResult(report=json.dumps(report()), markdown="#"))
+    assert (ok, text, gate.done) == (True, ACCEPTED, True)
 
 
 @pytest.fixture

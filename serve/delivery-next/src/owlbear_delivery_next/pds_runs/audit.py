@@ -26,9 +26,7 @@ if TYPE_CHECKING:
 
     from owlbear_delivery_next.runtimes.session_result import Run
 
-SKILL = "pds-audit-deprecations-js"
-PACKAGE = Path("node_modules", "@porsche-design-system", "components-js")  # the release, as the copy installs it
-SCHEMA = Path("skills", SKILL, "references", "report.schema.json")  # in the release's tree
+SKILL, PACKAGE, SCHEMA = audit_tools.SKILL, audit_tools.PACKAGE, audit_tools.SCHEMA
 VENDORED = ("pds", "vendor")  # folders under web/ OwlBear vendors rather than authors: never audited
 EXCLUDABLE = ("node_modules/", ".pds/")  # the only paths the auditor may leave out
 REPORTS = Path(".pds", "audits")
