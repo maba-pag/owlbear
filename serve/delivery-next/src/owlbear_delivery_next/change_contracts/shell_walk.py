@@ -115,7 +115,9 @@ class Walk:
             state.home_moved = True
         # unset -f, -fv: no variable goes
         if first == "unset" and all(w in {"-v", "--"} for w in words[i + 1 :] if w.startswith("-")):
+            # an expanded operand, a redirection or a leading assignment (restored after it) may defeat it
             sure = not any(getattr(w, "expanded", False) for w in words[i + 1 :]) and not set("<>") & set(command.raw)
+            sure = sure and not shell_programs.assignments(words[:i])
             _unset(state, [k for k in _STARTUP if k in words[i + 1 :]], top_level=command.top_level and sure)
         if first in _DECLARE:
             state.startup |= {k: None for k in _STARTUP if any(w.partition("=")[0] == k for w in words[i + 1 :])}

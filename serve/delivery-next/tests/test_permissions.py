@@ -1499,6 +1499,7 @@ def test_an_interactive_bash_in_posix_mode_from_its_environment_reads_env(script
     [
         "opt=-f; export BASH_ENV=./bad.sh; unset $opt BASH_ENV; bash -c true",
         "export BASH_ENV=./bad.sh; unset BASH_ENV < ./missing; bash -c true",
+        "export BASH_ENV=./bad.sh; BASH_ENV=./good.sh unset BASH_ENV; bash -c true",
     ],
 )
 def test_an_unset_the_guard_cant_be_sure_of_leaves_the_startup_file_unknown(scripts: Path, text: str) -> None:
