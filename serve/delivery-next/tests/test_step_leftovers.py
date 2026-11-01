@@ -188,3 +188,37 @@ def test_unreadable_marks_or_table_block_with_their_details(store, tmp_path, mon
         assert host(store, tmp_path, said).tick() == []
     assert detail in store.read("c1").blocked.reason
     assert any(detail in line for line in said)
+
+
+def test_a_runner_runs_only_once_its_record_is_written(store, tmp_path, monkeypatch) -> None:
+    ran = tmp_path / "ran"
+    runner = tmp_path / "runner"
+    runner.write_text(f'#!/bin/sh\necho "$@" > "{ran}"\n')
+    runner.chmod(0o755)
+    monkeypatch.setattr(sys, "executable", str(runner))
+    (store.root / "changes" / "c1").mkdir(parents=True)
+    h = Host(store, tmp_path)
+    rec = h.spawn("c1")
+    time.sleep(1.0)  # an unrecorded runner would have run by now
+    assert not ran.exists()
+    h._record("c1", rec)  # noqa: SLF001 - the write that lets the runner run
+    end = time.monotonic() + 10
+    while not ran.exists() and time.monotonic() < end:
+        time.sleep(0.05)
+    assert ran.read_text().startswith("-m owlbear_delivery_next run c1")
+    assert RunnerRecord.model_validate_json((store.root / "changes" / "c1" / "runner.json").read_text()).pid == rec.pid
+
+
+def test_a_runner_whose_host_dies_before_its_record_never_runs(store, tmp_path, monkeypatch) -> None:
+    ran = tmp_path / "ran"
+    runner = tmp_path / "runner"
+    runner.write_text(f'#!/bin/sh\ntouch "{ran}"\n')
+    runner.chmod(0o755)
+    monkeypatch.setattr(sys, "executable", str(runner))
+    (store.root / "changes" / "c1").mkdir(parents=True)
+    h = Host(store, tmp_path)
+    rec = h.spawn("c1")
+    held = h.held.pop(rec.pid)
+    held.stdin.close()  # what the host's death does to the pipe
+    assert held.wait(10) != 0
+    assert not ran.exists()

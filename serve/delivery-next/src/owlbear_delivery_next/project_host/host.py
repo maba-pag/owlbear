@@ -166,6 +166,7 @@ class Host:
         self.pr_states: dict[str, PrState] = {}
         self.pr_seen: dict[str, tuple[float, Seen]] = {}
         self.launches: dict[str, list[float]] = {}
+        self.held: dict[int, subprocess.Popen[bytes]] = {}  # runners spawned, waiting for their record (#752)
         self.reported: dict[str, tuple[str, int | None]] = {}
         self.refused: str | None = None  # why runners do not start: the code differs or cannot be read
         self.unset_said: str | None = None  # the settings' block the log last named
@@ -421,9 +422,22 @@ class Host:
             except BaseException:
                 session_slots.release(self, slug)
                 raise
-            atomic_write(self._path(slug), rec.model_dump_json())
+            self._record(slug, rec)
         self.say(f"{slug}: runner {rec.pid} started")
         return True
+
+    def _record(self, slug: str, rec: RunnerRecord) -> None:
+        """Write the runner's record, then let it run; a host that dies first closes its stdin, and it never runs."""
+        held = self.held.pop(rec.pid, None)
+        try:
+            atomic_write(self._path(slug), rec.model_dump_json())
+        except BaseException:
+            if held is not None and held.stdin is not None:
+                with contextlib.suppress(OSError):
+                    held.stdin.close()
+            raise
+        if held is not None:
+            check.release(held)
 
     def _spawn(self, slug: str) -> RunnerRecord:
         started = datetime.now(UTC)  # before the runner can commit, so its exit is later than this
@@ -431,14 +445,15 @@ class Host:
         argv += ["--sessions", str(self.grants.pop(slug, 1))]  # what its agent sessions may use at once (TD-336)
         with (self.store.root / "changes" / slug / "runner.log").open("ab") as out:
             proc = subprocess.Popen(  # noqa: S603 - this interpreter and a fixed module
-                argv,
+                ("/bin/sh", "-c", 'read -r _ && exec "$@" </dev/null', "sh", *argv),
                 cwd=self.repo,
                 env={**os.environ, data_repo.VIEW: str(self.store.shared.root) if self.store.shared else ""},
-                stdin=subprocess.DEVNULL,
+                stdin=subprocess.PIPE,
                 stdout=out,
                 stderr=subprocess.STDOUT,
                 start_new_session=True,
             )
+        self.held[proc.pid] = proc
         threading.Thread(target=lambda: (proc.wait(), self.wake.set()), daemon=True).start()
         created = None
         with contextlib.suppress(psutil.Error):
