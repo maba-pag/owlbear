@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from owlbear_delivery_next.runtimes import ahp, readiness, vscode_adapter
+from owlbear_delivery_next.runtimes import ahp, readiness, vscode_adapter, vscode_step
 from owlbear_delivery_next.runtimes.ahp import HostError
 from owlbear_delivery_next.runtimes.vscode_contract import Hooks, Outcome, StepSpec
 from owlbear_delivery_next.runtimes.vscode_step import Step
@@ -41,7 +41,7 @@ class FakeHost:
         self.boot_script: list[dict] = []  # actions the bootstrap turn plays after launch
         self.models, self.models_at = [MODEL], 0.0  # models the host lists, from this clock time on
         self.schema: dict | None = None  # the listed models' configSchema
-        self.reconnects, self.closed, self.twin = 0, 0, None
+        self.closed = 0
         self.listed = [(folder / AGENT).resolve().as_uri()]  # agent files the sessions list
         self.listed_at = 0.0  # host clock time from which the sessions list them
         self.sent: list[tuple[str, dict]] = []
@@ -62,11 +62,6 @@ class FakeHost:
             if self.boot_script:
                 n = resource.rsplit("s", 1)[1]
                 self.play(f"ahp-chat://default/c{n}", f"boot{n}", self.boot_script)
-
-    def reconnect(self) -> Twin:
-        self.reconnects += 1
-        self.twin = Twin(self)
-        return self.twin
 
     def close(self) -> None:
         self.closed += 1
@@ -101,15 +96,16 @@ class FakeHost:
         self.config[resource] = {}
         return resource
 
-    def request(self, method: str, params: dict, timeout: float = 60, client: str = "fake") -> dict:  # noqa: ARG002
+    def request(self, method: str, params: dict, timeout: float = 60) -> dict:  # noqa: ARG002
         if method == "listSessions":
             return {"items": list(self.items)}
         channel = params["channel"]
-        self.log.append((method, client, channel))
+        self.log.append((method, self.client_id, channel))
         if channel == "ahp-root://":
             listed = [{"id": m} for m in self.models] if self.t >= self.models_at else []
             listed = [m | {"configSchema": self.schema} for m in listed] if self.schema else listed
-            return {"snapshot": {"state": {"agents": [{"provider": "copilotcli", "models": listed}]}}}
+            claude = {"provider": "claude", "models": [{"id": MODEL}, {"id": "claude-x"}]}  # only Copilot's list counts
+            return {"snapshot": {"state": {"agents": [{"provider": "copilotcli", "models": listed}, claude]}}}
         if channel in self.chats:
             return {"snapshot": {"state": self.chats[channel]}}
         agents = [{"type": "agent", "uri": u} for u in self.listed] if self.t >= self.listed_at else []
@@ -119,14 +115,14 @@ class FakeHost:
         }
         return {"snapshot": {"state": state}}
 
-    def dispatch(self, channel: str, action: dict, client: str = "fake") -> int:
+    def dispatch(self, channel: str, action: dict) -> int:
         self.seq += 1
         self.sent.append((channel, action))
         kind = action["type"]
-        self.log.append((f"dispatch:{kind}", client, channel))
+        self.log.append((f"dispatch:{kind}", self.client_id, channel))
         if kind in self.reject:
-            if ("subscribe", client, channel) in self.log:  # the host tells only the channel's subscribers
-                origin = {"clientId": client, "clientSeq": self.seq}
+            if ("subscribe", self.client_id, channel) in self.log:  # the host tells only the channel's subscribers
+                origin = {"clientId": self.client_id, "clientSeq": self.seq}
                 params = {"channel": channel, "action": action, "origin": origin, "rejectionReason": self.reject[kind]}
                 self.events.append({"method": "action", "params": params})
         elif kind == "session/configChanged" and self.accept_config:
@@ -160,27 +156,6 @@ class FakeHost:
         return [(c, a) for c, a in self.sent if a["type"] == kind]
 
 
-class Twin:
-    """A second connection to the same fake host."""
-
-    client_id = "fake-again"
-
-    def __init__(self, host: FakeHost) -> None:
-        self.host, self.closed = host, 0
-
-    def request(self, method: str, params: dict, timeout: float = 60) -> dict:
-        return self.host.request(method, params, timeout, client=self.client_id)
-
-    def dispatch(self, channel: str, action: dict) -> int:
-        return self.host.dispatch(channel, action, client=self.client_id)
-
-    def next_event(self, timeout: float) -> dict | None:
-        return self.host.next_event(timeout)
-
-    def close(self) -> None:
-        self.closed += 1
-
-
 def spec(folder: Path, **kw: object) -> StepSpec:
     return StepSpec(
         folder=folder,
@@ -194,7 +169,7 @@ def spec(folder: Path, **kw: object) -> StepSpec:
 
 
 def step(host: FakeHost, s: StepSpec) -> Step:
-    hooks = Hooks(launch=host.launch, clock=host.clock, settings=lambda _f, _m: None, reconnect=host.reconnect)
+    hooks = Hooks(launch=host.launch, clock=host.clock, settings=lambda _f, _m: None)
     return Step(host, s, hooks)
 
 
@@ -294,11 +269,17 @@ def test_the_step_waits_until_the_host_lists_its_model_and_never_starts_without_
     out = step(host, spec(tmp_path)).open()
     assert (out.end, len(host.actions("chat/turnStarted"))) == ("started", 1)
 
-    host = FakeHost(tmp_path, [{}], [DONE])
-    host.models = ["mai-code-1.1-flash"]
-    out = step(host, spec(tmp_path)).open()
-    assert (out.end, out.detail) == ("model-unavailable", f"the agent host does not list {MODEL}")
-    assert host.actions("chat/turnStarted") == []
+    listed = f"the agent host lists mai-code-1.1-flash, gpt-5.6-sol for Copilot after 30 s, not {MODEL}"
+    empty = (
+        "the agent host lists no Copilot models after 30 s; OwlBear does not sign it in, "
+        "so check that VS Code is signed in to GitHub"
+    )
+    for models, detail in ((["mai-code-1.1-flash", "gpt-5.6-sol"], listed), ([], empty)):
+        host = FakeHost(tmp_path, [{}], [DONE])
+        host.models = models
+        out = step(host, spec(tmp_path)).open()
+        assert (out.end, out.detail) == ("model-unavailable", detail)
+        assert (host.actions("chat/turnStarted"), host.t >= vscode_step.MODELS) == ([], True)
 
 
 def test_an_agent_the_session_does_not_list_starts_no_turn(tmp_path: Path) -> None:
@@ -326,10 +307,10 @@ def test_step_fails_closed_when_host_ignores_the_config(tmp_path: Path) -> None:
     host.accept_config = False
     original = host.dispatch
 
-    def dispatch(channel: str, action: dict, client: str = "fake") -> int:
-        seq = original(channel, action, client)
+    def dispatch(channel: str, action: dict) -> int:
+        seq = original(channel, action)
         if action["type"] == "session/configChanged":  # rejections of other clients' actions are not this chat's
-            for who, n in (("someone-else", seq), ("fake-again", 99)):
+            for who, n in (("someone-else", seq), ("fake", 99)):
                 params = {"channel": channel, "origin": {"clientId": who, "clientSeq": n}, "rejectionReason": who}
                 host.events.append({"method": "action", "params": params})
         return seq
@@ -373,8 +354,8 @@ def test_a_user_turn_in_the_bound_chat_blocks_the_start(tmp_path: Path) -> None:
     host = FakeHost(tmp_path, [{}], [DONE])
     original = host.dispatch
 
-    def dispatch(channel: str, action: dict, client: str = "fake") -> int:
-        seq = original(channel, action, client)
+    def dispatch(channel: str, action: dict) -> int:
+        seq = original(channel, action)
         if action["type"] == "session/configChanged":
             host.chats["ahp-chat://default/c0"]["activeTurn"] = {"id": "user", "message": {"text": "mine"}}
         return seq
@@ -407,122 +388,82 @@ def _ws_recv(conn: socket.socket) -> dict:
     return json.loads(_ws_frame(conn)[1])
 
 
-def _host(
-    serve: Callable[[socket.socket], None], *, valid_accept: bool = True, accepts: int = 1
-) -> tuple[Path, socket.socket]:
+def _host(serve: Callable[[socket.socket], None], *, valid_accept: bool = True) -> tuple[Path, socket.socket]:
     path = Path(tempfile.mkdtemp(dir="/tmp")) / "h.sock"
     server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     server.bind(str(path))
-    server.listen(accepts)
+    server.listen(1)
 
     def accept() -> None:
-        for _ in range(accepts):
-            conn, _ = server.accept()
-            head = b""
-            while b"\r\n\r\n" not in head:
-                head += conn.recv(1)
-            assert b"tkn=secret" in head
-            assert b"User-Agent" not in head
-            assert b"permessage-deflate" not in head
-            key = next(
-                h.split(":", 1)[1].strip() for h in head.decode().split("\r\n") if h.startswith("Sec-WebSocket-Key")
-            )
-            digest = hashlib.sha1((key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").encode()).digest()  # noqa: S324
-            accept_key = base64.b64encode(digest).decode() if valid_accept else "wrong"
-            conn.sendall(
-                b"HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
-                + f"Sec-WebSocket-Accept: {accept_key}\r\n\r\n".encode()
-            )
-            threading.Thread(target=serve, args=(conn,), daemon=True).start()
+        conn, _ = server.accept()
+        head = b""
+        while b"\r\n\r\n" not in head:
+            head += conn.recv(1)
+        assert b"tkn=secret" in head
+        assert b"User-Agent" not in head
+        assert b"permessage-deflate" not in head
+        key = next(h.split(":", 1)[1].strip() for h in head.decode().split("\r\n") if h.startswith("Sec-WebSocket-Key"))
+        digest = hashlib.sha1((key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").encode()).digest()  # noqa: S324
+        accept_key = base64.b64encode(digest).decode() if valid_accept else "wrong"
+        conn.sendall(
+            b"HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
+            + f"Sec-WebSocket-Accept: {accept_key}\r\n\r\n".encode()
+        )
+        serve(conn)
 
     threading.Thread(target=accept, daemon=True).start()
     return path, server
 
 
-def _answer_close(conn: socket.socket) -> bytes:
-    """Wait for the client's close frame, echo it and close the socket as the host does; return the payload."""
-    op, data = _ws_frame(conn)
-    while op != 8:
-        op, data = _ws_frame(conn)
-    _ws_send(conn, data, op=8)
-    conn.close()
-    return data
+def _answer(conn: socket.socket, *, seen: list | None = None, version: str = ahp.PROTOCOL) -> bytes:
+    """Answer each request until the client's close frame; echo the close and return its payload.
 
-
-def _sign_in(
-    conn: socket.socket,
-    *,
-    refuse: bool = False,
-    seen: list | None = None,
-    version: str = ahp.PROTOCOL,
-    offered: list | None = None,
-) -> list[tuple[str, str | None]]:
-    """Answer ``initialize`` with ``version``, then ``authenticate``; each method and token is noted before its reply.
-
-    A refused ``authenticate`` gets the spec's AuthRequired error with a long detail; ``offered`` collects the versions
-    each ``initialize`` offered. A client that did not offer ``version`` sends no ``authenticate``.
+    ``initialize`` gets ``version``, any other method ``{}``; ``seen`` notes each method and its params before the
+    reply, so the client cannot return first.
     """
-    seen = [] if seen is None else seen
-    for _ in range(2):
-        msg = _ws_recv(conn)
-        seen.append((msg["method"], msg["params"].get("token")))
-        if msg["method"] == "initialize" and offered is not None:
-            offered.append(msg["params"]["protocolVersions"])
-        if refuse and msg["method"] == "authenticate":
-            reply = {"error": {"code": -32007, "message": "bad token", "data": {"detail": "x" * 400}}}
-        elif msg["method"] == "initialize":
-            reply = {"result": {"protocolVersion": version}}
-        else:
-            reply = {"result": {}}
-        _ws_send(conn, {"jsonrpc": "2.0", "id": msg["id"], **reply})
-        if version != ahp.PROTOCOL:
-            break
-    return seen
+    while True:
+        op, data = _ws_frame(conn)
+        if op == 8:
+            _ws_send(conn, data, op=8)
+            conn.close()
+            return data
+        if op != 1:
+            continue
+        msg = json.loads(data)
+        if seen is not None:
+            seen.append((msg["method"], msg["params"]))
+        result = {"protocolVersion": version} if msg["method"] == "initialize" else {}
+        _ws_send(conn, {"jsonrpc": "2.0", "id": msg["id"], "result": result})
 
 
-def test_a_reconnect_reaches_the_same_socket_and_signs_in_again() -> None:
-    seen: list[list[tuple[str, str | None]]] = []
-    offered: list[list[str]] = []
-
-    def serve(conn: socket.socket) -> None:
-        seen.append([])
-        _sign_in(conn, seen=seen[-1], offered=offered)  # noted before the reply, so the client cannot return first
-        _answer_close(conn)
-
-    path, server = _host(serve, accepts=2)
-    first = ahp.connect({"endpoint": {"path": str(path)}, "connectionToken": "secret"}, "c1", "gh-1")
-    second = first.reopen("gh-2")
-    try:
-        assert second is not first
-        assert seen == [
-            [("initialize", None), ("authenticate", "gh-1")],
-            [("initialize", None), ("authenticate", "gh-2")],
-        ]
-        assert offered == [[ahp.PROTOCOL], [ahp.PROTOCOL]]
-        assert first.protocol == second.protocol == "1.0.0"
-    finally:
-        first.close()
-        second.close()
-        server.close()
-
-
-def test_a_failed_sign_in_closes_the_connection() -> None:
+def test_connect_initializes_and_never_signs_in() -> None:
     ended: queue.Queue[bytes] = queue.Queue()
+    seen: list[tuple[str, dict]] = []
+    path, server = _host(lambda conn: ended.put(_answer(conn, seen=seen)))
+    try:
+        conn = ahp.connect(_entry(path), "c1")
+        assert conn.protocol == "1.0.0"
+        conn.close()
+        assert ended.get(timeout=5) == b"\x03\xe8"
+    finally:
+        server.close()
+    assert [method for method, _ in seen] == ["initialize"]
+    assert seen[0][1]["protocolVersions"] == [ahp.PROTOCOL]
+    assert "token" not in seen[0][1]
 
-    def serve(conn: socket.socket) -> None:
-        _sign_in(conn, refuse=True)
-        ended.put(_answer_close(conn))
 
-    path, server = _host(serve)
+def test_a_refused_initialize_closes_the_connection_and_keeps_the_error() -> None:
+    ended: queue.Queue[bytes] = queue.Queue()
+    path, server = _host(lambda conn: ended.put(_refuse_initialize(conn)))
     try:
         with pytest.raises(ahp.HostRefusedError) as refused:
-            ahp.connect({"endpoint": {"path": str(path)}, "connectionToken": "secret"}, "c1", "gh")
+            ahp.connect(_entry(path), "c1")
         got = refused.value
         assert (got.method, got.code, got.message, got.data) == (
-            "authenticate",
-            -32007,
-            "bad token",
-            {"detail": "x" * 400},
+            "initialize",
+            -32005,
+            "no",
+            {"supportedVersions": ["0.9.0"], "detail": "x" * 400},
         )
         assert "x" * 400 in str(got)
         assert ended.get(timeout=5) == b"\x03\xe8"  # a normal close
@@ -530,22 +471,17 @@ def test_a_failed_sign_in_closes_the_connection() -> None:
         server.close()
 
 
-def test_a_version_the_client_did_not_offer_ends_the_sign_in_before_authenticate() -> None:
+def test_a_version_the_client_did_not_offer_ends_the_connection() -> None:
     ended: queue.Queue[bytes] = queue.Queue()
-    seen: list[tuple[str, str | None]] = []
-
-    def serve(conn: socket.socket) -> None:
-        _sign_in(conn, seen=seen, version="0.9.0")
-        ended.put(_answer_close(conn))
-
-    path, server = _host(serve)
+    seen: list[tuple[str, dict]] = []
+    path, server = _host(lambda conn: ended.put(_answer(conn, seen=seen, version="0.9.0")))
     try:
         with pytest.raises(
             ahp.HostRefusedError, match=r"chose protocol '0\.9\.0', which OwlBear did not offer \(1\.0\.0\)"
         ):
-            ahp.connect({"endpoint": {"path": str(path)}, "connectionToken": "secret"}, "c1", "gh")
+            ahp.connect(_entry(path), "c1")
         assert ended.get(timeout=5) == b"\x03\xe8"
-        assert seen == [("initialize", None)]
+        assert [method for method, _ in seen] == ["initialize"]
     finally:
         server.close()
 
@@ -562,7 +498,7 @@ def test_connection_speaks_websocket_json_rpc_over_the_local_socket() -> None:
         second = _ws_recv(conn)
         _ws_send(conn, {"jsonrpc": "2.0", "id": second["id"], "error": {"message": "nope"}})
         seqs.extend(_ws_recv(conn)["params"]["clientSeq"] for _ in range(2))
-        _answer_close(conn)
+        _answer(conn)
 
     seqs: list[int] = []
     path, server = _host(serve)
@@ -629,7 +565,7 @@ def test_a_silent_upgrade_fails_within_the_io_bound_and_idle_reads_keep_waiting(
         first = _ws_recv(conn)
         threading.Event().wait(0.6)  # idle for three opening timeouts, then answer
         _ws_send(conn, {"jsonrpc": "2.0", "id": first["id"], "result": {"ok": True}})
-        _answer_close(conn)
+        _answer(conn)
 
     path, server = _host(serve)
     conn = ahp.Connection(str(path), "secret", "owlbear-delivery-test")
@@ -646,7 +582,7 @@ def test_a_message_over_the_size_limit_ends_the_connection(monkeypatch) -> None:
 
     def serve(conn: socket.socket) -> None:
         _ws_send(conn, {"jsonrpc": "2.0", "method": "action", "params": {"text": "x" * 100}})
-        closes.put(_answer_close(conn))
+        closes.put(_answer(conn))
 
     path, server = _host(serve)
     conn = ahp.Connection(str(path), "secret", "owlbear-delivery-test")
@@ -711,8 +647,7 @@ def test_endpoint_is_none_without_a_running_editor_host(tmp_path: Path) -> None:
 def test_connect_uses_a_running_host_without_opening_a_window(tmp_path: Path, monkeypatch) -> None:
     calls: list[object] = []
     monkeypatch.setattr(ahp, "endpoint", lambda: "entry")
-    monkeypatch.setattr(ahp, "connect", lambda entry, _client, _token: calls.append(("connect", entry)) or "conn")
-    monkeypatch.setattr(vscode_adapter, "_token", lambda: "t")
+    monkeypatch.setattr(ahp, "connect", lambda entry, _client: calls.append(("connect", entry)) or "conn")
     monkeypatch.setattr(vscode_adapter, "launch_code_chat", lambda args, cwd: calls.append(("open", args, cwd)))
 
     assert vscode_adapter.connect(tmp_path) == "conn"
@@ -728,30 +663,21 @@ def _no_waiting(monkeypatch, sleep: Callable[[float], None]) -> None:
     monkeypatch.setattr(vscode_adapter, "time", type("Clock", (), {"monotonic": time.monotonic, "sleep": sleep}))
 
 
-def _refuse_initialize(conn: socket.socket) -> None:
+def _refuse_initialize(conn: socket.socket) -> bytes:
     msg = _ws_recv(conn)
     data = {"supportedVersions": ["0.9.0"], "detail": "x" * 400}
     _ws_send(conn, {"jsonrpc": "2.0", "id": msg["id"], "error": {"code": -32005, "message": "no", "data": data}})
-    _answer_close(conn)
+    return _answer(conn)
 
 
-def _refuse_authenticate(conn: socket.socket) -> None:
-    _sign_in(conn, refuse=True)
-    _answer_close(conn)
-
-
-@pytest.mark.parametrize(("serve", "code"), [(_refuse_initialize, -32005), (_refuse_authenticate, -32007)])
-def test_a_host_refusal_reaches_the_shaping_outcome_whole_without_a_relaunch(
-    plain: Path, monkeypatch, caplog, serve: Callable[[socket.socket], None], code: int
-) -> None:
-    path, server = _host(serve)
+def test_a_host_refusal_reaches_the_shaping_outcome_whole_without_a_relaunch(plain: Path, monkeypatch, caplog) -> None:
+    path, server = _host(_refuse_initialize)
     launched: list[list[str]] = []
 
     def no_sleep(_s: float) -> None:
         pytest.fail("a refusal must not wait for another editor")
 
     monkeypatch.setattr(ahp, "endpoint", lambda: _entry(path))
-    monkeypatch.setattr(vscode_adapter, "_token", lambda: "gh")
     monkeypatch.setattr(readiness, "shaper_path", lambda _home: None)
     monkeypatch.setattr(vscode_adapter, "launch_code_chat", lambda args, _cwd: launched.append(args))
     _no_waiting(monkeypatch, no_sleep)
@@ -762,7 +688,7 @@ def test_a_host_refusal_reaches_the_shaping_outcome_whole_without_a_relaunch(
 
     assert (out.end, warning, launched) == ("error", "", [])
     assert out.detail.startswith("HostRefusedError: ")
-    assert f"(code {code})" in out.detail
+    assert "(code -32005)" in out.detail
     assert "x" * 400 in out.detail
     assert any(r.name == vscode_adapter.__name__ and r.levelno >= logging.WARNING for r in caplog.records)
 
@@ -784,15 +710,10 @@ def test_a_stale_endpoint_still_starts_vscode_and_connects_to_the_fresh_one(
         old_path, old_server = _host(_close_on_initialize)
         old, servers = _entry(old_path), [old_server]
 
-    def serve(conn: socket.socket) -> None:
-        _sign_in(conn)
-        _answer_close(conn)
-
-    path, server = _host(serve)
+    path, server = _host(_answer)
     old = old or _entry(path.with_name("gone.sock"))
     launched: list[list[str]] = []
     monkeypatch.setattr(ahp, "endpoint", lambda: _entry(path) if launched else old)
-    monkeypatch.setattr(vscode_adapter, "_token", lambda: "gh")
     monkeypatch.setattr(vscode_adapter, "launch_code_chat", lambda args, _cwd: launched.append(args))
     _no_waiting(monkeypatch, lambda _s: None)
     try:
@@ -811,7 +732,6 @@ def test_a_stale_endpoint_still_starts_vscode_and_connects_to_the_fresh_one(
 def test_without_a_fresh_endpoint_the_timeout_names_why_the_published_one_failed(tmp_path: Path, monkeypatch) -> None:
     gone = _entry(Path(tempfile.mkdtemp(dir="/tmp")) / "gone.sock")
     monkeypatch.setattr(ahp, "endpoint", lambda: gone)
-    monkeypatch.setattr(vscode_adapter, "_token", lambda: "gh")
     monkeypatch.setattr(vscode_adapter, "launch_code_chat", lambda _args, _cwd: None)
     monkeypatch.setattr(vscode_adapter, "START", 0.0)
 
@@ -871,9 +791,7 @@ def shaping_env(
         during()
         host.launch(args, cwd)
 
-    return vscode_adapter.Env(
-        connect=lambda _f: host, reconnect=lambda _c: host.reconnect(), launch=launch, clock=host.clock, shaper=shaper
-    )
+    return vscode_adapter.Env(connect=lambda _f: host, launch=launch, clock=host.clock, shaper=shaper)
 
 
 def shape(folder: Path, env: vscode_adapter.Env) -> tuple[Outcome, str]:
@@ -911,7 +829,7 @@ def test_the_shaping_chat_runs_on_the_shaper_role_and_is_left_to_the_owner(wt: P
     assert message["model"] == {"id": "claude-opus-5.5", "config": {"thinkingLevel": "medium", "contextSize": 200000}}
     assert host.chats[chat]["activeTurn"]["id"] == out.turns[0]  # still running: Delivery neither follows nor stops it
     assert host.actions("chat/turnCancelled") == []
-    assert (host.twin.closed, host.closed) == (1, 1)
+    assert host.closed == 1
     assert (git(wt, "status", "--porcelain", "--ignored"), untouched_git(wt)) == ("", before)
 
 
@@ -1041,8 +959,8 @@ def test_a_settings_rejection_fails_the_shaping_chat_at_once_whole_and_logged(pl
     assert host.actions("chat/turnStarted") == []
     assert host.t < 1  # at once, not after the wait for the settings
     session = out.session or ""
-    subscribed = host.log.index(("subscribe", "fake-again", session))
-    assert subscribed < host.log.index(("dispatch:session/configChanged", "fake-again", session))
+    subscribed = host.log.index(("subscribe", "fake", session))
+    assert subscribed < host.log.index(("dispatch:session/configChanged", "fake", session))
 
 
 def test_settings_that_are_not_an_object_refuse_the_shaping_chat_before_launch(plain: Path) -> None:
@@ -1057,9 +975,7 @@ def test_settings_that_are_not_an_object_refuse_the_shaping_chat_before_launch(p
 def test_a_shaping_turn_the_host_never_starts_is_reported(plain: Path) -> None:
     host = shaping_host(plain)
     dispatch = host.dispatch
-    host.dispatch = lambda channel, action, client="fake": (
-        0 if action["type"] == "chat/turnStarted" else dispatch(channel, action, client)
-    )
+    host.dispatch = lambda channel, action: 0 if action["type"] == "chat/turnStarted" else dispatch(channel, action)
     out, _ = shape(plain, shaping_env(host))
     assert (out.end, out.detail) == ("unstarted", "the host did not start the prompt's turn")
 

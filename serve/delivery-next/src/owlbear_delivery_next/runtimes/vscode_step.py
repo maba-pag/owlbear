@@ -2,12 +2,12 @@
 
 ``code chat`` opens or reuses the window on its working directory. Delivery pins the model in the folder's settings
 before launch and binds only the session it launched (nonce and folder; R2). The window's first turn is a shell-only
-``!echo`` that calls no model (TD-48); Delivery confirms only that echo, waits for it to end, signs in again over a new
-connection and waits until the host lists the chat's model, since a new window may start with none and resolve Auto
-(P14). The first turn names an explicit model, effort and agent file (TD-27, TD-32); the host ignores an agent it does
-not list, so the chat starts no turn unless its session lists the agent file. Nothing follows that turn or cancels it:
-the owner takes the chat from there. Delivery steps never run in a window (D-01M5WG8RGCBKADW6XPGP0E2FAP). When the host
-rejects the chat's own settings or first turn, matched by client id and sequence, the chat ends at once with its reason.
+``!echo`` that calls no model (TD-48); Delivery confirms only that echo, waits for it to end and waits until the host
+lists the chat's model, since a new window may start with none and resolve Auto (P14). The first turn names an explicit
+model, effort and agent file (TD-27, TD-32); the host ignores an agent it does not list, so the chat starts no turn
+unless its session lists the agent file. Nothing follows that turn or cancels it: the owner takes the chat from there.
+Delivery steps never run in a window (D-01M5WG8RGCBKADW6XPGP0E2FAP). When the host rejects the chat's own settings or
+first turn, matched by client id and sequence, the chat ends at once with its reason.
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ _UNBEGUN: tuple[End, str] = ("unstarted", "the host did not start the prompt's t
 ACK = 10.0  # seconds to wait for the host to confirm a cancel or a config change
 LISTED = 10.0  # seconds to wait for the session to list the agent file; the host took 0.4 s live
 BOOT = 30.0  # seconds to wait for the shell-only first turn to end
-MODELS = 30.0  # seconds to wait, after signing in again, until the host lists the chat's model (P14)
+MODELS = 30.0  # seconds to wait until the host lists the chat's model; VS Code's windows sign it in (P14, #890)
 
 
 def _action_in(ev: Json | None, chat: str) -> Json:
@@ -88,27 +88,17 @@ class Step:
         """Keep the connection, the chat's spec and the machine hooks."""
         self.conn, self.spec = conn, spec
         self.launch, self.clock, self.settings = hooks.launch, hooks.clock, hooks.settings
-        self.reconnect = hooks.reconnect
-        self.opened: list[Transport] = []  # connections this chat opened; it closes them when it ends
         self.schema: Json | None = None  # the model's config properties as the host lists them
         self.agent_uri = ""  # the agent file as the session lists it; the turns name it so
 
     def open(self, bind_limit: float = 60) -> Outcome:
         """Start the prompt's turn in a new interactive session and leave it to the user: no following, no cancel."""
-        try:
-            out, bound = self._open(bind_limit)
-            if bound is None or not self._ready(out, bound):
-                return out
-            seq = self._start(out, {"uri": self.agent_uri} if self.spec.agent else None, self.spec.prompt)
-            out.end, out.detail = self._began(bound.chat, out.turns[-1], seq)
+        out, bound = self._open(bind_limit)
+        if bound is None or not self._ready(out, bound):
             return out
-        finally:
-            self._close()
-
-    def _close(self) -> None:
-        for conn in self.opened:
-            if close := getattr(conn, "close", None):
-                close()
+        seq = self._start(out, {"uri": self.agent_uri} if self.spec.agent else None, self.spec.prompt)
+        out.end, out.detail = self._began(bound.chat, out.turns[-1], seq)
+        return out
 
     def _began(self, chat: str, turn: str, seq: int) -> tuple[End, str]:
         """Wait, at most ``ACK`` seconds, until the chat runs or has run ``turn``, or the host rejects it."""
@@ -138,11 +128,8 @@ class Step:
     def _ready(self, out: Outcome, bound: _Bound) -> bool:
         if not self._booted(out, bound):
             return False
-        if self.reconnect:
-            self.conn = self.reconnect()
-            self.opened.append(self.conn)
-        if not self._model_listed():
-            out.end, out.detail = "model-unavailable", f"the agent host does not list {self.spec.model}"
+        if why := self._model_missing():
+            out.end, out.detail = "model-unavailable", why
             return False
         if why := self._configure(bound.session):
             out.end, out.detail = "config-refused", why
@@ -189,20 +176,28 @@ class Step:
             return False
         return True
 
-    def _model_listed(self) -> bool:
-        """Wait, at most ``MODELS`` seconds, until the host lists the chat's model for Copilot sessions."""
+    def _model_missing(self) -> str:
+        """Wait, at most ``MODELS`` seconds, until the host lists the chat's model for Copilot sessions.
+
+        Returns '' once it does; otherwise which Copilot models the host lists instead, or that it lists none.
+        """
         deadline = self.clock() + MODELS
         while True:
             root = self.conn.request("subscribe", {"channel": ROOT})["snapshot"]["state"]
-            agents = (a for a in root.get("agents") or [] if a.get("provider") == "copilotcli")
-            if found := next(
-                (m for a in agents for m in a.get("models") or [] if m.get("id") == self.spec.model), None
-            ):
+            agents = [a for a in root.get("agents") or [] if a.get("provider") == "copilotcli"]
+            models = [m for a in agents for m in a.get("models") or []]
+            if found := next((m for m in models if m.get("id") == self.spec.model), None):
                 self.schema = (found.get("configSchema") or {}).get("properties")
-                return True
+                return ""
             if self.clock() >= deadline:
-                return False
+                break
             self.conn.next_event(0.5)
+        if ids := [str(m.get("id")) for m in models]:
+            return f"the agent host lists {', '.join(ids)} for Copilot after {MODELS:.0f} s, not {self.spec.model}"
+        return (
+            f"the agent host lists no Copilot models after {MODELS:.0f} s; OwlBear does not sign it in, "
+            "so check that VS Code is signed in to GitHub"
+        )
 
     def _listed(self, session: str) -> bool:
         """Wait, at most ``LISTED`` seconds, until the session's customizations list the chat's agent file."""

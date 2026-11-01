@@ -78,7 +78,6 @@ class Connection:
     def __init__(self, path: str, token: str, client_id: str) -> None:
         """Connect and upgrade; raises ``HostError`` when the host refuses, ``TimeoutError`` when it is silent."""
         self.client_id, self.protocol = client_id, ""  # protocol: the version the host chose at initialize
-        self._path, self._token = path, token
         try:
             self._ws = unix_connect(
                 path, f"ws://localhost/?tkn={quote(token, safe='')}", open_timeout=IO_TIMEOUT, ping_interval=KEEPALIVE,
@@ -99,11 +98,6 @@ class Connection:
         """Close the connection; the reader thread ends with a ``closed`` event."""
         with contextlib.suppress(OSError, WebSocketException):
             self._ws.close()
-
-    def reopen(self, github_token: str) -> Connection:
-        """A new, signed-in connection to this same host socket; no discovery, so it cannot reach another host."""
-        entry = {"endpoint": {"path": self._path}, "connectionToken": self._token}
-        return connect(entry, f"{self.client_id}-again", github_token)
 
     def _read(self) -> None:
         try:
@@ -202,8 +196,12 @@ def _chosen(result: Json) -> str:
     return chosen
 
 
-def connect(entry: Json, client_id: str, github_token: str) -> Connection:
-    """Connect, initialize and authenticate; the model list fills only after ``authenticate`` (P3)."""
+def connect(entry: Json, client_id: str) -> Connection:
+    """Connect and initialize.
+
+    VS Code's windows sign the host in to GitHub; OwlBear sends no ``authenticate`` and no GitHub token, since a
+    different token would move every live chat onto it (D-01M69WDDEAV4TZ0QD1GZTDB0DA).
+    """
     conn = Connection(entry["endpoint"]["path"], entry["connectionToken"], client_id)
     try:
         result = conn.request(
@@ -217,7 +215,6 @@ def connect(entry: Json, client_id: str, github_token: str) -> Connection:
             },
         )
         conn.protocol = _chosen(result)
-        conn.request("authenticate", {"channel": ROOT, "resource": "https://api.github.com", "token": github_token})
     except BaseException:
         conn.close()
         raise
