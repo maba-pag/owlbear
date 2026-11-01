@@ -402,6 +402,24 @@ def test_looks_and_cases_act_through_their_dialogs(tmp_path, monkeypatch, pds) -
 
 @pytest.mark.browser
 @pytest.mark.timeout(90)
+def test_a_reviewed_reserve_case_is_never_offered_as_an_example(tmp_path, monkeypatch, pds) -> None:
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    with machine_page(tmp_path, monkeypatch, pds) as w:
+        kept = cases.freeze({"intent": {"task": "t kept"}, "recent": [{"tool": "bash", "args": "ls"}]},
+                            {"source": "pilot", "family": "f", "reserve": True})  # fmt: skip
+        entry = {"stage": "test", "call": "none", "why": "why", "example": ""}
+        review = {"by": "t", "at": cases.now(), "note": "", "content": cases.content(kept, entry)}
+        cases.commit(cases.current()["n"], {kept: {**entry, "review": review}}, "t", "add")
+        assert cases.problems(cases.current()["cases"]) == []
+        page = improvement(w, pds)
+        stages = page.locator(f"#case-{kept} p-select-option")
+        expect(stages).to_have_count(3)
+        assert stages.evaluate_all("o => o.map((e) => e.value)") == ["candidate", "test", "removed"]
+
+
+@pytest.mark.browser
+@pytest.mark.timeout(90)
 def test_an_unchecked_candidate_only_stays_or_goes_and_says_how_its_check_is_asked(tmp_path, monkeypatch, pds) -> None:
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 

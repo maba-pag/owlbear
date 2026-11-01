@@ -12,6 +12,8 @@ const MOVES = [["candidate", "Candidate"], ["test", "Test"], ["example", "Exampl
 const EXAMPLE = 800;  // characters of one example's text (cases.EXAMPLE)
 // A case enters the tests or examples only with a review of its card: an unchecked candidate stays or goes.
 const unchecked = (c) => c.stage === "candidate" && !c.review;
+// A reserve, synthetic or unscored case is never an example (cases.problems).
+const barred = (c) => (c.marks ?? []).some((m) => ["reserve", "synthetic", "unscored"].includes(m));
 
 // What a move does now and next: one into or out of the examples changes what the Spotter is shown, so a paid
 // regression run must pass first; any other move is a new version at once.
@@ -55,7 +57,7 @@ function chooser(n, c, waiting) {
   const key = `case-${c.id}`;
   return html`<div class="row"><p-select id=${`stage-${c.id}`} label=${`Stage of case ${c.id}`} hide-label="true"
       compact="true" .value=${live(to)} @change=${(e) => { state.stages.set(c.id, e.target.value); show(); }}>
-    ${MOVES.filter(([v]) => !unchecked(c) || v === "candidate" || v === "removed")
+    ${MOVES.filter(([v]) => (!unchecked(c) || v === "candidate" || v === "removed") && (v !== "example" || !barred(c)))
       .map(([v, said]) => html`<p-select-option value=${v}>${said}</p-select-option>`)}</p-select>
     ${button(to === "removed" ? "Remove" : "Move", () => move(n, c), { busy: state.busy === key,
       disabled: !!state.busy || to === c.stage || waiting, aria: DIALOG })}</div>`;
