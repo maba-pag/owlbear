@@ -80,6 +80,24 @@ def test_an_install_runs_only_once_its_pid_is_journaled(tmp_path: Path) -> None:
     assert not ran.exists()
 
 
+def test_an_install_over_time_is_killed_though_the_process_table_is_unreadable(tmp_path: Path, monkeypatch) -> None:
+    def unlisted(_ids):
+        msg = "the process table cannot be listed"
+        raise processes.UnlistedError(msg)
+
+    pid = tmp_path / "pid"
+    monkeypatch.setattr(check, "WITHIN", 1.0)
+    monkeypatch.setattr(processes, "members", unlisted)
+    note = check.run(["/bin/sh", "-c", f'echo $$ > "{pid}"; exec sleep 60'], tmp_path, lambda _e: None)
+    leader = int(waited(pid))
+    try:
+        assert note.endswith("took over 1 s")
+        assert not psutil.pid_exists(leader) or psutil.Process(leader).status() == psutil.STATUS_ZOMBIE
+    finally:
+        with contextlib.suppress(OSError):
+            os.kill(leader, signal.SIGKILL)
+
+
 def test_an_unlisted_table_while_awaiting_readiness_is_polled_again(monkeypatch) -> None:
     calls: list[int] = []
 

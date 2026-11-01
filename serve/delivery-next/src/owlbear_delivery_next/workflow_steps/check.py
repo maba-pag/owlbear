@@ -71,15 +71,28 @@ def run(argv: list[str], cwd: Path, log: Callable[[dict[str, Any]], None], env: 
     except subprocess.TimeoutExpired:
         return f"`{cmd}` took over {within:.0f} s"
     finally:  # timed out, interrupted or done: nothing of its group outlives the command
-        if members(proc.pid, born):  # not once its id names a newer group
-            with contextlib.suppress(OSError):
-                os.killpg(proc.pid, signal.SIGKILL)
-        with contextlib.suppress(subprocess.TimeoutExpired):
-            proc.communicate(timeout=5)  # an escaped child may hold the pipe open
+        _end(proc, born)
     if proc.returncode:
         last = next((x for x in reversed(out.decode(errors="replace").splitlines()) if x.strip()), "")
         return f"`{cmd}` failed: {last.strip()[:CAUSE]}"
     return ""
+
+
+def _end(proc: subprocess.Popen[bytes], born: float | None) -> None:
+    """Kill the command's group unless its id may name a newer one, then collect its output.
+
+    An unreaped leader still holds its id, so a command over time or interrupted is killed without a lookup. Once it is
+    reaped, a member of the group must be found; an unlisted table leaves the members to the step's leftover lookup.
+    """
+    ours = proc.returncode is None
+    if not ours:
+        with contextlib.suppress(processes.UnlistedError):
+            ours = bool(members(proc.pid, born))
+    if ours:
+        with contextlib.suppress(OSError):
+            os.killpg(proc.pid, signal.SIGKILL)
+    with contextlib.suppress(subprocess.TimeoutExpired):
+        proc.communicate(timeout=5)  # an escaped child may hold the pipe open
 
 
 def action(c: Change, *, live: bool, paths: Mapping[str, str]) -> Action | None:
