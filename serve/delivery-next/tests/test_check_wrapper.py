@@ -98,6 +98,9 @@ def test_a_launch_whose_leader_is_gone_is_disposed_from_its_pid_file(tmp_path: P
         found = check.recovered(e, tmp_path / check.PIDFILE)
         assert found.pgid == proc.pid
         assert check.dispose(found) == {}
+        end = time.monotonic() + 5  # an exiting process has no group to list, yet psutil still sees it for a moment
+        while processes.alive(sleep, started) and time.monotonic() < end:
+            time.sleep(0.05)
         assert processes.alive(sleep, started) is False
     finally:
         with contextlib.suppress(OSError):
