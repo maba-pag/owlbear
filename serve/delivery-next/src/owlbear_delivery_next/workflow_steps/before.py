@@ -78,6 +78,7 @@ def _serve(  # noqa: PLR0913 - the widths come from the settings, the test copy 
     try:
         check.journal(log, e.pids)
         if (pids := check.ready(e, proc)) is None:
+            e = check.unready(e, proc)
             notes.append(f"the recipe did not answer at {e.ready_url} for the merge-base")
             return []
         e = e.model_copy(update={"pids": pids})

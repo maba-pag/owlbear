@@ -185,6 +185,20 @@ def gone(pid):
     return not (psutil.pid_exists(pid) and psutil.Process(pid).status() != psutil.STATUS_ZOMBIE)
 
 
+def test_a_recipe_whose_leader_exits_leaving_a_child_has_the_child_stopped(ui, tmp_path, monkeypatch):
+    monkeypatch.setattr(check, "READY_WITHIN", 1.0)
+    child = tmp_path / "child.pid"
+    spawn = (
+        "import subprocess, sys; "
+        "p = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)']); "
+        f"open({str(child)!r}, 'w').write(str(p.pid))"
+    )
+    ui.env = ui.env.model_copy(update={"command": f"{sys.executable} -c {shlex.quote(spawn)}"})
+    shots = run(ui, tmp_path, [])
+    assert shots.findings == [f"the recipe did not answer at {ui.env.ready_url} for the merge-base"]
+    assert gone(int(child.read_text()))
+
+
 def test_a_capture_that_raises_still_stops_the_preview_and_removes_the_worktree(ui, tmp_path, monkeypatch):
     def broken(_base, _states, _out, _widths, **_k):
         missing = "no Chromium"
