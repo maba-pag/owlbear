@@ -415,16 +415,6 @@ def _host(serve: Callable[[socket.socket], None], *, valid_accept: bool = True) 
     return path, server
 
 
-def _answer_close(conn: socket.socket) -> bytes:
-    """Wait for the client's close frame, echo it and close the socket as the host does; return the payload."""
-    op, data = _ws_frame(conn)
-    while op != 8:
-        op, data = _ws_frame(conn)
-    _ws_send(conn, data, op=8)
-    conn.close()
-    return data
-
-
 def _answer(conn: socket.socket, *, seen: list | None = None, version: str = ahp.PROTOCOL) -> bytes:
     """Answer each request until the client's close frame; echo the close and return its payload.
 
@@ -508,7 +498,7 @@ def test_connection_speaks_websocket_json_rpc_over_the_local_socket() -> None:
         second = _ws_recv(conn)
         _ws_send(conn, {"jsonrpc": "2.0", "id": second["id"], "error": {"message": "nope"}})
         seqs.extend(_ws_recv(conn)["params"]["clientSeq"] for _ in range(2))
-        _answer_close(conn)
+        _answer(conn)
 
     seqs: list[int] = []
     path, server = _host(serve)
@@ -575,7 +565,7 @@ def test_a_silent_upgrade_fails_within_the_io_bound_and_idle_reads_keep_waiting(
         first = _ws_recv(conn)
         threading.Event().wait(0.6)  # idle for three opening timeouts, then answer
         _ws_send(conn, {"jsonrpc": "2.0", "id": first["id"], "result": {"ok": True}})
-        _answer_close(conn)
+        _answer(conn)
 
     path, server = _host(serve)
     conn = ahp.Connection(str(path), "secret", "owlbear-delivery-test")
@@ -592,7 +582,7 @@ def test_a_message_over_the_size_limit_ends_the_connection(monkeypatch) -> None:
 
     def serve(conn: socket.socket) -> None:
         _ws_send(conn, {"jsonrpc": "2.0", "method": "action", "params": {"text": "x" * 100}})
-        closes.put(_answer_close(conn))
+        closes.put(_answer(conn))
 
     path, server = _host(serve)
     conn = ahp.Connection(str(path), "secret", "owlbear-delivery-test")
@@ -677,7 +667,7 @@ def _refuse_initialize(conn: socket.socket) -> bytes:
     msg = _ws_recv(conn)
     data = {"supportedVersions": ["0.9.0"], "detail": "x" * 400}
     _ws_send(conn, {"jsonrpc": "2.0", "id": msg["id"], "error": {"code": -32005, "message": "no", "data": data}})
-    return _answer_close(conn)
+    return _answer(conn)
 
 
 def test_a_host_refusal_reaches_the_shaping_outcome_whole_without_a_relaunch(plain: Path, monkeypatch, caplog) -> None:
