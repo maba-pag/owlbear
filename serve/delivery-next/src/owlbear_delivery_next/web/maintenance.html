@@ -36,7 +36,7 @@
 <!-- ask -->
 <script type="module">
 import { html, nothing, render } from "/assets/lit-html/3.3.3/lit-html.js";
-import { call, defined, here, project, shown } from "/assets/ui.mjs";
+import { blockedOf, call, defined, here, project, shown } from "/assets/ui.mjs";
 import { lastSaid, maintained } from "/assets/page/maintenance/overview.mjs";
 
 // Under the machine host with no project chosen, each project shows as a summary that opens it, beside the machine's
@@ -115,11 +115,13 @@ function testsBody() {
       <a href=${here({}, "/")}>Changes page</a>.</p-text>`;
   }
   if (!t.packages.length) return html`<p-text size="sm">No test files found on the target branch.</p-text>`;
+  const why = blockedOf(project);  // #808: no test review starts while this project's settings hold its work
   return html`<fieldset><legend><p-text size="sm" weight="semibold">Packages to review</p-text></legend>
       ${t.packages.map(box)}</fieldset>
     <p-text id="tests-runs" size="sm">${runs()}</p-text>
     <div><p-button id="tests-start" type="button" compact="true" variant="primary" .loading=${state.starting}
-      ?disabled=${!chosen().length} @click=${startReview}>Review tests</p-button></div>`;
+      ?disabled=${!chosen().length || why} title=${why || nothing} @click=${startReview}>Review tests</p-button></div>
+    ${why ? html`<p-text id="tests-blocked" size="xs" color="contrast-medium">${sentence(why)}.</p-text>` : nothing}`;
 }
 
 async function startReview() {
@@ -184,8 +186,10 @@ function folderRun(f) {
   return html`<li class="action">
     <div class="title"><p-heading size="md"><h3>${f.folder}</h3></p-heading>
       <p-button type="button" compact="true" variant="secondary" .loading=${state.curating === f.folder}
-        ?disabled=${["waiting", "running"].includes(f.state)} @click=${() => curate(f.folder)}
-        aria=${`{"aria-label": "Curate ${f.folder} now"}`}>Curate now</p-button></div>
+        ?disabled=${["waiting", "running"].includes(f.state) || f.blocked} title=${f.blocked || nothing}
+        @click=${() => curate(f.folder)} aria=${`{"aria-label": "Curate ${f.folder} now"}`}>Curate now</p-button></div>
+    ${f.blocked ? html`<p-text class="blocked" size="xs" color="contrast-medium">${sentence(f.blocked)}.</p-text>`
+      : nothing}
     <p-text size="sm">${said}</p-text>
     ${f.summary ? html`<p-text size="sm">${f.summary}</p-text>` : nothing}
     ${f.reason ? html`<p-text size="xs" color="contrast-medium">${f.reason}</p-text>` : nothing}
@@ -195,7 +199,7 @@ function folderRun(f) {
 }
 
 function curationSection() {
-  const c = state.curation;
+  const c = state.curation, held = c?.folders?.length > 0 && c.folders.every((f) => f.blocked);
   if (!c && !state.unread.curation && !state.refused.curation.size) return nothing;
   return html`<section aria-labelledby="curation-title">
     <p-heading size="lg"><h2 id="curation-title">Memory curation</h2></p-heading>
@@ -206,7 +210,8 @@ function curationSection() {
     ${refusal("curation")}${readError("curation")}
     ${c?.available ? html`<ul id="curation" class="actions">${c.folders.map(folderRun)}</ul>
       <div><p-button id="curate-all" type="button" compact="true" variant="primary"
-        .loading=${state.curating === "all"}
+        .loading=${state.curating === "all"} ?disabled=${held}
+        title=${held ? "every folder's settings are unset or can't be read" : nothing}
         @click=${() => curate("all")}>Curate all now</p-button></div>`
       : c ? html`<p-text id="curation-none" size="sm">${sentence(c.reason)}.</p-text>` : nothing}
   </section>`;
@@ -418,7 +423,18 @@ async function refresh(all = true) {
   if (busy) state.again = setTimeout(() => refresh(false), 5000);
 }
 
+// #808: a block set or lifted while the page is open shows at the machine's next poll; only the local curation
+// state is read again.
+async function follow() {
+  const generation = state.reading;
+  const [curation] = await Promise.allSettled([call("/curation", { machine: true, timeout: 15000 })]);
+  if (generation !== state.reading) return;
+  if (curation.status === "fulfilled") state.curation = curation.value;
+  show();
+}
+
 show();
+document.addEventListener("owlbear-polled", follow);
 document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh(); });
 await defined(["p-checkbox", "p-button"]);
 refresh();

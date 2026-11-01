@@ -13,12 +13,15 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from owlbear_delivery_next.change_flow import brief_tools, worktree
-from owlbear_delivery_next.state_store import briefs, identities
+from owlbear_delivery_next.settings import config
+from owlbear_delivery_next.state_store import briefs, identities, machine_settings
 from owlbear_delivery_next.state_store.store import Store
 from owlbear_delivery_next.workflow_steps import curation
 
 if TYPE_CHECKING:
     from pathlib import Path
+
+    from owlbear_delivery_next.settings.config import GlobalLayer, MachineValues
 
 NOW = datetime(2026, 10, 19, 12, tzinfo=UTC)
 _CHILD = """
@@ -30,8 +33,12 @@ from pathlib import Path
 from owlbear_delivery_next.change_flow import brief_tools, worktree
 from owlbear_delivery_next.state_store import briefs
 from owlbear_delivery_next.state_store.store import Store
+from owlbear_delivery_next.settings import config
+from owlbear_delivery_next.state_store import machine_settings
 from owlbear_delivery_next.workflow_steps import curation
 action, repo, arg = sys.argv[1], Path(sys.argv[2]), sys.argv[3]
+config.BASE = config.GlobalLayer.model_validate_json(sys.argv[4])  # the parent's test layers: a start needs them
+machine_settings.BASE = config.MachineValues.model_validate_json(sys.argv[5])
 try:
     store = Store.open(repo)
     if action == "curation":
@@ -88,9 +95,15 @@ def brief(title: str) -> dict[str, Any]:
     ).model_dump()  # fmt: skip
 
 
+def carried() -> tuple[GlobalLayer, MachineValues]:
+    assert config.BASE is not None
+    assert machine_settings.BASE is not None
+    return config.BASE, machine_settings.BASE
+
+
 def _spawn(action: str, repo: Path, arg: str) -> subprocess.Popen[str]:
     return subprocess.Popen(  # noqa: S603 - this interpreter runs the fixed synthetic child script
-        [sys.executable, "-c", _CHILD, action, str(repo), arg],
+        [sys.executable, "-c", _CHILD, action, str(repo), arg, *(b.model_dump_json() for b in carried())],
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,

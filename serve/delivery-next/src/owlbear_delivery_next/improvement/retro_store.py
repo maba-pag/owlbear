@@ -290,7 +290,7 @@ def run_states() -> dict[str, dict[str, Any]]:
             snap |= {k: line[k] for k in ("trigger", "by") if k in line}  # the button took it over
         elif event == "ended":
             snap |= {"state": "ended", "result": line.get("result", ""), "ended": line["at"]}
-            snap["credits"] = line.get("credits")
+            snap["credits"], snap["held"] = line.get("credits"), line.get("held", False)
     return found
 
 

@@ -1,8 +1,9 @@
 """Delivery's settings (§3.13, R3, TD-52): global with per-project overrides, resolved field by field.
 
 A layer leaves a field at ``None`` to inherit it: project, else this machine, else global. Code ships no defaults
-(the owner, 2026-10-23): a field no layer sets is unset, listed in ``Settings.missing``, shown as an error on the
-Settings page, and a step that needs it refuses (``SettingsUnset``). Any other value overrides, including ``[]`` and
+(the owner, 2026-10-23): a field no layer sets is unset, listed in ``Settings.missing`` and shown as an error on the
+Settings page. While one is unset, or a layer can't be read, nothing starts for the project (``work_block``, #808); a
+step already running that needs it refuses (``SettingsUnset``). Any other value overrides, including ``[]`` and
 ``False``. Only model, effort and context are applied today (TD-27); the other
 fields are stored for the config page and stay inactive until their features use them (TD-50).
 """
@@ -185,8 +186,9 @@ class MachineValues(Record):
     retro_after_change: Curate | None = None  # Retro after a Change ends, like curation's triggers
     retro_when_idle: Curate | None = None  # Retro over finished enrolled chats when idle
     enrolled_chats: list[str] | None = None  # workspace folders whose chats the Spotter and Retro may read; [] is none
-    update_check_hours_owlbear: int | None = Field(default=None, ge=1, le=HOURS)  # hours between timed update checks
-    update_check_hours_pds: int | None = Field(default=None, ge=1, le=HOURS)  # unset: only launch and hand checks
+    # Hours between timed update checks. Unset: only launch and hand checks, and no project's work starts (#808).
+    update_check_hours_owlbear: int | None = Field(default=None, ge=1, le=HOURS)
+    update_check_hours_pds: int | None = Field(default=None, ge=1, le=HOURS)
     update_check_hours_impeccable: int | None = Field(default=None, ge=1, le=HOURS)
 
     @field_validator("enrolled_chats")

@@ -1,6 +1,6 @@
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { repeat } from "/assets/lit-html/3.3.3/directives/repeat.js";
-import { here, HostDown, project, Restarted, Slow, shown } from "/assets/ui.mjs";
+import { blockedOf, here, HostDown, loaded, project, Restarted, Slow, shown } from "/assets/ui.mjs";
 import { KEY, state, page, show, call, keyOf, parts, several, failed } from "./state.mjs";
 import { hd, text } from "./widgets.mjs";
 import { spentText } from "./progress.mjs";
@@ -79,12 +79,26 @@ function listView() {
   })}`;
 }
 
+// The projects whose work waits for their settings (#808), machine-wide whatever the page shows: a warning naming
+// them, or the major error once no loaded project can start work; each says why, an unreadable reason in full.
+function blockedBanner() {
+  const all = loaded() ?? [], blocked = all.filter((p) => blockedOf(p.id));
+  if (!blocked.length) return nothing;
+  const every = blocked.length === all.length, names = blocked.map((p) => p.name).join(", ");
+  const heading = every ? "No work can be done until the unset settings are set."
+    : `${names} can't start work until ${blocked.length === 1 ? "its" : "their"} settings are set.`;
+  return html`<p-inline-notification id="blocked" state=${every ? "error" : "warning"} heading=${heading}
+    heading-tag="h2" dismiss-button="false"><ul>${blocked.map((p) => html`<li><a href=${here({ project: p.id,
+      change: "" }, "/config")}>${p.name}</a>: ${blockedOf(p.id)}</li>`)}</ul></p-inline-notification>`;
+}
+
 export function view() {
   const d = state.detail && state.detail.key === state.selected ? state.detail : null;
   return html`
     ${startedView()}
     <p-inline-notification id="error" state="error" dismiss-button="false" ?hidden=${!state.error}>${state.error
       ?? ""}</p-inline-notification>
+    ${blockedBanner()}
     <p-text id="seen" color="contrast-medium" size="xs">${state.seen}</p-text>
     <section id="notes" class="panel" aria-label="Repository settings" ?hidden=${!state.notes.length}>
       ${state.notes.map((n) => text(n))}</section>

@@ -121,7 +121,17 @@ def _carried_settings(monkeypatch):
 
 IMPROVEMENT_MACHINE = {  # tests only: settings added after the carry start unset in production (2026-10-25)
     "retro_after_change": "on", "retro_when_idle": "on", "enrolled_chats": [],
+    "update_check_hours_owlbear": 24, "update_check_hours_pds": 24, "update_check_hours_impeccable": 24,
 }  # fmt: skip
+INTERVALS = ("update_check_hours_owlbear", "update_check_hours_pds", "update_check_hours_impeccable")
+
+
+@pytest.fixture
+def intervals_unset(monkeypatch):
+    """The three update-check intervals unset under this machine, as on a machine that never set them."""
+    from owlbear_delivery_next.state_store import machine_settings  # noqa: PLC0415
+
+    monkeypatch.setattr(machine_settings, "BASE", machine_settings.BASE.model_copy(update=dict.fromkeys(INTERVALS)))
 
 
 def complete_layer():

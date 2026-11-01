@@ -40,9 +40,14 @@ type Ask = Callable[[str, str, str], Paid]  # (batch key, message, agent) -> the
 class StoppedError(Exception):
     """The run ends now with *result* (``stopped: ...``); what it did is kept and its unit's work stays due."""
 
-    def __init__(self, result: str) -> None:
+    def __init__(self, result: str, *, held: bool = False) -> None:
         super().__init__(result)
-        self.result = result
+        self.result, self.held = result, held
+
+    @classmethod
+    def unset(cls, why: str) -> StoppedError:
+        """Refused before any work because *why* blocks its settings (#808): held, not failed."""
+        return cls(f"refused: {why}", held=True)
 
 
 class WaitingError(Exception):

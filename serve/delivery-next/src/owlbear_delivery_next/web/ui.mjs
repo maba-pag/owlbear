@@ -184,6 +184,12 @@ export function unread() {
 export function loaded() {
   return bar.data ? bar.data.projects.filter((p) => p.state === "loaded") : null;
 }
+
+// Why no work may start for project *id* (#808), as the machine host last polled it; "" when its work may start, and
+// on a clone's own host, whose refusals come from its API.
+export function blockedOf(id) {
+  return loaded()?.find((p) => p.id === id)?.blocked ?? "";
+}
 for (const link of document.querySelectorAll("#top a[href^='/']")) link.href = here({}, link.getAttribute("href"));
 // The guard covers every link of the top row, the menu and the notes under it; a link opened in another tab leaves
 // this page as it is, and one to a part of this page (Settings ▸ Agents on Settings) does not leave it.

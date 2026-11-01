@@ -33,7 +33,7 @@ from owlbear_delivery_next.change_flow.curation_flow import CURATE
 from owlbear_delivery_next.local_system.git_files import git_common_dir
 from owlbear_delivery_next.runtimes import sdk_adapter, session_result, step_decisions
 from owlbear_delivery_next.settings import profile
-from owlbear_delivery_next.state_store import identities
+from owlbear_delivery_next.state_store import identities, work_block
 from owlbear_delivery_next.state_store.briefs import new_slug
 from owlbear_delivery_next.state_store.store import StoreError
 from owlbear_delivery_next.workflow_steps import curation_shares, sessions
@@ -112,13 +112,15 @@ def start(store: Store, repo: Path, chosen: list[str], now: datetime) -> Change:
     its slug, branch or worktree to the next.
 
     Raises:
-        StartError: A test review is open, or no chosen package has tests.
+        StartError: A setting is unset (#808), a test review is open, or no chosen package has tests.
     """
     with STARTING:
         return _start(store, repo, chosen, now)
 
 
 def _start(store: Store, repo: Path, chosen: list[str], now: datetime) -> Change:
+    if why := work_block.of_store(store).text():  # checked under the lock, so a setting unset while it waited holds it
+        raise StartError(409, why)
     if open_ := open_review(store):
         raise StartError(409, f"the test review {open_.handle} has not finished")
     target, commit = _target(store, repo)

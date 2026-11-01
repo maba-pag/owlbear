@@ -1,8 +1,8 @@
 """The machine settings in force (D-01M5MZKEPPVMFC9HK795MMG91B): this machine's own value, else Global's, else unset.
 
-Code ships no defaults (the owner, 2026-10-23): an unset setting is an error on the Settings page, and what needs it
-does not run: no update by itself without its switches and channel, no automatic curation without its trigger, no
-agent session without the machine's total.
+Code ships no defaults (the owner, 2026-10-23): an unset setting is an error on the Settings page, and while one is
+unset or can't be read no project's work starts (#808). What needs it does not run either: no update by itself without
+its switches and channel, no automatic curation without its trigger, no agent session without the machine's total.
 """
 
 from __future__ import annotations
@@ -20,6 +20,7 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.local_system.data_repo import DataRepo
 
 FIELDS: tuple[str, ...] = tuple(MachineValues.model_fields)
+NO_SHARED = "no shared repository is set up, so there are no global machine settings"
 BASE: MachineValues | None = None  # a layer under Global; empty in production (no code defaults), tests set one
 
 
@@ -52,7 +53,7 @@ def resolve(local: MachineValues, glob: MachineValues | None, notice: str = "") 
 def shared_values(shared: DataRepo | None) -> tuple[MachineValues | None, str]:
     """Global's machine settings, and why they could not be read; none without a shared repository."""
     if shared is None:
-        return None, "no shared repository is set up, so there are no global machine settings"
+        return None, NO_SHARED
     try:
         return read_layer(shared.global_path, GlobalLayer).machine, ""
     except StoreError as exc:

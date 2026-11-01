@@ -30,7 +30,7 @@ from owlbear_delivery_next.local_system import codebase, data_repo, maintenance,
 from owlbear_delivery_next.local_system.process_probe import ProcessTableWorktreeProbe, WorktreeProcessScanError
 from owlbear_delivery_next.local_system.slots import Slots
 from owlbear_delivery_next.local_system.storage_io import atomic_write
-from owlbear_delivery_next.project_host import environment, session_slots
+from owlbear_delivery_next.project_host import environment, launch_gate, session_slots
 from owlbear_delivery_next.project_host.runner_end import Found, disappeared, gone
 from owlbear_delivery_next.project_host.runner_end import block as _block
 from owlbear_delivery_next.project_host.runner_end import unverified as _unverified
@@ -54,8 +54,8 @@ SLEEP_JUMP = 60.0
 BURST = (5, 60.0)  # at most five runner launches per Change in this many seconds
 PROBE = timedelta(seconds=10)  # between network probes while a Change waits on the network
 PROBE_TIMEOUT = 3.0
-RESTART = "Delivery's code changed since the host started; restart the host"
 ENDING = "OwlBear stops once the running steps end; press Resume to cancel"
+RESTART = launch_gate.RESTART  # the CLI and the runner say it too
 
 
 class HostRecord(Record):
@@ -174,6 +174,7 @@ class Host:
         self.launches: dict[str, list[float]] = {}
         self.reported: dict[str, tuple[str, int | None]] = {}
         self.refused: str | None = None  # why runners do not start: the code differs or cannot be read
+        self.unset_said: str | None = None  # the settings' block the log last named
         self.offline: set[str] = set()  # Changes last seen waiting on the network
         self.back: dict[str, datetime] = {}  # those to wake, with when the probe saw the network return
         self.down, self.probe_at, self.clock = False, 0.0, time.monotonic
@@ -426,20 +427,8 @@ class Host:
             e = e.model_copy(update={"pids": e.pids | {p: check.created(p) for p in found}})
         return check.dispose(e)
 
-    def _stale(self) -> bool:
-        """Whether the package differs from what this host loaded, or cannot be read; checked again on every launch."""
-        code = self.code()
-        if code.startswith(codebase.UNREADABLE):
-            reason = f"Delivery's code cannot be read: {code.removeprefix(codebase.UNREADABLE)}"
-        else:
-            reason = RESTART if code != self.record.code else None
-        if reason != self.refused:
-            self.say(f"no runner starts: {reason}" if reason else "Delivery's code is as loaded; runners start again")
-            self.refused = reason
-        return reason is not None
-
     def _launch(self, slug: str) -> bool:
-        if self._stale():
+        if launch_gate.stale(self):
             return False  # its runners could write state this host cannot read
         recent = [t for t in self.launches.get(slug, []) if time.monotonic() - t < BURST[1]]
         if len(recent) >= BURST[0]:
@@ -447,8 +436,8 @@ class Host:
         with self.launching:  # a project folder rename or a project's stop waits, so no runner starts during it
             if self.updating():
                 return False  # an update's fence: nothing starts until it hands over or lifts it
-            if self.paused() and not (slug in self.passing and self.owner_runs()):
-                return False
+            if (self.paused() and not (slug in self.passing and self.owner_runs())) or launch_gate.blocked(self):
+                return False  # a setting unset: nothing starts, the owner's own requests included
             if (granted := session_slots.reserve(self, slug)) is None:
                 return False  # waits for a session slot (TD-336); no launch is counted
             self.launches[slug], self.grants[slug] = [*recent, time.monotonic()], granted

@@ -52,7 +52,7 @@ from owlbear_delivery_next.runtimes.vscode_adapter import open_chat
 from owlbear_delivery_next.runtimes.window_files import HARNESS
 from owlbear_delivery_next.settings import profile
 from owlbear_delivery_next.settings.config import SettingsUnset
-from owlbear_delivery_next.state_store import spend_ledger, tool_metrics, watch_reports
+from owlbear_delivery_next.state_store import spend_ledger, tool_metrics, watch_reports, work_block
 from owlbear_delivery_next.state_store.briefs import save_brief, save_visual, unrevisable
 from owlbear_delivery_next.state_store.store import StoreError
 from owlbear_delivery_next.workflow_steps import check, decision, decisions_gate, held, visual
@@ -285,24 +285,23 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
         return f"cd {shlex.quote(str(host.repo))} && {shlex.join(['code', 'chat', '-m', SHAPER_MODE, prompt])}"
 
     def start_chat(prompt: str, done: Ended | None = None) -> dict[str, Any]:
-        """Open the shaping chat with ``prompt`` in the background, or say why not and give the command by hand."""
+        """Open the shaping chat for ``prompt`` in the background, else say why and, unless work waits, the command."""
+        if why := work_block.of_store(store).text():
+            return {"started": False, "reason": why}
         try:
             shaper = store.settings().agent("shaper")
-        except SettingsUnset as exc:
-            return {"started": False, "command": by_hand(prompt), "reason": str(exc)}
-        except StoreError as exc:
-            return {"started": False, "command": by_hand(prompt), "reason": f"the settings are unreadable ({exc})"}
+        except (SettingsUnset, StoreError) as exc:  # unset or broken just after the check
+            return {"started": False, "reason": str(exc)}
         prompt += PICKER_NOTE.format(model=shaper.model, effort=shaper.effort)
         command = by_hand(prompt)
         if not which("code"):
             return {"started": False, "command": command, "reason": f"`code` is not on PATH; run this in {host.repo}"}
-
-        def work() -> dict[str, str]:
-            return launch(host.repo, shaper, prompt)
-
         try:
             with admitted(host):
-                return {"started": True, "launch": launches.start(work, command, done)}
+                if why := work_block.of_store(store).text():  # again under the lock: unset while it waited for it
+                    return {"started": False, "reason": why}
+                started = launches.start(lambda: launch(host.repo, shaper, prompt), command, done)
+                return {"started": True, "launch": started}
         except Refused as exc:
             raise HTTPException(exc.status, exc.text) from exc
 

@@ -1,5 +1,5 @@
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
-import { DIALOG, REVERT, state, show, draft, notify, send } from "./state.mjs";
+import { DIALOG, REVERT, state, show, draft, notify, send, starts } from "./state.mjs";
 import { button, external, field, choice, tick, hd, text, list, row, panel, info, notice } from "./widgets.mjs";
 import { taskRounds } from "./progress.mjs";
 
@@ -42,7 +42,7 @@ export function questionForm(q, d) {
     clarifying ? field(key, "statement", "Your intent, as this Change's decision records it (at most two lines)")
       : nothing,
     clarifying ? tick("This statement is my intent", mine.confirmed === true, confirm) : nothing,
-    button("Answer", answer));
+    button("Answer", answer, starts(d)));
 }
 
 // The owner's choice after the final review's last round (TD-217): the plan tasks to rebuild, those with an open
@@ -109,14 +109,15 @@ export function retryForm(q, r, d) {
       ${taskRounds(t.id, d, " (rebuild list)")}
       ${text(said.find((s) => s.startsWith(`${t.id} `)) ?? "", { size: "xs" })}`),
     html`<div>${said.map((s) => text(s, { size: "xs", weight: "semibold" }))}</div>`,
-    row(button(n ? `Rebuild ${n} task${n > 1 ? "s" : ""}` : "Accept as done", decide, { icon: "check", aria: DIALOG }),
+    row(button(n ? `Rebuild ${n} task${n > 1 ? "s" : ""}` : "Accept as done", decide,
+      { icon: "check", aria: DIALOG, ...starts(d) }),
       button("Another round", () => send("/answers", { question: q.id, option: "another" }, d, key),
-        { variant: "secondary" })),
+        { variant: "secondary", ...starts(d) })),
     choice(key, "from", "Plan again from the brief, starting from", [
       { id: "replan", label: "the existing code" },
       { id: "clean", label: "a clean state: the Change's work undone" },
     ]),
-    button("Plan again from the brief", replan, { variant: "secondary", aria: DIALOG }));
+    button("Plan again from the brief", replan, { variant: "secondary", aria: DIALOG, ...starts(d) }));
 }
 
 // What an answer sets off when it is more than going on: ending the Change, passing over a finding, going back.
@@ -232,8 +233,8 @@ export function checkForm(check, d) {
     check.url ? row(external("Open the preview", check.url),
       text(check.url, { size: "xs", color: "contrast-medium", tag: "span" })) : nothing,
     field(key, "note", "What failed (needed for Failed; the builder gets it as the fix task)"),
-    row(button("Passed", passed, { icon: "check", aria: last ? DIALOG : undefined }),
-      button("Failed", failedCheck, { variant: "secondary", icon: "close", aria: DIALOG })));
+    row(button("Passed", passed, { icon: "check", aria: last ? DIALOG : undefined, ...starts(d) }),
+      button("Failed", failedCheck, { variant: "secondary", icon: "close", aria: DIALOG, ...starts(d) })));
 }
 
 const CHECKED = { passed: "success", success: "success", failed: "error", failure: "error", error: "error" };
@@ -261,7 +262,7 @@ export function mergeForm(m, d) {
       compact="true">${c.name}: ${c.state}</p-tag>`)) : text("No checks reported", { size: "xs",
       color: "contrast-medium" }),
     text(`Head ${m.head}`, { size: "xs", color: "contrast-medium" }),
-    button(`Approve merging ${head}`, approve, { icon: "check", aria: DIALOG }));
+    button(`Approve merging ${head}`, approve, { icon: "check", aria: DIALOG, ...starts(d) }));
 }
 
 export function restartButton(d) {
@@ -276,7 +277,7 @@ export function restartButton(d) {
     });
     if (sure) send("/restart-review", {}, d);
   };
-  return button("Restart review loop", restart, { variant: "secondary", icon: "refresh", aria: DIALOG });
+  return button("Restart review loop", restart, { variant: "secondary", icon: "refresh", aria: DIALOG, ...starts(d) });
 }
 
 export function pullbackNote(p, d) {

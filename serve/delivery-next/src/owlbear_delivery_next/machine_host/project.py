@@ -20,7 +20,7 @@ from owlbear_delivery_next.local_system.storage_io import atomic_write, open_loc
 from owlbear_delivery_next.project_host import api, session_slots
 from owlbear_delivery_next.project_host.host import Host, HostRecord, running
 from owlbear_delivery_next.runtimes import readiness
-from owlbear_delivery_next.state_store import registry
+from owlbear_delivery_next.state_store import registry, work_block
 from owlbear_delivery_next.state_store.store import LockHeldError, Store, StoreError
 
 if TYPE_CHECKING:
@@ -246,12 +246,17 @@ class Project:
             self.state = "stopped"
         return []
 
-    def info(self) -> dict[str, Any]:
+    def info(self, here: work_block.Block | None = None) -> dict[str, Any]:
         """The project as the machine's project list shows it; ``setup`` is the command a clone still needs.
 
-        A loaded project's ``reason`` names the MCP files its setup check could not read.
+        A loaded project's ``reason`` names the MCP files its setup check could not read. A loaded project names what
+        keeps its work from starting: ``unset`` keys, or ``unset_reason`` when its settings can't be read, and
+        ``blocked`` as the owner reads it. *here* is this machine's block, read now unless given.
         """
         out: dict[str, Any] = {"id": self.entry.id, "name": self.name, "path": self.entry.path, "state": self.state}
+        if self.state == "loaded" and self.store is not None:
+            block = work_block.of_store(self.store, here)
+            out |= {"unset": list(block.keys), "unset_reason": block.reason, "blocked": block.text()}
         if self.reason:
             out["reason"] = self.reason
         if self.host:

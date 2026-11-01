@@ -1,8 +1,8 @@
 import { html, render } from "/assets/lit-html/3.3.3/lit-html.js";
-import { call as host, HostDown, project, Restarted, Slow, shown, token } from "/assets/ui.mjs";
+import { blockedOf, call as host, HostDown, project, Restarted, Slow, shown, token } from "/assets/ui.mjs";
 import { button } from "./widgets.mjs";
 import { youCount, view, refresh } from "./list.mjs";
-import { newChange } from "./shaping.mjs";
+import { newChange, unshapeable } from "./shaping.mjs";
 
 const TITLE = document.title;
 // A Change: its project's id, then its slug (TD-241)
@@ -22,13 +22,22 @@ export const page = { busy: false, again: false, lastSeen: null, arrived: false 
 export function show() {
   const focused = document.activeElement;
   render(view(), document.getElementById("page"));
-  render(button("New Change", newChange, { icon: "add", aria: DIALOG, busy: state.creating }),
+  const why = unshapeable();
+  render(button("New Change", newChange, { icon: "add", aria: DIALOG, busy: state.creating, disabled: Boolean(why),
+    title: why || undefined }),
     document.getElementById("header-actions"));
   const modal = [...document.querySelectorAll("p-modal")].some((m) => m.open);
   if (focused?.isConnected && document.activeElement !== focused && !modal) {
     focused.focus({ preventScroll: true });
   }
   document.title = youCount() ? `(${youCount()}) ${TITLE}` : TITLE;
+}
+
+// A button that starts work for Change *d* is disabled while its project is blocked, the reason as its title
+// (D-01M69C5E28ZM79195VEZZ5NQDV).
+export function starts(d) {
+  const why = blockedOf(d.project);
+  return why ? { disabled: true, title: why } : {};
 }
 
 // One call to the project *of* (this page's by default); a Change's own calls name its project.

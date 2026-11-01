@@ -11,6 +11,8 @@ import hashlib
 import json
 from typing import TYPE_CHECKING
 
+from owlbear_delivery_next.state_store.work_block import UNREADABLE
+
 if TYPE_CHECKING:
     from collections.abc import Callable
     from datetime import datetime
@@ -116,7 +118,7 @@ def refused(run: FolderRun) -> bool:
     """
     if run.state not in {"failed", "waiting"} or run.started_at is None or run.ended_at is None:
         return False
-    if run.reason in REFUSALS:
+    if run.reason in REFUSALS or run.reason.startswith(UNREADABLE):  # main's block of unreadable settings, too
         return run.ended_at == run.started_at
     unset = run.reason == SUBAGENTS_UNSET or (run.reason.startswith(UNSET[0]) and run.reason.endswith(UNSET[1]))
     return unset and run.ended_at >= run.started_at

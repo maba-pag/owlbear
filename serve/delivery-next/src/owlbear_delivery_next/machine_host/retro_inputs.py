@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-from owlbear_delivery_next.improvement import assumptions, cases, retro_judge
+from owlbear_delivery_next.improvement import assumptions, cases, chatlogs, retro_judge
 from owlbear_delivery_next.improvement import retro_proposals as props
 from owlbear_delivery_next.improvement import retro_store as store
 from owlbear_delivery_next.improvement import retro_synthetic as syn
@@ -22,6 +22,8 @@ from owlbear_delivery_next.settings.config import SettingsUnset
 from owlbear_delivery_next.state_store import machine_settings, registry, spend_ledger
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from owlbear_delivery_next.change_contracts.profile_record import RoleModel
     from owlbear_delivery_next.improvement.credit_meter import Meter
 
@@ -100,10 +102,13 @@ def unfinished(uid: str) -> list[dict[str, Any]]:
 
 
 def failed_grading() -> set[tuple[str, str]]:
-    """Each (unit, revision) whose last grade-only run ended short of judged: its late records wait for the button."""
+    """Each (unit, revision) whose last grade-only run ended short of judged: its late records wait for the button.
+
+    A run its unset settings held before any work (#808) is not one: its records are offered again once they are set.
+    """
     last: dict[tuple[str, str], str] = {}
     for r in store.run_states().values():  # in the order the runs opened
-        if r.get("mode") == "grade-only" and r["state"] == "ended":
+        if r.get("mode") == "grade-only" and r["state"] == "ended" and not r.get("held"):
             last[r.get("unit", ""), r.get("rev", "")] = r["result"]
     return {key for key, result in last.items() if result != "judged"}
 
@@ -141,6 +146,17 @@ def pinned() -> set[str]:
     return pins - {""}
 
 
+def prune(say: Callable[[str], None]) -> None:
+    """Remove the captures of judged chats nothing pins, saying how many or why it could not."""
+    try:
+        gone = chatlogs.prune(datetime.now(UTC), judged_sessions(), pinned())
+    except (store.RetroError, OSError, ValueError) as exc:
+        say(f"Retro could not prune judged captures: {type(exc).__name__}: {exc}")
+        return
+    if gone:
+        say(f"Retro pruned the captures of {len(gone)} judged sessions")
+
+
 NEEDS = (*retro_judge.NEEDS, assumptions.RETRO_LESSON_BAR, assumptions.RETRO_CATCHABLE)  # what every run rests on
 
 
@@ -163,6 +179,7 @@ class Running:
     meter: Meter | None = None
     why: str = ""  # why it waits
     unended: bool = False  # a session's end was not confirmed: the run ends at its next call
+    new: bool = False  # opened by this host and not yet admitted: its first admission rechecks its settings
 
     @classmethod
     def of(cls, snap: dict[str, Any]) -> Running:

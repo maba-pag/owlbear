@@ -4,7 +4,7 @@ import { call, here, loaded, project } from "/assets/ui.mjs";
 import { KINDS, DIALOG, GET, WRITE, state, filter, show, notify } from "./state.mjs";
 import { button, select, field } from "./widgets.mjs";
 import { card } from "./entries.mjs";
-import { chooser, createChange } from "./change.mjs";
+import { chooser, createChange, held } from "./change.mjs";
 
 // An untriaged entry shows under its origin too, so the project it was found in sees it to triage (TD-241).
 function shows(e) {
@@ -67,8 +67,10 @@ function started() {
   if (state.choosing) return chooser();
   const s = state.started;
   if (!s) return html`<p-text id="started" aria-live="polite"></p-text>`;
-  return html`<p-text id="started" aria-live="polite">${s.text ?? html`Could not open the chat: ${s.reason}. Run this
-    command instead:<pre><code>${s.command}</code></pre>`}</p-text>`;
+  // a project whose settings block its work gets no command to run by hand (#808)
+  const by = s.command ? html` Run this command instead:<pre><code>${s.command}</code></pre>` : "";
+  return html`<p-text id="started" aria-live="polite">${s.text ?? html`Could not open the chat: ${s.reason}.${by}`}
+    </p-text>`;
 }
 
 export function view() {
@@ -84,7 +86,7 @@ export function view() {
     const notes = [`The backlog is the issues of ${repositories.join(" and ")}.`,
       loaded.unreadable.length ? `Issues without a readable entry: ${loaded.unreadable.join(", ")}.` : "",
       ...loaded.failed.map((f) => `Not read just now: ${f}.`)];
-    const ticked = chosen().length;
+    const ticked = chosen().length, why = held(chosen());
     body.push(html`<p-text id="where" color="contrast-medium">${notes.filter(Boolean).join(" ")}</p-text>
       ${head}
       ${addForm()}
@@ -105,9 +107,12 @@ export function view() {
       <div id="selection" class="bar" role="region" aria-label="Selected entries" ?hidden=${!ticked && !state.creating}>
         <p-text id="chosen" weight="semibold">${ticked} selected</p-text>
         <div id="actions" class="row">
-          ${button(`Create Change from ${ticked}`, createChange, { icon: "add", aria: DIALOG, busy: state.creating })}
+          ${button(`Create Change from ${ticked}`, createChange, { icon: "add", aria: DIALOG, busy: state.creating,
+            disabled: Boolean(why), title: why })}
           ${button("Clear selection", () => { state.selected.clear(); show(); }, { variant: "secondary" })}
         </div>
+        ${why ? html`<p-text id="change-held" size="xs" color="contrast-medium">${why.charAt(0).toUpperCase()
+          + why.slice(1)}.</p-text>` : nothing}
       </div>`);
   }
   return html`

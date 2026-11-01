@@ -1,5 +1,5 @@
 import { html } from "/assets/lit-html/3.3.3/lit-html.js";
-import { project, shown } from "/assets/ui.mjs";
+import { blockedOf, project, shown } from "/assets/ui.mjs";
 import { state, show, call, several, failed } from "./state.mjs";
 import { button } from "./widgets.mjs";
 
@@ -7,8 +7,10 @@ export function startedView() {
   if (state.choosing) return chooserView();
   const s = state.started;
   if (!s) return html`<p-text id="started" aria-live="polite"></p-text>`;
-  return html`<p-text id="started" aria-live="polite">${s.text ?? html`Could not open the chat ${s.about}: ${s.reason}.
-    Copy this command: <code>${s.command}</code>`}</p-text>`;
+  // a project whose settings block its work gets no command to run by hand (#808)
+  const by = s.command ? html` Copy this command: <code>${s.command}</code>` : "";
+  return html`<p-text id="started" aria-live="polite">${s.text
+    ?? html`Could not open the chat ${s.about}: ${s.reason}.${by}`}</p-text>`;
 }
 
 async function launched(id, of) {  // the host opens the chat in the background; VS Code may first have to start
@@ -19,10 +21,22 @@ async function launched(id, of) {  // the host opens the chat in the background;
   }
 }
 
+// The shown projects a Change may be shaped in: those whose work may start (D-01M69C5E24XW634N0V0JA8RG5Z).
+function open() {
+  return (shown() ?? []).filter((p) => !blockedOf(p.id));
+}
+
+// Why New Change is off: every shown project is blocked; "" while one may start or the page has no machine host.
+export function unshapeable() {
+  const all = shown();
+  if (!all?.length || open().length) return "";
+  return all.length === 1 ? blockedOf(all[0].id) : "every project's settings are unset or can't be read";
+}
+
 // New Change asks which project first when the page shows several (TD-241).
 export function newChange() {
   if (several()) {
-    state.choosing = shown()[0].id;
+    state.choosing = open()[0]?.id ?? shown()[0].id;
     show();
     document.querySelector("#choose p-select")?.focus();
     return undefined;
@@ -30,7 +44,12 @@ export function newChange() {
   return shape(shown()?.[0]?.id ?? project);
 }
 
+// The chooser follows the poll: a chosen project that becomes blocked gives way to the first open one, and Continue
+// waits while none is open.
 function chooserView() {
+  const offered = open();
+  const ready = offered.length > 0;
+  if (ready && !offered.some((p) => p.id === state.choosing)) state.choosing = offered[0].id;
   const picked = (e) => { state.choosing = e.target.value; };
   const go = () => {
     const of = state.choosing;
@@ -40,9 +59,10 @@ function chooserView() {
   };
   const stop = () => { state.choosing = false; show(); };
   return html`<div id="choose" class="row"><p-select label="Shape the new Change in" .value=${state.choosing}
-    @change=${picked}>${shown().map((p) => html`<p-select-option value=${p.id}>${p.name}</p-select-option>`)}
+    @change=${picked}>${offered.map((p) => html`<p-select-option value=${p.id}>${p.name}</p-select-option>`)}
     </p-select>
-    ${button("Continue", go)}${button("Cancel", stop, { variant: "secondary" })}</div>`;
+    ${button("Continue", go, { disabled: !ready, title: ready ? undefined : unshapeable() })}
+    ${button("Cancel", stop, { variant: "secondary" })}</div>`;
 }
 
 function shape(of) {

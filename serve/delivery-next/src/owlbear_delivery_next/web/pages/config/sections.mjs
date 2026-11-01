@@ -40,7 +40,8 @@ function scopeSection() {
       : "No shared settings location is set up (run owlbear-next data PATH), so only this project's and this "
         + "machine's settings can be saved, locally."}</p-text></div>
     <p-text>A blank project value uses this machine's; a blank value on this machine uses the global one. OwlBear's
-      code has no defaults: a value no layer sets is unset, and a step that needs it asks you to fill it in.</p-text>
+      code has no defaults: a value no layer sets is unset, and the project's work waits until it is set; the Changes
+      page names each project that waits.</p-text>
   </section>`;
 }
 
@@ -137,8 +138,8 @@ function unsetSection() {
     keys.length} unset: ${keys.slice(0, FIRST).map(link)}${more(id, keys)}</li>`;
   return html`<section class="panel" id="unset" aria-labelledby="unset-title">${heading}
     <p-text color="error">${unset.length} setting${unset.length === 1 ? " is" : "s are"} unset. Code ships no
-      defaults: set ${unset.length === 1 ? "it" : "each"} in its group, best in the global layer; a step that needs one
-      asks you until then. Each name below opens its setting.</p-text>
+      defaults: set ${unset.length === 1 ? "it" : "each"} in its group, best in the global layer; until then the
+      project's work waits. Each name below opens its setting.</p-text>
     <ul id="unset-groups">${GROUPS.map((g) => [g, unset.filter((key) => groupOf(rowOf(key)) === g[0])])
       .filter(([, keys]) => keys.length).map(([g, keys]) => item(g, keys))}</ul>
     ${unread ? html`<p-text size="xs" id="unset-machine">${state.machineUnread ? "This machine's settings could not "
