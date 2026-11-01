@@ -359,6 +359,25 @@ def test_a_save_during_a_read_is_not_noticed_against_the_global_the_read_found(w
     assert after.notices == []
 
 
+def test_a_save_published_before_the_sync_never_hides_a_change_the_sync_pulls(world, monkeypatch):
+    world.push(**builder("A"))
+    reader = world.reader()
+    reader.read()
+    real = settings_read.settings_carry.sync
+
+    def sync(*args: object) -> str:  # this machine saved and published B; another machine then set C
+        reader.ledger.own(as_saved("A"), as_saved("B"))
+        world.push(**builder("B"))
+        world.push(**builder("C"))
+        return real(*args)
+
+    monkeypatch.setattr(settings_read.settings_carry, "sync", sync)
+    got = reader.read()
+
+    assert [(n.old, n.new) for n in got.notices] == [('"B"', '"C"')]
+    assert got.seen["agents.builder.model"] == '"C"'
+
+
 def test_a_read_is_dated_when_it_ends(world, monkeypatch):
     reader, mid = world.reader(), []
     real = reader._models  # noqa: SLF001

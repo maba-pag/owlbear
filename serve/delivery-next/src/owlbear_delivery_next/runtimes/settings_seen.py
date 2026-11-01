@@ -110,7 +110,7 @@ class Ledger:
         return seen
 
     def begin(self) -> None:
-        """Start a read: a save made before it ends is taken over the Global it found, which may be older."""
+        """Start a read's Global snapshot, after its sync: a save before the read ends is taken over what it found."""
         with self._lock:
             self._owned = {}
 

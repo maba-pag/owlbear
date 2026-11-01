@@ -47,7 +47,6 @@ class Reader:
     def read(self) -> Seen:
         """Read every source now, after any read already running; record what was found and what failed."""
         with self._run:
-            self.ledger.begin()
             failures: list[Failure] = []
             glob, unshared = None, False
             for source in (SHARED, MODELS, IMPECCABLE, MACHINE):
@@ -137,6 +136,7 @@ class Reader:
             except (data_repo.DataRepoError, registry.RegistryError) as exc:
                 refused = str(exc)
             missed += [(str(shared.root), refused)] if refused else []
+            self.ledger.begin()  # from here only this machine's saves change Global, each under the snapshot's lock
             try:
                 glob = flatten(read_layer_settled(shared.global_path, GlobalLayer))  # an own save is taken as one
             except StoreError as exc:
