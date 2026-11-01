@@ -155,6 +155,28 @@ def test_a_redraft_retro_review_rejects_is_rejected_with_its_reason(world):
 
 
 @pytest.mark.usefixtures("said")
+def test_a_redraft_filed_but_not_reviewed_is_reviewed_from_its_kept_answer_without_a_new_call(world, monkeypatch):
+    pid = _redirected()
+    reviewed, model = props.reviewed, Model(_redraft())
+
+    def stopped(*_a, **_k):
+        msg = "the host stopped"
+        raise RuntimeError(msg)
+
+    monkeypatch.setattr(props, "reviewed", stopped)
+    job = _job(model, world.projects)
+    job.tick(0.0)
+    child = props.folded()[pid]["redraft"]
+    assert props.folded()[child]["state"] == "drafted"
+
+    monkeypatch.setattr(props, "reviewed", reviewed)
+    store.request("owner", redraft=pid)
+    job.tick(1.0)
+    assert (props.folded()[pid]["redraft"], props.folded()[child]["state"]) == (child, "waiting")
+    assert len(model.messages) == 1
+
+
+@pytest.mark.usefixtures("said")
 def test_an_unusable_redraft_stops_files_nothing_and_redraft_again_succeeds_once(world):
     pid = _redirected()
     job = _job(Model("not json", _redraft(), _redraft()), world.projects)

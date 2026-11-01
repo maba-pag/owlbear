@@ -57,8 +57,9 @@ def run(w: Work, pid: str) -> dict[str, Any]:
     if snap is None or snap["state"] != "redirected":
         msg = f"refused: proposal {pid} is {'unknown' if snap is None else snap['state']}, not redirected"
         raise StoppedError(msg)
-    if snap["redraft"]:
+    if snap["redraft"] and props.folded()[snap["redraft"]]["state"] != "drafted":
         return {"redraft": snap["redraft"], "reviews": 0}
+    # A redraft filed but not yet reviewed (the host stopped in between) is reviewed from the kept answer: no new call.
     said = dict(paid(w, f"redraft:{pid}", render(snap), _valid, "retro-review"))
     said |= {k: str(said.get(k) or "")[:ABOUT] for k in ("cause", "target", "mechanism")}
     if said["cause"] not in retro_bars.CAUSES:
