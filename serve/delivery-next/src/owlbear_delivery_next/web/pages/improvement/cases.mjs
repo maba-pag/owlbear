@@ -67,8 +67,8 @@ function chooser(n, c, waiting) {
 // this case), then its check, asked already or to be asked.
 function onward(c, asked) {
   const run = c.last_check;
-  const last = run ? html`<p class="meta">Its last check (${run.id}, ${when(run.at)}): ${run.result}.</p>
-    ${run.note ? text(run.note, { size: "sm" }) : nothing}` : nothing;
+  const last = run ? text(html`Its last check (${run.id}, ${when(run.at)}): ${run.result}.${
+    run.note ? ` ${run.note}` : ""}`, { size: "sm" }) : nothing;
   return html`${last}${asked.has(c.id)
     ? html`<p class="meta">Its paid check is asked: a case it supports moves to the tests.</p>`
     : html`<p class="meta">It moves to the tests once ${run ? "a further" : "its"} paid check supports it:
