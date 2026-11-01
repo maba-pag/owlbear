@@ -47,8 +47,7 @@ def _project(state: str, store: Store | None) -> str:
 
 def _outside() -> str:
     try:
-        shared = data_repo.locate()
-        return work_block.of_settings(work_block.outside(shared)).text() if shared else work_block.machine().text()
+        return work_block.of_settings(work_block.outside(data_repo.locate())).text()
     except (data_repo.DataRepoError, StoreError) as exc:
         return f"{work_block.UNREADABLE}{exc}"
 

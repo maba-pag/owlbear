@@ -276,6 +276,13 @@ def test_units_of_an_unloaded_or_unknown_project_wait_and_others_follow_this_mac
     assert blocked("chat:cx") == blocked("syn:large") == UNSET_PDS
 
 
+@pytest.mark.usefixtures("gap")
+def test_without_a_shared_repository_units_outside_projects_wait_on_the_settings_they_resolve(tmp_path, machine):
+    _chat("cx", tmp_path / "elsewhere")
+    blocked = machine.retro.seams.blocked
+    assert blocked("chat:cx") == blocked("syn:large") == UNSET
+
+
 def test_the_button_on_a_synthetic_unit_records_a_refusal_when_global_is_unreadable(tmp_path, machine, monkeypatch):
     shared = tmp_path / "data"
     shared.mkdir()

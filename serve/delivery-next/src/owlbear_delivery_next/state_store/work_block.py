@@ -45,9 +45,13 @@ class Block:
         return str(SettingsUnset(list(self.keys))) if self.keys else ""
 
 
-def outside(shared: DataRepo) -> Settings:
-    """The settings outside any project: this machine's layer over the global one; ``StoreError`` when unreadable."""
-    return layered(shared.global_path, None, local_home.root() / MACHINE_SETTINGS)
+def outside(shared: DataRepo | None) -> Settings:
+    """The settings outside any project: this machine's layer over the global one, if any; ``StoreError`` if unreadable.
+
+    Without a shared repository nothing lies under this machine's layer, so every other setting is unset
+    (D-01M6AE4CE091ZHG9V2J8JZSBJ3).
+    """
+    return layered(shared.global_path if shared else None, None, local_home.root() / MACHINE_SETTINGS)
 
 
 def machine() -> Block:
