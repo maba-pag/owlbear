@@ -151,17 +151,18 @@ def _killed(proc: subprocess.Popen[str]) -> str:
 
 
 def run(root: Path, linter: Linter, timeout: float = TIMEOUT) -> Outcome:
-    """Run one linter with a timeout; its whole process group is killed when it runs over."""
+    """Run one linter in its own process group with a timeout; the whole group is killed when it runs over."""
     argv = [*linter.command, *(_arg(PurePosixPath(f).relative_to(linter.home)) for f in linter.files)]
     try:
         proc = subprocess.Popen(  # noqa: S603 - an argument vector of a configured linter, no shell
             argv,
             cwd=root / linter.home,
+            stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
             errors="replace",
-            start_new_session=True,
+            process_group=0,
         )
     except OSError as exc:
         return Outcome("broken", str(exc), f"could not start: {type(exc).__name__}")

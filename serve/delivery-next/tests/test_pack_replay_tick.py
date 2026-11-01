@@ -45,7 +45,7 @@ class Fake:
         self.live, self.pid = set(), 100
         (tmp_path / "wt").mkdir(exist_ok=True)
         self.worktree = str(tmp_path / "wt")
-        self.host = Host(store, repo, spawn=self.spawn, scan=lambda *_a: {}, group=lambda _g: {})
+        self.host = Host(store, repo, spawn=self.spawn, members=lambda _ids: {})
         self.host.alive = lambda pid, _created: pid in self.live
 
     def spawn(self, _slug):

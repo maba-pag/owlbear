@@ -23,7 +23,7 @@ from owlbear_delivery_next.local_system import data_repo, local_home
 from owlbear_delivery_next.local_system.storage_io import atomic_write, open_lock
 from owlbear_delivery_next.settings import migrations
 from owlbear_delivery_next.settings.config import Layer, Settings
-from owlbear_delivery_next.state_store import config_save, profile_share, project_home, roles_move
+from owlbear_delivery_next.state_store import config_save, profile_share, project_home, roles_move, step_pids
 from owlbear_delivery_next.state_store.database import (
     STORE_FORMAT,
     Database,
@@ -470,8 +470,10 @@ class Store:
         return [json.loads(row[0]) for row in rows]
 
     def log(self, lock: Lock, slug: str, event: dict[str, Any]) -> None:
-        """Append one activity event, keeping only the last ``ACTIVITY_LIMIT``."""
+        """Append one activity event, keeping only the last ``ACTIVITY_LIMIT``; a ``pids`` event is also kept whole."""
         lock.check(slug)
+        if event.get("event") == "pids":
+            step_pids.kept(self._dir(slug), event)
         with self.db.write() as db:
             append_activity(db, slug, json.dumps(event, default=str, sort_keys=True), ACTIVITY_LIMIT)
 

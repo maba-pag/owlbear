@@ -18,7 +18,7 @@ from owlbear_delivery_next.change_contracts import tools
 from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_flow import worktree
-from owlbear_delivery_next.local_system import lint
+from owlbear_delivery_next.local_system import lint, processes
 from owlbear_delivery_next.runtimes import sdk_adapter
 from owlbear_delivery_next.runtimes.results import ACCEPTED, ENDED, Gate
 from owlbear_delivery_next.runtimes.session_result import Run
@@ -256,6 +256,30 @@ def test_a_timed_out_linter_is_reported_even_when_a_detached_child_holds_its_out
     assert (out.state, out.reason) == ("broken", "timed out")
     assert "still holds it open" in out.output  # the drain was cut short, not ended by EOF
     assert time.monotonic() - started < 10
+
+
+def test_a_linter_keeps_the_runners_session_and_its_leftover_is_found(tmp_path: Path) -> None:
+    script = tool(
+        tmp_path, "leave", f"echo $$ > {tmp_path}/leader; sleep 300 >/dev/null 2>&1 & echo $! > {tmp_path}/left"
+    )
+    code = (
+        "import os; from pathlib import Path, PurePosixPath; from owlbear_delivery_next.local_system import lint; "
+        f"print(os.getpid(), lint.run(Path({str(tmp_path)!r}), lint.Linter('leave', ({str(script)!r},), "
+        "PurePosixPath(), ())).state)"
+    )
+    started = time.time()
+    runner = subprocess.run(  # noqa: S603 - this interpreter, leading its own session like a runner
+        [sys.executable, "-c", code], check=True, capture_output=True, text=True, timeout=60, start_new_session=True
+    )
+    left = int((tmp_path / "left").read_text())
+    try:
+        pid, state = runner.stdout.split()
+        assert state == "passed"
+        assert (os.getpgid(left), os.getsid(left)) == (int((tmp_path / "leader").read_text()), int(pid))
+        assert left in processes.members({int(pid): started})
+    finally:
+        with contextlib.suppress(OSError):
+            os.kill(left, signal.SIGKILL)
 
 
 def test_a_linter_skipped_after_breaking_twice_is_not_run_again(tmp_path: Path, monkeypatch) -> None:

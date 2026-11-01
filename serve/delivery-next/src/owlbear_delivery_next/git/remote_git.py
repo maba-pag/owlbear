@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Literal
 from owlbear_delivery_next.git.git_executable import resolve_git_executable
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Callable, Mapping, Sequence
     from pathlib import Path
 
 RemoteGitKind = Literal["read", "write"]
@@ -31,6 +31,7 @@ _COMMIT_PATTERN = re.compile(r"[0-9a-f]{40}")
 _REPOSITORY_VARIABLES = ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE")
 _BATCH_SSH_OPTION = "-o BatchMode=yes"
 _BATCH_SSH_COMMAND = f"ssh {_BATCH_SSH_OPTION}"
+launched: Callable[[int], None] | None = None  # the runner's journal of each remote Git leader; unset elsewhere
 _CONFIG_UNSET = 1
 # Git global options that take their value as the next argument.
 _GLOBAL_OPTIONS_WITH_VALUE = frozenset({"-c", "-C", "--config-env", "--git-dir", "--work-tree", "--namespace"})
@@ -193,10 +194,11 @@ def run_remote_git(
         None if "GIT_SSH_COMMAND" in base else _configured_ssh_command(repository, base, _global_options(arguments))
     )
     command = (resolve_git_executable(), "-C", str(repository), *arguments)
+    gated = launched is not None  # a journaled leader waits on its stdin until the journal holds it
     try:
         process = subprocess.Popen(  # noqa: S603 - fixed Git executable and code-owned argument vectors.
-            command,
-            stdin=subprocess.DEVNULL,
+            ("/bin/sh", "-c", 'read -r _ && exec "$@" </dev/null', "sh", *command) if gated else command,
+            stdin=subprocess.PIPE if gated else subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             env=remote_git_environment(base, configured_ssh_command=configured),
@@ -207,6 +209,9 @@ def run_remote_git(
         raise error from exc
     finished = False
     try:
+        if launched is not None:
+            launched(process.pid)
+            _release(process)
         stdout, stderr = process.communicate(timeout=bound)
         finished = True
     except subprocess.TimeoutExpired as exc:
@@ -225,6 +230,13 @@ def run_remote_git(
         detail = "remote Git write did not confirm its outcome"
         raise RemoteGitWriteUnknown(detail, timed_out=False, result=result)
     return result
+
+
+def _release(process: subprocess.Popen[bytes]) -> None:
+    """Let a journaled leader become Git; a runner that dies first closes the pipe, and Git never runs."""
+    if process.stdin is not None:
+        with contextlib.suppress(OSError), process.stdin:
+            process.stdin.write(b"go\n")
 
 
 def _terminate_group(process: subprocess.Popen[bytes]) -> None:

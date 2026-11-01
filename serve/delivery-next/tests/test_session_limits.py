@@ -55,7 +55,7 @@ class Fake:
         self.live, self.pid, self.store = set(), 100, store
         (path / "wt").mkdir(exist_ok=True)
         self.worktree = str(path / "wt")
-        self.host = Host(store, path, spawn=self.spawn, scan=lambda *_a: {}, group=lambda _g: {})
+        self.host = Host(store, path, spawn=self.spawn, members=lambda _ids: {})
         self.host.alive = lambda pid, _created: pid in self.live
         self.host.slots, self.host.record = slots, self.host.record.model_copy(update={"project": project})
         self.host.maintenance = maintenance.Maintenance(slots)  # bound by the machine host before any project starts

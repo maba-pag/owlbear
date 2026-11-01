@@ -30,6 +30,7 @@ READY_WITHIN = 60.0
 GRACE = 5.0
 WITHIN = 600.0  # seconds per install or preparation command
 SHOWN = 80  # characters of a command a note quotes, so a long path never pushes out why it failed
+PIDFILE = "env.pid"  # the launched recipe's pid, written by its wrapper before the recipe runs
 CAUSE = 160  # characters of its last output line; a whole note then fits a caller's 300 behind a 45-character prefix
 type Action = Literal["launch", "keep", "dispose", "settle"]
 type Pids = dict[int, float | None]
@@ -49,31 +50,49 @@ def shown(argv: list[str]) -> str:
 
 
 def run(argv: list[str], cwd: Path, log: Callable[[dict[str, Any]], None], env: Mapping[str, str] | None = None) -> str:
-    """Run one command the owner made known in its own group, within ``WITHIN``; a note if it failed, else empty."""
+    """Run one command the owner made known in its own group, within ``WITHIN``; a note if it failed, else empty.
+
+    Its leader waits on its stdin until the journal holds it; a runner that dies first closes the pipe, and the command
+    never runs.
+    """
     within, cmd = WITHIN, shown(argv)
     try:
         proc = subprocess.Popen(  # noqa: S603 - argument vector of a command the owner made known
-            argv, cwd=cwd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-            start_new_session=True, env=env,
+            ("/bin/sh", "-c", 'read -r _ && exec "$@" </dev/null', "sh", *argv), cwd=cwd, stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, start_new_session=True, env=env,
         )  # fmt: skip
     except OSError as exc:
         return f"`{cmd}` did not start: {exc}"
     born = created(proc.pid)
     try:
         journal(log, {proc.pid: born})
+        release(proc)
         out, _ = proc.communicate(timeout=within)
     except subprocess.TimeoutExpired:
         return f"`{cmd}` took over {within:.0f} s"
     finally:  # timed out, interrupted or done: nothing of its group outlives the command
-        if members(proc.pid, born):  # not once its id names a newer group
-            with contextlib.suppress(OSError):
-                os.killpg(proc.pid, signal.SIGKILL)
-        with contextlib.suppress(subprocess.TimeoutExpired):
-            proc.communicate(timeout=5)  # an escaped child may hold the pipe open
+        _end(proc, born)
     if proc.returncode:
         last = next((x for x in reversed(out.decode(errors="replace").splitlines()) if x.strip()), "")
         return f"`{cmd}` failed: {last.strip()[:CAUSE]}"
     return ""
+
+
+def _end(proc: subprocess.Popen[bytes], born: float | None) -> None:
+    """Kill the command's group unless its id may name a newer one, then collect its output.
+
+    An unreaped leader still holds its id, so a command over time or interrupted is killed without a lookup. Once it is
+    reaped, a member of the group must be found; an unlisted table leaves the members to the step's leftover lookup.
+    """
+    ours = proc.returncode is None
+    if not ours:
+        with contextlib.suppress(processes.UnlistedError):
+            ours = bool(members(proc.pid, born))
+    if ours:
+        with contextlib.suppress(OSError):
+            os.killpg(proc.pid, signal.SIGKILL)
+    with contextlib.suppress(subprocess.TimeoutExpired):
+        proc.communicate(timeout=5)  # an escaped child may hold the pipe open
 
 
 def action(c: Change, *, live: bool, paths: Mapping[str, str]) -> Action | None:
@@ -101,7 +120,7 @@ def owned(e: Environment, pid: int) -> bool:
     if pid in e.pids:
         return True
     try:
-        return e.pgid is not None and os.getpgid(pid) == e.pgid
+        return e.pgid is not None and e.pgid in {os.getpgid(pid), os.getsid(pid)}
     except OSError:
         return False
 
@@ -142,36 +161,68 @@ def created(pid: int) -> float | None:
 
 
 def members(pgid: int, leader: float | None = None) -> Found:
-    """Live members of one recorded group; none once its id names a newer process, as then the group ended."""
-    found: Found = {}
-    for p in psutil.process_iter(["name", "status", "create_time"]):
-        with contextlib.suppress(OSError, psutil.Error):
-            if p.info["status"] == psutil.STATUS_ZOMBIE or os.getpgid(p.pid) != pgid:
-                continue
-            if p.pid == pgid and leader is not None and abs(p.info["create_time"] - leader) >= 1.0:
-                return {}
-            found[p.pid] = p.info["name"] or ""
-    return found
+    """Live members of a recorded leader's group and session; none once its id names a newer process.
+
+    The leader starts its own session, so a job-control job in another group of it is a member too.
+    """
+    return processes.members({pgid: leader})
 
 
 def remaining(
     e: Environment, alive: processes.Observe = processes.alive, group: Callable[..., Found] = members
 ) -> Found:
-    """Recorded PIDs alive or unobservable, and every live member of the recorded group."""
+    """Recorded PIDs alive or unobservable, and every live member of the recorded group and session."""
     found: Found = {p: "" for p, t in e.pids.items() if alive(p, t) is not False}
     return found | (group(e.pgid, e.pids.get(e.pgid)) if e.pgid else {})
 
 
+def taken(e: Environment, leader: int) -> Pids:
+    """The recorded PIDs and every live member of the leader's group and session, each with its start time."""
+    return e.pids | {p: created(p) for p in members(leader, e.pids.get(leader))}
+
+
+def unready(e: Environment, proc: subprocess.Popen[bytes] | None) -> Environment:
+    """A launch that never answered, with its group's members recorded for disposal to prove them its own.
+
+    Its leader is gone at most a moment ago, too soon for the group's or session's id to be another's.
+    """
+    if proc is not None and e.pgid:
+        with contextlib.suppress(processes.UnlistedError):
+            return e.model_copy(update={"pids": taken(e, e.pgid)})
+    return e
+
+
+def _proven(e: Environment, found: Found) -> bool:
+    """Whether the members are still the launch's: a process recorded with its start time is one, started by then.
+
+    The leader's recorded time bounds its start. Without such a member, or with its start unreadable, the group's or
+    session's id may have ended and been taken by another's leader since.
+    """
+
+    def started_by(pid: int, bound: float) -> bool:
+        with contextlib.suppress(psutil.Error, OSError):
+            return processes.started(pid) <= bound + 1.0
+        return False
+
+    return any(p in found and t is not None and started_by(p, t) for p, t in e.pids.items())
+
+
 def dispose(e: Environment) -> Found:
-    """Signal the whole group, even without its leader, and the recorded PIDs, TERM then KILL; return what remains."""
+    """Signal the group, its session's other members and the recorded PIDs, TERM then KILL; return what remains.
+
+    A group and session whose members are not proven the launch's are never signalled; they remain.
+    """
     left: Found = {}
+    proven = False
     for sig, wait in ((signal.SIGTERM, GRACE), (signal.SIGKILL, 2.0)):
         if not (left := remaining(e)):
             return {}
+        found = members(e.pgid, e.pids.get(e.pgid)) if e.pgid and e.pgid not in {os.getpgrp(), os.getsid(0)} else {}
+        proven = proven or _proven(e, found)  # read before any signal; once proven, the id is the launch's
         processes.kill(e.pids, sig)
-        if e.pgid and e.pgid != os.getpgrp() and members(e.pgid, e.pids.get(e.pgid)):
+        for send, target in [(os.killpg, e.pgid), *((os.kill, p) for p in found)] if found and proven else []:
             with contextlib.suppress(OSError):
-                os.killpg(e.pgid, sig)
+                send(target, sig)
         end = time.monotonic() + wait
         while (left := remaining(e)) and time.monotonic() < end:
             time.sleep(0.2)
@@ -179,15 +230,24 @@ def dispose(e: Environment) -> Found:
 
 
 def start(
-    e: Environment, root: Path, log: Path, env: Mapping[str, str] | None = None
+    e: Environment, root: Path, log: Path, env: Mapping[str, str] | None = None, pidfile: Path | None = None
 ) -> subprocess.Popen[bytes] | None:
-    """Spawn the recipe as leader of its own session and group; *env* is a test copy's isolated environment."""
+    """Spawn the recipe as leader of its own session and group; *env* is a test copy's isolated environment.
+
+    Its leader, a shell, waits on its stdin: it becomes the recipe only once ``release`` says the group is recorded, so
+    a host or runner that stops in between leaves no recipe. With *pidfile*, the shell first writes its pid there.
+    """
     try:
+        argv = shlex.split(e.command)
+        if pidfile is not None:
+            pidfile.unlink(missing_ok=True)
+        record = 'echo $$ > "$0" && ' if pidfile is not None else ""
+        argv = ["/bin/sh", "-c", f'{record}read -r _ && exec "$@" </dev/null', str(pidfile or "sh"), *argv]
         with log.open("ab") as out:
             proc = subprocess.Popen(  # noqa: S603 - argument vector of the Builder's launch recipe
-                shlex.split(e.command),
+                argv,
                 cwd=root / e.directory,
-                stdin=subprocess.DEVNULL,
+                stdin=subprocess.PIPE,
                 stdout=out,
                 stderr=subprocess.STDOUT,
                 start_new_session=True,
@@ -199,12 +259,40 @@ def start(
     return proc
 
 
+def release(proc: subprocess.Popen[bytes]) -> None:
+    """Let a wrapped launch become its recipe; call only once its group is recorded."""
+    if proc.stdin is not None:
+        with contextlib.suppress(OSError), proc.stdin:
+            proc.stdin.write(b"go\n")
+
+
+def recovered(e: Environment, pidfile: Path) -> Environment:
+    """A launch whose group was never recorded, with its leader's pid from *pidfile* and the file's time as its start.
+
+    No file, or one older than the launch, leaves *e* unchanged. The time bounds the leader's start, so disposal never
+    signals a pid that a newer process took over.
+    """
+    try:
+        st = pidfile.stat()
+    except FileNotFoundError:
+        return e
+    if e.launched_at is None or st.st_mtime < e.launched_at.timestamp() - 1:
+        return e
+    text = pidfile.read_text().strip()
+    if not (text.isascii() and text.isdigit()) or int(text) <= 0:
+        msg = f"{pidfile} holds {text!r}, not a process id"
+        raise ValueError(msg)
+    pid = int(text)
+    return e.model_copy(update={"pgid": pid, "pids": e.pids | {pid: st.st_mtime}})
+
+
 def ready(e: Environment, proc: subprocess.Popen[bytes]) -> Pids | None:
     """Wait for the readiness URL; return the group's PIDs once it answers, else None."""
     end = time.monotonic() + READY_WITHIN
     while time.monotonic() < end and proc.returncode is None:
         if answers(e.ready_url):
-            return e.pids | {p: created(p) for p in members(proc.pid, e.pids.get(proc.pid))}
+            with contextlib.suppress(processes.UnlistedError):  # unlisted now: poll again; the deadline ends the wait
+                return taken(e, proc.pid)
         time.sleep(0.5)
     return None
 

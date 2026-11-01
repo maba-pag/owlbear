@@ -1,4 +1,4 @@
-"""Delivery host: one per clone; scheduler, runner launcher, termination scan and check environments (D4 §3.2).
+"""Delivery host: one per clone; scheduler, runner launcher, each step's leftovers and check environments (D4 §3.2).
 
 The process that runs it, with its HTTP server, starts in ``commands/serve`` (TD-171).
 """
@@ -15,7 +15,6 @@ import sys
 import threading
 import time
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 import psutil
@@ -27,10 +26,9 @@ from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_flow import delivery_target, loop
 from owlbear_delivery_next.change_flow.status import Activity, passes
 from owlbear_delivery_next.local_system import codebase, data_repo, maintenance, processes
-from owlbear_delivery_next.local_system.process_probe import ProcessTableWorktreeProbe, WorktreeProcessScanError
 from owlbear_delivery_next.local_system.slots import Slots
 from owlbear_delivery_next.local_system.storage_io import atomic_write
-from owlbear_delivery_next.project_host import environment, launch_gate, session_slots
+from owlbear_delivery_next.project_host import environment, launch_gate, leftovers, session_slots
 from owlbear_delivery_next.project_host.runner_end import Found, disappeared, gone
 from owlbear_delivery_next.project_host.runner_end import block as _block
 from owlbear_delivery_next.project_host.runner_end import unverified as _unverified
@@ -40,8 +38,9 @@ from owlbear_delivery_next.state_store.store import LockHeldError, Store, StoreE
 from owlbear_delivery_next.workflow_steps import before, check, disposable, engine, prepare, pullback, queue
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Mapping
     from contextlib import AbstractContextManager
+    from pathlib import Path
 
     from owlbear_delivery_next.change_contracts.models import Change, Environment
     from owlbear_delivery_next.change_flow.loop import PrState, Seen
@@ -129,10 +128,6 @@ def activity(store: Store, slug: str, host: HostRecord | None, *, paused: bool =
     return Activity(up, runner, pid, at, paused=paused, waiting_slot="" if runner else waiting)
 
 
-def _scan(path: Path, since: datetime) -> Found:
-    return dict(ProcessTableWorktreeProbe().active_processes((path,), started_after=since))
-
-
 class Host:
     """The scheduler: observes every Change, folds inboxes and starts at most one runner per Change.
 
@@ -147,14 +142,13 @@ class Host:
         repo: Path,
         *,
         spawn: Callable[[str], RunnerRecord] | None = None,
-        scan: Callable[[Path, datetime], Found] = _scan,
-        group: Callable[[int], Found] = check.members,
+        members: Callable[[Mapping[int, float | None]], Found] = processes.members,
         alive: Callable[[int, float | None], bool | None] = processes.alive,
         code: Callable[[], str] = codebase.identity,
         reach: Callable[[str], str | None] = lambda name: readiness.reach(name, timeout=PROBE_TIMEOUT),
         paused: Callable[[], bool] = lambda: False,
     ) -> None:
-        self.store, self.repo, self.scan, self.group, self.alive = store, repo, scan, group, alive
+        self.store, self.repo, self.members, self.alive = store, repo, members, alive
         self.spawn, self.code, self.reach, self.paused = spawn or self._spawn, code, reach, paused
         self.peers: Callable[[], list[Host]] = list  # the machine's other clones sharing this folder
         self.machine: Callable[[], list[Store]] = lambda: [self.store]  # every project store on this machine (TD-336)
@@ -172,6 +166,7 @@ class Host:
         self.pr_states: dict[str, PrState] = {}
         self.pr_seen: dict[str, tuple[float, Seen]] = {}
         self.launches: dict[str, list[float]] = {}
+        self.held: dict[int, subprocess.Popen[bytes]] = {}  # runners spawned, waiting for their record (#752)
         self.reported: dict[str, tuple[str, int | None]] = {}
         self.refused: str | None = None  # why runners do not start: the code differs or cannot be read
         self.unset_said: str | None = None  # the settings' block the log last named
@@ -296,7 +291,7 @@ class Host:
                 self.passing.add(slug)  # its launch passes the pause in this same pass
             act = self.env_action(c)
             if c.env and act in {"dispose", "settle"}:
-                if (left := self.clear(c, c.env)) is None or left:
+                if left := self.clear(c, c.env):
                     return self._blocked(lock, c, left, now)
                 c = check.settle(c, now, check.declared(c)) if act == "settle" else c
                 c.env = None
@@ -342,7 +337,7 @@ class Host:
         if (rec or c.blocked or _unverified(c)) and not self._gone(lock, c, rec, now):
             return False
         if self.draining() and c.env and (c.env.pids or c.env.pgid or c.env.launched_at):
-            if (left := self.clear(c, c.env)) is None or left:
+            if left := self.clear(c, c.env):
                 return self._blocked(lock, c, left, now)
             c.env = c.env.model_copy(update={"pids": {}, "pgid": None, "ready_at": None, "launched_at": None})
             self.say(f"{c.slug}: check environment stopped before OwlBear stops")
@@ -351,7 +346,7 @@ class Host:
 
     def _gone(self, lock: Lock, c: Change, rec: RunnerRecord | None, now: datetime) -> bool:
         """Whether nothing of the last step remains; then its runner is forgotten and its liveness stop cleared."""
-        if (found := self._survivors(c, rec)) is None or found:
+        if found := leftovers.survivors(self, c, rec):
             return self._blocked(lock, c, found, now)
         if _unverified(c):
             c.stop = c.outcome = None
@@ -370,38 +365,17 @@ class Host:
         self.say(f"{c.slug}: pull-back {c.pullback.state} {c.pullback.reason}".rstrip())
         return c
 
-    def mark(self, c: Change, found: Found | None, now: datetime) -> None:
+    def mark(self, c: Change, found: Found | str, now: datetime) -> None:
         """Record why no writer starts: processes of the last step remain, or could not be looked for."""
         stop = _block(found, now)
         if not (c.blocked and c.blocked.reason == stop.reason):
             c.blocked = stop
             self.say(f"{c.slug}: no writer starts: {stop.reason}")
 
-    def _blocked(self, lock: Lock, c: Change, found: Found | None, now: datetime) -> bool:
+    def _blocked(self, lock: Lock, c: Change, found: Found | str, now: datetime) -> bool:
         self.mark(c, found, now)
         self.store.write(lock, c)
         return False
-
-    def _survivors(self, c: Change, rec: RunnerRecord | None) -> Found | None:
-        """Processes of the last step still present: recorded PIDs, the runner's former group, the worktrees.
-
-        The read-only worktree is scanned while its last session's processes are not confirmed gone.
-        """
-        since = rec.started_at if rec else c.step.started_at
-        pids: dict[int, float | None] = {rec.pid: rec.created} if rec else {}
-        for e in self.store.events(c.slug) if since else []:
-            if e.get("event") == "pids" and datetime.fromisoformat(e["at"]) >= since - timedelta(seconds=1):
-                pids |= {int(p): t for p, t in e["pids"].items()}
-        found: Found = {p: "" for p, t in pids.items() if self.alive(p, t) is not False}
-        found |= self.group(rec.pid) if rec else {}
-        try:
-            ro = disposable.live(self.store.root / "changes" / c.slug)
-            for root in (Path(c.names.worktree) if c.names.worktree else None, ro):
-                if root and root.exists():  # Unreadable processes count only if they may have started with the step.
-                    found |= self.scan(root, since or datetime.now(UTC))
-        except OSError, WorktreeProcessScanError:
-            return None
-        return {p: v for p, v in found.items() if not (c.env and check.owned(c.env, p))}
 
     def owner_runs(self) -> bool:
         """Whether maintenance and the owner's own requests may start while paused.
@@ -417,15 +391,17 @@ class Host:
         live = bool(e and e.pids) and all(self.alive(p, t) is not False for p, t in e.pids.items())
         return check.action(c, live=live, paths=check.fingerprints(c, person) if person else {})
 
-    def clear(self, c: Change, e: Environment) -> Found | None:
-        """Dispose of all the environment may have started; an uncertain launch is found by the worktree scan."""
-        if e.launched_at and e.pgid is None and c.names.worktree:
-            try:
-                found = self.scan(Path(c.names.worktree), e.launched_at)
-            except WorktreeProcessScanError:
-                return None
-            e = e.model_copy(update={"pids": e.pids | {p: check.created(p) for p in found}})
-        return check.dispose(e)
+    def clear(self, c: Change, e: Environment) -> Found | str:
+        """Dispose of all the environment may have started, or say why its processes could not be looked for.
+
+        A launch whose group was never recorded is found by the pid its wrapper wrote.
+        """
+        try:
+            if e.launched_at and e.pgid is None:
+                e = check.recovered(e, self.store.root / "changes" / c.slug / check.PIDFILE)
+            return check.dispose(e)
+        except (OSError, ValueError, processes.UnlistedError) as exc:
+            return f"the check environment's processes could not be looked for: {exc}"
 
     def _launch(self, slug: str) -> bool:
         if launch_gate.stale(self):
@@ -446,9 +422,22 @@ class Host:
             except BaseException:
                 session_slots.release(self, slug)
                 raise
-            atomic_write(self._path(slug), rec.model_dump_json())
+            self._record(slug, rec)
         self.say(f"{slug}: runner {rec.pid} started")
         return True
+
+    def _record(self, slug: str, rec: RunnerRecord) -> None:
+        """Write the runner's record, then let it run; a host that dies first closes its stdin, and it never runs."""
+        held = self.held.pop(rec.pid, None)
+        try:
+            atomic_write(self._path(slug), rec.model_dump_json())
+        except BaseException:
+            if held is not None and held.stdin is not None:
+                with contextlib.suppress(OSError):
+                    held.stdin.close()
+            raise
+        if held is not None:
+            check.release(held)
 
     def _spawn(self, slug: str) -> RunnerRecord:
         started = datetime.now(UTC)  # before the runner can commit, so its exit is later than this
@@ -456,14 +445,15 @@ class Host:
         argv += ["--sessions", str(self.grants.pop(slug, 1))]  # what its agent sessions may use at once (TD-336)
         with (self.store.root / "changes" / slug / "runner.log").open("ab") as out:
             proc = subprocess.Popen(  # noqa: S603 - this interpreter and a fixed module
-                argv,
+                ("/bin/sh", "-c", 'read -r _ && exec "$@" </dev/null', "sh", *argv),
                 cwd=self.repo,
                 env={**os.environ, data_repo.VIEW: str(self.store.shared.root) if self.store.shared else ""},
-                stdin=subprocess.DEVNULL,
+                stdin=subprocess.PIPE,
                 stdout=out,
                 stderr=subprocess.STDOUT,
                 start_new_session=True,
             )
+        self.held[proc.pid] = proc
         threading.Thread(target=lambda: (proc.wait(), self.wake.set()), daemon=True).start()
         created = None
         with contextlib.suppress(psutil.Error):

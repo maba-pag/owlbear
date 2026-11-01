@@ -17,10 +17,10 @@ if TYPE_CHECKING:
 type Found = dict[int, str]
 
 
-def block(found: Found | None, now: datetime) -> Stop:
-    """Why no writer starts: the processes of the last step still present, or the table could not be scanned."""
-    if found is None:
-        reason, action = "the process table could not be scanned", "Check that no process of this step remains"
+def block(found: Found | str, now: datetime) -> Stop:
+    """Why no writer starts: the processes of the last step still present, or why they could not be looked for."""
+    if isinstance(found, str):
+        reason, action = found, "Check that no process of this step remains"
     else:
         named = ", ".join(f"{p} ({n})" if n else str(p) for p, n in sorted(found.items()))
         reason, action = f"processes still present: {named}", f"End processes {', '.join(map(str, sorted(found)))}"

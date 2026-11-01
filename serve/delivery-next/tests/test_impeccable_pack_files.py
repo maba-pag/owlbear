@@ -1,9 +1,14 @@
 """TD-76/TD-77: Impeccable's pins and install, the detector's three scans, and the UI builder's design skill."""
 
+import contextlib
 import hashlib
 import json
 import os
+import signal
 import stat
+import subprocess
+import sys
+import time
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -12,7 +17,7 @@ import pytest
 from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.commands import dispatch
 from owlbear_delivery_next.impeccable import detector, pack_files
-from owlbear_delivery_next.local_system import local_home, preload
+from owlbear_delivery_next.local_system import local_home, preload, processes
 from owlbear_delivery_next.runtimes import sdk_adapter
 
 ENGINE_JSON = [
@@ -177,6 +182,34 @@ def test_a_scan_that_hangs_ends(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(detector, "SECONDS", 0.2)
     with pytest.raises(detector.DetectorError, match="did not finish"):
         detector.scan_source(fake_engine(tmp_path, 0, "[]", sleep=5), [tmp_path / "a.html"], tmp_path)
+
+
+def test_the_detector_keeps_the_callers_session(tmp_path) -> None:
+    engine = tmp_path / "impeccable"
+    engine.write_text(
+        f"#!/bin/sh\necho $$ > {tmp_path}/leader\nsleep 300 >/dev/null 2>&1 &\necho $! > {tmp_path}/left\necho '[]'\n"
+    )
+    engine.chmod(engine.stat().st_mode | stat.S_IEXEC)
+    digest = hashlib.sha256(engine.read_bytes()).hexdigest()
+    code = (
+        "import os; from pathlib import Path; from owlbear_delivery_next.impeccable import detector, pack_files; "
+        f"pack = pack_files.Installed(engine=Path({str(engine)!r}), engine_sha256={digest!r}, bundle=''); "
+        f"page = Path({str(tmp_path / 'a.html')!r}); "
+        f"print(os.getpid(), len(detector.scan_source(pack, [page], Path({str(tmp_path)!r}))))"
+    )
+    started = time.time()
+    runner = subprocess.run(  # noqa: S603 - this interpreter, leading its own session like a runner
+        [sys.executable, "-c", code], check=True, capture_output=True, text=True, timeout=60, start_new_session=True
+    )
+    left = int((tmp_path / "left").read_text())
+    try:
+        pid, found = runner.stdout.split()
+        assert found == "0"
+        assert (os.getpgid(left), os.getsid(left)) == (int((tmp_path / "leader").read_text()), int(pid))
+        assert left in processes.members({int(pid): started})
+    finally:
+        with contextlib.suppress(OSError):
+            os.kill(left, signal.SIGKILL)
 
 
 def test_the_in_page_detector_runs_without_overlay_and_a_refusing_page_is_an_error(tmp_path) -> None:

@@ -356,6 +356,15 @@ repository, cleanup stops and leaves the worktree intact. Copy that work elsewhe
 remove the unsupported entry before retrying; a verified archive must not be assumed to contain
 an entry that cleanup refused.
 
+When a step's processes remain after it ends, the Change waits and its status names them. A
+step's processes are those in its runner's session, in the process group and session of each
+shell command it ran, and in the groups and sessions of the processes Delivery recorded for it.
+A Terminal, VS Code or anything else of yours, even in the worktree, never counts. The wait clears
+by itself once they end. When one of them, the process table or the step's command records can't
+be read, the status says what failed. Some processes escape: a command that detaches with
+`setsid` from a parent that exits before Delivery next looks, launchd jobs, commands run with
+`sudo`, and any whose command record was edited.
+
 The other pages serve the same projects:
 
 | Page | What it holds |
