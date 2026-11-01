@@ -131,11 +131,6 @@ class Job(Steps):
         return self.store.root / self.FILE
 
     @property
-    def an(self) -> str:
-        """The kind's title with its article, as its messages say it."""
-        return self.ADMISSION.an
-
-    @property
     def workspace(self) -> Path:
         """The current run's updater repository; a run from before per-run workspaces keeps the shared root."""
         kept = self.state.get("workspace")
@@ -188,10 +183,10 @@ class Job(Steps):
         """
         with self.lock:
             if self.state["state"] == "running" or self.busy():
-                msg = f"{self.an} update is already running"
+                msg = f"{self.ADMISSION.an} update is already running"
                 raise Busy(msg)
             if self.state["state"] == "waiting":
-                msg = f"{self.an} update waits for your answers; answer or discard it first"
+                msg = f"{self.ADMISSION.an} update waits for your answers; answer or discard it first"
                 raise Busy(msg)
             self._claim(self._fresh)
             run = uuid.uuid4().hex
