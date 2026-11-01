@@ -3,6 +3,7 @@
 A Change belongs to its registered project. A chat belongs to the registered project whose folder holds its
 workspace, the innermost when registrations nest. A synthetic unit, and a chat outside every registered project,
 run under this machine's settings over Global. A project registered but not loaded blocks its units with its state.
+A project's units also wait on Retro's own roles, which its sessions read outside any project.
 """
 
 from __future__ import annotations
@@ -12,7 +13,9 @@ from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.improvement import chatlogs
 from owlbear_delivery_next.local_system import data_repo
-from owlbear_delivery_next.state_store import work_block
+from owlbear_delivery_next.machine_host import retro_inputs
+from owlbear_delivery_next.settings.config import SettingsUnset
+from owlbear_delivery_next.state_store import registry, work_block
 from owlbear_delivery_next.state_store.database import StoreError
 
 if TYPE_CHECKING:
@@ -42,7 +45,19 @@ def block(uid: str, projects: Mapping[str, Project]) -> str:
 def _project(state: str, store: Store | None) -> str:
     if state != "loaded" or store is None:
         return f"its project is {state}"
-    return work_block.of_store(store).text()
+    return work_block.of_store(store).text() or _roles()
+
+
+def _roles() -> str:
+    """Retro's own roles, read outside any project as its sessions read them: a project's layer doesn't set them."""
+    try:
+        for agent in ("retro", "retro-review"):
+            retro_inputs.session(agent)
+    except SettingsUnset as exc:
+        return str(exc)
+    except (data_repo.DataRepoError, StoreError, registry.RegistryError, OSError, ValueError) as exc:
+        return f"{work_block.UNREADABLE}{exc}"
+    return ""
 
 
 def _outside() -> str:

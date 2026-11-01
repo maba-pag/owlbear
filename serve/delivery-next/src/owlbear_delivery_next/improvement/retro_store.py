@@ -260,7 +260,10 @@ def take(rid: str) -> bool:
 
 
 def run_event(run: str, event: str, **fields: object) -> None:
-    """One event of *run*: ``opened``, ``frozen``, ``inflight``, ``settled``, ``waiting``, ``resumed`` or ``ended``."""
+    """One event of *run*.
+
+    ``opened``, ``admitted``, ``frozen``, ``inflight``, ``settled``, ``waiting``, ``resumed`` or ``ended``.
+    """
     with locked():
         append("runs.jsonl", {"run": run, "event": event, "at": now(), **fields})
 
@@ -287,6 +290,7 @@ def run_states() -> dict[str, dict[str, Any]]:
             continue
         snap["spent"] = max(snap["spent"], line.get("spent", 0.0))
         snap["known"] = snap["known"] and line.get("known", True)
+        snap["new"] = snap.get("new", False) and event != "admitted"  # not yet admitted: its first admission rechecks
         if event == "inflight" and line["batch"] not in snap["unsettled"]:
             snap["unsettled"].append(line["batch"])
         elif event == "settled" and line["batch"] in snap["unsettled"]:
