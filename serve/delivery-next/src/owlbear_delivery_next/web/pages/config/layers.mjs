@@ -335,17 +335,16 @@ export async function readModels() {
   const n = models.ask();
   state.modelsNote = "Reading the models this machine's Copilot offers…";
   show();
-  let arrived;
+  let offered = null, note;
   try {
     const answer = await call("/config/models", { timeout: 45000 });
-    const offered = answer.models.length ? answer.models : null;
-    const note = offered && answer.error ? `Models as last read; reading them again failed (${answer.error}).`
+    offered = answer.models.length ? answer.models : null;
+    note = offered && answer.error ? `Models as last read; reading them again failed (${answer.error}).`
       : offered ? "Models, efforts and context sizes as this machine's Copilot offers them."
       : `Could not read the offered models (${answer.error || "none offered"}); type a model name.`;
-    arrived = { offered, note };
   } catch (e) {
-    arrived = { offered: null, note: `Could not read the offered models (${e.message}); type a model name.` };
+    note = `Could not read the offered models (${e.message}); type a model name.`;
   }
-  if (models.take(n)) page.arrived = arrived;
+  if (models.take(n)) page.arrived = { offered, note };
   showIdle();
 }

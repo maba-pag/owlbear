@@ -10,6 +10,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from copilot.generated import rpc
 from fastapi.testclient import TestClient
 
 from owlbear_delivery_next.impeccable import pack_files
@@ -44,11 +45,9 @@ def layer(**fields: object) -> str:
     return json.dumps({"format": CONFIG_FORMAT, **fields})
 
 
-def model(model_id: str) -> SimpleNamespace:
-    limits = SimpleNamespace(max_context_window_tokens=200_000)
-    return SimpleNamespace(id=model_id, name=model_id, supported_reasoning_efforts=None, default_reasoning_effort=None,
-                           billing=SimpleNamespace(token_prices=None), capabilities=SimpleNamespace(limits=limits),
-                           policy=None)  # fmt: skip
+def model(model_id: str) -> rpc.Model:
+    limits = rpc.ModelCapabilitiesLimits(max_context_window_tokens=200_000)
+    return rpc.Model(id=model_id, name=model_id, capabilities=rpc.ModelCapabilities(limits=limits))
 
 
 class World:
@@ -302,7 +301,7 @@ def test_a_failed_model_read_keeps_the_last_list_and_says_why(world, tmp_path, m
     c = client(Store(tmp_path / "shop"), reader)
 
     def read(*found: str) -> None:
-        def answer() -> list[SimpleNamespace]:
+        def answer() -> list[rpc.Model]:
             calls.append(found)
             if not found:
                 msg = "the CLI is gone"

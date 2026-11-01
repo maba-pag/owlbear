@@ -193,7 +193,6 @@ async function saveMachine() {
     instead: "Your edits stay unsaved on this page.",
   }))) return;
   state.machineSaving = true;  // the controls stay disabled until it ends, so no edit is made and lost meanwhile
-  machineReads.shown();  // a read begun before never shows older values
   show();
   try {
     accept(await call("/machine/settings", { method: "PUT", machine: true, timeout: WRITE,

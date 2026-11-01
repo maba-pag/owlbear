@@ -148,8 +148,8 @@ class Ledger:
         with self._lock:
             updates = {key: new.get(key) for key in changed(old, new)}
             self._owned |= updates
-            seen, broken = self._read()
-            if broken or seen.seen is None:
+            seen = self._read()[0]
+            if seen.seen is None:
                 return
             seen.seen = {k: v for k, v in (seen.seen | updates).items() if v is not None}
             try:
@@ -160,8 +160,8 @@ class Ledger:
     def dismiss(self, ids: Collection[str]) -> None:
         """Remove the notices with these ids; unknown ids are ignored."""
         with self._lock:
-            seen, broken = self._read()
-            if broken or not any(n.id in ids for n in seen.notices):
+            seen = self._read()[0]
+            if not any(n.id in ids for n in seen.notices):
                 return
             seen.notices = [n for n in seen.notices if n.id not in ids]
             self._write(seen)
