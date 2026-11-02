@@ -193,6 +193,13 @@ class Walk:
                 continue
             if flag := git_reading.bypass(words) or git_reading.switch(words, child.switches):
                 return f"`{self.name}` defines git alias {alias} as `{body}`, which uses {flag}, {BYPASS}"
+            if (
+                run
+                and self._reads(DOUBTFUL)
+                and (found := git_reading.expanded(command.words, replace(run, words=words), child.switches))
+            ):
+                use = f"git alias {alias} with {found}"
+                return f"`{self.name}` calls {use}, built at run time: it may be a flag or setting {BYPASS}"
             if reason := self._scripts(words, child):
                 return f"`{self.name}` defines git alias {alias} as `{body}`, which {reason}"
         return None
