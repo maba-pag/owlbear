@@ -2667,8 +2667,10 @@ def test_a_visual_round_shows_whole_errors(tmp_path: Path, monkeypatch, pds, cap
     after = design.rendered(
         page, pack, c.brief.visual[0], width=1280, url="http://127.0.0.1:9/", browser="", cwd=tmp_path
     )
-    why = f"not scanned: the page refused the design detector: RuntimeError: {whole_error}; "
-    why += f"the engine's own browser: {failed}"
+    why = (
+        f"not scanned: the page refused the design detector: RuntimeError: {whole_error}; "
+        f"the engine's own browser: {failed}"
+    )
     assert (after.scanned, after.reason) == (False, why)
     told = (
         f"design detector: sources: {failed}\nbefore: 0 screenshots at {b.head[:7]}; {note}\n"
@@ -2698,12 +2700,17 @@ def test_a_visual_round_shows_whole_errors(tmp_path: Path, monkeypatch, pds, cap
         assert {whole_error, line, f"Before: {note}"} <= set(shown_texts(page, url, of, "Decide visual round 1"))
         assert page.get_by_text("What the design detector found (evidence for the judges)").count() == 1  # both
         updated(store, questions=[], visual_rounds=[kept.model_copy(update={"outcome": "merge"})])
-        assert line in shown_texts(page, url, of, "Before and after")
+        shown = shown_texts(page, url, of, "Before and after")
+        assert [s for s in shown if "could not scan" in s] == [line]  # once: the judged capture shows the round's
         updated(store, visual_rounds=[])  # a failed shot is judged without a round: the capture keeps its scans
         assert line in shown_texts(page, url, of, "Before and after")
         updated(store, visual=None)
         before_only = {f"Not available: {note}", f"The design detector could not scan: changed sources: {failed}"}
         assert before_only <= set(shown_texts(page, url, of, "Before and after"))
+        updated(store, visual_rounds=[kept.model_copy(update={"outcome": None})])  # a judge failed: no judged capture
+        assert f"The design detector could not scan round 1 at {head[:7]}: {'; '.join(items[:2])}" in shown_texts(
+            page, url, of, "Before and after"
+        )  # beside the before capture's
         assert said == []
 
 

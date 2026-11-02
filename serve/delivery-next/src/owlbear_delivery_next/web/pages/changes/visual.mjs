@@ -260,6 +260,14 @@ export function visualSection(slug, v, b, existing, deciding) {
   return { lines, shots: html`<div class="gallery"><div class="shots">${pairs}</div></div>`, count: gallery.length };
 }
 
+// A round's refused scans while no judged capture of its commit shows them, as when a judge failed.
+export function roundRefused(r, v) {
+  if (!r || r.head === v?.head) return nothing;
+  const items = refused(r.detector);
+  return items.length ? text(`The design detector could not scan round ${r.number} at ${r.head.slice(0, 7)}: ${
+    items.join("; ")}`, { size: "xs" }) : nothing;
+}
+
 export function beforeSection(slug, b) {
   const gallery = [], cells = b.files.map((name) => {
     const [, at, width] = name.match(/^(.*)-(\d+)\.png$/);

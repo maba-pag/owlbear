@@ -4,7 +4,7 @@ import { toggle, button, hd, text, info, notice, refusal } from "./widgets.mjs";
 import {
   questionForm, retryForm, criteriaPanel, checkForm, mergeForm, restartButton, pullbackNote, stopNotice,
 } from "./forms.mjs";
-import { decisionForm, visualSection, beforeSection } from "./visual.mjs";
+import { decisionForm, visualSection, beforeSection, roundRefused } from "./visual.mjs";
 import { spendLines, toolLines, planList, roundsInfo, stepper } from "./progress.mjs";
 import { activityLog, split } from "./activity.mjs";
 import { approval, briefInfo } from "./brief.mjs";
@@ -61,6 +61,7 @@ export function detailView(d) {
   const r = d.visual_round, deciding = r && r.outcome === "ask" && d.question?.options.some((o) => o.id === "fail");
   const pictures = d.visual ? visualSection(d.key, d.visual, d.before, d.visual_existing_errors, deciding)
     : d.before ? beforeSection(d.key, d.before) : null;
+  const unjudged = roundRefused(r, d.visual);
   const approvingNow = d.step === "shape" && d.brief.approved !== d.brief.version;
   let question = nothing;
   if (d.question) {
@@ -79,8 +80,9 @@ export function detailView(d) {
     ${d.merge ? mergeForm(d.merge, d) : nothing}
     ${d.checks.filter((c) => c.waiting).map((c) => checkForm(c, d))}
     ${approvingNow ? approval(d) : nothing}
-    ${pictures && !deciding ? info("Before and after", pictures.lines,
-      toggle("screenshots", `Screenshots (${pictures.count})`, pictures.shots)) : nothing}
+    ${pictures && !deciding ? info("Before and after", pictures.lines, unjudged,
+      toggle("screenshots", `Screenshots (${pictures.count})`, pictures.shots))
+      : unjudged !== nothing ? info("Before and after", unjudged) : nothing}
     ${d.owner_criteria.length ? criteriaPanel(d) : nothing}
     ${d.progress ? info("Progress", stepper(d.progress), d.restartable ? restartButton(d) : nothing) : nothing}
     ${d.plan.length ? info("Plan", planList(d)) : nothing}
