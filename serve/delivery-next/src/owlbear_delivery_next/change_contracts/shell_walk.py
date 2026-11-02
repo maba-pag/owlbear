@@ -16,7 +16,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from owlbear_delivery_next.change_contracts import git_reading
+from owlbear_delivery_next.change_contracts import git_reading, guard_readers
 from owlbear_delivery_next.local_system import shell_programs
 from owlbear_delivery_next.local_system.shell_parse import Word
 
@@ -150,7 +150,7 @@ class Walk:
         program = run.words[0]
         if _built(run, program) or program.pattern:  # g?t, {git,x}: the shell picks the program from file names
             return f"`{self.name}` builds a command at run time (`{program}`); write the program and its script out"
-        if self._reads(VARIANT) and shell_programs.name(program) == "git" and (reason := self._git(run, state)):
+        if reason := self._git(run, state) or self._doubtful(command, run, state):
             return reason
         match shell_programs.name(program):
             case name if name in _FOLDER:
@@ -182,6 +182,8 @@ class Walk:
 
     def _git(self, run: Run, state: State) -> str | None:
         """A git run's hook-tool switch, then the shell texts it runs: rebase --exec, submodule foreach."""
+        if not self._reads(VARIANT) or shell_programs.name(run.words[0]) != "git":
+            return None
         if found := git_reading.switch(run.words, switches(state, run)):
             return f"`{self.name}` uses {found}, {BYPASS}"
         for text, after_write in git_reading.scripts(run.words):
@@ -191,6 +193,19 @@ class Walk:
                 child.effects = Effects(wrote=True)
             if reason := self._text(text, child):
                 return f"`{self.name}` has git run `{text}`: {reason}"
+        return None
+
+    def _doubtful(self, command: Command, run: Run, state: State) -> str | None:
+        """A git word built at run time that may skip hooks or signing, or a bypass in an interpreter's inline code."""
+        if not self._reads(DOUBTFUL):
+            return None
+        if found := git_reading.expanded(command.words, run, switches(state, run)):
+            return f"`{self.name}` uses {found}, built at run time: it may be a flag or setting {BYPASS}"
+        code = guard_readers.code(command, run.words)
+        for words in guard_readers.commands(code) if code is not None else ():
+            if flag := git_reading.bypass(words):
+                shown = " ".join(words)
+                return f"`{self.name}` runs code that holds `{shown}`, which uses {flag}, {BYPASS}"
         return None
 
     def _by_path(self, command: Command, run: Run, word: Word, state: State, *, wrote: bool) -> str | None:

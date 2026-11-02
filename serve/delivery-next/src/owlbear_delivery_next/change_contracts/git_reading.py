@@ -13,6 +13,7 @@ import shlex
 from typing import TYPE_CHECKING, NamedTuple
 
 from owlbear_delivery_next.local_system import shell_programs
+from owlbear_delivery_next.local_system.shell_words import Word
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -99,7 +100,14 @@ _GIT_VALUES = {  # short options taking the next word or only an attached value,
         ),
     ),
     "push": ("o", "", frozenset({"--exec", "--push-option", "--receive-pack", "--recurse-submodules", "--repo"})),
-}
+    "merge": ("mFsX", "S", frozenset({"--cleanup", "--file", "--into-name", "--message", "--strategy",
+                                      "--strategy-option"})),
+    "rebase": ("sXCx", "S", frozenset({"--empty", "--exec", "--onto", "--strategy", "--strategy-option",
+                                       "--whitespace"})),
+    "am": ("Cp", "S", frozenset({"--directory", "--empty", "--exclude", "--include", "--patch-format",
+                                 "--quoted-cr", "--whitespace"})),
+    "cherry-pick": ("mX", "S", frozenset({"--cleanup", "--empty", "--mainline", "--strategy", "--strategy-option"})),
+}  # fmt: skip
 _NO_VALUES: tuple[str, str, frozenset[str]] = ("", "", frozenset())
 _GIT_FALSE = frozenset({"", "0", "false", "no", "off"})
 _MIRROR_KEY = re.compile(r"remote\..+\.mirror", re.IGNORECASE)  # the remote's name keeps its case
@@ -167,8 +175,8 @@ def _mirrors(setting: str) -> bool:
     return not eq or value.lower() in {"true", "yes", "on"} or bool(re.fullmatch(r"[-+]?\d+", value) and int(value))
 
 
-def _config_set(arguments: Sequence[str]) -> str | None:
-    """The setting a git config command writes, as key=value, if it writes one."""
+def _config_set(arguments: Sequence[str]) -> tuple[str, str] | None:
+    """The key and value a git config command writes, if it writes one."""
     if any(a in _CONFIG_READS for a in arguments):
         return None
     plain: list[str] = []
@@ -180,15 +188,14 @@ def _config_set(arguments: Sequence[str]) -> str | None:
             plain.append(w)
     if plain[:1] == ["set"]:
         plain = plain[1:]
-    return f"{plain[0]}={plain[1]}" if len(plain) >= 2 else None  # noqa: PLR2004 - a key and its value
+    return (plain[0], plain[1]) if len(plain) >= 2 else None  # noqa: PLR2004 - a key and its value
 
 
 def _config_write(arguments: Sequence[str]) -> str | None:
     """The setting a git config command writes when it replaces the hooks, turns signing off or mirrors pushes."""
-    setting = _config_set(arguments)
-    if setting and (_disables(setting) or _mirrors(setting)):
-        return setting.replace("=", " ", 1)
-    return None
+    written = _config_set(arguments)
+    setting = "=".join(written or ())
+    return " ".join(written) if written and (_disables(setting) or _mirrors(setting)) else None
 
 
 def _short(cluster: str, required: str, optional: str) -> tuple[str, bool]:
@@ -311,8 +318,8 @@ def aliases(words: Sequence[str]) -> list[tuple[str, str]]:
         env = {**_environment(words), **run.env}
         call = _parse_git(run.words[1:])
         settings += [*call.config, *(f"{key}={env[var]}" for key, var in call.from_env if var in env)]
-        if call.sub == "config" and (setting := _config_set(call.arguments)):
-            settings.append(setting)
+        if call.sub == "config" and (written := _config_set(call.arguments)):
+            settings.append("=".join(written))
     found = (s.partition("=") for s in settings)
     return [(m[1], body) for key, _, body in found if body and (m := _ALIAS.fullmatch(key))]
 
@@ -362,3 +369,76 @@ def switch(words: Sequence[str], env: dict[str, str]) -> str | None:
         if value in _SWITCHES_OFF.get(key, ()) or (key in _SKIPS and value):
             return f"environment setting {key}={value}"
     return None
+
+
+def expanded(words: Sequence[str], run: shell_programs.Run, switches: dict[str, str]) -> str | None:
+    """A word of the git command *run* runs, built at run time, that may skip hooks or signing or force a push.
+
+    *words* are the command's, *switches* the hook tools' variables the run sees. Only a git command that writes, or
+    whose subcommand is built at run time, is read. Then: its subcommand, a -c key, the value of a hook, signing or
+    mirror key; in a git command that runs hooks also a switch's value and any other word, except an option's value
+    that stays one word and a path after --. A push's refspecs are never exempt.
+    """
+    if shell_programs.name(run.words[0]) != "git":
+        return None
+    call = _parse_git(run.words[1:])
+    if _built(call.sub):
+        return f"subcommand `{call.sub}`"
+    if not mutation(run.words):
+        return None
+    if found := _built_setting(call, {**_environment(words), **run.env}):
+        return found
+    if call.sub not in _HOOKED:
+        return None
+    built = (f"environment setting {k}={v}" for k, v in switches.items() if getattr(v, "expanded", False))
+    return next(built, None) or next((f"`{w}`" for w in _unexempt(call.sub, call.arguments) if _built(w)), None)
+
+
+def _built(word: str | None) -> bool:
+    return bool(word) and getattr(word, "expanded", False) and "$" in word
+
+
+def _built_setting(call: _GitCall, env: dict[str, str]) -> str | None:
+    """A -c, environment or config-write setting whose key, or a guarded key's value, is built at run time."""
+    settings = [_halves(c) for c in call.config]
+    settings += [
+        (k, env.get(f"GIT_CONFIG_VALUE_{m[1]}", Word())) for n, k in env.items() if (m := _CONFIG_KEY.fullmatch(n))
+    ]
+    settings += [
+        (Word("GIT_CONFIG_PARAMETERS"), v) for n, v in env.items() if n == "GIT_CONFIG_PARAMETERS" and _built(v)
+    ]
+    if call.sub == "config" and (written := _config_set(call.arguments)):
+        settings.append(written)
+    return next((f"setting `{k}={v}`" for k, v in settings if _built(k) or (_guarded(k) and _built(v))), None)
+
+
+def _halves(setting: str) -> tuple[str, str]:
+    """A -c setting's key and value, each built at run time when its own text holds the expansion."""
+    key, _, value = setting.partition("=")
+    flag = getattr(setting, "expanded", False)
+    return Word(key, expanded=flag), Word(value, expanded=flag)
+
+
+def _guarded(key: str) -> bool:
+    """Whether a git key replaces the hooks, signs or mirrors pushes, whatever its value."""
+    return key.lower() in {"core.hookspath", "commit.gpgsign", "tag.gpgsign", "git_config_parameters"} or bool(
+        _MIRROR_KEY.fullmatch(key)
+    )
+
+
+def _unexempt(sub: str, arguments: Sequence[str]) -> list[str]:
+    """The words of a git subcommand that may be options: all but an option's one-word value and paths after --."""
+    required, optional, long_values = _GIT_VALUES.get(sub, _NO_VALUES)
+    found: list[str] = []
+    i = 0
+    while i < len(arguments) and (w := arguments[i]) != "--":
+        name, eq, _ = w.partition("=")
+        flags, takes = _short(w[1:], required, optional) if re.fullmatch(r"-[^-].*", w) else (w[1:], False)
+        attached = (eq and name in long_values) or (flags != w[1:] and not takes)  # -m"$M", --message="$M"
+        if not attached or getattr(w, "split", False):
+            found.append(w)
+        valued = takes or (name in long_values and not eq)
+        if valued and i + 1 < len(arguments) and getattr(arguments[i + 1], "split", False):
+            found.append(arguments[i + 1])
+        i += 2 if valued else 1
+    return found + list(arguments[i + 1 :]) if sub == "push" else found

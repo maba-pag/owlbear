@@ -21,6 +21,7 @@ from owlbear_delivery_next.local_system.shell_words import (
 
 _REDIRECTION = re.compile(r"&?[<>]+[&|]?")
 _ARRAY = re.compile(r"[A-Za-z_]\w*\+?=")  # a=( or a+=(: an array's elements follow
+_LISTS = re.compile(r"\$\{(?:@|!?[A-Za-z_]\w*(?:\[@\]|@))")  # "${a[@]}", "${!p@}": several words
 _OPENERS = frozenset(
     {"{", "case", "for", "function", "if", "select", "until", "while"}
 )  # words that start a compound command
@@ -68,6 +69,7 @@ class _Level:
     word: str | None = None
     plain: str = ""  # the word with its quoted and escaped characters blanked out
     expanded: bool = False
+    split: bool = False  # an expansion in the word may give no word or several
     tilde: bool = False
     quote: str = ""
     redirect: tuple[int, str] | None = None  # the next word is a redirection's target: its descriptor and kind
@@ -84,6 +86,7 @@ class _Level:
         if self.word is None:
             return
         word = Word(self.word, expanded=self.expanded, tilde=self.tilde, pattern=globbed(self.plain))
+        word.split = self.split
         if self.redirect is None:
             self.pattern = self.pattern and (bool(self.words) or word != "esac")  # esac ends the arms
             self.words.append(word)
@@ -93,7 +96,7 @@ class _Level:
             if kind != "out":
                 self.inputs.append(Input(fd, kind, word))
             self.redirect = None
-        self.word, self.plain, self.expanded, self.tilde = None, "", False, False
+        self.word, self.plain, self.expanded, self.tilde, self.split = None, "", False, False, False
 
     def descriptor(self, default: int) -> int:
         """The descriptor written right before a redirection operator, which it consumes, else *default*."""
@@ -206,16 +209,19 @@ class _Lexer:
             end = ansi_c_end(text, i + 2) if ansi else i + 2
             s.add("$" + text[i + 2 : end - 1] if ansi else text[i:end])
             s.expanded = True
+            s.split = s.split or not (ansi or s.quote) or nxt == "@"  # "$@" gives each argument
             return end
         named = bool(nxt) and (nxt in "{_" or nxt.isalnum() or nxt in _SPECIAL)
         if named or (nxt and nxt in "'\"" and not s.quote):  # $'...' and $"...": decoded or translated by the shell
             s.expanded = True
+            s.split = s.split or (named and not s.quote)
         return None
 
     def _substitution(self, s: _Level, i: int) -> int:
         """A $(...) or backquoted substitution: its commands are checked on their own, with their command's input."""
         s.add("$")
         s.expanded = True
+        s.split = s.split or not s.quote
         opaque = s.opaque or s.piped or any(o for _, o in self.blocks)
         if self.text[i] == "`":
             return self.level(i + 1, "`", s.depth + 1, opaque=opaque)
@@ -243,6 +249,7 @@ class _Lexer:
         j = self._brace_end(s, i, outer=s.quote == '"')
         s.add(self.text[i:j])
         s.expanded = True
+        s.split = s.split or not s.quote or _LISTS.match(self.text, i) is not None
         return j
 
     def _brace_end(self, s: _Level, i: int, *, outer: bool) -> int:

@@ -11,7 +11,11 @@ from owlbear_delivery_next.local_system import shell_parse
 ROOT = Path("/w")
 READ, WRITE = Policy(ROOT, write=False), Policy(ROOT)
 LEVELS = ("strict", "standard", "lenient", "off")
-CLASSES = {"core": "git commit --no-verify -m x", "variant": "HUSKY=0 git commit -m x"}  # one each class finds first
+CLASSES = {  # one each class finds first
+    "core": "git commit --no-verify -m x",
+    "variant": "HUSKY=0 git commit -m x",
+    "doubtful": "git commit $FLAGS -m x",
+}
 OUTCOMES = {  # per level: what core, variant and doubtful findings get
     "strict": ("refuse", "refuse", "warn"),
     "standard": ("refuse", "warn", "warn"),
@@ -195,6 +199,41 @@ ROUTES |= {
         ("export HUSKY=0; env -u HUSKY git commit -m x", None),
         ("SKIP=lint pre-commit run", None),
         ("HUSKY=0 git status", None),
+    ],
+}
+ROUTES |= {
+    1: [  # commands in an interpreter's inline code
+        ("""python3 -c 'import subprocess; subprocess.run(["git", "commit", "--no-verify", "-m", "x"])'""", "doubtful"),
+        ("""node -e "require('child_process').execSync('git push --force')\"""", "doubtful"),
+        ("perl -e 'system(\"git push --force\")'", "doubtful"),
+        ("python3 -Bc 'import os; os.system(\"git push -f\")'", "doubtful"),
+        ("python3 <<'EOF'\nimport os\nos.system('git commit -n -m x')\nEOF", "doubtful"),
+        ("python3 <<< 'import os; os.system(\"git commit -n\")'", "doubtful"),
+        ("python3 -c 'print(\"git commit --no-verify\")'", "doubtful"),  # printing it reads the same
+        ("python3 -c 'print(1)'", None),
+        ("python3 script.py --no-verify", None),  # a script file: a documented limit
+        ("python3 -m pytest -k 'git commit --no-verify'", None),
+    ],
+    4: [  # git words built at run time
+        ("git commit $FLAG -m x", "doubtful"),
+        ("git $SUB", "doubtful"),
+        ('git commit "$@"', "doubtful"),
+        ('git commit "${args[@]}"', "doubtful"),
+        ("git commit -m $MSG", "doubtful"),  # split, so it may be several words
+        ('git push origin "$REFSPEC"', "doubtful"),
+        ('git -c "$K"=x commit -m x', "doubtful"),
+        ('git -c commit.gpgsign="$V" commit -m x', "doubtful"),
+        ('GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=commit.gpgsign GIT_CONFIG_VALUE_0="$V" git commit -m x', "doubtful"),
+        ('git config commit.gpgsign "$V"', "doubtful"),
+        ('git -c core.hooksPath="$P" commit -m x', "core"),  # the key alone skips hooks
+        ('HUSKY="$OFF" git commit -m x', "doubtful"),
+        ('export HUSKY="$OFF"; unset HUSKY; git commit -m x', None),
+        ('git commit -m "$MSG"', None),
+        ('git commit --message="$MSG"', None),
+        ('git add -- "$F"', None),
+        ('git config user.name "$N"', None),
+        ('git -c "$K" status', None),
+        ('git log "$REV"', None),
     ],
 }
 SEEN = {"refuse": "refused", "warn": "warned", "allow": "allowed"}

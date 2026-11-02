@@ -14,11 +14,12 @@ class Word(str):  # noqa: SLOT000 - a str subclass can hold attributes only in a
     expanded: bool  # it holds an expansion the shell fills in at run time: $x, ${x}, $(...), `...`
     tilde: bool  # it starts with an unquoted ~, which the shell turns into the home folder
     pattern: bool  # it holds an unquoted glob or brace the shell expands into file names or several words
+    split: bool  # an expansion in it may give no word or several: unquoted, "$@", "${a[@]}", "${!p@}"
 
     def __new__(cls, value: str = "", *, expanded: bool = False, tilde: bool = False, pattern: bool = False) -> Self:
-        """A word with *value* as its text."""
+        """A word with *value* as its text; the lexer marks *split* on the words it reads."""
         word = super().__new__(cls, value)
-        word.expanded, word.tilde, word.pattern = expanded, tilde, pattern
+        word.expanded, word.tilde, word.pattern, word.split = expanded, tilde, pattern, False
         return word
 
 
