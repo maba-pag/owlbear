@@ -12,6 +12,7 @@ import copy
 import dataclasses
 import json
 import sqlite3
+import threading
 from typing import TYPE_CHECKING, Any
 
 import pytest
@@ -304,6 +305,40 @@ def test_a_pending_note_a_newer_requester_message_supersedes_is_withdrawn_and_ex
     host, act = asyncio.run(main())
     sent, withdrawn = host.actions
     assert withdrawn == {"type": "chat/pendingMessageRemoved", "kind": kind, "id": sent["id"]}
+    assert (act.delivery, act.error) == (
+        "expired", "a newer requester message superseded its turn; withdrawn: the host no longer holds it")  # fmt: skip
+
+
+def test_a_note_a_newer_requester_message_supersedes_while_it_is_sent_is_withdrawn_and_expires(tmp_path) -> None:
+    class Slow(Host):
+        """The host, holding the note's dispatch until the test lets it finish."""
+
+        def __init__(self, clock: Clock) -> None:
+            super().__init__(clock)
+            self.sending, self.gate = threading.Event(), threading.Event()
+
+        def dispatch(self, channel: str, action: dict[str, Any]) -> int:
+            if action["type"] == "chat/pendingMessageSet":
+                self.sending.set()
+                self.gate.wait(5)
+            return super().dispatch(channel, action)
+
+    async def main() -> tuple[Host, acts.Act]:
+        host, bound = Slow(Clock()), Bound()
+        actor = chat(tmp_path, host, bound=bound)
+        *_, sending = await acted(actor)
+        await until(host.sending.is_set)  # the host is taking the note; its token is not waited on yet
+        actor.spot.take(asked("u-2"))  # the owner wrote again, as the follower reads it
+        actor.seen(asked("u-2"))
+        host.gate.set()
+        await asyncio.sleep(0.05)
+        bound.up.set()  # the log never shows the note
+        await asyncio.wait_for(sending, 1)
+        return host, act_of(actor)
+
+    host, act = asyncio.run(main())
+    sent, withdrawn = host.actions
+    assert withdrawn == {"type": "chat/pendingMessageRemoved", "kind": "steering", "id": sent["id"]}
     assert (act.delivery, act.error) == (
         "expired", "a newer requester message superseded its turn; withdrawn: the host no longer holds it")  # fmt: skip
 

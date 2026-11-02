@@ -20,10 +20,10 @@ Every note starts with its act's token (``acts.TOKEN``), so no reader takes it f
 hand-off's note excepted), is not sent: ``expired``. A sent note is ``delivered`` once the follower reads its
 ``user.message`` in the chat's log (``seen``); one the log does not show within ``BOUND`` seconds is withdrawn while
 the host still holds it, and recorded ``unconfirmed``, saying whether the host's state shows it gone. A newer requester
-message read while a discretionary or hand-off note waits supersedes it the same way: withdrawn, it is ``expired``,
-never delivered into the new turn; one the host had taken or still holds stays ``unconfirmed``. A note whose wait the
-follower stops (it ends, or stops following the chat) is ``unconfirmed``: its withdrawal goes to the Spotter's own
-threads, and nothing waits to say whether it took. A stop is
+message read while a discretionary or hand-off note is sent or waits supersedes it the same way: withdrawn, it is
+``expired``, never delivered into the new turn; one the host had taken or still holds stays ``unconfirmed``. A note
+whose wait the follower stops (it ends, or stops following the chat) is ``unconfirmed``: its withdrawal goes to the
+Spotter's own threads, and nothing waits to say whether it took. A stop is
 delivered once the host no longer runs the cancelled turn, else ``unconfirmed``. What raises (no exact chat, no
 agent host) goes to the Spotter, which keeps it on the act as ``failed``.
 
@@ -306,6 +306,8 @@ class ChatActor:
             waiter.set_result("seen")
         if yields:
             self.yielding.add(token)
+            if self.spot.kept.turn != record.turn and not waiter.done():  # a newer one read while the note was sent
+                waiter.set_result("superseded")
         bound = asyncio.ensure_future(self.sleep(BOUND))
         try:
             await asyncio.wait({waiter, bound}, return_when=asyncio.FIRST_COMPLETED)
