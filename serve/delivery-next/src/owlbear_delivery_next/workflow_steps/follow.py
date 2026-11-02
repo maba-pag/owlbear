@@ -81,7 +81,7 @@ def declared(ctx: Ctx, c: Change, pr: PullRequest, step: StepKind) -> tuple[tupl
         try:
             ctx.store.write_profile(ctx.profile)
         except StoreError as exc:  # the answer still holds; the next pass saves the confirmation again
-            ctx.log(c.slug, "profile-not-saved", key=profile.DECLARED, reason=str(exc)[:300])
+            ctx.log(c.slug, "profile-not-saved", key=profile.DECLARED, reason=f"{type(exc).__name__}: {exc}")
         else:
             ctx.log(c.slug, "profile-confirmed", key=profile.DECLARED, value=value)
     if value:

@@ -217,7 +217,7 @@ def refresh(shared: DataRepo | None) -> str:
             _interrupted(shared)
             status = shared.git("status", "--porcelain", "--untracked-files=no")
             if status.returncode:
-                msg = f"Git cannot read the shared data repository {shared.root}: {status.stderr.strip()[:200]}"
+                msg = f"Git cannot read the shared data repository {shared.root}: {status.stderr.strip()}"
                 raise DecisionsUnavailable(msg)
             if changed := status.stdout.splitlines():
                 return f"not refreshed: {len(changed)} uncommitted file(s) in {shared.root}; the next save publishes"

@@ -15,7 +15,7 @@ from owlbear_delivery_next.change_contracts import evidence
 from owlbear_delivery_next.change_contracts.failures import cause_key
 from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, Option, Overlap, StepKind, Stop
 from owlbear_delivery_next.change_flow.loop import StepResult
-from owlbear_delivery_next.change_flow.worktree import GIT, git
+from owlbear_delivery_next.change_flow.worktree import GIT, failure, git
 from owlbear_delivery_next.state_store.store import StoreError
 from owlbear_delivery_next.workflow_steps import engine
 
@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from owlbear_delivery_next.change_contracts.models import Change, Plan, Task
-    from owlbear_delivery_next.state_store.store import Store
+    from owlbear_delivery_next.state_store.store import Lock, Store
 
 RECENT = timedelta(days=14)  # a merged Change's scope still explains a collision this long
 LOCKS = frozenset({"uv.lock", "package-lock.json", "pnpm-lock.yaml", "yarn.lock", "poetry.lock"})
@@ -262,7 +262,9 @@ def starting(c: Change, task: Task | None) -> StepResult | None:
     return None
 
 
-def integrated(store: Store, c: Change, path: Path, session: tuple[str | None, str], result: StepResult) -> StepResult:
+def integrated(  # noqa: PLR0913, PLR0917 - the runner's writer and lock, the Change, its worktree and session
+    store: Store, lock: Lock, c: Change, path: Path, session: tuple[str | None, str], result: StepResult
+) -> StepResult:
     """An integration's result, or the collision question when it touched another Change's scope.
 
     *session* is the durable integration base and how the session ended. A resolved update collides on the paths the
@@ -289,5 +291,9 @@ def integrated(store: Store, c: Change, path: Path, session: tuple[str | None, s
             if hit:
                 return hit
     except (OSError, subprocess.SubprocessError, ValueError) as exc:
-        return _unverified(f"Integration collisions could not be checked: {exc}"[:300])
+        reason = f"Integration collisions could not be checked: {failure(exc)}"
+        store.log(
+            lock, c.slug, {"event": "collisions-unchecked", "at": datetime.now(UTC).isoformat(), "reason": reason}
+        )
+        return _unverified(reason)
     return result

@@ -89,7 +89,7 @@ def checked(store: Store, lock: Lock, c: Change) -> Change | None:
     now = datetime.now(UTC)
     if verdict is None:
         cause = cause_key(ErrorKind.NETWORK, c.step.kind, LABEL)
-        retry = StepResult(exit=Exit.RETRY, cause=cause, reason=f"{FAILED}: {why}"[:300], wake_at=now + wait)
+        retry = StepResult(exit=Exit.RETRY, cause=cause, reason=f"{FAILED}: {why}", wake_at=now + wait)
         store.write(lock, loop.apply(c, retry, now))
         return None
     if verdict.changes_brief:  # treated as a brief change from here on: never delivered, never a decision

@@ -95,7 +95,7 @@ def labelled(ctx: Ctx, c: Change, pr: PullRequest, labels: list[str]) -> None:
             ctx.gh.add_labels(pr.repository, pr.number, labels)
             ctx.log(c.slug, "labels", pr=pr.number, labels=labels)
         except ProviderError as exc:
-            ctx.log(c.slug, "labels-failed", pr=pr.number, labels=labels, reason=str(exc)[:300])
+            ctx.log(c.slug, "labels-failed", pr=pr.number, labels=labels, reason=f"{type(exc).__name__}: {exc}")
     c.names.labelled = pr.number
     ctx.store.write(ctx.lock, c)  # before anything else can fail: a recovering runner never labels it again
 

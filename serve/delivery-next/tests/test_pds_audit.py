@@ -262,6 +262,20 @@ def test_the_auditor_corrects_a_report_its_schema_refuses_before_its_session_end
     assert (ok, text, gate.done) == (True, ACCEPTED, True)
 
 
+def test_a_report_refused_until_the_limit_ends_the_session_with_its_whole_errors(sources, whole_error):
+    sources.at.mkdir()
+    skills = audit.lay_out(sources.at, sources.web, sources.tree, VERSION)
+    cfg = sessions.auditor(auditor_settings(model="claude-opus-5.5"), sources.at, skills, "audit it")
+    gate = Gate(cfg, run := Run("s"), lambda **_e: None, lambda: None)
+    for _ in range(3):
+        text, ok = gate.call(
+            audit_tools.SUBMIT, AuditResult(report=json.dumps(report(result=whole_error)), markdown="#")
+        )
+    expected = f"report: summary/result: {whole_error!r} is not one of ['completed', 'partial', 'failed']"
+    assert (ok, run.ending, run.detail) == (False, "invalid", expected)
+    assert text == f"Rejected. Fix each field, then call again:\n- {expected}"
+
+
 @pytest.fixture
 def production(monkeypatch) -> config.Settings:
     """A carried Global layer with no test layer under it: the auditor's row is unset until the owner fills it."""

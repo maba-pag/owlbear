@@ -200,7 +200,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:  # noq
         result = plan_round.planned(post, lock, change, path, run.payload, result, profile, others, events)
         overlap.record(change, result, others, path)
         end = datetime.now(UTC)
-    result = overlap.integrated(post, change, path, (start, run.ending), result)
+    result = overlap.integrated(post, lock, change, path, (start, run.ending), result)
     if isinstance(p := run.payload, tools.WrongPremise) and (p.stage, s.kind, result.exit) == TARGET:
         result = engine.needs_target(change, path, f"{p.reason} ({'; '.join(p.evidence)})", end)
     if ctx is not None:

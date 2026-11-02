@@ -380,3 +380,11 @@ def test_only_the_curation_task_is_the_curator_s_and_its_pr_text_fits(curating):
     text = curation_build.body(c)
     assert len(text) <= curation_build.BODY
     assert text.endswith("- \u2026 the rest is in the Change's record")
+
+
+def test_a_test_review_sent_back_stops_with_its_whole_reason(review, whole_error):
+    c = review.store.read(review.slug).model_copy(update={"step": Step(kind=StepKind.BUILD, task="t1")})
+    back = StepResult(exit=Exit.BACK, back_to=StepKind.PLAN, cause="scope:build:premise", reason=whole_error)
+    c = apply(c, back, NOW)
+    expected = f"a test review keeps its fixed brief and plan: {whole_error}"
+    assert (c.stop.reason, c.outcome.reason) == (expected, expected)

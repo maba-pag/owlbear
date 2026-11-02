@@ -338,7 +338,7 @@ def _closed(  # noqa: PLR0913, PLR0917 - the copy its runs ran in, and who keeps
         reason = f"a read-only step changed shared Git settings: {'; '.join(changes)}"
         events.append({"event": "read-only-tampered", "at": at, "changes": changes, "sessions": ids})
         for r in runs:
-            r.ending, r.payload, r.first, r.head, r.detail = "shared-git-changed", None, None, None, reason[:300]
+            r.ending, r.payload, r.first, r.head, r.detail = "shared-git-changed", None, None, None, reason
     elif moved := disposable.changed(copy):
         reason = f"a read-only step changed the repository: {', '.join(moved)}"
         events.append({"event": "read-only-violation", "at": at, "refs": moved, "sessions": ids})

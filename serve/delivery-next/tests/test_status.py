@@ -218,3 +218,26 @@ def test_card_is_quiet_only_past_the_step_kind_threshold_while_running(silent, q
     assert card(c, alive, [], NOW)["quiet"] is quiet
     assert card(c, Activity(host_up=True, last_event_at=NOW - silent), [], NOW)["quiet"] is False
     assert card(PUBLISHING, Activity(host_up=True), [], NOW)["quiet"] is False
+
+
+TRIED, FAILED = "tooling:build:sdk", " · last try failed: "
+ALIVE = Activity(host_up=True, runner_alive=True, last_event_at=NOW)
+LINES = [
+    (ALIVE, "implementing: rate limiter · builder active 0 s ago", FAILED),
+    (Activity(host_up=True, holder_pid=4242), "not running: waiting for process 4242 to end", FAILED),
+    (Activity(host_up=True, waiting_slot="2 of 2 busy"), "waiting for a session slot (2 of 2 busy)", FAILED),
+    (Activity(host_up=True), "not running: starting builder", FAILED),
+    (Activity(host_up=True), f"retrying: {TRIED} (1 of 3) at 12:05", " · "),
+]  # fmt: skip
+
+
+@pytest.mark.parametrize(("activity", "line", "joined"), LINES)
+@pytest.mark.parametrize("said", [True, False])
+def test_a_retry_says_its_last_failed_try_whole(activity, line, joined, said, whole_error):
+    waking = line.endswith("12:05")
+    reason = f"RuntimeError: {whole_error}" if said else ""
+    o = Outcome(
+        exit=Exit.RETRY, cause=TRIED, reason=reason, at=NOW, wake_at=NOW + timedelta(minutes=5 if waking else -1)
+    )
+    expected = f"Build 2/2 · {line}{joined}{reason}" if said else f"Build 2/2 · {line}"
+    assert status(build(outcome=o), activity, NOW).line == expected

@@ -525,3 +525,11 @@ def test_a_read_only_worktree_git_refuses_says_its_whole_output(  # noqa: PLR091
         "remove": f"git worktree remove failed: {cause}",
     }
     assert told == expected[where]
+
+
+def test_a_long_shared_git_change_stops_with_its_whole_reason(store, change_repo, monkeypatch, whole_error):
+    value = " ".join(whole_error.split())
+    reviewer(monkeypatch, lambda cfg: git(cfg.worktree, "config", "owlbear.note", value))
+    c = reviewed(store, change_repo)
+    expected = f"a read-only step changed shared Git settings: added config owlbear.note={value}"
+    assert (c.outcome.exit, c.stop.reason) == (Exit.STOP, expected)

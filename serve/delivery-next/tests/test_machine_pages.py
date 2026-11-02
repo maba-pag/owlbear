@@ -21,6 +21,7 @@ import httpx
 import pytest
 import uvicorn
 from copilot.generated import rpc
+from fastapi.testclient import TestClient
 
 from owlbear_delivery_next.change_contracts.models import (
     Brief,
@@ -37,6 +38,7 @@ from owlbear_delivery_next.change_contracts.round_records import RoundLoop, Roun
 from owlbear_delivery_next.change_flow import round_flow
 from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.github.gh import GhProvider
+from owlbear_delivery_next.github.provider import PullRequest
 from owlbear_delivery_next.impeccable import pack_files
 from owlbear_delivery_next.local_system import codebase, data_repo, local_home
 from owlbear_delivery_next.machine_host import app, project
@@ -47,9 +49,10 @@ from owlbear_delivery_next.runtimes import model_choices
 from owlbear_delivery_next.runtimes.settings_seen import NAME as SEEN
 from owlbear_delivery_next.settings import config, profile
 from owlbear_delivery_next.settings.config import CONFIG_FORMAT
-from owlbear_delivery_next.state_store import registry
+from owlbear_delivery_next.state_store import decision_store, registry
 from owlbear_delivery_next.state_store.store import MACHINE_SETTINGS, Store
-from owlbear_delivery_next.workflow_steps import retry
+from owlbear_delivery_next.workflow_steps import pick, publish, retry
+from owlbear_delivery_next.workflow_steps.engine import Ctx
 
 if TYPE_CHECKING:
     from playwright.sync_api import Page
@@ -2449,6 +2452,12 @@ def test_a_long_step_error_shows_whole_on_the_status_line(tmp_path: Path, monkey
     reason = f"ProviderError: read_pull_request: {whole_error}"
     step = next(e for e in store.events("c1") if e.get("event") == "step")
     assert (step["exit"], step["reason"], store.read("c1").outcome.reason) == (Exit.RETRY, reason, reason)
+    page = TestClient(api.create_app(store, "tok", Host(store, tmp_path)), base_url="http://127.0.0.1",
+                      headers={"authorization": "Bearer tok"})  # fmt: skip
+    o = store.read("c1").outcome
+    episode = f"network failing for \\d+ s, attempt 1, next try at {o.wake_at:%H:%M}"
+    line = f"Publish · retrying: {re.escape(reason)} · {episode}"
+    assert re.fullmatch(line, page.get("/api/next/changes/c1").json()["line"])
 
 
 @pytest.mark.browser
@@ -2498,4 +2507,62 @@ def test_a_long_undo_failure_is_asked_whole(tmp_path: Path, monkeypatch, pds, wh
         form = page.locator("section.act", has_text=f"Question {q.id}")
         expect(form).to_be_visible()
         assert form.locator("p-text").first.text_content() == asked
+        assert said == []
+
+
+@pytest.mark.browser
+def test_a_long_event_reason_shows_whole_in_recent_activity(tmp_path: Path, monkeypatch, pds, whole_error: str) -> None:
+    """#895 K2: a labelling failure, gh's whole multiline stderr, reads whole in the Change's recent activity."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    alpha = registry.register(clone(tmp_path / "alpha", "c1"))
+    store = Store.open(Path(alpha.path))
+
+    def refused(argv, _body, _timeout, _cwd):
+        return subprocess.CompletedProcess(argv, 1, b"", f"gh: {whole_error}\n".encode())
+
+    pr = PullRequest(
+        repository="o/r", number=7, node_id="n", url="https://x/pull/7", head_branch="owlbear/c1", head_sha="a" * 40,
+        base_branch="main", draft=True, state="open", merged=False, merge_commit_sha=None,
+    )  # fmt: skip
+    entries = {profile.REPO: ProfileEntry(state="known", value="o/r")}
+    with store.lock("c1") as lock:
+        ctx = Ctx(store, lock, tmp_path, Profile(entries=entries), GhProvider("o/r", runner=refused), datetime.now(UTC))
+        publish.labelled(ctx, store.read("c1"), pr, ["owlbear"])
+    (event,) = [e for e in store.events("c1") if e["event"] == "labels-failed"]
+    reason = f"ProviderError: add_labels: {whole_error}"
+    assert event["reason"] == reason
+    with browsing(monkeypatch, pds) as (page, url):
+        said = errors(page)
+        opened(page, url, alpha.id, "c1")
+        line = page.locator("ol.log > li", has_text="Could not label PR #7").locator(":scope > span")
+        expect(line).to_have_text(" ".join(f"Could not label PR #7 with owlbear: {reason}".split()))
+        assert said == []
+
+
+@pytest.mark.browser
+def test_a_failed_pick_shows_its_whole_error(tmp_path: Path, monkeypatch, pds, whole_error: str) -> None:
+    """#895 K3: a pick that cannot read the decisions shows why whole in the brief, and logs it."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    def unavailable(*_args, **_kwargs):
+        raise decision_store.DecisionsUnavailable(whole_error)
+
+    alpha = registry.register(clone(tmp_path / "alpha", "c1"))
+    store = Store.open(Path(alpha.path))
+    monkeypatch.setattr(pick.decision_store, "load", unavailable)
+    with store.lock("c1") as lock:
+        c = Change(slug="c1", brief=Brief(version=1, title="Notes"), step=Step(kind=StepKind.SHAPE))
+        store.write(lock, c)
+        pick.run(store, lock, c)
+    assert store.read("c1").brief.picked.reason == whole_error
+    (event,) = [e for e in store.events("c1") if e["event"] == "pick-failed"]
+    assert event["reason"] == whole_error
+    with browsing(monkeypatch, pds) as (page, url):
+        said = errors(page)
+        opened(page, url, alpha.id, "c1")
+        follows = page.locator(".brief section", has_text="Decisions this work follows")
+        shown = follows.locator("p-text")
+        expect(shown).to_have_count(1)
+        assert shown.text_content() == f"The pick failed: {whole_error}. The shaping chat can ask for it again."
         assert said == []

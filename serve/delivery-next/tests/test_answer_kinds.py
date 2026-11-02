@@ -581,3 +581,21 @@ def test_allowing_what_the_spotter_stopped_keeps_the_answer_and_asks_again_until
     assert (len(run.held), c.step.kind, loop.open_question(c)) == (1, kind, None)
     delivered = run.held[0][1]
     assert delivered is None or delivered.answer.option == then  # the worker never receives the allow answer
+
+
+@pytest.mark.parametrize("field", ["detail", "usage_unread"])
+def test_a_check_that_fails_waits_with_its_whole_reason(picking, monkeypatch, whole_error, field):
+    run = Asking(picking, monkeypatch)
+    assert run.answer(kind="clarification", text=WORDS, statement=SAID, confirmed=True).status_code == 200
+
+    async def failed(cfg):
+        ending, payload = ("error", None) if field == "detail" else ("result", verdict())
+        return Run(cfg.session_id, ending, payload, termination=Termination(confirmed=True), **{field: whole_error})
+
+    monkeypatch.setattr(runner.sdk_adapter, "run", failed)
+
+    c = run.step()
+
+    one = " ".join(whole_error.split())  # the session's detail is collapsed onto one line
+    why = f"its session ended error: {one}" if field == "detail" else f"its verdict cannot be trusted: {whole_error}"
+    assert (c.outcome.exit, c.outcome.reason) == (Exit.PENDING, f"{clarification.FAILED}: {why}")

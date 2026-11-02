@@ -105,7 +105,7 @@ def test_a_wrong_model_reruns_once_after_its_wait_and_a_second_in_a_row_asks():
     assert loop.next_step(c, wake - timedelta(seconds=1)) is None
     assert loop.next_step(c, wake) == c.step
     line = status(c, Activity(host_up=True), NOW + timedelta(minutes=1)).line
-    assert line.endswith("retrying: tooling:build:wrong-model (1 of 2) at 12:05")
+    assert line.endswith(f"retrying: tooling:build:wrong-model (1 of 2) at 12:05 · {c.outcome.reason}")
     c = loop.apply(c, wrong_model(K.BUILD, wake), wake)
     q = loop.open_question(c)
     assert c.outcome.exit == Exit.ASK

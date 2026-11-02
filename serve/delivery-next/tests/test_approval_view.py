@@ -26,8 +26,9 @@ from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.settings import config
-from owlbear_delivery_next.state_store import machine_settings, spend_ledger
+from owlbear_delivery_next.state_store import decision_store, machine_settings, spend_ledger
 from owlbear_delivery_next.state_store.store import Lock, Store
+from owlbear_delivery_next.workflow_steps import decision_publication
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -581,3 +582,26 @@ def test_a_stop_that_changed_since_the_page_showed_it_is_not_cleared(page_url, p
         expect(refused).to_contain_text("The stop changed since the page showed it; reload")
         with store.db.read() as db:
             assert db.execute("SELECT count(*) FROM inbox").fetchone() == (0,)
+
+
+@pytest.mark.browser
+def test_a_refused_approval_shows_its_whole_reason(page_url, pds, monkeypatch, whole_error) -> None:
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    def unavailable(*_args, **_kwargs):
+        raise decision_store.DecisionsUnavailable(whole_error)
+
+    monkeypatch.setattr(decision_publication.decision_archive, "lasting", unavailable)
+    store, base = page_url
+    reason = f"{decision_publication.REFUSED}: {whole_error}"
+    with opened(base, "flip", pds) as page:
+        page.get_by_role("button", name="Approve brief v2").click()
+        with replied(page, "/approve-brief") as reply:
+            pds.modal(page).get_by_role("button", name="Approve and start").click()
+        assert (reply.value.status, reply.value.json()["detail"]) == (409, reason)
+        refused = page.locator(".refused p-inline-notification")
+        expect(refused).to_have_attribute("heading", "Not done")
+        expect(refused).to_have_attribute("description", reason)
+    assert store.read("flip").brief.approved_version is None
+    (event,) = [e for e in store.events("flip") if e.get("event") == "approval-refused"]
+    assert event["reason"] == reason

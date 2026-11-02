@@ -294,6 +294,7 @@ def _status(  # noqa: C901, PLR0911, PLR0912 - D3 rules
             return Status(f"{s} · retrying: {o.reason} · {failing}{wake}{used}", None, o.who)
         who = _WHO.get(o.waiting, str(o.waiting)) if o.waiting else o.who
         return Status(f"{s} · waiting for {who}: {o.reason} (checked {_age(now - o.at)} ago)", None, o.who)
+    tried = f" · last try failed: {o.reason}" if o and o.exit == Exit.RETRY and o.reason else ""
     if activity.runner_alive:
         task = next((t for t in c.plan.tasks if t.id == c.step.task), None) if c.plan else None
         items = sum(1 for t in c.plan.tasks if t.item and not t.done) if task and task.item and c.plan else 0
@@ -308,13 +309,14 @@ def _status(  # noqa: C901, PLR0911, PLR0912 - D3 rules
             return Status(f"{line} · no activity for {_age(gap)}", None, "delivery")
         if o and o.denial:
             return Status(f"{line} · last denied: {redact(o.denial)}", None, "delivery")
-        return Status(f"{line} · {role} active {_age(now - last) if last else '0 s'} ago", None, "delivery")
+        return Status(f"{line} · {role} active {_age(now - last) if last else '0 s'} ago{tried}", None, "delivery")
     if o and o.exit == Exit.RETRY and o.wake_at and o.wake_at > now and o.cause:
         k = c.budgets.causes[o.cause].count if o.cause in c.budgets.causes else 1
         limit = WRONG_MODEL_LIMIT if o.cause.endswith(f":{WRONG_MODEL}") else RETRY_LIMIT
-        return Status(f"{s} · retrying: {o.cause} ({k} of {limit}) at {o.wake_at:%H:%M}", None, "delivery")
+        said = f" · {o.reason}" if o.reason else ""
+        return Status(f"{s} · retrying: {o.cause} ({k} of {limit}) at {o.wake_at:%H:%M}{said}", None, "delivery")
     if activity.holder_pid:
-        return Status(f"{s} · not running: waiting for process {activity.holder_pid} to end", None, "delivery")
+        return Status(f"{s} · not running: waiting for process {activity.holder_pid} to end{tried}", None, "delivery")
     if activity.waiting_slot:
-        return Status(f"{s} · waiting for a session slot ({activity.waiting_slot})", None, "delivery")
-    return Status(f"{s} · not running: starting {role}", None, "delivery")
+        return Status(f"{s} · waiting for a session slot ({activity.waiting_slot}){tried}", None, "delivery")
+    return Status(f"{s} · not running: starting {role}{tried}", None, "delivery")

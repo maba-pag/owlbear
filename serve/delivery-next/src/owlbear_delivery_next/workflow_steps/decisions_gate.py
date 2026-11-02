@@ -193,7 +193,7 @@ def _faulty(seen: Snapshot, c: Change, keys: Iterable[str]) -> list[str]:
 
 
 def _stopped(kind: ErrorKind, reason: str, action: str, resume: str, now: datetime) -> StepResult:
-    stop = Stop(kind=kind, reason=reason[:600], action=action, resume=resume, at=now)
+    stop = Stop(kind=kind, reason=reason, action=action, resume=resume, at=now)
     return StepResult(exit=Exit.STOP, reason=stop.reason, stop=stop)
 
 
@@ -288,7 +288,7 @@ def check_step(store: Store, c: Change, now: datetime, lock: Lock | None = None)
     try:
         view = decision_store.load(store.shared, store.name)
     except decision_store.DecisionsUnavailable as exc:
-        return Gate(c, StepResult(exit=Exit.STOP, reason=str(exc)[:600], stop=exc.stop(now)))
+        return Gate(c, StepResult(exit=Exit.STOP, reason=str(exc), stop=exc.stop(now)))
     return _wording_faults(view, c, now) or _judged(view, c, now, store, lock)
 
 
@@ -385,7 +385,7 @@ def _reassessed(
     now = datetime.now(UTC)
     if why:
         cause = cause_key(ErrorKind.NETWORK, c.step.kind, pick.LABEL)
-        reason = f"{REPICK}: {why}"[:300]
+        reason = f"{REPICK}: {why}"
         return c, StepResult(exit=Exit.RETRY, cause=cause, reason=reason, wake_at=now + wait)
     pin = c.decisions_baseline
     pin.revisions |= {d.id: d.rule_revision for d in later}
@@ -415,7 +415,7 @@ def gated(store: Store, lock: Lock, c: Change, step: Step | None) -> Iterator[Ch
     gate = check_step(store, c, now, lock)
     if gate.result is not None:
         event = {"event": "step", "at": now.isoformat(timespec="seconds"), "kind": step.kind}
-        store.log(lock, c.slug, event | {"exit": gate.result.exit, "reason": gate.result.reason[:300]})
+        store.log(lock, c.slug, event | {"exit": gate.result.exit, "reason": gate.result.reason})
         store.write(lock, loop.apply(gate.change, gate.result, now))
         yield None
         return

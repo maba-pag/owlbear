@@ -414,7 +414,7 @@ def test_a_pr_head_someone_else_pushed_goes_back_to_publish_without_reading_it_l
     assert gh.merges == []
 
 
-def test_unknown_declared_checks_ask_the_owner_once_per_workflow_digest_before_merging(tmp_path, clone):
+def test_unknown_declared_checks_ask_the_owner_once_per_workflow_digest_before_merging(tmp_path, clone, whole_error):
     head, entries = ci_head(clone, "${{ inputs.n }}")
     gh = FakeGh(pr(head=head))
     gh.checks = ()
@@ -430,13 +430,12 @@ def test_unknown_declared_checks_ask_the_owner_once_per_workflow_digest_before_m
     saving = cx.store.write_profile
 
     def locked(_profile) -> None:
-        msg = "the shared settings are locked"
-        raise SharedError(msg)
+        raise SharedError(whole_error)
 
     cx.store.write_profile = locked
     assert follow.declared(cx, c, gh.pr, StepKind.MERGE) == ((), None)  # the answer holds though unsaved
     assert [e["reason"] for e in cx.store.events(c.slug) if e.get("event") == "profile-not-saved"] == [
-        "the shared settings are locked"
+        f"SharedError: {whole_error}"
     ]
     cx.store.write_profile, cx.profile = saving, p
     names, held = follow.declared(cx, c, gh.pr, StepKind.MERGE)

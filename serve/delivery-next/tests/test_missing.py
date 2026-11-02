@@ -362,3 +362,15 @@ def test_a_shelve_failure_is_asked_and_logged_whole(repo, tmp_path, whole_error,
         f"Delivery could not set aside the uncommitted edits before planning ({why}). Commit, stash or discard them."
     )
     assert [e["reason"] for e in store.events("c1") if e["event"] == "not-shelved"] == [f"ShelveError: {why}"]
+
+
+@pytest.mark.parametrize("where", ["report", "session"])
+def test_a_denial_keeps_its_whole_text(whole_error, where) -> None:
+    if where == "report":
+        r = to_result(run(report("docker"), denied={"docker": whole_error}), K.BUILD, NOW)
+        reason = f"docker was denied by Delivery's guard, which grants nothing: {whole_error}"
+        assert (r.reason, r.denial) == (reason, whole_error)
+    else:
+        failed = Run("s1", ending="error", detail="stopped", termination=Termination(confirmed=True))
+        failed.denials = [f"earlier: {whole_error}"]
+        assert to_result(failed, K.BUILD, NOW).denial == f"earlier: {whole_error}"

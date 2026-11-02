@@ -14,6 +14,7 @@ and reasons and no governing answer, before a picker runs. Valid rules beside it
 from __future__ import annotations
 
 import json
+import logging
 import tempfile
 import threading
 import uuid
@@ -45,6 +46,7 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.settings.config import Settings
     from owlbear_delivery_next.state_store.store import Lock, Store
 
+_log = logging.getLogger(__name__)
 LABEL = "decision-lookup"
 CHAT = "chat lookup"  # the work a lead chat's lookup is part of, in the spend ledger
 ASKED = (
@@ -76,7 +78,7 @@ def worker(store: Store, lock: Lock, c: Change, question: str) -> tuple[dict[str
         found += _own(c, store.name, found)
         log, settings = pick.corrections(view.snapshot.root, store.name), store.settings()
     except (StoreError, OSError, ValueError) as exc:
-        return {"failed": _one(str(exc))}, None
+        return {"failed": str(exc)}, None
     if not found:
         return {"decisions": [], "note": NONE}, None
     journal = sdk_adapter.Journal(lambda e: store.log(lock, c.slug, e))
@@ -123,7 +125,17 @@ def chat(
     """The picker's answer to a lead chat over the project's and Global decisions in force, and its run.
 
     *settings* are the project's; without them (OwlBear's own decisions on the machine host) this machine's.
+    A failed answer is logged.
     """
+    said, done = _chat(shared, project, question, settings)
+    if "failed" in said:
+        _log.warning("decision lookup failed: %s", said["failed"])
+    return said, done
+
+
+def _chat(
+    shared: DataRepo | None, project: str, question: str, settings: Callable[[], Settings] | None
+) -> tuple[dict[str, Any], Run | None]:
     if shared is None:
         return {"failed": NO_SHARED}, None
     try:
@@ -136,7 +148,7 @@ def chat(
             return blocked, None
         log, resolved = pick.corrections(view.snapshot.root, project), settings() if settings else machine(shared)
     except (StoreError, OSError, ValueError) as exc:
-        return {"failed": _one(str(exc))}, None
+        return {"failed": str(exc)}, None
     if not found:
         return {"decisions": [], "note": NONE}, None
     try:
@@ -144,7 +156,7 @@ def chat(
             resolved, project or "global", pick.message(None, found, log, ASKED, question), sdk_adapter.Journal()
         )
     except Exception as exc:  # noqa: BLE001 - a lookup that cannot run is failed, never "none apply"
-        return {"failed": _one(f"{type(exc).__name__}: {exc}")}, None
+        return {"failed": f"{type(exc).__name__}: {exc}"}, None
     return answered(done, found), done
 
 
@@ -272,7 +284,10 @@ class Asked:
         try:
             said, done = worker(self.store, self.lock, self.current(), question)
         except Exception as exc:  # noqa: BLE001 - a lookup that cannot run is failed, never "none apply"
-            return {"failed": _one(f"{type(exc).__name__}: {exc}")}
+            said, done = {"failed": f"{type(exc).__name__}: {exc}"}, None
+        if "failed" in said:
+            at = datetime.now(UTC).isoformat()
+            self.store.log(self.lock, self.lock.slug, {"event": "lookup-failed", "at": at, "reason": said["failed"]})
         if done is not None:
             with self.state:
                 self.runs.append((done, "failed" if "failed" in said else "ok"))
