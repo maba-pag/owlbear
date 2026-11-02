@@ -219,18 +219,17 @@ def _unresolved(seen: Snapshot, found: list[Decision]) -> dict[str, Any] | None:
 
 
 def answered(done: Run, found: list[Decision]) -> dict[str, Any]:
-    """The decisions the session picked, each whole with its scope and origin; else why the lookup failed."""
+    """The picked decisions whole, without advisory picker notes; else why the lookup failed."""
     said = pick.judged(done, found, Pick(version=0))
     if said.status != "ok":
         return {"failed": said.reason}
     by_id = {d.id: d for d in found}
-    rows = [_row(by_id[p.id], p.note) for p in said.decisions]
+    rows = [_row(by_id[p.id]) for p in said.decisions]
     return {"decisions": rows} | ({"dropped": said.dropped} if said.dropped else {})
 
 
-def _row(d: Decision, note: str) -> dict[str, str]:
-    row = {"id": d.id, "title": d.title, "statement": whole(d), "scope": str(d.scope), "origin": str(d.origin)}
-    return row | ({"note": note} if note else {})
+def _row(d: Decision) -> dict[str, str]:
+    return {"id": d.id, "title": d.title, "statement": whole(d), "scope": str(d.scope), "origin": str(d.origin)}
 
 
 def _ran(settings: Settings, prefix: str, said: str, journal: sdk_adapter.Journal) -> Run:

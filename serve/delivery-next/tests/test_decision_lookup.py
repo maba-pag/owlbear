@@ -105,7 +105,7 @@ def test_a_workers_lookup_in_an_sdk_step_reads_the_complete_list_answers_whole_a
 
     answer, failed = said
     whole = {"id": other.id, "title": other.title, "statement": other.statement, "scope": "project"}
-    assert answer == {"decisions": [whole | {"origin": "approved", "note": "it governs the work"}]}
+    assert answer == {"decisions": [whole | {"origin": "approved"}]}
     assert failed["failed"].startswith("its session ended error")  # never an empty answer
     picker = picking.pickers()[1]
     assert (len(picking.pickers()), picker.model, picker.effort) == (3, "gpt-6.1-sol", "medium")
@@ -113,6 +113,8 @@ def test_a_workers_lookup_in_an_sdk_step_reads_the_complete_list_answers_whole_a
     assert picker.limit <= pick_tools.LIMIT
     assert c.spend.credits == 12.0  # the shaping pick and the answered lookup
     assert set(c.decisions_baseline.said) == {rule.id}  # a lookup answers; it attaches nothing
+    assert c.brief.picked is not None
+    assert c.brief.picked.decisions[0].note == "it governs the work"
     exits = [e["exit"] for e in picking.store.events(picking.slug) if e.get("kind") == lookup.LABEL]
     assert exits == ["ok", "failed"]
 
@@ -140,7 +142,7 @@ def test_a_workers_lookup_lists_the_changes_own_decisions_whole(picking, monkeyp
     build(picking)
 
     whole = {"id": own.id, "title": own.question, "statement": answer, "scope": "change", "origin": "decided"}
-    assert said == [{"decisions": [whole | {"note": "it governs the work"}]}]
+    assert said == [{"decisions": [whole]}]
     assert all(x in picking.pickers()[0].message for x in (own.id, answer))
 
 
@@ -171,7 +173,7 @@ def test_a_workers_lookup_lists_a_clarification_confirmed_during_the_work_once(p
     build(picking)
 
     whole = {"id": clarified.id, "title": clarified.title, "statement": clarified.text, "scope": "change"}
-    assert said == [{"decisions": [whole | {"origin": "decided", "note": "it governs the work"}]}]
+    assert said == [{"decisions": [whole | {"origin": "decided"}]}]
     assert picking.pickers()[-1].message.count(f"{clarified.id} |") == 1
 
 
