@@ -291,11 +291,14 @@ def _git_bypass(call: _GitCall, env: dict[str, str], *, push: bool) -> str | Non
         return f"--config-env {key}"
     if call.sub == "config" and (setting := _config_write(call.arguments)):
         return f"config {setting}"
-    # git remote add --mirror sets remote.<name>.mirror; =fetch only fetches
+    # git remote [-v] add --mirror sets remote.<name>.mirror; =fetch only fetches
+    remote = list(call.arguments)
+    while remote[:1] in (["-v"], ["--verbose"]):
+        remote.pop(0)
     if (
         call.sub == "remote"
-        and call.arguments[:1] == ("add",)
-        and (flag := next((a for a in call.arguments if a in {"--mirror", "--mirror=push"}), None))
+        and remote[:1] == ["add"]
+        and (flag := next((a for a in remote if a in {"--mirror", "--mirror=push"}), None))
     ):
         return f"remote add {flag}"
     return _sub_bypass(call.sub, call.arguments)

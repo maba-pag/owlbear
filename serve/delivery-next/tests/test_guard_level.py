@@ -153,6 +153,7 @@ ROUTES = {  # #864's routes: each case's command and the class it is found in, o
         ("export GIT_CONFIG_PARAMETERS=\"'remote.origin.mirror'='true'\"; git push", "core"),
         ("git remote add --mirror=push o u", "core"),
         ("git remote add --mirror o u", "core"),
+        ("git remote -v add --mirror=push o u", "core"),  # remote's own -v comes before add
         ("MIRROR=true git --config-env=remote.origin.mirror=MIRROR push", "core"),
         ("MIRROR=false git --config-env=remote.origin.mirror=MIRROR push", None),
         ("git -c remote.origin.mirror=yes fetch", None),
