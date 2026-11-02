@@ -1,4 +1,4 @@
-"""The Spotter (design §4): it records what it would say and the action its finding's category is set to, never acting.
+"""The Spotter (design §4): it records what it would say and the action its finding's category is set to, and acts.
 
 It looks at a Delivery step's hand-offs and a sample of its actions, never delaying the step or changing its outcome;
 the machine host's chats follower (``machine_host.chats``) gives an enrolled chat's hand-offs, plans, state changes and
@@ -17,18 +17,26 @@ its runtime is forced to stop. Each record keeps its spend, whether that is know
 (``credit_meter.Meter.report``). How Delivery answered each hand-off is kept beside its look. Records, outcomes and
 cards stay on this machine in ``~/.owlbear/spotter/`` (owner-only), written by ``improvement.spotter_store`` on its
 threads; this module re-exports the store's names its callers use. A record that names a state change is marked
-preliminary: the decision-conflict check comes with live delivery, so such records do not count toward going live.
+preliminary; the decision-conflict check's completed answer, kept on its act, lets Retro count it (``retro_units``).
 
 A record keeps its finding's ``category`` (one of ``CATEGORIES``; ``none`` when silent, ``insufficient-context`` when
 the card lacked the facts, ``failed`` for an unusable answer, empty when skipped) and the ``action`` the settings gave
-that category when the step started; nothing acts on it yet. Records written before the categories (2026-10-26) carry
-the earlier ``mode`` and ``verdict`` (silent, note, interrupt) instead; their lines are left as they are.
+that category when the step started. Records written before the categories (2026-10-26) carry the earlier ``mode`` and
+``verdict`` (silent, note, interrupt) instead; their lines are left as they are.
+
+A context the owner of the work gave an actuator (``Context.act``) acts on each finding, by the rules in
+``improvement.acts``: after the record, the act is decided from the act lines of the record's session and scope (so a
+rebuilt Spotter keeps its counts), its line written, then, unless nothing is sent, the actuator awaited on the look's
+own loop; one that raises leaves the act ``failed`` with its whole error. Its return is not delivery: the actuator
+confirms that from the runtime's own log. A finding naming a state change then asks ``Context.conflicts`` on a thread
+of its own, and its answer is added to the act. Without an actuator nothing acts and no act line is written.
 """
 
 from __future__ import annotations
 
 import asyncio
 import dataclasses
+import functools
 import json
 import random
 import re
@@ -38,7 +46,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-from owlbear_delivery_next.improvement import card, cases, credit_meter
+from owlbear_delivery_next.improvement import acts, card, cases, credit_meter
 from owlbear_delivery_next.improvement.events import Kept, as_dict, clip, kept_text
 from owlbear_delivery_next.improvement.spotter_store import (  # noqa: F401 - kept importable here
     GRACE,
@@ -83,6 +91,15 @@ class Context:
     decisions: tuple[str, ...] = ()
     gaps: tuple[str, ...] = ()  # what the runner could not give
     prompt: cases.Prompt | None = None  # frozen when the step starts (a chat: its turn); None: frozen by ``Spotter``
+    arm: str | None = None  # the unit's arm of the steered-versus-silent test (``state_store.spotter_arms``)
+    cap: int | None = None  # steering notes per step or chat turn: the Spotter's ``intervention_cap``
+    act: Callable[[Record, acts.Act], Awaitable[None]] | None = None  # the actuator; None: nothing acts
+    conflicts: Callable[[str], str] | None = None  # the decision-conflict check of a state change, its answer as text
+
+    def __post_init__(self) -> None:
+        if self.act is not None and (self.arm is None or self.cap is None):
+            msg = f"a Spotter that acts needs its arm and cap: arm {self.arm!r}, cap {self.cap!r} ({self.step})"
+            raise ValueError(msg)
 
 
 @dataclass
@@ -101,7 +118,7 @@ class Record:
     probability: float
     turn: str = ""  # the requester message the moment belongs to: its event id
     category: str = ""
-    action: str = ""  # the setting of the finding's category; recorded only, nothing acts yet
+    action: str = ""  # the setting of the finding's category; what was done is its act (``improvement.acts``)
     note: str = ""
     evidence: list[str] = field(default_factory=list)
     state_change: str = ""
@@ -195,6 +212,7 @@ class Spotter:
         self.running = 0  # looks admitted and not ended
         self.crowded: dict[str, int] = {}  # sampled looks skipped, by why, recorded once at the end
         self.closing = False  # the step ended: no look starts any more
+        self.deciding = asyncio.Lock()  # one act decided and written at a time: each reads the lines of the last
 
     def seen(self, ev: Any) -> None:  # noqa: ANN401 - an SDK event, on the step's loop
         """Take one event in; a completed action of the session's own agent may be sampled for a look."""
@@ -285,6 +303,7 @@ class Spotter:
         started, the_card = time.monotonic(), None
         record = self._record(look, probability, moment, ctx, skipped="the step ended before the look began")
         meter: credit_meter.Meter | None = None
+        acting = False
         try:
             meter = credit_meter.Meter(ctx.limit, "look", ident=record.id)  # one identity: the record and its sessions
             gaps = [*ctx.gaps, *([ctx.prompt.gap] if ctx.prompt and ctx.prompt.gap else [])]
@@ -304,6 +323,7 @@ class Spotter:
             record.state_change = clip(said.get("state_change") or "", 400)
             record.rationale = clip(said.get("rationale") or "", 1500)
             record.preliminary = bool(record.state_change)
+            acting = ctx.act is not None and record.category in CATEGORIES
         except TimeoutError:
             record.skipped = f"time: the look took over {LOOK:.0f} seconds"
         except Exception as exc:  # noqa: BLE001 - a look never reaches the step
@@ -322,6 +342,24 @@ class Spotter:
                 record.sdk_sessions = spend["sdk_sessions"]
             writing = asyncio.wrap_future(WORK.submit(store, self.folder, record, the_card))  # never cancelled
             await asyncio.wait({writing}, timeout=2 * LOCK)  # it goes on if this wait ends
+        if acting:
+            await self._act(record, ctx)
+
+    async def _act(self, record: Record, ctx: Context) -> None:
+        """Decide *record*'s act, write it and dispatch it unless nothing is sent; then check its state change."""
+        async with self.deciding:
+            sent, unresolved = await offload(acts.counts, self.folder, record.session, acts.scope(record, ctx))
+            act = acts.decide(record, record.look, ctx, sent, unresolved)
+            await offload(acts.write, self.folder, act)
+        if act.act not in acts.UNSENT and ctx.act is not None:
+            try:
+                await ctx.act(record, act)
+            except Exception as exc:  # noqa: BLE001 - kept on the act, whole; a look never reaches the step
+                error = f"{type(exc).__name__}: {exc}"
+                await offload(functools.partial(acts.update, self.folder, record.id, delivery="failed", error=error))
+        if record.state_change:
+            checking = acts.CHECKS.submit(acts.checked, self.folder, record.id, ctx.conflicts, record.state_change)
+            await asyncio.shield(asyncio.wrap_future(checking))  # a stopped wait leaves the check to end on its thread
 
     async def drain(self) -> None:
         """At the step's end: no look starts any more; wait briefly for running ones, then stop the rest; bounded."""

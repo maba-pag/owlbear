@@ -20,12 +20,12 @@ from copilot.tools import ToolInvocation
 from owlbear_delivery_next.change_contracts.models import Change, Plan, StepKind, Task
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_contracts.tools import Worktree
-from owlbear_delivery_next.improvement import card, cases, chatlogs, credit_meter, events, spotter
+from owlbear_delivery_next.improvement import acts, card, cases, chatlogs, credit_meter, events, spotter
 from owlbear_delivery_next.improvement.events import Kept
 from owlbear_delivery_next.runtimes import sdk_adapter, spend_reconcile, spotter_look, step_decisions
 from owlbear_delivery_next.settings.config import Layer, SettingsUnset, resolve
 from owlbear_delivery_next.settings.improvement import CATEGORIES, Spotter
-from owlbear_delivery_next.state_store import spend_ledger, spend_shares
+from owlbear_delivery_next.state_store import spend_ledger, spend_shares, spotter_arms
 from owlbear_delivery_next.state_store.store import Lock, Store
 from owlbear_delivery_next.workflow_steps import watched
 
@@ -1171,3 +1171,147 @@ def test_a_retry_runs_two_sdk_sessions_under_one_look_each_its_own_ledger_run(mo
     assert [x["sdk_sessions"] for x in imported] == [[a, b]]
     one_lost = spend_shares.derive([*kept, *imported])
     assert sorted(round(p["credits"], 6) for p in one_lost) == [0.1, 0.3]
+
+
+# Acting (#717): the real Spotter, its act lines and the arms; only the judge's answers and the delivery are faked
+
+STEERED = {"hand-off-fitness": "refuse-hand-off", "course-and-constraints": "steer",
+           "outside-state-changes": "stop-and-resume", "irreversible-harm": "stop-and-ask"}  # fmt: skip
+
+
+def finding(category: str) -> str:
+    return json.dumps({"category": category, "note": f"About {category}.", "evidence": ["e1"]})
+
+
+def answers(queue: list[str]) -> spotter.Judge:
+    """A judge answering each look in turn with the next of *queue*."""
+
+    async def look(_card: dict[str, Any], _ctx: spotter.Context, spend: credit_meter.Meter) -> str:
+        spend.part().ended(None, confirmed=True)
+        return queue.pop(0)
+
+    return look
+
+
+class Delivered:
+    """The actuator's transport faked: every act it is given is delivered, as the runtime's log would confirm."""
+
+    def __init__(self) -> None:
+        self.sent: list[tuple[str, str, str]] = []
+
+    async def __call__(self, record: spotter.Record, act: acts.Act) -> None:
+        self.sent.append((act.act, act.category, act.look))
+        acts.update(spotter.place(), record.id, delivery="delivered")
+
+
+def test_acting_follows_arms_the_cap_per_owner_turn_repeats_and_a_rebuilt_spotter_keeps_its_counts() -> None:
+    silent, steered = spotter_arms.arm("chat:s-quiet", 0), spotter_arms.arm("chat:s-1", 100)
+    deliver, queue = Delivered(), []
+
+    def chat(session: str, arm: str) -> spotter.Spotter:
+        base = ctx(project="", change="", step="chat", actions=STEERED, arm=arm, cap=2, act=deliver)
+        return spotter.Spotter(base, lambda: session, answers(queue))
+
+    async def look(spot: spotter.Spotter, kind: str, category: str) -> None:
+        queue.append(finding(category))
+        spot.look(kind, 1.0, {"kind": kind, "call": "c"})
+        while spot.tasks:
+            await asyncio.wait(set(spot.tasks))
+
+    async def main() -> list[str]:
+        quiet = chat("s-quiet", silent)
+        quiet.take(asked("Fix the bug."))
+        await look(quiet, "plan", "course-and-constraints")  # discretionary: recorded in the silent arm
+        await look(quiet, "hand-off", "irreversible-harm")  # harm acts in both arms
+        spot, owner = chat("s-1", steered), asked("Fix the bug.")
+        spot.take(owner)
+        await look(spot, "plan", "course-and-constraints")  # note 1
+        await look(spot, "hand-off", "course-and-constraints")  # note 2: another look kind is no repeat
+        spot.take(asked(acts.TOKEN.format(id="r0") + " Run the tests first."))  # OwlBear's note: no new turn
+        spot.take(event("user.message", {"content": "Steer.", "source": "owlbear-spotter"}))  # an agent source
+        await look(spot, "hand-off", "outside-state-changes")  # a third note: over the cap
+        await look(spot, "hand-off", "hand-off-fitness")  # refusals are never capped
+        await look(spot, "hand-off", "irreversible-harm")  # nor harm
+        await look(spot, "plan", "course-and-constraints")  # a delivered note's finding again: the owner is asked
+        await look(spot, "plan", "course-and-constraints")  # once
+        again = chat("s-1", steered)  # a restart within the turn: its requester message read again from the log
+        again.take(owner)
+        await look(again, "plan", "outside-state-changes")  # still over the cap
+        again.take(asked("Now the docs."))  # the owner's next turn
+        await look(again, "plan", "outside-state-changes")
+        await quiet.drain()
+        await again.drain()
+        return [r["id"] for r in records()]
+
+    ids = asyncio.run(main())
+    assert spotter.WORK.settled(5)
+    done = acts.acts(spotter.root())
+    assert [(done[i].session, done[i].act, done[i].why) for i in ids] == [
+        ("s-quiet", "none", "arm"), ("s-quiet", "stop-and-ask", "setting"),
+        ("s-1", "steer", "setting"), ("s-1", "steer", "setting"), ("s-1", "none", "cap"),
+        ("s-1", "refuse-hand-off", "setting"), ("s-1", "stop-and-ask", "setting"), ("s-1", "ask", "repeat"),
+        ("s-1", "none", "asked"), ("s-1", "none", "cap"), ("s-1", "stop-and-resume", "setting"),
+    ]  # fmt: skip
+    assert [a for a, _c, _l in deliver.sent] == ["stop-and-ask", "steer", "steer", "refuse-hand-off", "stop-and-ask",
+                                                 "ask", "stop-and-resume"]  # fmt: skip
+    assert {done[i].arm for i in ids[:2]} == {"silent"}
+    assert {done[i].arm for i in ids[2:]} == {"steered"}
+    assert done[ids[0]].unit == "chat:s-quiet"
+    assert done[ids[0]].delivery == ""  # nothing was sent
+    assert {done[i].delivery for i in ids[2:4]} == {"delivered"}
+
+
+def test_an_act_is_written_before_it_is_dispatched_and_a_failed_dispatch_keeps_its_whole_error() -> None:
+    seen: list[acts.Act | None] = []
+    error = "the runtime refused the note: " + "x" * 600
+
+    async def dispatch(record: spotter.Record, _act: acts.Act) -> None:
+        seen.append(acts.acts(spotter.root()).get(record.id))
+        if len(seen) == 2:
+            raise RuntimeError(error)
+
+    async def main() -> None:
+        for session in ("s-1", "s-2"):
+            spot = spotter.Spotter(ctx(actions=STEERED, arm="steered", cap=2, act=dispatch), lambda s=session: s,
+                                   judge(finding("hand-off-fitness")))  # fmt: skip
+            spot.handed_off("call-1", {})
+            await spot.drain()
+
+    asyncio.run(main())
+    assert spotter.WORK.settled(5)
+    first, second = seen
+    assert first is not None
+    assert (first.act, first.delivery, first.look, first.category, first.scope) == (
+        "refuse-hand-off", "pending", "hand-off", "hand-off-fitness", "build")  # fmt: skip
+    assert first.token == acts.TOKEN.format(id=first.record)
+    assert first.note == "About hand-off-fitness."
+    failed = acts.acts(spotter.root())[second.record]
+    assert (failed.delivery, failed.error) == ("failed", f"RuntimeError: {error}")
+    assert acts.acts(spotter.root())[first.record].delivery == "pending"  # the actuator's own log confirms it
+
+
+def test_a_state_change_finding_asks_the_conflict_check_after_acting_and_its_answer_lands_on_the_act() -> None:
+    order: list[str] = []
+
+    async def dispatch(_record: spotter.Record, act: acts.Act) -> None:
+        order.append(f"act {act.act}")
+
+    def conflicts(change: str) -> str:
+        order.append(f"check {change}")
+        return json.dumps({"decisions": [{"id": "D-1", "conflict": "none"}]})
+
+    answer = json.dumps({"category": "irreversible-harm", "note": "Deletes the backups.", "evidence": ["e1"],
+                         "state_change": "rm -rf ~/backups"})  # fmt: skip
+
+    async def main() -> None:
+        spot = spotter.Spotter(ctx(looks=("hand-off",), actions=STEERED, arm="silent", cap=2, act=dispatch,
+                                   conflicts=conflicts), lambda: "s-1", judge(answer))  # fmt: skip
+        spot.handed_off("call-1", {})
+        await spot.drain()
+
+    asyncio.run(main())
+    assert spotter.WORK.settled(5)
+    assert order == ["act stop-and-ask", "check rm -rf ~/backups"]
+    [act] = acts.acts(spotter.root()).values()
+    assert json.loads(act.conflict) == {"decisions": [{"id": "D-1", "conflict": "none"}]}
+    assert act.harm

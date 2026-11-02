@@ -22,6 +22,7 @@ import pytest
 
 from owlbear_delivery_next.change_contracts import watch_policy
 from owlbear_delivery_next.improvement import assumptions, cases, chatlogs, credit_meter, spotter
+from owlbear_delivery_next.improvement.events import Kept
 from owlbear_delivery_next.local_system import codebase, local_home, maintenance
 from owlbear_delivery_next.local_system.slots import Slots
 from owlbear_delivery_next.machine_host import chat_looks, chat_settings, chats
@@ -1161,3 +1162,13 @@ def test_a_rule_whose_entry_does_not_say_whether_it_was_retired_is_refused(world
     assert json.loads(assumptions.path().read_text())[assumptions.PLAN] == entry  # never replaced
     with pytest.raises(ValueError, match="retired"):
         assumptions.reset()  # a reset checks every entry before it changes any
+
+
+def test_a_spotter_note_in_the_chat_is_no_requester_and_the_owners_turn_goes_on(tmp_path) -> None:
+    m, kept, owner = moments(tmp_path), Kept(), asked("fix the bug")
+    note = asked("[OwlBear Spotter note 0a1b2c3d4e5f] Run the tests before you hand off.")
+    for d in (owner, note):
+        m.feed(d, live=True, now=0)
+        kept.add(d)
+    assert m.turn == kept.turn == owner["id"]
+    assert [r["text"] for r in kept.snapshot()["requests"]] == ["fix the bug"]

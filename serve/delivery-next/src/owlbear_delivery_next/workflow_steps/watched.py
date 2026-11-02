@@ -99,6 +99,7 @@ def spot(store: Store, lock: Lock, step: str, settings: Settings, limit: float) 
         limit=limit,
         context=role.context or "",
         actions=s.actions(),
+        cap=s.intervention_cap,
         open_work=tuple(t.title for t in plan.tasks if not t.done) if plan else (),
         decisions=tuple(line for line in step_decisions.held() if line.strip()),
         gaps=tuple(gaps),

@@ -51,6 +51,6 @@ def settings_now() -> Plan | str:
     ctx = spotter.Context(
         project="", change="", step="chat", looks=tuple(s.looks or ()), sample_rate=s.sample_rate or 0,
         verbose=s.verbose_on(datetime.now(UTC).date()), model=role.model or "", effort=role.effort or "",
-        limit=limit, context=role.context or "", actions=s.actions(), gaps=(CHAT,),
+        limit=limit, context=role.context or "", actions=s.actions(), gaps=(CHAT,), cap=s.intervention_cap,
     )  # fmt: skip
     return Plan(ctx, tuple(folders))  # no prompt: each chat takes its own at each turn's start (``Follower._snapped``)

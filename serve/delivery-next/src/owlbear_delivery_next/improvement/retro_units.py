@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.change_flow import worktree
-from owlbear_delivery_next.improvement import chatlogs, retro_store, spotter
+from owlbear_delivery_next.improvement import acts, chatlogs, retro_store, spotter
 from owlbear_delivery_next.local_system.git_files import git_common_dir
 from owlbear_delivery_next.state_store.database import StoreError
 from owlbear_delivery_next.state_store.store import ACTIVITY_LIMIT
@@ -62,14 +62,17 @@ def _when(text: str) -> datetime:
 
 
 def records() -> list[dict[str, Any]]:
-    """Every Spotter record on this machine; an unreadable line is left out, as case intake leaves it."""
-    found = []
+    """Every Spotter record on this machine, each with its act if it has one (``acts.joined``).
+
+    An unreadable line is left out, as case intake leaves it.
+    """
+    found, done = [], acts.acts(spotter.place())
     for path in sorted(spotter.place().glob("records-*.jsonl")):
         with contextlib.suppress(OSError):
             for line in path.read_text().splitlines():
                 with contextlib.suppress(ValueError):
                     if isinstance(r := json.loads(line), dict) and r.get("id"):
-                        found.append(r)
+                        found.append(r | (acts.joined(done[r["id"]]) if r["id"] in done else {}))
     return found
 
 
@@ -259,7 +262,10 @@ def card_gaps(ids: Iterable[str]) -> list[str]:
 
 
 def grade(record: Mapping[str, Any], rev: str, value: str, reason: str = "", **more: object) -> dict[str, Any]:
-    """A grade of *record* in revision *rev*: what live delivery's gate (#717) and the page (#716) read."""
+    """A grade of *record* in revision *rev*: what live delivery's gate (#717) and the page (#716) read.
+
+    A state change's record is preliminary until its act holds the decision-conflict check's completed answer.
+    """
     uid = unit_of(record)
     keep = ("look", "category", "note", "preliminary", "prompt", "cases", "session", "call", "cutoff")
     return {
@@ -274,6 +280,7 @@ def grade(record: Mapping[str, Any], rev: str, value: str, reason: str = "", **m
         "assumptions": ["retro-grades-1"],
         "at": retro_store.now(),
         **{k: record.get(k) for k in keep},
+        "preliminary": bool(record.get("preliminary")) and not acts.answered(record.get("conflict")),
         **more,
     }
 
