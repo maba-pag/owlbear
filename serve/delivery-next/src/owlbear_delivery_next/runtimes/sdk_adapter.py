@@ -26,6 +26,7 @@ from owlbear_delivery_next.local_system import pds_skill, preload, processes
 from owlbear_delivery_next.local_system.mask import redact
 from owlbear_delivery_next.local_system.processes import Termination, verdict
 from owlbear_delivery_next.runtimes import (
+    guard_hook,
     lessons,
     sdk_spend,
     sdk_teardown,
@@ -274,9 +275,16 @@ class _Step(StepTools):
         with contextlib.suppress(OSError):  # the now line is a hint; a failed write never ends the step
             self.cfg.journal.now({"tool": tool, "summary": watch_feed.summary(tool, arguments), "at": at})
 
+    def offered(self) -> frozenset[str]:
+        return frozenset(preload.tools(role_of(self.cfg)))
+
+    def pre_tool(self, data: Any, _invocation: Any) -> dict[str, str] | None:  # noqa: ANN401 - the SDK's hook input
+        return guard_hook.pre_tool(self, data, self.offered())
+
     def permission(self, request: Any, _invocation: Any) -> Any:  # noqa: ANN401 - SDK types
         req = view(request)
-        reason = decide(self.cfg.policy, req, frozenset(preload.tools(role_of(self.cfg))), memory=self.cfg.user.memory)
+        user = self.cfg.user
+        reason = decide(self.cfg.policy, req, self.offered(), memory=user.memory, level=user.guard)
         if reason is None:
             for name in identities(req):  # a later allowed use supersedes an earlier denial of the same program
                 self.run.denied.pop(name, None)
@@ -321,6 +329,7 @@ class _Step(StepTools):
             role["tools"].append(subagents.LAUNCHER)
         return {
             "on_permission_request": self.permission,
+            "hooks": {"on_pre_tool_use": self.pre_tool},  # the shell guard's warnings (D-01M6DX04FRP680Z4GGHK5B9VRC)
             "tools": self.tools(),
             "custom_agents": [role | {"infer": False}],  # the role never starts itself as a subagent
             "agent": role["name"],

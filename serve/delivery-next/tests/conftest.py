@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 import json
 import os
@@ -171,6 +172,46 @@ def complete_layer():
         ("load_user_instructions", "load_user_skills", "load_user_memory"), False
     )
     return base.model_copy(update=update)
+
+
+@pytest.fixture
+def through_step(tmp_path):
+    """#864: one shell command as a real step's session meets it: its pre-tool hook through the SDK's own dispatch,
+    then its permission callback. Returns how it went (refused, warned, allowed), what the agent was told, the
+    hook's raw output, the step's journal events and its Run."""
+    from copilot.rpc import PermissionDecisionReject  # noqa: PLC0415
+    from copilot.session import CopilotSession  # noqa: PLC0415
+
+    from owlbear_delivery_next.change_contracts.models import StepKind  # noqa: PLC0415
+    from owlbear_delivery_next.change_contracts.permissions import Policy  # noqa: PLC0415
+    from owlbear_delivery_next.change_contracts.tools import Worktree  # noqa: PLC0415
+    from owlbear_delivery_next.change_contracts.user_config import UserConfig  # noqa: PLC0415
+    from owlbear_delivery_next.runtimes import sdk_adapter  # noqa: PLC0415
+
+    def run(text: str, level: str = "strict", *, write: bool = True, user: UserConfig | None = None) -> SimpleNamespace:
+        at, events = tmp_path, []
+        cfg = sdk_adapter.Session(
+            StepKind.BUILD, at, "s1", "m", resume=False, policy=Policy(at, write=write), observe=Worktree, checks=(),
+            user=user or UserConfig(instructions=False, skills=False, memory=False, guard=level),
+            journal=sdk_adapter.Journal(event=events.append),
+        )  # fmt: skip
+        st = sdk_adapter._Step(cfg, SimpleNamespace(call_soon_threadsafe=lambda *_: None))  # noqa: SLF001
+        sdk = CopilotSession.__new__(CopilotSession)  # only its hook dispatch, as the runtime's call reaches it
+        sdk._hooks_lock, sdk.session_id = threading.Lock(), "s1"  # noqa: SLF001
+        sdk._register_hooks(st.options()["hooks"])  # noqa: SLF001
+        called = {"sessionId": "s1", "timestamp": 0, "cwd": str(at), "toolName": "bash", "toolArgs": {"command": text}}
+        out = asyncio.run(sdk._handle_hooks_invoke("preToolUse", called))  # noqa: SLF001
+        command = SimpleNamespace(identifier=text.split(maxsplit=1)[0] if text.split() else "")
+        request = SimpleNamespace(kind="shell", commands=[command], full_command_text=text, possible_paths=(),
+                                  command_segments=[SimpleNamespace(full_command_text=text)])  # fmt: skip
+        decision = st.permission(request, None)
+        refused = isinstance(decision, PermissionDecisionReject)
+        context = (out or {}).get("additionalContext", "")
+        outcome = "refused" if refused else "warned" if context else "allowed"
+        return SimpleNamespace(outcome=outcome, said=decision.feedback if refused else context, out=out,
+                               events=events, run=st.run, step=st)  # fmt: skip
+
+    return run
 
 
 @pytest.fixture

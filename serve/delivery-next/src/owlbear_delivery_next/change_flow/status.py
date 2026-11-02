@@ -58,6 +58,7 @@ def _tool_said(tool: object) -> str:
 _SAID: dict[str, Callable[[dict[str, Any]], str]] = {
     "tool": lambda e: _tool_said(e.get("tool")) + ("" if e.get("accepted", True) else " (refused)"),
     "denied": lambda e: f'denied "{redact(str((e.get("request") or [""])[0]))[:60]}"',
+    "warned": lambda e: f'warned "{redact(str((e.get("request") or [""])[0]))[:60]}"',
     "session": lambda e: "session resumed" if e.get("resumed") else "session started",
     "step": lambda e: (
         f"{_STEP_SAID.get(str(e.get('kind')), str(e.get('kind')).replace('-', ' '))} "
