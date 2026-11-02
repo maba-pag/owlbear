@@ -270,6 +270,18 @@ def test_a_note_whose_turn_was_superseded_or_ended_expires_unsent(tmp_path) -> N
     assert (host.actions, act.delivery, act.error) == ([], "expired", "the turn had ended before the note was sent")
 
 
+def test_an_expired_note_does_not_count_toward_the_cap(tmp_path) -> None:
+    async def main() -> chat_acts.ChatActor:
+        actor = chat(tmp_path, Host(Clock(), active=""))  # the turn ended before the note went
+        *_, sending = await acted(actor)
+        await sending
+        return actor
+
+    actor = asyncio.run(main())
+    act = act_of(actor)
+    assert (act.delivery, acts.counts(actor.spot.folder, act.session, act.scope)[0]) == ("expired", 0)
+
+
 def test_a_hand_off_note_is_queued_after_its_turn_and_delivered_once_the_log_shows_its_token(tmp_path) -> None:
     async def main() -> tuple[Host, list[str]]:
         host = Host(Clock(), active="")  # the turn ended with the reply the look judged

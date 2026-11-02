@@ -10,8 +10,8 @@ never capped (D-01M5W68MMV8JCVKNKH4VJQ9V14). Otherwise:
   showing the owner and stopping to ask him act in both: they never steer the agent;
 - a finding of the same category at the same look kind after a delivered act in the same scope (the step, or the
   chat's requester turn) becomes one ``ask`` to the owner, then ``none``: never a loop;
-- steering notes (steer, stop and resume) beyond the intervention cap in one scope become ``none``; hand-off refusals
-  are never capped.
+- steering notes (steer, stop and resume) beyond the intervention cap in one scope become ``none``; a note that failed
+  or expired unsent takes no place under it; hand-off refusals are never capped.
 
 ``show-owner`` is never sent to the agent: the record shows it. Each act is one line in the Spotter's
 ``outcomes-<date>.jsonl`` (kind ``act``) written before it is dispatched; later lines add its delivery, error and the
@@ -159,12 +159,12 @@ def acts(folder: Path) -> dict[str, Act]:
 
 
 def counts(folder: Path, session: str, scope_: str) -> tuple[int, dict[tuple[str, str], str]]:
-    """The steering notes sent in *session*'s *scope_* and its unresolved findings, from its act lines."""
+    """The steering notes in *session*'s *scope_*, but failed or expired ones, and its unresolved findings: its acts."""
     sent, unresolved = 0, {}
     for a in acts(folder).values():
         if (a.session, a.scope) != (session, scope_):
             continue
-        sent += a.act in NOTES and not a.harm and a.delivery != "failed"
+        sent += a.act in NOTES and not a.harm and a.delivery not in {"failed", "expired"}
         key = (a.category, a.look)
         if a.act == "ask":
             unresolved[key] = "asked"
