@@ -121,11 +121,12 @@ def activity(store: Store, slug: str, host: HostRecord | None, *, paused: bool =
     """Observed liveness for the status line: the Change lock's holder, unless it is the host itself."""
     holder = store.holder(slug)
     runner = holder is not None and (host is None or holder.pid != host.pid)
-    last = next((e["at"] for e in reversed(store.events(slug)) if "at" in e), None)
+    events = store.events(slug)
+    last = next((e["at"] for e in reversed(events) if "at" in e), None)
     at = datetime.fromisoformat(last) if last else None
     pid = holder.pid if runner and holder else None
     up = host is not None
-    return Activity(up, runner, pid, at, paused=paused, waiting_slot="" if runner else waiting)
+    return Activity(up, runner, pid, at, paused=paused, waiting_slot="" if runner else waiting, events=tuple(events))
 
 
 class Host:

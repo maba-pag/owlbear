@@ -1063,3 +1063,28 @@ def test_a_chat_cannot_clear_a_stop(store, tmp_path):
     answer = client(store, fake, **{"x-owlbear-use": "chat"}).post("/api/next/changes/c1/recovery", json=SHOWN)
     refused = "Only the owner clears a stop, on the Changes page"
     assert (answer.status_code, answer.json()["detail"], queued(store)) == (403, refused, [])
+
+
+def test_a_running_steps_stage_reaches_the_status_and_owlbear_status_from_the_store(store):
+    """#718: events the runner's sessions log in the store reach the shared status through host.activity."""
+    started = datetime.now(UTC) - timedelta(minutes=2)
+    c = Change(slug="c1", plan=Plan(tasks=[Task(id="t1", title="greet")]),
+               step=Step(kind=StepKind.BUILD, task="t1", started_at=started))  # fmt: skip
+    save(store, c)
+    record = host.HostRecord(url="http://127.0.0.1:9/", token="t", pid=1, started_at=NOW, code=codebase.CURRENT)  # noqa: S106
+    (store.root / "host.json").write_text(record.model_dump_json())
+    dir_fd = os.open(store.root, os.O_RDONLY)
+    host_fd = open_lock(dir_fd, blocking=False, name="host.lock")
+    os.close(dir_fd)
+    at = datetime.now(UTC).isoformat(timespec="seconds")
+    who = {"at": at, "session": "b1", "role": "builder"}
+    try:
+        with store.lock("c1") as lock:  # the runner, another process than the host
+            store.log(lock, "c1", who | {"event": "session", "id": "b1", "resumed": False})
+            store.log(lock, "c1", who | {"event": "tool", "tool": "submit_result", "accepted": False, "errors": ["x"]})
+            now = datetime.now(UTC)
+            line = status(store.read("c1"), host.activity(store, "c1", host.running(store)), now).line
+            assert line.startswith("Build 1/1 · fixing its refused result: greet · builder active")
+            assert f"c1: {line}" in cli.show_status(store, now).splitlines()
+    finally:
+        os.close(host_fd)

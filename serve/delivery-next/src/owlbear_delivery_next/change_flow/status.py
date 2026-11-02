@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.change_contracts.failures import QUOTA, WRONG_MODEL
 from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, StepKind, Waiting
-from owlbear_delivery_next.change_flow import loop, picks
+from owlbear_delivery_next.change_flow import loop, picks, step_stages
 from owlbear_delivery_next.change_flow.brief_rounds import MODES
 from owlbear_delivery_next.change_flow.budgets import EPISODE_QUIET, RETRY_LIMIT, WRONG_MODEL_LIMIT, episode
 from owlbear_delivery_next.change_flow.loop import CONSENT
@@ -68,6 +68,7 @@ _SAID: dict[str, Callable[[dict[str, Any]], str]] = {
     "force-stop": lambda _e: "stopped the session",
     "wave": lambda _e: "started judges",
     "answer": lambda e: f"answered {e.get('question')}: {str(e.get('class')).replace('_', ' ')}",  # TD-461
+    "ended": lambda _e: "session ended",
 }
 _WHO = {
     Waiting.CI: "CI",
@@ -103,6 +104,7 @@ class Activity:
     start_failure: Stop | None = None
     paused: bool = False  # Delivery itself waits for Resume (TD-259)
     waiting_slot: str = ""  # how full the session slots are while its step waits for one (TD-336)
+    events: tuple[dict[str, Any], ...] = ()  # the Change's retained events, its running step's stage among them
 
 
 @dataclass(frozen=True)
@@ -300,6 +302,7 @@ def _status(  # noqa: C901, PLR0911, PLR0912 - D3 rules
         task = next((t for t in c.plan.tasks if t.id == c.step.task), None) if c.plan else None
         items = sum(1 for t in c.plan.tasks if t.item and not t.done) if task and task.item and c.plan else 0
         label = (task.title if task else None) or next((f"check {p.id}" for p in c.checks if p.id == c.step.task), None)
+        verb = step_stages.of(c, activity.events, role) or verb  # #718
         line = f"{s} · {verb}: {label or c.brief.title or c.brief.outcome}"
         if items:
             line += f" · {items} open conversation item{'s' if items > 1 else ''}"
