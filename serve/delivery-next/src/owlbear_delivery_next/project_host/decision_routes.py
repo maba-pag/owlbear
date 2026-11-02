@@ -12,6 +12,7 @@ list leads with the read-back queue of its scope (TD-427).
 
 from __future__ import annotations
 
+import logging
 from dataclasses import asdict
 from typing import TYPE_CHECKING, Annotated, Any, Literal
 
@@ -45,6 +46,7 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.state_store.decision_store import DataView
     from owlbear_delivery_next.state_store.store import Store
 
+_log = logging.getLogger(__name__)
 NO_SHARED = "No shared repository is set up, so there are no decisions; set one with `owlbear-next data PATH`"
 OWNER_ONLY = "Only the owner does this, on the Decisions page; a chat proposes with record_decision"
 UNCONFIRMED = "only the owner retires a decision: read the retirement back to him, then pass confirmed=true"
@@ -253,9 +255,12 @@ def _receipts(work: Callable[[], list[Receipt]]) -> dict[str, Any]:
     except decision_actions.Refused as exc:
         raise HTTPException(exc.status, str(exc)) from exc
     except decision_store.DecisionsUnavailable as exc:
+        _log.warning("decisions unavailable: %s (%s)", exc, exc.action)
         raise HTTPException(409, f"{exc} ({exc.action})") from exc
     except decision_wording.WordingError as exc:
         raise HTTPException(409, f"{exc}; nothing was saved: confirm its full wording") from exc
+    for r in [r for r in done if r.notice]:  # a refused or partial save: the host log keeps it whole
+        _log.warning("decision %s %s: %s", r.id, "saved" if r.saved else "not saved", r.notice)
     return {"receipts": [asdict(r) for r in done], "saved": bool(done) and all(r.saved for r in done)}
 
 

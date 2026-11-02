@@ -524,3 +524,104 @@ def test_the_owner_checks_a_replacements_impact_and_schedules_its_fixes(store, p
     [issue] = github.issues.values()
     assert f"Old rule \u201c{old.title}\u201d: {old.statement}" in issue["body"]
     assert "- [ ] Change c1: Exports (https://github.com/acme/shop-site/pull/7)" in issue["body"]
+
+
+def failing_git(monkeypatch, message: str, fails) -> None:
+    """Git as the data repository runs it, except the commands *fails* picks, which fail with *message* as stderr."""
+    from owlbear_delivery_next.local_system import data_repo  # noqa: PLC0415
+
+    real = data_repo._git  # noqa: SLF001 - the repository's own Git calls are the boundary
+
+    def git(cwd, *args, until=None):
+        if fails(args):
+            return subprocess.CompletedProcess(["git", *args], 1, "", message + "\n")
+        return real(cwd, *args, until=until)
+
+    monkeypatch.setattr(data_repo, "_git", git)
+
+
+def logged(caplog) -> list[str]:
+    return [r.getMessage() for r in caplog.records if r.name.startswith("owlbear_delivery_next.project_host.")]
+
+
+@pytest.mark.browser
+def test_a_refused_save_shows_its_whole_notice(store, pds, monkeypatch, whole_error, caplog):
+    """The receipt's notice, as `said()` words it with ids named by title (none in the message), and its log line."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    rule = make(title="Exports are CSV", statement="Exports are CSV.", read_back="pending",
+                read_back_why="Asked again.", read_back_kind="uncertain")  # fmt: skip
+    write(rule, store.shared.root / PROJECT)
+    failing_git(monkeypatch, whole_error, lambda args: args[:1] == ("push",))
+    with decisions_page(store, pds) as page:
+        said: list[str] = []
+        page.on("console", lambda m: said.append(f"{m.text} {m.location['url']}") if m.type == "error" else None)
+        page.on("pageerror", lambda e: said.append(str(e)))
+        page.reload()
+        page.locator("#queue .queued", has_text="Exports are CSV").get_by_role("button", name="Still right").click()
+        expect(page.locator("#receipts li")).to_have_count(1)
+        shown = page.locator("#receipts li").text_content()
+    notice = f"saved and committed in {store.shared.root}, but the push failed: {whole_error}"
+    assert shown == f"\u201cExports are CSV\u201d: saved \u00b7 committed \u00b7 not published \u00b7 active. {notice}"
+    assert logged(caplog) == [f"decision {rule.id} saved: {notice}"]
+    assert [s for s in said if "/api/next/projects" not in s] == []  # a project host lists no projects (404)
+
+
+def owner(store: Store) -> Any:
+    from fastapi.testclient import TestClient  # noqa: PLC0415
+
+    return TestClient(api.create_app(store, "tok", Host()), base_url="http://127.0.0.1",
+                      headers={"authorization": "Bearer tok"})  # fmt: skip
+
+
+def replaced(store: Store) -> Decision:
+    """A published rule replaced by its successor in force, so the owner can keep a project's existing code."""
+    old = make(state=State.REPLACED)
+    new = make(title="Notes live in Postgres", statement="Notes live in Postgres.",
+               links=(Link(type=LinkType.REPLACES, target=old.id),))  # fmt: skip
+    for d in (old, new):
+        write(d, store.shared.root / PROJECT)
+    for args in (("add", "-A"), ("commit", "-qm", "replaced"), ("push", "-q", "origin", "HEAD")):
+        subprocess.run(["git", *args], cwd=store.shared.root, check=True, capture_output=True)  # noqa: S603, S607
+    return new
+
+
+@pytest.mark.parametrize(
+    ("failure", "route"),
+    [("held", "read-back"), ("held", "accept-existing"), ("unavailable", "read-back"), ("unavailable", "impact")],
+)
+def test_a_refused_save_answers_its_whole_notice(store, monkeypatch, whole_error, caplog, failure, route):  # noqa: PLR0913, PLR0917 - its fixtures
+    """The receipts `said()` words on the page (as above), or the 409 it shows, and the host log's line, each whole."""
+    from owlbear_delivery_next.local_system import publication_hold  # noqa: PLC0415
+    from owlbear_delivery_next.state_store import decision_batch  # noqa: PLC0415
+
+    new = replaced(store)
+    if failure == "held":  # the held publication's probe fails before the push and again before the rebase
+        failing_git(monkeypatch, whole_error, lambda args: args == ("rev-parse", "--git-path", publication_hold.RECORD))
+    else:
+
+        def unreadable(_shared):
+            raise decision_batch.JournalError(whole_error)
+
+        monkeypatch.setattr(decision_batch, "pending", unreadable)
+    base = f"/api/next/decisions/{new.id}"
+    if route == "read-back":
+        got = owner(store).post(f"{base}/read-back", json={"revision": new.revision, "confirmed": True})
+    elif route == "accept-existing":
+        kept = {"revision": new.revision, "project": PROJECT, "reason": "Old notes stay."}
+        got = owner(store).post(f"{base}/accept-existing?folder={PROJECT}", json=kept)
+    else:
+        got = owner(store).get(f"{base}/impact?folder={PROJECT}")
+    if failure == "held":
+        root = store.shared.root
+        notice = (
+            f"saved and committed in {root}, but it could not be rebased on the remote: nothing was pushed or "
+            f"rebased in {root}: a held automatic change cannot be checked: {whole_error}; push it by hand"
+        )
+        [receipt] = got.json()["receipts"]
+        assert (got.status_code, receipt["saved"], receipt["notice"]) == (200, True, notice)
+        assert logged(caplog) == [f"decision {receipt['id']} saved: {notice}"]
+    else:
+        detail = f"{whole_error} ({decision_store.RECOVER})"
+        assert (got.status_code, got.json()["detail"]) == (409, detail)
+        assert logged(caplog) == [f"decisions unavailable: {detail}"]

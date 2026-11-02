@@ -289,6 +289,79 @@ def test_a_recovery_request_refused_by_validation_never_echoes_what_was_sent(pic
     ).json()["done"]
 
 
+def failing_git(monkeypatch, message: str, fails) -> None:
+    """Git as the data repository runs it, except the commands *fails* picks, which fail with *message* as stderr."""
+    from owlbear_delivery_next.local_system import data_repo  # noqa: PLC0415
+
+    real = data_repo._git  # noqa: SLF001 - the repository's own Git calls are the boundary
+
+    def git(cwd, *args, until=None):
+        if fails(args):
+            return subprocess.CompletedProcess(["git", *args], 1, "", message + "\n")
+        return real(cwd, *args, until=until)
+
+    monkeypatch.setattr(data_repo, "_git", git)
+
+
+def logged(caplog) -> list[str]:
+    return [r.getMessage() for r in caplog.records if r.name.startswith("owlbear_delivery_next.project_host.")]
+
+
+@pytest.mark.browser
+def test_a_recovery_notice_shows_whole(picking, tmp_path, pds, monkeypatch, whole_error, caplog):  # noqa: PLR0913, PLR0917 - its fixtures
+    """A finish whose push fails says so whole, and an unreadable journal's diagnosis shows whole; both logged."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    _, generation = _interrupt(picking)
+    failing_git(monkeypatch, whole_error, lambda args: args[:1] == ("push",))
+    with decisions_page(_store(picking, tmp_path), pds) as page:
+        said: list[str] = []
+        page.on("console", lambda m: said.append(f"{m.text} {m.location['url']}") if m.type == "error" else None)
+        page.on("pageerror", lambda e: said.append(str(e)))
+        page.reload()
+        page.get_by_role("button", name="Finish batch").click()
+        pds.modal(page).get_by_role("button", name="Finish").click()
+        expect(page.locator("#recovery-notice")).to_contain_text(f"Finished batch {generation}")
+        shown = page.locator("#recovery-notice").text_content()
+
+        def unreadable(_shared):
+            raise decision_batch.JournalError(whole_error)
+
+        monkeypatch.setattr(decision_batch, "pending", unreadable)
+        page.reload()
+        expect(page.locator("#recovery-corrupt")).to_be_visible()
+        diagnosed = page.locator("#recovery-corrupt").text_content().strip()
+    pushed = f"saved and committed in {picking.shared.root}, but the push failed: {whole_error}"
+    notice = f"finished here, but not yet on the remote: {pushed}"
+    assert shown == f"Finished batch {generation}. {notice}"
+    assert diagnosed == whole_error
+    assert logged(caplog) == [f"decision recovery of batch {generation} (done: True): {notice}"]
+    assert [s for s in said if "/api/next/projects" not in s] == []  # a project host lists no projects (404)
+
+
+@pytest.mark.parametrize("exit_", ["data-repo", "journal"])
+def test_a_refused_recovery_answers_whole(picking, tmp_path, monkeypatch, whole_error, caplog, exit_):  # noqa: PLR0913, PLR0917 - its fixtures
+    """A finish refused by the data repository, or by the journal once the batch was read: its 409 and log line."""
+    from owlbear_delivery_next.local_system.data_repo import DataRepoError  # noqa: PLC0415
+
+    generation = _interrupted_here(picking)
+
+    def failing(*_args, **_kwargs):
+        raise (DataRepoError if exit_ == "data-repo" else decision_batch.JournalError)(whole_error)
+
+    monkeypatch.setattr(*((decision_recovery.decision_sync, "publish") if exit_ == "data-repo"
+                          else (decision_batch, "complete")), failing)  # fmt: skip
+    client = TestClient(
+        api.create_app(_store(picking, tmp_path), "tok", Host()),
+        base_url="http://127.0.0.1",
+        headers={"authorization": "Bearer tok"},
+    )
+    got = client.post("/api/next/decisions/recovery/finish", json={"generation": generation, "confirmed": True})
+    detail = f"{whole_error} ({decision_store.RECOVER})"
+    assert (got.status_code, got.json()["detail"]) == (409, detail)
+    assert logged(caplog) == [f"decision recovery refused: {detail}"]
+
+
 # Each Recovery and list read is sent at once and answered by the host then, but handed to the page only when the test
 # releases it, in the order it chooses; a held read waits for no clock. `__release(i, true)` answers it as an error.
 HOLD_READS = """() => {
@@ -350,3 +423,44 @@ def test_an_older_recovery_read_answered_last_never_hides_a_newer_interruption(p
         assert sent.value.post_data_json["generation"] == generation  # the owner's intent names the shown batch
         expect(page.locator("#recovery-notice")).to_contain_text(f"Finished batch {generation}")
     assert decision_batch.pending(picking.shared) is None
+
+
+@pytest.mark.parametrize("site", ["not-published", "unreadable", "invalid", "abandon"])
+def test_each_recovery_refusal_names_its_whole_error(picking, monkeypatch, whole_error, site):
+    """What finish or abandon says when the batch cannot be published, read, validated or put back, whole."""
+    from owlbear_decisions.validate import Finding  # noqa: PLC0415
+
+    generation = _interrupted_here(picking)
+    shared = picking.shared
+    if site == "not-published":
+        failing_git(monkeypatch, whole_error, lambda args: "commit" in args[:3])
+        said = decision_recovery.finish(shared, generation)
+        assert (said.done, said.notice) == (
+            False,
+            f"not published, so it stays: saved, but not committed: {whole_error}",
+        )
+        return
+    if site == "unreadable":
+
+        def unreadable(_shared):
+            raise decision_batch.JournalError(whole_error)
+
+        monkeypatch.setattr(decision_batch, "pending", unreadable)
+        expected = whole_error
+    elif site == "invalid":
+        decision_id = decision_batch.pending(shared).ids[0]
+        found = [Finding(f"{n}.md", "rule", whole_error, (decision_id,)) for n in range(4)]
+        monkeypatch.setattr(decision_store, "whole", lambda _root: ({}, found))
+        named = "; ".join(f"{n}.md: {whole_error}" for n in range(4))
+        expected = f"the interrupted batch {generation} does not validate, so it is not published: {named}"
+    else:
+
+        def unwritable(*_args):
+            raise OSError(whole_error)
+
+        monkeypatch.setattr(decision_batch, "complete", unwritable)
+        expected = whole_error
+    act = decision_recovery.abandon if site == "abandon" else decision_recovery.finish
+    with pytest.raises(decision_store.DecisionsUnavailable) as refused:
+        act(shared, generation)
+    assert (str(refused.value), refused.value.action) == (expected, decision_store.RECOVER)

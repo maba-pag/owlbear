@@ -95,7 +95,7 @@ def _head(shared: DataRepo) -> str:
     said = shared.git("rev-parse", "--show-toplevel", "HEAD")
     lines = said.stdout.splitlines()
     if said.returncode or len(lines) != 2 or lines[0] != str(shared.root.resolve()):  # noqa: PLR2004 - top, HEAD
-        why = said.stderr.strip()[:200] or "it is not the top folder of a Git checkout with a commit"
+        why = said.stderr.strip() or "it is not the top folder of a Git checkout with a commit"
         msg = f"Git cannot read the shared data repository {shared.root}: {why}"
         raise DecisionsUnavailable(msg)
     return lines[1]
@@ -130,9 +130,9 @@ def _files(shared: DataRepo, project: str) -> Snapshot:
 
 def _usable(seen: Snapshot, project: str) -> Snapshot:
     if bad := seen.unreadable:
-        named = "; ".join(f"{f.path}: {f.message}" for f in bad[:3])
+        named = "; ".join(f"{f.path}: {f.message}" for f in bad)
         msg = f"{len(bad)} file(s) among the decisions of {project or 'Global'} cannot be used: {named}"
-        raise DecisionsUnavailable(msg[:600], READ)
+        raise DecisionsUnavailable(msg, READ)
     return seen
 
 
@@ -146,11 +146,11 @@ def _interrupted(shared: DataRepo) -> None:
     try:
         batch = decision_batch.pending(shared)
     except decision_batch.JournalError as exc:
-        raise Unsettled(str(exc)[:600], RECOVER) from exc
+        raise Unsettled(str(exc), RECOVER) from exc
     if batch is not None:
         ids = ", ".join(batch.ids)
         msg = f"the interrupted decision batch {batch.generation} ({ids}) must be finished or abandoned"
-        raise Unsettled(msg[:600], RECOVER)
+        raise Unsettled(msg, RECOVER)
 
 
 def _open(shared: DataRepo | None) -> DataRepo:
@@ -169,7 +169,7 @@ def _stamp(shared: DataRepo) -> tuple[bytes | None, bytes | None]:
     try:
         return decision_batch.stamp(shared)
     except decision_batch.JournalError as exc:
-        raise Unsettled(str(exc)[:600], RECOVER) from exc
+        raise Unsettled(str(exc), RECOVER) from exc
 
 
 def _paired(shared: DataRepo, project: str) -> DataView:
@@ -261,7 +261,7 @@ def save_all(shared: DataRepo | None, items: Sequence[tuple[Decision, str | None
     except DataRepoError as exc:
         raise DecisionsUnavailable(str(exc)) from exc
     except decision_batch.JournalError as exc:  # the journal or its lock failed during the save: the batch is unknown
-        raise DecisionsUnavailable(str(exc)[:600], RECOVER) from exc
+        raise DecisionsUnavailable(str(exc), RECOVER) from exc
     except OSError as exc:
         msg = f"{', '.join(d.id for d, _ in items)} could not be written in {shared.root}: {exc}"
         raise DecisionsUnavailable(msg, READ) from exc
@@ -273,7 +273,7 @@ def _save_all(shared: DataRepo, items: list[Placed], message: str) -> list[Recei
     until = time.monotonic() + SAVE_SECONDS
     head, behind = decision_sync.prepare(shared, until)
     if not head:  # nothing is journalled or written until HEAD is proved on the remote
-        return [Receipt(d.id, saved=False, commit="", notice=behind[:300]) for d, _, _ in items]
+        return [Receipt(d.id, saved=False, commit="", notice=behind) for d, _, _ in items]
     try:
         return _journal(shared, items, message, head, behind)
     except decision_batch.Late:  # refused before its journal: nothing was written
@@ -296,7 +296,7 @@ def _journal(shared: DataRepo, items: list[Placed], message: str, head: str, beh
         raise
     if refused:
         why = "; ".join(f"{key}: {text}" for key, text in sorted(refused.items()))
-        held = f"not saved ({why[:120]}), and the files are not proved put back on HEAD {head[:12]}"
+        held = f"not saved ({why}), and the files are not proved put back on HEAD {head[:12]}"
         settled = decision_transaction.settle(shared, images, head, generation)
         return (
             _refused(shared, decisions, refused, behind) if settled else _held_back(shared, decisions, held, generation)
@@ -316,7 +316,7 @@ def _journal(shared: DataRepo, items: list[Placed], message: str, head: str, beh
     said = [sent.notice]
     view = _reconcile(shared, decisions, said, until, decision_sync.Continuation(sent.commit, sent.goal))
     if view is None:  # saved and published; only the conflict flags are interrupted
-        return [Receipt(d.id, saved=True, commit=_head(shared), notice=_join(*said)[:300]) for d in decisions]
+        return [Receipt(d.id, saved=True, commit=_head(shared), notice=_join(*said)) for d in decisions]
     return [
         replace(_receipt(shared, view, d, _join(*said, behind), until), batch=revision == d.revision)
         for d, revision in zip(decisions, held, strict=True)
@@ -380,7 +380,7 @@ def _put_back(
 
 
 def _unsaved(shared: DataRepo, decisions: list[Decision], notice: str) -> list[Receipt]:
-    return [Receipt(d.id, saved=False, commit=_head(shared), notice=notice[:300]) for d in decisions]
+    return [Receipt(d.id, saved=False, commit=_head(shared), notice=notice) for d in decisions]
 
 
 def _held_back(shared: DataRepo, decisions: list[Decision], why: str, generation: str) -> list[Receipt]:
@@ -391,7 +391,7 @@ def _held_back(shared: DataRepo, decisions: list[Decision], why: str, generation
 def _refused(shared: DataRepo, decisions: list[Decision], refused: dict[str, str], behind: str) -> list[Receipt]:
     others = f"not saved: {', '.join(sorted(refused))} was refused, and these saves go together or not at all"
     return [
-        Receipt(d.id, saved=False, commit=_head(shared), notice=_join(refused.get(d.id, others), behind)[:300])
+        Receipt(d.id, saved=False, commit=_head(shared), notice=_join(refused.get(d.id, others), behind))
         for d in decisions
     ]
 
@@ -463,7 +463,7 @@ def _receipt(shared: DataRepo, view: DataView, decision: Decision, said: str, un
     """Each step read back for the revision this save wrote: *decision*, or it flagged `conflict`."""
     entry = view.snapshot.get(decision.id)
     if entry is None:  # written, then gone: the rebase removed it
-        return Receipt(decision.id, saved=True, commit=view.commit, notice=_join(said, "the file is gone")[:300])
+        return Receipt(decision.id, saved=True, commit=view.commit, notice=_join(said, "the file is gone"))
     rel = decision_path(decision, _layer(shared.root, decision)).relative_to(shared.root).as_posix()
     held = entry.decision.revision
     ours = held in {decision.revision, decision.model_copy(update={"conflict": True}).revision}
@@ -481,7 +481,7 @@ def _receipt(shared: DataRepo, view: DataView, decision: Decision, said: str, un
         active=not conflict and view.snapshot.complete and view.snapshot.active(decision.id),
         revision=held,
         conflict=conflict,
-        notice=_join(said, _why(view.snapshot, decision.id, ours=ours, unresolved=unresolved, conflict=conflict))[:300],
+        notice=_join(said, _why(view.snapshot, decision.id, ours=ours, unresolved=unresolved, conflict=conflict)),
     )
 
 

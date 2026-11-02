@@ -6,6 +6,7 @@ refuses both actions; nothing here clears the journal on its own.
 
 from __future__ import annotations
 
+import logging
 from contextlib import ExitStack
 from typing import TYPE_CHECKING, Annotated, Any
 
@@ -21,6 +22,8 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.local_system.data_repo import DataRepo
 
 type Shared = Callable[[], DataRepo | None]
+
+_log = logging.getLogger(__name__)
 
 NOT_CONFIRMED = "recovery needs the owner's explicit confirmation"
 SAVING = {"interrupted": False, "corrupt": False, "diagnosis": "a decision save is in progress; read again shortly",
@@ -56,7 +59,7 @@ def _diagnosis(shared: DataRepo) -> dict[str, Any]:
     try:
         batch = decision_batch.pending(shared)
     except decision_batch.JournalError as exc:
-        return {"interrupted": True, "corrupt": True, "diagnosis": str(exc)[:600], "generation": ""}
+        return {"interrupted": True, "corrupt": True, "diagnosis": str(exc), "generation": ""}
     if batch is None:
         return {"interrupted": False, "corrupt": False, "diagnosis": "", "generation": ""}
     return {
@@ -77,9 +80,13 @@ def _run(action: Callable[[], Any], body: RecoveryBody) -> dict[str, Any]:
     try:
         out = action()
     except decision_store.DecisionsUnavailable as exc:
+        _log.warning("decision recovery refused: %s (%s)", exc, exc.action)
         raise HTTPException(409, f"{exc} ({exc.action})") from exc
     except decision_batch.JournalError as exc:  # the journal or its lock failed once the batch was read
-        raise HTTPException(409, f"{str(exc)[:600]} ({decision_store.RECOVER})") from exc
+        _log.warning("decision recovery refused: %s (%s)", exc, decision_store.RECOVER)
+        raise HTTPException(409, f"{exc} ({decision_store.RECOVER})") from exc
+    if out.notice:
+        _log.warning("decision recovery of batch %s (done: %s): %s", out.generation, out.done, out.notice)
     return {"done": out.done, "notice": out.notice, "generation": out.generation}
 
 

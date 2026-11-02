@@ -723,3 +723,43 @@ def test_a_rename_waits_for_steps_of_every_clone_sharing_the_folder_and_renames_
     live[0] = False
     assert c.put("/api/next/config/folder", json={"name": "acme-shop"}).status_code == 200
     assert (store.name, other.name) == ("acme-shop", "acme-shop")
+
+
+@pytest.mark.parametrize("step", ["git-folder", "tracked", "add", "staged", "commit", "rebase-probe", "rebase"])
+def test_each_failed_git_step_says_its_whole_stderr(shared, monkeypatch, whole_error, step) -> None:
+    """What the shared repository says when one Git step fails: Git's whole stderr, after its own context."""
+    root = shared[0]
+    data = data_repo.DataRepo(root)
+    (root / "notes.md").write_text("notes\n")
+    real = data_repo._git  # noqa: SLF001 - the repository's own Git calls are the boundary
+    picks = {
+        "git-folder": lambda args, until: args == ("rev-parse", "--absolute-git-dir") and until is None,
+        "tracked": lambda args, _: args[:1] == ("ls-files",),
+        "add": lambda args, _: args[:1] == ("add",),
+        "staged": lambda args, _: args[:3] == ("diff", "--cached", "--quiet"),
+        "commit": lambda args, _: "commit" in args[:3],
+        "rebase-probe": lambda args, until: args == ("rev-parse", "--absolute-git-dir") and until is not None,
+        "rebase": lambda args, _: "rebase" in args[:3],
+    }
+
+    def git(cwd, *args, until=None):
+        if picks[step](args, until):
+            return subprocess.CompletedProcess(["git", *args], 128, "", whole_error + "\n")
+        return real(cwd, *args, until=until)
+
+    monkeypatch.setattr(data_repo, "_git", git)
+    if step == "git-folder":
+        with pytest.raises(data_repo.DataRepoError) as refused, data.locked():
+            pass
+        assert str(refused.value) == f"the git folder of {root} cannot be found: {whole_error}"
+    elif step == "rebase-probe":
+        with pytest.raises(data_repo.DataRepoError) as refused:
+            data.rebasing()
+        assert str(refused.value) == f"cannot tell whether a rebase is in progress in {root}: {whole_error}"
+    elif step == "rebase":
+        assert data.rebase() == whole_error
+    elif step == "tracked":
+        said = data.commit(root / "gone.md", "notes")
+        assert said == f"saved, but not committed: git cannot tell whether gone.md is tracked: {whole_error}"
+    else:
+        assert data.commit(root / "notes.md", "notes") == f"saved, but not committed: {whole_error}"

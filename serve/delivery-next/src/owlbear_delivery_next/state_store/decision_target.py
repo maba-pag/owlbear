@@ -104,4 +104,4 @@ def push_commit(shared: DataRepo, commit: str, goal: Target | None, until: float
     sent = shared.git(
         "push", "-q", goal.remote, f"{commit}:{goal.ref}", until=until, guard=lambda: moved(shared, goal, until)
     )
-    return sent.stderr.strip()[:200] or "git push failed" if sent.returncode else ""
+    return sent.stderr.strip() or "git push failed" if sent.returncode else ""

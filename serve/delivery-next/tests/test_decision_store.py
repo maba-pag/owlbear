@@ -504,3 +504,117 @@ def test_a_lock_that_cannot_be_opened_makes_refresh_unavailable_not_a_crash(shar
     monkeypatch.setattr(DataRepo, "locked", broken)
     with pytest.raises(DecisionsUnavailable, match="Permission denied"):
         refresh(set_up(shared))
+
+
+def failing_git(monkeypatch, message: str, fails) -> None:
+    """Git as the data repository runs it, except the commands *fails* picks, which fail with *message* as stderr."""
+    from owlbear_delivery_next.local_system import data_repo  # noqa: PLC0415
+
+    real = data_repo._git  # noqa: SLF001 - the repository's own Git calls are the boundary
+
+    def git(cwd, *args, until=None):
+        if fails(args, until):
+            return subprocess.CompletedProcess(["git", *args], 128, "", message + "\n")
+        return real(cwd, *args, until=until)
+
+    monkeypatch.setattr(data_repo, "_git", git)
+
+
+@pytest.mark.parametrize("site", ["head", "rebase-probe", "commit", "fetch", "push-unflagged", "push-gone"])
+def test_each_git_failure_of_a_save_is_said_whole(shared, monkeypatch, whole_error, site) -> None:
+    """The stderr Git gave, whole, in what a save raises or in its receipt's notice."""
+    root = shared.root
+    pushed = f"saved and committed in {root}, but the push failed: {whole_error}"
+    picks = {
+        "head": lambda args, _: args == ("rev-parse", "--show-toplevel", "HEAD"),
+        "rebase-probe": lambda args, until: args == ("rev-parse", "--absolute-git-dir") and until is not None,
+        "commit": lambda args, _: "commit" in args[:3],
+        "fetch": lambda args, _: args[:1] == ("fetch",),
+    }
+    failing_git(monkeypatch, whole_error, picks.get(site, lambda args, _: args[:1] == ("push",)))
+    if site == "push-unflagged":  # the flags' round could not run: only the save's own notice is left
+        monkeypatch.setattr(decision_store, "_reconcile", lambda *_args: None)
+    elif site == "push-gone":  # the rebase removed the file just written
+        from owlbear_decisions.snapshot import Snapshot  # noqa: PLC0415
+
+        empty = Snapshot(root, PROJECT, (), (), ())
+        monkeypatch.setattr(decision_store, "_reconcile", lambda *_args: decision_store.DataView(empty, "c" * 40))
+    if site == "head":
+        with pytest.raises(DecisionsUnavailable) as refused:
+            save(shared, make(), expected_revision=None, message="decisions: notes")
+        assert str(refused.value) == f"Git cannot read the shared data repository {root}: {whole_error}"
+        return
+    said = save(shared, make(), expected_revision=None, message="decisions: notes")
+    expected = {
+        "rebase-probe": f"cannot tell whether a rebase is in progress in {root}: {whole_error}, so nothing was written",
+        "fetch": f"not checked against the remote: {whole_error}",
+        "push-unflagged": pushed,
+        "push-gone": f"{pushed}; the file is gone",
+    }.get(site)
+    if site == "commit":  # the batch stays interrupted for the owner
+        generation = decision_batch.pending(shared).generation
+        held = f"(interrupted batch {generation}: finish or abandon it in Decisions)"
+        expected = f"saved, but not committed: {whole_error} {held}"
+    assert said.notice == expected
+
+
+def test_every_unusable_decision_file_is_named(shared) -> None:
+    """Four unusable files are each named with their whole finding, not the first three."""
+    folder = shared.root / PROJECT / "decisions"
+    folder.mkdir(parents=True)
+    for n in range(4):
+        (folder / f"{make().id}.md").write_text(f"nothing {n}\n")
+    bad = snapshot(shared.root, PROJECT).unreadable
+    named = "; ".join(f"{f.path}: {f.message}" for f in bad)
+    with pytest.raises(DecisionsUnavailable) as refused:
+        load(shared, PROJECT)
+    assert (len(bad), str(refused.value)) == (4, f"4 file(s) among the decisions of {PROJECT} cannot be used: {named}")
+
+
+@pytest.mark.parametrize("site", ["interrupted", "stamp", "journal", "held", "refused"])
+def test_each_journal_or_write_refusal_is_said_whole(shared, monkeypatch, whole_error, site) -> None:
+    """The journal's error, a batch's ids and a refused file's reason, whole, in what a read or save says."""
+    from types import SimpleNamespace  # noqa: PLC0415
+
+    from owlbear_decisions import DecisionError  # noqa: PLC0415
+
+    def broken(*_args: object, **_kwargs: object) -> None:
+        raise decision_batch.JournalError(whole_error)
+
+    decision = make()
+    if site in {"interrupted", "stamp"}:  # a read refused while a batch is unsettled
+        if site == "interrupted":
+            batch = SimpleNamespace(generation="g1", ids=(whole_error,))
+            monkeypatch.setattr(decision_batch, "pending", lambda _shared: batch)
+            expected = f"the interrupted decision batch g1 ({whole_error}) must be finished or abandoned"
+        else:
+            monkeypatch.setattr(decision_batch, "stamp", broken)
+            expected = whole_error
+        with pytest.raises(DecisionsUnavailable) as refused:
+            load(set_up(shared), PROJECT)
+        assert str(refused.value) == expected
+        return
+    if site == "journal":  # the journal could not be begun: the batch's state is unknown
+        monkeypatch.setattr(decision_batch, "begin", broken)
+        with pytest.raises(DecisionsUnavailable) as refused:
+            save(shared, decision, expected_revision=None, message="decisions: notes")
+        assert str(refused.value) == whole_error
+        return
+    head = shared.git("rev-parse", "HEAD").stdout.strip()
+    if site == "held":  # refused midway, and the files are not proved put back
+        monkeypatch.setattr(decision_store, "write_batch", lambda *_args, **_kw: {decision.id: whole_error})
+        monkeypatch.setattr(decision_store.decision_transaction, "settle", lambda *_args: False)
+    else:  # refused before any file is written
+
+        def refusing(*_args: object) -> None:
+            raise DecisionError(whole_error)
+
+        monkeypatch.setattr(decision_store, "check_write", refusing)
+    said = save(shared, decision, expected_revision=None, message="decisions: notes")
+    if site == "held":
+        generation = decision_batch.pending(shared).generation
+        expected = (f"not saved ({decision.id}: {whole_error}), and the files are not proved put back on HEAD "
+                    f"{head[:12]} (interrupted batch {generation}: finish or abandon it in Decisions)")  # fmt: skip
+    else:
+        expected = whole_error
+    assert (said.saved, said.notice) == (False, expected)
