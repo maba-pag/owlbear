@@ -21,16 +21,19 @@ from typing import Any
 import pytest
 
 from owlbear_delivery_next.change_contracts import watch_policy
-from owlbear_delivery_next.improvement import assumptions, cases, chatlogs, credit_meter, spotter
+from owlbear_delivery_next.commands import chat_client
+from owlbear_delivery_next.improvement import acts, assumptions, cases, chatlogs, credit_meter, retro_units, spotter
+from owlbear_delivery_next.improvement.events import Kept
 from owlbear_delivery_next.local_system import codebase, local_home, maintenance
 from owlbear_delivery_next.local_system.slots import Slots
-from owlbear_delivery_next.machine_host import chat_looks, chat_settings, chats
+from owlbear_delivery_next.machine_host import chat_acts, chat_looks, chat_settings, chats
 from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.runtimes import chat_moments, spotter_look
 from owlbear_delivery_next.runtimes.chat_moments import Moments, classify, shell_effects, tokens
 
 LOOKS = ("hand-off", "plan", "state-change", "sample")
+VSCODE = chat_acts.VSCODE  # every chat here is VS Code's unless a test says otherwise
 N = iter(range(10**9))
 
 
@@ -292,7 +295,7 @@ class World:
     def __init__(self, work: Path, state: Path) -> None:
         self.work, self.state, self.cards, self.paused = work, state, [], False
         self.ctx = spotter.Context(project="", change="", step="chat", looks=LOOKS, sample_rate=0, verbose=False,
-                                   model="m1", effort="", limit=0.75, gaps=(chat_settings.CHAT,))  # fmt: skip
+                                   model="m1", effort="", limit=0.75, gaps=(chat_settings.CHAT,), cap=2)  # fmt: skip
         self.folders: tuple[str, ...] = (str(work),)
         self.plan: chat_settings.Plan | str | None = None
         self.follower = self.new()
@@ -312,10 +315,10 @@ class World:
         part.ended(None, confirmed=True)
         return '{"category": "none"}'
 
-    def chat(self, sid: str, events: list[dict[str, Any]], cwd: Path | None = None) -> Path:
+    def chat(self, sid: str, events: list[dict[str, Any]], cwd: Path | None = None, client: str = VSCODE) -> Path:
         folder = self.state / sid
         folder.mkdir(exist_ok=True)
-        (folder / "workspace.yaml").write_text(f"cwd: {cwd or self.work}\n")
+        (folder / "workspace.yaml").write_text(f"cwd: {cwd or self.work}\nclient_name: {client}\n")
         with (folder / "events.jsonl").open("a") as out:
             out.writelines(json.dumps(d) + "\n" for d in events)
         return folder / "events.jsonl"
@@ -399,14 +402,14 @@ def test_provenance_and_enrolment_come_before_any_read_and_fail_closed(world, mo
         (bare / "events.jsonl").write_text(json.dumps(asked("x")) + "\n")
         await world.passes(2)
         assert not [p for p in opened if "events.jsonl" in p]
-        (bare / "workspace.yaml").write_text(f"cwd: {world.work}\n")  # its metadata appears later: it is read now
+        (bare / "workspace.yaml").write_text(f"cwd: {world.work}\nclient_name: {VSCODE}\n")  # appears later: read now
         unreadable[0] = True  # the manifest cannot be read: nothing is
         await world.passes()
         assert not [p for p in opened if "events.jsonl" in p]
         unreadable[0] = False
         await world.passes()
         assert {Path(p).parent.name for p in opened if "events.jsonl" in p} == {"nometa"}
-        (bare / "workspace.yaml").write_text(f"cwd: {tmp_path / 'workshop'}\n")  # it moved out of the enrolled folder
+        (bare / "workspace.yaml").write_text(f"cwd: {tmp_path / 'workshop'}\nclient_name: {VSCODE}\n")  # moved out
         await world.passes()
         assert "nometa" not in world.follower.chats
 
@@ -1161,3 +1164,67 @@ def test_a_rule_whose_entry_does_not_say_whether_it_was_retired_is_refused(world
     assert json.loads(assumptions.path().read_text())[assumptions.PLAN] == entry  # never replaced
     with pytest.raises(ValueError, match="retired"):
         assumptions.reset()  # a reset checks every entry before it changes any
+
+
+def test_a_spotter_note_in_the_chat_is_no_requester_and_the_owners_turn_goes_on(tmp_path) -> None:
+    m, kept, owner = moments(tmp_path), Kept(), asked("fix the bug")
+    note = asked("[OwlBear Spotter note 0a1b2c3d4e5f] Run the tests before you hand off.")
+    for d in (owner, note):
+        m.feed(d, live=True, now=0)
+        kept.add(d)
+    assert m.turn == kept.turn == owner["id"]
+    assert [r["text"] for r in kept.snapshot()["requests"]] == ["fix the bug"]
+
+
+# Acting in VS Code's chats
+
+
+def test_a_terminal_session_is_not_followed_but_listed_while_a_vs_code_one_in_the_same_folder_is(world):
+    async def scenario() -> None:
+        await world.passes()
+        world.chat("term", turn(), client="github/cli")
+        world.chat("vs", turn())
+        await world.passes(2)
+
+    asyncio.run(scenario())
+    assert sorted(world.follower.chats) == ["vs"]
+    assert world.follower.not_followed() == [
+        {"session": "term", "workspace": str(world.work), "why": "not followed: terminal chat"}]  # fmt: skip
+    assert {r["session"] for r in records()} == {"vs"}
+
+
+@pytest.mark.parametrize("answer", [{"decisions": [{"id": "D-1", "title": "Never push from a chat"}]},
+                                    {"failed": "a lookup is already running in this folder"}])  # fmt: skip
+def test_a_chats_state_change_is_checked_through_the_hosts_lookup_and_a_failed_one_stays_preliminary(
+    world, monkeypatch, answer
+):
+    asked_: list[tuple[str, str, Any]] = []
+
+    class Host(chat_client.Chat):
+        def call(self, method: str, path: str, body: object = None, *_: Any, **__: Any) -> tuple[int, Any]:
+            asked_.append((method, path, body))
+            return 200, answer
+
+    async def found(_card: dict[str, Any], _ctx: spotter.Context, meter: credit_meter.Meter) -> str:
+        meter.part().ended(None, confirmed=True)
+        return json.dumps({"category": "outside-state-changes", "note": "It pushed.", "state_change": "git push"})
+
+    monkeypatch.setattr(chat_client, "workspace", lambda repo: Host(repo, repo))
+    world.ctx = dataclasses.replace(world.ctx, actions={"outside-state-changes": "record"})
+    world.follower = chats.Follower(lambda: False, lambda _t: None, read=world.read, judge=found, poll=0.01,
+                                    sessions=world.state)  # fmt: skip
+
+    async def scenario() -> None:
+        await world.passes()
+        world.chat("c", [asked("go"), *call("x", "bash", {"command": "git push"}, shell("git push", read_only=False))])
+        await world.passes()
+
+    asyncio.run(scenario())
+    assert spotter.WORK.settled(5)
+    assert acts.CHECKS.settled(5)
+    [(method, path, body)] = asked_
+    assert (method, path, "git push" in body["question"]) == ("POST", "/decisions/lookup", True)
+    [record] = [r for r in retro_units.records() if r["look"] == "state-change"]
+    assert (record["act"], json.loads(record["conflict"])) == ("none", answer)
+    preliminary = retro_units.grade(record, "r1", "useful")["preliminary"]
+    assert preliminary is ("failed" in answer)

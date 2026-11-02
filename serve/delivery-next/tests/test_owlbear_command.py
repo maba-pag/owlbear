@@ -28,8 +28,9 @@ def test_help_and_completion_load_no_command_module() -> None:
     )
     done = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)  # noqa: S603
     loaded = done.stdout.strip().splitlines()[-1]
-    assert loaded == (
-        "['owlbear_delivery_next.commands', 'owlbear_delivery_next.commands.project_commands', "
+    assert loaded == (  # the command definitions only: they import cyclopts and each other, never a handler
+        "['owlbear_delivery_next.commands', 'owlbear_delivery_next.commands.command_apps', "
+        "'owlbear_delivery_next.commands.improvement_commands', 'owlbear_delivery_next.commands.project_commands', "
         "'owlbear_delivery_next.machine_host', 'owlbear_delivery_next.machine_host.command']"
     )
 

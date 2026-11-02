@@ -36,7 +36,7 @@ from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.project_host import answers
 from owlbear_delivery_next.project_host.host import HostRecord
-from owlbear_delivery_next.runtimes import step_answers, step_decisions, step_input
+from owlbear_delivery_next.runtimes import session_result, step_answers, step_decisions, step_input
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.state_store import decision_archive
 from owlbear_delivery_next.state_store.store import Lock
@@ -548,3 +548,36 @@ def test_a_replacement_check_session_is_told_the_owners_pending_answer(tmp_path)
     parts = step_input.session(change, Profile(), tmp_path, {})
 
     assert f"- {ASKED}: English" in parts.message
+
+
+STOPPED = "The Spotter stopped this step for irreversible harm: it would force-push over main."
+
+
+@pytest.mark.parametrize(("then", "kind"), [("again", StepKind.BUILD), ("replan", StepKind.PLAN)])
+def test_allowing_what_the_spotter_stopped_keeps_the_answer_and_asks_again_until_another_option_moves_on(
+    picking, monkeypatch, then, kind
+):
+    """#717: allowing needs a brief amendment, not built yet: Resume never moves the step on; the other options do."""
+    run = Asking(picking, monkeypatch)
+    stopped = Run("s", ending="spotter-ask", detail=STOPPED, termination=DONE)
+    c = loop.apply(picking.change(), session_result.to_result(stopped, StepKind.BUILD, AT), AT)
+    picking.store.write(Lock(picking.slug), c)
+    first = c.outcome.question
+    assert run.answer(first, option="allow").status_code == 200
+    run.fold()
+    assert picking.http.post(f"/api/next/changes/{picking.slug}/intent", json={"intent": "resume"}).status_code == 200
+
+    c = run.step()  # the state as stored, Resume pressed, a tick
+
+    again = loop.open_question(c)
+    kept = next(q for q in c.questions if q.id == first)
+    assert (kept.answer.option, again.id != first, again.text, again.cause) == ("allow", True, STOPPED, kept.cause)
+    assert [o.id for o in again.options] == ["allow", "again", "replan"]
+    assert (run.held, c.step.kind) == ([], StepKind.BUILD)  # no worker started
+    assert run.answer(again.id, option=then).status_code == 200
+
+    c = run.step()
+
+    assert (len(run.held), c.step.kind, loop.open_question(c)) == (1, kind, None)
+    delivered = run.held[0][1]
+    assert delivered is None or delivered.answer.option == then  # the worker never receives the allow answer

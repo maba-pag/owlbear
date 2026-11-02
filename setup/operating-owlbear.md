@@ -139,6 +139,15 @@ registration intact when the admitted clone changes.
 after a merge and when idle each has its own setting in **Settings → This machine**: off, on, or on
 even while paused; **Curate now** on the Maintenance page always runs.
 
+The Spotter looks at agents' work beside them, in Delivery's steps and in the VS Code chats of the folders listed in
+`enrolled_chats`, and acts on each finding as its settings in **Settings → Spotter** say: it records it, steers the
+agent, refuses its hand-off, stops it and resumes it with a note, stops it to ask you, or shows it to you on the
+Improvement page. A terminal `copilot` session in those folders is not followed: OwlBear cannot reach it to act, and
+the Improvement page lists it. Its steered-versus-silent test is run from the command line: `owlbear improvement test
+declare --outcome … --start-threshold … --promote-threshold …` declares it (refused once it has started), `owlbear
+improvement test start` freezes the Spotter's model, effort, context, prompt and cases for every look until `owlbear
+improvement test end`, and the cases cannot change meanwhile; `owlbear improvement test show` prints its state.
+
 Retro looks back at finished work: it grades the Spotter's records against what happened later and
 proposes cases, lessons and fixes, each challenged before you see it. Its two switches sit beside
 curation's and work the same way: `retro_after_change` for a Change that ended, and `retro_when_idle`
@@ -155,8 +164,9 @@ to OwlBear itself; if making it fails, the card says why and **Apply again** ret
 it for good, **Later** sets it aside, and **Redirect** takes your direction: Retro redrafts it at once
 and it comes back as a new proposal; if no redraft is queued or running, **Redraft again** asks once
 more. Proposals from synthetic runs land only in the sandbox's places; one about OwlBear itself becomes
-a public issue marked `[synthetic]`, closed at once. Below them are the Spotter's settings, where each
-comes from, and its spend over the last week; its looks and the outside writes the watcher saw, by
+a public issue marked `[synthetic]`, closed at once. Below them are the Spotter's test, its settings, where each
+comes from, its spend over the last week and the enrolled chats it does not follow; its looks, each with what it did
+(its act, whether its Change or chat was drawn steered or silent, and whether the act was delivered or why not) and the outside writes the watcher saw, by
 project and Change; Retro's switches, runs and findings, with **Run Retro** on a finished Change; and
 the Spotter cases, whose moves queue a regression run and wait until it has run. A look or a Retro
 finding can be followed up as one backlog entry. The menu's switch **Show the Spotter's and Retro's

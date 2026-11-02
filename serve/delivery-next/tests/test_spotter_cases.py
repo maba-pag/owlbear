@@ -14,6 +14,7 @@ import pytest
 from owlbear_delivery_next.improvement import assumptions, case_intake, case_replay, cases, pilot_seed, spotter
 from owlbear_delivery_next.improvement.cases import CaseError
 from owlbear_delivery_next.improvement.credit_meter import Meter
+from owlbear_delivery_next.state_store import spotter_test
 
 
 def card(text: str = "the agent stops with work unfinished") -> dict[str, Any]:
@@ -232,6 +233,19 @@ def test_a_passing_result_on_a_changed_store_is_refused_as_stale_and_not_rerun()
     out = run(request, looker({}))
     assert out["result"] == "passed"
     assert out["applied"].startswith("refused as stale")
+    assert cases.current()["cases"][chosen]["stage"] == "test"
+
+
+def test_a_passing_result_refused_while_a_spotter_test_runs_is_recorded_and_not_rerun() -> None:
+    chosen, request = _regression_setup()
+    spotter_test.declare("fewer re-runs", "B", "A")
+    spotter_test.start({"model": "m", "effort": "high", "context": "", "prompt": "p", "prompt_hash": "ab12cd34",
+                        "cases": cases.current()["n"]})  # fmt: skip
+    out = run(request, looker({}))
+    assert (out["result"], out["applied"].split(": ")[0]) == ("passed", "refused while a Spotter test is active")
+    lines = (cases.place() / "runs.jsonl").read_text().splitlines()
+    applied = [r for r in map(json.loads, lines) if r["id"] == out["id"] and "applied" in r]
+    assert [(r["applied"], r["why"]) for r in applied] == [(None, out["applied"])]
     assert cases.current()["cases"][chosen]["stage"] == "test"
 
 

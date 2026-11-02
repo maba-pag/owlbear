@@ -176,7 +176,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:  # noq
             ui=change.brief.ui,
             helpers=_helpers(change, at, asked),
             preparing=ctx,
-            watch=watched.watching(store, lock, session, settings, at, _out, look_limit),  # its master switch (W1a)
+            watch=watched.watching(store, lock, session, settings, at, _out, look_limit, asked),  # W1a's switch
         )
 
     made = (lambda at: curation_build.curator(config(at), change, settings)) if curated else config

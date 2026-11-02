@@ -4,6 +4,10 @@ Whoever relays the owner's answer (a lead chat or the Changes page) classes it a
 brief change. A brief change, or a clarification its check found to change the brief, is never delivered: the work
 stops with one owner question. Amendments are not built yet (item 16), so it offers to answer the worker's question
 again within the brief, or to stop the Change.
+
+The Spotter's question (#717) is held the same way: a step the Spotter stopped to ask asks whether to allow what it
+stopped, run the step again with the Spotter's reason, or replan. Allowing it needs a brief amendment, not built yet
+either: the answer is recorded and the same question is asked again, so no Resume moves the step on.
 """
 
 from __future__ import annotations
@@ -14,7 +18,8 @@ from typing import TYPE_CHECKING, Any
 from owlbear_decisions import new_id
 from owlbear_delivery_next.change_contracts.failures import cause_key
 from owlbear_delivery_next.change_contracts.inbox import AnswerItem
-from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, Option, Outcome, Question
+from owlbear_delivery_next.change_contracts.models import Answer, ErrorKind, Exit, Option, Outcome, Question, StepKind
+from owlbear_delivery_next.change_flow.moves import ask
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -27,6 +32,14 @@ WITHIN = "within"
 OPTIONS = [
     Option(id=WITHIN, label="Answer within the brief", next="retry"),
     Option(id="stop", label="Stop the Change", next="abandon"),
+]
+SPOTTER, ALLOW = "spotter-ask", "allow"
+SPOTTER_OPTIONS = [
+    Option(
+        id=ALLOW, label="Allow it: needs a brief amendment, which isn't built yet (item 16); the question stays open"
+    ),
+    Option(id="again", label="Run it again with the Spotter's reason", next="retry"),
+    Option(id="replan", label="Replan with the whole plan in view", next=StepKind.PLAN),
 ]
 TEXT = (
     'Your answer to the question "{asked}" changes the approved brief{why}, so it was not passed on. Changing an '
@@ -93,3 +106,21 @@ def decided(c: Change, q: Question, target: str, at: datetime) -> None:
         return
     asked.answer = None
     c.outcome = Outcome(exit=Exit.ASK, reason=asked.text, who="you", question=asked.id, at=at)
+
+
+def spotter(kind: StepKind, text: str) -> Question:
+    """The owner's question of a *kind* step the Spotter stopped to ask, *text* saying why."""
+    return Question(step=kind, text=text, options=[o.model_copy() for o in SPOTTER_OPTIONS],
+                    cause=cause_key(ErrorKind.GATE, kind, SPOTTER))  # fmt: skip
+
+
+def held(c: Change, item: AnswerItem, now: datetime) -> bool:
+    """Whether *item* allows what the Spotter stopped, at the question *c* waits on; then it is kept, asked again."""
+    o = c.outcome
+    q = next((q for q in c.questions if q.id == item.question and q.answer is None), None)
+    if q is None or item.option != ALLOW or o is None or o.question != q.id or not (q.cause or "").endswith(SPOTTER):
+        return False
+    q.answer = Answer(option=item.option, text=item.text, channel=item.channel, at=item.at)
+    q.effect_observed_at = item.at  # kept for the record, never delivered to a worker as its answer
+    ask(c, q.model_copy(update={"id": "", "answer": None, "effect_observed_at": None}), now)
+    return True

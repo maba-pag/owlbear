@@ -25,7 +25,37 @@ function found(r) {
   return tag(CATEGORY[r.category] ?? r.category, r.category === "irreversible-harm" ? "error" : "warning");
 }
 
-// One look: its moment, what it found and why, what it spent, how it ended and how Retro graded it; *more* follows.
+// What its finding did (an act line, ``improvement.acts``): the setting's own words, its arm, how its delivery ended
+// and, when it failed, its error whole; a stop to ask's question; the decision-conflict check's answer. A record
+// without an act line says nothing of one.
+function acted(r) {
+  if (!r.act) return nothing;
+  const held = r.act === "none" && r.why ? ` (${r.why})` : "";
+  const delivery = r.delivery ? `, ${r.delivery}${r.error && r.delivery !== "failed" ? ` (${r.error})` : ""}`
+    : r.act === "none" ? "" : ", not sent to the agent";
+  return html`<p class="meta">Its act: ${r.act}${held}, ${r.arm || "no"} arm${delivery}</p>
+    ${r.delivery === "failed" ? html`<p class="meta">Its error: ${r.error || "not said"}</p>` : nothing}
+    ${r.question ? html`<p class="meta">Its question to you: ${r.question}</p>` : nothing}
+    ${r.conflict ? html`<p class="meta">Decision check: ${checked(r.conflict)}</p>` : nothing}`;
+}
+
+// The decision-conflict check's answer, kept as the lookup's JSON or as text saying why there is none: each decision
+// it returned by id and title, with the picker's note on why it governs.
+function checked(text) {
+  let said;
+  try {
+    said = JSON.parse(text);
+  } catch {
+    return text;
+  }
+  if (said?.failed) return `failed: ${said.failed}`;
+  const found = said?.decisions ?? [];
+  if (!found.length) return said?.note || "no decision governs it";
+  return found.map((d) => [d.id, d.title, d.note && `(${d.note})`].filter(Boolean).join(" ")).join("; ");
+}
+
+// One look: its moment, what it found and why, what it spent, what it did, how it ended and how Retro graded it;
+// *more* follows.
 export function look(r, named, more) {
   const evidence = r.evidence?.length ? `${plural(r.evidence.length, "piece")} of evidence: ${r.evidence.join(", ")}`
     : "";
@@ -38,8 +68,7 @@ export function look(r, named, more) {
     ${r.note ? html`<p-text size="sm">${r.note}</p-text>` : nothing}
     ${r.rationale ? html`<p class="meta">Why: ${r.rationale}</p>` : nothing}
     ${evidence ? html`<p class="meta">${evidence}</p>` : nothing}
-    ${r.action ? html`<p class="meta">Its setting for this: ${r.action}${r.stopped_step ? ""
-      : " (recorded; nothing acts on it yet)"}</p>` : nothing}
+    ${r.action ? html`<p class="meta">Its setting for this: ${r.action}</p>` : nothing}${acted(r)}
     ${r.grades?.length ? html`<ul class="meta">${r.grades.map(grade)}</ul>` : nothing}${more}
   </li>`;
 }

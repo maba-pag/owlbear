@@ -2,11 +2,11 @@
 
 Every SDK event passes through ``Kept.add`` as the same dict a session's ``events.jsonl`` line holds (``to_dict()``),
 so a live session and a logged one read alike. Only the session's own agent counts (no subagent's events). A user
-message is the requester's unless a source other than the user sent it or it continues autopilot (``requester``); any
-other is kept as an action, so it never replaces the request or the plan. Kept: the first requester message (the
-step's task) and the last few, the turn (the latest requester message's event id), the agent's last messages, the last
-answers to its questions, and a ring of the last actions, each field cut to a bound; what the ring drops is counted. A
-snapshot is a frozen copy: a result that completes after it is not in it.
+message is the requester's unless a source other than the user sent it, it continues autopilot or it is the Spotter's
+note (``requester``); any other is kept as an action, so it never replaces the request or the plan. Kept: the first
+requester message (the step's task) and the last few, the turn (the latest requester message's event id), the agent's
+last messages, the last answers to its questions, and a ring of the last actions, each field cut to a bound; what the
+ring drops is counted. A snapshot is a frozen copy: a result that completes after it is not in it.
 """
 
 from __future__ import annotations
@@ -22,6 +22,7 @@ QUESTIONS = frozenset({"ask_user", "askQuestions"})
 STOPS = frozenset({"abort", "session.abort", "session.shutdown"})
 OPEN, CLOSE = "<browser_context>", "</browser_context>"
 OMITTED = "[browser context omitted]"
+NOTE = "[OwlBear Spotter note "  # how every note the Spotter sends into a chat starts (``acts.TOKEN``)
 
 
 def no_browser(text: str) -> str:
@@ -45,16 +46,18 @@ def main_agent(d: dict[str, Any]) -> bool:
 
 
 def requester(d: dict[str, Any]) -> bool:
-    """Whether a main-agent ``user.message`` is the requester's: no source or the user's, and no autopilot continuation.
+    """Whether a main-agent ``user.message`` is the requester's: the user's, not autopilot's nor a Spotter note.
 
     The runtime writes no ``source`` for a message an SDK client sends without one (a Delivery step's, a chat's own,
-    traced 2026-10-27); a system, command or agent source and an autopilot continuation are not the requester.
+    traced 2026-10-27); a system, command or agent source (the Spotter's steering a step), an autopilot continuation
+    and a message starting with the Spotter's token (its note in a chat, sent as the user) are not the requester.
     """
     data = d.get("data") or {}
     return (
         d.get("type") == "user.message"
         and data.get("source") in {None, "", "user"}
         and not data.get("isAutopilotContinuation")
+        and not str(data.get("content") or "").startswith(NOTE)
     )
 
 

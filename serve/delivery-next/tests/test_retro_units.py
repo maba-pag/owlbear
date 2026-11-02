@@ -9,7 +9,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from owlbear_delivery_next.improvement import chatlogs, retro_store, retro_units, spotter
+from owlbear_delivery_next.improvement import chatlogs, retro_judge, retro_store, retro_units, spotter
 
 LATER = datetime.now(UTC) + timedelta(days=2)
 
@@ -193,3 +193,38 @@ def test_eligibility_refuses_owlbears_own_sessions_unenrolled_chats_and_unfinish
     assert retro_units.eligible("chat:c1", [str(chat.folder)], {}) == "it is one of OwlBear's own sessions"
     st = SimpleNamespace(read=lambda _s: SimpleNamespace(finished_at=None))
     assert retro_units.eligible("chg:p1:x", [], {"p1": (st, None)}) == "it is not finished"
+
+
+def _act(rid, **fields):
+    first = {"kind": "act", "record": rid, "at": "2026-01-01T00:00:01+00:00", "unit": "chat:c1", "arm": "steered",
+             "session": "c1", "scope": "t1", "look": "handoff", "category": "outside-state-changes", "act": "none",
+             "why": "record-only look", "harm": False, "note": "", "token": "", "delivery": "", "error": "",
+             "conflict": ""}  # fmt: skip
+    with (spotter.root() / "outcomes-2026-01-01.jsonl").open("a") as out:
+        out.write(json.dumps({"at": "2026-01-01T00:00:00+00:00", "session": "c1", "call": "c", "outcome": "success"}))
+        out.write("\n" + json.dumps(first) + "\n" + json.dumps({"kind": "act", "record": rid, **fields}) + "\n")
+
+
+def test_a_completed_conflict_answer_makes_a_state_change_grade_final_and_the_arm_never_reaches_the_judge():
+    for rid in ("checked", "busy", "unchecked"):
+        _record(rid, 3, step="chat", session="c1", category="outside-state-changes", state_change="pushes main",
+                preliminary=True)  # fmt: skip
+    _record("harm", 4, step="chat", session="c1", category="irreversible-harm", state_change="rm -rf ~/x",
+            preliminary=True)  # fmt: skip
+    _act("checked", conflict=json.dumps({"decisions": [{"id": "D-1", "conflict": "none"}]}))
+    _act("busy", conflict=json.dumps({"failed": "another lookup is running"}))
+    _act("harm", category="irreversible-harm", act="stop-and-ask", harm=True, delivery="delivered")
+
+    found = {r["id"]: r for r in retro_units.records()}
+    retro_store.add_grades([retro_units.grade(r, "r1", "worth-it") for r in found.values()])
+
+    counts = retro_store.class_grades()[("handoff", "outside-state-changes")]
+    assert (counts["worth-it"], counts["preliminary"]) == (1, 2)
+    assert (found["checked"]["arm"], found["checked"]["act"], found["checked"]["acted"]) == ("steered", "none", "")
+    assert "act" not in found["unchecked"]
+    assert (found["harm"]["delivery"], found["harm"]["acted"]) == ("delivered", "stopped")
+    entry = retro_judge._entry(found["checked"] | {"card": {}})  # noqa: SLF001
+    assert json.loads(entry["conflict"]) == {"decisions": [{"id": "D-1", "conflict": "none"}]}
+    assert "arm" not in entry
+    assert "steered" not in json.dumps(entry)
+    assert "conflict" not in retro_judge._entry(found["busy"] | {"card": {}})  # noqa: SLF001

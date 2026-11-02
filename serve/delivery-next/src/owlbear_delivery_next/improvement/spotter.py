@@ -1,9 +1,12 @@
-"""The Spotter (design §4): it records what it would say and the action its finding's category is set to, never acting.
+"""The Spotter (design §4): it records what it would say and the action its finding's category is set to, and acts.
 
-It looks at a Delivery step's hand-offs and a sample of its actions, never delaying the step or changing its outcome;
-the machine host's chats follower (``machine_host.chats``) gives an enrolled chat's hand-offs, plans, state changes and
-samples to one ``Spotter`` per chat, whose ``room`` admits at most one chat look at a time and none while paused. Each
-look keeps the settings in force when it was admitted, and its record the turn (requester message) it belongs to.
+It looks at a Delivery step's plan, its hand-offs, its state changes and a sample of its actions; it delays the step
+only where its finding could answer a hand-off (below). The step's plan is its agent's first reply after the step's
+own message (or a resumed session's answer), looked at once as it arrives (``Spotter.seen``), so a finding can steer
+the turn that follows it. The machine host's chats follower (``machine_host.chats``) gives an
+enrolled chat's hand-offs, plans, state changes and samples to one ``Spotter`` per chat, whose ``room`` admits at most
+one chat look at a time and none while paused. Each look keeps the settings in force when it was admitted, and its
+record the turn (requester message) it belongs to.
 
 A look runs as a task on the step's own event loop when the hand-off (the submit tool's call) or a sampled completion
 happens, over a frozen snapshot of the step's intake: the same moment and inputs a live look will have. The loop only
@@ -15,49 +18,68 @@ limit, cooperatively, so it may pass it; there is no daily budget. A look over c
 ``DRAIN`` seconds after the step ends is recorded as skipped; its teardown takes at most ``TEARDOWN`` per stage, then
 its runtime is forced to stop. Each record keeps its spend, whether that is known, its limit and its stop
 (``credit_meter.Meter.report``). How Delivery answered each hand-off is kept beside its look. Records, outcomes and
-cards stay on this machine in ``~/.owlbear/spotter/`` (owner-only). A record that names a state change is marked
-preliminary: the decision-conflict check comes with live delivery, so such records do not count toward going live.
+cards stay on this machine in ``~/.owlbear/spotter/`` (owner-only), written by ``improvement.spotter_store`` on its
+threads; this module re-exports the store's names its callers use. A record that names a state change is marked
+preliminary; the decision-conflict check's completed answer, kept on its act, lets Retro count it (``retro_units``).
 
 A record keeps its finding's ``category`` (one of ``CATEGORIES``; ``none`` when silent, ``insufficient-context`` when
 the card lacked the facts, ``failed`` for an unusable answer, empty when skipped) and the ``action`` the settings gave
-that category when the step started; nothing acts on it yet. Records written before the categories (2026-10-26) carry
-the earlier ``mode`` and ``verdict`` (silent, note, interrupt) instead; their lines are left as they are.
+that category when the step started. Records written before the categories (2026-10-26) carry the earlier ``mode`` and
+``verdict`` (silent, note, interrupt) instead; their lines are left as they are.
+
+A context the owner of the work gave an actuator (``Context.act``) acts on each finding, by the rules in
+``improvement.acts``: after the record, the act is decided from the act lines of the record's session and scope (so a
+rebuilt Spotter keeps its counts), its line written, then, unless nothing is sent, the actuator awaited on the look's
+own loop; one that raises leaves the act ``failed`` with its whole error. Its return is not delivery: the actuator
+confirms that from the runtime's own log. A finding naming a state change then asks ``Context.conflicts`` on a thread
+of its own, and its answer is added to the act. Without an actuator nothing acts and no act line is written.
+
+In a Delivery step the actuator is the step's own (``runtimes.spotter_act``), bound once its session opens: it steers
+the running turn, stops it and resumes with a note, or stops it to ask the owner. When a hand-off look could act
+(``acts.could_act``), the submit waits for it (``handed_off(held=True)``): the note the actuator gives back
+refuses the hand-off, and a look that ends without one lets Delivery answer as before; one that failed or timed out
+writes an act saying so.
+
+While the steered-versus-silent test runs (``state_store.spotter_test``), every look admitted, Delivery's and a chat's,
+whenever its Spotter was built, gets the model, effort, context and prompt the test froze at its start, and its record
+names the test; a look admitted before the start keeps its own, and its record names none.
 """
 
 from __future__ import annotations
 
 import asyncio
-import atexit
-import contextlib
 import dataclasses
-import fcntl
-import gzip
+import functools
 import json
-import os
-import queue
 import random
 import re
-import threading
 import time
 import uuid
-from concurrent.futures import Future
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-from owlbear_delivery_next.improvement import card, cases, credit_meter
+from owlbear_delivery_next.improvement import acts, card, cases, credit_meter
 from owlbear_delivery_next.improvement.events import Kept, as_dict, clip, kept_text
-from owlbear_delivery_next.local_system import local_home
+from owlbear_delivery_next.improvement.spotter_store import (  # noqa: F401 - kept importable here
+    GRACE,
+    LOCK,
+    WORK,
+    _append,
+    _today,
+    place,
+    root,
+    store,
+)
 from owlbear_delivery_next.settings.improvement import CATEGORIES
+from owlbear_delivery_next.state_store import spotter_test
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable, Iterable, Iterator, Mapping
-    from pathlib import Path
+    from collections.abc import Awaitable, Callable, Iterable, Mapping
 
 PROMPT = cases.PROMPT  # the prompt file; what a look sends is ``Context.prompt``, frozen with its examples
 RUNNING = 2  # looks at once per step
 LOOK, TEARDOWN, DRAIN = 90.0, 5.0, 5.0  # seconds a look's answer, each teardown stage and the step's end may take
-LOCK, GRACE = 5.0, 1.0  # seconds a file lock is waited for; and the Spotter's writes at the process's exit
 ANSWERS = frozenset({*CATEGORIES, "none", "insufficient-context"})  # a finding's category, or why there is none
 
 
@@ -80,6 +102,11 @@ class Context:
     decisions: tuple[str, ...] = ()
     gaps: tuple[str, ...] = ()  # what the runner could not give
     prompt: cases.Prompt | None = None  # frozen when the step starts (a chat: its turn); None: frozen by ``Spotter``
+    arm: str | None = None  # the unit's arm of the steered-versus-silent test (``state_store.spotter_arms``)
+    cap: int | None = None  # steering notes per step or chat turn: the Spotter's ``intervention_cap``
+    act: Callable[[Record, acts.Act], Awaitable[None]] | None = None  # the actuator; None: nothing acts
+    conflicts: Callable[[str], str] | None = None  # the decision-conflict check of a state change, its answer as text
+    test: str = ""  # the running test whose frozen inputs a look admitted with (``frozen``); "": none
 
 
 @dataclass
@@ -98,7 +125,7 @@ class Record:
     probability: float
     turn: str = ""  # the requester message the moment belongs to: its event id
     category: str = ""
-    action: str = ""  # the setting of the finding's category; recorded only, nothing acts yet
+    action: str = ""  # the setting of the finding's category; what was done is its act (``improvement.acts``)
     note: str = ""
     evidence: list[str] = field(default_factory=list)
     state_change: str = ""
@@ -116,63 +143,18 @@ class Record:
     stopped_by: str = ""
     seconds: float = 0.0
     skipped: str = ""
+    test: str = ""  # the test whose frozen model and prompt the look used; "": none ran when it was admitted
 
 
-def place() -> Path:
-    """Where the Spotter's records and cards are kept on this machine; nothing is created."""
-    return local_home.root() / "spotter"
-
-
-def ready(folder: Path) -> Path:
-    """*folder*, created owner-only with its cards' folder if needed."""
-    folder.mkdir(parents=True, exist_ok=True, mode=0o700)
-    (folder / "cards").mkdir(exist_ok=True, mode=0o700)
-    return folder
-
-
-def root() -> Path:
-    """The Spotter's folder, created if needed."""
-    return ready(place())
-
-
-def _today() -> str:
-    return datetime.now(UTC).date().isoformat()
-
-
-@contextlib.contextmanager
-def _locked(path: Path, seconds: float = LOCK) -> Iterator[None]:
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT, 0o600)
-    try:
-        until = time.monotonic() + seconds
-        while True:
-            try:
-                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                break
-            except BlockingIOError:
-                if time.monotonic() > until:
-                    raise TimeoutError(path.name) from None
-                time.sleep(0.02)
-        yield
-    finally:
-        os.close(fd)
-
-
-def _append(folder: Path, name: str, line: dict[str, Any]) -> None:
-    """One line appended to the day's file *name* in *folder* under its lock; a failure never reaches the step."""
-    with contextlib.suppress(OSError, TimeoutError), _locked(ready(folder) / "records.lock"):
-        fd = os.open(folder / f"{name}-{_today()}.jsonl", os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
-        with os.fdopen(fd, "a") as out:
-            out.write(json.dumps(line) + "\n")
-
-
-def store(folder: Path, record: Record, card_: dict[str, Any] | None) -> None:
-    """Keep *record*'s card and append the record to the day's records in *folder*; a failure never reaches the step."""
-    with contextlib.suppress(OSError):
-        if card_ is not None:
-            fd = os.open(ready(folder) / "cards" / f"{record.id}.json.gz", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-            with os.fdopen(fd, "wb") as raw, gzip.open(raw, "wt") as out:
-                json.dump(card_, out)
-    _append(folder, "records", asdict(record))
+def frozen(ctx: Context) -> Context:
+    """*ctx* with the running test's frozen model, effort, context and prompt; *ctx* itself while none runs."""
+    if (test := spotter_test.active()) is None:
+        return ctx
+    f = test["frozen"]
+    prompt = cases.Prompt(f["prompt"], f["cases"], f["prompt_hash"])
+    return dataclasses.replace(
+        ctx, model=f["model"], effort=f["effort"], context=f["context"], prompt=prompt, test=test["id"]
+    )
 
 
 def parse(text: str) -> dict[str, Any]:
@@ -249,12 +231,22 @@ class Spotter:
         self.running = 0  # looks admitted and not ended
         self.crowded: dict[str, int] = {}  # sampled looks skipped, by why, recorded once at the end
         self.closing = False  # the step ended: no look starts any more
+        self.deciding = asyncio.Lock()  # one act decided and written at a time: each reads the lines of the last
+        self.hand_offs: dict[str, asyncio.Future[str | None]] = {}  # a waiting submit's call id: the look's note
+        self.planned = False  # the step's plan was seen live: ``seen`` looks at it once
 
     def seen(self, ev: Any) -> None:  # noqa: ANN401 - an SDK event, on the step's loop
-        """Take one event in; a completed action of the session's own agent may be sampled for a look."""
+        """Take one event in: its own agent's completed action may be sampled, its first reply is its plan."""
         d = as_dict(ev)
+        unanswered = self.kept.first_reply is None
         if self.take(d):
             self.sample(d)
+        elif unanswered and self.kept.first_reply and self.kept.turn and not self.planned:
+            self.planned = True
+            if "plan" in self.ctx.looks:  # the card shows the reply as the plan
+                moment = {"at": d.get("timestamp"), "kind": "the agent's first reply after the requester's message",
+                          "call": str(d.get("id") or "")}  # fmt: skip
+                self._look("plan", 1.0, moment)
 
     def take(self, ev: Any) -> bool:  # noqa: ANN401 - an SDK event or a logged one
         """Take one event in without a look; whether it completed a call of the session's own agent."""
@@ -281,13 +273,32 @@ class Spotter:
         for ev in events:
             self.kept.add(ev)
 
-    def handed_off(self, call_id: str, arguments: Any) -> None:  # noqa: ANN401 - the submit tool's JSON arguments
-        """A look at the step's hand-off (its submit call, before Delivery accepts it), if hand-offs are looked at."""
-        if "hand-off" in self.ctx.looks:
-            at = datetime.now(UTC).isoformat(timespec="seconds")
-            self._look(
-                "hand-off", 1.0, {"at": at, "kind": "hand-off", "call": call_id, "result": kept_text(arguments, 3000)}
-            )
+    def handed_off(
+        self,
+        call_id: str,
+        arguments: Any,  # noqa: ANN401 - the submit tool's JSON arguments
+        *,
+        held: bool = False,
+    ) -> asyncio.Future[str | None] | None:
+        """A look at the step's hand-off (its submit call, before Delivery accepts it), if hand-offs are looked at.
+
+        *held*: the submit waits for the look; the future gives the note it answers with, None once the look ended
+        without one (or none started).
+        """
+        if "hand-off" not in self.ctx.looks:
+            return None
+        at = datetime.now(UTC).isoformat(timespec="seconds")
+        moment = {"at": at, "kind": "hand-off", "call": call_id, "result": kept_text(arguments, 3000)}
+        task = self._look("hand-off", 1.0, moment)
+        if not held:
+            return None
+        waiter: asyncio.Future[str | None] = asyncio.get_running_loop().create_future()
+        self.hand_offs[call_id] = waiter
+        if task is None:
+            waiter.set_result(None)
+        else:
+            task.add_done_callback(lambda _t: waiter.done() or waiter.set_result(None))
+        return waiter
 
     def answered(self, call_id: str, outcome: str) -> None:
         """How Delivery answered the hand-off *call_id* (accepted, rejected or failed), kept beside its look.
@@ -310,23 +321,26 @@ class Spotter:
                       project=ctx.project, change=ctx.change, step=ctx.step, session=self.session(), look=look,
                       call=str(moment.get("call") or ""), cutoff=int(moment.get("cutoff") or 0),
                       probability=probability, turn=str(moment.get("turn") or ""), model=ctx.model,
-                      effort=ctx.effort, **fields)  # fmt: skip
+                      effort=ctx.effort, test=ctx.test, **fields)  # fmt: skip
 
-    def _look(self, look: str, probability: float, moment: dict[str, Any]) -> None:
-        """Freeze the intake and the settings now; the rest runs in a task, its file work on the Spotter's threads."""
+    def _look(self, look: str, probability: float, moment: dict[str, Any]) -> asyncio.Future[Any] | None:
+        """Freeze the intake and the settings now (a running test's own inputs among them); the rest runs in a task."""
         if self.closing:
-            return
+            return None
+        ctx = frozen(self.ctx)  # the test's inputs, while it runs; read before admission, so a raise leaks none
         if why := ("capacity: looks already running" if self.running >= RUNNING else self.room()):
             if look == "sample":  # a burst of samples is one count, not a write each
                 self.crowded[why] = self.crowded.get(why, 0) + 1
             else:
                 self.skip(look, probability, moment, why)
-            return
+            return None
         snapshot = self.kept.snapshot()
         moment = {"turn": snapshot["turn"], **moment, "cutoff": snapshot["n"]}
         self.running += 1
-        task = self._run(look, probability, snapshot, moment, self.ctx)
-        self._track(asyncio.ensure_future(task)).add_done_callback(self._ended)
+        task = self._run(look, probability, snapshot, moment, ctx)
+        looked = self._track(asyncio.ensure_future(task))
+        looked.add_done_callback(self._ended)
+        return looked
 
     def _ended(self, _task: asyncio.Future[Any]) -> None:
         self.running -= 1
@@ -339,6 +353,7 @@ class Spotter:
         started, the_card = time.monotonic(), None
         record = self._record(look, probability, moment, ctx, skipped="the step ended before the look began")
         meter: credit_meter.Meter | None = None
+        acting = False
         try:
             meter = credit_meter.Meter(ctx.limit, "look", ident=record.id)  # one identity: the record and its sessions
             gaps = [*ctx.gaps, *([ctx.prompt.gap] if ctx.prompt and ctx.prompt.gap else [])]
@@ -349,15 +364,16 @@ class Spotter:
             text = await asyncio.wait_for(self.judge(the_card, ctx, meter), LOOK)
             if not text and meter.stopped:
                 record.skipped = f"credit limit: {meter.stopped} ({meter.stopped_by}) before an answer"
-                return
-            said = parse(text)
-            record.skipped, record.category = "", said["category"]
-            record.action = ctx.actions.get(record.category, "")
-            record.note = clip(said.get("note") or "", 1200)
-            record.evidence = [clip(e, 300) for e in said.get("evidence") or [] if isinstance(e, str)][:8]
-            record.state_change = clip(said.get("state_change") or "", 400)
-            record.rationale = clip(said.get("rationale") or "", 1500)
-            record.preliminary = bool(record.state_change)
+            else:
+                said = parse(text)
+                record.skipped, record.category = "", said["category"]
+                record.action = ctx.actions.get(record.category, "")
+                record.note = clip(said.get("note") or "", 1200)
+                record.evidence = [clip(e, 300) for e in said.get("evidence") or [] if isinstance(e, str)][:8]
+                record.state_change = clip(said.get("state_change") or "", 400)
+                record.rationale = clip(said.get("rationale") or "", 1500)
+                record.preliminary = bool(record.state_change)
+                acting = ctx.act is not None and record.category in CATEGORIES
         except TimeoutError:
             record.skipped = f"time: the look took over {LOOK:.0f} seconds"
         except Exception as exc:  # noqa: BLE001 - a look never reaches the step
@@ -376,6 +392,27 @@ class Spotter:
                 record.sdk_sessions = spend["sdk_sessions"]
             writing = asyncio.wrap_future(WORK.submit(store, self.folder, record, the_card))  # never cancelled
             await asyncio.wait({writing}, timeout=2 * LOCK)  # it goes on if this wait ends
+        if acting:
+            await self._act(record, ctx)
+        elif look == "hand-off" and record.call in self.hand_offs and (record.skipped or record.category == "failed"):
+            why = f"the hand-off was accepted: {record.skipped or 'the look gave an unusable answer'}"
+            await offload(acts.write, self.folder, acts.held_back(record, ctx, why))
+
+    async def _act(self, record: Record, ctx: Context) -> None:
+        """Decide *record*'s act, write it and dispatch it unless nothing is sent; then check its state change."""
+        async with self.deciding:
+            sent, unresolved = await offload(acts.counts, self.folder, record.session, acts.scope(record, ctx))
+            act = acts.decide(record, record.look, ctx, sent, unresolved)
+            await offload(acts.write, self.folder, act)
+        if act.act not in acts.UNSENT and ctx.act is not None:
+            try:
+                await ctx.act(record, act)
+            except Exception as exc:  # noqa: BLE001 - kept on the act, whole; a look never reaches the step
+                error = f"{type(exc).__name__}: {exc}"
+                await offload(functools.partial(acts.update, self.folder, record.id, delivery="failed", error=error))
+        if record.state_change:
+            checking = acts.CHECKS.submit(acts.checked, self.folder, record.id, ctx.conflicts, record.state_change)
+            await asyncio.shield(asyncio.wrap_future(checking))  # a stopped wait leaves the check to end on its thread
 
     async def drain(self) -> None:
         """At the step's end: no look starts any more; wait briefly for running ones, then stop the rest; bounded."""
@@ -393,48 +430,3 @@ class Spotter:
             task.cancel()
         if pending:
             await asyncio.wait(pending, timeout=4 * TEARDOWN)  # its spend's read, two teardown stages, its record
-
-
-class Worker:
-    """The Spotter's own daemon threads, first in, first out: the process waits at most ``GRACE`` for them at exit.
-
-    A killed write loses at most the line it was writing.
-    """
-
-    def __init__(self, threads: int) -> None:
-        self.jobs: queue.Queue[tuple[Future[Any], Callable[..., Any], tuple[Any, ...]]] = queue.Queue()
-        self.threads, self.started, self.lock = threads, False, threading.Lock()
-
-    def submit[T](self, work: Callable[..., T], *args: Any) -> Future[T]:  # noqa: ANN401 - the work's arguments
-        """Queue *work*; its future."""
-        with self.lock:
-            if not self.started:
-                for i in range(self.threads):
-                    threading.Thread(target=self._serve, name=f"spotter-{i}", daemon=True).start()
-                self.started = True
-        done: Future[T] = Future()
-        self.jobs.put((done, work, args))
-        return done
-
-    def _serve(self) -> None:
-        while True:
-            done, work, args = self.jobs.get()
-            try:
-                if done.set_running_or_notify_cancel():
-                    try:
-                        done.set_result(work(*args))
-                    except BaseException as exc:  # noqa: BLE001 - the future carries it
-                        done.set_exception(exc)
-            finally:
-                self.jobs.task_done()
-
-    def settled(self, seconds: float) -> bool:
-        """Wait at most *seconds* until every queued job ended; whether they did."""
-        until = time.monotonic() + seconds
-        while self.jobs.unfinished_tasks and time.monotonic() < until:
-            time.sleep(0.01)
-        return not self.jobs.unfinished_tasks
-
-
-WORK = Worker(2)
-atexit.register(WORK.settled, GRACE)

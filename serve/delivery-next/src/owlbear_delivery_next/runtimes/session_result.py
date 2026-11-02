@@ -28,6 +28,7 @@ from owlbear_delivery_next.change_contracts.models import (
     Task,
     Waiting,
 )
+from owlbear_delivery_next.change_flow import answer_kinds
 from owlbear_delivery_next.change_flow.loop import StepResult
 from owlbear_delivery_next.impeccable import design_tools
 from owlbear_delivery_next.local_system.processes import Termination
@@ -51,6 +52,7 @@ type Ending = Literal[
     "read-only-refused",
     "shared-git-changed",
     "credit-limit",
+    "spotter-ask",
 ]
 type ModelCheck = Literal["verified", "mismatch", "unknown"]
 PROVEN: frozenset[str] = frozenset({"result", "ask", "premise", "missing-tool"})  # endings whose model must be proven
@@ -212,7 +214,7 @@ def _exit(  # noqa: C901, PLR0911, PLR0912, PLR0915 - one case per ending
         # Until the host schedules sessions (TD-104/105), the wait stands in for queueing behind other ready work.
         cause, wake = cause_key(ErrorKind.TOOLING, kind, WRONG_MODEL), now + WRONG_MODEL_WAIT
         return StepResult(exit=Exit.RETRY, cause=cause, reason=run.detail, wake_at=wake)
-    if run.quota and run.ending not in {"result", "ask", "premise", "missing-tool"}:  # the quota ended it
+    if run.quota and run.ending not in {"result", "ask", "premise", "missing-tool", "spotter-ask"}:  # quota ended it
         reason = run.detail or "Copilot quota exhausted"
         return StepResult(
             exit=Exit.RETRY, cause=cause_key(ErrorKind.CAPACITY, kind, QUOTA), reason=reason, wake_at=run.quota_reset
@@ -249,6 +251,8 @@ def _exit(  # noqa: C901, PLR0911, PLR0912, PLR0915 - one case per ending
             options = [Option(id=f"o{i}", label=f"{o.label}: {o.effect}") for i, o in enumerate(p.options, 1)]
             question = Question(step=kind, text=f"{p.question} (why: {p.why})", options=options)
             return StepResult(exit=Exit.ASK, question=question)
+        case "spotter-ask":  # the Spotter stopped the step to ask the owner (#717)
+            return StepResult(exit=Exit.ASK, question=answer_kinds.spotter(kind, run.detail))
         case "premise" if isinstance(p, tools.WrongPremise):
             cause = cause_key(ErrorKind.SCOPE, kind, p.stage)
             back = {StepKind.CHECK: StepKind.BUILD, StepKind.PLAN: StepKind.SHAPE}.get(kind, StepKind.PLAN)

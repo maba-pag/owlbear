@@ -10,7 +10,7 @@ import contextlib
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
-from owlbear_delivery_next.improvement import case_replay, cases, followups, proposal_apply
+from owlbear_delivery_next.improvement import case_replay, cases, followups, proposal_apply, spotter_test_run
 from owlbear_delivery_next.improvement import proposal_targets as targets
 from owlbear_delivery_next.improvement import retro_proposals as props
 from owlbear_delivery_next.improvement import retro_store as store
@@ -86,7 +86,7 @@ def _settings(st: Store) -> dict[str, Any]:
 
 
 def spotter(projects: units.Projects, records: list[dict[str, Any]], now: datetime) -> dict[str, Any]:
-    """Each loaded project's Spotter settings and each project's spend over the last week.
+    """Each loaded project's Spotter settings, each project's spend over the last week and the Spotter's test.
 
     A look skipped before it began (no SDK session, no credits) is counted apart: it neither ran nor spent.
     """
@@ -106,6 +106,7 @@ def spotter(projects: units.Projects, records: list[dict[str, Any]], now: dateti
         "projects": {pid: {"name": repo.name} | _settings(st) for pid, (st, repo) in projects.items()},
         "window_days": WINDOW,
         "spend": spend,
+        "test": spotter_test_run.show(),  # read-only: declared, started with its frozen versions, ended, or none
     }
 
 

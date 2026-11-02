@@ -14,7 +14,7 @@ import gzip
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from owlbear_delivery_next.improvement import assumptions, case_review, cases, retro_bars, retro_segments, spotter
+from owlbear_delivery_next.improvement import acts, assumptions, case_review, cases, retro_bars, retro_segments, spotter
 from owlbear_delivery_next.improvement import proposal_targets as targets
 from owlbear_delivery_next.improvement import retro_proposals as props
 from owlbear_delivery_next.improvement import retro_store as store
@@ -70,7 +70,7 @@ def _entry(r: Mapping[str, Any]) -> dict[str, Any]:
         "note": cut(mask.redact(str(r.get("note") or "")), NOTE),
         "sampled_silence": silence(r),
         "card": cut(mask.redact(dumps(r["card"])), CARD) if "card" in r else _card(r["id"]),
-    }
+    } | ({"conflict": cut(mask.redact(str(r["conflict"])), CARD)} if acts.answered(r.get("conflict")) else {})
 
 
 def _unassessable(record: Mapping[str, Any]) -> str:

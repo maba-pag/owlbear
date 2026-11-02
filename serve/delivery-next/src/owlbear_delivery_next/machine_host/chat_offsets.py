@@ -45,6 +45,19 @@ def save(now: dict[str, Any]) -> bool:
     return False
 
 
+def missed(cid: str, old: dict[str, Any], start: int, file: tuple[int, int]) -> None:
+    """Record what chat *cid*'s log got while OwlBear was not following it as a gap.
+
+    *old* is where the last run read it to, *start* where following begins in *file* (its device and inode).
+    """
+    was = (int(old.get("offset") or 0), tuple(old.get("file") or (0, 0)))
+    if was[1] != file:
+        gap(cid, "the chat's log was replaced while OwlBear was not following it; read as context only")
+    elif was[0] < start:
+        read = f"bytes {was[0]}..{start} of the chat's log were read as context, never looked at"
+        gap(cid, f"OwlBear was not following: {read}")
+
+
 def gap(cid: str, why: str) -> None:
     """Record that chat *cid*'s bytes were not looked at, and *why*."""
     record = spotter.Record(

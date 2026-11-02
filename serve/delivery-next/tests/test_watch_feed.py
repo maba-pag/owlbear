@@ -342,3 +342,37 @@ def test_a_spotter_that_cannot_start_leaves_the_watcher_watching(place, monkeypa
     assert st.feed.spotter is None
     assert place.notes == ["spotter refused"]
     assert rows(place)["c1"]["verdict"] == OUTSIDE  # the watcher still judged the call
+
+
+def test_a_completed_write_outside_is_a_state_change_look_never_a_sample_whatever_the_reports_leave_out(
+    place, tmp_path
+) -> None:
+    """#717: the Spotter counts Delivery's own state and the exempt roots as outside; the reports leave both out."""
+    from owlbear_delivery_next.improvement import spotter  # noqa: PLC0415
+
+    mine, cache = tmp_path / "store" / "changes" / "c1", tmp_path / "cache"
+    for folder in (mine, cache):
+        folder.mkdir(parents=True, exist_ok=True)
+    places = Places((tmp_path / "worktrees", tmp_path / "store" / "changes"), (mine,), (cache,), tmp_path / "home")
+    spot = spotter.Context(project="p", change="c1", step="build", looks=("state-change", "sample"), sample_rate=100,
+                           verbose=False, model="m", effort="", limit=1.0)  # fmt: skip
+    place.watching = dataclasses.replace(place.watching, places=places, spot=spot)
+    calls = {"exempt": cache / "x", "outside": place.elsewhere / "x", "mine": mine / "state.json",
+             "inside": place.own / "x.py"}  # fmt: skip
+
+    async def main() -> None:
+        st = stepped(place, close=False)
+        for cid, path in calls.items():
+            st.on_event(start(cid, "create", path=str(path)))
+            st.on_event(event("tool.execution_complete", {"toolCallId": cid, "success": True}))
+            while st.feed.spotter.tasks:  # one look at a time: none is skipped for capacity
+                await asyncio.wait(set(st.feed.spotter.tasks))
+        await st.feed.spotter.drain()
+        st.feed.close()
+
+    asyncio.run(main())
+    assert spotter.WORK.settled(5)
+    looked = [json.loads(x) for f in spotter.root().glob("records-*.jsonl") for x in f.read_text().splitlines()]
+    expected = [("exempt", "state-change"), ("inside", "sample"), ("mine", "state-change"), ("outside", "state-change")]
+    assert sorted((r["call"], r["look"]) for r in looked) == expected
+    assert sorted(rows(place)) == ["outside"]  # the reports leave out the exempt root and the Change's own state

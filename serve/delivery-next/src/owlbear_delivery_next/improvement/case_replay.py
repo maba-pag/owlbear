@@ -10,8 +10,8 @@ scored cases and their expected calls are frozen when it is asked for (the curre
 neither in the reserve, nor unscored, nor an example in either version), with both prompts. Each case gets one look
 with each prompt. False notes, misses and wrong categories are counted apart; the change is refused when any of them
 rises, with no trade between them (D-01M5XCDRZJQJW4JMAQQ5G371YV), and when the comparison is empty, incomplete or
-stopped. A passing change is written only onto the very version it was asked against; else it is refused as stale and
-nothing is rerun.
+stopped. A passing change is written only onto the very version it was asked against, and never while a Spotter test
+runs; else it is refused, as stale or while the test is active, and nothing is rerun.
 
 **Release** (a marked assumption, ``assumptions.RELEASE``): a frozen manifest of the reviewed corpus (each test case's
 and example's card hash, expected call, family and reserve mark) and the grading contract. Equal manifests are one
@@ -28,7 +28,7 @@ import uuid
 from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.improvement import assumptions, cases
-from owlbear_delivery_next.improvement.cases import CaseError, Prompt, Stale
+from owlbear_delivery_next.improvement.cases import CaseError, Frozen, Prompt, Stale
 from owlbear_delivery_next.improvement.credit_meter import Meter
 from owlbear_delivery_next.improvement.events import clip
 from owlbear_delivery_next.local_system.storage_io import atomic_write
@@ -265,8 +265,9 @@ async def run(  # noqa: C901, PLR0912 - the run, its stop and its result
             try:
                 n = cases.commit(request["parent"], request["edits"], request["by"], request["reason"], out["id"])
                 cases.append("runs.jsonl", {"id": out["id"], "applied": n, "at": cases.now()})
-            except Stale as exc:
-                note = f"refused as stale: {exc}; nothing is rerun"
+            except (Stale, Frozen) as exc:
+                said = "refused as stale" if isinstance(exc, Stale) else "refused while a Spotter test is active"
+                note = f"{said}: {exc}; nothing is rerun"
                 cases.append("runs.jsonl", {"id": out["id"], "applied": None, "why": note, "at": cases.now()})
                 out["applied"] = note
             else:

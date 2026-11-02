@@ -233,6 +233,8 @@ def fold(  # noqa: C901, PLR0912 - per item kind
                 if c.step.kind == StepKind.SHAPE:
                     _done(c, None, now)
                     c.outcome = None
+            case AnswerItem() if answer_kinds.held(c, item, now):  # #717: the Spotter's question, kept, asked again
+                pass
             case AnswerItem():  # one that settles nothing goes to *dropped* with why, for the activity (#791)
                 if (why := _answer(c, item, now)) and dropped is not None:
                     dropped.append((item, why))

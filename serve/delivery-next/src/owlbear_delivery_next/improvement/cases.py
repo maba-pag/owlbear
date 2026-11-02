@@ -10,7 +10,9 @@ Rules every version keeps: a test case or an example has a call, a why and a rev
 and why; an example has its text and is neither in the reserve, nor synthetic, nor unscored; all examples together
 stay within ``EXAMPLES`` characters. A case whose assumption was retired is in no new version. A version whose active
 examples differ from its parent's is written only with a passed regression run bound to that very parent and change
-(``case_replay``): nothing else changes what the Spotter is shown.
+(``case_replay``): nothing else changes what the Spotter is shown. While the Spotter's test runs
+(``state_store.spotter_test``) no version changes the active examples; candidates, reviews and runs are written as
+ever.
 
 The prompt a look sends is one immutable ``Prompt`` snapshot (the prompt file, the verbose line, the examples), frozen
 when a step starts or a chat turn begins; its hash is of exactly those bytes.
@@ -35,6 +37,7 @@ from typing import TYPE_CHECKING, Any
 from owlbear_delivery_next.improvement import assumptions
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.settings.improvement import CATEGORIES
+from owlbear_delivery_next.state_store import spotter_test
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Mapping
@@ -57,6 +60,10 @@ class CaseError(Exception):
 
 class Stale(CaseError):  # noqa: N818 - says what happened
     """The cases changed since the change was asked for."""
+
+
+class Frozen(CaseError):  # noqa: N818 - says what happened
+    """The change would change the examples a running Spotter test froze."""
 
 
 def place() -> Path:
@@ -302,10 +309,12 @@ def problems(cases: Cases) -> list[str]:  # noqa: C901 - one rule after another
 def commit(parent: int, edits: Mapping[str, Entry | None], by: str, reason: str, run: str = "") -> int:
     """Write the version *edits* make of version *parent*; its number.
 
-    A change of the active examples needs *run*: a passed regression run of exactly this parent and change.
+    A change of the active examples needs *run*: a passed regression run of exactly this parent and change, and no
+    running Spotter test.
 
     Raises:
         Stale: The newest version is no longer *parent*.
+        Frozen: The change changes the examples while the Spotter's test runs.
         CaseError: The change breaks a rule, or changes the examples without its passed run.
     """
     with locked():
@@ -314,6 +323,10 @@ def commit(parent: int, edits: Mapping[str, Entry | None], by: str, reason: str,
             msg = f"the Spotter cases are at version {cur['n']} now, not {parent}"
             raise Stale(msg)
         cases = applied(cur["cases"], edits)
+        if shown(cases) != shown(cur["cases"]) and (test := spotter_test.active()) is not None:
+            msg = (f"{spotter_test.name(test)} runs since {test['started_at']}: the Spotter's examples stay as it "
+                   f"froze them (cases version {test['frozen']['cases']}) until it ends")  # fmt: skip
+            raise Frozen(msg)
         if found := problems(cases):
             raise CaseError("; ".join(found))
         if shown(cases) != shown(cur["cases"]) and not passed(run, parent, edits):
