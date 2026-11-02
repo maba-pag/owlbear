@@ -5,10 +5,11 @@
 Delivery accepts it, and Delivery's answer after; the accepting runs in a worker thread so lints never hold the loop
 (TD-87) and a cancelled handler still keeps the answer.
 
-When the Spotter's look at the hand-off could answer it (``acts.could_act``), the submit waits for that look, at most
+When the Spotter's look at the hand-off could act (``acts.could_act``), the submit waits for that look, at most
 ``WAIT`` seconds: a note it answers with refuses the hand-off, as a failed call tallied ``spotter`` (never ``rejected``,
-never an invalid result), and the agent goes on; the next submission is looked at again. A look that gives none, fails
-or outlasts the wait leaves the hand-off to Delivery as before; the look's act says why.
+never an invalid result), and the agent goes on; the next submission is looked at again. A stop to ask ends the step
+first, so Delivery never accepts the hand-off. A look that gives none, fails or outlasts the wait leaves the hand-off
+to Delivery as before; the look's act says why.
 """
 
 from __future__ import annotations

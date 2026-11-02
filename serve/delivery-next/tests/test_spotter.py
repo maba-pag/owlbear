@@ -1391,6 +1391,33 @@ def test_a_hand_off_waits_for_its_look_whose_steer_or_refusal_answers_it_and_the
     assert st.actor.session.calls == []  # a hand-off's note is the submit's answer, never a message
 
 
+def test_a_hand_off_waits_for_a_look_that_could_stop_to_ask_and_the_step_ends_with_its_question(tmp_path) -> None:
+    """Any category acting at a hand-off holds the submit: here course and constraints asks, in the silent arm."""
+    asking = {"hand-off-fitness": "record", "course-and-constraints": "stop-and-ask",
+              "outside-state-changes": "show-owner", "irreversible-harm": "record"}  # fmt: skip
+    release = asyncio.Event()
+
+    async def held(the_card: dict[str, Any], c: spotter.Context, spend: credit_meter.Meter) -> str:
+        await release.wait()
+        return await answers([finding("course-and-constraints")])(the_card, c, spend)
+
+    async def main() -> tuple[sdk_adapter._Step, Any]:
+        spot = spotter.Spotter(ctx(actions=asking, arm="silent", cap=2), lambda: "s1", held)
+        st = handing_off(tmp_path, spot)
+        first = asyncio.ensure_future(submitted(st, "call-1"))
+        await asyncio.sleep(0.1)  # past the moment an unheld submission is accepted
+        release.set()
+        result = await first
+        await spot.drain()
+        return st, result
+
+    st, result = asyncio.run(main())
+    assert spotter.WORK.settled(5)
+    assert result.result_type != "success"
+    assert st.run.ending == "spotter-ask"
+    assert st.run.detail == "The Spotter stopped this step: About course-and-constraints."
+
+
 def test_a_hand_off_whose_look_times_out_is_accepted_and_its_act_says_why(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(spotter, "LOOK", 0.05)
 

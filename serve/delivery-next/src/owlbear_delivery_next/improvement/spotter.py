@@ -33,8 +33,8 @@ confirms that from the runtime's own log. A finding naming a state change then a
 of its own, and its answer is added to the act. Without an actuator nothing acts and no act line is written.
 
 In a Delivery step the actuator is the step's own (``runtimes.spotter_act``), bound once its session opens: it steers
-the running turn, stops it and resumes with a note, or stops it to ask the owner. When a hand-off look could answer the
-hand-off (``acts.could_act``), the submit waits for it (``handed_off(held=True)``): the note the actuator gives back
+the running turn, stops it and resumes with a note, or stops it to ask the owner. When a hand-off look could act
+(``acts.could_act``), the submit waits for it (``handed_off(held=True)``): the note the actuator gives back
 refuses the hand-off, and a look that ends without one lets Delivery answer as before; one that failed or timed out
 writes an act saying so.
 

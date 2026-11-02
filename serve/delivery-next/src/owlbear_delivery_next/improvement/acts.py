@@ -107,12 +107,16 @@ def decide(record: Record, look: str, ctx: Context, sent: int, unresolved: Mappi
 def could_act(ctx: Context) -> bool:
     """Whether a hand-off look could answer the hand-off itself, so its submit waits for the look.
 
-    It could in the steered arm when hand-off fitness steers or refuses, and in either arm when irreversible harm stops.
+    It could when any category's setting acts in this arm: a discretionary action only in the steered arm, a stop to
+    ask in either, irreversible harm by any acting setting in either; recording and showing the owner never do.
     """
     if ctx.act is None or "hand-off" not in ctx.looks:
         return False
-    fitness = ctx.actions.get("hand-off-fitness") in {"steer", "refuse-hand-off"} and ctx.arm == "steered"
-    return fitness or ctx.actions.get(HARM, "record") not in {*UNSENT, "record"}
+    steered = ctx.arm == "steered"
+    return any(
+        setting not in {*UNSENT, "record"} and (category == HARM or setting not in DISCRETIONARY or steered)
+        for category, setting in ctx.actions.items()
+    )
 
 
 def held_back(record: Record, ctx: Context, why: str) -> Act:
