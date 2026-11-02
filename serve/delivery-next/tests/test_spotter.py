@@ -272,8 +272,9 @@ def test_a_freeze_read_that_raises_says_so_and_leaks_no_admission(monkeypatch) -
 def test_looks_past_capacity_are_recorded_skipped_and_a_look_stopped_at_its_limit_says_so() -> None:
     async def main() -> None:
         spot = spotter.Spotter(ctx(), lambda: "s-1", judge(wait=0.1))
-        for i in range(3):  # two run; the third finds no room
+        for i in range(2):  # two run; a third look other than a hand-off finds no room
             spot.handed_off(f"c{i}", {})
+        spot.look("plan", 1.0, {"kind": "plan", "call": "c2"})
         await asyncio.wait(set(spot.tasks))
         stopped = spotter.Spotter(ctx(), lambda: "s-2", judge("", cost=0.9))  # aborted before it answered
         stopped.handed_off("c3", {})
@@ -1553,3 +1554,32 @@ def test_a_state_change_is_checked_by_the_steps_own_lookup_through_the_runners_c
         assert "git push origin main" in questions[0]
         assert logged == [("the held Change", ran, {"kind": lookup.LABEL, "exit": "ok"})]
     assert retro_units.grade(record, "rev", "useful")["preliminary"] is busy
+
+
+def test_a_hand_off_look_at_full_capacity_takes_a_state_change_looks_slot_and_holds_the_submit() -> None:
+    deliver = Delivered()
+
+    async def look(the_card: dict[str, Any], _ctx: spotter.Context, spend: credit_meter.Meter) -> str:
+        changing = the_card["moment"]["kind"] == "a state change"
+        await asyncio.sleep(1 if changing else 0.05)  # the state changes' looks still run when the hand-off comes
+        spend.part().ended(None, confirmed=True)
+        return '{"category": "none"}' if changing else finding("irreversible-harm")
+
+    async def main() -> tuple[str | None, list[tuple[str, str, str]]]:
+        spot = spotter.Spotter(ctx(looks=("hand-off", "state-change"), act=deliver), lambda: "s-1", look)
+        for i in range(2):
+            spot.look("state-change", 1.0, {"kind": "a state change", "call": f"w{i}"})
+        await asyncio.sleep(0.05)
+        held = spot.handed_off("h", {"summary": "done"}, held=acts.could_act(spot.ctx))
+        assert held is not None
+        note = await asyncio.wait_for(held, 3)
+        sent = list(deliver.sent)  # what the hand-off's look did before the submit went on
+        await spot.drain()
+        return note, sent
+
+    note, sent = asyncio.run(main())
+    assert spotter.WORK.settled(5)
+    assert (note, sent) == (None, [("stop-and-ask", "irreversible-harm", "hand-off")])
+    got = sorted((r["look"], r["skipped"]) for r in records())
+    assert got[0] == ("hand-off", "")
+    assert got.count(("state-change", spotter.GAVE)) == 1

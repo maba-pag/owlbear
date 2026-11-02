@@ -12,15 +12,19 @@ A look runs as a task on the step's own event loop when the hand-off (the submit
 happens, over a frozen snapshot of the step's intake: the same moment and inputs a live look will have. The loop only
 freezes the snapshot; the card and every file write run in threads. A look is one tool-less SDK session on the spotter
 role in an empty folder, with no SDK credit cap, noted in the chatlogs manifest so it is never taken for a chat. At most
-``RUNNING`` looks run at once per step. Each look stops at its own credit limit (D-01M5XCD49YHHR1NQKKY8TQD0C3): its
-meter (``improvement.credit_meter``) adds the spend the runtime reports and the look is stopped once it reaches the
-limit, cooperatively, so it may pass it; there is no daily budget. A look over capacity, past ``LOOK``, or still running
-``DRAIN`` seconds after the step ends is recorded as skipped; its teardown takes at most ``TEARDOWN`` per stage, then
-its runtime is forced to stop. Each record keeps its spend, whether that is known, its limit and its stop
-(``credit_meter.Meter.report``). How Delivery answered each hand-off is kept beside its look. Records, outcomes and
-cards stay on this machine in ``~/.owlbear/spotter/`` (owner-only), written by ``improvement.spotter_store`` on its
-threads; this module re-exports the store's names its callers use. A record that names a state change is marked
-preliminary; the decision-conflict check's completed answer, kept on its act, lets Retro count it (``retro_units``).
+``RUNNING`` looks run at once per step. A hand-off look always gets a slot: at full capacity it takes the slot of the
+youngest sample look not yet answered, else of such a state-change look (an answered one keeps it: its finding may act),
+which is recorded as skipped for having given it (``GAVE``); with none of them it waits for a slot, within ``LOOK``. In
+the chats follower the same holds across every chat's Spotter (``peers``). Each look stops at its own credit limit
+(D-01M5XCD49YHHR1NQKKY8TQD0C3): its meter (``improvement.credit_meter``) adds the spend the runtime reports and the look
+is stopped once it reaches the limit, cooperatively, so it may pass it; there is no daily budget. Another look over
+capacity, a look past ``LOOK``, or one still running ``DRAIN`` seconds after the step ends is recorded as skipped; its
+teardown takes at most ``TEARDOWN`` per stage, then its runtime is forced to stop. Each record keeps its spend, whether
+that is known, its limit and its stop (``credit_meter.Meter.report``). How Delivery answered each hand-off is kept
+beside its look. Records, outcomes and cards stay on this machine in ``~/.owlbear/spotter/`` (owner-only), written by
+``improvement.spotter_store`` on its threads; this module re-exports the store's names its callers use. A record that
+names a state change is marked preliminary; the decision-conflict check's completed answer, kept on its act, lets Retro
+count it (``retro_units``).
 
 A record keeps its finding's ``category`` (one of ``CATEGORIES``; ``none`` when silent, ``insufficient-context`` when
 the card lacked the facts, ``failed`` for an unusable answer, empty when skipped) and the ``action`` the settings gave
@@ -80,6 +84,8 @@ if TYPE_CHECKING:
 PROMPT = cases.PROMPT  # the prompt file; what a look sends is ``Context.prompt``, frozen with its examples
 RUNNING = 2  # looks at once per step
 LOOK, TEARDOWN, DRAIN = 90.0, 5.0, 5.0  # seconds a look's answer, each teardown stage and the step's end may take
+SLOT = 0.05  # seconds between a waiting hand-off look's tries for a slot
+GAVE = "gave its slot to a hand-off look"  # why a record-only look cancelled for a hand-off look is skipped
 ANSWERS = frozenset({*CATEGORIES, "none", "insufficient-context"})  # a finding's category, or why there is none
 
 
@@ -216,19 +222,24 @@ class Spotter:
         *,
         room: Callable[[], str] | None = None,
         left: Callable[[], None] | None = None,
+        peers: Callable[[], Iterable[Spotter]] | None = None,
     ) -> None:
         """*room* admits a look ("") or says why none may start now, beyond this session's own capacity.
 
-        *left* is told once when a look *room* admitted ends.
+        *left* is told once when a look *room* admitted ends. *peers* are the Spotters sharing *room*'s slots, this one
+        among them: a hand-off look may take the slot of a look of any of them.
         """
         if ctx.prompt is None:
             ctx = dataclasses.replace(ctx, prompt=cases.snapshot(verbose=ctx.verbose))
         self.ctx, self.session, self.kept, self.judge = ctx, session, Kept(), judge
         self.room, self.left = room or str, left
+        self.peers = peers or (lambda: (self,))
         self.folder = place()  # where every write of this session goes, whatever changes later; made when written
         self.rng = rng or random.Random()  # noqa: S311 - sampling, not secrecy
         self.tasks: set[asyncio.Future[Any]] = set()
         self.running = 0  # looks admitted and not ended
+        self.yielding: dict[asyncio.Future[Any], str] = {}  # running record-only looks not yet answered, by kind
+        self.gave: set[asyncio.Future[Any]] = set()  # looks cancelled to give their slot to a hand-off look
         self.crowded: dict[str, int] = {}  # sampled looks skipped, by why, recorded once at the end
         self.closing = False  # the step ended: no look starts any more
         self.deciding = asyncio.Lock()  # one act decided and written at a time: each reads the lines of the last
@@ -328,22 +339,69 @@ class Spotter:
         if self.closing:
             return None
         ctx = frozen(self.ctx)  # the test's inputs, while it runs; read before admission, so a raise leaks none
-        if why := ("capacity: looks already running" if self.running >= RUNNING else self.room()):
+        if why := self._admitted():
+            if look == "hand-off" and why.startswith("capacity"):
+                return self._track(asyncio.ensure_future(self._waited(probability, moment, ctx)))
             if look == "sample":  # a burst of samples is one count, not a write each
                 self.crowded[why] = self.crowded.get(why, 0) + 1
             else:
                 self.skip(look, probability, moment, why)
             return None
+        return self._start(look, probability, moment, ctx)
+
+    def _admitted(self) -> str:
+        """Admit one look now (""), or say why none may start."""
+        return "capacity: looks already running" if self.running >= RUNNING else self.room()
+
+    def _start(self, look: str, probability: float, moment: dict[str, Any], ctx: Context) -> asyncio.Future[Any]:
         snapshot = self.kept.snapshot()
         moment = {"turn": snapshot["turn"], **moment, "cutoff": snapshot["n"]}
         self.running += 1
         task = self._run(look, probability, snapshot, moment, ctx)
         looked = self._track(asyncio.ensure_future(task))
         looked.add_done_callback(self._ended)
+        if look in acts.RECORD_ONLY:
+            self.yielding[looked] = look
         return looked
 
-    def _ended(self, _task: asyncio.Future[Any]) -> None:
+    async def _waited(self, probability: float, moment: dict[str, Any], ctx: Context) -> None:
+        """A hand-off look that met full capacity: it takes a record-only look's slot, or waits for one, within LOOK."""
+        deadline, why = time.monotonic() + LOOK, "capacity: looks already running"
+        while not self.closing and time.monotonic() < deadline:
+            self._give()
+            await asyncio.sleep(SLOT)
+            if self.closing:
+                break
+            if not (why := self._admitted()):
+                await self._start("hand-off", probability, moment, ctx)
+                return
+            if not why.startswith("capacity"):
+                break
+        if self.closing:
+            why = "capacity: looks still running when the step ended"
+        self.skip("hand-off", probability, moment, why)
+
+    def _give(self) -> None:
+        """Free a slot for a waiting hand-off look: cancel the youngest sample look not yet answered, else state change.
+
+        Every Spotter sharing the admission (``peers``) is asked; one already giving its slot frees it.
+        """
+        spots = list(self.peers())
+        if any(s.gave for s in spots):
+            return
+        for kind in ("sample", "state-change"):
+            for s in spots:
+                if young := [t for t, k in s.yielding.items() if k == kind]:
+                    task = young[-1]
+                    del s.yielding[task]
+                    s.gave.add(task)
+                    task.cancel()
+                    return
+
+    def _ended(self, task: asyncio.Future[Any]) -> None:
         self.running -= 1
+        self.yielding.pop(task, None)
+        self.gave.discard(task)
         if self.left is not None:
             self.left()
 
@@ -362,6 +420,7 @@ class Spotter:
             the_card = await offload(card.build, snapshot, moment, context)
             record.skipped = "the step ended while the look ran"
             text = await asyncio.wait_for(self.judge(the_card, ctx, meter), LOOK)
+            self.yielding.pop(asyncio.current_task(), None)  # answered: its finding may act, so it keeps its slot
             if not text and meter.stopped:
                 record.skipped = f"credit limit: {meter.stopped} ({meter.stopped_by}) before an answer"
             else:
@@ -379,6 +438,8 @@ class Spotter:
         except Exception as exc:  # noqa: BLE001 - a look never reaches the step
             record.category, record.skipped = "failed", f"{type(exc).__name__}: {exc}"
         finally:
+            if asyncio.current_task() in self.gave:
+                record.skipped = GAVE
             record.prompt, record.cases = ctx.prompt.hash if ctx.prompt else "", ctx.prompt.cases if ctx.prompt else 0
             record.seconds = round(time.monotonic() - started, 1)
             if meter is not None:  # without one (a limit it refused) nothing ran: the record still says why
