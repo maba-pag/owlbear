@@ -297,8 +297,9 @@ class ChatActor:
         try:
             await asyncio.wait({waiter, bound}, return_when=asyncio.FIRST_COMPLETED)
         except asyncio.CancelledError:  # the follower ends, or stops following the chat: never left pending
-            spotter.WORK.submit(acts.update, self.spot.folder, record.id, delivery="unconfirmed",
-                                error="the follower stopped reading the chat before its log showed it")  # fmt: skip
+            why = "the follower stopped reading the chat before its log showed it"
+            unseen = functools.partial(acts.update, delivery="unconfirmed", error=why)
+            spotter.WORK.submit(unseen, self.spot.folder, record.id)
             raise
         finally:
             bound.cancel()

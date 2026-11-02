@@ -288,3 +288,24 @@ def test_a_hand_off_note_is_queued_after_its_turn_and_delivered_once_the_log_sho
     [queued] = host.actions
     assert (queued["type"], queued["kind"]) == ("chat/pendingMessageSet", "queued")
     assert said == ["pending", "pending", "delivered"]
+
+
+def test_a_note_whose_wait_for_the_log_the_follower_stops_stays_unconfirmed_and_keeps_its_cap_slot(
+    tmp_path, monkeypatch
+) -> None:
+    monkeypatch.setattr(spotter, "DRAIN", 0.1)
+
+    async def main() -> chat_acts.ChatActor:
+        host = Host(Clock())
+        actor = chat(tmp_path, host)
+        actor.spot.look("plan", 1.0, {"kind": "plan", "call": "x"})
+        await until(lambda: actor.waiting)  # sent; the log has not shown it
+        await actor.spot.drain()  # the follower stops reading the chat
+        return actor
+
+    actor = asyncio.run(main())
+    assert spotter.WORK.settled(5)
+    act = act_of(actor)
+    assert (act.act, act.delivery, act.error) == (
+        "steer", "unconfirmed", "the follower stopped reading the chat before its log showed it")  # fmt: skip
+    assert acts.counts(actor.spot.folder, act.session, act.scope)[0] == 1
