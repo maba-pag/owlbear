@@ -1,12 +1,7 @@
 """The session's Git templates, which tests copy byte for byte (#917)."""
 
-from __future__ import annotations
-
 import subprocess
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from pathlib import Path
+from pathlib import Path
 
 
 def test_a_copied_template_repository_starts_no_background_maintenance(change_repo: Path, shared_repo) -> None:
