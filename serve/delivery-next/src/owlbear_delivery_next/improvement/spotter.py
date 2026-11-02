@@ -325,6 +325,7 @@ class Spotter:
         """Freeze the intake and the settings now (a running test's own inputs among them); the rest runs in a task."""
         if self.closing:
             return None
+        ctx = frozen(self.ctx)  # the test's inputs, while it runs; read before admission, so a raise leaks none
         if why := ("capacity: looks already running" if self.running >= RUNNING else self.room()):
             if look == "sample":  # a burst of samples is one count, not a write each
                 self.crowded[why] = self.crowded.get(why, 0) + 1
@@ -334,7 +335,7 @@ class Spotter:
         snapshot = self.kept.snapshot()
         moment = {"turn": snapshot["turn"], **moment, "cutoff": snapshot["n"]}
         self.running += 1
-        task = self._run(look, probability, snapshot, moment, frozen(self.ctx))  # the test's inputs, while it runs
+        task = self._run(look, probability, snapshot, moment, ctx)
         looked = self._track(asyncio.ensure_future(task))
         looked.add_done_callback(self._ended)
         return looked

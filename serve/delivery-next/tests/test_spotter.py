@@ -240,6 +240,35 @@ def test_a_look_past_its_time_is_skipped_and_a_wrong_answer_fails_never_silent(m
     assert [(r["category"], r["action"], r["skipped"][:4]) for r in records()] == [("", "", "time"), ("failed", "", "")]
 
 
+def test_a_freeze_read_that_raises_says_so_and_leaks_no_admission(monkeypatch) -> None:
+    """The chats' admission (*room*, *left*) is taken only once the look's frozen settings are read."""
+    admitted, reads = [], iter([OSError("test file unreadable"), None])
+
+    def active() -> None:
+        if isinstance(read := next(reads), Exception):
+            raise read
+
+    def room() -> str:
+        if admitted:
+            return "a chat look is running"
+        admitted.append(1)
+        return ""
+
+    monkeypatch.setattr(spotter.spotter_test, "active", active)
+
+    async def main() -> None:
+        spot = spotter.Spotter(ctx(), lambda: "s1", judge(), room=room, left=admitted.pop)
+        with pytest.raises(OSError, match="test file unreadable"):
+            spot.look("plan", 1.0, {"kind": "plan"})
+        spot.look("plan", 1.0, {"kind": "plan"})
+        await spot.drain()
+
+    asyncio.run(main())
+    assert spotter.WORK.settled(5)
+    assert [(r["look"], r["skipped"]) for r in records()] == [("plan", "")]
+    assert admitted == []
+
+
 def test_looks_past_capacity_are_recorded_skipped_and_a_look_stopped_at_its_limit_says_so() -> None:
     async def main() -> None:
         spot = spotter.Spotter(ctx(), lambda: "s-1", judge(wait=0.1))
