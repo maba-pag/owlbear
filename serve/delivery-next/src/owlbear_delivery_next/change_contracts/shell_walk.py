@@ -229,7 +229,7 @@ class Walk:
                 return f"`{self.name}` runs `{word}`, whose interpreter is built at run time (`{sub.words[0]}`)"
             if reason := self._interpreter_files(sub, word, state):
                 return reason
-            if reason := self.bypass(self.name, sub):
+            if self._reads(CORE) and (reason := self.bypass(self.name, sub)):
                 return reason
             if reason := self.mutation(self.name, sub):
                 return reason
@@ -304,7 +304,9 @@ class Walk:
         self, state: State, command: Command, run: Run, read: Callable[[Command, Run, State], str | None]
     ) -> str | None:
         """Read text that runs in this shell (sourced, eval, startup): its input is the command's, its cd unknown."""
-        saved, startup = state.stdin_plain, dict(state.startup)
+        saved, startup, kept = state.stdin_plain, dict(state.startup), dict(state.switches)
+        bound = {k: v for k, v in switches(state, run).items() if state.switches.get(k) is not v}
+        state.switches |= bound  # HUSKY=0 eval '...': only for that text
         state.stdin_plain = state.plain() and not command.opaque_stdin and command.stdin() is None
         state.startup |= {k: run.env[k] for k in _STARTUP if k in run.env}  # BASH_ENV=x source y: for its text
         state.home_moved = state.home_moved or "HOME" in run.env
@@ -316,6 +318,9 @@ class Walk:
             state.current -= 1
             state.unsure -= not command.top_level
             state.stdin_plain = saved
+            for k, v in bound.items():  # what the text set itself stays
+                if state.switches.get(k) is v:
+                    state.switches.pop(k) if k not in kept else state.switches.update({k: kept[k]})
             if any(k in run.env for k in _STARTUP):  # only for that text; what the text set itself is unknown
                 state.startup = startup | {k: None for k in _STARTUP if state.startup.get(k) != startup.get(k)}
 

@@ -275,16 +275,14 @@ class _Step(StepTools):
         with contextlib.suppress(OSError):  # the now line is a hint; a failed write never ends the step
             self.cfg.journal.now({"tool": tool, "summary": watch_feed.summary(tool, arguments), "at": at})
 
-    def offered(self) -> frozenset[str]:
-        return frozenset(preload.tools(role_of(self.cfg)))
-
     def pre_tool(self, data: Any, _invocation: Any) -> dict[str, str] | None:  # noqa: ANN401 - the SDK's hook input
-        return guard_hook.pre_tool(self, data, self.offered())
+        return guard_hook.pre_tool(self, data)
 
     def permission(self, request: Any, _invocation: Any) -> Any:  # noqa: ANN401 - SDK types
         req = view(request)
         user = self.cfg.user
-        reason = decide(self.cfg.policy, req, self.offered(), memory=user.memory, level=user.guard)
+        offered = frozenset(preload.tools(role_of(self.cfg)))
+        reason = decide(self.cfg.policy, req, offered, memory=user.memory, level=user.guard)
         if reason is None:
             for name in identities(req):  # a later allowed use supersedes an earlier denial of the same program
                 self.run.denied.pop(name, None)

@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from typing import Self
 
-_GLOB = re.compile(r"[*?]|\[.*\]|\{[^}]*(?:,|\.\.)[^}]*\}")  # *, ?, [...], {a,b} and {1..3}
+GLOB = re.compile(r"[*?]|\[.*\]|\{[^}]*(?:,|\.\.)[^}]*\}")  # *, ?, [...], {a,b} and {1..3}
 
 
 class Word(str):  # noqa: SLOT000 - a str subclass can hold attributes only in a __dict__
@@ -21,11 +21,6 @@ class Word(str):  # noqa: SLOT000 - a str subclass can hold attributes only in a
         word = super().__new__(cls, value)
         word.expanded, word.tilde, word.pattern, word.split = expanded, tilde, pattern, False
         return word
-
-
-def globbed(plain: str) -> bool:
-    """Whether a word's unquoted text, its quoted and escaped characters blanked out, holds a glob or a brace."""
-    return _GLOB.search(plain) is not None
 
 
 def continued(line: str) -> bool:

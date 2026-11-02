@@ -157,8 +157,6 @@ ROUTES = {  # #864's routes: each case's command and the class it is found in, o
         *((f"git -c remote.origin.mirror{v} push", "core") for v in ("=true", "=YES", "=on", "=1", "=-3", "")),
         *((f"git -c remote.origin.mirror={v} push", None) for v in ("false", "no", "off", "0", "")),
     ],
-}
-ROUTES |= {
     3: [  # a git alias the command defines runs its body
         ("git -c alias.ci='commit --no-verify' ci", "variant"),
         ("git -c alias.ci='!git commit --no-verify' ci", "variant"),
@@ -190,6 +188,8 @@ ROUTES |= {
         ("export SKIP=lint; git commit -m x", "variant"),
         ("LEFTHOOK_EXCLUDE=x git commit -m x", "variant"),
         ("export HUSKY=0; bash -c 'git commit -m x'", "variant"),
+        ("HUSKY=0 eval 'git commit -m x'", "variant"),
+        ("HUSKY=0 eval 'git status'; git commit -m x", None),  # only for that text
         ('HUSKY=0 git commit "$FLAGS" -m x', "variant"),
         ("HUSKY=0 git commit --no-verify -m x", "core"),  # the core reason comes first
         ("HUSKY=2 git commit -m x", None),
@@ -200,13 +200,16 @@ ROUTES |= {
         ("SKIP=lint pre-commit run", None),
         ("HUSKY=0 git status", None),
     ],
-}
-ROUTES |= {
     1: [  # commands in an interpreter's inline code
         ("""python3 -c 'import subprocess; subprocess.run(["git", "commit", "--no-verify", "-m", "x"])'""", "doubtful"),
         ("""node -e "require('child_process').execSync('git push --force')\"""", "doubtful"),
         ("perl -e 'system(\"git push --force\")'", "doubtful"),
         ("python3 -Bc 'import os; os.system(\"git push -f\")'", "doubtful"),
+        ("python3 -Bc'import os; os.system(\"git push -f\")'", "doubtful"),
+        ("python3 -W ignore -c 'import os; os.system(\"git push -f\")'", "doubtful"),
+        ('node -r path -e \'require("child_process").execSync("git push -f")\'', "doubtful"),
+        ("perl -we'system(\"git push --force\")'", "doubtful"),
+        ("python3 -- - <<'EOF'\nimport os\nos.system('git push -f')\nEOF", "doubtful"),
         ("python3 <<'EOF'\nimport os\nos.system('git commit -n -m x')\nEOF", "doubtful"),
         ("python3 <<< 'import os; os.system(\"git commit -n\")'", "doubtful"),
         ("python3 -c 'print(\"git commit --no-verify\")'", "doubtful"),  # printing it reads the same
@@ -225,11 +228,13 @@ ROUTES |= {
         ('git -c commit.gpgsign="$V" commit -m x', "doubtful"),
         ('GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=commit.gpgsign GIT_CONFIG_VALUE_0="$V" git commit -m x', "doubtful"),
         ('git config commit.gpgsign "$V"', "doubtful"),
+        ('MIRROR="$V" git --config-env=remote.origin.mirror=MIRROR push', "doubtful"),
         ('git -c core.hooksPath="$P" commit -m x', "core"),  # the key alone skips hooks
         ('HUSKY="$OFF" git commit -m x', "doubtful"),
         ('export HUSKY="$OFF"; unset HUSKY; git commit -m x', None),
         ('git commit -m "$MSG"', None),
         ('git commit --message="$MSG"', None),
+        ('git commit --gpg-sign="$KEYID" -m x', None),  # any long option's attached value stays one word
         ('git add -- "$F"', None),
         ('git config user.name "$N"', None),
         ('git -c "$K" status', None),

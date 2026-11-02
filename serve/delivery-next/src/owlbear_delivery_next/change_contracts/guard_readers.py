@@ -18,10 +18,15 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.local_system.shell_parse import Command
 
 _INTERPRETER = re.compile(r"(python)[\d.]*|(node)|(perl)")
-_CODE = {  # a word that gives the code in the next word, and one that holds it after two characters
-    "python": (re.compile(r"-[A-Za-z]*c"), re.compile(r"-c.+", re.DOTALL)),
-    "node": (re.compile(r"-e|--eval|-p|--print"), re.compile(r"--(?:eval|print)=.*", re.DOTALL)),
-    "perl": (re.compile(r"-[A-Za-z]*[eE]"), re.compile(r"-[eE].+", re.DOTALL)),
+_CODE = {  # its code option, alone or closing a cluster of flags, the code attached or in the next word
+    "python": re.compile(r"-[bBdEhiIOPqsSuvVx]*c(.*)", re.DOTALL),
+    "node": re.compile(r"-p?e|-p|--(?:eval|print)(?:=(.*))?", re.DOTALL),
+    "perl": re.compile(r"-[acnlpstTuUwW]*[eE](.*)", re.DOTALL),
+}
+_VALUED = {  # options whose value is the next word
+    "python": {"-W", "-X"},
+    "node": {"-r", "--require", "--import", "--loader", "-C", "--conditions", "--input-type"},
+    "perl": {"-I"},
 }
 _STRING = re.compile(r"""(['"`])((?:\\.|(?!\1).)*)\1""", re.DOTALL)  # a quoted literal, its escapes kept
 _LIST = re.compile(r"\[([^\[\]]*)\]")  # a list or array literal without nested ones
@@ -35,18 +40,15 @@ def code(command: Command, words: Sequence[str]) -> str | None:
     m = _INTERPRETER.fullmatch(shell_programs.name(words[0]))
     if not m:
         return None
-    given, attached = _CODE[next(filter(None, m.groups()))]
-    for i, w in enumerate(words[1:], 1):
-        if given.fullmatch(w):
-            return words[i + 1] if i + 1 < len(words) else None
-        if attached.fullmatch(w):
-            return w[w.index("=") + 1 :] if w.startswith("--") else w[2:]
-        if w == "-m" or not w.startswith("-") or w in {"-", "--"}:
-            break
-    else:
-        w = "-"
+    language = next(filter(None, m.groups()))
+    i = 1
+    while i < len(words) and words[i].startswith("-") and words[i] not in {"-", "--"}:
+        if given := _CODE[language].fullmatch(words[i]):
+            return given[1] or (words[i + 1] if i + 1 < len(words) else None)
+        i += 2 if words[i] in _VALUED[language] else 1
+    i += i < len(words) and words[i] == "--"
     stdin = command.stdin()
-    if w != "-" or stdin is None or stdin.kind not in {"here", "string"}:
+    if (i < len(words) and words[i] != "-") or stdin is None or stdin.kind not in {"here", "string"}:
         return None
     return stdin.word
 

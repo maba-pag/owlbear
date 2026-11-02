@@ -16,22 +16,21 @@ from owlbear_delivery_next.local_system.mask import redact
 if TYPE_CHECKING:
     from owlbear_delivery_next.runtimes.sdk_adapter import _Step
 
-SHELL = "bash"  # the runtime's shell tool; its arguments hold the whole command
 WARNING = (  # D-01M6DX667JAWPWV2RY3BB4G879
     "OwlBear's shell guard lets this command run but warns: {reason}. Check whether it breaks a rule; if it does, fix "
     "the cause or ask."
 )
 
 
-def pre_tool(step: _Step, data: dict[str, Any], offered: frozenset[str]) -> dict[str, str] | None:
+def pre_tool(step: _Step, data: dict[str, Any]) -> dict[str, str] | None:
     """The added context for a shell call the guard only warns about, else None; a failure stops the step."""
-    if data.get("toolName") != SHELL:
+    if data.get("toolName") != "bash":  # the runtime's shell tool; its arguments hold the whole command
         return None
     text = str((data.get("toolArgs") or {}).get("command") or "")
     try:
         cfg = step.cfg
         req = Request("shell", (text,), text=text)
-        verdict = judge(cfg.policy, req, offered, memory=cfg.user.memory, level=cfg.user.guard)
+        verdict = judge(cfg.policy, req, level=cfg.user.guard)
     except Exception:  # noqa: BLE001 - the SDK would swallow it; the step records it and stops instead
         error = redact(traceback.format_exc())
         step.log(event="hook-failed", hook="preToolUse", error=error)

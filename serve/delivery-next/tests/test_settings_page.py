@@ -1211,8 +1211,10 @@ def test_the_guard_level_saves_in_each_layer_as_a_level_and_clears_back_to_inher
         pds.group(page, "agents")
         expect(row.locator("p-text[color='error']")).to_have_count(1)
         pds.pick(page, "Layer", "global")
+        box = pds.select(page, GUARD).bounding_box()
+        assert min(box["width"], box["height"]) >= 24  # WCAG 2.5.8 target size
         pds.pick(page, GUARD, "strict")
-        _saved(page, pds, "Save global defaults", "the global")
+        _saved_by_keyboard(page, pds, "Save global defaults", "the global")
         pds.pick(page, "Layer", "machine")
         expect(row).to_contain_text("inherit (strict)")
         pds.pick(page, GUARD, "standard")

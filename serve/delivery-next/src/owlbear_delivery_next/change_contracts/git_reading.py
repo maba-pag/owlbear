@@ -130,7 +130,7 @@ class _GitCall(NamedTuple):
     config: tuple[str, ...]  # the -c settings, and the keys --config-env sets
     sub: str | None
     arguments: tuple[str, ...]  # the subcommand's, or the unparsed rest without one
-    from_env: tuple[tuple[str, str], ...] = ()  # --config-env's keys and the variables holding their values
+    from_env: tuple[tuple[str, str], ...]  # --config-env's keys and the variables holding their values
 
 
 def _parse_git(words: Sequence[str]) -> _GitCall:
@@ -407,6 +407,7 @@ def _built_setting(call: _GitCall, env: dict[str, str]) -> str | None:
     settings += [
         (Word("GIT_CONFIG_PARAMETERS"), v) for n, v in env.items() if n == "GIT_CONFIG_PARAMETERS" and _built(v)
     ]
+    settings += [(Word(key), env[var]) for key, var in call.from_env if var in env]
     if call.sub == "config" and (written := _config_set(call.arguments)):
         settings.append(written)
     return next((f"setting `{k}={v}`" for k, v in settings if _built(k) or (_guarded(k) and _built(v))), None)
@@ -434,7 +435,7 @@ def _unexempt(sub: str, arguments: Sequence[str]) -> list[str]:
     while i < len(arguments) and (w := arguments[i]) != "--":
         name, eq, _ = w.partition("=")
         flags, takes = _short(w[1:], required, optional) if re.fullmatch(r"-[^-].*", w) else (w[1:], False)
-        attached = (eq and name in long_values) or (flags != w[1:] and not takes)  # -m"$M", --message="$M"
+        attached = (eq and name.startswith("--") and "$" not in name) or (flags != w[1:] and not takes)  # -m"$M"
         if not attached or getattr(w, "split", False):
             found.append(w)
         valued = takes or (name in long_values and not eq)

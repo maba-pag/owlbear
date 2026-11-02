@@ -41,7 +41,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 Level = Literal["strict", "standard", "lenient", "off"]
-_REFUSED = {"strict": DOUBTFUL, "standard": VARIANT, "lenient": CORE, "off": CORE}  # classes below it are refused
+_REFUSED = {"strict": DOUBTFUL, "standard": VARIANT, "lenient": CORE}  # classes below it are refused
 _HARMLESS = re.compile(r"\d*>>?\s*/dev/null(?![^\s;&|)])|\d*>&\d+")  # discarded output or a descriptor copy
 _LOOKUP = re.compile(  # command -v cp: names the program, runs nothing
     r"(?<![^\s;&|(])command(?:[ \t]+-p)*[ \t]+-[pV]*[vV][pvV]*(?:[ \t]+-[pvV]+)*(?:[ \t]+--)?(?:[ \t]+[\w./+-]+)+"
@@ -195,8 +195,7 @@ def _check(  # noqa: PLR0913 - the walk calls it back with the text's place; the
             return f"`{name}` uses {found}, which writes in a read-only step"
         mutation = functools.partial(_run_mutation, policy)
         nested = functools.partial(_check, policy, reading=reading)
-        reader = _run_bypass if reading is not None else _none
-        walk = shell_walk.Walk(name, depth, nested, _writes, reader, mutation, reading)
+        walk = shell_walk.Walk(name, depth, nested, _writes, _run_bypass, mutation, reading)
         return walk.commands(commands, state or shell_walk.State(policy.root))
     except shell_programs.UnreadableError as error:
         return f"`{name}` {error}"
@@ -207,10 +206,6 @@ def _run_bypass(name: str, run: shell_programs.Run) -> str | None:
     if setting := git_reading.env_setting(run.env):
         return f"`{name}` uses environment setting {setting}, {BYPASS}"
     return f"`{name}` uses {flag}, {BYPASS}" if (flag := git_reading.bypass(run.words)) else None
-
-
-def _none(_name: str, _run: shell_programs.Run) -> None:
-    """No bypass reader: the read-only pass."""
 
 
 def _run_mutation(policy: Policy, name: str, run: shell_programs.Run) -> str | None:

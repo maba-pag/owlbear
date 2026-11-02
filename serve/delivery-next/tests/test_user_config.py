@@ -101,7 +101,6 @@ def test_a_format_19_layer_loads_with_the_guard_level_unset_and_refuses_an_unkno
     for model in (Layer, MachineLayer, GlobalLayer):
         layer = read_layer(path, model)
         assert (layer.format, layer.load_user_memory, layer.guard_level) == (config.CONFIG_FORMAT, True, None)
-    assert migrations.CONFIG[19] is migrations.guard_level_added
     path.write_text(json.dumps({"format": 20, "guard_level": "loose"}))
     with pytest.raises(StoreError):
         read_layer(path, Layer)

@@ -11,11 +11,11 @@ import re
 from dataclasses import dataclass, field
 
 from owlbear_delivery_next.local_system.shell_words import (
+    GLOB,
     Word,
     ansi_c_end,
     arithmetic_end,
     continued,
-    globbed,
     single_end,
 )
 
@@ -85,7 +85,7 @@ class _Level:
     def end_word(self) -> None:
         if self.word is None:
             return
-        word = Word(self.word, expanded=self.expanded, tilde=self.tilde, pattern=globbed(self.plain))
+        word = Word(self.word, expanded=self.expanded, tilde=self.tilde, pattern=GLOB.search(self.plain) is not None)
         word.split = self.split
         if self.redirect is None:
             self.pattern = self.pattern and (bool(self.words) or word != "esac")  # esac ends the arms
