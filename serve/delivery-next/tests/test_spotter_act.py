@@ -347,3 +347,11 @@ def test_an_act_cancelled_while_its_abort_or_its_confirmation_is_held_is_never_l
     assert spotter.WORK.settled(5)
     act = act_of(st)
     assert (act.act, act.delivery, act.error) == ("stop-and-resume", delivery, error)
+
+
+def test_a_spotter_stop_to_ask_keeps_the_owners_question_when_the_quota_also_ran_out() -> None:
+    said = spotter_act.HARM.format(note="Deletes the backups.")
+    run = session_result.Run("s-1", ending="spotter-ask", detail=said, termination=Termination(confirmed=True),
+                             quota=True)  # fmt: skip
+    result = session_result.to_result(run, StepKind.BUILD, datetime.now(UTC))
+    assert (result.exit, result.question.text) == (Exit.ASK, said)
