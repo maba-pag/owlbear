@@ -44,6 +44,7 @@ _CONFIG_KEY = re.compile(r"GIT_CONFIG_KEY_(\d+)")
 _READ_ONLY_GIT = frozenset(
     {
         "cat-file",
+        "check-ignore",
         "describe",
         "diff",
         "diff-tree",

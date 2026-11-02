@@ -81,6 +81,8 @@ def test_a_read_only_step_refuses_every_command_that_writes(text: str, how: str)
         "ls 2>/dev/null",
         "grep -rn x src > /dev/null",
         "cat .git/HEAD",
+        "git check-ignore -v -- probes/cleanup-717.log",
+        "git --no-pager check-ignore -v probes/cleanup-717.log",
     ],
 )
 def test_a_read_only_step_runs_any_command_that_only_reads(text: str) -> None:
