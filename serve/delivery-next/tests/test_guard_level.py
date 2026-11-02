@@ -168,6 +168,8 @@ ROUTES = {  # #864's routes: each case's command and the class it is found in, o
     ],
     3: [  # a git alias the command defines runs its body
         ("git -c alias.ci='commit --no-verify' ci", "variant"),
+        ("git -c alias.rb=\"rebase -x 'git push --force'\" rb main", "variant"),  # the text it has git run
+        ("git -c alias.rb=\"rebase -x 'make test'\" rb main", None),
         ("git -c alias.ci='!git commit --no-verify' ci", "variant"),
         ("CI='commit -n' git --config-env=alias.ci=CI ci", "variant"),
         ("GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=alias.ci GIT_CONFIG_VALUE_0='push --force' git ci", "variant"),
