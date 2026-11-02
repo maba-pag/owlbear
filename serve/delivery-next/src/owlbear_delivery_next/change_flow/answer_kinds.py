@@ -69,6 +69,18 @@ def delivered_next(c: Change) -> Question | None:
     )  # fmt: skip
 
 
+def superseded(c: Change, q: Question) -> str:
+    """Why the worker's unanswered *q* takes no answer: the Change no longer waits on it (#914), else "".
+
+    A change of intent or an abandonment folded earlier in the same batch counts as ``schedule`` routes it after the
+    fold: at the merge step a change of intent waits, so its question still does.
+    """
+    o, i = c.outcome, c.intent
+    moving = i.abandoned_at or (i.hold and c.step.kind != StepKind.MERGE)
+    waits = o is not None and o.exit == Exit.ASK and o.question == q.id and not moving
+    return "" if q.cause is not None or waits else f"question {q.id} no longer waits on an answer: the Change moved on"
+
+
 def decision_id(c: Change, q: Question) -> str:
     """The id of the decision *q*'s clarification becomes: the same on every check of the same answer."""
     at = q.answer.at if q.answer else datetime.now(UTC)
