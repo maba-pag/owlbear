@@ -3,7 +3,9 @@
 The Improvement page calls the same functions (``case_edits``). A stage move that changes the active examples, a reserve
 comparison and a check of candidates cost credits: the command only queues them, on the owner's word, for the machine
 host's job, which runs them within their run credit limit (D-01M5XCE8ZEX5WPSCBZ5Y9S4K96). A Retro run is queued the
-same way, for the host's Retro job; its plan view reads what a run would ask without asking.
+same way, for the host's Retro job; its plan view reads what a run would ask without asking. The Spotter's test is
+declared, started (freezing the Spotter's role as this machine's settings give it, Global's under its own, and the
+prompt), ended and shown here; each prints the test as ``improvement test show`` does.
 """
 
 from __future__ import annotations
@@ -21,19 +23,24 @@ from owlbear_delivery_next.improvement import (
     pilot_seed,
     retro_evidence,
     retro_proposals,
+    spotter_test_run,
 )
 from owlbear_delivery_next.improvement import retro_store as retro
 from owlbear_delivery_next.improvement import retro_synthetic as syn
 from owlbear_delivery_next.improvement import retro_units as units
 from owlbear_delivery_next.improvement.cases import CaseError
-from owlbear_delivery_next.state_store import registry
+from owlbear_delivery_next.local_system import data_repo
+from owlbear_delivery_next.settings.config import SettingsUnset
+from owlbear_delivery_next.state_store import registry, spotter_test
 from owlbear_delivery_next.state_store.database import StoreError
 from owlbear_delivery_next.state_store.store import Store
+from owlbear_delivery_next.workflow_steps import lookup
 
 if TYPE_CHECKING:
     import argparse
 
 BY = "owner (command)"
+REFUSED = (CaseError, retro.RetroError, registry.RegistryError, StoreError, spotter_test.Refused, SettingsUnset)
 QUEUED = "queued {}: the machine host runs it once OwlBear runs; `owlbear cases runs` shows its result"
 
 
@@ -46,6 +53,8 @@ def main(a: argparse.Namespace) -> int:
     try:
         if a.command == "improvement" and a.action == "retro":
             _retro(a)
+        elif a.command == "improvement" and a.action == "test":
+            _test(a)
         elif a.command == "improvement":
             retired, n = cases.reset()
             _say(f"retired: {', '.join(retired) or 'nothing'}" + (f"; cases version {n}" if n else ""))
@@ -53,7 +62,7 @@ def main(a: argparse.Namespace) -> int:
                 _say(f"synthetic {art['kind']} in {art['where']}: {art['ref']} {art.get('link') or ''}".rstrip())
         else:
             return _cases(a)
-    except (CaseError, retro.RetroError, registry.RegistryError, StoreError) as exc:
+    except REFUSED as exc:
         _say(f"refused: {exc}")
         return 1
     return 0
@@ -125,6 +134,20 @@ def _newest_release() -> str:
         msg = "no release yet: `owlbear cases release` freezes one"
         raise CaseError(msg)
     return found[-1]["id"]
+
+
+def _test(a: argparse.Namespace) -> None:
+    if a.test == "declare":
+        spotter_test.declare(a.outcome, a.start_threshold, a.promote_threshold)
+    elif a.test == "start":
+        shared = data_repo.locate()
+        if shared is None:
+            msg = "no shared repository is set up, so the Spotter's settings cannot be read"
+            raise spotter_test.Refused(msg)
+        spotter_test_run.start(lookup.machine(shared))
+    elif a.test == "end":
+        spotter_test.end()
+    _say(json.dumps(spotter_test_run.show()))
 
 
 def _retro(a: argparse.Namespace) -> None:

@@ -2,59 +2,19 @@
 
 Each command only parses: it returns the ``argparse.Namespace`` that :func:`commands.cli.run` runs, with the
 argparse names and defaults the handlers read. ``--repo PATH`` comes before the command and names the clone; the
-current folder by default. Loading this module imports no other OwlBear module, so ``owlbear --help`` and its
-completion stay fast (TD-263); a check that needs one imports it when the option is parsed.
+current folder by default. Loading this module imports no other OwlBear module but the other command definitions
+(``command_apps``, ``improvement_commands``), so ``owlbear --help`` and its completion stay fast (TD-263); a check that
+needs one imports it when the option is parsed.
 """
 
-import sys
 from argparse import Namespace
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Literal, NoReturn
+from typing import Annotated, Literal
 
-from cyclopts import App, Group, Parameter, validators
-from cyclopts.help import DefaultFormatter
+from cyclopts import Parameter
 
-if TYPE_CHECKING:
-    from rich.console import Console, ConsoleOptions
-
-
-class _Usage(DefaultFormatter):
-    """Cyclopts' help with argparse's lower-case ``usage:`` line."""
-
-    def render_usage(self, console: Console, options: ConsoleOptions, usage: object) -> None:  # noqa: ARG002
-        """Print ``usage: …``."""
-        from rich.text import Text  # noqa: PLC0415 - only help prints it
-
-        if usage:
-            plain = usage.plain if isinstance(usage, Text) else str(usage)
-            console.print(Text("usage: " + plain.removeprefix("Usage:").strip()))
-
-
-_LAST = Parameter(allow_repeating=True)  # a repeated option keeps its last value, as argparse did
-
-
-def _app(name: str | None = None, said: str | None = None) -> App:
-    group = App(
-        name=name,
-        help=said,
-        version_flags=[],
-        result_action="return_value",
-        help_formatter=_Usage(),
-        default_parameter=_LAST,
-    )
-    group.default(_missing)
-    return group
-
-
-def _missing() -> NoReturn:
-    """A group given no command: refused as argparse refused it."""
-    _refuse("a command is required")
-
-
-def _refuse(said: str) -> NoReturn:
-    """A usage error: said on stderr, exit 2, before anything runs."""
-    sys.stderr.write(f"owlbear-next: error: {said}\n")
-    sys.exit(2)
+from owlbear_delivery_next.commands.command_apps import LAST, group, refuse
+from owlbear_delivery_next.commands.improvement_commands import improvement
 
 
 def _pairs(values: list[str] | None) -> list[tuple[str, ...]]:
@@ -86,21 +46,17 @@ def _stage(_type: object, value: str) -> None:
     _among(value, (*cases.STAGES, "removed"))
 
 
-app = _app("owlbear-next", "OwlBear's commands for one project's clone.")
-backlog = _app("backlog", "The improvement backlog: issues in the shared repository (TD-84, TD-103).")
-cases = _app("cases", "The Spotter cases: stages, versions, replays (Improvement design §4).")
-improvement = _app("improvement", "Improvement's marked assumptions and Retro.")
-retro = _app("retro", "Retro: judge a finished Change or chat (Improvement design §5).")
+app = group("owlbear-next", "OwlBear's commands for one project's clone.")
+backlog = group("backlog", "The improvement backlog: issues in the shared repository (TD-84, TD-103).")
+cases = group("cases", "The Spotter cases: stages, versions, replays (Improvement design §4).")
 for _group in (backlog, cases, improvement):
     app.command(_group)
-improvement.command(retro)
-UNIT = Group("Unit", validator=validators.LimitedChoice(1, 1))  # exactly one, as argparse's required group
 
 
 @app.meta.default
 def _launch(
     *tokens: Annotated[str, Parameter(show=False, allow_leading_hyphen=True)],
-    repo: Annotated[Path | None, _LAST] = None,
+    repo: Annotated[Path | None, LAST] = None,
 ) -> Namespace | None:
     """Parse one command; help returns nothing.
 
@@ -156,7 +112,7 @@ def profile(
     try:
         overrides = [roles.parse(r) for r in role or []]
     except ValueError as exc:
-        _refuse(f"argument --role: {exc}")
+        refuse(f"argument --role: {exc}")
     return Namespace(command="profile", confirm=_pairs(confirm), role=overrides)
 
 
@@ -313,7 +269,7 @@ def impeccable(  # noqa: PLR0913 - one parameter per option
         replay: Rerun the design judge on decided rounds (costs requests).
     """
     if bool(diff) != bool(to):
-        _refuse("--diff and --to go together")
+        refuse("--diff and --to go together")
     return Namespace(command="impeccable", install=install, check=check, diff=diff, to=to, golden=golden, replay=replay)
 
 
@@ -453,37 +409,3 @@ def runs(*, last: int = 10) -> Namespace:
         last: How many of the latest runs.
     """
     return Namespace(command="cases", action="runs", last=last)
-
-
-@improvement.command
-def reset() -> Namespace:
-    """Retire every marked assumption."""
-    return Namespace(command="improvement", action="reset")
-
-
-@retro.command(name="run")
-def run_retro(
-    *,
-    change: Annotated[str | None, Parameter(group=UNIT)] = None,
-    chat: Annotated[str | None, Parameter(group=UNIT)] = None,
-    synthetic: Annotated[str | bool | None, Parameter(group=UNIT, negative="")] = None,  # NAME stays a name
-) -> Namespace:
-    """Queue a run of one unit for the host's Retro job (paid).
-
-    Args:
-        change: PROJECT/SLUG: a finished Change; PROJECT is its folder's name or id.
-        chat: SESSION: an enrolled chat, quiet for a day.
-        synthetic: The synthetic units, or one NAME.
-    """
-    return Namespace(command="improvement", action="retro", retro="run", change=change, chat=chat, synthetic=synthetic)
-
-
-@retro.command(name="status")
-def retro_status(*, last: int = 10, plan: str | None = None) -> Namespace:
-    """The latest runs, or with --plan what a run of a unit would ask (not paid).
-
-    Args:
-        last: How many of the latest runs.
-        plan: UNIT: a unit id (chg:…, chat:…, syn:…) or PROJECT/SLUG.
-    """
-    return Namespace(command="improvement", action="retro", retro="status", last=last, plan=plan)

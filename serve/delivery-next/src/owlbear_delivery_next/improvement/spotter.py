@@ -30,6 +30,10 @@ rebuilt Spotter keeps its counts), its line written, then, unless nothing is sen
 own loop; one that raises leaves the act ``failed`` with its whole error. Its return is not delivery: the actuator
 confirms that from the runtime's own log. A finding naming a state change then asks ``Context.conflicts`` on a thread
 of its own, and its answer is added to the act. Without an actuator nothing acts and no act line is written.
+
+While the steered-versus-silent test runs (``state_store.spotter_test``), every look admitted, Delivery's and a chat's,
+whenever its Spotter was built, gets the model, effort, context and prompt the test froze at its start, and its record
+names the test; a look admitted before the start keeps its own, and its record names none.
 """
 
 from __future__ import annotations
@@ -62,6 +66,7 @@ from owlbear_delivery_next.improvement.spotter_store import (  # noqa: F401 - ke
     store,
 )
 from owlbear_delivery_next.settings.improvement import CATEGORIES
+from owlbear_delivery_next.state_store import spotter_test
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Iterable, Mapping
@@ -95,6 +100,7 @@ class Context:
     cap: int | None = None  # steering notes per step or chat turn: the Spotter's ``intervention_cap``
     act: Callable[[Record, acts.Act], Awaitable[None]] | None = None  # the actuator; None: nothing acts
     conflicts: Callable[[str], str] | None = None  # the decision-conflict check of a state change, its answer as text
+    test: str = ""  # the running test whose frozen inputs a look admitted with (``frozen``); "": none
 
     def __post_init__(self) -> None:
         if self.act is not None and (self.arm is None or self.cap is None):
@@ -136,6 +142,18 @@ class Record:
     stopped_by: str = ""
     seconds: float = 0.0
     skipped: str = ""
+    test: str = ""  # the test whose frozen model and prompt the look used; "": none ran when it was admitted
+
+
+def frozen(ctx: Context) -> Context:
+    """*ctx* with the running test's frozen model, effort, context and prompt; *ctx* itself while none runs."""
+    if (test := spotter_test.active()) is None:
+        return ctx
+    f = test["frozen"]
+    prompt = cases.Prompt(f["prompt"], f["cases"], f["prompt_hash"])
+    return dataclasses.replace(
+        ctx, model=f["model"], effort=f["effort"], context=f["context"], prompt=prompt, test=test["id"]
+    )
 
 
 def parse(text: str) -> dict[str, Any]:
@@ -274,10 +292,10 @@ class Spotter:
                       project=ctx.project, change=ctx.change, step=ctx.step, session=self.session(), look=look,
                       call=str(moment.get("call") or ""), cutoff=int(moment.get("cutoff") or 0),
                       probability=probability, turn=str(moment.get("turn") or ""), model=ctx.model,
-                      effort=ctx.effort, **fields)  # fmt: skip
+                      effort=ctx.effort, test=ctx.test, **fields)  # fmt: skip
 
     def _look(self, look: str, probability: float, moment: dict[str, Any]) -> None:
-        """Freeze the intake and the settings now; the rest runs in a task, its file work on the Spotter's threads."""
+        """Freeze the intake and the settings now (a running test's own inputs among them); the rest runs in a task."""
         if self.closing:
             return
         if why := ("capacity: looks already running" if self.running >= RUNNING else self.room()):
@@ -289,7 +307,7 @@ class Spotter:
         snapshot = self.kept.snapshot()
         moment = {"turn": snapshot["turn"], **moment, "cutoff": snapshot["n"]}
         self.running += 1
-        task = self._run(look, probability, snapshot, moment, self.ctx)
+        task = self._run(look, probability, snapshot, moment, frozen(self.ctx))  # the test's inputs, while it runs
         self._track(asyncio.ensure_future(task)).add_done_callback(self._ended)
 
     def _ended(self, _task: asyncio.Future[Any]) -> None:
