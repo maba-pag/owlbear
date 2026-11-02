@@ -16,7 +16,8 @@
   .filters > p-select { flex: 0 1 16rem; min-width: 0; }
   .proposal .actions, .followup { margin-block-start: var(--p-spacing-static-sm); }
   .from { color: var(--p-color-contrast-medium); }
-  .case, .look { overflow-wrap: anywhere; }  /* a check's note or an act's error can quote a long path or id */
+  .case, .look, #follower-failed { overflow-wrap: anywhere; }  /* a note or an error can quote a long path or id */
+  #follower-failed { white-space: pre-wrap; }  /* a multi-line error keeps its lines */
   .cards ul.meta, .panel ul.meta, .panel ol.meta { margin: 0; padding-inline-start: 1.25rem; }
 </style>
 </head>

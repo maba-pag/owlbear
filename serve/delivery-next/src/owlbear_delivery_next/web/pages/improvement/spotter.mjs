@@ -3,7 +3,8 @@ import { here } from "/assets/ui.mjs";
 import { credits, empty, heading, plural, quiet, text, when } from "./widgets.mjs";
 
 // The Spotter (design §6): its test, each loaded project's settings and where each comes from, linked to Settings,
-// its spend over the last week and the enrolled chats it does not follow. Its looks are listed under Looks.
+// its spend over the last week and the enrolled chats it does not follow, with the chats follower's failed pass. Its
+// looks are listed under Looks.
 
 // Where each setting comes from, in the Settings page's words.
 const SOURCES = { default: "built-in default", global: "global", machine: "this machine", project: "this project",
@@ -62,11 +63,13 @@ function testLine(t) {
     : nothing}.${frozen}`);
 }
 
-// The enrolled chats it does not follow: a terminal ``copilot`` session has no host it could act through.
-function notFollowed(chats) {
-  if (!chats?.length) return nothing;
-  return html`<div id="not-followed">${heading(3, "Chats not followed", "md")}<ul class="meta">${chats.map((c) =>
-    html`<li>${c.workspace}: ${c.why} (session ${c.session})</li>`)}</ul></div>`;
+// The enrolled chats it does not follow: all of them while the follower's last pass failed (its whole error), and a
+// terminal ``copilot`` session, which has no host it could act through.
+function notFollowed(chats, failed) {
+  if (!chats?.length && !failed) return nothing;
+  return html`<div id="not-followed">${heading(3, "Chats not followed", "md")}<ul class="meta">${failed ? html`<li
+    id="follower-failed">All enrolled chats: the last pass failed, and the next one tries again: ${failed}</li>`
+    : nothing}${(chats ?? []).map((c) => html`<li>${c.workspace}: ${c.why} (session ${c.session})</li>`)}</ul></div>`;
 }
 
 export function spotterSection(s) {
@@ -82,6 +85,6 @@ export function spotterSection(s) {
       { window, of: s.spend[pid] }))}</ul>` : empty("No project is loaded on this machine.")}
     ${elsewhere.map(([pid, of]) => quiet(`${pid ? `Project ${pid}, not loaded now` : "Outside a project"}, last `
       + `${window}: ${spent(of)}`))}
-    ${notFollowed(s.not_followed)}
+    ${notFollowed(s.not_followed, s.follower_failed)}
   </section>`;
 }

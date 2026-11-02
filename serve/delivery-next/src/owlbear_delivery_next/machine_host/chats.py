@@ -18,6 +18,8 @@ Every ``POLL`` seconds, one pass:
    chats' order turning each pass. Each byte is fetched once: an event not yet complete is kept and continued at the
    next read; one over ``LINE`` bytes is left out and said in the chat's cards from then on.
 
+A pass that fails is told in host.log, its whole error (``failed``) on the Improvement page until a pass does not fail.
+
 Where a chat starts: one whose folder existed when the follower started following (at its start, when switched on and
 when the enrolled folders change: the baseline, by folder names alone) starts at its end then; one found later starts
 at its beginning. What came before the start is read as context once the chat grows, never looked at; so is a
@@ -140,7 +142,7 @@ class Follower:
         self.unfollowed: dict[str, dict[str, str]] = {}  # enrolled chats not VS Code's: their folder and why
         self.share = 0  # the steer share of the latest pass
         self.turns = 0
-        self.said = ""
+        self.said = self.failed = ""  # the line last told, and the last pass's whole error if it failed
         self.saved: dict[str, Any] = {}
 
     def start(self) -> None:
@@ -218,8 +220,10 @@ class Follower:
         while not self.closed.is_set():
             try:
                 await self._pass()
+                self.failed = ""
             except Exception as exc:  # noqa: BLE001 - the follower outlives one failed pass
-                self._tell(f"chats follower: a pass failed: {type(exc).__name__}: {exc}")
+                self.failed = f"{type(exc).__name__}: {exc}"  # the Improvement page's thread reads it
+                self._tell(f"chats follower: a pass failed: {self.failed}")
             await self._nap()
         await self._quit()
 
@@ -233,7 +237,7 @@ class Follower:
         spots = [c.spot for c in self.chats.values() if c.spot] + self.leaving
         if spots:
             await asyncio.wait({asyncio.ensure_future(s.drain()) for s in spots}, timeout=CLOSE - spotter.GRACE - 2)
-        self._save()
+        self.saved = chat_offsets.save(self.chats.values(), self.saved)  # for the next run's gap record
 
     def _tell(self, text: str) -> None:
         if text and text != self.said:
@@ -272,7 +276,7 @@ class Follower:
                 break
             left -= await self._tail(cid, found[cid], plan.ctx, left)
         self.last = {}  # what the last run left counts only for the chats found when following began
-        self._save()
+        self.saved = chat_offsets.save(self.chats.values(), self.saved)  # for the next run's gap record
 
     def _off(self, why: str) -> None:
         self._tell(why)
@@ -492,9 +496,3 @@ class Follower:
             return False
         c.spot.look(look, 1.0, moment)
         return look == "state-change"
-
-    def _save(self) -> None:
-        """Keep each followed chat's offset for the next run's gap record (``chat_offsets``)."""
-        now = {c.id: {"offset": max(c.offset, c.history), "file": list(c.file)} for c in self.chats.values()}
-        if now != self.saved and chat_offsets.save(now):
-            self.saved = now
