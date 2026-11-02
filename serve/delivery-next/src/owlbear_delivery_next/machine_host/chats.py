@@ -18,8 +18,7 @@ Every ``POLL`` seconds, one pass:
    chats' order turning each pass. Each byte is fetched once: an event not yet complete is kept and continued at the
    next read; one over ``LINE`` bytes is left out and said in the chat's cards from then on.
 
-A pass that fails is told in host.log, and its whole error (``failed``) is shown on the Improvement page until a pass
-does not fail.
+A pass that fails is told in host.log, its whole error (``failed``) on the Improvement page until a pass does not fail.
 
 Where a chat starts: one whose folder existed when the follower started following (at its start, when switched on and
 when the enrolled folders change: the baseline, by folder names alone) starts at its end then; one found later starts
@@ -143,8 +142,7 @@ class Follower:
         self.unfollowed: dict[str, dict[str, str]] = {}  # enrolled chats not VS Code's: their folder and why
         self.share = 0  # the steer share of the latest pass
         self.turns = 0
-        self.said = ""
-        self.failed = ""  # the whole error of the last pass, if it failed
+        self.said = self.failed = ""  # the line last told, and the last pass's whole error if it failed
         self.saved: dict[str, Any] = {}
 
     def start(self) -> None:

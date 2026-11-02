@@ -812,12 +812,9 @@ def test_a_failed_chats_pass_shows_its_whole_error_until_a_pass_succeeds(
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     error = f"{whole_error}\n/{'x' * 3000}"  # and an unbroken path component, wider than the page
-    plans: list[chat_settings.Plan] = []
 
     def read() -> chat_settings.Plan:
-        if not plans:
-            raise RuntimeError(error)
-        return plans[0]
+        raise RuntimeError(error)
 
     with machine_page(tmp_path, monkeypatch, pds, seed=False) as w:
         follower, told = w.machine.chats, []
@@ -833,7 +830,7 @@ def test_a_failed_chats_pass_shows_its_whole_error_until_a_pass_succeeds(
 
         ctx = spotter.Context(project="", change="", step="chat", looks=("hand-off",), sample_rate=0, verbose=False,
                               model="m", effort="medium", limit=0.75, actions={})  # fmt: skip
-        plans.append(chat_settings.Plan(ctx, ()))  # a pass that reads no chat, and does not fail
+        follower.read = lambda: chat_settings.Plan(ctx, ())  # a pass that reads no chat, and does not fail
         _until(lambda: not follower.failed)
         page.reload()
         page.locator("#proposals").wait_for()
