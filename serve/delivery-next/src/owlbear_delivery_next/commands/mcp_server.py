@@ -17,6 +17,7 @@ from pydantic import Field
 from owlbear_delivery_next.change_contracts import tools  # noqa: TC001 - MCP resolves the tools' annotations at runtime
 from owlbear_delivery_next.change_flow import brief_tools
 from owlbear_delivery_next.commands.chat_client import Chat, Closed, workspace
+from owlbear_delivery_next.commands.mcp_launch import serve_stdio
 from owlbear_delivery_next.project_host import answers
 
 _STATE: dict[str, Chat | Closed] = {}
@@ -291,4 +292,4 @@ def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="python -m owlbear_delivery_next mcp")
     parser.add_argument("--repo", type=Path, default=Path.cwd())
     _STATE["chat"] = workspace(parser.parse_args(argv).repo.resolve())
-    mcp.run()
+    serve_stdio(mcp)

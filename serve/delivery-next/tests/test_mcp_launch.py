@@ -18,13 +18,15 @@ from owlbear_delivery_next.machine_host import versions
 SITE = Path("lib") / f"python{sys.version_info.major}.{sys.version_info.minor}" / "site-packages"
 PROBE = {
     "__init__.py": "",
-    "__main__.py": (
+    "server.py": (
         "import json, os, sys\n"
+        "from mcp.server import MCPServer\n"
         "print(json.dumps({'exe': sys.executable, 'file': __file__, 'cwd': os.getcwd(),"
         " 'said': os.environ.get('SAID')}), flush=True)\n"
         "sys.stdin.readline()  # the test moves the alias and prunes meanwhile\n"
         "from owlbear_memory_mcp import later\n"
         "print(json.dumps({'later': later.__file__}), flush=True)\n"
+        "mcp = MCPServer('probe')  # served until the test closes its input\n"
     ),
     "later.py": "",  # imported only after the update
 }
@@ -89,6 +91,7 @@ def test_a_server_keeps_its_version_while_owlbear_updates_and_no_prune_takes_its
         old.stdin.write("go\n")
         old.stdin.flush()
         assert under(json.loads(old.stdout.readline())["later"], v1)  # imported after the update, from its version
+        old.stdin.close()
         assert old.wait(10) == 0
     finally:
         old.kill()
@@ -98,7 +101,7 @@ def test_a_server_keeps_its_version_while_owlbear_updates_and_no_prune_takes_its
     try:
         assert under(json.loads(new.stdout.readline() or new.stderr.read())["exe"], v2)
         new.stdin.write("go\n")
-        new.stdin.flush()
+        new.stdin.close()
         assert new.wait(10) == 0
     finally:
         new.kill()
@@ -118,7 +121,7 @@ def test_a_server_this_install_lacks_says_so_and_one_that_fails_to_import_raises
     broken = tmp_path / "broken_mcp"
     broken.mkdir()
     (broken / "__init__.py").write_text("")
-    (broken / "__main__.py").write_text("import no_such_dependency\n")
+    (broken / "server.py").write_text("import no_such_dependency\n")
     monkeypatch.syspath_prepend(str(tmp_path))
     monkeypatch.setitem(mcp_launch.SERVERS, "browser", "broken_mcp")
     with pytest.raises(ModuleNotFoundError, match="no_such_dependency"):
