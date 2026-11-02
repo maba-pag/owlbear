@@ -374,8 +374,7 @@ def scripts(words: Sequence[str]) -> list[tuple[str, bool]]:
     while given[:1] in (["-q"], ["--quiet"], ["--recursive"]):  # its only options; its command's are its own
         given.pop(0)
     # git runs sh -c '<first> "$@"' <the rest>; a word the shell built stays an expansion there
-    rest = [forwarded(w) for w in given[1:]]
-    return [(" ".join([given[0], *rest]).strip(), False)] if given else []
+    return [(" ".join([given[0], *map(forwarded, given[1:])]).strip(), False)] if given else []
 
 
 def forwarded(word: str) -> str:
