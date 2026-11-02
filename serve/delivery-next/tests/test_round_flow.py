@@ -402,3 +402,31 @@ def test_a_repair_of_no_task_whose_builder_rejects_a_finding_gets_only_that_judg
         built(store, clone, monkeypatch, "c\n")
     c = store.read("c1")
     assert ([t.done for t in c.plan.tasks[2:]], at(c)) == ([True] * (2 if upheld else 1), (K.REVIEW, None, "final"))
+
+
+@pytest.mark.parametrize("said", ["str", "bytes"])
+def test_an_undo_git_refuses_is_asked_and_logged_with_its_whole_output(tmp_path, clone, whole_error, monkeypatch, said):
+    base = git(clone, "rev-parse", "HEAD")
+    (clone / "a.txt").write_text("b\n")
+    git(clone, "commit", "-qam", "build b")
+    store = stored(tmp_path, RoundLoop(subject="t1", policy=RoundPolicy()))
+    c = store.read("c1")
+    c.plan.tasks[0].base, c.plan.tasks[0].spans = base, [f"{base}..{git(clone, 'rev-parse', 'HEAD')}"]
+    c.step = Step(kind=K.BUILD, task="t1", mode=round_flow.RETRY)
+    store.write(Lock("c1"), c)
+    real = retry.worktree.git
+
+    def refused(cwd, *args):
+        if args[0] == "revert":
+            stderr = whole_error.encode() if said == "bytes" else whole_error
+            raise subprocess.CalledProcessError(1, "git revert", stderr=stderr)
+        return real(cwd, *args)
+
+    monkeypatch.setattr(retry.worktree, "git", refused)
+    c = step(store, clone)
+    why = f"CalledProcessError: Command 'git revert' returned non-zero exit status 1.\n{whole_error}"
+    assert loop.open_question(c).text == (
+        f"Delivery could not undo attempt 1 of task t1 for its fresh build: {why}. Nothing was undone. Another round "
+        "reviews the last repair of the kept work; a pause lets you fix the branch first."
+    )
+    assert [e.get("error") for e in store.events("c1") if e["event"] == "undo"] == [why]

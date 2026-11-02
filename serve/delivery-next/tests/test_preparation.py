@@ -1,6 +1,7 @@
 """TD-96, TD-107: declared test preparation, the owner's permissions, the frozen snapshot and the preparer's patch."""
 
 import json
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -9,11 +10,24 @@ import pytest
 from pydantic import ValidationError
 
 from owlbear_delivery_next.change_contracts import preparation, tools
-from owlbear_delivery_next.change_contracts.models import Change, Environment, Exit, Step, StepKind, Waiting
+from owlbear_delivery_next.change_contracts.models import (
+    Change,
+    Environment,
+    Exit,
+    PersonCheck,
+    Plan,
+    Step,
+    StepKind,
+    Task,
+    Waiting,
+)
 from owlbear_delivery_next.change_contracts.preparation import DataPermissions, Preparation, Preparing
 from owlbear_delivery_next.change_flow import loop, worktree
+from owlbear_delivery_next.commands import runner
+from owlbear_delivery_next.local_system.processes import Termination
+from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.settings.config import CONFIG_FORMAT, Layer, resolve
-from owlbear_delivery_next.state_store.store import Store
+from owlbear_delivery_next.state_store.store import Lock, Store
 from owlbear_delivery_next.workflow_steps import check, prepare
 
 TOOL = """import os, pathlib, sys
@@ -38,6 +52,8 @@ if act == "fail":
     sys.exit("restore refused")
 if act == "fail-long":
     sys.exit("restore refused: " + "x" * 300)
+if act == "fail-whole":
+    sys.exit(pathlib.Path(__file__).with_name("whole.txt").read_text())
 """
 SETUP = """import os, pathlib, sys
 act, log = sys.argv[1], pathlib.Path(os.environ["TEST_LOG"])
@@ -354,28 +370,32 @@ def test_cleanup_runs_after_a_failed_restore_and_the_snapshot_may_be_kept(env):
 LONG = "restore refused: " + "x" * 300
 
 
-@pytest.mark.parametrize(("act", "cause"), [("fail", "restore refused"), ("fail-long", LONG)])
-def test_a_failed_command_on_a_long_path_still_says_why(env, act, cause):
+@pytest.mark.parametrize("act", ["fail", "fail-long", "fail-whole"])
+def test_a_failed_command_on_a_long_path_says_why_whole(env, whole_error, act):
     repo, store, _log, tmp = env
     deep = tmp
     if (pad := 290 - len(run(tmp, act)) - 1) > 0:  # a declared command of about 290 characters, wherever tmp is
         deep = tmp.joinpath(*(["d" * 100] * (pad // 101)), "e" * (pad % 101 or 1))
         deep.mkdir(parents=True)
         (deep / "tool.py").write_text(TOOL)
+    (deep / "whole.txt").write_text(whole_error)
     failing = option(tmp, restore=run(deep, act))
     assert len(failing.restore) >= 289
     c, s = change(repo, "pc1"), settings(failing)
     prepare._write(store, "c1", prepare.Prepared(check="pc1", option=failing))  # noqa: SLF001 - as accepted
     result = prepare.launch(store, c, s, lambda _e: None)
-    assert result.reason.endswith(f"failed: {cause[: check.CAUSE]}")  # the note is whole, not cut by the cap
-    assert len(result.reason) <= 300
+    cause = {"fail": "restore refused", "fail-long": LONG, "fail-whole": whole_error}[act]
+    assert result.reason == f"test preparation failed: the restore command `{failing.restore}` failed: {cause}"
 
 
-@pytest.mark.parametrize("args", [["python", "tool.py", "fail"], ["/" + "x" * 200 + "/python", "/w/tool.py", "fail"]])
-def test_a_note_quotes_a_command_within_its_bound_keeping_its_end(args):
-    shown = check.shown(args)
-    assert len(shown) <= check.SHOWN
-    assert shown.endswith("/w/tool.py fail" if len(args[0]) > 100 else "python tool.py fail")
+@pytest.mark.parametrize("long", [False, True])
+def test_a_note_quotes_the_whole_command(tmp_path, long):
+    deep = tmp_path / ("x" * 200 if long else "w")
+    deep.mkdir()
+    (deep / "tool.py").write_text(TOOL)
+    args = [sys.executable, str(deep / "tool.py"), "fail"]
+    note = check.run(args, tmp_path, lambda _e: None, {"PREP_LOG": str(tmp_path / "prep.log")})
+    assert note == f"`{shlex.join(args)}` failed: restore refused"
 
 
 def test_a_snapshot_changed_after_it_was_frozen_is_never_restored(env):
@@ -413,7 +433,7 @@ def test_setup_edits_become_a_patch_applied_for_the_check_and_discarded_after(en
     (repo / "fixtures" / "orders.json").write_text("[]\n")
     accepted = loop.StepResult(exit=Exit.PENDING, waiting=Waiting.PERSON_CHECK)
 
-    assert prepare.chosen(store, c, repo, recipe("fixtures"), ctx, accepted) is accepted
+    assert prepare.chosen(store, Lock("c1"), c, repo, recipe("fixtures"), ctx, accepted) is accepted
     assert prepare.edits(repo) == ["src/left.py"]  # the preparer's edits are gone; what it found stays
     assert sorted(prepare.read(store, "c1", "pc1").paths) == ["fixtures/orders.json", "fixtures/users.json"]
     (repo / "src" / "left.py").unlink()
@@ -448,7 +468,7 @@ def test_a_preparer_s_rename_is_kept_as_its_setup_patch_and_undone(env, how):
     assert sorted(prepare.edits(repo)) == names  # both real ends, each once
     accepted = loop.StepResult(exit=Exit.PENDING, waiting=Waiting.PERSON_CHECK)
 
-    assert prepare.chosen(store, c, repo, recipe("fixtures"), ctx, accepted) is accepted
+    assert prepare.chosen(store, Lock("c1"), c, repo, recipe("fixtures"), ctx, accepted) is accepted
     assert (prepare.edits(repo), (repo / OLD).read_text()) == ([], "[]\n")
     assert sorted(prepare.read(store, "c1", "pc1").paths) == names
 
@@ -470,7 +490,7 @@ def test_a_setup_file_added_then_deleted_leaves_an_empty_patch(env):
     (repo / "fixtures" / "tmp.json").unlink()  # "AD": only in the index, nothing to keep against HEAD
     accepted = loop.StepResult(exit=Exit.PENDING, waiting=Waiting.PERSON_CHECK)
 
-    assert prepare.chosen(store, c, repo, recipe("fixtures"), ctx, accepted) is accepted
+    assert prepare.chosen(store, Lock("c1"), c, repo, recipe("fixtures"), ctx, accepted) is accepted
     assert prepare.read(store, "c1", "pc1").paths == []  # no pathless capture of the edit it found
     assert prepare.launch(store, c, s, lambda _e: None).exit == Exit.PENDING
     assert (prepare.edits(repo), (repo / "src" / "left.py").read_text()) == (
@@ -485,7 +505,7 @@ def test_a_session_that_ends_without_a_recipe_keeps_none_of_its_edits(env):
     ctx = prepare.context(store, c, s, repo)
     (repo / "fixtures" / "users.json").write_text("edited\n")
     asked = loop.StepResult(exit=Exit.ASK)
-    assert prepare.chosen(store, c, repo, recipe(), ctx, asked) is asked
+    assert prepare.chosen(store, Lock("c1"), c, repo, recipe(), ctx, asked) is asked
     assert (prepare.edits(repo), prepare.read(store, "c1", "pc1")) == ([], None)
 
 
@@ -611,7 +631,7 @@ def patched(env) -> tuple[Change, object, Path]:
     ctx = prepare.context(store, c, s, repo)
     (repo / "fixtures" / "setup.py").write_text(SETUP)
     accepted = loop.StepResult(exit=Exit.PENDING, waiting=Waiting.PERSON_CHECK)
-    assert prepare.chosen(store, c, repo, recipe("fixtures"), ctx, accepted) is accepted
+    assert prepare.chosen(store, Lock("c1"), c, repo, recipe("fixtures"), ctx, accepted) is accepted
     assert not (repo / "fixtures" / "setup.py").exists()
     return c, s, tmp / "test.db"
 
@@ -650,7 +670,7 @@ def test_a_preparer_commit_is_undone_and_none_of_its_edits_stay(env, ending):
     (repo / "fixtures" / "orders.json").write_text("[]\n")
     if ending == "chosen":
         accepted = loop.StepResult(exit=Exit.PENDING, waiting=Waiting.PERSON_CHECK)
-        result = prepare.chosen(store, c, repo, recipe(), ctx, accepted)
+        result = prepare.chosen(store, Lock("c1"), c, repo, recipe(), ctx, accepted)
         assert (result.exit, result.reason.startswith("the preparer committed")) == (Exit.RETRY, True)
     else:
         prepare.stray(store, "c1", events.append)
@@ -673,9 +693,99 @@ def test_ignored_setup_files_the_preparer_created_or_changed_are_put_back(env, e
     (repo / "fixtures" / "deep" / "new.local").write_text("made by the preparer\n")
     if ending == "chosen":
         accepted = loop.StepResult(exit=Exit.PENDING, waiting=Waiting.PERSON_CHECK)
-        assert prepare.chosen(store, c, repo, recipe(), ctx, accepted) is accepted
+        assert prepare.chosen(store, Lock("c1"), c, repo, recipe(), ctx, accepted) is accepted
     else:
         prepare.stray(store, "c1", lambda _e: None)
     assert (repo / "fixtures" / "kept.local").read_text() == "the owner's\n"
     assert not (repo / "fixtures" / "deep" / "new.local").exists()
     assert (repo / "src" / "other.local").read_text() == "outside the setup globs\n"
+
+
+def events(store: Store, kind: str, field: str) -> list[object]:
+    return [e[field] for e in store.events("c1") if e.get("event") == kind]
+
+
+@pytest.mark.parametrize("said", ["str", "bytes"])
+def test_setup_edits_that_cannot_be_kept_say_and_log_why_whole(env, whole_error, monkeypatch, said):
+    repo, store, _log, tmp = env
+    s = settings(option(tmp, "data-only", id="fixtures"))
+    c = change(repo, "pc1")
+    c.env, c.plan = None, Plan(tasks=[Task(id="t1", title="one", scope=["src"])])
+    c.checks = [PersonCheck(id="pc1", steps=["open the page"])]
+    store.write(Lock("c1"), c)
+    monkeypatch.setattr(store, "settings", lambda: s)
+    monkeypatch.setattr(runner.worktree, "ensure", lambda *_a: repo)
+    real = prepare._git  # noqa: SLF001
+
+    def refused(root, *args, env=None):
+        if args[0] == "read-tree":
+            stderr = whole_error.encode() if said == "bytes" else whole_error
+            raise subprocess.CalledProcessError(128, "git read-tree HEAD", stderr=stderr)
+        return real(root, *args, env=env)
+
+    async def preparer(cfg):
+        (repo / "fixtures" / "users.json").write_text('[{"name": "Ada"}]\n')
+        head = git(repo, "rev-parse", "HEAD").strip()
+        return Run(cfg.session_id, "result", recipe("fixtures"), head=head, termination=Termination(confirmed=True))
+
+    monkeypatch.setattr(prepare, "_git", refused)
+    monkeypatch.setattr(runner.sdk_adapter, "run", preparer)
+    runner._agent(store, Lock("c1"), store.read("c1"), repo)  # noqa: SLF001
+    expected = (
+        "the preparer's setup edits could not be kept: CalledProcessError: Command 'git read-tree HEAD' returned "
+        f"non-zero exit status 128.\n{whole_error}"
+    )
+    assert store.read("c1").outcome.reason == expected
+    assert events(store, "setup-edits-not-kept", "reason") == [expected]
+
+
+@pytest.mark.parametrize("how", ["restore", "apply"])
+def test_a_failed_launch_logs_its_whole_reason(env, whole_error, monkeypatch, how):
+    repo, store, _log, tmp = env
+    (tmp / "whole.txt").write_text(whole_error)
+    chosen = option(tmp, restore=run(tmp, "fail-whole")) if how == "restore" else option(tmp)
+    s = settings(chosen)
+    monkeypatch.setattr(store, "settings", lambda: s)
+    c = change(repo, "pc1")
+    rec = prepare.Prepared(check="pc1", option=chosen, paths=["fixtures/users.json"] if how == "apply" else [])
+    prepare._write(store, "c1", rec, b"a patch" if how == "apply" else None)  # noqa: SLF001 - as accepted
+    store.write(Lock("c1"), c)
+    real = prepare._git  # noqa: SLF001
+
+    def hung(root, *args, env=None):
+        if args[0] == "apply":
+            cmd = "git apply"
+            raise subprocess.TimeoutExpired(cmd, 60, stderr=whole_error.encode())
+        return real(root, *args, env=env)
+
+    monkeypatch.setattr(prepare, "_git", hung)
+    assert prepare.ran(store, Lock("c1"), store.read("c1"), repo, runnable=True)
+    expected = "test preparation failed: " + (
+        f"the restore command `{chosen.restore}` failed: {whole_error}"
+        if how == "restore"
+        else f"TimeoutExpired: Command 'git apply' timed out after 60 seconds\n{whole_error}"
+    )
+    assert store.read("c1").outcome.reason == expected
+    assert events(store, "step", "reason") == [expected]
+
+
+def test_setup_edits_that_cannot_be_discarded_stop_and_log_whole(env, whole_error, monkeypatch):
+    repo, store, _log, tmp = env
+    c, s = change(repo, "pc1"), settings(option(tmp))
+    paths = [f"fixtures/f{i}.json" for i in range(7)]
+    rec = prepare.Prepared(check="pc1", option=option(tmp), paths=paths, applied=str(repo), open=True)
+    prepare._write(store, "c1", rec)  # noqa: SLF001 - an applied patch
+    c.env = None
+
+    def broken(*_a):
+        raise subprocess.CalledProcessError(128, "git checkout", stderr=whole_error.encode())
+
+    monkeypatch.setattr(prepare, "discard", broken)
+    said = []
+    stop = prepare.end(store, c, repo, s, said.append)
+    expected = (
+        f"the check's setup edits ({', '.join(paths)}) could not be discarded: CalledProcessError: Command "
+        f"'git checkout' returned non-zero exit status 128.\n{whole_error}"
+    )
+    assert stop.reason == expected
+    assert [e.get("stuck") for e in said if e["event"] == "prepared-end"] == [expected]

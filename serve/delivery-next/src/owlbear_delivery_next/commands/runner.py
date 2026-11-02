@@ -204,7 +204,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:  # noq
     if isinstance(p := run.payload, tools.WrongPremise) and (p.stage, s.kind, result.exit) == TARGET:
         result = engine.needs_target(change, path, f"{p.reason} ({'; '.join(p.evidence)})", end)
     if ctx is not None:
-        result = prepare.chosen(post, change, path, run.payload, ctx, result)
+        result = prepare.chosen(post, lock, change, path, run.payload, ctx, result)
     if isinstance(p := run.payload, tools.CheckRecipe) and result.exit == Exit.PENDING:
         change.env = Environment(check=s.task or "", command=p.command, directory=p.directory, ready_url=p.ready_url)
     if proposal is not None:  # its challenger's stop, else this result, is written with the verdict and its spend
@@ -268,7 +268,7 @@ def _visual(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     except visual.BrowserMissingError as exc:
         result = visual.missing_browser(str(exc))
     except Exception as exc:  # noqa: BLE001 - a capture error is never a pass
-        result = visual.broken(f"{type(exc).__name__}: {exc}"[:300])
+        result = visual.broken(f"{type(exc).__name__}: {exc}")
     else:
         result, judgement, kept = None, None, None
         if shots and all(s.file for s in shots):  # a failed shot is a finding without a reviewer
@@ -475,7 +475,10 @@ def _run(store: Store, lock: Lock, change: Change, step: Step | None, repo: Path
         now = datetime.now(UTC)
         store.write(lock, loop.apply(store.read(lock.slug), exc.result(now), now))
     except worktree.ShelveError as exc:  # the planner never starts on edits it would have to reject
-        store.write(lock, loop.apply(store.read(lock.slug), _unshelved(exc), datetime.now(UTC)))
+        now = datetime.now(UTC)
+        reason = f"{type(exc).__name__}: {exc}"
+        store.log(lock, lock.slug, {"event": "not-shelved", "at": now.isoformat(timespec="seconds"), "reason": reason})
+        store.write(lock, loop.apply(store.read(lock.slug), _unshelved(exc), now))
     except SettingsUnset as exc:
         unset_settings.asked(store, lock, exc)
 

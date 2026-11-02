@@ -94,7 +94,7 @@ def fetch(path: Path, branch: str) -> None:
     spec = f"+refs/heads/{branch}:refs/remotes/origin/{branch}"
     done = run_remote_git(path, ("fetch", "--quiet", "--no-tags", "origin", spec), kind="read")
     if done.returncode != 0:
-        msg = f"fetch of {branch} failed: {done.stderr.decode(errors='replace').strip()[-200:]}"
+        msg = f"fetch of {branch} failed: {done.stderr.decode(errors='replace').strip()}"
         raise RemoteGitFailed(msg, retry_safe=True, result=done)
 
 
@@ -169,7 +169,8 @@ def failed(c: Change, exc: Exception, now: datetime) -> StepResult:
         stop = Stop(kind=ErrorKind.GATE, reason=str(exc), action="Resolve it in GitHub", resume="GitHub agrees", at=now)
         return StepResult(exit=Exit.STOP, reason=str(exc), stop=stop)
     cause = failures.cause_key(classify(exc), kind, "github" if isinstance(exc, ProviderError) else "git")
-    return StepResult(exit=Exit.RETRY, cause=cause, reason=str(exc)[:300], wake_at=now + timedelta(minutes=1))
+    reason = f"{type(exc).__name__}: {exc}"
+    return StepResult(exit=Exit.RETRY, cause=cause, reason=reason, wake_at=now + timedelta(minutes=1))
 
 
 def classify(exc: Exception) -> ErrorKind:

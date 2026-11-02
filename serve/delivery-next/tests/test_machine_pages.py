@@ -22,7 +22,21 @@ import pytest
 import uvicorn
 from copilot.generated import rpc
 
-from owlbear_delivery_next.change_contracts.models import Brief, Change, Step, StepKind
+from owlbear_delivery_next.change_contracts.models import (
+    Brief,
+    Change,
+    Exit,
+    Names,
+    Plan,
+    Step,
+    StepKind,
+    Task,
+)
+from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
+from owlbear_delivery_next.change_contracts.round_records import RoundLoop, RoundPolicy
+from owlbear_delivery_next.change_flow import round_flow
+from owlbear_delivery_next.commands import runner
+from owlbear_delivery_next.github.gh import GhProvider
 from owlbear_delivery_next.impeccable import pack_files
 from owlbear_delivery_next.local_system import codebase, data_repo, local_home
 from owlbear_delivery_next.machine_host import app, project
@@ -31,10 +45,11 @@ from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import Host, HostRecord
 from owlbear_delivery_next.runtimes import model_choices
 from owlbear_delivery_next.runtimes.settings_seen import NAME as SEEN
-from owlbear_delivery_next.settings import config
+from owlbear_delivery_next.settings import config, profile
 from owlbear_delivery_next.settings.config import CONFIG_FORMAT
 from owlbear_delivery_next.state_store import registry
 from owlbear_delivery_next.state_store.store import MACHINE_SETTINGS, Store
+from owlbear_delivery_next.workflow_steps import retry
 
 if TYPE_CHECKING:
     from playwright.sync_api import Page
@@ -2415,4 +2430,72 @@ def test_dismiss_one_in_settings_and_all_from_changes(tmp_path: Path, monkeypatc
         page.goto(f"{base}/config?project={a.id}")
         expect(page.locator("#reads-status")).to_contain_text("all sources", timeout=READS_TIME * 1000)
         expect(entries).to_have_count(0)
+        assert said == []
+
+
+def test_a_long_step_error_shows_whole_on_the_status_line(tmp_path: Path, monkeypatch, whole_error: str) -> None:
+    """#895 K1: gh's whole multiline stderr reaches the engine step's event and outcome."""
+    store = Store(tmp_path / "store")
+    store.write_profile(Profile(entries={profile.REPO: ProfileEntry(state="known", value="o/r")}))
+
+    def refused(argv, _body, _timeout, _cwd):
+        return subprocess.CompletedProcess(argv, 1, b"", f"gh: {whole_error}\n".encode())
+
+    monkeypatch.setattr(runner.profile, "provider", lambda _p, r: GhProvider(r, runner=refused))
+    with store.lock("c1") as lock:
+        c = Change(slug="c1", step=Step(kind=StepKind.FOLLOW), names=Names(pr=7))
+        store.write(lock, c)
+        runner._engine(store, lock, c, tmp_path)  # noqa: SLF001
+    reason = f"ProviderError: read_pull_request: {whole_error}"
+    step = next(e for e in store.events("c1") if e.get("event") == "step")
+    assert (step["exit"], step["reason"], store.read("c1").outcome.reason) == (Exit.RETRY, reason, reason)
+
+
+@pytest.mark.browser
+def test_a_long_undo_failure_is_asked_whole(tmp_path: Path, monkeypatch, pds, whole_error: str) -> None:
+    """#895 K5: the undo's failure, git's whole output, is asked on the Changes page and logged whole."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    alpha = registry.register(clone(tmp_path / "alpha", "c1"))
+    work = clone(tmp_path / "work")
+    base = runner.worktree.git(work, "rev-parse", "HEAD").strip()
+    (work / "a.txt").write_text("b\n")
+    for args in (["add", "a.txt"], ["commit", "-qm", "build b"]):
+        subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", "-C", str(work), *args], check=True)  # noqa: S603, S607
+    head = runner.worktree.git(work, "rev-parse", "HEAD").strip()
+    real = runner.worktree.git
+
+    def refused(cwd, *args):
+        if args[0] == "revert":
+            raise subprocess.CalledProcessError(1, "git revert", stderr=whole_error.encode())
+        return real(cwd, *args)
+
+    monkeypatch.setattr(runner.worktree, "ensure", lambda *_a: work)
+    monkeypatch.setattr(runner.worktree, "git", refused)
+    store = Store.open(Path(alpha.path))
+    with store.lock("c1") as lock:
+        task = Task(id="t1", title="one", scope=["a.txt"], base=base, spans=[f"{base}..{head}"])
+        c = Change(
+            slug="c1",
+            brief=Brief(version=1),
+            plan=Plan(tasks=[task]),
+            names=Names(branch="owlbear/c1", target="main"),
+            step=Step(kind=StepKind.BUILD, task="t1", mode=round_flow.RETRY),
+            loops={"t1": RoundLoop(subject="t1", policy=RoundPolicy())},
+        )
+        store.write(lock, c)
+        assert retry.undone(store, lock, c, work)
+    why = f"CalledProcessError: Command 'git revert' returned non-zero exit status 1.\n{whole_error}"
+    asked = (
+        f"Delivery could not undo attempt 1 of task t1 for its fresh build: {why}. Nothing was undone. Another round "
+        "reviews the last repair of the kept work; a pause lets you fix the branch first."
+    )
+    assert [e.get("error") for e in store.events("c1") if e["event"] == "undo"] == [why]
+    q = store.read("c1").questions[-1]
+    with browsing(monkeypatch, pds) as (page, url):
+        said = errors(page)
+        opened(page, url, alpha.id, "c1")
+        form = page.locator("section.act", has_text=f"Question {q.id}")
+        expect(form).to_be_visible()
+        assert form.locator("p-text").first.text_content() == asked
         assert said == []

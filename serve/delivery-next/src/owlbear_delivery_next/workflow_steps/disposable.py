@@ -70,7 +70,7 @@ def prepare(source: Path, store: Store, slug: str) -> Copy | str:
             worktree.git(source, "worktree", "add", "--quiet", "--detach", str(at), commit)
         return Copy(source, at, _refs(source), _shared(source))
     except (OSError, subprocess.SubprocessError) as exc:
-        return f"the read-only worktree could not be prepared: {_why(exc)}"
+        return f"the read-only worktree could not be prepared: {worktree.failure(exc)}"
 
 
 def live(folder: Path) -> Path | None:
@@ -90,10 +90,6 @@ def begin(folder: Path, at: Path) -> None:
 def settled(folder: Path) -> None:
     """Every process of the last read-only session is confirmed gone."""
     (folder / LIVE).unlink(missing_ok=True)
-
-
-def _why(exc: BaseException) -> str:
-    return str(getattr(exc, "stderr", "") or exc).strip()[:300]
 
 
 def _refs(cwd: Path) -> dict[str, str]:
@@ -213,7 +209,7 @@ def remove(source: Path, store: Store, slug: str) -> str:
     try:
         at, left = path(source, slug), live(store.root / "changes" / slug)
     except (OSError, subprocess.SubprocessError) as exc:
-        return f"the read-only worktree of {source} could not be located: {_why(exc)}"
+        return f"the read-only worktree of {source} could not be located: {worktree.failure(exc)}"
     if not (at.exists() or at.is_symlink()):
         return ""
     if left:
@@ -223,7 +219,7 @@ def remove(source: Path, store: Store, slug: str) -> str:
     try:
         worktree.git(source, "worktree", "remove", "--force", str(at))
     except (OSError, subprocess.SubprocessError) as exc:
-        problem = f"git worktree remove failed: {_why(exc)}"
+        problem = f"git worktree remove failed: {worktree.failure(exc)}"
     if at.exists() and not at.is_symlink():
         shutil.rmtree(at, ignore_errors=True)
     return problem or (f"{at} remains after its removal" if at.exists() else "")

@@ -3003,3 +3003,15 @@ def test_a_dequeue_not_read_back_as_removed_keeps_the_barrier_and_asks_nothing(t
         True,
         True,
     )
+
+
+def test_a_failed_fetch_keeps_gits_whole_output(clone, whole_error, monkeypatch):
+    c = change(StepKind.BUILD, worktree=str(clone))
+    c.step.task = "t1"
+
+    def refused(_path, argv, **_k):
+        return subprocess.CompletedProcess(argv, 1, b"", f"{whole_error}\n".encode())
+
+    monkeypatch.setattr(engine, "run_remote_git", refused)
+    result = engine.needs_target(c, clone, "greet() exists only on main", NOW)
+    assert (result.exit, result.reason) == (Exit.RETRY, f"RemoteGitFailed: fetch of main failed: {whole_error}")

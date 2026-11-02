@@ -27,6 +27,17 @@ def git(cwd: Path, *args: str) -> str:
     ).stdout
 
 
+def failure(exc: BaseException) -> str:
+    """The whole text of a failure: its type and message, then the output of a command it carries.
+
+    ``str()`` of a ``CalledProcessError`` names the command and its exit status but not what it said, so its whole
+    stderr follows on its own lines (its stdout when stderr is empty).
+    """
+    said = getattr(exc, "stderr", None) or getattr(exc, "output", None) or b""
+    out = (said.decode(errors="replace") if isinstance(said, bytes) else str(said)).strip()
+    return f"{type(exc).__name__}: {exc}" + (f"\n{out}" if out else "")
+
+
 def data_root() -> Path:
     """Return the one folder that holds every worktree, so folder trust is granted once (P8), in OwlBear's folder."""
     return local_home.root() / "worktrees"
@@ -102,11 +113,10 @@ def shelve(path: Path, message: str) -> bool:
         git(path, "stash", "push", "--include-untracked", "--message", message)
         left = git(path, "status", "--porcelain").strip()
     except (OSError, subprocess.SubprocessError) as exc:
-        detail = str(getattr(exc, "stderr", "") or exc).strip()
-        msg = f"git stash failed in {path}: {detail[:300]}"
+        msg = f"git stash failed in {path}: {failure(exc)}"
         raise ShelveError(msg) from exc
     if left:
-        msg = f"files stay uncommitted in {path} after git stash: {left[:300]}"
+        msg = f"files stay uncommitted in {path} after git stash: {left}"
         raise ShelveError(msg)
     return True
 

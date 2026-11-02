@@ -1276,3 +1276,12 @@ def test_a_real_capture_records_console_and_page_errors_and_only_new_ones_fail(t
     assert [(e.kind, e.text) for e in old] == [("console", "old warning")]
     assert [e.kind for e in new] == ["page"]
     assert "undefined_call" in new[0].text
+
+
+def test_a_capture_error_keeps_its_whole_text(flow, whole_error):
+    def crash(*_a, **_k):
+        raise RuntimeError(whole_error)
+
+    flow.mp.setattr(visual, "CAPTURE", crash)
+    runner._visual(flow.store, Lock("c1"), checking(flow.store, flow.clone), flow.clone)  # noqa: SLF001
+    assert flow.store.read("c1").outcome.reason == f"capture failed: RuntimeError: {whole_error}"
