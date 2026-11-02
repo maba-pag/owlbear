@@ -49,6 +49,7 @@ def test_each_level_refuses_warns_or_allows_each_class(found: str, level: str) -
         ("bash -c 'git -c core.hooksPath=/dev/null status'; bash -c 'touch x'", True),
         ("echo '", False),
         ("HUSKY=0 git commit -m x", True),
+        ("'case' x in; git commit -m x", False),  # bash runs the commit after the program 'case'
     ],
 )
 def test_a_read_only_steps_writes_are_refused_at_every_level(text: str, *, named: bool, level: str) -> None:
@@ -237,6 +238,8 @@ ROUTES = {  # #864's routes: each case's command and the class it is found in, o
         ("""node -e "require('child_process').execSync('git push --force')\"""", "doubtful"),
         ("perl -e 'system(\"git push --force\")'", "doubtful"),
         ("perl -e '1;' -e 'system(\"git push --force\")'", "doubtful"),  # perl runs every -e
+        ("'case' x in; git push --force", "core"),  # a quoted case is a program's name, not the keyword
+        (r"\case x in; git commit -n -m x", "core"),
         ("python3 -Bc 'import os; os.system(\"git push -f\")'", "doubtful"),
         ("python3 -Bc'import os; os.system(\"git push -f\")'", "doubtful"),
         ("python3 -W ignore -c 'import os; os.system(\"git push -f\")'", "doubtful"),

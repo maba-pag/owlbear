@@ -63,6 +63,7 @@ class _Level:
     opaque: bool  # its commands read input from outside the text: a pipe or an output process substitution
     arith: bool = False  # inside (( )): < and > are operators, never redirections
     pattern: bool = False  # its words are no command: a case arm's patterns, an array's elements
+    case: bool = False  # its first word is the keyword case, unquoted; 'case' runs a program
     words: list[Word] = field(default_factory=list)
     inputs: list[Input] = field(default_factory=list)
     word: str | None = None
@@ -88,8 +89,10 @@ class _Level:
         word.split = self.split
         if self.redirect is None:
             self.pattern = self.pattern and (bool(self.words) or word != "esac")  # esac ends the arms
+            if not self.words:
+                self.case = word == "case" and "\0" not in self.plain
             self.words.append(word)
-            self.pattern = self.pattern or (self.words[:1] == ["case"] and self.words[2:] == ["in"])  # arms follow
+            self.pattern = self.pattern or (self.case and self.words[2:] == ["in"])  # arms follow
         else:
             fd, kind = self.redirect
             if kind != "out":
@@ -138,11 +141,11 @@ class _Lexer:
     def close(self, s: _Level, i: int) -> bool:
         """End the command being read at index *i*, keeping it when it has words or input; return whether it did."""
         s.end_word()
-        kept = bool(s.words or s.inputs or s.out) and (not s.pattern or s.words[:1] == ["case"])
+        kept = bool(s.words or s.inputs or s.out) and (not s.pattern or s.case)
         if kept:
             self._keep(s, i)
             s.piped = False
-        s.words, s.inputs, s.redirect, s.start, s.out = [], [], None, None, False
+        s.words, s.inputs, s.redirect, s.start, s.out, s.case = [], [], None, None, False, False
         return kept
 
     def _keep(self, s: _Level, i: int) -> None:
