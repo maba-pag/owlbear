@@ -170,7 +170,7 @@ def test_a_round_the_owner_decided_is_kept_with_its_before_and_after_screenshots
     for folder, data in ((out, b"after"), (old, b"before")):
         folder.mkdir(parents=True)
         (folder / "home-1280.png").write_bytes(data)
-    visual_settled.calibrated(store, change, out)
+    visual_settled.calibrated(store, Lock("c1"), change, out)
     kept = root / "shop-site" / "visual" / "c1-1"
     assert [(kept / n).read_bytes() for n in ("after-home-1280.png", "before-home-1280.png")] == [b"after", b"before"]
 

@@ -315,13 +315,14 @@ async def _once(  # noqa: PLR0913, PLR0917 - the card, its prompt and look, the 
         try:
             said = await look(the_card, prompt, meter)
         except Exception as exc:  # noqa: BLE001 - a failed look is retried once, then counted
-            said = {"category": "failed", "note": f"{type(exc).__name__}: {exc}"[:300]}
+            said = {"category": "failed", "note": f"{type(exc).__name__}: {exc}"}
         if said.get("category") in SILENT or said.get("category") in CATEGORIES:
             break
     looks.append(meter.report())
     if said.get("category") not in SILENT | set(CATEGORIES) and (stop := halt() or meter.report()["stopped"]):
         raise _Stopped(stop if halt() else f"the {meter.report()['stopped_by']} spend is {stop}")
-    return {"category": said.get("category", "failed"), "note": clip(said.get("note") or "", 1200)}
+    category, note = said.get("category", "failed"), said.get("note") or ""
+    return {"category": category, "note": note if category == "failed" else clip(note, 1200)}
 
 
 def _counts(answers: Mapping[str, Mapping[str, Mapping[str, Any]]]) -> dict[str, dict[str, int]]:

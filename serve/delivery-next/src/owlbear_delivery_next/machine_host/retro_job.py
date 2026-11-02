@@ -259,7 +259,7 @@ class RetroJob:
                 for agent in ("retro", "retro-review"):
                     session(agent)
             except (SettingsUnset, registry.RegistryError, OSError, ValueError) as exc:
-                why = f"refused: {type(exc).__name__}: {exc}"[:300]
+                why = f"refused: {type(exc).__name__}: {exc}"
         if not why and limit is None:
             why = "refused: the Retro run credit limit is unset"
         why = why or ctx.retired()
@@ -294,7 +294,7 @@ class RetroJob:
             result = "stopped: OwlBear stopped"
         except Exception as exc:
             LOG.exception("a Retro run failed")
-            result = f"failed: {type(exc).__name__}: {exc}"[:300]
+            result = f"failed: {type(exc).__name__}: {exc}"
         finally:
             self.running = ""
         self._ended(ctx, result, out)
@@ -440,7 +440,7 @@ class RetroJob:
     def _released(self, lease: str) -> bool:
         """End a call's lease: released when its runtime's end was confirmed, else held with its slot; held?"""
         left = list(self.unended)
-        problems = (f"the end of Retro sessions was not confirmed: {', '.join(left)}"[:300],) if left else ()
+        problems = (f"the end of Retro sessions was not confirmed: {', '.join(left)}",) if left else ()
         self.maintenance.finished(lease, Run(lease, termination=processes.Termination(not left, problems=problems)))
         if left:
             self.seams.say(f"Retro: {problems[0]}; no Retro call starts until Maintenance recovers it")

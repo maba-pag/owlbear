@@ -377,7 +377,7 @@ class Spotter:
         except TimeoutError:
             record.skipped = f"time: the look took over {LOOK:.0f} seconds"
         except Exception as exc:  # noqa: BLE001 - a look never reaches the step
-            record.category, record.skipped = "failed", f"{type(exc).__name__}: {exc}"[:300]
+            record.category, record.skipped = "failed", f"{type(exc).__name__}: {exc}"
         finally:
             record.prompt, record.cases = ctx.prompt.hash if ctx.prompt else "", ctx.prompt.cases if ctx.prompt else 0
             record.seconds = round(time.monotonic() - started, 1)

@@ -703,20 +703,19 @@ def test_a_request_whose_limits_cannot_be_read_is_kept_failed_never_lost(monkeyp
     assert not case_replay.queued()
 
 
-def test_a_failed_publication_is_kept_with_its_spend(monkeypatch, shared_repo) -> None:
+def test_a_failed_publication_is_kept_with_its_spend(monkeypatch, shared_repo, whole_error) -> None:
     j = Job(monkeypatch)
     j.job.shared = lambda: DataRepo(shared_repo[0])
 
     async def failing(_text, meter, _role) -> str:
         spend(meter, 0.2)
-        msg = "the runtime went away"
-        raise RuntimeError(msg)
+        raise RuntimeError(whole_error)
 
     j.job.asked = failing
     reviewed()
     j.job.tick(1000)
     [kept] = [r for r in case_replay.results() if r["kind"] == "publication"]
-    assert kept["result"].startswith("failed: RuntimeError")
+    assert kept["result"] == f"failed: RuntimeError: {whole_error}"
     assert kept["credits"]["credits"] == pytest.approx(0.2)
 
 

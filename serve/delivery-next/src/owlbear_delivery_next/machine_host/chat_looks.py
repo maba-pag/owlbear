@@ -86,7 +86,7 @@ class Owned:
             return await judge(the_card, ctx, meter)
         finally:
             spotter_look.UNENDED.reset(token)
-            problems = (f"the end of a Spotter chat look's session was not confirmed: {', '.join(unended)}"[:300],)
+            problems = (f"the end of a Spotter chat look's session was not confirmed: {', '.join(unended)}",)
             ended = _Ended(processes.Termination(not unended, problems=problems if unended else ()))
             if unended:
                 self.ownership.slots.restore_one(PROJECT, key, 1)  # its runtime may still use a session

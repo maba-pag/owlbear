@@ -2698,3 +2698,41 @@ def test_a_visual_round_shows_whole_errors(tmp_path: Path, monkeypatch, pds, cap
         before_only = {f"Not available: {note}", f"The design detector could not scan: changed sources: {failed}"}
         assert before_only <= set(shown_texts(page, url, of, "Before and after"))
         assert said == []
+
+
+@pytest.mark.browser
+def test_a_failed_calibration_shows_in_recent_activity(tmp_path: Path, monkeypatch, pds, capsys, whole_error) -> None:
+    # imported here, so this test only appends to the file
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    from owlbear_delivery_next.change_contracts.visual_records import (  # noqa: PLC0415
+        JudgeVerdict,
+        OwnerDecision,
+        VisualResult,
+        VisualRound,
+    )
+    from owlbear_delivery_next.impeccable import calibration  # noqa: PLC0415
+    from owlbear_delivery_next.impeccable_runs import visual_settled  # noqa: PLC0415
+
+    def unkept(*_args: object) -> str:
+        raise RuntimeError(whole_error)
+
+    monkeypatch.setattr(calibration, "keep", unkept)
+    alpha = registry.register(clone(tmp_path / "alpha", "same"))
+    head, tree, now = "a" * 40, "b" * 40, datetime.now(UTC)
+    verdicts = [JudgeVerdict(lens=lens, verdict="pass", usage_verified=True) for lens in ("correctness", "design")]
+    asked = VisualRound(number=1, head=head, tree=tree, states={}, widths=[1280], pack="p", verdicts=verdicts,
+                        decision=OwnerDecision(outcome="pass", at=now), outcome="ask", at=now)  # fmt: skip
+    store = Store(Store.open(Path(alpha.path)).root, data_repo.DataRepo(tmp_path / "shared"), "alpha")
+    with store.lock("same") as lock:
+        change = store.read("same").model_copy(update={"step": Step(kind=StepKind.CHECK), "visual_rounds": [asked]})
+        change.visual = VisualResult(head=head, tree="t", files=[], at=now)
+        assert visual_settled.settled(store, lock, change, (head, tree, [1280]), tmp_path / "out")
+    reason = f"RuntimeError: {whole_error}"
+    assert f"calibration: {reason}\n" in capsys.readouterr().out
+    [kept] = [e for e in store.events("same") if e["event"] == "calibration-not-kept"]
+    assert kept["reason"] == reason
+    with browsing(monkeypatch, pds) as (page, base):
+        opened(page, base, alpha.id)
+        line = page.locator("#detail ol.log > li > span", has_text="Calibration not kept")
+        expect(line).to_have_text(f"Calibration not kept: RuntimeError: {' '.join(whole_error.split())}")

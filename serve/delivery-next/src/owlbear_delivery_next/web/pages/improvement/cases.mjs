@@ -92,10 +92,18 @@ function version(v) {
     ? `: ${v.reason}` : ""}${v.run ? ` (run ${v.run})` : ""}</li>`;
 }
 
+// Why each look that failed failed, by case and side: a failed answer with no note says nothing more.
+function failedLooks(r) {
+  const said = Object.entries(r.answers ?? {}).flatMap(([cid, sides]) => Object.entries(sides)
+    .filter(([, a]) => a.category === "failed" && a.note).map(([side, a]) => `case ${cid}, ${side}: ${a.note}`));
+  return said.length ? html`<ul>${said.map((s) => html`<li>${s}</li>`)}</ul>` : nothing;
+}
+
 function replay(r) {
   if ("applied" in r && !("result" in r)) return html`<li>${when(r.at)} \u00b7 run ${r.id}: ${r.applied === null
     ? r.why : `wrote version ${r.applied}`}</li>`;
-  return html`<li>${when(r.ended ?? r.at)} \u00b7 ${r.kind ?? "run"} ${r.id}: ${r.result ?? "no result"}</li>`;
+  return html`<li>${when(r.ended ?? r.at)} \u00b7 ${r.kind ?? "run"} ${r.id}: ${r.result ?? "no result"}${
+    failedLooks(r)}</li>`;
 }
 
 export function casesSection(c) {

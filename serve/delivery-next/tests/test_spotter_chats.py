@@ -812,6 +812,48 @@ def test_a_look_whose_runtime_end_is_unconfirmed_holds_its_lease_and_admits_no_f
     assert again.counts(chat_looks.PROJECT)[2] == 1
 
 
+def test_a_held_look_says_its_whole_reason(world, whole_error):
+    names = whole_error.splitlines()  # the sessions whose end was not confirmed: far over 300 characters together
+    told: list[str] = []
+
+    async def stuck(card: dict[str, Any], ctx: spotter.Context, meter: credit_meter.Meter) -> str:
+        for name in names:
+            await spotter_look.teardown(Stuck(), None, name)
+        return await World.judge(world, card, ctx, meter)
+
+    ownership = maintenance.Maintenance(Slots(lambda: 2))
+    world.follower = chats.Follower(lambda: world.paused, told.append, read=world.read, judge=stuck, poll=0.01,
+                                    sessions=world.state, ownership=ownership)  # fmt: skip
+
+    async def scenario() -> None:
+        await world.passes()
+        world.chat("c", [asked("one"), ev("assistant.turn_start"), reply("plan one", tools=1)])
+        await world.passes()
+
+    asyncio.run(scenario())
+    reason = f"the end of a Spotter chat look's session was not confirmed: {', '.join(names)}"
+    [lease] = ownership.read()["sessions"]
+    assert (lease["reason"], told) == (
+        reason, [f"chats follower: {reason}; no chat look starts until Maintenance recovers it"])  # fmt: skip
+
+
+def test_a_failed_pass_is_told_whole(world, whole_error):
+    told: list[str] = []
+
+    def unreadable() -> chat_settings.Plan:
+        raise RuntimeError(whole_error)
+
+    f = chats.Follower(lambda: False, told.append, read=unreadable, judge=world.judge, poll=0.01,
+                       sessions=world.state)  # fmt: skip
+    f.start()
+    deadline = time.monotonic() + 5
+    while not told and time.monotonic() < deadline:
+        time.sleep(0.02)
+    f.close()
+    assert f.join(chats.CLOSE)
+    assert told == [f"chats follower: a pass failed: RuntimeError: {whole_error}"]  # said once, while it repeats
+
+
 def test_a_look_whose_runtime_ended_releases_its_lease(world):
     ownership = owned(world, world.judge)
 

@@ -218,7 +218,7 @@ class Follower:
             try:
                 await self._pass()
             except Exception as exc:  # noqa: BLE001 - the follower outlives one failed pass
-                self._tell(f"chats follower: a pass failed: {type(exc).__name__}: {exc}"[:300])
+                self._tell(f"chats follower: a pass failed: {type(exc).__name__}: {exc}")
             await self._nap()
         await self._quit()
 
