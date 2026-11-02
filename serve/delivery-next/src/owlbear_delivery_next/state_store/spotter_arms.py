@@ -12,7 +12,6 @@ from __future__ import annotations
 import json
 import os
 import random
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Literal, cast
 
 from owlbear_delivery_next.local_system import local_home, storage_io
@@ -53,6 +52,6 @@ def _kept_or_drawn(path: Path, unit: str, share: int) -> Arm:
     if unit in arms:
         return cast("Arm", arms[unit]["arm"])
     drawn: Arm = "steered" if random.SystemRandom().random() * 100 < share else "silent"
-    arms[unit] = {"arm": drawn, "share": share, "at": datetime.now(UTC).isoformat(timespec="seconds")}
+    arms[unit] = {"arm": drawn}
     storage_io.atomic_write(path, json.dumps(arms, indent=1, sort_keys=True) + "\n")
     return drawn

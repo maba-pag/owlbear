@@ -63,12 +63,9 @@ from owlbear_delivery_next.improvement.spotter_store import (  # noqa: F401 - ke
     GRACE,
     LOCK,
     WORK,
-    Worker,
     _append,
-    _locked,
     _today,
     place,
-    ready,
     root,
     store,
 )

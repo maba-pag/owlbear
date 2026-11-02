@@ -44,12 +44,5 @@ def show() -> dict[str, Any]:
     if test is None:
         return {"state": "none"}
     frozen = test.get("frozen")
-    return {
-        "id": test["id"],
-        "state": spotter_test.state(test),
-        "declared": test["declared"],
-        "declared_at": test["declared_at"],
-        "started_at": test["started_at"],
-        "ended_at": test["ended_at"],
-        "frozen": {k: v for k, v in frozen.items() if k != "prompt"} if frozen else None,
-    }
+    return {**test, "state": spotter_test.state(test),
+            "frozen": {k: v for k, v in frozen.items() if k != "prompt"} if frozen else None}  # fmt: skip
