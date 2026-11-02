@@ -103,6 +103,11 @@ _GIT_VALUES = {  # short options taking the next word or only an attached value,
 _NO_VALUES: tuple[str, str, frozenset[str]] = ("", "", frozenset())
 _GIT_FALSE = frozenset({"", "0", "false", "no", "off"})
 _MIRROR_KEY = re.compile(r"remote\..+\.mirror", re.IGNORECASE)  # the remote's name keeps its case
+_ALIAS = re.compile(r"alias\.(.+)", re.IGNORECASE)
+SWITCHES = frozenset({"HUSKY", "LEFTHOOK", "SKIP", "LEFTHOOK_EXCLUDE"})  # hook tools' variables that skip hooks
+_SWITCHES_OFF = {"HUSKY": {"0"}, "LEFTHOOK": {"0", "false"}}  # the values that turn the tool off
+_SKIPS = ("SKIP", "LEFTHOOK_EXCLUDE")  # any value names hooks to skip: pre-commit's and lefthook's
+_HOOKED = frozenset({"am", "cherry-pick", "commit", "merge", "push", "rebase"})  # git commands that run hooks
 _GIT_WRITE_OPTIONS = frozenset(
     {
         "--output",
@@ -162,8 +167,8 @@ def _mirrors(setting: str) -> bool:
     return not eq or value.lower() in {"true", "yes", "on"} or bool(re.fullmatch(r"[-+]?\d+", value) and int(value))
 
 
-def _config_write(arguments: Sequence[str]) -> str | None:
-    """The setting a git config command writes when it replaces the hooks, turns signing off or mirrors pushes."""
+def _config_set(arguments: Sequence[str]) -> str | None:
+    """The setting a git config command writes, as key=value, if it writes one."""
     if any(a in _CONFIG_READS for a in arguments):
         return None
     plain: list[str] = []
@@ -175,9 +180,14 @@ def _config_write(arguments: Sequence[str]) -> str | None:
             plain.append(w)
     if plain[:1] == ["set"]:
         plain = plain[1:]
-    setting = f"{plain[0]}={plain[1]}" if len(plain) >= 2 else ""  # noqa: PLR2004 - a key and its value
-    if _disables(setting) or _mirrors(setting):
-        return f"{plain[0]} {plain[1]}"
+    return f"{plain[0]}={plain[1]}" if len(plain) >= 2 else None  # noqa: PLR2004 - a key and its value
+
+
+def _config_write(arguments: Sequence[str]) -> str | None:
+    """The setting a git config command writes when it replaces the hooks, turns signing off or mirrors pushes."""
+    setting = _config_set(arguments)
+    if setting and (_disables(setting) or _mirrors(setting)):
+        return setting.replace("=", " ", 1)
     return None
 
 
@@ -217,8 +227,8 @@ def _environment(words: Sequence[str]) -> dict[str, str]:
     return shell_programs.assignments(words[:i])
 
 
-def env_setting(env: dict[str, str]) -> str | None:
-    """A setting that git configuration passed by environment uses to replace the hooks or turn signing off."""
+def _env_settings(env: dict[str, str]) -> list[str]:
+    """The settings git configuration passed by environment gives: GIT_CONFIG_PARAMETERS and GIT_CONFIG_KEY_n."""
     try:
         settings = shlex.split(env.get("GIT_CONFIG_PARAMETERS", ""))
     except ValueError:
@@ -227,7 +237,12 @@ def env_setting(env: dict[str, str]) -> str | None:
         if m := _CONFIG_KEY.fullmatch(name):
             value = env.get(f"GIT_CONFIG_VALUE_{m[1]}")
             settings.append(key if value is None else f"{key}={value}")
-    return next((s for s in settings if _disables(s) or _mirrors(s)), None)  # exported, it outlives the command
+    return settings
+
+
+def env_setting(env: dict[str, str]) -> str | None:
+    """A setting that git configuration passed by environment uses to replace the hooks or turn signing off."""
+    return next((s for s in _env_settings(env) if _disables(s) or _mirrors(s)), None)  # exported, it outlives it
 
 
 def bypass(words: Sequence[str]) -> str | None:
@@ -280,4 +295,70 @@ def mutation(words: Sequence[str]) -> str | None:
             continue
         if call.sub not in _READ_ONLY_GIT and (call.sub or call.arguments):
             return f"Git command '{call.sub or ' '.join(prog)}'"
+    return None
+
+
+def aliases(words: Sequence[str]) -> list[tuple[str, str]]:
+    """The git aliases one command defines, each name and body: by -c, --config-env, environment or config write.
+
+    A --config-env value is the variable's when the command sets it; an alias whose body is unknown is left out.
+    """
+    settings = _env_settings(_environment(words))
+    for run in shell_programs.runs(words):
+        settings += _env_settings(run.env)
+        if shell_programs.name(run.words[0]) != "git":
+            continue
+        env = {**_environment(words), **run.env}
+        call = _parse_git(run.words[1:])
+        settings += [*call.config, *(f"{key}={env[var]}" for key, var in call.from_env if var in env)]
+        if call.sub == "config" and (setting := _config_set(call.arguments)):
+            settings.append(setting)
+    found = (s.partition("=") for s in settings)
+    return [(m[1], body) for key, _, body in found if body and (m := _ALIAS.fullmatch(key))]
+
+
+def scripts(words: Sequence[str]) -> list[tuple[str, bool]]:
+    """The shell texts a git command runs, each with whether it runs after the command wrote.
+
+    rebase runs each --exec text after a commit it made; submodule foreach runs its text in each submodule.
+    """
+    call = _parse_git(words[1:])
+    arguments = call.arguments[: call.arguments.index("--")] if "--" in call.arguments else call.arguments
+    if call.sub == "rebase":
+        return [(text, True) for text in _rebase_exec(arguments)]
+    rest = [a for a in arguments if a not in {"-q", "--quiet"}]
+    if call.sub == "submodule" and rest[:1] == ["foreach"]:
+        text = " ".join(rest[2:] if rest[1:2] == ["--recursive"] else rest[1:])
+        return [(text, False)] if text else []
+    return []
+
+
+def _rebase_exec(arguments: Sequence[str]) -> list[str]:
+    """The texts git rebase runs with -x or --exec, given in the next word or attached."""
+    found: list[str] = []
+    for i, w in enumerate(arguments):
+        following = arguments[i + 1] if i + 1 < len(arguments) else ""
+        if w == "--exec":
+            found.append(following)
+        elif w.startswith("--exec="):
+            found.append(w.removeprefix("--exec="))
+        elif re.fullmatch(r"-[^-].*", w):
+            flags, _ = _short(w[1:], "sXCx", "S")
+            if w[len(flags) + 1 : len(flags) + 2] == "x":
+                found.append(w[len(flags) + 2 :] or following)
+    return [text for text in found if text]
+
+
+def switch(words: Sequence[str], env: dict[str, str]) -> str | None:
+    """A hook tool's switch in *env* that skips the hooks of the git command *words* runs: HUSKY=0, and the like.
+
+    A value built at run time is not read here.
+    """
+    if shell_programs.name(words[0]) != "git" or _parse_git(words[1:]).sub not in _HOOKED:
+        return None
+    for key, value in env.items():
+        if getattr(value, "expanded", False):
+            continue
+        if value in _SWITCHES_OFF.get(key, ()) or (key in _SKIPS and value):
+            return f"environment setting {key}={value}"
     return None

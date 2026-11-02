@@ -10,11 +10,13 @@ now may not be the one that runs) and a relative path once the folder is unknown
 from __future__ import annotations
 
 import os
+import shlex
 import stat
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from owlbear_delivery_next.change_contracts import git_reading
 from owlbear_delivery_next.local_system import shell_programs
 from owlbear_delivery_next.local_system.shell_parse import Word
 
@@ -24,6 +26,8 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.local_system.shell_parse import Command
     from owlbear_delivery_next.local_system.shell_programs import Run
 
+CORE, VARIANT, DOUBTFUL = 0, 1, 2  # the reader classes, each pass reading with its own and the ones before
+BYPASS = "which skips hooks or signing or forces history"  # the end of every bypass denial's reason
 _DEVICE_STDIN = frozenset({"/dev/stdin", "/dev/fd/0"})  # a path naming the shell's own input
 _STDIN = _DEVICE_STDIN | {"-"}  # as a shell's script operand; source reads a file named -
 _FOLDER = frozenset({"cd", "pushd", "popd"})
@@ -53,10 +57,14 @@ class State:
     home_moved: bool = False  # the text set or unset HOME, so ~ is not the guard's home folder
     current: int = 0  # above 0 while sourced or eval text runs in this shell
     unsure: int = 0  # above 0 while that text may not run: its source or eval is conditional or in a subshell
+    switches: dict[str, Word] = field(default_factory=dict)  # hook tools' variables set, as git_reading.SWITCHES
 
     def child(self, *, plain: bool) -> State:
         """The state a shell this one starts begins with: writes are shared, folder and variables copied."""
-        return State(self.at, self.effects, plain, startup=dict(self.startup), home_moved=self.home_moved)
+        return State(
+            self.at, self.effects, plain, startup=dict(self.startup), home_moved=self.home_moved,
+            switches=dict(self.switches),
+        )  # fmt: skip
 
     def plain(self) -> bool:
         """Whether this shell's standard input is still the step's own."""
@@ -73,6 +81,10 @@ class Walk:
     writes: Callable[[Command], bool]
     bypass: Callable[[str, Run], str | None]  # the refusal of a run's environment that turns hooks or signing off
     mutation: Callable[[str, Run], str | None]  # the refusal of a write by a run, in a read-only step
+    reading: int | None = None  # the pass's reader class; None reads no bypass
+
+    def _reads(self, found: int) -> bool:
+        return self.reading is not None and self.reading >= found
 
     def commands(self, commands: Sequence[Command], state: State) -> str | None:
         """Read *commands* in order and return the first refusal."""
@@ -86,6 +98,8 @@ class Walk:
 
     def _command(self, command: Command, state: State) -> str | None:
         """Each program a command runs, in order: its launchers by path, then the program; a write marks the rest."""
+        if self._reads(VARIANT) and (reason := self._aliases(command, state)):
+            return reason
         head = next((w for w in command.words if not shell_programs.ASSIGNMENT.match(w)), None)
         runs = shell_programs.runs(command.words)
         checked: set[str] = set()
@@ -113,6 +127,9 @@ class Walk:
                 if key in assigned:
                     state.startup[key] = assigned[key] if top_level else None
             state.home_moved = state.home_moved or "HOME" in assigned
+        if first is None or first in {"export", *_DECLARE}:  # set even where it may not run
+            assigned = shell_programs.assignments(words[:i] if first is None else words[i + 1 :])
+            state.switches |= {k: v for k, v in assigned.items() if k in git_reading.SWITCHES}
         if first in {"unset", *_DECLARE} and any(w.partition("=")[0] == "HOME" for w in words[i + 1 :]):
             state.home_moved = True
         # unset -f, -fv: no variable goes
@@ -122,6 +139,8 @@ class Walk:
             prefix = words[shell_programs.head(words) : i]  # command -$opt, command -x: unset may not run
             sure = sure and not shell_programs.assignments(words[:i]) and set(prefix) <= _PLAIN_PREFIX
             _unset(state, [k for k in _STARTUP if k in words[i + 1 :]], top_level=top_level and sure)
+            if top_level and sure:
+                state.switches = {k: v for k, v in state.switches.items() if k not in words[i + 1 :]}
         if first in _DECLARE:
             state.startup |= {k: None for k in _STARTUP if any(w.partition("=")[0] == k for w in words[i + 1 :])}
         if first == "exec" and command.stdin() is not None:
@@ -131,6 +150,8 @@ class Walk:
         program = run.words[0]
         if _built(run, program) or program.pattern:  # g?t, {git,x}: the shell picks the program from file names
             return f"`{self.name}` builds a command at run time (`{program}`); write the program and its script out"
+        if self._reads(VARIANT) and shell_programs.name(program) == "git" and (reason := self._git(run, state)):
+            return reason
         match shell_programs.name(program):
             case name if name in _FOLDER:
                 self._folder(command, run, state)
@@ -140,6 +161,36 @@ class Walk:
                 return self._current(state, command, run, self._source)
             case "eval":
                 return self._current(state, command, run, self._eval)
+        return None
+
+    def _aliases(self, command: Command, state: State) -> str | None:
+        """A git alias the command defines whose body skips hooks or signing: a git command, or ! and shell text."""
+        for alias, body in git_reading.aliases(command.words):
+            if body.startswith("!"):
+                child = state.child(plain=state.plain())
+                child.at = None  # git runs it in the top folder of the repository it finds
+                if reason := self._text(body[1:], child):
+                    return f"`{self.name}` defines git alias {alias}: {reason}"
+                continue
+            try:
+                words = [Word("git"), *map(Word, shlex.split(body))]
+            except ValueError:  # git can't split it either, and runs nothing
+                continue
+            if flag := git_reading.bypass(words):
+                return f"`{self.name}` defines git alias {alias} as `{body}`, which uses {flag}, {BYPASS}"
+        return None
+
+    def _git(self, run: Run, state: State) -> str | None:
+        """A git run's hook-tool switch, then the shell texts it runs: rebase --exec, submodule foreach."""
+        if found := git_reading.switch(run.words, switches(state, run)):
+            return f"`{self.name}` uses {found}, {BYPASS}"
+        for text, after_write in git_reading.scripts(run.words):
+            child = state.child(plain=state.plain())
+            child.at = None  # rebase runs it in the top folder, foreach in each submodule's
+            if after_write:  # a file it runs may be one the rebase just wrote
+                child.effects = Effects(wrote=True)
+            if reason := self._text(text, child):
+                return f"`{self.name}` has git run `{text}`: {reason}"
         return None
 
     def _by_path(self, command: Command, run: Run, word: Word, state: State, *, wrote: bool) -> str | None:
@@ -203,6 +254,7 @@ class Walk:
         plain = state.plain() and not command.opaque_stdin and not run.from_input
         child = state.child(plain=plain and command.stdin() is None)
         child.home_moved = child.home_moved or "HOME" in run.env or bool(run.removed & {"HOME", "*"})
+        child.switches = switches(state, run)
         child.startup = {
             **{k: v for k, v in child.startup.items() if "*" not in run.removed and k not in run.removed},
             **{k: run.env[k] for k in _STARTUP if k in run.env},
@@ -376,3 +428,9 @@ def _unset(state: State, keys: list[str], *, top_level: bool) -> None:
 
 def _operands(run: Run) -> list[Word]:
     return run.words[2 if run.words[1:2] == ["--"] else 1 :]
+
+
+def switches(state: State, run: Run) -> dict[str, Word]:
+    """The hook tools' variables a run sees: the shell's, without those env -u or -i removed, then its own."""
+    kept = {} if "*" in run.removed else {k: v for k, v in state.switches.items() if k not in run.removed}
+    return {**kept, **{k: v for k, v in run.env.items() if k in git_reading.SWITCHES}}

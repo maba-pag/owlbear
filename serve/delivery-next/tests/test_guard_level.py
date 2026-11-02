@@ -11,7 +11,7 @@ from owlbear_delivery_next.local_system import shell_parse
 ROOT = Path("/w")
 READ, WRITE = Policy(ROOT, write=False), Policy(ROOT)
 LEVELS = ("strict", "standard", "lenient", "off")
-CLASSES = {"core": "git commit --no-verify -m x"}  # one command each class finds first
+CLASSES = {"core": "git commit --no-verify -m x", "variant": "HUSKY=0 git commit -m x"}  # one each class finds first
 OUTCOMES = {  # per level: what core, variant and doubtful findings get
     "strict": ("refuse", "refuse", "warn"),
     "standard": ("refuse", "warn", "warn"),
@@ -44,6 +44,7 @@ def test_each_level_refuses_warns_or_allows_each_class(found: str, level: str) -
         ("touch x; git commit --no-verify -m x", True),
         ("bash -c 'git -c core.hooksPath=/dev/null status'; bash -c 'touch x'", True),
         ("echo '", False),
+        ("HUSKY=0 git commit -m x", True),
     ],
 )
 def test_a_read_only_steps_writes_are_refused_at_every_level(text: str, *, named: bool, level: str) -> None:
@@ -151,6 +152,49 @@ ROUTES = {  # #864's routes: each case's command and the class it is found in, o
         ("git clone --mirror u d", None),
         *((f"git -c remote.origin.mirror{v} push", "core") for v in ("=true", "=YES", "=on", "=1", "=-3", "")),
         *((f"git -c remote.origin.mirror={v} push", None) for v in ("false", "no", "off", "0", "")),
+    ],
+}
+ROUTES |= {
+    3: [  # a git alias the command defines runs its body
+        ("git -c alias.ci='commit --no-verify' ci", "variant"),
+        ("git -c alias.ci='!git commit --no-verify' ci", "variant"),
+        ("CI='commit -n' git --config-env=alias.ci=CI ci", "variant"),
+        ("GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=alias.ci GIT_CONFIG_VALUE_0='push --force' git ci", "variant"),
+        ("git config alias.c 'commit --no-verify' && git c -m x", "variant"),
+        ("GIT_CONFIG_PARAMETERS=\"'alias.c'='commit -n'\" git c -m x", "variant"),
+        ("git -c alias.st=status st", None),
+        ("git -c alias.lg='!git log --oneline' lg", None),
+        ("git c -m x", None),  # an alias already in config: a documented limit
+        ("git --config-env=alias.ci=UNKNOWN ci", None),
+    ],
+    5: [  # commands git runs
+        ("git rebase -x 'git commit --amend --no-verify' main", "variant"),
+        ("git rebase --exec 'git commit --amend --no-verify' main", "variant"),
+        ("git rebase --exec='git push --force' main", "variant"),
+        ("git rebase -ix 'git commit -n' main", "variant"),
+        ("git rebase -x /usr/bin/true main", "variant"),  # a file it runs may be one the rebase just wrote
+        ("git rebase -x 'make test' main", None),
+        ("git submodule foreach '/bin/echo hi'", None),
+        ("git submodule foreach './fix'", "variant"),  # from each submodule's folder, which the guard can't follow
+        ("git submodule foreach 'git push --force'", "variant"),
+        ("git submodule --quiet foreach --recursive 'git push --force'", "variant"),
+        ("git bisect run 'git commit -n'", None),  # a documented limit
+    ],
+    10: [  # hook tools' switches
+        ("HUSKY=0 git commit -m x", "variant"),
+        ("env LEFTHOOK=false git push", "variant"),
+        ("export SKIP=lint; git commit -m x", "variant"),
+        ("LEFTHOOK_EXCLUDE=x git commit -m x", "variant"),
+        ("export HUSKY=0; bash -c 'git commit -m x'", "variant"),
+        ('HUSKY=0 git commit "$FLAGS" -m x', "variant"),
+        ("HUSKY=0 git commit --no-verify -m x", "core"),  # the core reason comes first
+        ("HUSKY=2 git commit -m x", None),
+        ("LEFTHOOK=1 git commit -m x", None),
+        ("SKIP= git commit -m x", None),
+        ("export HUSKY=0; unset HUSKY; git commit -m x", None),
+        ("export HUSKY=0; env -u HUSKY git commit -m x", None),
+        ("SKIP=lint pre-commit run", None),
+        ("HUSKY=0 git status", None),
     ],
 }
 SEEN = {"refuse": "refused", "warn": "warned", "allow": "allowed"}

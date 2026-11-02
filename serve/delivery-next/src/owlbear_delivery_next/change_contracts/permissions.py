@@ -27,6 +27,7 @@ from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any, Literal
 
 from owlbear_delivery_next.change_contracts import git_reading, shell_walk, tools
+from owlbear_delivery_next.change_contracts.shell_walk import BYPASS, CORE, DOUBTFUL, VARIANT
 from owlbear_delivery_next.local_system import shell_parse, shell_programs
 
 if TYPE_CHECKING:
@@ -34,9 +35,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 Level = Literal["strict", "standard", "lenient", "off"]
-CORE, VARIANT, DOUBTFUL = 0, 1, 2  # the reader classes, each pass reading with its own and the ones before
 _REFUSED = {"strict": DOUBTFUL, "standard": VARIANT, "lenient": CORE, "off": CORE}  # classes below it are refused
-BYPASS = "which skips hooks or signing or forces history"  # the end of every bypass denial's reason
 _HARMLESS = re.compile(r"\d*>>?\s*/dev/null(?![^\s;&|)])|\d*>&\d+")  # discarded output or a descriptor copy
 _LOOKUP = re.compile(  # command -v cp: names the program, runs nothing
     r"(?<![^\s;&|(])command(?:[ \t]+-p)*[ \t]+-[pV]*[vV][pvV]*(?:[ \t]+-[pvV]+)*(?:[ \t]+--)?(?:[ \t]+[\w./+-]+)+"
@@ -190,7 +189,8 @@ def _check(  # noqa: PLR0913 - the walk calls it back with the text's place; the
             return f"`{name}` uses {found}, which writes in a read-only step"
         mutation = functools.partial(_run_mutation, policy)
         nested = functools.partial(_check, policy, reading=reading)
-        walk = shell_walk.Walk(name, depth, nested, _writes, _run_bypass if reading is not None else _none, mutation)
+        reader = _run_bypass if reading is not None else _none
+        walk = shell_walk.Walk(name, depth, nested, _writes, reader, mutation, reading)
         return walk.commands(commands, state or shell_walk.State(policy.root))
     except shell_programs.UnreadableError as error:
         return f"`{name}` {error}"
