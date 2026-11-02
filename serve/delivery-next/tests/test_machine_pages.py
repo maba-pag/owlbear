@@ -2436,7 +2436,8 @@ def test_dismiss_one_in_settings_and_all_from_changes(tmp_path: Path, monkeypatc
         expect(banner).to_contain_text(f"{n - 1} Global settings changed elsewhere", timeout=READS_TIME * 1000)
         banner.get_by_role("link", name="Show in Settings").click()
         expect(page).to_have_url(f"{base}/config?project={a.id}#overview")
-        expect(page.locator("#reads-changed")).to_be_focused(timeout=READS_TIME * 1000)
+        expect(page.locator("#groups")).to_be_visible(timeout=READS_TIME * 1000)  # the list outlives the layers' load
+        expect(page.locator("#reads-changed")).to_be_focused()
         expect(entries).to_have_count(n - 1)
         page.go_back()
         dismiss = banner.get_by_role("button", name="Dismiss")
@@ -2669,11 +2670,15 @@ def test_a_visual_round_shows_whole_errors(tmp_path: Path, monkeypatch, pds, cap
         f"not scanned: the page refused the design detector: RuntimeError: {whole_error}; "
         f"the engine's own browser: {failed}"
     )
-    told = (
-        f"design detector: sources: {failed}\nbefore: 0 screenshots at {b.head[:7]}; {note}\n"
-        f"design detector: home at 1280: {why}\n"
-    )
-    assert told in capsys.readouterr().out  # an earlier test's machine may still say it stopped
+    out = capsys.readouterr().out  # an earlier test's machine may still say it stopped, between these lines too
+    assert all(
+        message in out
+        for message in (
+            f"design detector: sources: {failed}\n",
+            f"before: 0 screenshots at {b.head[:7]}; {note}\n",
+            f"design detector: home at 1280: {why}\n",
+        )
+    ), out
     head, now = _git(Path(c.names.worktree), "rev-parse", "HEAD"), datetime.now(UTC)
     failing = Run("s", ending="error", detail=whole_error, termination=processes.Termination(confirmed=True))
     correct = judges.correctness([failing], carried.MODELS["reviewer"], now)
