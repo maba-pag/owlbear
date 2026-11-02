@@ -9,7 +9,8 @@ The switch turns W1a's feed and the Spotter's looks on or off (D-01M5WB09Z3ZKJVN
 finding under one of four categories, each set to one action its category allows (D-01M5WP8Z4ADZ5FN7RJDR17RQQ5); a
 look records the action its category is given, and in a Delivery step the finding acts by it (``improvement.acts``):
 the steer share draws each Change's arm of the steered-versus-silent test, only the steered arm steers, refuses a
-hand-off or stops and resumes, and the cap bounds the steering notes per step or chat turn.
+hand-off or stops and resumes (irreversible harm acts by its setting in both arms), and the cap bounds the steering
+notes per step or chat turn.
 
 Each look, live or replayed, stops at its own credit limit (D-01M5XCD49YHHR1NQKKY8TQD0C3); there is no daily budget.
 The limit is a credit amount, a finite number above zero, written into Global once (``settings.carried``).
