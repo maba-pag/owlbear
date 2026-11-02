@@ -43,7 +43,7 @@ JOBS: dict[str, tuple[str, ...]] = dict.fromkeys(
     ("visual-review", "brief-challenge", "brief-reconsider", "amendment-challenge"), JUDGED
 ) | {"pds-audit": ("pds-audit-deprecations-js",), "pds-update": ("pds-knowledge-js",)}  # a PDS candidate's (#777)
 MEMORY = "owlbear-memory"  # the memory server's name; agent files name its tools as owlbear-memory/<tool>
-MEMORY_MODULE = "owlbear_memory_mcp"  # run as the workspace's .vscode/mcp.json runs it
+MEMORY_MODULE = "owlbear_memory_mcp"  # the memory server's package
 MEMORY_DIR = "OWLBEAR_MEMORY_DIR"  # the memory server's store folder
 MEMORY_GLOBAL = "OWLBEAR_MEMORY_GLOBAL_DIR"  # the shared repository's Global memory, read beside it (TD-241)
 MEMORY_AGENTS = "OWLBEAR_MEMORY_AGENTS"  # the agents a curated memory may be scoped to without a reviewed witness
@@ -84,7 +84,8 @@ def memory(store: Path | None) -> dict[str, Any] | None:
     """
     if store is None or find_spec(MEMORY_MODULE) is None:
         return None
-    command = {"command": sys.executable, "args": ["-m", MEMORY_MODULE]}
+    serve = ["-m", "owlbear_delivery_next", "serve", "memory"]  # as .mcp.json runs it: 2025 handshake only (#906)
+    command = {"command": sys.executable, "args": serve}
     env = {MEMORY_DIR: str(store), MEMORY_GLOBAL: str(global_memory(store)), MEMORY_AGENTS: memory_agents()}
     return command | {"env": env, "tools": ["*"]}
 

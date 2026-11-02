@@ -7,6 +7,7 @@ import subprocess
 import sys
 import sysconfig
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -17,13 +18,15 @@ from owlbear_delivery_next.machine_host import versions
 SITE = Path("lib") / f"python{sys.version_info.major}.{sys.version_info.minor}" / "site-packages"
 PROBE = {
     "__init__.py": "",
-    "__main__.py": (
+    "server.py": (
         "import json, os, sys\n"
+        "from mcp.server import MCPServer\n"
         "print(json.dumps({'exe': sys.executable, 'file': __file__, 'cwd': os.getcwd(),"
         " 'said': os.environ.get('SAID')}), flush=True)\n"
         "sys.stdin.readline()  # the test moves the alias and prunes meanwhile\n"
         "from owlbear_memory_mcp import later\n"
         "print(json.dumps({'later': later.__file__}), flush=True)\n"
+        "mcp = MCPServer('probe')  # served until the test closes its input\n"
     ),
     "later.py": "",  # imported only after the update
 }
@@ -88,6 +91,7 @@ def test_a_server_keeps_its_version_while_owlbear_updates_and_no_prune_takes_its
         old.stdin.write("go\n")
         old.stdin.flush()
         assert under(json.loads(old.stdout.readline())["later"], v1)  # imported after the update, from its version
+        old.stdin.close()
         assert old.wait(10) == 0
     finally:
         old.kill()
@@ -97,7 +101,7 @@ def test_a_server_keeps_its_version_while_owlbear_updates_and_no_prune_takes_its
     try:
         assert under(json.loads(new.stdout.readline() or new.stderr.read())["exe"], v2)
         new.stdin.write("go\n")
-        new.stdin.flush()
+        new.stdin.close()
         assert new.wait(10) == 0
     finally:
         new.kill()
@@ -117,53 +121,99 @@ def test_a_server_this_install_lacks_says_so_and_one_that_fails_to_import_raises
     broken = tmp_path / "broken_mcp"
     broken.mkdir()
     (broken / "__init__.py").write_text("")
-    (broken / "__main__.py").write_text("import no_such_dependency\n")
+    (broken / "server.py").write_text("import no_such_dependency\n")
     monkeypatch.syspath_prepend(str(tmp_path))
     monkeypatch.setitem(mcp_launch.SERVERS, "browser", "broken_mcp")
     with pytest.raises(ModuleNotFoundError, match="no_such_dependency"):
         mcp_launch.main(["browser"])
 
 
-ASKED = [
-    {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-06-18",
-     "capabilities": {}, "clientInfo": {"name": "t", "version": "0"}}},
-    {"jsonrpc": "2.0", "method": "notifications/initialized"},
-    {"jsonrpc": "2.0", "id": 2, "method": "tools/list"},
-]  # fmt: skip
+CONFIGURED = json.loads((Path(__file__).parents[3] / ".mcp.json").read_text())["mcpServers"]
+KNOWN_TOOL = {
+    "owlbear-delivery": "save_brief",
+    "owlbear-memory": "save_memory",
+    "owlbear-knowledge": "knowledge_search",
+    "owlbear-browser": "navigate",
+}
+ENVELOPE = {
+    "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+    "io.modelcontextprotocol/clientInfo": {"name": "t", "version": "0"},
+    "io.modelcontextprotocol/clientCapabilities": {},
+}  # what a 2026-07-28 client stamps on every request
 
 
-def answered(argv: list[str], workspace: Path, held: Path | None = None) -> None:
-    """The memory server *argv* starts in *workspace* initializes and lists its tools, and writes nothing else.
+def handshake(version: str) -> list[dict[str, Any]]:
+    return [
+        {"jsonrpc": "2.0", "id": 2, "method": "initialize", "params": {"protocolVersion": version,
+         "capabilities": {}, "clientInfo": {"name": "t", "version": "0"}}},
+        {"jsonrpc": "2.0", "method": "notifications/initialized"},
+        {"jsonrpc": "2.0", "id": 3, "method": "tools/list"},
+    ]  # fmt: skip
 
-    With *held*, the version folder it holds a lease on while it runs.
+
+OPENINGS = {
+    "ordinary": handshake("2025-06-18"),
+    # The Copilot CLI asks server/discover first and falls back to a 2025-11-25 initialize when that fails (#906).
+    "discover_first": [
+        {"jsonrpc": "2.0", "id": 1, "method": "server/discover", "params": {"_meta": ENVELOPE}},
+        *handshake("2025-11-25"),
+    ],
+}
+LISTED = {"jsonrpc": "2.0", "id": 4, "method": "tools/call", "params": {"name": "list_memories", "arguments": {}}}
+
+
+def answered(name: str, asked: list[dict[str, Any]], workspace: Path, held: Path) -> dict[int, dict[str, Any]]:
+    """The answers, by id, of the server *name* started in *workspace* exactly as configured; it writes nothing else.
+
+    It holds a lease on the version folder *held* while it runs.
     """
-    (workspace / ".owlbear").mkdir(exist_ok=True)  # the server reads its folder from the client's working folder
-    server = subprocess.Popen(  # noqa: S603 - an interpreter of this test's making
-        argv, cwd=workspace, text=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE
-    )
+    (workspace / ".owlbear").mkdir(exist_ok=True)  # the servers read their folder from the client's working folder
+    subprocess.run(["git", "init", "-q"], cwd=workspace, check=True)  # noqa: S607 - the chat server's repository
+    entry = CONFIGURED[name]
+    argv = [os.path.expandvars(part) for part in (entry["command"], *entry["args"])]
+    server = subprocess.Popen(  # noqa: S603 - the configured command, on an interpreter of this test's making
+        argv, cwd=workspace, text=True, env={**os.environ, **entry.get("env", {})},
+        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+    )  # fmt: skip
     try:
-        server.stdin.write("".join(json.dumps(m) + "\n" for m in ASKED))
+        server.stdin.write("".join(json.dumps(m) + "\n" for m in asked))
         server.stdin.flush()
-        frames = [json.loads(server.stdout.readline()) for _ in range(2)]  # each line a frame: nothing else on stdout
-        assert held is None or leases.held(held) == [server.pid]
+        # each line a frame: nothing else on stdout; pipelined requests may be answered out of order
+        frames = [json.loads(server.stdout.readline() or "null") for m in asked if "id" in m]
+        assert leases.held(held) == [server.pid]
         server.stdin.close()  # the client ends it, after its answers
         rest, err = server.communicate(timeout=20)
     finally:
         server.kill()
-    assert (server.returncode, [f.get("id") for f in frames], rest) == (0, [1, 2], ""), err
-    assert "save_memory" in [t["name"] for t in frames[1]["result"]["tools"]]
+    assert None not in frames, err
+    assert (server.returncode, rest) == (0, ""), err
+    return {frame["id"]: frame for frame in frames}
 
 
-@pytest.mark.timeout(60)
-def test_the_workspace_starts_each_server_exactly_as_configured_from_the_installed_version(tmp_path):
+def test_the_workspace_starts_each_server_exactly_as_configured_from_the_installed_version():
     """``.mcp.json`` names the runtime's python through ``${HOME}``, which every client expands, and no repository."""
-    configured = json.loads((Path(__file__).parents[3] / ".mcp.json").read_text())["mcpServers"]
-    version = installed("v1.0", probe=False)
-    alias(version)
     python = "${HOME}/.owlbear/runtime/.venv/bin/python"
-    assert {name: (entry["command"], entry["args"]) for name, entry in configured.items()} == {
+    assert {name: (entry["command"], entry["args"]) for name, entry in CONFIGURED.items()} == {
         **{f"owlbear-{n}": (python, ["-m", "owlbear_delivery_next", "serve", n]) for n in mcp_launch.SERVERS},
         "owlbear-delivery": (python, ["-m", "owlbear_delivery_next", "mcp"]),
     }  # the chat server takes its repository from the folder the client starts it in
-    memory = configured["owlbear-memory"]
-    answered([os.path.expandvars(part) for part in (memory["command"], *memory["args"])], tmp_path, held=version)
+
+
+@pytest.mark.timeout(60)
+@pytest.mark.parametrize("opening", OPENINGS)
+@pytest.mark.parametrize("name", KNOWN_TOOL)
+def test_each_configured_server_initializes_and_lists_its_tools_whatever_the_client_asks_first(name, opening, tmp_path):
+    version = installed("v1.0", probe=False)
+    alias(version)
+    asked = [*OPENINGS[opening], *([LISTED] if name == "owlbear-memory" and opening == "discover_first" else [])]
+    frames = answered(name, asked, tmp_path, held=version)
+    initialized = frames[2].get("result")
+    assert initialized, frames[2]
+    if opening == "discover_first":
+        assert "error" in frames[1], frames[1]  # which sends the client back to initialize
+    sent = next(m for m in asked if m["method"] == "initialize")["params"]["protocolVersion"]
+    assert (initialized["protocolVersion"], initialized["serverInfo"]["name"]) == (sent, name)
+    assert "tools" in initialized["capabilities"]
+    assert KNOWN_TOOL[name] in [t["name"] for t in frames[3]["result"]["tools"]], frames[3]
+    if 4 in frames:  # memory's tools read the server's lifespan state
+        assert not frames[4]["result"].get("isError"), frames[4]
