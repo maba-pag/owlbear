@@ -726,7 +726,7 @@ def test_a_change_record_failure_is_logged_whole(  # noqa: PLR0913, PLR0917 - it
 
         monkeypatch.setattr(decision_archive, "_history", unreadable_history)
         expected = (f"the record of notes was not saved; no decision of notes was archived; "
-                    f"decision history of notes: {whole_error}")  # fmt: skip
+                    f"decision history of notes: OSError: {whole_error}")  # fmt: skip
 
     assert change_record.save(store, finished(), MERGED, AT) == expected
     local = LocalStore(tmp_path / "store", DataRepo(shared_repo[0]), "shop-site")
@@ -761,7 +761,7 @@ def test_each_archive_refusal_names_its_whole_error(store, monkeypatch, whole_er
         lasting = c.brief.approved[0].decisions[1].id
         with pytest.raises(DecisionError) as refused:
             decision_archive.lasting("shop-site", c, STEM)
-        assert str(refused.value) == f"decision {lasting} of notes cannot be published: {invalid}"
+        assert str(refused.value) == f"decision {lasting} of notes cannot be published: ValidationError: {invalid}"
         return
     if site == "planned":
         real = decision_archive.check_write
@@ -772,14 +772,16 @@ def test_each_archive_refusal_names_its_whole_error(store, monkeypatch, whole_er
             return real(current, decision, expected)
 
         monkeypatch.setattr(decision_archive, "check_write", refusing)
-        expected = f"{refusal}; decision {ui} of notes: {whole_error}"
+        expected = f"{refusal}; decision {ui} of notes: DecisionError: {whole_error}"
     elif site == "unreadable-repo":
 
         def unreadable(*_args):
             raise OSError(whole_error)
 
         monkeypatch.setattr(decision_archive, "read_repo", unreadable)
-        expected = f"{refusal}; the decisions of notes cannot be checked against {store.shared.root}: {whole_error}"
+        expected = (
+            f"{refusal}; the decisions of notes cannot be checked against {store.shared.root}: OSError: {whole_error}"
+        )
     else:
         monkeypatch.setattr(decision_archive, "check", lambda _entries: [Finding("x.md", "rule", whole_error, (ui,))])
         expected = f"{refusal}; decision {ui} of notes: rule: {whole_error}"

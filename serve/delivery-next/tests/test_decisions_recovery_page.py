@@ -334,7 +334,7 @@ def test_a_recovery_notice_shows_whole(picking, tmp_path, pds, monkeypatch, whol
     pushed = f"saved and committed in {picking.shared.root}, but the push failed: {whole_error}"
     notice = f"finished here, but not yet on the remote: {pushed}"
     assert shown == f"Finished batch {generation}. {notice}"
-    assert diagnosed == whole_error
+    assert diagnosed == f"JournalError: {whole_error}"
     assert logged(caplog) == [f"decision recovery of batch {generation} (done: True): {notice}"]
     assert [s for s in said if "/api/next/projects" not in s] == []  # a project host lists no projects (404)
 
@@ -357,7 +357,7 @@ def test_a_refused_recovery_answers_whole(picking, tmp_path, monkeypatch, whole_
         headers={"authorization": "Bearer tok"},
     )
     got = client.post("/api/next/decisions/recovery/finish", json={"generation": generation, "confirmed": True})
-    detail = f"{whole_error} ({decision_store.RECOVER})"
+    detail = f"{'JournalError: ' if exit_ == 'journal' else ''}{whole_error} ({decision_store.RECOVER})"
     assert (got.status_code, got.json()["detail"]) == (409, detail)
     assert logged(caplog) == [f"decision recovery refused: {detail}"]
 

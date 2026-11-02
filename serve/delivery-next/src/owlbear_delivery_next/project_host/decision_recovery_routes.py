@@ -59,7 +59,7 @@ def _diagnosis(shared: DataRepo) -> dict[str, Any]:
     try:
         batch = decision_batch.pending(shared)
     except decision_batch.JournalError as exc:
-        return {"interrupted": True, "corrupt": True, "diagnosis": str(exc), "generation": ""}
+        return {"interrupted": True, "corrupt": True, "diagnosis": f"{type(exc).__name__}: {exc}", "generation": ""}
     if batch is None:
         return {"interrupted": False, "corrupt": False, "diagnosis": "", "generation": ""}
     return {
@@ -83,8 +83,9 @@ def _run(action: Callable[[], Any], body: RecoveryBody) -> dict[str, Any]:
         _log.warning("decision recovery refused: %s (%s)", exc, exc.action)
         raise HTTPException(409, f"{exc} ({exc.action})") from exc
     except decision_batch.JournalError as exc:  # the journal or its lock failed once the batch was read
-        _log.warning("decision recovery refused: %s (%s)", exc, decision_store.RECOVER)
-        raise HTTPException(409, f"{exc} ({decision_store.RECOVER})") from exc
+        why = f"{type(exc).__name__}: {exc} ({decision_store.RECOVER})"
+        _log.warning("decision recovery refused: %s", why)
+        raise HTTPException(409, why) from exc
     if out.notice:
         _log.warning("decision recovery of batch %s (done: %s): %s", out.generation, out.done, out.notice)
     return {"done": out.done, "notice": out.notice, "generation": out.generation}

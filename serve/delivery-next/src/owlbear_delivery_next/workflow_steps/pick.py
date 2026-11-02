@@ -143,8 +143,9 @@ def run(store: Store, lock: Lock, c: Change) -> Change:
         found = listed(view.snapshot, c)
         said = message(c, found, log)
     except (decision_store.DecisionsUnavailable, OSError, ValueError) as exc:
-        c.brief.picked = base.model_copy(update={"status": "failed", "reason": str(exc)})
-        store.log(lock, c.slug, {"event": "pick-failed", "at": now.isoformat(), "reason": str(exc)})
+        why = f"{type(exc).__name__}: {exc}"
+        c.brief.picked = base.model_copy(update={"status": "failed", "reason": why})
+        store.log(lock, c.slug, {"event": "pick-failed", "at": now.isoformat(), "reason": why})
         store.write(lock, c)
         return c
     base = base.model_copy(update={"commit": view.commit, "listed": digest(found, moved(view.snapshot, c))})
@@ -169,7 +170,7 @@ def reassessed(store: Store, lock: Lock, c: Change, found: list[Decision], root:
         log = corrections(root, store.name)
         message_text = message(c, found, log, LATER)
     except (OSError, ValueError) as exc:
-        return [], str(exc)
+        return [], f"{type(exc).__name__}: {exc}"
     held = c.decisions_baseline
     done = _session(store, lock, c, message_text, held)
     said = judged(done, found, Pick(version=c.brief.version))

@@ -2569,16 +2569,17 @@ def test_a_failed_pick_shows_its_whole_error(tmp_path: Path, monkeypatch, pds, w
         c = Change(slug="c1", brief=Brief(version=1, title="Notes"), step=Step(kind=StepKind.SHAPE))
         store.write(lock, c)
         pick.run(store, lock, c)
-    assert store.read("c1").brief.picked.reason == whole_error
+    failed = f"DecisionsUnavailable: {whole_error}"
+    assert store.read("c1").brief.picked.reason == failed
     (event,) = [e for e in store.events("c1") if e["event"] == "pick-failed"]
-    assert event["reason"] == whole_error
+    assert event["reason"] == failed
     with browsing(monkeypatch, pds) as (page, url):
         said = errors(page)
         opened(page, url, alpha.id, "c1")
         follows = page.locator(".brief section", has_text="Decisions this work follows")
         shown = follows.locator("p-text")
         expect(shown).to_have_count(1)
-        assert shown.text_content() == f"The pick failed: {whole_error}. The shaping chat can ask for it again."
+        assert shown.text_content() == f"The pick failed: {failed}. The shaping chat can ask for it again."
         assert said == []
 
 

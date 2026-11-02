@@ -768,7 +768,7 @@ def test_a_failed_ci_repair_keeps_and_logs_its_whole_error(tmp_path, checkout, w
     logged = [line.split(" ", 1)[1] for line in state["log"]]
     again = "have an agent try again, or discard"
     if cause == "repair-session":
-        detail = f"the agent's repair did not finish: the agent ended with error: {whole_error}"
+        detail = f"the agent's repair did not finish: PackError: the agent ended with error: {whole_error}"
         url = next(i["detail"] for i in state["invocations"] if i["operation"] == "pull-request")
         stage, op, reason = (
             "merge",

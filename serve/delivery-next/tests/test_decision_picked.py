@@ -276,7 +276,7 @@ def _session_said(ending: str, payload: pick_tools.PickResult | None = None, **f
 @pytest.mark.parametrize(
     ("said", "why"),
     [
-        ("corrections", "{e}"),
+        ("corrections", "OSError: {e}"),
         ("detail", "its session ended error: {e}"),
         ("usage_unread", "its pick cannot be trusted: {e}"),
     ],

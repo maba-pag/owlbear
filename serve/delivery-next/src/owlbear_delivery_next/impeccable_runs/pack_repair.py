@@ -320,7 +320,7 @@ def _made(job: Job, ctx: Context, src: pack_git.Source, gh: Provider) -> Outcome
         run(at, ["commit", "--quiet", "-m", message])
         r.commit = run(at, ["rev-parse", "HEAD"])
     except (pack_files.PackError, ProviderError, OSError) as exc:
-        return Outcome("failed", f"the agent's repair did not finish: {exc}")
+        return Outcome("failed", f"the agent's repair did not finish: {type(exc).__name__}: {exc}")
     finally:
         if not job.keeps(at):
             _quiet(run, src.root, ["worktree", "remove", "--force", str(at)])

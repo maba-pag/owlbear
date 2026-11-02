@@ -611,7 +611,7 @@ def test_a_failed_lookup_answers_and_logs_whole(picking, monkeypatch, caplog, wh
     building(picking, picking.put(make()))
     if fails == "load":
         monkeypatch.setattr(lookup.decision_store, "load", _raises(decision_store.DecisionsUnavailable(whole_error)))
-        failed = whole_error
+        failed = f"DecisionsUnavailable: {whole_error}"
     else:
         monkeypatch.setattr(lookup, "_ran", _raises(RuntimeError(whole_error)))
         failed = f"RuntimeError: {whole_error}"

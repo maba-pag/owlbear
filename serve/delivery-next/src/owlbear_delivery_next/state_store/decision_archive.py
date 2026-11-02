@@ -80,7 +80,7 @@ def write_plan(
         try:
             refused = decision_store.write_batch(writes, fence, root)
         except OSError as exc:
-            refused = {"files": f"cannot be written: {exc}"}
+            refused = {"files": f"cannot be written: {type(exc).__name__}: {exc}"}
         problems = [f"decision {key} of {slug}: {why}" for key, why in refused.items()]
     if problems:
         return [], [f"no decision of {slug} was archived", *problems]
@@ -136,7 +136,7 @@ def lasting(project: str, c: Change, stem: str, *, root: Path | None = None) -> 
             try:
                 found.append(_as_decision(fields, legacy))
             except ValidationError as exc:
-                msg = f"decision {fields['id']} of {c.slug} cannot be published: {exc}"
+                msg = f"decision {fields['id']} of {c.slug} cannot be published: {type(exc).__name__}: {exc}"
                 raise DecisionError(msg) from exc
     return found
 
@@ -149,7 +149,7 @@ def _planned(root: Path, project: str, c: Change, stem: str, outcome: str) -> tu
     try:
         source, legacy = _history(root, project, c, stem)
     except (decision_store.DecisionsUnavailable, DecisionError, ValidationError, OSError) as exc:
-        return [], [f"decision history of {c.slug}: {exc}"]
+        return [], [f"decision history of {c.slug}: {type(exc).__name__}: {exc}"]
     for fields in [*_brief(project, source, stem, outcome), *_changed(project, c, stem, outcome)]:
         if fields["scope"] is Scope.PROJECT and fields["id"] in published:
             continue
@@ -162,7 +162,7 @@ def _planned(root: Path, project: str, c: Change, stem: str, outcome: str) -> tu
                 check_write(current, decision, current.revision if current else None)
             planned.append((decision, layer, current.revision if current else None))
         except (DecisionError, ValidationError, OSError) as exc:
-            problems.append(f"decision {fields['id']} of {c.slug}: {exc}")
+            problems.append(f"decision {fields['id']} of {c.slug}: {type(exc).__name__}: {exc}")
     return planned, problems
 
 
@@ -234,7 +234,7 @@ def _graph(root: Path, project: str, c: Change, planned: list[Placed]) -> list[s
     try:
         found = read_repo(root, project)
     except OSError as exc:
-        return [f"the decisions of {c.slug} cannot be checked against {root}: {exc}"]
+        return [f"the decisions of {c.slug} cannot be checked against {root}: {type(exc).__name__}: {exc}"]
     placed = [Entry(decision_path(d, layer), Layer(layer, d.scope, d.project, d.change), d) for d, layer, _ in planned]
     paths = {e.path for e in placed}
     entries = [e for e in found.entries if e.path not in paths] + placed
