@@ -421,8 +421,8 @@ def expanded(words: Sequence[str], run: shell_programs.Run, switches: dict[str, 
     mirror key; in a git command that runs hooks also a switch's value and any other word, except an option's value
     that stays one word and a path after --. A push's refspecs are never exempt.
     """
-    if shell_programs.name(run.words[0]) != "git":
-        return None
+    if shell_programs.name(run.words[0]) != "git":  # it may run git push, which reads the settings it is given
+        return _built_setting(_parse_git([]), {**_environment(words), **run.env}, push=True)
     call = _parse_git(run.words[1:])
     if _built(call.sub):
         return f"subcommand `{call.sub}`"

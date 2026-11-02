@@ -266,6 +266,7 @@ ROUTES = {  # #864's routes: each case's command and the class it is found in, o
         ('git -c commit.gpgsign="$V" commit -m x', "doubtful"),
         ('GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=commit.gpgsign GIT_CONFIG_VALUE_0="$V" git commit -m x', "doubtful"),
         ('git config commit.gpgsign "$V"', "doubtful"),
+        ('GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=remote.o.mirror GIT_CONFIG_VALUE_0="$M" bash -c "git push"', "doubtful"),
         ('MIRROR="$V" git --config-env=remote.origin.mirror=MIRROR push', "doubtful"),
         ('VALUE=false git --config-env="$K"=VALUE commit -m x', "doubtful"),
         ('git --config-env=remote.origin.mirror="$VARNAME" push', "doubtful"),
