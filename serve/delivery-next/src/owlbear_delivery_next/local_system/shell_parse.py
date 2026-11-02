@@ -170,7 +170,7 @@ class _Lexer:
         self.group, self.defined = None, False
         if first in _OPENERS:
             self.blocks.append((len(self.commands) - 1, opaque, s.case is not None))
-        if s.case:  # `then case …`, `{ case …`: the case is a block of its own
+        if s.case and s.words[s.case - 1] in _LEADS:  # `then case …`, `{ case …`: the case is a block of its own
             self.blocks.append((len(self.commands) - 1, opaque, True))
 
     def _opaque(self, start: int, end: int | None = None) -> None:
