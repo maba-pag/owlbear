@@ -542,18 +542,21 @@ def test_a_queued_answer_the_fold_does_not_apply_leaves_an_activity_line(picking
     assert (kept and kept.text, inbox(picking)) == (WORDS if first else None, 0)
 
 
-MOVED = "no longer waits on an answer: the Change moved on"
+MOVED = "no longer waits on an answer:"
 
 
-def moved_on(run: Asking, how: str) -> None:
-    """The Change stops waiting on the worker's question: the owner changes its intent, or its PR went elsewhere."""
+def moved_on(run: Asking, how: str) -> str:
+    """The Change stops waiting on the worker's question: the owner changes its intent, or its PR went elsewhere.
+
+    Returns why an answer to it is refused."""
     if how == "change":
         run.p.store.put_inbox(run.p.slug, IntentItem(at=AT, intent="change", text="a different greeting"))
         c, _ = run.fold()
         assert (c.step.kind, c.outcome) == (StepKind.SHAPE, None)
-    else:
-        c, _ = run.p.store.fold(Lock(run.p.slug), run.p.slug, datetime.now(UTC), pr_state="misdelivered")
-        assert (c.step.kind, c.outcome.question == run.qid) == (StepKind.BUILD, False)
+        return f"question {run.qid} {MOVED} its intent changed"
+    c, _ = run.p.store.fold(Lock(run.p.slug), run.p.slug, datetime.now(UTC), pr_state="misdelivered")
+    assert (c.step.kind, c.outcome.question == run.qid) == (StepKind.BUILD, False)
+    return f"question {run.qid} {MOVED} it waits on question {c.outcome.question} now"
 
 
 @pytest.mark.parametrize("how", ["change", "misdelivered"])
@@ -562,13 +565,13 @@ def test_an_answer_to_a_question_the_change_no_longer_waits_on_is_refused_and_qu
     run = Asking(picking, monkeypatch)
     body = answers.AnswerBody(question=run.qid, kind="event", text=WORDS)
     item = answers.answer_item(picking.store, picking.change(), body)
-    moved_on(run, how)
+    why = moved_on(run, how)
 
     assert isinstance(item, AnswerItem)
-    assert (picking.store.put_answer(picking.slug, item), inbox(picking)) == (f"question {run.qid} {MOVED}", 0)
+    assert (picking.store.put_answer(picking.slug, item), inbox(picking)) == (why, 0)
     late = run.answer(kind="event", text=WORDS)
     refused = (late.status_code, late.json()["detail"], inbox(picking), run.asked(picking.change()).answer)
-    assert refused == (409, f"question {run.qid} {MOVED}", 0, None)
+    assert refused == (409, why, 0, None)
 
 
 @pytest.mark.parametrize("intent", ["change", "abandon"])
@@ -583,20 +586,21 @@ def test_an_answer_queued_after_a_change_of_intent_is_not_applied(picking, monke
 
     said = [(e["event"], e.get("reason")) for e in picking.store.events(picking.slug)
             if e.get("event") in {"answer", "answer-not-applied"}]  # fmt: skip
-    assert said == [("answer-not-applied", f"question {run.qid} {MOVED}")]
+    why = "the Change was abandoned" if intent == "abandon" else "its intent changed"
+    assert said == [("answer-not-applied", f"question {run.qid} {MOVED} {why}")]
     assert (run.asked(c).answer, inbox(picking)) == (None, 0)
 
 
 def test_the_cli_refuses_an_answer_the_change_no_longer_waits_on(picking, monkeypatch, capsys):
     run = Asking(picking, monkeypatch)
     monkeypatch.setattr(cli.Store, "open", lambda *_a, **_k: picking.store)
-    moved_on(run, "change")
+    why = moved_on(run, "change")
 
     code = cli.main(["--repo", str(picking.repo), "answer", picking.slug, "--question", run.qid, "--text", WORDS,
                      "--kind", "event"])  # fmt: skip
 
     assert (code, inbox(picking)) == (1, 0)
-    assert f"not answered: question {run.qid} {MOVED}" in capsys.readouterr().err
+    assert f"not answered: {why}" in capsys.readouterr().err
 
 
 def test_the_chat_tool_reports_an_answer_the_change_no_longer_waits_on_as_not_answered(picking, monkeypatch):
@@ -606,12 +610,12 @@ def test_the_chat_tool_reports_an_answer_the_change_no_longer_waits_on_as_not_an
     monkeypatch.setattr(chat_client.Chat, "record", lambda _self: RECORD)
     monkeypatch.setattr(chat_client, "_LOCAL", Loopback(picking.http))
     monkeypatch.setitem(mcp_server._STATE, "chat", chat)  # noqa: SLF001 - the server's one chat
-    moved_on(run, "change")
+    why = moved_on(run, "change")
 
     args = {"question": f"c1.{run.qid}", "kind": "event", "text": WORDS}
     out = asyncio.run(mcp_server.mcp.call_tool("answer_question", args)).structured_content
 
-    assert (out["answered"], out.get("error"), inbox(picking)) == (False, f"question {run.qid} {MOVED}", 0)
+    assert (out["answered"], out.get("error"), inbox(picking)) == (False, why, 0)
 
 
 @pytest.mark.parametrize("held", ["paused", "change-at-merge"])
