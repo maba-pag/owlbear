@@ -146,6 +146,8 @@ ROUTES = {  # #864's routes: each case's command and the class it is found in, o
         ("git config remote.origin.mirror true && git push", "core"),
         ("git config remote.origin.mirror true", "core"),  # its push may come in the next command
         ("GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=remote.origin.mirror GIT_CONFIG_VALUE_0=true git push", "core"),
+        ("GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=remote.origin.mirror GIT_CONFIG_VALUE_0=true bash -c 'git push'", "core"),
+        ("GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=remote.o.mirror GIT_CONFIG_VALUE_0=1 git rebase -x 'git push' m", "core"),
         ("export GIT_CONFIG_PARAMETERS=\"'remote.origin.mirror'='true'\"; git push", "core"),
         ("git remote add --mirror=push o u", "core"),
         ("git remote add --mirror o u", "core"),
@@ -186,6 +188,8 @@ ROUTES = {  # #864's routes: each case's command and the class it is found in, o
         ("git submodule --quiet foreach --recursive 'git push --force'", "variant"),
         ("git submodule foreach bash -c 'git commit --no-verify -m x'", "variant"),  # sh -c '<first> "$@"' <the rest>
         ("git submodule foreach git status --short", None),
+        ("git submodule foreach bash -c -- 'git commit --no-verify -m x'", "variant"),  # its -- is bash's
+        ("git submodule foreach git commit -q -n -m x", "variant"),
         ("git bisect run 'git commit -n'", None),  # a documented limit
     ],
     10: [  # hook tools' switches
@@ -198,6 +202,10 @@ ROUTES = {  # #864's routes: each case's command and the class it is found in, o
         ("HUSKY=0 eval 'git status'; git commit -m x", None),  # only for that text
         ("export HUSKY=0; HUSKY=1 eval 'unset HUSKY'; git commit -m x", "variant"),  # bash restores HUSKY=0
         ("HUSKY=1 eval 'export HUSKY=0'; git commit -m x", None),
+        ("HUSKY=1 eval 'unset HUSKY'; git commit -m x", None),  # nothing to restore
+        ("export HUSKY=0; (export HUSKY=1); git commit -m x", "variant"),
+        ("export HUSKY=0; if false; then export HUSKY=1; fi; git commit -m x", "variant"),
+        ("export HUSKY=1; if x; then export HUSKY=0; fi; git commit -m x", "variant"),
         ("HUSKY=0 git submodule foreach 'git commit -m x'", "variant"),
         ("export HUSKY=0; env -u HUSKY git submodule foreach 'git commit -m x'", None),
         ('HUSKY=0 git commit "$FLAGS" -m x', "variant"),
@@ -229,6 +237,8 @@ ROUTES = {  # #864's routes: each case's command and the class it is found in, o
     ],
     4: [  # git words built at run time
         ("git commit $FLAG -m x", "doubtful"),
+        ('git commit -"$FLAG" -m x', "doubtful"),  # not -F with a value
+        ('git commit -m"$MSG"', None),
         ("git $SUB", "doubtful"),
         ('git commit "$@"', "doubtful"),
         ('git commit "${args[@]}"', "doubtful"),

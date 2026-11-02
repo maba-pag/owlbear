@@ -121,15 +121,17 @@ class Walk:
         words, top_level = command.words, command.top_level and not state.unsure
         i = shell_programs.builtin(words)  # then export ..., command -p -- exec ...: the builtin itself
         first = words[i] if i < len(words) else None
-        if first is None or first == "export":
+        if first is None or first in {"export", *_DECLARE}:  # switches are set even where it may not run
             assigned = shell_programs.assignments(words[:i] if first is None else words[i + 1 :])
-            for key in _STARTUP:
-                if key in assigned:
-                    state.startup[key] = assigned[key] if top_level else None
-            state.home_moved = state.home_moved or "HOME" in assigned
-        if first is None or first in {"export", *_DECLARE}:  # set even where it may not run
-            assigned = shell_programs.assignments(words[:i] if first is None else words[i + 1 :])
-            state.switches |= {k: v for k, v in assigned.items() if k in git_reading.SWITCHES}
+            if first in {None, "export"}:
+                for key in _STARTUP:
+                    if key in assigned:
+                        state.startup[key] = assigned[key] if top_level else None
+                state.home_moved = state.home_moved or "HOME" in assigned
+            assigned = {k: v for k, v in assigned.items() if k in git_reading.SWITCHES}
+            # one that may not run, as in ( ) or if, leaves a switch that skips hooks in place
+            keep = {k for k in assigned if not top_level and git_reading.turns_off(k, state.switches.get(k, ""))}
+            state.switches |= {k: v for k, v in assigned.items() if k not in keep}
         if first in {"unset", *_DECLARE} and any(w.partition("=")[0] == "HOME" for w in words[i + 1 :]):
             state.home_moved = True
         # unset -f, -fv: no variable goes
@@ -202,8 +204,7 @@ class Walk:
             return None
         if found := git_reading.expanded(command.words, run, switches(state, run)):
             return f"`{self.name}` uses {found}, built at run time: it may be a flag or setting {BYPASS}"
-        code = guard_readers.code(command, run.words)
-        for words in guard_readers.commands(code) if code is not None else ():
+        for words in guard_readers.commands(guard_readers.code(command, run.words) or ""):
             if flag := git_reading.bypass(words):
                 shown = " ".join(words)
                 return f"`{self.name}` runs code that holds `{shown}`, which uses {flag}, {BYPASS}"
@@ -320,7 +321,7 @@ class Walk:
             state.unsure -= not command.top_level
             state.stdin_plain = saved
             for k in bound:  # bash restores them after eval or source, whatever the text set
-                state.switches.pop(k) if k not in kept else state.switches.update({k: kept[k]})
+                state.switches.pop(k, None) if k not in kept else state.switches.update({k: kept[k]})
             if any(k in run.env for k in _STARTUP):  # only for that text; what the text set itself is unknown
                 state.startup = startup | {k: None for k in _STARTUP if state.startup.get(k) != startup.get(k)}
 

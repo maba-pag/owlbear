@@ -113,8 +113,8 @@ _GIT_FALSE = frozenset({"", "0", "false", "no", "off"})
 _MIRROR_KEY = re.compile(r"remote\..+\.mirror", re.IGNORECASE)  # the remote's name keeps its case
 _ALIAS = re.compile(r"alias\.(.+)", re.IGNORECASE)
 SWITCHES = frozenset({"HUSKY", "LEFTHOOK", "SKIP", "LEFTHOOK_EXCLUDE"})  # hook tools' variables that skip hooks
-_SWITCHES_OFF = {"HUSKY": {"0"}, "LEFTHOOK": {"0", "false"}}  # the values that turn the tool off
-_SKIPS = ("SKIP", "LEFTHOOK_EXCLUDE")  # any value names hooks to skip: pre-commit's and lefthook's
+_SWITCHES_OFF = {"HUSKY": {"0"}, "LEFTHOOK": {"0", "false"}}  # the values that turn the tool off; SKIP and
+# LEFTHOOK_EXCLUDE with any value name hooks to skip: pre-commit's and lefthook's
 _HOOKED = frozenset({"am", "cherry-pick", "commit", "merge", "push", "rebase"})  # git commands that run hooks
 _GIT_WRITE_OPTIONS = frozenset(
     {
@@ -251,11 +251,15 @@ def _env_settings(env: dict[str, str]) -> list[str]:
 def env_setting(env: dict[str, str], words: Sequence[str]) -> str | None:
     """A setting that git configuration passed by environment to the command *words* uses to skip hooks or signing.
 
-    A mirror setting counts when the command pushes, or exports it so that it outlives the command.
+    A mirror setting counts when the command may push, or exports it so that it outlives the command: git push,
+    git text that runs other commands, or another program, which may run git push in its turn.
     """
     i = shell_programs.builtin(words)
     lasting = (i < len(words) and words[i] == "export") or any(
-        shell_programs.name(r.words[0]) == "git" and _parse_git(r.words[1:]).sub == "push"
+        shell_programs.name(r.words[0]) != "git"
+        or _parse_git(r.words[1:]).sub == "push"
+        or scripts(r.words)
+        or aliases(r.words)
         for r in shell_programs.runs(words)
     )
     return next((s for s in _env_settings(env) if _disables(s) or (lasting and _mirrors(s))), None)
@@ -283,11 +287,11 @@ def _git_bypass(call: _GitCall, env: dict[str, str]) -> str | None:
         return f"--config-env {key}"
     if call.sub == "config" and (setting := _config_write(call.arguments)):
         return f"config {setting}"
-    mirror = {"--mirror", "--mirror=push"}  # git remote add sets remote.<name>.mirror; =fetch only fetches
+    # git remote add --mirror sets remote.<name>.mirror; =fetch only fetches
     if (
         call.sub == "remote"
         and call.arguments[:1] == ("add",)
-        and (flag := next(filter(mirror.__contains__, call.arguments), None))
+        and (flag := next((a for a in call.arguments if a in {"--mirror", "--mirror=push"}), None))
     ):
         return f"remote add {flag}"
     return _sub_bypass(call.sub, call.arguments)
@@ -339,14 +343,21 @@ def scripts(words: Sequence[str]) -> list[tuple[str, bool]]:
     rebase runs each --exec text after a commit it made; submodule foreach runs its text in each submodule.
     """
     call = _parse_git(words[1:])
-    arguments = call.arguments[: call.arguments.index("--")] if "--" in call.arguments else call.arguments
+    arguments = list(call.arguments)
     if call.sub == "rebase":
-        return [(text, True) for text in _rebase_exec(arguments)]
-    rest = [a for a in arguments if a not in {"-q", "--quiet"}]
-    if call.sub == "submodule" and rest[:1] == ["foreach"]:
-        given = rest[2:] if rest[1:2] == ["--recursive"] else rest[1:]  # git runs sh -c '<first> "$@"' <the rest>
-        return [(" ".join([given[0], shlex.join(given[1:])]).strip(), False)] if given else []
-    return []
+        return [
+            (text, True)
+            for text in _rebase_exec(arguments[: arguments.index("--")] if "--" in arguments else arguments)
+        ]
+    while arguments[:1] in (["-q"], ["--quiet"]):
+        arguments.pop(0)
+    if call.sub != "submodule" or arguments[:1] != ["foreach"]:
+        return []
+    given = arguments[1:]
+    while given[:1] in (["-q"], ["--quiet"], ["--recursive"]):  # its only options; its command's are its own
+        given.pop(0)
+    # git runs sh -c '<first> "$@"' <the rest>
+    return [(" ".join([given[0], shlex.join(given[1:])]).strip(), False)] if given else []
 
 
 def _rebase_exec(arguments: Sequence[str]) -> list[str]:
@@ -372,12 +383,14 @@ def switch(words: Sequence[str], env: dict[str, str]) -> str | None:
     """
     if shell_programs.name(words[0]) != "git" or _parse_git(words[1:]).sub not in _HOOKED:
         return None
-    for key, value in env.items():
-        if getattr(value, "expanded", False):
-            continue
-        if value in _SWITCHES_OFF.get(key, ()) or (key in _SKIPS and value):
-            return f"environment setting {key}={value}"
-    return None
+    return next((f"environment setting {k}={v}" for k, v in env.items() if turns_off(k, v)), None)
+
+
+def turns_off(key: str, value: str) -> bool:
+    """Whether a hook tool's variable set to *value* skips hooks; a value built at run time is not read."""
+    if getattr(value, "expanded", False):
+        return False
+    return value in _SWITCHES_OFF.get(key, ()) or (key in {"SKIP", "LEFTHOOK_EXCLUDE"} and bool(value))
 
 
 def expanded(words: Sequence[str], run: shell_programs.Run, switches: dict[str, str]) -> str | None:
@@ -413,9 +426,7 @@ def _built_setting(call: _GitCall, env: dict[str, str]) -> str | None:
     settings += [
         (k, env.get(f"GIT_CONFIG_VALUE_{m[1]}", Word())) for n, k in env.items() if (m := _CONFIG_KEY.fullmatch(n))
     ]
-    settings += [
-        (Word("GIT_CONFIG_PARAMETERS"), v) for n, v in env.items() if n == "GIT_CONFIG_PARAMETERS" and _built(v)
-    ]
+    settings += [(Word("GIT_CONFIG_PARAMETERS"), env.get("GIT_CONFIG_PARAMETERS", ""))]
     settings += [(key, env.get(var, var)) for key, var in call.from_env]  # a variable named at run time is built
     push = call.sub == "push"
     if call.sub == "config" and (written := _config_set(call.arguments)):
@@ -448,7 +459,9 @@ def _unexempt(sub: str, arguments: Sequence[str]) -> list[str]:
     while i < len(arguments) and (w := arguments[i]) != "--":
         name, eq, _ = w.partition("=")
         flags, takes = _short(w[1:], required, optional) if re.fullmatch(r"-[^-].*", w) else (w[1:], False)
-        attached = (eq and name.startswith("--") and "$" not in name) or (flags != w[1:] and not takes)  # -m"$M"
+        # -m"$M"; in -"$F" the F is the variable's
+        short = flags != w[1:] and not takes and "$" not in w[1 : len(flags) + 2]
+        attached = (eq and name.startswith("--") and "$" not in name) or short
         if not attached or getattr(w, "split", False):
             found.append(w)
         valued = takes or (name in long_values and not eq)
