@@ -26,18 +26,19 @@ its end then. A restart records each chat's bytes written while OwlBear was not 
 (D-01M5XCE8ZA4FGYYY45YP44M8RD), from the offsets the last run left in ``chats.json``. A chat without a new event for a
 day goes dormant: its intake is dropped and its offset kept until it grows.
 
-Admission (``room``, ``chat_looks.Gate``): one chat look at a time across all chats, a draining one counted; none
-while the machine is paused (D-01M5XCE8ZC030KT2FZ7D6SZCJN), once the follower closes, once an update's fence or a stop
-holds the machine's stop barrier (one admitted before is counted as running work), or while a look's runtime may
-still run (its lease held); the chats are read all the same. No turn settles while an event is still being written.
-The state-change moment of a completed call is looked at instead of a sample of it. A moment whose rule (a marked
-assumption, ``runtimes.chat_moments``) a reset retired is recorded as skipped and never looked at; the chat is read,
-and its other moments and samples go on (a retired state-change rule leaves its call's sample to be taken); a look
-admitted before the reset runs on. Before any moment is settled or admitted, a chat's Spotter gets the settings in
-force (its ``look_credit_limit`` among them) and every gap known by then; its prompt and cases' snapshot
-(``cases.snapshot``) is taken when a turn starts (a turn begun before following, at its first live event) and serves
-every look of that turn. An admitted look keeps both, whatever changes before it runs, and its record keeps the turn,
-the case version and prompt hash, and its meter's spend and stop.
+Admission (``room``, ``chat_looks.Gate``): one chat look at a time across all chats, a draining one counted; none while
+the machine is paused (D-01M5XCE8ZC030KT2FZ7D6SZCJN), once the follower closes, once an update's fence or a stop holds
+the machine's stop barrier (one admitted before is counted as running work), or while a look's runtime may still run
+(its lease held); the chats are read all the same. A hand-off moment that finds the one look running takes its slot if
+it is a sample or state-change look not yet answered, whichever chat's, or waits for it (``Spotter``). No turn settles
+while an event is still being written. The state-change moment of a completed call is looked at instead of a sample of
+it. A moment whose rule (a marked assumption, ``runtimes.chat_moments``) a reset retired is recorded as skipped and
+never looked at; the chat is read, and its other moments and samples go on (a retired state-change rule leaves its
+call's sample to be taken); a look admitted before the reset runs on. Before any moment is settled or admitted, a chat's
+Spotter gets the settings in force (its ``look_credit_limit`` among them) and every gap known by then; its prompt and
+cases' snapshot (``cases.snapshot``) is taken when a turn starts (a turn begun before following, at its first live
+event) and serves every look of that turn. An admitted look keeps both, whatever changes before it runs, and its record
+keeps the turn, the case version and prompt hash, and its meter's spend and stop.
 
 A chat's Spotter acts in it through a ``chat_acts.ChatActor`` (whose notes the follower confirms from the log), in the
 chat's arm (``chat:<session>``, drawn once with the steer share), and checks a state change against the decisions
@@ -326,7 +327,9 @@ class Follower:
         judge = self.judge or spotter_look.judged
         if self.owned is not None:
             judge = functools.partial(self.owned.judged, judge)
-        c.spot = spotter.Spotter(self._ctx(c, ctx), lambda cid=c.id: cid, judge, room=self.room, left=self.gate.left)
+        peers = lambda: [d.spot for d in self.chats.values() if d.spot] + self.leaving  # noqa: E731 - slot sharers
+        c.spot = spotter.Spotter(self._ctx(c, ctx), lambda cid=c.id: cid, judge, room=self.room, left=self.gate.left,
+                                 peers=peers)  # fmt: skip
         c.actor = chat_acts.ChatActor(c.id, c.spot)
         c.spot.ctx = self._ctx(c, ctx)
         c.moments = Moments(c.workspace, Path.home(), Path(os.environ["TMPDIR"]) if os.environ.get("TMPDIR") else None)

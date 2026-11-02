@@ -3,13 +3,15 @@
 A worker's question takes its relayer's class: an event, a clarification or a brief change (TD-461). A clarification
 carries the statement the owner confirmed when it was read back to him; without that confirmation nothing is stored.
 A visual round's decision names what the page showed (TD-79), a final retry its tasks (TD-217). The console answers
-with the same checks and binds to what ``show`` printed (#676).
+with the same checks and binds to what ``show`` printed (#676). The page shows a question with what an earlier
+answer to it left unsaid: allowing what the Spotter stopped is held, and the question asked again says so (#717);
+an answer the fold did not apply stays beside its question with why.
 """
 
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Annotated, Literal
+from typing import TYPE_CHECKING, Annotated, Any, Literal
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
@@ -79,6 +81,19 @@ def router(store: Store, read: Callable[[str], Change], put: Callable[[str, Inbo
     return routes
 
 
+def shown(c: Change, q: Question, events: list[dict[str, Any]]) -> dict[str, object]:
+    """What the Changes page shows with the open *q* besides its text and options.
+
+    Whether chat may answer it, and when the owner allowed what the Spotter stopped on the questions *q* asks again
+    (#717): that answer is held, so without it the page would show the same question as if he had not answered. The
+    last answer to *q* the fold did not apply, from *events*, stays beside it until an answer to it applies (#791): a
+    question opened again after that never shows it.
+    """
+    said = [e for e in events if e.get("event") in {"answer", "answer-not-applied"} and e.get("question") == q.id]
+    dropped = said[-1] if said and said[-1]["event"] == "answer-not-applied" else None
+    return {"ordinary": loop.ordinary(q), "held": answer_kinds.kept(c, q), "dropped": dropped}
+
+
 def answer_item(store: Store, c: Change, body: AnswerBody) -> AnswerItem | tuple[int, str]:
     """The item an answer to an open question queues, or the status and reason it is refused with.
 
@@ -110,7 +125,9 @@ def _checked(store: Store, c: Change, q: Question, body: AnswerBody) -> tuple[in
         return 422, f"option {body.option} is not one of {[o.id for o in q.options]}"
     if q.repair and ((now_open := loop.open_question(c)) is None or now_open.id != q.id):
         return 409, "the Change moved on since this round gate asked; reload"
-    chosen = {o.next for o in q.options} & loop.DECISIONS - {"retry"} or q.repair or answer_kinds.owned(q)
+    anyway = bool(q.options) and all(o.next == "retry" for o in q.options)  # the fold reruns the step on any answer
+    # Delivery's own questions are settled by an option; a worker's question also takes the owner's own words
+    chosen = (not anyway and bool((q.cause and q.options) or q.repair)) or answer_kinds.owned(q)
     if body.option is None and chosen:
         return 422, f"choose one of {[o.label for o in q.options]}"
     if any(o.id == body.option and o.next == "reconsider" for o in q.options) and not body.text.strip():

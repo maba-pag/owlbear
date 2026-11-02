@@ -272,8 +272,9 @@ def test_a_freeze_read_that_raises_says_so_and_leaks_no_admission(monkeypatch) -
 def test_looks_past_capacity_are_recorded_skipped_and_a_look_stopped_at_its_limit_says_so() -> None:
     async def main() -> None:
         spot = spotter.Spotter(ctx(), lambda: "s-1", judge(wait=0.1))
-        for i in range(3):  # two run; the third finds no room
+        for i in range(2):  # two run; a third look other than a hand-off finds no room
             spot.handed_off(f"c{i}", {})
+        spot.look("plan", 1.0, {"kind": "plan", "call": "c2"})
         await asyncio.wait(set(spot.tasks))
         stopped = spotter.Spotter(ctx(), lambda: "s-2", judge("", cost=0.9))  # aborted before it answered
         stopped.handed_off("c3", {})
@@ -793,6 +794,42 @@ def test_a_hand_off_skipped_for_capacity_keeps_the_events_seen_as_its_cutoff() -
 
     asyncio.run(main())
     assert sorted((r["skipped"][:8], r["cutoff"]) for r in records()) == [("", 3), ("", 3), ("capacity", 3)]
+
+
+def test_a_hand_off_look_waiting_for_a_slot_judges_its_own_turn_though_the_next_one_is_taken_in_meanwhile() -> None:
+    release, judged, cards = asyncio.Event(), asyncio.Event(), []
+
+    async def look(the_card: dict[str, Any], _ctx: spotter.Context, spend: credit_meter.Meter) -> str:
+        cards.append(the_card)
+        if the_card["moment"]["call"] == "h":
+            judged.set()
+        await release.wait()
+        spend.part().ended(None, confirmed=True)
+        return '{"category": "none"}'
+
+    async def main() -> str:
+        spot = spotter.Spotter(ctx(), lambda: "s-1", look)
+        for ev in (asked("Build it."), said("Plan."), said("Done.")):
+            spot.seen(ev)
+        turn = spot.kept.turn
+        for i in range(2):
+            spot.look("plan", 1.0, {"kind": "a running look", "call": f"p{i}"})
+        spot.handed_off("h", {})  # it waits: neither running look gives its slot
+        for ev in (asked("Now the farewell."), said("Next plan.")):
+            spot.seen(ev)
+        await asyncio.sleep(0.1)
+        release.set()
+        await asyncio.wait_for(judged.wait(), 3)  # the slot frees and the hand-off's look begins
+        await spot.drain()
+        return turn
+
+    turn = asyncio.run(main())
+    assert spotter.WORK.settled(5)
+    handed = cards[-1]["moment"]
+    assert (handed["call"], handed["turn"], handed["cutoff"], cards[-1]["intent"]["later_requests"]) == (
+        "h", turn, 3, [])  # fmt: skip
+    [record] = [r for r in records() if r["call"] == "h"]
+    assert (record["turn"], record["cutoff"], record["skipped"]) == (turn, 3, "")
 
 
 def usage(nano: float | None, second: int = 0) -> SessionEvent:
@@ -1452,7 +1489,7 @@ def test_a_stop_to_ask_at_a_hand_off_whose_abort_outlasts_the_submits_wait_still
 ) -> None:
     from owlbear_delivery_next.runtimes import spotter_act, step_tools  # noqa: PLC0415 - #717's actuator and submit
 
-    monkeypatch.setattr(step_tools, "WAIT", 0.1)
+    monkeypatch.setattr(step_tools, "wait", lambda: 0.1)
     monkeypatch.setattr(spotter_act, "CALL", 0.5)  # the abort answers only after the submit stopped waiting
     asking = dict.fromkeys(CATEGORIES, "record") | {"course-and-constraints": "stop-and-ask"}
 
@@ -1553,3 +1590,58 @@ def test_a_state_change_is_checked_by_the_steps_own_lookup_through_the_runners_c
         assert "git push origin main" in questions[0]
         assert logged == [("the held Change", ran, {"kind": lookup.LABEL, "exit": "ok"})]
     assert retro_units.grade(record, "rev", "useful")["preliminary"] is busy
+
+
+def test_a_hand_off_look_at_full_capacity_takes_a_state_change_looks_slot_and_holds_the_submit() -> None:
+    deliver = Delivered()
+
+    async def look(the_card: dict[str, Any], _ctx: spotter.Context, spend: credit_meter.Meter) -> str:
+        changing = the_card["moment"]["kind"] == "a state change"
+        await asyncio.sleep(1 if changing else 0.05)  # the state changes' looks still run when the hand-off comes
+        spend.part().ended(None, confirmed=True)
+        return '{"category": "none"}' if changing else finding("irreversible-harm")
+
+    async def main() -> tuple[str | None, list[tuple[str, str, str]]]:
+        spot = spotter.Spotter(ctx(looks=("hand-off", "state-change"), act=deliver), lambda: "s-1", look)
+        for i in range(2):
+            spot.look("state-change", 1.0, {"kind": "a state change", "call": f"w{i}"})
+        await asyncio.sleep(0.05)
+        held = spot.handed_off("h", {"summary": "done"}, held=acts.could_act(spot.ctx))
+        assert held is not None
+        note = await asyncio.wait_for(held, 3)
+        sent = list(deliver.sent)  # what the hand-off's look did before the submit went on
+        await spot.drain()
+        return note, sent
+
+    note, sent = asyncio.run(main())
+    assert spotter.WORK.settled(5)
+    assert (note, sent) == (None, [("stop-and-ask", "irreversible-harm", "hand-off")])
+    got = sorted((r["look"], r["skipped"]) for r in records())
+    assert got[0] == ("hand-off", "")
+    assert got.count(("state-change", spotter.GAVE)) == 1
+
+
+def test_a_submit_waits_for_a_hand_off_look_that_first_waited_for_a_slot_and_takes_its_refusal(
+    tmp_path, monkeypatch
+) -> None:
+    """One budget holds the submit: the look's wait for a slot, its answer and a teardown stage (#919)."""
+    monkeypatch.setattr(spotter, "LOOK", 0.5)
+    monkeypatch.setattr(spotter, "TEARDOWN", 0.05)
+
+    async def look(the_card: dict[str, Any], _ctx: spotter.Context, spend: credit_meter.Meter) -> str:
+        await asyncio.sleep(0.35)  # the running looks free their slots after this; the hand-off's then answers after it
+        spend.part().ended(None, confirmed=True)
+        return finding("hand-off-fitness") if the_card["moment"]["call"] == "call-1" else '{"category": "none"}'
+
+    async def main() -> Any:
+        spot = spotter.Spotter(ctx(actions=STEERED, arm="steered", cap=2), lambda: "s1", look)
+        st = handing_off(tmp_path, spot)
+        for i in range(2):
+            spot.look("plan", 1.0, {"kind": "a running look", "call": f"p{i}"})  # neither gives its slot
+        result = await submitted(st, "call-1")
+        await spot.drain()
+        return result
+
+    result = asyncio.run(main())
+    assert spotter.WORK.settled(5)
+    assert (result.result_type, result.text_result_for_llm.endswith("] About hand-off-fitness.")) == ("failure", True)

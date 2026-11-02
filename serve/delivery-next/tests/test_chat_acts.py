@@ -35,8 +35,9 @@ def b64(text: str) -> str:
 ROWS = (
     ("copilotcli:/aaa", f"ahp-chat://c-a/{b64('copilotcli:/aaa')}", "s-a"),  # as VS Code's store keeps them
     ("copilotcli:/aaa", f"ahp-chat://c-ab/{b64('copilotcli:/aaa')}", "s-ab"),  # another chat in the same folder
-    ("copilotcli:/bbb", f"ahp-chat://default/{b64('copilotcli:/bbb')}", "s-b"),
-)  # a session's default chat
+    ("copilotcli:/bbb", f"ahp-chat://default/{b64('copilotcli:/bbb')}", "s-b"),  # a session's default chat
+    ("copilotcli:/ccc", f"ahp-chat://default/{b64('copilotcli:/ccc')}", "s-c"),  # one the host lists by its uuid
+)
 
 
 def store(tmp_path: Path, *rows: tuple[str, str, str]) -> Path:
@@ -67,6 +68,11 @@ class Host:
         self.items = [
             {"resource": "ahp-session:/aaa", "chats": [{"resource": "ahp-chat:/c-a"}]},
             {"resource": "ahp-session:/bbb", "chats": [{"resource": f"ahp-chat://default/{b64('x')}"}]},
+            {
+                "resource": "ahp-session:/ccc",
+                "defaultChat": "ahp-chat:/c-c",  # a window session, traced 2026-11-02
+                "chats": [{"resource": "ahp-chat:/c-c"}, {"resource": "ahp-chat:/c-c2"}],
+            },
         ]
         turn = {"id": "t-1", "message": {"text": "fix the bug", "origin": {"kind": "user"}, "model": MODEL}}
         self.chat = {"turns": [turn], "activeTurn": {"id": active, "message": {"text": "go"}} if active else None}
@@ -80,7 +86,7 @@ class Host:
     def request(self, method: str, params: dict[str, Any], timeout: float = 60) -> dict[str, Any]:  # noqa: ARG002
         if method == "listSessions":
             return {"items": self.items}
-        assert params["channel"] in {"ahp-chat:/c-a", f"ahp-chat://default/{b64('x')}"}
+        assert params["channel"] in {"ahp-chat:/c-a", f"ahp-chat://default/{b64('x')}", "ahp-chat:/c-c"}
         return {"snapshot": {"state": copy.deepcopy(self.chat)}}
 
     def dispatch(self, channel: str, action: dict[str, Any]) -> int:  # noqa: ARG002 - one chat
@@ -179,13 +185,15 @@ def test_only_the_one_chat_the_store_names_for_the_session_is_acted_on(tmp_path)
         await actor.spot.drain()
         return host, act_of(actor)
 
-    for session in ("s-a", "s-b", "s-x"):
+    for session in ("s-a", "s-b", "s-c", "s-x"):
         (tmp_path / session).mkdir()
     assert chat_acts.chat_of("s-a", store(tmp_path, *ROWS)) == (
         "copilotcli:/aaa", f"ahp-chat://c-a/{b64('copilotcli:/aaa')}")  # never s-ab's, in the same folder  # fmt: skip
     host, act = asyncio.run(main("s-a"))
     assert (host.actions[0]["kind"], act.delivery) == ("steering", "delivered")  # on ahp-chat:/c-a, as the host lists
     host, act = asyncio.run(main("s-b"))  # a default chat, listed under the host's own session URI
+    assert (host.actions[0]["kind"], act.delivery) == ("steering", "delivered")
+    host, act = asyncio.run(main("s-c"))  # a default chat the host lists by its own uuid, as its session's default
     assert (host.actions[0]["kind"], act.delivery) == ("steering", "delivered")
     host, act = asyncio.run(main("s-x"))
     assert (host.opened, host.actions) == (0, [])

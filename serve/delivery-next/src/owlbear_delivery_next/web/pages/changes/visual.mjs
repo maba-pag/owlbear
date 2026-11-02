@@ -2,7 +2,7 @@ import { html, nothing, render } from "/assets/lit-html/3.3.3/lit-html.js";
 import { api, token } from "/assets/ui.mjs";
 import { DIALOG, REVERT, show, parts, draft, notify, send, starts } from "./state.mjs";
 import { disclosure, button, field, tick, hd, text, list, row, panel } from "./widgets.mjs";
-import { merging, finale, mergeSetting } from "./forms.mjs";
+import { merging, finale, mergeSetting, droppedLine } from "./forms.mjs";
 
 const JUDGE = { design: "Design judge", correctness: "Correctness judge" };
 const SEVERITY = { P0: ["Blocks the task", "error"], P1: ["Serious", "error"], P2: ["Annoying", "warning"],
@@ -129,7 +129,7 @@ export function decisionForm(q, r, pictures, d) {
       send("/answers", { question: q.id, option, text: comment, ...round, findings }, d, key);
     }
   };
-  return panel(`Decide visual round ${r.number} of ${r.head.slice(0, 7)}`, key, pictures,
+  return panel(`Decide visual round ${r.number} of ${r.head.slice(0, 7)}`, key, droppedLine(q), pictures,
     hd(4, "Verdicts", "sm"), r.verdicts.map(verdictLine),
     made.length ? html`${hd(4, "Problems this Change introduced", "sm")}${text("Blocking, serious and annoying "
       + "problems and any missed criterion of yours are ticked for you; a Fail sends the ticked ones to the "

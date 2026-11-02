@@ -124,3 +124,18 @@ def held(c: Change, item: AnswerItem, now: datetime) -> bool:
     q.effect_observed_at = item.at  # kept for the record, never delivered to a worker as its answer
     ask(c, q.model_copy(update={"id": "", "answer": None, "effect_observed_at": None}), now)
     return True
+
+
+def kept(c: Change, q: Question) -> list[str]:
+    """When the owner allowed what the Spotter stopped on the questions *q* asks again, oldest first.
+
+    ``held`` asks again at once, so they are the questions just before *q* with its cause and an allow answer.
+    """
+    if not (q.cause or "").endswith(SPOTTER):
+        return []
+    said: list[str] = []
+    for x in reversed(c.questions[: [x.id for x in c.questions].index(q.id)]):
+        if x.cause != q.cause or x.answer is None or x.answer.option != ALLOW:
+            break
+        said.insert(0, x.answer.at.isoformat())
+    return said

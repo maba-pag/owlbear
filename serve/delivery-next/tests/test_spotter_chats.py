@@ -349,14 +349,13 @@ def test_a_chat_found_after_the_follower_began_is_looked_at_from_its_start_and_i
         await world.passes()
         world.chat("c1", whole[4:])
         await world.passes(2)
-        world.chat("c1", turn("a quick one"))  # a whole turn between two passes: its plan look is still running
+        world.chat("c1", turn("a quick one"))  # a whole turn between two passes: its hand-off waits for the plan's slot
         await world.passes()
 
     asyncio.run(scenario())
     got = [(r["look"], r["session"], r["step"], r["skipped"]) for r in records()]
     assert got[:2] == [("plan", "c1", "chat", ""), ("hand-off", "c1", "chat", "")]
-    assert sorted(got[2:]) == [
-        ("hand-off", "c1", "chat", "capacity: a chat look is already running"), ("plan", "c1", "chat", "")]  # fmt: skip
+    assert sorted(got[2:]) == [("hand-off", "c1", "chat", ""), ("plan", "c1", "chat", "")]
     assert records()[0]["turn"] == records()[1]["turn"] == turn_id(world.state / "c1")
     card = world.cards[0][0]
     assert card["step"] == "chat"
